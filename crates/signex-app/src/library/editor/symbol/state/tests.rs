@@ -747,3 +747,85 @@ fn select_in_box_crossing_touches_polygon_bbox() {
         Some(SymbolSelection::All)
     );
 }
+
+// --- Arc CCW-wraparound convention ---------------------------------------
+
+fn arc_symbol(start_deg: f64, end_deg: f64) -> Symbol {
+    let mut s = Symbol::empty("test");
+    s.graphics.push(signex_library::SymbolGraphic {
+        kind: SymbolGraphicKind::Arc {
+            center: [0.0, 0.0],
+            radius: 5.0,
+            start_deg,
+            end_deg,
+        },
+        stroke_width: 0.15,
+        part_number: 0,
+        fill: None,
+    });
+    s
+}
+
+/// Rotating a 0°-crossing arc must keep hit-test and the CPU draw
+/// arm's tessellated sweep in agreement — the exact bug class this
+/// normalization pass fixes. Starts as `270 -> 90` (a 180° arc
+/// spanning the world's left half, CCW from 270° through 0° to 90°);
+/// rotating it CW 90° stores `180 -> 0` (`rotation.rs`'s independent
+/// `rem_euclid`-based normalization produces a wrapped, `end < start`
+/// pair here — the exact form the CPU draw path used to mis-render).
+#[test]
+fn rotated_wraparound_arc_hit_test_and_draw_sweep_agree() {
+    let mut s = arc_symbol(270.0, 90.0);
+    rotate_selected(&mut s, Some(SymbolSelection::Graphic(0)), true);
+
+    let (start_deg, end_deg, center, radius) = match &s.graphics[0].kind {
+        SymbolGraphicKind::Arc {
+            start_deg,
+            end_deg,
+            center,
+            radius,
+        } => (*start_deg, *end_deg, *center, *radius),
+        other => panic!("expected Arc, got {other:?}"),
+    };
+    assert_eq!(start_deg, 180.0);
+    assert_eq!(end_deg, 0.0, "rotation.rs produces the wrapped form");
+
+    // hit_test.rs's independent Arc arm: the rotated arc now spans
+    // the bottom half (world angles [180°, 360°)) — below center hits,
+    // above center misses.
+    assert_eq!(
+        hit_test(&s, center[0], center[1] - radius, 1),
+        Some(SymbolSelection::Graphic(0)),
+        "point at 270° (below center) must be on the rotated arc"
+    );
+    assert_eq!(
+        hit_test(&s, center[0], center[1] + radius, 1),
+        None,
+        "point at 90° (above center) must be off the rotated arc"
+    );
+
+    // The CPU draw arm's tessellated sweep (via the same helper
+    // `renderer_scene_canvas::draw_arc_bucket` now calls) must agree
+    // on both of the same two points, independently re-deriving
+    // "is this angle within the sweep" rather than reusing hit_test's
+    // own formula.
+    let sweep = signex_gfx::primitive::arc::ccw_wrapped_sweep_rad(
+        (start_deg as f32).to_radians(),
+        (end_deg as f32).to_radians(),
+    );
+    let tau = std::f32::consts::TAU;
+    let offset_from_start = |x: f64, y: f64| -> f32 {
+        let raw = (y as f32).atan2(x as f32) - (start_deg as f32).to_radians();
+        raw.rem_euclid(tau)
+    };
+    let below_offset = offset_from_start(0.0, -radius);
+    let above_offset = offset_from_start(0.0, radius);
+    assert!(
+        below_offset <= sweep + 1e-3,
+        "draw arm's sweep must include the 270° point hit-test hit"
+    );
+    assert!(
+        above_offset > sweep + 1e-3,
+        "draw arm's sweep must exclude the 90° point hit-test missed"
+    );
+}

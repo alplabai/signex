@@ -228,9 +228,6 @@ impl SymbolCanvas<'_> {
                             .with_width(1.0),
                     );
                     // Arc sweep from start to cursor angle.
-                    // canvas::path::Arc lives in screen space (y-down), so we
-                    // negate the world-space angles to compensate for the y-flip
-                    // applied by w2s: screen_angle = -world_angle.
                     // Use the unwrapped end angle from state to avoid the ±180°
                     // discontinuity that raw atan2 would introduce.
                     let end_deg = state.arc_end_deg_unwrapped.unwrap_or_else(|| {
@@ -238,12 +235,27 @@ impl SymbolCanvas<'_> {
                         let dy = cur_y - cy;
                         dy.atan2(dx).to_degrees()
                     });
+                    // Must show exactly what `AddArc`'s commit handler
+                    // will store (`updates/mod.rs` swaps start/end for
+                    // a CW-dragged, i.e. `end_deg < start_deg`, arc
+                    // before storing it) — so this preview builds the
+                    // same CCW-wraparound sweep the same way
+                    // `renderer_scene_canvas::draw_arc_bucket` does,
+                    // rather than feeding the raw (possibly negative,
+                    // possibly CW-signed) drag delta straight to
+                    // iced's unnormalized-sweep arc builder. See that
+                    // function's doc comment for the full mapping.
+                    let start_rad = -(start_deg as f32).to_radians();
+                    let sweep = signex_gfx::primitive::arc::ccw_wrapped_sweep_rad(
+                        (start_deg as f32).to_radians(),
+                        (end_deg as f32).to_radians(),
+                    );
                     let arc_path = canvas::Path::new(|builder| {
                         builder.arc(canvas::path::Arc {
                             center: center_p,
                             radius: radius_screen,
-                            start_angle: iced::Radians(-(start_deg as f32).to_radians()),
-                            end_angle: iced::Radians(-(end_deg as f32).to_radians()),
+                            start_angle: iced::Radians(start_rad),
+                            end_angle: iced::Radians(start_rad - sweep),
                         });
                     });
                     frame.stroke(

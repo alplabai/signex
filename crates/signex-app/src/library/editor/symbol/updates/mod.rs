@@ -152,6 +152,46 @@ fn polygon_signed_area2(vertices: &[[f64; 2]]) -> f64 {
         .sum()
 }
 
+/// Normalise an about-to-be-stored `SymbolGraphicKind::Arc`'s
+/// `start_deg`/`end_deg` into this codebase's CCW-wraparound
+/// convention — see `signex_gfx::primitive::arc::ccw_wrapped_sweep_
+/// rad`'s doc comment for the full rule (`hit_test.rs`'s `Arc` arm,
+/// `rotation.rs`'s Arc rotate arm, and `arc.wgsl`'s `sdf_arc` all
+/// already assume it; the CPU canvas draw arm now does too).
+///
+/// The three-click placement gesture's third click can produce
+/// `end_deg < start_deg` two different ways: a genuinely CW drag
+/// (the cursor moved backwards past the start angle, so the unwrapped
+/// tracked end angle went negative relative to start — e.g. `start:
+/// 30, end: -60`), or simply because `start_deg` is a raw `atan2`
+/// result while `end_deg` is separately unwrapped and the two never
+/// got reconciled into a common `[0, 360)` frame. Either way, under
+/// the CCW-wraparound rule `end_deg < start_deg` is read as "the long
+/// way around" — the opposite of the short arc the placement preview
+/// showed (see `draw_arc_preview`, which builds its ghost from the
+/// exact same CCW-wraparound sweep this function's callers store).
+///
+/// The fix is a swap, not an independent `rem_euclid` on each field:
+/// reducing `start_deg` and `end_deg` into `[0, 360)` separately
+/// leaves their CCW-wraparound sweep unchanged (subtracting whole
+/// turns from either endpoint can't change `end - start` by anything
+/// but a multiple of 360°), so it would faithfully preserve the WRONG
+/// long-way sweep. Swapping the pair instead stores the endpoints in
+/// the other order, whose CCW-wraparound sweep is the complement
+/// (`360° - old_sweep`) — the short arc the user actually dragged.
+/// Both endpoints are then reduced into `[0, 360)` purely for a
+/// canonical, human-readable stored range (matches `rotation.rs`'s
+/// stored range); this reduction step alone never changes which arc
+/// is represented, only its numeric presentation.
+fn normalize_arc_commit_deg(start_deg: f64, end_deg: f64) -> (f64, f64) {
+    let (start_deg, end_deg) = if end_deg < start_deg {
+        (end_deg, start_deg)
+    } else {
+        (start_deg, end_deg)
+    };
+    (start_deg.rem_euclid(360.0), end_deg.rem_euclid(360.0))
+}
+
 /// Apply a primitive-editor event to a standalone Symbol editor
 /// state. Mirrors the symbol-tab arms of `apply_inline_edit` but
 /// against the path-keyed standalone state. Visibility is
@@ -226,6 +266,7 @@ pub(crate) fn apply_symbol_primitive_edit(
             start_deg,
             end_deg,
         } => {
+            let (start_deg, end_deg) = normalize_arc_commit_deg(start_deg, end_deg);
             push_graphic(
                 editor,
                 signex_library::SymbolGraphicKind::Arc {
@@ -577,5 +618,58 @@ mod tests {
         assert!(editor.primitive().graphics.is_empty());
         assert_eq!(editor.undo_snapshots.len(), 0);
         assert!(editor.polygon_vertices.is_empty());
+    }
+
+    /// `normalize_arc_commit_deg` swaps a CW-dragged pair (`end <
+    /// start`) so the stored endpoints represent the same short arc
+    /// under the CCW-wraparound convention, instead of preserving the
+    /// (wrong) long-way-around sweep a per-field `rem_euclid` would.
+    #[test]
+    fn normalize_arc_commit_deg_swaps_a_cw_dragged_pair() {
+        // The task's concrete repro: dragging CW past the start angle
+        // leaves the unwrapped tracker negative.
+        assert_eq!(normalize_arc_commit_deg(30.0, -60.0), (300.0, 30.0));
+    }
+
+    /// An already-CCW (non-wrapped) pair is untouched beyond the
+    /// canonicalising `rem_euclid` — no swap, matching the "already
+    /// correct" arcs this whole pass leaves unchanged.
+    #[test]
+    fn normalize_arc_commit_deg_leaves_ccw_pairs_unswapped() {
+        assert_eq!(normalize_arc_commit_deg(10.0, 100.0), (10.0, 100.0));
+    }
+
+    /// `AddArc` commits a CW-dragged placement (`end_deg < start_deg`)
+    /// with its endpoints swapped, so the graphic that lands in
+    /// `Symbol::graphics` — not just the intermediate helper — stores
+    /// the CCW-wraparound form of the short arc the preview showed.
+    #[test]
+    fn add_arc_commit_stores_swapped_endpoints_for_a_cw_drag() {
+        let mut editor = new_editor();
+        apply_symbol_primitive_edit(
+            &mut editor,
+            SymbolEditorMsg::AddArc {
+                cx: 0.0,
+                cy: 0.0,
+                radius: 5.0,
+                start_deg: 30.0,
+                end_deg: -60.0,
+            },
+        );
+
+        assert_eq!(editor.primitive().graphics.len(), 1);
+        match &editor.primitive().graphics[0].kind {
+            SymbolGraphicKind::Arc {
+                start_deg,
+                end_deg,
+                radius,
+                ..
+            } => {
+                assert_eq!(*start_deg, 300.0);
+                assert_eq!(*end_deg, 30.0);
+                assert_eq!(*radius, 5.0);
+            }
+            other => panic!("expected Arc, got {other:?}"),
+        }
     }
 }
