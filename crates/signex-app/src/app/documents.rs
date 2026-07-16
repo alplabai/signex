@@ -314,6 +314,10 @@ pub struct SymbolEditorState {
     /// Cleared on the next successful action. Never serialized, never
     /// snapshotted for undo.
     pub status_message: Option<String>,
+    /// Open right-click context menu, if any. `None` = closed. Mirrors
+    /// `FootprintEditorState`'s `context_menu` field 1:1 in structure —
+    /// see `crate::library::editor::symbol::state::SymbolContextMenuState`.
+    pub context_menu: Option<crate::library::editor::symbol::state::SymbolContextMenuState>,
 }
 
 impl SymbolEditorState {
@@ -346,6 +350,7 @@ impl SymbolEditorState {
             local_color_picker: None,
             polygon_vertices: Vec::new(),
             status_message: None,
+            context_menu: None,
         };
         state.reset_camera_origin_center();
         state

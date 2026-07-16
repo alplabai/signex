@@ -348,6 +348,38 @@ pub fn pin_on_part(pin: &SymbolPin, active_part: u8) -> bool {
     pin.part_number == 0 || pin.part_number == active_part
 }
 
+/// Graphic indices the current selection names individually — the
+/// empty `Vec` for every selection kind that doesn't name individual
+/// graphics (`None`, `Pin`, `Field`, `All`). Shared by the "Join into
+/// Polygon" op (`updates::join`) and its context-menu enablement
+/// check (`context_menu`) so both agree on exactly which selections
+/// name eligible sources.
+pub fn join_source_indices(selected: &Option<SymbolSelection>) -> Vec<usize> {
+    match selected {
+        Some(SymbolSelection::Graphic(idx)) => vec![*idx],
+        Some(SymbolSelection::Multiple {
+            graphic_indices, ..
+        }) => graphic_indices.clone(),
+        _ => Vec::new(),
+    }
+}
+
+/// Whether the current selection is eligible for "Join into Polygon":
+/// at least one graphic named, and every named graphic is a `Line` or
+/// an `Arc` — a Rectangle/Circle/Text/Polygon anywhere in the
+/// selection disqualifies the whole op. A stale index (selection
+/// outlived a delete) also disqualifies.
+pub fn selection_is_join_eligible(sym: &Symbol, selected: &Option<SymbolSelection>) -> bool {
+    let indices = join_source_indices(selected);
+    !indices.is_empty()
+        && indices.iter().all(|&idx| {
+            matches!(
+                sym.graphics.get(idx).map(|g| &g.kind),
+                Some(SymbolGraphicKind::Line { .. }) | Some(SymbolGraphicKind::Arc { .. })
+            )
+        })
+}
+
 /// Add a pin at the given canvas coordinates and return its index in
 /// `Symbol::pins`. Auto-assigns the next free numeric pin number and
 /// scopes it to `part_number` (typically the editor's active sub-part
@@ -374,12 +406,14 @@ fn next_pin_number(sym: &Symbol) -> String {
     (highest + 1).to_string()
 }
 
+mod context_menu;
 mod hit_test;
 mod movement;
 mod rotation;
 #[cfg(test)]
 mod tests;
 
+pub use context_menu::*;
 pub use hit_test::*;
 pub use movement::*;
 pub use rotation::*;

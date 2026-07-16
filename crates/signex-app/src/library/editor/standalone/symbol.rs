@@ -344,6 +344,23 @@ fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> SymbolEdi
         CanvasAction::DragCommit => SymbolEditorMsg::DragCommit,
         CanvasAction::Undo => SymbolEditorMsg::Undo,
         CanvasAction::Redo => SymbolEditorMsg::Redo,
+        CanvasAction::ShowContextMenu { x, y, target } => SymbolEditorMsg::ShowContextMenu {
+            x,
+            y,
+            target: symbol_context_target_to_msg(target),
+        },
+    }
+}
+
+fn symbol_context_target_to_msg(
+    target: sym_state::SymbolContextTarget,
+) -> crate::library::messages::SymbolContextTargetMsg {
+    use crate::library::messages::SymbolContextTargetMsg;
+    use sym_state::SymbolContextTarget;
+    match target {
+        SymbolContextTarget::Empty => SymbolContextTargetMsg::Empty,
+        SymbolContextTarget::Pin(idx) => SymbolContextTargetMsg::Pin(idx),
+        SymbolContextTarget::Graphic(idx) => SymbolContextTargetMsg::Graphic(idx),
     }
 }
 

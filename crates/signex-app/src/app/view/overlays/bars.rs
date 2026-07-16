@@ -162,15 +162,17 @@ impl Signex {
 
     /// Schematic Active Bar overlay — only painted on the main window,
     /// so the main canvas's selection set is the right gate.
-    pub(in crate::app::view) fn schematic_active_bar_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn schematic_active_bar_overlay(
+        &self,
+    ) -> Option<Element<'_, Message>> {
         if !self.has_active_schematic() {
             return None;
         }
         let ui = &self.ui_state;
         let document = &self.document_state;
         let interaction = &self.interaction_state;
-        let y_offset: f32 = crate::menu_bar::MENU_BAR_HEIGHT
-            + if document.tabs.is_empty() { 0.0 } else { 28.0 };
+        let y_offset: f32 =
+            crate::menu_bar::MENU_BAR_HEIGHT + if document.tabs.is_empty() { 0.0 } else { 28.0 };
         let bar_has_selection = !interaction.canvas.selected.is_empty();
         let bar_has_net_colors = !ui.net_colors.is_empty();
         let bar = crate::active_bar::view_bar(
@@ -211,8 +213,8 @@ impl Signex {
             return Vec::new();
         };
         let mut out: Vec<Element<'_, Message>> = Vec::new();
-        let y_offset: f32 = crate::menu_bar::MENU_BAR_HEIGHT
-            + if document.tabs.is_empty() { 0.0 } else { 28.0 };
+        let y_offset: f32 =
+            crate::menu_bar::MENU_BAR_HEIGHT + if document.tabs.is_empty() { 0.0 } else { 28.0 };
         let theme_id = self.ui_state.theme_id;
         let tokens = &document.panel_ctx.tokens;
         // Task 6 — footprint-native presets (`SelectionFilterKind`),
@@ -354,7 +356,9 @@ impl Signex {
     /// v0.13 — symbol library editor active bar (+ its dropdown overlay)
     /// mounted at the SAME app-view layer as the schematic / footprint
     /// bars.
-    pub(in crate::app::view) fn symbol_editor_active_bar_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(in crate::app::view) fn symbol_editor_active_bar_overlay(
+        &self,
+    ) -> Vec<Element<'_, Message>> {
         let document = &self.document_state;
         let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab) else {
             return Vec::new();
@@ -366,8 +370,8 @@ impl Signex {
             return Vec::new();
         };
         let mut out: Vec<Element<'_, Message>> = Vec::new();
-        let y_offset: f32 = crate::menu_bar::MENU_BAR_HEIGHT
-            + if document.tabs.is_empty() { 0.0 } else { 28.0 };
+        let y_offset: f32 =
+            crate::menu_bar::MENU_BAR_HEIGHT + if document.tabs.is_empty() { 0.0 } else { 28.0 };
         let theme_id = self.ui_state.theme_id;
         let tokens = &document.panel_ctx.tokens;
         let bar_items = crate::library::editor::symbol::active_bar::bar_items(editor, theme_id);
@@ -391,6 +395,71 @@ impl Signex {
             out.push(overlay.map(Message::Library));
         }
         out
+    }
+
+    /// Right-click context menu overlay for the symbol canvas. Mirrors
+    /// [`Self::footprint_context_menu_overlay`] 1:1 in structure — see
+    /// that method for the coordinate / clamping rationale.
+    pub(in crate::app::view) fn symbol_context_menu_overlay(&self) -> Vec<Element<'_, Message>> {
+        let document = &self.document_state;
+        let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab) else {
+            return Vec::new();
+        };
+        let Some(path) = active_tab.kind.as_symbol_editor() else {
+            return Vec::new();
+        };
+        let Some(editor) = self.document_state.symbol_editors.get(path) else {
+            return Vec::new();
+        };
+        let tokens = &document.panel_ctx.tokens;
+        let Some(menu_state) = editor.context_menu.as_ref() else {
+            return Vec::new();
+        };
+        let Some(card) =
+            crate::library::editor::symbol::context_menu::view_context_menu(editor, tokens, path)
+        else {
+            return Vec::new();
+        };
+        let close_msg = Message::Library(
+            crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                path: path.to_path_buf(),
+                msg: crate::library::messages::PrimitiveEdit::Symbol(
+                    crate::library::messages::SymbolEditorMsg::CloseContextMenu,
+                ),
+            },
+        );
+        let card_msg = card.map(Message::Library);
+        let (x, y) = Self::clamp_symbol_menu_position(
+            (menu_state.x, menu_state.y),
+            self.ui_state.window_size,
+        );
+        vec![
+            Self::dismiss_layer(close_msg),
+            super::super::translate::Translate::new(card_msg, (x, y)).into(),
+        ]
+    }
+
+    /// Clamp the symbol context menu's requested `(x, y)` so a
+    /// conservative estimate of its footprint stays on screen near
+    /// the right / bottom window edges (matches the footprint
+    /// overlay's clamping, sized down for the shorter symbol menu).
+    fn clamp_symbol_menu_position(requested: (f32, f32), window: (f32, f32)) -> (f32, f32) {
+        let (mx, my) = requested;
+        let (ww, wh) = window;
+        let est_menu_w: f32 = 200.0;
+        let est_menu_h: f32 = 260.0;
+        let edge_margin: f32 = 4.0;
+        let x = if mx + est_menu_w + edge_margin > ww {
+            (ww - est_menu_w - edge_margin).max(0.0)
+        } else {
+            mx
+        };
+        let y = if my + est_menu_h + edge_margin > wh {
+            (my - est_menu_h).max(0.0)
+        } else {
+            my
+        };
+        (x, y)
     }
 
     /// In-canvas text-edit input — the floating `text_input` anchored on
@@ -430,8 +499,7 @@ impl Signex {
         // Font size in pixels matches the rendered label (10 pt ≈ 1.8 mm).
         let font_px = (cam_scale * 1.8).clamp(10.0, 64.0);
         // Estimate width from text length to keep the input snug.
-        let approx_w =
-            ((edit_state.text.chars().count() as f32 + 2.0) * font_px * 0.62).max(60.0);
+        let approx_w = ((edit_state.text.chars().count() as f32 + 2.0) * font_px * 0.62).max(60.0);
         // Offset the input so the baseline sits on top of the label text.
         let abs_x = x_canvas_origin + canvas_local_x - 2.0;
         let abs_y = y_canvas_origin + canvas_local_y - font_px - 2.0;
@@ -512,9 +580,7 @@ impl Signex {
         };
         let panel_items: Vec<Element<'_, Message>> = crate::panels::ALL_PANELS
             .iter()
-            .filter(|&&kind| {
-                (!kind.needs_schematic() || has_sch) && (!kind.needs_pcb() || has_pcb)
-            })
+            .filter(|&&kind| (!kind.needs_schematic() || has_sch) && (!kind.needs_pcb() || has_pcb))
             .map(|&kind| {
                 // Altium parity: a leading ✓ column marks open panels
                 // so the user can see at a glance which ones are

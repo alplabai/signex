@@ -349,10 +349,9 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
             | Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Middle)) => {
                 self.on_secondary_press(state, bounds, cursor)
             }
-            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Right))
-            | Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Middle)) => {
-                self.on_secondary_release(state)
-            }
+            Event::Mouse(mouse::Event::ButtonReleased(
+                button @ (mouse::Button::Right | mouse::Button::Middle),
+            )) => self.on_secondary_release(state, button, bounds, cursor),
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
                 self.on_cursor_moved(state, bounds, cursor)
             }

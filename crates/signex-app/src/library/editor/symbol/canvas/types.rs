@@ -4,7 +4,7 @@
 //! external consumers (`standalone.rs`, `documents.rs`) keep importing
 //! them from `…::symbol::canvas`.
 
-use super::super::state::{GraphicHandle, SymbolSelection};
+use super::super::state::{GraphicHandle, SymbolContextTarget, SymbolSelection};
 
 /// The actions a [`SymbolCanvas`] can emit upward.
 #[derive(Debug, Clone)]
@@ -127,6 +127,14 @@ pub enum CanvasAction {
     Undo,
     /// Redo — Ctrl+Y / Ctrl+Shift+Z while the canvas has keyboard focus.
     Redo,
+    /// A right-release-without-pan-motion — open the context menu at
+    /// window-absolute `(x, y)`. `target` is what the release-time
+    /// hit-test found (pin / graphic / empty canvas).
+    ShowContextMenu {
+        x: f32,
+        y: f32,
+        target: SymbolContextTarget,
+    },
 }
 
 /// Pivot mode carried by rotate actions emitted from the Symbol canvas.
@@ -194,6 +202,11 @@ pub struct CanvasState {
     /// Last cursor screen position during a pan, used to compute
     /// per-frame deltas.
     pub last_pan_pos: Option<iced::Point>,
+    /// Set the first time a right/middle-button drag actually moves
+    /// (mirrors the footprint canvas's `pan_moved`). A right-release
+    /// with this still `false` opens the context menu instead of
+    /// having panned; cleared on release.
+    pub pan_moved: bool,
     /// World-space anchor of a rubber-band box selection in progress.
     /// Set on `ButtonPressed(Left)` that hits empty space; cleared on
     /// `ButtonReleased(Left)`.

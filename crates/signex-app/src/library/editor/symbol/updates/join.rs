@@ -8,7 +8,7 @@
 use signex_library::{ChainError, ChainSegment, SymbolGraphic, SymbolGraphicKind};
 
 use super::{SymEditor, close_pickers, mark_dirty, push_undo};
-use crate::library::editor::symbol::state::SymbolSelection;
+use crate::library::editor::symbol::state::{SymbolSelection, join_source_indices};
 use crate::library::messages::SymbolEditorMsg;
 
 pub(super) fn apply_symbol_join(editor: &mut SymEditor, msg: SymbolEditorMsg) {
@@ -16,7 +16,7 @@ pub(super) fn apply_symbol_join(editor: &mut SymEditor, msg: SymbolEditorMsg) {
         return;
     }
 
-    let mut indices = selected_graphic_indices(&editor.selected);
+    let mut indices = join_source_indices(&editor.selected);
     if indices.is_empty() {
         return;
     }
@@ -88,19 +88,6 @@ fn splice_selection_into_polygon(
     editor.selected = Some(SymbolSelection::Graphic(new_idx));
     close_pickers(editor);
     mark_dirty(editor);
-}
-
-/// Graphic indices named by the current selection — the empty `Vec`
-/// for every selection kind that doesn't name individual graphics
-/// (`None`, `Pin`, `Field`, `All`).
-fn selected_graphic_indices(selected: &Option<SymbolSelection>) -> Vec<usize> {
-    match selected {
-        Some(SymbolSelection::Graphic(idx)) => vec![*idx],
-        Some(SymbolSelection::Multiple {
-            graphic_indices, ..
-        }) => graphic_indices.clone(),
-        _ => Vec::new(),
-    }
 }
 
 /// Resolve `indices` against the active symbol's graphics, returning

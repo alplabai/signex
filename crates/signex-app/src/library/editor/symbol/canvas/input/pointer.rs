@@ -54,16 +54,55 @@ impl SymbolCanvas<'_> {
         let pos = cursor.position_in(bounds)?;
         state.panning = true;
         state.last_pan_pos = Some(pos);
+        // Track motion so a right-release without pan motion opens the
+        // context menu instead (see `on_secondary_release`).
+        state.pan_moved = false;
         Some(canvas::Action::capture())
     }
 
-    /// Right/Middle release: end the pan.
+    /// Right/Middle release: end the pan. A **right**-release that did
+    /// not pan opens the context menu (pin → graphic → empty hit
+    /// priority), window-absolute coords, mirroring the footprint
+    /// canvas's `on_secondary_released`. Middle-release never opens the
+    /// menu. Note: when the matching press instead cancelled an
+    /// in-progress Place Polygon / multi-click draw (see
+    /// `on_secondary_press`), `state.panning` was never armed, so this
+    /// release naturally falls through to a no-op — placement-cancel
+    /// wins over opening the menu with no extra checks needed here.
     pub(in crate::library::editor::symbol::canvas) fn on_secondary_release(
         &self,
         state: &mut CanvasState,
+        button: &mouse::Button,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
     ) -> Option<canvas::Action<CanvasAction>> {
+        let was_panning = state.panning;
+        let did_pan = state.pan_moved;
         state.panning = false;
         state.last_pan_pos = None;
+        state.pan_moved = false;
+        if was_panning
+            && !did_pan
+            && *button == mouse::Button::Right
+            && let Some(cursor_pos) = cursor.position_in(bounds)
+        {
+            let screen_x = bounds.x + cursor_pos.x;
+            let screen_y = bounds.y + cursor_pos.y;
+            let (wx, wy) = world_for(self, cursor_pos.x, cursor_pos.y, bounds);
+            let target = match state::hit_test(self.symbol, wx, wy, self.active_part) {
+                Some(SymbolSelection::Pin(idx)) => state::SymbolContextTarget::Pin(idx),
+                Some(SymbolSelection::Graphic(idx)) => state::SymbolContextTarget::Graphic(idx),
+                _ => state::SymbolContextTarget::Empty,
+            };
+            return Some(
+                canvas::Action::publish(CanvasAction::ShowContextMenu {
+                    x: screen_x,
+                    y: screen_y,
+                    target,
+                })
+                .and_capture(),
+            );
+        }
         None
     }
 
@@ -84,6 +123,7 @@ impl SymbolCanvas<'_> {
             let dy = pos.y - last.y;
             state.last_pan_pos = Some(pos);
             if dx != 0.0 || dy != 0.0 {
+                state.pan_moved = true;
                 return Some(canvas::Action::publish(CanvasAction::Pan { dx, dy }));
             }
             return None;

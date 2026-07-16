@@ -4,12 +4,12 @@ use iced::{Element, Length};
 pub(crate) mod dialogs;
 pub(crate) mod translate;
 
+mod chrome;
 mod context_menu;
+mod modals;
+mod overlays;
 mod pdf_preview;
 mod print_preview;
-mod modals;
-mod chrome;
-mod overlays;
 
 use super::*;
 
@@ -677,6 +677,7 @@ impl Signex {
         layers.extend(self.footprint_context_menu_overlay());
         layers.extend(self.footprint_move_by_overlay());
         layers.extend(self.symbol_editor_active_bar_overlay());
+        layers.extend(self.symbol_context_menu_overlay());
         layers.extend(self.text_edit_overlay());
 
         // Right-click menus, grid picker, panel list, dock drag zones,

@@ -211,4 +211,30 @@ pub enum SymbolEditorMsg {
 
     /// Toggle a kind on the symbol-editor selection filter.
     ToggleSelectionFilter(crate::library::editor::symbol::state::SymbolFilterKind),
+
+    // ── Right-click context menu ─────────────────────────────
+    /// Right-release-without-pan opens the context menu at
+    /// window-absolute `(x, y)`; `target` is what the cursor was
+    /// over, so the handler can select-first (Altium parity) before
+    /// showing the menu.
+    ShowContextMenu {
+        x: f32,
+        y: f32,
+        target: SymbolContextTargetMsg,
+    },
+
+    /// Close the open context menu (Esc / click outside / any
+    /// non-context-menu action fired through it).
+    CloseContextMenu,
+
+    /// Toggle which submenu row is accordion-expanded in place.
+    /// `None` collapses whichever submenu was open.
+    ContextMenuOpenSubmenu(Option<SymbolContextSubmenuMsg>),
+
+    /// A context-menu row's real action, boxed so this enum doesn't
+    /// grow for every other variant. The dispatcher applies the
+    /// boxed message via itself, then closes the menu — the "any
+    /// click on a real action closes the popover" behaviour every
+    /// row wants, expressed once instead of per-row.
+    ContextMenuAction(Box<SymbolEditorMsg>),
 }

@@ -9,6 +9,7 @@
 //! implementation.
 
 mod camera;
+mod context_menu;
 mod history;
 mod join;
 mod movement;
@@ -18,6 +19,7 @@ mod transform;
 mod ui;
 
 use camera::apply_symbol_camera;
+use context_menu::apply_symbol_context_menu;
 use history::apply_symbol_history;
 use join::apply_symbol_join;
 use movement::apply_symbol_move;
@@ -26,7 +28,10 @@ use selection::apply_symbol_selection;
 use transform::apply_symbol_transform;
 use ui::apply_symbol_ui;
 
-use crate::library::messages::{GraphicHandleMsg, SymbolEditorMsg, SymbolRotatePivotMsg};
+use crate::library::messages::{
+    GraphicHandleMsg, SymbolContextSubmenuMsg, SymbolContextTargetMsg, SymbolEditorMsg,
+    SymbolRotatePivotMsg,
+};
 
 type SymEditor = crate::app::SymbolEditorState;
 
@@ -350,6 +355,44 @@ pub(crate) fn apply_symbol_primitive_edit(
         SymbolEditorMsg::Undo | SymbolEditorMsg::Redo | SymbolEditorMsg::DragCommit => {
             apply_symbol_history(editor, msg)
         }
+
+        // ── Right-click context menu ─────────────────────────────
+        SymbolEditorMsg::ShowContextMenu { .. }
+        | SymbolEditorMsg::CloseContextMenu
+        | SymbolEditorMsg::ContextMenuOpenSubmenu(_) => apply_symbol_context_menu(editor, msg),
+
+        // A menu row's real action: apply it (recursing back into this
+        // same dispatcher) then close the popover — the "any click on
+        // a real action closes the menu" behaviour every row wants,
+        // expressed once instead of per-row.
+        SymbolEditorMsg::ContextMenuAction(inner) => {
+            editor.context_menu = None;
+            apply_symbol_primitive_edit(editor, *inner);
+        }
+    }
+}
+
+/// Translate the pure-data [`SymbolContextTargetMsg`] into the
+/// canvas/state-side [`crate::library::editor::symbol::state::SymbolContextTarget`].
+fn context_target_msg_to_state(
+    msg: SymbolContextTargetMsg,
+) -> crate::library::editor::symbol::state::SymbolContextTarget {
+    use crate::library::editor::symbol::state::SymbolContextTarget;
+    match msg {
+        SymbolContextTargetMsg::Empty => SymbolContextTarget::Empty,
+        SymbolContextTargetMsg::Pin(idx) => SymbolContextTarget::Pin(idx),
+        SymbolContextTargetMsg::Graphic(idx) => SymbolContextTarget::Graphic(idx),
+    }
+}
+
+/// Translate the pure-data [`SymbolContextSubmenuMsg`] into the
+/// canvas/state-side [`crate::library::editor::symbol::state::SymbolContextSubmenu`].
+fn context_submenu_msg_to_state(
+    msg: SymbolContextSubmenuMsg,
+) -> crate::library::editor::symbol::state::SymbolContextSubmenu {
+    use crate::library::editor::symbol::state::SymbolContextSubmenu;
+    match msg {
+        SymbolContextSubmenuMsg::Place => SymbolContextSubmenu::Place,
     }
 }
 
