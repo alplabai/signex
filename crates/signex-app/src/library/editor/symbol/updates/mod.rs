@@ -418,3 +418,162 @@ fn rotate_pivot_msg_to_state(
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_library::{Symbol, SymbolFile, SymbolGraphicKind};
+    use std::path::PathBuf;
+
+    fn new_editor() -> SymEditor {
+        SymEditor::new(
+            PathBuf::from("t.snxsym"),
+            SymbolFile::from_symbol(Symbol::empty("T")),
+        )
+    }
+
+    /// Three `PolygonClick`s then `PolygonCommit` push exactly one
+    /// graphic and exactly one undo snapshot — mirrors what every
+    /// close gesture (click-on-first-vertex / double-click / Enter)
+    /// collapses to from the dispatcher's point of view.
+    #[test]
+    fn polygon_click_then_commit_pushes_one_graphic_and_one_undo_entry() {
+        let mut editor = new_editor();
+        apply_symbol_primitive_edit(
+            &mut editor,
+            SymbolEditorMsg::PolygonClick { x: 0.0, y: 0.0 },
+        );
+        apply_symbol_primitive_edit(
+            &mut editor,
+            SymbolEditorMsg::PolygonClick { x: 4.0, y: 0.0 },
+        );
+        apply_symbol_primitive_edit(
+            &mut editor,
+            SymbolEditorMsg::PolygonClick { x: 2.0, y: 3.0 },
+        );
+        assert_eq!(
+            editor.undo_snapshots.len(),
+            0,
+            "clicks alone don't push undo"
+        );
+
+        apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::PolygonCommit);
+
+        assert_eq!(editor.primitive().graphics.len(), 1);
+        assert_eq!(
+            editor.undo_snapshots.len(),
+            1,
+            "commit pushes exactly one undo snapshot"
+        );
+        assert!(
+            editor.polygon_vertices.is_empty(),
+            "stash is emptied on commit"
+        );
+        match &editor.primitive().graphics[0].kind {
+            SymbolGraphicKind::Polygon { vertices } => {
+                assert_eq!(vertices, &vec![[0.0, 0.0], [4.0, 0.0], [2.0, 3.0]]);
+            }
+            other => panic!("expected Polygon, got {other:?}"),
+        }
+    }
+
+    /// Fewer than 3 collected vertices — `PolygonCommit` is a silent
+    /// discard: no graphic, no undo snapshot, stash still clears.
+    #[test]
+    fn polygon_commit_with_fewer_than_three_vertices_is_discarded() {
+        let mut editor = new_editor();
+        apply_symbol_primitive_edit(
+            &mut editor,
+            SymbolEditorMsg::PolygonClick { x: 0.0, y: 0.0 },
+        );
+        apply_symbol_primitive_edit(
+            &mut editor,
+            SymbolEditorMsg::PolygonClick { x: 4.0, y: 0.0 },
+        );
+        apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::PolygonCommit);
+
+        assert!(editor.primitive().graphics.is_empty());
+        assert_eq!(editor.undo_snapshots.len(), 0);
+        assert!(editor.polygon_vertices.is_empty());
+    }
+
+    /// A degenerate (collinear, zero-area) ring is discarded even
+    /// with >= 3 vertices.
+    #[test]
+    fn polygon_commit_with_collinear_vertices_is_discarded() {
+        let mut editor = new_editor();
+        apply_symbol_primitive_edit(
+            &mut editor,
+            SymbolEditorMsg::PolygonClick { x: 0.0, y: 0.0 },
+        );
+        apply_symbol_primitive_edit(
+            &mut editor,
+            SymbolEditorMsg::PolygonClick { x: 1.0, y: 1.0 },
+        );
+        apply_symbol_primitive_edit(
+            &mut editor,
+            SymbolEditorMsg::PolygonClick { x: 2.0, y: 2.0 },
+        );
+        apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::PolygonCommit);
+
+        assert!(editor.primitive().graphics.is_empty());
+        assert_eq!(editor.undo_snapshots.len(), 0);
+    }
+
+    /// A trailing vertex equal to the first (a plain click landed
+    /// exactly on vertex 0's snapped grid position without triggering
+    /// the tolerance-based close gesture) is dropped before
+    /// committing, so the ring doesn't double its closing edge.
+    #[test]
+    fn polygon_commit_drops_duplicate_closing_vertex() {
+        let mut editor = new_editor();
+        apply_symbol_primitive_edit(
+            &mut editor,
+            SymbolEditorMsg::PolygonClick { x: 0.0, y: 0.0 },
+        );
+        apply_symbol_primitive_edit(
+            &mut editor,
+            SymbolEditorMsg::PolygonClick { x: 4.0, y: 0.0 },
+        );
+        apply_symbol_primitive_edit(
+            &mut editor,
+            SymbolEditorMsg::PolygonClick { x: 2.0, y: 3.0 },
+        );
+        apply_symbol_primitive_edit(
+            &mut editor,
+            SymbolEditorMsg::PolygonClick { x: 0.0, y: 0.0 },
+        );
+        apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::PolygonCommit);
+
+        match &editor.primitive().graphics[0].kind {
+            SymbolGraphicKind::Polygon { vertices } => {
+                assert_eq!(vertices.len(), 3, "duplicate closing vertex dropped");
+                assert_eq!(vertices, &vec![[0.0, 0.0], [4.0, 0.0], [2.0, 3.0]]);
+            }
+            other => panic!("expected Polygon, got {other:?}"),
+        }
+    }
+
+    /// `PolygonCancel` discards the stash with no commit, regardless
+    /// of vertex count.
+    #[test]
+    fn polygon_cancel_discards_without_committing() {
+        let mut editor = new_editor();
+        apply_symbol_primitive_edit(
+            &mut editor,
+            SymbolEditorMsg::PolygonClick { x: 0.0, y: 0.0 },
+        );
+        apply_symbol_primitive_edit(
+            &mut editor,
+            SymbolEditorMsg::PolygonClick { x: 4.0, y: 0.0 },
+        );
+        apply_symbol_primitive_edit(
+            &mut editor,
+            SymbolEditorMsg::PolygonClick { x: 2.0, y: 3.0 },
+        );
+        apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::PolygonCancel);
+
+        assert!(editor.primitive().graphics.is_empty());
+        assert_eq!(editor.undo_snapshots.len(), 0);
+        assert!(editor.polygon_vertices.is_empty());
+    }
+}

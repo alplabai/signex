@@ -566,3 +566,184 @@ fn select_in_box_all_uses_visible_counts() {
     }
 }
 
+// --- Polygon graphic coverage --------------------------------------------
+
+fn polygon_symbol(vertices: Vec<[f64; 2]>, fill: Option<[u8; 4]>) -> Symbol {
+    let mut s = Symbol::empty("test");
+    s.graphics.push(signex_library::SymbolGraphic {
+        kind: SymbolGraphicKind::Polygon { vertices },
+        stroke_width: 0.15,
+        part_number: 0,
+        fill,
+    });
+    s
+}
+
+#[test]
+fn polygon_centroid_averages_vertices() {
+    let c = polygon_centroid(&[[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]]);
+    assert_eq!(c, [1.0, 1.0]);
+}
+
+#[test]
+fn hit_test_outlined_polygon_hits_edge_band_not_interior() {
+    let s = polygon_symbol(vec![[0.0, 0.0], [4.0, 0.0], [2.0, 4.0]], None);
+    // Within 0.5mm of the bottom edge (0,0)-(4,0) — a hit.
+    assert_eq!(hit_test(&s, 2.0, 0.3, 1), Some(SymbolSelection::Graphic(0)));
+    // Geometrically inside the triangle but far (>0.5mm) from every
+    // edge — outline-only, unfilled, so this must NOT hit.
+    assert_eq!(hit_test(&s, 2.0, 1.5, 1), None);
+    // Clearly outside the triangle and far from any edge.
+    assert_eq!(hit_test(&s, 20.0, 20.0, 1), None);
+}
+
+#[test]
+fn hit_test_filled_polygon_hits_interior_and_edge() {
+    let s = polygon_symbol(
+        vec![[0.0, 0.0], [4.0, 0.0], [2.0, 4.0]],
+        Some([200, 60, 60, 255]),
+    );
+    // Interior point — filled polygons hit via point-in-polygon.
+    assert_eq!(hit_test(&s, 2.0, 1.5, 1), Some(SymbolSelection::Graphic(0)));
+    // Edge point — filled polygons must ALSO hit the outline band
+    // (the outer half of the stroke renders outside the fill).
+    assert_eq!(hit_test(&s, 2.0, 0.3, 1), Some(SymbolSelection::Graphic(0)));
+    // Outside both the fill and the edge tolerance.
+    assert_eq!(hit_test(&s, 20.0, 20.0, 1), None);
+}
+
+#[test]
+fn hit_test_filled_concave_polygon_excludes_the_notch() {
+    // L-shape: union of [0,0]-[4,2] and [0,2]-[2,4], missing the
+    // [2,4]x[2,4] corner (the "notch").
+    let s = polygon_symbol(
+        vec![
+            [0.0, 0.0],
+            [4.0, 0.0],
+            [4.0, 2.0],
+            [2.0, 2.0],
+            [2.0, 4.0],
+            [0.0, 4.0],
+        ],
+        Some([200, 60, 60, 255]),
+    );
+    // Inside the lower arm of the L.
+    assert_eq!(hit_test(&s, 1.0, 1.0, 1), Some(SymbolSelection::Graphic(0)));
+    // Inside the upper-left arm of the L.
+    assert_eq!(hit_test(&s, 1.0, 3.0, 1), Some(SymbolSelection::Graphic(0)));
+    // Inside the notch's bounding box but outside the actual L-shape
+    // (a convex point-in-polygon test would wrongly hit this).
+    assert_eq!(hit_test(&s, 3.0, 3.0, 1), None);
+}
+
+#[test]
+fn graphic_handle_position_returns_polygon_vertex() {
+    let s = polygon_symbol(vec![[0.0, 0.0], [2.0, 0.0], [1.0, 2.0]], None);
+    assert_eq!(
+        graphic_handle_position(&s, 0, GraphicHandle::PolygonVertex(2)),
+        Some([1.0, 2.0])
+    );
+    assert_eq!(
+        graphic_handle_position(&s, 0, GraphicHandle::PolygonVertex(9)),
+        None,
+        "out-of-range vertex index is a safe miss"
+    );
+}
+
+#[test]
+fn graphic_handles_returns_one_per_polygon_vertex() {
+    let s = polygon_symbol(vec![[0.0, 0.0], [2.0, 0.0], [1.0, 2.0]], None);
+    assert_eq!(
+        graphic_handles(&s, 0),
+        vec![
+            (GraphicHandle::PolygonVertex(0), [0.0, 0.0]),
+            (GraphicHandle::PolygonVertex(1), [2.0, 0.0]),
+            (GraphicHandle::PolygonVertex(2), [1.0, 2.0]),
+        ]
+    );
+}
+
+#[test]
+fn hit_test_graphic_handle_finds_polygon_vertex() {
+    let s = polygon_symbol(vec![[0.0, 0.0], [2.0, 0.0], [1.0, 2.0]], None);
+    let hit = hit_test_graphic_handle(&s, 2.0, 0.0, 1.5, 1);
+    assert_eq!(hit, Some((0, GraphicHandle::PolygonVertex(1))));
+}
+
+#[test]
+fn move_graphic_handle_moves_polygon_vertex() {
+    let mut s = polygon_symbol(vec![[0.0, 0.0], [2.0, 0.0], [1.0, 2.0]], None);
+    move_graphic_handle(&mut s, 0, GraphicHandle::PolygonVertex(1), 9.0, 9.0);
+    match &s.graphics[0].kind {
+        SymbolGraphicKind::Polygon { vertices } => {
+            assert_eq!(vertices[0], [0.0, 0.0], "untouched vertex stays put");
+            assert_eq!(vertices[1], [9.0, 9.0], "dragged vertex moves");
+            assert_eq!(vertices[2], [1.0, 2.0], "untouched vertex stays put");
+        }
+        other => panic!("expected Polygon, got {other:?}"),
+    }
+}
+
+#[test]
+fn move_selected_translates_polygon_by_centroid_delta() {
+    // Square, centroid (1,1); move the centroid to (5,5) — every
+    // vertex shifts by the same (4,4) delta.
+    let mut s = polygon_symbol(vec![[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]], None);
+    move_selected(&mut s, Some(SymbolSelection::Graphic(0)), 5.0, 5.0);
+    match &s.graphics[0].kind {
+        SymbolGraphicKind::Polygon { vertices } => {
+            assert_eq!(
+                vertices,
+                &vec![[4.0, 4.0], [6.0, 4.0], [6.0, 6.0], [4.0, 6.0]]
+            );
+        }
+        other => panic!("expected Polygon, got {other:?}"),
+    }
+}
+
+#[test]
+fn rotate_selected_about_geometry_center_rotates_polygon_vertices() {
+    // Square [0,0]-[2,2], centroid (1,1), rotated 90° CW about its
+    // own center maps each corner to the next corner (CW direction).
+    let mut s = polygon_symbol(vec![[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]], None);
+    rotate_selected_about_geometry_center(&mut s, Some(SymbolSelection::Graphic(0)), true);
+    match &s.graphics[0].kind {
+        SymbolGraphicKind::Polygon { vertices } => {
+            assert_eq!(
+                vertices,
+                &vec![[0.0, 2.0], [0.0, 0.0], [2.0, 0.0], [2.0, 2.0]]
+            );
+        }
+        other => panic!("expected Polygon, got {other:?}"),
+    }
+}
+
+#[test]
+fn select_in_box_window_includes_polygon_by_bbox() {
+    let mut s = polygon_symbol(vec![[0.0, 0.0], [4.0, 0.0], [2.0, 3.0]], None);
+    s.graphics[0].part_number = 1;
+    // Box fully containing the triangle's bbox — Window hit; with no
+    // pins and only this one graphic, a full-containment box resolves
+    // to `All` (matches `select_in_box_all_uses_visible_counts`).
+    assert_eq!(
+        select_in_box(&s, -1.0, -1.0, 5.0, 4.0, BoxSelectKind::Window, 1),
+        Some(SymbolSelection::All)
+    );
+    // Box too small to contain the whole bbox — Window misses it.
+    assert_eq!(
+        select_in_box(&s, -1.0, -1.0, 1.0, 1.0, BoxSelectKind::Window, 1),
+        None
+    );
+}
+
+#[test]
+fn select_in_box_crossing_touches_polygon_bbox() {
+    let mut s = polygon_symbol(vec![[0.0, 0.0], [4.0, 0.0], [2.0, 3.0]], None);
+    s.graphics[0].part_number = 1;
+    // A small box only overlapping the triangle bbox's corner still
+    // counts under Crossing (touch semantics).
+    assert_eq!(
+        select_in_box(&s, -1.0, -1.0, 1.0, 1.0, BoxSelectKind::Crossing, 1),
+        Some(SymbolSelection::All)
+    );
+}
