@@ -115,24 +115,28 @@ impl LinePipeline {
 
     /// Upload line instances into the instance buffer.
     pub fn upload(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, lines: &[LineSegment]) {
-        self.instance_count = lines.len() as u32;
-
         if lines.is_empty() {
+            self.instance_count = 0;
             return;
         }
 
-        if lines.len() > self.instance_capacity {
-            self.instance_capacity = lines.len().next_power_of_two();
-            self.instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("signex_gfx_line_instances"),
-                size: (self.instance_capacity * std::mem::size_of::<LineSegment>())
-                    as wgpu::BufferAddress,
-                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
-        }
+        let writable = super::growth::ensure_capacity(
+            device,
+            &mut self.instance_buffer,
+            &mut self.instance_capacity,
+            lines.len(),
+            std::mem::size_of::<LineSegment>(),
+            "signex_gfx_line_instances",
+            wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            device.limits().max_buffer_size,
+        );
+        self.instance_count = writable as u32;
 
-        queue.write_buffer(&self.instance_buffer, 0, bytemuck::cast_slice(lines));
+        queue.write_buffer(
+            &self.instance_buffer,
+            0,
+            bytemuck::cast_slice(&lines[..writable]),
+        );
     }
 
     /// Draw all uploaded line instances.

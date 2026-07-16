@@ -110,24 +110,28 @@ impl CirclePipeline {
 
     /// Upload circle instances into the instance buffer.
     pub fn upload(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, circles: &[Circle]) {
-        self.instance_count = circles.len() as u32;
-
         if circles.is_empty() {
+            self.instance_count = 0;
             return;
         }
 
-        if circles.len() > self.instance_capacity {
-            self.instance_capacity = circles.len().next_power_of_two();
-            self.instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("signex_gfx_circle_instances"),
-                size: (self.instance_capacity * std::mem::size_of::<Circle>())
-                    as wgpu::BufferAddress,
-                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
-        }
+        let writable = super::growth::ensure_capacity(
+            device,
+            &mut self.instance_buffer,
+            &mut self.instance_capacity,
+            circles.len(),
+            std::mem::size_of::<Circle>(),
+            "signex_gfx_circle_instances",
+            wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            device.limits().max_buffer_size,
+        );
+        self.instance_count = writable as u32;
 
-        queue.write_buffer(&self.instance_buffer, 0, bytemuck::cast_slice(circles));
+        queue.write_buffer(
+            &self.instance_buffer,
+            0,
+            bytemuck::cast_slice(&circles[..writable]),
+        );
     }
 
     /// Draw all uploaded circle instances.

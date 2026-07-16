@@ -73,12 +73,15 @@ fn append_fill(vertices: &mut Vec<PolygonVertex>, polygon: &GpuPolygon) {
 /// tolerance for the sub-0.1 mm widths the renderer emits. No-op when the
 /// polygon has no stroke colour or a non-positive width.
 fn append_stroke(vertices: &mut Vec<PolygonVertex>, polygon: &GpuPolygon) {
-    let Some(stroke_color) = polygon.stroke_color else {
-        return;
-    };
-    if polygon.stroke_width <= 0.0 {
+    // `is_stroked()` is the shared definition of "this contour carries an
+    // outline": a stroke colour AND a positive width. Keeping the guard here in
+    // terms of that predicate is what the CPU↔GPU parity test locks against.
+    if !polygon.is_stroked() {
         return;
     }
+    let stroke_color = polygon
+        .stroke_color
+        .expect("is_stroked() guarantees a stroke colour");
 
     let points = &polygon.vertices;
     let half = polygon.stroke_width * 0.5;
@@ -210,24 +213,29 @@ impl PolygonPipeline {
 
     pub fn upload(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, polygons: &[GpuPolygon]) {
         let vertices = triangulate_polygons(polygons);
-        self.vertex_count = vertices.len() as u32;
 
         if vertices.is_empty() {
+            self.vertex_count = 0;
             return;
         }
 
-        if vertices.len() > self.vertex_capacity {
-            self.vertex_capacity = vertices.len().next_power_of_two();
-            self.vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("signex_gfx_polygon_vertices"),
-                size: (self.vertex_capacity * std::mem::size_of::<PolygonVertex>())
-                    as wgpu::BufferAddress,
-                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
-        }
+        let writable = super::growth::ensure_capacity(
+            device,
+            &mut self.vertex_buffer,
+            &mut self.vertex_capacity,
+            vertices.len(),
+            std::mem::size_of::<PolygonVertex>(),
+            "signex_gfx_polygon_vertices",
+            wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            device.limits().max_buffer_size,
+        );
+        self.vertex_count = writable as u32;
 
-        queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&vertices));
+        queue.write_buffer(
+            &self.vertex_buffer,
+            0,
+            bytemuck::cast_slice(&vertices[..writable]),
+        );
     }
 
     pub fn draw(
