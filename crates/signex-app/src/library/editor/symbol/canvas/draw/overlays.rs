@@ -236,15 +236,18 @@ impl SymbolCanvas<'_> {
                         dy.atan2(dx).to_degrees()
                     });
                     // Must show exactly what `AddArc`'s commit handler
-                    // will store (`updates/mod.rs` swaps start/end for
-                    // a CW-dragged, i.e. `end_deg < start_deg`, arc
-                    // before storing it) — so this preview builds the
-                    // same CCW-wraparound sweep the same way
-                    // `renderer_scene_canvas::draw_arc_bucket` does,
-                    // rather than feeding the raw (possibly negative,
-                    // possibly CW-signed) drag delta straight to
-                    // iced's unnormalized-sweep arc builder. See that
-                    // function's doc comment for the full mapping.
+                    // will store — so run the raw drag pair through the
+                    // SAME `normalize_arc_commit_deg` swap the commit
+                    // handler applies (a CW drag, `end_deg < start_deg`,
+                    // stores the swapped pair whose CCW-wraparound sweep
+                    // is the short arc the user dragged), THEN build the
+                    // CCW-wraparound sweep the way
+                    // `renderer_scene_canvas::draw_arc_bucket` does.
+                    // Feeding the raw pair to the wraparound sweep alone
+                    // would ghost the 360°-complement on every clockwise
+                    // drag while the commit stores the short arc.
+                    let (start_deg, end_deg) =
+                        super::super::super::updates::normalize_arc_commit_deg(start_deg, end_deg);
                     let start_rad = -(start_deg as f32).to_radians();
                     let sweep = signex_gfx::primitive::arc::ccw_wrapped_sweep_rad(
                         (start_deg as f32).to_radians(),

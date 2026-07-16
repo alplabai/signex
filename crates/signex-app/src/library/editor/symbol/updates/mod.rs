@@ -183,7 +183,7 @@ fn polygon_signed_area2(vertices: &[[f64; 2]]) -> f64 {
 /// canonical, human-readable stored range (matches `rotation.rs`'s
 /// stored range); this reduction step alone never changes which arc
 /// is represented, only its numeric presentation.
-fn normalize_arc_commit_deg(start_deg: f64, end_deg: f64) -> (f64, f64) {
+pub(super) fn normalize_arc_commit_deg(start_deg: f64, end_deg: f64) -> (f64, f64) {
     let (start_deg, end_deg) = if end_deg < start_deg {
         (end_deg, start_deg)
     } else {
