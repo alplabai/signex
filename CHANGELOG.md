@@ -8,9 +8,9 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
-## [0.14.0] — unreleased
+## [0.14.0] — 2026-07-16
 
-**Everything since v0.13.0** — 170 commits, 2026-05-06 → 2026-07-15.
+**Everything since v0.13.0** — 209 commits, 2026-05-06 → 2026-07-16.
 
 This section was originally written on 2026-05-31 covering only the footprint
 editor, and never tagged. Work kept landing past it: symbol multi-unit, the
@@ -88,6 +88,14 @@ summarises by theme rather than listing every commit.
   `atomic_write`, atomic `.snxprj`, and a corrupt-JSON guard (#104, #119);
   residual document writes routed through `atomic_write`, New Project guarded
   (#104, #128); prompt for unsaved changes on app exit (#95, #124).
+- **Footprint sketch-profile pads** — moving a pad made with "Make Pad from
+  Profile" left its sketch profile behind, and the bake then resolved the
+  copper back to the pad's original location, so an exported footprint placed
+  the pad in the wrong spot with no warning. The profile now travels with the
+  pad: the loop walker gained an id-level core that needs no solve, a pad that
+  first appears from the sketch side is relinked to its `PadAttr` entity by
+  number, and a whole-pad drag no longer snaps its cursor to the pad's own
+  outline vertices (#142, #311).
 - **Connectivity** — wires connect at T-junctions in net derivation (#107,
   #120); the net-colour flood runs on the authoritative connectivity core
   (#138).
@@ -103,6 +111,10 @@ summarises by theme rather than listing every commit.
 - **Interaction** — unsnapped cursor position for Select-tool hit-testing,
   snapped coords retained for drag anchor and delta; `CursorAt` published
   during box-select drag to force redraw.
+- **Detached windows open in front** — a detached modal, undocked tab, or
+  detached panel opened at the default window level with no raise, so on
+  Windows it could appear *behind* the main window and the user had to move
+  the main window to find the dialog they had just opened (#311).
 - Preferences modal is responsive to window resize (#208) and the reopen
   regression is fixed; theme-aligned canvas backdrop, sheet tracks the stored
   paper size (#201); library server gains a persistent DB backend and rejects
