@@ -375,7 +375,25 @@ impl FootprintCanvas<'_> {
             cstate.last_snap = None;
             raw_world
         } else {
-            let point_hit = sketch_snap(self.sketch, cstate, raw_world);
+            // A whole-pad drag must NOT snap the cursor to sketch
+            // Points. A sketch-profile pad carries its outline as
+            // sketch geometry that moves WITH the pad, so those Points
+            // sit right under the cursor mid-drag; snapping to them
+            // makes the cursor lock onto the pad's own outline for a
+            // tick and jump — a visible flicker. Grid / pad snapping
+            // via `snap_cursor` still applies. Sketch-point and
+            // sketch-line drags keep vertex snapping (that's the whole
+            // point of dragging a vertex).
+            let pad_drag = cstate
+                .drag
+                .as_ref()
+                .map(|d| d.pad_idx != usize::MAX && d.sketch_point.is_none() && d.sketch_line.is_none())
+                .unwrap_or(false);
+            let point_hit = if pad_drag {
+                None
+            } else {
+                sketch_snap(self.sketch, cstate, raw_world)
+            };
             let result = snap::snap_cursor(raw_world, self.sketch, self.state, point_hit);
             cstate.last_snap = Some(result);
             result.pos
