@@ -174,7 +174,7 @@ broken layout — these GPUs are not supported.
 
 ## Building
 
-**Prerequisites:** Rust 1.85+ (the workspace is edition 2024) and a GPU supporting
+**Prerequisites:** Rust 1.88+ (edition 2024 plus let-chains) and a GPU supporting
 Vulkan, Metal, or DX12.
 
 ```bash
