@@ -61,7 +61,7 @@ pub struct ErcPin {
     /// `false` for `Unclassified` and `DoNotConnect` pin types — those may be
     /// left unconnected by design. DSL: `pin.required == true`.
     pub required: bool,
-    /// `true` if a wire endpoint, bus endpoint, label, or no-connect marker
+    /// `true` if a wire endpoint, junction, label, or no-connect marker
     /// sits at this pin's world-space tip. DSL: `pin.connected == false`.
     pub connected: bool,
 }
