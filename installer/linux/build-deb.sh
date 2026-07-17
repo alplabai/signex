@@ -12,6 +12,7 @@ set -euo pipefail
 BINARY_PATH="${1:?usage: build-deb.sh <binary> <version> <arch>}"
 VERSION="${2:?missing version}"
 ARCH="${3:?missing arch}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
@@ -20,6 +21,9 @@ PKG_DIR="$WORK_DIR/signex_${VERSION}_${ARCH}"
 mkdir -p "$PKG_DIR/DEBIAN"
 mkdir -p "$PKG_DIR/usr/bin"
 mkdir -p "$PKG_DIR/usr/share/applications"
+mkdir -p "$PKG_DIR/usr/share/icons/hicolor/128x128/apps"
+mkdir -p "$PKG_DIR/usr/share/icons/hicolor/256x256/apps"
+mkdir -p "$PKG_DIR/usr/share/icons/hicolor/512x512/apps"
 mkdir -p "$PKG_DIR/usr/share/icons/hicolor/scalable/apps"
 mkdir -p "$PKG_DIR/usr/share/icons/hicolor/scalable/mimetypes"
 mkdir -p "$PKG_DIR/usr/share/mime/packages"
@@ -28,13 +32,20 @@ mkdir -p "$PKG_DIR/usr/share/doc/signex"
 cp "$BINARY_PATH" "$PKG_DIR/usr/bin/signex"
 chmod 755 "$PKG_DIR/usr/bin/signex"
 
+# Signex application icons for desktop launchers. The desktop entry
+# below uses Icon=signex, so hicolor app icons must be installed under
+# the matching basename at each available size.
+cp "$SCRIPT_DIR/signex-128.png" "$PKG_DIR/usr/share/icons/hicolor/128x128/apps/signex.png"
+cp "$SCRIPT_DIR/signex-256.png" "$PKG_DIR/usr/share/icons/hicolor/256x256/apps/signex.png"
+cp "$SCRIPT_DIR/signex-512.png" "$PKG_DIR/usr/share/icons/hicolor/512x512/apps/signex.png"
+
 # Signex file-format icons (SVG) — Linux uses the SVG source
 # directly, scaled by the desktop environment. Names follow the
 # freedesktop.org MIME-icon convention
 # `application-vnd.alpcaner.signex.<ext>.svg` so the
 # hicolor-scalable theme pairs them with the MIME types declared
 # below.
-REPO_ROOT_FOR_ICONS="$(cd "$(dirname "$0")/../.." && pwd)"
+REPO_ROOT_FOR_ICONS="$(cd "$SCRIPT_DIR/../.." && pwd)"
 FILE_ICON_DIR="$REPO_ROOT_FOR_ICONS/crates/signex-app/assets/icons/files"
 for ext in snxprj snxsch snxpcb snxfpt snxsim snxlib snxsym snxpkg snxmat snxcfg snxmod; do
   src="$FILE_ICON_DIR/$ext.svg"
@@ -132,6 +143,7 @@ Type=Application
 Name=Signex
 Comment=AI-first EDA editor
 Exec=/usr/bin/signex %F
+Icon=signex
 Terminal=false
 Categories=Development;Electronics;Engineering;
 MimeType=application/vnd.alpcaner.signex.snxprj;application/vnd.alpcaner.signex.snxsch;application/vnd.alpcaner.signex.snxpcb;application/vnd.alpcaner.signex.snxfpt;application/vnd.alpcaner.signex.snxsim;application/vnd.alpcaner.signex.snxlib;application/vnd.alpcaner.signex.snxsym;application/vnd.alpcaner.signex.snxpkg;application/vnd.alpcaner.signex.snxmat;application/vnd.alpcaner.signex.snxcfg;application/vnd.alpcaner.signex.snxmod;

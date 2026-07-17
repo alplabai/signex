@@ -61,7 +61,7 @@ pub struct ErcPin {
     /// `false` for `Unclassified` and `DoNotConnect` pin types — those may be
     /// left unconnected by design. DSL: `pin.required == true`.
     pub required: bool,
-    /// `true` if a wire endpoint, bus endpoint, label, or no-connect marker
+    /// `true` if a wire endpoint, junction, label, or no-connect marker
     /// sits at this pin's world-space tip. DSL: `pin.connected == false`.
     pub connected: bool,
 }
@@ -402,6 +402,21 @@ fn summarize_nets(
     let junction_pts: Vec<Point> = junctions.iter().map(|j| j.position).collect();
     let mut conn = SheetConnectivity::from_segments(&segments, &junction_pts);
 
+    // Anchor every label to the wire it sits on — endpoint *or* interior —
+    // exactly as `merged_sheet_parent` does before it reads net roots. A label
+    // dropped mid-span is not a wire endpoint, so an unanchored `root_of` hands
+    // it a singleton root and its name never reaches the net (issue #396, the
+    // DSL-facing half of #388).
+    //
+    // Anchoring is a separate pass because a union can re-point a class
+    // representative: a label landing where a wire ends on another wire's
+    // interior merges those two classes, changing a root recorded earlier in
+    // the same loop. Every root below is therefore read only after the last
+    // union, mirroring `merged_sheet_parent`'s merge-then-read split.
+    for lbl in labels {
+        conn.root_of_anchored(&lbl.position, &segments);
+    }
+
     // Group labels by net root.
     let mut net_labels: HashMap<(i64, i64), Vec<&ErcLabel>> = HashMap::new();
     for lbl in labels {
@@ -591,6 +606,84 @@ mod tests {
             nets.len(),
             2,
             "without a junction the T is two separate nets"
+        );
+    }
+
+    fn label(pos: Point, text: &str, label_type: LabelType) -> ErcLabel {
+        ErcLabel {
+            uuid: Uuid::nil(),
+            text: text.into(),
+            position: pos,
+            label_type,
+        }
+    }
+
+    #[test]
+    fn mid_wire_label_names_the_net_the_dsl_reads() {
+        // Regression for issue #396: a Net label dropped on a wire's INTERIOR
+        // (5,0), not on either endpoint. `build_netlist` anchors it via
+        // `point_on_segment`, so the netlist calls this net "SDA"; an
+        // unanchored `root_of` instead handed the label a singleton root and
+        // the ErcNet the DSL reads came back unnamed — every DSL rule keyed on
+        // `net.name` / `net.class` then disagreed with the netlist (#388).
+        let wires = vec![wire(pt(0.0, 0.0), pt(10.0, 0.0))];
+        let labels = vec![label(pt(5.0, 0.0), "SDA", LabelType::Net)];
+        let syms = vec![symbol(vec![
+            pin(pt(0.0, 0.0), PinDirection::Output),
+            pin(pt(10.0, 0.0), PinDirection::Input),
+        ])];
+
+        let nets = summarize_nets(&wires, &labels, &[], &syms);
+        assert_eq!(nets.len(), 1, "one wire with two pins is one net");
+        assert_eq!(
+            nets[0].name, "SDA",
+            "a mid-span label must name the net the DSL sees"
+        );
+        assert_eq!(
+            nets[0].class, "sda",
+            "class derives from the anchored name, not an empty one"
+        );
+    }
+
+    #[test]
+    fn endpoint_label_still_names_its_net() {
+        // The anchoring pass must not regress the ordinary case: a label
+        // sitting exactly on a wire endpoint is already in the wire's class,
+        // so anchoring is a no-op union and the name still lands.
+        let wires = vec![wire(pt(0.0, 0.0), pt(10.0, 0.0))];
+        let labels = vec![label(pt(0.0, 0.0), "VBUS", LabelType::Global)];
+        let syms = vec![symbol(vec![
+            pin(pt(0.0, 0.0), PinDirection::PowerOutput),
+            pin(pt(10.0, 0.0), PinDirection::Input),
+        ])];
+
+        let nets = summarize_nets(&wires, &labels, &[], &syms);
+        assert_eq!(nets.len(), 1);
+        assert_eq!(nets[0].name, "VBUS");
+        assert!(nets[0].has_driver, "PowerOutput drives the net");
+    }
+
+    #[test]
+    fn label_off_every_wire_does_not_join_a_net() {
+        // Anchoring must not be a licence to attach any label anywhere: a
+        // label at (7,3) lies off the wire, so it stays its own root and
+        // never names the wire's net. Anchoring ERC more leniently than
+        // `build_netlist` would be its own #388.
+        let wires = vec![wire(pt(0.0, 0.0), pt(10.0, 0.0))];
+        let labels = vec![label(pt(7.0, 3.0), "STRAY", LabelType::Net)];
+        let syms = vec![symbol(vec![
+            pin(pt(0.0, 0.0), PinDirection::Output),
+            pin(pt(10.0, 0.0), PinDirection::Input),
+        ])];
+
+        let nets = summarize_nets(&wires, &labels, &[], &syms);
+        let wire_net = nets
+            .iter()
+            .find(|n| n.pin_types.len() == 2)
+            .expect("the wire's own net still exists");
+        assert_eq!(
+            wire_net.name, "",
+            "an off-wire label must not name the wire's net"
         );
     }
 }
