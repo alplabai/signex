@@ -8,9 +8,9 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
-## [0.14.0] — unreleased
+## [0.14.0] — 2026-07-17
 
-**Everything since v0.13.0** — 170 commits, 2026-05-06 → 2026-07-15.
+**Everything since v0.13.0** — 217 commits, 2026-05-06 → 2026-07-17.
 
 This section was originally written on 2026-05-31 covering only the footprint
 editor, and never tagged. Work kept landing past it: symbol multi-unit, the
@@ -84,13 +84,39 @@ summarises by theme rather than listing every commit.
 ### Fixed
 
 - **Data loss / persistence** — TSV cells are escaped so a schematic save can
-  always reopen (#96, #130); persistence made crash-safe with `fsync`
-  `atomic_write`, atomic `.snxprj`, and a corrupt-JSON guard (#104, #119);
-  residual document writes routed through `atomic_write`, New Project guarded
-  (#104, #128); prompt for unsaved changes on app exit (#95, #124).
+  always reopen (#96, #130); C0 control bytes in a TSV cell are escaped too, so
+  a stray control character in user text can no longer produce a `.snxsch` /
+  `.snxpcb` that will not reload (#386, #397); the footprint editor's STEP store
+  is written via `atomic_write`, so a crash mid-write can no longer strand a
+  corrupt 3D asset that is then served forever (#387, #398); persistence made
+  crash-safe with `fsync` `atomic_write`, atomic `.snxprj`, and a corrupt-JSON
+  guard (#104, #119); residual document writes routed through `atomic_write`,
+  New Project guarded (#104, #128); prompt for unsaved changes on app exit
+  (#95, #124).
+- **Footprint sketch-profile pads** — moving a pad made with "Make Pad from
+  Profile" left its sketch profile behind, and the bake then resolved the
+  copper back to the pad's original location, so an exported footprint placed
+  the pad in the wrong spot with no warning. The profile now travels with the
+  pad: the loop walker gained an id-level core that needs no solve, a pad that
+  first appears from the sketch side is relinked to its `PadAttr` entity by
+  number, and a whole-pad drag no longer snaps its cursor to the pad's own
+  outline vertices (#142, #311).
 - **Connectivity** — wires connect at T-junctions in net derivation (#107,
   #120); the net-colour flood runs on the authoritative connectivity core
   (#138).
+- **ERC agrees with the netlist on mid-wire taps** — ERC re-derived
+  connectivity with endpoint-only checks, so a label or pin tapping a wire's
+  interior was invisible to the rules while the netlist saw it. The rules now
+  read the shared wire-anchored connectivity (#388, #399); DSL net names are
+  anchored the same way, so rules keyed on `net.name` / `net.class` no longer
+  see an unnamed net plus a phantom (#396, #403); and bus range labels placed
+  mid-span — where they are normally drawn — are anchored to their bundle, so a
+  `D[0..7]` / `D[0..3]` width mismatch on one bus is reported instead of
+  silently passing (#395, #405).
+- **PDF and preview net names** — the exporters re-derived connectivity of
+  their own instead of reading the authoritative `Netlist` off
+  `ExportContext`, so an exported sheet could annotate a net differently from
+  the netlist it shipped with (#389, #400).
 - **Editing** — Ctrl+C/X/V/D and shift-chorded shortcuts un-broken (#103,
   #127); Find/Replace replaces the matched substring rather than the whole
   field (#102, #125).
@@ -103,6 +129,10 @@ summarises by theme rather than listing every commit.
 - **Interaction** — unsnapped cursor position for Select-tool hit-testing,
   snapped coords retained for drag anchor and delta; `CursorAt` published
   during box-select drag to force redraw.
+- **Detached windows open in front** — a detached modal, undocked tab, or
+  detached panel opened at the default window level with no raise, so on
+  Windows it could appear *behind* the main window and the user had to move
+  the main window to find the dialog they had just opened (#311).
 - Preferences modal is responsive to window resize (#208) and the reopen
   regression is fixed; theme-aligned canvas backdrop, sheet tracks the stored
   paper size (#201); library server gains a persistent DB backend and rejects
