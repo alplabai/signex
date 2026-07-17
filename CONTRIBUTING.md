@@ -56,7 +56,10 @@ the project's design rules) help identify rendering discrepancies.
 
 ### Prerequisites
 
-- **Rust 1.85+** (edition 2024)
+- **Rust 1.88+** — edition 2024 needs 1.85, but the workspace also uses
+  let-chains (`if cond && let Some(x) = ...`), stable only from 1.88. The
+  workspace declares `rust-version = "1.88"`, so an older toolchain fails with
+  a clear "requires rustc 1.88.0 or newer" instead of confusing errors.
 - A GPU supporting Vulkan, Metal, or DX12 (for wgpu) — CI runs headless via lavapipe
 
 ### Build and Run
