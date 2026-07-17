@@ -320,6 +320,27 @@ pub(crate) fn bus_bit_width_mismatch(ctx: &ErcContext, out: &mut Vec<Diagnostic>
         Some((&text[..open], lo, hi))
     }
 
+    // Anchor each range label to the bus segment it sits on — endpoint *or*
+    // interior. Mid-span is where users actually put a bus range label, and an
+    // unanchored `root_of` gave every one of them its own singleton group, so
+    // a group never reached the `len() >= 2` needed to compare widths and the
+    // mismatch was never reported (issue #395).
+    //
+    // Anchoring against buses is correct *here* and nowhere else: `conn` is
+    // bus-local, built from bus segments alone, and models bundle grouping —
+    // something `build_netlist` does not derive at all, so unlike the net rules
+    // (D5.4) there is no netlist for this to be more lenient than.
+    //
+    // Separate pass for the same reason as the net side: a union re-points a
+    // class representative, so a root recorded mid-loop can go stale. Read
+    // every root only after the last union.
+    for lbl in &ctx.labels {
+        if parse_bus_label(&lbl.text).is_none() {
+            continue;
+        }
+        conn.root_of_anchored(&lbl.position, &buses);
+    }
+
     type Groups<'a> = HashMap<(i64, i64), Vec<(&'a crate::context::ErcLabel, (i64, i64))>>;
     let mut by_root: Groups<'_> = HashMap::new();
     for lbl in &ctx.labels {
@@ -949,6 +970,108 @@ mod tests {
             out_fwd.len(),
             out_rev.len(),
             "verdict must not depend on label document order (fwd={out_fwd:?}, rev={out_rev:?})"
+        );
+    }
+
+    fn bus_ctx(buses: Vec<crate::context::ErcBus>, labels: Vec<ErcLabel>) -> ErcContext {
+        ErcContext {
+            buses,
+            labels,
+            ..ctx(Vec::new(), Vec::new(), Vec::new(), Vec::new())
+        }
+    }
+
+    fn bus(a: Point, b: Point) -> crate::context::ErcBus {
+        crate::context::ErcBus { start: a, end: b }
+    }
+
+    #[test]
+    fn bus_bit_width_mismatch_catches_mid_bus_range_labels() {
+        // Regression for issue #395: both range labels sit on the bus INTERIOR
+        // — where users actually place them — not on an endpoint. Unanchored,
+        // each landed on its own singleton root, no group ever reached the
+        // `len() >= 2` needed to compare widths, and the mismatch went unsaid.
+        let buses = vec![bus(pt(0.0, 0.0), pt(10.0, 0.0))];
+        let labels = vec![
+            net_label("D[0..7]", pt(3.0, 0.0)),
+            net_label("D[0..3]", pt(7.0, 0.0)),
+        ];
+        let mut out = Vec::new();
+        bus_bit_width_mismatch(&bus_ctx(buses, labels), &mut out);
+        assert_eq!(
+            out.len(),
+            1,
+            "a mid-bus width mismatch must be reported: {out:?}"
+        );
+    }
+
+    #[test]
+    fn bus_bit_width_mismatch_still_catches_endpoint_range_labels() {
+        // Guard: the case that already worked before #395 must keep working —
+        // anchoring an endpoint label is a no-op union.
+        let buses = vec![bus(pt(0.0, 0.0), pt(10.0, 0.0))];
+        let labels = vec![
+            net_label("D[0..7]", pt(0.0, 0.0)),
+            net_label("D[0..3]", pt(10.0, 0.0)),
+        ];
+        let mut out = Vec::new();
+        bus_bit_width_mismatch(&bus_ctx(buses, labels), &mut out);
+        assert_eq!(out.len(), 1, "endpoint mismatch still fires: {out:?}");
+    }
+
+    #[test]
+    fn bus_bit_width_mismatch_accepts_matching_mid_bus_widths() {
+        // Anchoring must not turn into a false-positive engine: two mid-span
+        // labels that agree on the width are grouped together now (they were
+        // two singletons before) and must still report nothing.
+        let buses = vec![bus(pt(0.0, 0.0), pt(10.0, 0.0))];
+        let labels = vec![
+            net_label("D[0..7]", pt(3.0, 0.0)),
+            net_label("D[0..7]", pt(7.0, 0.0)),
+        ];
+        let mut out = Vec::new();
+        bus_bit_width_mismatch(&bus_ctx(buses, labels), &mut out);
+        assert!(
+            out.is_empty(),
+            "matching widths are not a mismatch: {out:?}"
+        );
+    }
+
+    #[test]
+    fn bus_bit_width_mismatch_keeps_separate_buses_apart() {
+        // Anchoring is per-segment, not global: two disjoint buses each with
+        // their own range label are two groups of one, so differing widths
+        // across unrelated buses are not a mismatch.
+        let buses = vec![
+            bus(pt(0.0, 0.0), pt(10.0, 0.0)),
+            bus(pt(0.0, 50.0), pt(10.0, 50.0)),
+        ];
+        let labels = vec![
+            net_label("D[0..7]", pt(5.0, 0.0)),
+            net_label("A[0..3]", pt(5.0, 50.0)),
+        ];
+        let mut out = Vec::new();
+        bus_bit_width_mismatch(&bus_ctx(buses, labels), &mut out);
+        assert!(
+            out.is_empty(),
+            "unrelated buses must not be compared: {out:?}"
+        );
+    }
+
+    #[test]
+    fn bus_bit_width_mismatch_ignores_a_label_off_every_bus() {
+        // A range label floating off the bus stays its own root and never
+        // joins the bundle — anchoring must not attract anything nearby.
+        let buses = vec![bus(pt(0.0, 0.0), pt(10.0, 0.0))];
+        let labels = vec![
+            net_label("D[0..7]", pt(5.0, 0.0)),
+            net_label("D[0..3]", pt(5.0, 25.0)),
+        ];
+        let mut out = Vec::new();
+        bus_bit_width_mismatch(&bus_ctx(buses, labels), &mut out);
+        assert!(
+            out.is_empty(),
+            "an off-bus label must not join the bundle: {out:?}"
         );
     }
 }
