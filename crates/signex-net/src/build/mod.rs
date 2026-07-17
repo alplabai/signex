@@ -210,13 +210,21 @@ impl SheetConnectivity {
     /// "same net" comparison agrees with [`build_netlist`] by construction
     /// (issue #388) instead of missing the interior tap.
     ///
-    /// Pass **wire** segments only — never bus segments. A bus is a member
-    /// bundle, not a single net, and `build_netlist` never anchors labels
-    /// against buses either; anchoring to a bus interior here would make the
-    /// caller more lenient than the netlist (D5.4).
-    pub fn root_of_anchored(&mut self, p: &Point, wires: &[(Point, Point)]) -> Key {
+    /// Anchor only against the segments this connectivity was **built from**.
+    /// For net connectivity — anything derived from `sheet.wires` — that means
+    /// wire segments and never buses: a bus is a member bundle, not a single
+    /// net, `build_netlist` never anchors labels against buses either, and
+    /// anchoring to a bus interior would make the caller more lenient than the
+    /// netlist (D5.4). A **bus-local** connectivity built only from bus
+    /// segments (`from_segments(&buses, &[])`, as `bus_bit_width_mismatch`
+    /// uses to group range labels per bundle) is the one exception: it models
+    /// bundle grouping, which the netlist does not derive at all, so there is
+    /// no netlist to diverge from and its own bus segments are the correct
+    /// anchor (issue #395). Mixing the two — anchoring bus segments into wire
+    /// connectivity — is what D5.4 forbids.
+    pub fn root_of_anchored(&mut self, p: &Point, segments: &[(Point, Point)]) -> Key {
         let pk = pt_key(p);
-        for (a, b) in wires {
+        for (a, b) in segments {
             if point_on_segment(pk, pt_key(a), pt_key(b)) {
                 uf_union(&mut self.parent, pk, pt_key(a));
                 break;
