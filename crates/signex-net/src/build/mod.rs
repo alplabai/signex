@@ -22,8 +22,10 @@ use uuid::Uuid;
 use crate::uf::{Key, find as uf_find, union as uf_union};
 
 /// 1 µm integer bucket — the union-find key space and the single definition of
-/// "same point" for the whole derivation (D5.5). Matches ERC's `pt_key`.
-pub(crate) fn pt_key(p: &Point) -> Key {
+/// "same point" for the whole derivation (D5.5). `pub` so `signex-erc`'s rules
+/// can compare positions with the exact same metric instead of hand-rolling a
+/// second float-epsilon `same()` (issue #388).
+pub fn pt_key(p: &Point) -> Key {
     ((p.x * 1000.0).round() as i64, (p.y * 1000.0).round() as i64)
 }
 
@@ -40,7 +42,12 @@ pub(crate) fn pt_key(p: &Point) -> Key {
 /// the wire. The real fix is exact integer-nanometre coordinates (the schematic
 /// model still stores `f64` mm); that migration is the future coordinate ADR's
 /// job, and until then exact collinearity is the safe, deterministic rule.
-pub(crate) fn point_on_segment(p: Key, a: Key, b: Key) -> bool {
+///
+/// `pub` so callers outside this crate (`signex-erc`'s rules) can anchor a
+/// point to a wire's interior the same way [`merged_sheet_parent`] anchors
+/// labels, instead of re-deriving an endpoint-only approximation that
+/// disagrees with the netlist on mid-wire taps (issue #388).
+pub fn point_on_segment(p: Key, a: Key, b: Key) -> bool {
     let cross =
         (b.0 - a.0) as i128 * (p.1 - a.1) as i128 - (b.1 - a.1) as i128 * (p.0 - a.0) as i128;
     if cross != 0 {
@@ -192,6 +199,38 @@ impl SheetConnectivity {
     /// equal. Takes `&mut self` because lookups path-compress.
     pub fn root_of(&mut self, p: &Point) -> Key {
         uf_find(&mut self.parent, pt_key(p))
+    }
+
+    /// The net root of `p` after anchoring it to any wire in `wires` whose
+    /// segment it lies on — endpoint **or interior** — via
+    /// [`point_on_segment`], the same anchoring [`merged_sheet_parent`]
+    /// applies to labels before computing net roots. Use this (not
+    /// [`root_of`](Self::root_of)) for points that are not themselves wire
+    /// endpoints, such as a Net/Global/Power label sitting mid-span, so a
+    /// "same net" comparison agrees with [`build_netlist`] by construction
+    /// (issue #388) instead of missing the interior tap.
+    ///
+    /// Anchor only against the segments this connectivity was **built from**.
+    /// For net connectivity — anything derived from `sheet.wires` — that means
+    /// wire segments and never buses: a bus is a member bundle, not a single
+    /// net, `build_netlist` never anchors labels against buses either, and
+    /// anchoring to a bus interior would make the caller more lenient than the
+    /// netlist (D5.4). A **bus-local** connectivity built only from bus
+    /// segments (`from_segments(&buses, &[])`, as `bus_bit_width_mismatch`
+    /// uses to group range labels per bundle) is the one exception: it models
+    /// bundle grouping, which the netlist does not derive at all, so there is
+    /// no netlist to diverge from and its own bus segments are the correct
+    /// anchor (issue #395). Mixing the two — anchoring bus segments into wire
+    /// connectivity — is what D5.4 forbids.
+    pub fn root_of_anchored(&mut self, p: &Point, segments: &[(Point, Point)]) -> Key {
+        let pk = pt_key(p);
+        for (a, b) in segments {
+            if point_on_segment(pk, pt_key(a), pt_key(b)) {
+                uf_union(&mut self.parent, pk, pt_key(a));
+                break;
+            }
+        }
+        uf_find(&mut self.parent, pk)
     }
 }
 
