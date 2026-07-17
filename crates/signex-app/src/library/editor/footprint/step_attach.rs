@@ -152,7 +152,7 @@ pub fn stash_step(lib_root: &Path, bytes: &[u8], filename: &str) -> Option<StepA
     }
     let target = step_dir.join(format!("{hash}.step"));
     if !target.exists()
-        && let Err(e) = std::fs::write(&target, bytes)
+        && let Err(e) = signex_types::atomic_io::atomic_write(&target, bytes)
     {
         tracing::warn!(
             target: "signex::library",
