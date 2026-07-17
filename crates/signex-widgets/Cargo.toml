@@ -3,6 +3,7 @@ name = "signex-widgets"
 description = "Custom Iced widgets for Signex EDA — tree view, menus, data table, property grid"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
