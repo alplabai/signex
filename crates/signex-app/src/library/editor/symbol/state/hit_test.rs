@@ -124,6 +124,19 @@ fn hit_test_graphic_body(sym: &Symbol, idx: usize, x: f64, y: f64) -> bool {
             if (d - radius).abs() > GRAPHIC_BODY_TOL {
                 return false;
             }
+            // A full-turn arc (raw span a nonzero whole number of
+            // turns) is a full circle — its entire radius band is
+            // selectable, not just the two endpoint angles a collapsed
+            // sweep would otherwise allow. Shared authority with the
+            // CPU draw path's full-turn belt so draw and hit-test never
+            // disagree (a 0° -> 360° Properties-panel edit renders a
+            // circle the user can also click anywhere on).
+            if signex_gfx::primitive::arc::arc_is_full_turn_rad(
+                (*start_deg as f32).to_radians(),
+                (*end_deg as f32).to_radians(),
+            ) {
+                return true;
+            }
             // Angle of the click point in degrees, normalised to [0, 360).
             let a = dy.atan2(dx).to_degrees().rem_euclid(360.0);
             let s = start_deg.rem_euclid(360.0);

@@ -45,6 +45,25 @@ pub fn ccw_wrapped_sweep_rad(start_angle: f32, end_angle: f32) -> f32 {
     (end_angle - start_angle).rem_euclid(TAU)
 }
 
+/// `true` when an arc's raw (unwrapped) `start..end` span is a nonzero
+/// whole number of full turns: its [`ccw_wrapped_sweep_rad`] collapses
+/// to (near) zero while the raw `end - start` span is genuinely
+/// nonzero. Such an arc is a full circle, not a degenerate zero-sweep
+/// point (`start == end`, where the raw span is also ~0), and must be
+/// drawn and hit-tested as the whole circle outline.
+///
+/// This is the single authority both the CPU canvas draw path
+/// (`renderer_scene_canvas::draw_arc_bucket`) and the symbol body
+/// hit-test (`state::hit_test`'s `Arc` arm) consult, so a full-turn
+/// arc a user typed into the Properties panel (`0° -> 360°`, which
+/// bypasses the load-time full-turn-to-`Circle` migration) never
+/// renders as a visible circle it cannot also click-select.
+pub fn arc_is_full_turn_rad(start_angle: f32, end_angle: f32) -> bool {
+    const EPS: f32 = 1e-4;
+    ccw_wrapped_sweep_rad(start_angle, end_angle).abs() < EPS
+        && (end_angle - start_angle).abs() > EPS
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -93,5 +112,31 @@ mod tests {
         let sweep_ba = ccw_wrapped_sweep_rad(b, a);
         let tau = std::f32::consts::TAU;
         assert!((sweep_ab + sweep_ba - tau).abs() < 1e-4);
+    }
+
+    /// A `0 -> 360°` (`0 -> TAU`) pair sweeps zero CCW but spans a full
+    /// turn: it is a circle, not a point. Both the draw path and the
+    /// hit-test must agree on this via `arc_is_full_turn_rad`.
+    #[test]
+    fn full_turn_pair_is_detected() {
+        assert!(arc_is_full_turn_rad(0.0, std::f32::consts::TAU));
+        // A raw span offset by a full turn (10° -> 370°) also collapses
+        // to zero sweep and must read as a full turn, not a sliver.
+        assert!(arc_is_full_turn_rad(
+            10f32.to_radians(),
+            370f32.to_radians()
+        ));
+    }
+
+    /// `start == end` is a genuine zero-sweep point-arc (raw span ~0),
+    /// and an ordinary partial arc has a nonzero sweep — neither is a
+    /// full turn.
+    #[test]
+    fn degenerate_point_and_ordinary_arc_are_not_full_turns() {
+        assert!(!arc_is_full_turn_rad(
+            45f32.to_radians(),
+            45f32.to_radians()
+        ));
+        assert!(!arc_is_full_turn_rad(0.0, 90f32.to_radians()));
     }
 }
