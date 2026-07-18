@@ -190,6 +190,34 @@ impl Signex {
                             ),
                         },
                     ))
+                } else if let Some(path) = self
+                    .document_state
+                    .tabs
+                    .get(self.document_state.active_tab)
+                    .and_then(|t| t.kind.as_symbol_editor())
+                    .cloned()
+                {
+                    // Symbol editor tab: Esc's one job today is
+                    // closing an open right-click context menu (no
+                    // per-tool cancel state to reset yet, unlike the
+                    // footprint editor's `ToolEscape`).
+                    let menu_open = self
+                        .document_state
+                        .symbol_editors
+                        .get(&path)
+                        .is_some_and(|e| e.context_menu.is_some());
+                    if menu_open {
+                        self.update(Message::Library(
+                            crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                                path,
+                                msg: crate::library::messages::PrimitiveEdit::Symbol(
+                                    crate::library::messages::SymbolEditorMsg::CloseContextMenu,
+                                ),
+                            },
+                        ))
+                    } else {
+                        Task::none()
+                    }
                 } else {
                     self.update(Message::Tool(crate::app::ToolMessage::SelectTool(
                         crate::app::Tool::Select,

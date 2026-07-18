@@ -28,7 +28,6 @@ pub type ComponentId = Uuid;
 #[allow(dead_code)]
 pub type Version = u32;
 
-
 mod library_message;
 pub use library_message::LibraryMessage;
 
@@ -305,6 +304,7 @@ pub enum SymbolToolMsg {
     PlaceCircle,
     PlaceArc,
     PlaceText,
+    PlacePolygon,
 }
 
 /// v0.13.3 — selection-aware constraint kind tag. The dispatcher
@@ -500,6 +500,9 @@ pub enum GraphicHandleMsg {
     ArcEnd,
     /// Text anchor / `position` field.
     TextAnchor,
+    /// Polygon vertex at the given index — pure-data alias of
+    /// `editor::symbol::state::GraphicHandle::PolygonVertex`.
+    PolygonVertex(u32),
 }
 
 /// Pivot mode for Symbol-graphic rotate operations.
@@ -510,6 +513,23 @@ pub enum SymbolRotatePivotMsg {
     WorldOrigin,
     /// Rotate around each selected graphic's geometry center.
     GeometryCenter,
+}
+
+/// What the cursor was over at right-click time — pure-data alias of
+/// `editor::symbol::state::SymbolContextTarget`. Carried by
+/// `SymbolEditorMsg::ShowContextMenu`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SymbolContextTargetMsg {
+    Empty,
+    Pin(usize),
+    Graphic(usize),
+}
+
+/// Which context-menu submenu is accordion-expanded — pure-data alias
+/// of `editor::symbol::state::SymbolContextSubmenu`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SymbolContextSubmenuMsg {
+    Place,
 }
 
 mod footprint;

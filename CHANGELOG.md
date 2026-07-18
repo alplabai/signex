@@ -8,6 +8,46 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
+### Added — symbol editor
+
+- **Polygon graphic primitive + Place Polygon tool** — click-collect closed-loop
+  vertex stash on the symbol canvas, closeable by clicking the first vertex,
+  double-clicking, or Enter. `.snxsym` files **containing a polygon** are
+  written with the new `snxsym/v2` format token (older builds refuse them
+  with a clear unsupported-format error instead of an opaque parse failure);
+  polygon-free files keep `snxsym/v1` and stay readable by older builds.
+- **Join into Polygon** — chain the selected Line/Arc graphics end-to-end
+  (shared endpoints, in any order/direction) into one closed Polygon,
+  replacing the source graphics in a single undo step. An open chain
+  auto-closes once via the missing edge between its two loose ends; a
+  branching, disjoint, or otherwise malformed selection is left untouched
+  and explained in the editor's status footer.
+- **Right-click context menu** — Place ▸ submenu (Pin/Line/Rectangle/
+  Circle/Arc/Text/Polygon), Join into Polygon (selection-aware), Delete,
+  Select All / Deselect All, Fit to Window. Right-click on an unselected
+  graphic selects it first (Altium parity); Esc and click-outside close
+  the menu.
+
+### Fixed
+
+- Rotated / clockwise-drawn symbol arcs now render at the same sweep their
+  endpoint handles hit-test against — the CPU canvas draw path picked up
+  the CCW-wraparound sweep normalisation the GPU shader and hit-test
+  already used, so a rotated or CW arc no longer visibly renders in the
+  wrong place relative to where it selects.
+- **Legacy `.snxsym` arc migration** — arcs saved by older builds are
+  normalised once at load time: clockwise-placement pairs (recognisable by
+  a negative / unwrapped endpoint) are swapped into the CCW-wraparound
+  form so the arc the user originally drew is preserved, and an exact
+  full-turn arc (`0 → 360`) becomes a `Circle`. The next save persists the
+  normalised form. KNOWN LIMIT: a clockwise-intent pair whose endpoints
+  both already sit in `[0, 360)` (hand-typed in the Properties panel, or a
+  CW placement that never crossed 0°) is indistinguishable from a
+  rotation-produced wraparound pair and is left as wraparound — such arcs
+  render as their complement (they already hit-tested and GPU-rendered
+  that way before this release; only the CPU canvas ever showed the short
+  arc).
+
 ## [0.14.0] — 2026-07-17
 
 **Everything since v0.13.0** — 217 commits, 2026-05-06 → 2026-07-17.

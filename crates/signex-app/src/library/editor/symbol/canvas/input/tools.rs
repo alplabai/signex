@@ -32,9 +32,14 @@ impl SymbolCanvas<'_> {
                 // Use a screen-pixel-based tolerance so handles are
                 // equally easy to hit at any zoom level.
                 let tol_mm = (8.0_f32 / self.camera.scale.max(0.01)).clamp(0.5, 4.0) as f64;
-                if let Some((idx, handle)) =
-                    state::hit_test_graphic_handle(self.symbol, ux, uy, tol_mm, self.active_part)
-                {
+                if let Some((idx, handle)) = state::hit_test_graphic_handle(
+                    self.symbol,
+                    ux,
+                    uy,
+                    tol_mm,
+                    self.active_part,
+                    &self.selected,
+                ) {
                     state.dragging_handle = Some((idx, handle));
                     state.dragging = false;
                     state.drag_anchor_offset = None;
@@ -46,8 +51,10 @@ impl SymbolCanvas<'_> {
                 // Pin tip + graphic hit-test wins; a click on a pin's
                 // name/number label is a fallback so the pin is grabbable
                 // by its text, not only its ~1.5 mm tip.
-                let sel = state::hit_test(self.symbol, ux, uy, self.active_part)
-                    .or_else(|| self.pin_hit_by_label(ux, uy).map(state::SymbolSelection::Pin));
+                let sel = state::hit_test(self.symbol, ux, uy, self.active_part).or_else(|| {
+                    self.pin_hit_by_label(ux, uy)
+                        .map(state::SymbolSelection::Pin)
+                });
                 if let Some(sel) = sel {
                     state.box_select_origin = None;
                     state.box_select_current = None;
@@ -154,19 +161,37 @@ impl SymbolCanvas<'_> {
                 }
             }
             SymbolTool::PlaceArc => {
-                if let Some((radius, start_deg)) = state.arc_radius_start.take() {
-                    // Third click — commit the arc.
-                    let (cx, cy) = state.arc_center.take().unwrap_or((wx, wy));
-                    state.arc_cursor = None;
+                if let Some((radius, start_deg)) = state.arc_radius_start {
+                    // Third click — peek (don't take yet) so a
+                    // rejected commit (see below) leaves the gesture
+                    // exactly where it was, ready for another click.
+                    let (cx, cy) = state.arc_center.unwrap_or((wx, wy));
                     // Use the unwrapped end angle so arcs that swept
                     // past ±180° are stored correctly. Fall back to a
                     // fresh atan2 only if the cursor never moved after
                     // the second click.
-                    let end_deg = state.arc_end_deg_unwrapped.take().unwrap_or_else(|| {
+                    let end_deg = state.arc_end_deg_unwrapped.unwrap_or_else(|| {
                         let dx = wx - cx;
                         let dy = wy - cy;
                         dy.atan2(dx).to_degrees()
                     });
+                    if arc_sweep_exceeds_full_turn(start_deg, end_deg) {
+                        // A full turn or more: the commit-normalization
+                        // swap (`normalize_arc_commit_deg`) would
+                        // collapse this to `start == end` — an
+                        // invisible, unselectable, un-deletable point-
+                        // arc that still saves to disk. Reject instead
+                        // of committing; gesture state is untouched
+                        // (no `.take()` above), so the third click is
+                        // effectively ignored and dragging can continue.
+                        return Some(
+                            canvas::Action::publish(CanvasAction::ArcSweepRejected).and_capture(),
+                        );
+                    }
+                    state.arc_radius_start = None;
+                    state.arc_center = None;
+                    state.arc_cursor = None;
+                    state.arc_end_deg_unwrapped = None;
                     Some(
                         canvas::Action::publish(CanvasAction::AddArc {
                             cx,
@@ -198,6 +223,127 @@ impl SymbolCanvas<'_> {
             SymbolTool::PlaceText => {
                 Some(canvas::Action::publish(CanvasAction::AddText { x: wx, y: wy }).and_capture())
             }
+            SymbolTool::PlacePolygon => self.on_polygon_click(state, wx, wy, ux, uy),
         }
+    }
+
+    /// Click-collect gesture for the `PlacePolygon` tool. The vertex
+    /// stash itself (`self.polygon_vertices`) lives on
+    /// `SymbolEditorState`, not this Program's `CanvasState` — a
+    /// document-scoped Vec, not per-widget-slot ephemeral state, so a
+    /// tab switch mid-placement can't leak an in-flight vertex list
+    /// into a different document (see `CanvasAction::PolygonClick`'s
+    /// doc comment). Each plain click publishes `PolygonClick` so the
+    /// dispatcher appends it there; two close gestures are checked
+    /// first so they don't append a duplicate vertex:
+    ///
+    /// 1. A click on the already-placed first vertex (hit-tolerance
+    ///    based, using the unsnapped cursor so it feels the same at
+    ///    every zoom level — mirrors `hit_test_graphic_handle`'s
+    ///    tolerance derivation).
+    /// 2. A double-click — both clicks must land on the exact same
+    ///    snapped grid vertex within 300 ms (not a fixed mm radius,
+    ///    which at a fine snap grid could misread two adjacent-but-
+    ///    distinct clicks as a double-click).
+    ///
+    /// Both close gestures require `>= 3` collected vertices before
+    /// they publish `PolygonCommit` — the dispatcher's `mem::take`
+    /// discards an invalid ring, so committing early would silently
+    /// WIPE the in-progress stash. Below 3 vertices a matched double-
+    /// click is swallowed (captured, no vertex appended, no commit)
+    /// and collection continues.
+    fn on_polygon_click(
+        &self,
+        state: &mut CanvasState,
+        wx: f64,
+        wy: f64,
+        ux: f64,
+        uy: f64,
+    ) -> Option<canvas::Action<CanvasAction>> {
+        // Close gesture 1: click on the first vertex.
+        if self.polygon_vertices.len() >= 3
+            && let Some(&(fx, fy)) = self.polygon_vertices.first()
+        {
+            let tol_mm = (8.0_f32 / self.camera.scale.max(0.01)).clamp(0.5, 4.0) as f64;
+            let dx = ux - fx;
+            let dy = uy - fy;
+            if dx * dx + dy * dy <= tol_mm * tol_mm {
+                return Some(self.publish_polygon_commit(state));
+            }
+        }
+
+        // Close gesture 2: double-click on the same snapped vertex.
+        // Checked before appending so the second click of the pair
+        // never becomes a near-duplicate vertex.
+        let now = std::time::Instant::now();
+        if let (Some(last_time), Some(last_pos)) =
+            (state.polygon_last_click_time, state.polygon_last_click_pos)
+        {
+            let dt = now.duration_since(last_time);
+            if dt.as_millis() < 300 && last_pos == (wx, wy) {
+                state.polygon_last_click_time = None;
+                state.polygon_last_click_pos = None;
+                // Guard mirrors gesture 1 and the Enter arm: below 3
+                // vertices there is nothing valid to close, and the
+                // dispatcher's `mem::take` would wipe the stash — so
+                // swallow the click (no duplicate vertex) and keep
+                // collecting instead of committing.
+                if self.polygon_vertices.len() < 3 {
+                    return Some(canvas::Action::capture());
+                }
+                return Some(self.publish_polygon_commit(state));
+            }
+        }
+
+        // Plain click — append a vertex and keep collecting.
+        state.polygon_last_click_time = Some(now);
+        state.polygon_last_click_pos = Some((wx, wy));
+        state.polygon_cursor = Some((wx, wy));
+        Some(canvas::Action::publish(CanvasAction::PolygonClick { x: wx, y: wy }).and_capture())
+    }
+
+    /// Publish the commit action + reset the ephemeral gesture-timing
+    /// fields that live in `CanvasState`. The vertex-count / validity
+    /// check happens at the dispatcher (`SymbolEditorMsg::PolygonCommit`
+    /// handler) against the editor-owned stash, not here.
+    fn publish_polygon_commit(&self, state: &mut CanvasState) -> canvas::Action<CanvasAction> {
+        state.polygon_cursor = None;
+        state.polygon_last_click_time = None;
+        state.polygon_last_click_pos = None;
+        canvas::Action::publish(CanvasAction::PolygonCommit).and_capture()
+    }
+}
+
+/// `true` when the Place Arc gesture's raw, unwrapped drag delta
+/// (`end_deg - start_deg`, BEFORE `normalize_arc_commit_deg`'s
+/// swap-and-`rem_euclid`) covers a full turn or more. Committing such
+/// a drag would collapse to `start_deg == end_deg` after
+/// normalization — a zero-sweep point-arc that's invisible,
+/// unselectable, and un-deletable via the canvas, yet still saves to
+/// disk and still occupies its bounding box.
+fn arc_sweep_exceeds_full_turn(start_deg: f64, end_deg: f64) -> bool {
+    (end_deg - start_deg).abs() >= 360.0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn arc_sweep_exceeds_full_turn_at_exactly_360() {
+        assert!(arc_sweep_exceeds_full_turn(0.0, 360.0));
+        assert!(arc_sweep_exceeds_full_turn(30.0, -330.0));
+    }
+
+    #[test]
+    fn arc_sweep_exceeds_full_turn_past_360() {
+        assert!(arc_sweep_exceeds_full_turn(10.0, 400.0));
+    }
+
+    #[test]
+    fn arc_sweep_within_a_turn_is_not_rejected() {
+        assert!(!arc_sweep_exceeds_full_turn(30.0, -60.0));
+        assert!(!arc_sweep_exceeds_full_turn(10.0, 350.0));
+        assert!(!arc_sweep_exceeds_full_turn(0.0, 359.9));
     }
 }

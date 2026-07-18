@@ -294,6 +294,33 @@ pub struct SymbolEditorState {
     /// closed. Transient UI-only state: never serialized, never
     /// snapshotted for undo.
     pub local_color_picker: Option<LocalColorPicker>,
+    /// Click-collect vertex stash for the canvas's `PlacePolygon`
+    /// tool (grid-snapped mm world positions). Lives here — on the
+    /// per-document editor model — rather than on the canvas
+    /// `Program::State`, which iced reuses across tab switches for
+    /// whichever `.snxsym` tab is currently rendered; a stash kept
+    /// there would survive a switch to a different document and could
+    /// mis-commit into it. Mirrors the footprint editor's
+    /// `FootprintEditorState::place_polygon_vertices`. Mutated only by
+    /// `SymbolEditorMsg::PolygonClick` / `PolygonCommit` /
+    /// `PolygonCancel`, plus the synchronous flush in the `SetTool`
+    /// handler when the user switches away from `PlacePolygon`.
+    pub polygon_vertices: Vec<(f64, f64)>,
+    /// Transient, user-visible status line rendered in the symbol
+    /// editor's status footer (see `standalone::symbol::view_symbol_
+    /// status`). `None` most of the time; set to `Some(reason)` when
+    /// an action fails in a way the user needs to see explained (e.g.
+    /// `JoinSelectionIntoPolygon` on a non-connecting selection).
+    /// Cleared centrally at the top of `apply_symbol_primitive_edit`
+    /// (see `updates::clear_stale_status_message`) on the next message
+    /// that represents an attempted mutation, so it never lingers past
+    /// the action it described. Never serialized, never snapshotted
+    /// for undo.
+    pub status_message: Option<String>,
+    /// Open right-click context menu, if any. `None` = closed. Mirrors
+    /// `FootprintEditorState`'s `context_menu` field 1:1 in structure —
+    /// see `crate::library::editor::symbol::state::SymbolContextMenuState`.
+    pub context_menu: Option<crate::library::editor::symbol::state::SymbolContextMenuState>,
 }
 
 impl SymbolEditorState {
@@ -324,6 +351,9 @@ impl SymbolEditorState {
             mid_drag: false,
             graphic_fill_picker: None,
             local_color_picker: None,
+            polygon_vertices: Vec::new(),
+            status_message: None,
+            context_menu: None,
         };
         state.reset_camera_origin_center();
         state

@@ -214,6 +214,11 @@ pub enum GraphicKindSummary {
         content: String,
         size: f64,
     },
+    /// Read-only vertex count — no per-vertex numeric editor in this
+    /// slice; the canvas's per-vertex drag handles cover editing.
+    Polygon {
+        vertex_count: usize,
+    },
 }
 
 /// Identifier for one numeric field on a graphic — carried by
@@ -249,4 +254,3 @@ pub enum GraphicFieldId {
     /// All variants — `SymbolGraphic.stroke_width`.
     StrokeWidth,
 }
-

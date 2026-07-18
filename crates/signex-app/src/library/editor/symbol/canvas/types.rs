@@ -4,7 +4,7 @@
 //! external consumers (`standalone.rs`, `documents.rs`) keep importing
 //! them from `…::symbol::canvas`.
 
-use super::super::state::{GraphicHandle, SymbolSelection};
+use super::super::state::{GraphicHandle, SymbolContextTarget, SymbolSelection};
 
 /// The actions a [`SymbolCanvas`] can emit upward.
 #[derive(Debug, Clone)]
@@ -51,11 +51,35 @@ pub enum CanvasAction {
         start_deg: f64,
         end_deg: f64,
     },
+    /// The three-click Place Arc gesture's third click swept >= 360°
+    /// (unwrapped `end - start`) — a full turn or more, which the
+    /// commit-normalization swap would collapse to `start == end` (an
+    /// invisible, unselectable point-arc that still saves to disk).
+    /// Emitted instead of `AddArc`; the gesture's `CanvasState` fields
+    /// are left untouched so the third click is effectively ignored
+    /// and the user can keep dragging toward a valid sweep.
+    ArcSweepRejected,
     /// Stamp a default text label "Text" anchored at `(x, y)`.
     AddText {
         x: f64,
         y: f64,
     },
+    /// Append one grid-snapped vertex to the Place Polygon stash
+    /// (`SymbolEditorState::polygon_vertices`). Emitted on a plain
+    /// click while the `PlacePolygon` tool is active and the click
+    /// doesn't match a close gesture.
+    PolygonClick {
+        x: f64,
+        y: f64,
+    },
+    /// Commit the Place Polygon stash: pushes a closed-polygon graphic
+    /// when it holds a valid ring (>= 3 vertices after normalising),
+    /// otherwise silently discards it. Emitted by any of the close
+    /// gestures — click on the first vertex, double-click, or Enter.
+    PolygonCommit,
+    /// Discard the Place Polygon stash with no commit. Emitted by Esc
+    /// or a right-click while a polygon placement is in flight.
+    PolygonCancel,
     Select(SymbolSelection),
     Deselect,
     Move {
@@ -111,6 +135,19 @@ pub enum CanvasAction {
     Undo,
     /// Redo — Ctrl+Y / Ctrl+Shift+Z while the canvas has keyboard focus.
     Redo,
+    /// A right-release-without-pan-motion — open the context menu at
+    /// window-absolute `(x, y)`. `target` is what the release-time
+    /// hit-test found (pin / graphic / empty canvas).
+    ShowContextMenu {
+        x: f32,
+        y: f32,
+        target: SymbolContextTarget,
+    },
+    /// An in-flight right-drag just crossed the pan motion threshold
+    /// while the context menu was open — close it (the context menu
+    /// and a pan can't coexist; mirrors the footprint canvas's
+    /// `pan_on_cursor_moved`).
+    CloseContextMenu,
 }
 
 /// Pivot mode carried by rotate actions emitted from the Symbol canvas.
@@ -122,9 +159,9 @@ pub enum RotatePivotMode {
 
 /// Canvas tools — Altium-style `Tool` enum scoped to this surface.
 /// Mirrors the SchLib Place menu: Pin / Line / Rectangle / Ellipse
-/// (Circle) / Arc / Text are the working tools; `Polygon` /
-/// `RoundRectangle` / `Bezier` / `Image` etc. live on the Active
-/// Bar as stubs and are deferred to v0.9.x.
+/// (Circle) / Arc / Text / Polygon are the working tools;
+/// `RoundRectangle` / `Bezier` / `Image` etc. live on the Active Bar
+/// as stubs and are deferred to v0.9.x.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SymbolTool {
     Select,
@@ -134,6 +171,11 @@ pub enum SymbolTool {
     PlaceCircle,
     PlaceArc,
     PlaceText,
+    /// Click-collect closed polygon (>= 3 vertices) — see
+    /// `SymbolEditorState::polygon_vertices` and the close gestures
+    /// documented on `CanvasAction::PolygonClick` / `PolygonCommit` /
+    /// `PolygonCancel`.
+    PlacePolygon,
 }
 
 impl SymbolTool {
@@ -146,6 +188,7 @@ impl SymbolTool {
             SymbolTool::PlaceCircle => "Ellipse",
             SymbolTool::PlaceArc => "Arc",
             SymbolTool::PlaceText => "Text",
+            SymbolTool::PlacePolygon => "Polygon",
         }
     }
 }
@@ -172,6 +215,18 @@ pub struct CanvasState {
     /// Last cursor screen position during a pan, used to compute
     /// per-frame deltas.
     pub last_pan_pos: Option<iced::Point>,
+    /// Fixed screen position of the secondary-button press that armed
+    /// the current pan — the origin the cumulative pan-motion latch
+    /// (`pan_moved_past_threshold`) measures against, distinct from
+    /// `last_pan_pos` (which moves every frame). Cleared on release /
+    /// cursor-left.
+    pub secondary_press_pos: Option<iced::Point>,
+    /// Set the first time a right/middle-button drag's CUMULATIVE
+    /// displacement from `secondary_press_pos` crosses the pan motion
+    /// threshold (mirrors the footprint canvas's `pan_moved`). A
+    /// right-release with this still `false` opens the context menu
+    /// instead of having panned; cleared on release.
+    pub pan_moved: bool,
     /// World-space anchor of a rubber-band box selection in progress.
     /// Set on `ButtonPressed(Left)` that hits empty space; cleared on
     /// `ButtonReleased(Left)`.
@@ -213,4 +268,26 @@ pub struct CanvasState {
     /// result this never jumps at the ±180° boundary so arcs that
     /// cross 0° / 360° render continuously.
     pub arc_end_deg_unwrapped: Option<f64>,
+    /// Live cursor (snapped) updated every `CursorMoved` while the
+    /// Place Polygon stash (`SymbolEditorState::polygon_vertices`,
+    /// NOT stored here — see that field's doc comment) is non-empty —
+    /// the open end of the rubber-band preview polyline. Purely a
+    /// view-layer readout, so it's harmless for this to be ephemeral
+    /// per-widget-slot state that could in principle be stale right
+    /// after a tab switch; it never drives a commit by itself.
+    pub polygon_cursor: Option<(f64, f64)>,
+    /// Timestamp of the last `PlacePolygon` left-click — paired with
+    /// `polygon_last_click_pos` to detect the close-by-double-click
+    /// gesture (300 ms, same snapped vertex) without appending a
+    /// duplicate vertex. Ephemeral click-timing only, not vertex data
+    /// — see `polygon_cursor`'s doc comment for why that's safe to
+    /// leave in this per-widget-slot state.
+    pub polygon_last_click_time: Option<std::time::Instant>,
+    /// Grid-snapped world position of the last `PlacePolygon`
+    /// left-click, paired with `polygon_last_click_time` for the
+    /// double-click check — the second click must land on the exact
+    /// same snapped vertex, not just within a fixed mm radius, so a
+    /// fine snap grid can't misread two adjacent-but-distinct clicks
+    /// as a double-click.
+    pub polygon_last_click_pos: Option<(f64, f64)>,
 }
