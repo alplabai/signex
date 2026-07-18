@@ -9,7 +9,9 @@
 //! rendering. `super::flatten` is the one place that walks this data
 //! into widgets.
 
-use crate::library::editor::symbol::state::{SymbolSelection, selection_is_join_eligible};
+use crate::library::editor::symbol::state::{
+    SymbolSelection, selected_is_deletable, selection_is_join_eligible,
+};
 use crate::library::messages::{SymbolEditorMsg, SymbolSelectionMsg, SymbolToolMsg};
 use signex_library::Symbol;
 
@@ -73,7 +75,7 @@ pub fn build_symbol_context_menu_rows(
         SymbolMenuRow::item(
             "symbol.delete",
             "Delete",
-            selected.is_some(),
+            selected_is_deletable(selected),
             SymbolEditorMsg::DeleteSelected,
         ),
         SymbolMenuRow::item(
@@ -191,6 +193,22 @@ mod tests {
         assert!(find(&rows, "symbol.select-all").enabled);
         assert!(find(&rows, "symbol.fit-to-window").enabled);
         assert!(find(&rows, "symbol.place").enabled);
+    }
+
+    /// `SymbolSelection::All` is a no-op for `delete_selected`, so the
+    /// Delete row must be disabled — otherwise clicking it pushes a
+    /// wasted undo snapshot that can evict real history. Regression
+    /// guard for the delete-on-All undo-pollution fix.
+    #[test]
+    fn all_selection_disables_delete() {
+        let sym = Symbol::empty("T");
+        let rows = build_symbol_context_menu_rows(&sym, 1, &Some(SymbolSelection::All));
+
+        assert!(!find(&rows, "symbol.delete").enabled);
+        // Select All / Fit stay enabled; Deselect All is enabled too
+        // (a non-empty selection can be cleared).
+        assert!(find(&rows, "symbol.select-all").enabled);
+        assert!(find(&rows, "symbol.deselect-all").enabled);
     }
 
     /// A selection of only Line graphics enables Join into Polygon.

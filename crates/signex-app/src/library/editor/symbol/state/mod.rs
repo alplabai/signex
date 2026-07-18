@@ -508,6 +508,21 @@ pub fn selection_is_join_eligible(
         && common_graphic_part_number(sym, &indices).is_some()
 }
 
+/// Whether [`delete_selected`] would actually remove anything for this
+/// selection. `None`, `All`, and `Field` are no-ops there (they return
+/// `None` without mutating the symbol), so callers gate on this to skip
+/// a wasted undo snapshot — mirroring how [`selection_is_join_eligible`]
+/// lets `apply_symbol_join` validate before it takes one — and to grey
+/// out the context-menu Delete row for a selection it cannot act on.
+pub fn selected_is_deletable(selected: &Option<SymbolSelection>) -> bool {
+    matches!(
+        selected,
+        Some(SymbolSelection::Pin(_))
+            | Some(SymbolSelection::Graphic(_))
+            | Some(SymbolSelection::Multiple { .. })
+    )
+}
+
 /// Add a pin at the given canvas coordinates and return its index in
 /// `Symbol::pins`. Auto-assigns the next free numeric pin number and
 /// scopes it to `part_number` (typically the editor's active sub-part
