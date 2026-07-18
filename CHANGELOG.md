@@ -48,9 +48,9 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
   that way before this release; only the CPU canvas ever showed the short
   arc).
 
-## [0.14.0] — 2026-07-17
+## [0.14.0] — 2026-07-18
 
-**Everything since v0.13.0** — 217 commits, 2026-05-06 → 2026-07-17.
+**Everything since v0.13.0** — 221 commits, 2026-05-06 → 2026-07-18.
 
 This section was originally written on 2026-05-31 covering only the footprint
 editor, and never tagged. Work kept landing past it: symbol multi-unit, the
@@ -89,6 +89,13 @@ summarises by theme rather than listing every commit.
   off (#298).
 - **`anchor2d`** — pivot-aware 2D rotation with a compensated (B-type)
   `Transform2D`.
+- **Polygon graphic primitive + closed-shape authoring** (#378) — a
+  `SymbolGraphicKind::Polygon` (implicitly-closed ring) with fill/stroke,
+  concave-correct hit-test, and per-vertex handles; a **Place Polygon**
+  click-collect tool with the full close-gesture set; **Join into Polygon**,
+  which chains selected lines/arcs end-to-end into one closed polygon
+  (auto-closing an open chain) in a single undo step; and a **right-click
+  context menu** built from a pure data-to-menu row function.
 
 ### Added — keyboard and commands
 
@@ -166,6 +173,17 @@ summarises by theme rather than listing every commit.
   the screen-space y-flip; arc discontinuity past ±180° prevented; rotation
   angles normalised; `LineJoin::Round` for rectangle/polygon corners; round
   line caps.
+- **Symbol arc sweep convention unified, with a data-safe legacy migration**
+  (#378) — the CPU canvas draw path was the lone signed-sweep holdout while
+  hit-test, the GPU SDF shader, and rotation all read `start_deg`/`end_deg` as a
+  CCW sweep that wraps through 360°, so a rotated 0°-crossing arc drew its
+  complement while clicks landed on the real arc. All consumers now route
+  through one authority (`signex_gfx::primitive::arc::ccw_wrapped_sweep_rad`),
+  a full-turn arc draws and hit-tests as one circle, and a load-time migration
+  self-heals legacy clockwise-signed pairs on read. Every endpoint writer
+  (placement, rotation, the Properties panel, and the arc-endpoint drag handle)
+  normalises into `[0, 360)` so a saved arc round-trips instead of silently
+  reloading as its complement.
 - **Interaction** — unsnapped cursor position for Select-tool hit-testing,
   snapped coords retained for drag anchor and delta; `CursorAt` published
   during box-select drag to force redraw.
@@ -185,6 +203,9 @@ summarises by theme rather than listing every commit.
 - CI and license guards run on `trunk` (#121); PR preconditions aligned with
   the org control-process convention (#134); Linux dependency install hardened
   against the `packages.microsoft.com` apt outage (#155).
+- **Declared the 1.88 MSRV** and corrected the README + CONTRIBUTING Rust
+  version references to match (#383).
+- README and codebase map refreshed to the v0.14 workspace reality (#385).
 
 ### Added — footprint editor (the original v0.14 scope)
 
