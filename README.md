@@ -8,9 +8,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/alplabai/signex/blob/dev/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License"></a>
+  <a href="https://github.com/alplabai/signex/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License"></a>
   <a href="https://github.com/alplabai/signex/releases/tag/v0.14.0"><img src="https://img.shields.io/badge/version-v0.14.0-green.svg" alt="Version"></a>
-  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.80%2B-orange.svg" alt="Rust"></a>
+  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.88%2B-orange.svg" alt="Rust"></a>
   <a href="https://github.com/alplabai/signex/wiki"><img src="https://img.shields.io/badge/wiki-user%20guide-blueviolet.svg" alt="Wiki"></a>
   <a href="https://github.com/alplabai/signex/discussions"><img src="https://img.shields.io/badge/discussions-join-brightgreen.svg" alt="Discussions"></a>
 </p>
