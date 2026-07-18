@@ -20,15 +20,15 @@ impl Default for Camera {
         Self {
             // Start centered roughly on an A4 sheet
             offset: Point::new(50.0, 50.0),
-            scale: 3.0, // ~3 pixels per mm → reasonable default zoom
+            scale: signex_types::schematic::SCHEMATIC_ZOOM_100_SCALE,
         }
     }
 }
 
 impl Camera {
-    // 3.0 scale = 100%, so 25%..1600% => 0.75..48.0
-    pub const MIN_SCALE: f32 = 0.75;
-    pub const MAX_SCALE: f32 = 48.0;
+    // 100% = `SCHEMATIC_ZOOM_100_SCALE`, so 25%..1600% = x0.25..x16.0.
+    pub const MIN_SCALE: f32 = signex_types::schematic::SCHEMATIC_ZOOM_100_SCALE * 0.25;
+    pub const MAX_SCALE: f32 = signex_types::schematic::SCHEMATIC_ZOOM_100_SCALE * 16.0;
     pub const ZOOM_FACTOR: f32 = 1.1;
 
     /// Convert world coordinates (mm) to screen coordinates (pixels).
@@ -103,7 +103,6 @@ impl Camera {
 
     /// Current zoom percentage for display.
     pub fn zoom_percent(&self) -> f64 {
-        // 3.0 scale = 100% (default)
-        (self.scale as f64 / 3.0) * 100.0
+        (self.scale as f64 / signex_types::schematic::SCHEMATIC_ZOOM_100_SCALE as f64) * 100.0
     }
 }

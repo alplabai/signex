@@ -145,20 +145,20 @@ pub fn distance_pt_circle(
         .ok_or(SketchError::EntityNotFound(circle))?;
     let (centre_id, radius) = match entity.kind {
         EntityKind::Circle { center, .. } => {
-            let r = circle_radius(circle, state, index)
-                .ok_or(SketchError::EntityNotFound(circle))?;
+            let r =
+                circle_radius(circle, state, index).ok_or(SketchError::EntityNotFound(circle))?;
             (center, r)
         }
         EntityKind::Arc { center, start, .. } => {
             let c = point_xy(center, state, index, sketch)
                 .ok_or(SketchError::EntityNotFound(center))?;
-            let s = point_xy(start, state, index, sketch)
-                .ok_or(SketchError::EntityNotFound(start))?;
+            let s =
+                point_xy(start, state, index, sketch).ok_or(SketchError::EntityNotFound(start))?;
             (center, distance(s, c))
         }
         _ => return Err(SketchError::EntityNotFound(circle)),
     };
-    let c = point_xy(centre_id, state, index, sketch)
-        .ok_or(SketchError::EntityNotFound(centre_id))?;
+    let c =
+        point_xy(centre_id, state, index, sketch).ok_or(SketchError::EntityNotFound(centre_id))?;
     Ok(vec![distance(p, c) - radius - target_mm])
 }

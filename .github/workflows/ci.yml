@@ -1,17 +1,29 @@
-name: CI
+# SPDX-License-Identifier: Apache-2.0
+#
+# Primary PR gate for the signex workspace: compile, test, format, and
+# the license/dependency audit. Runs on every PR + push to main / trunk.
+# Job names use the org's `<check> · <detail>` convention so they read
+# cleanly as required status-check contexts under branch protection.
+
+name: ci
 
 on:
   push:
-    branches: [main]
+    branches: [main, trunk]
   pull_request:
-    branches: [main]
+    branches: [main, trunk]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   check:
-    name: Check (${{ matrix.os }})
+    name: check · ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -29,6 +41,13 @@ jobs:
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |
+          # Drop the pre-provisioned packages.microsoft.com apt sources. The
+          # build needs nothing from them, but when that repo serves an invalid
+          # InRelease (a recurring runner-image outage) `apt-get update` fails
+          # the whole step under `set -e`. Everything below is in the Ubuntu
+          # archive.
+          sudo grep -rlZ 'packages.microsoft.com' /etc/apt/sources.list.d/ 2>/dev/null \
+            | sudo xargs -0 -r rm -f || true
           sudo apt-get update
           sudo apt-get install -y \
             libxkbcommon-dev libwayland-dev libvulkan-dev \
@@ -41,7 +60,7 @@ jobs:
         run: cargo clippy --workspace -- -W clippy::all
 
   test:
-    name: Test
+    name: test · workspace
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -54,16 +73,26 @@ jobs:
 
       - name: Install Linux dependencies
         run: |
+          # See the check job: drop the packages.microsoft.com apt sources so a
+          # broken InRelease there can't fail `apt-get update`. All packages
+          # below come from the Ubuntu archive.
+          sudo grep -rlZ 'packages.microsoft.com' /etc/apt/sources.list.d/ 2>/dev/null \
+            | sudo xargs -0 -r rm -f || true
           sudo apt-get update
           sudo apt-get install -y \
             libxkbcommon-dev libwayland-dev libvulkan-dev \
-            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
+            mesa-vulkan-drivers
 
+      # signex-gfx's debug_pass smoke tests request a real wgpu adapter and
+      # panic if none is found. GitHub's headless runners have no GPU, so we
+      # provide lavapipe (mesa-vulkan-drivers, a software Vulkan ICD) above;
+      # wgpu picks it up automatically and the tests run on the CPU rasterizer.
       - name: Test
         run: cargo test --workspace
 
   fmt:
-    name: Format
+    name: fmt · rustfmt
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -77,7 +106,7 @@ jobs:
         continue-on-error: true
 
   deny:
-    name: License + dependency audit (cargo-deny)
+    name: deny · licenses + deps
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -96,5 +125,12 @@ jobs:
         run: cargo deny --all-features check sources
         continue-on-error: true
 
+      # Advisories are informational, not a merge gate: they fire on newly
+      # published RUSTSEC entries against the shared Cargo.lock (mostly
+      # transitive GUI-stack crates like quick-xml / ttf-parser pinned deep
+      # in iced/winit) with no code change on our side. Surface them as an
+      # annotation; criticals are addressed by a human, not by blocking CI.
+      # (deny.toml documents this same intent; `licenses` above stays hard.)
       - name: Check advisories
         run: cargo deny --all-features check advisories
+        continue-on-error: true

@@ -93,12 +93,18 @@ mod tests {
     #[test]
     fn ccw_triangle_is_positive() {
         // Standard CCW triangle: (0,0) -> (1,0) -> (0,1) is left-turn.
-        assert_eq!(orient2d(p(0.0, 0.0), p(1.0, 0.0), p(0.0, 1.0)), Sign::Positive);
+        assert_eq!(
+            orient2d(p(0.0, 0.0), p(1.0, 0.0), p(0.0, 1.0)),
+            Sign::Positive
+        );
     }
 
     #[test]
     fn cw_triangle_is_negative() {
-        assert_eq!(orient2d(p(0.0, 0.0), p(0.0, 1.0), p(1.0, 0.0)), Sign::Negative);
+        assert_eq!(
+            orient2d(p(0.0, 0.0), p(0.0, 1.0), p(1.0, 0.0)),
+            Sign::Negative
+        );
     }
 
     #[test]

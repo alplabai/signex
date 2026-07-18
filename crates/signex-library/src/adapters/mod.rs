@@ -14,8 +14,11 @@
 #[cfg(feature = "local-git")]
 pub mod local_git;
 
+// The project-scoped adapter now lives at `local_git::project`; keep
+// the flat `local_git_project` path so external
+// `adapters::local_git_project::…` consumers resolve unchanged.
 #[cfg(feature = "local-git")]
-pub mod local_git_project;
+pub use local_git::project as local_git_project;
 
 #[cfg(feature = "database")]
 pub mod database;

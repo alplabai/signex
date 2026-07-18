@@ -1,8 +1,14 @@
 blank_issues_enabled: true
 contact_links:
-  - name: Migration Plan
-    url: https://github.com/alplabai/signex/blob/main/docs/master-plan.md
-    about: Full migration plan and architecture decisions for Signex
-  - name: Gap Analysis
-    url: https://github.com/alplabai/signex/blob/main/docs/altium-gap-analysis.md
-    about: Altium Designer feature gap analysis with 67 critical gaps
+  - name: Roadmap
+    url: https://github.com/alplabai/signex/blob/trunk/docs/ROADMAP.md
+    about: What's planned and where your contribution might fit
+  - name: Codebase overview
+    url: https://github.com/alplabai/signex/blob/trunk/docs/REPOSITORY_AND_CODEBASE.md
+    about: How the repo and crates are laid out
+  - name: Licensing & the KiCad split
+    url: https://github.com/alplabai/signex/blob/trunk/docs/LICENSING.md
+    about: Why KiCad-related work goes in the signex-kicad-import companion repo
+  - name: Discussions
+    url: https://github.com/alplabai/signex/discussions
+    about: General questions and design conversations

@@ -1,7 +1,7 @@
 pub mod cache;
 pub mod error;
-pub mod gltf;
 pub mod glb;
+pub mod gltf;
 pub mod normalize;
 pub mod step;
 pub mod vrml;
@@ -62,7 +62,9 @@ pub fn import_model(request: ModelImportRequest) -> Result<ModelImportResult, Mo
     let source_path = &request.source_path;
 
     if !source_path.exists() {
-        return Err(ModelImportError::SourceNotFound { path: source_path.clone() });
+        return Err(ModelImportError::SourceNotFound {
+            path: source_path.clone(),
+        });
     }
 
     let format = detect_format(source_path)?;
@@ -94,7 +96,7 @@ pub fn import_model(request: ModelImportRequest) -> Result<ModelImportResult, Mo
                 source_path: source_path.clone(),
                 source_mtime,
                 converter_version: request.converter_version.to_owned(),
-                mesh_count: 0,   // not re-parsed on hit
+                mesh_count: 0, // not re-parsed on hit
                 primitive_count: 0,
                 byte_len,
             },
@@ -120,7 +122,9 @@ pub fn import_model(request: ModelImportRequest) -> Result<ModelImportResult, Mo
             let mesh_count = result.meshes.len();
             let mut warnings = Vec::new();
             for entity in result.unsupported_entities {
-                warnings.push(ImportWarning::UnsupportedGeometry { entity_type: entity });
+                warnings.push(ImportWarning::UnsupportedGeometry {
+                    entity_type: entity,
+                });
             }
             let (json, bin) = normalize::meshes_to_gltf(
                 &result.meshes,
@@ -192,4 +196,3 @@ fn detect_format(path: &Path) -> Result<SourceFormat, ModelImportError> {
         _ => Err(ModelImportError::UnsupportedFormat { extension: ext }),
     }
 }
-

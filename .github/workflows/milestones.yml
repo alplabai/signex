@@ -1,0 +1,48 @@
+name: Sync milestones
+
+# Keeps the repo's milestones in lockstep with .github/milestones.yml,
+# the same way labels.yml keeps labels in lockstep. Runs when the
+# milestone set (or its tooling) changes on trunk, and can be triggered
+# by hand. Milestones are managed as code — edit milestones.yml in a PR.
+#
+# Pull requests get a dry run so a reviewer can see the diff before it
+# lands. Only trunk actually writes.
+
+on:
+  push:
+    branches: [trunk]
+    paths:
+      - ".github/milestones.yml"
+      - ".github/scripts/sync_milestones.py"
+      - ".github/workflows/milestones.yml"
+  pull_request:
+    paths:
+      - ".github/milestones.yml"
+      - ".github/scripts/sync_milestones.py"
+      - ".github/workflows/milestones.yml"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  sync:
+    name: Apply milestones.yml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyYAML
+        run: pip install --disable-pip-version-check pyyaml
+
+      - name: Sync milestones
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python .github/scripts/sync_milestones.py \
+            --repo "${{ github.repository }}" \
+            ${{ github.event_name == 'pull_request' && '--dry-run' || '' }}

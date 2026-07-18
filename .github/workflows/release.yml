@@ -3,7 +3,13 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      # Strict semver only. A bare "v*" also matches checkpoint tags like
+      # v0.11-pre-library-restore-2026-04-29, which are snapshots rather
+      # than releases — they fired a full cross-platform release build and
+      # tried to publish a GitHub Release off a CHANGELOG section that does
+      # not exist. Keep snapshot tags outside this pattern.
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"   # pre-releases: v1.0.0-rc.1
 
 permissions:
   contents: write
@@ -80,6 +86,11 @@ jobs:
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |
+          # Drop the packages.microsoft.com apt sources so a broken InRelease
+          # there can't fail `apt-get update` under `set -e`. All packages
+          # below come from the Ubuntu archive.
+          sudo grep -rlZ 'packages.microsoft.com' /etc/apt/sources.list.d/ 2>/dev/null \
+            | sudo xargs -0 -r rm -f || true
           sudo apt-get update
           sudo apt-get install -y \
             libxkbcommon-dev libwayland-dev libvulkan-dev \

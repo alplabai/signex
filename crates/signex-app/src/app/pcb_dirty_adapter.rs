@@ -1,5 +1,5 @@
 use super::*;
-use signex_renderer::pcb::{dirty_flags_for_events, PcbAppEvent};
+use signex_renderer::pcb::{PcbAppEvent, dirty_flags_for_events};
 
 const PCB_EVENTS_NONE: &[PcbAppEvent] = &[];
 const PCB_EVENTS_THEME: &[PcbAppEvent] = &[PcbAppEvent::ThemeChanged];
@@ -17,8 +17,8 @@ const PCB_EVENTS_WIDE_MUTATION: &[PcbAppEvent] = &[
 
 pub(crate) fn pcb_renderer_events_for_message(message: &Message) -> &'static [PcbAppEvent] {
     match message {
-        Message::ThemeChanged(_) => PCB_EVENTS_THEME,
-        Message::Undo | Message::Redo => PCB_EVENTS_WIDE_MUTATION,
+        Message::Ui(UiMsg::ThemeChanged(_)) => PCB_EVENTS_THEME,
+        Message::Edit(EditMsg::Undo | EditMsg::Redo) => PCB_EVENTS_WIDE_MUTATION,
         Message::CanvasEvent(CanvasEvent::MoveSelected { .. })
         | Message::CanvasEventInWindow {
             event: CanvasEvent::MoveSelected { .. },
@@ -87,7 +87,7 @@ mod tests {
 
     #[test]
     fn theme_change_message_maps_to_theme_dirty_event() {
-        let message = Message::ThemeChanged(ThemeId::Signex);
+        let message = Message::Ui(UiMsg::ThemeChanged(ThemeId::Signex));
         let events = pcb_renderer_events_for_message(&message);
 
         assert_eq!(events, &[PcbAppEvent::ThemeChanged]);
@@ -105,7 +105,7 @@ mod tests {
 
     #[test]
     fn unrelated_message_has_no_pcb_dirty_hint() {
-        let message = Message::GridToggle;
+        let message = Message::Ui(UiMsg::GridToggle);
         let events = pcb_renderer_events_for_message(&message);
 
         assert!(events.is_empty());

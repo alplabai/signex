@@ -25,7 +25,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use crate::app::FootprintEditorState;
-use crate::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 
 /// Render the inspector strip. Returns an empty `Space` when not in
 /// Sketch mode so the caller can unconditionally add it to the body
@@ -109,7 +109,7 @@ fn view_tool_palette<'a>(
             .padding([3, 8])
             .on_press(LibraryMessage::PrimitiveEditorEvent {
                 path,
-                msg: PrimitiveEditorMsg::FootprintSketchSetTool(target),
+                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchSetTool(target)),
             })
             .style(move |_: &Theme, _| iced::widget::button::Style {
                 background: if on {
@@ -285,7 +285,9 @@ fn view_constraint_submenu<'a>(
             .padding([3, 8])
             .on_press(LibraryMessage::PrimitiveEditorEvent {
                 path,
-                msg: PrimitiveEditorMsg::FootprintSketchAddConstraintForSelection(t),
+                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchAddConstraintForSelection(
+                    t,
+                )),
             })
             .style(move |_: &Theme, _| iced::widget::button::Style {
                 background: Some(iced::Background::Color(iced::Color::from_rgba(
@@ -323,7 +325,7 @@ fn view_constraint_submenu<'a>(
             })
             .on_input(move |s| LibraryMessage::PrimitiveEditorEvent {
                 path: path.clone(),
-                msg: PrimitiveEditorMsg::FootprintSketchDimensionInput(s),
+                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchDimensionInput(s)),
             });
         pill_row = pill_row.push(input);
     }
@@ -335,10 +337,10 @@ fn view_constraint_submenu<'a>(
             .padding([2, 6])
             .on_press(LibraryMessage::PrimitiveEditorEvent {
                 path: clear_path,
-                msg: PrimitiveEditorMsg::FootprintSketchSelect {
+                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchSelect {
                     id: None,
                     shift: false,
-                },
+                }),
             })
             .style(move |_: &Theme, _| iced::widget::button::Style {
                 background: Some(iced::Background::Color(iced::Color::from_rgba(
@@ -442,10 +444,12 @@ fn view_params<'a>(
                         })
                         .on_input(move |new_expr| LibraryMessage::PrimitiveEditorEvent {
                             path: path.clone(),
-                            msg: PrimitiveEditorMsg::FootprintSketchEditParameter {
-                                name: name_clone.clone(),
-                                expr: new_expr,
-                            },
+                            msg: PrimitiveEdit::Footprint(
+                                FootprintEditorMsg::SketchEditParameter {
+                                    name: name_clone.clone(),
+                                    expr: new_expr,
+                                }
+                            ),
                         }),
                 ]
                 .spacing(6)
@@ -490,7 +494,7 @@ fn view_warnings<'a>(
 /// v0.16.2 — Role-assignment dropdown. Visible only when a sketch
 /// entity is selected; pick_list value mirrors the entity's
 /// currently-attached `*Attr` slot (or `Unassigned`). Picking a new
-/// value emits [`PrimitiveEditorMsg::FootprintSketchSetRole`] which
+/// value emits [`FootprintEditorMsg::SketchSetRole`] which
 /// the dispatcher routes through `apply_sketch_role_with_warnings`
 /// (clears all attrs, sets the matching one with defaults, runs
 /// solve + bake).
@@ -547,7 +551,7 @@ fn view_role<'a>(
     let dropdown = pick_list(RoleTag::ALL, Some(current), move |new_role| {
         LibraryMessage::PrimitiveEditorEvent {
             path: path.clone(),
-            msg: PrimitiveEditorMsg::FootprintSketchSetRole { id, role: new_role },
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchSetRole { id, role: new_role }),
         }
     })
     .text_size(11)

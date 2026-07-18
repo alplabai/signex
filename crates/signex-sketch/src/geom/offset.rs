@@ -21,8 +21,8 @@
 
 use std::f64::consts::TAU;
 
-use super::predicates::{orient2d, signed_area, Sign};
 use super::Point2;
+use super::predicates::{Sign, orient2d, signed_area};
 
 /// How offset corners are joined.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -91,7 +91,9 @@ pub fn offset_polygon(polygon: &[Point2], d: f64, style: CornerStyle) -> Vec<Poi
         let (e_in_dx, e_in_dy) = (curr.x - prev.x, curr.y - prev.y);
         let (e_out_dx, e_out_dy) = (next.x - curr.x, next.y - curr.y);
         let l_in = (e_in_dx * e_in_dx + e_in_dy * e_in_dy).sqrt().max(1e-12);
-        let l_out = (e_out_dx * e_out_dx + e_out_dy * e_out_dy).sqrt().max(1e-12);
+        let l_out = (e_out_dx * e_out_dx + e_out_dy * e_out_dy)
+            .sqrt()
+            .max(1e-12);
         let in_dir = (e_in_dx / l_in, e_in_dy / l_in);
         let out_dir = (e_out_dx / l_out, e_out_dy / l_out);
 
@@ -137,12 +139,8 @@ pub fn offset_polygon(polygon: &[Point2], d: f64, style: CornerStyle) -> Vec<Poi
                         let dx = out_off.x - in_off.x;
                         let dy = out_off.y - in_off.y;
                         let t = (dx * out_dir.1 - dy * out_dir.0) / denom;
-                        let join = Point2::new(
-                            in_off.x + t * in_dir.0,
-                            in_off.y + t * in_dir.1,
-                        );
-                        let bulge = ((join.x - curr.x).powi(2) + (join.y - curr.y).powi(2))
-                            .sqrt();
+                        let join = Point2::new(in_off.x + t * in_dir.0, in_off.y + t * in_dir.1);
+                        let bulge = ((join.x - curr.x).powi(2) + (join.y - curr.y).powi(2)).sqrt();
                         if bulge <= miter_limit * signed_d.abs().max(1e-9) {
                             out.push(join);
                         } else {
@@ -153,8 +151,7 @@ pub fn offset_polygon(polygon: &[Point2], d: f64, style: CornerStyle) -> Vec<Poi
                 }
                 _ => {
                     out.push(in_off);
-                    if (in_off.x - out_off.x).abs() > 1e-12
-                        || (in_off.y - out_off.y).abs() > 1e-12
+                    if (in_off.x - out_off.x).abs() > 1e-12 || (in_off.y - out_off.y).abs() > 1e-12
                     {
                         out.push(out_off);
                     }
@@ -210,7 +207,9 @@ mod tests {
     fn empty_polygon_returns_empty() {
         assert!(offset_polygon(&[], 1.0, CornerStyle::default()).is_empty());
         assert!(offset_polygon(&[p(0.0, 0.0)], 1.0, CornerStyle::default()).is_empty());
-        assert!(offset_polygon(&[p(0.0, 0.0), p(1.0, 0.0)], 1.0, CornerStyle::default()).is_empty());
+        assert!(
+            offset_polygon(&[p(0.0, 0.0), p(1.0, 0.0)], 1.0, CornerStyle::default()).is_empty()
+        );
     }
 
     #[test]

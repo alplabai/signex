@@ -12,7 +12,7 @@
 //!
 //! Submodules:
 //! - [`pad`] — `EditorPad`, `PadStackUi`, `NextPadDefaults`, `PadSide`,
-//!   `CourtyardRect`, `ShapeParamMap`.
+//!   `CourtyardRect`, `ShapeParamMap`, `AlignOp`.
 //! - [`mode`] — `EditorMode`, `FpActiveBarMenu`, `PadStackTab`.
 //! - [`context_menu`] — right-click menu state types.
 //! - [`placement`] — `PlacementInput*`, `PlaceArcPending`.
@@ -34,10 +34,14 @@ pub use context_menu::{
     FootprintContextTarget,
 };
 pub use mode::{EditorMode, FpActiveBarMenu, PadStackTab};
-pub use pad::{CourtyardRect, EditorPad, NextPadDefaults, PadSide, PadStackUi, ShapeParamMap};
+pub use pad::{
+    AlignOp, CourtyardRect, EditorPad, NextPadDefaults, PadSide, PadStackUi, ShapeParamMap,
+};
 pub use placement::{PlaceArcPending, PlacementInput, PlacementInputKind};
 pub use selection_filter::{FpSelectionMode, SelectionFilter, SelectionFilterKind};
-pub use snap_options::{GridDef, GridDisplay, Guide, GuideAxis, SnapOptions, SnapSubTab, SnappingMode};
+pub use snap_options::{
+    GridDef, GridDisplay, Guide, GuideAxis, SnapOptions, SnapSubTab, SnappingMode,
+};
 pub use tool::{PadsTool, SketchTool, ToolPending};
 
 use signex_library::{Footprint, LayerId};
@@ -48,6 +52,26 @@ use pad::NEW_PAD_SIZE_MM;
 /// Slack on each side of the pad bounding box when auto-fitting the
 /// courtyard polygon.
 const COURTYARD_SLACK_MM: f64 = 0.25;
+
+/// v0.14 — typed-delta "Move Selection By X, Y" modal. `None` on
+/// `FootprintEditorState::move_by_modal` means the modal is closed.
+/// Two erasable string buffers (same pattern as `dimension_input`) so
+/// typing "-" / "." mid-entry doesn't fight an f64 binding.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct MoveByModal {
+    pub dx_buf: String,
+    pub dy_buf: String,
+}
+
+impl MoveByModal {
+    /// Parse both buffers as mm. `None` if either fails to parse.
+    pub fn parsed(&self) -> Option<(f64, f64)> {
+        Some((
+            self.dx_buf.trim().parse().ok()?,
+            self.dy_buf.trim().parse().ok()?,
+        ))
+    }
+}
 
 /// Live, in-memory state of the Footprint canvas — drives interaction
 /// and rendering. The authoritative pad list lives on
@@ -137,6 +161,10 @@ pub struct FootprintEditorState {
     pub selected_sketch_extra: Vec<signex_sketch::id::SketchEntityId>,
     /// v0.13.3 — Dimension tool's pending value (text input).
     pub dimension_input: String,
+    /// v0.14 — typed-delta "Move Selection By" modal. `None` = closed.
+    /// Two erasable string buffers (same pattern as `dimension_input`)
+    /// so typing "-" / "." mid-entry doesn't fight an f64 binding.
+    pub move_by_modal: Option<MoveByModal>,
     /// v0.15 — Pads-mode tool.
     pub pads_tool: PadsTool,
     /// v0.16.1 — sticky construction-mode toggle.
@@ -184,6 +212,15 @@ pub struct FootprintEditorState {
     /// v0.24 Phase 1 (Track D) — live numeric input during sketch-tool
     /// placement.
     pub placement_input: Option<PlacementInput>,
+    /// v0.14-footprint — the *inactive* (stashed) placement-input
+    /// fields while the user Tab-cycles a multi-dimension tool. The
+    /// focused field always lives in `placement_input` (so the
+    /// existing char-append / consume logic needs no rework); Tab
+    /// rotates the focused field out to here and pulls the next one
+    /// in. Holds 0..N entries: empty for single-field tools, one for
+    /// Line (len/angle) & Rectangle (w/h), two for Rounded-Rect
+    /// (w/h/radius).
+    pub placement_input_others: Vec<PlacementInput>,
     /// v0.25 polish — per-input verbatim buffers for Properties-panel
     /// numeric fields.
     pub numeric_buffers: std::collections::HashMap<String, String>,
@@ -242,6 +279,7 @@ impl FootprintEditorState {
             selected_sketch_secondary: None,
             selected_sketch_extra: Vec::new(),
             dimension_input: String::new(),
+            move_by_modal: None,
             pads_tool: PadsTool::default(),
             construction_mode: false,
             centerline_mode: false,
@@ -263,6 +301,7 @@ impl FootprintEditorState {
             active_bar_menu: None,
             pad_stack_tab: PadStackTab::default(),
             placement_input: None,
+            placement_input_others: Vec::new(),
             numeric_buffers: std::collections::HashMap::new(),
             context_menu: None,
             fit_pending: false,
@@ -385,6 +424,27 @@ impl FootprintEditorState {
         }
     }
 
+    /// v0.14 — translate every pad in `indices` by `(dx, dy)` mm.
+    /// Backs the active-bar "Move Selection by X, Y…" nudge. Out-of-
+    /// range indices are skipped; the courtyard is recomputed once at
+    /// the end. Returns the moved pad indices (in the order given,
+    /// minus any out-of-range entries) so the caller can mirror exactly
+    /// those pads into the backing sketch.
+    pub fn nudge_pads(&mut self, indices: &[usize], dx: f64, dy: f64) -> Vec<usize> {
+        let mut moved = Vec::with_capacity(indices.len());
+        for &i in indices {
+            if let Some(pad) = self.pads.get_mut(i) {
+                let (x, y) = pad.position_mm;
+                pad.position_mm = (x + dx, y + dy);
+                moved.push(i);
+            }
+        }
+        if !moved.is_empty() {
+            self.recompute_courtyard();
+        }
+        moved
+    }
+
     /// Delete the pad at `idx`.
     pub fn delete_pad(&mut self, idx: usize) {
         if idx >= self.pads.len() {
@@ -460,9 +520,7 @@ impl FootprintEditorState {
     /// rectangle. Returns `true` when a polygon was produced;
     /// `false` when there are no pads or the boolean union failed.
     pub fn recompute_courtyard_outline(&mut self) -> bool {
-        use signex_sketch::geom::{
-            offset_polygon, polygon_op, BoolOp, CornerStyle, Point2,
-        };
+        use signex_sketch::geom::{BoolOp, CornerStyle, Point2, offset_polygon, polygon_op};
 
         if self.pads.is_empty() {
             self.courtyard_outline_mm = None;
@@ -517,8 +575,11 @@ impl FootprintEditorState {
         // corner — enough to read smooth at typical zooms.
         let mut offsetted: Vec<Vec<Point2>> = Vec::new();
         for ring in &accumulated {
-            let off =
-                offset_polygon(ring, COURTYARD_SLACK_MM, CornerStyle::Round { arc_segments: 4 });
+            let off = offset_polygon(
+                ring,
+                COURTYARD_SLACK_MM,
+                CornerStyle::Round { arc_segments: 4 },
+            );
             if off.len() >= 3 {
                 offsetted.push(off);
             }
@@ -544,6 +605,17 @@ impl FootprintEditorState {
     /// `sketch_entity_id`, `corner_entity_ids`, and `shape_params` (v0.24
     /// Track A4) don't round-trip through `Pad`, so we re-attach them
     /// by matching `pad.number`.
+    ///
+    /// A pad matched in `old_links` keeps its full editor-side link. A
+    /// pad NOT in `old_links` — one that first appears from the sketch
+    /// side (e.g. "Make Pad from Profile", which mints a `PadAttr`-
+    /// carrying entity directly on the sketch and only reaches
+    /// `state.pads` after the next bake) — is relinked from the
+    /// authoritative source: the sketch entity whose `PadAttr.number`
+    /// matches. Without this fallback such a pad stays permanently
+    /// `sketch_entity_id: None`, so a Pads-mode move can't mirror into
+    /// the sketch and the pad snaps back to its original position on the
+    /// next bake.
     pub fn refresh_pads_from_primitive(&mut self, fp: &Footprint) {
         use std::collections::HashMap;
         type Link = (
@@ -565,12 +637,24 @@ impl FootprintEditorState {
                 )
             })
             .collect();
+        let sketch_links: HashMap<String, signex_sketch::id::SketchEntityId> = fp
+            .sketch
+            .as_ref()
+            .map(|s| {
+                s.entities
+                    .iter()
+                    .filter_map(|e| e.pad.as_ref().map(|attr| (attr.number.clone(), e.id)))
+                    .collect()
+            })
+            .unwrap_or_default();
         let mut new_pads: Vec<EditorPad> = fp.pads.iter().map(EditorPad::from_pad).collect();
         for p in &mut new_pads {
             if let Some((sid, cids, params)) = old_links.get(&p.number) {
                 p.sketch_entity_id = *sid;
                 p.corner_entity_ids = *cids;
                 p.shape_params = params.clone();
+            } else if let Some(sid) = sketch_links.get(&p.number) {
+                p.sketch_entity_id = Some(*sid);
             }
         }
         self.pads = new_pads;
@@ -692,5 +776,57 @@ mod tests {
         FootprintEditorState::sync_pads_to_primitive(&s, &mut fp);
         assert_eq!(fp.pads.len(), 1);
         assert_eq!(fp.pads[0].number, "1");
+    }
+
+    /// A pad that first appears from the SKETCH side — "Make Pad from
+    /// Profile" mints a centre Point carrying a `PadAttr` directly on the
+    /// sketch, and the pad only reaches `state.pads` after the next
+    /// bake. Its number never existed in the prior `state.pads`, so the
+    /// number-vs-old-pads relink misses and it would stay permanently
+    /// unlinked (`sketch_entity_id: None`). An unlinked pad can't
+    /// mirror a move into the sketch, so dragging it in Pads mode leaves
+    /// the profile behind and the pad snaps back on the next bake.
+    ///
+    /// The relink must fall back to the authoritative link: the sketch
+    /// entity whose `PadAttr.number` matches the pad.
+    #[test]
+    fn refresh_relinks_pad_from_sketch_pad_attr() {
+        use signex_sketch::attr::PadAttr;
+        use signex_sketch::entity::{Entity, EntityKind};
+        use signex_sketch::id::SketchEntityId;
+        use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
+        use signex_sketch::sketch::SketchData;
+
+        let mut fp = Footprint::empty("test");
+        let plane_id = PlaneId::new();
+        let mut sketch = SketchData::default();
+        sketch.planes.push(Plane {
+            id: plane_id,
+            kind: PlaneKind::BoardTop,
+        });
+        let centre_id = SketchEntityId::new();
+        let mut centre = Entity::new(centre_id, plane_id, EntityKind::Point { x: 1.0, y: 0.5 });
+        centre.pad = Some(PadAttr {
+            number: "1".into(),
+            ..PadAttr::default()
+        });
+        sketch.entities.push(centre);
+        fp.sketch = Some(sketch);
+        fp.pads.push(Pad {
+            number: "1".into(),
+            ..Pad::default()
+        });
+
+        // state.pads is empty — the pad first appears from the sketch.
+        let mut s = FootprintEditorState::empty();
+        s.refresh_pads_from_primitive(&fp);
+
+        assert_eq!(s.pads.len(), 1);
+        assert_eq!(
+            s.pads[0].sketch_entity_id,
+            Some(centre_id),
+            "pad appearing from the sketch must relink to its \
+             PadAttr-carrying entity by number"
+        );
     }
 }

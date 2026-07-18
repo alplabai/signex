@@ -7,7 +7,7 @@
 - Task name: canvas runtime cutover away from legacy schematic runtime
 - Owner: renderer-team
 - Date: 2026-05-05
-- Status: in_progress
+- Status: done
 
 ## Scope
 
@@ -31,6 +31,12 @@ risk while Milestone F migration continues.
   - `text::{draw_text_note_preview, expand_char_escapes, escape_for_standard}`
   - `draw_power_port_preview(...)`
   - `instance_transform(...)`
+- Switched schematic render family emission to renderer snapshot scene flow:
+  - wires, buses, bus entries, no-connects, junctions
+  - symbols, child sheets, drawings, labels, text notes
+  - symbol reference/value fields and parameter text rendering
+- Switched symbol editor canvas rendering to renderer snapshot scene flow for
+  symbol graphics, pins, pin halos, and text families.
 
 ## Verification
 
@@ -51,8 +57,8 @@ Result:
 - This slice removes the legacy schematic runtime dependency path from app code.
 - Follow-up non-schematic utility cleanup (font/style/color settings) was
   completed in Task 06.
-- Task 03 remains `in_progress` until the target `signex-renderer` scene-flow
-  contract is fully adopted.
+- Task 03 closed in this slice after both schematic and symbol canvas paths
+  moved to renderer scene snapshots.
 
 ## Clean-room evidence
 
@@ -65,4 +71,4 @@ Result:
 - [x] Legacy schematic runtime imports removed from app call path
 - [x] Build validation completed
 - [x] Evidence log added
-- [ ] Full `signex-renderer` scene contract adoption completed
+- [x] Full `signex-renderer` scene contract adoption completed

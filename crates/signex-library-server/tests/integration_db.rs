@@ -212,6 +212,70 @@ async fn route_post_row_then_get() {
 }
 
 #[tokio::test]
+async fn route_post_duplicate_row_conflicts_and_preserves_original() {
+    // POST must be create-only. A second POST with the same row_id must
+    // return 409 and must NOT overwrite the stored row (the old handler
+    // silently upserted, letting one client clobber another's edit).
+    let state = fresh_state().await;
+    let app = router_with_state(state);
+
+    let library_id = Uuid::now_v7();
+    let row1 = fixture_row("R0805_10k");
+    let mut row2 = row1.clone();
+    row2.internal_pn = InternalPn::new("R0805_CLOBBER");
+    row2.version = "9.9.9".into();
+
+    let post = |body: Vec<u8>| {
+        Request::builder()
+            .method("POST")
+            .uri(format!("/tables/resistors/rows?library_id={library_id}"))
+            .header("content-type", "application/json")
+            .header("authorization", bearer_header())
+            .body(Body::from(body))
+            .unwrap()
+    };
+
+    let r1 = app
+        .clone()
+        .oneshot(post(serde_json::to_vec(&row1).unwrap()))
+        .await
+        .unwrap();
+    assert_eq!(r1.status(), StatusCode::CREATED);
+
+    // Second POST with the same row_id but different content → 409.
+    let r2 = app
+        .clone()
+        .oneshot(post(serde_json::to_vec(&row2).unwrap()))
+        .await
+        .unwrap();
+    assert_eq!(r2.status(), StatusCode::CONFLICT);
+
+    // The stored row is still the original — nothing was clobbered.
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/tables/resistors/rows/{}?library_id={library_id}",
+                    row1.row_id
+                ))
+                .header("authorization", bearer_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let bytes = axum::body::to_bytes(resp.into_body(), 1 << 20)
+        .await
+        .unwrap();
+    let got: ComponentRow = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(
+        got, row1,
+        "the original row must survive a conflicting POST"
+    );
+}
+
+#[tokio::test]
 async fn route_put_row_updates() {
     // POST a row, PUT a modified copy back, GET should return the modified
     // version.

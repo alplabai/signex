@@ -2,14 +2,15 @@
 name = "signex-gfx"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 
 [dependencies]
-wgpu = "29.0.3"
+wgpu = "=27.0.1"
 glam = "0.32.1"
 bytemuck = { version = "1", features = ["derive"] }
-glyphon = "0.11.0"
+cryoglyph = "0.1.0"
 rstar = "0.12"
 bitflags = "2"
 

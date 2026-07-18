@@ -134,10 +134,10 @@ theory) and is also the assumption every permissively-licensed Rust
 project relying on LLM-assisted development implicitly makes.
 
 The discipline is a process rule, not a marketing claim. It shapes
-agent prompts, retrieval scopes, and the contributor declaration
-block. PRs to this repo include the explicit `KiCad source consulted:
-[yes/no]` declaration; "yes" routes the PR to the companion repo
-instead.
+agent prompts and retrieval scopes. Opening a PR against this repo
+affirms no license-gated source files were used; CI blocks only a
+description that explicitly admits one (a `License-gated sources: yes`
+line), routing it to the companion repo.
 
 If you are reviewing this codebase and have a specific file or specific
 lines you believe are derivative of KiCad source despite the above —
@@ -153,21 +153,82 @@ Patches to the main `signex` repo must not contain KiCad-derived code.
 The repository is Apache-2.0 clean; KiCad I/O lives in the GPL-3.0
 companion repo.
 
-In particular, when you open a PR, declare:
+Opening a PR affirms **no license-gated source files** were used —
+nothing under GPL/copyleft or otherwise Apache-incompatible. A
+contribution that did use one adds a line `License-gated sources: yes`
+and belongs in signex-kicad-import instead.
 
-- **Source basis:** [my own work | Signex's prior code | published
-  format specs | other (specify)]
-- **LLM-assisted:** [yes/no — if yes, list which models]
-- **KiCad source consulted:** [yes/no — if yes, the PR belongs in
-  signex-kicad-import, not here]
+### What "otherwise Apache-incompatible" means
+
+This document is the canonical statement of that phrase. It was
+undefined until issue #305, and the omission was expensive for someone
+other than us.
+
+[PR #304](https://github.com/alplabai/signex/pull/304) was a substantial,
+competent Rust rewrite of a project licensed "CC BY 4.0 … You may not
+resell this tool". Both halves of that are disqualifying here. It passed
+all twelve licence-guard jobs and `cargo deny` clean — a port is not a
+Cargo dependency, so `deny` never sees it, and it contained no
+KiCad-shaped identifier, so the guards never fired. The self-declaration
+was answered in good faith: CC BY reads as permissive, and the resale
+restriction is a trailing sentence appended by the author that appears
+nowhere in the CC BY licence text. No amount of CI would have changed
+that answer. The defect was that we had never written the rule down.
+
+**A port or translation is a derivative work.** Rewriting a project's
+JavaScript as Rust does not reset its copyright. Neither does re-typing
+its C++, renaming its identifiers, reorganising its modules, or routing
+the translation through an LLM. Copyright derivation attaches to what the
+author had in front of them at the point of authorship — the same
+principle stated in "LLM context discipline" above, applied outward
+rather than inward. Independent implementation of a *published algorithm
+or formula* is a different act and is not derivation; the distinction is
+the source you worked from, not the distance between the outputs.
+
+**Incompatible classes:**
+
+| Class | Examples | Why it fails here |
+|---|---|---|
+| GPL / copyleft | GPL-2.0/3.0, AGPL, LGPL | Reciprocal terms relicense Signex. LGPL included — a binding is a link. Copyleft solvers are reached across a process boundary only; see [EXTERNAL_TOOLS.md §4](EXTERNAL_TOOLS.md#4-the-gpl--lgpl-bridge-boundary), the dependency-side counterpart to this section. |
+| **Any Creative Commons licence** | CC BY, CC BY-SA, CC BY-NC | CC is not a software licence — Creative Commons states this itself and recommends against using CC for code. CC BY's attribution terms do not compose with Apache-2.0's `NOTICE` model; BY-SA is copyleft; BY-NC adds a field-of-use bar. CC0 is a public-domain dedication rather than a licence in this sense and is fine. |
+| Non-commercial / no-resale / any field-of-use restriction | CC BY-NC, "you may not resell this tool", "personal use only" | **Signex Pro is sold from this tree.** See below. |
+| Source-available / open-core / "fair source" | BUSL, SSPL, Elastic, Commons Clause, PolyForm | Use restrictions and/or reciprocal terms; not open source. |
+| Text, tables, and figures of paywalled standards | IPC, IEC, JEDEC, ISO | The **document** is copyrighted. The **formulas and physical facts** in it are facts and are not — implementing the maths from your own understanding is fine and welcome. Copying prose, tables, figure geometry, or worked examples is not, including via an LLM. |
+
+MIT, BSD, ISC, Zlib, Unlicense, CC0 and Apache-2.0 are compatible.
+Anything on neither list is a question worth asking before it is a PR
+worth writing.
+
+**Why a field-of-use restriction is fatal to this repo specifically.**
+Signex Community is Apache-2.0 and free. **Signex Pro is a paid
+commercial edition built from the same source tree.** A "non-commercial"
+or "no resale" term on any code under `crates/` would be breached the day
+Pro ships, and would void the unencumbered Apache-2.0 surface promised to
+redistributors and embedders in the TL;DR above — the same promise that
+motivated the two-repo split in the first place. Many projects could
+accept such a term. This one cannot. That is a fact about our business
+model, not a criticism of the licence or of anyone who chose it.
+
+**If you are unsure about a source, open an issue and ask.** Name the
+project and its licence; we will answer. That is cheaper for you than
+discovering it at review, and considerably cheaper for us than saying no
+to finished work.
+
+### LLM provenance
 
 LLMs that have been trained on KiCad source CAN contribute to the GPL
 companion repo. They should NOT contribute to the Apache main repo. If
 your LLM has consulted KiCad source, route the work to
-signex-kicad-import.
+signex-kicad-import. The same rule generalises: if you or your assistant
+worked from the source of *any* project in an incompatible class above,
+the result carries that project's licence and does not belong here.
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for the full contribution
-guide and PR template.
+See [CONTRIBUTING.md](../CONTRIBUTING.md#license-compliance-for-contributions)
+for the contributor-facing version, the PR template, and the CI
+mechanics. Note that the CI gates in `license-guard.yml` are shaped
+around the KiCad incident and cannot detect a port of an arbitrary
+project; the advisory `port-smell` job added for #305 is a heuristic and
+is honest about being one. The written policy above is the control.
 
 ## Acknowledgements
 

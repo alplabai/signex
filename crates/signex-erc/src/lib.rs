@@ -1,6 +1,6 @@
 //! Electrical Rules Check. Runs on a [`SchematicSheet`] and returns a
 //! list of [`Violation`]s. Internally the sheet is projected into an
-//! [`ErcContext`] first, so rule logic stays independent from any legacy renderer crate.
+//! [`ErcContext`] first, so rule logic stays independent from renderer internals.
 //!
 //! # Architecture
 //!
@@ -14,8 +14,7 @@
 //!  Vec<Violation>   ← public API
 //! ```
 //!
-//! v0.12 migrated this crate off the v0.11 render-snapshot wrapper;
-//! ERC now reads from `signex_types::SchematicSheet` directly.
+//! ERC reads from `signex_types::SchematicSheet` directly.
 
 use serde::{Deserialize, Serialize};
 use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind};
@@ -25,7 +24,6 @@ pub mod diagnostic;
 pub mod engine;
 pub mod rule;
 mod rules;
-pub(crate) mod uf;
 
 pub use context::ErcContext;
 pub use diagnostic::Diagnostic;

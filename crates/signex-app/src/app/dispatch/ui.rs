@@ -3,19 +3,19 @@ use iced::Task;
 use super::super::*;
 
 impl Signex {
-    pub(super) fn dispatch_ui_message(&mut self, message: Message) -> Task<Message> {
+    pub(super) fn dispatch_ui_message(&mut self, message: UiMsg) -> Task<Message> {
         match message {
-            Message::ThemeChanged(id) => {
+            UiMsg::ThemeChanged(id) => {
                 self.ui_state.theme_id = id;
                 self.update_canvas_theme();
                 crate::fonts::write_theme_pref(id);
                 self.finish_update()
             }
-            Message::UnitCycled | Message::StatusBar(StatusBarRequest::CycleUnit) => {
+            UiMsg::UnitCycled | UiMsg::StatusBar(StatusBarRequest::CycleUnit) => {
                 self.handle_unit_cycle_request();
                 self.finish_update()
             }
-            Message::GridToggle | Message::StatusBar(StatusBarRequest::ToggleGrid) => {
+            UiMsg::GridToggle | UiMsg::StatusBar(StatusBarRequest::ToggleGrid) => {
                 self.ui_state.grid_visible = !self.ui_state.grid_visible;
                 self.interaction_state.active_canvas_mut().grid_visible =
                     self.ui_state.grid_visible;
@@ -25,11 +25,11 @@ impl Signex {
                 crate::fonts::write_grid_visible_pref(self.ui_state.grid_visible);
                 self.finish_update()
             }
-            Message::DragStart(target) => {
+            UiMsg::DragStart(target) => {
                 self.handle_layout_drag_started(target);
                 self.finish_update()
             }
-            Message::DragMove(x, y) => {
+            UiMsg::DragMove(x, y) => {
                 self.handle_layout_drag_moved(x, y);
                 // Altium parity: cursor leaving the main window during a
                 // modal, floating-panel, or tab drag hands the content
@@ -39,28 +39,37 @@ impl Signex {
                 let tab_detach = self.check_tab_auto_detach(x, y);
                 let finish = self.finish_update();
                 if let Some(modal) = modal_detach {
-                    Task::batch([finish, Task::done(Message::DetachModal(modal))])
+                    Task::batch([
+                        finish,
+                        Task::done(Message::Window(WindowMsg::DetachModal(modal))),
+                    ])
                 } else if let Some(idx) = panel_detach {
-                    Task::batch([finish, Task::done(Message::DetachFloatingPanel(idx))])
+                    Task::batch([
+                        finish,
+                        Task::done(Message::Window(WindowMsg::DetachFloatingPanel(idx))),
+                    ])
                 } else if let Some(idx) = tab_detach {
-                    Task::batch([finish, Task::done(Message::UndockTab(idx))])
+                    Task::batch([
+                        finish,
+                        Task::done(Message::Window(WindowMsg::UndockTab(idx))),
+                    ])
                 } else {
                     finish
                 }
             }
-            Message::WindowResized(w, h) => {
+            UiMsg::WindowResized(w, h) => {
                 self.ui_state.window_size = (w, h);
                 self.finish_update()
             }
-            Message::DragEnd => {
+            UiMsg::DragEnd => {
                 self.handle_layout_drag_finished();
                 self.finish_update()
             }
-            Message::GridCycle => {
+            UiMsg::GridCycle => {
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.finish_update()
             }
-            Message::GridPickerOpen => {
+            UiMsg::GridPickerOpen => {
                 // v0.18.10 — only mount the picker when the active
                 // tab is a Footprint editor; the schematic / PCB
                 // grid systems aren't wired through this picker yet.
@@ -85,11 +94,11 @@ impl Signex {
                 }
                 self.finish_update()
             }
-            Message::GridPickerClose => {
+            UiMsg::GridPickerClose => {
                 self.interaction_state.grid_picker = None;
                 self.finish_update()
             }
-            Message::GridPickerSelect(step_mm) => {
+            UiMsg::GridPickerSelect(step_mm) => {
                 self.interaction_state.grid_picker = None;
                 if let Some(editor) = self.active_footprint_editor_mut() {
                     if step_mm > 0.0 && step_mm.is_finite() {
@@ -105,7 +114,123 @@ impl Signex {
                 self.refresh_panel_ctx();
                 self.finish_update()
             }
-            Message::GridPropertiesOpen => {
+            UiMsg::StatusBar(StatusBarRequest::ToggleSnap) => {
+                self.ui_state.snap_enabled = !self.ui_state.snap_enabled;
+                self.interaction_state.active_canvas_mut().snap_enabled =
+                    self.ui_state.snap_enabled;
+                crate::fonts::write_snap_enabled_pref(self.ui_state.snap_enabled);
+                // v0.18.25.1 — mirror the global toggle into every open
+                // footprint editor so the .snxfpt snap chain (guides /
+                // grid / point-hit / angle) short-circuits in lockstep
+                // with the schematic + PCB canvases.
+                let disabled = !self.ui_state.snap_enabled;
+                for editor in self.document_state.footprint_editors.values_mut() {
+                    editor.state.global_snap_disabled = disabled;
+                    editor.canvas_cache.clear();
+                }
+                self.finish_update()
+            }
+            UiMsg::StatusBar(StatusBarRequest::TogglePanelList) => {
+                self.dispatch_overlay_message(OverlayMsg::TogglePanelList)
+            }
+            UiMsg::StatusBar(StatusBarRequest::OpenPropertiesForSelection) => {
+                self.handle_menu_message(MenuMessage::OpenPropertiesPanel)
+            }
+            UiMsg::ToggleSnapHotspots => {
+                self.ui_state.snap_hotspots = !self.ui_state.snap_hotspots;
+                self.document_state.panel_ctx.snap_hotspots = self.ui_state.snap_hotspots;
+                self.finish_update()
+            }
+            UiMsg::KeymapStroke(stroke) => self.resolve_keymap_stroke(stroke),
+        }
+    }
+
+    /// Custom Selection Filter modal handler (namespaced family,
+    /// ADR-0001 D3). Drives the footprint editor's selection-filter
+    /// customization modal.
+    pub(crate) fn dispatch_selection_filter_message(
+        &mut self,
+        msg: SelectionFilterMsg,
+    ) -> Task<Message> {
+        match msg {
+            SelectionFilterMsg::OpenCustom => {
+                if let Some(editor) = self.active_footprint_editor() {
+                    let f = editor.state.selection_filter;
+                    self.ui_state.selection_filter_custom =
+                        Some(crate::app::SelectionFilterCustomState {
+                            pads: f.pads,
+                            tracks: f.tracks,
+                            arcs: f.arcs,
+                            pours: f.pours,
+                            bodies_3d: f.bodies_3d,
+                            keepouts: f.keepouts,
+                            cutouts: f.cutouts,
+                            texts: f.texts,
+                            vias: f.vias,
+                            regions: f.regions,
+                            fills: f.fills,
+                            other: f.other,
+                        });
+                }
+                self.finish_update()
+            }
+            SelectionFilterMsg::CloseCustom => {
+                self.ui_state.selection_filter_custom = None;
+                self.finish_update()
+            }
+            SelectionFilterMsg::ToggleCustomKind(kind) => {
+                use crate::library::editor::footprint::state::SelectionFilterKind as K;
+                if let Some(state) = self.ui_state.selection_filter_custom.as_mut() {
+                    match kind {
+                        K::Pads => state.pads = !state.pads,
+                        K::Tracks => state.tracks = !state.tracks,
+                        K::Arcs => state.arcs = !state.arcs,
+                        K::Pours => state.pours = !state.pours,
+                        K::Bodies3d => state.bodies_3d = !state.bodies_3d,
+                        K::Keepouts => state.keepouts = !state.keepouts,
+                        K::Cutouts => state.cutouts = !state.cutouts,
+                        K::Texts => state.texts = !state.texts,
+                        K::Vias => state.vias = !state.vias,
+                        K::Regions => state.regions = !state.regions,
+                        K::Fills => state.fills = !state.fills,
+                        K::Other => state.other = !state.other,
+                    }
+                }
+                self.finish_update()
+            }
+            SelectionFilterMsg::ApplyCustom => {
+                let draft = self.ui_state.selection_filter_custom.take();
+                if let (Some(d), Some(editor)) = (draft, self.active_footprint_editor_mut()) {
+                    editor.state.selection_filter =
+                        crate::library::editor::footprint::state::SelectionFilter {
+                            pads: d.pads,
+                            tracks: d.tracks,
+                            arcs: d.arcs,
+                            pours: d.pours,
+                            bodies_3d: d.bodies_3d,
+                            keepouts: d.keepouts,
+                            cutouts: d.cutouts,
+                            texts: d.texts,
+                            vias: d.vias,
+                            regions: d.regions,
+                            fills: d.fills,
+                            other: d.other,
+                        };
+                    editor.canvas_cache.clear();
+                }
+                self.refresh_panel_ctx();
+                self.finish_update()
+            }
+        }
+    }
+
+    /// Grid Properties dialog handler (namespaced family, ADR-0001 D3).
+    pub(crate) fn dispatch_grid_properties_message(
+        &mut self,
+        msg: GridPropertiesMsg,
+    ) -> Task<Message> {
+        match msg {
+            GridPropertiesMsg::Open => {
                 // Pre-populate from the active footprint editor's
                 // current step. No-op for non-footprint tabs (the
                 // modal would have nothing to drive).
@@ -129,29 +254,29 @@ impl Signex {
                 }
                 self.finish_update()
             }
-            Message::GridPropertiesSetFineDisplay(d) => {
+            GridPropertiesMsg::SetFineDisplay(d) => {
                 if let Some(state) = self.ui_state.grid_properties.as_mut() {
                     state.fine_display = d;
                 }
                 self.finish_update()
             }
-            Message::GridPropertiesSetCoarseDisplay(d) => {
+            GridPropertiesMsg::SetCoarseDisplay(d) => {
                 if let Some(state) = self.ui_state.grid_properties.as_mut() {
                     state.coarse_display = d;
                 }
                 self.finish_update()
             }
-            Message::GridPropertiesSetMultiplier(m) => {
+            GridPropertiesMsg::SetMultiplier(m) => {
                 if let Some(state) = self.ui_state.grid_properties.as_mut() {
                     state.multiplier = m.max(1);
                 }
                 self.finish_update()
             }
-            Message::GridPropertiesClose => {
+            GridPropertiesMsg::Close => {
                 self.ui_state.grid_properties = None;
                 self.finish_update()
             }
-            Message::GridPropertiesSetStepX(value) => {
+            GridPropertiesMsg::SetStepX(value) => {
                 if let Some(state) = self.ui_state.grid_properties.as_mut() {
                     state.step_x_mm = value;
                     if state.link_xy {
@@ -160,7 +285,7 @@ impl Signex {
                 }
                 self.finish_update()
             }
-            Message::GridPropertiesSetStepY(value) => {
+            GridPropertiesMsg::SetStepY(value) => {
                 if let Some(state) = self.ui_state.grid_properties.as_mut() {
                     state.step_y_mm = value;
                     if state.link_xy {
@@ -169,7 +294,7 @@ impl Signex {
                 }
                 self.finish_update()
             }
-            Message::GridPropertiesToggleLink => {
+            GridPropertiesMsg::ToggleLink => {
                 if let Some(state) = self.ui_state.grid_properties.as_mut() {
                     state.link_xy = !state.link_xy;
                     if state.link_xy {
@@ -180,75 +305,7 @@ impl Signex {
                 }
                 self.finish_update()
             }
-            Message::OpenSelectionFilterCustom => {
-                if let Some(editor) = self.active_footprint_editor() {
-                    let f = editor.state.selection_filter;
-                    self.ui_state.selection_filter_custom =
-                        Some(crate::app::SelectionFilterCustomState {
-                            pads: f.pads,
-                            tracks: f.tracks,
-                            arcs: f.arcs,
-                            pours: f.pours,
-                            bodies_3d: f.bodies_3d,
-                            keepouts: f.keepouts,
-                            cutouts: f.cutouts,
-                            texts: f.texts,
-                            vias: f.vias,
-                            regions: f.regions,
-                            fills: f.fills,
-                            other: f.other,
-                        });
-                }
-                self.finish_update()
-            }
-            Message::CloseSelectionFilterCustom => {
-                self.ui_state.selection_filter_custom = None;
-                self.finish_update()
-            }
-            Message::ToggleSelectionFilterCustomKind(kind) => {
-                use crate::library::editor::footprint::state::SelectionFilterKind as K;
-                if let Some(state) = self.ui_state.selection_filter_custom.as_mut() {
-                    match kind {
-                        K::Pads => state.pads = !state.pads,
-                        K::Tracks => state.tracks = !state.tracks,
-                        K::Arcs => state.arcs = !state.arcs,
-                        K::Pours => state.pours = !state.pours,
-                        K::Bodies3d => state.bodies_3d = !state.bodies_3d,
-                        K::Keepouts => state.keepouts = !state.keepouts,
-                        K::Cutouts => state.cutouts = !state.cutouts,
-                        K::Texts => state.texts = !state.texts,
-                        K::Vias => state.vias = !state.vias,
-                        K::Regions => state.regions = !state.regions,
-                        K::Fills => state.fills = !state.fills,
-                        K::Other => state.other = !state.other,
-                    }
-                }
-                self.finish_update()
-            }
-            Message::ApplySelectionFilterCustom => {
-                let draft = self.ui_state.selection_filter_custom.take();
-                if let (Some(d), Some(editor)) = (draft, self.active_footprint_editor_mut()) {
-                    editor.state.selection_filter =
-                        crate::library::editor::footprint::state::SelectionFilter {
-                            pads: d.pads,
-                            tracks: d.tracks,
-                            arcs: d.arcs,
-                            pours: d.pours,
-                            bodies_3d: d.bodies_3d,
-                            keepouts: d.keepouts,
-                            cutouts: d.cutouts,
-                            texts: d.texts,
-                            vias: d.vias,
-                            regions: d.regions,
-                            fills: d.fills,
-                            other: d.other,
-                        };
-                    editor.canvas_cache.clear();
-                }
-                self.refresh_panel_ctx();
-                self.finish_update()
-            }
-            Message::GridPropertiesApply => {
+            GridPropertiesMsg::Apply => {
                 // Validate the X step (Y is taken from X for now —
                 // single-axis steps in `SnapOptions`; the Y field
                 // exists in the dialog for forward compatibility).
@@ -284,46 +341,6 @@ impl Signex {
                 self.refresh_panel_ctx();
                 self.finish_update()
             }
-            Message::StatusBar(StatusBarRequest::ToggleSnap) => {
-                self.ui_state.snap_enabled = !self.ui_state.snap_enabled;
-                self.interaction_state.active_canvas_mut().snap_enabled =
-                    self.ui_state.snap_enabled;
-                crate::fonts::write_snap_enabled_pref(self.ui_state.snap_enabled);
-                // v0.18.25.1 — mirror the global toggle into every open
-                // footprint editor so the .snxfpt snap chain (guides /
-                // grid / point-hit / angle) short-circuits in lockstep
-                // with the schematic + PCB canvases.
-                let disabled = !self.ui_state.snap_enabled;
-                for editor in self.document_state.footprint_editors.values_mut() {
-                    editor.state.global_snap_disabled = disabled;
-                    editor.canvas_cache.clear();
-                }
-                self.finish_update()
-            }
-            Message::StatusBar(StatusBarRequest::TogglePanelList) => {
-                self.dispatch_overlay_message(Message::TogglePanelList)
-            }
-            Message::StatusBar(StatusBarRequest::OpenPropertiesForSelection) => {
-                self.dispatch_overlay_message(Message::Menu(MenuMessage::OpenPropertiesPanel))
-            }
-            Message::CanvasEvent(event) => {
-                // First user gesture on the canvas dismisses the
-                // first-run tour card (UX §4.3). Cheap inline check —
-                // false branch when the card is already dismissed.
-                if self.ui_state.first_run_tour_open {
-                    self.ui_state.first_run_tour_open = false;
-                    crate::fonts::write_first_run_tour_dismissed(true);
-                }
-                self.handle_canvas_interaction_event(event)
-            }
-            Message::CanvasEventInWindow { window_id, event } => {
-                if self.ui_state.first_run_tour_open {
-                    self.ui_state.first_run_tour_open = false;
-                    crate::fonts::write_first_run_tour_dismissed(true);
-                }
-                self.handle_canvas_event_in_window(window_id, event)
-            }
-            _ => unreachable!("dispatch_ui_message received non-ui message"),
         }
     }
 
@@ -349,7 +366,7 @@ impl Signex {
     /// **Panic safety:** the swap is guarded with `catch_unwind` +
     /// `resume_unwind` so a panicking handler still restores both the
     /// canvas slot and `active_path` before the panic propagates.
-    fn handle_canvas_event_in_window(
+    pub(super) fn handle_canvas_event_in_window(
         &mut self,
         window_id: iced::window::Id,
         event: crate::canvas::CanvasEvent,

@@ -11,9 +11,9 @@
 
 use signex_gfx::scene::Scene;
 use signex_renderer::pcb3d::{
-    check_projection_alignment, emit_opaque_pass_preview, emit_projection_pass, ingest_runtime_glb,
     GlbSource, ModelTransform, OpaquePassLayout, ProjectionPassConfig, RuntimeGlbIngestRequest,
-    RuntimeMaterialPolicy,
+    RuntimeMaterialPolicy, check_projection_alignment, emit_opaque_pass_preview,
+    emit_projection_pass, ingest_runtime_glb,
 };
 use signex_renderer::theme::ResolvedTheme;
 
@@ -38,7 +38,7 @@ fn make_glb_bytes(json: &str) -> Vec<u8> {
     let total_len = 12 + 8 + json_chunk.len();
     let mut bytes = Vec::with_capacity(total_len);
     bytes.extend_from_slice(&0x46546C67_u32.to_le_bytes()); // magic
-    bytes.extend_from_slice(&2_u32.to_le_bytes());          // version
+    bytes.extend_from_slice(&2_u32.to_le_bytes()); // version
     bytes.extend_from_slice(&(total_len as u32).to_le_bytes());
     bytes.extend_from_slice(&(json_chunk.len() as u32).to_le_bytes());
     bytes.extend_from_slice(&0x4E4F534A_u32.to_le_bytes()); // JSON chunk type
@@ -88,7 +88,10 @@ fn benchmark_smoke_tier_s_opaque_pass_emits_expected_polygon_count() {
     emit_opaque_pass_preview(&model, &theme, &mut scene, OpaquePassLayout::default());
 
     assert_eq!(scene.polygons.len(), 3);
-    assert!(scene.overlay_polygons.is_empty(), "opaque pass must not touch overlay_polygons");
+    assert!(
+        scene.overlay_polygons.is_empty(),
+        "opaque pass must not touch overlay_polygons"
+    );
 }
 
 #[test]
@@ -101,16 +104,19 @@ fn benchmark_smoke_tier_s_projection_pass_emits_expected_overlay_count() {
     let config = ProjectionPassConfig::default();
     assert!(check_projection_alignment("tier-s", &config).is_ok());
 
-    emit_projection_pass(&model, &theme, &mut scene, config).expect("tier-S projection must succeed");
+    emit_projection_pass(&model, &theme, &mut scene, config)
+        .expect("tier-S projection must succeed");
 
     assert_eq!(scene.overlay_polygons.len(), 3);
-    assert!(scene.polygons.is_empty(), "projection pass must not touch base polygons");
+    assert!(
+        scene.polygons.is_empty(),
+        "projection pass must not touch base polygons"
+    );
 }
 
 #[test]
 fn benchmark_smoke_tier_s_full_pipeline_pass_separation_holds() {
-    let model =
-        ingest_runtime_glb(request("tier-s-full", tier_s_json())).expect("tier-S ingest");
+    let model = ingest_runtime_glb(request("tier-s-full", tier_s_json())).expect("tier-S ingest");
     let mut scene = Scene::default();
     let theme = ResolvedTheme::builtin_default();
 
@@ -118,7 +124,11 @@ fn benchmark_smoke_tier_s_full_pipeline_pass_separation_holds() {
     emit_projection_pass(&model, &theme, &mut scene, ProjectionPassConfig::default())
         .expect("tier-S projection");
 
-    assert_eq!(scene.polygons.len(), 3, "opaque pass count must be stable after projection pass");
+    assert_eq!(
+        scene.polygons.len(),
+        3,
+        "opaque pass count must be stable after projection pass"
+    );
     assert_eq!(scene.overlay_polygons.len(), 3, "projection pass count");
 }
 
@@ -195,8 +205,7 @@ fn benchmark_smoke_tier_m_projection_pass_emits_expected_overlay_count() {
 
 #[test]
 fn benchmark_smoke_tier_m_full_pipeline_pass_separation_holds() {
-    let model =
-        ingest_runtime_glb(request("tier-m-full", tier_m_json())).expect("tier-M ingest");
+    let model = ingest_runtime_glb(request("tier-m-full", tier_m_json())).expect("tier-M ingest");
     let mut scene = Scene::default();
     let theme = ResolvedTheme::builtin_default();
 
@@ -204,6 +213,10 @@ fn benchmark_smoke_tier_m_full_pipeline_pass_separation_holds() {
     emit_projection_pass(&model, &theme, &mut scene, ProjectionPassConfig::default())
         .expect("tier-M projection");
 
-    assert_eq!(scene.polygons.len(), 7, "opaque pass count stable after projection pass");
+    assert_eq!(
+        scene.polygons.len(),
+        7,
+        "opaque pass count stable after projection pass"
+    );
     assert_eq!(scene.overlay_polygons.len(), 7, "projection overlay count");
 }

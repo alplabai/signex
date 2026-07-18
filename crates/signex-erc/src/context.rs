@@ -1,48 +1,13 @@
 //! Parser-independent ERC context. Built by projecting a
 //! [`SchematicSheet`] once; all rule functions read from here so
-//! they stay independent from any legacy renderer crate.
+//! they stay independent from renderer internals.
 
 use std::collections::HashMap;
 
+use signex_net::SheetConnectivity;
 use signex_types::schematic::SchematicSheet;
-use signex_types::schematic::{LabelType, PinDirection, Point};
+use signex_types::schematic::{LabelType, PinDirection, Point, SymbolTransform};
 use uuid::Uuid;
-
-#[derive(Debug, Clone, Copy)]
-struct SymbolTransform {
-    origin: Point,
-    rotation_deg: f64,
-    mirror_x: bool,
-    mirror_y: bool,
-}
-
-impl SymbolTransform {
-    fn from_symbol(symbol: &signex_types::schematic::Symbol) -> Self {
-        Self {
-            origin: symbol.position,
-            rotation_deg: symbol.rotation,
-            mirror_x: symbol.mirror_x,
-            mirror_y: symbol.mirror_y,
-        }
-    }
-
-    fn apply(&self, local: Point) -> Point {
-        let x = local.x;
-        let y = -local.y;
-        let rad = -self.rotation_deg.to_radians();
-        let cos = rad.cos();
-        let sin = rad.sin();
-        let mut rx = x * cos - y * sin;
-        let mut ry = x * sin + y * cos;
-        if self.mirror_y {
-            rx = -rx;
-        }
-        if self.mirror_x {
-            ry = -ry;
-        }
-        Point::new(rx + self.origin.x, ry + self.origin.y)
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Paper size
@@ -96,7 +61,7 @@ pub struct ErcPin {
     /// `false` for `Unclassified` and `DoNotConnect` pin types — those may be
     /// left unconnected by design. DSL: `pin.required == true`.
     pub required: bool,
-    /// `true` if a wire endpoint, bus endpoint, label, or no-connect marker
+    /// `true` if a wire endpoint, junction, label, or no-connect marker
     /// sits at this pin's world-space tip. DSL: `pin.connected == false`.
     pub connected: bool,
 }
@@ -218,7 +183,8 @@ pub struct ErcContext {
     pub no_connects: Vec<ErcNoConnect>,
     pub bus_entries: Vec<ErcBusEntry>,
     pub child_sheets: Vec<ErcChildSheet>,
-    /// Derived logical nets (union-find over wire topology).
+    /// Logical net summaries for the DSL, projected off the shared
+    /// [`SheetConnectivity`] derivation (see `summarize_nets`).
     pub nets: Vec<ErcNet>,
     /// Child sheet contexts keyed by filename. Only populated when built via
     /// [`from_snapshot_with_children`].
@@ -331,8 +297,13 @@ impl ErcContext {
                         let _world = SymbolTransform::from_symbol(sym).apply(lp.pin.position);
                         let (wx, wy) = (_world.x, _world.y);
                         let world_pos = Point::new(wx, wy);
-                        let connected =
-                            point_is_connected(&world_pos, &wires, &buses, &labels, &no_connects);
+                        let connected = point_is_connected(
+                            &world_pos,
+                            &wires,
+                            &junctions,
+                            &labels,
+                            &no_connects,
+                        );
                         let required = !matches!(
                             lp.pin.direction,
                             PinDirection::Unclassified | PinDirection::DoNotConnect
@@ -359,7 +330,7 @@ impl ErcContext {
             .collect();
 
         // --- Step 3: derive logical nets ----------------------------------
-        let nets = derive_nets(&wires, &labels, &junctions, &symbols);
+        let nets = summarize_nets(&wires, &labels, &junctions, &symbols);
 
         ErcContext {
             paper_size: PaperSize::parse(&snapshot.paper_size),
@@ -381,64 +352,75 @@ impl ErcContext {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const EPS: f64 = 1e-4;
-
-fn pt_same(a: &Point, b: &Point) -> bool {
-    (a.x - b.x).abs() < EPS && (a.y - b.y).abs() < EPS
-}
-
-/// MD-6: see `rules::key` — same 1 µm bucket so context + rule
-/// projections agree on net membership.
+/// MD-6: see `rules::key` — the 1 µm bucket, the single "same point" metric so
+/// context + rule projections agree on net membership (D5.5).
 fn pt_key(p: &Point) -> (i64, i64) {
     ((p.x * 1000.0).round() as i64, (p.y * 1000.0).round() as i64)
 }
 
-/// Returns `true` if any wire/bus endpoint, label, or no-connect sits at `pos`.
+/// True when a wire endpoint, junction, label, or no-connect sits at `pos`,
+/// compared in the 1 µm key space — the same "same point" definition the
+/// union-find uses, so the gate and the net partition never disagree (D5.5).
+/// Junctions count: a pin may tap a wire mid-span where a junction sits (D5.3).
+/// Buses do not: a bundle is never unioned, so gating on a bus endpoint minted
+/// a one-terminal phantom net and a spurious unconnected-pin warning (D5.4).
 fn point_is_connected(
     pos: &Point,
     wires: &[ErcWire],
-    buses: &[ErcBus],
+    junctions: &[ErcJunction],
     labels: &[ErcLabel],
     no_connects: &[ErcNoConnect],
 ) -> bool {
+    let k = pt_key(pos);
     wires
         .iter()
-        .any(|w| pt_same(&w.start, pos) || pt_same(&w.end, pos))
-        || buses
-            .iter()
-            .any(|b| pt_same(&b.start, pos) || pt_same(&b.end, pos))
-        || labels.iter().any(|l| pt_same(&l.position, pos))
-        || no_connects.iter().any(|nc| pt_same(&nc.position, pos))
+        .any(|w| pt_key(&w.start) == k || pt_key(&w.end) == k)
+        || junctions.iter().any(|j| pt_key(&j.position) == k)
+        || labels.iter().any(|l| pt_key(&l.position) == k)
+        || no_connects.iter().any(|nc| pt_key(&nc.position) == k)
 }
 
 // ---------------------------------------------------------------------------
-// Net derivation (union-find over wire endpoints)
+// Net summaries for the DSL
 // ---------------------------------------------------------------------------
 
-// Union-find lives in `crate::uf` (HI-17). Import the canonical helpers.
-use crate::uf::{find as uf_find, union as uf_union};
-
-fn derive_nets(
+/// Summarise each geometric net into the flat [`ErcNet`] the ERC DSL reads:
+/// its highest-priority label name, a coarse class, and the electrical types of
+/// the pins on it.
+///
+/// Connectivity is **not** derived here — it comes from the shared
+/// [`SheetConnectivity`] (the same wire-endpoint union plus junction T-merge
+/// `build_netlist` uses), so ERC and the netlist agree on membership by
+/// construction instead of ERC hand-rolling a second union-find.
+fn summarize_nets(
     wires: &[ErcWire],
     labels: &[ErcLabel],
     junctions: &[ErcJunction],
     symbols: &[ErcSymbol],
 ) -> Vec<ErcNet> {
-    let mut parent: HashMap<(i64, i64), (i64, i64)> = HashMap::new();
+    let segments: Vec<(Point, Point)> = wires.iter().map(|w| (w.start, w.end)).collect();
+    let junction_pts: Vec<Point> = junctions.iter().map(|j| j.position).collect();
+    let mut conn = SheetConnectivity::from_segments(&segments, &junction_pts);
 
-    // Wire segments connect their two endpoints.
-    for w in wires {
-        uf_union(&mut parent, pt_key(&w.start), pt_key(&w.end));
-    }
-    // Junctions anchor crossing wire endpoints into the same net.
-    for j in junctions {
-        uf_find(&mut parent, pt_key(&j.position));
+    // Anchor every label to the wire it sits on — endpoint *or* interior —
+    // exactly as `merged_sheet_parent` does before it reads net roots. A label
+    // dropped mid-span is not a wire endpoint, so an unanchored `root_of` hands
+    // it a singleton root and its name never reaches the net (issue #396, the
+    // DSL-facing half of #388).
+    //
+    // Anchoring is a separate pass because a union can re-point a class
+    // representative: a label landing where a wire ends on another wire's
+    // interior merges those two classes, changing a root recorded earlier in
+    // the same loop. Every root below is therefore read only after the last
+    // union, mirroring `merged_sheet_parent`'s merge-then-read split.
+    for lbl in labels {
+        conn.root_of_anchored(&lbl.position, &segments);
     }
 
     // Group labels by net root.
     let mut net_labels: HashMap<(i64, i64), Vec<&ErcLabel>> = HashMap::new();
     for lbl in labels {
-        let root = uf_find(&mut parent, pt_key(&lbl.position));
+        let root = conn.root_of(&lbl.position);
         net_labels.entry(root).or_default().push(lbl);
     }
 
@@ -455,7 +437,7 @@ fn derive_nets(
             // We can't distinguish nc-only from wire-connected here without
             // re-probing, so we include everything that's "connected" — the
             // no-connect case creates a small singleton net that harms nothing.
-            let root = uf_find(&mut parent, pt_key(&pin.world_pos));
+            let root = conn.root_of(&pin.world_pos);
             net_pins.entry(root).or_default().push(pin.electrical_type);
         }
     }
@@ -498,7 +480,7 @@ fn derive_nets(
                 .unwrap_or_else(|| name.to_ascii_lowercase());
 
             let has_driver = pins.iter().any(|t| DRIVING.contains(t));
-            let has_pullup = pins.iter().any(|t| *t == PinDirection::Passive);
+            let has_pullup = pins.contains(&PinDirection::Passive);
 
             ErcNet {
                 name,
@@ -509,4 +491,199 @@ fn derive_nets(
             }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pt(x: f64, y: f64) -> Point {
+        Point { x, y }
+    }
+
+    fn wire(a: Point, b: Point) -> ErcWire {
+        ErcWire {
+            uuid: Uuid::nil(),
+            start: a,
+            end: b,
+        }
+    }
+
+    fn pin(pos: Point, dir: PinDirection) -> ErcPin {
+        ErcPin {
+            world_pos: pos,
+            electrical_type: dir,
+            required: true,
+            connected: true,
+        }
+    }
+
+    fn symbol(pins: Vec<ErcPin>) -> ErcSymbol {
+        ErcSymbol {
+            uuid: Uuid::nil(),
+            reference: "U1".into(),
+            value: String::new(),
+            position: pt(0.0, 0.0),
+            is_power: false,
+            pins,
+            attrs: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn junction_gates_connectivity_but_off_points_do_not() {
+        // D5.3: a pin tapping a wire mid-span where a junction sits is
+        // connected. D5.4: buses no longer gate, so a point that is only on a
+        // bus (off every wire/junction/label) is not connected — no phantom net
+        // or spurious unconnected-pin warning.
+        let wires = vec![wire(pt(0.0, 0.0), pt(10.0, 0.0))];
+        let junctions = vec![ErcJunction {
+            position: pt(5.0, 0.0),
+        }];
+        let labels: Vec<ErcLabel> = Vec::new();
+        let no_connects: Vec<ErcNoConnect> = Vec::new();
+        assert!(
+            point_is_connected(&pt(5.0, 0.0), &wires, &junctions, &labels, &no_connects),
+            "pin on a mid-wire junction is connected"
+        );
+        assert!(
+            point_is_connected(&pt(0.0, 0.0), &wires, &junctions, &labels, &no_connects),
+            "pin on a wire endpoint is connected"
+        );
+        assert!(
+            !point_is_connected(&pt(7.0, 3.0), &wires, &junctions, &labels, &no_connects),
+            "a point off every wire/junction/label is not connected"
+        );
+    }
+
+    #[test]
+    fn t_junction_merges_wire_ending_on_another_wires_interior() {
+        // Horizontal wire (0,0)-(10,0); a vertical wire (5,0)-(5,5)
+        // ends on its interior; a junction dot sits at (5,0). A pin at
+        // each far end must land on ONE net once the junction connects
+        // the two wires. Regression for issue #107.
+        let wires = vec![
+            wire(pt(0.0, 0.0), pt(10.0, 0.0)),
+            wire(pt(5.0, 0.0), pt(5.0, 5.0)),
+        ];
+        let junctions = vec![ErcJunction {
+            position: pt(5.0, 0.0),
+        }];
+        let syms = vec![symbol(vec![
+            pin(pt(0.0, 0.0), PinDirection::Output),
+            pin(pt(5.0, 5.0), PinDirection::Input),
+        ])];
+
+        let nets = summarize_nets(&wires, &[], &junctions, &syms);
+        assert_eq!(
+            nets.len(),
+            1,
+            "a T-junction must merge both wires into one net"
+        );
+        assert_eq!(
+            nets[0].pin_types.len(),
+            2,
+            "both pins belong to the merged net"
+        );
+    }
+
+    #[test]
+    fn t_intersection_without_junction_stays_two_nets() {
+        // Same geometry, no junction dot: the connection is not
+        // asserted, so the wires remain two separate nets. Documents
+        // that the junction is what drives a T-connection.
+        let wires = vec![
+            wire(pt(0.0, 0.0), pt(10.0, 0.0)),
+            wire(pt(5.0, 0.0), pt(5.0, 5.0)),
+        ];
+        let syms = vec![symbol(vec![
+            pin(pt(0.0, 0.0), PinDirection::Output),
+            pin(pt(5.0, 5.0), PinDirection::Input),
+        ])];
+
+        let nets = summarize_nets(&wires, &[], &[], &syms);
+        assert_eq!(
+            nets.len(),
+            2,
+            "without a junction the T is two separate nets"
+        );
+    }
+
+    fn label(pos: Point, text: &str, label_type: LabelType) -> ErcLabel {
+        ErcLabel {
+            uuid: Uuid::nil(),
+            text: text.into(),
+            position: pos,
+            label_type,
+        }
+    }
+
+    #[test]
+    fn mid_wire_label_names_the_net_the_dsl_reads() {
+        // Regression for issue #396: a Net label dropped on a wire's INTERIOR
+        // (5,0), not on either endpoint. `build_netlist` anchors it via
+        // `point_on_segment`, so the netlist calls this net "SDA"; an
+        // unanchored `root_of` instead handed the label a singleton root and
+        // the ErcNet the DSL reads came back unnamed — every DSL rule keyed on
+        // `net.name` / `net.class` then disagreed with the netlist (#388).
+        let wires = vec![wire(pt(0.0, 0.0), pt(10.0, 0.0))];
+        let labels = vec![label(pt(5.0, 0.0), "SDA", LabelType::Net)];
+        let syms = vec![symbol(vec![
+            pin(pt(0.0, 0.0), PinDirection::Output),
+            pin(pt(10.0, 0.0), PinDirection::Input),
+        ])];
+
+        let nets = summarize_nets(&wires, &labels, &[], &syms);
+        assert_eq!(nets.len(), 1, "one wire with two pins is one net");
+        assert_eq!(
+            nets[0].name, "SDA",
+            "a mid-span label must name the net the DSL sees"
+        );
+        assert_eq!(
+            nets[0].class, "sda",
+            "class derives from the anchored name, not an empty one"
+        );
+    }
+
+    #[test]
+    fn endpoint_label_still_names_its_net() {
+        // The anchoring pass must not regress the ordinary case: a label
+        // sitting exactly on a wire endpoint is already in the wire's class,
+        // so anchoring is a no-op union and the name still lands.
+        let wires = vec![wire(pt(0.0, 0.0), pt(10.0, 0.0))];
+        let labels = vec![label(pt(0.0, 0.0), "VBUS", LabelType::Global)];
+        let syms = vec![symbol(vec![
+            pin(pt(0.0, 0.0), PinDirection::PowerOutput),
+            pin(pt(10.0, 0.0), PinDirection::Input),
+        ])];
+
+        let nets = summarize_nets(&wires, &labels, &[], &syms);
+        assert_eq!(nets.len(), 1);
+        assert_eq!(nets[0].name, "VBUS");
+        assert!(nets[0].has_driver, "PowerOutput drives the net");
+    }
+
+    #[test]
+    fn label_off_every_wire_does_not_join_a_net() {
+        // Anchoring must not be a licence to attach any label anywhere: a
+        // label at (7,3) lies off the wire, so it stays its own root and
+        // never names the wire's net. Anchoring ERC more leniently than
+        // `build_netlist` would be its own #388.
+        let wires = vec![wire(pt(0.0, 0.0), pt(10.0, 0.0))];
+        let labels = vec![label(pt(7.0, 3.0), "STRAY", LabelType::Net)];
+        let syms = vec![symbol(vec![
+            pin(pt(0.0, 0.0), PinDirection::Output),
+            pin(pt(10.0, 0.0), PinDirection::Input),
+        ])];
+
+        let nets = summarize_nets(&wires, &labels, &[], &syms);
+        let wire_net = nets
+            .iter()
+            .find(|n| n.pin_types.len() == 2)
+            .expect("the wire's own net still exists");
+        assert_eq!(
+            wire_net.name, "",
+            "an off-wire label must not name the wire's net"
+        );
+    }
 }

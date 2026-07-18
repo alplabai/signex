@@ -6,7 +6,7 @@
 
 use serde::Deserialize;
 use signex_gfx::style::ColorSlot;
-use signex_types::theme::{canvas_colors, CanvasColors, Color, ThemeId};
+use signex_types::theme::{CanvasColors, Color, ThemeId, canvas_colors};
 use std::sync::OnceLock;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -89,8 +89,9 @@ struct BuiltinSlots {
 }
 
 fn load_builtin_theme() -> ResolvedTheme {
-    let palette: BuiltinPaletteFile = serde_json::from_str(include_str!("../data/builtin_schematic_palette.json"))
-        .expect("valid builtin_schematic_palette.json");
+    let palette: BuiltinPaletteFile =
+        serde_json::from_str(include_str!("../data/builtin_schematic_palette.json"))
+            .expect("valid builtin_schematic_palette.json");
 
     let mut resolved = ResolvedTheme::empty();
     resolved.set_slot(ColorSlot::Wire, palette.slots.wire);

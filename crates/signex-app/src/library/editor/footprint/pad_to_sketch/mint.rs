@@ -111,8 +111,14 @@ pub(super) fn mint_round_rect_pad_geometry(
         (xmin, ymin + r), // 6: NW left-edge anchor
         (xmin + r, ymin), // 7: NW top-edge anchor
     ];
-    let anchor_ids: [SketchEntityId; 8] =
-        std::array::from_fn(|i| push_point(sketch, plane_id, anchor_positions[i].0, anchor_positions[i].1));
+    let anchor_ids: [SketchEntityId; 8] = std::array::from_fn(|i| {
+        push_point(
+            sketch,
+            plane_id,
+            anchor_positions[i].0,
+            anchor_positions[i].1,
+        )
+    });
 
     // ── 3. 4 inset corner Points (arc centres).
     let inset_positions: [(f64, f64); 4] = [
@@ -121,8 +127,9 @@ pub(super) fn mint_round_rect_pad_geometry(
         (xmin + r, ymax - r), // SW arc centre
         (xmin + r, ymin + r), // NW arc centre
     ];
-    let inset_ids: [SketchEntityId; 4] =
-        std::array::from_fn(|i| push_point(sketch, plane_id, inset_positions[i].0, inset_positions[i].1));
+    let inset_ids: [SketchEntityId; 4] = std::array::from_fn(|i| {
+        push_point(sketch, plane_id, inset_positions[i].0, inset_positions[i].1)
+    });
 
     // ── 4. 4 shorter Lines connecting adjacent anchors.
     for (start, end) in [
@@ -137,7 +144,12 @@ pub(super) fn mint_round_rect_pad_geometry(
     // ── 5. 4 corner Arcs. Record per-corner Arc IDs on
     //    `pad.shape_params` via sidecar keys so the Unlink action can
     //    reverse-lookup which corner an Arc represents.
-    let arc_keys: [&str; 4] = ["corner_r_ne_arc", "corner_r_se_arc", "corner_r_sw_arc", "corner_r_nw_arc"];
+    let arc_keys: [&str; 4] = [
+        "corner_r_ne_arc",
+        "corner_r_se_arc",
+        "corner_r_sw_arc",
+        "corner_r_nw_arc",
+    ];
     let arc_specs: [(usize, SketchEntityId, SketchEntityId); 4] = [
         (0, anchor_ids[0], anchor_ids[1]),
         (1, anchor_ids[2], anchor_ids[3]),
@@ -202,8 +214,14 @@ pub(super) fn mint_oval_pad_geometry(
             (xmin, ymin + inset),
         ]
     };
-    let anchor_ids: [SketchEntityId; 4] =
-        std::array::from_fn(|i| push_point(sketch, plane_id, anchor_positions[i].0, anchor_positions[i].1));
+    let anchor_ids: [SketchEntityId; 4] = std::array::from_fn(|i| {
+        push_point(
+            sketch,
+            plane_id,
+            anchor_positions[i].0,
+            anchor_positions[i].1,
+        )
+    });
 
     let arc_centres: [(f64, f64); 2] = if wide {
         [
@@ -227,8 +245,20 @@ pub(super) fn mint_oval_pad_geometry(
 
     // ── 5. 2 Arcs on the short-axis ends (CCW sweep).
     let arc_ids: [SketchEntityId; 2] = [
-        push_arc_ccw(sketch, plane_id, arc_centre_ids[1], anchor_ids[1], anchor_ids[2]),
-        push_arc_ccw(sketch, plane_id, arc_centre_ids[0], anchor_ids[3], anchor_ids[0]),
+        push_arc_ccw(
+            sketch,
+            plane_id,
+            arc_centre_ids[1],
+            anchor_ids[1],
+            anchor_ids[2],
+        ),
+        push_arc_ccw(
+            sketch,
+            plane_id,
+            arc_centre_ids[0],
+            anchor_ids[3],
+            anchor_ids[0],
+        ),
     ];
 
     // ── 6. width / height parameters.
@@ -237,8 +267,10 @@ pub(super) fn mint_oval_pad_geometry(
 
     // ── 7. Sidecar bindings for the delete-sweep seed list.
     for (idx, anchor_id) in anchor_ids.iter().enumerate() {
-        pad.shape_params
-            .insert(format!("oval_anchor_{idx}"), anchor_id.0.simple().to_string());
+        pad.shape_params.insert(
+            format!("oval_anchor_{idx}"),
+            anchor_id.0.simple().to_string(),
+        );
     }
     for (idx, centre) in arc_centre_ids.iter().enumerate() {
         pad.shape_params
@@ -295,14 +327,38 @@ pub(super) fn mint_chamfered_pad_geometry(
 
     // ── 2. Per-corner anchor Points (only for ENABLED corners).
     let corner_specs: [(usize, bool, &str, &str, (f64, f64), (f64, f64)); 4] = [
-        (0, corner_flags.top_right, "chamfer_ne_anchor1", "chamfer_ne_anchor2",
-         (xmax - r, ymin), (xmax, ymin + r)),
-        (1, corner_flags.bottom_right, "chamfer_se_anchor1", "chamfer_se_anchor2",
-         (xmax, ymax - r), (xmax - r, ymax)),
-        (2, corner_flags.bottom_left, "chamfer_sw_anchor1", "chamfer_sw_anchor2",
-         (xmin + r, ymax), (xmin, ymax - r)),
-        (3, corner_flags.top_left, "chamfer_nw_anchor1", "chamfer_nw_anchor2",
-         (xmin, ymin + r), (xmin + r, ymin)),
+        (
+            0,
+            corner_flags.top_right,
+            "chamfer_ne_anchor1",
+            "chamfer_ne_anchor2",
+            (xmax - r, ymin),
+            (xmax, ymin + r),
+        ),
+        (
+            1,
+            corner_flags.bottom_right,
+            "chamfer_se_anchor1",
+            "chamfer_se_anchor2",
+            (xmax, ymax - r),
+            (xmax - r, ymax),
+        ),
+        (
+            2,
+            corner_flags.bottom_left,
+            "chamfer_sw_anchor1",
+            "chamfer_sw_anchor2",
+            (xmin + r, ymax),
+            (xmin, ymax - r),
+        ),
+        (
+            3,
+            corner_flags.top_left,
+            "chamfer_nw_anchor1",
+            "chamfer_nw_anchor2",
+            (xmin, ymin + r),
+            (xmin + r, ymin),
+        ),
     ];
 
     let mut anchors: [Option<(SketchEntityId, SketchEntityId)>; 4] = [None, None, None, None];

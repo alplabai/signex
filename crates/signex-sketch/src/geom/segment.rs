@@ -5,8 +5,8 @@
 //! reconstruct the world-mm hit position via `seg.at(t)` and order
 //! multiple intersections along the ray direction.
 
+use super::predicates::{DEFAULT_TOL, orient2d};
 use super::{Point2, Sign};
-use super::predicates::{orient2d, DEFAULT_TOL};
 
 /// 2D line segment from `a` to `b`. Endpoints stored as bare points
 /// so the user can build one inline from `EntityKind::Point` data.
@@ -130,18 +130,11 @@ pub enum SegmentIntersection {
     /// Single point at world position `pt`, parameters `t0` (along
     /// the first segment) and `t1` (along the second), each in
     /// `[0, 1]`.
-    Point {
-        pt: Point2,
-        t0: f64,
-        t1: f64,
-    },
+    Point { pt: Point2, t0: f64, t1: f64 },
     /// Colinear overlap. `from` and `to` are the world endpoints of
     /// the overlapping range, ordered along the first segment's
     /// direction. Equal points = touch-only (single shared endpoint).
-    Overlap {
-        from: Point2,
-        to: Point2,
-    },
+    Overlap { from: Point2, to: Point2 },
 }
 
 /// Intersect two line segments. Returns `None` for parallel-disjoint
@@ -162,8 +155,7 @@ pub fn segment_segment_intersection(p: Segment2, q: Segment2) -> SegmentIntersec
     if denom.abs() <= DEFAULT_TOL * (r.0.abs() + r.1.abs() + s.0.abs() + s.1.abs()).max(1.0) {
         // Parallel — colinear iff (q-p) × r == 0 too.
         let cross = qmp.0 * r.1 - qmp.1 * r.0;
-        if cross.abs()
-            > DEFAULT_TOL * (qmp.0.abs() + qmp.1.abs() + r.0.abs() + r.1.abs()).max(1.0)
+        if cross.abs() > DEFAULT_TOL * (qmp.0.abs() + qmp.1.abs() + r.0.abs() + r.1.abs()).max(1.0)
         {
             return SegmentIntersection::None;
         }

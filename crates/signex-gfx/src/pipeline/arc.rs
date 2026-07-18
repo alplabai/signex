@@ -28,8 +28,8 @@ impl ArcPipeline {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("signex_gfx_arc_pipeline_layout"),
-            bind_group_layouts: &[Some(camera_bind_group_layout)],
-            immediate_size: 0,
+            bind_group_layouts: &[camera_bind_group_layout],
+            push_constant_ranges: &[],
         });
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -97,7 +97,7 @@ impl ArcPipeline {
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
-            multiview_mask: None,
+            multiview: None,
             cache: None,
         });
 
@@ -128,8 +128,7 @@ impl ArcPipeline {
             self.instance_capacity = arcs.len().next_power_of_two();
             self.instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("signex_gfx_arc_instances"),
-                size: (self.instance_capacity * std::mem::size_of::<Arc>())
-                    as wgpu::BufferAddress,
+                size: (self.instance_capacity * std::mem::size_of::<Arc>()) as wgpu::BufferAddress,
                 usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             });
@@ -138,10 +137,10 @@ impl ArcPipeline {
         queue.write_buffer(&self.instance_buffer, 0, bytemuck::cast_slice(arcs));
     }
 
-    pub fn draw<'a>(
-        &'a self,
-        render_pass: &mut wgpu::RenderPass<'a>,
-        camera_bind_group: &'a wgpu::BindGroup,
+    pub fn draw(
+        &self,
+        render_pass: &mut wgpu::RenderPass<'_>,
+        camera_bind_group: &wgpu::BindGroup,
     ) {
         if self.instance_count == 0 {
             return;

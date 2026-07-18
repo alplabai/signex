@@ -151,9 +151,9 @@ impl Signex {
         }
     }
 
-    pub(super) fn dispatch_tool_message(&mut self, message: Message) -> Task<Message> {
+    pub(super) fn dispatch_tool_message(&mut self, message: ToolMessage) -> Task<Message> {
         match message {
-            Message::PrePlacementTab => {
+            ToolMessage::PrePlacementTab => {
                 // v0.16.1 — footprint-pad placement pause/resume.
                 // When the active tab is a footprint editor and the
                 // user has armed Pads-mode PlacePad, route TAB to a
@@ -166,14 +166,14 @@ impl Signex {
                 {
                     if let Some(path) = active_tab.kind.as_footprint_editor() {
                         let path = path.clone();
-                        let _ = self.update(crate::app::contracts::Message::Library(
+                        return self.update(crate::app::contracts::Message::Library(
                             crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                                 path,
-                                msg:
-                                    crate::library::messages::PrimitiveEditorMsg::FootprintTogglePlacementPause,
+                                msg: crate::library::messages::PrimitiveEdit::Footprint(
+                                    crate::library::messages::FootprintEditorMsg::TogglePlacementPause,
+                                ),
                             },
                         ));
-                        return Task::none();
                     }
                 }
                 if self.interaction_state.current_tool != Tool::Select {
@@ -395,7 +395,7 @@ impl Signex {
                 }
                 self.finish_update()
             }
-            Message::ResumePlacement => {
+            ToolMessage::ResumePlacement => {
                 // Big on-canvas "Resume" button (Altium-style pause overlay).
                 // Keep `pre_placement` alive so the next click consumes the
                 // values the user just edited — only un-pause the canvas and
@@ -405,27 +405,31 @@ impl Signex {
                 self.update_selection_info();
                 // v0.13 — also resume the footprint editor's placement
                 // pause when the active tab is a footprint editor.
-                if let Some(active_tab) =
+                let resume_task = if let Some(active_tab) =
                     self.document_state.tabs.get(self.document_state.active_tab)
                     && let Some(path) = active_tab.kind.as_footprint_editor()
                 {
                     let path = path.clone();
-                    let _ = self.update(crate::app::contracts::Message::Library(
+                    self.update(crate::app::contracts::Message::Library(
                         crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                             path,
-                            msg: crate::library::messages::PrimitiveEditorMsg::FootprintTogglePlacementPause,
+                            msg: crate::library::messages::PrimitiveEdit::Footprint(
+                                crate::library::messages::FootprintEditorMsg::TogglePlacementPause,
+                            ),
                         },
-                    ));
-                }
-                self.finish_update()
+                    ))
+                } else {
+                    Task::none()
+                };
+                Task::batch([resume_task, self.finish_update()])
             }
-            Message::CycleDrawMode => {
+            ToolMessage::CycleDrawMode => {
                 self.interaction_state.draw_mode = self.interaction_state.draw_mode.next();
                 self.interaction_state.active_canvas_mut().draw_mode =
                     self.interaction_state.draw_mode;
                 self.finish_update()
             }
-            Message::CancelDrawing => {
+            ToolMessage::CancelDrawing => {
                 if self.interaction_state.wire_drawing {
                     self.interaction_state.wire_drawing = false;
                     self.interaction_state.wire_points.clear();
@@ -439,7 +443,7 @@ impl Signex {
                 }
                 self.finish_update()
             }
-            Message::Tool(ToolMessage::SelectTool(tool)) => {
+            ToolMessage::SelectTool(tool) => {
                 self.interaction_state.current_tool = tool;
                 // Re-label the floating cursor tag so the user sees which
                 // placement mode they're in. Altium shows the tool name near
@@ -482,7 +486,6 @@ impl Signex {
                 }
                 self.finish_update()
             }
-            _ => unreachable!("dispatch_tool_message received non-tool message"),
         }
     }
 }

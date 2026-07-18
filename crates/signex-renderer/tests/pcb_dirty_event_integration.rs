@@ -2,7 +2,7 @@
 
 use signex_gfx::scene::{DirtyFlags, Scene};
 use signex_renderer::pcb::{
-    dirty_flags_for_events, DrcMarkerInput, PcbAppEvent, PcbRenderer, PcbSnapshot, RatsnestInput,
+    DrcMarkerInput, PcbAppEvent, PcbRenderer, PcbSnapshot, RatsnestInput, dirty_flags_for_events,
 };
 use signex_renderer::schematic::ViewRenderer;
 use signex_renderer::theme::ResolvedTheme;

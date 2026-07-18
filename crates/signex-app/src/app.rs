@@ -22,23 +22,30 @@ mod helpers;
 mod load_gateway;
 mod mutation_gateway;
 mod pcb_dirty_adapter;
+pub(crate) mod project_sheets;
 mod runtime;
 mod selection_request;
 mod state;
 pub(crate) mod view;
 
 pub use contracts::{
-    ContextAction, ContextMenuState, ContextSubmenu, DragTarget, EnableVersionControlState,
-    GridPickerState, GridPropertiesState, Message, ProjectCloseChoice, ProjectCloseConfirmState,
+    AnnotateMsg, AppQuitConfirmState, BomPreviewMsg, CommandPaletteMsg, ContextAction,
+    ContextMenuMsg, ContextMenuState, ContextSubmenu, DragTarget, EditMsg, EnableVersionControlMsg,
+    EnableVersionControlState, ErcMsg, ExportMsg, FileMsg, GridPickerState, GridPropertiesMsg,
+    GridPropertiesState, Message, MoveSelectionMsg, NetColorMsg, OverlayMsg, ParameterManagerMsg,
+    PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice, ProjectCloseConfirmState, ProjectMsg,
     ProjectOptionsState, ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice,
-    RemoveDialogState, RenameDialogState, SelectionFilterCustomState, StatusBarRequest,
-    TabContextAction, TabContextMenuState, TextEditState, TrackItem, VersionControlScope,
+    RemoveDialogState, RemoveMsg, RenameDialogState, RenameMsg, SelectionFilterCustomState,
+    SelectionFilterMsg, StatusBarRequest, TabContextAction, TabContextMenuState, TextEditMsg,
+    TextEditState, TrackItem, UiMsg, VersionControlScope, WindowMsg,
 };
 pub use documents::{
-    ComponentEditorTab, DrawMode, FootprintEditorState, SchematicTabSession, SymbolEditorState,
-    TabDocument, TabInfo, TabKind, Tool,
+    ComponentEditorTab, DrawMode, FootprintEditorState, GraphicFillPicker, LocalColorPicker,
+    LocalColorSlot, SchematicTabSession, SymbolEditorState, TabDocument, TabInfo, TabKind, Tool,
 };
-pub use state::{DocumentState, InteractionState, LoadedProject, ProjectId, Signex, UiState};
+pub use state::{
+    DocumentState, InteractionState, KeymapRecorderState, LoadedProject, ProjectId, Signex, UiState,
+};
 
 // Re-exported so modal dialogs outside `state` can reference the type.
 #[allow(unused_imports)]

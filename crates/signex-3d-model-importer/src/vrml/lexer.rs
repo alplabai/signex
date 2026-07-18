@@ -108,14 +108,22 @@ mod tests {
         let (tokens, _) = tokenize("{ [ ] }");
         assert_eq!(
             tokens,
-            vec![Token::LBrace, Token::LBracket, Token::RBracket, Token::RBrace]
+            vec![
+                Token::LBrace,
+                Token::LBracket,
+                Token::RBracket,
+                Token::RBrace
+            ]
         );
     }
 
     #[test]
     fn tokenize_words_across_lines() {
         let (tokens, lines) = tokenize("foo\nbar");
-        assert_eq!(tokens, vec![Token::Word("foo".into()), Token::Word("bar".into())]);
+        assert_eq!(
+            tokens,
+            vec![Token::Word("foo".into()), Token::Word("bar".into())]
+        );
         assert_eq!(lines, vec![1, 2]);
     }
 }

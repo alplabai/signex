@@ -17,15 +17,16 @@
 //! positions the card at exactly those pixels.
 
 use iced::widget::{button, column, container, row, text};
-use iced::{Background, Border, Color, Element, Length, Padding};
+use iced::{Background, Border, Element, Length, Padding};
 
 use signex_types::theme::ThemeTokens;
 
 use crate::app::FootprintEditorState;
+use crate::keymap::{AppCommandId, CompiledKeymap};
 use crate::library::editor::footprint::state::{
     FootprintContextAction, FootprintContextSubmenu, FootprintContextTarget,
 };
-use crate::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::styles::ti;
 
 /// v0.26-C — surface the silk graphic''s kind in the menu header so
@@ -55,16 +56,24 @@ pub fn view_context_menu<'a>(
     tokens: &'a ThemeTokens,
     path: &'a std::path::Path,
     has_clipboard: bool,
+    keymap: &'a CompiledKeymap,
 ) -> Option<Element<'a, LibraryMessage>> {
     let menu_state = editor.state.context_menu.as_ref()?;
 
     let path_owned = path.to_path_buf();
-    let make_msg = move |msg: PrimitiveEditorMsg| LibraryMessage::PrimitiveEditorEvent {
+    let make_msg = move |msg: FootprintEditorMsg| LibraryMessage::PrimitiveEditorEvent {
         path: path_owned.clone(),
-        msg,
+        msg: PrimitiveEdit::Footprint(msg),
     };
 
     let mut items: Vec<Element<'a, LibraryMessage>> = Vec::new();
+    // Shortcut hints resolved from the active keymap profile, with the
+    // historic fixed labels as fallbacks.
+    let select_all_shortcut = shortcut_label(keymap, "select_all", "Ctrl+A");
+    let unselect_all_shortcut = shortcut_label(keymap, "unselect_all", "Ctrl+Shift+A");
+    let cut_shortcut = shortcut_label(keymap, "cut", "Ctrl+X");
+    let copy_shortcut = shortcut_label(keymap, "copy", "Ctrl+C");
+    let paste_shortcut = shortcut_label(keymap, "paste", "Ctrl+V");
 
     match menu_state.target {
         FootprintContextTarget::Empty => {
@@ -74,13 +83,12 @@ pub fn view_context_menu<'a>(
             // Place ▸ — switches the Pads-mode tool. The five most-
             // used Place targets; rest of the Pads palette is still
             // reachable via the active bar.
-            let place_open =
-                menu_state.submenu == Some(FootprintContextSubmenu::Place);
+            let place_open = menu_state.submenu == Some(FootprintContextSubmenu::Place);
             items.push(item_submenu_header(
                 tokens,
                 "Place",
                 place_open,
-                make_msg(PrimitiveEditorMsg::FootprintContextMenuOpenSubmenu(Some(
+                make_msg(FootprintEditorMsg::ContextMenuOpenSubmenu(Some(
                     FootprintContextSubmenu::Place,
                 ))),
             ));
@@ -90,41 +98,40 @@ pub fn view_context_menu<'a>(
                     tokens,
                     "Pad",
                     "P",
-                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlacePad)),
+                    make_msg(FootprintEditorMsg::SetPadsTool(PadsTool::PlacePad)),
                 ));
                 items.push(item_indented(
                     tokens,
                     "Track",
                     "T",
-                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceTrack)),
+                    make_msg(FootprintEditorMsg::SetPadsTool(PadsTool::PlaceTrack)),
                 ));
                 items.push(item_indented(
                     tokens,
                     "Arc",
                     "A",
-                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceArc)),
+                    make_msg(FootprintEditorMsg::SetPadsTool(PadsTool::PlaceArc)),
                 ));
                 items.push(item_indented(
                     tokens,
                     "Polygon (Region)",
                     "R",
-                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlacePolygon)),
+                    make_msg(FootprintEditorMsg::SetPadsTool(PadsTool::PlacePolygon)),
                 ));
                 items.push(item_indented(
                     tokens,
                     "String (Text)",
                     "S",
-                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceString)),
+                    make_msg(FootprintEditorMsg::SetPadsTool(PadsTool::PlaceString)),
                 ));
             }
 
-            let sel_open =
-                menu_state.submenu == Some(FootprintContextSubmenu::Selection);
+            let sel_open = menu_state.submenu == Some(FootprintContextSubmenu::Selection);
             items.push(item_submenu_header(
                 tokens,
                 "Selection",
                 sel_open,
-                make_msg(PrimitiveEditorMsg::FootprintContextMenuOpenSubmenu(Some(
+                make_msg(FootprintEditorMsg::ContextMenuOpenSubmenu(Some(
                     FootprintContextSubmenu::Selection,
                 ))),
             ));
@@ -132,28 +139,27 @@ pub fn view_context_menu<'a>(
                 items.push(item_indented(
                     tokens,
                     "Select All",
-                    "Ctrl+A",
-                    make_msg(PrimitiveEditorMsg::FootprintContextMenuAction(
+                    &select_all_shortcut,
+                    make_msg(FootprintEditorMsg::ContextMenuAction(
                         FootprintContextAction::SelectAllPads,
                     )),
                 ));
                 items.push(item_indented(
                     tokens,
                     "Deselect All",
-                    "Ctrl+Shift+A",
-                    make_msg(PrimitiveEditorMsg::FootprintContextMenuAction(
+                    &unselect_all_shortcut,
+                    make_msg(FootprintEditorMsg::ContextMenuAction(
                         FootprintContextAction::DeselectAll,
                     )),
                 ));
             }
 
-            let view_open =
-                menu_state.submenu == Some(FootprintContextSubmenu::View);
+            let view_open = menu_state.submenu == Some(FootprintContextSubmenu::View);
             items.push(item_submenu_header(
                 tokens,
                 "View",
                 view_open,
-                make_msg(PrimitiveEditorMsg::FootprintContextMenuOpenSubmenu(Some(
+                make_msg(FootprintEditorMsg::ContextMenuOpenSubmenu(Some(
                     FootprintContextSubmenu::View,
                 ))),
             ));
@@ -162,7 +168,7 @@ pub fn view_context_menu<'a>(
                     tokens,
                     "Fit to Window",
                     "V, F",
-                    make_msg(PrimitiveEditorMsg::FootprintContextMenuAction(
+                    make_msg(FootprintEditorMsg::ContextMenuAction(
                         FootprintContextAction::FitToWindow,
                     )),
                 ));
@@ -177,8 +183,8 @@ pub fn view_context_menu<'a>(
                 items.push(item_msg(
                     tokens,
                     "Paste",
-                    "Ctrl+V",
-                    make_msg(PrimitiveEditorMsg::FootprintPastePad),
+                    &paste_shortcut,
+                    make_msg(FootprintEditorMsg::PastePad),
                 ));
                 items.push(separator(tokens));
             }
@@ -187,7 +193,7 @@ pub fn view_context_menu<'a>(
                 tokens,
                 "Properties...",
                 "",
-                make_msg(PrimitiveEditorMsg::FootprintCloseContextMenu),
+                make_msg(FootprintEditorMsg::CloseContextMenu),
             ));
         }
 
@@ -207,20 +213,19 @@ pub fn view_context_menu<'a>(
                 tokens,
                 "Properties...",
                 "",
-                make_msg(PrimitiveEditorMsg::FootprintCloseContextMenu),
+                make_msg(FootprintEditorMsg::CloseContextMenu),
             ));
 
             // v0.26-G — Pad Actions ▸ now expands to the items we
             // can wire today (Rotate 90°, Flip Layer). Altium''s
             // Custom Pad / Thermal Connection ops remain stubs until
             // those subsystems land.
-            let pad_actions_open =
-                menu_state.submenu == Some(FootprintContextSubmenu::PadActions);
+            let pad_actions_open = menu_state.submenu == Some(FootprintContextSubmenu::PadActions);
             items.push(item_submenu_header(
                 tokens,
                 "Pad Actions",
                 pad_actions_open,
-                make_msg(PrimitiveEditorMsg::FootprintContextMenuOpenSubmenu(Some(
+                make_msg(FootprintEditorMsg::ContextMenuOpenSubmenu(Some(
                     FootprintContextSubmenu::PadActions,
                 ))),
             ));
@@ -229,26 +234,26 @@ pub fn view_context_menu<'a>(
                     tokens,
                     "Rotate 90°",
                     "Space",
-                    make_msg(PrimitiveEditorMsg::FootprintActiveBarRotateSelection),
+                    make_msg(FootprintEditorMsg::ActiveBarRotateSelection),
                 ));
                 items.push(item_indented(
                     tokens,
                     "Flip Layer",
                     "X",
-                    make_msg(PrimitiveEditorMsg::FootprintActiveBarFlipSelection),
+                    make_msg(FootprintEditorMsg::ActiveBarFlipSelection),
                 ));
                 // Stubs — Custom Pad + Thermal subsystems pending.
                 items.push(item_indented(
                     tokens,
                     "Custom Pad from Outline...",
                     "",
-                    make_msg(PrimitiveEditorMsg::FootprintCloseContextMenu),
+                    make_msg(FootprintEditorMsg::CloseContextMenu),
                 ));
                 items.push(item_indented(
                     tokens,
                     "Thermal Connection Points...",
                     "",
-                    make_msg(PrimitiveEditorMsg::FootprintCloseContextMenu),
+                    make_msg(FootprintEditorMsg::CloseContextMenu),
                 ));
             }
 
@@ -258,28 +263,28 @@ pub fn view_context_menu<'a>(
             items.push(item_msg(
                 tokens,
                 "Cut",
-                "Ctrl+X",
-                make_msg(PrimitiveEditorMsg::FootprintCutPad),
+                &cut_shortcut,
+                make_msg(FootprintEditorMsg::CutPad),
             ));
             items.push(item_msg(
                 tokens,
                 "Copy",
-                "Ctrl+C",
-                make_msg(PrimitiveEditorMsg::FootprintCopyPad),
+                &copy_shortcut,
+                make_msg(FootprintEditorMsg::CopyPad),
             ));
             if has_clipboard {
                 items.push(item_msg(
                     tokens,
                     "Paste",
-                    "Ctrl+V",
-                    make_msg(PrimitiveEditorMsg::FootprintPastePad),
+                    &paste_shortcut,
+                    make_msg(FootprintEditorMsg::PastePad),
                 ));
             }
             items.push(item_msg(
                 tokens,
                 "Delete",
                 "Del",
-                make_msg(PrimitiveEditorMsg::FootprintDeleteSelected),
+                make_msg(FootprintEditorMsg::DeleteSelected),
             ));
 
             items.push(separator(tokens));
@@ -310,7 +315,7 @@ pub fn view_context_menu<'a>(
                 tokens,
                 "Delete",
                 "Del",
-                make_msg(PrimitiveEditorMsg::FootprintDeleteSilkF),
+                make_msg(FootprintEditorMsg::DeleteSilkF),
             ));
             items.push(separator(tokens));
             items.push(item_disabled(tokens, "Find Similar Objects...", ""));
@@ -333,6 +338,15 @@ pub fn view_context_menu<'a>(
         .width(MENU_WIDTH);
 
     Some(card.into())
+}
+
+/// Resolve a keymap command id to its label under the active profile,
+/// falling back to `fallback` when the command is unbound.
+fn shortcut_label(keymap: &CompiledKeymap, command_id: &str, fallback: &str) -> String {
+    AppCommandId::new(command_id)
+        .ok()
+        .and_then(|command| keymap.shortcut_label(&command))
+        .unwrap_or_else(|| fallback.to_string())
 }
 
 // ── helpers ─────────────────────────────────────────────────────────
@@ -359,20 +373,20 @@ fn item_msg<'a>(
     .width(MENU_WIDTH)
     .padding([ROW_PAD_Y, ROW_PAD_X])
     .on_press(message)
-    .style(move |_: &iced::Theme, status: iced::widget::button::Status| {
-        let bg = match status {
-            iced::widget::button::Status::Hovered => {
-                Some(Background::Color(hover_c))
+    .style(
+        move |_: &iced::Theme, status: iced::widget::button::Status| {
+            let bg = match status {
+                iced::widget::button::Status::Hovered => Some(Background::Color(hover_c)),
+                _ => None,
+            };
+            iced::widget::button::Style {
+                background: bg,
+                border: Border::default(),
+                text_color: text_c,
+                ..iced::widget::button::Style::default()
             }
-            _ => None,
-        };
-        iced::widget::button::Style {
-            background: bg,
-            border: Border::default(),
-            text_color: text_c,
-            ..iced::widget::button::Style::default()
-        }
-    })
+        },
+    )
     .into()
 }
 
@@ -399,20 +413,20 @@ fn item_indented<'a>(
     .width(MENU_WIDTH)
     .padding([ROW_PAD_Y, ROW_PAD_X])
     .on_press(message)
-    .style(move |_: &iced::Theme, status: iced::widget::button::Status| {
-        let bg = match status {
-            iced::widget::button::Status::Hovered => {
-                Some(Background::Color(hover_c))
+    .style(
+        move |_: &iced::Theme, status: iced::widget::button::Status| {
+            let bg = match status {
+                iced::widget::button::Status::Hovered => Some(Background::Color(hover_c)),
+                _ => None,
+            };
+            iced::widget::button::Style {
+                background: bg,
+                border: Border::default(),
+                text_color: text_c,
+                ..iced::widget::button::Style::default()
             }
-            _ => None,
-        };
-        iced::widget::button::Style {
-            background: bg,
-            border: Border::default(),
-            text_color: text_c,
-            ..iced::widget::button::Style::default()
-        }
-    })
+        },
+    )
     .into()
 }
 
@@ -459,20 +473,22 @@ fn item_submenu_header<'a>(
     .width(MENU_WIDTH)
     .padding([ROW_PAD_Y, ROW_PAD_X])
     .on_press(message)
-    .style(move |_: &iced::Theme, status: iced::widget::button::Status| {
-        let bg = match status {
-            iced::widget::button::Status::Hovered | iced::widget::button::Status::Pressed => {
-                Some(Background::Color(hover_c))
+    .style(
+        move |_: &iced::Theme, status: iced::widget::button::Status| {
+            let bg = match status {
+                iced::widget::button::Status::Hovered | iced::widget::button::Status::Pressed => {
+                    Some(Background::Color(hover_c))
+                }
+                _ => None,
+            };
+            iced::widget::button::Style {
+                background: bg,
+                border: Border::default(),
+                text_color: text_c,
+                ..iced::widget::button::Style::default()
             }
-            _ => None,
-        };
-        iced::widget::button::Style {
-            background: bg,
-            border: Border::default(),
-            text_color: text_c,
-            ..iced::widget::button::Style::default()
-        }
-    })
+        },
+    )
     .into()
 }
 

@@ -5,7 +5,7 @@
 //! `sync_pads_to_primitive` flow is covered in `state.rs` itself.
 
 use super::layers::{FpLayer, LayerVisibility};
-use super::state::FootprintEditorState;
+use super::state::{FootprintEditorState, MoveByModal};
 
 #[test]
 fn empty_state_has_no_pads_or_courtyard() {
@@ -59,4 +59,117 @@ fn layer_visibility_default_only_front_on() {
     assert!(!v.get(FpLayer::BCu));
     assert!(v.get(FpLayer::FFab));
     assert!(!v.get(FpLayer::BFab));
+}
+
+// v0.14 — "Move Selection by X, Y…" nudges the whole selection by one
+// grid step. `nudge_pads` is the geometry the dispatcher calls; assert
+// it translates exactly the selected pads and leaves the rest put.
+#[test]
+fn nudge_pads_translates_selection_by_delta() {
+    let mut s = FootprintEditorState::empty();
+    s.add_pad_at(0.0, 0.0); // idx 0 — selected
+    s.add_pad_at(2.0, 1.0); // idx 1 — selected
+    s.add_pad_at(5.0, 5.0); // idx 2 — NOT selected, must stay put
+
+    // Default grid step is 1.0 mm; nudge the first two pads by +1 / +1.
+    let step = s.snap_options.grid_step_mm;
+    let moved = s.nudge_pads(&[0, 1], step, step);
+
+    assert_eq!(moved, vec![0, 1]);
+    assert_eq!(s.pads[0].position_mm, (1.0, 1.0));
+    assert_eq!(s.pads[1].position_mm, (3.0, 2.0));
+    // Unselected pad is untouched.
+    assert_eq!(s.pads[2].position_mm, (5.0, 5.0));
+}
+
+// 3D Body mint populates body_3d as an Extrude body whose outline is the
+// courtyard, so the CPU preview shows a solid immediately.
+#[test]
+fn mint_body3d_extrudes_courtyard() {
+    use signex_library::primitive::footprint::BodyShape;
+    let mut fp = signex_library::primitive::footprint::Footprint::empty("TestFp");
+    // give the footprint a non-empty courtyard (2x2mm square) so the box
+    // has an outline to copy.
+    fp.courtyard = signex_library::primitive::footprint::Polygon::new(vec![
+        [-1.0, -1.0],
+        [1.0, -1.0],
+        [1.0, 1.0],
+        [-1.0, 1.0],
+    ]);
+    assert!(fp.body_3d.outline.is_none());
+    crate::library::editor::footprint::body3d_mint::mint_box_from_courtyard(&mut fp);
+    assert_eq!(fp.body_3d.shape, BodyShape::Extrude);
+    assert!(
+        fp.body_3d.outline.is_some(),
+        "outline should be the courtyard"
+    );
+    assert!(fp.body_3d.height_mm > 0.0);
+}
+
+// Out-of-range indices are skipped (no panic) and excluded from the
+// returned moved-list — the dispatcher relies on this to mirror only
+// the pads that actually moved into the sketch.
+#[test]
+fn nudge_pads_skips_out_of_range_indices() {
+    let mut s = FootprintEditorState::empty();
+    s.add_pad_at(0.0, 0.0); // idx 0
+    let moved = s.nudge_pads(&[0, 99], 0.5, -0.5);
+    assert_eq!(moved, vec![0]);
+    assert_eq!(s.pads[0].position_mm, (0.5, -0.5));
+}
+
+// Empty selection is a clean no-op: nothing moves, nothing returned.
+#[test]
+fn nudge_pads_empty_selection_is_noop() {
+    let mut s = FootprintEditorState::empty();
+    s.add_pad_at(0.0, 0.0);
+    let moved = s.nudge_pads(&[], 1.0, 1.0);
+    assert!(moved.is_empty());
+    assert_eq!(s.pads[0].position_mm, (0.0, 0.0));
+}
+
+// Confirming the Move-By modal nudges the selection by the typed mm delta
+// (not one grid step) and closes the modal.
+#[test]
+fn move_by_modal_nudges_by_typed_delta() {
+    let mut s = FootprintEditorState::empty();
+    s.add_pad_at(0.0, 0.0); // idx 0
+    s.selected_pad = Some(0);
+    s.move_by_modal = Some(MoveByModal {
+        dx_buf: "2.5".into(),
+        dy_buf: "-1.0".into(),
+    });
+    let (dx, dy) = s.move_by_modal.as_ref().unwrap().parsed().unwrap();
+    let moved = s.nudge_pads(&[0], dx, dy);
+    assert_eq!(moved, vec![0]);
+    assert_eq!(s.pads[0].position_mm, (2.5, -1.0));
+}
+
+// v0.14 — Placing a text frame appends a silk Text carrying a
+// Some(frame) box (item ③ bounding-box Text Frame place tool).
+#[test]
+fn place_text_frame_sets_frame_box() {
+    use signex_library::primitive::footprint::FpGraphicKind;
+    let mut fp = signex_library::primitive::footprint::Footprint::empty("FrameTool");
+    crate::library::editor::footprint::text_frame::add_text_frame(&mut fp, 0.0, 0.0, 4.0, 2.0);
+    match &fp.silk_f.last().unwrap().kind {
+        FpGraphicKind::Text { frame, .. } => assert_eq!(*frame, Some((4.0, 2.0))),
+        _ => panic!("expected Text"),
+    }
+}
+
+// Task 6 — applying a footprint filter preset replaces the active
+// selection-filter set with exactly the preset's kinds.
+#[test]
+fn apply_filter_preset_sets_state_filter() {
+    use crate::library::editor::footprint::state::selection_filter::SelectionFilterKind as K;
+    let mut s = FootprintEditorState::empty();
+    s.selection_filter.set_all(true);
+    let preset = crate::active_bar::FootprintFilterPreset {
+        name: "pads".into(),
+        kinds: vec![K::Pads],
+    };
+    crate::library::editor::footprint::filter_presets::apply_preset(&mut s, &preset);
+    assert!(s.selection_filter.get(K::Pads));
+    assert!(!s.selection_filter.get(K::Tracks));
 }

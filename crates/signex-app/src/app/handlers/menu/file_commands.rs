@@ -17,9 +17,9 @@ impl Signex {
                         .await
                         .map(|file| file.path().to_path_buf())
                 },
-                Message::FileOpened,
+                |p| Message::File(FileMsg::Opened(p)),
             )),
-            MenuMessage::Save => Some(self.update(Message::SaveFile)),
+            MenuMessage::Save => Some(self.update(Message::File(FileMsg::Save))),
             MenuMessage::SaveAs => Some(Task::perform(
                 async {
                     rfd::AsyncFileDialog::new()
@@ -29,7 +29,10 @@ impl Signex {
                         .await
                         .map(|file| file.path().to_path_buf())
                 },
-                |path| path.map(Message::SaveFileAs).unwrap_or(Message::Noop),
+                |path| {
+                    path.map(|p| Message::File(FileMsg::SaveAs(p)))
+                        .unwrap_or(Message::Noop)
+                },
             )),
             MenuMessage::NewProject => Some(Task::perform(
                 async {
@@ -41,13 +44,15 @@ impl Signex {
                         .await
                         .map(|file| file.path().to_path_buf())
                 },
-                Message::NewProjectFile,
+                |p| Message::File(FileMsg::NewProject(p)),
             )),
-            MenuMessage::PrintPreview => Some(self.update(Message::PrintPreviewRequested)),
-            MenuMessage::ExportPdf => Some(self.update(Message::ExportPdfOpenDialog)),
+            MenuMessage::PrintPreview => {
+                Some(self.update(Message::PrintPreview(PrintPreviewMsg::Requested)))
+            }
+            MenuMessage::ExportPdf => Some(self.update(Message::Export(ExportMsg::PdfOpenDialog))),
             MenuMessage::ExportNetlist => self.handle_export_netlist_requested(),
             MenuMessage::ExportBom => Some(self.handle_bom_preview_open()),
-            MenuMessage::Exit => Some(self.update(Message::CloseMainWindow)),
+            MenuMessage::Exit => Some(self.update(Message::Window(WindowMsg::CloseMainWindow))),
             MenuMessage::LibraryOpenLibrary => Some(self.update(Message::Library(
                 crate::library::LibraryMessage::OpenLibraryDialog,
             ))),
@@ -93,10 +98,10 @@ impl Signex {
                 Some(self.handle_add_library_primitive(signex_library::PrimitiveKind::Footprint))
             }
             MenuMessage::ToolsNewPart => self.dispatch_active_symbol_primitive_event(
-                crate::library::messages::PrimitiveEditorMsg::SymbolNewPart,
+                crate::library::messages::SymbolEditorMsg::NewPart,
             ),
             MenuMessage::ToolsRemovePart => self.dispatch_active_symbol_primitive_event(
-                crate::library::messages::PrimitiveEditorMsg::SymbolRemovePart,
+                crate::library::messages::SymbolEditorMsg::RemovePart,
             ),
             MenuMessage::ToolsDocumentOptions => {
                 // Resolve the active tab's containing `.snxlib` and
@@ -135,7 +140,7 @@ impl Signex {
     /// tab kinds (mirrors `MenuMessage::Save`-style guards).
     fn dispatch_active_symbol_primitive_event(
         &mut self,
-        msg: crate::library::messages::PrimitiveEditorMsg,
+        msg: crate::library::messages::SymbolEditorMsg,
     ) -> Option<Task<Message>> {
         let path = self
             .document_state
@@ -146,7 +151,10 @@ impl Signex {
                 _ => None,
             })?;
         Some(self.update(Message::Library(
-            crate::library::LibraryMessage::PrimitiveEditorEvent { path, msg },
+            crate::library::LibraryMessage::PrimitiveEditorEvent {
+                path,
+                msg: crate::library::messages::PrimitiveEdit::Symbol(msg),
+            },
         )))
     }
 

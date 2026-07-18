@@ -3,13 +3,13 @@ use iced::Task;
 use super::super::*;
 
 impl Signex {
-    pub(super) fn dispatch_overlay_message(&mut self, message: Message) -> Task<Message> {
+    pub(super) fn dispatch_overlay_message(&mut self, message: OverlayMsg) -> Task<Message> {
         match message {
-            Message::TogglePanelList => {
+            OverlayMsg::TogglePanelList => {
                 self.ui_state.panel_list_open = !self.ui_state.panel_list_open;
                 Task::none()
             }
-            Message::OpenPanel(kind) => {
+            OverlayMsg::OpenPanel(kind) => {
                 self.ui_state.panel_list_open = false;
                 self.document_state
                     .dock
@@ -17,51 +17,88 @@ impl Signex {
                 crate::fonts::write_dock_layout(&self.document_state.dock);
                 Task::none()
             }
-            Message::OpenFind => self.handle_find_replace_open_requested(false),
-            Message::OpenReplace => self.handle_find_replace_open_requested(true),
-            Message::OpenPreferences => self.handle_preferences_open_requested(),
-            Message::ClosePreferences => self.handle_preferences_close_requested(),
-            Message::CloseKeyboardShortcuts => {
+            OverlayMsg::OpenFind => self.handle_find_replace_open_requested(false),
+            OverlayMsg::OpenReplace => self.handle_find_replace_open_requested(true),
+            OverlayMsg::CloseKeyboardShortcuts => {
                 self.ui_state.keyboard_shortcuts_open = false;
                 Task::none()
             }
-            Message::DismissFirstRunTour => {
+            OverlayMsg::DismissFirstRunTour => {
                 self.ui_state.first_run_tour_open = false;
                 crate::fonts::write_first_run_tour_dismissed(true);
                 Task::none()
             }
-            Message::PreferencesNav(nav) => self.handle_preferences_navigation_requested(nav),
-            Message::PreferencesMsg(msg) => self.handle_preferences_message(msg),
-            Message::FindReplaceMsg(msg) => self.handle_find_replace_message(msg),
-            Message::RunErc => {
-                let close_task = if self.ui_state.erc_dialog_open {
-                    self.handle_close_erc_dialog()
-                } else {
-                    Task::none()
-                };
-                let task = self.handle_run_erc();
-                let finish = self.finish_update();
-                Task::batch([close_task, finish, task])
-            }
-            Message::Annotate(mode) => self.handle_annotate(mode),
-            Message::OpenAnnotateDialog => self.handle_open_annotate_dialog(),
-            Message::CloseAnnotateDialog => self.handle_close_annotate_dialog(),
-            Message::AnnotateOrderChanged(order) => self.handle_annotate_order_changed(order),
-            Message::OpenErcDialog => self.handle_open_erc_dialog(),
-            Message::CloseErcDialog => self.handle_close_erc_dialog(),
-            Message::ErcSeverityChanged(rule, sev) => self.handle_erc_severity_changed(rule, sev),
-            Message::OpenAnnotateResetConfirm => self.handle_open_annotate_reset_confirm(),
-            Message::CloseAnnotateResetConfirm => self.handle_close_annotate_reset_confirm(),
-            Message::ModalDragStart { modal, x, y } => self.handle_modal_drag_start(modal, x, y),
-            Message::ModalDragEnd => self.handle_modal_drag_end(),
-            Message::FocusAt {
+            OverlayMsg::ModalDragStart { modal, x, y } => self.handle_modal_drag_start(modal, x, y),
+            OverlayMsg::ModalDragEnd => self.handle_modal_drag_end(),
+            OverlayMsg::FocusAt {
                 world_x,
                 world_y,
                 select,
             } => self.handle_focus_at(world_x, world_y, select),
-            Message::ToggleAutoFocus => self.handle_toggle_auto_focus(),
-            Message::ActiveBar(msg) => self.handle_active_bar_message(msg),
-            Message::ShowContextMenu(x, y) => {
+            OverlayMsg::ToggleAutoFocus => self.handle_toggle_auto_focus(),
+        }
+    }
+
+    /// Project lifecycle family handler (namespaced, ADR-0001 D3).
+    /// Covers the project-close / app-quit confirm modals, the Project
+    /// Options dismiss, the Add-Existing / Add-New-Schematic file-picker
+    /// completions, and the async git-commit completion.
+    pub(crate) fn dispatch_project_message(&mut self, msg: ProjectMsg) -> Task<Message> {
+        match msg {
+            ProjectMsg::CloseConfirm(choice) => self.handle_project_close_confirm(choice),
+            ProjectMsg::AppQuitConfirm(choice) => self.handle_app_quit_confirm(choice),
+            ProjectMsg::CloseOptions => {
+                self.ui_state.project_options = None;
+                Task::none()
+            }
+            ProjectMsg::AddExistingFilePicked { project_idx, paths } => {
+                self.handle_add_existing_file_picked(project_idx, paths);
+                Task::none()
+            }
+            ProjectMsg::AddNewSchematicPicked { project_idx, path } => {
+                self.handle_add_new_schematic_picked(project_idx, path);
+                Task::none()
+            }
+            ProjectMsg::GitCommitDone {
+                project_root,
+                rel_path,
+                result,
+            } => {
+                self.handle_project_git_commit_done(project_root, rel_path, result);
+                Task::none()
+            }
+        }
+    }
+
+    /// Move Selection dialog family handler (namespaced, ADR-0001 D3).
+    /// Altium numeric ΔX / ΔY move on the current selection.
+    pub(crate) fn dispatch_move_selection_message(
+        &mut self,
+        msg: MoveSelectionMsg,
+    ) -> Task<Message> {
+        match msg {
+            MoveSelectionMsg::Open => self.handle_open_move_selection_dialog(),
+            MoveSelectionMsg::Close => {
+                let _ = self.handle_close_move_selection_dialog();
+                self.close_detached_modal(super::state::ModalId::MoveSelection)
+            }
+            MoveSelectionMsg::DxChanged(s) => {
+                self.ui_state.move_selection.dx = s;
+                Task::none()
+            }
+            MoveSelectionMsg::DyChanged(s) => {
+                self.ui_state.move_selection.dy = s;
+                Task::none()
+            }
+            MoveSelectionMsg::Apply => self.handle_move_selection_apply(),
+        }
+    }
+
+    /// Context-menu subsystem handler (canvas / project-tree / tab menus +
+    /// submenu hover state machine), namespaced (ADR-0001 D3).
+    pub(crate) fn dispatch_context_menu_message(&mut self, msg: ContextMenuMsg) -> Task<Message> {
+        match msg {
+            ContextMenuMsg::Show(x, y) => {
                 // Altium convention: right-click during placement terminates
                 // the placement flow (tool-stuck OR ghost-armed OR pending
                 // power/port OR paused preview OR net-colour pen armed)
@@ -94,7 +131,7 @@ impl Signex {
                 }
                 Task::none()
             }
-            Message::CloseContextMenu => {
+            ContextMenuMsg::Close => {
                 self.interaction_state.context_menu = None;
                 self.interaction_state.context_submenu = None;
                 self.interaction_state.pending_submenu = None;
@@ -103,7 +140,7 @@ impl Signex {
                 self.interaction_state.submenu_unhovered_since = None;
                 Task::none()
             }
-            Message::ShowProjectTreeContextMenu(path) => {
+            ContextMenuMsg::ShowProjectTree(path) => {
                 // Close any canvas context menu so the two menus never
                 // overlap, then anchor the new menu to `last_mouse_pos`
                 // (iced 0.14 mouse_area does not forward cursor coords
@@ -125,7 +162,7 @@ impl Signex {
                     Some(crate::app::ProjectTreeContextMenuState { x, y, path });
                 Task::none()
             }
-            Message::CloseProjectTreeContextMenu => {
+            ContextMenuMsg::CloseProjectTree => {
                 self.interaction_state.project_tree_context_menu = None;
                 self.interaction_state.context_submenu = None;
                 self.interaction_state.pending_submenu = None;
@@ -134,8 +171,8 @@ impl Signex {
                 self.interaction_state.submenu_unhovered_since = None;
                 Task::none()
             }
-            Message::ProjectTreeAction(action) => self.handle_project_tree_action(action),
-            Message::ShowTabContextMenu(idx) => {
+            ContextMenuMsg::ProjectTreeAction(action) => self.handle_project_tree_action(action),
+            ContextMenuMsg::ShowTab(idx) => {
                 // Mutually exclusive with the canvas + project-tree
                 // menus — close them and any submenu state from a
                 // previous right-click before anchoring the tab menu
@@ -152,7 +189,7 @@ impl Signex {
                     Some(crate::app::TabContextMenuState { x, y, tab_idx: idx });
                 Task::none()
             }
-            Message::CloseTabContextMenu => {
+            ContextMenuMsg::CloseTab => {
                 self.interaction_state.tab_context_menu = None;
                 self.interaction_state.context_submenu = None;
                 self.interaction_state.pending_submenu = None;
@@ -161,60 +198,8 @@ impl Signex {
                 self.interaction_state.submenu_unhovered_since = None;
                 Task::none()
             }
-            Message::TabContextAction(action) => self.handle_tab_context_action(action),
-            Message::ProjectCloseConfirm(choice) => self.handle_project_close_confirm(choice),
-            Message::RenameBufferChanged(s) => {
-                if let Some(d) = self.ui_state.rename_dialog.as_mut() {
-                    d.buffer = s;
-                    d.error = None;
-                }
-                Task::none()
-            }
-            Message::RenameSubmit => self.handle_rename_submit(),
-            Message::CloseRenameDialog => {
-                self.ui_state.rename_dialog = None;
-                Task::none()
-            }
-            Message::RemoveConfirm(choice) => self.handle_remove_confirm(choice),
-            Message::CloseRemoveDialog => {
-                self.ui_state.remove_dialog = None;
-                Task::none()
-            }
-            Message::AddExistingFilePicked { project_idx, paths } => {
-                self.handle_add_existing_file_picked(project_idx, paths);
-                Task::none()
-            }
-            Message::AddNewSchematicPicked { project_idx, path } => {
-                self.handle_add_new_schematic_picked(project_idx, path);
-                Task::none()
-            }
-            Message::CloseProjectOptions => {
-                self.ui_state.project_options = None;
-                Task::none()
-            }
-            Message::EnableVersionControlToggleLfs => {
-                if let Some(s) = self.ui_state.enable_version_control.as_mut() {
-                    s.use_lfs = !s.use_lfs;
-                }
-                Task::none()
-            }
-            Message::EnableVersionControlToggleItem(idx) => {
-                if let Some(s) = self.ui_state.enable_version_control.as_mut() {
-                    if let Some(item) = s.items.get_mut(idx) {
-                        item.tracked = !item.tracked;
-                    }
-                }
-                Task::none()
-            }
-            Message::EnableVersionControlConfirm => {
-                self.handle_enable_version_control_confirm();
-                Task::none()
-            }
-            Message::CloseEnableVersionControl => {
-                self.ui_state.enable_version_control = None;
-                Task::none()
-            }
-            Message::OpenContextSubmenu(kind) => {
+            ContextMenuMsg::TabAction(action) => self.handle_tab_context_action(action),
+            ContextMenuMsg::SubmenuOpen(kind) => {
                 // Click-to-open. Toggles off if the same kind is fired
                 // again so the header row works as a collapse handle.
                 if self.interaction_state.context_submenu == Some(kind) {
@@ -226,7 +211,7 @@ impl Signex {
                 self.interaction_state.submenu_unhovered_since = None;
                 Task::none()
             }
-            Message::HoverContextSubmenu(kind) => {
+            ContextMenuMsg::SubmenuHover(kind) => {
                 // Cursor entered a launcher row — arm the hover-open
                 // timer and mark the launcher zone as hovered. The
                 // close timer (if any) gets cancelled by the zone
@@ -236,7 +221,7 @@ impl Signex {
                 self.refresh_submenu_hover_state();
                 Task::none()
             }
-            Message::LeaveContextSubmenu => {
+            ContextMenuMsg::SubmenuLeave => {
                 // Cursor left a launcher row. Cancel the pending open
                 // only if we're leaving the same launcher that armed
                 // it (avoids a stale launcher cancelling a fresh open).
@@ -245,17 +230,17 @@ impl Signex {
                 self.refresh_submenu_hover_state();
                 Task::none()
             }
-            Message::EnterContextSubmenuPanel => {
+            ContextMenuMsg::SubmenuEnterPanel => {
                 self.interaction_state.submenu_panel_hovered = true;
                 self.refresh_submenu_hover_state();
                 Task::none()
             }
-            Message::LeaveContextSubmenuPanel => {
+            ContextMenuMsg::SubmenuLeavePanel => {
                 self.interaction_state.submenu_panel_hovered = false;
                 self.refresh_submenu_hover_state();
                 Task::none()
             }
-            Message::TickContextSubmenuHover => {
+            ContextMenuMsg::SubmenuTickHover => {
                 if let Some((kind, started)) = self.interaction_state.pending_submenu {
                     if started.elapsed() >= std::time::Duration::from_millis(200) {
                         self.interaction_state.context_submenu = Some(kind);
@@ -271,7 +256,7 @@ impl Signex {
                 }
                 Task::none()
             }
-            Message::ContextAction(action) => {
+            ContextMenuMsg::Action(action) => {
                 self.interaction_state.context_menu = None;
                 self.interaction_state.context_submenu = None;
                 self.interaction_state.pending_submenu = None;
@@ -279,40 +264,220 @@ impl Signex {
                 self.interaction_state.submenu_panel_hovered = false;
                 self.interaction_state.submenu_unhovered_since = None;
                 match action {
-                    ContextAction::Copy => self.dispatch_document_message(Message::Copy),
-                    ContextAction::Cut => self.dispatch_document_message(Message::Cut),
-                    ContextAction::Paste => self.dispatch_document_message(Message::Paste),
-                    ContextAction::SmartPaste => {
-                        self.dispatch_document_message(Message::SmartPaste)
-                    }
+                    ContextAction::Copy => self.dispatch_edit_message(EditMsg::Copy),
+                    ContextAction::Cut => self.dispatch_edit_message(EditMsg::Cut),
+                    ContextAction::Paste => self.dispatch_edit_message(EditMsg::Paste),
+                    ContextAction::SmartPaste => self.dispatch_edit_message(EditMsg::SmartPaste),
                     ContextAction::OpenChildSheet => {
                         self.open_selected_child_sheet();
                         Task::none()
                     }
-                    ContextAction::Delete => {
-                        self.dispatch_document_message(Message::DeleteSelected)
-                    }
-                    ContextAction::SelectAll => self.dispatch_routed_message(Message::Selection(
-                        selection_request::SelectionRequest::SelectAll,
-                    )),
+                    ContextAction::Delete => self.dispatch_edit_message(EditMsg::DeleteSelected),
+                    ContextAction::SelectAll => self
+                        .handle_selection_request(selection_request::SelectionRequest::SelectAll),
                     ContextAction::ZoomFit => {
-                        self.dispatch_ui_message(Message::CanvasEvent(CanvasEvent::FitAll))
+                        self.handle_canvas_interaction_event(CanvasEvent::FitAll)
                     }
                     ContextAction::RotateSelected => {
-                        self.dispatch_document_message(Message::RotateSelected)
+                        self.dispatch_edit_message(EditMsg::RotateSelected)
                     }
-                    ContextAction::MirrorX => {
-                        self.dispatch_document_message(Message::MirrorSelectedY)
-                    }
-                    ContextAction::MirrorY => {
-                        self.dispatch_document_message(Message::MirrorSelectedX)
-                    }
+                    ContextAction::MirrorX => self.dispatch_edit_message(EditMsg::MirrorSelectedY),
+                    ContextAction::MirrorY => self.dispatch_edit_message(EditMsg::MirrorSelectedX),
                     ContextAction::ActiveBar(active_bar_action) => {
                         self.handle_active_bar_action(active_bar_action)
                     }
                 }
             }
-            _ => unreachable!("dispatch_overlay_message received non-overlay message"),
+        }
+    }
+
+    /// Annotate dialog family handler (namespaced, ADR-0001 D3).
+    pub(crate) fn dispatch_annotate_message(&mut self, msg: AnnotateMsg) -> Task<Message> {
+        match msg {
+            AnnotateMsg::Run(mode) => self.handle_annotate(mode),
+            AnnotateMsg::OpenDialog => self.handle_open_annotate_dialog(),
+            AnnotateMsg::CloseDialog => self.handle_close_annotate_dialog(),
+            AnnotateMsg::OrderChanged(order) => self.handle_annotate_order_changed(order),
+            AnnotateMsg::OpenResetConfirm => self.handle_open_annotate_reset_confirm(),
+            AnnotateMsg::CloseResetConfirm => self.handle_close_annotate_reset_confirm(),
+            AnnotateMsg::ToggleLock(uuid) => {
+                if self.ui_state.annotate_locked.contains(&uuid) {
+                    self.ui_state.annotate_locked.remove(&uuid);
+                } else {
+                    self.ui_state.annotate_locked.insert(uuid);
+                }
+                Task::none()
+            }
+        }
+    }
+
+    /// ERC dialog family handler (namespaced, ADR-0001 D3).
+    pub(crate) fn dispatch_erc_message(&mut self, msg: ErcMsg) -> Task<Message> {
+        match msg {
+            ErcMsg::Run => {
+                let close_task = if self.ui_state.erc_dialog_open {
+                    self.handle_close_erc_dialog()
+                } else {
+                    Task::none()
+                };
+                let task = self.handle_run_erc();
+                let finish = self.finish_update();
+                Task::batch([close_task, finish, task])
+            }
+            ErcMsg::OpenDialog => self.handle_open_erc_dialog(),
+            ErcMsg::CloseDialog => self.handle_close_erc_dialog(),
+            ErcMsg::SeverityChanged(rule, sev) => self.handle_erc_severity_changed(rule, sev),
+            ErcMsg::PinMatrixCellCycled { row, col } => {
+                use signex_erc::Severity;
+                // Baseline defaults must match the `MATRIX` constant in
+                // `pin_matrix_view` so "clearing" an override drops back
+                // to the same severity the user sees in the UI.
+                const BASELINE: [[Severity; 6]; 6] = [
+                    [
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                    ],
+                    [
+                        Severity::Off,
+                        Severity::Error,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Error,
+                        Severity::Error,
+                    ],
+                    [
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Warning,
+                    ],
+                    [
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Error,
+                    ],
+                    [
+                        Severity::Off,
+                        Severity::Error,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Error,
+                        Severity::Error,
+                    ],
+                    [
+                        Severity::Off,
+                        Severity::Error,
+                        Severity::Warning,
+                        Severity::Error,
+                        Severity::Error,
+                        Severity::Off,
+                    ],
+                ];
+                let key = (row, col);
+                let baseline = BASELINE
+                    .get(row as usize)
+                    .and_then(|r| r.get(col as usize))
+                    .copied()
+                    .unwrap_or(Severity::Off);
+                let current = self
+                    .ui_state
+                    .pin_matrix_overrides
+                    .get(&key)
+                    .copied()
+                    .unwrap_or(baseline);
+                let next = match current {
+                    Severity::Error => Severity::Warning,
+                    Severity::Warning => Severity::Info,
+                    Severity::Info => Severity::Off,
+                    Severity::Off => Severity::Error,
+                };
+                if next == baseline {
+                    self.ui_state.pin_matrix_overrides.remove(&key);
+                } else {
+                    self.ui_state.pin_matrix_overrides.insert(key, next);
+                }
+                crate::fonts::write_pin_matrix_overrides(&self.ui_state.pin_matrix_overrides);
+                Task::none()
+            }
+        }
+    }
+
+    /// Preferences modal family handler (namespaced, ADR-0001 D3).
+    pub(crate) fn dispatch_preferences_message(&mut self, msg: PreferencesMsg) -> Task<Message> {
+        match msg {
+            PreferencesMsg::Open => self.handle_preferences_open_requested(),
+            PreferencesMsg::Close => self.handle_preferences_close_requested(),
+            PreferencesMsg::Nav(nav) => self.handle_preferences_navigation_requested(nav),
+            PreferencesMsg::Inner(msg) => self.handle_preferences_message(msg),
+        }
+    }
+
+    /// Enable Version Control modal family handler (namespaced, ADR-0001 D3).
+    pub(crate) fn dispatch_enable_version_control_message(
+        &mut self,
+        msg: EnableVersionControlMsg,
+    ) -> Task<Message> {
+        match msg {
+            EnableVersionControlMsg::ToggleLfs => {
+                if let Some(s) = self.ui_state.enable_version_control.as_mut() {
+                    s.use_lfs = !s.use_lfs;
+                }
+                Task::none()
+            }
+            EnableVersionControlMsg::ToggleItem(idx) => {
+                if let Some(s) = self.ui_state.enable_version_control.as_mut() {
+                    if let Some(item) = s.items.get_mut(idx) {
+                        item.tracked = !item.tracked;
+                    }
+                }
+                Task::none()
+            }
+            EnableVersionControlMsg::Confirm => {
+                self.handle_enable_version_control_confirm();
+                Task::none()
+            }
+            EnableVersionControlMsg::Close => {
+                self.ui_state.enable_version_control = None;
+                Task::none()
+            }
+        }
+    }
+
+    /// Rename modal family handler (namespaced, ADR-0001 D3).
+    pub(crate) fn dispatch_rename_message(&mut self, msg: RenameMsg) -> Task<Message> {
+        match msg {
+            RenameMsg::BufferChanged(s) => {
+                if let Some(d) = self.ui_state.rename_dialog.as_mut() {
+                    d.buffer = s;
+                    d.error = None;
+                }
+                Task::none()
+            }
+            RenameMsg::Submit => self.handle_rename_submit(),
+            RenameMsg::Close => {
+                self.ui_state.rename_dialog = None;
+                Task::none()
+            }
+        }
+    }
+
+    /// Remove-from-project modal family handler (namespaced, ADR-0001 D3).
+    pub(crate) fn dispatch_remove_message(&mut self, msg: RemoveMsg) -> Task<Message> {
+        match msg {
+            RemoveMsg::Confirm(choice) => self.handle_remove_confirm(choice),
+            RemoveMsg::Close => {
+                self.ui_state.remove_dialog = None;
+                Task::none()
+            }
         }
     }
 

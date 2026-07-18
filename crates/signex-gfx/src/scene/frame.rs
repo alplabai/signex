@@ -13,7 +13,7 @@ use crate::primitive::text::TextItem;
 use super::dirty::DirtyFlags;
 
 /// Flat primitive collection consumed by GPU pipelines.
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 pub struct Scene {
     pub lines: Vec<LineSegment>,
     pub circles: Vec<Circle>,

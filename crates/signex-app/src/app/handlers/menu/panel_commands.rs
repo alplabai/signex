@@ -55,10 +55,13 @@ impl Signex {
                 );
                 Some(Task::none())
             }
-            MenuMessage::OpenPreferences => Some(self.update(Message::OpenPreferences)),
+            MenuMessage::OpenPreferences => {
+                Some(self.update(Message::Preferences(PreferencesMsg::Open)))
+            }
             MenuMessage::OpenKeyboardShortcuts => {
                 // Single-flag toggle — opening the modal is enough; the
-                // close path goes through `Message::CloseKeyboardShortcuts`.
+                // close path goes through
+                // `Message::Overlay(OverlayMsg::CloseKeyboardShortcuts)`.
                 self.ui_state.keyboard_shortcuts_open = true;
                 self.interaction_state.context_menu = None;
                 self.ui_state.panel_list_open = false;

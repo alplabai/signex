@@ -29,8 +29,8 @@ impl CirclePipeline {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("signex_gfx_circle_pipeline_layout"),
-            bind_group_layouts: &[Some(camera_bind_group_layout)],
-            immediate_size: 0,
+            bind_group_layouts: &[camera_bind_group_layout],
+            push_constant_ranges: &[],
         });
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -88,7 +88,7 @@ impl CirclePipeline {
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
-            multiview_mask: None,
+            multiview: None,
             cache: None,
         });
 
@@ -109,12 +109,7 @@ impl CirclePipeline {
     }
 
     /// Upload circle instances into the instance buffer.
-    pub fn upload(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        circles: &[Circle],
-    ) {
+    pub fn upload(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, circles: &[Circle]) {
         self.instance_count = circles.len() as u32;
 
         if circles.is_empty() {
@@ -136,10 +131,10 @@ impl CirclePipeline {
     }
 
     /// Draw all uploaded circle instances.
-    pub fn draw<'a>(
-        &'a self,
-        render_pass: &mut wgpu::RenderPass<'a>,
-        camera_bind_group: &'a wgpu::BindGroup,
+    pub fn draw(
+        &self,
+        render_pass: &mut wgpu::RenderPass<'_>,
+        camera_bind_group: &wgpu::BindGroup,
     ) {
         if self.instance_count == 0 {
             return;

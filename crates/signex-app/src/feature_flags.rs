@@ -7,25 +7,29 @@
 
 /// Footprint / sketch editor master switch.
 ///
-/// **v0.13.0 ("Symbol & Library") ships with this OFF.** The footprint
-/// editor (`.snxfpt` pad/sketch canvas) is feature-incomplete and was
-/// under heavy daily churn through v0.27; it is hidden for this release
-/// so users land on the polished symbol + library surfaces instead.
+/// **Enabled as of v0.14.0 ("Footprint Editor").** v0.13.0 shipped this
+/// OFF while the `.snxfpt` pad/sketch editor was finished; v0.14 wires
+/// the remaining active-bar tools (Align/Distribute, Move/Drag,
+/// Fill/Region, Text Frame, selection-filter All toggle), exposes the
+/// full sketch-constraint set, and fixes the pad shape-param bug — so
+/// the editor is now reachable.
 ///
-/// What the gate turns off:
+/// When ON, this enables:
 /// - opening a `.snxfpt` as an editable `TabKind::FootprintEditor` tab
 ///   ([`crate::app::Signex::handle_open_primitive`]);
 /// - the "New Footprint / PCB Library" create flow
 ///   ([`crate::app::Signex::add_project_footprint_library`]);
 /// - the matching command-palette entry and project-tree menu items.
 ///
-/// What stays available (footprints are still first-class *data*):
-/// - read-only footprint preview in the Component Preview tab;
-/// - Pick Footprint binding of existing `.snxfpt` files into rows;
-/// - the footprint column in the Library Browser;
-/// - the bake / library backend.
-///
-/// Flip to `true` when the editor is ready; the
+/// Set back to `false` to ship the editor dark again; the
 /// `opening_snxfpt_does_not_create_editable_tab_when_gated` regression
-/// test is written to flip with it.
-pub const FOOTPRINT_EDITOR_ENABLED: bool = false;
+/// test branches on this flag so it stays valid either way.
+pub const FOOTPRINT_EDITOR_ENABLED: bool = true;
+
+/// Route the schematic canvas content through the GPU (`signex_gfx` pipelines
+/// via iced's shader widget) instead of CPU `canvas::Frame` tessellation
+/// (issue #169 PR 2). Default `false`: the render module exists and is
+/// exercised by a headless test, but the CPU path stays the default until
+/// GPU visual parity is proven and pointer/overlay layers are wired onto the
+/// shader surface. See [`crate::schematic_shader`].
+pub const SCHEMATIC_GPU_RENDER: bool = false;

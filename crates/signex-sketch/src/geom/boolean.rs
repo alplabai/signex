@@ -12,8 +12,8 @@
 //! the clip is always a rectangle or a fixed shape) which cover
 //! ~80% of the practical use sites in the editor today.
 
-use super::predicates::signed_area;
 use super::Point2;
+use super::predicates::signed_area;
 
 /// Clip the (possibly concave) `subject` polygon against the
 /// **convex** `clip` polygon. Returns a single polygon ring

@@ -3,15 +3,15 @@ use iced::Task;
 use super::super::*;
 
 impl Signex {
-    pub(super) fn dispatch_text_edit_message(&mut self, message: Message) -> Task<Message> {
+    pub(super) fn dispatch_text_edit_message(&mut self, message: TextEditMsg) -> Task<Message> {
         match message {
-            Message::TextEditChanged(text) => {
+            TextEditMsg::Changed(text) => {
                 if let Some(ref mut state) = self.interaction_state.editing_text {
                     state.text = text;
                 }
                 self.finish_update()
             }
-            Message::TextEditSubmit => {
+            TextEditMsg::Submit => {
                 if let Some(state) = self.interaction_state.editing_text.take()
                     && state.text != state.original_text
                 {
@@ -38,7 +38,6 @@ impl Signex {
                 }
                 self.finish_update()
             }
-            _ => unreachable!("dispatch_text_edit_message received non-text-edit message"),
         }
     }
 }

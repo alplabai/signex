@@ -17,6 +17,25 @@ impl Signex {
     }
 
     pub(crate) fn handle_undo_requested(&mut self) {
+        // If the active tab is a symbol editor, delegate undo to it.
+        if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
+            && let Some(path) = active_tab.kind.as_symbol_editor().cloned()
+        {
+            if let Some(editor) = self.document_state.symbol_editors.get_mut(&path) {
+                if let Some(snapshot) = editor.undo_snapshots.pop() {
+                    let current = editor.primitive().clone();
+                    editor.redo_snapshots.push(current);
+                    *editor.primitive_mut() = snapshot;
+                    editor.mid_drag = false;
+                    editor.selected = None;
+                    editor.dirty = true;
+                    editor.canvas_cache.clear();
+                    self.refresh_panel_ctx();
+                }
+            }
+            return;
+        }
+
         // v0.24 Phase 1 (Track B) — footprint editor undo. When the
         // active tab is a footprint editor, route through that
         // editor's per-instance history stack instead of the
@@ -53,6 +72,25 @@ impl Signex {
     }
 
     pub(crate) fn handle_redo_requested(&mut self) {
+        // If the active tab is a symbol editor, delegate redo to it.
+        if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
+            && let Some(path) = active_tab.kind.as_symbol_editor().cloned()
+        {
+            if let Some(editor) = self.document_state.symbol_editors.get_mut(&path) {
+                if let Some(snapshot) = editor.redo_snapshots.pop() {
+                    let current = editor.primitive().clone();
+                    editor.undo_snapshots.push(current);
+                    *editor.primitive_mut() = snapshot;
+                    editor.mid_drag = false;
+                    editor.selected = None;
+                    editor.dirty = true;
+                    editor.canvas_cache.clear();
+                    self.refresh_panel_ctx();
+                }
+            }
+            return;
+        }
+
         // v0.24 Phase 1 (Track B) — same fork as undo.
         if let Some(path) = self.active_footprint_editor_path() {
             if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
@@ -68,7 +106,6 @@ impl Signex {
             self.interaction_state.active_canvas_mut().selected.clear();
         }
     }
-
 
     pub(crate) fn handle_selection_rotate_requested(&mut self) {
         if let Some(engine) = self.document_state.active_engine()

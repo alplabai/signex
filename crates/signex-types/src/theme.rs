@@ -256,8 +256,10 @@ const SIGNEX_TOKENS: ThemeTokens = ThemeTokens {
 };
 
 const SIGNEX_CANVAS: CanvasColors = CanvasColors {
-    // Classic Altium Designer schematic palette — cream sheet, dark elements
-    background: c(0x50, 0x50, 0x50), // Medium gray workspace outside sheet
+    // Classic schematic palette — cream sheet, dark elements. The workspace
+    // OUTSIDE the sheet follows the chrome (`SIGNEX_TOKENS.bg`) so the canvas
+    // backdrop reads as part of the dark UI instead of a detached gray slab.
+    background: c(0x2D, 0x2D, 0x30), // Chrome-aligned workspace outside sheet
     paper: c(0xFF, 0xFF, 0xE0),      // Pale cream/yellow sheet (255,255,224)
     wire: c(0x00, 0x00, 0x80),       // Navy blue wires
     junction: c(0x00, 0x00, 0x80),   // Navy blue junction dots

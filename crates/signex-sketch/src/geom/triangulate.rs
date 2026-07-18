@@ -7,8 +7,8 @@
 //! where the basic form's constant factors beat the more
 //! sophisticated O(n log n) variants.
 
-use super::predicates::{orient2d, signed_area, Sign};
 use super::Point2;
+use super::predicates::{Sign, orient2d, signed_area};
 
 /// Triangulate a simple polygon. Returns a list of triangles, each
 /// as a triple of indices into the original `polygon` slice.
@@ -108,13 +108,7 @@ pub fn ear_clip(polygon: &[Point2]) -> Vec<[usize; 3]> {
 /// of the CCW-oriented polygon: convex AND no other polygon vertex
 /// lies inside it. Operates on the CCW-canonicalised view via
 /// `ring`.
-fn is_ear(
-    polygon: &[Point2],
-    ring: &[usize],
-    prev: usize,
-    curr: usize,
-    next: usize,
-) -> bool {
+fn is_ear(polygon: &[Point2], ring: &[usize], prev: usize, curr: usize, next: usize) -> bool {
     let a = polygon[prev];
     let b = polygon[curr];
     let c = polygon[next];

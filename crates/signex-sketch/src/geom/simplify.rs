@@ -9,9 +9,9 @@
 //! become inner steps of the boolean itself; for the current
 //! Greiner-Hormann they're a "make my inputs cleaner" entry point.
 
-use super::predicates::orient2d;
 use super::Point2;
 use super::Sign;
+use super::predicates::orient2d;
 
 /// Multi-contour polygon: one outer ring plus zero or more holes.
 /// Outer winds CCW; holes wind CW by convention. Useful as a
@@ -25,7 +25,10 @@ pub struct MultiContour {
 
 impl MultiContour {
     pub fn new(outer: Vec<Point2>) -> Self {
-        Self { outer, holes: Vec::new() }
+        Self {
+            outer,
+            holes: Vec::new(),
+        }
     }
 
     pub fn with_holes(outer: Vec<Point2>, holes: Vec<Vec<Point2>>) -> Self {
@@ -89,12 +92,7 @@ pub fn snap_to_grid(polygon: &[Point2], step: f64) -> Vec<Point2> {
     }
     polygon
         .iter()
-        .map(|p| {
-            Point2::new(
-                (p.x / step).round() * step,
-                (p.y / step).round() * step,
-            )
-        })
+        .map(|p| Point2::new((p.x / step).round() * step, (p.y / step).round() * step))
         .collect()
 }
 
@@ -117,7 +115,13 @@ mod tests {
 
     #[test]
     fn dedup_removes_adjacent_duplicates() {
-        let pts = vec![p(0.0, 0.0), p(0.0, 0.0), p(1.0, 0.0), p(1.0, 0.0), p(1.0, 1.0)];
+        let pts = vec![
+            p(0.0, 0.0),
+            p(0.0, 0.0),
+            p(1.0, 0.0),
+            p(1.0, 0.0),
+            p(1.0, 1.0),
+        ];
         let out = dedup(&pts, 1e-9);
         assert_eq!(out, vec![p(0.0, 0.0), p(1.0, 0.0), p(1.0, 1.0)]);
     }
@@ -155,8 +159,8 @@ mod tests {
     fn simplify_pipeline_combines_all_three() {
         let pts = vec![
             p(0.0, 0.0),
-            p(0.0001, 0.0),  // near-duplicate after snap
-            p(0.5, 0.0),     // colinear after dedup
+            p(0.0001, 0.0), // near-duplicate after snap
+            p(0.5, 0.0),    // colinear after dedup
             p(1.0, 0.0),
             p(1.0, 1.0),
             p(0.0, 1.0),

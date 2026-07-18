@@ -14,6 +14,12 @@ pub enum PadsTool {
     PlaceHole,
     /// v0.18.15 — silk-layer text placeholder. 1-click drop.
     PlaceString,
+    /// v0.14 — silk-layer text with a drag-defined bounding box
+    /// (item ③). Press-drag-release on empty canvas: press sets the
+    /// anchor, drag previews a ghost rectangle, release computes
+    /// w×h and commits a framed `Text`. Text is aligned/clipped
+    /// inside the frame at render time — no auto-wrap/reflow.
+    PlaceTextFrame,
     /// v0.18.15.1 — silk-layer line. 2-click gesture.
     PlaceTrack,
     /// v0.18.15.3 — silk-layer arc. 3-click gesture.

@@ -1,4 +1,4 @@
-use signex_3d_model_importer::{import_model, ModelImportRequest, SourceFormat};
+use signex_3d_model_importer::{ModelImportRequest, SourceFormat, import_model};
 
 fn write_tier0_wrl(path: &std::path::Path) {
     std::fs::write(
@@ -48,22 +48,22 @@ Shape {\n\
 }
 
 fn write_tier0_gltf(path: &std::path::Path, bin_path: &std::path::Path) {
-  // POSITION (3 vertices) + INDEX (1 triangle)
-  let mut bin = Vec::new();
+    // POSITION (3 vertices) + INDEX (1 triangle)
+    let mut bin = Vec::new();
 
-  // positions: (0,0,0), (1,0,0), (0,1,0)
-  for f in [0.0f32, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0] {
-    bin.extend_from_slice(&f.to_le_bytes());
-  }
-  // indices: 0,1,2 as u32
-  for i in [0u32, 1, 2] {
-    bin.extend_from_slice(&i.to_le_bytes());
-  }
+    // positions: (0,0,0), (1,0,0), (0,1,0)
+    for f in [0.0f32, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0] {
+        bin.extend_from_slice(&f.to_le_bytes());
+    }
+    // indices: 0,1,2 as u32
+    for i in [0u32, 1, 2] {
+        bin.extend_from_slice(&i.to_le_bytes());
+    }
 
-  std::fs::write(bin_path, &bin).expect("write gltf bin fixture");
+    std::fs::write(bin_path, &bin).expect("write gltf bin fixture");
 
-  let gltf = format!(
-    r#"{{
+    let gltf = format!(
+        r#"{{
   "asset": {{ "version": "2.0" }},
   "scene": 0,
   "scenes": [{{ "nodes": [0] }}],
@@ -79,15 +79,18 @@ fn write_tier0_gltf(path: &std::path::Path, bin_path: &std::path::Path) {
   ],
   "buffers": [{{ "uri": "{}", "byteLength": {} }}]
 }}"#,
-    bin_path.file_name().and_then(|n| n.to_str()).expect("bin filename"),
-    bin.len()
-  );
+        bin_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .expect("bin filename"),
+        bin.len()
+    );
 
-  std::fs::write(path, gltf).expect("write gltf fixture");
+    std::fs::write(path, gltf).expect("write gltf fixture");
 }
 
 fn write_tier0_step(path: &std::path::Path) {
-  let step = r#"ISO-10303-21;
+    let step = r#"ISO-10303-21;
 HEADER;
 FILE_DESCRIPTION(('simple triangle'),'2;1');
 ENDSEC;
@@ -104,7 +107,7 @@ DATA;
 ENDSEC;
 END-ISO-10303-21;
 "#;
-  std::fs::write(path, step).expect("write step fixture");
+    std::fs::write(path, step).expect("write step fixture");
 }
 
 #[test]
@@ -146,7 +149,11 @@ fn import_tier0_glb_has_valid_magic() {
 
     let glb = std::fs::read(&result.glb_path).expect("read glb");
     assert_eq!(&glb[0..4], b"glTF", "GLB magic mismatch");
-    assert_eq!(u32::from_le_bytes(glb[4..8].try_into().unwrap()), 2, "GLB version mismatch");
+    assert_eq!(
+        u32::from_le_bytes(glb[4..8].try_into().unwrap()),
+        2,
+        "GLB version mismatch"
+    );
 }
 
 #[test]
@@ -223,46 +230,46 @@ fn import_tier1_two_body_produces_two_meshes() {
 
 #[test]
 fn import_tier0_gltf_produces_glb() {
-  let dir = tempfile::tempdir().expect("tempdir");
-  let src = dir.path().join("tier0.gltf");
-  let bin = dir.path().join("tier0.bin");
-  let cache = dir.path().join("cache");
-  write_tier0_gltf(&src, &bin);
+    let dir = tempfile::tempdir().expect("tempdir");
+    let src = dir.path().join("tier0.gltf");
+    let bin = dir.path().join("tier0.bin");
+    let cache = dir.path().join("cache");
+    write_tier0_gltf(&src, &bin);
 
-  let result = import_model(ModelImportRequest {
-    model_id: "gltf_tier0".into(),
-    source_path: src,
-    cache_dir: cache,
-    converter_version: "0.1.0",
-  })
-  .expect("gltf import failed");
+    let result = import_model(ModelImportRequest {
+        model_id: "gltf_tier0".into(),
+        source_path: src,
+        cache_dir: cache,
+        converter_version: "0.1.0",
+    })
+    .expect("gltf import failed");
 
-  assert_eq!(result.metadata.source_format, SourceFormat::Gltf);
-  assert_eq!(result.metadata.mesh_count, 1);
-  assert_eq!(result.metadata.primitive_count, 1);
-  let glb = std::fs::read(&result.glb_path).expect("read glb");
-  assert_eq!(&glb[0..4], b"glTF");
+    assert_eq!(result.metadata.source_format, SourceFormat::Gltf);
+    assert_eq!(result.metadata.mesh_count, 1);
+    assert_eq!(result.metadata.primitive_count, 1);
+    let glb = std::fs::read(&result.glb_path).expect("read glb");
+    assert_eq!(&glb[0..4], b"glTF");
 }
 
 #[test]
 fn import_tier0_step_produces_glb() {
-  let dir = tempfile::tempdir().expect("tempdir");
-  let src = dir.path().join("tier0.step");
-  let cache = dir.path().join("cache");
-  write_tier0_step(&src);
+    let dir = tempfile::tempdir().expect("tempdir");
+    let src = dir.path().join("tier0.step");
+    let cache = dir.path().join("cache");
+    write_tier0_step(&src);
 
-  let result = import_model(ModelImportRequest {
-    model_id: "step_tier0".into(),
-    source_path: src,
-    cache_dir: cache,
-    converter_version: "0.1.0",
-  })
-  .expect("step import failed");
+    let result = import_model(ModelImportRequest {
+        model_id: "step_tier0".into(),
+        source_path: src,
+        cache_dir: cache,
+        converter_version: "0.1.0",
+    })
+    .expect("step import failed");
 
-  assert_eq!(result.metadata.source_format, SourceFormat::Step);
-  assert_eq!(result.metadata.mesh_count, 1);
-  let glb = std::fs::read(&result.glb_path).expect("read glb");
-  assert_eq!(&glb[0..4], b"glTF");
+    assert_eq!(result.metadata.source_format, SourceFormat::Step);
+    assert_eq!(result.metadata.mesh_count, 1);
+    let glb = std::fs::read(&result.glb_path).expect("read glb");
+    assert_eq!(&glb[0..4], b"glTF");
 }
 
 #[test]

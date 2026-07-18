@@ -1,0 +1,228 @@
+# Signex label taxonomy — the single source of truth for repo labels.
+#
+# Edited here, applied automatically by .github/workflows/labels.yml
+# (EndBug/label-sync) on push to trunk. Treat labels as code: change
+# them in a PR, get them reviewed, let CI sync them.
+#
+# Families (labels sort alphabetically on GitHub, so the prefix groups them):
+#   type:     what kind of change/issue it is        (blue)
+#   area:     which subsystem it touches             (green; auto-applied by labeler)
+#   tier:     which version gate it blocks           (teal)
+#   priority: how urgent it is                       (graded red→green)
+#   status:   where it is in the workflow            (purple)
+#   plus a handful of standalone signal labels.
+#
+# `tier:` and `priority:` are different axes and must not be conflated.
+# `tier:` answers "which release can this ship in?" (a scope gate, from
+# docs/ROADMAP.md). `priority:` answers "how soon should someone look at
+# it?" (urgency). A `tier: p2` bug can be `priority: critical` — it is
+# urgent, but it still cannot pull v3.0 scope into v1.0.
+#
+# `aliases` migrate pre-existing labels onto the new names without
+# losing the issues/PRs already tagged with the old label.
+
+# ─────────────────────────── type: ───────────────────────────
+- name: "type: feature"
+  color: "1d76db"
+  description: "New capability or user-facing enhancement"
+  aliases: ["feature", "enhancement"]
+- name: "type: bug"
+  color: "1d76db"
+  description: "Something works incorrectly"
+  aliases: ["bug"]
+- name: "type: refactor"
+  color: "1d76db"
+  description: "Internal restructuring, no behavior change"
+- name: "type: performance"
+  color: "1d76db"
+  description: "Speed or memory improvement"
+- name: "type: docs"
+  color: "1d76db"
+  description: "Documentation only"
+  aliases: ["documentation"]
+- name: "type: test"
+  color: "1d76db"
+  description: "Tests or fixtures only"
+- name: "type: ci"
+  color: "1d76db"
+  description: "CI, build, or workflow tooling"
+- name: "type: chore"
+  color: "1d76db"
+  description: "Dependency bumps, version bumps, housekeeping"
+
+# ─────────────────────────── area: ───────────────────────────
+# Auto-applied by the path labeler (.github/labeler.yml); keep the two in sync.
+- name: "area: app"
+  color: "0e8a16"
+  description: "signex-app shell — menus, dock, panels, chrome, tabs"
+- name: "area: footprint-editor"
+  color: "0e8a16"
+  description: "Footprint editor + its properties panel"
+- name: "area: symbol-editor"
+  color: "0e8a16"
+  description: "Symbol editor"
+- name: "area: schematic"
+  color: "0e8a16"
+  description: "Schematic canvas, runtime, find/replace"
+- name: "area: pcb"
+  color: "0e8a16"
+  description: "PCB canvas / layout"
+- name: "area: library"
+  color: "0e8a16"
+  description: "Component library + library server"
+- name: "area: sketch"
+  color: "0e8a16"
+  description: "signex-sketch — geometry, constraints, solver"
+- name: "area: bake"
+  color: "0e8a16"
+  description: "signex-bake — pad baking, arrays, numbering"
+- name: "area: erc"
+  color: "0e8a16"
+  description: "ERC engine + DSL"
+- name: "area: bom"
+  color: "0e8a16"
+  description: "Bill of materials"
+- name: "area: output"
+  color: "0e8a16"
+  description: "Exporters — PDF, netlist, non-KiCad formats"
+- name: "area: rendering"
+  color: "0e8a16"
+  description: "Renderer + GPU (signex-renderer, signex-gfx)"
+- name: "area: 3d"
+  color: "0e8a16"
+  description: "3D model import"
+- name: "area: types"
+  color: "0e8a16"
+  description: "Domain types + native .snx format codec"
+- name: "area: engine"
+  color: "0e8a16"
+  description: "Edit engine + history"
+- name: "area: widgets"
+  color: "0e8a16"
+  description: "Custom widgets + chrome catalog"
+- name: "area: infra"
+  color: "0e8a16"
+  description: "CI, workflows, cargo-deny, workspace config, .github"
+- name: "area: docs"
+  color: "0e8a16"
+  description: "Docs and top-level markdown"
+
+# ─────────────────────────── tier: ───────────────────────────
+# The scope gate from docs/ROADMAP.md §"Priority tiers". A feature
+# proposed for an earlier version than its tier allows is answered with
+# "after the current target ships". This family exists so that rule is
+# queryable instead of remembered.
+- name: "tier: p0"
+  color: "006b75"
+  description: "Required for v1.0 — Community Preview cannot ship without it"
+- name: "tier: p1"
+  color: "006b75"
+  description: "Required for v2.0 — professional users expect it"
+- name: "tier: p2"
+  color: "006b75"
+  description: "Differentiator — drives Pro adoption; ships v2.1–v3.0"
+- name: "tier: p3"
+  color: "006b75"
+  description: "Nice to have — stable core required first; v3.x and later"
+
+# ────────────────────────── priority: ─────────────────────────
+- name: "priority: critical"
+  color: "b60205"
+  description: "Data loss, crash, or release blocker — fix ASAP"
+- name: "priority: high"
+  color: "d93f0b"
+  description: "Important; schedule soon"
+- name: "priority: medium"
+  color: "fbca04"
+  description: "Normal priority"
+- name: "priority: low"
+  color: "c2e0c6"
+  description: "Nice to have; no urgency"
+
+# ─────────────────────────── status: ──────────────────────────
+- name: "status: needs-triage"
+  color: "5319e7"
+  description: "Awaiting maintainer review and labeling"
+- name: "status: in-progress"
+  color: "5319e7"
+  description: "Someone is actively working on it"
+- name: "status: blocked"
+  color: "5319e7"
+  description: "Waiting on a dependency or a decision"
+- name: "status: needs-review"
+  color: "5319e7"
+  description: "PR is ready and awaiting code review"
+- name: "status: on-hold"
+  color: "5319e7"
+  description: "Deferred / parked for now"
+
+# ───────────────────────── standalone ─────────────────────────
+- name: "ui/ux"
+  color: "d4c5f9"
+  description: "Interaction, visual design, or UX-parity concern — cuts across areas"
+- name: "question"
+  color: "cfd3d7"
+  description: "Needs a decision or clarification before work can start"
+- name: "data-loss"
+  color: "b60205"
+  description: "Can corrupt or lose user data — top priority (see #96, #104)"
+- name: "regression"
+  color: "b60205"
+  description: "Worked before, broken now"
+- name: "security"
+  color: "b60205"
+  description: "Security-sensitive"
+- name: "breaking-change"
+  color: "d93f0b"
+  description: "Changes a file format, public API, or user workflow"
+- name: "license-review"
+  color: "fbca04"
+  description: "Touches licensing; needs a license-compliance look"
+- name: "dependencies"
+  color: "0366d6"
+  description: "Dependency updates"
+- name: "good first issue"
+  color: "7057ff"
+  description: "Good for newcomers — scoped and well-defined"
+  aliases: ["good-first-issue"]
+- name: "help wanted"
+  color: "008672"
+  description: "Extra attention or contributors wanted"
+  aliases: ["help-wanted"]
+- name: "duplicate"
+  color: "cfd3d7"
+  description: "Already tracked elsewhere"
+- name: "wontfix"
+  color: "cfd3d7"
+  description: "Working as intended / out of scope"
+- name: "invalid"
+  color: "cfd3d7"
+  description: "Not reproducible or not actionable"
+
+# ──────────────────── pending retirement ─────────────────────
+# These labels are live on GitHub but deliberately NOT declared above,
+# because each duplicates an `area:` label or is obsolete. They are left
+# in place rather than deleted: `delete-other-labels` is false, and
+# removing a label strips it from every issue already carrying it.
+#
+# They are NOT expressed as `aliases:` on the `area:` entries, because an
+# alias renames the old label onto the new one and every target below
+# already exists — label-sync would be renaming onto a live label.
+#
+# Migrate each, then delete it, then (optionally) flip
+# `delete-other-labels: true` in .github/workflows/labels.yml once this
+# file is genuinely complete:
+#
+#   schematic     → area: schematic   (in use: #199, #171)
+#   pcb           → area: pcb
+#   rendering     → area: rendering   (in use: #199, #171, #169, #166)
+#   parser        → area: types
+#   kicad-compat  → obsolete since #62 moved KiCad I/O to the
+#                   signex-kicad-import companion repo; delete outright
+#
+# Per label, to move issues across and remove the old one:
+#
+#   gh issue list --label schematic --json number -q '.[].number' \
+#     | xargs -I{} gh issue edit {} \
+#         --add-label "area: schematic" --remove-label schematic
+#   gh label delete schematic --yes

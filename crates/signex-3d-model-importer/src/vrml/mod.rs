@@ -21,15 +21,11 @@ pub fn load(path: &PathBuf) -> Result<Vec<VrmlMesh>, ModelImportError> {
             line,
             reason: "unexpected end of file".to_owned(),
         },
-        parser::ParseError::UnresolvedUse { name } => {
-            ModelImportError::VrmlUnresolvedUse { name }
-        }
-        parser::ParseError::MalformedNumber { line, value } => {
-            ModelImportError::VrmlParseFailed {
-                path: path.clone(),
-                line,
-                reason: format!("malformed number: {value}"),
-            }
-        }
+        parser::ParseError::UnresolvedUse { name } => ModelImportError::VrmlUnresolvedUse { name },
+        parser::ParseError::MalformedNumber { line, value } => ModelImportError::VrmlParseFailed {
+            path: path.clone(),
+            line,
+            reason: format!("malformed number: {value}"),
+        },
     })
 }

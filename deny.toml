@@ -47,32 +47,28 @@ expression = "ISC AND MIT AND OpenSSL"
 license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
 
 [bans]
-# No banned crates yet, but the section is here so additions are easy.
+# `multiple-versions` stays "warn": the ~60 remaining duplicates are all
+# transitive GUI-stack deps pinned by iced/winit/image with no clean remedy.
+# Flipping to "deny" needs an enumerated `skip` list for those, generated and
+# verified with cargo-deny locally — tracked as CI hardening.
 multiple-versions = "warn"
-deny = []
+# `glyphon` was removed when signex-gfx moved onto iced's wgpu 27 + the
+# cryoglyph text shaper; re-adding it would relink a second wgpu/naga/
+# cosmic-text stack, so it is banned outright as a regression guard.
+deny = [{ name = "glyphon" }]
 
 [advisories]
-# Yanked crates are surfaced as warnings, not hard errors — the only
-# yanked entry (core2) is a deep transitive with no non-yanked release.
+# Surface RUSTSEC advisories at "warn" — security advisories are
+# informational in CI (the workflow's `check advisories` step is
+# continue-on-error: true). Critical advisories should still be
+# addressed by a human. Currently carried, all transitive GUI-stack
+# deps with no clean lockfile remedy (pinned by iced/winit):
+#   RUSTSEC-2026-0194 / -0195  quick-xml 0.39 (DoS) — needs >=0.41,
+#     but wayland-scanner pins 0.39; revisit on an iced/winit bump.
+#   RUSTSEC-2026-0192          ttf-parser 0.25 unmaintained — no
+#     safe upgrade; comes via cosmic-text / fontdb.
 yanked = "warn"
-# Ignored advisories. Each entry is a transitive dependency for which
-# `cargo update` finds no safe upgrade; the only remedy would be a
-# major-version bump of `iced 0.14` or `tantivy 0.22`, which is out of
-# scope here. Re-evaluate when those upstreams move.
-ignore = [
-    # core2 unmaintained, all versions yanked. Pulled via
-    # bitstream-io -> rav1e -> ravif -> image -> iced (AVIF decode).
-    "RUSTSEC-2026-0105",
-    # core2 unsound Buf::read_exact. Same dead transitive path as
-    # above; not reachable from our usage.
-    "RUSTSEC-2026-0008",
-    # instant unmaintained (superseded by web-time). Pulled via
-    # measure_time -> tantivy; no safe upgrade until tantivy drops it.
-    "RUSTSEC-2024-0384",
-    # paste unmaintained proc-macro (superseded by pastey). Pulled via
-    # rav1e -> ravif -> image -> iced; no safe upgrade in this tree.
-    "RUSTSEC-2024-0436",
-]
+ignore = []
 
 [sources]
 # Only crates.io and the official rust-lang git registry are allowed.

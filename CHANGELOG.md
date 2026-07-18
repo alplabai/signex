@@ -2,9 +2,289 @@
 
 All notable changes to Signex ship here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely and [Semantic Versioning](https://semver.org/spec/v2.0.0.html) strictly.
 
-Each release section is authored **before** the `vX.Y.Z` tag is created, so the release workflow picks it up as the GitHub Release body. See `.claude/hooks/pre-release-guard.sh` for the enforcement.
+Each release section is authored **before** the `vX.Y.Z` tag is created, so the release workflow picks it up as the GitHub Release body. `.github/workflows/release.yml` ("Extract CHANGELOG entry for this tag") matches `## [X.Y.Z]` against the tag with the leading `v` stripped.
+
+**Nothing enforces this.** A missing section is not an error — the workflow silently falls back to auto-generated notes, so a tag cut without a section still ships, just with a worse release page. This file previously cited `.claude/hooks/pre-release-guard.sh` as the enforcement; that path is gitignored and no such hook exists.
 
 ## [Unreleased]
+
+### Added — symbol editor
+
+- **Polygon graphic primitive + Place Polygon tool** — click-collect closed-loop
+  vertex stash on the symbol canvas, closeable by clicking the first vertex,
+  double-clicking, or Enter. `.snxsym` files **containing a polygon** are
+  written with the new `snxsym/v2` format token (older builds refuse them
+  with a clear unsupported-format error instead of an opaque parse failure);
+  polygon-free files keep `snxsym/v1` and stay readable by older builds.
+- **Join into Polygon** — chain the selected Line/Arc graphics end-to-end
+  (shared endpoints, in any order/direction) into one closed Polygon,
+  replacing the source graphics in a single undo step. An open chain
+  auto-closes once via the missing edge between its two loose ends; a
+  branching, disjoint, or otherwise malformed selection is left untouched
+  and explained in the editor's status footer.
+- **Right-click context menu** — Place ▸ submenu (Pin/Line/Rectangle/
+  Circle/Arc/Text/Polygon), Join into Polygon (selection-aware), Delete,
+  Select All / Deselect All, Fit to Window. Right-click on an unselected
+  graphic selects it first (Altium parity); Esc and click-outside close
+  the menu.
+
+### Fixed
+
+- Rotated / clockwise-drawn symbol arcs now render at the same sweep their
+  endpoint handles hit-test against — the CPU canvas draw path picked up
+  the CCW-wraparound sweep normalisation the GPU shader and hit-test
+  already used, so a rotated or CW arc no longer visibly renders in the
+  wrong place relative to where it selects.
+- **Legacy `.snxsym` arc migration** — arcs saved by older builds are
+  normalised once at load time: clockwise-placement pairs (recognisable by
+  a negative / unwrapped endpoint) are swapped into the CCW-wraparound
+  form so the arc the user originally drew is preserved, and an exact
+  full-turn arc (`0 → 360`) becomes a `Circle`. The next save persists the
+  normalised form. KNOWN LIMIT: a clockwise-intent pair whose endpoints
+  both already sit in `[0, 360)` (hand-typed in the Properties panel, or a
+  CW placement that never crossed 0°) is indistinguishable from a
+  rotation-produced wraparound pair and is left as wraparound — such arcs
+  render as their complement (they already hit-tested and GPU-rendered
+  that way before this release; only the CPU canvas ever showed the short
+  arc).
+
+## [0.14.0] — 2026-07-18
+
+**Everything since v0.13.0** — 221 commits, 2026-05-06 → 2026-07-18.
+
+This section was originally written on 2026-05-31 covering only the footprint
+editor, and never tagged. Work kept landing past it: symbol multi-unit, the
+`signex-net` netlist contract, keyboard-shortcut profiles, the schematic GPU
+render path, and 83 commits of ADR-0001 decomposition. Rather than mint a
+phantom version — v0.12 is already one, planned and merged but never tagged —
+v0.14.0 claims all of it. The bulk below was reconstructed from `git log` and
+summarises by theme rather than listing every commit.
+
+### Added — netlist
+
+- **`signex-net` crate — the authoritative `Netlist` contract** (#137). One
+  derivation of connectivity, consumed by everything that needs it instead of
+  each subsystem rolling its own.
+- **Cross-sheet netlist stitching** — `build_project_netlist` (#168).
+- Same-name labels merge into a single net in `build_netlist` (#154).
+- Netlist contract completed and connectivity-gate defects fixed (#157);
+  ERC now consumes the shared derivation, with one `SymbolTransform` (#158).
+- **Project-netlist app wiring** — cache, shared sheet-map, exporter (#159).
+
+### Added — symbol editor
+
+- **Multi-unit parts as a first-class concept** — `part_count`, unit buttons,
+  band→footer layout (#290–#292), per-unit graphics via
+  `SymbolGraphic.part_number` (#293), and per-unit body geometry, with draw,
+  hit-test, and select all scoped to the active unit (#294).
+- **Drawing tools** — two-click line, two-click circle, three-click arc,
+  two-click rectangle with per-graphic fill (#299), rectangle edge handles
+  with resize cursor hints.
+- **Selection** — AutoCAD-style rubber-band box select, select-all (Ctrl+A),
+  clicking a graphic body drags the whole symbol, and clicking a graphic
+  selects only that graphic.
+- Undo/redo and grid controls; separate grid styles for schematic and symbol
+  editors; Properties panel refreshes on canvas selection.
+- Optional pin grab-by-label with whole-pin glow — per-tab toggle, default
+  off (#298).
+- **`anchor2d`** — pivot-aware 2D rotation with a compensated (B-type)
+  `Transform2D`.
+- **Polygon graphic primitive + closed-shape authoring** (#378) — a
+  `SymbolGraphicKind::Polygon` (implicitly-closed ring) with fill/stroke,
+  concave-correct hit-test, and per-vertex handles; a **Place Polygon**
+  click-collect tool with the full close-gesture set; **Join into Polygon**,
+  which chains selected lines/arcs end-to-end into one closed polygon
+  (auto-closing an open chain) in a single undo step; and a **right-click
+  context menu** built from a pure data-to-menu row function.
+
+### Added — keyboard and commands
+
+- **Configurable keyboard-shortcut profiles with an in-app editor** (#202,
+  supersedes #116).
+- Menu labels are sourced from the command table via `menu_label()` (#270,
+  #282), so menus and the shortcut pane can present differently from one
+  `CommandMetadata` entry (#271).
+- Drift-guard test: every menu command id must resolve in `CommandMetadata`
+  (#272, #283).
+
+### Added — rendering
+
+- **Schematic GPU render module** via iced's shader widget (#169, #200).
+- Schematic renderer scene cutover started in the app canvases; Milestone F
+  schematic-runtime tasks 03–05 completed.
+
+### Changed
+
+- **`signex-gfx` aligned to iced's wgpu 27 + cryoglyph**, dropping the dual
+  GPU stack (#198).
+- **Large-scale decomposition under ADR-0001** — 83 commits splitting god-files
+  and god-functions across `signex-app`, `signex-engine`, `signex-renderer`,
+  `signex-gfx`, `signex-types`, `signex-library`, `signex-net`, `signex-output`,
+  and the 3D importer, under an 800-line cap. Includes the root `Message`
+  namespacing (D3), the canvas `update`/`draw` splits, the property-panel
+  family, and the 1,223-line `collect_overlays` (#210). Internal only — no
+  behaviour change intended.
+- License Guard is framed by GPL rather than by the banned tool's name (#209).
+- Repo governance: label taxonomy, path labeler, CODEOWNERS, refreshed
+  templates (#133); roadmap reconciled and milestones + tiers as code (#300).
+
+### Fixed
+
+- **Data loss / persistence** — TSV cells are escaped so a schematic save can
+  always reopen (#96, #130); C0 control bytes in a TSV cell are escaped too, so
+  a stray control character in user text can no longer produce a `.snxsch` /
+  `.snxpcb` that will not reload (#386, #397); the footprint editor's STEP store
+  is written via `atomic_write`, so a crash mid-write can no longer strand a
+  corrupt 3D asset that is then served forever (#387, #398); persistence made
+  crash-safe with `fsync` `atomic_write`, atomic `.snxprj`, and a corrupt-JSON
+  guard (#104, #119); residual document writes routed through `atomic_write`,
+  New Project guarded (#104, #128); prompt for unsaved changes on app exit
+  (#95, #124).
+- **Footprint sketch-profile pads** — moving a pad made with "Make Pad from
+  Profile" left its sketch profile behind, and the bake then resolved the
+  copper back to the pad's original location, so an exported footprint placed
+  the pad in the wrong spot with no warning. The profile now travels with the
+  pad: the loop walker gained an id-level core that needs no solve, a pad that
+  first appears from the sketch side is relinked to its `PadAttr` entity by
+  number, and a whole-pad drag no longer snaps its cursor to the pad's own
+  outline vertices (#142, #311).
+- **Connectivity** — wires connect at T-junctions in net derivation (#107,
+  #120); the net-colour flood runs on the authoritative connectivity core
+  (#138).
+- **ERC agrees with the netlist on mid-wire taps** — ERC re-derived
+  connectivity with endpoint-only checks, so a label or pin tapping a wire's
+  interior was invisible to the rules while the netlist saw it. The rules now
+  read the shared wire-anchored connectivity (#388, #399); DSL net names are
+  anchored the same way, so rules keyed on `net.name` / `net.class` no longer
+  see an unnamed net plus a phantom (#396, #403); and bus range labels placed
+  mid-span — where they are normally drawn — are anchored to their bundle, so a
+  `D[0..7]` / `D[0..3]` width mismatch on one bus is reported instead of
+  silently passing (#395, #405).
+- **PDF and preview net names** — the exporters re-derived connectivity of
+  their own instead of reading the authoritative `Netlist` off
+  `ExportContext`, so an exported sheet could annotate a net differently from
+  the netlist it shipped with (#389, #400).
+- **Editing** — Ctrl+C/X/V/D and shift-chorded shortcuts un-broken (#103,
+  #127); Find/Replace replaces the matched substring rather than the whole
+  field (#102, #125).
+- **Symbol rendering** — pin text rotation corrected for screen Y-flip; name
+  `h_align` reversed for flipped pin orientations; pin tip rotates around the
+  body-end pivot; arc angles negated in both preview and scene renderer for
+  the screen-space y-flip; arc discontinuity past ±180° prevented; rotation
+  angles normalised; `LineJoin::Round` for rectangle/polygon corners; round
+  line caps.
+- **Symbol arc sweep convention unified, with a data-safe legacy migration**
+  (#378) — the CPU canvas draw path was the lone signed-sweep holdout while
+  hit-test, the GPU SDF shader, and rotation all read `start_deg`/`end_deg` as a
+  CCW sweep that wraps through 360°, so a rotated 0°-crossing arc drew its
+  complement while clicks landed on the real arc. All consumers now route
+  through one authority (`signex_gfx::primitive::arc::ccw_wrapped_sweep_rad`),
+  a full-turn arc draws and hit-tests as one circle, and a load-time migration
+  self-heals legacy clockwise-signed pairs on read. Every endpoint writer
+  (placement, rotation, the Properties panel, and the arc-endpoint drag handle)
+  normalises into `[0, 360)` so a saved arc round-trips instead of silently
+  reloading as its complement.
+- **Interaction** — unsnapped cursor position for Select-tool hit-testing,
+  snapped coords retained for drag anchor and delta; `CursorAt` published
+  during box-select drag to force redraw.
+- **Detached windows open in front** — a detached modal, undocked tab, or
+  detached panel opened at the default window level with no raise, so on
+  Windows it could appear *behind* the main window and the user had to move
+  the main window to find the dialog they had just opened (#311).
+- Preferences modal is responsive to window resize (#208) and the reopen
+  regression is fixed; theme-aligned canvas backdrop, sheet tracks the stored
+  paper size (#201); library server gains a persistent DB backend and rejects
+  duplicate-row POST (#97, #122).
+
+### CI
+
+- lavapipe installed so `signex-gfx` GPU smoke tests run headless (#126).
+- `cargo-deny` advisories are informational, not a merge gate (#123).
+- CI and license guards run on `trunk` (#121); PR preconditions aligned with
+  the org control-process convention (#134); Linux dependency install hardened
+  against the `packages.microsoft.com` apt outage (#155).
+- **Declared the 1.88 MSRV** and corrected the README + CONTRIBUTING Rust
+  version references to match (#383).
+- README and codebase map refreshed to the v0.14 workspace reality (#385).
+
+### Added — footprint editor (the original v0.14 scope)
+
+v0.13.0 shipped the footprint / sketch editor compiled but hidden behind a
+feature flag while it was finished; v0.14 completes the remaining active-bar
+tooling and **enables the editor** — opening a `.snxfpt` now opens an editable
+tab, and the New Footprint / PCB Library create flow is live again.
+
+#### Sketch constraints
+
+- **Nine more sketch constraints exposed** in the sketch-mode active
+  bar: Tangent (line-arc + arc-arc), Angle, Equal-Radius, Point-on-Arc,
+  Distance-point-to-line, Distance-point-to-circle, and Symmetric
+  (about a line + about a point). The Newton-LM solver and serialization
+  already supported all 19 constraint kinds; this surfaces the 9 that
+  had no button. Selection-first UX: select the entities, the valid
+  constraint buttons light up. The two 3-entity Symmetric constraints
+  take their third entity from the multi-select extra slot.
+
+#### Active-bar tools wired
+
+- **Align / Distribute / Spacing** (12 ops) — Align Left/Right/Top/
+  Bottom + center H/V, Distribute Horizontally/Vertically (equal centre
+  gaps, extremes fixed), and Increase/Decrease H/V spacing (one grid
+  step, pivoting about the selection centroid). Operate on the combined
+  pad selection; no-op under 2 pads (3 for distribute). Sketch-backed
+  pads mirror their move into the sketch; undo-snapshotted.
+- **Move / Drag / Move Selection** — activate the Select tool (footprint
+  pad-move is drag-under-select). Adds a `nudge_pads` helper +
+  `FootprintActiveBarNudgeSelection` foundation for the typed-delta
+  "Move Selection by X, Y…" dialog (dialog itself deferred to v0.15).
+- **Fill / Solid Region / Text Frame** — wired to the existing
+  filled-polygon (`PlaceRegion`) and silk-text (`PlaceString`) place
+  tools.
+- **Selection-filter "All - On / All - Off"** toggle wired to a new
+  `SelectionFilter::set_all`.
+
+#### Deferred cleanup
+
+- **Move Selection by X, Y…** now opens a typed-delta modal (two mm
+  inputs) that nudges the pad selection by the entered amount, reusing
+  the same sketch-mirror + undo path as the one-step grid nudge.
+- **3D Body / Extruded 3D Body** active-bar items mint the footprint's
+  `body_3d` (extrude the courtyard, or the fab outline) — visible
+  immediately in the CPU 3D preview. The interactive wgpu pipeline stays
+  deferred (v2.x).
+- **Text Frame** is now a real bounding-box place tool: drag a rectangle
+  to set the frame; the silk string aligns/clips inside it. (No
+  auto-wrap yet.)
+- **Footprint-native selection-filter presets** — the filter dropdown's
+  All-On/All-Off toggle and preset chips are wired to real footprint
+  `SelectionFilterKind` presets, persisted under `footprint_filter_presets`
+  in prefs, with a "Save current filter as preset" capture. (Replaces the
+  schematic-typed presets that could not apply to footprints.)
+
+#### Fixed — footprint editor
+
+- **Pad shape-param leak** — `mint_shape_geometry_for` now clears a
+  pad's `shape_params` before regenerating geometry, so changing a pad's
+  shape (e.g. RoundRect → Round) no longer strands stale parameter keys
+  for the solver / next bake.
+
+#### Changed — footprint editor
+
+- `FOOTPRINT_EDITOR_ENABLED` flipped `false` → `true`
+  (`crates/signex-app/src/feature_flags.rs`). The
+  `opening_snxfpt_does_not_create_editable_tab_when_gated` regression
+  test branches on the flag and now asserts the enabled behaviour.
+
+#### Deferred to v0.15
+
+- Break Track / Drag Track End (need track-segment split infra).
+
+### Constraints — Apache-clean invariants (carry forward)
+
+- Zero `kicad` substrings under `crates/`; no third-party
+  constraint-solver substrings under `signex-sketch` / `signex-bake`;
+  `cargo-deny` advisories + licenses green; full `cargo test --workspace`
+  green (GPU smoke tests skip headlessly).
 
 ## [0.13.0] — 2026-05-31
 

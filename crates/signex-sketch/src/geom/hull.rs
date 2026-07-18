@@ -14,8 +14,8 @@
 //! and colinear points are handled — colinear points on the hull
 //! edge are dropped (only the extreme endpoints survive).
 
-use super::predicates::{orient2d, Sign};
 use super::Point2;
+use super::predicates::{Sign, orient2d};
 
 /// Build the convex hull of `points`. Returns the hull vertices in
 /// counter-clockwise order. An input with fewer than 3 distinct

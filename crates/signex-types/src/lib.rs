@@ -1,3 +1,4 @@
+pub mod anchor2d;
 pub mod atomic_io;
 pub mod coord;
 pub mod format;
@@ -7,6 +8,7 @@ pub mod net;
 pub mod pcb;
 pub mod project;
 pub mod property;
+pub mod rotation2d;
 pub mod schematic;
 pub mod theme;
 pub mod violation;

@@ -23,17 +23,17 @@ hit-testing, and invalidation-driven updates.
 
 - [x] Task 01: Schematic runtime callsite inventory and cutover contract freeze.
 - [x] Task 02: App compatibility bridge for snapshot/invalidation/style contracts.
-- [ ] Task 03: Canvas render path cutover to `signex-renderer` scene pipeline.
-- [ ] Task 04: Hit-test and selection workflow migration.
-- [ ] Task 05: Overlay/preview/text helper migration (`escape`, expansion, ghost paths).
+- [x] Task 03: Canvas render path cutover to `signex-renderer` scene pipeline.
+- [x] Task 04: Hit-test and selection workflow migration.
+- [x] Task 05: Overlay/preview/text helper migration (`escape`, expansion, ghost paths).
 - [x] Task 06: Remove remaining direct legacy runtime imports and remove old source crate.
 - [ ] Task 07: Regression parity validation and benchmark smoke gates.
 
 ## Acceptance criteria
 
 - [x] Main schematic canvas no longer calls legacy schematic runtime API paths.
-- [ ] Selection, lasso, and polygon hit-tests match prior behavior on baseline fixtures.
-- [ ] Overlay families (preview/ghost/lasso/snap/ERC markers) are emitted with parity in expected layers.
+- [x] Selection, lasso, and polygon hit-tests match prior behavior on baseline fixtures.
+- [x] Overlay families (preview/ghost/lasso/snap/ERC markers) are emitted with parity in expected layers.
 - [ ] App dispatch and invalidation flow maps correctly to renderer dirty-family updates.
 - [x] `signex-app` has no direct legacy schematic runtime dependency at cutover exit gate.
 - [ ] Cutover regression command set passes locally (`signex-app` + `signex-renderer` test suites).
@@ -54,11 +54,14 @@ Completed in this slice:
 
 - [x] [logs/milestone-f-task-01-callsite-inventory.md](../logs/milestone-f-task-01-callsite-inventory.md)
 - [x] [logs/milestone-f-task-02-compat-bridge.md](../logs/milestone-f-task-02-compat-bridge.md)
+- [x] [logs/milestone-f-task-03-canvas-cutover.md](../logs/milestone-f-task-03-canvas-cutover.md)
+- [x] [logs/milestone-f-task-04-hittest-selection-migration.md](../logs/milestone-f-task-04-hittest-selection-migration.md)
+- [x] [logs/milestone-f-task-05-overlay-helper-migration.md](../logs/milestone-f-task-05-overlay-helper-migration.md)
 - [x] [logs/milestone-f-task-06-legacy-runtime-removal.md](../logs/milestone-f-task-06-legacy-runtime-removal.md)
 
 In progress:
 
-- [ ] [logs/milestone-f-task-03-canvas-cutover.md](../logs/milestone-f-task-03-canvas-cutover.md)
+- [ ] [logs/milestone-f-task-07-regression-smoke.md](../logs/milestone-f-task-07-regression-smoke.md)
 
 ## Non-goals
 

@@ -56,8 +56,11 @@ the project's design rules) help identify rendering discrepancies.
 
 ### Prerequisites
 
-- **Rust 1.80+** (edition 2024)
-- A GPU supporting Vulkan, Metal, or DX12 (for wgpu)
+- **Rust 1.88+** — edition 2024 needs 1.85, but the workspace also uses
+  let-chains (`if cond && let Some(x) = ...`), stable only from 1.88. The
+  workspace declares `rust-version = "1.88"`, so an older toolchain fails with
+  a clear "requires rustc 1.88.0 or newer" instead of confusing errors.
+- A GPU supporting Vulkan, Metal, or DX12 (for wgpu) — CI runs headless via lavapipe
 
 ### Build and Run
 
@@ -71,35 +74,38 @@ cargo run -p signex-app
 ### Verify Your Changes
 
 ```bash
-cargo test --workspace        # All tests pass
-cargo clippy --workspace -- -D warnings   # Zero warnings
+cargo test --workspace        # hard gate — must pass
+cargo check --workspace       # hard gate — must compile
+cargo fmt --all               # advisory in CI, but keep it clean
+cargo clippy --workspace      # advisory in CI, but review the warnings
 ```
 
-Both must pass before opening a PR.
+`cargo test` and `cargo check` are the CI hard gates. `fmt` and `clippy`
+are surfaced but don't block a merge — see "Merge rules for `trunk`" below.
 
 ## Git Workflow
 
 ### Branches
 
 ```
-main   ← stable releases only (protected, requires PR + approval)
-└─ dev ← integration branch (default, all PRs target here)
+main     ← stable releases only (protected, requires PR + approval)
+└─ trunk ← integration branch (default, all PRs target here)
    ├─ feature/...   new features
    └─ fix/...       bug fixes
 ```
 
-- **Always branch from `dev`**, not `main`
-- **Always PR to `dev`**, not `main`
+- **Always branch from `trunk`**, not `main`
+- **Always PR to `trunk`**, not `main`
 - Branch naming: `feature/<description>` or `fix/<description>`
 
 ### Making a PR
 
 1. Fork the repo
-2. Create a branch from `dev`: `git checkout -b feature/my-feature dev`
+2. Create a branch from `trunk`: `git checkout -b feature/my-feature trunk`
 3. Make your changes
 4. Ensure `cargo test` and `cargo clippy` pass
 5. Commit with a descriptive message: `feat: add measure tool (Ctrl+M)`
-6. Push and open a PR against `dev`
+6. Push and open a PR against `trunk`
 
 ### Commit Messages
 
@@ -115,19 +121,64 @@ docs: add KiCad 9 fixture for multi-sheet test
 
 ## Crate Map
 
-| Crate | What goes here | Dependencies |
+Each crate maps to an `area:` label (auto-applied to PRs by path — see
+[`.github/labeler.yml`](.github/labeler.yml)).
+
+| Crate | What goes here | `area:` label |
 |---|---|---|
-| `signex-types` | Domain types (schematic, PCB, net, layer, theme) + native `.snxsch`/`.snxpcb` format codec. **No rendering deps.** | serde, toml, uuid |
-| `signex-engine` | Edit engine. Open/save through `SnxSchematic` / `SnxPcb`. Multi-window history. | signex-types |
-| `signex-render` | Canvas draw routines, hit-testing. Bridges types to Iced Canvas calls. | signex-types |
-| `signex-widgets` | Custom Iced widgets (TreeView, symbol preview, theme extensions) | iced, iced_aw |
-| `signex-erc` / `signex-erc-dsl` | ERC rule engine + DSL compiler | signex-types |
-| `signex-output` | PDF, BOM, netlist exporters (non-KiCad formats) | signex-types |
-| `signex-app` | Main binary. Iced Application, panels, dock, menus, canvas, Active Bar. | everything above |
+| `signex-types` | Domain types (schematic, PCB, net, layer, theme) + native `.snxsch`/`.snxpcb` format codec. **No rendering deps.** | `types` |
+| `signex-engine` | Edit engine + multi-window history. | `engine` |
+| `signex-sketch` | 2D geometry, constraints, and the sketch solver. | `sketch` |
+| `signex-bake` | Pad baking, arrays, pad/via numbering. | `bake` |
+| `signex-library` / `signex-library-server` | Component library model + the library server. | `library` |
+| `signex-erc` / `signex-erc-dsl` | ERC rule engine + DSL compiler. | `erc` |
+| `signex-bom` | Bill-of-materials generation. | `bom` |
+| `signex-output` | PDF / netlist exporters (non-KiCad formats). | `output` |
+| `signex-renderer` / `signex-gfx` | Canvas draw routines + GPU rendering. | `rendering` |
+| `signex-3d-model-importer` | 3D model (glTF/STEP) import. | `3d` |
+| `signex-widgets` / `chrome-catalog` | Custom Iced widgets + chrome catalog. | `widgets` |
+| `signex-app` | Main binary — Iced app, panels, dock, menus, canvas, Active Bar, and the footprint/symbol/library editors. | `app`, `footprint-editor`, `symbol-editor`, `schematic`, `pcb` |
 
 **Rule:** `signex-types` has zero rendering dependencies. If you need to draw
-something, that code goes in `signex-render`. If you need a UI widget, that goes
-in `signex-widgets` or `signex-app`.
+something, that code goes in `signex-renderer` / `signex-gfx`. If you need a UI
+widget, that goes in `signex-widgets` or `signex-app`.
+
+## Labels
+
+Labels are managed as code in [`.github/labels.yml`](.github/labels.yml) and
+synced automatically on merge to `trunk`. Four families plus a few signal labels:
+
+| Family | Meaning | Who sets it |
+|---|---|---|
+| `type:` | Kind of change — `feature`, `bug`, `refactor`, `docs`, `ci`, `chore`, `test`, `performance` | Author / triager |
+| `area:` | Subsystem touched — `sketch`, `footprint-editor`, `library`, … | **Auto** (path labeler) |
+| `priority:` | `critical` / `high` / `medium` / `low` | Triager |
+| `status:` | `needs-triage`, `in-progress`, `blocked`, `needs-review`, `on-hold` | Whoever moves it |
+
+Signal labels: `data-loss`, `regression`, `security`, `breaking-change`,
+`license-review`, `good first issue`, `help wanted`.
+
+New issues open as `status: needs-triage` (+ `type:` from the template). On a PR,
+the `area:` labels are applied for you; add a `type:` and, if warranted, a
+`priority:` / `data-loss` / `regression` / `breaking-change` label.
+
+## Merge rules for `trunk`
+
+`trunk` is protected. The full policy — PR preconditions, required checks,
+merge methods, and the server-side branch-protection settings — lives in
+[`docs/branching-and-merge-policy.md`](docs/branching-and-merge-policy.md);
+the importable ruleset is in [`.github/rulesets/`](.github/rulesets/). In short:
+
+- Changes land via **pull request** — no direct pushes, no force-push, no
+  branch deletion (admins included).
+- **1 Code-Owner approving review** is required; you can't approve your own PR.
+  Conversations must be resolved and the branch up to date with `trunk`.
+- CI hard gates must be green before merge: `check · ubuntu-latest`,
+  `test · workspace`, `deny · licenses + deps`, `PR-description self-declaration`,
+  and `No KiCad-shaped names anywhere in crates/`. `fmt · rustfmt`, `clippy`, and
+  the advisory `cargo-deny` steps are informational and don't block.
+- Merge with a **merge commit** (to preserve a contributor's per-commit history)
+  or **squash** (one logical change → one commit).
 
 ## Good First Issues
 
@@ -163,27 +214,101 @@ with every contributor.
 ## License compliance for contributions
 
 The main signex repo is **Apache-2.0 clean**. Patches must not introduce
-KiCad-derived code or any GPL-licensed dependency. KiCad import / export
-lives in the [signex-kicad-import](https://github.com/alplabai/signex-kicad-import)
+code, data, or dependencies under any licence incompatible with
+Apache-2.0 — which is a wider net than GPL, and the next section defines
+it. KiCad import / export lives in the
+[signex-kicad-import](https://github.com/alplabai/signex-kicad-import)
 GPL-3.0-or-later companion repo — that's where KiCad-related work
-belongs. See [docs/LICENSING.md](docs/LICENSING.md) for the rationale
-behind the two-repo split.
+belongs. See [docs/LICENSING.md](docs/LICENSING.md) for the full statement
+and the rationale behind the two-repo split.
 
-When you open a PR against the main `signex` repo, include this block
-in the PR description:
+### What "otherwise Apache-incompatible" means
 
-```
-Source basis: [my own work | Signex's prior code | published format
-specs | other (specify)]
-LLM-assisted: [yes/no — if yes, list which models]
-KiCad source consulted: [yes/no — if yes, the PR belongs in
-signex-kicad-import, not here]
-```
+Opening a PR affirms that **no license-gated source files** were used —
+nothing under GPL/copyleft **or otherwise Apache-incompatible**. We asked
+that for a long time without ever saying what the second half meant, which
+was our omission, not a contributor's problem to guess at.
 
-CI will check the PR description for this block (see
-`.github/workflows/license-guard.yml` and the PR-license-declaration
-workflow). If the third field is `yes`, CI rejects the PR with a
-pointer to the companion repo.
+It cost someone. [PR #304](https://github.com/alplabai/signex/pull/304)
+arrived as a skilled, careful Rust rewrite of a project licensed
+"CC BY 4.0 … You may not resell this tool". That is Apache-incompatible on
+two counts, and it passed all twelve of our licence CI jobs plus
+`cargo deny` green. The declaration was answered honestly — CC BY reads as
+permissive, and the resale restriction is a trailing sentence that isn't
+part of the CC BY licence text at all. Nothing we automated would have
+changed that answer. Only writing the rule down does. So:
+
+**A port is a derivative work.** Rewriting a project's JavaScript in Rust
+does not reset its copyright. Neither does re-typing its C++, renaming the
+identifiers, restructuring the modules, or having an LLM do the
+translation. If you read someone else's source and wrote code that follows
+it, their licence governs your result — however different it looks. This is
+the single point engineers most often don't know, and it is not a close
+call legally.
+
+Implementing a *published algorithm or formula* independently is a
+different thing and is fine. The line is what you had in front of you when
+you wrote it, not how much the output diverges.
+
+**Licence classes that are incompatible with this repo:**
+
+- **GPL / copyleft** — GPL-2.0/3.0, AGPL, and **LGPL**. Reciprocal terms
+  relicense Signex; a binding is a link. Copyleft solvers are reached
+  across a process boundary only — see
+  [docs/EXTERNAL_TOOLS.md §4](docs/EXTERNAL_TOOLS.md#4-the-gpl--lgpl-bridge-boundary),
+  which is the dependency-side counterpart to this section.
+- **Any Creative Commons licence** — CC BY, CC BY-SA, CC BY-NC, all of
+  them. CC is not a software licence; Creative Commons says so itself. CC
+  BY's attribution terms don't compose with Apache-2.0's `NOTICE` model,
+  and BY-SA is copyleft. "But CC BY is permissive" is the exact trap #304
+  fell into. (CC0 is a public-domain dedication, not a CC licence in this
+  sense, and is fine.)
+- **Non-commercial / no-resale / any field-of-use restriction** — CC BY-NC,
+  "you may not resell this tool", "personal use only", "not for commercial
+  use". See below; this class is fatal here specifically.
+- **Source-available / open-core / "fair source"** — BUSL, SSPL, Elastic,
+  Commons Clause, PolyForm. Not open source, whatever the marketing says.
+- **The text, tables, and figures of paywalled standards** — IPC, IEC,
+  JEDEC, ISO. Important distinction: the **formulas and physical facts** in
+  a standard are facts, not copyrightable, and implementing them from your
+  own understanding is fine and welcome. The **document** is copyrighted —
+  do not copy its prose, its tables, its figure geometry, or its worked
+  examples, and don't paste it into an LLM to do it for you.
+
+MIT, BSD, ISC, Zlib, Unlicense, CC0, and Apache-2.0 are fine. Anything on
+neither list: ask.
+
+**Why "no resale" is fatal here in particular.** Signex Community is
+Apache-2.0 and free; **Signex Pro is a paid commercial edition built from
+this same tree**. A field-of-use restriction on any code in `crates/` would
+be violated the day Pro ships, and would break the Apache-2.0 surface we
+promise every downstream redistributor and embedder. Plenty of projects
+could live with a non-commercial clause. We cannot. That's a property of
+our business model, not a judgement about the licence.
+
+### If you're not sure, ask — don't PR
+
+[Open an issue](https://github.com/alplabai/signex/issues/new), name the
+source and its licence, and we'll answer. It costs you one comment. A wrong
+guess discovered at review costs you the weekend you spent on the code, and
+we would rather spend our time saying "yes, go" than "sorry". This is the
+same rule [docs/EXTERNAL_TOOLS.md §1](docs/EXTERNAL_TOOLS.md#1-the-rule)
+applies to stack choices, for the same reason.
+
+### Mechanics
+
+The PR template asks you to confirm the work is original or derived only
+from sources whose licence you checked, and to name the source and licence
+if it is derived. CI (see `.github/workflows/license-guard.yml` and the
+PR-license-declaration workflow) passes unless the description explicitly
+admits a license-gated source. If your contribution did draw on one, add a
+line `License-gated sources: yes` — CI rejects it here with a pointer to
+the companion repo, which is where that work belongs.
+
+A PR that adds a new crate or more than ~2000 lines of Rust also gets an
+automated comment asking the provenance question directly. It's advisory,
+it never blocks, and it fires on plenty of entirely original work — if it
+lands on yours, it means nothing more than "this PR is large".
 
 Why this matters: large-language-model assistants that have been
 trained on KiCad source can inadvertently produce structurally
@@ -196,6 +321,13 @@ introduces KiCad-flavoured identifiers (`kicad`, `KiCad`, `F_CU`,
 `B_CU`, `F_SILKS`, `tri_state`, `Net-(`, …) anywhere under `crates/`.
 This is a structural backstop on top of the PR-description self-
 declaration.
+
+Those gates are shaped around one past incident and they do not detect a
+port of some project they've never heard of. There's also an advisory
+`port-smell` job that greps for residue a port tends to leave — it never
+blocks, and a careful port trips none of it. Treat none of this as a
+clean bill of health: the section above is the actual rule, and reading
+it is the thing that works.
 
 ## Questions?
 

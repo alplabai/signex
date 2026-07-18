@@ -340,7 +340,11 @@ impl Signex {
         self.interaction_state.current_tool = Tool::Select;
     }
 
-    pub(crate) fn apply_loaded_pcb_document(&mut self, fit_to_board: bool, refresh_panel_ctx: bool) {
+    pub(crate) fn apply_loaded_pcb_document(
+        &mut self,
+        fit_to_board: bool,
+        refresh_panel_ctx: bool,
+    ) {
         self.clear_schematic_ui_state();
         self.sync_pcb_canvas_from_visible_board();
         if fit_to_board {
@@ -358,7 +362,9 @@ impl Signex {
 
     fn apply_loaded_empty_document(&mut self, refresh_panel_ctx: bool) {
         self.clear_schematic_ui_state();
-        self.interaction_state.pcb_canvas.set_renderer_snapshot(None);
+        self.interaction_state
+            .pcb_canvas
+            .set_renderer_snapshot(None);
         self.interaction_state.pcb_canvas.clear_bg_cache();
         self.interaction_state.pcb_canvas.clear_content_cache();
 
@@ -428,7 +434,14 @@ impl Signex {
                         )
                     })
                     .collect(),
-                snapshot.paper_size.clone(),
+                // Older documents may carry an empty paper_size (serde
+                // default); normalize so the Page Options selector and the
+                // drawn sheet agree on the effective A4 fallback.
+                if snapshot.paper_size.is_empty() {
+                    "A4".to_string()
+                } else {
+                    snapshot.paper_size.clone()
+                },
             )
         } else if let Some(snapshot) = self.active_pcb_snapshot() {
             (
@@ -464,5 +477,12 @@ impl Signex {
         self.document_state.panel_ctx.lib_symbol_names = document_summary.5;
         self.document_state.panel_ctx.placed_symbols = document_summary.6;
         self.document_state.panel_ctx.paper_size = document_summary.7;
+
+        // Drive the drawn sheet from the (re)loaded document's paper size —
+        // without this the canvas keeps the previous tab's dimensions and the
+        // sheet rectangle stops matching the stored A-series format.
+        if self.has_active_schematic() {
+            self.apply_page_dimensions_to_canvas();
+        }
     }
 }

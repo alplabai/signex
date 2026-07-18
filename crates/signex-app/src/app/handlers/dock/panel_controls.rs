@@ -1,9 +1,13 @@
+use iced::Task;
+
 use super::super::super::*;
 
 impl Signex {
     /// Push the effective paper dimensions from PanelContext into the canvas so
-    /// the background / grid track Page Options changes immediately.
-    fn apply_page_dimensions_to_canvas(&mut self) {
+    /// the background / grid track Page Options changes immediately. Also
+    /// called from the document-load path so an opened sheet's stored paper
+    /// size drives the drawn sheet, not the previous tab's leftovers.
+    pub(crate) fn apply_page_dimensions_to_canvas(&mut self) {
         let ctx = &self.document_state.panel_ctx;
         let (w, h) = match ctx.page_format_mode {
             crate::panels::PageFormatMode::Custom => (ctx.custom_paper_w_mm, ctx.custom_paper_h_mm),
@@ -14,10 +18,15 @@ impl Signex {
         self.interaction_state.active_canvas_mut().clear_bg_cache();
     }
 
+    /// Returns `None` when the message isn't a panel-control message
+    /// (so the caller can fall through to the next dock handler), or
+    /// `Some(task)` when handled — the task carries any follow-up work
+    /// from a re-entrant `self.update(...)` so it isn't dropped.
     pub(super) fn handle_dock_panel_control_message(
         &mut self,
         panel_msg: &crate::panels::PanelMsg,
-    ) -> bool {
+    ) -> Option<Task<Message>> {
+        let mut follow = Task::none();
         match panel_msg {
             crate::panels::PanelMsg::SetUnit(unit) => {
                 self.ui_state.unit = *unit;
@@ -225,7 +234,7 @@ impl Signex {
                             Some(signex_types::schematic::SelectedKind::Drawing)
                         )
                     }) {
-                        let _ = self.update(crate::app::Message::UpdateDrawingField(uuid, edit));
+                        follow = self.update(crate::app::Message::UpdateDrawingField(uuid, edit));
                     }
                 }
             }
@@ -239,7 +248,7 @@ impl Signex {
                         Some(signex_types::schematic::SelectedKind::Drawing)
                     )
                 }) {
-                    let _ = self.update(crate::app::Message::UpdateDrawingField(uuid, *edit));
+                    follow = self.update(crate::app::Message::UpdateDrawingField(uuid, *edit));
                 }
             }
             crate::panels::PanelMsg::ConfirmPrePlacement => {
@@ -345,6 +354,15 @@ impl Signex {
             crate::panels::PanelMsg::SetPaperSize(size) => {
                 self.document_state.panel_ctx.paper_size = size.clone();
                 self.apply_page_dimensions_to_canvas();
+                // Persist into the document (SchematicSheet.paper_size) so the
+                // choice survives save/reopen; undoable like any other edit.
+                self.apply_engine_command(
+                    signex_engine::Command::SetPaperSize {
+                        paper_size: size.clone(),
+                    },
+                    false,
+                    false,
+                );
             }
             crate::panels::PanelMsg::SetPageOrigin(origin) => {
                 self.document_state.panel_ctx.page_origin = *origin;
@@ -392,9 +410,9 @@ impl Signex {
             crate::panels::PanelMsg::SelectCustomFilterTab(idx) => {
                 self.handle_select_custom_filter_tab(*idx);
             }
-            _ => return false,
+            _ => return None,
         }
 
-        true
+        Some(follow)
     }
 }

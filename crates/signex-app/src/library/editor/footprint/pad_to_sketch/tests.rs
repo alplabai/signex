@@ -36,8 +36,7 @@ fn three_pads_mint_three_points_with_pad_attrs() {
     // v0.16 — per pad: 1 centre Point + 4 corner Points + 4 outline
     // Lines = 9 entities. 3 pads × 9 = 27.
     assert_eq!(sketch.entities.len(), 27);
-    let attr_carriers: Vec<&Entity> =
-        sketch.entities.iter().filter(|e| e.pad.is_some()).collect();
+    let attr_carriers: Vec<&Entity> = sketch.entities.iter().filter(|e| e.pad.is_some()).collect();
     assert_eq!(attr_carriers.len(), 3);
     for entity in attr_carriers {
         assert!(matches!(entity.kind, EntityKind::Point { .. }));
@@ -73,7 +72,10 @@ fn skip_when_sketch_already_has_entities() {
     let n = auto_mint_for_literal_pads(&mut pads, &mut fp);
     assert_eq!(n, 0, "auto-mint must skip when sketch is already populated");
     assert_eq!(fp.sketch.as_ref().unwrap().entities.len(), 1);
-    assert!(pads[0].sketch_entity_id.is_none(), "skip leaves the link unset");
+    assert!(
+        pads[0].sketch_entity_id.is_none(),
+        "skip leaves the link unset"
+    );
 }
 
 #[test]
@@ -113,7 +115,11 @@ fn mirror_add_pad_links_to_new_sketch_entity() {
     mirror_add_pad_to_sketch(&mut pad, &mut fp);
     let id = pad.sketch_entity_id.expect("mirror should mint id");
     let sketch = fp.sketch.as_ref().unwrap();
-    let entity = sketch.entities.iter().find(|e| e.id == id).expect("entity exists");
+    let entity = sketch
+        .entities
+        .iter()
+        .find(|e| e.id == id)
+        .expect("entity exists");
     match entity.kind {
         EntityKind::Point { x, y } => assert_eq!((x, y), (5.0, 5.0)),
         _ => panic!("minted entity must be a Point"),
@@ -161,6 +167,129 @@ fn mirror_delete_pad_drops_sketch_entity() {
     assert_eq!(fp.sketch.as_ref().unwrap().entities.len(), 9);
     mirror_delete_pad_from_sketch(&pad, &mut fp);
     assert_eq!(fp.sketch.as_ref().unwrap().entities.len(), 0);
+}
+
+/// Build a footprint whose sketch holds a closed rectangle profile and a
+/// centre Point carrying a `SketchProfile` PadAttr seeded from one of the
+/// rectangle's Lines — the shape produced by "Make Pad from Profile".
+///
+/// Returns the pad (linked to the centre) and the four profile-corner ids
+/// in sw, se, ne, nw order.
+fn footprint_with_profile_pad() -> (Footprint, EditorPad, [SketchEntityId; 4]) {
+    use signex_sketch::attr::{CustomPadShape, PadAttr, PadShape};
+
+    let mut fp = Footprint::empty("test");
+    let plane_id = PlaneId::new();
+    let mut sketch = SketchData::default();
+    sketch.planes.push(Plane {
+        id: plane_id,
+        kind: PlaneKind::BoardTop,
+    });
+
+    // Rectangle (0,0)-(2,1): four corner Points, four connecting Lines.
+    let corners = [
+        (0.0_f64, 0.0_f64),
+        (2.0, 0.0),
+        (2.0, 1.0),
+        (0.0, 1.0),
+    ];
+    let corner_ids: [SketchEntityId; 4] = std::array::from_fn(|i| {
+        let id = SketchEntityId::new();
+        sketch.entities.push(Entity::new(
+            id,
+            plane_id,
+            EntityKind::Point {
+                x: corners[i].0,
+                y: corners[i].1,
+            },
+        ));
+        id
+    });
+    let mut seed_line = None;
+    for i in 0..4 {
+        let id = SketchEntityId::new();
+        sketch.entities.push(Entity::new(
+            id,
+            plane_id,
+            EntityKind::Line {
+                start: corner_ids[i],
+                end: corner_ids[(i + 1) % 4],
+            },
+        ));
+        seed_line.get_or_insert(id);
+    }
+
+    // Centre Point at the rectangle's centroid, carrying the pad attr.
+    let centre_id = SketchEntityId::new();
+    let mut centre = Entity::new(centre_id, plane_id, EntityKind::Point { x: 1.0, y: 0.5 });
+    centre.pad = Some(PadAttr {
+        number: "1".into(),
+        shape: PadShape::Custom(CustomPadShape::SketchProfile {
+            source: vec![seed_line.expect("seed line minted")],
+        }),
+        ..PadAttr::default()
+    });
+    sketch.entities.push(centre);
+    fp.sketch = Some(sketch);
+
+    let mut pad = editor_pad("1", 1.0, 0.5);
+    pad.sketch_entity_id = Some(centre_id);
+    // "Make Pad from Profile" leaves this None — the pad does not own the
+    // rectangle's geometry, it only references the seed Line.
+    pad.corner_entity_ids = None;
+
+    (fp, pad, corner_ids)
+}
+
+/// Moving a `SketchProfile` pad must carry its profile geometry along.
+///
+/// Regression for the v0.14 bug: `mirror_move_pad_in_sketch` moved only the
+/// centre Point and the `corner_entity_ids` bbox outline. A SketchProfile pad
+/// has `corner_entity_ids: None`, so the profile stayed at its original
+/// coordinates — visibly, the sketch rectangle did not follow the pad. The
+/// silent half was worse: `signex_bake` bakes the profile as
+/// `world_pts - pad_position`, so the copper resolved back to the ORIGINAL
+/// location and the exported footprint had the pad in the wrong place.
+#[test]
+fn mirror_move_profile_pad_translates_profile_geometry() {
+    let (mut fp, mut pad, corner_ids) = footprint_with_profile_pad();
+
+    // Move the pad by (+3.0, +3.0): centroid (1.0, 0.5) -> (4.0, 3.5).
+    pad.position_mm = (4.0, 3.5);
+    mirror_move_pad_in_sketch(&pad, &mut fp);
+
+    let point_at = |fp: &Footprint, id: SketchEntityId| -> (f64, f64) {
+        let entity = fp
+            .sketch
+            .as_ref()
+            .unwrap()
+            .entities
+            .iter()
+            .find(|e| e.id == id)
+            .expect("entity present");
+        match entity.kind {
+            EntityKind::Point { x, y } => (x, y),
+            _ => panic!("profile corner must be a Point"),
+        }
+    };
+
+    // The centre tracks the pad (this already worked).
+    assert_eq!(
+        point_at(&fp, pad.sketch_entity_id.unwrap()),
+        (4.0, 3.5),
+        "centre Point must follow the pad"
+    );
+
+    // The profile must have travelled by the same delta.
+    let expected = [(3.0, 3.0), (5.0, 3.0), (5.0, 4.0), (3.0, 4.0)];
+    let actual: Vec<(f64, f64)> = corner_ids.iter().map(|id| point_at(&fp, *id)).collect();
+    assert_eq!(
+        actual,
+        expected.to_vec(),
+        "profile geometry must translate with the pad, else the sketch shows \
+         the shape at its old position and the bake emits copper at the old \
+         location"
+    );
 }
 
 #[test]

@@ -6,9 +6,9 @@
 
 use serde::Deserialize;
 use signex_gfx::debug_pass::{
-    run_arc_smoke_pass, run_grid_overlay_text_composite_smoke_pass, run_grid_smoke_pass,
-    run_line_circle_smoke_pass, run_polygon_smoke_pass, run_text_geometry_composite_smoke_pass,
-    run_text_smoke_pass, CompositeStage,
+    CompositeStage, run_arc_smoke_pass, run_grid_overlay_text_composite_smoke_pass,
+    run_grid_smoke_pass, run_line_circle_smoke_pass, run_polygon_smoke_pass,
+    run_text_geometry_composite_smoke_pass, run_text_smoke_pass,
 };
 use signex_gfx::primitive::arc::Arc;
 use signex_gfx::primitive::circle::Circle;
@@ -16,8 +16,8 @@ use signex_gfx::primitive::line::LineSegment;
 use signex_gfx::primitive::polygon::GpuPolygon;
 use signex_gfx::primitive::text::{TextHAlign, TextItem, TextVAlign};
 use signex_gfx::scene::{
-    apply_dirty_uploads, apply_dirty_uploads_with_culling, DirtyFlags, Scene, SceneUploadTarget,
-    TextUploadParams, UploadCounters, UploadCulling, ViewportAabbMm,
+    DirtyFlags, Scene, SceneUploadTarget, TextUploadParams, UploadCounters, UploadCulling,
+    ViewportAabbMm, apply_dirty_uploads, apply_dirty_uploads_with_culling,
 };
 
 #[derive(Debug, Deserialize)]
@@ -177,7 +177,11 @@ fn load_golden_fixture() -> GoldenBaseline {
 }
 
 fn expected_stage_order(stages: &[GoldenStage]) -> Vec<CompositeStage> {
-    stages.iter().copied().map(GoldenStage::as_runtime).collect()
+    stages
+        .iter()
+        .copied()
+        .map(GoldenStage::as_runtime)
+        .collect()
 }
 
 fn assert_float_eq(lhs: f32, rhs: f32, epsilon: f32) {
@@ -364,49 +368,21 @@ fn build_upload_fixture_scene() -> Scene {
     scene
 }
 
-/// Headless CI (no Vulkan/Metal/DX12/GL adapter) can't run the GPU
-/// smoke passes. Treat "no adapter/device" as a skip — the tests
-/// still run and assert wherever a real adapter is available.
-fn is_headless_skip(err: &str) -> bool {
-    err.contains("failed to acquire adapter") || err.contains("failed to acquire device")
-}
-
-/// Unwrap a smoke-pass `Result`, or skip the test (early `return`)
-/// when the failure is just "no GPU adapter in this environment".
-/// A real error still panics.
-macro_rules! gpu_or_skip {
-    ($expr:expr, $what:expr) => {
-        match $expr {
-            Ok(v) => v,
-            Err(e) if is_headless_skip(&e) => {
-                eprintln!("skipping GPU smoke test ({}): {e}", $what);
-                return;
-            }
-            Err(e) => panic!("{}: {e}", $what),
-        }
-    };
-}
-
 #[test]
 fn regression_golden_smoke_reports_match_fixture_baseline() {
     let golden = load_golden_fixture();
 
     let line_circle =
-        gpu_or_skip!(pollster::block_on(run_line_circle_smoke_pass(32.0)), "line-circle smoke report");
-    let arc_instances = gpu_or_skip!(pollster::block_on(run_arc_smoke_pass()), "arc smoke report");
+        pollster::block_on(run_line_circle_smoke_pass(32.0)).expect("line-circle smoke report");
+    let arc_instances = pollster::block_on(run_arc_smoke_pass()).expect("arc smoke report");
     let polygon_vertices =
-        gpu_or_skip!(pollster::block_on(run_polygon_smoke_pass()), "polygon smoke report");
-    let text_instances =
-        gpu_or_skip!(pollster::block_on(run_text_smoke_pass()), "text smoke report");
-    let grid = gpu_or_skip!(pollster::block_on(run_grid_smoke_pass()), "grid smoke report");
-    let text_geometry = gpu_or_skip!(
-        pollster::block_on(run_text_geometry_composite_smoke_pass()),
-        "text-geometry composite smoke report"
-    );
-    let overlay = gpu_or_skip!(
-        pollster::block_on(run_grid_overlay_text_composite_smoke_pass()),
-        "grid-overlay-text composite smoke report"
-    );
+        pollster::block_on(run_polygon_smoke_pass()).expect("polygon smoke report");
+    let text_instances = pollster::block_on(run_text_smoke_pass()).expect("text smoke report");
+    let grid = pollster::block_on(run_grid_smoke_pass()).expect("grid smoke report");
+    let text_geometry = pollster::block_on(run_text_geometry_composite_smoke_pass())
+        .expect("text-geometry composite smoke report");
+    let overlay = pollster::block_on(run_grid_overlay_text_composite_smoke_pass())
+        .expect("grid-overlay-text composite smoke report");
 
     assert_eq!(line_circle.line_instances, golden.smoke.line_instances);
     assert_eq!(line_circle.circle_instances, golden.smoke.circle_instances);
@@ -414,10 +390,21 @@ fn regression_golden_smoke_reports_match_fixture_baseline() {
     assert_eq!(polygon_vertices, golden.smoke.polygon_vertices);
     assert_eq!(text_instances, golden.smoke.text_instances);
 
-    assert_float_eq(grid.minor_lod_alpha, golden.smoke.grid_minor_lod_alpha, 0.000001);
-    assert_float_eq(grid.major_lod_alpha, golden.smoke.grid_major_lod_alpha, 0.000001);
+    assert_float_eq(
+        grid.minor_lod_alpha,
+        golden.smoke.grid_minor_lod_alpha,
+        0.000001,
+    );
+    assert_float_eq(
+        grid.major_lod_alpha,
+        golden.smoke.grid_major_lod_alpha,
+        0.000001,
+    );
 
-    assert_eq!(text_geometry.polygon_vertices, golden.smoke.polygon_vertices);
+    assert_eq!(
+        text_geometry.polygon_vertices,
+        golden.smoke.polygon_vertices
+    );
     assert_eq!(
         text_geometry.text_instances,
         golden.smoke.text_geometry_text_instances
@@ -427,7 +414,10 @@ fn regression_golden_smoke_reports_match_fixture_baseline() {
         expected_stage_order(&golden.smoke.text_geometry_stage_order)
     );
 
-    assert_eq!(overlay.geometry_vertices, golden.smoke.overlay_geometry_vertices);
+    assert_eq!(
+        overlay.geometry_vertices,
+        golden.smoke.overlay_geometry_vertices
+    );
     assert_eq!(overlay.overlay_instances, golden.smoke.overlay_instances);
     assert_eq!(overlay.text_instances, golden.smoke.overlay_text_instances);
     assert_eq!(
@@ -480,9 +470,15 @@ fn regression_golden_upload_gating_matches_fixture_baseline() {
         golden.upload.core_culling_total_updates
     );
     assert_eq!(core_target.uploaded_lines, golden.upload.core_visible_lines);
-    assert_eq!(core_target.uploaded_circles, golden.upload.core_visible_circles);
+    assert_eq!(
+        core_target.uploaded_circles,
+        golden.upload.core_visible_circles
+    );
     assert_eq!(core_target.uploaded_arcs, golden.upload.core_visible_arcs);
-    assert_eq!(core_target.uploaded_polygons, golden.upload.core_visible_polygons);
+    assert_eq!(
+        core_target.uploaded_polygons,
+        golden.upload.core_visible_polygons
+    );
     assert_eq!(core_target.uploaded_texts, golden.upload.core_visible_texts);
 
     let mut overlay_target = MockUploadTarget::default();
@@ -511,7 +507,10 @@ fn regression_golden_upload_gating_matches_fixture_baseline() {
         overlay_target.uploaded_overlay_polygons,
         golden.upload.overlay_visible_polygons
     );
-    assert_eq!(overlay_target.uploaded_erc_lines, golden.upload.overlay_visible_erc_lines);
+    assert_eq!(
+        overlay_target.uploaded_erc_lines,
+        golden.upload.overlay_visible_erc_lines
+    );
     assert_eq!(
         overlay_target.uploaded_erc_circles,
         golden.upload.overlay_visible_erc_circles

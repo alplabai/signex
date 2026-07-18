@@ -88,17 +88,11 @@ fn commit_path_chains_subsequent_commits() {
     let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
 
     write_file(&root, "my.snxprj", "v1");
-    adapter
-        .commit_path(Path::new("my.snxprj"), "v1")
-        .unwrap();
+    adapter.commit_path(Path::new("my.snxprj"), "v1").unwrap();
     write_file(&root, "my.snxprj", "v2");
-    adapter
-        .commit_path(Path::new("my.snxprj"), "v2")
-        .unwrap();
+    adapter.commit_path(Path::new("my.snxprj"), "v2").unwrap();
     write_file(&root, "my.snxprj", "v3");
-    adapter
-        .commit_path(Path::new("my.snxprj"), "v3")
-        .unwrap();
+    adapter.commit_path(Path::new("my.snxprj"), "v3").unwrap();
 
     let entries = adapter.file_history(Path::new("my.snxprj"), 10).unwrap();
     assert_eq!(entries.len(), 3);
@@ -173,13 +167,9 @@ fn restore_at_round_trips_a_prior_version() {
     let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
 
     write_file(&root, "sheet.snxsch", "version-A content");
-    let oid_a = adapter
-        .commit_path(Path::new("sheet.snxsch"), "A")
-        .unwrap();
+    let oid_a = adapter.commit_path(Path::new("sheet.snxsch"), "A").unwrap();
     write_file(&root, "sheet.snxsch", "version-B content");
-    let _oid_b = adapter
-        .commit_path(Path::new("sheet.snxsch"), "B")
-        .unwrap();
+    let _oid_b = adapter.commit_path(Path::new("sheet.snxsch"), "B").unwrap();
 
     // Working tree currently shows B.
     assert_eq!(read_file(&root, "sheet.snxsch"), "version-B content");
@@ -231,9 +221,7 @@ fn restore_at_from_sha_round_trips_via_string_oid() {
     let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
 
     write_file(&root, "x.snxsch", "v1");
-    let oid_a = adapter
-        .commit_path(Path::new("x.snxsch"), "v1")
-        .unwrap();
+    let oid_a = adapter.commit_path(Path::new("x.snxsch"), "v1").unwrap();
     write_file(&root, "x.snxsch", "v2");
     adapter.commit_path(Path::new("x.snxsch"), "v2").unwrap();
 
@@ -284,9 +272,7 @@ fn commit_external_change_creates_a_user_edit_commit() {
     // of Signex.
     write_file(&root, "sheet.snxsch", "out-of-app edit");
     let abs = root.join("sheet.snxsch");
-    let _oid = adapter
-        .commit_external_change(&abs, "")
-        .unwrap();
+    let _oid = adapter.commit_external_change(&abs, "").unwrap();
 
     let entries = adapter.file_history(Path::new("sheet.snxsch"), 10).unwrap();
     assert_eq!(entries.len(), 2);
@@ -351,15 +337,15 @@ fn commit_path_populates_history_diff_stats() {
 
     // First commit — 3 lines added (root commit path counts newlines).
     write_file(&root, "main.snxsch", "line1\nline2\nline3\n");
-    adapter
-        .commit_path(Path::new("main.snxsch"), "v1")
-        .unwrap();
+    adapter.commit_path(Path::new("main.snxsch"), "v1").unwrap();
 
     // Second commit — 2 lines added, 1 deleted relative to the first.
-    write_file(&root, "main.snxsch", "line1\nline2_modified\nline4\nline5\n");
-    adapter
-        .commit_path(Path::new("main.snxsch"), "v2")
-        .unwrap();
+    write_file(
+        &root,
+        "main.snxsch",
+        "line1\nline2_modified\nline4\nline5\n",
+    );
+    adapter.commit_path(Path::new("main.snxsch"), "v2").unwrap();
 
     let entries = adapter.file_history(Path::new("main.snxsch"), 10).unwrap();
     assert_eq!(entries.len(), 2, "expected two commits in history");

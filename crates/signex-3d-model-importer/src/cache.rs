@@ -16,7 +16,9 @@ pub fn cache_path(
 ) -> Result<PathBuf, ModelImportError> {
     let mtime_secs = source_mtime
         .duration_since(SystemTime::UNIX_EPOCH)
-        .map_err(|e| ModelImportError::CacheFailed { reason: e.to_string() })?
+        .map_err(|e| ModelImportError::CacheFailed {
+            reason: e.to_string(),
+        })?
         .as_secs();
 
     let key = format!(

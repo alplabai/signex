@@ -3,6 +3,7 @@ name = "signex-app"
 description = "Signex EDA — main application binary (Iced 0.14 + wgpu)"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 
 [lib]
@@ -28,6 +29,7 @@ anyhow = { workspace = true }
 signex-widgets = { workspace = true }
 signex-erc = { workspace = true }
 signex-erc-dsl = { workspace = true }
+signex-net = { workspace = true }
 signex-output = { workspace = true }
 signex-library = { workspace = true, features = [
     "local-git",
@@ -38,7 +40,13 @@ signex-library = { workspace = true, features = [
 ] }
 signex-sketch = { workspace = true }
 signex-bake = { workspace = true }
-tracing = { workspace = true }
+# `log` feature: signex-app installs a `log`-based logger (SignexLogger) but
+# no tracing subscriber, and several crates (notably signex-library) report
+# non-fatal errors via tracing::warn!. Without this feature those records
+# only reached the log on Linux, via a Wayland-only transitive that happened
+# to enable tracing's log bridge. Enabling it here makes library warnings
+# reach the diagnostics panel on every platform.
+tracing = { workspace = true, features = ["log"] }
 chrono = { workspace = true }
 rfd = { workspace = true }
 sha2 = { workspace = true }

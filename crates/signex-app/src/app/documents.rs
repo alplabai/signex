@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use iced::Point;
 use signex_library::{Footprint, Symbol};
 use signex_types::pcb::PcbBoard;
 
@@ -200,6 +201,35 @@ pub struct TabInfo {
 /// pin layout + the existing
 /// [`crate::library::editor::symbol::state`] mutation helpers, so the
 /// behaviour matches the in-Component Editor experience verbatim.
+/// One of the three symbol-level local-colour slots. Each can carry an
+/// independent RGBA override (or inherit from the sheet palette).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LocalColorSlot {
+    Fill,
+    Line,
+    Pin,
+}
+
+/// Transient open-state for a placed graphic's fill colour-picker.
+/// `idx` is the graphic's index in the active symbol; `advanced` is
+/// `true` once the user expanded the inline palette into the HSV / RGB
+/// overlay. UI-only — never serialized, never snapshotted for undo.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GraphicFillPicker {
+    pub idx: usize,
+    pub advanced: bool,
+}
+
+/// Transient open-state for a symbol-level local-colour picker.
+/// `slot` selects Fills / Lines / Pins; `advanced` is `true` once the
+/// user expanded into the HSV / RGB overlay. UI-only — never
+/// serialized, never snapshotted for undo.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LocalColorPicker {
+    pub slot: LocalColorSlot,
+    pub advanced: bool,
+}
+
 #[derive(Debug)]
 pub struct SymbolEditorState {
     pub path: PathBuf,
@@ -224,10 +254,9 @@ pub struct SymbolEditorState {
     pub dirty: bool,
     /// Pan/zoom camera state — mirrors the schematic canvas so the
     /// user's viewport survives across tool / selection changes
-    /// within the same `.snxsym` tab. Reset to `fit` on first frame
-    /// (`fit_pending = true`) and on every active-symbol switch so a
-    /// new symbol opens centred regardless of the previous symbol's
-    /// pan offset.
+    /// within the same `.snxsym` tab. New tabs and active-symbol
+    /// switches reset this to a centered-origin home view so the
+    /// symbol anchor opens in a predictable place.
     pub camera: crate::canvas::Camera,
     /// Last cursor world position over the canvas, in mm. Drives the
     /// status footer's X/Y readout. `None` when the cursor is
@@ -239,18 +268,70 @@ pub struct SymbolEditorState {
     /// the footprint editor's `selection_filter`.
     pub selection_filter: crate::library::editor::symbol::state::SymbolSelectionFilter,
     /// v0.13 — Open active-bar dropdown menu. `None` = no menu open.
-    pub active_bar_menu:
-        Option<crate::library::editor::symbol::state::SymActiveBarMenu>,
+    pub active_bar_menu: Option<crate::library::editor::symbol::state::SymActiveBarMenu>,
     /// v0.13 — Pause flag for placement (TAB during Place Pin / etc.).
     pub placement_paused: bool,
+    /// Snapshot stack for undo. Each entry is a full clone of the
+    /// `Symbol` at the moment before a mutation was applied. Max 100
+    /// entries; oldest entries are dropped when the limit is exceeded.
+    pub undo_snapshots: Vec<signex_library::Symbol>,
+    /// Snapshot stack for redo. Cleared whenever a new mutation is
+    /// recorded; populated by `SymbolUndo` so the user can step
+    /// forward again after undoing.
+    pub redo_snapshots: Vec<signex_library::Symbol>,
+    /// Set to `true` on the first `Move`/`MoveAll`/`MoveGraphicHandle`
+    /// in a drag sequence so subsequent move events in the same drag do
+    /// NOT push additional snapshots (the pre-drag snapshot is already
+    /// on the undo stack). Cleared by `SymbolDragCommit` (emitted on
+    /// `ButtonReleased`).
+    pub mid_drag: bool,
+    /// Which placed graphic's fill colour-picker is open, plus whether
+    /// it has been expanded to the HSV / RGB overlay. `None` = closed.
+    /// Transient UI-only state: never serialized, never snapshotted for
+    /// undo.
+    pub graphic_fill_picker: Option<GraphicFillPicker>,
+    /// Which symbol-level local colour slot's picker is open. `None` =
+    /// closed. Transient UI-only state: never serialized, never
+    /// snapshotted for undo.
+    pub local_color_picker: Option<LocalColorPicker>,
+    /// Click-collect vertex stash for the canvas's `PlacePolygon`
+    /// tool (grid-snapped mm world positions). Lives here — on the
+    /// per-document editor model — rather than on the canvas
+    /// `Program::State`, which iced reuses across tab switches for
+    /// whichever `.snxsym` tab is currently rendered; a stash kept
+    /// there would survive a switch to a different document and could
+    /// mis-commit into it. Mirrors the footprint editor's
+    /// `FootprintEditorState::place_polygon_vertices`. Mutated only by
+    /// `SymbolEditorMsg::PolygonClick` / `PolygonCommit` /
+    /// `PolygonCancel`, plus the synchronous flush in the `SetTool`
+    /// handler when the user switches away from `PlacePolygon`.
+    pub polygon_vertices: Vec<(f64, f64)>,
+    /// Transient, user-visible status line rendered in the symbol
+    /// editor's status footer (see `standalone::symbol::view_symbol_
+    /// status`). `None` most of the time; set to `Some(reason)` when
+    /// an action fails in a way the user needs to see explained (e.g.
+    /// `JoinSelectionIntoPolygon` on a non-connecting selection).
+    /// Cleared centrally at the top of `apply_symbol_primitive_edit`
+    /// (see `updates::clear_stale_status_message`) on the next message
+    /// that represents an attempted mutation, so it never lingers past
+    /// the action it described. Never serialized, never snapshotted
+    /// for undo.
+    pub status_message: Option<String>,
+    /// Open right-click context menu, if any. `None` = closed. Mirrors
+    /// `FootprintEditorState`'s `context_menu` field 1:1 in structure —
+    /// see `crate::library::editor::symbol::state::SymbolContextMenuState`.
+    pub context_menu: Option<crate::library::editor::symbol::state::SymbolContextMenuState>,
 }
 
 impl SymbolEditorState {
+    const DEFAULT_SYMBOL_VIEWPORT_WIDTH: f32 = 800.0;
+    const DEFAULT_SYMBOL_VIEWPORT_HEIGHT: f32 = 500.0;
+
     /// Build a fresh standalone editor state from a `SymbolFile`
     /// container loaded off disk. `path` is the `.snxsym` file the
     /// user opened. The editor opens on the first symbol in the file.
     pub fn new(path: PathBuf, file: signex_library::SymbolFile) -> Self {
-        Self {
+        let mut state = Self {
             path,
             file,
             active_idx: 0,
@@ -265,7 +346,27 @@ impl SymbolEditorState {
             selection_filter: Default::default(),
             active_bar_menu: None,
             placement_paused: false,
-        }
+            undo_snapshots: Vec::new(),
+            redo_snapshots: Vec::new(),
+            mid_drag: false,
+            graphic_fill_picker: None,
+            local_color_picker: None,
+            polygon_vertices: Vec::new(),
+            status_message: None,
+            context_menu: None,
+        };
+        state.reset_camera_origin_center();
+        state
+    }
+
+    /// Reset pan/zoom and place world origin in the center of the
+    /// default symbol-canvas viewport.
+    pub(crate) fn reset_camera_origin_center(&mut self) {
+        self.camera = crate::canvas::Camera::default();
+        self.camera.offset = Point::new(
+            Self::DEFAULT_SYMBOL_VIEWPORT_WIDTH * 0.5,
+            Self::DEFAULT_SYMBOL_VIEWPORT_HEIGHT * 0.5,
+        );
     }
 
     /// Borrow the symbol currently being edited. Falls back to the
