@@ -453,7 +453,15 @@ pub fn move_graphic_handle(sym: &mut Symbol, idx: usize, handle: GraphicHandle, 
             },
             GraphicHandle::ArcStart,
         ) => {
-            *start_deg = (y - center[1]).atan2(x - center[0]).to_degrees();
+            // rem_euclid into [0, 360): atan2 returns (-180, 180], and a
+            // raw negative endpoint on disk trips `migrate_legacy_arc`
+            // (fires on `end_deg < 0.0`) into swapping the pair to its
+            // complement on reload — the same 270°→90° round-trip loss the
+            // Properties-panel arc edit guards against.
+            *start_deg = (y - center[1])
+                .atan2(x - center[0])
+                .to_degrees()
+                .rem_euclid(360.0);
         }
         (
             SymbolGraphicKind::Arc {
@@ -461,7 +469,10 @@ pub fn move_graphic_handle(sym: &mut Symbol, idx: usize, handle: GraphicHandle, 
             },
             GraphicHandle::ArcEnd,
         ) => {
-            *end_deg = (y - center[1]).atan2(x - center[0]).to_degrees();
+            *end_deg = (y - center[1])
+                .atan2(x - center[0])
+                .to_degrees()
+                .rem_euclid(360.0);
         }
         (SymbolGraphicKind::Text { position, .. }, GraphicHandle::TextAnchor) => {
             position[0] = x;

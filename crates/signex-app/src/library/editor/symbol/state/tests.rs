@@ -893,3 +893,51 @@ fn rotated_wraparound_arc_hit_test_and_draw_sweep_agree() {
         "draw arm's sweep must exclude the 90° point hit-test missed"
     );
 }
+
+/// Dragging an arc endpoint handle into the lower half-plane yields a
+/// negative `atan2` angle. It must be reduced into `[0, 360)` before it
+/// reaches disk: a raw negative endpoint trips `migrate_legacy_arc`
+/// (which fires on `end_deg < 0.0`) into swapping the pair to its
+/// complement on reload, silently turning the 285° arc the user dragged
+/// into a 75° arc — the same round-trip data loss the Properties-panel
+/// edit path guards against. Regression for the ArcEnd handle writer.
+#[test]
+fn arc_endpoint_handle_drag_survives_save_reload() {
+    use signex_gfx::primitive::arc::ccw_wrapped_sweep_rad;
+
+    let mut s = arc_symbol(30.0, 90.0);
+    // Drag the end handle below-and-right of the centre → raw atan2 = -45°.
+    move_graphic_handle(&mut s, 0, GraphicHandle::ArcEnd, 1.0, -1.0);
+
+    let (start_deg, end_deg) = match &s.graphics[0].kind {
+        SymbolGraphicKind::Arc {
+            start_deg, end_deg, ..
+        } => (*start_deg, *end_deg),
+        other => panic!("expected Arc, got {other:?}"),
+    };
+    assert!(
+        (0.0..360.0).contains(&end_deg),
+        "handle-drag endpoint must be reduced into [0, 360), got {end_deg}"
+    );
+    let in_session = ccw_wrapped_sweep_rad(
+        (start_deg as f32).to_radians(),
+        (end_deg as f32).to_radians(),
+    );
+
+    // Round-trip through the on-disk format: to_toml_string → from_toml_str
+    // runs migrate_legacy_arc, which must leave this pair untouched.
+    let file = signex_library::SymbolFile::from_symbol(s.clone());
+    let toml = file.to_toml_string().expect("serialise");
+    let reloaded = signex_library::SymbolFile::from_toml_str(&toml).expect("parse");
+    let (rs, re) = match &reloaded.symbols[0].graphics[0].kind {
+        SymbolGraphicKind::Arc {
+            start_deg, end_deg, ..
+        } => (*start_deg, *end_deg),
+        other => panic!("expected Arc after reload, got {other:?}"),
+    };
+    let after = ccw_wrapped_sweep_rad((rs as f32).to_radians(), (re as f32).to_radians());
+    assert!(
+        (in_session - after).abs() < 1e-4,
+        "sweep must survive save/reload: {in_session} rad in-session vs {after} rad reloaded"
+    );
+}
