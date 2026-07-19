@@ -137,10 +137,13 @@ pub fn read_table(path: &Path) -> Result<Vec<ComponentRow>, LibraryError> {
 
 /// Replace the contents of `path` with `rows`. Creates parent directories
 /// if they don't exist.
+///
+/// Crash-safe: the bytes land via [`signex_types::atomic_io::atomic_write`]
+/// (temp file + fsync + rename), so a crash or power loss mid-save leaves
+/// either the previous table or the new one — never a truncated file. Every
+/// mutator here ([`append_row`], [`delete_row`], [`update_row`]) rewrites the
+/// whole table through this one funnel, so they inherit the guarantee.
 pub fn write_table(path: &Path, rows: &[ComponentRow]) -> Result<(), LibraryError> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
     let mut wtr = WriterBuilder::new()
         .delimiter(b'\t')
         .quote_style(QuoteStyle::Necessary)
@@ -154,7 +157,7 @@ pub fn write_table(path: &Path, rows: &[ComponentRow]) -> Result<(), LibraryErro
     let bytes = wtr
         .into_inner()
         .map_err(|e| LibraryError::Backend(format!("flush table: {e}")))?;
-    std::fs::write(path, bytes)?;
+    signex_types::atomic_io::atomic_write(path, &bytes)?;
     Ok(())
 }
 
@@ -505,16 +508,40 @@ mod tests {
         assert!(rows.is_empty());
     }
 
-    /// `append_row` honours an empty file, then keeps growing it.
+    /// `append_row` honours an empty file, then keeps growing it — and
+    /// leaves no stranded `.tmp` sibling behind.
     #[test]
     fn append_row_grows_the_file() {
-        let tmp = tempfile::NamedTempFile::new().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("table.tsv");
         let a = mk_row("R1", "resistor");
         let b = mk_row("R2", "resistor");
-        append_row(tmp.path(), &a).unwrap();
-        append_row(tmp.path(), &b).unwrap();
-        let back = read_table(tmp.path()).unwrap();
+        append_row(&path, &a).unwrap();
+        append_row(&path, &b).unwrap();
+        let back = read_table(&path).unwrap();
         assert_eq!(back, vec![a, b]);
+        assert!(!dir.path().join("table.tsv.tmp").exists());
+    }
+
+    /// `write_table` must go through `atomic_write`, not `fs::write`:
+    /// a failed save leaves the previous table fully intact.
+    ///
+    /// Discriminator: pre-creating a *directory* at `<path>.tmp` makes
+    /// `atomic_write`'s `File::create(&tmp)` fail before it can touch the
+    /// destination. A plain `fs::write` would ignore the sibling entirely,
+    /// succeed, and clobber the old rows — so this test fails on a revert.
+    #[test]
+    fn write_table_is_atomic_and_preserves_original_on_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("table.tsv");
+        let original = vec![mk_row("R1", "resistor"), mk_row("R2", "resistor")];
+        write_table(&path, &original).unwrap();
+
+        std::fs::create_dir_all(dir.path().join("table.tsv.tmp")).unwrap();
+        let err = write_table(&path, &[mk_row("C1", "capacitor")]).unwrap_err();
+        assert!(matches!(err, LibraryError::Io(_)), "got {err:?}");
+
+        assert_eq!(read_table(&path).unwrap(), original);
     }
 
     /// `delete_row` removes the matching id, leaves others alone.
