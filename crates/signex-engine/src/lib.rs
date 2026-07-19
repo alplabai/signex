@@ -466,4 +466,103 @@ mod tests {
             engine.document().junctions
         );
     }
+
+    /// Dragging a stub onto a trunk is at least as ordinary as drawing through
+    /// one, and it produced the identical defect: `MoveSelection` mutates wire
+    /// coordinates but reconciled no junctions, so the drag landed a real
+    /// junction-less T the netlist reads as disconnected (issues #107, #402).
+    /// Fixing only `PlaceWireSegment` left this sibling caller broken.
+    #[test]
+    fn dragging_a_stub_onto_a_trunks_interior_gets_a_junction() {
+        let mut document = test_sheet();
+        document
+            .wires
+            .push(wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0)));
+        let stub = wire(Point::new(5.0, 3.0), Point::new(5.0, 10.0));
+        let stub_uuid = stub.uuid;
+        document.wires.push(stub);
+        let mut engine = Engine::new(document).expect("engine");
+
+        let result = engine
+            .execute(Command::MoveSelection {
+                items: vec![SelectedItem {
+                    kind: SelectedKind::Wire,
+                    uuid: stub_uuid,
+                }],
+                dx: 0.0,
+                dy: -3.0,
+            })
+            .expect("drag stub");
+
+        let junctions = &engine.document().junctions;
+        assert_eq!(junctions.len(), 1, "{junctions:?}");
+        assert_eq!(junctions[0].position, Point::new(5.0, 0.0));
+        assert!(
+            result
+                .patch_pair
+                .expect("changed command carries a patch")
+                .document
+                .contains(DocumentPatch::JUNCTIONS),
+            "a minted dot must be in the patch or the canvas never redraws it"
+        );
+    }
+
+    /// The negative twin of the drag: sliding a stub so it merely *crosses* the
+    /// trunk is not a connection either.
+    #[test]
+    fn dragging_a_stub_across_a_trunk_gets_no_junction() {
+        let mut document = test_sheet();
+        document
+            .wires
+            .push(wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0)));
+        let stub = wire(Point::new(5.0, 3.0), Point::new(5.0, 13.0));
+        let stub_uuid = stub.uuid;
+        document.wires.push(stub);
+        let mut engine = Engine::new(document).expect("engine");
+
+        engine
+            .execute(Command::MoveSelection {
+                items: vec![SelectedItem {
+                    kind: SelectedKind::Wire,
+                    uuid: stub_uuid,
+                }],
+                dx: 0.0,
+                dy: -8.0,
+            })
+            .expect("drag stub");
+
+        assert!(
+            engine.document().junctions.is_empty(),
+            "{:?}",
+            engine.document().junctions
+        );
+    }
+
+    /// A dot the netlist will not honour is worse than no dot: it asserts a
+    /// connection the derivation refuses to make, with a reassuring visual.
+    ///
+    /// The stub's endpoint sits 5 µm off the trunk — inside the 0.01 mm float
+    /// tolerance the geometry helpers use, but *not* exactly collinear in the
+    /// netlist's 1 µm key space, so `SheetConnectivity` would drop the dot and
+    /// leave the two wires on separate nets. Mint nothing rather than lie.
+    #[test]
+    fn an_endpoint_off_the_trunk_in_key_space_gets_no_lying_junction() {
+        let mut document = test_sheet();
+        document
+            .wires
+            .push(wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0)));
+        let mut engine = Engine::new(document).expect("engine");
+
+        engine
+            .execute(Command::PlaceWireSegment {
+                wire: wire(Point::new(5.0, 0.005), Point::new(5.0, 10.0)),
+            })
+            .expect("place off-grid stub");
+
+        assert!(
+            engine.document().junctions.is_empty(),
+            "dot minted where the netlist would not honour it: {:?}",
+            engine.document().junctions
+        );
+    }
 }

@@ -489,6 +489,14 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
 
     // A net exists wherever at least one terminal lands. A label with no pins
     // is a dangling label — it carries no connectivity, so it forms no net.
+    //
+    // `NetId` is the position in this sorted root order, and an unlabelled net
+    // is named `N$<id>` from it. The root is the minimum key of its class
+    // (`uf::union` keeps the smaller), so the order is a pure function of the
+    // partition — but it is still *geometry*-derived: move a wire and the ids
+    // renumber. `net_name` is a persisted PCB field (on pads, tracks, zones),
+    // so a future schematic → PCB net sync MUST match by terminal set, never
+    // by these auto-generated names (issue #402).
     let mut roots: Vec<Key> = net_terms.keys().copied().collect();
     roots.sort_unstable();
 
