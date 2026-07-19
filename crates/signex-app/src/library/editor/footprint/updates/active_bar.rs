@@ -135,6 +135,20 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
                 for idx in state.selected_pad_indices() {
                     if let Some(pad) = state.pads.get_mut(idx) {
                         pad.layers = pad.layers.iter().map(flip_layer).collect();
+                        // Flipping a pad to the other side mirrors its
+                        // copper about the pad's own vertical axis, and
+                        // a mirror negates the angle. Swapping only the
+                        // layer names left a 45° pad rendering and
+                        // baking at +45° on the back where it belongs
+                        // at -45° — harmless while rotation was inert,
+                        // a wrong footprint now that rotation is a real
+                        // geometry input.
+                        //
+                        // Pad positions are NOT mirrored: this flips
+                        // each selected pad in place, not the footprint
+                        // about its origin. Mirroring the layout is a
+                        // separate operation and does not exist yet.
+                        pad.rotation_deg = (-pad.rotation_deg).rem_euclid(360.0);
                     }
                 }
                 CanvasState::sync_pads_to_primitive(state, primitive);

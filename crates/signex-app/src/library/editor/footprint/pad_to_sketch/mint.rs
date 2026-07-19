@@ -99,6 +99,10 @@ pub(super) fn mint_round_rect_pad_geometry(
     let bbox_corners = bbox_corner_points(sketch, plane_id, pad);
 
     // ── 2. 8 arc-anchor Points (per corner: edge-anchor + edge-anchor).
+    //    Derived in the pad frame off `bbox_mm`, then taken to world —
+    //    `bbox_corner_points` above emits ROTATED corners, so leaving
+    //    these axis-aligned would break the outline open on any turned
+    //    pad.
     let anchor_positions: [(f64, f64); 8] = [
         (xmax - r, ymin), // 0: NE top-edge anchor
         (xmax, ymin + r), // 1: NE right-edge anchor
@@ -108,7 +112,8 @@ pub(super) fn mint_round_rect_pad_geometry(
         (xmin, ymax - r), // 5: SW left-edge anchor
         (xmin, ymin + r), // 6: NW left-edge anchor
         (xmin + r, ymin), // 7: NW top-edge anchor
-    ];
+    ]
+    .map(|(x, y)| pad.local_to_world_mm(x, y));
     let anchor_ids: [SketchEntityId; 8] = std::array::from_fn(|i| {
         push_point(
             sketch,
@@ -124,7 +129,8 @@ pub(super) fn mint_round_rect_pad_geometry(
         (xmax - r, ymax - r), // SE arc centre
         (xmin + r, ymax - r), // SW arc centre
         (xmin + r, ymin + r), // NW arc centre
-    ];
+    ]
+    .map(|(x, y)| pad.local_to_world_mm(x, y));
     let inset_ids: [SketchEntityId; 4] = std::array::from_fn(|i| {
         push_point(sketch, plane_id, inset_positions[i].0, inset_positions[i].1)
     });
@@ -197,6 +203,8 @@ pub(super) fn mint_oval_pad_geometry(
 
     // ── 2. 4 arc-anchor Points + 2 Arc-centre Points.
     let wide = w >= h;
+    // Pad-frame derivation, then out to world — see the round-rect
+    // anchors above; the bbox corners these join are already rotated.
     let anchor_positions: [(f64, f64); 4] = if wide {
         [
             (xmin + inset, ymin),
@@ -211,7 +219,8 @@ pub(super) fn mint_oval_pad_geometry(
             (xmin, ymax - inset),
             (xmin, ymin + inset),
         ]
-    };
+    }
+    .map(|(x, y)| pad.local_to_world_mm(x, y));
     let anchor_ids: [SketchEntityId; 4] = std::array::from_fn(|i| {
         push_point(
             sketch,
@@ -231,7 +240,8 @@ pub(super) fn mint_oval_pad_geometry(
             ((xmin + xmax) / 2.0, ymin + inset),
             ((xmin + xmax) / 2.0, ymax - inset),
         ]
-    };
+    }
+    .map(|(x, y)| pad.local_to_world_mm(x, y));
     let arc_centre_ids: [SketchEntityId; 2] =
         std::array::from_fn(|i| push_point(sketch, plane_id, arc_centres[i].0, arc_centres[i].1));
 
@@ -364,6 +374,11 @@ pub(super) fn mint_chamfered_pad_geometry(
         if !enabled {
             continue;
         }
+        // Pad-frame → world. `bbox_corners` is rotated and the outline
+        // traversal below joins these anchors straight to it, so an
+        // un-rotated anchor would cut the corner off diagonally.
+        let pos1 = pad.local_to_world_mm(pos1.0, pos1.1);
+        let pos2 = pad.local_to_world_mm(pos2.0, pos2.1);
         let a1_id = push_point(sketch, plane_id, pos1.0, pos1.1);
         let a2_id = push_point(sketch, plane_id, pos2.0, pos2.1);
         anchors[corner_idx] = Some((a1_id, a2_id));

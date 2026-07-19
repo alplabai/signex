@@ -28,6 +28,7 @@ use signex_sketch::id::SketchEntityId;
 use signex_sketch::sketch::SketchData;
 
 use super::state::EditorPad;
+pub use attr::{mirror_pad_attrs_into_sketch, mirror_rotation_expr};
 use attr::{ensure_board_top_plane, id_slug, pad_attr_from_editor_pad};
 use mint::{
     mint_chamfered_pad_geometry, mint_oval_pad_geometry, mint_pad_corner_outline,

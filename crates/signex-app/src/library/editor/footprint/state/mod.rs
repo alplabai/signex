@@ -679,47 +679,10 @@ impl FootprintEditorState {
                 [c.min_x, c.max_y],
             ]);
         }
-        // v0.22 Phase D1 — Pads-mode → Sketch attribute mirror.
+        // v0.22 Phase D1 — Pads-mode → Sketch attribute mirror. The
+        // mapping itself is `pad_to_sketch` policy and lives there.
         if let Some(sketch) = fp.sketch.as_mut() {
-            for pad in &canvas.pads {
-                let Some(id) = pad.sketch_entity_id else {
-                    continue;
-                };
-                let Some(entity) = sketch.entities.iter_mut().find(|e| e.id == id) else {
-                    continue;
-                };
-                let Some(attr) = entity.pad.as_mut() else {
-                    continue;
-                };
-                attr.number = pad.number.clone();
-                attr.net = pad.net.clone();
-                attr.locked = pad.locked;
-                attr.electrical_type = pad.electrical_type;
-                attr.template = pad.template.clone();
-                attr.library = pad.template_library.clone();
-                attr.feature_top = pad.feature_top;
-                attr.feature_bottom = pad.feature_bottom;
-                attr.testpoint = pad.testpoint;
-                attr.hole_tolerance_plus_mm = pad.hole_tolerance_plus_mm;
-                attr.hole_tolerance_minus_mm = pad.hole_tolerance_minus_mm;
-                attr.hole_rotation_deg = pad.hole_rotation_deg;
-                attr.copper_offset_x_mm = pad.copper_offset_x_mm;
-                attr.copper_offset_y_mm = pad.copper_offset_y_mm;
-                // Rotation was the one geometry field this mirror never
-                // wrote, so a sketch-baked pad came back at 0° while the
-                // literal `Pad` carried the true angle. Guarded: an
-                // authored `= expr` binding is the user's, and a blind
-                // overwrite would silently destroy it. Plain literals
-                // (and `None`) are ours to own.
-                let authored = attr
-                    .rotation_expr
-                    .as_deref()
-                    .is_some_and(|e| e.trim_start().starts_with('='));
-                if !authored {
-                    attr.rotation_expr =
-                        Some(super::pad_to_sketch::rotation_expr(pad.rotation_deg));
-                }
-            }
+            super::pad_to_sketch::mirror_pad_attrs_into_sketch(&canvas.pads, sketch);
         }
     }
 }

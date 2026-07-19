@@ -468,3 +468,172 @@ fn sync_preserves_an_authored_rotation_expression() {
         "a plain literal must track the editor's rotation"
     );
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Rotation reaches the MINTED GEOMETRY, not just the bbox corners.
+//
+// `bbox_corner_points` emits rotated corners, but the arc anchors,
+// arc centres and chamfer anchors of RoundRect / Oval / Chamfered
+// were all still derived straight off the un-rotated `bbox_mm()`.
+// The result was an outline whose corners had turned with the pad
+// while the edges and arcs joining them had not — geometry that no
+// longer closes. The invariant below catches the whole class: every
+// Point a shape mints has to sit on or inside the pad's real copper
+// quad, which an un-rotated anchor does not at 45°.
+// ─────────────────────────────────────────────────────────────────
+
+/// Every `Point` in `fp`'s sketch, expressed in the pad's own frame.
+fn minted_points_in_pad_frame(fp: &Footprint, pad: &EditorPad) -> Vec<(f64, f64)> {
+    fp.sketch
+        .as_ref()
+        .expect("mint produced a sketch")
+        .entities
+        .iter()
+        .filter_map(|e| match e.kind {
+            EntityKind::Point { x, y } => Some(pad.world_to_local_mm(x, y)),
+            _ => None,
+        })
+        .collect()
+}
+
+fn assert_minted_geometry_stays_inside_the_turned_copper(shape: LibPadShape) {
+    let mut fp = Footprint::empty("test");
+    let mut pad = editor_pad("1", 0.0, 0.0);
+    pad.size_mm = (2.0, 1.0);
+    pad.shape = shape.clone();
+    pad.rotation_deg = 45.0;
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+    let (xmin, ymin, xmax, ymax) = pad.bbox_mm();
+    const EPS: f64 = 1e-9;
+    let points = minted_points_in_pad_frame(&fp, &pad);
+    assert!(
+        points.len() > 5,
+        "{shape:?} must mint more than the centre + 4 corners; got {}",
+        points.len()
+    );
+    for (lx, ly) in points {
+        assert!(
+            lx >= xmin - EPS && lx <= xmax + EPS && ly >= ymin - EPS && ly <= ymax + EPS,
+            "{shape:?}: minted Point maps to ({lx}, {ly}) in the pad frame, outside the copper \
+             [{xmin}, {xmax}] × [{ymin}, {ymax}] — it was derived off the un-rotated bbox while \
+             the corners it joins were rotated, so the outline does not close"
+        );
+    }
+}
+
+#[test]
+fn rotated_round_rect_mints_geometry_that_closes() {
+    assert_minted_geometry_stays_inside_the_turned_copper(LibPadShape::RoundRect {
+        radius_ratio: 0.25,
+    });
+}
+
+#[test]
+fn rotated_oval_mints_geometry_that_closes() {
+    assert_minted_geometry_stays_inside_the_turned_copper(LibPadShape::Oval);
+}
+
+#[test]
+fn rotated_chamfered_mints_geometry_that_closes() {
+    use signex_library::primitive::footprint::ChamferedCorners;
+    assert_minted_geometry_stays_inside_the_turned_copper(LibPadShape::Chamfered {
+        chamfer_ratio: 0.25,
+        corners: ChamferedCorners {
+            top_left: true,
+            top_right: true,
+            bottom_left: true,
+            bottom_right: true,
+        },
+    });
+}
+
+#[test]
+fn sync_preserves_a_bare_parameter_binding_with_no_eq_prefix() {
+    use crate::library::editor::footprint::state::FootprintEditorState;
+
+    // The `=` prefix is OPTIONAL — `resolve_dim` strips it before
+    // parsing and `signex_bake::pad::rotation_deg` does the same — so
+    // a bare `leg_angle` is a fully valid authored binding. Keying the
+    // data-loss guard on the prefix destroyed exactly these.
+    let mut fp = Footprint::empty("test");
+    let mut pad = editor_pad("1", 0.0, 0.0);
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+    let id = pad.sketch_entity_id.expect("centre Point minted");
+    fp.sketch
+        .as_mut()
+        .unwrap()
+        .entities
+        .iter_mut()
+        .find(|e| e.id == id)
+        .and_then(|e| e.pad.as_mut())
+        .unwrap()
+        .rotation_expr = Some("leg_angle".into());
+
+    pad.rotation_deg = 90.0;
+    let mut s = FootprintEditorState::empty();
+    s.pads = vec![pad];
+    FootprintEditorState::sync_pads_to_primitive(&s, &mut fp);
+
+    let after = fp
+        .sketch
+        .as_ref()
+        .unwrap()
+        .entities
+        .iter()
+        .find(|e| e.id == id)
+        .and_then(|e| e.pad.as_ref())
+        .unwrap()
+        .rotation_expr
+        .clone();
+    assert_eq!(
+        after.as_deref(),
+        Some("leg_angle"),
+        "a prefix-less parameter binding is still the user's authored expression and must \
+         survive the Pads→Sketch mirror"
+    );
+}
+
+#[test]
+fn sync_overwrites_every_bare_literal_form() {
+    use crate::library::editor::footprint::state::FootprintEditorState;
+
+    for literal in ["0deg", "= 0deg", "12.5", "-45deg", "1rad"] {
+        let mut fp = Footprint::empty("test");
+        let mut pad = editor_pad("1", 0.0, 0.0);
+        mirror_add_pad_to_sketch(&mut pad, &mut fp);
+        let id = pad.sketch_entity_id.expect("centre Point minted");
+        fp.sketch
+            .as_mut()
+            .unwrap()
+            .entities
+            .iter_mut()
+            .find(|e| e.id == id)
+            .and_then(|e| e.pad.as_mut())
+            .unwrap()
+            .rotation_expr = Some(literal.into());
+
+        pad.rotation_deg = 90.0;
+        let mut s = FootprintEditorState::empty();
+        s.pads = vec![pad.clone()];
+        FootprintEditorState::sync_pads_to_primitive(&s, &mut fp);
+
+        let after = fp
+            .sketch
+            .as_ref()
+            .unwrap()
+            .entities
+            .iter()
+            .find(|e| e.id == id)
+            .and_then(|e| e.pad.as_ref())
+            .unwrap()
+            .rotation_expr
+            .clone();
+        assert_eq!(
+            after.as_deref(),
+            Some("90deg"),
+            "{literal:?} carries no parameter reference, so the editor owns it and must keep \
+             it current"
+        );
+    }
+}

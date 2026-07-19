@@ -204,3 +204,171 @@ fn one_undo_reverses_the_whole_multi_pad_rotate() {
         );
     }
 }
+
+/// Touching Line is a sibling of rubber-band select and scored pads
+/// against the same un-rotated box. A 2×1 mm pad turned 90° occupies
+/// ±0.5 mm in X and ±1.0 mm in Y, so the un-rotated box answers
+/// backwards on both of these lines.
+#[test]
+fn touching_line_scores_the_rotated_pad_not_the_unrotated_box() {
+    let probe = |x: f64, y: f64| -> bool {
+        let (mut app, path, _tmp) = fixture("touching-line-rotated", 1);
+        {
+            let editor = app.document_state.footprint_editors.get_mut(&path).unwrap();
+            let pad = &mut editor.state.pads[0];
+            pad.position_mm = (0.0, 0.0);
+            pad.size_mm = (2.0, 1.0);
+            pad.rotation_deg = 90.0;
+            // A short segment straddling the probe point, drawn well
+            // clear of the pad centre in the other axis.
+            editor.state.touching_line_active = true;
+            editor.state.touching_line_first = Some((x - 0.01, y - 0.01));
+        }
+        dispatch(
+            &mut app,
+            &path,
+            FootprintEditorMsg::TouchingLineCommit {
+                x_mm: x + 0.01,
+                y_mm: y + 0.01,
+            },
+        );
+        let editor = app.document_state.footprint_editors.get(&path).unwrap();
+        editor.state.selected_pad.is_some()
+    };
+
+    assert!(
+        !probe(0.9, 0.0),
+        "a Touching Line at x = 0.9 crosses no copper — the rotated pad only reaches ±0.5 mm \
+         in X — yet the un-rotated box selects it"
+    );
+    assert!(
+        probe(0.0, 0.9),
+        "a Touching Line at y = 0.9 crosses the real copper (±1.0 mm in Y) and must select \
+         the pad; the un-rotated box misses it"
+    );
+}
+
+/// Flip mirrors the pad's copper to the other side, and a mirror
+/// negates the angle. Swapping only the layer names baked a 45° pad
+/// at +45° on the back where the mirrored part sits at −45°.
+#[test]
+fn flip_negates_the_rotation_of_every_selected_pad() {
+    let (mut app, path, _tmp) = fixture("multi-flip-rotation", 3);
+    {
+        let editor = app.document_state.footprint_editors.get_mut(&path).unwrap();
+        editor.state.selected_pad = Some(0);
+        editor.state.selected_pads_extra = vec![1, 2];
+        for pad in editor.state.pads.iter_mut() {
+            pad.rotation_deg = 45.0;
+        }
+    }
+
+    dispatch(&mut app, &path, FootprintEditorMsg::ActiveBarFlipSelection);
+
+    let editor = app.document_state.footprint_editors.get(&path).unwrap();
+    for (i, pad) in editor.state.pads.iter().enumerate() {
+        assert_eq!(
+            pad.rotation_deg, 315.0,
+            "pad {i}: flipping to the back mirrors the copper, so 45° must become −45° \
+             (315°); leaving it at +45° bakes a footprint that cannot be assembled"
+        );
+    }
+}
+
+/// The v0.27 sketch-line-edge-drag → pad-resize propagation
+/// classified the dragged line against the un-rotated `bbox_mm()`.
+/// Once the outline is minted rotated, a turned pad's edges are
+/// diagonal (or, at 90°, axis-aligned but with W/H swapped relative
+/// to the un-rotated box) and the classification rejects every one of
+/// them — the propagation silently no-ops and the user sees the line
+/// move while the copper underneath does nothing.
+#[test]
+fn sketch_edge_drag_resizes_a_rotated_pad() {
+    use signex_app::app::{FootprintEditorState, TabInfo, TabKind};
+    use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
+    use signex_library::{Footprint, FootprintFile, PadShape};
+    use signex_sketch::entity::EntityKind;
+
+    let path = PathBuf::from("rotated-line-drag-resize.snxfpt");
+    let mut fp = Footprint::empty("rotated-line-drag");
+    let mut pad = EditorPad::new_default("1".into(), (0.0, 0.0));
+    pad.shape = PadShape::Rect;
+    pad.size_mm = (2.0, 1.0);
+    pad.rotation_deg = 90.0;
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+    // At +90° the pad-frame top edge (y = ymin = −0.5, x ∈ [−1, 1])
+    // maps to the world segment x = 0.5, y ∈ [−1, 1] — a VERTICAL
+    // world line. Find it by its constant world x.
+    let sketch = fp.sketch.as_ref().expect("mirror minted a sketch");
+    let pos_of = |id: signex_sketch::id::SketchEntityId| -> Option<(f64, f64)> {
+        sketch.entities.iter().find(|e| e.id == id).and_then(|e| {
+            if let EntityKind::Point { x, y } = e.kind {
+                Some((x, y))
+            } else {
+                None
+            }
+        })
+    };
+    let edge_id = sketch
+        .entities
+        .iter()
+        .find_map(|e| match e.kind {
+            EntityKind::Line { start, end } => {
+                let (sx, _) = pos_of(start)?;
+                let (ex, _) = pos_of(end)?;
+                ((sx - 0.5).abs() < 1e-6 && (ex - 0.5).abs() < 1e-6).then_some(e.id)
+            }
+            _ => None,
+        })
+        .expect("the rotated Rect pad mints its top edge as the world line x = 0.5");
+
+    let file = FootprintFile::from_footprint(fp);
+    let mut editor = FootprintEditorState::new(path.clone(), file);
+    editor.state.pads = vec![pad];
+    editor.state.selected_pad = Some(0);
+    let (mut app, _initial_task) = Signex::new();
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+    app.document_state.tabs.push(TabInfo {
+        title: "rotated-line-drag".into(),
+        path: path.clone(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: TabKind::FootprintEditor(path.clone()),
+    });
+    app.document_state.active_tab = 0;
+
+    // Drag that edge 0.2 mm in −X (world). In the pad frame that is
+    // +0.2 in Y on the top edge: ymin −0.5 → −0.3, so H 1.0 → 0.8 and
+    // the local centre moves to y = +0.1, i.e. world (−0.1, 0).
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchMoveLine {
+            id: edge_id,
+            dx: -0.2,
+            dy: 0.0,
+        }),
+    }));
+
+    let editor = app.document_state.footprint_editors.get(&path).unwrap();
+    let after = &editor.state.pads[0];
+    assert!(
+        (after.size_mm.1 - 0.8).abs() < 1e-6,
+        "dragging the rotated pad's top edge inward by 0.2mm must shrink H 1.0 → 0.8; got {} \
+         (unchanged means the propagation rejected the edge and silently no-opped)",
+        after.size_mm.1
+    );
+    assert!(
+        (after.size_mm.0 - 2.0).abs() < 1e-6,
+        "the perpendicular extent must not change; got {}",
+        after.size_mm.0
+    );
+    assert!(
+        (after.position_mm.0 + 0.1).abs() < 1e-6 && after.position_mm.1.abs() < 1e-6,
+        "the new centre is the pad-frame midpoint taken back to world = (−0.1, 0); got {:?}",
+        after.position_mm
+    );
+}

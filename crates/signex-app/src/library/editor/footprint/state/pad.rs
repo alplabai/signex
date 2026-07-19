@@ -195,19 +195,56 @@ impl EditorPad {
         (cx - w / 2.0, cy - h / 2.0, cx + w / 2.0, cy + h / 2.0)
     }
 
+    /// Rotate a free VECTOR (a delta — no translation applied) from the
+    /// pad's own frame into world mm.
+    pub fn rotate_delta_to_world_mm(&self, dx: f64, dy: f64) -> (f64, f64) {
+        if self.rotation_deg == 0.0 {
+            return (dx, dy);
+        }
+        let (sin, cos) = self.rotation_deg.to_radians().sin_cos();
+        (dx * cos - dy * sin, dx * sin + dy * cos)
+    }
+
+    /// Inverse of [`Self::rotate_delta_to_world_mm`].
+    pub fn rotate_delta_to_local_mm(&self, dx: f64, dy: f64) -> (f64, f64) {
+        if self.rotation_deg == 0.0 {
+            return (dx, dy);
+        }
+        let (sin, cos) = self.rotation_deg.to_radians().sin_cos();
+        (dx * cos + dy * sin, -dx * sin + dy * cos)
+    }
+
+    /// Map a POINT given in the pad's own frame — the frame
+    /// [`Self::bbox_mm`] is expressed in — into world mm.
+    ///
+    /// Every position derived off `bbox_mm` (round-rect arc anchors,
+    /// chamfer anchors, oval arc centres, the resized-edge corner
+    /// targets) has to come back through here, or the derived geometry
+    /// stays axis-aligned while the corners it is supposed to join turn
+    /// with the pad, and the outline no longer closes.
+    pub fn local_to_world_mm(&self, x: f64, y: f64) -> (f64, f64) {
+        let (cx, cy) = self.position_mm;
+        let (dx, dy) = self.rotate_delta_to_world_mm(x - cx, y - cy);
+        (cx + dx, cy + dy)
+    }
+
+    /// Inverse of [`Self::local_to_world_mm`] — takes a world point into
+    /// the pad's own frame, where the axis-aligned reasoning that
+    /// `bbox_mm` supports is valid again.
+    pub fn world_to_local_mm(&self, x: f64, y: f64) -> (f64, f64) {
+        let (cx, cy) = self.position_mm;
+        let (dx, dy) = self.rotate_delta_to_local_mm(x - cx, y - cy);
+        (cx + dx, cy + dy)
+    }
+
     /// The four half-extent corners rotated about `position_mm` by
     /// `rotation_deg`, in `[ne, se, sw, nw]` order — the order the
     /// sketch-mirror corner code already assumes.
     pub fn rotated_corners_mm(&self) -> [(f64, f64); 4] {
-        let (cx, cy) = self.position_mm;
-        let (hw, hh) = (self.size_mm.0 / 2.0, self.size_mm.1 / 2.0);
-        // [ne, se, sw, nw] as offsets from the centre.
-        let local = [(hw, -hh), (hw, hh), (-hw, hh), (-hw, -hh)];
-        if self.rotation_deg == 0.0 {
-            return local.map(|(dx, dy)| (cx + dx, cy + dy));
-        }
-        let (sin, cos) = self.rotation_deg.to_radians().sin_cos();
-        local.map(|(dx, dy)| (cx + dx * cos - dy * sin, cy + dx * sin + dy * cos))
+        let (xmin, ymin, xmax, ymax) = self.bbox_mm();
+        // [ne, se, sw, nw].
+        [(xmax, ymin), (xmax, ymax), (xmin, ymax), (xmin, ymin)]
+            .map(|(x, y)| self.local_to_world_mm(x, y))
     }
 
     /// Axis-aligned bounding box of the ROTATED pad, in mm. Equals
@@ -231,13 +268,7 @@ impl EditorPad {
     pub fn contains_mm(&self, x: f64, y: f64) -> bool {
         let (cx, cy) = self.position_mm;
         let (hw, hh) = (self.size_mm.0 / 2.0, self.size_mm.1 / 2.0);
-        let (dx, dy) = (x - cx, y - cy);
-        let (lx, ly) = if self.rotation_deg == 0.0 {
-            (dx, dy)
-        } else {
-            let (sin, cos) = self.rotation_deg.to_radians().sin_cos();
-            (dx * cos + dy * sin, -dx * sin + dy * cos)
-        };
+        let (lx, ly) = self.rotate_delta_to_local_mm(x - cx, y - cy);
         lx.abs() <= hw && ly.abs() <= hh
     }
 

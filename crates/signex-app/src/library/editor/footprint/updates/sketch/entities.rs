@@ -451,10 +451,17 @@ pub(in crate::library::editor::footprint::updates) fn apply(
             // (top / bottom / left / right). Only axis-aligned lines
             // qualify — diagonal sketch lines are never pad edges
             // for Rect / RoundRect / Oval / Chamfered shapes.
+            //
+            // "Axis-aligned" means axis-aligned IN THE PAD'S FRAME. A
+            // turned pad's edges are diagonal in world space, so the
+            // line, the drag delta and the resulting corner targets all
+            // go through `world_to_local_mm` / `local_to_world_mm`.
+            // Classifying a rotated pad in world coordinates rejects
+            // every edge and the propagation silently no-ops — the exact
+            // "line moves, copper doesn't" failure this block exists to
+            // prevent.
             const EDGE_EPS: f64 = 1e-4;
-            if let Some(((sx, sy), (ex, ey))) = pre_drag_endpoints {
-                let is_horizontal = (sy - ey).abs() < EDGE_EPS;
-                let is_vertical = (sx - ex).abs() < EDGE_EPS;
+            if let Some((world_start, world_end)) = pre_drag_endpoints {
                 let pad_count = editor.state.pads.len();
                 for pad_idx in 0..pad_count {
                     let bbox_data = {
@@ -462,6 +469,11 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                         if pad.corner_entity_ids.is_none() {
                             continue;
                         }
+                        let (sx, sy) = pad.world_to_local_mm(world_start.0, world_start.1);
+                        let (ex, ey) = pad.world_to_local_mm(world_end.0, world_end.1);
+                        let (dx, dy) = pad.rotate_delta_to_local_mm(dx, dy);
+                        let is_horizontal = (sy - ey).abs() < EDGE_EPS;
+                        let is_vertical = (sx - ex).abs() < EDGE_EPS;
                         let (xmin, ymin, xmax, ymax) = pad.bbox_mm();
                         // Both endpoints must lie on the same bbox
                         // side; partial overlap (line extends past a
@@ -509,15 +521,28 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                     let Some((new_xmin, new_ymin, new_xmax, new_ymax)) = bbox_data else {
                         continue;
                     };
+                    // Extents are rotation-invariant; the positions are
+                    // not — they came out of the pad frame and go back
+                    // to world here.
                     let new_w = new_xmax - new_xmin;
                     let new_h = new_ymax - new_ymin;
-                    let new_cx = (new_xmin + new_xmax) / 2.0;
-                    let new_cy = (new_ymin + new_ymax) / 2.0;
-                    let (corners_arr, centre_id) = {
+                    let (corners_arr, centre_id, (new_cx, new_cy), target_positions) = {
                         let pad = &editor.state.pads[pad_idx];
                         (
                             pad.corner_entity_ids.expect("checked is_some above"),
                             pad.sketch_entity_id,
+                            pad.local_to_world_mm(
+                                (new_xmin + new_xmax) / 2.0,
+                                (new_ymin + new_ymax) / 2.0,
+                            ),
+                            // [ne, se, sw, nw] — see mint_pad_corner_outline.
+                            [
+                                (new_xmax, new_ymin),
+                                (new_xmax, new_ymax),
+                                (new_xmin, new_ymax),
+                                (new_xmin, new_ymin),
+                            ]
+                            .map(|(x, y)| pad.local_to_world_mm(x, y)),
                         )
                     };
                     // Rewrite the centre Point's PadAttr size exprs
@@ -577,14 +602,8 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                     // victim loop already shifted the affected
                     // corners; for RoundRect / Oval / Chamfered the
                     // bbox corners aren't in `victims` so they need
-                    // explicit catch-up here. Order: [ne, se, sw, nw]
-                    // — see mint_pad_corner_outline.
-                    let target_positions: [(f64, f64); 4] = [
-                        (new_xmax, new_ymin), // ne
-                        (new_xmax, new_ymax), // se
-                        (new_xmin, new_ymax), // sw
-                        (new_xmin, new_ymin), // nw
-                    ];
+                    // explicit catch-up here. `target_positions` was
+                    // taken to world above.
                     for (corner_id, (target_x, target_y)) in
                         corners_arr.iter().zip(target_positions.iter())
                     {

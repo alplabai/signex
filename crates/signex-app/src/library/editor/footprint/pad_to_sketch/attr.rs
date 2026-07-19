@@ -15,6 +15,72 @@ use signex_sketch::sketch::SketchData;
 
 use super::super::state::EditorPad;
 
+/// v0.22 Phase D1 — Pads-mode → Sketch attribute mirror. Push every
+/// editor-owned pad field onto the `PadAttr` carried by the pad's
+/// centre `Point`, for each pad that has one.
+///
+/// Lives here rather than in `FootprintEditorState` because it is
+/// pad↔sketch mapping policy, which is what this module is; the
+/// editor-state module only calls it.
+pub fn mirror_pad_attrs_into_sketch(pads: &[EditorPad], sketch: &mut SketchData) {
+    for pad in pads {
+        let Some(id) = pad.sketch_entity_id else {
+            continue;
+        };
+        let Some(entity) = sketch.entities.iter_mut().find(|e| e.id == id) else {
+            continue;
+        };
+        let Some(attr) = entity.pad.as_mut() else {
+            continue;
+        };
+        attr.number = pad.number.clone();
+        attr.net = pad.net.clone();
+        attr.locked = pad.locked;
+        attr.electrical_type = pad.electrical_type;
+        attr.template = pad.template.clone();
+        attr.library = pad.template_library.clone();
+        attr.feature_top = pad.feature_top;
+        attr.feature_bottom = pad.feature_bottom;
+        attr.testpoint = pad.testpoint;
+        attr.hole_tolerance_plus_mm = pad.hole_tolerance_plus_mm;
+        attr.hole_tolerance_minus_mm = pad.hole_tolerance_minus_mm;
+        attr.hole_rotation_deg = pad.hole_rotation_deg;
+        attr.copper_offset_x_mm = pad.copper_offset_x_mm;
+        attr.copper_offset_y_mm = pad.copper_offset_y_mm;
+        mirror_rotation_expr(&mut attr.rotation_expr, pad.rotation_deg);
+    }
+}
+
+/// Rotation was the one geometry field the mirror never wrote, so a
+/// sketch-baked pad came back at 0° while the literal `Pad` carried
+/// the true angle. It is written now, but only over an expression this
+/// module could itself have written.
+///
+/// The discriminator is "is this a bare numeric literal", NOT "does it
+/// start with `=`". The `=` prefix is OPTIONAL throughout this
+/// codebase — `signex_sketch::solver::residual::resolve_dim` strips it
+/// before parsing and `signex_bake::pad::rotation_deg` does the same —
+/// so a bare `leg_angle` or `apex_angle * 2` is a fully valid authored
+/// parameter binding. Keying on `=` would destroy exactly those, with
+/// no warning and no undo entry for the sketch attribute.
+pub fn mirror_rotation_expr(current: &mut Option<String>, deg: f64) {
+    if current.as_deref().is_none_or(is_numeric_literal) {
+        *current = Some(super::rotation_expr(deg));
+    }
+}
+
+/// True when `expr` is a plain number with an optional unit suffix
+/// (`90`, `-45.5deg`, `1rad`, and the `=`-prefixed forms of each) —
+/// i.e. carries no parameter reference or arithmetic, so overwriting
+/// it loses nothing the user authored by name.
+fn is_numeric_literal(expr: &str) -> bool {
+    let body = expr.trim().trim_start_matches('=').trim();
+    let number = body
+        .trim_end_matches(|c: char| c.is_ascii_alphabetic())
+        .trim();
+    !number.is_empty() && number.parse::<f64>().is_ok()
+}
+
 /// v0.24 Track A — UUID slug for parameter-name namespacing. Strips
 /// dashes so the resulting parameter name is a valid identifier in
 /// the expression language.
