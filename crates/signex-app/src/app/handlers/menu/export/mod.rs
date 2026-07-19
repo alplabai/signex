@@ -32,10 +32,16 @@ fn build_export_context(
 pub(crate) struct ExportIssues {
     /// What the stitcher reported in-band.
     pub(crate) stitch: Vec<signex_net::StitchIssue>,
-    /// Declared pages the stitched netlist does not cover — the stitcher only
-    /// walks down from the root, so a page nothing references is simply not in
-    /// the netlist. Empty for a loose document, which has no declared pages.
+    /// Declared pages that exist and were read, but that the stitched netlist
+    /// does not cover — the stitcher only walks down from the root, so a page
+    /// nothing references is simply not in the netlist. Empty for a loose
+    /// document, which has no declared pages.
     pub(crate) uncovered_pages: Vec<PathBuf>,
+    /// Declared pages with no file at their path at all. Kept apart from
+    /// [`Self::uncovered_pages`]: those are a child-sheet-graph problem and
+    /// these are not, and a page that does not exist is also dropped from the
+    /// exported page set, so the PDF comes out short a page.
+    pub(crate) missing_pages: Vec<PathBuf>,
     /// Sheets that exist but could not be read: `(path, why)`.
     pub(crate) unreadable: Vec<(PathBuf, String)>,
 }
@@ -54,6 +60,8 @@ impl ExportIssues {
     /// a hole.
     pub(crate) fn netlist_is_incomplete(&self) -> bool {
         !self.uncovered_pages.is_empty()
+            || !self.missing_pages.is_empty()
+            || !self.unreadable.is_empty()
             || self.stitch.iter().any(|issue| {
                 matches!(
                     issue,
@@ -76,6 +84,13 @@ impl ExportIssues {
         // explains any page below that is uncovered *because* of it.
         for (path, why) in &self.unreadable {
             out.push(format!("Netlist: sheet '{}' {why}", path.display()));
+        }
+        for path in &self.missing_pages {
+            out.push(format!(
+                "Netlist: page '{}' is listed in the project but no file exists at that \
+                 path — it is dropped from the netlist and from the exported pages",
+                path.display()
+            ));
         }
         for path in &self.uncovered_pages {
             out.push(format!(
@@ -268,8 +283,26 @@ fn build_export_scope(
         // Carry that shortfall as an incompleteness of its own: without it a
         // flat project exports a .net holding one page of a multi-page board,
         // with `issues` empty and nothing warned.
-        issues.uncovered_pages = set.pages_outside_the_hierarchy;
-        issues.unreadable = set.unreadable;
+        //
+        // Split by *why* a page is out. "Nothing reaches it from the root by a
+        // child-sheet reference" sends the user to inspect a graph, which is
+        // the wrong place when the file simply is not there; and a page that
+        // exists but will not parse is already reported verbatim above, so it
+        // must not also be reported as a graph problem. All three keep the
+        // netlist incomplete.
+        let unreadable: std::collections::HashSet<&PathBuf> =
+            set.unreadable.iter().map(|(path, _)| path).collect();
+        for path in &set.pages_outside_the_hierarchy {
+            if unreadable.contains(path) {
+                continue;
+            }
+            if set.sheets.contains_key(path) {
+                issues.uncovered_pages.push(path.clone());
+            } else {
+                issues.missing_pages.push(path.clone());
+            }
+        }
+        issues.unreadable = set.unreadable.clone();
         let root = set.sheets.get(&root_path)?;
         let children = crate::app::project_sheets::project_children_map(&set.sheets);
         let project_dir = owning_project.map(|p| p.dir().to_path_buf());

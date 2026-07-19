@@ -778,3 +778,5 @@ fn a_child_that_exists_but_will_not_parse_is_not_called_missing() {
         "its subtree is still out of the netlist, so the .net still refuses"
     );
 }
+
+mod diagnosis;
