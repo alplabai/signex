@@ -179,6 +179,41 @@ pub struct BomTable {
     pub metadata: BomMetadata,
 }
 
+/// Split a designator into (alpha prefix, digit run, remainder).
+fn reference_parts(reference: &str) -> (&str, &str, &str) {
+    let prefix_len = reference
+        .bytes()
+        .take_while(u8::is_ascii_alphabetic)
+        .count();
+    let (prefix, rest) = reference.split_at(prefix_len);
+    let digits_len = rest.bytes().take_while(u8::is_ascii_digit).count();
+    let (digits, remainder) = rest.split_at(digits_len);
+    (prefix, digits, remainder)
+}
+
+/// Natural designator order: R1 < R2 < R9 < R10, not `str::cmp`'s R1 < R10 < R2.
+///
+/// The digit run is compared by significant length then bytes rather than parsed
+/// into an integer, so arbitrarily long numeric tails stay correctly ordered
+/// instead of overflowing.
+fn compare_references(a: &str, b: &str) -> std::cmp::Ordering {
+    let (a_prefix, a_digits, a_rest) = reference_parts(a);
+    let (b_prefix, b_digits, b_rest) = reference_parts(b);
+    let a_significant = a_digits.trim_start_matches('0');
+    let b_significant = b_digits.trim_start_matches('0');
+
+    a_prefix
+        .cmp(b_prefix)
+        .then_with(|| a_significant.len().cmp(&b_significant.len()))
+        .then_with(|| a_significant.cmp(b_significant))
+        .then_with(|| a_rest.cmp(b_rest))
+        .then_with(|| a.cmp(b))
+}
+
+fn first_reference(row: &BomRow) -> &str {
+    row.references.first().map(String::as_str).unwrap_or("")
+}
+
 /// Build a BOM table from a normalized BOM context.
 pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
     let mut components = ctx
@@ -191,7 +226,7 @@ pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
         .cloned()
         .collect::<Vec<_>>();
 
-    components.sort_by(|a, b| a.reference.cmp(&b.reference));
+    components.sort_by(|a, b| compare_references(&a.reference, &b.reference));
 
     let rows = match opts.grouping {
         BomGrouping::Grouped => {
@@ -249,7 +284,7 @@ pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
                 })
                 .collect::<Vec<_>>();
 
-            rows.sort_by(|a, b| a.references.first().cmp(&b.references.first()));
+            rows.sort_by(|a, b| compare_references(first_reference(a), first_reference(b)));
             rows
         }
         BomGrouping::Ungrouped | BomGrouping::Flat => {
@@ -270,7 +305,7 @@ pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
                 .collect::<Vec<_>>();
 
             if opts.grouping == BomGrouping::Flat {
-                rows.sort_by(|a, b| a.references.first().cmp(&b.references.first()));
+                rows.sort_by(|a, b| compare_references(first_reference(a), first_reference(b)));
             }
 
             rows
@@ -406,6 +441,102 @@ mod tests {
         assert_eq!(table.rows[1].qty, 2);
         assert_eq!(table.rows[1].fitted_qty, 2);
         assert_eq!(table.rows[1].not_fitted_qty, 0);
+    }
+
+    #[test]
+    fn sorts_references_naturally_when_grouped() {
+        let ctx = BomContext {
+            components: vec![
+                component("R1", "10k", "R_0603"),
+                component("R10", "10k", "R_0603"),
+                component("R2", "10k", "R_0603"),
+                component("R9", "10k", "R_0603"),
+            ],
+            metadata: BomMetadata::default(),
+        };
+
+        let table = build_table(&ctx, &BomEngineOptions::default());
+
+        assert_eq!(table.rows.len(), 1);
+        assert_eq!(table.rows[0].references, vec!["R1", "R2", "R9", "R10"]);
+    }
+
+    #[test]
+    fn sorts_rows_naturally_when_flat() {
+        let ctx = BomContext {
+            components: vec![
+                component("R1", "1k", "R_0603"),
+                component("R10", "10k", "R_0603"),
+                component("R2", "2k", "R_0603"),
+                component("R9", "9k", "R_0603"),
+            ],
+            metadata: BomMetadata::default(),
+        };
+
+        let table = build_table(
+            &ctx,
+            &BomEngineOptions {
+                grouping: BomGrouping::Flat,
+                ..BomEngineOptions::default()
+            },
+        );
+
+        let order = table
+            .rows
+            .iter()
+            .map(|row| row.references[0].as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(order, vec!["R1", "R2", "R9", "R10"]);
+    }
+
+    #[test]
+    fn sorts_rows_naturally_when_grouped_across_rows() {
+        let ctx = BomContext {
+            components: vec![
+                component("R10", "10k", "R_0805"),
+                component("R2", "2k", "R_0603"),
+            ],
+            metadata: BomMetadata::default(),
+        };
+
+        let table = build_table(&ctx, &BomEngineOptions::default());
+
+        let order = table
+            .rows
+            .iter()
+            .map(|row| row.references[0].as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(order, vec!["R2", "R10"]);
+    }
+
+    #[test]
+    fn sorts_references_without_or_with_oversized_numeric_tails() {
+        let huge = "R99999999999999999999999";
+        let ctx = BomContext {
+            components: vec![
+                component("VR", "reg", "SOT23"),
+                component(huge, "huge", "R_0603"),
+                component("R10", "10k", "R_0603"),
+                component("R", "bare", "R_0603"),
+                component("R2", "2k", "R_0603"),
+            ],
+            metadata: BomMetadata::default(),
+        };
+
+        let table = build_table(
+            &ctx,
+            &BomEngineOptions {
+                grouping: BomGrouping::Flat,
+                ..BomEngineOptions::default()
+            },
+        );
+
+        let order = table
+            .rows
+            .iter()
+            .map(|row| row.references[0].as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(order, vec!["R", "R2", "R10", huge, "VR"]);
     }
 
     #[test]

@@ -397,7 +397,9 @@ fn resolve_variant_fitted(
                 if let Some((variant_name, kind)) = parse_variant_field_key(key)
                     && variant_name.eq_ignore_ascii_case(active_variant)
                 {
-                    let parsed = parse_bool_field(value)?;
+                    let Some(parsed) = parse_bool_field(value) else {
+                        continue;
+                    };
                     return Some(match kind {
                         VariantFieldKind::Fitted => parsed,
                         VariantFieldKind::Dnp => !parsed,
@@ -506,6 +508,26 @@ mod tests {
         assert_eq!(resolve_variant_fitted(&symbol, Some("LITE")), Some(false));
         assert_eq!(resolve_variant_fitted(&symbol, Some("PRO")), Some(true));
         assert_eq!(resolve_variant_fitted(&symbol, None), Some(true));
+    }
+
+    #[test]
+    fn variant_fitted_falls_back_to_base_when_variant_value_unparseable() {
+        let mut symbol = test_symbol();
+        symbol
+            .fields
+            .insert("Fitted@LITE".to_string(), "maybe".to_string());
+        symbol
+            .fields
+            .insert("Fitted".to_string(), "yes".to_string());
+
+        assert_eq!(resolve_variant_fitted(&symbol, Some("LITE")), Some(true));
+
+        // A parseable sibling variant field must still be reached after the
+        // unparseable one is skipped.
+        symbol
+            .fields
+            .insert("DNP@LITE".to_string(), "no".to_string());
+        assert_eq!(resolve_variant_fitted(&symbol, Some("LITE")), Some(true));
     }
 
     #[test]
