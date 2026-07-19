@@ -381,6 +381,37 @@ fn resolve_base_variant_fitted(symbol: &signex_types::schematic::Symbol) -> Opti
     None
 }
 
+/// Fit state for `active_variant` taken from `symbol.fields`.
+///
+/// `fields` is a `HashMap`, so a symbol carrying contradictory entries
+/// (`Fitted@LITE=yes` alongside `DNP@LITE=yes`) would resolve by hash order and
+/// export a different fit state from one run to the next. Resolve with the same
+/// precedence `resolve_base_variant_fitted` applies — Fitted ahead of DNP — and
+/// break any remaining tie on the field key, so the answer is a pure function
+/// of the file rather than of the allocator.
+fn resolve_variant_fitted_from_fields(
+    symbol: &signex_types::schematic::Symbol,
+    active_variant: &str,
+) -> Option<bool> {
+    symbol
+        .fields
+        .iter()
+        .filter_map(|(key, value)| {
+            let (variant_name, kind) = parse_variant_field_key(key)?;
+            if !variant_name.eq_ignore_ascii_case(active_variant) {
+                return None;
+            }
+            let parsed = parse_bool_field(value)?;
+            let (rank, fitted) = match kind {
+                VariantFieldKind::Fitted => (0u8, parsed),
+                VariantFieldKind::Dnp => (1u8, !parsed),
+            };
+            Some(((rank, key.as_str()), fitted))
+        })
+        .min_by_key(|(precedence, _)| *precedence)
+        .map(|(_, fitted)| fitted)
+}
+
 fn resolve_variant_fitted(
     symbol: &signex_types::schematic::Symbol,
     active_variant: Option<&str>,
@@ -393,18 +424,8 @@ fn resolve_variant_fitted(
             {
                 return Some(property_override);
             }
-            for (key, value) in &symbol.fields {
-                if let Some((variant_name, kind)) = parse_variant_field_key(key)
-                    && variant_name.eq_ignore_ascii_case(active_variant)
-                {
-                    let Some(parsed) = parse_bool_field(value) else {
-                        continue;
-                    };
-                    return Some(match kind {
-                        VariantFieldKind::Fitted => parsed,
-                        VariantFieldKind::Dnp => !parsed,
-                    });
-                }
+            if let Some(from_fields) = resolve_variant_fitted_from_fields(symbol, active_variant) {
+                return Some(from_fields);
             }
         }
     }
@@ -528,6 +549,26 @@ mod tests {
             .fields
             .insert("DNP@LITE".to_string(), "no".to_string());
         assert_eq!(resolve_variant_fitted(&symbol, Some("LITE")), Some(true));
+    }
+
+    /// `symbol.fields` is a `HashMap`, so a symbol carrying contradictory
+    /// variant entries used to resolve by whichever key the allocator handed
+    /// over first — the same file could export a different fit state run to
+    /// run. Fitted wins over DNP, deterministically. Rebuilt per iteration
+    /// because `RandomState` re-seeds per map, not per process.
+    #[test]
+    fn contradictory_variant_fields_resolve_deterministically() {
+        for _ in 0..64 {
+            let mut symbol = test_symbol();
+            symbol
+                .fields
+                .insert("Fitted@LITE".to_string(), "no".to_string());
+            symbol
+                .fields
+                .insert("DNP@LITE".to_string(), "no".to_string());
+            // Fitted@LITE=no → not fitted; DNP@LITE=no → fitted. Fitted wins.
+            assert_eq!(resolve_variant_fitted(&symbol, Some("LITE")), Some(false));
+        }
     }
 
     #[test]

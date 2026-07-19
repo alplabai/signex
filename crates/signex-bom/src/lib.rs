@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use serde::{Deserialize, Serialize};
+use signex_types::designator::compare_references;
 
 /// Input context for BOM generation.
 #[derive(Debug, Clone)]
@@ -177,37 +178,6 @@ pub struct BomRow {
 pub struct BomTable {
     pub rows: Vec<BomRow>,
     pub metadata: BomMetadata,
-}
-
-/// Split a designator into (alpha prefix, digit run, remainder).
-fn reference_parts(reference: &str) -> (&str, &str, &str) {
-    let prefix_len = reference
-        .bytes()
-        .take_while(u8::is_ascii_alphabetic)
-        .count();
-    let (prefix, rest) = reference.split_at(prefix_len);
-    let digits_len = rest.bytes().take_while(u8::is_ascii_digit).count();
-    let (digits, remainder) = rest.split_at(digits_len);
-    (prefix, digits, remainder)
-}
-
-/// Natural designator order: R1 < R2 < R9 < R10, not `str::cmp`'s R1 < R10 < R2.
-///
-/// The digit run is compared by significant length then bytes rather than parsed
-/// into an integer, so arbitrarily long numeric tails stay correctly ordered
-/// instead of overflowing.
-fn compare_references(a: &str, b: &str) -> std::cmp::Ordering {
-    let (a_prefix, a_digits, a_rest) = reference_parts(a);
-    let (b_prefix, b_digits, b_rest) = reference_parts(b);
-    let a_significant = a_digits.trim_start_matches('0');
-    let b_significant = b_digits.trim_start_matches('0');
-
-    a_prefix
-        .cmp(b_prefix)
-        .then_with(|| a_significant.len().cmp(&b_significant.len()))
-        .then_with(|| a_significant.cmp(b_significant))
-        .then_with(|| a_rest.cmp(b_rest))
-        .then_with(|| a.cmp(b))
 }
 
 fn first_reference(row: &BomRow) -> &str {

@@ -15,6 +15,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use signex_types::designator::compare_references;
 use signex_types::net::{Net, NetId, Netlist, Terminal};
 use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, SymbolTransform};
 use uuid::Uuid;
@@ -480,7 +481,10 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
 
             let (wires, junctions) = membership.remove(&root).unwrap_or_default();
             let mut terminals = net_terms.remove(&root).unwrap_or_default();
-            terminals.sort_by(|a, b| a.reference.cmp(&b.reference).then(a.pin.cmp(&b.pin)));
+            terminals.sort_by(|a, b| {
+                compare_references(&a.reference, &b.reference)
+                    .then_with(|| compare_references(&a.pin, &b.pin))
+            });
 
             Net {
                 id,

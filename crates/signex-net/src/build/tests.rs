@@ -701,3 +701,58 @@ fn net_numbering_is_deterministic() {
     assert_eq!(a.nets[0].id, NetId(1));
     assert_eq!(a.nets[1].id, NetId(2));
 }
+
+#[test]
+fn terminals_order_designators_and_pins_naturally() {
+    // Ten resistors sit on one wire. `str::cmp` would list R1, R10, R2…;
+    // an exported netlist has to read R1, R2, … R10 like every other
+    // reference-ordered list in the app. The two-pin part additionally
+    // proves the pin tiebreak is natural too — pin 10 after pin 2.
+    let mut sheet = empty_sheet();
+    sheet.wires.push(wire(pt(0.0, 0.0), pt(100.0, 0.0)));
+    add_lib(
+        &mut sheet,
+        "R",
+        vec![lib_pin("1", pt(0.0, 0.0), PinDirection::Passive)],
+    );
+    add_lib(
+        &mut sheet,
+        "MULTI",
+        vec![
+            lib_pin("2", pt(0.0, 0.0), PinDirection::Passive),
+            lib_pin("10", pt(0.0, 0.0), PinDirection::Passive),
+        ],
+    );
+    for n in 1..=10 {
+        // Mid-span pins need a junction to count as terminals.
+        sheet.junctions.push(junction(pt(n as f64, 0.0)));
+        place(&mut sheet, &format!("R{n}"), "R", pt(n as f64, 0.0));
+    }
+    sheet.junctions.push(junction(pt(50.0, 0.0)));
+    place(&mut sheet, "U1", "MULTI", pt(50.0, 0.0));
+
+    let netlist = build_netlist(&sheet);
+    assert_eq!(netlist.nets.len(), 1);
+    let order: Vec<(&str, &str)> = netlist.nets[0]
+        .terminals
+        .iter()
+        .map(|t| (t.reference.as_str(), t.pin.as_str()))
+        .collect();
+    assert_eq!(
+        order,
+        vec![
+            ("R1", "1"),
+            ("R2", "1"),
+            ("R3", "1"),
+            ("R4", "1"),
+            ("R5", "1"),
+            ("R6", "1"),
+            ("R7", "1"),
+            ("R8", "1"),
+            ("R9", "1"),
+            ("R10", "1"),
+            ("U1", "2"),
+            ("U1", "10"),
+        ]
+    );
+}
