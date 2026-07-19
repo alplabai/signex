@@ -78,7 +78,7 @@ fn schematic(children: &[&str]) -> SchematicSheet {
 /// what makes the net real, and the reference is what a dropped subtree costs
 /// you on the board — missing components. `net_name` is unqualified in the
 /// project netlist because the label is `Global`.
-fn sheet_with_net(reference: &str, net_name: &str, children: &[&str]) -> SchematicSheet {
+pub(crate) fn sheet_with_net(reference: &str, net_name: &str, children: &[&str]) -> SchematicSheet {
     use signex_types::schematic::{
         HAlign, Label, LabelType, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Symbol,
         VAlign, Wire,
@@ -196,7 +196,7 @@ fn netlist_references(ctx: &signex_output::ExportContext) -> Vec<String> {
 /// A `Signex` with one loaded, *active* project whose persisted sheet list is
 /// `listed`. Sheets are not opened here — callers add the engines they need
 /// with [`open`].
-fn app_workspace(dir: &str, listed: &[&str]) -> Signex {
+pub(crate) fn app_workspace(dir: &str, listed: &[&str]) -> Signex {
     let (mut app, _task) = Signex::new();
     let id = app.document_state.mint_project_id();
     app.document_state.projects.push(LoadedProject {
@@ -238,7 +238,7 @@ fn open(ds: &mut DocumentState, path: &PathBuf, children: &[&str]) {
     open_with(ds, path, schematic(children));
 }
 
-fn open_with(ds: &mut DocumentState, path: &PathBuf, sheet: SchematicSheet) {
+pub(crate) fn open_with(ds: &mut DocumentState, path: &PathBuf, sheet: SchematicSheet) {
     let engine = signex_engine::Engine::new(sheet).expect("engine");
     ds.engines.insert(path.clone(), engine);
 }
@@ -314,8 +314,9 @@ fn hierarchical_child_sheet_exports_its_owning_project() {
     // export was simply refusing to look at anything outside `data.sheets`.
     // The fix is completeness, not a better apology.
     assert!(
-        issues.is_empty(),
-        "an open hierarchical child is in memory; no stitch issue is warranted: {issues:?}"
+        issues.messages().is_empty(),
+        "an open hierarchical child is in memory; no stitch issue is warranted: {:?}",
+        issues.messages()
     );
 }
 
@@ -357,8 +358,9 @@ fn root_active_netlist_contains_a_child_absent_from_data_sheets() {
         "a dropped subtree is missing components on the board"
     );
     assert!(
-        issues.is_empty(),
-        "nothing is missing, so no stitch issue may be manufactured: {issues:?}"
+        issues.messages().is_empty(),
+        "nothing is missing, so no stitch issue may be manufactured: {:?}",
+        issues.messages()
     );
 }
 
@@ -393,7 +395,11 @@ fn a_child_only_on_disk_is_stitched_without_being_opened() {
         names.iter().any(|n| n == "ON_DISK_NET"),
         "an unopened child on disk must be stitched in, {names:?}"
     );
-    assert!(issues.is_empty(), "nothing is missing: {issues:?}");
+    assert!(
+        issues.messages().is_empty(),
+        "nothing is missing: {:?}",
+        issues.messages()
+    );
 }
 
 #[test]
@@ -636,5 +642,139 @@ fn rerasterizing_the_preview_does_not_flood_the_messages_panel() {
         before,
         "the shared context builder must not log — surfacing belongs to the \
          three user-action entry points"
+    );
+}
+
+// -- Definition of done (c): no listed page vanishes from the .net ---------
+
+/// A flat two-page project: both pages are listed, neither references the
+/// other as a child sheet. `project_navigation::add` appends to `data.sheets`
+/// with no requirement that anything reference the sheet, so this is routine,
+/// not pathological.
+fn app_flat_project() -> Signex {
+    let mut app = app_workspace("/w/flat", &["a.snxsch", "b.snxsch"]);
+    let a = PathBuf::from("/w/flat").join("a.snxsch");
+    let b = PathBuf::from("/w/flat").join("b.snxsch");
+    open_with(
+        &mut app.document_state,
+        &a,
+        sheet_with_net("R_A", "NET_A", &[]),
+    );
+    open_with(
+        &mut app.document_state,
+        &b,
+        sheet_with_net("R_B", "NET_B", &[]),
+    );
+    app.document_state.active_path = Some(b);
+    app
+}
+
+#[test]
+fn a_flat_projects_second_page_cannot_vanish_from_the_netlist_unannounced() {
+    // Rooting the netlist at the project root is right, but the stitcher only
+    // walks *down* from that root: a listed page nothing references is not in
+    // the netlist at all. Nothing is formally `MissingChild`, so before this
+    // the issue list was empty, the refusal gate never fired, and a .net
+    // holding one page of a two-page board was written to disk in silence —
+    // strictly worse than shipping the focused page, because the file looks
+    // like the whole project.
+    let mut app = app_flat_project();
+
+    let (ctx, issues) = super::build_export_scope(&app.document_state).expect("context");
+
+    // The shortfall is real, not hypothetical.
+    assert_eq!(
+        netlist_references(&ctx),
+        vec!["R_A".to_string()],
+        "precondition: the stitcher does not reach an unreferenced page"
+    );
+    assert!(
+        issues.stitch.is_empty(),
+        "precondition: nothing is formally MissingChild here — that is the trap"
+    );
+    assert!(
+        issues.netlist_is_incomplete(),
+        "a listed page outside the hierarchy is an incomplete netlist"
+    );
+
+    // …and the machine-consumed deliverable therefore refuses, by the same
+    // per-deliverable policy that already covers MissingChild.
+    let out = std::env::temp_dir().join(format!("signex-flat-{}.net", Uuid::new_v4()));
+    let _ = app.handle_export_netlist_finished(Ok(out.clone()));
+
+    assert!(
+        !out.exists(),
+        "a .net missing half the board must not reach disk: {}",
+        out.display()
+    );
+    let err = app
+        .document_state
+        .export_error
+        .clone()
+        .expect("the refusal must be raised through the export_error modal");
+    assert!(
+        err.contains("b.snxsch"),
+        "the modal must name the page that is not in the netlist: {err}"
+    );
+    std::fs::remove_file(&out).ok();
+}
+
+#[test]
+fn a_page_the_root_does_reach_is_not_reported_as_a_shortfall() {
+    // The other side of the same rule — the coverage check must not refuse a
+    // perfectly good hierarchical export.
+    let mut ds = workspace("/w/a", &["top.snxsch", "power.snxsch"]);
+    let top = PathBuf::from("/w/a").join("top.snxsch");
+    let power = PathBuf::from("/w/a").join("power.snxsch");
+    open_with(
+        &mut ds,
+        &top,
+        sheet_with_net("R_TOP", "TOP_NET", &["power.snxsch"]),
+    );
+    open_with(&mut ds, &power, sheet_with_net("R_POWER", "POWER_NET", &[]));
+    ds.active_path = Some(power);
+
+    let (_ctx, issues) = super::build_export_scope(&ds).expect("context");
+
+    assert!(
+        !issues.netlist_is_incomplete(),
+        "both pages are in the netlist: {:?}",
+        issues.messages()
+    );
+}
+
+#[test]
+fn a_child_that_exists_but_will_not_parse_is_not_called_missing() {
+    // "could not be found" sends the user hunting for a file that is sitting
+    // right where it should be. The refusal is correct; the diagnosis was not.
+    let dir = std::env::temp_dir().join(format!("signex-export-corrupt-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).expect("tempdir");
+    std::fs::write(dir.join("child.snxsch"), "(this is not a schematic").expect("write child");
+
+    let dir_str = dir.to_string_lossy().to_string();
+    let mut ds = workspace(&dir_str, &["top.snxsch"]);
+    let top = dir.join("top.snxsch");
+    open_with(
+        &mut ds,
+        &top,
+        sheet_with_net("R_TOP", "TOP_NET", &["child.snxsch"]),
+    );
+    ds.active_path = Some(top);
+
+    let (_ctx, issues) = super::build_export_scope(&ds).expect("context");
+    let messages = issues.messages().join("\n");
+    std::fs::remove_dir_all(&dir).ok();
+
+    assert!(
+        messages.contains("could not be parsed"),
+        "a corrupt child must be diagnosed as unreadable, not absent: {messages}"
+    );
+    assert!(
+        messages.contains("child.snxsch"),
+        "the message must name the file: {messages}"
+    );
+    assert!(
+        issues.netlist_is_incomplete(),
+        "its subtree is still out of the netlist, so the .net still refuses"
     );
 }

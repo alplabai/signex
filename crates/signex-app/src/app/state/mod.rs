@@ -7,7 +7,7 @@ use crate::dock::DockArea;
 use super::TabInfo;
 
 mod interaction;
-mod scope;
+pub(crate) mod scope;
 mod ui;
 
 pub use interaction::InteractionState;

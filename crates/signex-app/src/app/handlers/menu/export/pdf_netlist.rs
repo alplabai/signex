@@ -163,17 +163,13 @@ impl Signex {
         // downstream, so refuse and write nothing rather than hand the layout
         // tool a plausible-looking wrong netlist. (The PDF, which a human
         // reads, takes the opposite call.)
-        if super::netlist_is_incomplete(&issues) {
-            let detail = issues
-                .iter()
-                .map(crate::app::project_sheets::stitch_issue_message)
-                .collect::<Vec<_>>()
-                .join("\n");
+        if issues.netlist_is_incomplete() {
+            let detail = issues.messages().join("\n");
             self.document_state.export_error = Some(format!(
-                "Netlist export refused: the project netlist is incomplete, so the \
-                 exported file would be missing components and would carry wrong net \
-                 names where nets merge through the missing sheet. Nothing was written \
-                 to {}.\n\n{detail}",
+                "Netlist export refused: the project netlist does not cover the whole \
+                 project, so the exported file would be missing components and would \
+                 carry wrong net names wherever nets merge through a sheet that is not \
+                 in it. Nothing was written to {}.\n\n{detail}",
                 save_path.display(),
             ));
             return Task::none();

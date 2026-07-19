@@ -13,16 +13,24 @@ impl Signex {
             std::collections::HashMap::new();
         let tab_count = self.document_state.tabs.len();
 
+        // The project, from the one assembler: the declared pages plus
+        // everything reachable down the child-sheet graph. Seeding off
+        // `engines.values()` instead both over-reached (a loose tab from
+        // another project claimed numbers here) and under-reached (a
+        // hierarchical child never added to `data.sheets` was invisible, so
+        // this "project-wide" annotate handed out designators it already
+        // used) — #406.
+        let (_pages, project_set) =
+            crate::app::project_sheets::assemble_active_project_sheets(&self.document_state);
+
         // Pass A: seed the shared counter from every sheet's already-
         // annotated symbols. This happens inside annotate_with_seed's
         // phase 2, but running a separate seed pass first ensures
         // order-independence — without this, sheet B could reuse
         // numbers it considers free that sheet A actually claims.
-        // Every open schematic tab's engine lives in the HashMap, so
-        // one pass over `engines.values()` covers active + background.
         let mut all_existing: Vec<String> = Vec::new();
-        for engine in self.document_state.engines.values() {
-            for sym in &engine.document().symbols {
+        for sheet in project_set.sheets.values() {
+            for sym in &sheet.symbols {
                 if !sym.is_power && !sym.reference.starts_with('#') {
                     all_existing.push(sym.reference.clone());
                 }
@@ -54,7 +62,9 @@ impl Signex {
             .iter()
             .enumerate()
             .filter_map(|(idx, tab)| {
-                if idx == active_idx {
+                // This project's sheets only — a loose tab from elsewhere was
+                // never seeded, so it must not draw from this counter.
+                if idx == active_idx || !project_set.sheets.contains_key(&tab.path) {
                     None
                 } else {
                     Some((idx, tab.path.clone()))
@@ -73,59 +83,27 @@ impl Signex {
             }
         }
 
-        // Pass B2: walk every sheet in the project that isn't currently
-        // open as a tab — parse from disk, annotate with the shared
-        // counter, and write back. Altium's Annotate-Across-Project
-        // covers even the sheets the user hasn't opened so designators
-        // stay unique project-wide.
-        let open_paths: std::collections::HashSet<std::path::PathBuf> = self
-            .document_state
-            .tabs
+        // Pass B2: every project sheet that isn't currently open as a tab —
+        // annotate the already-parsed copy with the shared counter and write
+        // it back. Altium's Annotate-Across-Project covers even the sheets
+        // the user hasn't opened so designators stay unique project-wide.
+        let mut unopened_sheets: Vec<(
+            std::path::PathBuf,
+            signex_types::schematic::SchematicSheet,
+        )> = project_set
+            .sheets
             .iter()
-            .map(|t| t.path.clone())
+            .filter(|(path, _)| !self.document_state.engines.contains_key(*path))
+            .map(|(path, sheet)| (path.clone(), sheet.clone()))
             .collect();
-        let project_root = self
-            .document_state
-            .active_document_project()
-            .map(|p| p.dir().to_path_buf());
-        let unopened_sheet_paths: Vec<std::path::PathBuf> = self
-            .document_state
-            .active_document_project()
-            .map(|p| {
-                p.data
-                    .sheets
-                    .iter()
-                    .filter_map(|s| {
-                        let path = match project_root.as_ref() {
-                            Some(root) => root.join(&s.filename),
-                            None => std::path::PathBuf::from(&s.filename),
-                        };
-                        if open_paths.contains(&path) {
-                            None
-                        } else {
-                            Some(path)
-                        }
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
+        // Deterministic: `sheets` is a `HashMap`, and the counter hands out
+        // numbers in walk order.
+        unopened_sheets.sort_by(|a, b| a.0.cmp(&b.0));
         let mut disk_touched = 0usize;
-        for sheet_path in unopened_sheet_paths {
-            let Ok(text) = std::fs::read_to_string(&sheet_path) else {
-                crate::diagnostics::log_info(format!(
-                    "Annotate: failed to read unopened sheet {}",
-                    sheet_path.display()
-                ));
-                continue;
-            };
-            let Ok(sheet) = signex_types::format::SnxSchematic::parse(&text).map(|snx| snx.sheet)
-            else {
-                crate::diagnostics::log_info(format!(
-                    "Annotate: failed to parse unopened sheet {}",
-                    sheet_path.display()
-                ));
-                continue;
-            };
+        for (path, why) in &project_set.unreadable {
+            crate::diagnostics::log_info(format!("Annotate: sheet '{}' {why}", path.display()));
+        }
+        for (sheet_path, sheet) in unopened_sheets {
             let Ok(mut engine) = signex_engine::Engine::new(sheet) else {
                 continue;
             };
@@ -194,10 +172,11 @@ impl Signex {
     /// Altium's "Reset Duplicate Designators" — find references that
     /// appear on more than one symbol across the WHOLE project, reset
     /// just those to `{prefix}?`. Everything else keeps its current
-    /// value. Walks open tabs (live + cached engines) and every sheet
-    /// in `project_data.sheets` not opened as a tab; unopened sheets
-    /// are re-saved through the native `.snxsch` writer so the fix is
-    /// project-wide.
+    /// value. The project is the one assembler's answer
+    /// ([`crate::app::project_sheets::assemble_project_sheets`]): the
+    /// declared pages plus everything reachable down the child-sheet
+    /// graph. Unopened sheets are re-saved through the native
+    /// `.snxsch` writer so the fix is project-wide.
     pub(crate) fn handle_reset_duplicate_designators(&mut self) -> Task<Message> {
         use std::collections::{HashMap, HashSet};
         use std::path::PathBuf;
@@ -217,69 +196,37 @@ impl Signex {
                 *counts.entry(sym.reference.clone()).or_insert(0) += 1;
             }
         };
-        // All open schematic engines live in the HashMap — one loop
-        // covers the active tab plus every background tab.
-        for engine in self.document_state.engines.values() {
-            bump(&mut counts, engine.document());
-        }
-        let open_paths: HashSet<PathBuf> = self
-            .document_state
-            .tabs
-            .iter()
-            .map(|t| t.path.clone())
-            .collect();
-        let project_root = self
-            .document_state
-            .active_document_project()
-            .map(|p| p.dir().to_path_buf());
-        let unopened_paths: Vec<PathBuf> = self
-            .document_state
-            .active_document_project()
-            .map(|p| {
-                p.data
-                    .sheets
-                    .iter()
-                    .filter_map(|s| {
-                        let path = match project_root.as_ref() {
-                            Some(root) => root.join(&s.filename),
-                            None => PathBuf::from(&s.filename),
-                        };
-                        if open_paths.contains(&path) {
-                            None
-                        } else {
-                            Some(path)
-                        }
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
+        // The project, not "every open engine plus the declared pages".
+        // The old set both over- and under-reached: a loose tab from
+        // another project made its R1 collide with this project's R1,
+        // while a hierarchical child that was never added to
+        // `data.sheets` was invisible — so its duplicate refdes
+        // survived into the netlist and onto the board (#406).
+        let (_pages, project_set) =
+            crate::app::project_sheets::assemble_active_project_sheets(&self.document_state);
 
-        // Parse each unopened sheet ONCE up-front and keep the
-        // `SchematicSheet` around for phase 2 — saves a second disk
-        // parse and guarantees counting + reset see the same state.
-        let mut unopened: Vec<(PathBuf, signex_types::schematic::SchematicSheet)> =
-            Vec::with_capacity(unopened_paths.len());
-        for path in unopened_paths {
-            let parse_result = std::fs::read_to_string(&path)
-                .map_err(anyhow::Error::from)
-                .and_then(|text| {
-                    signex_types::format::SnxSchematic::parse(&text)
-                        .map(|snx| snx.sheet)
-                        .map_err(anyhow::Error::from)
-                });
-            match parse_result {
-                Ok(sheet) => {
-                    bump(&mut counts, &sheet);
-                    unopened.push((path, sheet));
-                }
-                Err(err) => {
-                    crate::diagnostics::log_info(format!(
-                        "Reset Duplicate Designators: failed to parse unopened sheet {}: {err}",
-                        path.display(),
-                    ));
-                }
+        // Split by "is it open as an engine": open sheets are reset
+        // through their engine so the edit is undoable, the rest are
+        // written straight back to disk. The already-parsed
+        // `SchematicSheet` is kept for phase 2 so counting and reset
+        // see the same state.
+        let mut unopened: Vec<(PathBuf, signex_types::schematic::SchematicSheet)> = Vec::new();
+        let mut project_paths: HashSet<PathBuf> = HashSet::new();
+        for (path, sheet) in project_set.sheets {
+            bump(&mut counts, &sheet);
+            project_paths.insert(path.clone());
+            if !self.document_state.engines.contains_key(&path) {
+                unopened.push((path, sheet));
             }
         }
+        for (path, why) in &project_set.unreadable {
+            crate::diagnostics::log_info(format!(
+                "Reset Duplicate Designators: sheet '{}' {why}",
+                path.display(),
+            ));
+        }
+        // Deterministic write order — `sheets` is a `HashMap`.
+        unopened.sort_by(|a, b| a.0.cmp(&b.0));
 
         // Phase 2: anything seen more than once is a duplicate that
         // needs resetting.
@@ -340,7 +287,9 @@ impl Signex {
             .iter()
             .enumerate()
             .filter_map(|(idx, tab)| {
-                if idx == active_idx {
+                // Only this project's sheets: a loose tab from somewhere else
+                // was never counted, so it must not be reset either.
+                if idx == active_idx || !project_paths.contains(&tab.path) {
                     None
                 } else {
                     Some((idx, tab.path.clone()))
