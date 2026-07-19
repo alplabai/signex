@@ -389,9 +389,11 @@ fn point_is_connected(
 /// the pins on it.
 ///
 /// Connectivity is **not** derived here — it comes from the shared
-/// [`SheetConnectivity`] (the same wire-endpoint union plus junction T-merge
-/// `build_netlist` uses), so ERC and the netlist agree on membership by
-/// construction instead of ERC hand-rolling a second union-find.
+/// [`SheetConnectivity`]: the physical wire-endpoint union plus junction
+/// T-merge, *and* the logical same-name label merge on top
+/// ([`SheetConnectivity::merge_named_labels`]). Both halves are the ones
+/// `build_netlist` applies, so ERC and the netlist agree on membership by
+/// construction instead of ERC hand-rolling a second, thinner union-find.
 fn summarize_nets(
     wires: &[ErcWire],
     labels: &[ErcLabel],
@@ -402,20 +404,25 @@ fn summarize_nets(
     let junction_pts: Vec<Point> = junctions.iter().map(|j| j.position).collect();
     let mut conn = SheetConnectivity::from_segments(&segments, &junction_pts);
 
-    // Anchor every label to the wire it sits on — endpoint *or* interior —
-    // exactly as `merged_sheet_parent` does before it reads net roots. A label
-    // dropped mid-span is not a wire endpoint, so an unanchored `root_of` hands
-    // it a singleton root and its name never reaches the net (issue #396, the
-    // DSL-facing half of #388).
+    // Apply the *logical* layer `build_netlist` applies on top of the geometry.
+    // It anchors every label to the wire it sits on — endpoint *or* interior;
+    // a label dropped mid-span is not a wire endpoint, so an unanchored
+    // `root_of` hands it a singleton root and its name never reaches the net
+    // (issue #396, the DSL-facing half of #388). It then merges nets carrying
+    // the same Global/Power/Net label name: two disjoint wires each labelled
+    // `VCC` are ONE net to `build_netlist`, and ERC used to hand the DSL two
+    // `VCC` fragments with the driver on only one of them (issue #404).
     //
-    // Anchoring is a separate pass because a union can re-point a class
-    // representative: a label landing where a wire ends on another wire's
-    // interior merges those two classes, changing a root recorded earlier in
-    // the same loop. Every root below is therefore read only after the last
-    // union, mirroring `merged_sheet_parent`'s merge-then-read split.
-    for lbl in labels {
-        conn.root_of_anchored(&lbl.position, &segments);
-    }
+    // This is a separate pass because a union can re-point a class
+    // representative, changing a root recorded earlier. Every root below is
+    // therefore read only after the last union — the merge-then-read split
+    // `merged_sheet_parent` relies on too.
+    conn.merge_named_labels(
+        labels
+            .iter()
+            .map(|l| (l.position, l.label_type, l.text.as_str())),
+        &segments,
+    );
 
     // Group labels by net root.
     let mut net_labels: HashMap<(i64, i64), Vec<&ErcLabel>> = HashMap::new();
@@ -684,6 +691,85 @@ mod tests {
         assert_eq!(
             wire_net.name, "",
             "an off-wire label must not name the wire's net"
+        );
+    }
+
+    #[test]
+    fn same_name_labels_merge_disjoint_wires_into_one_net() {
+        // Regression for #404. Two unconnected wires, a `Net` label `VCC` on
+        // each: `merged_sheet_parent` merges them by name, so `build_netlist`
+        // sees ONE net holding both pins. `summarize_nets` used to group
+        // geometrically only and handed the DSL two `VCC` fragments — a rule
+        // like `net.name == "VCC" && !has_driver()` then false-fired on the
+        // fragment whose driver sat on the other wire.
+        let wires = vec![
+            wire(pt(0.0, 0.0), pt(10.0, 0.0)),
+            wire(pt(50.0, 0.0), pt(60.0, 0.0)),
+        ];
+        let labels = vec![
+            label(pt(5.0, 0.0), "VCC", LabelType::Net),
+            label(pt(55.0, 0.0), "VCC", LabelType::Net),
+        ];
+        let syms = vec![symbol(vec![
+            pin(pt(0.0, 0.0), PinDirection::Output), // driver on wire A
+            pin(pt(60.0, 0.0), PinDirection::Input), // sink on wire B
+        ])];
+
+        let nets = summarize_nets(&wires, &labels, &[], &syms);
+        assert_eq!(nets.len(), 1, "same-name Net labels merge the two wires");
+        assert_eq!(nets[0].name, "VCC");
+        assert_eq!(
+            nets[0].pin_types.len(),
+            2,
+            "both pins land on the merged net"
+        );
+        assert!(nets[0].has_driver, "the driver on the far wire counts");
+    }
+
+    #[test]
+    fn differently_named_labels_do_not_merge() {
+        // Negative guard: the merge keys on the label TEXT, so it can never
+        // become a blanket join of every labelled wire.
+        let wires = vec![
+            wire(pt(0.0, 0.0), pt(10.0, 0.0)),
+            wire(pt(50.0, 0.0), pt(60.0, 0.0)),
+        ];
+        let labels = vec![
+            label(pt(5.0, 0.0), "VCC", LabelType::Net),
+            label(pt(55.0, 0.0), "VBAT", LabelType::Net),
+        ];
+        let syms = vec![symbol(vec![
+            pin(pt(0.0, 0.0), PinDirection::Output),
+            pin(pt(60.0, 0.0), PinDirection::Input),
+        ])];
+
+        let nets = summarize_nets(&wires, &labels, &[], &syms);
+        assert_eq!(nets.len(), 2, "different names stay two nets");
+    }
+
+    #[test]
+    fn same_name_hierarchical_labels_do_not_merge() {
+        // `Hierarchical` binds to a parent sheet's pins, not to same-name
+        // peers, so it is excluded from the name merge — mirroring the
+        // `signex-net` side (`build/tests.rs`) on the ERC side.
+        let wires = vec![
+            wire(pt(0.0, 0.0), pt(10.0, 0.0)),
+            wire(pt(50.0, 0.0), pt(60.0, 0.0)),
+        ];
+        let labels = vec![
+            label(pt(5.0, 0.0), "BUS_A", LabelType::Hierarchical),
+            label(pt(55.0, 0.0), "BUS_A", LabelType::Hierarchical),
+        ];
+        let syms = vec![symbol(vec![
+            pin(pt(0.0, 0.0), PinDirection::Output),
+            pin(pt(60.0, 0.0), PinDirection::Input),
+        ])];
+
+        let nets = summarize_nets(&wires, &labels, &[], &syms);
+        assert_eq!(
+            nets.len(),
+            2,
+            "hierarchical labels do not join same-name peers on one sheet"
         );
     }
 }

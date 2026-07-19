@@ -513,14 +513,20 @@ pub(crate) fn missing_power_flag(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 
     // Two passes, matching `merged_sheet_parent`'s invariant: every union
     // completes before any root is sampled. Anchor every label to its wire
-    // interior first (issue #388), THEN read roots — sampling interleaved
-    // with anchoring made an earlier label's cached root go stale once a
-    // later label's union re-rooted its class (a label at a junction-less T
-    // point), which could both miss a real conflict and false-flag a port
-    // that IS cross-referenced.
-    for lbl in &named_labels {
-        conn.root_of_anchored(&lbl.position, &wires);
-    }
+    // interior first (issue #388) and merge the same-name ones, THEN read
+    // roots — sampling interleaved with anchoring made an earlier label's
+    // cached root go stale once a later label's union re-rooted its class (a
+    // label at a junction-less T point), which could both miss a real conflict
+    // and false-flag a port that IS cross-referenced. The same-name merge is
+    // what makes the "shares a net" claim below mean what `build_netlist`
+    // means by it: without it, a port whose fragment is joined to the labelled
+    // fragment by a third same-name label false-positived (issue #404).
+    conn.merge_named_labels(
+        named_labels
+            .iter()
+            .map(|l| (l.position, l.label_type, l.text.as_str())),
+        &wires,
+    );
 
     // Map each label text → set of net roots its labels sit on.
     let mut label_nets: HashMap<&str, std::collections::HashSet<(i64, i64)>> = HashMap::new();

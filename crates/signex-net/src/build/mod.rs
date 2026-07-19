@@ -232,6 +232,44 @@ impl SheetConnectivity {
         }
         uf_find(&mut self.parent, pk)
     }
+
+    /// The *logical* layer on top of the physical connectivity: anchor each
+    /// label to the wire it sits on (endpoint or interior, via
+    /// [`root_of_anchored`](Self::root_of_anchored)), then merge net roots that
+    /// share a same-name label whose kind joins by name — `Global`, `Power`,
+    /// local `Net`. `Hierarchical` is excluded: it binds to a parent sheet's
+    /// pins, not to same-name peers, and is left to cross-sheet stitching.
+    ///
+    /// Labels arrive as plain `(position, kind, text)` tuples so consumers
+    /// outside `signex-net` — which hold their own snapshot types, not a
+    /// [`SchematicSheet`] — apply the *same* merge instead of re-deriving a
+    /// geometry-only copy that reports more nets than [`build_netlist`] does
+    /// (issues #388, #396, #404).
+    ///
+    /// Anchoring and merging are both unions and [`uf_union`] re-`find`s its
+    /// operands, so a representative re-pointed by a later merge never leaks a
+    /// stale root. Callers must still read every root *after* this returns.
+    pub fn merge_named_labels<'a>(
+        &mut self,
+        labels: impl IntoIterator<Item = (Point, LabelType, &'a str)>,
+        segments: &[(Point, Point)],
+    ) {
+        let mut name_root: HashMap<&'a str, Key> = HashMap::new();
+        for (pos, kind, text) in labels {
+            let root = self.root_of_anchored(&pos, segments);
+            if text.is_empty()
+                || !matches!(kind, LabelType::Global | LabelType::Power | LabelType::Net)
+            {
+                continue;
+            }
+            match name_root.get(text) {
+                Some(&existing) => uf_union(&mut self.parent, root, existing),
+                None => {
+                    name_root.insert(text, root);
+                }
+            }
+        }
+    }
 }
 
 /// The wire and junction uuids the net-colour flood should paint when the
@@ -278,42 +316,22 @@ pub(crate) fn merged_sheet_parent(sheet: &SchematicSheet) -> HashMap<Key, Key> {
     // Start from the physical connectivity core (wires + junction T-merges),
     // owned so the label-merge below never disturbs what the net-flood reads
     // through `SheetConnectivity`.
-    let mut parent = SheetConnectivity::build(sheet).parent;
+    let mut conn = SheetConnectivity::build(sheet);
 
-    // Anchor each label to the wire it sits on (endpoint or interior), then
-    // merge net roots that share a same-name label whose kind joins by name,
-    // within this sheet: Global, Power (power nets), and local Net. (Global and
-    // Power also join across sheets by name — the cross-sheet stitcher's job;
-    // here we only see one sheet.) Hierarchical labels join to a parent sheet's
-    // pins, not to same-name peers, so they are left to cross-sheet stitching.
-    let mut name_root: HashMap<&str, Key> = HashMap::new();
-    for lbl in &sheet.labels {
-        let lk = pt_key(&lbl.position);
-        for w in &sheet.wires {
-            if point_on_segment(lk, pt_key(&w.start), pt_key(&w.end)) {
-                uf_union(&mut parent, lk, pt_key(&w.start));
-                break;
-            }
-        }
-        if lbl.text.is_empty()
-            || !matches!(
-                lbl.label_type,
-                LabelType::Global | LabelType::Power | LabelType::Net
-            )
-        {
-            continue;
-        }
-        let root = uf_find(&mut parent, lk);
-        match name_root.get(lbl.text.as_str()) {
-            Some(&existing) => {
-                uf_union(&mut parent, root, existing);
-            }
-            None => {
-                name_root.insert(lbl.text.as_str(), root);
-            }
-        }
-    }
-    parent
+    // Then the logical layer: same-name labels join nets within this sheet.
+    // (Global and Power also join across sheets by name — the cross-sheet
+    // stitcher's job; here we only see one sheet.) This is the shared
+    // [`SheetConnectivity::merge_named_labels`], so every consumer outside this
+    // crate derives the identical topology.
+    let segments: Vec<(Point, Point)> = sheet.wires.iter().map(|w| (w.start, w.end)).collect();
+    conn.merge_named_labels(
+        sheet
+            .labels
+            .iter()
+            .map(|l| (l.position, l.label_type, l.text.as_str())),
+        &segments,
+    );
+    conn.parent
 }
 
 /// Group each sheet label under its merged net root, so the highest-priority
