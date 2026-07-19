@@ -667,11 +667,12 @@ fn view_footprint_canvas<'a>(
 /// mismatch anyway).
 fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEdit {
     match msg {
-        // Pre-existing quirk preserved: Tab during sketch placement input
-        // is emitted by the canvas but was never wired through to the
-        // standalone dispatcher, so it lands as a no-op Save. Kept as-is
-        // to keep this refactor behavior-neutral.
-        EditorMsg::Footprint(FootprintEditorMsg::SketchPlacementInputTab) => PrimitiveEdit::Save,
+        // v0.15 (#180) — Tab during sketch placement input used to be
+        // special-cased to a no-op `Save` here, so it never reached
+        // `apply_footprint_primitive_edit` -> `sketch::placement::apply`,
+        // which already cycles the focused dimension field. Route it
+        // through the same uniform passthrough as every other
+        // `FootprintEditorMsg` below.
         EditorMsg::Footprint(fp) => PrimitiveEdit::Footprint(fp),
         // Anything not emitted by the footprint canvas is dropped via a
         // benign "save of the wrong tab" — the path-keyed dispatcher
@@ -717,4 +718,41 @@ fn view_footprint_footer<'a>(
     .style(crate::styles::modal_footer_strip(tokens))
     .width(Length::Fill)
     .into()
+}
+
+#[cfg(test)]
+mod tests {
+    //! Issue #180 — `editor_msg_to_primitive_msg` is the canvas-to-
+    //! dispatcher bridge and is private to this module, so it can only
+    //! be exercised from an in-crate unit test (an integration test
+    //! under `tests/` has no visibility into it: `standalone::footprint`
+    //! is a private submodule re-exporting only `view_footprint`).
+    use super::*;
+
+    #[test]
+    fn sketch_placement_tab_routes_to_footprint_not_save() {
+        let out = editor_msg_to_primitive_msg(EditorMsg::Footprint(
+            FootprintEditorMsg::SketchPlacementInputTab,
+        ));
+        match out {
+            PrimitiveEdit::Footprint(FootprintEditorMsg::SketchPlacementInputTab) => {}
+            other => panic!(
+                "expected SketchPlacementInputTab to pass through to the footprint \
+                 dispatcher (which cycles the placement-input field), got {other:?}"
+            ),
+        }
+    }
+
+    // Every other Footprint variant already passed through uniformly;
+    // pin that down too so a future special-case regresses loudly.
+    #[test]
+    fn sketch_placement_char_routes_to_footprint_uniformly() {
+        let out = editor_msg_to_primitive_msg(EditorMsg::Footprint(
+            FootprintEditorMsg::SketchPlacementInputChar('5'),
+        ));
+        match out {
+            PrimitiveEdit::Footprint(FootprintEditorMsg::SketchPlacementInputChar('5')) => {}
+            other => panic!("expected uniform Footprint passthrough, got {other:?}"),
+        }
+    }
 }
