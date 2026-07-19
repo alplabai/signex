@@ -6361,7 +6361,7 @@ fn placement_input_tab_cycles_rounded_rect_three_fields() {
 }
 
 /// Issue #180 — complementary user-visible coverage for the standalone
-/// canvas-to-dispatcher routing fix (`footprint_msg_to_primitive_msg`
+/// canvas-to-dispatcher routing fix (`translate_footprint_canvas_msg`
 /// in `standalone/footprint.rs`). The in-crate mapping test living
 /// alongside that function is what actually catches the routing bug —
 /// it proves the bridge no longer discards `SketchPlacementInputTab`
