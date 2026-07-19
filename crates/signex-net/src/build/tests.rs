@@ -674,6 +674,33 @@ fn flood_respects_micron_precision_and_does_not_leak() {
 }
 
 #[test]
+fn flood_follows_a_same_name_label_merge() {
+    // Regression for #404. Two physically disjoint wires, each carrying the
+    // Net label `VCC`: `build_netlist` returns ONE net. A flood that derives
+    // only the physical connectivity painted the clicked wire alone, so the
+    // highlight contradicted the netlist it claims to colour.
+    let mut sheet = empty_sheet();
+    let a = Uuid::from_u128(30);
+    let b = Uuid::from_u128(31);
+    sheet.wires.push(wire_id(pt(0.0, 0.0), pt(10.0, 0.0), a));
+    sheet.wires.push(wire_id(pt(50.0, 0.0), pt(60.0, 0.0), b));
+    sheet
+        .labels
+        .push(label("VCC", pt(5.0, 0.0), LabelType::Net));
+    sheet
+        .labels
+        .push(label("VCC", pt(55.0, 0.0), LabelType::Net));
+
+    let mut flood = flood_net_elements(&sheet, a).expect("clicked wire exists");
+    flood.wires.sort();
+    assert_eq!(
+        flood.wires,
+        vec![a, b],
+        "the highlight must paint the whole net the netlist derives"
+    );
+}
+
+#[test]
 fn flood_returns_none_for_an_unknown_wire() {
     let sheet = empty_sheet();
     assert!(flood_net_elements(&sheet, Uuid::from_u128(99)).is_none());
