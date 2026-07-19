@@ -33,4 +33,4 @@ pub use attr::LinkedRadius;
 pub use error::{SketchError, SolveError};
 pub use sketch::SketchData;
 pub use solver::Solver;
-pub use split::{SplitResult, split_line};
+pub use split::{SplitError, SplitResult, split_line};
