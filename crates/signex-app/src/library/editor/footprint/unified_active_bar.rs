@@ -199,11 +199,17 @@ fn dropdown_trigger_items(
 ) -> Vec<ActiveBarItem<LibraryMessage>> {
     let path = editor.path.clone();
     let active = editor.state.active_bar_menu;
+    // Move and Select fire the identical `SetPadsTool(Select)` message
+    // (there is no separate Move tool — see `PadsTool` in state/tool.rs),
+    // so both buttons' "armed" highlight is this one flag.
+    let select_tool_armed =
+        editor.state.pads_tool == crate::library::editor::footprint::state::PadsTool::Select;
 
     let dual = |label: &str,
                 icon: ActiveBarIcon,
                 menu: FpActiveBarMenu,
-                left: Option<FootprintEditorMsg>|
+                left: Option<FootprintEditorMsg>,
+                selected_override: Option<bool>|
      -> ActiveBarItem<LibraryMessage> {
         let on_press = Some(LibraryMessage::PrimitiveEditorEvent {
             path: path.clone(),
@@ -219,7 +225,7 @@ fn dropdown_trigger_items(
             icon,
             tooltip: label.to_string(),
             enabled: true,
-            selected: active == Some(menu),
+            selected: selected_override.unwrap_or(active == Some(menu)),
             on_press,
             on_right_press,
             dropdown_indicator: Some(ActiveBarIcon::Svg(ic::icon_chevron_45(tid))),
@@ -232,15 +238,17 @@ fn dropdown_trigger_items(
             ActiveBarIcon::Svg(ic::icon_filter(tid)),
             FpActiveBarMenu::Filter,
             None,
+            None,
         ),
         dual(
             "Snap Options (left or right click for menu)",
             ActiveBarIcon::Svg(ic::icon_dd_align_grid(tid)),
             FpActiveBarMenu::Snap,
             None,
+            None,
         ),
         dual(
-            "Move (right-click for placement-mode menu)",
+            "Move (right-click for move / transform menu)",
             ActiveBarIcon::Svg(ic::icon_move(tid)),
             FpActiveBarMenu::Place,
             // A footprint has no separate move tool: pad movement IS
@@ -252,6 +260,11 @@ fn dropdown_trigger_items(
             Some(FootprintEditorMsg::SetPadsTool(
                 crate::library::editor::footprint::state::PadsTool::Select,
             )),
+            // #375 follow-up — track the armed tool, not the open
+            // dropdown, so a fresh tab (no menu open, default tool
+            // already Select) still shows Move as active instead of
+            // giving the user no feedback on left-click.
+            Some(select_tool_armed),
         ),
         dual(
             "Select (right-click for selection-mode menu)",
@@ -260,17 +273,20 @@ fn dropdown_trigger_items(
             Some(FootprintEditorMsg::SetPadsTool(
                 crate::library::editor::footprint::state::PadsTool::Select,
             )),
+            Some(select_tool_armed),
         ),
         dual(
             "Align / Distribute (right-click for menu)",
             ActiveBarIcon::Svg(ic::icon_align(tid)),
             FpActiveBarMenu::Align,
             Some(FootprintEditorMsg::ActiveBarAlignSelectionToGrid),
+            None,
         ),
         dual(
             "3D Body (left or right click for menu)",
             ActiveBarIcon::Svg(ic::icon_dd_graphic(tid)),
             FpActiveBarMenu::Body3d,
+            None,
             None,
         ),
         dual(
@@ -280,11 +296,13 @@ fn dropdown_trigger_items(
             Some(FootprintEditorMsg::SetPadsTool(
                 crate::library::editor::footprint::state::PadsTool::PlaceString,
             )),
+            None,
         ),
         dual(
             "Shapes (right-click for sketch-mode shape menu)",
             ActiveBarIcon::Svg(ic::icon_shapes(tid)),
             FpActiveBarMenu::Shapes,
+            None,
             None,
         ),
     ]

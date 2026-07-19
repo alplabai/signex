@@ -178,29 +178,22 @@ fn apply_filter_preset_sets_state_filter() {
 // arm PadsTool::Select (a footprint has no separate move tool; pad
 // movement is drag-under-Select — see `active_bar_dropdowns.rs`'s
 // `place_entries`), not fall through to the `ActiveBarStub` no-op.
+//
+// Pinned by POSITION, not by tooltip text: `dropdown_trigger_items`
+// puts Filter, Snap, Place, Select, Align, Body3d, Text, Shapes in
+// that exact order (the same order `dropdown_x_offset` documents and
+// depends on for dropdown placement), so the Place/Move button is
+// always index 2. A `tooltip.contains("Move")` assertion would
+// couple this test to prose the tooltip-wording fix itself rewrites.
 #[test]
 fn place_move_button_left_click_arms_select_tool() {
     use crate::library::editor::footprint::state::PadsTool;
-    use crate::library::editor::footprint::unified_active_bar::bar_items;
     use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
-    use signex_types::theme::{theme_tokens, ThemeId};
     use signex_widgets::active_bar::ActiveBarItem;
 
-    let file = signex_library::FootprintFile::from_footprint(
-        signex_library::primitive::footprint::Footprint::empty("Test"),
-    );
-    let editor =
-        crate::app::FootprintEditorState::new(std::path::PathBuf::from("t.snxfpt"), file);
-    let tid = ThemeId::CatppuccinMocha;
-    let tokens = theme_tokens(tid);
-
-    let place_btn = bar_items(&editor, tid, &tokens)
-        .into_iter()
-        .find_map(|item| match item {
-            ActiveBarItem::Button(b) if b.tooltip.contains("Move") => Some(b),
-            _ => None,
-        })
-        .expect("Place / Move button should be in the active bar");
+    let ActiveBarItem::Button(place_btn) = place_move_button(default_editor()) else {
+        panic!("index 2 should be the Place/Move button");
+    };
 
     match place_btn.on_press {
         Some(LibraryMessage::PrimitiveEditorEvent {
@@ -209,4 +202,59 @@ fn place_move_button_left_click_arms_select_tool() {
         }) => {}
         other => panic!("expected left-click to arm PadsTool::Select, got {other:?}"),
     }
+}
+
+// #375 follow-up — the button's `selected` (armed-tool highlight) must
+// track `pads_tool`, not `active_bar_menu`. Before this fix `selected`
+// was `active_bar_menu == Some(FpActiveBarMenu::Place)`, and
+// `SetPadsTool` always resets `active_bar_menu` to `None` (see
+// `updates/view.rs`), so the Move button could never show armed —
+// not on a fresh tab (default tool is already Select) and not after
+// clicking it (the click itself closes the menu). Move and Select
+// fire the identical `SetPadsTool(Select)` message, so they light up
+// together; that's correct, not a bug — there is only one underlying
+// tool state to represent.
+#[test]
+fn place_move_button_selected_tracks_armed_select_tool() {
+    use crate::library::editor::footprint::state::PadsTool;
+    use signex_widgets::active_bar::ActiveBarItem;
+
+    // Fresh tab: PadsTool::Select is #[default], so Move should
+    // already read armed.
+    let ActiveBarItem::Button(place_btn) = place_move_button(default_editor()) else {
+        panic!("index 2 should be the Place/Move button");
+    };
+    assert!(
+        place_btn.selected,
+        "Move should show armed on a fresh tab (default tool is Select)"
+    );
+
+    // Arm a different tool (Text) — Move must stop reading armed.
+    let mut editor = default_editor();
+    editor.state.pads_tool = PadsTool::PlaceString;
+    let ActiveBarItem::Button(place_btn) = place_move_button(editor) else {
+        panic!("index 2 should be the Place/Move button");
+    };
+    assert!(
+        !place_btn.selected,
+        "Move must not read armed once a different tool is armed"
+    );
+}
+
+fn default_editor() -> crate::app::FootprintEditorState {
+    let file = signex_library::FootprintFile::from_footprint(
+        signex_library::primitive::footprint::Footprint::empty("Test"),
+    );
+    crate::app::FootprintEditorState::new(std::path::PathBuf::from("t.snxfpt"), file)
+}
+
+fn place_move_button(
+    editor: crate::app::FootprintEditorState,
+) -> signex_widgets::active_bar::ActiveBarItem<crate::library::messages::LibraryMessage> {
+    use crate::library::editor::footprint::unified_active_bar::bar_items;
+    use signex_types::theme::{ThemeId, theme_tokens};
+
+    let tid = ThemeId::CatppuccinMocha;
+    let tokens = theme_tokens(tid);
+    bar_items(&editor, tid, &tokens).remove(2)
 }
