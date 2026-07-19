@@ -484,4 +484,5 @@ impl_has_uuid!(
     signex_types::schematic::Symbol,
     signex_types::schematic::TextNote,
     signex_types::schematic::ChildSheet,
+    signex_types::schematic::SheetPin,
 );
