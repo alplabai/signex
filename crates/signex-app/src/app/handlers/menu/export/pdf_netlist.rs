@@ -37,7 +37,7 @@ impl Signex {
             }
         };
 
-        let mut ctx = match super::build_export_context(&self.document_state) {
+        let (mut ctx, issues) = match super::build_export_scope(&self.document_state) {
             Some(c) => c,
             None => {
                 self.document_state.pending_pdf_options = None;
@@ -47,6 +47,11 @@ impl Signex {
                 return Task::none();
             }
         };
+        // Human-consumed deliverable: a partial PDF beats a refusal — the
+        // user may well be printing or reviewing mid-refactor with a child
+        // file genuinely absent from disk. So this degrades rather than
+        // blocks, but it degrades *loudly*, once, from this user action.
+        super::log_stitch_issues(&self.document_state, &ctx, &issues);
 
         // Use pending options if they were set by the dialog, otherwise fall back to defaults.
         let options = self
@@ -142,13 +147,37 @@ impl Signex {
             }
         };
 
-        let ctx = match super::build_export_context(&self.document_state) {
+        let (ctx, issues) = match super::build_export_scope(&self.document_state) {
             Some(c) => c,
             None => {
                 log::warn!("Netlist export: no active schematic");
                 return Task::none();
             }
         };
+        super::log_stitch_issues(&self.document_state, &ctx, &issues);
+
+        // Machine-consumed deliverable: this file is imported into a PCB, and
+        // a hole in it becomes missing components on the board plus nets that
+        // stayed split where they should have merged through the missing
+        // sheet's ports. There is no "read the warning and judge" step
+        // downstream, so refuse and write nothing rather than hand the layout
+        // tool a plausible-looking wrong netlist. (The PDF, which a human
+        // reads, takes the opposite call.)
+        if super::netlist_is_incomplete(&issues) {
+            let detail = issues
+                .iter()
+                .map(crate::app::project_sheets::stitch_issue_message)
+                .collect::<Vec<_>>()
+                .join("\n");
+            self.document_state.export_error = Some(format!(
+                "Netlist export refused: the project netlist is incomplete, so the \
+                 exported file would be missing components and would carry wrong net \
+                 names where nets merge through the missing sheet. Nothing was written \
+                 to {}.\n\n{detail}",
+                save_path.display(),
+            ));
+            return Task::none();
+        }
 
         match NetlistExporter.export(&ctx, &NetlistOptions::default()) {
             Ok(output) => match std::fs::write(&save_path, &output.bytes) {

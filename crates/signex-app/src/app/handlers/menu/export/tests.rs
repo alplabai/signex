@@ -14,7 +14,9 @@
 //!    still resolve to its owning project and export the project's pages, not
 //!    ship a one-page PDF of the child alone;
 //! 3. …and the netlist that ships with it must not quietly omit that child's
-//!    subtree: `build_project_netlist`'s stitch issues reach the user;
+//!    subtree — the netlist input set is the child-sheet graph, not the
+//!    printed page set, so a `MissingChild` means *missing*, and when one is
+//!    genuine the `.net` export refuses while the PDF degrades loudly;
 //! 4. a project directory recorded in `data.dir` that no longer matches the
 //!    `.snxprj` on disk must not resolve ownership and sheet paths differently;
 //! 5. the loose page set is sorted, not `HashMap`-ordered.
@@ -70,10 +72,131 @@ fn schematic(children: &[&str]) -> SchematicSheet {
     }
 }
 
-/// A `DocumentState` with one loaded, *active* project whose persisted sheet
-/// list is `listed`. Sheets are not opened here — callers add the engines they
-/// need with [`open`].
-fn workspace(dir: &str, listed: &[&str]) -> DocumentState {
+/// A sheet with one component pin sitting on a wire named by a `Global` label.
+///
+/// Both halves matter: a net only exists where a terminal lands, so the pin is
+/// what makes the net real, and the reference is what a dropped subtree costs
+/// you on the board — missing components. `net_name` is unqualified in the
+/// project netlist because the label is `Global`.
+fn sheet_with_net(reference: &str, net_name: &str, children: &[&str]) -> SchematicSheet {
+    use signex_types::schematic::{
+        HAlign, Label, LabelType, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Symbol,
+        VAlign, Wire,
+    };
+    let mut sheet = schematic(children);
+    let origin = Point::new(0.0, 0.0);
+    sheet.wires.push(Wire {
+        uuid: Uuid::new_v4(),
+        start: origin,
+        end: Point::new(10.0, 0.0),
+        stroke_width: 0.0,
+    });
+    sheet.labels.push(Label {
+        uuid: Uuid::new_v4(),
+        text: net_name.to_string(),
+        position: origin,
+        rotation: 0.0,
+        label_type: LabelType::Global,
+        shape: String::new(),
+        font_size: 1.27,
+        justify: HAlign::default(),
+        justify_v: VAlign::default(),
+    });
+    sheet.lib_symbols.insert(
+        "Device:R".to_string(),
+        LibSymbol {
+            id: "Device:R".to_string(),
+            reference: "R".to_string(),
+            value: String::new(),
+            footprint: String::new(),
+            datasheet: String::new(),
+            description: String::new(),
+            keywords: String::new(),
+            fp_filters: String::new(),
+            in_bom: true,
+            on_board: true,
+            in_pos_files: true,
+            duplicate_pin_numbers_are_jumpers: false,
+            graphics: Vec::new(),
+            pins: vec![LibPin {
+                unit: 0,
+                body_style: 1,
+                pin: Pin {
+                    direction: PinDirection::Passive,
+                    shape_style: PinShapeStyle::Plain,
+                    position: origin,
+                    rotation: 0.0,
+                    length: 0.0,
+                    name: String::new(),
+                    number: "1".to_string(),
+                    visible: true,
+                    name_visible: true,
+                    number_visible: true,
+                },
+            }],
+            show_pin_numbers: true,
+            show_pin_names: true,
+            pin_name_offset: 0.0,
+        },
+    );
+    sheet.symbols.push(Symbol {
+        uuid: Uuid::new_v4(),
+        lib_id: "Device:R".to_string(),
+        reference: reference.to_string(),
+        value: String::new(),
+        footprint: String::new(),
+        datasheet: String::new(),
+        position: origin,
+        rotation: 0.0,
+        mirror_x: false,
+        mirror_y: false,
+        unit: 1,
+        is_power: false,
+        ref_text: None,
+        val_text: None,
+        fields_autoplaced: false,
+        fields_user_placed: false,
+        dnp: false,
+        in_bom: true,
+        on_board: true,
+        exclude_from_sim: false,
+        locked: false,
+        fields: HashMap::new(),
+        custom_properties: Vec::new(),
+        pin_uuids: HashMap::new(),
+        instances: Vec::new(),
+        library_id: None,
+        row_id: None,
+        library_version: String::new(),
+    });
+    sheet
+}
+
+fn net_names(ctx: &signex_output::ExportContext) -> Vec<String> {
+    ctx.netlist
+        .as_ref()
+        .map(|n| n.nets.iter().map(|net| net.name.clone()).collect())
+        .unwrap_or_default()
+}
+
+/// Every component reference the exported netlist carries a terminal for —
+/// what a dropped subtree costs on the board.
+fn netlist_references(ctx: &signex_output::ExportContext) -> Vec<String> {
+    let mut refs: Vec<String> = ctx
+        .netlist
+        .iter()
+        .flat_map(|n| n.nets.iter())
+        .flat_map(|net| net.terminals.iter().map(|t| t.reference.clone()))
+        .collect();
+    refs.sort();
+    refs.dedup();
+    refs
+}
+
+/// A `Signex` with one loaded, *active* project whose persisted sheet list is
+/// `listed`. Sheets are not opened here — callers add the engines they need
+/// with [`open`].
+fn app_workspace(dir: &str, listed: &[&str]) -> Signex {
     let (mut app, _task) = Signex::new();
     let id = app.document_state.mint_project_id();
     app.document_state.projects.push(LoadedProject {
@@ -103,12 +226,20 @@ fn workspace(dir: &str, listed: &[&str]) -> DocumentState {
     });
     // The sticky pointer every one of these regressions is about.
     app.document_state.active_project = Some(id);
-    app.document_state
+    app
+}
+
+fn workspace(dir: &str, listed: &[&str]) -> DocumentState {
+    app_workspace(dir, listed).document_state
 }
 
 /// Open `path` as a live engine whose sheet references `children`.
 fn open(ds: &mut DocumentState, path: &PathBuf, children: &[&str]) {
-    let engine = signex_engine::Engine::new(schematic(children)).expect("engine");
+    open_with(ds, path, schematic(children));
+}
+
+fn open_with(ds: &mut DocumentState, path: &PathBuf, sheet: SchematicSheet) {
+    let engine = signex_engine::Engine::new(sheet).expect("engine");
     ds.engines.insert(path.clone(), engine);
 }
 
@@ -178,19 +309,116 @@ fn hierarchical_child_sheet_exports_its_owning_project() {
         "the active path is below the exported set, so the netlist falls back \
          to the project's own root sheet rather than resolving to None"
     );
-    // The point of this assertion. `child.snxsch` is referenced by `top` but
-    // is not in `data.sheets`, so it is not an exported page and not in the
-    // stitch input either: the netlist that ships is missing that whole
-    // subtree. It is `Some`, so the "no netlist" warning does not fire, and
-    // without surfacing the stitch issues an incomplete netlist would go to
-    // fab looking perfectly plausible. Before the fallback existed this
-    // yielded `None` — a loud failure; the user must be told either way.
+    // Round 3 asserted a `MissingChild` here and called that correct. It was
+    // not: the child is open as a live engine, so nothing is missing — the
+    // export was simply refusing to look at anything outside `data.sheets`.
+    // The fix is completeness, not a better apology.
     assert!(
-        issues.iter().any(|i| matches!(
-            i,
-            signex_net::StitchIssue::MissingChild { filename, .. } if filename == "child.snxsch"
-        )),
-        "the omitted subtree must be reported to the user, not dropped: {issues:?}"
+        issues.is_empty(),
+        "an open hierarchical child is in memory; no stitch issue is warranted: {issues:?}"
+    );
+}
+
+// -- Definition of done (a): the netlist input set is complete -------------
+
+#[test]
+fn root_active_netlist_contains_a_child_absent_from_data_sheets() {
+    // The routine state, and the worst path: the root sheet is active and
+    // `child.snxsch` is a hierarchical child that was never added to
+    // `data.sheets` (descending into one never appends to that list). Deriving
+    // the netlist from the *page* set alone drops the child's whole subtree
+    // and exports a plausible-looking netlist missing it.
+    let mut ds = workspace("/w/a", &["top.snxsch"]);
+    let top = PathBuf::from("/w/a").join("top.snxsch");
+    let child = PathBuf::from("/w/a").join("child.snxsch");
+    open_with(
+        &mut ds,
+        &top,
+        sheet_with_net("R_TOP", "TOP_NET", &["child.snxsch"]),
+    );
+    open_with(&mut ds, &child, sheet_with_net("R_CHILD", "CHILD_NET", &[]));
+    ds.active_path = Some(top.clone());
+
+    let (ctx, issues) = super::build_export_scope(&ds).expect("context");
+
+    assert_eq!(
+        page_paths(&ctx),
+        vec![top],
+        "the child is not a printed page"
+    );
+    let names = net_names(&ctx);
+    assert!(
+        names.iter().any(|n| n == "CHILD_NET"),
+        "the child subtree must be in the exported netlist, {names:?}"
+    );
+    assert_eq!(
+        netlist_references(&ctx),
+        vec!["R_CHILD".to_string(), "R_TOP".to_string()],
+        "a dropped subtree is missing components on the board"
+    );
+    assert!(
+        issues.is_empty(),
+        "nothing is missing, so no stitch issue may be manufactured: {issues:?}"
+    );
+}
+
+#[test]
+fn a_child_only_on_disk_is_stitched_without_being_opened() {
+    // Same completeness requirement one step further out: the child is neither
+    // in `data.sheets` nor open as a tab, but it is sitting next to its parent
+    // on disk. `MissingChild` must mean *missing*, not merely *unopened*.
+    let dir = std::env::temp_dir().join(format!("signex-export-disk-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).expect("tempdir");
+    let child_text =
+        signex_types::format::SnxSchematic::new(sheet_with_net("R_DISK", "ON_DISK_NET", &[]))
+            .write_string()
+            .expect("serialize child");
+    std::fs::write(dir.join("child.snxsch"), child_text).expect("write child");
+
+    let dir_str = dir.to_string_lossy().to_string();
+    let mut ds = workspace(&dir_str, &["top.snxsch"]);
+    let top = dir.join("top.snxsch");
+    open_with(
+        &mut ds,
+        &top,
+        sheet_with_net("R_TOP", "TOP_NET", &["child.snxsch"]),
+    );
+    ds.active_path = Some(top);
+
+    let (ctx, issues) = super::build_export_scope(&ds).expect("context");
+    let names = net_names(&ctx);
+    std::fs::remove_dir_all(&dir).ok();
+
+    assert!(
+        names.iter().any(|n| n == "ON_DISK_NET"),
+        "an unopened child on disk must be stitched in, {names:?}"
+    );
+    assert!(issues.is_empty(), "nothing is missing: {issues:?}");
+}
+
+#[test]
+fn a_project_export_roots_at_the_project_root_not_the_active_child() {
+    // BEHAVIOURAL CHANGE. Rooting at `active_path` when it happened to be
+    // listed made one File > Export Netlist yield either the project netlist
+    // or a subtree-only netlist depending on whether the sheet in focus had
+    // ever been added to `data.sheets`. An owned project-wide export roots at
+    // the project root, always.
+    let mut ds = workspace("/w/a", &["top.snxsch", "power.snxsch"]);
+    let top = PathBuf::from("/w/a").join("top.snxsch");
+    let power = PathBuf::from("/w/a").join("power.snxsch");
+    open_with(
+        &mut ds,
+        &top,
+        sheet_with_net("R_TOP", "TOP_NET", &["power.snxsch"]),
+    );
+    open_with(&mut ds, &power, sheet_with_net("R_POWER", "POWER_NET", &[]));
+    ds.active_path = Some(power);
+
+    let names = net_names(&context(&ds));
+    assert!(
+        names.iter().any(|n| n == "TOP_NET"),
+        "a project export is rooted at the project root even with a child \
+         sheet focused, so the root's own nets are present: {names:?}"
     );
 }
 
@@ -301,5 +529,112 @@ fn a_stale_persisted_dir_does_not_desync_ownership_from_the_sheet_paths() {
         page_paths(&ctx),
         vec![top],
         "one convention only: the sheet path must be the one ownership matched"
+    );
+}
+
+// -- Definition of done (b): per-deliverable severity policy ---------------
+
+/// Count the diagnostics mentioning `marker`. The panel buffer is global, so
+/// every test that asserts on it uses a filename unique to itself.
+fn diagnostic_count(marker: &str) -> usize {
+    let _ = crate::diagnostics::init_logging();
+    crate::diagnostics::recent_entries()
+        .iter()
+        .filter(|e| e.message.contains(marker))
+        .count()
+}
+
+/// A project whose root references `missing` — a child that is neither open
+/// nor on disk. The one case that is a *genuine* `MissingChild`.
+fn app_with_missing_child(missing: &str) -> Signex {
+    let dir = std::env::temp_dir().join(format!("signex-export-missing-{}", Uuid::new_v4()));
+    let mut app = app_workspace(&dir.to_string_lossy(), &["top.snxsch"]);
+    let top = dir.join("top.snxsch");
+    open_with(
+        &mut app.document_state,
+        &top,
+        sheet_with_net("R_TOP", "TOP_NET", &[missing]),
+    );
+    app.document_state.active_path = Some(top);
+    app
+}
+
+#[test]
+fn netlist_export_refuses_to_write_an_incomplete_netlist() {
+    // The .net file is machine-consumed: a PCB imports it and a missing
+    // subtree becomes missing components on the board, plus nets that stayed
+    // split where they should have merged through the missing sheet's ports.
+    // Nothing downstream reads a warning, so nothing is written.
+    let mut app = app_with_missing_child("gone-net.snxsch");
+    let out = std::env::temp_dir().join(format!("signex-refuse-{}.net", Uuid::new_v4()));
+
+    let _ = app.handle_export_netlist_finished(Ok(out.clone()));
+
+    assert!(
+        !out.exists(),
+        "an incomplete netlist must not reach disk: {}",
+        out.display()
+    );
+    let err = app
+        .document_state
+        .export_error
+        .clone()
+        .expect("the refusal must be raised through the export_error modal");
+    assert!(
+        err.contains("gone-net.snxsch"),
+        "the modal must name what is missing: {err}"
+    );
+    std::fs::remove_file(&out).ok();
+}
+
+#[test]
+fn pdf_export_proceeds_and_warns_once_per_user_action() {
+    // The PDF is human-consumed: printing or reviewing mid-refactor with a
+    // child genuinely absent from disk is a real workflow, so it degrades
+    // rather than refuses — but the warning must reach the Messages panel, and
+    // exactly once per user action.
+    let marker = format!("gone-pdf-{}.snxsch", Uuid::new_v4());
+    let _ = crate::diagnostics::init_logging();
+    let before = diagnostic_count(&marker);
+    let mut app = app_with_missing_child(&marker);
+    let out = std::env::temp_dir().join(format!("signex-partial-{}.pdf", Uuid::new_v4()));
+
+    let _ = app.handle_export_pdf_finished(Ok(out.clone()));
+
+    assert!(
+        app.document_state.export_error.is_none(),
+        "a partial PDF proceeds: {:?}",
+        app.document_state.export_error
+    );
+    assert!(out.exists(), "the PDF must still be written");
+    assert_eq!(
+        diagnostic_count(&marker) - before,
+        1,
+        "the stitch warning must reach the user exactly once per user action"
+    );
+    std::fs::remove_file(&out).ok();
+}
+
+#[test]
+fn rerasterizing_the_preview_does_not_flood_the_messages_panel() {
+    // Round 3 logged each stitch issue inside the shared context builder,
+    // which `rerasterize_print_preview` calls unconditionally — from eleven
+    // call sites including a text-input handler that fires per keystroke. The
+    // panel keeps 200 entries with no dedupe, so the warnings evicted the
+    // user's ERC results and then their own earliest copies.
+    let marker = format!("gone-rerender-{}.snxsch", Uuid::new_v4());
+    let _ = crate::diagnostics::init_logging();
+    let app = app_with_missing_child(&marker);
+    let before = diagnostic_count(&marker);
+
+    for _ in 0..25 {
+        let _ = super::build_export_context(&app.document_state);
+    }
+
+    assert_eq!(
+        diagnostic_count(&marker),
+        before,
+        "the shared context builder must not log — surfacing belongs to the \
+         three user-action entry points"
     );
 }

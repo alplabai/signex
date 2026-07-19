@@ -1,8 +1,10 @@
 //! Export / print-preview menu handlers (PDF, netlist, BOM, print).
 
-use std::path::PathBuf;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 use signex_output::{ExportContext, ProjectMetadata, SheetSnapshot};
+use signex_types::schematic::SchematicSheet;
 
 mod bom;
 mod pdf_netlist;
@@ -21,17 +23,51 @@ fn project_root_sheet_path(project: &crate::app::state::LoadedProject) -> Option
     Some(project.dir().join(filename))
 }
 
-/// Assemble the export context and log whatever the assembly found wrong —
-/// the entry point every export/preview handler calls.
+/// Assemble the export context, discarding the stitch issues — for the
+/// callers that render an *intermediate* artifact rather than a deliverable
+/// (the BOM dialog, every print-preview rerasterize).
 ///
-/// The logging sits in this wrapper, not in [`build_export_scope`], so the
-/// scope build stays a pure function of `DocumentState` that a test can assert
-/// the diagnostics of without reaching into the global logger.
+/// Deliberately silent. Round 3 logged each issue here, and
+/// `rerasterize_print_preview` calls this on every settings toggle *and* on
+/// every keystroke in the specific-page input; the Messages panel keeps only
+/// `MAX_DIAGNOSTIC_ENTRIES` (200) with no dedupe, so those copies evicted the
+/// user's ERC results and eventually the earliest copies of the very stitch
+/// warnings this path exists to deliver. Surfacing belongs to the user
+/// actions — see [`log_stitch_issues`].
 fn build_export_context(
     document_state: &crate::app::state::DocumentState,
 ) -> Option<ExportContext> {
-    let (ctx, issues) = build_export_scope(document_state)?;
-    for issue in &issues {
+    build_export_scope(document_state).map(|(ctx, _issues)| ctx)
+}
+
+/// Whether the derived netlist is missing connectivity rather than merely
+/// oddly named.
+///
+/// A `MissingChild` subtree does not just leave its own nets out: nets that
+/// should merge through that sheet's ports stay split, so the surviving nets
+/// can carry the *wrong* names. `SheetCycle` truncates the walk with the same
+/// effect. The other `StitchIssue` variants (duplicate UUIDs, shared
+/// references, name collisions) describe a complete netlist with a naming or
+/// annotation problem — loud, but not a hole.
+fn netlist_is_incomplete(issues: &[signex_net::StitchIssue]) -> bool {
+    issues.iter().any(|issue| {
+        matches!(
+            issue,
+            signex_net::StitchIssue::MissingChild { .. }
+                | signex_net::StitchIssue::SheetCycle { .. }
+        )
+    })
+}
+
+/// Put the stitch issues in front of the user — called once per *user action*
+/// (print-preview open, PDF written, netlist written), never from the shared
+/// context builder.
+fn log_stitch_issues(
+    document_state: &crate::app::state::DocumentState,
+    ctx: &ExportContext,
+    issues: &[signex_net::StitchIssue],
+) {
+    for issue in issues {
         crate::diagnostics::log_warning(format!(
             "Export: {}",
             crate::app::project_sheets::stitch_issue_message(issue)
@@ -53,13 +89,74 @@ fn build_export_context(
                 .as_ref()
                 .map_or_else(String::new, |p| p.display().to_string())
         ));
+    } else if netlist_is_incomplete(issues) {
+        crate::diagnostics::log_warning(
+            "Export: the project netlist is incomplete — NET_NAME() annotations may be \
+             unresolved and may show the WRONG net name, because nets that merge through \
+             the missing sheet's ports stay split. Do not use this export as a wiring \
+             reference.",
+        );
     }
-    Some(ctx)
 }
 
-/// Snapshot every open engine as a `SheetSnapshot`, active engine first,
-/// alongside the stitch issues raised while deriving the project netlist.
-/// Returns `None` if there is no active engine.
+/// Read one sheet: the live engine snapshot when the file is open as a tab
+/// (so unsaved edits are in the export), a disk parse otherwise.
+fn load_sheet(
+    document_state: &crate::app::state::DocumentState,
+    path: &Path,
+) -> anyhow::Result<SchematicSheet> {
+    if let Some(engine) = document_state.engines.get(path) {
+        return Ok(engine.document().clone());
+    }
+    let text = std::fs::read_to_string(path)?;
+    Ok(signex_types::format::SnxSchematic::parse(&text)?.sheet)
+}
+
+/// Every sheet reachable from `root_path` down the `child_sheets` graph, keyed
+/// by absolute path.
+///
+/// The netlist input set is **not** the page set. `data.sheets` lists the
+/// pages a project *prints*; a hierarchical child is reached by a
+/// `child_sheets` reference and is never added to that list — descending into
+/// one opens a tab without registering it. Deriving the netlist from the pages
+/// alone therefore drops every such subtree and reports a `MissingChild` for a
+/// sheet that is sitting in memory, or right next to its parent on disk. That
+/// is where the export's phantom stitch issues came from (#406).
+///
+/// Cycle-safe via the visited set. A reference that resolves to neither an
+/// open tab nor a readable file is simply absent, which is precisely the case
+/// `build_project_netlist` reports as a genuine `MissingChild`.
+fn reachable_sheets(
+    document_state: &crate::app::state::DocumentState,
+    root_path: &Path,
+) -> HashMap<PathBuf, SchematicSheet> {
+    let mut out: HashMap<PathBuf, SchematicSheet> = HashMap::new();
+    let mut queue = vec![root_path.to_path_buf()];
+    while let Some(path) = queue.pop() {
+        if out.contains_key(&path) {
+            continue;
+        }
+        let Ok(sheet) = load_sheet(document_state, &path) else {
+            continue;
+        };
+        let dir = path.parent().unwrap_or_else(|| Path::new("")).to_path_buf();
+        for child in &sheet.child_sheets {
+            queue.push(dir.join(&child.filename));
+        }
+        out.insert(path, sheet);
+    }
+    out
+}
+
+/// The export's page set + metadata + project netlist, alongside the stitch
+/// issues raised while deriving that netlist. Returns `None` if there is no
+/// active engine.
+///
+/// The issues are handed back rather than acted on here, because severity is
+/// a **per-deliverable policy**, not a property of the scope: the `.net` file
+/// is machine-consumed and refuses on a hole, the PDF is human-consumed and
+/// degrades loudly. See `handle_export_netlist_finished` /
+/// `handle_export_pdf_finished`.
 fn build_export_scope(
     document_state: &crate::app::state::DocumentState,
 ) -> Option<(ExportContext, Vec<signex_net::StitchIssue>)> {
@@ -85,27 +182,15 @@ fn build_export_scope(
         let total = project.data.sheets.len().max(1);
         for (i, entry) in project.data.sheets.iter().enumerate() {
             let abs_path: PathBuf = project_dir.join(&entry.filename);
-            let schematic = match document_state.engines.get(&abs_path) {
-                Some(engine) => engine.document().clone(),
-                None => {
-                    let parse_result = std::fs::read_to_string(&abs_path)
-                        .map_err(anyhow::Error::from)
-                        .and_then(|text| {
-                            signex_types::format::SnxSchematic::parse(&text)
-                                .map(|snx| snx.sheet)
-                                .map_err(anyhow::Error::from)
-                        });
-                    match parse_result {
-                        Ok(s) => s,
-                        Err(e) => {
-                            log::warn!(
-                                "Print preview: skipping sheet {} ({}): {e}",
-                                entry.name,
-                                abs_path.display()
-                            );
-                            continue;
-                        }
-                    }
+            let schematic = match load_sheet(document_state, &abs_path) {
+                Ok(s) => s,
+                Err(e) => {
+                    log::warn!(
+                        "Print preview: skipping sheet {} ({}): {e}",
+                        entry.name,
+                        abs_path.display()
+                    );
+                    continue;
                 }
             };
             snapshots.push(SheetSnapshot {
@@ -168,41 +253,42 @@ fn build_export_scope(
     // each parent references — the shared project view (ADR-0002 D8).
     let mut issues: Vec<signex_net::StitchIssue> = Vec::new();
     let netlist = {
-        let by_path: std::collections::HashMap<PathBuf, signex_types::schematic::SchematicSheet> =
-            sheets
+        // Root a project-wide export at the *project's* root sheet,
+        // unconditionally. Rooting at `active_path` made one File > Export
+        // Netlist yield either the project netlist or a subtree-only netlist
+        // depending on whether the sheet the user happened to be looking at
+        // had ever been added to `data.sheets` — same user intent, two
+        // different .net files, no way to tell them apart. Active-path
+        // rooting stays on the loose-document path, where the active document
+        // *is* the whole scope.
+        let root_path = match owning_project {
+            Some(project) => project_root_sheet_path(project),
+            None => Some(active_path.clone()),
+        };
+        root_path.and_then(|root_path| {
+            // Input set = the printed pages *plus* everything reachable down
+            // the child-sheet graph. See `reachable_sheets`: the pages alone
+            // are an incomplete netlist input, and it is that incompleteness
+            // — not the reporting of it — that manufactured the MissingChild
+            // issues this export used to emit.
+            let mut by_path: HashMap<PathBuf, SchematicSheet> = sheets
                 .iter()
                 .map(|s| (s.path.clone(), s.schematic.clone()))
                 .collect();
-        // Root the netlist at the active document when it is one of the
-        // exported pages. It isn't always: descending into a hierarchical
-        // child opens a tab that was never added to the project's `sheets`
-        // list, so a project-scoped export covers the project's pages while
-        // the active path sits below them. Fall back to the project's own
-        // root sheet there — the export is project-wide, so the project
-        // netlist is the one that belongs in it.
-        let root_path = Some(active_path.clone())
-            .filter(|p| by_path.contains_key(p))
-            .or_else(|| owning_project.and_then(project_root_sheet_path));
-        root_path.and_then(|root_path| {
-            by_path.get(&root_path).map(|root| {
-                let children = crate::app::project_sheets::project_children_map(&by_path);
-                let project_dir = owning_project.map(|p| p.dir().to_path_buf());
-                let root_filename = crate::app::project_sheets::root_reference_name(
-                    &root_path,
-                    project_dir.as_deref(),
-                );
-                // `build_project_netlist` always produces a netlist and
-                // reports what it could not stitch in-band. Dropping
-                // `.issues` here would ship a plausible-looking netlist that
-                // is silently missing a whole subtree — strictly worse than
-                // the `None` this path used to yield, which at least failed
-                // loudly. The mutation gateway already surfaces these; so
-                // does the export now.
-                let result =
-                    signex_net::build_project_netlist(root, &children, root_filename.as_deref());
-                issues = result.issues;
-                result.netlist
-            })
+            by_path.extend(reachable_sheets(document_state, &root_path));
+            let root = by_path.get(&root_path)?.clone();
+            let children = crate::app::project_sheets::project_children_map(&by_path);
+            let project_dir = owning_project.map(|p| p.dir().to_path_buf());
+            let root_filename =
+                crate::app::project_sheets::root_reference_name(&root_path, project_dir.as_deref());
+            // `build_project_netlist` always produces a netlist and reports
+            // what it could not stitch in-band. The issues are returned to the
+            // caller rather than dropped: they decide policy — the .net export
+            // refuses on them, the PDF proceeds and warns.
+            let result =
+                signex_net::build_project_netlist(&root, &children, root_filename.as_deref());
+            issues = result.issues;
+            Some(result.netlist)
         })
     };
 

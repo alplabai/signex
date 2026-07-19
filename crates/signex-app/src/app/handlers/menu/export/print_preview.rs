@@ -14,13 +14,18 @@ impl Signex {
             return iced::Task::none();
         }
 
-        let ctx = match super::build_export_context(&self.document_state) {
+        let (ctx, issues) = match super::build_export_scope(&self.document_state) {
             Some(c) => c,
             None => {
                 log::warn!("Print preview: no active schematic");
                 return iced::Task::none();
             }
         };
+        // Opening the modal is a user action, so the stitch issues surface
+        // here — once. `rerasterize_print_preview` below must stay silent: it
+        // fires on every settings toggle and on every keystroke in the
+        // specific-page input.
+        super::log_stitch_issues(&self.document_state, &ctx, &issues);
 
         // Derive page size and orientation from the active schematic document
         // so the preview matches the actual sheet dimensions rather than
