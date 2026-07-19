@@ -289,11 +289,22 @@ fn hash_from_cell(s: &str) -> Result<[u8; 32], LibraryError> {
     if s.is_empty() {
         return Ok([0u8; 32]);
     }
-    if s.len() != 64 {
+    // Validate on bytes before slicing: `s.len()` is a BYTE count, so a
+    // hand-edited cell of 61×'a' + '€' is 64 bytes and clears a naive
+    // length guard, then `&s[60..62]` splits the 3-byte '€' and panics.
+    // Requiring every byte to be ASCII hex makes each `i*2` offset a
+    // provable char boundary.
+    let bytes = s.as_bytes();
+    if bytes.len() != 64 {
         return Err(LibraryError::Backend(format!(
             "content_hash must be 64 hex chars, got {}",
-            s.len()
+            bytes.len()
         )));
+    }
+    if !bytes.iter().all(u8::is_ascii_hexdigit) {
+        return Err(LibraryError::Backend(
+            "content_hash must be 64 hex chars".to_string(),
+        ));
     }
     let mut out = [0u8; 32];
     for (i, byte) in out.iter_mut().enumerate() {
@@ -582,6 +593,22 @@ mod tests {
         let s = hash_to_cell(&h);
         let back = hash_from_cell(&s).unwrap();
         assert_eq!(h, back);
+    }
+
+    /// A 64-BYTE cell whose bytes are not all ASCII hex is a recoverable
+    /// error, never a char-boundary panic.
+    #[test]
+    fn hash_from_cell_rejects_multibyte_cell() {
+        let cell = format!("{}{}", "a".repeat(61), '€');
+        assert_eq!(cell.len(), 64, "cell must be 64 BYTES to reach the slicing");
+        assert!(matches!(
+            hash_from_cell(&cell),
+            Err(LibraryError::Backend(_))
+        ));
+        assert!(matches!(
+            hash_from_cell(&"z".repeat(64)),
+            Err(LibraryError::Backend(_))
+        ));
     }
 
     #[test]

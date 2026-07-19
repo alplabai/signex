@@ -19,6 +19,7 @@ use signex_sketch::attr::{
     ChamferedCorners, DrillSpec, PadAttr, PadKind, PadShape, PadSide, PasteAperturePattern,
 };
 use signex_sketch::entity::{Entity, EntityKind};
+use signex_sketch::error::SketchError;
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 use signex_sketch::sketch::SketchData;
@@ -373,6 +374,28 @@ fn bake_chamfered_native() {
         warnings.iter().all(|w| !w.contains("Chamfered")),
         "v0.14 should not warn on Chamfered; got {warnings:?}"
     );
+}
+
+/// A chamfer ratio carrying a physical unit is an error, not a silent
+/// clamp: `"20um"` used to bake `chamfer_ratio == 0.5` with no warning.
+#[test]
+fn bake_chamfered_rejects_united_ratio() {
+    let mut s = Sketch::new();
+    let p = s.add_point(0.0, 0.0);
+    let mut pad = smd_rect_pad("1", "1.0mm", "0.5mm");
+    pad.shape = PadShape::Chamfered {
+        chamfer_ratio_expr: "20um".into(),
+        corners: ChamferedCorners::ALL,
+    };
+    s.attach_pad(p, pad);
+
+    let solve = solve(&s.data);
+    let mut out = Vec::new();
+    let mut warnings = Vec::new();
+    match bake_pads(&s.data, &solve, &HashMap::new(), &mut out, &mut warnings) {
+        Err(SketchError::Unit(_)) => {}
+        other => panic!("expected SketchError::Unit, got {other:?}"),
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────
