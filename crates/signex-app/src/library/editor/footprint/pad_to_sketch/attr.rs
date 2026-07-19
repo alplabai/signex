@@ -64,7 +64,10 @@ pub(super) fn pad_attr_from_editor_pad(pad: &EditorPad) -> PadAttr {
         shape: map_shape(&pad.shape),
         size_x_expr: format!("{}mm", format_f64(pad.size_mm.0)),
         size_y_expr: format!("{}mm", format_f64(pad.size_mm.1)),
-        rotation_expr: None,
+        // Hardcoding `None` here baked every sketch-mirrored pad at 0°
+        // while `EditorPad::to_pad` wrote the true angle to the literal
+        // `Pad` — two persistence paths, two answers for one pad.
+        rotation_expr: Some(super::rotation_expr(pad.rotation_deg)),
         offset_x_expr: None,
         offset_y_expr: None,
         drill,

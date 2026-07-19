@@ -178,17 +178,67 @@ impl EditorPad {
             .unwrap_or(FpLayer::FCu)
     }
 
-    /// Bounding box (min_x, min_y, max_x, max_y) in mm.
+    /// Un-rotated, axis-aligned half-extent box (min_x, min_y, max_x,
+    /// max_y) in mm.
+    ///
+    /// This is the PAD-LOCAL frame — `rotation_deg` is deliberately
+    /// ignored. Only callers that reason in the pad's own frame want
+    /// this (the chamfer / round-rect anchor derivation in
+    /// `pad_to_sketch::solve`). Anything asking "where does this pad
+    /// actually sit on the board" wants [`Self::rotated_aabb_mm`] or
+    /// [`Self::rotated_corners_mm`] instead — reading the un-rotated
+    /// box is what left hit-test, courtyard, rubber-band and the pad
+    /// renderer all disagreeing with the drawn copper.
     pub fn bbox_mm(&self) -> (f64, f64, f64, f64) {
         let (cx, cy) = self.position_mm;
         let (w, h) = self.size_mm;
         (cx - w / 2.0, cy - h / 2.0, cx + w / 2.0, cy + h / 2.0)
     }
 
-    /// AABB containment check.
+    /// The four half-extent corners rotated about `position_mm` by
+    /// `rotation_deg`, in `[ne, se, sw, nw]` order — the order the
+    /// sketch-mirror corner code already assumes.
+    pub fn rotated_corners_mm(&self) -> [(f64, f64); 4] {
+        let (cx, cy) = self.position_mm;
+        let (hw, hh) = (self.size_mm.0 / 2.0, self.size_mm.1 / 2.0);
+        // [ne, se, sw, nw] as offsets from the centre.
+        let local = [(hw, -hh), (hw, hh), (-hw, hh), (-hw, -hh)];
+        if self.rotation_deg == 0.0 {
+            return local.map(|(dx, dy)| (cx + dx, cy + dy));
+        }
+        let (sin, cos) = self.rotation_deg.to_radians().sin_cos();
+        local.map(|(dx, dy)| (cx + dx * cos - dy * sin, cy + dx * sin + dy * cos))
+    }
+
+    /// Axis-aligned bounding box of the ROTATED pad, in mm. Equals
+    /// [`Self::bbox_mm`] at zero rotation and grows to enclose the
+    /// turned copper otherwise.
+    pub fn rotated_aabb_mm(&self) -> (f64, f64, f64, f64) {
+        if self.rotation_deg == 0.0 {
+            return self.bbox_mm();
+        }
+        let corners = self.rotated_corners_mm();
+        corners.iter().skip(1).fold(
+            (corners[0].0, corners[0].1, corners[0].0, corners[0].1),
+            |(x0, y0, x1, y1), &(x, y)| (x0.min(x), y0.min(y), x1.max(x), y1.max(y)),
+        )
+    }
+
+    /// Point-in-pad containment, rotation-aware. Inverse-rotates the
+    /// probe into the pad's own frame and compares against the half
+    /// extents, so a turned pad is hit on its real copper rather than
+    /// on the axis-aligned box it would occupy unrotated.
     pub fn contains_mm(&self, x: f64, y: f64) -> bool {
-        let (xmin, ymin, xmax, ymax) = self.bbox_mm();
-        x >= xmin && x <= xmax && y >= ymin && y <= ymax
+        let (cx, cy) = self.position_mm;
+        let (hw, hh) = (self.size_mm.0 / 2.0, self.size_mm.1 / 2.0);
+        let (dx, dy) = (x - cx, y - cy);
+        let (lx, ly) = if self.rotation_deg == 0.0 {
+            (dx, dy)
+        } else {
+            let (sin, cos) = self.rotation_deg.to_radians().sin_cos();
+            (dx * cos + dy * sin, -dx * sin + dy * cos)
+        };
+        lx.abs() <= hw && ly.abs() <= hh
     }
 
     pub(super) fn from_pad(p: &Pad) -> Self {

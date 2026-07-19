@@ -28,13 +28,11 @@ pub(super) fn mint_pad_corner_outline(
     plane_id: PlaneId,
     pad: &EditorPad,
 ) -> [SketchEntityId; 4] {
-    let bbox = pad.bbox_mm();
-    let positions: [(f64, f64); 4] = [
-        (bbox.2, bbox.1), // ne
-        (bbox.2, bbox.3), // se
-        (bbox.0, bbox.3), // sw
-        (bbox.0, bbox.1), // nw
-    ];
+    // Rotated corners — the outline has to track the drawn copper, not
+    // the un-rotated box. Safe against the solver: no Horizontal /
+    // Vertical constraint is minted on these construction lines, so a
+    // turned quad cannot make the system unsatisfiable.
+    let positions = pad.rotated_corners_mm();
     let ids: [SketchEntityId; 4] = std::array::from_fn(|i| {
         let (x, y) = positions[i];
         push_construction_point(sketch, plane_id, x, y)

@@ -16,6 +16,7 @@
 //! - [`mode`] — `EditorMode`, `FpActiveBarMenu`, `PadStackTab`.
 //! - [`context_menu`] — right-click menu state types.
 //! - [`placement`] — `PlacementInput*`, `PlaceArcPending`.
+//! - [`selection`] — `selected_pad_indices`, the shared selection union.
 //! - [`tool`] — `PadsTool`, `SketchTool`, `ToolPending`.
 //! - [`selection_filter`] — `SelectionFilter`, `SelectionFilterKind`.
 //! - [`snap_options`] — `SnapOptions`, `GridDef`, `Guide*`, `SnapSubTab`,
@@ -25,6 +26,7 @@ pub mod context_menu;
 pub mod mode;
 pub mod pad;
 pub mod placement;
+pub mod selection;
 pub mod selection_filter;
 pub mod snap_options;
 pub mod tool;
@@ -318,7 +320,7 @@ impl FootprintEditorState {
             });
         };
         for pad in &self.pads {
-            let (x0, y0, x1, y1) = pad.bbox_mm();
+            let (x0, y0, x1, y1) = pad.rotated_aabb_mm();
             expand(x0, y0, x1, y1);
         }
         if let Some(c) = self.courtyard_mm {
@@ -483,7 +485,7 @@ impl FootprintEditorState {
         let mut max_x = f64::NEG_INFINITY;
         let mut max_y = f64::NEG_INFINITY;
         for pad in &self.pads {
-            let (x0, y0, x1, y1) = pad.bbox_mm();
+            let (x0, y0, x1, y1) = pad.rotated_aabb_mm();
             if x0 < min_x {
                 min_x = x0;
             }
@@ -527,22 +529,20 @@ impl FootprintEditorState {
             return false;
         }
 
-        // Per-pad bbox polygon, CCW. Round/Oval/RoundRect/etc. fall
-        // back to bbox here for v0.27; a follow-up can mint the
-        // shape-accurate outline (sampled circle for Round, arc-
-        // anchor for RoundRect, etc.) so the courtyard hugs the
-        // copper rather than the enclosing rectangle.
+        // Per-pad quad from the ROTATED corners, so a turned pad's
+        // courtyard hugs the copper instead of the box it would
+        // occupy unrotated. Round/Oval/RoundRect/etc. still fall back
+        // to the enclosing quad; a follow-up can mint the shape-
+        // accurate outline (sampled circle for Round, arc-anchor for
+        // RoundRect, etc.).
         let pad_polys: Vec<Vec<Point2>> = self
             .pads
             .iter()
             .map(|p| {
-                let (x0, y0, x1, y1) = p.bbox_mm();
-                vec![
-                    Point2::new(x0, y0),
-                    Point2::new(x1, y0),
-                    Point2::new(x1, y1),
-                    Point2::new(x0, y1),
-                ]
+                p.rotated_corners_mm()
+                    .iter()
+                    .map(|&(x, y)| Point2::new(x, y))
+                    .collect()
             })
             .collect();
 
@@ -705,6 +705,20 @@ impl FootprintEditorState {
                 attr.hole_rotation_deg = pad.hole_rotation_deg;
                 attr.copper_offset_x_mm = pad.copper_offset_x_mm;
                 attr.copper_offset_y_mm = pad.copper_offset_y_mm;
+                // Rotation was the one geometry field this mirror never
+                // wrote, so a sketch-baked pad came back at 0° while the
+                // literal `Pad` carried the true angle. Guarded: an
+                // authored `= expr` binding is the user's, and a blind
+                // overwrite would silently destroy it. Plain literals
+                // (and `None`) are ours to own.
+                let authored = attr
+                    .rotation_expr
+                    .as_deref()
+                    .is_some_and(|e| e.trim_start().starts_with('='));
+                if !authored {
+                    attr.rotation_expr =
+                        Some(super::pad_to_sketch::rotation_expr(pad.rotation_deg));
+                }
             }
         }
     }

@@ -210,7 +210,7 @@ impl FootprintCanvas<'_> {
         // the first hit.
         let mut hits: Vec<usize> = Vec::new();
         for (idx, pad) in self.state.pads.iter().enumerate() {
-            let (px0, py0, px1, py1) = pad.bbox_mm();
+            let (px0, py0, px1, py1) = pad.rotated_aabb_mm();
             let fully_inside = px0 >= x0 && px1 <= x1 && py0 >= y0 && py1 <= y1;
             let fully_outside = px1 < x0 || px0 > x1 || py1 < y0 || py0 > y1;
             let touching = !fully_outside;

@@ -34,6 +34,16 @@ use mint::{
     mint_round_pad_geometry, mint_round_rect_pad_geometry,
 };
 
+/// The sketch-side expression for a pad's rotation. Shared by the
+/// mint path (`pad_attr_from_editor_pad`) and the Pads→Sketch
+/// attribute mirror in `sync_pads_to_primitive`, so both write the
+/// identical string and the two persistence paths cannot drift.
+/// Emits an explicit `deg` unit; `signex_bake::pad` reads it back
+/// through the Angle unit family.
+pub fn rotation_expr(deg: f64) -> String {
+    format!("{}deg", attr::format_f64(deg))
+}
+
 pub use solve::{
     mirror_solve_to_chamfer_anchors, mirror_solve_to_oval_geometry, mirror_solve_to_oval_size,
     mirror_solve_to_pad_stack, mirror_solve_to_round_rect_geometry,
@@ -213,13 +223,7 @@ pub fn mirror_move_pad_in_sketch(pad: &EditorPad, footprint: &mut Footprint) {
     // v0.16 — also reposition the outline-corner Points so the
     // construction outline tracks the pad bbox.
     if let Some(corners) = pad.corner_entity_ids {
-        let bbox = pad.bbox_mm();
-        let positions: [(f64, f64); 4] = [
-            (bbox.2, bbox.1), // ne
-            (bbox.2, bbox.3), // se
-            (bbox.0, bbox.3), // sw
-            (bbox.0, bbox.1), // nw
-        ];
+        let positions = pad.rotated_corners_mm();
         for (id, (px, py)) in corners.iter().zip(positions.iter()) {
             helpers::set_point_xy(sketch, *id, *px, *py);
         }

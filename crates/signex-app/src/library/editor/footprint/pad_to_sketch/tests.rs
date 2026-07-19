@@ -346,3 +346,125 @@ fn shape_change_preserves_corner_positions() {
         "corner positions must remain stable across shape changes"
     );
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Rotation reaches the SKETCH persistence path.
+//
+// `pad_attr_from_editor_pad` hardcoded `rotation_expr: None` and
+// `sync_pads_to_primitive` never wrote the field, so
+// `signex_bake::pad::rotation_deg` mapped `None -> 0.0` while
+// `EditorPad::to_pad` wrote the true angle onto the literal `Pad`.
+// Two persistence paths, two answers for the same pad.
+// ─────────────────────────────────────────────────────────────────
+
+#[test]
+fn minted_pad_attr_carries_the_rotation() {
+    let mut fp = Footprint::empty("test");
+    let mut pad = editor_pad("1", 0.0, 0.0);
+    pad.rotation_deg = 45.0;
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+    let id = pad.sketch_entity_id.expect("centre Point minted");
+    let attr = fp
+        .sketch
+        .as_ref()
+        .unwrap()
+        .entities
+        .iter()
+        .find(|e| e.id == id)
+        .and_then(|e| e.pad.as_ref())
+        .expect("PadAttr on the centre Point");
+    assert_eq!(
+        attr.rotation_expr.as_deref(),
+        Some("45deg"),
+        "the minted PadAttr must carry the pad's rotation"
+    );
+}
+
+#[test]
+fn rotation_survives_a_bake_round_trip() {
+    use signex_sketch::solver::Solver;
+    use signex_sketch::solver::residual::ResolvedParams;
+
+    let mut fp = Footprint::empty("test");
+    let mut pad = editor_pad("1", 0.0, 0.0);
+    pad.rotation_deg = 45.0;
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+    let sketch = fp.sketch.as_ref().unwrap();
+    let solve = Solver::default()
+        .solve(sketch, &ResolvedParams::new())
+        .expect("solve");
+    let mut out = Vec::new();
+    let mut warnings = Vec::new();
+    signex_bake::bake_pads(
+        sketch,
+        &solve,
+        &std::collections::HashMap::new(),
+        &mut out,
+        &mut warnings,
+    )
+    .expect("bake_pads ok");
+
+    assert_eq!(out.len(), 1, "one pad baked");
+    assert_eq!(
+        out[0].rotation, 45.0,
+        "the sketch-baked pad must carry the authored rotation, not 0°"
+    );
+}
+
+#[test]
+fn sync_preserves_an_authored_rotation_expression() {
+    use crate::library::editor::footprint::state::FootprintEditorState;
+
+    let mut fp = Footprint::empty("test");
+    let mut pad = editor_pad("1", 0.0, 0.0);
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+    let id = pad.sketch_entity_id.expect("centre Point minted");
+
+    // The user binds rotation to a parameter. The Pads→Sketch mirror
+    // must not clobber it with the editor's literal angle.
+    let set_expr = |fp: &mut Footprint, expr: Option<String>| {
+        fp.sketch
+            .as_mut()
+            .unwrap()
+            .entities
+            .iter_mut()
+            .find(|e| e.id == id)
+            .and_then(|e| e.pad.as_mut())
+            .unwrap()
+            .rotation_expr = expr;
+    };
+    let read_expr = |fp: &Footprint| -> Option<String> {
+        fp.sketch
+            .as_ref()
+            .unwrap()
+            .entities
+            .iter()
+            .find(|e| e.id == id)
+            .and_then(|e| e.pad.as_ref())
+            .unwrap()
+            .rotation_expr
+            .clone()
+    };
+
+    set_expr(&mut fp, Some("= leg_angle".into()));
+    pad.rotation_deg = 90.0;
+    let mut s = FootprintEditorState::empty();
+    s.pads = vec![pad.clone()];
+    FootprintEditorState::sync_pads_to_primitive(&s, &mut fp);
+    assert_eq!(
+        read_expr(&fp).as_deref(),
+        Some("= leg_angle"),
+        "an authored `= expr` binding is the user's and must survive the sync"
+    );
+
+    // A plain literal, by contrast, is ours to keep current.
+    set_expr(&mut fp, Some("0deg".into()));
+    FootprintEditorState::sync_pads_to_primitive(&s, &mut fp);
+    assert_eq!(
+        read_expr(&fp).as_deref(),
+        Some("90deg"),
+        "a plain literal must track the editor's rotation"
+    );
+}

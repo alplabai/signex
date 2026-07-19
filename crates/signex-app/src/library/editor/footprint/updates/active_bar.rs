@@ -109,14 +109,22 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
             editor.state.snap_subtab = sub;
             editor.canvas_cache.clear();
         }
+        // v0.28 — Rotate / Flip / Align-to-Grid act on the WHOLE
+        // selection. All three used to read `state.selected_pad` alone
+        // and silently transform one pad out of N; a partial flip in
+        // particular leaves mixed F./B. layers, which is a fab error.
+        // No `push_history()` here — `apply_footprint_primitive_edit`
+        // blanket-pushes for every message `mutates_footprint_state`
+        // classifies as mutating, and none of these three are on its
+        // exemption list. Pushing again would double-stack the history.
         FootprintEditorMsg::ActiveBarRotateSelection => {
             editor.with_parts(|state, primitive| {
-                if let Some(idx) = state.selected_pad
-                    && let Some(pad) = state.pads.get_mut(idx)
-                {
-                    pad.rotation_deg = (pad.rotation_deg + 90.0).rem_euclid(360.0);
-                    CanvasState::sync_pads_to_primitive(state, primitive);
+                for idx in state.selected_pad_indices() {
+                    if let Some(pad) = state.pads.get_mut(idx) {
+                        pad.rotation_deg = (pad.rotation_deg + 90.0).rem_euclid(360.0);
+                    }
                 }
+                CanvasState::sync_pads_to_primitive(state, primitive);
             });
             editor.state.active_bar_menu = None;
             editor.canvas_cache.clear();
@@ -124,27 +132,12 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
         }
         FootprintEditorMsg::ActiveBarFlipSelection => {
             editor.with_parts(|state, primitive| {
-                if let Some(idx) = state.selected_pad
-                    && let Some(pad) = state.pads.get_mut(idx)
-                {
-                    let new_layers: Vec<signex_library::LayerId> = pad
-                        .layers
-                        .iter()
-                        .map(|l| {
-                            let s = l.as_str();
-                            let flipped = if let Some(rest) = s.strip_prefix("F.") {
-                                format!("B.{rest}")
-                            } else if let Some(rest) = s.strip_prefix("B.") {
-                                format!("F.{rest}")
-                            } else {
-                                s.to_string()
-                            };
-                            signex_library::LayerId::new(flipped)
-                        })
-                        .collect();
-                    pad.layers = new_layers;
-                    CanvasState::sync_pads_to_primitive(state, primitive);
+                for idx in state.selected_pad_indices() {
+                    if let Some(pad) = state.pads.get_mut(idx) {
+                        pad.layers = pad.layers.iter().map(flip_layer).collect();
+                    }
                 }
+                CanvasState::sync_pads_to_primitive(state, primitive);
             });
             editor.state.active_bar_menu = None;
             editor.canvas_cache.clear();
@@ -185,19 +178,23 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
         FootprintEditorMsg::ActiveBarAlignSelectionToGrid => {
             editor.with_parts(|state, primitive| {
                 let step = state.snap_options.grid_step_mm.max(0.001);
-                if let Some(idx) = state.selected_pad
-                    && let Some(pad) = state.pads.get_mut(idx)
-                {
-                    let (x, y) = pad.position_mm;
-                    pad.position_mm = ((x / step).round() * step, (y / step).round() * step);
-                    // v0.23 — mirror the snap into the sketch so the
-                    // construction outline + centre Point follow the
-                    // pad. Skipping this left the sketch primitive
-                    // stranded at the pre-snap position.
-                    let pad_snapshot = pad.clone();
-                    pad_to_sketch::mirror_move_pad_in_sketch(&pad_snapshot, primitive);
-                    CanvasState::sync_pads_to_primitive(state, primitive);
+                let mut snapshots: Vec<crate::library::editor::footprint::state::EditorPad> =
+                    Vec::new();
+                for idx in state.selected_pad_indices() {
+                    if let Some(pad) = state.pads.get_mut(idx) {
+                        let (x, y) = pad.position_mm;
+                        pad.position_mm = ((x / step).round() * step, (y / step).round() * step);
+                        snapshots.push(pad.clone());
+                    }
                 }
+                // v0.23 — mirror the snap into the sketch so the
+                // construction outline + centre Point follow the pad.
+                // Skipping this left the sketch primitive stranded at
+                // the pre-snap position.
+                for snapshot in &snapshots {
+                    pad_to_sketch::mirror_move_pad_in_sketch(snapshot, primitive);
+                }
+                CanvasState::sync_pads_to_primitive(state, primitive);
             });
             editor.state.active_bar_menu = None;
             editor.canvas_cache.clear();
@@ -274,4 +271,19 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
         }
         _ => unreachable!("non-active_bar variant routed to active_bar::apply"),
     }
+}
+
+/// Swap a layer between the front and back side. Anything without an
+/// `F.` / `B.` prefix (`*.Cu`, bare names) is side-agnostic and passes
+/// through unchanged.
+fn flip_layer(layer: &signex_library::LayerId) -> signex_library::LayerId {
+    let s = layer.as_str();
+    let flipped = if let Some(rest) = s.strip_prefix("F.") {
+        format!("B.{rest}")
+    } else if let Some(rest) = s.strip_prefix("B.") {
+        format!("F.{rest}")
+    } else {
+        s.to_string()
+    };
+    signex_library::LayerId::new(flipped)
 }
