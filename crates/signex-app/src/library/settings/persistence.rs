@@ -151,17 +151,20 @@ pub fn load_preferred_order_at(path: &std::path::Path) -> Vec<DistributorSource>
     out
 }
 
-/// Persist the preferred-order list. Silently swallows I/O errors
-/// after a `tracing::warn!` — losing this is non-fatal.
-pub fn save_preferred_order(order: &[DistributorSource]) {
+/// Persist the preferred-order list. Errors warn through `tracing` and
+/// surface to the caller via the `Result` so the dispatcher can show a
+/// brief inline error in the Distributor APIs settings panel — mirrors
+/// `components_panel::global_prefs::save`. Swallowing this made a failed
+/// save invisible until the user found the setting reverted next launch.
+pub fn save_preferred_order(order: &[DistributorSource]) -> Result<(), String> {
     let Some(path) = config_path() else {
         tracing::warn!(
             target: "signex::library",
             "distributors.toml: no config dir on this platform; skipping save"
         );
-        return;
+        return Err("no user config dir available".to_string());
     };
-    save_preferred_order_at(&path, order);
+    save_preferred_order_at(&path, order)
 }
 
 /// Variant for tests / explicit paths.
@@ -170,7 +173,10 @@ pub fn save_preferred_order(order: &[DistributorSource]) {
 /// sibling, fsyncs it and renames over the destination, so a crash mid-save
 /// leaves the previously persisted order intact rather than a truncated file.
 /// It also creates the parent directory, so no separate `create_dir_all`.
-pub fn save_preferred_order_at(path: &std::path::Path, order: &[DistributorSource]) {
+pub fn save_preferred_order_at(
+    path: &std::path::Path,
+    order: &[DistributorSource],
+) -> Result<(), String> {
     let cfg = DistributorsConfig {
         distributor_apis: DistributorApisSection {
             preferred_order: order
@@ -181,25 +187,23 @@ pub fn save_preferred_order_at(path: &std::path::Path, order: &[DistributorSourc
                 .collect(),
         },
     };
-    match toml::to_string_pretty(&cfg) {
-        Ok(s) => {
-            if let Err(e) = signex_types::atomic_io::atomic_write(path, s.as_bytes()) {
-                tracing::warn!(
-                    target: "signex::library",
-                    path = %path.display(),
-                    error = %e,
-                    "distributors.toml: write failed"
-                );
-            }
-        }
-        Err(e) => {
-            tracing::warn!(
-                target: "signex::library",
-                error = %e,
-                "distributors.toml: serialize failed"
-            );
-        }
-    }
+    let text = toml::to_string_pretty(&cfg).map_err(|e| {
+        tracing::warn!(
+            target: "signex::library",
+            error = %e,
+            "distributors.toml: serialize failed"
+        );
+        format!("serialise distributors.toml: {e}")
+    })?;
+    signex_types::atomic_io::atomic_write(path, text.as_bytes()).map_err(|e| {
+        tracing::warn!(
+            target: "signex::library",
+            path = %path.display(),
+            error = %e,
+            "distributors.toml: write failed"
+        );
+        format!("write {}: {}", path.display(), e)
+    })
 }
 
 #[cfg(test)]
@@ -215,7 +219,7 @@ mod tests {
             DistributorSource::DigiKey,
             DistributorSource::Mouser,
         ];
-        save_preferred_order_at(&path, &original);
+        save_preferred_order_at(&path, &original).unwrap();
         let read = load_preferred_order_at(&path);
         assert_eq!(read, original);
         // A successful atomic save strands no `.tmp` sibling.
@@ -224,8 +228,7 @@ mod tests {
 
     /// `save_preferred_order_at` must go through `atomic_write`, not
     /// `fs::write`: a failed save leaves the previously persisted order
-    /// fully intact (the function swallows the error, so the on-disk
-    /// state is the only observable).
+    /// fully intact, and reports the failure instead of swallowing it.
     ///
     /// Discriminator: pre-creating a *directory* at `<path>.tmp` makes
     /// `atomic_write`'s `File::create(&tmp)` fail before it can touch the
@@ -236,11 +239,13 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let path = config_path_for_dir(tmp.path());
         let original = vec![DistributorSource::Lcsc, DistributorSource::Jlcpcb];
-        save_preferred_order_at(&path, &original);
+        save_preferred_order_at(&path, &original).unwrap();
         assert_eq!(load_preferred_order_at(&path), original);
 
         std::fs::create_dir_all(path.with_extension("toml.tmp")).unwrap();
-        save_preferred_order_at(&path, &[DistributorSource::Octopart]);
+        // The failure is reported, not swallowed — the dispatcher needs it
+        // to put an inline error in front of the user.
+        assert!(save_preferred_order_at(&path, &[DistributorSource::Octopart]).is_err());
 
         assert_eq!(load_preferred_order_at(&path), original);
     }
