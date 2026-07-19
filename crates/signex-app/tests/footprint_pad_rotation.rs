@@ -248,11 +248,20 @@ fn touching_line_scores_the_rotated_pad_not_the_unrotated_box() {
     );
 }
 
-/// Flip mirrors the pad's copper to the other side, and a mirror
-/// negates the angle. Swapping only the layer names baked a 45° pad
-/// at +45° on the back where the mirrored part sits at −45°.
+/// Flip mirrors the pad's copper to the other side. `signex_bake::pad`
+/// consumes the stored fields verbatim with no side-based mirroring of
+/// its own, so the stored data IS the geometry and the WHOLE
+/// mirror-sensitive set has to move under `x → -x`, not just the angle.
+///
+/// Mirroring a subset bakes a shape that is neither the front nor the
+/// back one: a Chamfered pad flipped with its angle negated but its
+/// corner flags left alone keeps the chamfer on the wrong corner and
+/// the part will not seat.
 #[test]
-fn flip_negates_the_rotation_of_every_selected_pad() {
+fn flip_mirrors_every_mirror_sensitive_field_of_every_selected_pad() {
+    use signex_library::PadShape;
+    use signex_library::primitive::footprint::ChamferedCorners;
+
     let (mut app, path, _tmp) = fixture("multi-flip-rotation", 3);
     {
         let editor = app.document_state.footprint_editors.get_mut(&path).unwrap();
@@ -260,6 +269,16 @@ fn flip_negates_the_rotation_of_every_selected_pad() {
         editor.state.selected_pads_extra = vec![1, 2];
         for pad in editor.state.pads.iter_mut() {
             pad.rotation_deg = 45.0;
+            pad.shape = PadShape::Chamfered {
+                chamfer_ratio: 0.25,
+                corners: ChamferedCorners {
+                    top_right: true,
+                    ..Default::default()
+                },
+            };
+            pad.copper_offset_x_mm = Some(0.3);
+            pad.copper_offset_y_mm = Some(0.4);
+            pad.hole_rotation_deg = Some(30.0);
         }
     }
 
@@ -271,6 +290,190 @@ fn flip_negates_the_rotation_of_every_selected_pad() {
             pad.rotation_deg, 315.0,
             "pad {i}: flipping to the back mirrors the copper, so 45° must become −45° \
              (315°); leaving it at +45° bakes a footprint that cannot be assembled"
+        );
+        match &pad.shape {
+            PadShape::Chamfered { corners, .. } => {
+                assert!(
+                    corners.top_left && !corners.top_right,
+                    "pad {i}: the chamfer was on the TOP-RIGHT corner; mirroring the pad puts \
+                     it on the TOP-LEFT. Got {corners:?} — a chamfer left on the un-mirrored \
+                     corner means the part will not seat"
+                );
+                assert!(
+                    !corners.bottom_left && !corners.bottom_right,
+                    "pad {i}: the bottom corners were both off and must stay off: {corners:?}"
+                );
+            }
+            other => panic!("pad {i}: flip must not change the shape variant, got {other:?}"),
+        }
+        assert_eq!(
+            pad.copper_offset_x_mm,
+            Some(-0.3),
+            "pad {i}: an X copper offset is measured in the pad frame and reverses under the \
+             mirror; leaving it at +0.3 puts the copper on the wrong side of the hole"
+        );
+        assert_eq!(
+            pad.copper_offset_y_mm,
+            Some(0.4),
+            "pad {i}: the Y offset is along the mirror axis and must NOT change"
+        );
+        assert_eq!(
+            pad.hole_rotation_deg,
+            Some(330.0),
+            "pad {i}: a slot/rectangular hole turns with the copper — 30° mirrors to −30° \
+             (330°), or the slot no longer lines up with the pad it sits in"
+        );
+    }
+}
+
+/// The rotate arm mutated `rotation_deg` and called only
+/// `sync_pads_to_primitive`, which writes `fp.pads` + the attribute
+/// mirror and never repositions `corner_entity_ids`. The corner
+/// `Point`s are moved by `mirror_move_pad_in_sketch` alone, which the
+/// two structurally identical align arms in the same file DO call.
+///
+/// Result: copper rendered at 90° while the sketch construction outline
+/// still showed the 0° corners — the exact "derived geometry no longer
+/// matches the copper" failure this branch exists to fix, reintroduced
+/// by the very button issue #390 is about.
+///
+/// This drives the real `ActiveBarRotateSelection` message and asserts
+/// the sketch `Point` positions; the mint-time closure invariants
+/// cannot see this because they only ever run at mint time.
+#[test]
+fn rotate_moves_the_sketch_outline_corners_to_match_the_turned_copper() {
+    let (mut app, path, corner_ids) = sketched_pad_fixture("rotate-outline", (2.0, 1.0));
+
+    dispatch(
+        &mut app,
+        &path,
+        FootprintEditorMsg::ActiveBarRotateSelection,
+    );
+
+    let editor = app.document_state.footprint_editors.get(&path).unwrap();
+    let pad = &editor.state.pads[0];
+    assert_eq!(pad.rotation_deg, 90.0, "pre-condition: the pad turned 90°");
+    assert_corners_match_pad(editor, &corner_ids, pad, "after ActiveBarRotateSelection");
+}
+
+/// Same defect on the Flip arm — it negates the angle, so
+/// `rotated_corners_mm()` moves and the outline has to follow.
+#[test]
+fn flip_moves_the_sketch_outline_corners_to_match_the_mirrored_copper() {
+    let (mut app, path, corner_ids) = sketched_pad_fixture("flip-outline", (2.0, 1.0));
+    {
+        let editor = app.document_state.footprint_editors.get_mut(&path).unwrap();
+        editor.state.pads[0].rotation_deg = 30.0;
+    }
+
+    dispatch(&mut app, &path, FootprintEditorMsg::ActiveBarFlipSelection);
+
+    let editor = app.document_state.footprint_editors.get(&path).unwrap();
+    let pad = &editor.state.pads[0];
+    assert_eq!(
+        pad.rotation_deg, 330.0,
+        "pre-condition: 30° mirrored to −30°"
+    );
+    assert_corners_match_pad(editor, &corner_ids, pad, "after ActiveBarFlipSelection");
+}
+
+/// The Properties-panel rotation field is the third sibling: it also
+/// writes `rotation_deg` and syncs without re-placing the corners.
+#[test]
+fn properties_panel_rotation_moves_the_sketch_outline_corners() {
+    use signex_app::dock::DockMessage;
+    use signex_app::panels::PanelMsg;
+
+    let (mut app, path, corner_ids) = sketched_pad_fixture("panel-rotate-outline", (2.0, 1.0));
+
+    let _ = app.update(Message::Dock(DockMessage::Panel(
+        PanelMsg::FpEditorSetSelectedPadRotation {
+            idx: 0,
+            value: "90".into(),
+        },
+    )));
+
+    let editor = app.document_state.footprint_editors.get(&path).unwrap();
+    let pad = &editor.state.pads[0];
+    assert_eq!(pad.rotation_deg, 90.0, "pre-condition: the panel set 90°");
+    assert_corners_match_pad(editor, &corner_ids, pad, "after the panel rotation edit");
+}
+
+/// A footprint editor holding one selected `Rect` pad at the origin
+/// with its sketch outline already minted. Returns the four corner
+/// `Point` ids in `[ne, se, sw, nw]` order.
+fn sketched_pad_fixture(
+    stem: &str,
+    size_mm: (f64, f64),
+) -> (Signex, PathBuf, [signex_sketch::id::SketchEntityId; 4]) {
+    use signex_app::app::{FootprintEditorState, TabInfo, TabKind};
+    use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
+    use signex_library::{Footprint, FootprintFile, PadShape};
+
+    let path = PathBuf::from(format!("{stem}.snxfpt"));
+    let mut fp = Footprint::empty(stem);
+    let mut pad = EditorPad::new_default("1".into(), (0.0, 0.0));
+    pad.shape = PadShape::Rect;
+    pad.size_mm = size_mm;
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+    let corner_ids = pad
+        .corner_entity_ids
+        .expect("a Rect pad mints four outline-corner Points");
+
+    let file = FootprintFile::from_footprint(fp);
+    let mut editor = FootprintEditorState::new(path.clone(), file);
+    editor.state.pads = vec![pad];
+    editor.state.selected_pad = Some(0);
+
+    let (mut app, _initial_task) = Signex::new();
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+    app.document_state.tabs.push(TabInfo {
+        title: stem.into(),
+        path: path.clone(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: TabKind::FootprintEditor(path.clone()),
+    });
+    app.document_state.active_tab = 0;
+    (app, path, corner_ids)
+}
+
+/// Every outline-corner `Point` must sit exactly where the pad's real
+/// copper corner is. Anything else is a construction outline that
+/// disagrees with the copper it outlines.
+fn assert_corners_match_pad(
+    editor: &signex_app::app::FootprintEditorState,
+    corner_ids: &[signex_sketch::id::SketchEntityId; 4],
+    pad: &EditorPad,
+    when: &str,
+) {
+    use signex_sketch::entity::EntityKind;
+
+    let sketch = editor
+        .primitive()
+        .sketch
+        .as_ref()
+        .expect("the fixture minted a sketch");
+    let expected = pad.rotated_corners_mm();
+    for (i, id) in corner_ids.iter().enumerate() {
+        let got = sketch
+            .entities
+            .iter()
+            .find(|e| e.id == *id)
+            .and_then(|e| match e.kind {
+                EntityKind::Point { x, y } => Some((x, y)),
+                _ => None,
+            })
+            .expect("corner Point still present");
+        let (ex, ey) = expected[i];
+        assert!(
+            (got.0 - ex).abs() < 1e-9 && (got.1 - ey).abs() < 1e-9,
+            "{when}: outline corner {i} sits at {got:?} but the pad's copper corner is at \
+             ({ex}, {ey}). The construction outline is stranded at the PRE-transform \
+             geometry while the copper renders transformed"
         );
     }
 }

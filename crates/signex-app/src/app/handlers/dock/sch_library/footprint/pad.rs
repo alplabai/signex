@@ -106,7 +106,15 @@ impl Signex {
             if let Ok(parsed) = value.trim().parse::<f64>() {
                 if let Some(pad) = editor.state.pads.get_mut(idx) {
                     pad.rotation_deg = parsed;
+                    let snapshot = pad.clone();
                     editor.with_parts(|state, primitive| {
+                        // Same class as the active-bar Rotate arm: the
+                        // sketch outline corners are derived from
+                        // `rotation_deg`, and `sync_pads_to_primitive`
+                        // never touches them.
+                        crate::library::editor::footprint::pad_to_sketch::mirror_move_pad_in_sketch(
+                            &snapshot, primitive,
+                        );
                         crate::library::editor::footprint::state::FootprintEditorState::sync_pads_to_primitive(state, primitive);
                     });
                     editor.dirty = true;
@@ -323,7 +331,18 @@ impl Signex {
         if let Some(editor) = self.active_footprint_editor_mut() {
             if let Some(pad) = editor.state.pads.get_mut(idx) {
                 f(pad);
+                let snapshot = pad.clone();
                 editor.with_parts(|state, primitive| {
+                    // This funnel carries `size_mm` and `shape` edits,
+                    // both of which move `rotated_corners_mm()`. The
+                    // sketch outline corners are only ever re-placed
+                    // by `mirror_move_pad_in_sketch`, so without this
+                    // the construction outline keeps the old extents.
+                    // No-op for the non-geometry fields that also come
+                    // through here — it rewrites the same values.
+                    crate::library::editor::footprint::pad_to_sketch::mirror_move_pad_in_sketch(
+                        &snapshot, primitive,
+                    );
                     crate::library::editor::footprint::state::FootprintEditorState::sync_pads_to_primitive(state, primitive);
                 });
                 editor.dirty = true;

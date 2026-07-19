@@ -231,6 +231,24 @@ pub fn mirror_move_pad_in_sketch(pad: &EditorPad, footprint: &mut Footprint) {
     }
 }
 
+/// True when this pad's copper is a traced sketch loop ("Make Pad
+/// from Profile") rather than a parametric shape.
+///
+/// Such a pad owns no `size_mm` / `shape` geometry for a transform to
+/// ride on — its outline is the loop. A caller that mirrors or
+/// otherwise reshapes pad copper must either transform the loop too or
+/// say out loud that it did not; silently leaving the loop put bakes
+/// the un-transformed shape.
+pub fn is_sketch_profile_pad(pad: &EditorPad, footprint: &Footprint) -> bool {
+    let Some(centre) = pad.sketch_entity_id else {
+        return false;
+    };
+    let Some(sketch) = footprint.sketch.as_ref() else {
+        return false;
+    };
+    profile_seed_line(sketch, centre).is_some()
+}
+
 /// Raw x/y of a sketch `Point` entity, straight off `SketchData` —
 /// the pre-solve authored position, which is what the mirror mutates.
 fn point_xy_of(sketch: &SketchData, id: SketchEntityId) -> Option<(f64, f64)> {

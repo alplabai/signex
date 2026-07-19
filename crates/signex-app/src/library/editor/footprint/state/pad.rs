@@ -261,6 +261,42 @@ impl EditorPad {
         )
     }
 
+    /// Mirror every mirror-sensitive field about the pad's OWN
+    /// vertical axis (local `x → -x`). This is what moving a pad to
+    /// the other side of the board does to its copper.
+    ///
+    /// `signex_bake::pad` consumes each of these verbatim with no
+    /// side-based mirroring of its own, so the stored data IS the
+    /// baked geometry. Mirroring only a subset bakes a shape that is
+    /// neither the front nor the back one — a Chamfered pad flipped
+    /// with its angle negated but its corner flags left alone keeps
+    /// the chamfer on the wrong corner and the part will not seat.
+    /// Every field that changes under `x → -x` therefore moves here
+    /// together, or none of them do.
+    ///
+    /// Pad POSITION is deliberately untouched: this mirrors each pad
+    /// in place. Mirroring the layout about the footprint origin is a
+    /// different operation and does not exist yet.
+    pub fn mirror_about_own_vertical_axis(&mut self) {
+        self.rotation_deg = (-self.rotation_deg).rem_euclid(360.0);
+        self.hole_rotation_deg = self.hole_rotation_deg.map(|d| (-d).rem_euclid(360.0));
+        self.copper_offset_x_mm = self.copper_offset_x_mm.map(|v| -v);
+        match &mut self.shape {
+            PadShape::Chamfered { corners, .. } => {
+                std::mem::swap(&mut corners.top_left, &mut corners.top_right);
+                std::mem::swap(&mut corners.bottom_left, &mut corners.bottom_right);
+            }
+            PadShape::Custom(poly) => {
+                for p in poly.points.iter_mut() {
+                    p[0] = -p[0];
+                }
+            }
+            // Round / Rect / RoundRect / Oval are symmetric about
+            // their own vertical axis — nothing to mirror.
+            PadShape::Round | PadShape::Rect | PadShape::RoundRect { .. } | PadShape::Oval => {}
+        }
+    }
+
     /// Point-in-pad containment, rotation-aware. Inverse-rotates the
     /// probe into the pad's own frame and compares against the half
     /// extents, so a turned pad is hit on its real copper rather than

@@ -119,10 +119,24 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
         // exemption list. Pushing again would double-stack the history.
         FootprintEditorMsg::ActiveBarRotateSelection => {
             editor.with_parts(|state, primitive| {
+                let mut snapshots: Vec<crate::library::editor::footprint::state::EditorPad> =
+                    Vec::new();
                 for idx in state.selected_pad_indices() {
                     if let Some(pad) = state.pads.get_mut(idx) {
                         pad.rotation_deg = (pad.rotation_deg + 90.0).rem_euclid(360.0);
+                        snapshots.push(pad.clone());
                     }
+                }
+                // `rotation_deg` is a geometry input — the sketch
+                // outline corners come off `rotated_corners_mm()`, so
+                // they have to be re-placed here. Without it the
+                // copper renders turned while the construction
+                // outline still sits at the pre-rotate angle, and the
+                // edge-drag classifier downstream then measures a
+                // stale world line against the live pad frame. Same
+                // reason the align arms below mirror.
+                for snapshot in &snapshots {
+                    pad_to_sketch::mirror_move_pad_in_sketch(snapshot, primitive);
                 }
                 CanvasState::sync_pads_to_primitive(state, primitive);
             });
@@ -132,24 +146,47 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
         }
         FootprintEditorMsg::ActiveBarFlipSelection => {
             editor.with_parts(|state, primitive| {
+                let mut snapshots: Vec<crate::library::editor::footprint::state::EditorPad> =
+                    Vec::new();
                 for idx in state.selected_pad_indices() {
                     if let Some(pad) = state.pads.get_mut(idx) {
                         pad.layers = pad.layers.iter().map(flip_layer).collect();
                         // Flipping a pad to the other side mirrors its
-                        // copper about the pad's own vertical axis, and
-                        // a mirror negates the angle. Swapping only the
-                        // layer names left a 45° pad rendering and
-                        // baking at +45° on the back where it belongs
-                        // at -45° — harmless while rotation was inert,
-                        // a wrong footprint now that rotation is a real
-                        // geometry input.
+                        // copper about the pad's own vertical axis.
+                        // `signex_bake::pad` consumes the stored
+                        // fields verbatim with no side-based mirroring
+                        // of its own, so the WHOLE mirror-sensitive
+                        // set has to move together — angle, hole
+                        // angle, copper X offset, chamfer corners,
+                        // custom outline. Mirroring only the angle
+                        // bakes a shape that is neither the front nor
+                        // the back one.
                         //
                         // Pad positions are NOT mirrored: this flips
                         // each selected pad in place, not the footprint
                         // about its origin. Mirroring the layout is a
                         // separate operation and does not exist yet.
-                        pad.rotation_deg = (-pad.rotation_deg).rem_euclid(360.0);
+                        pad.mirror_about_own_vertical_axis();
+                        snapshots.push(pad.clone());
                     }
+                }
+                for snapshot in &snapshots {
+                    // A profile pad's copper is a sketch loop, not a
+                    // parametric shape — there is nothing on the pad
+                    // to mirror and the loop stays as drawn. Say so
+                    // rather than let a silently un-mirrored outline
+                    // reach the bake.
+                    if pad_to_sketch::is_sketch_profile_pad(snapshot, primitive) {
+                        crate::diagnostics::log_warning(format!(
+                            "Flip: pad {} is a sketch-profile pad — its outline loop was NOT \
+                             mirrored. Mirror the sketch loop by hand before baking.",
+                            snapshot.number
+                        ));
+                    }
+                    // The angle changed, so `rotated_corners_mm()` did
+                    // too — re-place the outline corners for the same
+                    // reason the rotate arm above does.
+                    pad_to_sketch::mirror_move_pad_in_sketch(snapshot, primitive);
                 }
                 CanvasState::sync_pads_to_primitive(state, primitive);
             });
