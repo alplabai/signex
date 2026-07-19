@@ -1,51 +1,16 @@
-use super::*;
+//! Attribute / flag / constraint / array / pad-profile-seed carry-over
+//! onto `split_line`'s two replacement halves.
+
+use super::{line_endpoints, line_sketch};
 use crate::array::{Array, ArrayId, ArrayKind, NumberingScheme};
-use crate::attr::{CustomPadShape, PadAttr, PadShape, PasteAperturePattern, SilkAttr};
+use crate::attr::{
+    BoardCutoutAttr, CourtyardAttr, CustomPadShape, KeepoutAttr, KeepoutKinds, MaskExcludeAttr,
+    MaskOpeningAttr, PadAttr, PadShape, PasteApertureAttr, PasteAperturePattern, PourAttr,
+    PourFillType, SilkAttr, ThermalRelief, VScoreHintAttr, VScoreSide,
+};
 use crate::constraint::{Constraint, ConstraintKind, DimTarget};
-use crate::plane::PlaneId;
+use crate::split::*;
 use signex_types::layer::SignexLayer;
-
-/// A single Line `start -> end` plus its two Point entities.
-/// Returns `(sketch, line, start, end)`.
-fn line_sketch(
-    start: (f64, f64),
-    end: (f64, f64),
-) -> (SketchData, SketchEntityId, SketchEntityId, SketchEntityId) {
-    let plane = PlaneId::new();
-    let start_id = SketchEntityId::new();
-    let end_id = SketchEntityId::new();
-    let line_id = SketchEntityId::new();
-    let mut sketch = SketchData::default();
-    sketch.entities.push(Entity::new(
-        start_id,
-        plane,
-        EntityKind::Point {
-            x: start.0,
-            y: start.1,
-        },
-    ));
-    sketch.entities.push(Entity::new(
-        end_id,
-        plane,
-        EntityKind::Point { x: end.0, y: end.1 },
-    ));
-    sketch.entities.push(Entity::new(
-        line_id,
-        plane,
-        EntityKind::Line {
-            start: start_id,
-            end: end_id,
-        },
-    ));
-    (sketch, line_id, start_id, end_id)
-}
-
-fn line_endpoints(sketch: &SketchData, line: SketchEntityId) -> (SketchEntityId, SketchEntityId) {
-    match sketch.entities.iter().find(|e| e.id == line).unwrap().kind {
-        EntityKind::Line { start, end } => (start, end),
-        _ => panic!("not a line"),
-    }
-}
 
 // ─── Plain split ───
 
@@ -126,6 +91,93 @@ fn bake_attributes_and_flags_carry_onto_both_halves() {
         assert!(e.construction, "construction flag must carry over to {id}");
         assert!(e.silk.is_some(), "silk attribute must carry over to {id}");
     }
+}
+
+/// BLOCKER 1 repro. Before the fix, `build_split_entities` cloned the
+/// retired Line's ENTIRE attribute set onto BOTH halves. That's right
+/// for a PER-SEGMENT attr (silk, v_score — each independently true of
+/// the segment it lands on) but wrong for a CLOSED-PROFILE SEED attr
+/// (courtyard, mask_opening, mask_exclude, paste_aperture, pour,
+/// keepout, board_cutout): the bake traces the WHOLE loop from ANY
+/// entity carrying the attr, so two carriers on one loop emit the
+/// region twice (two identical `FpPour`, two routed `FpCutout` on the
+/// same board slot, ...). Exactly one entity on the loop — `line_a` —
+/// may keep each seed attr after a split.
+#[test]
+fn closed_profile_seed_attrs_stay_on_line_a_only() {
+    let (mut sketch, line, ..) = line_sketch((0.0, 0.0), (10.0, 0.0));
+    {
+        let e = sketch.entities.iter_mut().find(|e| e.id == line).unwrap();
+        // Per-segment (must carry to BOTH halves — regression guard).
+        e.construction = true;
+        e.silk = Some(SilkAttr {
+            layer: SignexLayer::TopSilk,
+        });
+        e.v_score = Some(VScoreHintAttr {
+            depth_fraction_expr: "0.5".into(),
+            min_web_expr: None,
+            side: VScoreSide::Both,
+        });
+        // Closed-profile seed (must stay on line_a ONLY).
+        e.courtyard = Some(CourtyardAttr);
+        e.mask_opening = Some(MaskOpeningAttr {
+            layer: SignexLayer::TopSolderMask,
+        });
+        e.mask_exclude = Some(MaskExcludeAttr {
+            layer: SignexLayer::BottomSolderMask,
+        });
+        e.paste_aperture = Some(PasteApertureAttr {
+            layer: SignexLayer::TopPaste,
+        });
+        e.pour = Some(PourAttr {
+            layer: SignexLayer::TopCopper,
+            net: None,
+            fill_type: PourFillType::Solid,
+            thermal_relief: ThermalRelief::default(),
+            clearance_expr: None,
+            min_thickness_expr: None,
+            priority: 0,
+        });
+        e.keepout = Some(KeepoutAttr {
+            layer: SignexLayer::TopCopper,
+            kinds: KeepoutKinds::default(),
+        });
+        e.board_cutout = Some(BoardCutoutAttr {
+            edge_radius_expr: None,
+            through: true,
+        });
+    }
+
+    let result = split_line(&mut sketch, line, 0.5).unwrap();
+    let line_a = sketch
+        .entities
+        .iter()
+        .find(|e| e.id == result.line_a)
+        .unwrap();
+    let line_b = sketch
+        .entities
+        .iter()
+        .find(|e| e.id == result.line_b)
+        .unwrap();
+
+    assert!(line_a.construction && line_b.construction);
+    assert!(line_a.silk.is_some() && line_b.silk.is_some());
+    assert!(line_a.v_score.is_some() && line_b.v_score.is_some());
+
+    assert!(line_a.courtyard.is_some(), "line_a keeps courtyard");
+    assert!(line_b.courtyard.is_none(), "line_b must not carry it too");
+    assert!(line_a.mask_opening.is_some());
+    assert!(line_b.mask_opening.is_none());
+    assert!(line_a.mask_exclude.is_some());
+    assert!(line_b.mask_exclude.is_none());
+    assert!(line_a.paste_aperture.is_some());
+    assert!(line_b.paste_aperture.is_none());
+    assert!(line_a.pour.is_some());
+    assert!(line_b.pour.is_none());
+    assert!(line_a.keepout.is_some());
+    assert!(line_b.keepout.is_none());
+    assert!(line_a.board_cutout.is_some());
+    assert!(line_b.board_cutout.is_none());
 }
 
 // ─── Constraint carry-over ───
@@ -389,7 +441,7 @@ fn references_line(c: &Constraint, line: SketchEntityId) -> bool {
     }
 }
 
-// ─── Non-constraint id-bearing collections (BLOCKER 1) ───
+// ─── Non-constraint id-bearing collections (BLOCKER 1, round 1) ───
 
 #[test]
 fn array_source_and_polar_center_retarget_to_line_a() {
@@ -502,335 +554,4 @@ fn paste_aperture_custom_source_retargets_to_line_a() {
         }
         other => panic!("paste_apertures must still be Custom, got {other:?}"),
     }
-}
-
-// ─── T_EPS -> MIN_SEGMENT_LEN_MM (BLOCKER 2) ───
-
-#[test]
-fn ulp_absorbed_mid_point_is_rejected() {
-    // Reviewer counterexample: t clears any sane parametric epsilon by
-    // 2x, but the resulting mid coordinate is absorbed by the ulp of
-    // 500.0 and lands bit-identical to `start` — line_a would be
-    // exactly zero-length.
-    let (mut sketch, line, ..) = line_sketch((500.0, 0.0), (500.000_001, 0.0));
-    let before = sketch.clone();
-    assert!(split_line(&mut sketch, line, 2e-9).is_err());
-    assert_eq!(sketch, before);
-}
-
-#[test]
-fn mid_too_close_to_endpoint_on_a_long_line_is_rejected() {
-    // A long line where `t` alone looks nowhere near an endpoint in a
-    // parametric sense, but the resulting mid coordinate is still
-    // real-world sub-micron from `start`.
-    let (mut sketch, line, ..) = line_sketch((0.0, 0.0), (1000.0, 0.0));
-    let before = sketch.clone();
-    let err = split_line(&mut sketch, line, 1e-7).unwrap_err();
-    assert_eq!(err, SplitError::TooCloseToEndpoint);
-    assert_eq!(sketch, before);
-}
-
-#[test]
-fn a_realistic_close_to_end_split_still_succeeds() {
-    // Corollary check: MIN_SEGMENT_LEN_MM must not reject a split a
-    // real click (issue #372 hit-tests at ~0.30 mm tolerance) could
-    // plausibly have aimed for.
-    let (mut sketch, line, ..) = line_sketch((0.0, 0.0), (10.0, 0.0));
-    let result = split_line(&mut sketch, line, 0.01).expect("a 0.1 mm-scale split must succeed");
-    let (mx, _) = entity_point_xy(&sketch, result.mid_point).unwrap();
-    assert!((mx - 0.1).abs() < 1e-9);
-}
-
-// ─── Degenerate inputs — every one must return Err and leave
-// `sketch` byte-for-byte unchanged. ───
-
-#[test]
-fn missing_line_id_returns_err() {
-    let (mut sketch, ..) = line_sketch((0.0, 0.0), (10.0, 0.0));
-    let before = sketch.clone();
-    let bogus = SketchEntityId::new();
-    assert_eq!(
-        split_line(&mut sketch, bogus, 0.5),
-        Err(SplitError::NotALine(bogus))
-    );
-    assert_eq!(sketch, before);
-}
-
-#[test]
-fn wrong_kind_returns_err() {
-    let (mut sketch, _line, start, ..) = line_sketch((0.0, 0.0), (10.0, 0.0));
-    let before = sketch.clone();
-    // `start` resolves to a Point, not a Line.
-    assert_eq!(
-        split_line(&mut sketch, start, 0.5),
-        Err(SplitError::NotALine(start))
-    );
-    assert_eq!(sketch, before);
-}
-
-#[test]
-fn zero_length_line_returns_err() {
-    let (mut sketch, line, ..) = line_sketch((3.0, 3.0), (3.0, 3.0));
-    let before = sketch.clone();
-    assert_eq!(
-        split_line(&mut sketch, line, 0.5),
-        Err(SplitError::DegenerateLine)
-    );
-    assert_eq!(sketch, before);
-}
-
-#[test]
-fn t_at_or_beyond_an_endpoint_returns_err() {
-    for t in [0.0, 1.0, -0.1, 1.1, -5.0, 5.0] {
-        let (mut sketch, line, ..) = line_sketch((0.0, 0.0), (10.0, 0.0));
-        let before = sketch.clone();
-        assert_eq!(
-            split_line(&mut sketch, line, t),
-            Err(SplitError::InvalidParameter(t)),
-            "t={t} must be rejected"
-        );
-        assert_eq!(sketch, before, "t={t} must leave sketch unchanged");
-    }
-}
-
-#[test]
-fn t_within_min_segment_len_of_an_endpoint_returns_err() {
-    for t in [1e-12, 1.0 - 1e-12] {
-        let (mut sketch, line, ..) = line_sketch((0.0, 0.0), (10.0, 0.0));
-        let before = sketch.clone();
-        assert_eq!(
-            split_line(&mut sketch, line, t),
-            Err(SplitError::TooCloseToEndpoint),
-            "t={t} must be rejected"
-        );
-        assert_eq!(sketch, before);
-    }
-}
-
-#[test]
-fn t_nan_or_infinite_returns_err() {
-    for t in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
-        let (mut sketch, line, ..) = line_sketch((0.0, 0.0), (10.0, 0.0));
-        let before = sketch.clone();
-        // NaN != NaN under PartialEq, so match the variant rather than
-        // assert_eq! against a NaN-carrying payload.
-        let err = split_line(&mut sketch, line, t).unwrap_err();
-        assert!(
-            matches!(err, SplitError::InvalidParameter(_)),
-            "t={t:?} must be InvalidParameter, got {err:?}"
-        );
-        assert_eq!(sketch, before);
-    }
-}
-
-#[test]
-fn unresolvable_endpoint_returns_err() {
-    let plane = PlaneId::new();
-    let start_id = SketchEntityId::new();
-    let dangling_end = SketchEntityId::new(); // never inserted as an entity
-    let line_id = SketchEntityId::new();
-    let mut sketch = SketchData::default();
-    sketch.entities.push(Entity::new(
-        start_id,
-        plane,
-        EntityKind::Point { x: 0.0, y: 0.0 },
-    ));
-    sketch.entities.push(Entity::new(
-        line_id,
-        plane,
-        EntityKind::Line {
-            start: start_id,
-            end: dangling_end,
-        },
-    ));
-    let before = sketch.clone();
-    assert_eq!(
-        split_line(&mut sketch, line_id, 0.5),
-        Err(SplitError::NotALine(line_id))
-    );
-    assert_eq!(sketch, before);
-}
-
-#[test]
-fn failed_split_leaves_sketch_byte_identical() {
-    // Belt-and-braces: a constraint present pre-call must survive
-    // untouched too, not just the entity list.
-    let (mut sketch, line, ..) = line_sketch((0.0, 0.0), (10.0, 0.0));
-    sketch.constraints.push(Constraint {
-        id: ConstraintId::new(),
-        kind: ConstraintKind::Horizontal { line },
-    });
-    let before = sketch.clone();
-    assert!(split_line(&mut sketch, line, 1.5).is_err());
-    assert_eq!(
-        sketch, before,
-        "a rejected split must not touch entities or constraints"
-    );
-}
-
-// ─── Solver acceptance criterion (BLOCKER 3 / issue #360) ───
-
-/// Perturbed axis-aligned rectangle — `p1` Fixed at the origin, width
-/// 10 mm, height 5 mm — plus the constraint set that pins it there:
-/// Horizontal on the bottom/top edges, Vertical on the left/right
-/// edges, and one `DistancePtPt` per axis. 6 residuals over 6 free
-/// scalars (`p1` is Fixed and excluded from the state vector) — the
-/// system is exactly determined, so it converges to a unique solution
-/// near the perturbed initial guess rather than trivially no-op-ing.
-/// Returns `(sketch, p1, p2, p3, p4, l1)`; `l1` (the bottom edge,
-/// `p1 -> p2`) is the one the test below splits.
-fn perturbed_rectangle() -> (
-    SketchData,
-    SketchEntityId,
-    SketchEntityId,
-    SketchEntityId,
-    SketchEntityId,
-    SketchEntityId,
-) {
-    let plane = PlaneId::new();
-    let mut sketch = SketchData::default();
-    sketch.planes.push(crate::plane::Plane {
-        id: plane,
-        kind: crate::plane::PlaneKind::BoardTop,
-    });
-
-    let pts = [(0.0, 0.0), (9.8, 0.15), (9.85, 4.8), (0.2, 5.15)];
-    let ids: Vec<SketchEntityId> = pts
-        .iter()
-        .map(|&(x, y)| {
-            let id = SketchEntityId::new();
-            sketch
-                .entities
-                .push(Entity::new(id, plane, EntityKind::Point { x, y }));
-            id
-        })
-        .collect();
-    let (p1, p2, p3, p4) = (ids[0], ids[1], ids[2], ids[3]);
-
-    let edges = [(p1, p2), (p2, p3), (p3, p4), (p4, p1)];
-    let line_ids: Vec<SketchEntityId> = edges
-        .iter()
-        .map(|&(start, end)| {
-            let id = SketchEntityId::new();
-            sketch
-                .entities
-                .push(Entity::new(id, plane, EntityKind::Line { start, end }));
-            id
-        })
-        .collect();
-    let (l1, l2, l3, l4) = (line_ids[0], line_ids[1], line_ids[2], line_ids[3]);
-
-    use ConstraintKind::*;
-    let kinds = [
-        Fixed { point: p1 },
-        Horizontal { line: l1 },
-        Vertical { line: l2 },
-        Horizontal { line: l3 },
-        Vertical { line: l4 },
-        DistancePtPt {
-            p1,
-            p2,
-            target: DimTarget::Literal(10.0),
-        },
-        DistancePtPt {
-            p1,
-            p2: p4,
-            target: DimTarget::Literal(5.0),
-        },
-    ];
-    for kind in kinds {
-        sketch.constraints.push(Constraint {
-            id: ConstraintId::new(),
-            kind,
-        });
-    }
-
-    (sketch, p1, p2, p3, p4, l1)
-}
-
-#[test]
-fn split_then_solve_leaves_rectangle_visually_unchanged() {
-    use crate::solver::Solver;
-    use crate::solver::residual::ResolvedParams;
-    use crate::solver::state::point_xy;
-
-    let (mut sketch, p1, p2, p3, p4, l1) = perturbed_rectangle();
-    let solver = Solver::default();
-    let params = ResolvedParams::new();
-    const TOL: f64 = 1e-6;
-
-    // Baseline solve, and commit the solved positions back onto the
-    // entities — split_line reads raw entity coordinates, not solver
-    // state, so a caller must commit before splitting (mirrors what
-    // the app does after a solve).
-    let solved = solver
-        .solve(&sketch, &params)
-        .expect("baseline solve must converge");
-    let expect_xy = [
-        (p1, (0.0, 0.0)),
-        (p2, (10.0, 0.0)),
-        (p3, (10.0, 5.0)),
-        (p4, (0.0, 5.0)),
-    ];
-    for (id, (ex, ey)) in expect_xy {
-        let (x, y) = point_xy(id, &solved.result.state, &solved.result.index, &sketch).unwrap();
-        assert!(
-            (x - ex).abs() < TOL && (y - ey).abs() < TOL,
-            "baseline solve did not converge {id} to ({ex},{ey}), got ({x},{y})"
-        );
-        sketch
-            .entities
-            .iter_mut()
-            .find(|e| e.id == id)
-            .unwrap()
-            .kind = EntityKind::Point { x, y };
-    }
-
-    // Split the bottom edge off-centre, then knock the new mid point's
-    // AND p2's y off-line — exactly the scenario the duplicated
-    // Horizontal pair exists to correct on the next solve. Perturbing
-    // p2 specifically exercises `line_b`'s own copy: p2 is only tied
-    // to `mid.y` through it (p2's other two constraints, Vertical and
-    // DistancePtPt, don't pin p2.y on their own), so a carry-over that
-    // silently dropped or misdirected `line_b`'s copy would leave p2
-    // free to drift instead of settling back onto the line.
-    let result = split_line(&mut sketch, l1, 0.3).expect("split of a solved edge must succeed");
-    sketch
-        .entities
-        .iter_mut()
-        .find(|e| e.id == result.mid_point)
-        .unwrap()
-        .kind = EntityKind::Point { x: 3.0, y: 0.2 };
-    sketch
-        .entities
-        .iter_mut()
-        .find(|e| e.id == p2)
-        .unwrap()
-        .kind = EntityKind::Point { x: 10.0, y: 0.15 };
-
-    let resolved = solver.solve(&sketch, &params).expect(
-        "post-split solve must converge — a broken carry-over would over- or \
-                 under-constrain this and fail here",
-    );
-    let solved_xy =
-        |id| point_xy(id, &resolved.result.state, &resolved.result.index, &sketch).unwrap();
-
-    // The three untouched corners are visually unchanged.
-    for (id, (ex, ey)) in expect_xy {
-        let (x, y) = solved_xy(id);
-        assert!(
-            (x - ex).abs() < TOL && (y - ey).abs() < TOL,
-            "post-split corner {id} moved to ({x},{y}), expected ({ex},{ey})"
-        );
-    }
-    // The duplicated Horizontal pair pulls the perturbed mid point
-    // back onto the line (y -> 0)...
-    let (mx, my) = solved_xy(result.mid_point);
-    assert!(my.abs() < TOL, "mid.y = {my}, should have settled to 0");
-    // ...without moving its x: nothing constrains mid.x, so it stays
-    // exactly where the split placed it.
-    assert!(
-        (mx - 3.0).abs() < TOL,
-        "mid.x drifted to {mx}, expected 3.0 (unconstrained)"
-    );
 }

@@ -52,12 +52,28 @@ pub enum SplitError {
     /// `(500.000001, 0.0)`, `t = 2e-9` clears any sane parametric
     /// epsilon by 2x, yet `start.x + t * dx` is absorbed by the ulp of
     /// `500.0` and lands bit-identical to `start`).
+    ///
+    /// By the time this fires, `validate_split` has already rejected
+    /// every line shorter than twice [`MIN_SEGMENT_LEN_MM`] (see
+    /// [`DegenerateLine`](Self::DegenerateLine)), so a line long enough
+    /// to reach this check always has SOME `t` (e.g. `0.5`) that would
+    /// succeed — "click nearer the middle" is always true advice here,
+    /// never a dead end.
     #[error("split would land within the minimum segment length of an endpoint")]
     TooCloseToEndpoint,
-    /// `line`'s two endpoints already resolve within
-    /// [`MIN_SEGMENT_LEN_MM`] of each other — there is no useful split
-    /// of an already-degenerate line.
-    #[error("line is degenerate (shorter than the minimum segment length)")]
+    /// `line`'s two endpoints resolve to less than twice
+    /// [`MIN_SEGMENT_LEN_MM`] apart, or one of them is non-finite
+    /// (NaN / infinite) — either way, no `t` in `(0.0, 1.0)` can ever
+    /// produce a valid split. The `2x` threshold (not `1x`) matters:
+    /// even the best-case split, `t = 0.5`, divides the line exactly in
+    /// half, so a line shorter than twice the minimum still leaves at
+    /// least one half under it, at ANY `t`. A `1x` threshold would
+    /// misclassify that line as [`TooCloseToEndpoint`](Self::TooCloseToEndpoint)
+    /// for the caller's specific `t` — a variant whose doc promises a
+    /// nearer-middle retry will succeed, which for such a line is
+    /// false. `DegenerateLine` is the one variant that means "no retry
+    /// will ever help."
+    #[error("line is degenerate (shorter than twice the minimum segment length, or non-finite)")]
     DegenerateLine,
 }
 
@@ -89,9 +105,23 @@ pub struct SplitResult {
 ///
 /// On success the original `Line` is removed and replaced by two new
 /// `Line`s that inherit its `construction` / `centerline` flags and
-/// every bake attribute (silk, courtyard, mask, paste, pour, keepout,
-/// board cutout, v-score) — so splitting e.g. a silk line yields two
-/// silk lines rather than dropping the halves out of the bake.
+/// its PER-SEGMENT bake attributes (`silk`, `v_score`) — so splitting
+/// e.g. a silk line yields two silk lines rather than dropping either
+/// half out of the bake.
+///
+/// CLOSED-PROFILE SEED attributes (`courtyard`, `mask_opening`,
+/// `mask_exclude`, `paste_aperture`, `pour`, `keepout`,
+/// `board_cutout`) stay on `line_a` ONLY. Each of those bakes by
+/// tracing the WHOLE closed loop from any entity that carries the
+/// attribute (`trace_closed_profile` in `signex-bake`), so a Line that
+/// kept the attribute on both halves would make the bake discover —
+/// and emit — the same loop twice (two identical pours on the same
+/// net, two routed board cutouts on the same slot, a spurious "only
+/// one courtyard per footprint" warning, …). `line_a` keeps the
+/// original `start`, so it anchors the trace at the exact point the
+/// pre-split seed did — the same one-seed-per-loop reasoning
+/// `attr_refs::retarget_pad_profiles` already relies on for the pad
+/// Custom-shape / Custom-paste-aperture seed lists.
 ///
 /// Every reference to the retired line elsewhere in `sketch` is also
 /// rewritten or dropped, by kind:
@@ -110,10 +140,19 @@ pub fn split_line(
     line: SketchEntityId,
     t: f64,
 ) -> Result<SplitResult, SplitError> {
-    let (line_idx, start_id, end_id, start_xy, end_xy) = validate_split(sketch, line, t)?;
+    let ValidatedSplit {
+        line_idx,
+        start_id,
+        end_id,
+        start_xy,
+        end_xy,
+    } = validate_split(sketch, line, t)?;
     let dx = end_xy.0 - start_xy.0;
     let dy = end_xy.1 - start_xy.1;
     let mid_xy = (start_xy.0 + t * dx, start_xy.1 + t * dy);
+    if !mid_xy.0.is_finite() || !mid_xy.1.is_finite() {
+        return Err(SplitError::DegenerateLine);
+    }
     if mm_distance(mid_xy, start_xy) < MIN_SEGMENT_LEN_MM
         || mm_distance(mid_xy, end_xy) < MIN_SEGMENT_LEN_MM
     {
@@ -206,28 +245,45 @@ fn build_split_entities(
         start: mid_id,
         end: end_id,
     };
+    // Closed-profile SEED attrs trace the WHOLE loop from any carrier
+    // (see this module's doc comment) — `line_a` already carries them
+    // via `template`; strip them off `line_b` so exactly one entity on
+    // the loop remains a seed. Per-segment attrs (silk, v_score) and
+    // the construction/centerline flags stay untouched on both.
+    line_b.courtyard = None;
+    line_b.mask_opening = None;
+    line_b.mask_exclude = None;
+    line_b.paste_aperture = None;
+    line_b.pour = None;
+    line_b.keepout = None;
+    line_b.board_cutout = None;
     (mid_point, line_a, line_b)
 }
 
+/// Read-only results of [`validate_split`]'s checks — the retired
+/// line's index plus its resolved endpoint ids/coordinates. Named
+/// fields instead of a 5-tuple `Result` payload (clippy's
+/// `type_complexity` flags a bare tuple that size).
+struct ValidatedSplit {
+    line_idx: usize,
+    start_id: SketchEntityId,
+    end_id: SketchEntityId,
+    start_xy: (f64, f64),
+    end_xy: (f64, f64),
+}
+
 /// Validate `line` / `t` against read-only lookups only — resolves the
-/// line's index and endpoints, checks `t`'s range, and rejects an
-/// already-degenerate line. The caller still owes the post-mid-point
-/// [`SplitError::TooCloseToEndpoint`] check, which needs `t` applied
-/// to real coordinates rather than a lookup.
+/// line's index and endpoints, checks `t`'s range, and rejects a line
+/// no `t` could ever split (shorter than `2 * MIN_SEGMENT_LEN_MM` —
+/// see [`SplitError::DegenerateLine`]'s doc for why `2x` and not `1x`).
+/// The caller still owes the post-mid-point
+/// [`SplitError::TooCloseToEndpoint`] / non-finite check, which needs
+/// `t` applied to real coordinates rather than a lookup.
 fn validate_split(
     sketch: &SketchData,
     line: SketchEntityId,
     t: f64,
-) -> Result<
-    (
-        usize,
-        SketchEntityId,
-        SketchEntityId,
-        (f64, f64),
-        (f64, f64),
-    ),
-    SplitError,
-> {
+) -> Result<ValidatedSplit, SplitError> {
     let line_idx = sketch
         .entities
         .iter()
@@ -242,10 +298,16 @@ fn validate_split(
     }
     let start_xy = entity_point_xy(sketch, start_id).ok_or(SplitError::NotALine(line))?;
     let end_xy = entity_point_xy(sketch, end_id).ok_or(SplitError::NotALine(line))?;
-    if mm_distance(start_xy, end_xy) < MIN_SEGMENT_LEN_MM {
+    if mm_distance(start_xy, end_xy) < 2.0 * MIN_SEGMENT_LEN_MM {
         return Err(SplitError::DegenerateLine);
     }
-    Ok((line_idx, start_id, end_id, start_xy, end_xy))
+    Ok(ValidatedSplit {
+        line_idx,
+        start_id,
+        end_id,
+        start_xy,
+        end_xy,
+    })
 }
 
 /// Euclidean distance between two `(x, y)` pairs in mm.
