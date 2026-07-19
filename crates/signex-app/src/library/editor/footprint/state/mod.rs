@@ -619,38 +619,23 @@ impl FootprintEditorState {
     /// `sketch_entity_id: None`, so a Pads-mode move can't mirror into
     /// the sketch and the pad snaps back to its original position on the
     /// next bake.
+    ///
+    /// The number match is only applied where the number identifies ONE
+    /// pad on each side. Pad numbers are not unique in signex (a
+    /// shared-designator row / thermal / shield set is normal), and a
+    /// last-wins number map hands several pads the same
+    /// `sketch_entity_id` — after which a Pads-mode delete of one runs
+    /// the delete mirror over another pad's geometry and its copper
+    /// silently disappears from the bake. Ambiguous numbers are left
+    /// unlinked here and offered to `relink_pads_to_sketch`, which
+    /// disambiguates by exact position and refuses if even that ties.
     pub fn refresh_pads_from_primitive(&mut self, fp: &Footprint) {
-        use std::collections::HashMap;
-        type Link = (
-            Option<signex_sketch::id::SketchEntityId>,
-            Option<[signex_sketch::id::SketchEntityId; 4]>,
-            ShapeParamMap,
-        );
-        let old_links: HashMap<String, Link> = self
-            .pads
-            .iter()
-            .map(|p| {
-                (
-                    p.number.clone(),
-                    (
-                        p.sketch_entity_id,
-                        p.corner_entity_ids,
-                        p.shape_params.clone(),
-                    ),
-                )
-            })
-            .collect();
         let mut new_pads: Vec<EditorPad> = fp.pads.iter().map(EditorPad::from_pad).collect();
-        for p in &mut new_pads {
-            if let Some((sid, cids, params)) = old_links.get(&p.number) {
-                p.sketch_entity_id = *sid;
-                p.corner_entity_ids = *cids;
-                p.shape_params = params.clone();
-            }
-        }
-        // Anything `old_links` could not supply a link for — a pad that
-        // first appears from the sketch side, or one whose old link was
-        // itself `None` after a reopen — is relinked from the sketch.
+        pad::carry_links_by_unique_number(&self.pads, &mut new_pads);
+        // Anything the number carry could not supply a link for — a pad
+        // that first appears from the sketch side, one whose old link
+        // was itself `None` after a reopen, or one whose number is
+        // ambiguous — is relinked from the sketch.
         pad::relink_pads_to_sketch(&mut new_pads, fp);
         self.pads = new_pads;
         if let Some(idx) = self.selected_pad {

@@ -115,9 +115,18 @@ fn persisted_ledger(sketch: &SketchData, centre: SketchEntityId) -> Vec<SketchEn
 /// ownership field.
 ///
 /// Called at the end of minting, which is the only moment the full set
-/// is known from the volatile fields. Later edits never orphan it:
-/// `mint_shape_geometry_for` is the sole re-mint site and re-records,
-/// and a delete drops the centre `PadAttr` along with the ledger.
+/// is known from the volatile fields, and it is the ONLY write site —
+/// nothing re-records afterwards. That is sound only because nothing
+/// re-mints afterwards either: changing a pad's shape
+/// (`fp_editor_set_selected_pad_shape`) writes `pad.shape` and never
+/// calls back into `pad_to_sketch`, so the sketch still holds exactly
+/// the geometry this ledger names. A delete drops the centre `PadAttr`
+/// and the ledger with it.
+///
+/// If a re-mint path is ever added — a shape change that regenerates
+/// geometry, say — it MUST route through `mint_shape_geometry_for` (or
+/// call this) or the ledger will name entities that no longer exist
+/// while the new ones are unowned.
 pub(super) fn record_ledger(sketch: &mut SketchData, pad: &EditorPad, centre: SketchEntityId) {
     let owned = owned_sketch_entities(pad, sketch);
     if let Some(attr) = sketch

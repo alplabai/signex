@@ -15,6 +15,7 @@ use signex_library::primitive::footprint::{Footprint, PadShape};
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::sketch::SketchData;
+use std::path::PathBuf;
 
 /// Mint one pad of `shape` at `pos` into a fresh footprint and return
 /// the footprint with the editor state already synced onto it — i.e.
@@ -26,6 +27,25 @@ fn footprint_with_minted_pad(shape: PadShape, pos: (f64, f64)) -> Footprint {
     state.pads[0].shape = shape;
     state.pads[0].size_mm = (2.0, 1.0);
     pad_to_sketch::mirror_add_pad_to_sketch(&mut state.pads[0], &mut fp);
+    FootprintEditorState::sync_pads_to_primitive(&state, &mut fp);
+    fp
+}
+
+/// Two pads that SHARE a pad number, both minted, both synced onto the
+/// primitive — i.e. what a shared-designator row / thermal / shield pad
+/// set looks like on disk. `designator_override` is the production path
+/// that produces it: it stamps one number onto every pad placed after
+/// it.
+fn footprint_with_two_pads_sharing_a_number() -> Footprint {
+    let mut fp = Footprint::empty("t");
+    let mut state = FootprintEditorState::from_footprint(&fp);
+    state.next_pad_defaults.designator_override = Some("1".to_string());
+    for pos in [(0.0, 0.0), (5.0, 0.0)] {
+        let idx = state.add_pad_at(pos.0, pos.1);
+        state.pads[idx].size_mm = (2.0, 1.0);
+        pad_to_sketch::mirror_add_pad_to_sketch(&mut state.pads[idx], &mut fp);
+    }
+    assert_eq!(state.pads[0].number, state.pads[1].number, "shared number");
     FootprintEditorState::sync_pads_to_primitive(&state, &mut fp);
     fp
 }
@@ -221,5 +241,260 @@ fn issue142_move_repairs_drifted_bbox_corners() {
         point_xy(sketch, corners[0]),
         Some((5.0, 3.5)),
         "the drifted corner was carried along by the delta instead of repaired"
+    );
+}
+
+/// Two pads sharing a number must not share a sketch centre.
+///
+/// Pad numbers are not unique anywhere in signex — the designator field
+/// takes any string, and `next_pad_defaults.designator_override` stamps
+/// one number onto every pad placed after it, which is how a
+/// shared-designator row / thermal / shield pad set is authored. Each
+/// such pad mints its OWN `PadAttr`-bearing centre.
+///
+/// Relinking them by number alone is last-wins, so on reopen every pad
+/// with that number got the SAME `sketch_entity_id` — and then a
+/// Pads-mode delete of pad A ran the delete mirror over pad B's centre,
+/// B's `PadAttr::owned` ledger and B's whole outline. B stayed in
+/// `state.pads` looking healthy while the bake, which resolves copper
+/// from the sketch, silently dropped its copper from the export.
+#[test]
+fn issue142_duplicate_pad_numbers_do_not_alias_one_centre() {
+    let fp = footprint_with_two_pads_sharing_a_number();
+    let state = FootprintEditorState::from_footprint(&fp);
+
+    let (a, b) = (
+        state.pads[0].sketch_entity_id,
+        state.pads[1].sketch_entity_id,
+    );
+    assert!(
+        a.is_some() && b.is_some(),
+        "both duplicate-numbered pads must relink (positions disambiguate them)"
+    );
+    assert_ne!(
+        a, b,
+        "the two pads were aliased onto ONE centre — an edit to either \
+         destroys the other's geometry"
+    );
+}
+
+/// ...and deleting one of them must leave the other's copper intact.
+///
+/// The concrete failure the aliasing produces. Pad A is deleted in Pads
+/// mode; if A and B share a centre, `mirror_delete_pad_from_sketch`
+/// takes B's outline and B's `PadAttr` centre with it while B remains
+/// in the pad list — copper that silently vanishes from the export.
+#[test]
+fn issue142_deleting_one_duplicate_numbered_pad_keeps_the_others_copper() {
+    let mut fp = footprint_with_two_pads_sharing_a_number();
+    let state = FootprintEditorState::from_footprint(&fp);
+    let b_centre = state.pads[1].sketch_entity_id.expect("pad B relinked");
+    let b_owned: Vec<SketchEntityId> = fp
+        .sketch
+        .as_ref()
+        .unwrap()
+        .entities
+        .iter()
+        .find(|e| e.id == b_centre)
+        .and_then(|e| e.pad.as_ref())
+        .map(|attr| attr.owned.clone())
+        .expect("pad B carries its durable ledger");
+    assert!(
+        b_owned.len() > 1,
+        "pad B owns an outline, not just a centre"
+    );
+
+    pad_to_sketch::mirror_delete_pad_from_sketch(&state.pads[0], &mut fp);
+
+    let sketch = fp.sketch.as_ref().unwrap();
+    assert!(
+        sketch.entities.iter().any(|e| e.id == b_centre),
+        "pad B's centre was deleted along with pad A — B's copper is gone from the bake"
+    );
+    for id in b_owned {
+        assert!(
+            sketch.entities.iter().any(|e| e.id == id),
+            "pad B's owned entity {id:?} was deleted along with pad A"
+        );
+    }
+}
+
+/// The durable ledger has to survive the REAL serialiser, not just
+/// `from_footprint`.
+///
+/// The whole reopen fix rests on `PadAttr::owned` round-tripping
+/// through `Footprint`'s serde derive — the same `serde_json` path
+/// `local_git::primitives` writes with. The other reopen tests cross
+/// the `EditorPad`-volatility boundary but never the serde one, so
+/// nothing pinned the field's `#[serde(default,
+/// skip_serializing_if = "Vec::is_empty")]` attributes or its presence
+/// in the struct at all.
+#[test]
+fn issue142_owned_ledger_survives_a_real_serde_round_trip() {
+    let fp = footprint_with_minted_pad(PadShape::RoundRect { radius_ratio: 0.25 }, (1.0, 1.0));
+    let before: Vec<Vec<SketchEntityId>> = fp
+        .sketch
+        .as_ref()
+        .unwrap()
+        .entities
+        .iter()
+        .filter_map(|e| e.pad.as_ref().map(|attr| attr.owned.clone()))
+        .collect();
+    assert!(
+        before.iter().all(|o| o.len() > 1),
+        "the mint must record a non-trivial ledger, got {before:?}"
+    );
+
+    let json = serde_json::to_string(&fp).expect("Footprint serialises");
+    let mut round_tripped: Footprint = serde_json::from_str(&json).expect("Footprint deserialises");
+
+    let after: Vec<Vec<SketchEntityId>> = round_tripped
+        .sketch
+        .as_ref()
+        .unwrap()
+        .entities
+        .iter()
+        .filter_map(|e| e.pad.as_ref().map(|attr| attr.owned.clone()))
+        .collect();
+    assert_eq!(
+        before, after,
+        "PadAttr::owned did not survive the serde round trip — every reopened \
+         pad owns nothing and both mirrors strand its geometry"
+    );
+
+    // And it is still load-bearing after the trip: a delete off the
+    // deserialised footprint clears the pad's whole outline.
+    let state = FootprintEditorState::from_footprint(&round_tripped);
+    pad_to_sketch::mirror_delete_pad_from_sketch(&state.pads[0], &mut round_tripped);
+    assert!(
+        round_tripped.sketch.as_ref().unwrap().entities.is_empty(),
+        "geometry survived a delete on the deserialised footprint"
+    );
+}
+
+// ---------------------------------------------------------------
+// Wave-1 (#142) paste regression, relocated out of `regression.rs`.
+// It belongs with the rest of the pad ↔ sketch mirror coverage, and
+// `regression.rs` is 6500+ lines against a ~800-line cap — adding to
+// it was the regression, moving it out is the fix.
+// ---------------------------------------------------------------
+
+/// One app with `count` default pads on a footprint editor — the
+/// local twin of `regression.rs`'s `fixture_footprint_with_pads`,
+/// carried along with the test that needs it.
+fn app_with_footprint_pads(stem: &str, count: usize) -> (signex_app::app::Signex, PathBuf) {
+    use signex_app::app::FootprintEditorState as EditorTab;
+    use signex_app::library::editor::footprint::state::EditorPad;
+    use signex_library::FootprintFile;
+
+    let path = PathBuf::from(format!("{stem}.snxfpt"));
+    let file = FootprintFile::from_footprint(Footprint::empty(stem));
+    let mut editor = EditorTab::new(path.clone(), file);
+    for i in 0..count {
+        editor.state.pads.push(EditorPad::new_default(
+            (i + 1).to_string(),
+            (i as f64 * 2.0, 0.0),
+        ));
+    }
+    let (mut app, _initial_task) = signex_app::app::Signex::new();
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+    (app, path)
+}
+/// A pasted pad must not alias the template's sketch parameters.
+///
+/// `shape_params` is the third pad-ownership field (alongside
+/// `sketch_entity_id` and `corner_entity_ids`) and was cloned wholesale
+/// from the template while only the other two were reset. The pasted
+/// pad therefore still named the TEMPLATE's parameter names and Arc
+/// ids, so editing its corner radius in the Properties panel resolved
+/// through `pad.shape_params[key]` and silently resized the ORIGINAL
+/// pad. It never self-corrected either: `auto_mint_for_literal_pads`
+/// early-returns once the sketch holds any non-construction entity, and
+/// `refresh_pads_from_primitive` re-attaches pads by number from the
+/// old links, preserving the stale ledger indefinitely.
+#[test]
+fn v026e_paste_does_not_alias_template_shape_params() {
+    use signex_app::app::Message;
+    use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
+
+    let (mut app, path) = app_with_footprint_pads("v026e-paste-shape-params", 1);
+    // Give the single pad a RoundRect shape and mint its sketch
+    // geometry, so the footprint's sketch is authored and the pad owns
+    // a populated `shape_params` ledger.
+    {
+        let editor = app.document_state.footprint_editors.get_mut(&path).unwrap();
+        editor.state.pads[0].shape = PadShape::RoundRect { radius_ratio: 0.25 };
+        editor.with_parts(|state, primitive| {
+            pad_to_sketch::mirror_add_pad_to_sketch(&mut state.pads[0], primitive);
+        });
+        editor.state.selected_pad = Some(0);
+    }
+    let template = {
+        let editor = app.document_state.footprint_editors.get(&path).unwrap();
+        assert!(
+            !editor.state.pads[0].shape_params.is_empty(),
+            "RoundRect mint must populate shape_params"
+        );
+        editor.state.pads[0].clone()
+    };
+
+    for msg in [FootprintEditorMsg::CopyPad, FootprintEditorMsg::PastePad] {
+        let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+            path: path.clone(),
+            msg: PrimitiveEdit::Footprint(msg),
+        }));
+    }
+
+    let editor = app.document_state.footprint_editors.get(&path).unwrap();
+    let pasted = editor.state.pads.last().unwrap();
+    assert_ne!(
+        pasted.sketch_entity_id, template.sketch_entity_id,
+        "the paste must own a distinct centre entity"
+    );
+    assert!(
+        pasted.sketch_entity_id.is_some(),
+        "an authored sketch will never auto-mint the paste later, so paste must \
+         mint it now"
+    );
+    for (key, value) in &pasted.shape_params {
+        assert!(
+            template.shape_params.get(key) != Some(value),
+            "pasted shape_params[{key}] = {value} still aliases the template — \
+             editing the paste would resize the ORIGINAL pad"
+        );
+    }
+}
+
+/// The post-bake refresh must not alias duplicate numbers either.
+///
+/// `refresh_pads_from_primitive` carries the three volatile link fields
+/// across the rebuild through its own number-keyed map — the same
+/// last-wins structure, the same aliasing, one function over. Fixing
+/// only the reopen path would have left every post-bake refresh
+/// handing both duplicate-numbered pads one centre.
+#[test]
+fn issue142_post_bake_refresh_does_not_alias_duplicate_numbers() {
+    let fp = footprint_with_two_pads_sharing_a_number();
+    let mut state = FootprintEditorState::from_footprint(&fp);
+    let (a, b) = (
+        state.pads[0].sketch_entity_id,
+        state.pads[1].sketch_entity_id,
+    );
+
+    state.refresh_pads_from_primitive(&fp);
+
+    assert_eq!(
+        (
+            state.pads[0].sketch_entity_id,
+            state.pads[1].sketch_entity_id
+        ),
+        (a, b),
+        "the refresh re-pointed a duplicate-numbered pad at the other pad's centre"
+    );
+    assert_ne!(
+        state.pads[0].sketch_entity_id, state.pads[1].sketch_entity_id,
+        "the refresh aliased both pads onto ONE centre"
     );
 }
