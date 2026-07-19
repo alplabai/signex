@@ -131,7 +131,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
                     // leaving a parametric shape's anchors behind at
                     // the old angle.
                     if !pad_to_sketch::remint_pad_geometry(pad, primitive) {
-                        warn_profile_pad_untransformed("Rotate", &pad.number);
+                        pad_to_sketch::warn_profile_pad_untransformed("Rotate", &pad.number);
                     }
                 }
                 CanvasState::sync_pads_to_primitive(state, primitive);
@@ -167,7 +167,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
                     // shape the bake reads carries the swapped chamfer
                     // corners instead of the pre-flip ones.
                     if !pad_to_sketch::remint_pad_geometry(pad, primitive) {
-                        warn_profile_pad_untransformed("Flip", &pad.number);
+                        pad_to_sketch::warn_profile_pad_untransformed("Flip", &pad.number);
                     }
                 }
                 CanvasState::sync_pads_to_primitive(state, primitive);
@@ -304,17 +304,6 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
         }
         _ => unreachable!("non-active_bar variant routed to active_bar::apply"),
     }
-}
-
-/// A sketch-profile pad's copper is a traced loop, not a parametric
-/// shape — there is nothing on the pad for a frame transform to ride
-/// on, and the loop stays exactly as drawn. Say so rather than let a
-/// silently un-transformed outline reach the bake.
-fn warn_profile_pad_untransformed(op: &str, pad_number: &str) {
-    crate::diagnostics::log_warning(format!(
-        "{op}: pad {pad_number} is a sketch-profile pad — its outline loop was NOT transformed. \
-         Transform the sketch loop by hand before baking."
-    ));
 }
 
 /// Swap a layer between the front and back side. Anything without an

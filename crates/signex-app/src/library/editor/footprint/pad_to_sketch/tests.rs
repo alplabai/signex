@@ -637,3 +637,63 @@ fn sync_overwrites_every_bare_literal_form() {
         );
     }
 }
+
+/// The delete sweep drops the pad's whole entity set, so a constraint
+/// authored against ANY of those entities is dangling afterwards — not
+/// just one authored against the centre. Matching the centre id alone
+/// left the rest behind pointing at entities that no longer exist.
+///
+/// It matters more now that a frame transform re-mints through this
+/// path: a user who constrains a chamfer anchor accumulates a stale
+/// row on every rotate and flip, not once on a pad delete.
+#[test]
+fn mirror_delete_pad_drops_constraints_on_the_whole_entity_set() {
+    use signex_library::primitive::footprint::ChamferedCorners;
+    use signex_sketch::constraint::{Constraint, ConstraintKind};
+    use signex_sketch::id::ConstraintId;
+
+    let mut fp = Footprint::empty("test");
+    let mut pad = editor_pad("X", 0.0, 0.0);
+    pad.size_mm = (2.0, 1.0);
+    pad.shape = LibPadShape::Chamfered {
+        chamfer_ratio: 0.25,
+        corners: ChamferedCorners {
+            top_right: true,
+            ..Default::default()
+        },
+    };
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+    // A free Point the user owns, constrained to a chamfer anchor —
+    // the anchor is a pad-owned entity that is NOT the centre.
+    let anchor_raw = pad
+        .shape_params
+        .get("chamfer_ne_anchor1")
+        .expect("a chamfered pad binds its NE anchor");
+    let anchor = SketchEntityId(uuid::Uuid::parse_str(anchor_raw).expect("sidecar is a UUID slug"));
+    let plane_id = fp.sketch.as_ref().unwrap().planes[0].id;
+    let free = SketchEntityId::new();
+    let sketch = fp.sketch.as_mut().unwrap();
+    sketch.entities.push(Entity::new(
+        free,
+        plane_id,
+        EntityKind::Point { x: 9.0, y: 9.0 },
+    ));
+    sketch.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::Coincident {
+            p1: free,
+            p2: anchor,
+        },
+    });
+
+    mirror_delete_pad_from_sketch(&pad, &mut fp);
+
+    let sketch = fp.sketch.as_ref().unwrap();
+    assert!(
+        sketch.constraints.is_empty(),
+        "a constraint referencing the deleted NE chamfer anchor must be swept with it; \
+         {} survived pointing at an entity that no longer exists",
+        sketch.constraints.len()
+    );
+}

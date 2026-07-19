@@ -262,6 +262,16 @@ fn flip_keeps_the_baked_shape_equal_to_the_editor_shape() {
 /// which is a far larger mutation than moving four points. One Ctrl+Z
 /// still has to put the sketch back exactly as it was, or the re-mint
 /// is a one-way loss of the user's outline.
+///
+/// NOT A PROOF OF THE FIX, and do not read it as one. This test does
+/// not go red when the re-mint is reverted: the behaviour it replaces
+/// is a four-point corner move, which is trivially undoable, so it
+/// passes either way. It is a FORWARD-LOOKING guard — it fails the day
+/// someone makes the re-mint one-way — and it is kept for that.
+///
+/// The tests that prove the fix are (a) and (b) above, plus (d), (e)
+/// and (f) below; each was confirmed red with its own fix reverted.
+/// Three green tests are not three proofs.
 #[test]
 fn one_undo_after_a_rotate_restores_the_prior_sketch_geometry() {
     let (mut app, path) = editor_with_minted_pad("chamfer-rotate-undo", chamfered_repro_pad());
@@ -301,5 +311,123 @@ fn one_undo_after_a_rotate_restores_the_prior_sketch_geometry() {
     assert!(
         pad.sketch_entity_id.is_some() && pad.corner_entity_ids.is_some(),
         "undo restores the pad's sketch links too, or the pad is orphaned from its outline"
+    );
+}
+
+/// THE INVARIANT (d), the Properties-panel rotation field. Structurally
+/// identical to the active-bar Rotate arm — same frame change, same
+/// obligation — and it is the site the branch first regenerated
+/// through the bbox-corner mover, so the corners turned into the 90°
+/// frame while the chamfer anchor stayed at its 0° position and the
+/// outline crossed itself.
+///
+/// The Rect-shaped sibling of this test in `footprint_pad_rotation.rs`
+/// cannot see that: for a `Rect` the outline IS the four bbox corners
+/// and the corner mover is correct by construction. Only a parametric
+/// shape exposes it.
+#[test]
+fn properties_panel_rotation_regenerates_the_chamfer_anchor() {
+    use signex_app::dock::DockMessage;
+    use signex_app::panels::PanelMsg;
+
+    let (mut app, path) = editor_with_minted_pad("chamfer-panel-rotate", chamfered_repro_pad());
+
+    let _ = app.update(Message::Dock(DockMessage::Panel(
+        PanelMsg::FpEditorSetSelectedPadRotation {
+            idx: 0,
+            value: "90".into(),
+        },
+    )));
+
+    let editor = app.document_state.footprint_editors.get(&path).unwrap();
+    let pad = &editor.state.pads[0];
+    assert_eq!(pad.rotation_deg, 90.0, "pre-condition: the panel set 90°");
+    let sketch = editor.primitive().sketch.as_ref().expect("sketch present");
+
+    let anchor = sidecar_point(sketch, pad, "chamfer_ne_anchor1");
+    assert!(
+        (anchor.0 - 0.5).abs() < 1e-9 && (anchor.1 - 0.75).abs() < 1e-9,
+        "the NE chamfer anchor must land at (0.5, 0.75). Got {anchor:?}; (0.75, −0.5) means \
+         the panel edit re-placed the bbox corners alone and left the anchor in the pre-rotate \
+         frame — an outline mixing two frames"
+    );
+}
+
+/// THE INVARIANT (e), the size / shape funnel. `with_selected_pad`
+/// carries `size_mm` and `shape` edits, both of which move the whole
+/// outline. Widening a Chamfered pad through the bbox-corner mover
+/// pushed the corners out to the new extents and left the chamfer
+/// anchors on the old ones.
+#[test]
+fn resizing_a_chamfered_pad_regenerates_its_chamfer_anchor() {
+    use signex_app::dock::DockMessage;
+    use signex_app::panels::PanelMsg;
+
+    let (mut app, path) = editor_with_minted_pad("chamfer-resize", chamfered_repro_pad());
+
+    let _ = app.update(Message::Dock(DockMessage::Panel(
+        PanelMsg::FpEditorSetSelectedPadSizeX {
+            idx: 0,
+            value: "3".into(),
+        },
+    )));
+
+    let editor = app.document_state.footprint_editors.get(&path).unwrap();
+    let pad = &editor.state.pads[0];
+    assert_eq!(pad.size_mm, (3.0, 1.0), "pre-condition: the panel set 3 mm");
+    let sketch = editor.primitive().sketch.as_ref().expect("sketch present");
+
+    // 3×1 mm at the origin: xmax = 1.5, ymin = −0.5, and the chamfer
+    // length r = 0.25 × min(3, 1) = 0.25, so anchor1 = (1.25, −0.5).
+    let anchor = sidecar_point(sketch, pad, "chamfer_ne_anchor1");
+    assert!(
+        (anchor.0 - 1.25).abs() < 1e-9 && (anchor.1 + 0.5).abs() < 1e-9,
+        "the NE chamfer anchor must follow the new 3 mm extents to (1.25, −0.5). Got \
+         {anchor:?}; (0.75, −0.5) is the pre-resize position, i.e. the corners widened and \
+         the chamfer did not"
+    );
+}
+
+/// THE INVARIANT (f), the TRANSLATION siblings — pad drag, nudge,
+/// Move-By, align-to-grid, move-origin-to-grid, align/distribute. Six
+/// call sites, all routing through `mirror_move_pad_in_sketch`, and
+/// the pad frame's ORIGIN is as much a part of the frame as its angle:
+/// every anchor is placed through `local_to_world_mm`, which is
+/// centred on `position_mm`.
+///
+/// The corner mover moved the centre and the four bbox corners and
+/// nothing else, so a dragged Chamfered pad left its chamfer anchors
+/// behind at the old location entirely. This one is fixed by
+/// translating the sidecar rather than re-minting it: a translation
+/// moves every owned point by the same delta, and a re-mint on every
+/// drag frame would destroy the user's constraints for nothing.
+#[test]
+fn translating_a_chamfered_pad_carries_its_chamfer_anchor_with_it() {
+    let (mut app, path) = editor_with_minted_pad("chamfer-translate", chamfered_repro_pad());
+
+    dispatch(
+        &mut app,
+        &path,
+        FootprintEditorMsg::MovePad {
+            idx: 0,
+            x_mm: 5.0,
+            y_mm: 3.0,
+        },
+    );
+
+    let editor = app.document_state.footprint_editors.get(&path).unwrap();
+    let pad = &editor.state.pads[0];
+    assert_eq!(
+        pad.position_mm,
+        (5.0, 3.0),
+        "pre-condition: the pad moved to (5, 3)"
+    );
+    let sketch = editor.primitive().sketch.as_ref().expect("sketch present");
+
+    let anchor = sidecar_point(sketch, pad, "chamfer_ne_anchor1");
+    assert!(
+        (anchor.0 - 5.75).abs() < 1e-9 && (anchor.1 - 2.5).abs() < 1e-9,
+        "the NE chamfer anchor must ride the (+5, +3) translation to (5.75, 2.5). Got \
+         {anchor:?}; (0.75, −0.5) means it never left the origin while the copper moved"
     );
 }

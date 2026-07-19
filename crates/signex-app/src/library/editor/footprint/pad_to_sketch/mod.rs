@@ -274,10 +274,12 @@ pub fn mirror_move_pad_in_sketch(pad: &EditorPad, footprint: &mut Footprint) {
     let Some(sketch) = footprint.sketch.as_mut() else {
         return;
     };
-    // Must run BEFORE the centre is overwritten — the delta is measured
-    // from the centre's current position. The centre is a standalone
-    // minted Point and never part of the traced loop, so it cannot be
-    // translated twice.
+    // Both of the next two lines must run BEFORE the centre is
+    // overwritten — each measures its delta from the centre's CURRENT
+    // position. The centre is a standalone minted Point and never part
+    // of the traced loop, so it cannot be translated twice.
+    let delta =
+        point_xy_of(sketch, entity_id).map(|(x, y)| (pad.position_mm.0 - x, pad.position_mm.1 - y));
     translate_profile_with_pad(sketch, entity_id, pad.position_mm);
     helpers::set_point_xy(sketch, entity_id, pad.position_mm.0, pad.position_mm.1);
     // v0.16 — also reposition the outline-corner Points so the
@@ -288,6 +290,99 @@ pub fn mirror_move_pad_in_sketch(pad: &EditorPad, footprint: &mut Footprint) {
             helpers::set_point_xy(sketch, *id, *px, *py);
         }
     }
+    // The four bbox corners are NOT the whole outline. A parametric
+    // shape also owns anchor / arc-centre `Point`s — a Chamfered pad's
+    // chamfer anchors, a RoundRect's arc anchors and inset centres, an
+    // Oval's arc centres — and they are as much a function of the pad
+    // frame as the corners are. Leaving them put translated the bbox
+    // and stranded the anchors at the old position, giving an outline
+    // that mixes two frames.
+    //
+    // A pure translation moves every one of them by the SAME delta, so
+    // they take it directly here rather than through a re-mint. That
+    // matters: a re-mint replaces the entities and so drops any
+    // constraint the user authored against them, which would be an
+    // unacceptable price for dragging a pad.
+    if let Some((dx, dy)) = delta.filter(|&(dx, dy)| dx != 0.0 || dy != 0.0) {
+        for id in sidecar_point_ids(sketch, pad) {
+            if let Some((x, y)) = point_xy_of(sketch, id) {
+                helpers::set_point_xy(sketch, id, x + dx, y + dy);
+            }
+        }
+    }
+}
+
+/// Every `Point` this pad minted as part of its per-shape sidecar,
+/// seeded from `pad.shape_params` and expanded ONE level through the
+/// Line / Arc / Circle ids recorded there (a RoundRect records only
+/// its four corner Arcs; the anchors and inset centres hang off them).
+///
+/// Excludes the centre and the bbox corners — those are placed
+/// absolutely by the caller and must not also take a delta.
+///
+/// Deliberately NOT the delete path's outward reachability sweep. That
+/// one walks from the pad through anything that touches it, which is
+/// right for a delete but on a MOVE would drag a user's own
+/// construction line along by whichever endpoint they snapped to a pad
+/// corner. Every id reached here was minted by this pad.
+fn sidecar_point_ids(sketch: &SketchData, pad: &EditorPad) -> Vec<SketchEntityId> {
+    use std::collections::HashSet;
+
+    let mut placed: HashSet<SketchEntityId> = HashSet::new();
+    placed.extend(pad.sketch_entity_id);
+    if let Some(corners) = pad.corner_entity_ids {
+        placed.extend(corners);
+    }
+
+    let mut seen: HashSet<SketchEntityId> = HashSet::new();
+    let mut out: Vec<SketchEntityId> = Vec::new();
+    let mut push = |id: SketchEntityId, out: &mut Vec<SketchEntityId>| {
+        if !placed.contains(&id) && seen.insert(id) {
+            out.push(id);
+        }
+    };
+
+    // Canonical parameter bindings (`corner_r` -> `corner_r_<slug>`)
+    // are names, not ids, and fail to parse as a UUID — they fall
+    // through here exactly as they do in the delete sweep.
+    for value in pad.shape_params.values() {
+        let Ok(uuid) = uuid::Uuid::parse_str(value) else {
+            continue;
+        };
+        let id = SketchEntityId(uuid);
+        let Some(entity) = sketch.entities.iter().find(|e| e.id == id) else {
+            continue;
+        };
+        match &entity.kind {
+            EntityKind::Point { .. } => push(id, &mut out),
+            EntityKind::Line { start, end } => {
+                push(*start, &mut out);
+                push(*end, &mut out);
+            }
+            EntityKind::Arc {
+                center, start, end, ..
+            } => {
+                push(*center, &mut out);
+                push(*start, &mut out);
+                push(*end, &mut out);
+            }
+            EntityKind::Circle { center, .. } => push(*center, &mut out),
+        }
+    }
+    out
+}
+
+/// A sketch-profile pad's copper is a traced loop, not a parametric
+/// shape — there is nothing on the pad for a frame transform to ride
+/// on, and the loop stays exactly as drawn. This is the warning
+/// [`remint_pad_geometry`]'s `false` return obliges its caller to
+/// emit, kept next to the function that owes it so every caller says
+/// the same thing.
+pub fn warn_profile_pad_untransformed(op: &str, pad_number: &str) {
+    crate::diagnostics::log_warning(format!(
+        "{op}: pad {pad_number} is a sketch-profile pad — its outline loop was NOT transformed. \
+         Transform the sketch loop by hand before baking."
+    ));
 }
 
 /// True when this pad's copper is a traced sketch loop ("Make Pad
@@ -464,10 +559,20 @@ pub fn mirror_delete_pad_from_sketch(pad: &EditorPad, footprint: &mut Footprint)
     });
     // Drop dangling constraint refs — coarse rule via Debug
     // stringification (mirrors the SketchEdit::DeleteEntity path).
-    let id_str = entity_id.to_string();
-    sketch
-        .constraints
-        .retain(|c| !format!("{:?}", c.kind).contains(&id_str));
+    //
+    // Tested against the WHOLE drop set, not the centre alone. Every
+    // outline corner and every anchor just went with it, so a
+    // constraint the user authored against a chamfer anchor is as
+    // dangling as one against the centre; matching only the centre
+    // left those rows behind pointing at entities that no longer
+    // exist. It matters more now that re-mint runs this path on every
+    // rotate and flip rather than only on a pad delete — the stale
+    // rows would otherwise accumulate one transform at a time.
+    let dropped_ids: Vec<String> = drop_set.iter().map(|id| id.to_string()).collect();
+    sketch.constraints.retain(|c| {
+        let rendered = format!("{:?}", c.kind);
+        !dropped_ids.iter().any(|id| rendered.contains(id))
+    });
 
     // v0.24 Track A — drop shape parameters keyed by the centre-Point
     // UUID slug.
