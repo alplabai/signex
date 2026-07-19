@@ -115,9 +115,18 @@ pub fn mirror_add_pad_to_sketch(pad: &mut EditorPad, footprint: &mut Footprint) 
     if pad.sketch_entity_id.is_some() {
         return;
     }
+    mint_pad_entities(pad, footprint, SketchEntityId::new());
+}
+
+/// Mint a pad's centre `Point` + `PadAttr` + per-shape sidecar geometry
+/// under `entity_id`. The single body behind both the first mint
+/// (`mirror_add_pad_to_sketch`) and the re-mint
+/// (`remint_pad_geometry`), so a transform can never regenerate
+/// geometry through a second, differently-behaved copy of the layout
+/// rules.
+fn mint_pad_entities(pad: &mut EditorPad, footprint: &mut Footprint, entity_id: SketchEntityId) {
     let plane_id = ensure_board_top_plane(footprint);
     let sketch = footprint.sketch.get_or_insert_with(SketchData::default);
-    let entity_id = SketchEntityId::new();
     let mut entity = Entity::new(
         entity_id,
         plane_id,
@@ -130,6 +139,56 @@ pub fn mirror_add_pad_to_sketch(pad: &mut EditorPad, footprint: &mut Footprint) 
     sketch.entities.push(entity);
     pad.sketch_entity_id = Some(entity_id);
     mint_shape_geometry_for(sketch, plane_id, pad, entity_id);
+}
+
+/// Regenerate a pad's sketch sidecar after a transform that changes
+/// the pad FRAME — rotate, flip, anything that moves
+/// `local_to_world_mm`. Drops the old geometry through
+/// [`mirror_delete_pad_from_sketch`] and re-mints it through
+/// [`mint_pad_entities`], so the new angle is honoured BY
+/// CONSTRUCTION.
+///
+/// This is the whole point: per-shape layout knowledge (where a
+/// chamfer anchor sits, where a round-rect arc centre sits) lives in
+/// `mint` and nowhere else. Repositioning the four bbox corners with
+/// [`mirror_move_pad_in_sketch`] is correct only for the shapes whose
+/// entire outline IS those four corners — every parametric shape ends
+/// up with rotated corners joined to un-rotated anchors, an outline
+/// that is neither the old shape nor the new one. Teaching the corner
+/// mover each shape's layout would make a third copy of those rules;
+/// re-minting keeps one.
+///
+/// Re-minting also rewrites the `PadAttr` via `pad_attr_from_editor_pad`,
+/// which is what keeps `attr.shape` — the field `signex_bake::pad`
+/// reads — in step with the editor's `pad.shape` after a flip swaps
+/// the chamfer corners.
+///
+/// Returns `false` for a sketch-profile pad, where nothing was
+/// regenerated: its copper is a traced loop, not a parametric shape,
+/// so there is no layout to re-derive and the wildcard mint branch
+/// would fabricate a bbox outline it never had. The caller owes the
+/// user a warning in that case.
+///
+/// COST: constraints the user authored against the old outline
+/// entities go with the old entities. The delete path already sweeps
+/// them; a rotate is therefore a constraint-dropping edit. It is
+/// undoable in one step — the history snapshot carries the whole
+/// footprint file, sketch included.
+pub fn remint_pad_geometry(pad: &mut EditorPad, footprint: &mut Footprint) -> bool {
+    let Some(entity_id) = pad.sketch_entity_id else {
+        // No sketch link yet — nothing minted, nothing to regenerate.
+        return true;
+    };
+    if is_sketch_profile_pad(pad, footprint) {
+        return false;
+    }
+    mirror_delete_pad_from_sketch(pad, footprint);
+    // Reuse the SAME centre id: selection state and any external
+    // handle on the pad's centre `Point` keep pointing at the pad
+    // rather than dangling on a fresh UUID.
+    pad.corner_entity_ids = None;
+    mint_pad_entities(pad, footprint, entity_id);
+    true
 }
 
 /// Branch on `pad.shape` to mint the correct sketch geometry — Circle

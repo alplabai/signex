@@ -48,7 +48,28 @@ pub fn mirror_pad_attrs_into_sketch(pads: &[EditorPad], sketch: &mut SketchData)
         attr.copper_offset_x_mm = pad.copper_offset_x_mm;
         attr.copper_offset_y_mm = pad.copper_offset_y_mm;
         mirror_rotation_expr(&mut attr.rotation_expr, pad.rotation_deg);
+        mirror_shape(&mut attr.shape, &pad.shape);
     }
+}
+
+/// `signex_bake::pad` reads `PadAttr::shape`, so the sketch copy of
+/// the shape IS what gets baked. Leaving it out of the mirror let a
+/// flip swap the editor pad's chamfer corners while the sketch — and
+/// therefore the bake — kept the pre-flip ones: two representations,
+/// two answers, and the part does not seat.
+///
+/// A `SketchProfile` custom shape is never overwritten. That variant
+/// is not derived from `pad.shape` at all — it names the traced loop
+/// that IS the pad's copper, and `map_shape` would replace it with a
+/// static point list, silently severing the profile link.
+fn mirror_shape(current: &mut SkPadShape, shape: &LibPadShape) {
+    if matches!(
+        current,
+        SkPadShape::Custom(CustomPadShape::SketchProfile { .. })
+    ) {
+        return;
+    }
+    *current = map_shape(shape);
 }
 
 /// Rotation was the one geometry field the mirror never wrote, so a

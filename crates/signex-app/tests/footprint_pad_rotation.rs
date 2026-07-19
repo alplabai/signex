@@ -342,7 +342,7 @@ fn flip_mirrors_every_mirror_sensitive_field_of_every_selected_pad() {
 /// cannot see this because they only ever run at mint time.
 #[test]
 fn rotate_moves_the_sketch_outline_corners_to_match_the_turned_copper() {
-    let (mut app, path, corner_ids) = sketched_pad_fixture("rotate-outline", (2.0, 1.0));
+    let (mut app, path) = sketched_pad_fixture("rotate-outline", (2.0, 1.0));
 
     dispatch(
         &mut app,
@@ -353,14 +353,14 @@ fn rotate_moves_the_sketch_outline_corners_to_match_the_turned_copper() {
     let editor = app.document_state.footprint_editors.get(&path).unwrap();
     let pad = &editor.state.pads[0];
     assert_eq!(pad.rotation_deg, 90.0, "pre-condition: the pad turned 90°");
-    assert_corners_match_pad(editor, &corner_ids, pad, "after ActiveBarRotateSelection");
+    assert_corners_match_pad(editor, pad, "after ActiveBarRotateSelection");
 }
 
 /// Same defect on the Flip arm — it negates the angle, so
 /// `rotated_corners_mm()` moves and the outline has to follow.
 #[test]
 fn flip_moves_the_sketch_outline_corners_to_match_the_mirrored_copper() {
-    let (mut app, path, corner_ids) = sketched_pad_fixture("flip-outline", (2.0, 1.0));
+    let (mut app, path) = sketched_pad_fixture("flip-outline", (2.0, 1.0));
     {
         let editor = app.document_state.footprint_editors.get_mut(&path).unwrap();
         editor.state.pads[0].rotation_deg = 30.0;
@@ -374,7 +374,7 @@ fn flip_moves_the_sketch_outline_corners_to_match_the_mirrored_copper() {
         pad.rotation_deg, 330.0,
         "pre-condition: 30° mirrored to −30°"
     );
-    assert_corners_match_pad(editor, &corner_ids, pad, "after ActiveBarFlipSelection");
+    assert_corners_match_pad(editor, pad, "after ActiveBarFlipSelection");
 }
 
 /// The Properties-panel rotation field is the third sibling: it also
@@ -384,7 +384,7 @@ fn properties_panel_rotation_moves_the_sketch_outline_corners() {
     use signex_app::dock::DockMessage;
     use signex_app::panels::PanelMsg;
 
-    let (mut app, path, corner_ids) = sketched_pad_fixture("panel-rotate-outline", (2.0, 1.0));
+    let (mut app, path) = sketched_pad_fixture("panel-rotate-outline", (2.0, 1.0));
 
     let _ = app.update(Message::Dock(DockMessage::Panel(
         PanelMsg::FpEditorSetSelectedPadRotation {
@@ -396,16 +396,12 @@ fn properties_panel_rotation_moves_the_sketch_outline_corners() {
     let editor = app.document_state.footprint_editors.get(&path).unwrap();
     let pad = &editor.state.pads[0];
     assert_eq!(pad.rotation_deg, 90.0, "pre-condition: the panel set 90°");
-    assert_corners_match_pad(editor, &corner_ids, pad, "after the panel rotation edit");
+    assert_corners_match_pad(editor, pad, "after the panel rotation edit");
 }
 
 /// A footprint editor holding one selected `Rect` pad at the origin
-/// with its sketch outline already minted. Returns the four corner
-/// `Point` ids in `[ne, se, sw, nw]` order.
-fn sketched_pad_fixture(
-    stem: &str,
-    size_mm: (f64, f64),
-) -> (Signex, PathBuf, [signex_sketch::id::SketchEntityId; 4]) {
+/// with its sketch outline already minted.
+fn sketched_pad_fixture(stem: &str, size_mm: (f64, f64)) -> (Signex, PathBuf) {
     use signex_app::app::{FootprintEditorState, TabInfo, TabKind};
     use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
     use signex_library::{Footprint, FootprintFile, PadShape};
@@ -416,9 +412,10 @@ fn sketched_pad_fixture(
     pad.shape = PadShape::Rect;
     pad.size_mm = size_mm;
     mirror_add_pad_to_sketch(&mut pad, &mut fp);
-    let corner_ids = pad
-        .corner_entity_ids
-        .expect("a Rect pad mints four outline-corner Points");
+    assert!(
+        pad.corner_entity_ids.is_some(),
+        "a Rect pad mints four outline-corner Points"
+    );
 
     let file = FootprintFile::from_footprint(fp);
     let mut editor = FootprintEditorState::new(path.clone(), file);
@@ -438,15 +435,22 @@ fn sketched_pad_fixture(
         kind: TabKind::FootprintEditor(path.clone()),
     });
     app.document_state.active_tab = 0;
-    (app, path, corner_ids)
+    (app, path)
 }
 
 /// Every outline-corner `Point` must sit exactly where the pad's real
 /// copper corner is. Anything else is a construction outline that
 /// disagrees with the copper it outlines.
+///
+/// The corner IDs are read off the PAD, live, not captured before the
+/// transform. A frame transform re-mints the sidecar through
+/// `pad_to_sketch::remint_pad_geometry`, so the outline entities that
+/// exist afterwards are new ones — holding the pre-transform IDs would
+/// assert entity identity, which is not the property that matters. The
+/// property that matters is that the outline the pad currently points
+/// at traces the copper.
 fn assert_corners_match_pad(
     editor: &signex_app::app::FootprintEditorState,
-    corner_ids: &[signex_sketch::id::SketchEntityId; 4],
     pad: &EditorPad,
     when: &str,
 ) {
@@ -457,6 +461,9 @@ fn assert_corners_match_pad(
         .sketch
         .as_ref()
         .expect("the fixture minted a sketch");
+    let corner_ids = pad
+        .corner_entity_ids
+        .expect("the pad still owns four outline-corner Points");
     let expected = pad.rotated_corners_mm();
     for (i, id) in corner_ids.iter().enumerate() {
         let got = sketch
