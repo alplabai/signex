@@ -123,6 +123,17 @@ pub struct SplitResult {
 /// `attr_refs::retarget_pad_profiles` already relies on for the pad
 /// Custom-shape / Custom-paste-aperture seed lists.
 ///
+/// CALLERS MUST KNOW: the bake is not the only reader of those seven
+/// slots. The footprint editor's Properties panel derives its Role and
+/// its Pour / Keepout / Cutout sub-forms from the SINGLE selected
+/// entity's own `Option`s, so after a split only `line_a` still
+/// presents as (say) a pour boundary — selecting `line_b` shows
+/// "Unassigned" and edits to it no-op against a `None`. A caller that
+/// leaves the user selected on `line_b` invites them to re-tag it,
+/// which puts a second seed on the loop and reproduces the double-emit
+/// this rule exists to prevent. Re-select onto [`SplitResult::line_a`]
+/// after splitting a profile-bearing edge.
+///
 /// Every reference to the retired line elsewhere in `sketch` is also
 /// rewritten or dropped, by kind:
 ///
