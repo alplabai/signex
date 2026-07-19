@@ -10,8 +10,10 @@
 //!
 //! Scope (ADR-0001 A3.1): single sheet only — no hierarchy; net names come
 //! from the highest-priority label on the net, matching the current ERC
-//! semantics. Same-name label *merging* and cross-sheet stitching are
-//! deferred to a later increment.
+//! semantics. Single-sheet same-name label *merging* is applied here, by
+//! [`SheetConnectivity::merge_named_labels`], and every consumer of that type
+//! is expected to apply it too. Only cross-sheet stitching lives elsewhere
+//! (the project-level stitcher) and is deferred to a later increment.
 
 use std::collections::{HashMap, HashSet};
 
@@ -283,13 +285,16 @@ pub struct FloodElements {
 
 /// Every wire and junction on the same net as `target_wire`, for the
 /// net-colour flood. Returns `None` when `target_wire` is not a wire in
-/// `sheet`. Uses the same [`SheetConnectivity`] core as [`build_netlist`], so
-/// the highlight follows the real net exactly — it can neither bleed across
-/// nets (the old 0.01 mm-bucket over-merge) nor miss a T-junction the way the
-/// app's previous inline union-find did.
+/// `sheet`. Uses the same [`merged_connectivity`] as [`build_netlist`], so the
+/// highlight follows the real net exactly — it can neither bleed across nets
+/// (the old 0.01 mm-bucket over-merge) nor miss a T-junction the way the app's
+/// previous inline union-find did, and it paints *every* wire on the net,
+/// including a physically disjoint one joined only by a same-name label
+/// (issue #404 — a physical-only flood contradicted the netlist it claims to
+/// colour).
 pub fn flood_net_elements(sheet: &SchematicSheet, target_wire: Uuid) -> Option<FloodElements> {
     let target = sheet.wires.iter().find(|w| w.uuid == target_wire)?;
-    let mut conn = SheetConnectivity::build(sheet);
+    let mut conn = merged_connectivity(sheet);
     let root = conn.root_of(&target.start);
     let wires = sheet
         .wires
@@ -313,16 +318,20 @@ pub fn flood_net_elements(sheet: &SchematicSheet, target_wire: Uuid) -> Option<F
 /// sampled: sampling a root and then mutating the map again is a correctness
 /// hazard the two-level stitcher relies on this to avoid.
 pub(crate) fn merged_sheet_parent(sheet: &SchematicSheet) -> HashMap<Key, Key> {
-    // Start from the physical connectivity core (wires + junction T-merges),
-    // owned so the label-merge below never disturbs what the net-flood reads
-    // through `SheetConnectivity`.
-    let mut conn = SheetConnectivity::build(sheet);
+    merged_connectivity(sheet).parent
+}
 
-    // Then the logical layer: same-name labels join nets within this sheet.
-    // (Global and Power also join across sheets by name — the cross-sheet
-    // stitcher's job; here we only see one sheet.) This is the shared
-    // [`SheetConnectivity::merge_named_labels`], so every consumer outside this
-    // crate derives the identical topology.
+/// The whole per-sheet topology a consumer must read to agree with
+/// [`build_netlist`]: the physical [`SheetConnectivity`] core (wire endpoints +
+/// junction T-merges) **plus** the logical same-name label merge on top. Every
+/// on-sheet consumer — the netlist, the net-colour flood, and ERC across the
+/// crate boundary — goes through this pair; deriving only the physical half is
+/// the #404 defect (a consumer reports more nets than the netlist has).
+///
+/// (`Global` and `Power` also join *across* sheets by name — the cross-sheet
+/// stitcher's job; here we only ever see one sheet.)
+fn merged_connectivity(sheet: &SchematicSheet) -> SheetConnectivity {
+    let mut conn = SheetConnectivity::build(sheet);
     let segments: Vec<(Point, Point)> = sheet.wires.iter().map(|w| (w.start, w.end)).collect();
     conn.merge_named_labels(
         sheet
@@ -331,7 +340,7 @@ pub(crate) fn merged_sheet_parent(sheet: &SchematicSheet) -> HashMap<Key, Key> {
             .map(|l| (l.position, l.label_type, l.text.as_str())),
         &segments,
     );
-    conn.parent
+    conn
 }
 
 /// Group each sheet label under its merged net root, so the highest-priority

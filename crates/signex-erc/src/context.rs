@@ -772,4 +772,33 @@ mod tests {
             "hierarchical labels do not join same-name peers on one sheet"
         );
     }
+
+    #[test]
+    fn a_merged_net_takes_the_highest_priority_label_name() {
+        // The user-visible consequence of merging, mirroring signex-net's
+        // `label_names_the_net_by_priority` on the ERC side: the merge changes
+        // the NAME the DSL sees, not just the net count. Two wires joined by a
+        // shared Global `SYS` also carry a Net label `VCC` each; the merged net
+        // is named `SYS` (Global outranks Net), so a DSL rule keyed on
+        // `net.name == "VCC"` stops matching ENTIRELY rather than matching once
+        // instead of twice.
+        let wires = vec![
+            wire(pt(0.0, 0.0), pt(10.0, 0.0)),
+            wire(pt(50.0, 0.0), pt(60.0, 0.0)),
+        ];
+        let labels = vec![
+            label(pt(0.0, 0.0), "VCC", LabelType::Net),
+            label(pt(10.0, 0.0), "SYS", LabelType::Global),
+            label(pt(50.0, 0.0), "VCC", LabelType::Net),
+            label(pt(60.0, 0.0), "SYS", LabelType::Global),
+        ];
+        let syms = vec![symbol(vec![pin(pt(0.0, 0.0), PinDirection::Output)])];
+
+        let nets = summarize_nets(&wires, &labels, &[], &syms);
+        assert_eq!(nets.len(), 1, "the shared Global joins both wires");
+        assert_eq!(
+            nets[0].name, "SYS",
+            "Global outranks Net when naming the merged net"
+        );
+    }
 }
