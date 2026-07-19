@@ -13,10 +13,13 @@
 //!   helper.
 //! - [`mint`] — per-shape `mint_*_pad_geometry` functions.
 //! - [`solve`] — post-solve "reverse mirror" helpers.
+//! - [`ownership`] — the single answer to "which sketch entities does
+//!   this pad own?", shared by the move and delete mirrors.
 
 mod attr;
 mod helpers;
 mod mint;
+mod ownership;
 mod solve;
 
 #[cfg(test)]
@@ -39,6 +42,21 @@ pub use solve::{
     mirror_solve_to_pad_stack, mirror_solve_to_round_rect_geometry,
 };
 
+/// Whether the footprint's sketch already holds authored (non-
+/// construction) content.
+///
+/// This is exactly the condition [`auto_mint_for_literal_pads`]
+/// early-returns on, so a caller that mints a single pad (paste) can
+/// use it to tell the two cases apart: authored → auto-mint will never
+/// pick this pad up, mint it now; not authored → auto-mint still
+/// covers it, and minting early is what would break that.
+pub fn sketch_is_authored(footprint: &Footprint) -> bool {
+    footprint
+        .sketch
+        .as_ref()
+        .is_some_and(|s| s.entities.iter().any(|e| !e.construction))
+}
+
 /// When the user transitions into Sketch mode for the first time on
 /// a footprint that has literal pads but an empty sketch, mint a
 /// `Point` + `PadAttr` for each pad. Writes the minted sketch entity
@@ -52,11 +70,8 @@ pub fn auto_mint_for_literal_pads(pads: &mut [EditorPad], footprint: &mut Footpr
     }
     // Skip if the sketch already has any non-construction entities —
     // assume the user has already started authoring sketch content.
-    if let Some(sketch) = footprint.sketch.as_ref() {
-        let has_real_entity = sketch.entities.iter().any(|e| !e.construction);
-        if has_real_entity {
-            return 0;
-        }
+    if sketch_is_authored(footprint) {
+        return 0;
     }
 
     let plane_id = ensure_board_top_plane(footprint);
@@ -197,6 +212,15 @@ fn mint_shape_geometry_for(
 /// The profile is authoritative for a sketch-profile pad; the pad's
 /// position is a derived handle, and moving the handle means
 /// translating the geometry.
+///
+/// Translates the pad's WHOLE owned set
+/// ([`ownership::owned_sketch_entities`]) rather than just the centre
+/// and the four bbox corners. RoundRect's 8 edge anchors + 4 inset
+/// arc-centres, Oval's 4 anchors + 2 arc-centres and Chamfered's
+/// per-corner anchors are all minted NON-construction, so leaving them
+/// behind made the bake emit copper from the stranded geometry — and
+/// nothing downstream repaired it (`sync_pads_to_primitive` copies
+/// attributes only, it never re-mints).
 pub fn mirror_move_pad_in_sketch(pad: &EditorPad, footprint: &mut Footprint) {
     let Some(entity_id) = pad.sketch_entity_id else {
         return;
@@ -204,26 +228,36 @@ pub fn mirror_move_pad_in_sketch(pad: &EditorPad, footprint: &mut Footprint) {
     let Some(sketch) = footprint.sketch.as_mut() else {
         return;
     };
+    // Read the delta BEFORE any mutation — the centre is the only
+    // absolute reference, and every other owned Point rides on it.
+    let Some((old_x, old_y)) = point_xy_of(sketch, entity_id) else {
+        return;
+    };
+    let (dx, dy) = (pad.position_mm.0 - old_x, pad.position_mm.1 - old_y);
     // Must run BEFORE the centre is overwritten — the delta is measured
     // from the centre's current position. The centre is a standalone
     // minted Point and never part of the traced loop, so it cannot be
-    // translated twice.
+    // translated twice. A profile pad also owns no `corner_entity_ids`
+    // / `shape_params`, so the profile loop and the owned set below are
+    // disjoint and nothing takes the delta twice.
     translate_profile_with_pad(sketch, entity_id, pad.position_mm);
-    helpers::set_point_xy(sketch, entity_id, pad.position_mm.0, pad.position_mm.1);
-    // v0.16 — also reposition the outline-corner Points so the
-    // construction outline tracks the pad bbox.
-    if let Some(corners) = pad.corner_entity_ids {
-        let bbox = pad.bbox_mm();
-        let positions: [(f64, f64); 4] = [
-            (bbox.2, bbox.1), // ne
-            (bbox.2, bbox.3), // se
-            (bbox.0, bbox.3), // sw
-            (bbox.0, bbox.1), // nw
-        ];
-        for (id, (px, py)) in corners.iter().zip(positions.iter()) {
-            helpers::set_point_xy(sketch, *id, *px, *py);
+    // A pad move is a pure translation, so a single delta covers every
+    // shape — no per-shape position tables (those belong to `solve`,
+    // which handles radius / size changes). Lines, Arcs and the Round
+    // Circle follow their endpoints, and `set_point_xy` no-ops on them.
+    let owned = ownership::owned_sketch_entities(pad, sketch);
+    for id in owned {
+        if id == entity_id {
+            continue;
+        }
+        if let Some((x, y)) = point_xy_of(sketch, id) {
+            helpers::set_point_xy(sketch, id, x + dx, y + dy);
         }
     }
+    // The centre is set absolutely, not by delta: `old + (new - old)`
+    // is not bit-identical to `new` in floating point, and the centre
+    // is the pad's authoritative handle.
+    helpers::set_point_xy(sketch, entity_id, pad.position_mm.0, pad.position_mm.1);
 }
 
 /// Raw x/y of a sketch `Point` entity, straight off `SketchData` —
@@ -313,19 +347,9 @@ pub fn mirror_delete_pad_from_sketch(pad: &EditorPad, footprint: &mut Footprint)
     let Some(sketch) = footprint.sketch.as_mut() else {
         return;
     };
-    let mut to_drop: Vec<SketchEntityId> = vec![entity_id];
-    if let Some(corners) = pad.corner_entity_ids {
-        to_drop.extend_from_slice(&corners);
-    }
-    // v0.24 Track A5 + A6 — seed any sidecar entity IDs stored on
-    // `pad.shape_params`. Sidecar values are UUID slugs (no dashes);
-    // canonical bindings (`corner_r_<slug>`, etc.) have a leading
-    // identifier prefix so they fall through.
-    for value in pad.shape_params.values() {
-        if let Ok(uuid) = uuid::Uuid::parse_str(value) {
-            to_drop.push(SketchEntityId(uuid));
-        }
-    }
+    // v0.24 Track A5 + A6 — the seed spans all three ownership fields
+    // (centre, bbox corners, `shape_params` sidecars); see [`ownership`].
+    let to_drop = ownership::owned_sketch_entities(pad, sketch);
     let mut drop_set: std::collections::HashSet<SketchEntityId> = to_drop.iter().copied().collect();
 
     // Secondary sweep — pull every Line / Arc / Circle that touches a
@@ -382,13 +406,21 @@ pub fn mirror_delete_pad_from_sketch(pad: &EditorPad, footprint: &mut Footprint)
     });
     // Drop dangling constraint refs — coarse rule via Debug
     // stringification (mirrors the SketchEdit::DeleteEntity path).
-    let id_str = entity_id.to_string();
-    sketch
-        .constraints
-        .retain(|c| !format!("{:?}", c.kind).contains(&id_str));
+    // Swept against the WHOLE drop set: matching the centre id alone
+    // left every constraint on a dropped corner / anchor / inset / arc
+    // pointing at an entity that no longer exists.
+    let dropped_ids: Vec<String> = drop_set.iter().map(|id| id.to_string()).collect();
+    sketch.constraints.retain(|c| {
+        let rendered = format!("{:?}", c.kind);
+        !dropped_ids.iter().any(|id| rendered.contains(id))
+    });
 
     // v0.24 Track A — drop shape parameters keyed by the centre-Point
-    // UUID slug.
+    // UUID slug. `contains`, not `ends_with`: the per-corner unlink
+    // override is minted as `corner_r_<slug>_ne` (see
+    // `updates/sketch/pad_bridge.rs`), which ends with the corner
+    // suffix and would otherwise be orphaned in the parameter table
+    // forever. Slugs are 32-hex UUIDs, so a false positive is nil.
     let slug = id_slug(entity_id);
-    sketch.parameters.0.retain(|name, _| !name.ends_with(&slug));
+    sketch.parameters.0.retain(|name, _| !name.contains(&slug));
 }
