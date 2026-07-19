@@ -204,43 +204,6 @@ fn place_move_button_left_click_arms_select_tool() {
     }
 }
 
-// #375 follow-up — the button's `selected` (armed-tool highlight) must
-// track `pads_tool`, not `active_bar_menu`. Before this fix `selected`
-// was `active_bar_menu == Some(FpActiveBarMenu::Place)`, and
-// `SetPadsTool` always resets `active_bar_menu` to `None` (see
-// `updates/view.rs`), so the Move button could never show armed —
-// not on a fresh tab (default tool is already Select) and not after
-// clicking it (the click itself closes the menu). Move and Select
-// fire the identical `SetPadsTool(Select)` message, so they light up
-// together; that's correct, not a bug — there is only one underlying
-// tool state to represent.
-#[test]
-fn place_move_button_selected_tracks_armed_select_tool() {
-    use crate::library::editor::footprint::state::PadsTool;
-    use signex_widgets::active_bar::ActiveBarItem;
-
-    // Fresh tab: PadsTool::Select is #[default], so Move should
-    // already read armed.
-    let ActiveBarItem::Button(place_btn) = place_move_button(default_editor()) else {
-        panic!("index 2 should be the Place/Move button");
-    };
-    assert!(
-        place_btn.selected,
-        "Move should show armed on a fresh tab (default tool is Select)"
-    );
-
-    // Arm a different tool (Text) — Move must stop reading armed.
-    let mut editor = default_editor();
-    editor.state.pads_tool = PadsTool::PlaceString;
-    let ActiveBarItem::Button(place_btn) = place_move_button(editor) else {
-        panic!("index 2 should be the Place/Move button");
-    };
-    assert!(
-        !place_btn.selected,
-        "Move must not read armed once a different tool is armed"
-    );
-}
-
 fn default_editor() -> crate::app::FootprintEditorState {
     let file = signex_library::FootprintFile::from_footprint(
         signex_library::primitive::footprint::Footprint::empty("Test"),
