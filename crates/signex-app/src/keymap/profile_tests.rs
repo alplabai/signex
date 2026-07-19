@@ -120,6 +120,55 @@ fn persistence_round_trip_keeps_bundled_profiles_and_active_custom_profile() {
     assert!(loaded.profile("altium").is_some());
     assert!(loaded.profile("classic").is_some());
     assert!(loaded.profile("my-altium").is_some());
+
+    // A successful atomic save strands no `.tmp` sibling.
+    let mut tmp_name = path.file_name().unwrap().to_os_string();
+    tmp_name.push(".tmp");
+    assert!(!path.with_file_name(tmp_name).exists());
+}
+
+/// `save_profile_set_at` must go through `atomic_write`, not `fs::write`:
+/// a failed save leaves the user's previously saved custom keymap profiles
+/// fully intact instead of truncating them.
+///
+/// Discriminator: pre-creating a *directory* at `<path>.tmp` makes
+/// `atomic_write`'s `File::create(&tmp)` fail before it can touch the
+/// destination, and the call returns `Err`. A plain `fs::write` would ignore
+/// the sibling, succeed, and clobber the old file — so this test fails on a
+/// revert.
+#[test]
+fn save_profile_set_at_leaves_previous_profiles_intact_when_write_fails() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = config_path_for_dir(tmp.path());
+
+    let mut first = ShortcutProfileSet::built_ins().unwrap();
+    let custom = first
+        .active_profile()
+        .copy_as_custom("keeper", "Keeper")
+        .unwrap();
+    first.insert_custom_profile(custom).unwrap();
+    first.set_active_profile("keeper").unwrap();
+    save_profile_set_at(&path, &first).unwrap();
+    let before = std::fs::read_to_string(&path).unwrap();
+
+    let mut tmp_name = path.file_name().unwrap().to_os_string();
+    tmp_name.push(".tmp");
+    std::fs::create_dir_all(path.with_file_name(tmp_name)).unwrap();
+
+    let mut second = ShortcutProfileSet::built_ins().unwrap();
+    let other = second
+        .active_profile()
+        .copy_as_custom("clobberer", "Clobberer")
+        .unwrap();
+    second.insert_custom_profile(other).unwrap();
+    second.set_active_profile("clobberer").unwrap();
+
+    assert!(save_profile_set_at(&path, &second).is_err());
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
+    assert_eq!(
+        load_profile_set_at(&path).unwrap().active_profile().id,
+        "keeper"
+    );
 }
 
 #[test]

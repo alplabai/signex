@@ -134,9 +134,27 @@ fn smart_paste_offset(app: &Signex) -> (f64, f64) {
 }
 
 impl Signex {
+    /// Cut is copy + delete, but Copy (`collect_selection_clipboard`)
+    /// silently drops kinds it can't carry — `ChildSheet`/`SheetPin`
+    /// today. Deleting those anyway would destroy them with nothing in
+    /// the clipboard to restore on paste, so only the clipboard-carriable
+    /// subset of the selection is cut; anything else stays selected and
+    /// untouched (#341 — sheet clipboard support itself stays out of
+    /// scope; Cut just can't silently eat what Copy drops).
     pub(crate) fn handle_selection_cut_requested(&mut self) -> Task<Message> {
+        let selected = self.interaction_state.active_canvas().selected.clone();
+        let (cuttable, kept) = signex_engine::partition_cuttable(&selected);
+        if cuttable.is_empty() {
+            return Task::none();
+        }
+
+        self.interaction_state.active_canvas_mut().selected = cuttable;
         self.handle_selection_copy_requested();
         self.handle_selection_delete_requested();
+        self.interaction_state
+            .active_canvas_mut()
+            .selected
+            .extend(kept);
         Task::none()
     }
 

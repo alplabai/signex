@@ -10,3 +10,4 @@ description = "BOM engine for Signex EDA"
 
 [dependencies]
 serde = { workspace = true }
+signex-types = { path = "../signex-types" }

@@ -578,6 +578,39 @@ impl Engine {
 }
 
 // ---------------------------------------------------------------------------
+// Cut = copy + delete, but the two must agree on what they carry
+// ---------------------------------------------------------------------------
+
+/// Kinds `collect_selection_clipboard` (above) captures. Single source of
+/// truth for `partition_cuttable` — keep this in sync with that match.
+fn clipboard_can_carry(kind: SelectedKind) -> bool {
+    matches!(
+        kind,
+        SelectedKind::Wire
+            | SelectedKind::Bus
+            | SelectedKind::Label
+            | SelectedKind::Symbol
+            | SelectedKind::Junction
+            | SelectedKind::NoConnect
+            | SelectedKind::TextNote
+    )
+}
+
+/// Splits a selection into the subset Cut can safely copy-then-delete and
+/// the remainder it must leave untouched. Cut is copy + delete; a kind
+/// `collect_selection_clipboard` can't carry (`ChildSheet`, `SheetPin`,
+/// `Drawing`, `BusEntry`, …) would otherwise get deleted with nothing in
+/// the clipboard to restore it — a silent destroy, not a no-op (#341:
+/// sheet clipboard support itself is out of scope, but Cut must not desync
+/// from what Copy can actually carry).
+pub fn partition_cuttable(items: &[SelectedItem]) -> (Vec<SelectedItem>, Vec<SelectedItem>) {
+    items
+        .iter()
+        .copied()
+        .partition(|item| clipboard_can_carry(item.kind))
+}
+
+// ---------------------------------------------------------------------------
 // Arc geometry helper
 // ---------------------------------------------------------------------------
 

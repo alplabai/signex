@@ -8,9 +8,25 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
-_Nothing yet — v0.14.0 shipped 2026-07-18. The symbol polygon primitive, Place
-Polygon tool, Join into Polygon, right-click context menu, and the arc-sweep /
-legacy-migration fixes that briefly lived here all shipped in v0.14.0 below._
+### Fixed
+
+- **Same-name label merging is applied by every connectivity consumer** (#404).
+  `SheetConnectivity::merge_named_labels` is now called by `summarize_nets`
+  (ERC/DSL), `net_label_conflict`, `missing_power_flag`, and
+  `flood_net_elements` (the net-colour highlight), so all of them derive the
+  same topology `build_netlist` does. Two physically disjoint wires sharing a
+  label name were previously separate nets to each of these, but one net to the
+  netlist.
+
+  **Behaviour change for existing projects.** Merging changes the net *name*
+  the ERC DSL sees, not just the net count: when a `VCC`-labelled fragment
+  merges with one carrying a higher-priority `Global`/`Power` label, the merged
+  net takes the higher-priority name. A DSL rule keyed on `net.name == "VCC"`
+  can therefore stop matching entirely rather than merely matching once instead
+  of twice. `net_label_conflict` also now reports conflicts created by such a
+  join — two differently-named `Net` labels pulled onto one net by a shared
+  `Global`/`Power` label previously went unreported, and both signal names were
+  silently dropped from the netlist.
 
 ## [0.14.0] — 2026-07-18
 
