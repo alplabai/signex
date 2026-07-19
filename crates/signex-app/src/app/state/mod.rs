@@ -498,10 +498,16 @@ pub struct PreviewState {
     /// while the user is holding the mouse down on the preview
     /// surface. Updated every move via the global mouse handler.
     pub panning: Option<((f32, f32), f32, f32)>,
-    /// Files chosen for export from the active project's sheet list.
-    /// Empty = all files (default at open). When non-empty, only the
-    /// listed paths are rasterised + exported. Driven by the file
-    /// picker in the Settings tab.
+    /// Every sheet this export could cover, as `(path, display name)` in
+    /// page order — a snapshot of the `ExportContext` sheet set taken when
+    /// the modal opened. The Settings-tab file picker renders from this
+    /// rather than re-deriving from the project, so the checkbox list is
+    /// guaranteed to match the pages the exporter will emit (a loose
+    /// schematic lists itself; a project lists its sheets).
+    pub sheet_files: Vec<(PathBuf, String)>,
+    /// Files the user has ticked for export, a subset of `sheet_files`.
+    /// Seeded to all of them on open. Empty = nothing selected, which the
+    /// export path rejects with a user-visible error.
     pub selected_files: std::collections::HashSet<PathBuf>,
     /// Available variants for the active project — drives the variant
     /// picker dropdown options. The currently-selected value lives on
@@ -543,6 +549,19 @@ impl DocumentState {
     /// workspace is empty or no project has been made active yet.
     pub fn active_loaded_project(&self) -> Option<&LoadedProject> {
         self.active_project.and_then(|id| self.project_by_id(id))
+    }
+
+    /// Project that owns the *active document*, for export scoping.
+    ///
+    /// Deliberately not `active_loaded_project()`: `active_project` is a
+    /// sticky workspace-wide pointer that survives focusing a tab with no
+    /// project of its own (symbol / footprint / library editors, or a loose
+    /// schematic opened without its companion project file). Exports must
+    /// follow the document on screen, so they resolve scope from the sheet
+    /// list that actually contains `active_path`. `None` = the active
+    /// document is loose and exports as a standalone sheet.
+    pub fn export_scope_project(&self) -> Option<&LoadedProject> {
+        project_owning_sheet(&self.projects, self.active_path.as_ref()?)
     }
 
     pub fn active_engine(&self) -> Option<&signex_engine::Engine> {
@@ -587,6 +606,84 @@ impl DocumentState {
             }
         };
         self.engines.get(target_path)
+    }
+}
+
+/// Find the project whose sheet list contains `path`.
+///
+/// Stricter than [`DocumentState::project_for_path`], which matches on the
+/// parent directory alone: a schematic sitting inside a project's folder but
+/// never added to `sheets` belongs to no project, and must not drag that
+/// project's other sheets into an export. Joins `dir` with each entry's
+/// `filename` — the same key form `DocumentState.engines` uses.
+pub(crate) fn project_owning_sheet<'a>(
+    projects: &'a [LoadedProject],
+    path: &std::path::Path,
+) -> Option<&'a LoadedProject> {
+    projects.iter().find(|p| {
+        let dir = std::path::Path::new(&p.data.dir);
+        p.data.sheets.iter().any(|s| dir.join(&s.filename) == path)
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_types::project::SheetEntry;
+
+    fn project(id: u32, dir: &str, filenames: &[&str]) -> LoadedProject {
+        LoadedProject {
+            id: ProjectId(id),
+            path: PathBuf::from(dir).join("proj.snxprj"),
+            data: ProjectData {
+                name: "proj".to_string(),
+                dir: dir.to_string(),
+                schematic_root: None,
+                pcb_file: None,
+                sheets: filenames
+                    .iter()
+                    .map(|f| SheetEntry {
+                        name: (*f).to_string(),
+                        filename: (*f).to_string(),
+                        symbols_count: 0,
+                        wires_count: 0,
+                        labels_count: 0,
+                    })
+                    .collect(),
+                variant_definitions: Vec::new(),
+                active_variant: None,
+                libraries: Vec::new(),
+                enable_git: false,
+            },
+            pending_libraries: std::collections::HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn owning_project_is_the_one_listing_the_sheet() {
+        let projects = vec![project(1, "/w/a", &["top.snxsch", "power.snxsch"])];
+        let found = project_owning_sheet(&projects, &PathBuf::from("/w/a").join("power.snxsch"));
+        assert_eq!(found.map(|p| p.id), Some(ProjectId(1)));
+    }
+
+    #[test]
+    fn loose_sheet_in_another_directory_belongs_to_no_project() {
+        let projects = vec![project(1, "/w/a", &["top.snxsch"])];
+        assert!(
+            project_owning_sheet(&projects, &PathBuf::from("/w/loose").join("scratch.snxsch"))
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn sheet_inside_the_project_directory_but_unlisted_belongs_to_no_project() {
+        // The case parent-directory matching (`project_for_path`) gets
+        // wrong — it would claim this file for the project and export
+        // the project's whole sheet list instead of this one document.
+        let projects = vec![project(1, "/w/a", &["top.snxsch"])];
+        assert!(
+            project_owning_sheet(&projects, &PathBuf::from("/w/a").join("stray.snxsch")).is_none()
+        );
     }
 }
 

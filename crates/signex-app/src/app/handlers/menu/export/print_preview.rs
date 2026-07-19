@@ -76,7 +76,7 @@ impl Signex {
         log::info!("Print preview: rendered {} page(s)", pages.len());
         let variants = self
             .document_state
-            .active_loaded_project()
+            .export_scope_project()
             .map(|p| p.data.variant_definitions.clone())
             .unwrap_or_default();
         // Seed `pdf_options.variant` from the project's active variant
@@ -85,23 +85,20 @@ impl Signex {
         let mut pdf_opts = pdf_opts;
         pdf_opts.variant = self
             .document_state
-            .active_loaded_project()
+            .export_scope_project()
             .and_then(|p| p.data.active_variant.clone());
-        // Seed the file picker with every sheet from the active
-        // project — open-modal default is "export everything", and
-        // user toggles take the box from checked to unchecked.
-        let selected_files: std::collections::HashSet<PathBuf> = self
-            .document_state
-            .active_loaded_project()
-            .map(|p| {
-                let dir = std::path::PathBuf::from(&p.data.dir);
-                p.data
-                    .sheets
-                    .iter()
-                    .map(|s| dir.join(&s.filename))
-                    .collect()
-            })
-            .unwrap_or_default();
+        // Seed the file picker off the export context's own sheet set —
+        // open-modal default is "export everything", and user toggles
+        // take the box from checked to unchecked. Reading `ctx` rather
+        // than re-deriving from the project keeps the picker and the
+        // exported pages in lockstep for loose documents too.
+        let sheet_files: Vec<(PathBuf, String)> = ctx
+            .sheets
+            .iter()
+            .map(|s| (s.path.clone(), s.sheet_name.clone()))
+            .collect();
+        let selected_files: std::collections::HashSet<PathBuf> =
+            sheet_files.iter().map(|(p, _)| p.clone()).collect();
         self.document_state.preview = Some(crate::app::state::PreviewState {
             pages,
             page_handles,
@@ -112,6 +109,7 @@ impl Signex {
             active_tab: crate::app::state::PdfPreviewTab::Preview,
             pan: (0.0, 0.0),
             panning: None,
+            sheet_files,
             selected_files,
             variants,
             quality: initial_quality,
@@ -421,20 +419,8 @@ impl Signex {
     }
 
     pub(crate) fn handle_print_preview_select_all_files(&mut self) {
-        let all: std::collections::HashSet<PathBuf> = self
-            .document_state
-            .active_loaded_project()
-            .map(|p| {
-                let dir = std::path::PathBuf::from(&p.data.dir);
-                p.data
-                    .sheets
-                    .iter()
-                    .map(|s| dir.join(&s.filename))
-                    .collect()
-            })
-            .unwrap_or_default();
         if let Some(preview) = self.document_state.preview.as_mut() {
-            preview.selected_files = all;
+            preview.selected_files = preview.sheet_files.iter().map(|(p, _)| p.clone()).collect();
         }
         self.rerasterize_print_preview();
     }

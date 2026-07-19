@@ -17,14 +17,19 @@ fn build_export_context(
     let active_path = document_state.active_path.as_ref()?;
     let active_engine = document_state.engines.get(active_path)?;
 
-    // Project-wide PDF: walk the active project's full sheet list rather
+    // Project-wide PDF: walk the owning project's full sheet list rather
     // than just the open tabs. Sheets currently opened as tabs use the
     // live engine snapshot (so unsaved edits show in the preview);
     // unopened sheets are read straight from disk via the parser. If
-    // the active document isn't tied to a project (loose .standard_sch),
-    // we fall back to the engines map so a single-sheet preview still
+    // the active document isn't tied to a project (loose .snxsch), we
+    // fall back to the engines map so a single-sheet preview still
     // works.
-    let sheets: Vec<SheetSnapshot> = if let Some(project) = document_state.active_loaded_project() {
+    //
+    // Scope comes from `export_scope_project()` — the project whose sheet
+    // list contains the active document — NOT `active_loaded_project()`,
+    // whose `active_project` pointer is sticky by design and keeps
+    // pointing at the last-loaded project while a loose file is focused.
+    let sheets: Vec<SheetSnapshot> = if let Some(project) = document_state.export_scope_project() {
         let project_dir = std::path::Path::new(&project.data.dir);
         let mut snapshots: Vec<SheetSnapshot> = Vec::new();
         let total = project.data.sheets.len().max(1);
@@ -63,7 +68,16 @@ fn build_export_context(
         }
         snapshots
     } else {
-        let mut paths: Vec<PathBuf> = document_state.engines.keys().cloned().collect();
+        // Loose documents only: an open tab belonging to some *other*
+        // loaded project would otherwise ride along as an extra page.
+        let mut paths: Vec<PathBuf> = document_state
+            .engines
+            .keys()
+            .filter(|p| {
+                crate::app::state::project_owning_sheet(&document_state.projects, p).is_none()
+            })
+            .cloned()
+            .collect();
         paths.sort_by_key(|p| p != active_path);
         let sheet_count = paths.len();
         paths
@@ -91,7 +105,7 @@ fn build_export_context(
     let comment = |n: usize| tb.get(&format!("comment{n}")).cloned().unwrap_or_default();
     let mut custom_fields = std::collections::BTreeMap::new();
     let active_variant = document_state
-        .active_loaded_project()
+        .export_scope_project()
         .and_then(|p| p.data.active_variant.clone())
         .unwrap_or_else(|| "Base".to_string());
     if !active_variant.eq_ignore_ascii_case("Base") {
@@ -119,7 +133,7 @@ fn build_export_context(
         by_path.get(active_path).map(|root| {
             let children = crate::app::project_sheets::project_children_map(&by_path);
             let project_dir = document_state
-                .active_loaded_project()
+                .export_scope_project()
                 .map(|p| PathBuf::from(&p.data.dir));
             let root_filename = crate::app::project_sheets::root_reference_name(
                 active_path,
@@ -128,6 +142,17 @@ fn build_export_context(
             signex_net::build_project_netlist(root, &children, root_filename.as_deref()).netlist
         })
     };
+    // Canary: with the scope resolved off the active document this set
+    // always contains it, so a miss means the sheet set and the active
+    // path have drifted apart again. Warn once here rather than in each
+    // exporter — a `None` netlist silently blanks every `NET_NAME()`
+    // annotation downstream (`signex_output::build_pin_net_lookup`).
+    if netlist.is_none() {
+        log::warn!(
+            "Export: no netlist derived for {} — NET_NAME() annotations will be blank",
+            active_path.display()
+        );
+    }
 
     Some(ExportContext {
         sheets,

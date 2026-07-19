@@ -15,7 +15,9 @@ pub struct ExpressionTables {
 /// project's authoritative `Netlist` (ADR-0002 D7) rather than a
 /// PDF-local re-derivation — `netlist` is `None` when the caller didn't
 /// derive one (e.g. a PDF-only export with no netlist attached), in which
-/// case `net_name_by_symbol_pin` is empty rather than guessing.
+/// case `net_name_by_symbol_pin` is empty rather than guessing. The app
+/// warns when it hands over a `None` netlist, so the resulting blank
+/// `NET_NAME()` annotations are traceable in the log.
 pub fn build_expression_tables(
     sheets: &[SheetSnapshot],
     netlist: Option<&Netlist>,
@@ -78,7 +80,8 @@ fn insert_instance_keys(
 /// netlist's terminals, keyed by symbol uuid then pin number. `None` (no
 /// netlist attached to this export) yields an empty table rather than a
 /// guess — the whole point of reading the contract instead of re-deriving
-/// it is that "unknown" stays unknown.
+/// it is that "unknown" stays unknown. Not silent: the export handler that
+/// builds the `ExportContext` logs a warning before passing `None` through.
 fn build_pin_net_lookup(netlist: Option<&Netlist>) -> HashMap<String, HashMap<String, String>> {
     let mut result: HashMap<String, HashMap<String, String>> = HashMap::new();
     let Some(netlist) = netlist else {
