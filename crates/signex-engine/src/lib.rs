@@ -380,6 +380,113 @@ mod tests {
         assert!(moved.user_moved);
     }
 
+    fn test_sheet_pin(name: &str) -> SheetPin {
+        SheetPin {
+            uuid: uuid::Uuid::new_v4(),
+            name: name.to_string(),
+            direction: "input".to_string(),
+            position: Point::new(10.0, 22.0),
+            rotation: 0.0,
+            auto_generated: false,
+            user_moved: false,
+        }
+    }
+
+    fn test_child_sheet(pins: Vec<SheetPin>) -> ChildSheet {
+        ChildSheet {
+            uuid: uuid::Uuid::new_v4(),
+            name: "Child".to_string(),
+            filename: "child.snxsch".to_string(),
+            position: Point::new(10.0, 20.0),
+            size: (30.0, 30.0),
+            stroke_width: 0.12,
+            fill: FillType::None,
+            stroke_color: None,
+            fill_color: None,
+            fields_autoplaced: false,
+            pins,
+            instances: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn delete_selection_removes_child_sheet_and_its_pins() {
+        let mut document = test_sheet();
+        let sheet = test_child_sheet(vec![test_sheet_pin("SDA"), test_sheet_pin("SCL")]);
+        let sheet_uuid = sheet.uuid;
+        document.child_sheets.push(sheet);
+
+        let mut engine = Engine::new(document).unwrap();
+        let result = engine
+            .execute(Command::DeleteSelection {
+                items: vec![SelectedItem::new(sheet_uuid, SelectedKind::ChildSheet)],
+            })
+            .unwrap();
+
+        assert!(result.changed);
+        assert!(engine.document().child_sheets.is_empty());
+    }
+
+    #[test]
+    fn delete_selection_removes_only_the_targeted_sheet_pin() {
+        let mut document = test_sheet();
+        let keep_pin = test_sheet_pin("SDA");
+        let keep_uuid = keep_pin.uuid;
+        let doomed_pin = test_sheet_pin("SCL");
+        let doomed_uuid = doomed_pin.uuid;
+        let sheet = test_child_sheet(vec![keep_pin, doomed_pin]);
+        let sheet_uuid = sheet.uuid;
+        document.child_sheets.push(sheet);
+
+        let mut engine = Engine::new(document).unwrap();
+        let result = engine
+            .execute(Command::DeleteSelection {
+                items: vec![SelectedItem::new(doomed_uuid, SelectedKind::SheetPin)],
+            })
+            .unwrap();
+
+        assert!(result.changed);
+        assert_eq!(engine.document().child_sheets.len(), 1);
+        assert_eq!(engine.document().child_sheets[0].uuid, sheet_uuid);
+        let pins = &engine.document().child_sheets[0].pins;
+        assert_eq!(pins.len(), 1);
+        assert_eq!(pins[0].uuid, keep_uuid);
+    }
+
+    #[test]
+    fn delete_selection_of_child_sheet_and_sheet_pin_are_undoable() {
+        let mut document = test_sheet();
+        let sheet = test_child_sheet(vec![test_sheet_pin("SDA"), test_sheet_pin("SCL")]);
+        let sheet_uuid = sheet.uuid;
+        let pin_uuid = sheet.pins[0].uuid;
+        document.child_sheets.push(sheet);
+
+        let mut engine = Engine::new(document).unwrap();
+
+        // Deleting the pin lands a history entry that undo() reverts.
+        engine
+            .execute(Command::DeleteSelection {
+                items: vec![SelectedItem::new(pin_uuid, SelectedKind::SheetPin)],
+            })
+            .unwrap();
+        assert_eq!(engine.document().child_sheets[0].pins.len(), 1);
+        assert!(engine.can_undo());
+        engine.undo().unwrap();
+        assert_eq!(engine.document().child_sheets[0].pins.len(), 2);
+
+        // Deleting the sheet itself is likewise undoable.
+        engine
+            .execute(Command::DeleteSelection {
+                items: vec![SelectedItem::new(sheet_uuid, SelectedKind::ChildSheet)],
+            })
+            .unwrap();
+        assert!(engine.document().child_sheets.is_empty());
+        engine.undo().unwrap();
+        assert_eq!(engine.document().child_sheets.len(), 1);
+        assert_eq!(engine.document().child_sheets[0].uuid, sheet_uuid);
+        assert_eq!(engine.document().child_sheets[0].pins.len(), 2);
+    }
+
     #[test]
     fn set_paper_size_persists_no_ops_and_undoes() {
         let mut engine = Engine::new(test_sheet()).expect("engine");

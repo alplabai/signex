@@ -47,6 +47,11 @@ impl Engine {
                     .iter()
                     .any(|sheet_pin| sheet_pin.uuid == item.uuid)
             }),
+            SelectedKind::ChildSheet => self
+                .document
+                .child_sheets
+                .iter()
+                .any(|child_sheet| child_sheet.uuid == item.uuid),
             SelectedKind::Drawing => self.document.drawings.iter().any(|d| {
                 let u = match d {
                     SchDrawing::Line { uuid, .. }
@@ -84,9 +89,19 @@ impl Engine {
                 });
                 self.document.drawings.len() != before_len
             }
+            // A child sheet owns its pins (`ChildSheet::pins`), so removing
+            // the sheet entry removes them with it.
+            //
+            // Note this is NOT the same ownership model as
+            // `reconcile_child_sheet_pins` (sheet.rs): reconcile treats pins as
+            // DERIVED, recreating any missing port-matched pin with a fresh
+            // uuid and `auto_generated: true`. Only `!auto_generated` pins are
+            // user data that stays deleted.
             SelectedKind::ChildSheet => {
                 remove_by_uuid(&mut self.document.child_sheets, item.uuid)
             }
+            // A pin is owned by whichever child sheet holds it; delete just
+            // that pin from its `pins` vec, leaving the sheet in place.
             SelectedKind::SheetPin => {
                 let mut removed = false;
                 for child_sheet in &mut self.document.child_sheets {
