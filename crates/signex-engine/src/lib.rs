@@ -19,7 +19,7 @@ pub use command::{
 pub use error::EngineError;
 use history::HistoryEntry;
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
-pub use selection::{ClipboardSelection, SelectionAnchor, SelectionDetails};
+pub use selection::{ClipboardSelection, SelectionAnchor, SelectionDetails, partition_cuttable};
 use signex_types::schematic::SchematicSheet;
 
 const JUNCTION_TOLERANCE_MM: f64 = 0.01;
@@ -148,8 +148,8 @@ impl Engine {
 mod tests {
     use super::*;
     use signex_types::schematic::{
-        ChildSheet, FillType, GRID_MM, Label, LabelType, Point, SelectedItem, SelectedKind,
-        SheetPin,
+        BusEntry, ChildSheet, FillType, GRID_MM, Label, LabelType, Point, SelectedItem,
+        SelectedKind, SheetPin,
     };
 
     fn test_sheet() -> SchematicSheet {
@@ -380,6 +380,224 @@ mod tests {
         assert!(moved.user_moved);
     }
 
+    fn test_sheet_pin(name: &str) -> SheetPin {
+        SheetPin {
+            uuid: uuid::Uuid::new_v4(),
+            name: name.to_string(),
+            direction: "input".to_string(),
+            position: Point::new(10.0, 22.0),
+            rotation: 0.0,
+            auto_generated: false,
+            user_moved: false,
+        }
+    }
+
+    fn test_child_sheet(pins: Vec<SheetPin>) -> ChildSheet {
+        ChildSheet {
+            uuid: uuid::Uuid::new_v4(),
+            name: "Child".to_string(),
+            filename: "child.snxsch".to_string(),
+            position: Point::new(10.0, 20.0),
+            size: (30.0, 30.0),
+            stroke_width: 0.12,
+            fill: FillType::None,
+            stroke_color: None,
+            fill_color: None,
+            fields_autoplaced: false,
+            pins,
+            instances: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn delete_selection_removes_child_sheet_and_its_pins() {
+        let mut document = test_sheet();
+        let sheet = test_child_sheet(vec![test_sheet_pin("SDA"), test_sheet_pin("SCL")]);
+        let sheet_uuid = sheet.uuid;
+        document.child_sheets.push(sheet);
+
+        let mut engine = Engine::new(document).unwrap();
+        let result = engine
+            .execute(Command::DeleteSelection {
+                items: vec![SelectedItem::new(sheet_uuid, SelectedKind::ChildSheet)],
+            })
+            .unwrap();
+
+        assert!(result.changed);
+        assert!(engine.document().child_sheets.is_empty());
+    }
+
+    #[test]
+    fn delete_selection_removes_only_the_targeted_sheet_pin() {
+        let mut document = test_sheet();
+        let keep_pin = test_sheet_pin("SDA");
+        let keep_uuid = keep_pin.uuid;
+        let doomed_pin = test_sheet_pin("SCL");
+        let doomed_uuid = doomed_pin.uuid;
+        let sheet = test_child_sheet(vec![keep_pin, doomed_pin]);
+        let sheet_uuid = sheet.uuid;
+        document.child_sheets.push(sheet);
+
+        let mut engine = Engine::new(document).unwrap();
+        let result = engine
+            .execute(Command::DeleteSelection {
+                items: vec![SelectedItem::new(doomed_uuid, SelectedKind::SheetPin)],
+            })
+            .unwrap();
+
+        assert!(result.changed);
+        assert_eq!(engine.document().child_sheets.len(), 1);
+        assert_eq!(engine.document().child_sheets[0].uuid, sheet_uuid);
+        let pins = &engine.document().child_sheets[0].pins;
+        assert_eq!(pins.len(), 1);
+        assert_eq!(pins[0].uuid, keep_uuid);
+    }
+
+    #[test]
+    fn delete_selection_of_child_sheet_and_sheet_pin_are_undoable() {
+        let mut document = test_sheet();
+        let sheet = test_child_sheet(vec![test_sheet_pin("SDA"), test_sheet_pin("SCL")]);
+        let sheet_uuid = sheet.uuid;
+        let pin_uuid = sheet.pins[0].uuid;
+        document.child_sheets.push(sheet);
+
+        let mut engine = Engine::new(document).unwrap();
+
+        // Deleting the pin lands a history entry that undo() reverts.
+        engine
+            .execute(Command::DeleteSelection {
+                items: vec![SelectedItem::new(pin_uuid, SelectedKind::SheetPin)],
+            })
+            .unwrap();
+        assert_eq!(engine.document().child_sheets[0].pins.len(), 1);
+        assert!(engine.can_undo());
+        engine.undo().unwrap();
+        assert_eq!(engine.document().child_sheets[0].pins.len(), 2);
+
+        // Deleting the sheet itself is likewise undoable.
+        engine
+            .execute(Command::DeleteSelection {
+                items: vec![SelectedItem::new(sheet_uuid, SelectedKind::ChildSheet)],
+            })
+            .unwrap();
+        assert!(engine.document().child_sheets.is_empty());
+        engine.undo().unwrap();
+        assert_eq!(engine.document().child_sheets.len(), 1);
+        assert_eq!(engine.document().child_sheets[0].uuid, sheet_uuid);
+        assert_eq!(engine.document().child_sheets[0].pins.len(), 2);
+    }
+
+    #[test]
+    fn has_selected_items_recognizes_child_sheet_and_pin() {
+        // Regression for review finding #3 on PR fixing #341:
+        // `contains_selected_item` gates `has_selected_items`, which the
+        // app uses to decide whether Delete is even armed
+        // (handlers/editing_commands.rs). None of the DeleteSelection
+        // tests above route through it — `Command::execute` deletes
+        // unconditionally — so a refactor could drop the ChildSheet /
+        // SheetPin arms with every other test still green. This asserts
+        // the gate itself.
+        let mut document = test_sheet();
+        let pin = test_sheet_pin("SDA");
+        let pin_uuid = pin.uuid;
+        let sheet = test_child_sheet(vec![pin]);
+        let sheet_uuid = sheet.uuid;
+        document.child_sheets.push(sheet);
+
+        let engine = Engine::new(document).unwrap();
+
+        assert!(engine.has_selected_items(&[SelectedItem::new(sheet_uuid, SelectedKind::ChildSheet)]));
+        assert!(engine.has_selected_items(&[SelectedItem::new(pin_uuid, SelectedKind::SheetPin)]));
+    }
+
+    #[test]
+    fn delete_selection_removes_bus_entry() {
+        // Review finding #2: BusEntry was selectable, hit-testable and
+        // movable but fell through both `contains_selected_item` and
+        // `remove_selected_item`'s `_ => false` — the same silent-no-op
+        // bug #341 reports for sheets, just for a different kind.
+        let mut document = test_sheet();
+        let bus_entry = BusEntry {
+            uuid: uuid::Uuid::new_v4(),
+            position: Point::new(5.0, 5.0),
+            size: (2.54, 2.54),
+        };
+        let bus_entry_uuid = bus_entry.uuid;
+        document.bus_entries.push(bus_entry);
+
+        let mut engine = Engine::new(document).unwrap();
+        assert!(engine.has_selected_items(&[SelectedItem::new(bus_entry_uuid, SelectedKind::BusEntry)]));
+
+        let result = engine
+            .execute(Command::DeleteSelection {
+                items: vec![SelectedItem::new(bus_entry_uuid, SelectedKind::BusEntry)],
+            })
+            .unwrap();
+
+        assert!(result.changed);
+        assert!(engine.document().bus_entries.is_empty());
+    }
+
+    #[test]
+    fn partition_cuttable_keeps_child_sheet_and_pin_out_of_cut() {
+        // Review finding #1: Cut (copy + delete) must not destroy a kind
+        // `collect_selection_clipboard` silently drops. `partition_cuttable`
+        // is what `handle_selection_cut_requested` (signex-app) uses to
+        // keep the two in sync.
+        let symbol_item = SelectedItem::new(uuid::Uuid::new_v4(), SelectedKind::Symbol);
+        let sheet_item = SelectedItem::new(uuid::Uuid::new_v4(), SelectedKind::ChildSheet);
+        let pin_item = SelectedItem::new(uuid::Uuid::new_v4(), SelectedKind::SheetPin);
+
+        let (cuttable, kept) =
+            crate::selection::partition_cuttable(&[symbol_item, sheet_item, pin_item]);
+
+        assert_eq!(cuttable, vec![symbol_item]);
+        assert_eq!(kept, vec![sheet_item, pin_item]);
+    }
+
+    #[test]
+    fn deleting_a_port_backed_sheet_pin_does_not_survive_reconcile() {
+        // Review finding #4 (comment correction): documents the actual
+        // interaction between SheetPin delete and
+        // `reconcile_child_sheet_pins` (sheet.rs; not yet wired into the
+        // app — #359). Reconcile derives pins from currently-exposed
+        // ports by name, so deleting a pin whose port is still exposed
+        // does not stick — the next reconcile recreates it with a fresh
+        // uuid.
+        let pin = test_sheet_pin("SDA");
+        let original_uuid = pin.uuid;
+        let sheet = test_child_sheet(vec![pin]);
+        let sheet_uuid = sheet.uuid;
+        let mut document = test_sheet();
+        document.child_sheets.push(sheet);
+
+        let mut engine = Engine::new(document).unwrap();
+        engine
+            .execute(Command::DeleteSelection {
+                items: vec![SelectedItem::new(original_uuid, SelectedKind::SheetPin)],
+            })
+            .unwrap();
+        assert!(engine.document().child_sheets[0].pins.is_empty());
+
+        // "SDA" is still an exposed port (that comes from the child
+        // sheet's own hierarchical labels, unrelated to the pin delete),
+        // so reconcile regenerates it.
+        let mut child = engine.document().child_sheets[0].clone();
+        assert_eq!(child.uuid, sheet_uuid);
+        let ports = [SheetPort {
+            name: "SDA".to_string(),
+            direction: "input".to_string(),
+        }];
+        let changed = crate::sheet::reconcile_child_sheet_pins(&mut child, &ports);
+
+        assert!(changed);
+        assert_eq!(child.pins.len(), 1);
+        assert_ne!(
+            child.pins[0].uuid, original_uuid,
+            "delete does not survive reconcile once #359 wires it in"
+        );
+    }
+
     #[test]
     fn set_paper_size_persists_no_ops_and_undoes() {
         let mut engine = Engine::new(test_sheet()).expect("engine");
@@ -409,5 +627,96 @@ mod tests {
         // Undo restores the previous format.
         engine.undo().expect("undo");
         assert_eq!(engine.document().paper_size, "A4");
+    }
+
+    #[test]
+    fn delete_child_sheet_and_undo() {
+        let mut document = test_sheet();
+        let child_sheet_uuid = uuid::Uuid::new_v4();
+        document.child_sheets.push(ChildSheet {
+            uuid: child_sheet_uuid,
+            name: "ChildSheet".to_string(),
+            filename: "child.snxsch".to_string(),
+            position: Point::new(10.0, 20.0),
+            size: (30.0, 30.0),
+            stroke_width: 0.12,
+            fill: FillType::None,
+            stroke_color: None,
+            fill_color: None,
+            fields_autoplaced: false,
+            pins: Vec::new(),
+            instances: Vec::new(),
+        });
+
+        let mut engine = Engine::new(document).unwrap();
+        assert_eq!(engine.document().child_sheets.len(), 1);
+        assert_eq!(engine.document().child_sheets[0].uuid, child_sheet_uuid);
+
+        // Delete the child sheet
+        let result = engine.execute(Command::DeleteSelection {
+            items: vec![SelectedItem::new(child_sheet_uuid, SelectedKind::ChildSheet)],
+        });
+        assert!(result.unwrap().changed);
+        assert_eq!(engine.document().child_sheets.len(), 0);
+
+        // Undo the deletion
+        engine.undo().expect("undo");
+        assert_eq!(engine.document().child_sheets.len(), 1);
+        assert_eq!(engine.document().child_sheets[0].uuid, child_sheet_uuid);
+        // Ensure the restored sheet matches the original
+        assert_eq!(engine.document().child_sheets[0].name, "ChildSheet");
+        assert_eq!(engine.document().child_sheets[0].filename, "child.snxsch");
+    }
+
+    #[test]
+    fn delete_sheet_pin_and_undo() {
+        let mut document = test_sheet();
+        let child_sheet_uuid = uuid::Uuid::new_v4();
+        let pin_uuid = uuid::Uuid::new_v4();
+        document.child_sheets.push(ChildSheet {
+            uuid: child_sheet_uuid,
+            name: "ChildSheet".to_string(),
+            filename: "child.snxsch".to_string(),
+            position: Point::new(10.0, 20.0),
+            size: (30.0, 30.0),
+            stroke_width: 0.12,
+            fill: FillType::None,
+            stroke_color: None,
+            fill_color: None,
+            fields_autoplaced: false,
+            pins: vec![SheetPin {
+                uuid: pin_uuid,
+                name: "Pin1".to_string(),
+                direction: "input".to_string(),
+                position: Point::new(15.0, 25.0),
+                rotation: 0.0,
+                auto_generated: false,
+                user_moved: false,
+            }],
+            instances: Vec::new(),
+        });
+
+        let mut engine = Engine::new(document).unwrap();
+        assert_eq!(engine.document().child_sheets.len(), 1);
+        assert_eq!(engine.document().child_sheets[0].pins.len(), 1);
+        assert_eq!(engine.document().child_sheets[0].pins[0].uuid, pin_uuid);
+
+        // Delete the sheet pin
+        let result = engine.execute(Command::DeleteSelection {
+            items: vec![SelectedItem::new(pin_uuid, SelectedKind::SheetPin)],
+        });
+        assert!(result.unwrap().changed);
+        assert_eq!(engine.document().child_sheets.len(), 1);
+        assert_eq!(engine.document().child_sheets[0].pins.len(), 0);
+
+        // Undo the deletion
+        engine.undo().expect("undo");
+        assert_eq!(engine.document().child_sheets.len(), 1);
+        assert_eq!(engine.document().child_sheets[0].pins.len(), 1);
+        assert_eq!(engine.document().child_sheets[0].pins[0].uuid, pin_uuid);
+        // Ensure the restored pin matches the original
+        assert_eq!(engine.document().child_sheets[0].pins[0].name, "Pin1");
+        assert_eq!(engine.document().child_sheets[0].pins[0].direction, "input");
+        assert_eq!(engine.document().child_sheets[0].pins[0].position, Point::new(15.0, 25.0));
     }
 }
