@@ -173,3 +173,51 @@ fn apply_filter_preset_sets_state_filter() {
     assert!(s.selection_filter.get(K::Pads));
     assert!(!s.selection_filter.get(K::Tracks));
 }
+
+// Issue #375 — the Place / Move active-bar button's left-click must
+// arm PadsTool::Select (a footprint has no separate move tool; pad
+// movement is drag-under-Select — see `active_bar_dropdowns.rs`'s
+// `place_entries`), not fall through to the `ActiveBarStub` no-op.
+//
+// Pinned by POSITION, not by tooltip text: `dropdown_trigger_items`
+// puts Filter, Snap, Place, Select, Align, Body3d, Text, Shapes in
+// that exact order (the same order `dropdown_x_offset` documents and
+// depends on for dropdown placement), so the Place/Move button is
+// always index 2. A `tooltip.contains("Move")` assertion would
+// couple this test to prose the tooltip-wording fix itself rewrites.
+#[test]
+fn place_move_button_left_click_arms_select_tool() {
+    use crate::library::editor::footprint::state::PadsTool;
+    use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
+    use signex_widgets::active_bar::ActiveBarItem;
+
+    let ActiveBarItem::Button(place_btn) = place_move_button(default_editor()) else {
+        panic!("index 2 should be the Place/Move button");
+    };
+
+    match place_btn.on_press {
+        Some(LibraryMessage::PrimitiveEditorEvent {
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetPadsTool(PadsTool::Select)),
+            ..
+        }) => {}
+        other => panic!("expected left-click to arm PadsTool::Select, got {other:?}"),
+    }
+}
+
+fn default_editor() -> crate::app::FootprintEditorState {
+    let file = signex_library::FootprintFile::from_footprint(
+        signex_library::primitive::footprint::Footprint::empty("Test"),
+    );
+    crate::app::FootprintEditorState::new(std::path::PathBuf::from("t.snxfpt"), file)
+}
+
+fn place_move_button(
+    editor: crate::app::FootprintEditorState,
+) -> signex_widgets::active_bar::ActiveBarItem<crate::library::messages::LibraryMessage> {
+    use crate::library::editor::footprint::unified_active_bar::bar_items;
+    use signex_types::theme::{ThemeId, theme_tokens};
+
+    let tid = ThemeId::CatppuccinMocha;
+    let tokens = theme_tokens(tid);
+    bar_items(&editor, tid, &tokens).remove(2)
+}
