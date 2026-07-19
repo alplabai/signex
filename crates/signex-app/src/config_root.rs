@@ -52,7 +52,21 @@ pub fn config_root() -> Option<PathBuf> {
             std::env::temp_dir().join(format!("signex-test-prefs-{}", std::process::id())),
         );
     }
-    dirs::config_dir().map(|dir| dir.join("signex"))
+    dirs::config_dir().map(|dir| config_root_for_dir(&dir))
+}
+
+/// Join the `signex` subdirectory onto an arbitrary base directory.
+///
+/// [`config_root`] uses this for the real OS config dir, and it's the
+/// one place the two `config_path_for_dir` test helpers
+/// (`keymap::profile`, `library::settings::persistence`) get the same
+/// join from — before #440 hoisted this, production went through
+/// `config_root()` while those two test helpers still hardcoded
+/// `base.join("signex")` themselves, so a rename of the folder here
+/// would have silently diverged production from the tests that are
+/// supposed to prove it (#440 review).
+pub fn config_root_for_dir(base: &std::path::Path) -> PathBuf {
+    base.join("signex")
 }
 
 #[cfg(test)]

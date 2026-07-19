@@ -13,9 +13,10 @@
 //! Fallback: if the OS reports no config directory at all
 //! (`dirs::config_dir()` returns `None` — rare, e.g. a daemon or
 //! container with neither `$HOME` nor `$XDG_CONFIG_HOME`), preferences
-//! resolve to a per-user subdirectory of the OS temp dir instead (see
-//! [`production_temp_fallback_path`]), and a `tracing::warn!` names the
-//! fact that they will not survive a temp-directory sweep.
+//! resolve to a random-named per-process subdirectory of the OS temp
+//! dir instead (see [`production_temp_fallback_path`]), and a
+//! `tracing::error!` names the fact that they will not survive a
+//! temp-directory sweep or a restart.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
@@ -192,24 +193,28 @@ fn prefs_path() -> PathBuf {
     use std::sync::OnceLock;
     static PATH: OnceLock<PathBuf> = OnceLock::new();
     PATH.get_or_init(|| {
-        match crate::config_root::config_root() {
-            Some(dir) if crate::config_root::is_test_redirect_active() => {
-                // Test/dev redirect active: `config_root()` already
-                // resolved to the shared per-process tempdir without
-                // touching the real config dir. Return immediately so
-                // the legacy-prefs migration below never runs.
-                dir.join("prefs.json")
-            }
-            root => {
-                let canonical = match root {
-                    Some(dir) => dir.join("prefs.json"),
-                    None => production_temp_fallback_path(),
-                };
-                let legacy = legacy_posix_prefs_path();
-                migrate_legacy_prefs(&canonical, &legacy);
-                canonical
-            }
+        let root = crate::config_root::config_root();
+        if crate::config_root::is_test_redirect_active() {
+            // Branch on the gate itself, not on whether `root` happens
+            // to be `Some` — `config_root()` always resolves under the
+            // redirect today, but a `Some(dir) if is_test_redirect_
+            // active()` match guard is correct only *because* of that
+            // coincidence. If `config_root()` ever grows an env
+            // override or an early `?` that can return `None` while
+            // the redirect is active, that guard would silently fall
+            // through to the arm below and run migrate_legacy_prefs
+            // against the developer's real legacy path mid-test-suite
+            // (#440 review). Deciding on the gate alone rules that out.
+            let dir = root.expect("config_root() always resolves under the test/dev redirect");
+            return dir.join("prefs.json");
         }
+        let canonical = match root {
+            Some(dir) => dir.join("prefs.json"),
+            None => production_temp_fallback_path(),
+        };
+        let legacy = legacy_posix_prefs_path();
+        migrate_legacy_prefs(&canonical, &legacy);
+        canonical
     })
     .clone()
 }
@@ -224,35 +229,58 @@ fn prefs_path() -> PathBuf {
 /// `prefs.json.tmp` as a symlink gets `atomic_write`'s `File::create` to
 /// write through it.
 ///
-/// Discriminated by the OS username env var instead — the cheapest
-/// per-user handle available without a new dependency. If no such var is
-/// set either, there is no safe shared path left to fall back to; per the
-/// issue's own desired end state ("fail loudly, rather than silently
-/// landing in [a shared/CWD path]"), this panics rather than write
-/// anywhere.
+/// A later per-user `<tmp>/signex-{user}` scheme fixed the sharing
+/// problem but leaned on `USER`/`USERNAME`/`LOGNAME` being set — a
+/// bare-uid container or a systemd unit with a scrubbed environment has
+/// none of those, and that version `panic!`ed there, taking the whole
+/// app down before the window ever appeared (#440 review: "fail loudly"
+/// was meant to mean a visible log line, not a vanished process).
+///
+/// `tempfile::Builder::tempdir()` replaces that scheme outright: the
+/// directory name is process-random (nothing to pre-guess for the
+/// symlink attack above, no username needed) and it's created 0700 on
+/// Unix — strictly safer than the username-keyed scheme even on the
+/// happy path. If even creating a temp directory fails (the temp
+/// filesystem itself is unwritable — every other option has already
+/// failed too), this hands back a path anyway rather than panicking:
+/// every write through it fails at `atomic_write`'s own
+/// `tracing::debug!`, and the app simply runs the session on in-memory
+/// defaults. Degrade, don't die.
 fn production_temp_fallback_path() -> PathBuf {
-    let user = std::env::var("USER")
-        .or_else(|_| std::env::var("USERNAME"))
-        .or_else(|_| std::env::var("LOGNAME"))
-        .ok()
-        .filter(|s| !s.is_empty());
-    let Some(user) = user else {
-        panic!(
-            "signex: no OS config directory (dirs::config_dir() returned None) and no \
-             USER/USERNAME/LOGNAME env var to derive a per-user temp fallback from — \
-             refusing to write preferences to a predictable shared path (issue #437)"
-        );
+    let dir = match tempfile::Builder::new().prefix("signex-").tempdir() {
+        Ok(dir) => {
+            // Leak the `TempDir` handle rather than let it delete the
+            // directory when dropped at the end of this function:
+            // `prefs_path()` caches the returned path for the whole
+            // process lifetime and writes to it repeatedly across the
+            // session, so the directory has to outlive any handle we
+            // could hold instead. `into_path()` is `tempfile`'s
+            // documented opt-out of the drop-time cleanup; the OS's
+            // own temp-dir sweep remains the intended eventual
+            // cleanup, matching the "will NOT persist" contract below.
+            dir.into_path()
+        }
+        Err(e) => {
+            tracing::error!(
+                target = "signex::prefs",
+                error = %e,
+                "no OS config directory (dirs::config_dir() returned None) and \
+                 creating a random per-process temp directory also failed; \
+                 preferences will not persist for this session"
+            );
+            return std::env::temp_dir()
+                .join("signex-prefs-unavailable")
+                .join("prefs.json");
+        }
     };
-    tracing::warn!(
+    tracing::error!(
         target = "signex::prefs",
-        user = %user,
+        path = %dir.display(),
         "no OS config directory found (dirs::config_dir() returned None); \
-         falling back to a per-user temp directory — preferences will NOT \
-         persist across a temp-directory sweep"
+         falling back to a random-named per-process temp directory — \
+         preferences will NOT persist across a temp-directory sweep or a restart"
     );
-    std::env::temp_dir()
-        .join(format!("signex-{user}"))
-        .join("prefs.json")
+    dir.join("prefs.json")
 }
 
 /// One-shot startup migrations applied to `prefs.json` before any
@@ -768,3 +796,23 @@ pub use dock_layout::*;
 pub use erc::*;
 pub use misc::*;
 pub use presets::*;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `prefs_path()` is private (unlike the other three prefs
+    /// resolvers, which are all `pub`), so it can't be reached from an
+    /// integration test in `tests/` — this is that resolver's half of
+    /// the #440 guard. Proves fonts' prefs file lands under the same
+    /// `config_root()` the other three share, under the test redirect.
+    #[test]
+    fn prefs_path_lives_under_the_shared_config_root() {
+        let root = crate::config_root::config_root().expect("test redirect always resolves");
+        assert!(
+            prefs_path().starts_with(&root),
+            "fonts::prefs_path() must live under config_root(), got {}",
+            prefs_path().display()
+        );
+    }
+}

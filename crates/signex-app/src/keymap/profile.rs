@@ -356,7 +356,7 @@ pub fn config_path() -> Option<PathBuf> {
 }
 
 pub fn config_path_for_dir(base: &Path) -> PathBuf {
-    base.join("signex").join(USER_SHORTCUTS_FILE_NAME)
+    crate::config_root::config_root_for_dir(base).join(USER_SHORTCUTS_FILE_NAME)
 }
 
 pub fn load_profile_set() -> Result<ShortcutProfileSet, ProfileLoadError> {
