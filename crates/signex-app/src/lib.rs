@@ -14,6 +14,7 @@ pub mod active_bar;
 pub mod app;
 pub mod canvas;
 pub mod chrome;
+pub mod config_root;
 pub mod diagnostics;
 pub mod dock;
 pub mod feature_flags;

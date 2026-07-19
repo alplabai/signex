@@ -352,7 +352,7 @@ pub struct BindingConflict {
 }
 
 pub fn config_path() -> Option<PathBuf> {
-    dirs::config_dir().map(|base| config_path_for_dir(&base))
+    crate::config_root::config_root().map(|root| root.join(USER_SHORTCUTS_FILE_NAME))
 }
 
 pub fn config_path_for_dir(base: &Path) -> PathBuf {

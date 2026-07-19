@@ -99,7 +99,7 @@ fn str_to_source(s: &str) -> Option<DistributorSource> {
 /// when the platform refuses to hand us a config dir (rare; e.g. some
 /// sandboxed CI runners). Tests override via [`config_path_for_dir`].
 pub fn config_path() -> Option<PathBuf> {
-    dirs::config_dir().map(|p| p.join("signex").join(FILE_NAME))
+    crate::config_root::config_root().map(|root| root.join(FILE_NAME))
 }
 
 /// Test-friendly variant — same layout, but rooted under the supplied

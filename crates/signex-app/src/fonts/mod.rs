@@ -181,34 +181,35 @@ pub fn system_font_families() -> &'static Vec<String> {
 /// Computed once per process (via `OnceLock`) so the legacy-prefs
 /// migration runs at most once.
 ///
-/// Under `cfg(test)` (signex-app's own unit tests) or the
-/// `test-prefs-redirect` feature (activated for every crate that links
-/// signex-app as a dev-dependency — see `Cargo.toml`), this resolves to
-/// a per-process tempdir instead and returns *before* touching
-/// `dirs::config_dir()` or `legacy_posix_prefs_path()` at all — so the
-/// legacy migration never runs and never reads/writes the developer's
-/// real config directory. Issue #437.
+/// The directory itself comes from [`crate::config_root::config_root`],
+/// shared by the other three config-file resolvers. Under
+/// `cfg(test)`/`test-prefs-redirect` that resolves to a per-process
+/// tempdir, and this function returns *before* touching
+/// `legacy_posix_prefs_path()` at all — so the legacy migration never
+/// runs and never reads/writes the developer's real config directory.
+/// Issue #437, hoisted in #440.
 fn prefs_path() -> PathBuf {
     use std::sync::OnceLock;
     static PATH: OnceLock<PathBuf> = OnceLock::new();
     PATH.get_or_init(|| {
-        // `cfg!(test)` is belt-and-braces, not load-bearing: the only unit
-        // where it evaluates true is signex-app's own unit-test build, and
-        // that build always carries `test-prefs-redirect` too (self dev-
-        // dependency, see `Cargo.toml`) — so the feature check alone
-        // already decides this branch. Kept in case that wiring changes.
-        if cfg!(test) || cfg!(feature = "test-prefs-redirect") {
-            return std::env::temp_dir()
-                .join(format!("signex-test-prefs-{}", std::process::id()))
-                .join("prefs.json");
+        match crate::config_root::config_root() {
+            Some(dir) if crate::config_root::is_test_redirect_active() => {
+                // Test/dev redirect active: `config_root()` already
+                // resolved to the shared per-process tempdir without
+                // touching the real config dir. Return immediately so
+                // the legacy-prefs migration below never runs.
+                dir.join("prefs.json")
+            }
+            root => {
+                let canonical = match root {
+                    Some(dir) => dir.join("prefs.json"),
+                    None => production_temp_fallback_path(),
+                };
+                let legacy = legacy_posix_prefs_path();
+                migrate_legacy_prefs(&canonical, &legacy);
+                canonical
+            }
         }
-        let canonical = match dirs::config_dir() {
-            Some(dir) => dir.join("signex").join("prefs.json"),
-            None => production_temp_fallback_path(),
-        };
-        let legacy = legacy_posix_prefs_path();
-        migrate_legacy_prefs(&canonical, &legacy);
-        canonical
     })
     .clone()
 }
