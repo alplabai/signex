@@ -367,10 +367,25 @@ pub(crate) fn apply_footprint_clipboard_op(
                 new_pad.position_mm = (px, py);
                 new_pad.number = next_num.clone();
                 // Reset sketch links so the pad mirrors freshly into
-                // the sketch on the next mode switch (avoids two
-                // pads sharing an entity id).
+                // the sketch (avoids two pads sharing an entity id).
+                // `shape_params` is the third ownership field and was
+                // cloned wholesale above: leaving it aliased the
+                // TEMPLATE's parameter names and Arc ids, so editing
+                // the pasted pad's corner radius / width / height in
+                // the Properties panel silently resized the ORIGINAL.
                 new_pad.sketch_entity_id = None;
                 new_pad.corner_entity_ids = None;
+                new_pad.shape_params.clear();
+                // Mint the paste its own geometry NOW when the sketch
+                // is already authored — `auto_mint_for_literal_pads`
+                // early-returns on exactly that condition, so waiting
+                // for it would leave the pasted pad unlinked forever.
+                // When the sketch is NOT authored, auto-mint still
+                // covers this pad along with its siblings, and minting
+                // here would be what breaks it.
+                if pad_to_sketch::sketch_is_authored(primitive) {
+                    pad_to_sketch::mirror_add_pad_to_sketch(&mut new_pad, primitive);
+                }
                 state.pads.push(new_pad);
                 let new_idx = state.pads.len() - 1;
                 state.selected_pad = Some(new_idx);
