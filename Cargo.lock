@@ -5221,6 +5221,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "signex-app",
  "signex-bake",
  "signex-engine",
  "signex-erc",

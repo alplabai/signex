@@ -173,12 +173,25 @@ pub fn system_font_families() -> &'static Vec<String> {
 ///
 /// Computed once per process (via `OnceLock`) so the legacy-prefs
 /// migration runs at most once.
+///
+/// Under `cfg(test)` (signex-app's own unit tests) or the
+/// `test-prefs-redirect` feature (activated for every crate that links
+/// signex-app as a dev-dependency — see `Cargo.toml`), this resolves to
+/// a per-process tempdir instead and returns *before* touching
+/// `dirs::config_dir()` or `legacy_posix_prefs_path()` at all — so the
+/// legacy migration never runs and never reads/writes the developer's
+/// real config directory. Issue #437.
 fn prefs_path() -> PathBuf {
     use std::sync::OnceLock;
     static PATH: OnceLock<PathBuf> = OnceLock::new();
     PATH.get_or_init(|| {
+        if cfg!(test) || cfg!(feature = "test-prefs-redirect") {
+            return std::env::temp_dir()
+                .join(format!("signex-test-prefs-{}", std::process::id()))
+                .join("prefs.json");
+        }
         let canonical = dirs::config_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
+            .unwrap_or_else(std::env::temp_dir)
             .join("signex")
             .join("prefs.json");
         let legacy = legacy_posix_prefs_path();
@@ -212,12 +225,13 @@ fn prefs_path() -> PathBuf {
 /// [`legacy_posix_prefs_path()`]; tests inject a tempdir-shaped path.
 pub fn migrate_legacy_prefs(canonical: &Path, legacy: &Path) {
     // F1: copy legacy path → canonical, but only if canonical is empty.
-    if !canonical.exists() {
-        if legacy != canonical && legacy.exists() {
-            if let Some(parent) = canonical.parent() {
-                let _ = std::fs::create_dir_all(parent);
-            }
-            let _ = std::fs::copy(legacy, canonical);
+    // Routed through `write_pref_atomic` (temp + fsync + rename) rather
+    // than `std::fs::copy`: a kill mid-copy with a bare copy can leave a
+    // truncated `canonical` file, which then blocks re-migration forever
+    // because `canonical.exists()` is already true on the next launch.
+    if !canonical.exists() && legacy != canonical && legacy.exists() {
+        if let Ok(bytes) = std::fs::read(legacy) {
+            write_pref_atomic(canonical, &bytes, "migrate_legacy_prefs_copy");
         }
     }
 
