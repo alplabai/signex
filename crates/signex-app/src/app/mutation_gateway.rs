@@ -279,12 +279,9 @@ impl Signex {
         // project, and its unopened sheets would be parsed into this
         // document's child map (#406).
         if let Some(project) = self.document_state.active_document_project() {
-            let project_root = project.path.parent().map(std::path::PathBuf::from);
+            let project_root = project.dir().to_path_buf();
             for sheet in &project.data.sheets {
-                let path = match project_root.as_ref() {
-                    Some(root) => root.join(&sheet.filename),
-                    None => std::path::PathBuf::from(&sheet.filename),
-                };
+                let path = project_root.join(&sheet.filename);
                 if by_path.contains_key(&path) {
                     continue;
                 }
@@ -317,50 +314,16 @@ impl Signex {
         let project_dir = self
             .document_state
             .active_document_project()
-            .map(|p| std::path::PathBuf::from(&p.data.dir));
+            .map(|p| p.dir().to_path_buf());
         let root_filename =
             crate::app::project_sheets::root_reference_name(&active_path, project_dir.as_deref());
         let result = signex_net::build_project_netlist(&root, &children, root_filename.as_deref());
         for issue in &result.issues {
-            crate::diagnostics::log_warning(stitch_issue_message(issue));
+            crate::diagnostics::log_warning(crate::app::project_sheets::stitch_issue_message(
+                issue,
+            ));
         }
         self.ui_state.project_netlist = Some(result);
-    }
-}
-
-/// A one-line, user-facing message for a cross-sheet stitch issue (ADR-0002 D7,
-/// part 3) — shown in the Messages panel alongside other diagnostics.
-fn stitch_issue_message(issue: &signex_net::StitchIssue) -> String {
-    use signex_net::StitchIssue as I;
-    match issue {
-        I::MissingChild {
-            parent_path,
-            sheet_name,
-            filename,
-        } => format!(
-            "Netlist: sheet '{sheet_name}' on '{parent_path}' references a child '{filename}' that could not be found"
-        ),
-        I::SheetCycle {
-            parent_path,
-            filename,
-        } => format!("Netlist: sheet cycle — '{parent_path}' re-enters '{filename}'"),
-        I::DuplicateSheetUuid {
-            filename_a,
-            filename_b,
-        } => format!(
-            "Netlist: sheets '{filename_a}' and '{filename_b}' share a UUID (copied as a template?)"
-        ),
-        I::SharedReferenceAcrossInstances {
-            filename,
-            reference,
-        } => format!(
-            "Netlist: reference '{reference}' in '{filename}' is shared across sheet instances"
-        ),
-        I::NameCollision { name } => {
-            format!(
-                "Netlist: two distinct nets are both named '{name}'; the later one was suffixed"
-            )
-        }
     }
 }
 

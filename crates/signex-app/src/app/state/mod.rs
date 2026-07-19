@@ -232,6 +232,26 @@ pub struct LoadedProject {
         std::collections::HashMap<uuid::Uuid, crate::library::commands::PendingLibrarySpec>,
 }
 
+impl LoadedProject {
+    /// The project's directory — the *one* convention for "where this
+    /// project's relative sheet filenames resolve from".
+    ///
+    /// Two conventions used to coexist: the parent of the `.snxprj` on disk,
+    /// and the persisted `data.dir` string. The loader patches `data.dir` to
+    /// the opened path's parent, so they agree for a freshly-loaded project —
+    /// but a `LoadedProject` assembled any other way (project creation, a
+    /// `.snxprj` that recorded an absolute `dir` that no longer matches) can
+    /// have them disagree, and then ownership resolution succeeds while the
+    /// sheet paths it produces do not exist. The export skips those pages
+    /// silently. `path.parent()` is the only one that cannot be stale: it is
+    /// derived from the file actually opened.
+    pub fn dir(&self) -> &std::path::Path {
+        self.path
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new(""))
+    }
+}
+
 pub struct DocumentState {
     pub dock: DockArea,
     pub tabs: Vec<TabInfo>,
@@ -583,13 +603,22 @@ impl DocumentState {
     /// Open engine paths that belong to no loaded project — the page set of a
     /// loose-document export. An open tab belonging to some *other* loaded
     /// project would otherwise ride along as an extra page.
+    ///
+    /// Sorted by path: `engines` is a `HashMap`, so an unsorted result orders
+    /// the loose export's pages (and the print-preview file-picker rows, which
+    /// are re-seeded from this set on every rerasterize) by hash iteration
+    /// order — visibly reshuffling between rerasterizes with two or more loose
+    /// schematics open. Callers that want a specific page first re-order after.
     pub fn unowned_engine_paths(&self) -> Vec<PathBuf> {
         let refs = self.child_sheet_refs();
-        self.engines
+        let mut paths: Vec<PathBuf> = self
+            .engines
             .keys()
             .filter(|p| scope::project_owning_sheet(&self.projects, &refs, p).is_none())
             .cloned()
-            .collect()
+            .collect();
+        paths.sort();
+        paths
     }
 
     /// `sheet path → the `filename` strings it references as child sheets`,

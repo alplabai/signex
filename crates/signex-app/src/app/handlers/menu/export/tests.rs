@@ -1,18 +1,23 @@
 //! Export scope regressions (#406) — asserted on the *emitted page set*.
 //!
-//! These drive [`build_export_context`] itself rather than the scope helper it
-//! calls, because the shipped artifact is the page list: the earlier round of
-//! this fix tested only that a new helper returned what it was written to
-//! return, which cannot go red on a revert.
+//! These drive [`super::build_export_scope`] itself rather than the scope
+//! helper it calls, because the shipped artifact is the page list: the earlier
+//! round of this fix tested only that a new helper returned what it was written
+//! to return, which cannot go red on a revert.
 //!
-//! Two distinct wrong-deliverable failures are covered:
+//! The wrong-deliverable failures covered:
 //!
 //! 1. a loose schematic focused while a project is loaded must export *itself*,
 //!    not the sticky `active_project`'s sheet list;
 //! 2. a hierarchical child sheet — opened by descending into a sheet symbol,
 //!    which never adds it to the project's persisted `sheets` list — must
 //!    still resolve to its owning project and export the project's pages, not
-//!    ship a one-page PDF of the child alone.
+//!    ship a one-page PDF of the child alone;
+//! 3. …and the netlist that ships with it must not quietly omit that child's
+//!    subtree: `build_project_netlist`'s stitch issues reach the user;
+//! 4. a project directory recorded in `data.dir` that no longer matches the
+//!    `.snxprj` on disk must not resolve ownership and sheet paths differently;
+//! 5. the loose page set is sorted, not `HashMap`-ordered.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -113,6 +118,11 @@ fn page_paths(ctx: &signex_output::ExportContext) -> Vec<PathBuf> {
     paths
 }
 
+/// The context alone, for the cases that do not care about stitch issues.
+fn context(ds: &DocumentState) -> signex_output::ExportContext {
+    super::build_export_scope(ds).expect("context").0
+}
+
 #[test]
 fn loose_schematic_exports_itself_not_the_sticky_projects_sheets() {
     // #406 verbatim: ProjectA is loaded and still the active project; the user
@@ -127,7 +137,7 @@ fn loose_schematic_exports_itself_not_the_sticky_projects_sheets() {
     open(&mut ds, &loose, &[]);
     ds.active_path = Some(loose.clone());
 
-    let ctx = super::build_export_context(&ds).expect("context");
+    let ctx = context(&ds);
 
     assert_eq!(
         page_paths(&ctx),
@@ -155,7 +165,7 @@ fn hierarchical_child_sheet_exports_its_owning_project() {
     open(&mut ds, &child, &[]);
     ds.active_path = Some(child.clone());
 
-    let ctx = super::build_export_context(&ds).expect("context");
+    let (ctx, issues) = super::build_export_scope(&ds).expect("context");
 
     assert_eq!(
         page_paths(&ctx),
@@ -167,6 +177,20 @@ fn hierarchical_child_sheet_exports_its_owning_project() {
         ctx.netlist.is_some(),
         "the active path is below the exported set, so the netlist falls back \
          to the project's own root sheet rather than resolving to None"
+    );
+    // The point of this assertion. `child.snxsch` is referenced by `top` but
+    // is not in `data.sheets`, so it is not an exported page and not in the
+    // stitch input either: the netlist that ships is missing that whole
+    // subtree. It is `Some`, so the "no netlist" warning does not fire, and
+    // without surfacing the stitch issues an incomplete netlist would go to
+    // fab looking perfectly plausible. Before the fallback existed this
+    // yielded `None` — a loud failure; the user must be told either way.
+    assert!(
+        issues.iter().any(|i| matches!(
+            i,
+            signex_net::StitchIssue::MissingChild { filename, .. } if filename == "child.snxsch"
+        )),
+        "the omitted subtree must be reported to the user, not dropped: {issues:?}"
     );
 }
 
@@ -181,7 +205,7 @@ fn grandchild_resolves_through_two_hops_to_the_project() {
     open(&mut ds, &leaf, &[]);
     ds.active_path = Some(leaf);
 
-    let ctx = super::build_export_context(&ds).expect("context");
+    let ctx = context(&ds);
     assert_eq!(page_paths(&ctx), vec![top]);
 }
 
@@ -196,7 +220,7 @@ fn listed_project_sheet_exports_the_whole_project() {
     open(&mut ds, &power, &[]);
     ds.active_path = Some(power);
 
-    let ctx = super::build_export_context(&ds).expect("context");
+    let ctx = context(&ds);
     let mut expected = vec![top, PathBuf::from("/w/a").join("power.snxsch")];
     expected.sort();
     assert_eq!(page_paths(&ctx), expected);
@@ -218,6 +242,64 @@ fn schematic_inside_the_project_directory_but_unlisted_stays_loose() {
         ds.project_for_path(&stray).is_some(),
         "precondition: parent-dir matching does claim this file"
     );
-    let ctx = super::build_export_context(&ds).expect("context");
+    let ctx = context(&ds);
     assert_eq!(page_paths(&ctx), vec![stray]);
+}
+
+#[test]
+fn loose_export_page_order_is_stable_across_rebuilds() {
+    // `engines` is a `HashMap`. The loose page set is fed straight into
+    // `PreviewState.sheet_files`, which the print preview re-seeds on every
+    // rerasterize — hash-iteration order makes the Settings-tab file-picker
+    // rows visibly reshuffle between rerasterizes. Only the active page's
+    // position is pinned by the export; the rest must be deterministic.
+    let mut ds = workspace("/w/a", &["top.snxsch"]);
+    let active = PathBuf::from("/w/loose").join("m.snxsch");
+    // Eight loose sheets, not two: an unsorted `HashMap` walk has a 1-in-5040
+    // chance of coming out sorted by luck, so a thinner fixture would let the
+    // regression through green on most runs.
+    for name in [
+        "z.snxsch", "a.snxsch", "k.snxsch", "b.snxsch", "q.snxsch", "c.snxsch", "t.snxsch",
+        "d.snxsch",
+    ] {
+        open(&mut ds, &PathBuf::from("/w/loose").join(name), &[]);
+    }
+    open(&mut ds, &active, &[]);
+    ds.active_path = Some(active.clone());
+
+    let order: Vec<PathBuf> = context(&ds).sheets.iter().map(|s| s.path.clone()).collect();
+    assert_eq!(order.first(), Some(&active), "active page stays first");
+    let mut sorted_tail = order[1..].to_vec();
+    sorted_tail.sort();
+    assert_eq!(
+        order[1..],
+        sorted_tail[..],
+        "remaining pages must be sorted"
+    );
+    for _ in 0..8 {
+        let again: Vec<PathBuf> = context(&ds).sheets.iter().map(|s| s.path.clone()).collect();
+        assert_eq!(again, order, "page order must not depend on hash iteration");
+    }
+}
+
+#[test]
+fn a_stale_persisted_dir_does_not_desync_ownership_from_the_sheet_paths() {
+    // `data.dir` is a persisted string; `path` is where the `.snxprj` actually
+    // is. A project file moved on disk (or one recording an absolute `dir`
+    // that no longer matches) makes the two disagree. If ownership resolves
+    // off one and the sheet paths off the other, ownership succeeds while
+    // every page resolves to a non-existent path and the export silently
+    // emits nothing.
+    let mut ds = workspace("/w/a", &["top.snxsch"]);
+    ds.projects[0].data.dir = "/w/somewhere-else".to_string();
+    let top = PathBuf::from("/w/a").join("top.snxsch");
+    open(&mut ds, &top, &[]);
+    ds.active_path = Some(top.clone());
+
+    let ctx = context(&ds);
+    assert_eq!(
+        page_paths(&ctx),
+        vec![top],
+        "one convention only: the sheet path must be the one ownership matched"
+    );
 }

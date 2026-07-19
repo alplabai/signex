@@ -6,6 +6,8 @@ use super::super::*;
 mod clicked;
 mod double_clicked;
 mod layout_drag;
+#[cfg(test)]
+mod tests;
 
 /// Default stroke width applied when the user hasn't edited the
 /// pre_placement Width value yet. Standard's "default line width"
@@ -256,20 +258,19 @@ impl Signex {
             return Some(raw);
         }
 
-        // Base the relative child filename on the project that owns the
-        // document on screen, never the sticky `active_project` pointer: with
-        // a loose schematic focused the latter still names the last-loaded
-        // project, and the child would resolve into *that* project's
-        // directory — opening the wrong file, or reporting "Child-sheet file
-        // not found" for a child sitting right next to its parent (#406).
+        // A `ChildSheet.filename` is relative to the PARENT SHEET's own
+        // directory, never to the project root — the convention every other
+        // consumer of it already uses (`state::scope::parent_of` and
+        // `project_sheets::project_children_map`, ADR-0002 D8). The sheet on
+        // screen *is* the parent, so its directory is the base. Resolving
+        // against the project directory instead breaks the moment a sheet
+        // lives in a subdirectory: /w/a/sub/mid.snxsch referencing
+        // "leaf.snxsch" resolved to /w/a/leaf.snxsch — the wrong file, or
+        // "Child-sheet file not found" for a child sitting right next to its
+        // parent (#339, #406).
         let base_dir = self
-            .document_state
-            .active_document_project()
-            .and_then(|p| p.path.parent().map(std::path::PathBuf::from))
-            .or_else(|| {
-                self.active_tab_path()
-                    .and_then(|path| path.parent().map(std::path::PathBuf::from))
-            });
+            .active_tab_path()
+            .and_then(|path| path.parent().map(std::path::PathBuf::from));
 
         Some(match base_dir {
             Some(base) => base.join(raw),

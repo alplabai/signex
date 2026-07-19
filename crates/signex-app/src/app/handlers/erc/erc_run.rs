@@ -48,7 +48,7 @@ impl Signex {
         let project_root = self
             .document_state
             .active_document_project()
-            .and_then(|p| p.path.parent().map(std::path::PathBuf::from));
+            .map(|p| p.dir().to_path_buf());
 
         // Active tab.
         if let Some(tab) = self.document_state.tabs.get(self.document_state.active_tab)
@@ -143,7 +143,7 @@ impl Signex {
         let project_root = self
             .document_state
             .active_document_project()
-            .and_then(|p| p.path.parent().map(std::path::PathBuf::from))?;
+            .map(|p| p.dir().to_path_buf())?;
 
         let dsl_path_candidates = [
             project_root.join("erc.dsl"),

@@ -87,7 +87,7 @@ impl Signex {
         let project_root = self
             .document_state
             .active_document_project()
-            .and_then(|p| p.path.parent().map(std::path::PathBuf::from));
+            .map(|p| p.dir().to_path_buf());
         let unopened_sheet_paths: Vec<std::path::PathBuf> = self
             .document_state
             .active_document_project()
@@ -231,7 +231,7 @@ impl Signex {
         let project_root = self
             .document_state
             .active_document_project()
-            .and_then(|p| p.path.parent().map(PathBuf::from));
+            .map(|p| p.dir().to_path_buf());
         let unopened_paths: Vec<PathBuf> = self
             .document_state
             .active_document_project()

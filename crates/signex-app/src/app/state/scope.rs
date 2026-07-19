@@ -50,7 +50,7 @@ fn project_listing_sheet<'a>(
 ) -> Option<&'a LoadedProject> {
     let key = path_key(path);
     projects.iter().find(|p| {
-        let dir = Path::new(&p.data.dir);
+        let dir = p.dir();
         p.data
             .sheets
             .iter()

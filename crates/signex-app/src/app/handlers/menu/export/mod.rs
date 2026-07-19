@@ -18,14 +18,51 @@ fn project_root_sheet_path(project: &crate::app::state::LoadedProject) -> Option
         .schematic_root
         .clone()
         .or_else(|| project.data.sheets.first().map(|s| s.filename.clone()))?;
-    Some(std::path::Path::new(&project.data.dir).join(filename))
+    Some(project.dir().join(filename))
 }
 
-/// Snapshot every open engine as a `SheetSnapshot`, active engine first.
-/// Returns `None` if there is no active engine.
+/// Assemble the export context and log whatever the assembly found wrong —
+/// the entry point every export/preview handler calls.
+///
+/// The logging sits in this wrapper, not in [`build_export_scope`], so the
+/// scope build stays a pure function of `DocumentState` that a test can assert
+/// the diagnostics of without reaching into the global logger.
 fn build_export_context(
     document_state: &crate::app::state::DocumentState,
 ) -> Option<ExportContext> {
+    let (ctx, issues) = build_export_scope(document_state)?;
+    for issue in &issues {
+        crate::diagnostics::log_warning(format!(
+            "Export: {}",
+            crate::app::project_sheets::stitch_issue_message(issue)
+        ));
+    }
+    if ctx.netlist.is_none() {
+        // No root sheet in the exported set at all — the netlist exporter has
+        // nothing to write (it returns `NetlistError::NoNetlist`) and every
+        // `NET_NAME()` annotation in the PDF falls back to the literal token.
+        // Raised here rather than in `signex-output`: that crate already
+        // *errors* on a missing netlist where a netlist is the deliverable;
+        // what it cannot do is warn about the silently-degraded PDF, and it is
+        // a dependency-light domain crate that neither logs nor knows which
+        // document the user was looking at.
+        crate::diagnostics::log_warning(format!(
+            "Export: no netlist derived for {} — NET_NAME() annotations will be unresolved",
+            document_state
+                .active_path
+                .as_ref()
+                .map_or_else(String::new, |p| p.display().to_string())
+        ));
+    }
+    Some(ctx)
+}
+
+/// Snapshot every open engine as a `SheetSnapshot`, active engine first,
+/// alongside the stitch issues raised while deriving the project netlist.
+/// Returns `None` if there is no active engine.
+fn build_export_scope(
+    document_state: &crate::app::state::DocumentState,
+) -> Option<(ExportContext, Vec<signex_net::StitchIssue>)> {
     let active_path = document_state.active_path.as_ref()?;
     let active_engine = document_state.engines.get(active_path)?;
 
@@ -43,7 +80,7 @@ fn build_export_context(
     // last-loaded project while a loose file is focused (#406).
     let owning_project = document_state.active_document_project();
     let sheets: Vec<SheetSnapshot> = if let Some(project) = owning_project {
-        let project_dir = std::path::Path::new(&project.data.dir);
+        let project_dir = project.dir();
         let mut snapshots: Vec<SheetSnapshot> = Vec::new();
         let total = project.data.sheets.len().max(1);
         for (i, entry) in project.data.sheets.iter().enumerate() {
@@ -129,6 +166,7 @@ fn build_export_context(
     // netlist exporter reads the contract instead of re-deriving connectivity
     // (ADR-0002 D7). The children map is keyed by the exact `ChildSheet.filename`
     // each parent references — the shared project view (ADR-0002 D8).
+    let mut issues: Vec<signex_net::StitchIssue> = Vec::new();
     let netlist = {
         let by_path: std::collections::HashMap<PathBuf, signex_types::schematic::SchematicSheet> =
             sheets
@@ -148,32 +186,32 @@ fn build_export_context(
         root_path.and_then(|root_path| {
             by_path.get(&root_path).map(|root| {
                 let children = crate::app::project_sheets::project_children_map(&by_path);
-                let project_dir = owning_project.map(|p| PathBuf::from(&p.data.dir));
+                let project_dir = owning_project.map(|p| p.dir().to_path_buf());
                 let root_filename = crate::app::project_sheets::root_reference_name(
                     &root_path,
                     project_dir.as_deref(),
                 );
-                signex_net::build_project_netlist(root, &children, root_filename.as_deref()).netlist
+                // `build_project_netlist` always produces a netlist and
+                // reports what it could not stitch in-band. Dropping
+                // `.issues` here would ship a plausible-looking netlist that
+                // is silently missing a whole subtree — strictly worse than
+                // the `None` this path used to yield, which at least failed
+                // loudly. The mutation gateway already surfaces these; so
+                // does the export now.
+                let result =
+                    signex_net::build_project_netlist(root, &children, root_filename.as_deref());
+                issues = result.issues;
+                result.netlist
             })
         })
     };
-    // No root sheet in the exported set at all — the netlist exporter has
-    // nothing to write and every `NET_NAME()` annotation falls back to the
-    // literal token. Surfaced through `diagnostics`, which mirrors into the
-    // Messages panel, so it is visible in the GUI and not only in the log.
-    // Deliberately raised here rather than in `signex-output`: that crate is
-    // one of the dependency-light domain crates and carries no logging
-    // dependency, and the app is the only producer of a real `ExportContext`.
-    if netlist.is_none() {
-        crate::diagnostics::log_warning(format!(
-            "Export: no netlist derived for {} — NET_NAME() annotations will be unresolved",
-            active_path.display()
-        ));
-    }
 
-    Some(ExportContext {
-        sheets,
-        metadata,
-        netlist,
-    })
+    Some((
+        ExportContext {
+            sheets,
+            metadata,
+            netlist,
+        },
+        issues,
+    ))
 }

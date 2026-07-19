@@ -49,6 +49,47 @@ pub(crate) fn root_reference_name(root_path: &Path, project_dir: Option<&Path>) 
         .and_then(|p| p.to_str().map(str::to_string))
 }
 
+/// A one-line, user-facing message for a cross-sheet stitch issue (ADR-0002 D7,
+/// part 3) — shown in the Messages panel alongside other diagnostics.
+///
+/// Lives here rather than in one consumer because *every* caller of
+/// [`signex_net::build_project_netlist`] must surface its issues: the netlist
+/// is always produced, so a dropped `MissingChild` means an exported netlist
+/// that is quietly missing a whole subtree.
+pub(crate) fn stitch_issue_message(issue: &signex_net::StitchIssue) -> String {
+    use signex_net::StitchIssue as I;
+    match issue {
+        I::MissingChild {
+            parent_path,
+            sheet_name,
+            filename,
+        } => format!(
+            "Netlist: sheet '{sheet_name}' on '{parent_path}' references a child '{filename}' that could not be found"
+        ),
+        I::SheetCycle {
+            parent_path,
+            filename,
+        } => format!("Netlist: sheet cycle — '{parent_path}' re-enters '{filename}'"),
+        I::DuplicateSheetUuid {
+            filename_a,
+            filename_b,
+        } => format!(
+            "Netlist: sheets '{filename_a}' and '{filename_b}' share a UUID (copied as a template?)"
+        ),
+        I::SharedReferenceAcrossInstances {
+            filename,
+            reference,
+        } => format!(
+            "Netlist: reference '{reference}' in '{filename}' is shared across sheet instances"
+        ),
+        I::NameCollision { name } => {
+            format!(
+                "Netlist: two distinct nets are both named '{name}'; the later one was suffixed"
+            )
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
