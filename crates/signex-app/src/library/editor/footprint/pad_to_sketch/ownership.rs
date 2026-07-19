@@ -1,6 +1,13 @@
 //! Which sketch entities a pad OWNS.
 //!
-//! Ownership is spread across three `EditorPad` fields:
+//! The DURABLE answer is [`signex_sketch::attr::PadAttr::owned`], a
+//! ledger written onto the centre Point's `PadAttr` at mint time by
+//! [`record_ledger`]. It is the only one of the four ownership records
+//! that survives a save + reopen.
+//!
+//! The other three live on `EditorPad` and are session-volatile —
+//! `EditorPad::from_pad` sets all of them to `None` / empty because
+//! they have no home on `Pad`:
 //! - `sketch_entity_id` — the centre `Point` carrying the `PadAttr`.
 //! - `corner_entity_ids` — the four bbox-corner Points.
 //! - `shape_params` — the per-shape sidecar ledger. RoundRect records
@@ -8,8 +15,12 @@
 //!   arc-centres / Lines / Arcs (`oval_*`), Chamfered its per-corner
 //!   anchors (`chamfer_*_anchor*`).
 //!
+//! They are still consulted, because a pad written before the durable
+//! ledger existed has an empty `PadAttr::owned` and the volatile fields
+//! are all it has within the minting session.
+//!
 //! Any operation that acts on "the pad's geometry" has to consult all
-//! three. Handling a subset is what stranded RoundRect anchors on a
+//! four. Handling a subset is what stranded RoundRect anchors on a
 //! move and leaked constraints / parameters on a delete — this module
 //! exists so move and delete cannot drift apart again.
 
@@ -38,6 +49,11 @@ use super::super::state::EditorPad;
 pub(super) fn owned_sketch_entities(pad: &EditorPad, sketch: &SketchData) -> Vec<SketchEntityId> {
     let mut seeds: Vec<SketchEntityId> = Vec::new();
     seeds.extend(pad.sketch_entity_id);
+    // The durable ledger first — it is the whole answer for a pad that
+    // came back from disk, where the three fields below are empty.
+    if let Some(centre) = pad.sketch_entity_id {
+        seeds.extend(persisted_ledger(sketch, centre));
+    }
     if let Some(corners) = pad.corner_entity_ids {
         seeds.extend_from_slice(&corners);
     }
@@ -54,12 +70,17 @@ pub(super) fn owned_sketch_entities(pad: &EditorPad, sketch: &SketchData) -> Vec
     let mut owned: Vec<SketchEntityId> = Vec::with_capacity(seeds.len());
     let mut seen: HashSet<SketchEntityId> = HashSet::new();
     for id in seeds {
-        if seen.insert(id) {
-            owned.push(id);
-        }
+        // Existence gates the push, not just the expansion. A seed that
+        // names no live entity is not owned geometry, and letting it
+        // through put a dead UUID into the delete drop set — where it is
+        // substring-matched against every constraint's `Debug` rendering
+        // and would take unrelated constraints with it.
         let Some(entity) = sketch.entities.iter().find(|e| e.id == id) else {
             continue;
         };
+        if seen.insert(id) {
+            owned.push(id);
+        }
         let (a, b, c) = match &entity.kind {
             EntityKind::Line { start, end } => (Some(*start), Some(*end), None),
             EntityKind::Arc {
@@ -75,4 +96,36 @@ pub(super) fn owned_sketch_entities(pad: &EditorPad, sketch: &SketchData) -> Vec
         }
     }
     owned
+}
+
+/// The durable ledger carried by `centre`'s `PadAttr`. Empty when the
+/// entity is gone, carries no `PadAttr`, or predates the field.
+fn persisted_ledger(sketch: &SketchData, centre: SketchEntityId) -> Vec<SketchEntityId> {
+    sketch
+        .entities
+        .iter()
+        .find(|e| e.id == centre)
+        .and_then(|e| e.pad.as_ref())
+        .map(|attr| attr.owned.clone())
+        .unwrap_or_default()
+}
+
+/// Write the pad's current owned set onto its centre `PadAttr`, so the
+/// answer survives the save + reopen that wipes every `EditorPad`
+/// ownership field.
+///
+/// Called at the end of minting, which is the only moment the full set
+/// is known from the volatile fields. Later edits never orphan it:
+/// `mint_shape_geometry_for` is the sole re-mint site and re-records,
+/// and a delete drops the centre `PadAttr` along with the ledger.
+pub(super) fn record_ledger(sketch: &mut SketchData, pad: &EditorPad, centre: SketchEntityId) {
+    let owned = owned_sketch_entities(pad, sketch);
+    if let Some(attr) = sketch
+        .entities
+        .iter_mut()
+        .find(|e| e.id == centre)
+        .and_then(|e| e.pad.as_mut())
+    {
+        attr.owned = owned;
+    }
 }

@@ -304,6 +304,24 @@ pub struct PadAttr {
     /// Copper offset Y (mm).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub copper_offset_y_mm: Option<f64>,
+    /// DURABLE ownership ledger — every sketch entity minted for this
+    /// pad (bbox corners, edge anchors, arc centres, the outline Lines
+    /// / Arcs / Circle), centre included.
+    ///
+    /// The editor-side mirror used to answer "which entities does this
+    /// pad own?" from three `EditorPad` fields — `sketch_entity_id`,
+    /// `corner_entity_ids`, `shape_params` — none of which round-trip
+    /// through `Pad`. After a save + reopen the answer was "none", so a
+    /// Pads-mode move stranded the pad's outline where it was minted
+    /// and a Pads-mode delete left the whole outline (and its `PadAttr`
+    /// centre) behind, resurrecting the pad on the next bake.
+    ///
+    /// It lives on the `PadAttr` because the `PadAttr` is the only pad
+    /// fact the sketch itself persists. Empty for pads written before
+    /// this field existed: the mirror then falls back to the volatile
+    /// fields, which is exactly the old behaviour.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub owned: Vec<SketchEntityId>,
 }
 
 fn is_false(v: &bool) -> bool {

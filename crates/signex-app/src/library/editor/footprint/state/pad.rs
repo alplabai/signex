@@ -429,3 +429,40 @@ pub enum AlignOp {
     /// Contract vertical gaps by one grid step.
     DecreaseVSpacing,
 }
+
+/// Re-attach each pad's `sketch_entity_id` from the sketch itself, by
+/// matching the `PadAttr.number` the centre `Point` carries.
+///
+/// `EditorPad::from_pad` cannot restore it — the link has no home on
+/// `Pad`, so every pad rebuilt from the primitive comes back with
+/// `sketch_entity_id: None`. That is silent data loss on the next
+/// edit, not a cosmetic gap: `mirror_move_pad_in_sketch` and
+/// `mirror_delete_pad_from_sketch` both early-return on a `None` link,
+/// so after a save + reopen a Pads-mode move left the pad's whole
+/// outline stranded at its old position (the bake then emits copper
+/// from the stranded geometry) and a Pads-mode delete left the outline
+/// AND its `PadAttr`-carrying centre behind, resurrecting the deleted
+/// pad on the next bake.
+///
+/// The sketch is the durable side of the link, so it is the side the
+/// link is rebuilt from. Shared by [`super::FootprintEditorState::from_footprint`]
+/// (open / reopen) and `refresh_pads_from_primitive` (post-bake
+/// refresh) so the two loaders cannot drift apart.
+pub(super) fn relink_pads_to_sketch(pads: &mut [EditorPad], fp: &signex_library::Footprint) {
+    use std::collections::HashMap;
+
+    let Some(sketch) = fp.sketch.as_ref() else {
+        return;
+    };
+    let by_number: HashMap<&str, signex_sketch::id::SketchEntityId> = sketch
+        .entities
+        .iter()
+        .filter_map(|e| e.pad.as_ref().map(|attr| (attr.number.as_str(), e.id)))
+        .collect();
+    for pad in pads.iter_mut() {
+        if pad.sketch_entity_id.is_some() {
+            continue;
+        }
+        pad.sketch_entity_id = by_number.get(pad.number.as_str()).copied();
+    }
+}

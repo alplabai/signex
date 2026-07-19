@@ -525,3 +525,69 @@ fn shape_change_preserves_corner_positions() {
         "corner positions must remain stable across shape changes"
     );
 }
+
+/// The owned set must never name an entity the sketch does not have.
+///
+/// Seeds used to be pushed before the lookup that confirms them, so a
+/// stale or foreign UUID in the ledger reached the delete drop set —
+/// where ids are stringified and substring-matched against every
+/// constraint's `Debug` rendering. A dead id there is not a no-op; it
+/// deletes whatever constraint happens to mention it.
+#[test]
+fn owned_set_excludes_ids_with_no_live_entity() {
+    let mut fp = Footprint::empty("test");
+    let mut pad = editor_pad("1", 0.0, 0.0);
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+    let sketch = fp.sketch.as_mut().unwrap();
+
+    // A ledger entry naming nothing — a pad written by an older build,
+    // or geometry deleted from Sketch mode since.
+    let ghost = SketchEntityId::new();
+    let centre = pad.sketch_entity_id.unwrap();
+    sketch
+        .entities
+        .iter_mut()
+        .find(|e| e.id == centre)
+        .and_then(|e| e.pad.as_mut())
+        .unwrap()
+        .owned
+        .push(ghost);
+
+    let owned = ownership::owned_sketch_entities(&pad, sketch);
+    assert!(
+        !owned.contains(&ghost),
+        "a seed naming no live entity must not be reported as owned"
+    );
+}
+
+/// A profile pad that ALSO owns the loop's Points must take the move
+/// delta exactly once.
+///
+/// `mint_shape_geometry_for`'s catch-all arm sets `corner_entity_ids`
+/// for `LibPadShape::Custom`, so a Custom pad minted through
+/// `mirror_add_pad_to_sketch` whose `PadAttr` is a `SketchProfile` over
+/// that same outline sits in BOTH the traced loop and the owned set.
+/// The move translates the profile first and the owned set second, so
+/// the shared Points used to take the delta twice and the outline
+/// landed at double the offset — copper in the wrong place on the next
+/// bake. Correctness was resting on an undocumented "these two sets are
+/// disjoint" invariant that this configuration violates.
+#[test]
+fn mirror_move_profile_pad_owning_its_loop_applies_delta_once() {
+    let (mut fp, mut pad, corner_ids) = footprint_with_profile_pad();
+    // The one thing that differs from `footprint_with_profile_pad`'s
+    // "Make Pad from Profile" origin: the pad also claims the loop's
+    // corners, exactly as the Custom mint arm would have written them.
+    pad.corner_entity_ids = Some(corner_ids);
+
+    pad.position_mm = (4.0, 3.5); // centroid (1.0, 0.5) + (3.0, 3.0)
+    mirror_move_pad_in_sketch(&pad, &mut fp);
+
+    let expected = [(3.0, 3.0), (5.0, 3.0), (5.0, 4.0), (3.0, 4.0)];
+    let actual: Vec<(f64, f64)> = corner_ids.iter().map(|id| point_of(&fp, *id)).collect();
+    assert_eq!(
+        actual,
+        expected.to_vec(),
+        "the loop's Points took the pad delta more than once"
+    );
+}

@@ -29,6 +29,7 @@ use signex_library::primitive::footprint::{Footprint, PadShape as LibPadShape};
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::sketch::SketchData;
+use std::collections::HashSet;
 
 use super::state::EditorPad;
 use attr::{ensure_board_top_plane, id_slug, pad_attr_from_editor_pad};
@@ -193,6 +194,12 @@ fn mint_shape_geometry_for(
             pad.corner_entity_ids = Some(corners);
         }
     }
+    // Record the durable ownership ledger onto the centre `PadAttr`.
+    // The three `EditorPad` fields the branches above just wrote are
+    // session-volatile — `EditorPad::from_pad` drops all of them — so
+    // without this the reopened pad owns nothing and a Pads-mode move
+    // strands the outline it just minted.
+    ownership::record_ledger(sketch, pad, entity_id);
 }
 
 /// v0.15 — when a pad moves in Pads mode (drag), update its backing
@@ -237,17 +244,19 @@ pub fn mirror_move_pad_in_sketch(pad: &EditorPad, footprint: &mut Footprint) {
     // Must run BEFORE the centre is overwritten — the delta is measured
     // from the centre's current position. The centre is a standalone
     // minted Point and never part of the traced loop, so it cannot be
-    // translated twice. A profile pad also owns no `corner_entity_ids`
-    // / `shape_params`, so the profile loop and the owned set below are
-    // disjoint and nothing takes the delta twice.
-    translate_profile_with_pad(sketch, entity_id, pad.position_mm);
+    // translated twice. Everything the profile trace DID move is
+    // returned and skipped below rather than assumed disjoint: a
+    // `Custom` pad minted through `mint_shape_geometry_for` gets
+    // `corner_entity_ids`, and if its `PadAttr` is a `SketchProfile`
+    // over that same outline the delta would otherwise land twice.
+    let already_translated = translate_profile_with_pad(sketch, entity_id, pad.position_mm);
     // A pad move is a pure translation, so a single delta covers every
     // shape — no per-shape position tables (those belong to `solve`,
     // which handles radius / size changes). Lines, Arcs and the Round
     // Circle follow their endpoints, and `set_point_xy` no-ops on them.
     let owned = ownership::owned_sketch_entities(pad, sketch);
     for id in owned {
-        if id == entity_id {
+        if id == entity_id || already_translated.contains(&id) {
             continue;
         }
         if let Some((x, y)) = point_xy_of(sketch, id) {
@@ -258,6 +267,40 @@ pub fn mirror_move_pad_in_sketch(pad: &EditorPad, footprint: &mut Footprint) {
     // is not bit-identical to `new` in floating point, and the centre
     // is the pad's authoritative handle.
     helpers::set_point_xy(sketch, entity_id, pad.position_mm.0, pad.position_mm.1);
+    reassert_bbox_corners(sketch, pad, &already_translated);
+}
+
+/// Re-state the four bbox-corner Points ABSOLUTELY from `pad.bbox_mm()`
+/// after the delta pass.
+///
+/// A no-op on a healthy pad — the delta already landed them there. It
+/// exists for the unhealthy one: the corners are the only owned Points
+/// whose position is fully derivable from `Pad`, so any drift between
+/// the pad's declared size and its sketch outline is repairable, and
+/// repairing it on every move is what stops repeated moves from
+/// accumulating f64 rounding in the outline forever.
+///
+/// Skips anything the profile trace already placed — a
+/// `Custom(SketchProfile)` loop is authoritative over its own points
+/// and owes nothing to the pad's bbox.
+fn reassert_bbox_corners(
+    sketch: &mut SketchData,
+    pad: &EditorPad,
+    already_translated: &HashSet<SketchEntityId>,
+) {
+    let Some(corners) = pad.corner_entity_ids else {
+        return;
+    };
+    let (xmin, ymin, xmax, ymax) = pad.bbox_mm();
+    // `[ne, se, sw, nw]` — the order `helpers::bbox_corner_points` and
+    // `mint::mint_pad_corner_outline` both mint in.
+    let positions = [(xmax, ymin), (xmax, ymax), (xmin, ymax), (xmin, ymin)];
+    for (id, (x, y)) in corners.into_iter().zip(positions) {
+        if already_translated.contains(&id) {
+            continue;
+        }
+        helpers::set_point_xy(sketch, id, x, y);
+    }
 }
 
 /// Raw x/y of a sketch `Point` entity, straight off `SketchData` —
@@ -292,8 +335,10 @@ fn profile_seed_line(sketch: &SketchData, centre: SketchEntityId) -> Option<Sket
 }
 
 /// Translate a sketch-profile pad's loop so it tracks the pad to
-/// `new_position`. No-op for non-profile pads, for a zero delta, or
-/// when the loop can't be traced.
+/// `new_position`, returning every Point it moved so the caller can
+/// keep the delta off them a second time. No-op (and empty) for
+/// non-profile pads, for a zero delta, or when the loop can't be
+/// traced.
 ///
 /// Raw-position mutation matches how a user-driven sketch drag behaves
 /// (`SketchEdit::MovePoint` writes entity x/y and lets the next solve
@@ -309,27 +354,30 @@ fn translate_profile_with_pad(
     sketch: &mut SketchData,
     centre: SketchEntityId,
     new_position: (f64, f64),
-) {
+) -> HashSet<SketchEntityId> {
+    let mut moved: HashSet<SketchEntityId> = HashSet::new();
     let Some(seed) = profile_seed_line(sketch, centre) else {
-        return;
+        return moved;
     };
     let Some((old_x, old_y)) = point_xy_of(sketch, centre) else {
-        return;
+        return moved;
     };
     let (dx, dy) = (new_position.0 - old_x, new_position.1 - old_y);
     if dx == 0.0 && dy == 0.0 {
-        return;
+        return moved;
     }
     let Ok(traced) = signex_bake::profile::trace_closed_profile_entities(sketch, seed) else {
-        return;
+        return moved;
     };
     // `traced.points` is already deduplicated and includes Arc centres,
     // so each owned Point takes the delta exactly once.
     for id in traced.points {
         if let Some((x, y)) = point_xy_of(sketch, id) {
             helpers::set_point_xy(sketch, id, x + dx, y + dy);
+            moved.insert(id);
         }
     }
+    moved
 }
 
 /// v0.15 — when a pad is deleted in Pads mode, also drop its backing
@@ -350,41 +398,36 @@ pub fn mirror_delete_pad_from_sketch(pad: &EditorPad, footprint: &mut Footprint)
     // v0.24 Track A5 + A6 — the seed spans all three ownership fields
     // (centre, bbox corners, `shape_params` sidecars); see [`ownership`].
     let to_drop = ownership::owned_sketch_entities(pad, sketch);
-    let mut drop_set: std::collections::HashSet<SketchEntityId> = to_drop.iter().copied().collect();
+    let mut drop_set: HashSet<SketchEntityId> = to_drop.iter().copied().collect();
 
-    // Secondary sweep — pull every Line / Arc / Circle that touches a
-    // dropped ID into the drop set (along with the Points it
-    // references). One pass suffices because Points are leaves.
-    let mut secondary_drops: std::collections::HashSet<SketchEntityId> =
-        std::collections::HashSet::new();
+    // Secondary sweep — a Line / Arc / Circle that references a dropped
+    // Point cannot survive it, so it joins the drop set (which also
+    // feeds the constraint sweep below). One pass suffices because
+    // Points are leaves.
+    //
+    // Only the dependent entity is added, never the Points it
+    // references. Pulling those in too was over-collection: the pad's
+    // own anchors / inset arc-centres are already reached by
+    // [`ownership::owned_sketch_entities`] expanding its Arcs forward,
+    // so the only ids the far side of this edge can contribute are
+    // FOREIGN — the far endpoint of a user-drawn silk Line that merely
+    // happens to share one of the pad's anchor Points. Deleting a pad
+    // must not take user geometry with it.
+    let mut secondary_drops: HashSet<SketchEntityId> = HashSet::new();
     for entity in &sketch.entities {
         if drop_set.contains(&entity.id) {
             continue;
         }
-        match &entity.kind {
-            EntityKind::Line { start, end } => {
-                if drop_set.contains(start) || drop_set.contains(end) {
-                    secondary_drops.insert(entity.id);
-                    secondary_drops.insert(*start);
-                    secondary_drops.insert(*end);
-                }
-            }
+        let touched = match &entity.kind {
+            EntityKind::Line { start, end } => drop_set.contains(start) || drop_set.contains(end),
             EntityKind::Arc {
                 center, start, end, ..
-            } => {
-                if drop_set.contains(center) || drop_set.contains(start) || drop_set.contains(end) {
-                    secondary_drops.insert(entity.id);
-                    secondary_drops.insert(*center);
-                    secondary_drops.insert(*start);
-                    secondary_drops.insert(*end);
-                }
-            }
-            EntityKind::Circle { center, .. } => {
-                if drop_set.contains(center) {
-                    secondary_drops.insert(entity.id);
-                }
-            }
-            EntityKind::Point { .. } => {}
+            } => drop_set.contains(center) || drop_set.contains(start) || drop_set.contains(end),
+            EntityKind::Circle { center, .. } => drop_set.contains(center),
+            EntityKind::Point { .. } => false,
+        };
+        if touched {
+            secondary_drops.insert(entity.id);
         }
     }
     drop_set.extend(secondary_drops);

@@ -233,7 +233,10 @@ pub struct FootprintEditorState {
 impl FootprintEditorState {
     /// Build canvas state from the primitive's pad list.
     pub fn from_footprint(fp: &Footprint) -> Self {
-        let pads = fp.pads.iter().map(EditorPad::from_pad).collect();
+        let mut pads: Vec<EditorPad> = fp.pads.iter().map(EditorPad::from_pad).collect();
+        // Rebuild the sketch link from the sketch — `from_pad` cannot,
+        // and without it every mirror early-returns after a reopen.
+        pad::relink_pads_to_sketch(&mut pads, fp);
         let mut s = Self::with_pads(pads);
         s.recompute_courtyard();
         s
@@ -637,26 +640,18 @@ impl FootprintEditorState {
                 )
             })
             .collect();
-        let sketch_links: HashMap<String, signex_sketch::id::SketchEntityId> = fp
-            .sketch
-            .as_ref()
-            .map(|s| {
-                s.entities
-                    .iter()
-                    .filter_map(|e| e.pad.as_ref().map(|attr| (attr.number.clone(), e.id)))
-                    .collect()
-            })
-            .unwrap_or_default();
         let mut new_pads: Vec<EditorPad> = fp.pads.iter().map(EditorPad::from_pad).collect();
         for p in &mut new_pads {
             if let Some((sid, cids, params)) = old_links.get(&p.number) {
                 p.sketch_entity_id = *sid;
                 p.corner_entity_ids = *cids;
                 p.shape_params = params.clone();
-            } else if let Some(sid) = sketch_links.get(&p.number) {
-                p.sketch_entity_id = Some(*sid);
             }
         }
+        // Anything `old_links` could not supply a link for — a pad that
+        // first appears from the sketch side, or one whose old link was
+        // itself `None` after a reopen — is relinked from the sketch.
+        pad::relink_pads_to_sketch(&mut new_pads, fp);
         self.pads = new_pads;
         if let Some(idx) = self.selected_pad {
             if idx >= self.pads.len() {
