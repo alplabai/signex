@@ -240,10 +240,18 @@ fn dropdown_trigger_items(
             None,
         ),
         dual(
-            "Place / Move (right-click for menu)",
+            "Move (right-click for move / transform menu)",
             ActiveBarIcon::Svg(ic::icon_move(tid)),
             FpActiveBarMenu::Place,
-            Some(FootprintEditorMsg::ActiveBarStub("Move")),
+            // A footprint has no separate move tool: pad movement IS
+            // drag-under-Select (see `active_bar_dropdowns.rs`'s
+            // `place_entries` — every row in this menu arms Select).
+            // Left-click therefore arms Select directly instead of
+            // routing through `ActiveBarStub`, which only logged
+            // "coming soon" and never opened the menu either.
+            Some(FootprintEditorMsg::SetPadsTool(
+                crate::library::editor::footprint::state::PadsTool::Select,
+            )),
         ),
         dual(
             "Select (right-click for selection-mode menu)",

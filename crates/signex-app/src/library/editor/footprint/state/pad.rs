@@ -429,3 +429,180 @@ pub enum AlignOp {
     /// Contract vertical gaps by one grid step.
     DecreaseVSpacing,
 }
+
+/// Carry the three session-volatile link fields from the pre-refresh
+/// pad list onto the freshly-rebuilt one, matching by pad number.
+///
+/// Only where the number identifies exactly ONE pad on each side.
+/// Numbers are not unique in signex, and a last-wins number map hands
+/// several pads the same `sketch_entity_id` — after which a Pads-mode
+/// delete of one pad runs the delete mirror over another's geometry
+/// and that pad's copper silently disappears from the bake. An
+/// ambiguous number is left unlinked here and picked up by
+/// [`relink_pads_to_sketch`], which disambiguates by exact position
+/// and refuses if even that ties.
+pub(super) fn carry_links_by_unique_number(old: &[EditorPad], new_pads: &mut [EditorPad]) {
+    use std::collections::HashMap;
+    type Link<'a> = (
+        Option<signex_sketch::id::SketchEntityId>,
+        Option<[signex_sketch::id::SketchEntityId; 4]>,
+        &'a ShapeParamMap,
+    );
+
+    // `None` = the number is claimed by more than one old pad.
+    let mut old_links: HashMap<&str, Option<Link<'_>>> = HashMap::new();
+    for p in old {
+        old_links
+            .entry(p.number.as_str())
+            .and_modify(|slot| *slot = None)
+            .or_insert(Some((
+                p.sketch_entity_id,
+                p.corner_entity_ids,
+                &p.shape_params,
+            )));
+    }
+    let mut new_counts: HashMap<&str, usize> = HashMap::new();
+    for p in new_pads.iter() {
+        *new_counts.entry(p.number.as_str()).or_default() += 1;
+    }
+    // Resolved up front: `new_counts` borrows `new_pads` immutably.
+    let resolved: Vec<Option<Link<'_>>> = new_pads
+        .iter()
+        .map(|p| match new_counts.get(p.number.as_str()) {
+            Some(1) => old_links.get(p.number.as_str()).copied().flatten(),
+            _ => None,
+        })
+        .collect();
+    for (p, link) in new_pads.iter_mut().zip(resolved) {
+        if let Some((sid, cids, params)) = link {
+            p.sketch_entity_id = sid;
+            p.corner_entity_ids = cids;
+            p.shape_params = params.clone();
+        }
+    }
+}
+
+/// Re-attach each pad's `sketch_entity_id` from the sketch itself, by
+/// matching the `PadAttr.number` the centre `Point` carries.
+///
+/// `EditorPad::from_pad` cannot restore it — the link has no home on
+/// `Pad`, so every pad rebuilt from the primitive comes back with
+/// `sketch_entity_id: None`. That is silent data loss on the next
+/// edit, not a cosmetic gap: `mirror_move_pad_in_sketch` and
+/// `mirror_delete_pad_from_sketch` both early-return on a `None` link,
+/// so after a save + reopen a Pads-mode move left the pad's whole
+/// outline stranded at its old position (the bake then emits copper
+/// from the stranded geometry) and a Pads-mode delete left the outline
+/// AND its `PadAttr`-carrying centre behind, resurrecting the deleted
+/// pad on the next bake.
+///
+/// The sketch is the durable side of the link, so it is the side the
+/// link is rebuilt from. Shared by [`super::FootprintEditorState::from_footprint`]
+/// (open / reopen) and `refresh_pads_from_primitive` (post-bake
+/// refresh) so the two loaders cannot drift apart.
+///
+/// # Pad numbers are NOT unique
+///
+/// Nothing in signex enforces a unique pad number — the Properties
+/// field takes any string and `next_pad_defaults.designator_override`
+/// stamps one number onto every pad placed after it, which is how a
+/// shared-designator row / thermal / shield pad set is authored. Each
+/// such pad still mints its OWN `PadAttr`-bearing centre, so a plain
+/// number → id map is last-wins and hands several pads the SAME
+/// centre. Aliased that way, a Pads-mode delete of one pad runs the
+/// delete mirror against ANOTHER pad's geometry and its `PadAttr`
+/// ledger: that pad's whole outline goes, the pad itself stays in the
+/// list, and since the bake resolves copper from the sketch its copper
+/// silently vanishes from the export. A move aliases the same way.
+///
+/// So the number is only the first half of the key. Positions
+/// disambiguate a collision — exactly, never by epsilon, and the pad
+/// centre's `Point` is written from `pad.position_mm` verbatim. If a
+/// collision survives that (two pads sharing a number AND a position),
+/// the link is REFUSED: an unlinked pad makes both mirrors early-return,
+/// which is the pre-fix #142 behaviour — stale geometry, but never
+/// another pad's geometry destroyed.
+pub(super) fn relink_pads_to_sketch(pads: &mut [EditorPad], fp: &signex_library::Footprint) {
+    use std::collections::HashMap;
+
+    let Some(sketch) = fp.sketch.as_ref() else {
+        return;
+    };
+    let mut by_number: HashMap<&str, Vec<(PosKey, signex_sketch::id::SketchEntityId)>> =
+        HashMap::new();
+    for e in &sketch.entities {
+        if let (Some(attr), signex_sketch::entity::EntityKind::Point { x, y }) =
+            (e.pad.as_ref(), &e.kind)
+        {
+            by_number
+                .entry(attr.number.as_str())
+                .or_default()
+                .push((pos_key(*x, *y), e.id));
+        }
+    }
+    // Two pads that share a number are ambiguous from the pad side
+    // too, and two that share a number AND a position are ambiguous
+    // even after the tie-break. Counted up front so the loop below can
+    // refuse instead of aliasing.
+    let mut number_claims: HashMap<String, usize> = HashMap::new();
+    let mut exact_claims: HashMap<(String, PosKey), usize> = HashMap::new();
+    for pad in pads.iter() {
+        *number_claims.entry(pad.number.clone()).or_default() += 1;
+        *exact_claims
+            .entry((pad.number.clone(), pad_pos_key(pad)))
+            .or_default() += 1;
+    }
+    for pad in pads.iter_mut() {
+        if pad.sketch_entity_id.is_some() {
+            continue;
+        }
+        let Some(candidates) = by_number.get(pad.number.as_str()) else {
+            continue;
+        };
+        pad.sketch_entity_id = resolve_link(pad, candidates, &number_claims, &exact_claims);
+    }
+}
+
+/// Bit-exact position key. `f64::to_bits` because "same point" in this
+/// repo is exact equality — an epsilon compare here would be the same
+/// aliasing bug with extra steps.
+type PosKey = (u64, u64);
+
+fn pos_key(x: f64, y: f64) -> PosKey {
+    (x.to_bits(), y.to_bits())
+}
+
+fn pad_pos_key(pad: &EditorPad) -> PosKey {
+    pos_key(pad.position_mm.0, pad.position_mm.1)
+}
+
+/// Pick `pad`'s centre out of the candidates sharing its number, or
+/// `None` when the answer is not unambiguous. See the collision section
+/// on [`relink_pads_to_sketch`] for why `None` is the safe answer.
+fn resolve_link(
+    pad: &EditorPad,
+    candidates: &[(PosKey, signex_sketch::id::SketchEntityId)],
+    number_claims: &std::collections::HashMap<String, usize>,
+    exact_claims: &std::collections::HashMap<(String, PosKey), usize>,
+) -> Option<signex_sketch::id::SketchEntityId> {
+    let key = pad_pos_key(pad);
+    // Fast path: the number identifies exactly one pad and exactly one
+    // centre. No position involved, so a solver-nudged centre still
+    // relinks.
+    if candidates.len() == 1 && number_claims.get(&pad.number).copied().unwrap_or(0) == 1 {
+        return Some(candidates[0].1);
+    }
+    if exact_claims
+        .get(&(pad.number.clone(), key))
+        .copied()
+        .unwrap_or(0)
+        != 1
+    {
+        return None;
+    }
+    let mut hits = candidates.iter().filter(|(k, _)| *k == key);
+    match (hits.next(), hits.next()) {
+        (Some((_, id)), None) => Some(*id),
+        _ => None,
+    }
+}

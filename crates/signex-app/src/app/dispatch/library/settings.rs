@@ -8,7 +8,7 @@ use super::*;
 
 impl Signex {
     pub(super) fn handle_library_settings_message(&mut self, msg: SettingsMsg) -> Task<Message> {
-        use crate::library::settings::{digikey_oauth, persistence};
+        use crate::library::settings::digikey_oauth;
         use signex_library::distributor::DistributorAdapter;
         use signex_library::distributors::digikey::{DIGIKEY_AUTH_URL, DIGIKEY_TOKEN_URL};
         use signex_library::distributors::keyring::KeyringStore;
@@ -191,26 +191,34 @@ impl Signex {
                     Err(e) => format!("Failed: {e}"),
                 });
             }
-            SettingsMsg::PreferenceUp(src) => {
-                let order = &mut self.library.settings.preferred_order;
-                if let Some(i) = order.iter().position(|s| *s == src)
-                    && i > 0
-                {
-                    order.swap(i, i - 1);
-                    persistence::save_preferred_order(order);
-                }
-            }
-            SettingsMsg::PreferenceDown(src) => {
-                let order = &mut self.library.settings.preferred_order;
-                if let Some(i) = order.iter().position(|s| *s == src)
-                    && i + 1 < order.len()
-                {
-                    order.swap(i, i + 1);
-                    persistence::save_preferred_order(order);
-                }
-            }
+            SettingsMsg::PreferenceUp(src) => self.swap_preferred_order(src, true),
+            SettingsMsg::PreferenceDown(src) => self.swap_preferred_order(src, false),
         }
         Task::none()
     }
 
+    /// Move `src` one slot up (or down) the preferred-order list and
+    /// persist. A save failure lands in `preferred_order_error` so the
+    /// panel can show it inline — silently swallowing it left the user
+    /// to discover the reverted order on next launch.
+    fn swap_preferred_order(&mut self, src: signex_library::DistributorSource, up: bool) {
+        let order = &mut self.library.settings.preferred_order;
+        let Some(i) = order.iter().position(|s| *s == src) else {
+            return;
+        };
+        let target = if up {
+            if i == 0 {
+                return;
+            }
+            i - 1
+        } else {
+            if i + 1 >= order.len() {
+                return;
+            }
+            i + 1
+        };
+        order.swap(i, target);
+        let saved = crate::library::settings::persistence::save_preferred_order(order);
+        self.library.settings.preferred_order_error = saved.err();
+    }
 }

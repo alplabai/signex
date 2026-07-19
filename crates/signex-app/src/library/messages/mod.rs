@@ -125,8 +125,9 @@ pub enum EditorMsg {
     SaveSymbol(uuid::Uuid, Box<signex_library::Symbol>),
     // ── Footprint canvas (used by the standalone .snxfpt tab) ──
     /// Namespaced footprint-canvas edit (ADR-0001 D3). The footprint
-    /// canvas program emits this; `editor_msg_to_primitive_msg` bridges
-    /// it to `PrimitiveEdit::Footprint` for the standalone `.snxfpt` tab.
+    /// canvas program emits this; `translate_footprint_canvas_msg`
+    /// bridges it to `PrimitiveEdit::Footprint` for the standalone
+    /// `.snxfpt` tab.
     Footprint(FootprintEditorMsg),
     /// Fire-and-forget save of the active footprint primitive. Boxed
     /// so the containing enum stays cheap to clone and propagate.

@@ -5265,6 +5265,7 @@ name = "signex-bom"
 version = "0.14.0"
 dependencies = [
  "serde",
+ "signex-types",
 ]
 
 [[package]]
