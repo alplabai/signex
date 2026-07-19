@@ -165,18 +165,12 @@ pub fn save_preferred_order(order: &[DistributorSource]) {
 }
 
 /// Variant for tests / explicit paths.
+///
+/// Crash-safe: [`signex_types::atomic_io::atomic_write`] writes to a temp
+/// sibling, fsyncs it and renames over the destination, so a crash mid-save
+/// leaves the previously persisted order intact rather than a truncated file.
+/// It also creates the parent directory, so no separate `create_dir_all`.
 pub fn save_preferred_order_at(path: &std::path::Path, order: &[DistributorSource]) {
-    if let Some(parent) = path.parent()
-        && let Err(e) = std::fs::create_dir_all(parent)
-    {
-        tracing::warn!(
-            target: "signex::library",
-            path = %parent.display(),
-            error = %e,
-            "distributors.toml: create_dir_all failed"
-        );
-        return;
-    }
     let cfg = DistributorsConfig {
         distributor_apis: DistributorApisSection {
             preferred_order: order
@@ -189,7 +183,7 @@ pub fn save_preferred_order_at(path: &std::path::Path, order: &[DistributorSourc
     };
     match toml::to_string_pretty(&cfg) {
         Ok(s) => {
-            if let Err(e) = std::fs::write(path, s) {
+            if let Err(e) = signex_types::atomic_io::atomic_write(path, s.as_bytes()) {
                 tracing::warn!(
                     target: "signex::library",
                     path = %path.display(),
@@ -224,6 +218,31 @@ mod tests {
         save_preferred_order_at(&path, &original);
         let read = load_preferred_order_at(&path);
         assert_eq!(read, original);
+        // A successful atomic save strands no `.tmp` sibling.
+        assert!(!path.with_extension("toml.tmp").exists());
+    }
+
+    /// `save_preferred_order_at` must go through `atomic_write`, not
+    /// `fs::write`: a failed save leaves the previously persisted order
+    /// fully intact (the function swallows the error, so the on-disk
+    /// state is the only observable).
+    ///
+    /// Discriminator: pre-creating a *directory* at `<path>.tmp` makes
+    /// `atomic_write`'s `File::create(&tmp)` fail before it can touch the
+    /// destination. A plain `fs::write` would ignore the sibling, succeed,
+    /// and clobber the old file — so this test fails on a revert.
+    #[test]
+    fn save_preferred_order_at_leaves_original_intact_when_write_fails() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = config_path_for_dir(tmp.path());
+        let original = vec![DistributorSource::Lcsc, DistributorSource::Jlcpcb];
+        save_preferred_order_at(&path, &original);
+        assert_eq!(load_preferred_order_at(&path), original);
+
+        std::fs::create_dir_all(path.with_extension("toml.tmp")).unwrap();
+        save_preferred_order_at(&path, &[DistributorSource::Octopart]);
+
+        assert_eq!(load_preferred_order_at(&path), original);
     }
 
     #[test]
