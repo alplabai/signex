@@ -274,7 +274,11 @@ impl Signex {
         for (path, engine) in &self.document_state.engines {
             by_path.insert(path.clone(), engine.document().clone());
         }
-        if let Some(project) = self.document_state.active_loaded_project() {
+        // Owning project, not the sticky `active_project` pointer: with a
+        // loose schematic focused the latter still names the last-loaded
+        // project, and its unopened sheets would be parsed into this
+        // document's child map (#406).
+        if let Some(project) = self.document_state.active_document_project() {
             let project_root = project.path.parent().map(std::path::PathBuf::from);
             for sheet in &project.data.sheets {
                 let path = match project_root.as_ref() {
@@ -312,7 +316,7 @@ impl Signex {
         let children = crate::app::project_sheets::project_children_map(&by_path);
         let project_dir = self
             .document_state
-            .active_loaded_project()
+            .active_document_project()
             .map(|p| std::path::PathBuf::from(&p.data.dir));
         let root_filename =
             crate::app::project_sheets::root_reference_name(&active_path, project_dir.as_deref());

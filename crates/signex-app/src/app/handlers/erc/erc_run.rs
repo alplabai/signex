@@ -47,7 +47,7 @@ impl Signex {
             .collect();
         let project_root = self
             .document_state
-            .active_loaded_project()
+            .active_document_project()
             .and_then(|p| p.path.parent().map(std::path::PathBuf::from));
 
         // Active tab.
@@ -68,7 +68,7 @@ impl Signex {
             }
         }
         // Unopened project sheets.
-        if let Some(pd) = self.document_state.active_loaded_project().map(|p| &p.data) {
+        if let Some(pd) = self.document_state.active_document_project().map(|p| &p.data) {
             for sheet in &pd.sheets {
                 let path = match project_root.as_ref() {
                     Some(root) => root.join(&sheet.filename),
@@ -142,7 +142,7 @@ impl Signex {
     fn load_project_dsl_eval_fns(&self) -> Option<Vec<signex_erc::engine::EvalFn>> {
         let project_root = self
             .document_state
-            .active_loaded_project()
+            .active_document_project()
             .and_then(|p| p.path.parent().map(std::path::PathBuf::from))?;
 
         let dsl_path_candidates = [

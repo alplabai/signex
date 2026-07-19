@@ -76,7 +76,7 @@ impl Signex {
         log::info!("Print preview: rendered {} page(s)", pages.len());
         let variants = self
             .document_state
-            .export_scope_project()
+            .active_document_project()
             .map(|p| p.data.variant_definitions.clone())
             .unwrap_or_default();
         // Seed `pdf_options.variant` from the project's active variant
@@ -85,7 +85,7 @@ impl Signex {
         let mut pdf_opts = pdf_opts;
         pdf_opts.variant = self
             .document_state
-            .export_scope_project()
+            .active_document_project()
             .and_then(|p| p.data.active_variant.clone());
         // Seed the file picker off the export context's own sheet set —
         // open-modal default is "export everything", and user toggles
@@ -279,18 +279,41 @@ impl Signex {
     }
 
     fn rerasterize_print_preview(&mut self) {
-        let (pdf_opts, file_filter, preview_dpi) = match self.document_state.preview.as_ref() {
-            Some(preview) => (
-                preview.pdf_options.clone(),
-                preview.selected_files.clone(),
-                preview.quality.preview_dpi(),
-            ),
+        let (pdf_opts, preview_dpi) = match self.document_state.preview.as_ref() {
+            Some(preview) => (preview.pdf_options.clone(), preview.quality.preview_dpi()),
             None => return,
         };
 
         let mut ctx = match super::build_export_context(&self.document_state) {
             Some(c) => c,
             None => return,
+        };
+        // Re-seed the picker from the freshly built context. `sheet_files` was
+        // captured once at modal open; if the active document changed while the
+        // preview was up, the stale list names paths no longer in `ctx` and the
+        // filter below empties it — a blank preview with no explanation. Keep
+        // each surviving path's checked state and default genuinely-new sheets
+        // to checked, matching the open-modal "export everything" default.
+        let file_filter = {
+            let Some(preview) = self.document_state.preview.as_mut() else {
+                return;
+            };
+            let known: std::collections::HashSet<PathBuf> =
+                preview.sheet_files.iter().map(|(p, _)| p.clone()).collect();
+            let current: std::collections::HashSet<PathBuf> =
+                ctx.sheets.iter().map(|s| s.path.clone()).collect();
+            preview.selected_files.retain(|p| current.contains(p));
+            for path in &current {
+                if !known.contains(path) {
+                    preview.selected_files.insert(path.clone());
+                }
+            }
+            preview.sheet_files = ctx
+                .sheets
+                .iter()
+                .map(|s| (s.path.clone(), s.sheet_name.clone()))
+                .collect();
+            preview.selected_files.clone()
         };
         // Drop sheets the user unchecked in the file picker. An
         // empty filter set means "no files selected" — matches

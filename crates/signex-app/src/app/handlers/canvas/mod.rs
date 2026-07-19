@@ -256,9 +256,15 @@ impl Signex {
             return Some(raw);
         }
 
+        // Base the relative child filename on the project that owns the
+        // document on screen, never the sticky `active_project` pointer: with
+        // a loose schematic focused the latter still names the last-loaded
+        // project, and the child would resolve into *that* project's
+        // directory — opening the wrong file, or reporting "Child-sheet file
+        // not found" for a child sitting right next to its parent (#406).
         let base_dir = self
             .document_state
-            .active_loaded_project()
+            .active_document_project()
             .and_then(|p| p.path.parent().map(std::path::PathBuf::from))
             .or_else(|| {
                 self.active_tab_path()

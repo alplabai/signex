@@ -63,6 +63,27 @@ pub struct ExpressionEvalContext<'a> {
 }
 
 // ---------------------------------------------------------------------------
+// Auto net name — Signex format, not derived from any other EDA tool
+// ---------------------------------------------------------------------------
+
+/// Default name for an unnamed net.
+///
+/// Format: `unnamed-<sheet>:<ref>:<pin>`. Picks the lexicographically-
+/// smallest `(refdes, pin)` for determinism. Sheet defaults to empty
+/// string when the caller doesn't have a sheet context.
+pub fn auto_net_name(sheet: &str, pins: &[(String, String)]) -> Option<String> {
+    pins.iter()
+        .min_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)))
+        .map(|(r, p)| {
+            if sheet.is_empty() {
+                format!("unnamed-{r}:{p}")
+            } else {
+                format!("unnamed-{sheet}:{r}:{p}")
+            }
+        })
+}
+
+// ---------------------------------------------------------------------------
 // Expression evaluator
 // ---------------------------------------------------------------------------
 
@@ -74,15 +95,7 @@ pub struct ExpressionEvalContext<'a> {
 /// - `CELL()`
 /// - `NET_NAME(<pin>)`
 ///
-/// Unresolved `${...}`, `@{...}` and `CELL()` are preserved verbatim: their
-/// argument is a user-authored reference, so echoing it back is the
-/// authoring feedback that says "this name resolved to nothing".
-///
-/// `NET_NAME(<pin>)` is the exception — its value is *derived*
-/// connectivity, and an unwired pin (NC, test point, in-progress design) is
-/// a legitimate state, not a typo. It renders empty so plotted output never
-/// carries a debug token into a fab or customer deliverable; the missing
-/// wire on the page already says the pin is unwired.
+/// Unresolved expressions are preserved verbatim to avoid destructive output.
 pub fn evaluate_expressions(input: &str, ctx: &ExpressionEvalContext<'_>) -> String {
     if input.is_empty() {
         return String::new();
@@ -150,11 +163,12 @@ pub fn evaluate_expressions(input: &str, ctx: &ExpressionEvalContext<'_>) -> Str
         if starts_with_ascii_ci(bytes, i, b"NET_NAME(")
             && let Some((arg, next_index)) = read_parenthesized(input, i + "NET_NAME(".len())
         {
-            // Unresolved → render nothing. See the doc comment above:
-            // an unwired pin is a real state, and echoing the token would
-            // print `NET_NAME(1)` onto an exported PDF.
             if let Some(value) = eval_net_name(arg.trim(), ctx) {
                 out.push_str(&value);
+            } else {
+                out.push_str("NET_NAME(");
+                out.push_str(arg);
+                out.push(')');
             }
             i = next_index;
             continue;
@@ -674,6 +688,27 @@ mod tests {
     }
 
     #[test]
+    fn auto_net_name_format_is_signex() {
+        let pins = vec![
+            ("U2".to_string(), "5".to_string()),
+            ("R1".to_string(), "2".to_string()),
+            ("R1".to_string(), "1".to_string()),
+        ];
+        // Format must be "unnamed-<sheet>:<ref>:<pin>" per the Apache-clean
+        // remediation. Must NOT match the historical Standard format string.
+        assert_eq!(auto_net_name("", &pins), Some("unnamed-R1:1".to_string()));
+        assert_eq!(
+            auto_net_name("PowerSupply", &pins),
+            Some("unnamed-PowerSupply:R1:1".to_string())
+        );
+    }
+
+    #[test]
+    fn auto_net_name_empty_pins() {
+        assert_eq!(auto_net_name("", &[]), None);
+    }
+
+    #[test]
     fn evaluates_refdes_and_at_variables() {
         let mut at = HashMap::new();
         at.insert("Comment".to_string(), "Decoupling".to_string());
@@ -707,18 +742,9 @@ mod tests {
     }
 
     #[test]
-    fn unresolved_dollar_and_at_expressions_are_preserved() {
+    fn unresolved_expressions_are_preserved() {
         let ctx = ExpressionEvalContext::default();
-        let out = evaluate_expressions("${refdes:U1} @{foo} CELL()", &ctx);
-        assert_eq!(out, "${refdes:U1} @{foo} CELL()");
-    }
-
-    #[test]
-    fn unresolved_net_name_renders_empty() {
-        // An unwired pin must not print `NET_NAME(1)` onto an exported
-        // sheet — it renders as nothing at all.
-        let ctx = ExpressionEvalContext::default();
-        assert_eq!(evaluate_expressions("NET_NAME(1)", &ctx), "");
-        assert_eq!(evaluate_expressions("[NET_NAME(1)]", &ctx), "[]");
+        let out = evaluate_expressions("${refdes:U1} @{foo} NET_NAME(1)", &ctx);
+        assert_eq!(out, "${refdes:U1} @{foo} NET_NAME(1)");
     }
 }

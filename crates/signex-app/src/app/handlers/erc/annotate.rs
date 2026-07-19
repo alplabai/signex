@@ -86,11 +86,11 @@ impl Signex {
             .collect();
         let project_root = self
             .document_state
-            .active_loaded_project()
+            .active_document_project()
             .and_then(|p| p.path.parent().map(std::path::PathBuf::from));
         let unopened_sheet_paths: Vec<std::path::PathBuf> = self
             .document_state
-            .active_loaded_project()
+            .active_document_project()
             .map(|p| {
                 p.data
                     .sheets
@@ -230,11 +230,11 @@ impl Signex {
             .collect();
         let project_root = self
             .document_state
-            .active_loaded_project()
+            .active_document_project()
             .and_then(|p| p.path.parent().map(PathBuf::from));
         let unopened_paths: Vec<PathBuf> = self
             .document_state
-            .active_loaded_project()
+            .active_document_project()
             .map(|p| {
                 p.data
                     .sheets

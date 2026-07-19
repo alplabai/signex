@@ -4,10 +4,22 @@ use std::path::PathBuf;
 
 use signex_output::{ExportContext, ProjectMetadata, SheetSnapshot};
 
-
 mod bom;
 mod pdf_netlist;
 mod print_preview;
+#[cfg(test)]
+mod tests;
+
+/// Absolute path of a project's root schematic — its declared
+/// `schematic_root`, falling back to the first entry in the sheet list.
+fn project_root_sheet_path(project: &crate::app::state::LoadedProject) -> Option<PathBuf> {
+    let filename = project
+        .data
+        .schematic_root
+        .clone()
+        .or_else(|| project.data.sheets.first().map(|s| s.filename.clone()))?;
+    Some(std::path::Path::new(&project.data.dir).join(filename))
+}
 
 /// Snapshot every open engine as a `SheetSnapshot`, active engine first.
 /// Returns `None` if there is no active engine.
@@ -25,11 +37,12 @@ fn build_export_context(
     // fall back to the engines map so a single-sheet preview still
     // works.
     //
-    // Scope comes from `export_scope_project()` — the project whose sheet
-    // list contains the active document — NOT `active_loaded_project()`,
-    // whose `active_project` pointer is sticky by design and keeps
-    // pointing at the last-loaded project while a loose file is focused.
-    let sheets: Vec<SheetSnapshot> = if let Some(project) = document_state.export_scope_project() {
+    // Scope comes from `active_document_project()` — the project that owns
+    // the active document — NOT `active_loaded_project()`, whose
+    // `active_project` pointer is sticky by design and keeps pointing at the
+    // last-loaded project while a loose file is focused (#406).
+    let owning_project = document_state.active_document_project();
+    let sheets: Vec<SheetSnapshot> = if let Some(project) = owning_project {
         let project_dir = std::path::Path::new(&project.data.dir);
         let mut snapshots: Vec<SheetSnapshot> = Vec::new();
         let total = project.data.sheets.len().max(1);
@@ -70,14 +83,7 @@ fn build_export_context(
     } else {
         // Loose documents only: an open tab belonging to some *other*
         // loaded project would otherwise ride along as an extra page.
-        let mut paths: Vec<PathBuf> = document_state
-            .engines
-            .keys()
-            .filter(|p| {
-                crate::app::state::project_owning_sheet(&document_state.projects, p).is_none()
-            })
-            .cloned()
-            .collect();
+        let mut paths: Vec<PathBuf> = document_state.unowned_engine_paths();
         paths.sort_by_key(|p| p != active_path);
         let sheet_count = paths.len();
         paths
@@ -104,8 +110,7 @@ fn build_export_context(
     let tb = &active_engine.document().title_block;
     let comment = |n: usize| tb.get(&format!("comment{n}")).cloned().unwrap_or_default();
     let mut custom_fields = std::collections::BTreeMap::new();
-    let active_variant = document_state
-        .export_scope_project()
+    let active_variant = owning_project
         .and_then(|p| p.data.active_variant.clone())
         .unwrap_or_else(|| "Base".to_string());
     if !active_variant.eq_ignore_ascii_case("Base") {
@@ -130,28 +135,40 @@ fn build_export_context(
                 .iter()
                 .map(|s| (s.path.clone(), s.schematic.clone()))
                 .collect();
-        by_path.get(active_path).map(|root| {
-            let children = crate::app::project_sheets::project_children_map(&by_path);
-            let project_dir = document_state
-                .export_scope_project()
-                .map(|p| PathBuf::from(&p.data.dir));
-            let root_filename = crate::app::project_sheets::root_reference_name(
-                active_path,
-                project_dir.as_deref(),
-            );
-            signex_net::build_project_netlist(root, &children, root_filename.as_deref()).netlist
+        // Root the netlist at the active document when it is one of the
+        // exported pages. It isn't always: descending into a hierarchical
+        // child opens a tab that was never added to the project's `sheets`
+        // list, so a project-scoped export covers the project's pages while
+        // the active path sits below them. Fall back to the project's own
+        // root sheet there — the export is project-wide, so the project
+        // netlist is the one that belongs in it.
+        let root_path = Some(active_path.clone())
+            .filter(|p| by_path.contains_key(p))
+            .or_else(|| owning_project.and_then(project_root_sheet_path));
+        root_path.and_then(|root_path| {
+            by_path.get(&root_path).map(|root| {
+                let children = crate::app::project_sheets::project_children_map(&by_path);
+                let project_dir = owning_project.map(|p| PathBuf::from(&p.data.dir));
+                let root_filename = crate::app::project_sheets::root_reference_name(
+                    &root_path,
+                    project_dir.as_deref(),
+                );
+                signex_net::build_project_netlist(root, &children, root_filename.as_deref()).netlist
+            })
         })
     };
-    // Canary: with the scope resolved off the active document this set
-    // always contains it, so a miss means the sheet set and the active
-    // path have drifted apart again. Warn once here rather than in each
-    // exporter — a `None` netlist silently blanks every `NET_NAME()`
-    // annotation downstream (`signex_output::build_pin_net_lookup`).
+    // No root sheet in the exported set at all — the netlist exporter has
+    // nothing to write and every `NET_NAME()` annotation falls back to the
+    // literal token. Surfaced through `diagnostics`, which mirrors into the
+    // Messages panel, so it is visible in the GUI and not only in the log.
+    // Deliberately raised here rather than in `signex-output`: that crate is
+    // one of the dependency-light domain crates and carries no logging
+    // dependency, and the app is the only producer of a real `ExportContext`.
     if netlist.is_none() {
-        log::warn!(
-            "Export: no netlist derived for {} — NET_NAME() annotations will be blank",
+        crate::diagnostics::log_warning(format!(
+            "Export: no netlist derived for {} — NET_NAME() annotations will be unresolved",
             active_path.display()
-        );
+        ));
     }
 
     Some(ExportContext {

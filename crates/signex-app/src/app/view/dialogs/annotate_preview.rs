@@ -57,7 +57,7 @@ impl super::super::super::Signex {
 
         // Pass 2: parse every remaining project sheet from disk so the
         // change list spans sheets the user hasn't opened yet.
-        if let Some(loaded) = self.document_state.active_loaded_project() {
+        if let Some(loaded) = self.document_state.active_document_project() {
             let project_dir = loaded
                 .path
                 .parent()
