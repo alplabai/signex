@@ -12,11 +12,13 @@
 //! - [`attr`] — `EditorPad ↔ PadAttr` mapping and the BoardTop plane
 //!   helper.
 //! - [`mint`] — per-shape `mint_*_pad_geometry` functions.
+//! - [`remint_in_place`] — the id-preserving re-mint a live drag needs.
 //! - [`solve`] — post-solve "reverse mirror" helpers.
 
 mod attr;
 mod helpers;
 mod mint;
+mod remint_in_place;
 mod solve;
 
 #[cfg(test)]
@@ -45,6 +47,7 @@ pub fn rotation_expr(deg: f64) -> String {
     format!("{}deg", attr::format_f64(deg))
 }
 
+pub use remint_in_place::remint_pad_geometry_in_place;
 pub use solve::{
     mirror_solve_to_chamfer_anchors, mirror_solve_to_oval_geometry, mirror_solve_to_oval_size,
     mirror_solve_to_pad_stack, mirror_solve_to_round_rect_geometry,
@@ -312,6 +315,22 @@ pub fn mirror_move_pad_in_sketch(pad: &EditorPad, footprint: &mut Footprint) {
     }
 }
 
+/// THE SEEDING RULE, in one place. A `pad.shape_params` VALUE that
+/// parses as a UUID names one of this pad's own sidecar entities; a
+/// canonical parameter binding (`corner_r` -> `corner_r_<slug>`, see
+/// `helpers::bind_shape_param`) is a parameter NAME, does not parse,
+/// and falls through.
+///
+/// Three readers need it — the move path's sidecar sweep, the delete
+/// path's drop set, and the in-place re-mint's pairing — and their
+/// TRAVERSALS are deliberately different. The seed must not be: a
+/// future shape that records its ids under a new key convention has to
+/// be taught here once, or it gets anchors that translate on a drag
+/// and survive a delete.
+fn sidecar_id(value: &str) -> Option<SketchEntityId> {
+    uuid::Uuid::parse_str(value).ok().map(SketchEntityId)
+}
+
 /// Every `Point` this pad minted as part of its per-shape sidecar,
 /// seeded from `pad.shape_params` and expanded ONE level through the
 /// Line / Arc / Circle ids recorded there (a RoundRect records only
@@ -342,14 +361,10 @@ fn sidecar_point_ids(sketch: &SketchData, pad: &EditorPad) -> Vec<SketchEntityId
         }
     };
 
-    // Canonical parameter bindings (`corner_r` -> `corner_r_<slug>`)
-    // are names, not ids, and fail to parse as a UUID — they fall
-    // through here exactly as they do in the delete sweep.
     for value in pad.shape_params.values() {
-        let Ok(uuid) = uuid::Uuid::parse_str(value) else {
+        let Some(id) = sidecar_id(value) else {
             continue;
         };
-        let id = SketchEntityId(uuid);
         let Some(entity) = sketch.entities.iter().find(|e| e.id == id) else {
             continue;
         };
@@ -495,14 +510,8 @@ pub fn mirror_delete_pad_from_sketch(pad: &EditorPad, footprint: &mut Footprint)
         to_drop.extend_from_slice(&corners);
     }
     // v0.24 Track A5 + A6 — seed any sidecar entity IDs stored on
-    // `pad.shape_params`. Sidecar values are UUID slugs (no dashes);
-    // canonical bindings (`corner_r_<slug>`, etc.) have a leading
-    // identifier prefix so they fall through.
-    for value in pad.shape_params.values() {
-        if let Ok(uuid) = uuid::Uuid::parse_str(value) {
-            to_drop.push(SketchEntityId(uuid));
-        }
-    }
+    // `pad.shape_params`, by the same rule every other reader uses.
+    to_drop.extend(pad.shape_params.values().filter_map(|v| sidecar_id(v)));
     let mut drop_set: std::collections::HashSet<SketchEntityId> = to_drop.iter().copied().collect();
 
     // Secondary sweep — pull every Line / Arc / Circle that touches a
