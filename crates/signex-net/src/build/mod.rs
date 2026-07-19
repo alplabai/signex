@@ -58,6 +58,44 @@ pub fn point_on_segment(p: Key, a: Key, b: Key) -> bool {
     within_x && within_y
 }
 
+/// Attach a floating point to the wire it sits on, in the exact 1 µm key space.
+///
+/// Anchoring **attaches** a point to a segment; it never **asserts** a
+/// connection between two segments — only a junction dot does that (issue
+/// #107). Two rules keep that promise, and together they make the result a
+/// function of the geometry alone rather than of the order `segments` happens
+/// to arrive in (issue #402):
+///
+/// 1. If `pk` is already an endpoint of *any* segment, do nothing. It is
+///    already a node of that segment's class (every caller's `parent` has the
+///    segment endpoints unioned first), so unioning it into some *other*
+///    segment would merge two electrically separate wires — exactly the
+///    junction-less T that #107 says must stay disconnected.
+/// 2. Otherwise `pk` taps one or more segment interiors. Anchor to exactly
+///    **one**, chosen by a total order over the whole slice (smallest
+///    normalised endpoint-key pair). Folding in a second candidate would
+///    bridge two wires merely crossing at `pk`.
+///
+/// The old inline form — union into the first matching segment, then `break` —
+/// broke both: at a junction-less T it bridged or not depending purely on which
+/// wire the slice yielded first.
+pub(crate) fn anchor_point(parent: &mut HashMap<Key, Key>, pk: Key, segments: &[(Point, Point)]) {
+    let keyed = || segments.iter().map(|(a, b)| (pt_key(a), pt_key(b)));
+
+    if keyed().any(|(ak, bk)| pk == ak || pk == bk) {
+        return;
+    }
+
+    let chosen = keyed()
+        .filter(|&(ak, bk)| point_on_segment(pk, ak, bk))
+        .min_by_key(|&(ak, bk)| (ak.min(bk), ak.max(bk)));
+    if let Some((ak, bk)) = chosen {
+        // Either endpoint identifies the same class; take the smaller one so
+        // the union argument itself carries no order dependence.
+        uf_union(parent, pk, ak.min(bk));
+    }
+}
+
 /// True when a wire endpoint, junction, label, or no-connect marker sits at
 /// `pos`, compared in the 1 µm key space — the *same* "same point" definition
 /// the union-find uses, so the connectivity gate and the net partition can
@@ -224,12 +262,7 @@ impl SheetConnectivity {
     /// connectivity — is what D5.4 forbids.
     pub fn root_of_anchored(&mut self, p: &Point, segments: &[(Point, Point)]) -> Key {
         let pk = pt_key(p);
-        for (a, b) in segments {
-            if point_on_segment(pk, pt_key(a), pt_key(b)) {
-                uf_union(&mut self.parent, pk, pt_key(a));
-                break;
-            }
-        }
+        anchor_point(&mut self.parent, pk, segments);
         uf_find(&mut self.parent, pk)
     }
 }
@@ -286,15 +319,11 @@ pub(crate) fn merged_sheet_parent(sheet: &SchematicSheet) -> HashMap<Key, Key> {
     // Power also join across sheets by name — the cross-sheet stitcher's job;
     // here we only see one sheet.) Hierarchical labels join to a parent sheet's
     // pins, not to same-name peers, so they are left to cross-sheet stitching.
+    let wire_pairs: Vec<(Point, Point)> = sheet.wires.iter().map(|w| (w.start, w.end)).collect();
     let mut name_root: HashMap<&str, Key> = HashMap::new();
     for lbl in &sheet.labels {
         let lk = pt_key(&lbl.position);
-        for w in &sheet.wires {
-            if point_on_segment(lk, pt_key(&w.start), pt_key(&w.end)) {
-                uf_union(&mut parent, lk, pt_key(&w.start));
-                break;
-            }
-        }
+        anchor_point(&mut parent, lk, &wire_pairs);
         if lbl.text.is_empty()
             || !matches!(
                 lbl.label_type,

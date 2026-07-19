@@ -1,5 +1,7 @@
 //! Tests for single-sheet netlist building.
 use super::*;
+
+mod wire_order;
 use signex_types::schematic::{
     Junction, Label, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Symbol, Wire,
 };

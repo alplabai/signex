@@ -331,6 +331,43 @@ fn point_on_wire_interior(
     t > margin && t < 1.0 - margin
 }
 
+/// Junction dots a newly drawn wire needs because an **existing** wire's
+/// endpoint lands on the new wire's interior — the mirror image of
+/// [`needed_junction`], which only ever inspects the *new* wire's own two
+/// endpoints.
+///
+/// Without this, drawing a stub and then a trunk through the stub's endpoint
+/// produced a real junction-less T with no dot. The netlist deliberately treats
+/// that as disconnected (issue #107), so the connection was silently lost
+/// (issue #402). `document` may already contain the new wire; a wire endpoint
+/// can never sit on its own interior, so no self-exclusion is needed.
+pub(crate) fn junctions_under_new_wire(
+    wire: &signex_types::schematic::Wire,
+    document: &SchematicSheet,
+    tolerance: f64,
+) -> Vec<signex_types::schematic::Junction> {
+    let mut placed: Vec<signex_types::schematic::Junction> = Vec::new();
+    for point in document
+        .wires
+        .iter()
+        .flat_map(|w| [w.start, w.end])
+        .filter(|p| point_on_wire_interior(*p, wire, tolerance))
+    {
+        let already = document.junctions.iter().chain(placed.iter()).any(|j| {
+            (j.position.x - point.x).abs() < tolerance && (j.position.y - point.y).abs() < tolerance
+        });
+        if already {
+            continue;
+        }
+        placed.push(signex_types::schematic::Junction {
+            uuid: uuid::Uuid::new_v4(),
+            position: point,
+            diameter: 0.0,
+        });
+    }
+    placed
+}
+
 pub(crate) fn needed_junction(
     point: signex_types::schematic::Point,
     document: &SchematicSheet,
@@ -377,4 +414,3 @@ pub(crate) fn needed_junction(
 
     None
 }
-

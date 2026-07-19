@@ -18,12 +18,12 @@
 use std::collections::{HashMap, HashSet};
 
 use signex_types::net::{Net, NetId, Netlist, Terminal};
-use signex_types::schematic::{Label, LabelType, SchematicSheet};
+use signex_types::schematic::{Label, LabelType, Point, SchematicSheet};
 use uuid::Uuid;
 
 use crate::build::{
-    collect_membership, collect_net_labels, collect_terminals, dedup_net_names, label_priority,
-    merged_sheet_parent, point_on_segment, power_name_carriers, pt_key,
+    anchor_point, collect_membership, collect_net_labels, collect_terminals, dedup_net_names,
+    label_priority, merged_sheet_parent, power_name_carriers, pt_key,
 };
 use crate::uf::{Key, find as uf_find, union as uf_union};
 
@@ -330,15 +330,10 @@ fn analyze(sheet: &SchematicSheet) -> Analysis<'_> {
 
     // Anchor every child-sheet pin to the wire it sits on (endpoint or
     // interior), like a label — before sampling any root.
+    let wire_pairs: Vec<(Point, Point)> = sheet.wires.iter().map(|w| (w.start, w.end)).collect();
     for cs in &sheet.child_sheets {
         for sp in &cs.pins {
-            let pk = pt_key(&sp.position);
-            for w in &sheet.wires {
-                if point_on_segment(pk, pt_key(&w.start), pt_key(&w.end)) {
-                    uf_union(&mut parent, pk, pt_key(&w.start));
-                    break;
-                }
-            }
+            anchor_point(&mut parent, pt_key(&sp.position), &wire_pairs);
         }
     }
 

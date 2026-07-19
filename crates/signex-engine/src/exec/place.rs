@@ -139,6 +139,17 @@ impl Engine {
                     }
                 }
 
+                // The mirror case: an existing wire's endpoint landing on the
+                // new wire's interior. `needed_junction` only looks at the new
+                // wire's own endpoints, so drawing a stub then a trunk through
+                // it left an undotted T that the netlist reads as disconnected.
+                let under = transform::junctions_under_new_wire(
+                    &wire,
+                    &self.document,
+                    JUNCTION_TOLERANCE_MM,
+                );
+                self.document.junctions.extend(under);
+
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::ObjectPlaced,
                     document: DocumentPatch::WIRES | DocumentPatch::JUNCTIONS,

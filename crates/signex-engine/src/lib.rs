@@ -410,4 +410,60 @@ mod tests {
         engine.undo().expect("undo");
         assert_eq!(engine.document().paper_size, "A4");
     }
+
+    fn wire(a: Point, b: Point) -> signex_types::schematic::Wire {
+        signex_types::schematic::Wire {
+            uuid: uuid::Uuid::new_v4(),
+            start: a,
+            end: b,
+            stroke_width: 0.0,
+        }
+    }
+
+    /// Drawing a stub and then a trunk through the stub's endpoint is the
+    /// ordinary way a T gets drawn, and it used to leave no junction dot:
+    /// `needed_junction` only ever inspected the *new* wire's own two
+    /// endpoints. The netlist treats an undotted T as disconnected (issue
+    /// #107), so the connection was silently lost (issue #402).
+    #[test]
+    fn a_trunk_drawn_through_an_existing_wires_endpoint_gets_a_junction() {
+        let mut document = test_sheet();
+        document
+            .wires
+            .push(wire(Point::new(5.0, 0.0), Point::new(5.0, 10.0)));
+        let mut engine = Engine::new(document).expect("engine");
+
+        engine
+            .execute(Command::PlaceWireSegment {
+                wire: wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0)),
+            })
+            .expect("place trunk");
+
+        let junctions = &engine.document().junctions;
+        assert_eq!(junctions.len(), 1, "{junctions:?}");
+        assert_eq!(junctions[0].position, Point::new(5.0, 0.0));
+    }
+
+    /// The negative twin: a trunk merely *crossing* another wire's interior is
+    /// not a connection, so it must not mint a dot.
+    #[test]
+    fn a_trunk_crossing_another_wires_interior_gets_no_junction() {
+        let mut document = test_sheet();
+        document
+            .wires
+            .push(wire(Point::new(5.0, -5.0), Point::new(5.0, 5.0)));
+        let mut engine = Engine::new(document).expect("engine");
+
+        engine
+            .execute(Command::PlaceWireSegment {
+                wire: wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0)),
+            })
+            .expect("place trunk");
+
+        assert!(
+            engine.document().junctions.is_empty(),
+            "{:?}",
+            engine.document().junctions
+        );
+    }
 }

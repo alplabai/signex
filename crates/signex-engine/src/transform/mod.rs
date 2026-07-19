@@ -399,8 +399,8 @@ fn normalize_degrees(angle_degrees: f64) -> f64 {
 }
 
 mod autoplace;
-pub(crate) use autoplace::needed_junction;
 use autoplace::autoplace_fields;
+pub(crate) use autoplace::{junctions_under_new_wire, needed_junction};
 
 // ---------------------------------------------------------------------------
 // UUID-based collection helpers
