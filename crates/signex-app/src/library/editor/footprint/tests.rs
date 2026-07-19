@@ -173,3 +173,40 @@ fn apply_filter_preset_sets_state_filter() {
     assert!(s.selection_filter.get(K::Pads));
     assert!(!s.selection_filter.get(K::Tracks));
 }
+
+// Issue #375 — the Place / Move active-bar button's left-click must
+// arm PadsTool::Select (a footprint has no separate move tool; pad
+// movement is drag-under-Select — see `active_bar_dropdowns.rs`'s
+// `place_entries`), not fall through to the `ActiveBarStub` no-op.
+#[test]
+fn place_move_button_left_click_arms_select_tool() {
+    use crate::library::editor::footprint::state::PadsTool;
+    use crate::library::editor::footprint::unified_active_bar::bar_items;
+    use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
+    use signex_types::theme::{theme_tokens, ThemeId};
+    use signex_widgets::active_bar::ActiveBarItem;
+
+    let file = signex_library::FootprintFile::from_footprint(
+        signex_library::primitive::footprint::Footprint::empty("Test"),
+    );
+    let editor =
+        crate::app::FootprintEditorState::new(std::path::PathBuf::from("t.snxfpt"), file);
+    let tid = ThemeId::CatppuccinMocha;
+    let tokens = theme_tokens(tid);
+
+    let place_btn = bar_items(&editor, tid, &tokens)
+        .into_iter()
+        .find_map(|item| match item {
+            ActiveBarItem::Button(b) if b.tooltip.contains("Move") => Some(b),
+            _ => None,
+        })
+        .expect("Place / Move button should be in the active bar");
+
+    match place_btn.on_press {
+        Some(LibraryMessage::PrimitiveEditorEvent {
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetPadsTool(PadsTool::Select)),
+            ..
+        }) => {}
+        other => panic!("expected left-click to arm PadsTool::Select, got {other:?}"),
+    }
+}
