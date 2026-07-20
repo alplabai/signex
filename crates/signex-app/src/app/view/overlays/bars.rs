@@ -353,6 +353,46 @@ impl Signex {
         ]
     }
 
+    /// #370 — "Align…" dialog for the footprint editor. Mounted at the
+    /// same overlay layer as the Move-By modal (a blocking dialog once
+    /// open): a dismiss backdrop that routes to `AlignCancel`, then the
+    /// centered card.
+    pub(in crate::app::view) fn footprint_align_overlay(&self) -> Vec<Element<'_, Message>> {
+        let document = &self.document_state;
+        let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab) else {
+            return Vec::new();
+        };
+        let Some(path) = active_tab.kind.as_footprint_editor() else {
+            return Vec::new();
+        };
+        let Some(editor) = self.document_state.footprint_editors.get(path) else {
+            return Vec::new();
+        };
+        let tokens = &document.panel_ctx.tokens;
+        let Some(card) =
+            crate::library::editor::footprint::align_modal::view_align_modal(editor, tokens)
+        else {
+            return Vec::new();
+        };
+        let close_msg = Message::Library(
+            crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                path: path.to_path_buf(),
+                msg: crate::library::messages::PrimitiveEdit::Footprint(
+                    crate::library::messages::FootprintEditorMsg::AlignCancel,
+                ),
+            },
+        );
+        vec![
+            Self::dismiss_layer(close_msg),
+            container(card.map(Message::Library))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x(Length::Fill)
+                .center_y(Length::Fill)
+                .into(),
+        ]
+    }
+
     /// v0.13 — symbol library editor active bar (+ its dropdown overlay)
     /// mounted at the SAME app-view layer as the schematic / footprint
     /// bars.

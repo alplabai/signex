@@ -40,15 +40,6 @@ fn stub(label: &'static str, path: PathBuf) -> DropdownItem<LibraryMessage> {
     DropdownItem::new(label, fp(path, FootprintEditorMsg::ActiveBarStub(label)))
 }
 
-/// "Coming soon" stub item with an icon for visual recognition.
-fn stub_with_icon(
-    label: &'static str,
-    path: PathBuf,
-    icon: iced::widget::svg::Handle,
-) -> DropdownItem<LibraryMessage> {
-    DropdownItem::new(label, fp(path, FootprintEditorMsg::ActiveBarStub(label))).icon(icon)
-}
-
 /// v0.14 — real Align/Distribute/Spacing item, no icon. Emits
 /// [`FootprintEditorMsg::AlignPads`] so the dispatcher
 /// transforms the current pad selection.
@@ -466,14 +457,13 @@ fn select_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessa
 fn align_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessage>> {
     use crate::library::editor::footprint::state::AlignOp;
     vec![
-        // The generic "Align…" dialog launcher stays a stub for v0.14 —
-        // the concrete operations below cover the day-to-day flow; the
-        // dialog (per-axis radio + reference picker) is a later task.
-        DropdownEntry::Item(stub_with_icon(
-            "Align…",
-            path.clone(),
-            ic::icon_dd_align_menu(tid),
-        )),
+        // #370 — the generic "Align…" launcher opens the per-axis Align
+        // dialog (horizontal + vertical op pickers). Label, position and
+        // icon are unchanged; only the wiring moved off the stub.
+        DropdownEntry::Item(
+            DropdownItem::new("Align…", fp(path.clone(), FootprintEditorMsg::AlignOpen))
+                .icon(ic::icon_dd_align_menu(tid)),
+        ),
         DropdownEntry::Separator,
         DropdownEntry::Item(align_item_with_icon(
             "Align Left",

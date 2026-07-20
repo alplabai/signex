@@ -544,6 +544,11 @@ pub(crate) fn apply_footprint_primitive_edit(
         | FootprintEditorMsg::MoveBySetY(..)
         | FootprintEditorMsg::MoveByConfirm
         | FootprintEditorMsg::MoveByCancel
+        | FootprintEditorMsg::AlignOpen
+        | FootprintEditorMsg::AlignSetHorizontal(..)
+        | FootprintEditorMsg::AlignSetVertical(..)
+        | FootprintEditorMsg::AlignConfirm
+        | FootprintEditorMsg::AlignCancel
         | FootprintEditorMsg::ActiveBarAlignSelectionToGrid
         | FootprintEditorMsg::ActiveBarMoveOriginToGrid
         | FootprintEditorMsg::ActiveBarSelectAll
@@ -682,6 +687,17 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         | MoveBySetY(_)
         | MoveByConfirm
         | MoveByCancel
+        // #370 — Align dialog open/edit/cancel are pure UI state (the
+        // chosen ops live on `align_modal`, not persisted geometry);
+        // Confirm pushes its OWN single snapshot inside the handler,
+        // gated on a large-enough selection and at least one chosen
+        // op — so keep every Align* variant out of the blanket
+        // pre-push to avoid double-stacking / snapshotting a no-op.
+        | AlignOpen
+        | AlignSetHorizontal(_)
+        | AlignSetVertical(_)
+        | AlignConfirm
+        | AlignCancel
         // v0.14 — 3D Body mint pushes its own snapshot inside the
         // handler (unconditionally, unlike nudge). Keep it out of the
         // blanket pre-push to avoid double-stacking the history.
