@@ -449,6 +449,11 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                 | SketchTool::RectPattern
                 | SketchTool::CircularPattern => transform::apply(editor, &ctx, tool),
                 SketchTool::Fillet | SketchTool::Trim => edit::apply(editor, &ctx, tool),
+                // #361 — Drag Track End is not a click-to-place gesture:
+                // it arms an endpoint drag on PRESS in the canvas
+                // (`try_drag_track_end_grab`) and never publishes a
+                // SketchToolClick, so this dispatch is unreachable for it.
+                SketchTool::DragTrackEnd => {}
             }
             // v0.24 Track D — buffer is consumed once per click. The
             // user has to type again before the next gesture step,

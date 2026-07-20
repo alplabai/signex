@@ -284,6 +284,11 @@ impl FootprintCanvas<'_> {
                 id: select_id,
                 shift: false,
             }),
+            // #361 — Drag Track End arms its endpoint grab on PRESS
+            // (`try_drag_track_end_grab`); a release reaching here means
+            // the press missed every line, so an un-moved empty click is
+            // a no-op — it never places geometry.
+            SketchTool::DragTrackEnd => return None,
             SketchTool::Point => EditorMsg::Footprint(FootprintEditorMsg::SketchPlacePoint {
                 x_mm: click_world.0,
                 y_mm: click_world.1,

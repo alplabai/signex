@@ -66,6 +66,15 @@ pub enum SketchTool {
     /// you want gone. EDA use: cleaning up overlapping silk/outline
     /// without manual delete + redraw.
     Trim,
+    /// #361 — "Drag Track End" (Place ▸ Drag Track End). An
+    /// endpoint-biased segment grab: a left-press anywhere on a sketch
+    /// `Line` grabs that line's NEARER endpoint and drives the existing
+    /// Point-drag path (`try_drag_track_end_grab` → `DragState.sketch_point`
+    /// in `canvas/input/`), so the endpoint follows the cursor with the
+    /// solver live — no 12 px point-snap precision required. Not a
+    /// placement tool: it never mints geometry, it only re-arms the
+    /// endpoint drag. Arc / circle endpoints are out of scope.
+    DragTrackEnd,
 }
 
 /// Transient per-tool gesture state. The canvas Program reads + writes
