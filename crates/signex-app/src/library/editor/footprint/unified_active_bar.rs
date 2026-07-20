@@ -17,19 +17,6 @@ use crate::icons as ic;
 use crate::library::editor::footprint::state::{EditorMode, FpActiveBarMenu};
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 
-// v0.26-H — layout constants for per-button dropdown positioning.
-// MUST stay in sync with `signex_widgets::active_bar` (BTN_SIZE,
-// SEP_W, BAR_PADDING, ROW_SPACING). Drift here = misaligned
-// dropdowns; the widget's constants are private so we mirror them.
-const BTN_SIZE: f32 = 26.0;
-const SEP_W: f32 = 1.0;
-const BAR_PADDING: f32 = 2.0;
-const ROW_SPACING: f32 = 2.0;
-/// Per-step horizontal advance: a button + the spacing after it.
-const STEP_BTN: f32 = BTN_SIZE + ROW_SPACING;
-/// Per-step horizontal advance for a separator: width + spacing.
-const STEP_SEP: f32 = SEP_W + ROW_SPACING;
-
 /// Build the bar items only — caller mounts via
 /// `signex_widgets::active_bar::view(items, tokens)` so the chain is
 /// identical to the schematic.
@@ -58,53 +45,39 @@ pub fn bar_items(
     items
 }
 
-/// v0.26-H — horizontal offset (in px) of a dropdown trigger
-/// button's LEFT edge, measured from the bar's own left edge.
-/// Use [`bar_width`] to convert to a window-absolute coordinate:
-///   `abs_x = bar_left_x + dropdown_x_offset(menu)`
-/// where `bar_left_x = (window_width - bar_width) / 2.0`.
+/// Where `menu`'s trigger button sits: its left edge in px from the
+/// bar's own left edge, plus the bar's total width. `None` when the
+/// current bar has no trigger for that menu (the two sketch group
+/// menus only exist in `EditorMode::Sketch`).
 ///
-/// Order matches [`dropdown_trigger_items`]: Filter, Snap, Place,
-/// Select, Align, Body3d, Text, Shapes. The bar starts with these
-/// 8 buttons before any separator, so each step is one
-/// [`STEP_BTN`].
-pub fn dropdown_x_offset(menu: FpActiveBarMenu) -> f32 {
-    let idx: f32 = match menu {
-        FpActiveBarMenu::Filter => 0.0,
-        FpActiveBarMenu::Snap => 1.0,
-        FpActiveBarMenu::Place => 2.0,
-        FpActiveBarMenu::Select => 3.0,
-        FpActiveBarMenu::Align => 4.0,
-        FpActiveBarMenu::Body3d => 5.0,
-        FpActiveBarMenu::Text => 6.0,
-        FpActiveBarMenu::Shapes => 7.0,
+/// Both numbers are **derived from the items the bar just built**, not
+/// from a table of slot indices. That matters: the previous version
+/// hand-maintained a `Filter => 0, Snap => 1, …` index map plus its own
+/// copies of the widget's pixel constants, so every button added,
+/// removed, or reordered was a chance to silently misplace every panel.
+///
+/// The trigger is located by its *message*, not its position — every
+/// menu trigger publishes `ToggleActiveBarMenu(menu)` on right-press,
+/// while the left-press action varies (Place / Select / Text arm a tool
+/// instead). Nothing else on the bar sends that message.
+fn menu_trigger_geometry(
+    items: &[ActiveBarItem<LibraryMessage>],
+    menu: FpActiveBarMenu,
+) -> (Option<f32>, f32) {
+    let (offsets, total) = signex_widgets::active_bar::slot_offsets(items);
+    let opens = |item: &ActiveBarItem<LibraryMessage>| -> bool {
+        let ActiveBarItem::Button(b) = item else {
+            return false;
+        };
+        matches!(
+            &b.on_right_press,
+            Some(LibraryMessage::PrimitiveEditorEvent {
+                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::ToggleActiveBarMenu(m)),
+                ..
+            }) if *m == menu
+        )
     };
-    BAR_PADDING + idx * STEP_BTN
-}
-
-/// v0.26-H — total bar width in px. Mirrors the [`bar_items`] item
-/// list so dropdown positioning math knows where the bar's left
-/// edge sits when iced auto-sizes + centre-aligns the bar.
-pub fn bar_width(editor: &FootprintEditorState, theme_id: ThemeId, tokens: &ThemeTokens) -> f32 {
-    let items = bar_items(editor, theme_id, tokens);
-    let mut w = 2.0 * BAR_PADDING;
-    for (i, item) in items.iter().enumerate() {
-        if i > 0 {
-            w += ROW_SPACING;
-        }
-        match item {
-            ActiveBarItem::Button(_) => w += BTN_SIZE,
-            ActiveBarItem::Separator => w += SEP_W,
-            // Sketch-mode bar uses one Custom item for the dimension
-            // input (58 px wide). Approximation: 60 px. Off-by-a-few
-            // px is fine — the dropdown trigger buttons live in the
-            // first 8 slots BEFORE any Custom item, so the offset
-            // computation itself stays exact; only the bar's centre
-            // alignment drifts by half the estimate error.
-            ActiveBarItem::Custom(_) => w += 60.0,
-        }
-    }
-    w
+    (items.iter().position(opens).map(|i| offsets[i]), total)
 }
 
 /// Build the dropdown overlay (panel + click-outside backstop) for
@@ -152,19 +125,28 @@ pub fn dropdown_overlay<'a>(
         FpActiveBarMenu::Body3d => Some(200.0),
         FpActiveBarMenu::Text => Some(180.0),
         FpActiveBarMenu::Shapes => Some(220.0),
+        // Wide enough for "Rounded Rectangle" / "Rectangular Pattern" /
+        // "Make Pad from Profile" plus the leading icon.
+        FpActiveBarMenu::SketchCreate => Some(230.0),
+        FpActiveBarMenu::SketchModify => Some(250.0),
     };
     let panel = signex_widgets::active_bar_dropdown::view(entries, tokens, width_hint);
 
-    // v0.26-H — compute the dropdown's absolute window x as
-    //   bar_left + dropdown_x_offset(menu)
-    // where bar_left = (window_width - bar_width) / 2 (since the
-    // mounting site centre-aligns the bar). Clamp the dropdown's
-    // right edge inside the viewport so a near-rightmost button
-    // still keeps its panel fully visible.
-    let bar_w = bar_width(editor, theme_id, tokens);
+    // v0.26-H — the panel lands under its own trigger button:
+    //   bar_left + <that button's offset within the bar>
+    // where bar_left = (window_width - bar_width) / 2, since the
+    // mounting site centre-aligns the bar. Both come from measuring
+    // the items this same bar just built. Clamp the panel's right edge
+    // inside the viewport so a near-rightmost button still keeps it
+    // fully visible.
+    let (trigger_x, bar_w) = menu_trigger_geometry(&bar_items(editor, theme_id, tokens), menu);
+    // No trigger on the current bar means nothing to anchor to — a
+    // stale menu key from a mode switch. Draw nothing rather than
+    // park a panel over an unrelated button.
+    let trigger_x = trigger_x?;
     let bar_left = ((window_width - bar_w) / 2.0).max(0.0);
     let panel_w = width_hint.unwrap_or(220.0);
-    let raw_x = bar_left + dropdown_x_offset(menu);
+    let raw_x = bar_left + trigger_x;
     let edge_margin: f32 = 4.0;
     let abs_x = if raw_x + panel_w + edge_margin > window_width {
         (window_width - panel_w - edge_margin).max(0.0)
@@ -186,6 +168,104 @@ pub fn dropdown_overlay<'a>(
     });
 
     Some(Stack::new().push(backstop).push(panel_anchor).into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_widgets::active_bar::{BAR_PADDING, BTN_SIZE, ROW_SPACING};
+
+    fn editor_in(
+        mode: crate::library::editor::footprint::state::EditorMode,
+    ) -> FootprintEditorState {
+        use signex_library::{Footprint, FootprintFile};
+        let file = FootprintFile::from_footprint(Footprint::empty("t"));
+        let mut editor =
+            crate::app::FootprintEditorState::new(std::path::PathBuf::from("t.snxfpt"), file);
+        editor.state.mode = mode;
+        editor
+    }
+
+    /// Panel anchors are located by scanning the built bar for the
+    /// button that opens each menu. Confirm the scan actually finds
+    /// them, in the right order, and that a menu whose trigger isn't on
+    /// the current bar reports `None` instead of a bogus offset.
+    #[test]
+    fn menu_triggers_are_located_by_message_not_by_index() {
+        use crate::library::editor::footprint::state::EditorMode;
+        use signex_types::theme::{ThemeId, theme_tokens};
+
+        let tid = ThemeId::Signex;
+        let tokens = theme_tokens(tid);
+
+        let sketch = editor_in(EditorMode::Sketch);
+        let items = bar_items(&sketch, tid, &tokens);
+        let at = |m| menu_trigger_geometry(&items, m).0;
+
+        // The first shared trigger sits flush against the bar padding.
+        assert_eq!(at(FpActiveBarMenu::Filter), Some(BAR_PADDING));
+        // Later shared triggers advance one button-plus-spacing each.
+        assert_eq!(
+            at(FpActiveBarMenu::Snap),
+            Some(BAR_PADDING + BTN_SIZE + ROW_SPACING)
+        );
+        // Both sketch groups are present, Create left of Modify, and
+        // both right of every shared trigger.
+        let (create, modify) = (
+            at(FpActiveBarMenu::SketchCreate).expect("Create trigger missing in Sketch mode"),
+            at(FpActiveBarMenu::SketchModify).expect("Modify trigger missing in Sketch mode"),
+        );
+        assert!(create < modify);
+        assert!(at(FpActiveBarMenu::Shapes).is_some_and(|shapes| shapes < create));
+
+        // Pads mode has no sketch group triggers — and must say so
+        // rather than hand back a stale offset.
+        let pads = editor_in(EditorMode::Normal);
+        let pads_items = bar_items(&pads, tid, &tokens);
+        assert_eq!(
+            menu_trigger_geometry(&pads_items, FpActiveBarMenu::SketchCreate).0,
+            None
+        );
+        assert!(
+            menu_trigger_geometry(&pads_items, FpActiveBarMenu::Filter)
+                .0
+                .is_some()
+        );
+    }
+
+    /// The measured width has to match what the bar actually draws, or
+    /// the centre-aligned bar's left edge is wrong and every panel
+    /// shifts by half the error. Guards the Custom slot in particular:
+    /// its width is declared, not measured.
+    #[test]
+    fn bar_width_counts_every_slot_including_the_custom_one() {
+        use crate::library::editor::footprint::sketch_mode::active_bar::DIM_INPUT_W;
+        use crate::library::editor::footprint::state::EditorMode;
+        use signex_types::theme::{ThemeId, theme_tokens};
+
+        let tid = ThemeId::Signex;
+        let tokens = theme_tokens(tid);
+        let editor = editor_in(EditorMode::Sketch);
+        let items = bar_items(&editor, tid, &tokens);
+
+        let customs = items
+            .iter()
+            .filter(|i| matches!(i, ActiveBarItem::Custom { .. }))
+            .count();
+        assert_eq!(customs, 1, "sketch bar should carry the dimension input");
+
+        let expected: f32 = 2.0 * BAR_PADDING
+            + items.iter().map(|i| i.width()).sum::<f32>()
+            + ROW_SPACING * (items.len() - 1) as f32;
+        let (_, measured) = menu_trigger_geometry(&items, FpActiveBarMenu::Filter);
+        assert!(
+            (measured - expected).abs() < 0.01,
+            "{measured} vs {expected}"
+        );
+        // And the Custom slot is contributing its declared width, not a
+        // button's — the bug that shifted every panel ~13 px right.
+        assert!(DIM_INPUT_W > BTN_SIZE);
+    }
 }
 
 /// Build the 8 dropdown trigger buttons matching the schematic's

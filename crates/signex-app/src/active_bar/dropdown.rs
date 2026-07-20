@@ -582,16 +582,21 @@ fn dropdown_min_width(menu: ActiveBarMenu) -> Option<f32> {
 
 /// Horizontal offset (in px) to align dropdown below a given button index.
 pub fn dropdown_x_offset(menu: ActiveBarMenu) -> f32 {
-    // Bar layout (`view_bar`): each `ab_icon_btn` is a 26 px container,
-    // separators are `width(1)`, the row uses `.spacing(2)`, the bar
-    // container uses `.padding([2, 2])`. So advancing past one button
-    // costs 26 + 2 = 28 px and advancing past one separator costs
-    // 1 + 2 = 3 px.
+    // Bar layout (`view_bar`), in the widget's own constants so the
+    // pixel geometry has one home. Advancing past one button costs
+    // BTN_SIZE + ROW_SPACING; past one separator, SEP_W + ROW_SPACING.
+    //
+    // The index map below is still hand-maintained, unlike the
+    // footprint bar's — converting it needs `view_bar` split into a
+    // `bar_items()` the offsets can be measured from, which is its own
+    // change. It is correct today: the bar's only Custom slot (the
+    // draw-mode pill) is appended after all thirteen triggers.
+    use signex_widgets::active_bar::{BAR_PADDING, BTN_SIZE, ROW_SPACING, SEP_W};
     // Layout: [Filter][Move] | [Select][Align] | [Wire][Power] | [Harness][Sheet][Port][Dir] | [Text][Shapes][NetColor]
     //  btn:     0      1    s    2      3     s   4      5    s    6      7     8    9    s  10     11     12
-    let btn = 28.0_f32;
-    let s = 3.0_f32;
-    let pad = 2.0_f32;
+    let btn = BTN_SIZE + ROW_SPACING;
+    let s = SEP_W + ROW_SPACING;
+    let pad = BAR_PADDING;
     pad + match menu {
         ActiveBarMenu::Filter => 0.0,
         ActiveBarMenu::Select => btn,

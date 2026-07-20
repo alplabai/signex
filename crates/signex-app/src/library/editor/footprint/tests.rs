@@ -211,6 +211,41 @@ fn default_editor() -> crate::app::FootprintEditorState {
     crate::app::FootprintEditorState::new(std::path::PathBuf::from("t.snxfpt"), file)
 }
 
+/// Esc used to have no effect on the footprint editor's right-click
+/// menu — the only way out was clicking somewhere harmless. It now
+/// closes the menu, and stops there, so backing out of a menu doesn't
+/// also throw away the selection the menu was opened to act on.
+#[test]
+fn escape_closes_context_menu_before_clearing_selection() {
+    use crate::library::editor::footprint::state::{
+        FootprintContextMenuState, FootprintContextTarget,
+    };
+    use crate::library::editor::footprint::updates::apply_footprint_primitive_edit as apply;
+    use crate::library::messages::FootprintEditorMsg::ToolEscape;
+
+    let mut editor = default_editor();
+    editor.state.add_pad_at(0.0, 0.0);
+    editor.state.selected_pad = Some(0);
+    editor.state.context_menu = Some(FootprintContextMenuState {
+        x: 40.0,
+        y: 60.0,
+        target: FootprintContextTarget::Pad(0),
+        submenu: None,
+    });
+
+    apply(&mut editor, ToolEscape);
+    assert!(editor.state.context_menu.is_none(), "menu should close");
+    assert_eq!(
+        editor.state.selected_pad,
+        Some(0),
+        "closing the menu must not drop the selection it acts on"
+    );
+
+    // Second Esc, no menu open — now the tool/selection reset runs.
+    apply(&mut editor, ToolEscape);
+    assert!(editor.state.selected_pad.is_none());
+}
+
 fn place_move_button(
     editor: crate::app::FootprintEditorState,
 ) -> signex_widgets::active_bar::ActiveBarItem<crate::library::messages::LibraryMessage> {

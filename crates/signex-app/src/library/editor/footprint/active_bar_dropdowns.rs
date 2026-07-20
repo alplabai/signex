@@ -93,7 +93,117 @@ pub fn entries(
         FpActiveBarMenu::Body3d => body3d_entries(state, path),
         FpActiveBarMenu::Text => text_entries(state, path, tid),
         FpActiveBarMenu::Shapes => shapes_entries(path, tid),
+        FpActiveBarMenu::SketchCreate => sketch_create_entries(state, path, tid),
+        FpActiveBarMenu::SketchModify => sketch_modify_entries(state, path, tid),
     }
+}
+
+/// Sketch ▸ Create — the six geometry tools that used to sit as six
+/// separate always-visible buttons on the sketch bar. Each row arms
+/// the tool via [`FootprintEditorMsg::ActiveBarSetSketchTool`], which
+/// also dismisses the menu; the armed one carries a checkmark so the
+/// user can see what's in hand without closing the menu first.
+fn sketch_create_entries(
+    state: &FootprintEditorState,
+    path: PathBuf,
+    tid: ThemeId,
+) -> Vec<DropdownEntry<LibraryMessage>> {
+    let armed = state.active_tool;
+    let arm = |tool: SketchTool| -> LibraryMessage {
+        fp(
+            path.clone(),
+            FootprintEditorMsg::ActiveBarSetSketchTool(tool),
+        )
+    };
+    let row = |label: &'static str,
+               tool: SketchTool,
+               icon: iced::widget::svg::Handle|
+     -> DropdownEntry<LibraryMessage> {
+        DropdownEntry::Item(
+            DropdownItem::new(label, arm(tool))
+                .icon(icon)
+                .checked(armed == tool),
+        )
+    };
+    vec![
+        DropdownEntry::Header("Create".into()),
+        row("Line", SketchTool::Line, ic::icon_shape_line(tid)),
+        row("Rectangle", SketchTool::Rectangle, ic::icon_shape_rect(tid)),
+        row(
+            "Rounded Rectangle",
+            SketchTool::RoundedRectangle,
+            ic::icon_sk_rounded_rect(tid),
+        ),
+        row("Circle", SketchTool::Circle, ic::icon_shape_circle(tid)),
+        row("Arc", SketchTool::Arc, ic::icon_shape_arc(tid)),
+        row(
+            "Tangent Arc",
+            SketchTool::TangentArc,
+            ic::icon_shape_arc(tid),
+        ),
+    ]
+}
+
+/// Sketch ▸ Modify — the six edit tools plus the one-shot Make Pad
+/// action. Mirror / Offset / the two Pattern tools consume a
+/// selection, so they grey out with an explanatory label when nothing
+/// is selected rather than arming a tool that would only warn.
+fn sketch_modify_entries(
+    state: &FootprintEditorState,
+    path: PathBuf,
+    tid: ThemeId,
+) -> Vec<DropdownEntry<LibraryMessage>> {
+    let armed = state.active_tool;
+    let has_selection = state.selected_sketch.is_some()
+        || state.selected_sketch_secondary.is_some()
+        || !state.selected_sketch_extra.is_empty();
+    let arm = |tool: SketchTool| -> LibraryMessage {
+        fp(
+            path.clone(),
+            FootprintEditorMsg::ActiveBarSetSketchTool(tool),
+        )
+    };
+    let row = |label: &'static str,
+               tool: SketchTool,
+               icon: iced::widget::svg::Handle,
+               needs_selection: bool|
+     -> DropdownEntry<LibraryMessage> {
+        DropdownEntry::Item(
+            DropdownItem::new(label, arm(tool))
+                .icon(icon)
+                .checked(armed == tool)
+                .disabled(needs_selection && !has_selection),
+        )
+    };
+    vec![
+        DropdownEntry::Header("Modify".into()),
+        row("Fillet", SketchTool::Fillet, ic::icon_sk_fillet(tid), false),
+        row("Trim", SketchTool::Trim, ic::icon_sk_trim(tid), false),
+        DropdownEntry::Separator,
+        DropdownEntry::Header("Needs a selection".into()),
+        row("Mirror", SketchTool::Mirror, ic::icon_sk_mirror(tid), true),
+        row("Offset", SketchTool::Offset, ic::icon_sk_offset(tid), true),
+        row(
+            "Rectangular Pattern",
+            SketchTool::RectPattern,
+            ic::icon_sk_rect_pattern(tid),
+            true,
+        ),
+        row(
+            "Circular Pattern",
+            SketchTool::CircularPattern,
+            ic::icon_sk_circular_pattern(tid),
+            true,
+        ),
+        DropdownEntry::Separator,
+        DropdownEntry::Item(
+            DropdownItem::new(
+                "Make Pad from Profile",
+                fp(path, FootprintEditorMsg::SketchMakePadFromProfile),
+            )
+            .icon(ic::icon_sk_make_pad(tid)),
+        ),
+    ]
 }
 
 fn filter_entries(

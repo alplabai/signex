@@ -49,6 +49,14 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
             editor.state.pads_tool = crate::library::editor::footprint::state::PadsTool::Select;
             editor.state.active_tool = crate::library::editor::footprint::state::SketchTool::Select;
             editor.state.tool_pending = crate::library::editor::footprint::state::ToolPending::Idle;
+            // Same reason, for the open dropdown: Sketch ▸ Create and
+            // Sketch ▸ Modify only have a trigger button while the bar
+            // is in Sketch mode, so a mode change with one of them open
+            // would strand the panel over a button that no longer
+            // exists. (Mouse-driven mode changes can't reach here with
+            // a menu open — the dropdown's backstop eats the click —
+            // but a keyboard shortcut can.)
+            editor.state.active_bar_menu = None;
             editor.state.mode = mode;
             // Run the dispatcher so the sketch is initialised + solved
             // on first switch into Sketch mode (or no-op otherwise).
@@ -144,6 +152,20 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
             editor.canvas_cache.clear();
         }
         FootprintEditorMsg::ToolEscape => {
+            // Esc unwinds the deepest thing first — the same ladder
+            // `bootstrap::subscription` walks for modals, and what the
+            // symbol editor already does. With the right-click menu
+            // open, Esc dismisses it and stops there; falling through
+            // would ALSO drop the pad selection the menu was opened to
+            // act on, so the user loses their selection just for
+            // backing out of a menu. Until now the footprint editor had
+            // no Esc path for its context menu at all — the only way
+            // out was a click somewhere harmless.
+            if editor.state.context_menu.is_some() {
+                editor.state.context_menu = None;
+                editor.canvas_cache.clear();
+                return;
+            }
             // v0.15 — global Esc tool cancel. Resets both Pads and
             // Sketch tool state, mode-agnostic.
             editor.state.pads_tool = crate::library::editor::footprint::state::PadsTool::Select;

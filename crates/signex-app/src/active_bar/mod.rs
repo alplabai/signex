@@ -700,7 +700,14 @@ pub fn view_bar<'a>(
                     ..button::Style::default()
                 })
                 .into();
-        items.push(ActiveBarItem::Custom(pill));
+        // 42 px fits the widest label ("90°" / "45°" / "Any") at size
+        // 12 plus the 7 px side padding. Declared rather than measured
+        // because `slot_offsets` places every dropdown from these
+        // widths — see `ActiveBarItem::Custom`. This pill sits AFTER
+        // every dropdown trigger on this bar, so an error here would
+        // only shift the bar's centring, not the panels; state it
+        // correctly anyway.
+        items.push(ActiveBarItem::custom(pill, 42.0));
     }
 
     signex_widgets::active_bar::view(items, tokens)
