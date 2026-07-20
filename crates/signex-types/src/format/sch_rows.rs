@@ -287,7 +287,7 @@ pub(in crate::format) fn symbol_to_row(s: &Symbol) -> SchComponentRow {
 }
 
 pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtras) -> Symbol {
-    let mut fields = extras.fields.clone();
+    let mut fields: std::collections::HashMap<String, String> = extras.fields.into_iter().collect();
     // LO-6: precedence is `extras.fields["MPN"] > row.mpn`. The TSV row
     // column wins ONLY when no extras-side `MPN` is set, mirroring how
     // `symbol_to_row` populates the column from `fields["MPN"]`. A
@@ -325,7 +325,7 @@ pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtra
         locked: extras.locked,
         fields,
         custom_properties: extras.custom_properties,
-        pin_uuids: extras.pin_uuids,
+        pin_uuids: extras.pin_uuids.into_iter().collect(),
         library_id: None,
         row_id: None,
         library_version: String::new(),

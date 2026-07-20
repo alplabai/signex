@@ -1,7 +1,7 @@
 //! Move + box-select operations for the symbol editor.
 
-use super::*;
 use super::rotation::{pin_body_delta, translate_graphic_to};
+use super::*;
 
 /// Move the currently-selected element to a new canvas position.
 /// Coordinates are in mm; callers should snap to the grid first.
@@ -188,6 +188,10 @@ fn graphic_fully_inside_box(
                 && position[1] - h >= ymin
                 && position[1] + h <= ymax
         }
+        SymbolGraphicKind::Polygon { vertices } => match polygon_bbox(vertices) {
+            Some((gx0, gy0, gx1, gy1)) => gx0 >= xmin && gx1 <= xmax && gy0 >= ymin && gy1 <= ymax,
+            None => false,
+        },
     }
 }
 
@@ -216,7 +220,24 @@ fn graphic_intersects_box(
                 && position[1] - h <= ymax
                 && position[1] + h >= ymin
         }
+        SymbolGraphicKind::Polygon { vertices } => match polygon_bbox(vertices) {
+            Some((gx0, gy0, gx1, gy1)) => gx0 <= xmax && gx1 >= xmin && gy0 <= ymax && gy1 >= ymin,
+            None => false,
+        },
     }
+}
+
+/// Axis-aligned bounding box over a polygon's vertices. `None` for an
+/// empty vertex list (degenerate — box-select treats it as a miss).
+fn polygon_bbox(vertices: &[[f64; 2]]) -> Option<(f64, f64, f64, f64)> {
+    let mut bounds: Option<(f64, f64, f64, f64)> = None;
+    for v in vertices {
+        bounds = Some(match bounds {
+            Some((x0, y0, x1, y1)) => (x0.min(v[0]), y0.min(v[1]), x1.max(v[0]), y1.max(v[1])),
+            None => (v[0], v[1], v[0], v[1]),
+        });
+    }
+    bounds
 }
 
 fn segment_crosses_box(
@@ -254,4 +275,3 @@ fn segments_intersect(a: [f64; 2], b: [f64; 2], c: [f64; 2], d: [f64; 2]) -> boo
     ((d1 > 0.0 && d2 < 0.0) || (d1 < 0.0 && d2 > 0.0))
         && ((d3 > 0.0 && d4 < 0.0) || (d3 < 0.0 && d4 > 0.0))
 }
-

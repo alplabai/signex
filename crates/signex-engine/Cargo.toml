@@ -3,6 +3,7 @@ name = "signex-engine"
 description = "Editing engine skeleton for Signex EDA"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 
 [dependencies]

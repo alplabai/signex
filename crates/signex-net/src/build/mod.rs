@@ -10,11 +10,14 @@
 //!
 //! Scope (ADR-0001 A3.1): single sheet only — no hierarchy; net names come
 //! from the highest-priority label on the net, matching the current ERC
-//! semantics. Same-name label *merging* and cross-sheet stitching are
-//! deferred to a later increment.
+//! semantics. Single-sheet same-name label *merging* is applied here, by
+//! [`SheetConnectivity::merge_named_labels`], and every consumer of that type
+//! is expected to apply it too. Only cross-sheet stitching lives elsewhere
+//! (the project-level stitcher) and is deferred to a later increment.
 
 use std::collections::{HashMap, HashSet};
 
+use signex_types::designator::compare_references;
 use signex_types::net::{Net, NetId, Netlist, Terminal};
 use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, SymbolTransform};
 use uuid::Uuid;
@@ -22,8 +25,10 @@ use uuid::Uuid;
 use crate::uf::{Key, find as uf_find, union as uf_union};
 
 /// 1 µm integer bucket — the union-find key space and the single definition of
-/// "same point" for the whole derivation (D5.5). Matches ERC's `pt_key`.
-pub(crate) fn pt_key(p: &Point) -> Key {
+/// "same point" for the whole derivation (D5.5). `pub` so `signex-erc`'s rules
+/// can compare positions with the exact same metric instead of hand-rolling a
+/// second float-epsilon `same()` (issue #388).
+pub fn pt_key(p: &Point) -> Key {
     ((p.x * 1000.0).round() as i64, (p.y * 1000.0).round() as i64)
 }
 
@@ -40,7 +45,12 @@ pub(crate) fn pt_key(p: &Point) -> Key {
 /// the wire. The real fix is exact integer-nanometre coordinates (the schematic
 /// model still stores `f64` mm); that migration is the future coordinate ADR's
 /// job, and until then exact collinearity is the safe, deterministic rule.
-pub(crate) fn point_on_segment(p: Key, a: Key, b: Key) -> bool {
+///
+/// `pub` so callers outside this crate (`signex-erc`'s rules) can anchor a
+/// point to a wire's interior the same way [`merged_sheet_parent`] anchors
+/// labels, instead of re-deriving an endpoint-only approximation that
+/// disagrees with the netlist on mid-wire taps (issue #388).
+pub fn point_on_segment(p: Key, a: Key, b: Key) -> bool {
     let cross =
         (b.0 - a.0) as i128 * (p.1 - a.1) as i128 - (b.1 - a.1) as i128 * (p.0 - a.0) as i128;
     if cross != 0 {
@@ -193,6 +203,76 @@ impl SheetConnectivity {
     pub fn root_of(&mut self, p: &Point) -> Key {
         uf_find(&mut self.parent, pt_key(p))
     }
+
+    /// The net root of `p` after anchoring it to any wire in `wires` whose
+    /// segment it lies on — endpoint **or interior** — via
+    /// [`point_on_segment`], the same anchoring [`merged_sheet_parent`]
+    /// applies to labels before computing net roots. Use this (not
+    /// [`root_of`](Self::root_of)) for points that are not themselves wire
+    /// endpoints, such as a Net/Global/Power label sitting mid-span, so a
+    /// "same net" comparison agrees with [`build_netlist`] by construction
+    /// (issue #388) instead of missing the interior tap.
+    ///
+    /// Anchor only against the segments this connectivity was **built from**.
+    /// For net connectivity — anything derived from `sheet.wires` — that means
+    /// wire segments and never buses: a bus is a member bundle, not a single
+    /// net, `build_netlist` never anchors labels against buses either, and
+    /// anchoring to a bus interior would make the caller more lenient than the
+    /// netlist (D5.4). A **bus-local** connectivity built only from bus
+    /// segments (`from_segments(&buses, &[])`, as `bus_bit_width_mismatch`
+    /// uses to group range labels per bundle) is the one exception: it models
+    /// bundle grouping, which the netlist does not derive at all, so there is
+    /// no netlist to diverge from and its own bus segments are the correct
+    /// anchor (issue #395). Mixing the two — anchoring bus segments into wire
+    /// connectivity — is what D5.4 forbids.
+    pub fn root_of_anchored(&mut self, p: &Point, segments: &[(Point, Point)]) -> Key {
+        let pk = pt_key(p);
+        for (a, b) in segments {
+            if point_on_segment(pk, pt_key(a), pt_key(b)) {
+                uf_union(&mut self.parent, pk, pt_key(a));
+                break;
+            }
+        }
+        uf_find(&mut self.parent, pk)
+    }
+
+    /// The *logical* layer on top of the physical connectivity: anchor each
+    /// label to the wire it sits on (endpoint or interior, via
+    /// [`root_of_anchored`](Self::root_of_anchored)), then merge net roots that
+    /// share a same-name label whose kind joins by name — `Global`, `Power`,
+    /// local `Net`. `Hierarchical` is excluded: it binds to a parent sheet's
+    /// pins, not to same-name peers, and is left to cross-sheet stitching.
+    ///
+    /// Labels arrive as plain `(position, kind, text)` tuples so consumers
+    /// outside `signex-net` — which hold their own snapshot types, not a
+    /// [`SchematicSheet`] — apply the *same* merge instead of re-deriving a
+    /// geometry-only copy that reports more nets than [`build_netlist`] does
+    /// (issues #388, #396, #404).
+    ///
+    /// Anchoring and merging are both unions and [`uf_union`] re-`find`s its
+    /// operands, so a representative re-pointed by a later merge never leaks a
+    /// stale root. Callers must still read every root *after* this returns.
+    pub fn merge_named_labels<'a>(
+        &mut self,
+        labels: impl IntoIterator<Item = (Point, LabelType, &'a str)>,
+        segments: &[(Point, Point)],
+    ) {
+        let mut name_root: HashMap<&'a str, Key> = HashMap::new();
+        for (pos, kind, text) in labels {
+            let root = self.root_of_anchored(&pos, segments);
+            if text.is_empty()
+                || !matches!(kind, LabelType::Global | LabelType::Power | LabelType::Net)
+            {
+                continue;
+            }
+            match name_root.get(text) {
+                Some(&existing) => uf_union(&mut self.parent, root, existing),
+                None => {
+                    name_root.insert(text, root);
+                }
+            }
+        }
+    }
 }
 
 /// The wire and junction uuids the net-colour flood should paint when the
@@ -206,13 +286,16 @@ pub struct FloodElements {
 
 /// Every wire and junction on the same net as `target_wire`, for the
 /// net-colour flood. Returns `None` when `target_wire` is not a wire in
-/// `sheet`. Uses the same [`SheetConnectivity`] core as [`build_netlist`], so
-/// the highlight follows the real net exactly — it can neither bleed across
-/// nets (the old 0.01 mm-bucket over-merge) nor miss a T-junction the way the
-/// app's previous inline union-find did.
+/// `sheet`. Uses the same [`merged_connectivity`] as [`build_netlist`], so the
+/// highlight follows the real net exactly — it can neither bleed across nets
+/// (the old 0.01 mm-bucket over-merge) nor miss a T-junction the way the app's
+/// previous inline union-find did, and it paints *every* wire on the net,
+/// including a physically disjoint one joined only by a same-name label
+/// (issue #404 — a physical-only flood contradicted the netlist it claims to
+/// colour).
 pub fn flood_net_elements(sheet: &SchematicSheet, target_wire: Uuid) -> Option<FloodElements> {
     let target = sheet.wires.iter().find(|w| w.uuid == target_wire)?;
-    let mut conn = SheetConnectivity::build(sheet);
+    let mut conn = merged_connectivity(sheet);
     let root = conn.root_of(&target.start);
     let wires = sheet
         .wires
@@ -236,45 +319,29 @@ pub fn flood_net_elements(sheet: &SchematicSheet, target_wire: Uuid) -> Option<F
 /// sampled: sampling a root and then mutating the map again is a correctness
 /// hazard the two-level stitcher relies on this to avoid.
 pub(crate) fn merged_sheet_parent(sheet: &SchematicSheet) -> HashMap<Key, Key> {
-    // Start from the physical connectivity core (wires + junction T-merges),
-    // owned so the label-merge below never disturbs what the net-flood reads
-    // through `SheetConnectivity`.
-    let mut parent = SheetConnectivity::build(sheet).parent;
+    merged_connectivity(sheet).parent
+}
 
-    // Anchor each label to the wire it sits on (endpoint or interior), then
-    // merge net roots that share a same-name label whose kind joins by name,
-    // within this sheet: Global, Power (power nets), and local Net. (Global and
-    // Power also join across sheets by name — the cross-sheet stitcher's job;
-    // here we only see one sheet.) Hierarchical labels join to a parent sheet's
-    // pins, not to same-name peers, so they are left to cross-sheet stitching.
-    let mut name_root: HashMap<&str, Key> = HashMap::new();
-    for lbl in &sheet.labels {
-        let lk = pt_key(&lbl.position);
-        for w in &sheet.wires {
-            if point_on_segment(lk, pt_key(&w.start), pt_key(&w.end)) {
-                uf_union(&mut parent, lk, pt_key(&w.start));
-                break;
-            }
-        }
-        if lbl.text.is_empty()
-            || !matches!(
-                lbl.label_type,
-                LabelType::Global | LabelType::Power | LabelType::Net
-            )
-        {
-            continue;
-        }
-        let root = uf_find(&mut parent, lk);
-        match name_root.get(lbl.text.as_str()) {
-            Some(&existing) => {
-                uf_union(&mut parent, root, existing);
-            }
-            None => {
-                name_root.insert(lbl.text.as_str(), root);
-            }
-        }
-    }
-    parent
+/// The whole per-sheet topology a consumer must read to agree with
+/// [`build_netlist`]: the physical [`SheetConnectivity`] core (wire endpoints +
+/// junction T-merges) **plus** the logical same-name label merge on top. Every
+/// on-sheet consumer — the netlist, the net-colour flood, and ERC across the
+/// crate boundary — goes through this pair; deriving only the physical half is
+/// the #404 defect (a consumer reports more nets than the netlist has).
+///
+/// (`Global` and `Power` also join *across* sheets by name — the cross-sheet
+/// stitcher's job; here we only ever see one sheet.)
+fn merged_connectivity(sheet: &SchematicSheet) -> SheetConnectivity {
+    let mut conn = SheetConnectivity::build(sheet);
+    let segments: Vec<(Point, Point)> = sheet.wires.iter().map(|w| (w.start, w.end)).collect();
+    conn.merge_named_labels(
+        sheet
+            .labels
+            .iter()
+            .map(|l| (l.position, l.label_type, l.text.as_str())),
+        &segments,
+    );
+    conn
 }
 
 /// Group each sheet label under its merged net root, so the highest-priority
@@ -441,7 +508,10 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
 
             let (wires, junctions) = membership.remove(&root).unwrap_or_default();
             let mut terminals = net_terms.remove(&root).unwrap_or_default();
-            terminals.sort_by(|a, b| a.reference.cmp(&b.reference).then(a.pin.cmp(&b.pin)));
+            terminals.sort_by(|a, b| {
+                compare_references(&a.reference, &b.reference)
+                    .then_with(|| compare_references(&a.pin, &b.pin))
+            });
 
             Net {
                 id,

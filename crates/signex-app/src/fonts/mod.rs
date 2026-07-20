@@ -9,6 +9,13 @@
 //! on Windows, `~/Library/Application Support/signex/prefs.json` on
 //! macOS, `$XDG_CONFIG_HOME/signex/prefs.json` on Linux).
 //! Format: `{"ui_font": "Roboto"}`
+//!
+//! Fallback: if the OS reports no config directory at all
+//! (`dirs::config_dir()` returns `None` — rare, e.g. a daemon or
+//! container with neither `$HOME` nor `$XDG_CONFIG_HOME`), preferences
+//! resolve to a per-user subdirectory of the OS temp dir instead (see
+//! [`production_temp_fallback_path`]), and a `tracing::warn!` names the
+//! fact that they will not survive a temp-directory sweep.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
@@ -173,19 +180,78 @@ pub fn system_font_families() -> &'static Vec<String> {
 ///
 /// Computed once per process (via `OnceLock`) so the legacy-prefs
 /// migration runs at most once.
+///
+/// Under `cfg(test)` (signex-app's own unit tests) or the
+/// `test-prefs-redirect` feature (activated for every crate that links
+/// signex-app as a dev-dependency — see `Cargo.toml`), this resolves to
+/// a per-process tempdir instead and returns *before* touching
+/// `dirs::config_dir()` or `legacy_posix_prefs_path()` at all — so the
+/// legacy migration never runs and never reads/writes the developer's
+/// real config directory. Issue #437.
 fn prefs_path() -> PathBuf {
     use std::sync::OnceLock;
     static PATH: OnceLock<PathBuf> = OnceLock::new();
     PATH.get_or_init(|| {
-        let canonical = dirs::config_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("signex")
-            .join("prefs.json");
+        // `cfg!(test)` is belt-and-braces, not load-bearing: the only unit
+        // where it evaluates true is signex-app's own unit-test build, and
+        // that build always carries `test-prefs-redirect` too (self dev-
+        // dependency, see `Cargo.toml`) — so the feature check alone
+        // already decides this branch. Kept in case that wiring changes.
+        if cfg!(test) || cfg!(feature = "test-prefs-redirect") {
+            return std::env::temp_dir()
+                .join(format!("signex-test-prefs-{}", std::process::id()))
+                .join("prefs.json");
+        }
+        let canonical = match dirs::config_dir() {
+            Some(dir) => dir.join("signex").join("prefs.json"),
+            None => production_temp_fallback_path(),
+        };
         let legacy = legacy_posix_prefs_path();
         migrate_legacy_prefs(&canonical, &legacy);
         canonical
     })
     .clone()
+}
+
+/// Fallback used only when `dirs::config_dir()` returns `None` (rare — a
+/// Windows account with no `%APPDATA%`, a daemon/container with neither
+/// `$XDG_CONFIG_HOME` nor `$HOME`). Issue #437's review flagged the naive
+/// version of this fallback (a bare `<tmp>/signex/prefs.json`) as
+/// predictable and shared: two users on one host collide (the second gets
+/// `EACCES` from `atomic_write`, visible only at `tracing::debug!`, or
+/// silently reads the first user's prefs), and an attacker who pre-creates
+/// `prefs.json.tmp` as a symlink gets `atomic_write`'s `File::create` to
+/// write through it.
+///
+/// Discriminated by the OS username env var instead — the cheapest
+/// per-user handle available without a new dependency. If no such var is
+/// set either, there is no safe shared path left to fall back to; per the
+/// issue's own desired end state ("fail loudly, rather than silently
+/// landing in [a shared/CWD path]"), this panics rather than write
+/// anywhere.
+fn production_temp_fallback_path() -> PathBuf {
+    let user = std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .or_else(|_| std::env::var("LOGNAME"))
+        .ok()
+        .filter(|s| !s.is_empty());
+    let Some(user) = user else {
+        panic!(
+            "signex: no OS config directory (dirs::config_dir() returned None) and no \
+             USER/USERNAME/LOGNAME env var to derive a per-user temp fallback from — \
+             refusing to write preferences to a predictable shared path (issue #437)"
+        );
+    };
+    tracing::warn!(
+        target = "signex::prefs",
+        user = %user,
+        "no OS config directory found (dirs::config_dir() returned None); \
+         falling back to a per-user temp directory — preferences will NOT \
+         persist across a temp-directory sweep"
+    );
+    std::env::temp_dir()
+        .join(format!("signex-{user}"))
+        .join("prefs.json")
 }
 
 /// One-shot startup migrations applied to `prefs.json` before any
@@ -212,12 +278,13 @@ fn prefs_path() -> PathBuf {
 /// [`legacy_posix_prefs_path()`]; tests inject a tempdir-shaped path.
 pub fn migrate_legacy_prefs(canonical: &Path, legacy: &Path) {
     // F1: copy legacy path → canonical, but only if canonical is empty.
-    if !canonical.exists() {
-        if legacy != canonical && legacy.exists() {
-            if let Some(parent) = canonical.parent() {
-                let _ = std::fs::create_dir_all(parent);
-            }
-            let _ = std::fs::copy(legacy, canonical);
+    // Routed through `write_pref_atomic` (temp + fsync + rename) rather
+    // than `std::fs::copy`: a kill mid-copy with a bare copy can leave a
+    // truncated `canonical` file, which then blocks re-migration forever
+    // because `canonical.exists()` is already true on the next launch.
+    if !canonical.exists() && legacy != canonical && legacy.exists() {
+        if let Ok(bytes) = std::fs::read(legacy) {
+            write_pref_atomic(canonical, &bytes, "migrate_legacy_prefs_copy");
         }
     }
 

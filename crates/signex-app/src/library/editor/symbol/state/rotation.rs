@@ -138,6 +138,17 @@ fn rotate_graphic_90(
                 pivot,
             );
         }
+        SymbolGraphicKind::Polygon { vertices } => {
+            for v in vertices.iter_mut() {
+                *v = rotate_graphic_point_90(
+                    *v,
+                    geometry_center,
+                    clockwise,
+                    RotationSpace::World,
+                    pivot,
+                );
+            }
+        }
     }
 }
 
@@ -148,6 +159,7 @@ fn graphic_geometry_center(kind: &SymbolGraphicKind) -> [f64; 2] {
         }
         SymbolGraphicKind::Circle { center, .. } | SymbolGraphicKind::Arc { center, .. } => *center,
         SymbolGraphicKind::Text { position, .. } => *position,
+        SymbolGraphicKind::Polygon { vertices } => super::polygon_centroid(vertices),
     }
 }
 
@@ -283,6 +295,17 @@ pub(super) fn translate_graphic_to(sym: &mut Symbol, idx: usize, x: f64, y: f64)
             position[0] = x;
             position[1] = y;
         }
+        SymbolGraphicKind::Polygon { vertices } => {
+            // Anchor is the centroid — matches `selection_anchor` so
+            // the drag offset captured on press stays correct.
+            let c = super::polygon_centroid(vertices);
+            let dx = x - c[0];
+            let dy = y - c[1];
+            for v in vertices.iter_mut() {
+                v[0] += dx;
+                v[1] += dy;
+            }
+        }
     }
 }
 
@@ -309,6 +332,11 @@ pub fn translate_graphic_by(kind: &mut SymbolGraphicKind, dx: f64, dy: f64) {
             position[0] += dx;
             position[1] += dy;
         }
+        SymbolGraphicKind::Polygon { vertices } => {
+            for v in vertices.iter_mut() {
+                v[0] += dx;
+                v[1] += dy;
+            }
+        }
     }
 }
-

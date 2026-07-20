@@ -134,8 +134,9 @@ fn hit_test_graphic_handle_finds_rectangle_corner() {
         part_number: 0,
         fill: None,
     });
-    // BR corner is at (to.x, from.y) = (10.0, 0.0).
-    let hit = hit_test_graphic_handle(&s, 10.0, 0.0, 1.5, 1);
+    // BR corner is at (to.x, from.y) = (10.0, 0.0). Non-Polygon handles
+    // hit-test regardless of selection (`None` here).
+    let hit = hit_test_graphic_handle(&s, 10.0, 0.0, 1.5, 1, &None);
     assert_eq!(hit, Some((0, GraphicHandle::RectCorner(2))));
 }
 
@@ -566,3 +567,377 @@ fn select_in_box_all_uses_visible_counts() {
     }
 }
 
+// --- Polygon graphic coverage --------------------------------------------
+
+fn polygon_symbol(vertices: Vec<[f64; 2]>, fill: Option<[u8; 4]>) -> Symbol {
+    let mut s = Symbol::empty("test");
+    s.graphics.push(signex_library::SymbolGraphic {
+        kind: SymbolGraphicKind::Polygon { vertices },
+        stroke_width: 0.15,
+        part_number: 0,
+        fill,
+    });
+    s
+}
+
+#[test]
+fn polygon_centroid_averages_vertices() {
+    let c = polygon_centroid(&[[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]]);
+    assert_eq!(c, [1.0, 1.0]);
+}
+
+/// A rectangle-as-polygon whose top side is densely subdivided into
+/// many extra collinear points (mimicking a tessellated arc side from
+/// a Join-into-Polygon result) still centres at the true geometric
+/// centre — a plain vertex mean would skew toward the densely
+/// subdivided side instead.
+#[test]
+fn polygon_centroid_is_area_weighted_not_skewed_by_a_densely_subdivided_side() {
+    let mut vertices = vec![[0.0, 0.0], [4.0, 0.0], [4.0, 4.0]];
+    // 8 extra collinear points along the top edge (4,4) -> (0,4) — 11
+    // vertices total, 8 of them clustered on one side.
+    for i in 1..9 {
+        let t = i as f64 / 9.0;
+        vertices.push([4.0 - 4.0 * t, 4.0]);
+    }
+    vertices.push([0.0, 4.0]);
+
+    let c = polygon_centroid(&vertices);
+
+    let eps = 1e-9;
+    assert!((c[0] - 2.0).abs() < eps, "expected x ≈ 2.0, got {}", c[0]);
+    assert!((c[1] - 2.0).abs() < eps, "expected y ≈ 2.0, got {}", c[1]);
+}
+
+/// A degenerate ring (~zero signed area — a bowtie) falls back to the
+/// plain vertex mean rather than dividing by ~zero.
+#[test]
+fn polygon_centroid_falls_back_to_vertex_mean_for_a_bowtie() {
+    let vertices = [[0.0, 0.0], [1.27, 1.27], [1.27, 0.0], [0.0, 1.27]];
+    let c = polygon_centroid(&vertices);
+    let expected = [
+        (0.0 + 1.27 + 1.27 + 0.0) / 4.0,
+        (0.0 + 1.27 + 0.0 + 1.27) / 4.0,
+    ];
+    let eps = 1e-9;
+    assert!((c[0] - expected[0]).abs() < eps);
+    assert!((c[1] - expected[1]).abs() < eps);
+}
+
+#[test]
+fn hit_test_outlined_polygon_hits_edge_band_not_interior() {
+    let s = polygon_symbol(vec![[0.0, 0.0], [4.0, 0.0], [2.0, 4.0]], None);
+    // Within 0.5mm of the bottom edge (0,0)-(4,0) — a hit.
+    assert_eq!(hit_test(&s, 2.0, 0.3, 1), Some(SymbolSelection::Graphic(0)));
+    // Geometrically inside the triangle but far (>0.5mm) from every
+    // edge — outline-only, unfilled, so this must NOT hit.
+    assert_eq!(hit_test(&s, 2.0, 1.5, 1), None);
+    // Clearly outside the triangle and far from any edge.
+    assert_eq!(hit_test(&s, 20.0, 20.0, 1), None);
+}
+
+#[test]
+fn hit_test_filled_polygon_hits_interior_and_edge() {
+    let s = polygon_symbol(
+        vec![[0.0, 0.0], [4.0, 0.0], [2.0, 4.0]],
+        Some([200, 60, 60, 255]),
+    );
+    // Interior point — filled polygons hit via point-in-polygon.
+    assert_eq!(hit_test(&s, 2.0, 1.5, 1), Some(SymbolSelection::Graphic(0)));
+    // Edge point — filled polygons must ALSO hit the outline band
+    // (the outer half of the stroke renders outside the fill).
+    assert_eq!(hit_test(&s, 2.0, 0.3, 1), Some(SymbolSelection::Graphic(0)));
+    // Outside both the fill and the edge tolerance.
+    assert_eq!(hit_test(&s, 20.0, 20.0, 1), None);
+}
+
+#[test]
+fn hit_test_filled_concave_polygon_excludes_the_notch() {
+    // L-shape: union of [0,0]-[4,2] and [0,2]-[2,4], missing the
+    // [2,4]x[2,4] corner (the "notch").
+    let s = polygon_symbol(
+        vec![
+            [0.0, 0.0],
+            [4.0, 0.0],
+            [4.0, 2.0],
+            [2.0, 2.0],
+            [2.0, 4.0],
+            [0.0, 4.0],
+        ],
+        Some([200, 60, 60, 255]),
+    );
+    // Inside the lower arm of the L.
+    assert_eq!(hit_test(&s, 1.0, 1.0, 1), Some(SymbolSelection::Graphic(0)));
+    // Inside the upper-left arm of the L.
+    assert_eq!(hit_test(&s, 1.0, 3.0, 1), Some(SymbolSelection::Graphic(0)));
+    // Inside the notch's bounding box but outside the actual L-shape
+    // (a convex point-in-polygon test would wrongly hit this).
+    assert_eq!(hit_test(&s, 3.0, 3.0, 1), None);
+}
+
+#[test]
+fn graphic_handle_position_returns_polygon_vertex() {
+    let s = polygon_symbol(vec![[0.0, 0.0], [2.0, 0.0], [1.0, 2.0]], None);
+    assert_eq!(
+        graphic_handle_position(&s, 0, GraphicHandle::PolygonVertex(2)),
+        Some([1.0, 2.0])
+    );
+    assert_eq!(
+        graphic_handle_position(&s, 0, GraphicHandle::PolygonVertex(9)),
+        None,
+        "out-of-range vertex index is a safe miss"
+    );
+}
+
+#[test]
+fn graphic_handles_returns_one_per_polygon_vertex() {
+    let s = polygon_symbol(vec![[0.0, 0.0], [2.0, 0.0], [1.0, 2.0]], None);
+    assert_eq!(
+        graphic_handles(&s, 0),
+        vec![
+            (GraphicHandle::PolygonVertex(0), [0.0, 0.0]),
+            (GraphicHandle::PolygonVertex(1), [2.0, 0.0]),
+            (GraphicHandle::PolygonVertex(2), [1.0, 2.0]),
+        ]
+    );
+}
+
+/// A `PolygonVertex` handle only hit-tests when its polygon is the
+/// currently-selected graphic — otherwise a click near one of its
+/// (possibly many, tessellated-arc-side) vertices would grab an
+/// invisible handle instead of falling through to `hit_test`'s body
+/// selection.
+#[test]
+fn hit_test_graphic_handle_finds_polygon_vertex_when_selected() {
+    let s = polygon_symbol(vec![[0.0, 0.0], [2.0, 0.0], [1.0, 2.0]], None);
+    let selected = Some(SymbolSelection::Graphic(0));
+    let hit = hit_test_graphic_handle(&s, 2.0, 0.0, 1.5, 1, &selected);
+    assert_eq!(hit, Some((0, GraphicHandle::PolygonVertex(1))));
+}
+
+/// An unselected polygon's vertices don't hit-test at all — a click
+/// on its body must select the shape, not silently grab a vertex
+/// handle the user can't even see (the draw path only renders
+/// handles for the selected graphic).
+#[test]
+fn hit_test_graphic_handle_ignores_polygon_vertex_when_not_selected() {
+    let s = polygon_symbol(vec![[0.0, 0.0], [2.0, 0.0], [1.0, 2.0]], None);
+    let hit = hit_test_graphic_handle(&s, 2.0, 0.0, 1.5, 1, &None);
+    assert_eq!(
+        hit, None,
+        "vertex hit-test misses when the polygon isn't selected"
+    );
+
+    // The same click still finds the shape via body hit-test — the
+    // scenario the fix restores: unselected polygon click selects the
+    // body instead of always grabbing a vertex.
+    assert_eq!(hit_test(&s, 2.0, 0.0, 1), Some(SymbolSelection::Graphic(0)));
+}
+
+#[test]
+fn move_graphic_handle_moves_polygon_vertex() {
+    let mut s = polygon_symbol(vec![[0.0, 0.0], [2.0, 0.0], [1.0, 2.0]], None);
+    move_graphic_handle(&mut s, 0, GraphicHandle::PolygonVertex(1), 9.0, 9.0);
+    match &s.graphics[0].kind {
+        SymbolGraphicKind::Polygon { vertices } => {
+            assert_eq!(vertices[0], [0.0, 0.0], "untouched vertex stays put");
+            assert_eq!(vertices[1], [9.0, 9.0], "dragged vertex moves");
+            assert_eq!(vertices[2], [1.0, 2.0], "untouched vertex stays put");
+        }
+        other => panic!("expected Polygon, got {other:?}"),
+    }
+}
+
+#[test]
+fn move_selected_translates_polygon_by_centroid_delta() {
+    // Square, centroid (1,1); move the centroid to (5,5) — every
+    // vertex shifts by the same (4,4) delta.
+    let mut s = polygon_symbol(vec![[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]], None);
+    move_selected(&mut s, Some(SymbolSelection::Graphic(0)), 5.0, 5.0);
+    match &s.graphics[0].kind {
+        SymbolGraphicKind::Polygon { vertices } => {
+            assert_eq!(
+                vertices,
+                &vec![[4.0, 4.0], [6.0, 4.0], [6.0, 6.0], [4.0, 6.0]]
+            );
+        }
+        other => panic!("expected Polygon, got {other:?}"),
+    }
+}
+
+#[test]
+fn rotate_selected_about_geometry_center_rotates_polygon_vertices() {
+    // Square [0,0]-[2,2], centroid (1,1), rotated 90° CW about its
+    // own center maps each corner to the next corner (CW direction).
+    let mut s = polygon_symbol(vec![[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]], None);
+    rotate_selected_about_geometry_center(&mut s, Some(SymbolSelection::Graphic(0)), true);
+    match &s.graphics[0].kind {
+        SymbolGraphicKind::Polygon { vertices } => {
+            assert_eq!(
+                vertices,
+                &vec![[0.0, 2.0], [0.0, 0.0], [2.0, 0.0], [2.0, 2.0]]
+            );
+        }
+        other => panic!("expected Polygon, got {other:?}"),
+    }
+}
+
+#[test]
+fn select_in_box_window_includes_polygon_by_bbox() {
+    let mut s = polygon_symbol(vec![[0.0, 0.0], [4.0, 0.0], [2.0, 3.0]], None);
+    s.graphics[0].part_number = 1;
+    // Box fully containing the triangle's bbox — Window hit; with no
+    // pins and only this one graphic, a full-containment box resolves
+    // to `All` (matches `select_in_box_all_uses_visible_counts`).
+    assert_eq!(
+        select_in_box(&s, -1.0, -1.0, 5.0, 4.0, BoxSelectKind::Window, 1),
+        Some(SymbolSelection::All)
+    );
+    // Box too small to contain the whole bbox — Window misses it.
+    assert_eq!(
+        select_in_box(&s, -1.0, -1.0, 1.0, 1.0, BoxSelectKind::Window, 1),
+        None
+    );
+}
+
+#[test]
+fn select_in_box_crossing_touches_polygon_bbox() {
+    let mut s = polygon_symbol(vec![[0.0, 0.0], [4.0, 0.0], [2.0, 3.0]], None);
+    s.graphics[0].part_number = 1;
+    // A small box only overlapping the triangle bbox's corner still
+    // counts under Crossing (touch semantics).
+    assert_eq!(
+        select_in_box(&s, -1.0, -1.0, 1.0, 1.0, BoxSelectKind::Crossing, 1),
+        Some(SymbolSelection::All)
+    );
+}
+
+// --- Arc CCW-wraparound convention ---------------------------------------
+
+fn arc_symbol(start_deg: f64, end_deg: f64) -> Symbol {
+    let mut s = Symbol::empty("test");
+    s.graphics.push(signex_library::SymbolGraphic {
+        kind: SymbolGraphicKind::Arc {
+            center: [0.0, 0.0],
+            radius: 5.0,
+            start_deg,
+            end_deg,
+        },
+        stroke_width: 0.15,
+        part_number: 0,
+        fill: None,
+    });
+    s
+}
+
+/// Rotating a 0°-crossing arc must keep hit-test and the CPU draw
+/// arm's tessellated sweep in agreement — the exact bug class this
+/// normalization pass fixes. Starts as `270 -> 90` (a 180° arc
+/// spanning the world's left half, CCW from 270° through 0° to 90°);
+/// rotating it CW 90° stores `180 -> 0` (`rotation.rs`'s independent
+/// `rem_euclid`-based normalization produces a wrapped, `end < start`
+/// pair here — the exact form the CPU draw path used to mis-render).
+#[test]
+fn rotated_wraparound_arc_hit_test_and_draw_sweep_agree() {
+    let mut s = arc_symbol(270.0, 90.0);
+    rotate_selected(&mut s, Some(SymbolSelection::Graphic(0)), true);
+
+    let (start_deg, end_deg, center, radius) = match &s.graphics[0].kind {
+        SymbolGraphicKind::Arc {
+            start_deg,
+            end_deg,
+            center,
+            radius,
+        } => (*start_deg, *end_deg, *center, *radius),
+        other => panic!("expected Arc, got {other:?}"),
+    };
+    assert_eq!(start_deg, 180.0);
+    assert_eq!(end_deg, 0.0, "rotation.rs produces the wrapped form");
+
+    // hit_test.rs's independent Arc arm: the rotated arc now spans
+    // the bottom half (world angles [180°, 360°)) — below center hits,
+    // above center misses.
+    assert_eq!(
+        hit_test(&s, center[0], center[1] - radius, 1),
+        Some(SymbolSelection::Graphic(0)),
+        "point at 270° (below center) must be on the rotated arc"
+    );
+    assert_eq!(
+        hit_test(&s, center[0], center[1] + radius, 1),
+        None,
+        "point at 90° (above center) must be off the rotated arc"
+    );
+
+    // The CPU draw arm's tessellated sweep (via the same helper
+    // `renderer_scene_canvas::draw_arc_bucket` now calls) must agree
+    // on both of the same two points, independently re-deriving
+    // "is this angle within the sweep" rather than reusing hit_test's
+    // own formula.
+    let sweep = signex_gfx::primitive::arc::ccw_wrapped_sweep_rad(
+        (start_deg as f32).to_radians(),
+        (end_deg as f32).to_radians(),
+    );
+    let tau = std::f32::consts::TAU;
+    let offset_from_start = |x: f64, y: f64| -> f32 {
+        let raw = (y as f32).atan2(x as f32) - (start_deg as f32).to_radians();
+        raw.rem_euclid(tau)
+    };
+    let below_offset = offset_from_start(0.0, -radius);
+    let above_offset = offset_from_start(0.0, radius);
+    assert!(
+        below_offset <= sweep + 1e-3,
+        "draw arm's sweep must include the 270° point hit-test hit"
+    );
+    assert!(
+        above_offset > sweep + 1e-3,
+        "draw arm's sweep must exclude the 90° point hit-test missed"
+    );
+}
+
+/// Dragging an arc endpoint handle into the lower half-plane yields a
+/// negative `atan2` angle. It must be reduced into `[0, 360)` before it
+/// reaches disk: a raw negative endpoint trips `migrate_legacy_arc`
+/// (which fires on `end_deg < 0.0`) into swapping the pair to its
+/// complement on reload, silently turning the 285° arc the user dragged
+/// into a 75° arc — the same round-trip data loss the Properties-panel
+/// edit path guards against. Regression for the ArcEnd handle writer.
+#[test]
+fn arc_endpoint_handle_drag_survives_save_reload() {
+    use signex_gfx::primitive::arc::ccw_wrapped_sweep_rad;
+
+    let mut s = arc_symbol(30.0, 90.0);
+    // Drag the end handle below-and-right of the centre → raw atan2 = -45°.
+    move_graphic_handle(&mut s, 0, GraphicHandle::ArcEnd, 1.0, -1.0);
+
+    let (start_deg, end_deg) = match &s.graphics[0].kind {
+        SymbolGraphicKind::Arc {
+            start_deg, end_deg, ..
+        } => (*start_deg, *end_deg),
+        other => panic!("expected Arc, got {other:?}"),
+    };
+    assert!(
+        (0.0..360.0).contains(&end_deg),
+        "handle-drag endpoint must be reduced into [0, 360), got {end_deg}"
+    );
+    let in_session = ccw_wrapped_sweep_rad(
+        (start_deg as f32).to_radians(),
+        (end_deg as f32).to_radians(),
+    );
+
+    // Round-trip through the on-disk format: to_toml_string → from_toml_str
+    // runs migrate_legacy_arc, which must leave this pair untouched.
+    let file = signex_library::SymbolFile::from_symbol(s.clone());
+    let toml = file.to_toml_string().expect("serialise");
+    let reloaded = signex_library::SymbolFile::from_toml_str(&toml).expect("parse");
+    let (rs, re) = match &reloaded.symbols[0].graphics[0].kind {
+        SymbolGraphicKind::Arc {
+            start_deg, end_deg, ..
+        } => (*start_deg, *end_deg),
+        other => panic!("expected Arc after reload, got {other:?}"),
+    };
+    let after = ccw_wrapped_sweep_rad((rs as f32).to_radians(), (re as f32).to_radians());
+    assert!(
+        (in_session - after).abs() < 1e-4,
+        "sweep must survive save/reload: {in_session} rad in-session vs {after} rad reloaded"
+    );
+}

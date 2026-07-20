@@ -124,6 +124,19 @@ fn hit_test_graphic_body(sym: &Symbol, idx: usize, x: f64, y: f64) -> bool {
             if (d - radius).abs() > GRAPHIC_BODY_TOL {
                 return false;
             }
+            // A full-turn arc (raw span a nonzero whole number of
+            // turns) is a full circle — its entire radius band is
+            // selectable, not just the two endpoint angles a collapsed
+            // sweep would otherwise allow. Shared authority with the
+            // CPU draw path's full-turn belt so draw and hit-test never
+            // disagree (a 0° -> 360° Properties-panel edit renders a
+            // circle the user can also click anywhere on).
+            if signex_gfx::primitive::arc::arc_is_full_turn_rad(
+                (*start_deg as f32).to_radians(),
+                (*end_deg as f32).to_radians(),
+            ) {
+                return true;
+            }
             // Angle of the click point in degrees, normalised to [0, 360).
             let a = dy.atan2(dx).to_degrees().rem_euclid(360.0);
             let s = start_deg.rem_euclid(360.0);
@@ -140,11 +153,45 @@ fn hit_test_graphic_body(sym: &Symbol, idx: usize, x: f64, y: f64) -> bool {
             let half_h = size * 0.5;
             (x - position[0]).abs() <= half_w && (y - position[1]).abs() <= half_h
         }
+        SymbolGraphicKind::Polygon { vertices } => {
+            if vertices.len() < 2 {
+                false
+            } else if g.fill.is_some() {
+                // Filled: interior OR the outline band, so an edge
+                // click (or the outer half of the stroke, which
+                // renders outside the fill) still registers.
+                point_in_polygon([x, y], vertices)
+                    || polygon_outline_hit(x, y, vertices, GRAPHIC_BODY_TOL)
+            } else {
+                polygon_outline_hit(x, y, vertices, GRAPHIC_BODY_TOL)
+            }
+        }
     }
 }
 
 fn point_to_segment_dist_sq(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
     signex_sketch::geom::point_to_segment_distance_sq(p, a, b)
+}
+
+/// Even-odd point-in-polygon test (implicitly-closed vertex ring) — a
+/// thin adapter over `signex_sketch::geom::point_in_polygon`. Mirrors
+/// the footprint canvas's own adapter of the same shared helper.
+fn point_in_polygon(p: [f64; 2], vertices: &[[f64; 2]]) -> bool {
+    let polygon: Vec<signex_sketch::geom::Point2> = vertices.iter().map(|&v| v.into()).collect();
+    signex_sketch::geom::point_in_polygon(p, &polygon)
+}
+
+/// `true` when `(x, y)` lies within `tol` of any closed-polygon edge
+/// (including the implicit last-to-first segment).
+fn polygon_outline_hit(x: f64, y: f64, vertices: &[[f64; 2]], tol: f64) -> bool {
+    let n = vertices.len();
+    for i in 0..n {
+        let j = (i + 1) % n;
+        if point_to_segment_dist_sq([x, y], vertices[i], vertices[j]) <= tol * tol {
+            return true;
+        }
+    }
+    false
 }
 
 /// Compute the world (mm) position of a graphic's resize handle.
@@ -206,6 +253,9 @@ pub fn graphic_handle_position(
             [center[0] + radius * e.cos(), center[1] + radius * e.sin()]
         }
         (SymbolGraphicKind::Text { position, .. }, GraphicHandle::TextAnchor) => *position,
+        (SymbolGraphicKind::Polygon { vertices }, GraphicHandle::PolygonVertex(i)) => {
+            *vertices.get(i as usize)?
+        }
         _ => return None,
     })
 }
@@ -265,6 +315,19 @@ pub fn graphic_handles(sym: &Symbol, idx: usize) -> Vec<(GraphicHandle, [f64; 2]
         SymbolGraphicKind::Text { position, .. } => {
             vec![(GraphicHandle::TextAnchor, *position)]
         }
+        SymbolGraphicKind::Polygon { vertices } => vertices
+            .iter()
+            .enumerate()
+            .map(|(i, v)| {
+                // `u32` covers over 4 billion vertices — no real
+                // symbol will ever get remotely close, but guard the
+                // cast anyway rather than silently truncating/wrapping
+                // (which used to collide distinct vertices onto the
+                // same handle id past a `u16`'s 65535).
+                debug_assert!(i <= u32::MAX as usize, "polygon vertex index overflows u32");
+                (GraphicHandle::PolygonVertex(i as u32), *v)
+            })
+            .collect(),
     }
 }
 
@@ -279,12 +342,28 @@ pub fn graphic_handles(sym: &Symbol, idx: usize) -> Vec<(GraphicHandle, [f64; 2]
 /// ```text
 /// let tol_mm = (8.0_f32 / camera.scale.max(0.01)).clamp(0.5, 4.0) as f64;
 /// ```
+///
+/// `selected` scopes `PolygonVertex` handles to whichever graphic is
+/// currently selected (via [`super::graphic_is_selected`]) — every
+/// OTHER handle kind (rect corner/edge, line endpoint, circle radius,
+/// arc start/end, text anchor) still hit-tests on every graphic on
+/// the part regardless of selection, matching their existing,
+/// unscoped behaviour (and the draw path, which already only ever
+/// *renders* a selected graphic's handles — see
+/// `draw_resize_handles`). A Polygon can carry far more vertices than
+/// any other kind has handles (a Join-into-Polygon result routinely
+/// tessellates an arc side into ~16 points), so scanning them
+/// unconditionally made an unselected polygon effectively
+/// unclickable-as-a-body: a click almost anywhere near it grabbed an
+/// invisible vertex handle instead of falling through to
+/// `hit_test`'s body selection.
 pub fn hit_test_graphic_handle(
     sym: &Symbol,
     x: f64,
     y: f64,
     tol_mm: f64,
     active_part: u8,
+    selected: &Option<SymbolSelection>,
 ) -> Option<(usize, GraphicHandle)> {
     let r_sq = tol_mm * tol_mm;
     for idx in (0..sym.graphics.len()).rev() {
@@ -295,6 +374,11 @@ pub fn hit_test_graphic_handle(
             continue;
         }
         for (handle, pos) in graphic_handles(sym, idx) {
+            if matches!(handle, GraphicHandle::PolygonVertex(_))
+                && !super::graphic_is_selected(selected, idx)
+            {
+                continue;
+            }
             let dx = pos[0] - x;
             let dy = pos[1] - y;
             if dx * dx + dy * dy <= r_sq {
@@ -369,7 +453,15 @@ pub fn move_graphic_handle(sym: &mut Symbol, idx: usize, handle: GraphicHandle, 
             },
             GraphicHandle::ArcStart,
         ) => {
-            *start_deg = (y - center[1]).atan2(x - center[0]).to_degrees();
+            // rem_euclid into [0, 360): atan2 returns (-180, 180], and a
+            // raw negative endpoint on disk trips `migrate_legacy_arc`
+            // (fires on `end_deg < 0.0`) into swapping the pair to its
+            // complement on reload — the same 270°→90° round-trip loss the
+            // Properties-panel arc edit guards against.
+            *start_deg = (y - center[1])
+                .atan2(x - center[0])
+                .to_degrees()
+                .rem_euclid(360.0);
         }
         (
             SymbolGraphicKind::Arc {
@@ -377,13 +469,21 @@ pub fn move_graphic_handle(sym: &mut Symbol, idx: usize, handle: GraphicHandle, 
             },
             GraphicHandle::ArcEnd,
         ) => {
-            *end_deg = (y - center[1]).atan2(x - center[0]).to_degrees();
+            *end_deg = (y - center[1])
+                .atan2(x - center[0])
+                .to_degrees()
+                .rem_euclid(360.0);
         }
         (SymbolGraphicKind::Text { position, .. }, GraphicHandle::TextAnchor) => {
             position[0] = x;
             position[1] = y;
         }
+        (SymbolGraphicKind::Polygon { vertices }, GraphicHandle::PolygonVertex(i)) => {
+            if let Some(v) = vertices.get_mut(i as usize) {
+                v[0] = x;
+                v[1] = y;
+            }
+        }
         _ => {}
     }
 }
-

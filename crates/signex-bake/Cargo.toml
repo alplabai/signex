@@ -3,6 +3,7 @@ name = "signex-bake"
 description = "Sketch -> footprint primitive bake pipeline (signex-sketch + signex-library)"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 
 [dependencies]

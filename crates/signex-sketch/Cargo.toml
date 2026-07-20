@@ -3,6 +3,7 @@ name = "signex-sketch"
 description = "2D parametric sketcher for footprints — entities, constraints, solver, bake"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 
 [dependencies]

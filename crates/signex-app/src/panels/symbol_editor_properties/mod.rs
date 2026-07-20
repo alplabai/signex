@@ -37,6 +37,7 @@ pub(super) fn view_symbol_editor_properties<'a>(
             GraphicKindSummary::Circle { .. } => "Graphic — Circle",
             GraphicKindSummary::Arc { .. } => "Graphic — Arc",
             GraphicKindSummary::Text { .. } => "Graphic — Text",
+            GraphicKindSummary::Polygon { .. } => "Graphic — Polygon",
         },
     };
     col = col.push(
@@ -54,13 +55,7 @@ pub(super) fn view_symbol_editor_properties<'a>(
             col = pin::view_pin_selection(col, pin, muted, primary, border_c);
         }
         SymbolEditorSelection::Graphic(g) => {
-            col = graphic::view_graphic_selection(
-                col,
-                g,
-                muted,
-                border_c,
-                sym.graphic_fill_picker,
-            );
+            col = graphic::view_graphic_selection(col, g, muted, border_c, sym.graphic_fill_picker);
         }
         SymbolEditorSelection::FieldReference => {
             col = col.push(prop_row_static(
@@ -79,7 +74,12 @@ pub(super) fn view_symbol_editor_properties<'a>(
             );
         }
         SymbolEditorSelection::FieldValue => {
-            col = col.push(prop_row_static("Field", "Value".to_string(), muted, primary));
+            col = col.push(prop_row_static(
+                "Field",
+                "Value".to_string(),
+                muted,
+                primary,
+            ));
             col = col.push(
                 container(
                     text("Bound to the host Component's value at place-time.")

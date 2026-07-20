@@ -52,9 +52,18 @@ impl Signex {
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
 
-        // Compute preview: walk *every* open sheet, share one counter so
-        // the proposed designators line up with what the engine will do
-        // across the project.
+        // The project's sheets, from the one assembler — the same set
+        // `handle_annotate` acts on, so the dialog and the operation cannot
+        // describe different sheets (#406).
+        //
+        // This reads unopened sheets from disk, on every frame this modal
+        // renders, which `view` is not supposed to do. Deliberately left:
+        // the alternative is a snapshot cached in state, and a snapshot goes
+        // stale against the live state `handle_annotate` reads — which is
+        // precisely the preview-disagrees-with-the-action bug above, bought
+        // back for a frame-rate win nobody has asked for. Lift it into a Task
+        // when the parse is measured to matter, and invalidate it on every
+        // document mutation when you do.
         let proposed = self.preview_project_annotations();
         let total_symbols: usize = proposed.len();
         let current_sheet_name = self

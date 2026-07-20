@@ -68,11 +68,27 @@ pub struct SymbolCanvas<'a> {
     pub symbol: &'a Symbol,
     pub selected: Option<SymbolSelection>,
     pub tool: SymbolTool,
+    /// Click-collect vertex stash for the `PlacePolygon` tool —
+    /// owned by [`crate::app::SymbolEditorState::polygon_vertices`],
+    /// not this Program's ephemeral `CanvasState`, so it can't survive
+    /// a tab switch and mis-commit into a different document (see the
+    /// commit that introduced this field for the cross-tab-corruption
+    /// bug it replaces). Read-only here: the gesture handlers publish
+    /// `CanvasAction::PolygonClick` / `PolygonCommit` / `PolygonCancel`
+    /// and the dispatcher mutates the editor's copy.
+    pub polygon_vertices: &'a [(f64, f64)],
     /// Active sub-part the canvas is filtering pins for. Pins with
     /// `part_number == 0` (Part Zero) render on every part; pins
     /// with `part_number == active_part` render on the active part
     /// only. Defaults to `1` (single-part components).
     pub active_part: u8,
+    /// Whether the right-click context menu is currently open (see
+    /// `SymbolEditorState::context_menu`). The context menu and a pan
+    /// can't coexist — once an in-flight right-drag crosses the pan
+    /// motion threshold while this is `true`, the pointer handler
+    /// closes the menu instead of publishing that frame's pan (mirrors
+    /// the footprint canvas's `pan_on_cursor_moved`).
+    pub context_menu_open: bool,
     /// Pan/zoom state owned by the editor tab — see
     /// [`crate::app::SymbolEditorState::camera`].
     pub camera: &'a crate::canvas::Camera,
@@ -110,7 +126,9 @@ impl<'a> SymbolCanvas<'a> {
         symbol: &'a Symbol,
         selected: Option<SymbolSelection>,
         tool: SymbolTool,
+        polygon_vertices: &'a [(f64, f64)],
         active_part: u8,
+        context_menu_open: bool,
         camera: &'a crate::canvas::Camera,
         grid_size_mm: f64,
         grid_visible: bool,
@@ -132,7 +150,9 @@ impl<'a> SymbolCanvas<'a> {
             symbol,
             selected,
             tool,
+            polygon_vertices,
             active_part,
+            context_menu_open,
             camera,
             grid_size_mm,
             grid_visible,
@@ -254,6 +274,11 @@ impl<'a> SymbolCanvas<'a> {
                         position[1] + size,
                     );
                 }
+                SymbolGraphicKind::Polygon { vertices } => {
+                    for v in vertices {
+                        include_rect(&mut bounds, v[0], v[1], v[0], v[1]);
+                    }
+                }
             }
         }
 
@@ -299,16 +324,13 @@ fn item_in_selection(group: &SymbolSelection, item: &SymbolSelection) -> bool {
 }
 
 /// Returns `true` when the graphic at `idx` should be drawn in the
-/// selection colour. Handles single-graphic, Multiple, and All selections.
+/// selection colour. Handles single-graphic, Multiple, and All
+/// selections. Thin wrapper over `state::graphic_is_selected` — kept
+/// here too since `hit_test_graphic_handle` (state-side) needs the
+/// exact same check to scope `PolygonVertex` handle hit-testing to
+/// the selected polygon only.
 fn is_graphic_selected(sel: &Option<SymbolSelection>, idx: usize) -> bool {
-    match sel {
-        Some(SymbolSelection::Graphic(i)) => *i == idx,
-        Some(SymbolSelection::Multiple {
-            graphic_indices, ..
-        }) => graphic_indices.contains(&idx),
-        Some(SymbolSelection::All) => true,
-        _ => false,
-    }
+    state::graphic_is_selected(sel, idx)
 }
 
 impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
@@ -329,14 +351,12 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 self.on_left_press(state, bounds, cursor)
             }
-            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right))
-            | Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Middle)) => {
-                self.on_secondary_press(state, bounds, cursor)
-            }
-            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Right))
-            | Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Middle)) => {
-                self.on_secondary_release(state)
-            }
+            Event::Mouse(mouse::Event::ButtonPressed(
+                button @ (mouse::Button::Right | mouse::Button::Middle),
+            )) => self.on_secondary_press(state, button, bounds, cursor),
+            Event::Mouse(mouse::Event::ButtonReleased(
+                button @ (mouse::Button::Right | mouse::Button::Middle),
+            )) => self.on_secondary_release(state, button, bounds, cursor),
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
                 self.on_cursor_moved(state, bounds, cursor)
             }
@@ -378,9 +398,14 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
             if let Some(pos) = cursor.position_in(bounds) {
                 let (wx, wy) = world_unsnapped(self, pos.x, pos.y, bounds);
                 let tol_mm = (8.0_f32 / self.camera.scale.max(0.01)).clamp(0.5, 4.0) as f64;
-                if let Some((_, handle)) =
-                    state::hit_test_graphic_handle(self.symbol, wx, wy, tol_mm, self.active_part)
-                {
+                if let Some((_, handle)) = state::hit_test_graphic_handle(
+                    self.symbol,
+                    wx,
+                    wy,
+                    tol_mm,
+                    self.active_part,
+                    &self.selected,
+                ) {
                     return state::handle_interaction(handle);
                 }
             }
@@ -416,6 +441,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         self.draw_line_preview(&mut frame, state);
         self.draw_circle_preview(&mut frame, state);
         self.draw_arc_preview(&mut frame, state);
+        self.draw_polygon_preview(&mut frame, state);
 
         vec![frame.into_geometry()]
     }
@@ -589,6 +615,23 @@ impl<'a> SymbolCanvas<'a> {
                         rotation_rad: 0.0,
                         h_align: HAlign::Left,
                         v_align: VAlign::Top,
+                    });
+                }
+                SymbolGraphicKind::Polygon { vertices } => {
+                    let fill = match g.fill {
+                        Some([fr, fg, fb, fa]) => {
+                            to_rgba(Color::from_rgba8(fr, fg, fb, fa as f32 / 255.0))
+                        }
+                        None => [0.0, 0.0, 0.0, 0.0],
+                    };
+                    polygons.push(PolygonInput {
+                        vertices: vertices
+                            .iter()
+                            .map(|v| [v[0] as f32, v[1] as f32])
+                            .collect(),
+                        fill_color: fill,
+                        stroke_color: Some(to_rgba(stroke_color)),
+                        stroke_width_mm: stroke_world_mm(stroke_w, scale),
                     });
                 }
             }

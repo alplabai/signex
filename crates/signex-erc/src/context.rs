@@ -61,7 +61,7 @@ pub struct ErcPin {
     /// `false` for `Unclassified` and `DoNotConnect` pin types — those may be
     /// left unconnected by design. DSL: `pin.required == true`.
     pub required: bool,
-    /// `true` if a wire endpoint, bus endpoint, label, or no-connect marker
+    /// `true` if a wire endpoint, junction, label, or no-connect marker
     /// sits at this pin's world-space tip. DSL: `pin.connected == false`.
     pub connected: bool,
 }
@@ -389,9 +389,11 @@ fn point_is_connected(
 /// the pins on it.
 ///
 /// Connectivity is **not** derived here — it comes from the shared
-/// [`SheetConnectivity`] (the same wire-endpoint union plus junction T-merge
-/// `build_netlist` uses), so ERC and the netlist agree on membership by
-/// construction instead of ERC hand-rolling a second union-find.
+/// [`SheetConnectivity`]: the physical wire-endpoint union plus junction
+/// T-merge, *and* the logical same-name label merge on top
+/// ([`SheetConnectivity::merge_named_labels`]). Both halves are the ones
+/// `build_netlist` applies, so ERC and the netlist agree on membership by
+/// construction instead of ERC hand-rolling a second, thinner union-find.
 fn summarize_nets(
     wires: &[ErcWire],
     labels: &[ErcLabel],
@@ -401,6 +403,26 @@ fn summarize_nets(
     let segments: Vec<(Point, Point)> = wires.iter().map(|w| (w.start, w.end)).collect();
     let junction_pts: Vec<Point> = junctions.iter().map(|j| j.position).collect();
     let mut conn = SheetConnectivity::from_segments(&segments, &junction_pts);
+
+    // Apply the *logical* layer `build_netlist` applies on top of the geometry.
+    // It anchors every label to the wire it sits on — endpoint *or* interior;
+    // a label dropped mid-span is not a wire endpoint, so an unanchored
+    // `root_of` hands it a singleton root and its name never reaches the net
+    // (issue #396, the DSL-facing half of #388). It then merges nets carrying
+    // the same Global/Power/Net label name: two disjoint wires each labelled
+    // `VCC` are ONE net to `build_netlist`, and ERC used to hand the DSL two
+    // `VCC` fragments with the driver on only one of them (issue #404).
+    //
+    // This is a separate pass because a union can re-point a class
+    // representative, changing a root recorded earlier. Every root below is
+    // therefore read only after the last union — the merge-then-read split
+    // `merged_sheet_parent` relies on too.
+    conn.merge_named_labels(
+        labels
+            .iter()
+            .map(|l| (l.position, l.label_type, l.text.as_str())),
+        &segments,
+    );
 
     // Group labels by net root.
     let mut net_labels: HashMap<(i64, i64), Vec<&ErcLabel>> = HashMap::new();
@@ -591,6 +613,192 @@ mod tests {
             nets.len(),
             2,
             "without a junction the T is two separate nets"
+        );
+    }
+
+    fn label(pos: Point, text: &str, label_type: LabelType) -> ErcLabel {
+        ErcLabel {
+            uuid: Uuid::nil(),
+            text: text.into(),
+            position: pos,
+            label_type,
+        }
+    }
+
+    #[test]
+    fn mid_wire_label_names_the_net_the_dsl_reads() {
+        // Regression for issue #396: a Net label dropped on a wire's INTERIOR
+        // (5,0), not on either endpoint. `build_netlist` anchors it via
+        // `point_on_segment`, so the netlist calls this net "SDA"; an
+        // unanchored `root_of` instead handed the label a singleton root and
+        // the ErcNet the DSL reads came back unnamed — every DSL rule keyed on
+        // `net.name` / `net.class` then disagreed with the netlist (#388).
+        let wires = vec![wire(pt(0.0, 0.0), pt(10.0, 0.0))];
+        let labels = vec![label(pt(5.0, 0.0), "SDA", LabelType::Net)];
+        let syms = vec![symbol(vec![
+            pin(pt(0.0, 0.0), PinDirection::Output),
+            pin(pt(10.0, 0.0), PinDirection::Input),
+        ])];
+
+        let nets = summarize_nets(&wires, &labels, &[], &syms);
+        assert_eq!(nets.len(), 1, "one wire with two pins is one net");
+        assert_eq!(
+            nets[0].name, "SDA",
+            "a mid-span label must name the net the DSL sees"
+        );
+        assert_eq!(
+            nets[0].class, "sda",
+            "class derives from the anchored name, not an empty one"
+        );
+    }
+
+    #[test]
+    fn endpoint_label_still_names_its_net() {
+        // The anchoring pass must not regress the ordinary case: a label
+        // sitting exactly on a wire endpoint is already in the wire's class,
+        // so anchoring is a no-op union and the name still lands.
+        let wires = vec![wire(pt(0.0, 0.0), pt(10.0, 0.0))];
+        let labels = vec![label(pt(0.0, 0.0), "VBUS", LabelType::Global)];
+        let syms = vec![symbol(vec![
+            pin(pt(0.0, 0.0), PinDirection::PowerOutput),
+            pin(pt(10.0, 0.0), PinDirection::Input),
+        ])];
+
+        let nets = summarize_nets(&wires, &labels, &[], &syms);
+        assert_eq!(nets.len(), 1);
+        assert_eq!(nets[0].name, "VBUS");
+        assert!(nets[0].has_driver, "PowerOutput drives the net");
+    }
+
+    #[test]
+    fn label_off_every_wire_does_not_join_a_net() {
+        // Anchoring must not be a licence to attach any label anywhere: a
+        // label at (7,3) lies off the wire, so it stays its own root and
+        // never names the wire's net. Anchoring ERC more leniently than
+        // `build_netlist` would be its own #388.
+        let wires = vec![wire(pt(0.0, 0.0), pt(10.0, 0.0))];
+        let labels = vec![label(pt(7.0, 3.0), "STRAY", LabelType::Net)];
+        let syms = vec![symbol(vec![
+            pin(pt(0.0, 0.0), PinDirection::Output),
+            pin(pt(10.0, 0.0), PinDirection::Input),
+        ])];
+
+        let nets = summarize_nets(&wires, &labels, &[], &syms);
+        let wire_net = nets
+            .iter()
+            .find(|n| n.pin_types.len() == 2)
+            .expect("the wire's own net still exists");
+        assert_eq!(
+            wire_net.name, "",
+            "an off-wire label must not name the wire's net"
+        );
+    }
+
+    #[test]
+    fn same_name_labels_merge_disjoint_wires_into_one_net() {
+        // Regression for #404. Two unconnected wires, a `Net` label `VCC` on
+        // each: `merged_sheet_parent` merges them by name, so `build_netlist`
+        // sees ONE net holding both pins. `summarize_nets` used to group
+        // geometrically only and handed the DSL two `VCC` fragments — a rule
+        // like `net.name == "VCC" && !has_driver()` then false-fired on the
+        // fragment whose driver sat on the other wire.
+        let wires = vec![
+            wire(pt(0.0, 0.0), pt(10.0, 0.0)),
+            wire(pt(50.0, 0.0), pt(60.0, 0.0)),
+        ];
+        let labels = vec![
+            label(pt(5.0, 0.0), "VCC", LabelType::Net),
+            label(pt(55.0, 0.0), "VCC", LabelType::Net),
+        ];
+        let syms = vec![symbol(vec![
+            pin(pt(0.0, 0.0), PinDirection::Output), // driver on wire A
+            pin(pt(60.0, 0.0), PinDirection::Input), // sink on wire B
+        ])];
+
+        let nets = summarize_nets(&wires, &labels, &[], &syms);
+        assert_eq!(nets.len(), 1, "same-name Net labels merge the two wires");
+        assert_eq!(nets[0].name, "VCC");
+        assert_eq!(
+            nets[0].pin_types.len(),
+            2,
+            "both pins land on the merged net"
+        );
+        assert!(nets[0].has_driver, "the driver on the far wire counts");
+    }
+
+    #[test]
+    fn differently_named_labels_do_not_merge() {
+        // Negative guard: the merge keys on the label TEXT, so it can never
+        // become a blanket join of every labelled wire.
+        let wires = vec![
+            wire(pt(0.0, 0.0), pt(10.0, 0.0)),
+            wire(pt(50.0, 0.0), pt(60.0, 0.0)),
+        ];
+        let labels = vec![
+            label(pt(5.0, 0.0), "VCC", LabelType::Net),
+            label(pt(55.0, 0.0), "VBAT", LabelType::Net),
+        ];
+        let syms = vec![symbol(vec![
+            pin(pt(0.0, 0.0), PinDirection::Output),
+            pin(pt(60.0, 0.0), PinDirection::Input),
+        ])];
+
+        let nets = summarize_nets(&wires, &labels, &[], &syms);
+        assert_eq!(nets.len(), 2, "different names stay two nets");
+    }
+
+    #[test]
+    fn same_name_hierarchical_labels_do_not_merge() {
+        // `Hierarchical` binds to a parent sheet's pins, not to same-name
+        // peers, so it is excluded from the name merge — mirroring the
+        // `signex-net` side (`build/tests.rs`) on the ERC side.
+        let wires = vec![
+            wire(pt(0.0, 0.0), pt(10.0, 0.0)),
+            wire(pt(50.0, 0.0), pt(60.0, 0.0)),
+        ];
+        let labels = vec![
+            label(pt(5.0, 0.0), "BUS_A", LabelType::Hierarchical),
+            label(pt(55.0, 0.0), "BUS_A", LabelType::Hierarchical),
+        ];
+        let syms = vec![symbol(vec![
+            pin(pt(0.0, 0.0), PinDirection::Output),
+            pin(pt(60.0, 0.0), PinDirection::Input),
+        ])];
+
+        let nets = summarize_nets(&wires, &labels, &[], &syms);
+        assert_eq!(
+            nets.len(),
+            2,
+            "hierarchical labels do not join same-name peers on one sheet"
+        );
+    }
+
+    #[test]
+    fn a_merged_net_takes_the_highest_priority_label_name() {
+        // The user-visible consequence of merging, mirroring signex-net's
+        // `label_names_the_net_by_priority` on the ERC side: the merge changes
+        // the NAME the DSL sees, not just the net count. Two wires joined by a
+        // shared Global `SYS` also carry a Net label `VCC` each; the merged net
+        // is named `SYS` (Global outranks Net), so a DSL rule keyed on
+        // `net.name == "VCC"` stops matching ENTIRELY rather than matching once
+        // instead of twice.
+        let wires = vec![
+            wire(pt(0.0, 0.0), pt(10.0, 0.0)),
+            wire(pt(50.0, 0.0), pt(60.0, 0.0)),
+        ];
+        let labels = vec![
+            label(pt(0.0, 0.0), "VCC", LabelType::Net),
+            label(pt(10.0, 0.0), "SYS", LabelType::Global),
+            label(pt(50.0, 0.0), "VCC", LabelType::Net),
+            label(pt(60.0, 0.0), "SYS", LabelType::Global),
+        ];
+        let syms = vec![symbol(vec![pin(pt(0.0, 0.0), PinDirection::Output)])];
+
+        let nets = summarize_nets(&wires, &labels, &[], &syms);
+        assert_eq!(nets.len(), 1, "the shared Global joins both wires");
+        assert_eq!(
+            nets[0].name, "SYS",
+            "Global outranks Net when naming the merged net"
         );
     }
 }

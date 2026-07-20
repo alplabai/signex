@@ -438,10 +438,14 @@ fn bake_shape(
             corners,
         } => {
             // v0.14: native Chamfered bake — chamfer_ratio in [0, 0.5].
+            // As with RoundRect above, the ratio is dimensionless by
+            // spec; `as_count()?` rejects expressions carrying physical
+            // units up front instead of silently baking their raw
+            // scalar (`"20um"` → 20 → clamped to 0.5).
             let ast = parse(strip_eq_prefix(chamfer_ratio_expr)).map_err(SketchError::Expr)?;
             let q = eval(&ast, ctx).map_err(SketchError::Expr)?;
             LibPadShape::Chamfered {
-                chamfer_ratio: q.value.clamp(0.0, 0.5),
+                chamfer_ratio: q.as_count()?.clamp(0.0, 0.5),
                 corners: map_corners(corners),
             }
         }

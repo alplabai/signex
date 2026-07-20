@@ -125,13 +125,18 @@ fn view_symbol_status<'a>(
             grid_toggle,
             grid_cycle,
             Space::new().width(Length::Fill),
-            text(if editor.selected.is_some() {
-                "Del removes · drag to move · scroll zooms · right-drag pans · Home fits"
-            } else {
-                "Ctrl+Z undo · Ctrl+Y redo · scroll zooms · right-drag pans · Home fits"
-            })
-            .size(10)
-            .color(muted),
+            match &editor.status_message {
+                Some(msg) => text(msg.clone())
+                    .size(10)
+                    .color(theme_ext::error_color(tokens)),
+                None => text(if editor.selected.is_some() {
+                    "Del removes · drag to move · scroll zooms · right-drag pans · Home fits"
+                } else {
+                    "Ctrl+Z undo · Ctrl+Y redo · scroll zooms · right-drag pans · Home fits"
+                })
+                .size(10)
+                .color(muted),
+            },
         ]
         .spacing(8)
         .align_y(iced::Alignment::Center),
@@ -198,7 +203,10 @@ fn view_symbol_toolbar<'a>(
             // NewPart / RemovePart messages; Phase B fixes their
             // semantics (real delete + persistent empty unit).
             btn("+", PrimitiveEdit::Symbol(SymbolEditorMsg::NewPart)),
-            btn("\u{2212}", PrimitiveEdit::Symbol(SymbolEditorMsg::RemovePart)),
+            btn(
+                "\u{2212}",
+                PrimitiveEdit::Symbol(SymbolEditorMsg::RemovePart)
+            ),
             Space::new().width(8),
             btn(save_label, PrimitiveEdit::Save),
         ]
@@ -239,7 +247,9 @@ fn view_symbol_canvas<'a>(
         editor.primitive(),
         editor.selected.clone(),
         editor.tool,
+        &editor.polygon_vertices,
         editor.active_part,
+        editor.context_menu.is_some(),
         &editor.camera,
         display.grid_size_mm as f64,
         display.grid_visible,
@@ -304,7 +314,11 @@ fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> SymbolEdi
             start_deg,
             end_deg,
         },
+        CanvasAction::ArcSweepRejected => SymbolEditorMsg::ArcSweepRejected,
         CanvasAction::AddText { x, y } => SymbolEditorMsg::AddText { x, y },
+        CanvasAction::PolygonClick { x, y } => SymbolEditorMsg::PolygonClick { x, y },
+        CanvasAction::PolygonCommit => SymbolEditorMsg::PolygonCommit,
+        CanvasAction::PolygonCancel => SymbolEditorMsg::PolygonCancel,
         CanvasAction::Select(sel) => SymbolEditorMsg::Select(symbol_selection_to_msg(sel)),
         CanvasAction::Deselect => SymbolEditorMsg::Deselect,
         CanvasAction::Move { x, y } => SymbolEditorMsg::MoveSelected { x, y },
@@ -332,6 +346,24 @@ fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> SymbolEdi
         CanvasAction::DragCommit => SymbolEditorMsg::DragCommit,
         CanvasAction::Undo => SymbolEditorMsg::Undo,
         CanvasAction::Redo => SymbolEditorMsg::Redo,
+        CanvasAction::ShowContextMenu { x, y, target } => SymbolEditorMsg::ShowContextMenu {
+            x,
+            y,
+            target: symbol_context_target_to_msg(target),
+        },
+        CanvasAction::CloseContextMenu => SymbolEditorMsg::CloseContextMenu,
+    }
+}
+
+fn symbol_context_target_to_msg(
+    target: sym_state::SymbolContextTarget,
+) -> crate::library::messages::SymbolContextTargetMsg {
+    use crate::library::messages::SymbolContextTargetMsg;
+    use sym_state::SymbolContextTarget;
+    match target {
+        SymbolContextTarget::Empty => SymbolContextTargetMsg::Empty,
+        SymbolContextTarget::Pin(idx) => SymbolContextTargetMsg::Pin(idx),
+        SymbolContextTarget::Graphic(idx) => SymbolContextTargetMsg::Graphic(idx),
     }
 }
 
@@ -345,6 +377,7 @@ fn graphic_handle_to_msg(handle: sym_state::GraphicHandle) -> GraphicHandleMsg {
         GraphicHandle::ArcStart => GraphicHandleMsg::ArcStart,
         GraphicHandle::ArcEnd => GraphicHandleMsg::ArcEnd,
         GraphicHandle::TextAnchor => GraphicHandleMsg::TextAnchor,
+        GraphicHandle::PolygonVertex(i) => GraphicHandleMsg::PolygonVertex(i),
     }
 }
 

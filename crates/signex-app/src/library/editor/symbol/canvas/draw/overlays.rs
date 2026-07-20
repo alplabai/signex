@@ -228,9 +228,6 @@ impl SymbolCanvas<'_> {
                             .with_width(1.0),
                     );
                     // Arc sweep from start to cursor angle.
-                    // canvas::path::Arc lives in screen space (y-down), so we
-                    // negate the world-space angles to compensate for the y-flip
-                    // applied by w2s: screen_angle = -world_angle.
                     // Use the unwrapped end angle from state to avoid the ±180°
                     // discontinuity that raw atan2 would introduce.
                     let end_deg = state.arc_end_deg_unwrapped.unwrap_or_else(|| {
@@ -238,12 +235,30 @@ impl SymbolCanvas<'_> {
                         let dy = cur_y - cy;
                         dy.atan2(dx).to_degrees()
                     });
+                    // Must show exactly what `AddArc`'s commit handler
+                    // will store — so run the raw drag pair through the
+                    // SAME `normalize_arc_commit_deg` swap the commit
+                    // handler applies (a CW drag, `end_deg < start_deg`,
+                    // stores the swapped pair whose CCW-wraparound sweep
+                    // is the short arc the user dragged), THEN build the
+                    // CCW-wraparound sweep the way
+                    // `renderer_scene_canvas::draw_arc_bucket` does.
+                    // Feeding the raw pair to the wraparound sweep alone
+                    // would ghost the 360°-complement on every clockwise
+                    // drag while the commit stores the short arc.
+                    let (start_deg, end_deg) =
+                        super::super::super::updates::normalize_arc_commit_deg(start_deg, end_deg);
+                    let start_rad = -(start_deg as f32).to_radians();
+                    let sweep = signex_gfx::primitive::arc::ccw_wrapped_sweep_rad(
+                        (start_deg as f32).to_radians(),
+                        (end_deg as f32).to_radians(),
+                    );
                     let arc_path = canvas::Path::new(|builder| {
                         builder.arc(canvas::path::Arc {
                             center: center_p,
                             radius: radius_screen,
-                            start_angle: iced::Radians(-(start_deg as f32).to_radians()),
-                            end_angle: iced::Radians(-(end_deg as f32).to_radians()),
+                            start_angle: iced::Radians(start_rad),
+                            end_angle: iced::Radians(start_rad - sweep),
                         });
                     });
                     frame.stroke(
@@ -263,6 +278,64 @@ impl SymbolCanvas<'_> {
                         .with_width(1.0),
                 );
             }
+        }
+    }
+
+    /// Click-collect polygon placement preview — an open polyline
+    /// through the committed vertices plus a rubber-band segment to
+    /// the live cursor. Once >= 3 vertices are collected, the first
+    /// vertex gets a highlighted ring marking it as the "click here
+    /// to close" affordance.
+    pub(in crate::library::editor::symbol::canvas) fn draw_polygon_preview(
+        &self,
+        frame: &mut canvas::Frame,
+        state: &CanvasState,
+    ) {
+        if self.polygon_vertices.is_empty() {
+            return;
+        }
+        let cam = self.camera;
+        let scale = cam.scale;
+        let ox = cam.offset.x;
+        let oy = cam.offset.y;
+        let w2s = |x: f64, y: f64| -> iced::Point {
+            iced::Point::new(ox + (x as f32) * scale, oy - (y as f32) * scale)
+        };
+        let preview_color = Color {
+            a: 0.55,
+            ..self.selected_color
+        };
+        let path = canvas::Path::new(|builder| {
+            let first = w2s(self.polygon_vertices[0].0, self.polygon_vertices[0].1);
+            builder.move_to(first);
+            for &(x, y) in self.polygon_vertices.iter().skip(1) {
+                builder.line_to(w2s(x, y));
+            }
+            if let Some((cx, cy)) = state.polygon_cursor {
+                builder.line_to(w2s(cx, cy));
+            }
+        });
+        frame.stroke(
+            &path,
+            canvas::Stroke::default()
+                .with_color(preview_color)
+                .with_width(stroke_px_at_zoom(SYMBOL_GRAPHIC_STROKE_PX_AT_100, scale)),
+        );
+        for &(x, y) in self.polygon_vertices {
+            frame.fill(&canvas::Path::circle(w2s(x, y), 3.0), preview_color);
+        }
+        // Closable affordance: once a close-by-click is actually live
+        // (>= 3 vertices), ring the first vertex so it reads as
+        // clickable, distinct from the plain dots on every other
+        // collected vertex.
+        if self.polygon_vertices.len() >= 3 {
+            let first = w2s(self.polygon_vertices[0].0, self.polygon_vertices[0].1);
+            frame.stroke(
+                &canvas::Path::circle(first, 6.0),
+                canvas::Stroke::default()
+                    .with_color(preview_color)
+                    .with_width(1.5),
+            );
         }
     }
 }

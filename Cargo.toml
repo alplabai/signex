@@ -43,6 +43,12 @@ default-members = [
 [workspace.package]
 version = "0.14.0"
 edition = "2024"
+# Edition 2024 needs Rust 1.85, but the workspace also uses let-chains
+# (`if cond && let Some(x) = ...`), stable only from Rust 1.88.0 — so 1.88 is
+# the real floor. Declared so cargo fails with "requires rustc 1.88.0 or newer"
+# instead of the confusing let-chain / dependency-resolution errors an older
+# toolchain produces — a contributor hit exactly that and shipped an untested PR.
+rust-version = "1.88"
 license = "Apache-2.0"
 repository = "https://github.com/alplabai/signex"
 

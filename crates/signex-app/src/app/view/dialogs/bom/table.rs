@@ -8,6 +8,67 @@ use super::super::*;
 use iced::widget::{Row, Space, column, container, row, scrollable, text};
 use iced::{Background, Color, Element, Length, Theme};
 
+/// First designator of a BOM row — the key the export pipeline orders rows by,
+/// so the preview's Designator sort matches the exported file exactly.
+fn first_reference(row: &signex_output::BomRow) -> &str {
+    row.references.first().map(String::as_str).unwrap_or("")
+}
+
+/// Rendered text of one cell — also the sort key for the text columns.
+fn column_value(c: &signex_output::BomColumn, r: &signex_output::BomRow) -> String {
+    use signex_output::BomColumn;
+    match c {
+        BomColumn::Name => r.name.clone(),
+        BomColumn::Description => r.description.clone(),
+        BomColumn::Designator | BomColumn::Reference => r.references.join(", "),
+        BomColumn::Value => r.value.clone(),
+        BomColumn::Footprint => r.footprint.clone(),
+        BomColumn::LibRef => r.lib_ref.clone(),
+        BomColumn::Qty => r.qty.to_string(),
+        BomColumn::Custom(key) => r.custom.get(key).cloned().unwrap_or_default(),
+    }
+}
+
+/// Row indexes into `rows` in display order.
+///
+/// Indexes rather than rows so the caller borrows without cloning the `BomRow`
+/// vec. Qty sorts numerically; a designator column sorts with the *same*
+/// natural order the export pipeline applies (`signex_bom::build_table`), so
+/// the modal and the CSV/HTML/XLSX the user exports next never disagree — a
+/// plain `str` compare here would show R1, R10, R2 over an export reading
+/// R1, R2, R10. Every other column sorts case-insensitively on its cell text.
+fn sorted_row_order(
+    rows: &[signex_output::BomRow],
+    columns: &[signex_output::BomColumn],
+    sort: Option<(usize, bool)>,
+) -> Vec<usize> {
+    use signex_output::BomColumn;
+    let mut row_order: Vec<usize> = (0..rows.len()).collect();
+    let Some((sort_idx, asc)) = sort else {
+        return row_order;
+    };
+    let Some(sort_col) = columns.get(sort_idx) else {
+        return row_order;
+    };
+    row_order.sort_by(|&a, &b| {
+        let (ra, rb) = (&rows[a], &rows[b]);
+        let cmp = match sort_col {
+            BomColumn::Qty => ra.qty.cmp(&rb.qty),
+            BomColumn::Designator | BomColumn::Reference => {
+                signex_types::designator::compare_references(
+                    first_reference(ra),
+                    first_reference(rb),
+                )
+            }
+            _ => column_value(sort_col, ra)
+                .to_ascii_lowercase()
+                .cmp(&column_value(sort_col, rb).to_ascii_lowercase()),
+        };
+        if asc { cmp } else { cmp.reverse() }
+    });
+    row_order
+}
+
 impl Signex {
     /// Build the scrollable BOM data grid (header strip + data rows) for the
     /// active preview. Returns the `scrollable` body the modal drops into its
@@ -43,18 +104,6 @@ impl Signex {
                 .get(&idx)
                 .copied()
                 .unwrap_or_else(|| default_column_width(c))
-        };
-        let column_value = |c: &BomColumn, r: &signex_output::BomRow| -> String {
-            match c {
-                BomColumn::Name => r.name.clone(),
-                BomColumn::Description => r.description.clone(),
-                BomColumn::Designator | BomColumn::Reference => r.references.join(", "),
-                BomColumn::Value => r.value.clone(),
-                BomColumn::Footprint => r.footprint.clone(),
-                BomColumn::LibRef => r.lib_ref.clone(),
-                BomColumn::Qty => r.qty.to_string(),
-                BomColumn::Custom(key) => r.custom.get(key).cloned().unwrap_or_default(),
-            }
         };
         // Compute the table's full content width — gutter + 1 px
         // gutter→data divider + sum(column_width) + (n-1) inter-
@@ -212,27 +261,8 @@ impl Signex {
             .width(Length::Fixed(table_width.max(100.0)))
             .into();
 
-        // Sort the row order if a sort spec is set. We sort indexes
-        // into preview.table.rows so we can borrow rows by reference
-        // without cloning the BomRow Vec. Numeric columns (Qty) sort
-        // numerically; the rest sort case-insensitively.
-        let mut row_order: Vec<usize> = (0..preview.table.rows.len()).collect();
-        if let Some((sort_idx, asc)) = preview.sort
-            && let Some(sort_col) = preview.options.columns.get(sort_idx)
-        {
-            let key = |r: &signex_output::BomRow| column_value(sort_col, r);
-            row_order.sort_by(|&a, &b| {
-                let ra = &preview.table.rows[a];
-                let rb = &preview.table.rows[b];
-                let cmp = match sort_col {
-                    BomColumn::Qty => ra.qty.cmp(&rb.qty),
-                    _ => key(ra)
-                        .to_ascii_lowercase()
-                        .cmp(&key(rb).to_ascii_lowercase()),
-                };
-                if asc { cmp } else { cmp.reverse() }
-            });
-        }
+        let row_order =
+            sorted_row_order(&preview.table.rows, &preview.options.columns, preview.sort);
 
         let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(preview.table.rows.len());
         for (visible_idx, &row_idx) in row_order.iter().enumerate() {
@@ -345,5 +375,77 @@ impl Signex {
             .width(Length::Fill)
             .height(Length::Fill);
         body.into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sorted_row_order;
+    use signex_output::{BomColumn, BomRow};
+
+    fn row(references: &[&str], qty: u32, value: &str) -> BomRow {
+        BomRow {
+            references: references.iter().map(|r| r.to_string()).collect(),
+            qty,
+            value: value.to_string(),
+            ..BomRow::default()
+        }
+    }
+
+    /// The export pipeline orders rollup rows by their first designator with
+    /// `signex_types::designator::compare_references`, and the preview modal
+    /// opens with the Designator column sort pre-seeded. Sorting the joined
+    /// reference string with `str::cmp` here showed R1, R10, R2 in the modal
+    /// over a CSV/HTML/XLSX reading R1, R2, R10 — the preview has to agree
+    /// with the file the user exports one click later.
+    #[test]
+    fn designator_sort_matches_the_export_order() {
+        let rows = vec![
+            row(&["R10"], 1, "1k"),
+            row(&["R2"], 1, "2k"),
+            row(&["R1", "R11"], 2, "3k"),
+        ];
+        let columns = vec![BomColumn::Designator, BomColumn::Qty];
+
+        let ascending = sorted_row_order(&rows, &columns, Some((0, true)));
+        assert_eq!(ascending, vec![2, 1, 0], "R1 < R2 < R10");
+
+        let descending = sorted_row_order(&rows, &columns, Some((0, false)));
+        assert_eq!(descending, vec![0, 1, 2], "descending is the exact reverse");
+    }
+
+    /// Qty stays numeric and the text columns stay case-insensitive — the
+    /// natural-order change must not have leaked into the other branches.
+    #[test]
+    fn other_columns_keep_their_own_orders() {
+        let rows = vec![
+            row(&["R1"], 10, "beta"),
+            row(&["R2"], 2, "Alpha"),
+            row(&["R3"], 9, "gamma"),
+        ];
+        let columns = vec![BomColumn::Designator, BomColumn::Qty, BomColumn::Value];
+
+        assert_eq!(
+            sorted_row_order(&rows, &columns, Some((1, true))),
+            vec![1, 2, 0]
+        );
+        assert_eq!(
+            sorted_row_order(&rows, &columns, Some((2, true))),
+            vec![1, 0, 2]
+        );
+    }
+
+    /// No sort spec, or one pointing past the column set, leaves the rollup
+    /// order the export pipeline already produced.
+    #[test]
+    fn unsorted_and_out_of_range_keep_rollup_order() {
+        let rows = vec![row(&["R10"], 1, "a"), row(&["R2"], 1, "b")];
+        let columns = vec![BomColumn::Designator];
+
+        assert_eq!(sorted_row_order(&rows, &columns, None), vec![0, 1]);
+        assert_eq!(
+            sorted_row_order(&rows, &columns, Some((7, true))),
+            vec![0, 1]
+        );
     }
 }

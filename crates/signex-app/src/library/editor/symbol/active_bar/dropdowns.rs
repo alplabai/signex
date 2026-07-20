@@ -374,9 +374,13 @@ fn shapes_entries(
                 .icon(ic::icon_dd_rect(tid))
                 .checked(active_tool == SymbolTool::PlaceRectangle),
         ),
+        DropdownEntry::Item(
+            DropdownItem::new("Polygon", arm(SymbolToolMsg::PlacePolygon))
+                .icon(ic::icon_dd_polygon(tid))
+                .checked(active_tool == SymbolTool::PlacePolygon),
+        ),
         DropdownEntry::Separator,
         DropdownEntry::Item(stub("Round Rectangle", path.clone())),
-        DropdownEntry::Item(stub("Polygon", path.clone())),
         DropdownEntry::Item(stub("Bezier", path.clone())),
         DropdownEntry::Item(stub("Pie Chart", path.clone())),
         DropdownEntry::Item(stub("Elliptical Arc", path)),

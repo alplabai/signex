@@ -49,9 +49,37 @@ pub enum SymbolEditorMsg {
         end_deg: f64,
     },
 
+    /// The Place Arc gesture's third click swept >= 360° — rejected
+    /// rather than committed (see `CanvasAction::ArcSweepRejected`'s
+    /// doc comment). Sets `SymbolEditorState::status_message`; no
+    /// graphic is pushed and no undo snapshot is recorded.
+    ArcSweepRejected,
+
     /// Stamp a default "Text" label anchored at `(x, y)`. Edit the
     /// content via the Properties panel after placement.
     AddText { x: f64, y: f64 },
+
+    /// Append one grid-snapped vertex to `SymbolEditorState::
+    /// polygon_vertices` (Place Polygon click-collect stash).
+    PolygonClick { x: f64, y: f64 },
+
+    /// Commit the Place Polygon stash: pushes a closed polygon
+    /// (implicitly closed — see `SymbolGraphicKind::Polygon`) through
+    /// `push_graphic` when the stash holds a valid ring (>= 3
+    /// vertices after normalising), else silently discards it.
+    PolygonCommit,
+
+    /// Discard the Place Polygon stash with no commit (Esc /
+    /// right-click while a placement is in flight).
+    PolygonCancel,
+
+    /// Join the selected Line/Arc graphics end-to-end into one closed
+    /// Polygon (`signex_library::chain_into_closed_contour`). No-op
+    /// when the selection is empty, contains fewer than one eligible
+    /// graphic, or contains any non-Line/Arc graphic. An open chain is
+    /// auto-closed once by synthesizing the missing edge between its
+    /// two loose ends before retrying.
+    JoinSelectionIntoPolygon,
 
     /// Select a symbol element (pin index / field key).
     Select(SymbolSelectionMsg),
@@ -189,4 +217,30 @@ pub enum SymbolEditorMsg {
 
     /// Toggle a kind on the symbol-editor selection filter.
     ToggleSelectionFilter(crate::library::editor::symbol::state::SymbolFilterKind),
+
+    // ── Right-click context menu ─────────────────────────────
+    /// Right-release-without-pan opens the context menu at
+    /// window-absolute `(x, y)`; `target` is what the cursor was
+    /// over, so the handler can select-first (Altium parity) before
+    /// showing the menu.
+    ShowContextMenu {
+        x: f32,
+        y: f32,
+        target: SymbolContextTargetMsg,
+    },
+
+    /// Close the open context menu (Esc / click outside / any
+    /// non-context-menu action fired through it).
+    CloseContextMenu,
+
+    /// Toggle which submenu row is accordion-expanded in place.
+    /// `None` collapses whichever submenu was open.
+    ContextMenuOpenSubmenu(Option<SymbolContextSubmenuMsg>),
+
+    /// A context-menu row's real action, boxed so this enum doesn't
+    /// grow for every other variant. The dispatcher applies the
+    /// boxed message via itself, then closes the menu — the "any
+    /// click on a real action closes the popover" behaviour every
+    /// row wants, expressed once instead of per-row.
+    ContextMenuAction(Box<SymbolEditorMsg>),
 }
