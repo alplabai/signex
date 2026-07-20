@@ -221,3 +221,104 @@ fn place_move_button(
     let tokens = theme_tokens(tid);
     bar_items(&editor, tid, &tokens).remove(2)
 }
+
+// ---------------------------------------------------------------------
+// #146 — footprint context-menu / active-bar selection + dirty/history
+// hygiene. These drive the real dispatcher
+// (`apply_footprint_primitive_edit`) against the app-wrapper editor so
+// the `dirty` flag and the undo `history` stack are observable.
+// ---------------------------------------------------------------------
+
+/// A wrapper editor pre-seeded with `n` pads at distinct positions and
+/// reset to a clean state, so a test asserts the *dispatcher* — not the
+/// fixture — is what dirties the document / stacks history.
+fn editor_with_pads(n: usize) -> crate::app::FootprintEditorState {
+    let mut e = default_editor();
+    for i in 0..n {
+        e.state.add_pad_at(i as f64 * 2.0, 0.0);
+    }
+    e.dirty = false;
+    e.history.clear();
+    e
+}
+
+#[test]
+fn issue_146_rotate_with_no_selection_stays_clean() {
+    use crate::library::editor::footprint::updates::apply_footprint_primitive_edit;
+    use crate::library::messages::FootprintEditorMsg;
+    let mut e = editor_with_pads(2);
+    e.state.selected_pad = None;
+    apply_footprint_primitive_edit(&mut e, FootprintEditorMsg::ActiveBarRotateSelection);
+    assert!(!e.dirty, "no-op rotate must not dirty the document");
+    assert!(
+        e.history.is_empty(),
+        "no-op rotate must not stack undo history"
+    );
+}
+
+#[test]
+fn issue_146_rotate_with_selection_dirties_and_snapshots_once() {
+    use crate::library::editor::footprint::updates::apply_footprint_primitive_edit;
+    use crate::library::messages::FootprintEditorMsg;
+    let mut e = editor_with_pads(2);
+    e.state.selected_pad = Some(0);
+    apply_footprint_primitive_edit(&mut e, FootprintEditorMsg::ActiveBarRotateSelection);
+    assert!(e.dirty, "a real rotate dirties the document");
+    assert_eq!(
+        e.history.len(),
+        1,
+        "exactly one undo snapshot per real rotate (no double-push)"
+    );
+}
+
+#[test]
+fn issue_146_align_to_grid_with_no_selection_stays_clean() {
+    use crate::library::editor::footprint::updates::apply_footprint_primitive_edit;
+    use crate::library::messages::FootprintEditorMsg;
+    let mut e = editor_with_pads(1);
+    e.state.selected_pad = None;
+    apply_footprint_primitive_edit(&mut e, FootprintEditorMsg::ActiveBarAlignSelectionToGrid);
+    assert!(!e.dirty);
+    assert!(e.history.is_empty());
+}
+
+#[test]
+fn issue_146_context_click_on_new_pad_clears_stale_extras() {
+    use crate::library::editor::footprint::state::FootprintContextTarget;
+    use crate::library::editor::footprint::updates::apply_footprint_primitive_edit;
+    use crate::library::messages::FootprintEditorMsg;
+    let mut e = editor_with_pads(3);
+    e.state.selected_pad = Some(0);
+    e.state.selected_pads_extra = vec![1, 2];
+    // Right-click a different pad: the primary selection changes, so the
+    // stale multi-select extras must be dropped.
+    apply_footprint_primitive_edit(
+        &mut e,
+        FootprintEditorMsg::ShowContextMenu {
+            x: 0.0,
+            y: 0.0,
+            target: FootprintContextTarget::Pad(1),
+        },
+    );
+    assert_eq!(e.state.selected_pad, Some(1));
+    assert!(
+        e.state.selected_pads_extra.is_empty(),
+        "a primary-selection change via right-click drops stale extras"
+    );
+}
+
+#[test]
+fn issue_146_context_select_all_fills_extras_like_active_bar() {
+    use crate::library::editor::footprint::state::FootprintContextAction;
+    use crate::library::editor::footprint::updates::apply_footprint_primitive_edit;
+    use crate::library::messages::FootprintEditorMsg;
+    let mut e = editor_with_pads(3);
+    apply_footprint_primitive_edit(
+        &mut e,
+        FootprintEditorMsg::ContextMenuAction(FootprintContextAction::SelectAllPads),
+    );
+    // Same set the active-bar Select All produces: pad 0 primary, rest
+    // in the extras.
+    assert_eq!(e.state.selected_pad, Some(0));
+    assert_eq!(e.state.selected_pads_extra, vec![1, 2]);
+}
