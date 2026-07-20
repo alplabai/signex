@@ -1,8 +1,21 @@
 //! `Engine::exec_place` — see `exec/mod.rs`.
 
 use crate::*;
+use signex_types::schematic::SelectedItem;
 
 impl Engine {
+    /// Reconcile junction dots after a move / rotate / mirror mutated wire
+    /// geometry, and return the document patch including `JUNCTIONS` if any
+    /// dot was minted. Shared by all three arms so none of them can drift
+    /// back into leaving a junction-less T behind (issue #402).
+    fn reconciled_patch(&mut self, items: &[SelectedItem]) -> DocumentPatch {
+        let mut patch = DocumentPatch::from_selected_items(items);
+        if self.reconcile_wire_junctions(items) {
+            patch |= DocumentPatch::JUNCTIONS;
+        }
+        patch
+    }
+
     pub(crate) fn exec_place(
         &mut self,
         before: SchematicSheet,
@@ -42,7 +55,7 @@ impl Engine {
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::SelectionMoved,
-                    document: DocumentPatch::from_selected_items(&items),
+                    document: self.reconciled_patch(&items),
                 };
 
                 self.record_history(before, patch_pair);
@@ -65,7 +78,7 @@ impl Engine {
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::SelectionRotated,
-                    document: DocumentPatch::from_selected_items(&items),
+                    document: self.reconciled_patch(&items),
                 };
 
                 self.record_history(before, patch_pair);
@@ -85,7 +98,7 @@ impl Engine {
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::SelectionMirrored,
-                    document: DocumentPatch::from_selected_items(&items),
+                    document: self.reconciled_patch(&items),
                 };
 
                 self.record_history(before, patch_pair);
@@ -131,13 +144,12 @@ impl Engine {
             Command::PlaceWireSegment { wire } => {
                 self.document.wires.push(wire.clone());
 
-                for point in [wire.start, wire.end] {
-                    if let Some(junction) =
-                        transform::needed_junction(point, &self.document, JUNCTION_TOLERANCE_MM)
-                    {
-                        self.document.junctions.push(junction);
-                    }
-                }
+                // Both directions of the T: the new wire's own endpoints
+                // landing on something, and something else's endpoint landing
+                // on the new wire's interior.
+                let minted =
+                    transform::junctions_for_wire(&wire, &self.document, JUNCTION_TOLERANCE_MM);
+                self.document.junctions.extend(minted);
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::ObjectPlaced,

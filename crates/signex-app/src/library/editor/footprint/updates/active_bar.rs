@@ -110,21 +110,34 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
             editor.state.snap_subtab = sub;
             editor.canvas_cache.clear();
         }
+        // v0.28 — Rotate / Flip / Align-to-Grid act on the WHOLE
+        // selection. All three used to read `state.selected_pad` alone
+        // and silently transform one pad out of N; a partial flip in
+        // particular leaves mixed F./B. layers, which is a fab error.
+        // #146 put all three on `mutates_footprint_state`'s exemption
+        // list, so `apply_footprint_primitive_edit` does NOT blanket-push
+        // for them: each snapshots here itself — exactly once, and only
+        // when the selection is non-empty, so a no-op transform never
+        // stacks undo history or dirties the document.
         FootprintEditorMsg::ActiveBarRotateSelection => {
-            // #146 — snapshot + dirty only when a pad is actually
-            // selected; a no-op rotate with nothing selected must not
-            // stack undo history or mark the document dirty.
-            if let Some(idx) = editor
-                .state
-                .selected_pad
-                .filter(|&i| i < editor.state.pads.len())
-            {
+            // #146 + #433 — snapshot + dirty only when at least one pad is
+            // selected (a no-op rotate must not stack undo history or dirty
+            // the document), then rotate EVERY selected pad (#390 multi-select)
+            // and re-mint each pad's derived sketch geometry through its one
+            // owner so positions off the moved frame follow it (#433).
+            if !editor.state.selected_pad_indices().is_empty() {
                 editor.push_history();
                 editor.with_parts(|state, primitive| {
-                    if let Some(pad) = state.pads.get_mut(idx) {
+                    for idx in state.selected_pad_indices() {
+                        let Some(pad) = state.pads.get_mut(idx) else {
+                            continue;
+                        };
                         pad.rotation_deg = (pad.rotation_deg + 90.0).rem_euclid(360.0);
-                        CanvasState::sync_pads_to_primitive(state, primitive);
+                        if !pad_to_sketch::remint_pad_geometry(pad, primitive) {
+                            pad_to_sketch::warn_profile_pad_untransformed("Rotate", &pad.number);
+                        }
                     }
+                    CanvasState::sync_pads_to_primitive(state, primitive);
                 });
                 editor.canvas_cache.clear();
                 editor.dirty = true;
@@ -132,33 +145,31 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
             editor.state.active_bar_menu = None;
         }
         FootprintEditorMsg::ActiveBarFlipSelection => {
-            // #146 — gate history + dirty on a real selection (see rotate).
-            if let Some(idx) = editor
-                .state
-                .selected_pad
-                .filter(|&i| i < editor.state.pads.len())
-            {
+            // #146 + #433 — gate history + dirty on a real selection (see
+            // rotate), then flip EVERY selected pad in place (#390 multi-
+            // select). Flipping to the other side mirrors the pad's copper
+            // about its own vertical axis: `signex_bake::pad` consumes the
+            // stored fields verbatim, so the WHOLE mirror-sensitive set moves
+            // together (angle, hole angle, copper X offset, chamfer corners,
+            // custom outline) — mirroring only the angle bakes a shape that is
+            // neither the front nor the back one. Pad POSITIONS are not
+            // mirrored (this flips each pad in place, not the footprint about
+            // its origin). The re-mint refreshes the sketch `PadAttr`, so the
+            // bake reads the swapped chamfer corners, not the pre-flip ones.
+            if !editor.state.selected_pad_indices().is_empty() {
                 editor.push_history();
                 editor.with_parts(|state, primitive| {
-                    if let Some(pad) = state.pads.get_mut(idx) {
-                        let new_layers: Vec<signex_library::LayerId> = pad
-                            .layers
-                            .iter()
-                            .map(|l| {
-                                let s = l.as_str();
-                                let flipped = if let Some(rest) = s.strip_prefix("F.") {
-                                    format!("B.{rest}")
-                                } else if let Some(rest) = s.strip_prefix("B.") {
-                                    format!("F.{rest}")
-                                } else {
-                                    s.to_string()
-                                };
-                                signex_library::LayerId::new(flipped)
-                            })
-                            .collect();
-                        pad.layers = new_layers;
-                        CanvasState::sync_pads_to_primitive(state, primitive);
+                    for idx in state.selected_pad_indices() {
+                        let Some(pad) = state.pads.get_mut(idx) else {
+                            continue;
+                        };
+                        pad.layers = pad.layers.iter().map(flip_layer).collect();
+                        pad.mirror_about_own_vertical_axis();
+                        if !pad_to_sketch::remint_pad_geometry(pad, primitive) {
+                            pad_to_sketch::warn_profile_pad_untransformed("Flip", &pad.number);
+                        }
                     }
+                    CanvasState::sync_pads_to_primitive(state, primitive);
                 });
                 editor.canvas_cache.clear();
                 editor.dirty = true;
@@ -296,26 +307,28 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
             editor.state.align_modal = None;
         }
         FootprintEditorMsg::ActiveBarAlignSelectionToGrid => {
-            // #146 — gate history + dirty on a real selection (see rotate).
-            if let Some(idx) = editor
-                .state
-                .selected_pad
-                .filter(|&i| i < editor.state.pads.len())
-            {
+            // #146 + #433 — gate history + dirty on a real selection (see
+            // rotate), then snap EVERY selected pad to the grid (#390 multi-
+            // select) and mirror each snap into the sketch so the construction
+            // outline + centre Point follow the pad (v0.23).
+            if !editor.state.selected_pad_indices().is_empty() {
                 editor.push_history();
                 editor.with_parts(|state, primitive| {
                     let step = state.snap_options.grid_step_mm.max(0.001);
-                    if let Some(pad) = state.pads.get_mut(idx) {
-                        let (x, y) = pad.position_mm;
-                        pad.position_mm = ((x / step).round() * step, (y / step).round() * step);
-                        // v0.23 — mirror the snap into the sketch so the
-                        // construction outline + centre Point follow the
-                        // pad. Skipping this left the sketch primitive
-                        // stranded at the pre-snap position.
-                        let pad_snapshot = pad.clone();
-                        pad_to_sketch::mirror_move_pad_in_sketch(&pad_snapshot, primitive);
-                        CanvasState::sync_pads_to_primitive(state, primitive);
+                    let mut snapshots: Vec<crate::library::editor::footprint::state::EditorPad> =
+                        Vec::new();
+                    for idx in state.selected_pad_indices() {
+                        if let Some(pad) = state.pads.get_mut(idx) {
+                            let (x, y) = pad.position_mm;
+                            pad.position_mm =
+                                ((x / step).round() * step, (y / step).round() * step);
+                            snapshots.push(pad.clone());
+                        }
                     }
+                    for snapshot in &snapshots {
+                        pad_to_sketch::mirror_move_pad_in_sketch(snapshot, primitive);
+                    }
+                    CanvasState::sync_pads_to_primitive(state, primitive);
                 });
                 editor.canvas_cache.clear();
                 editor.dirty = true;
@@ -398,4 +411,19 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
         }
         _ => unreachable!("non-active_bar variant routed to active_bar::apply"),
     }
+}
+
+/// Swap a layer between the front and back side. Anything without an
+/// `F.` / `B.` prefix (`*.Cu`, bare names) is side-agnostic and passes
+/// through unchanged.
+fn flip_layer(layer: &signex_library::LayerId) -> signex_library::LayerId {
+    let s = layer.as_str();
+    let flipped = if let Some(rest) = s.strip_prefix("F.") {
+        format!("B.{rest}")
+    } else if let Some(rest) = s.strip_prefix("B.") {
+        format!("F.{rest}")
+    } else {
+        s.to_string()
+    };
+    signex_library::LayerId::new(flipped)
 }

@@ -71,6 +71,7 @@ fn erc_rule_kind_key(rule: signex_erc::RuleKind) -> &'static str {
         MissingPowerFlag => "missing_power_flag",
         PowerPortShort => "power_port_short",
         SymbolOutsideSheet => "symbol_outside_sheet",
+        AmbiguousLabelAnchor => "ambiguous_label_anchor",
     }
 }
 
@@ -88,6 +89,7 @@ fn parse_erc_rule_kind(s: &str) -> Option<signex_erc::RuleKind> {
         "missing_power_flag" => MissingPowerFlag,
         "power_port_short" => PowerPortShort,
         "symbol_outside_sheet" => SymbolOutsideSheet,
+        "ambiguous_label_anchor" => AmbiguousLabelAnchor,
         _ => return None,
     })
 }

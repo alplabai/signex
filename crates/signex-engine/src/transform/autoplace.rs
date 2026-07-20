@@ -331,6 +331,100 @@ fn point_on_wire_interior(
     t > margin && t < 1.0 - margin
 }
 
+/// True when a dot at `point` would actually merge two wires — i.e. at least
+/// two of the sheet's wires contain `point` **exactly** in the netlist's 1 µm
+/// key space.
+///
+/// The geometry above works in `f64` mm with a 0.01 mm tolerance, but
+/// `SheetConnectivity` honours a junction only where `point_on_segment` holds
+/// with *exact* collinearity in the key space (D5.5). A candidate a few µm off
+/// a wire therefore yields a dot the netlist refuses to act on: a reassuring
+/// visual asserting a connection that does not exist, which is strictly worse
+/// than the undotted T it was meant to fix (issue #402). Off-grid endpoints —
+/// imported or legacy geometry — are exactly where the two metrics diverge, so
+/// every dot this module mints is gated on the netlist's own answer rather than
+/// on the float tolerance alone.
+fn junction_is_honoured(point: signex_types::schematic::Point, document: &SchematicSheet) -> bool {
+    let k = signex_net::pt_key(&point);
+    document
+        .wires
+        .iter()
+        .filter(|w| {
+            signex_net::point_on_segment(
+                k,
+                signex_net::pt_key(&w.start),
+                signex_net::pt_key(&w.end),
+            )
+        })
+        .count()
+        >= 2
+}
+
+fn junction_at(point: signex_types::schematic::Point) -> signex_types::schematic::Junction {
+    signex_types::schematic::Junction {
+        uuid: uuid::Uuid::new_v4(),
+        position: point,
+        diameter: 0.0,
+    }
+}
+
+/// Every junction dot the sheet needs on account of `wire` — **both**
+/// directions of the T: the wire's own endpoints landing on something
+/// ([`needed_junction`]) and something else's endpoint landing on this wire's
+/// interior ([`junctions_under_new_wire`]).
+///
+/// Call with `wire` already present in `document`. Any command that creates or
+/// moves wire geometry must route through here; reconciling only the placement
+/// path leaves drag / rotate / mirror minting junction-less Ts (issue #402).
+pub(crate) fn junctions_for_wire(
+    wire: &signex_types::schematic::Wire,
+    document: &SchematicSheet,
+    tolerance: f64,
+) -> Vec<signex_types::schematic::Junction> {
+    let mut placed: Vec<signex_types::schematic::Junction> = Vec::new();
+    for point in [wire.start, wire.end] {
+        if let Some(junction) = needed_junction(point, document, tolerance) {
+            placed.push(junction);
+        }
+    }
+    placed.extend(junctions_under_new_wire(wire, document, tolerance));
+    placed
+}
+
+/// Junction dots a newly drawn wire needs because an **existing** wire's
+/// endpoint lands on the new wire's interior — the mirror image of
+/// [`needed_junction`], which only ever inspects the *new* wire's own two
+/// endpoints.
+///
+/// Without this, drawing a stub and then a trunk through the stub's endpoint
+/// produced a real junction-less T with no dot. The netlist deliberately treats
+/// that as disconnected (issue #107), so the connection was silently lost
+/// (issue #402). `document` may already contain the new wire; a wire endpoint
+/// can never sit on its own interior, so no self-exclusion is needed.
+pub(crate) fn junctions_under_new_wire(
+    wire: &signex_types::schematic::Wire,
+    document: &SchematicSheet,
+    tolerance: f64,
+) -> Vec<signex_types::schematic::Junction> {
+    let mut placed: Vec<signex_types::schematic::Junction> = Vec::new();
+    for point in document
+        .wires
+        .iter()
+        .flat_map(|w| [w.start, w.end])
+        .filter(|p| point_on_wire_interior(*p, wire, tolerance))
+        .filter(|p| junction_is_honoured(*p, document))
+    {
+        let already = document.junctions.iter().chain(placed.iter()).any(|j| {
+            (j.position.x - point.x).abs() < tolerance && (j.position.y - point.y).abs() < tolerance
+        });
+        if already {
+            continue;
+        }
+        placed.push(junction_at(point));
+    }
+    placed
+}
+
 pub(crate) fn needed_junction(
     point: signex_types::schematic::Point,
     document: &SchematicSheet,
@@ -348,13 +442,6 @@ pub(crate) fn needed_junction(
         .wires
         .iter()
         .any(|wire| point_on_wire_interior(point, wire, tolerance));
-    if on_wire_interior {
-        return Some(signex_types::schematic::Junction {
-            uuid: uuid::Uuid::new_v4(),
-            position: point,
-            diameter: 0.0,
-        });
-    }
 
     let endpoint_count = document
         .wires
@@ -367,14 +454,10 @@ pub(crate) fn needed_junction(
             at_start || at_end
         })
         .count();
-    if endpoint_count >= 3 {
-        return Some(signex_types::schematic::Junction {
-            uuid: uuid::Uuid::new_v4(),
-            position: point,
-            diameter: 0.0,
-        });
+
+    if !(on_wire_interior || endpoint_count >= 3) {
+        return None;
     }
 
-    None
+    junction_is_honoured(point, document).then(|| junction_at(point))
 }
-

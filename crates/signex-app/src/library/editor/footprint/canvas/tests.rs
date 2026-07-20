@@ -89,6 +89,73 @@ fn point_to_segment_dist_zero_length() {
     assert!((d - 5.0).abs() < 1e-9);
 }
 
+// ─────────────────────────────────────────────────────────────────
+// Arc hit-test — `EntityKind::Arc` carries no radius field, so the
+// branch used to score raw distance-to-CENTRE. That made the arc
+// grabbable by clicking its empty middle and un-grabbable by clicking
+// the stroke the user can actually see. The radius is derivable from
+// the start point; these two assertions fail in opposite directions
+// without it.
+// ─────────────────────────────────────────────────────────────────
+
+/// Sketch with one arc of radius `r_mm` centred at the origin, plus
+/// its centre / start / end Points. Returns the arc's id.
+fn arc_sketch(r_mm: f64) -> (signex_sketch::SketchData, signex_sketch::id::SketchEntityId) {
+    use signex_sketch::entity::{Entity, EntityKind};
+    use signex_sketch::id::SketchEntityId;
+    use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
+
+    let plane_id = PlaneId::new();
+    let push = |sketch: &mut signex_sketch::SketchData, kind| {
+        let id = SketchEntityId::new();
+        sketch.entities.push(Entity::new(id, plane_id, kind));
+        id
+    };
+    let mut sketch = signex_sketch::SketchData {
+        planes: vec![Plane {
+            id: plane_id,
+            kind: PlaneKind::BoardTop,
+        }],
+        ..signex_sketch::SketchData::default()
+    };
+    let center = push(&mut sketch, EntityKind::Point { x: 0.0, y: 0.0 });
+    let start = push(&mut sketch, EntityKind::Point { x: r_mm, y: 0.0 });
+    let end = push(&mut sketch, EntityKind::Point { x: 0.0, y: r_mm });
+    let arc = push(
+        &mut sketch,
+        EntityKind::Arc {
+            center,
+            start,
+            end,
+            sweep_ccw: true,
+        },
+    );
+    (sketch, arc)
+}
+
+#[test]
+fn arc_hit_test_grabs_the_stroke_not_the_centre() {
+    use super::FootprintCanvasState;
+    use super::hit_test::sketch_hit_other;
+
+    // Default scale is 30 px/mm, so r = 1.5 mm ⇒ 45 px on screen —
+    // far outside the 12 px snap radius, which is what makes the
+    // centre-vs-edge distinction observable.
+    let (sketch, arc_id) = arc_sketch(1.5);
+    let cstate = FootprintCanvasState::default();
+
+    assert_eq!(
+        sketch_hit_other(Some(&sketch), &cstate, (1.5, 0.0)),
+        Some(arc_id),
+        "a click ON the arc stroke must hit the arc"
+    );
+    assert_eq!(
+        sketch_hit_other(Some(&sketch), &cstate, (0.0, 0.0)),
+        None,
+        "a click at the arc's CENTRE is 45 px from the stroke and must not hit"
+    );
+}
+
 #[test]
 fn polygon_filled_silk_uses_even_odd() {
     let pac = vec![

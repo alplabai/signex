@@ -12,6 +12,7 @@
 //! - [`attr`] — `EditorPad ↔ PadAttr` mapping and the BoardTop plane
 //!   helper.
 //! - [`mint`] — per-shape `mint_*_pad_geometry` functions.
+//! - [`remint_in_place`] — the id-preserving re-mint a live drag needs.
 //! - [`solve`] — post-solve "reverse mirror" helpers.
 //! - [`ownership`] — the single answer to "which sketch entities does
 //!   this pad own?", shared by the move and delete mirrors.
@@ -20,6 +21,7 @@ mod attr;
 mod helpers;
 mod mint;
 mod ownership;
+mod remint_in_place;
 mod solve;
 
 #[cfg(test)]
@@ -33,11 +35,23 @@ use std::collections::HashSet;
 
 use super::state::EditorPad;
 use attr::{ensure_board_top_plane, id_slug, pad_attr_from_editor_pad};
+pub use attr::{mirror_pad_attrs_into_sketch, mirror_rotation_expr};
 use mint::{
     mint_chamfered_pad_geometry, mint_oval_pad_geometry, mint_pad_corner_outline,
     mint_round_pad_geometry, mint_round_rect_pad_geometry,
 };
 
+/// The sketch-side expression for a pad's rotation. Shared by the
+/// mint path (`pad_attr_from_editor_pad`) and the Pads→Sketch
+/// attribute mirror in `sync_pads_to_primitive`, so both write the
+/// identical string and the two persistence paths cannot drift.
+/// Emits an explicit `deg` unit; `signex_bake::pad` reads it back
+/// through the Angle unit family.
+pub fn rotation_expr(deg: f64) -> String {
+    format!("{}deg", attr::format_f64(deg))
+}
+
+pub use remint_in_place::remint_pad_geometry_in_place;
 pub use solve::{
     mirror_solve_to_chamfer_anchors, mirror_solve_to_oval_geometry, mirror_solve_to_oval_size,
     mirror_solve_to_pad_stack, mirror_solve_to_round_rect_geometry,
@@ -120,9 +134,18 @@ pub fn mirror_add_pad_to_sketch(pad: &mut EditorPad, footprint: &mut Footprint) 
     if pad.sketch_entity_id.is_some() {
         return;
     }
+    mint_pad_entities(pad, footprint, SketchEntityId::new());
+}
+
+/// Mint a pad's centre `Point` + `PadAttr` + per-shape sidecar geometry
+/// under `entity_id`. The single body behind both the first mint
+/// (`mirror_add_pad_to_sketch`) and the re-mint
+/// (`remint_pad_geometry`), so a transform can never regenerate
+/// geometry through a second, differently-behaved copy of the layout
+/// rules.
+fn mint_pad_entities(pad: &mut EditorPad, footprint: &mut Footprint, entity_id: SketchEntityId) {
     let plane_id = ensure_board_top_plane(footprint);
     let sketch = footprint.sketch.get_or_insert_with(SketchData::default);
-    let entity_id = SketchEntityId::new();
     let mut entity = Entity::new(
         entity_id,
         plane_id,
@@ -135,6 +158,56 @@ pub fn mirror_add_pad_to_sketch(pad: &mut EditorPad, footprint: &mut Footprint) 
     sketch.entities.push(entity);
     pad.sketch_entity_id = Some(entity_id);
     mint_shape_geometry_for(sketch, plane_id, pad, entity_id);
+}
+
+/// Regenerate a pad's sketch sidecar after a transform that changes
+/// the pad FRAME — rotate, flip, anything that moves
+/// `local_to_world_mm`. Drops the old geometry through
+/// [`mirror_delete_pad_from_sketch`] and re-mints it through
+/// [`mint_pad_entities`], so the new angle is honoured BY
+/// CONSTRUCTION.
+///
+/// This is the whole point: per-shape layout knowledge (where a
+/// chamfer anchor sits, where a round-rect arc centre sits) lives in
+/// `mint` and nowhere else. Repositioning the four bbox corners with
+/// [`mirror_move_pad_in_sketch`] is correct only for the shapes whose
+/// entire outline IS those four corners — every parametric shape ends
+/// up with rotated corners joined to un-rotated anchors, an outline
+/// that is neither the old shape nor the new one. Teaching the corner
+/// mover each shape's layout would make a third copy of those rules;
+/// re-minting keeps one.
+///
+/// Re-minting also rewrites the `PadAttr` via `pad_attr_from_editor_pad`,
+/// which is what keeps `attr.shape` — the field `signex_bake::pad`
+/// reads — in step with the editor's `pad.shape` after a flip swaps
+/// the chamfer corners.
+///
+/// Returns `false` for a sketch-profile pad, where nothing was
+/// regenerated: its copper is a traced loop, not a parametric shape,
+/// so there is no layout to re-derive and the wildcard mint branch
+/// would fabricate a bbox outline it never had. The caller owes the
+/// user a warning in that case.
+///
+/// COST: constraints the user authored against the old outline
+/// entities go with the old entities. The delete path already sweeps
+/// them; a rotate is therefore a constraint-dropping edit. It is
+/// undoable in one step — the history snapshot carries the whole
+/// footprint file, sketch included.
+pub fn remint_pad_geometry(pad: &mut EditorPad, footprint: &mut Footprint) -> bool {
+    let Some(entity_id) = pad.sketch_entity_id else {
+        // No sketch link yet — nothing minted, nothing to regenerate.
+        return true;
+    };
+    if is_sketch_profile_pad(pad, footprint) {
+        return false;
+    }
+    mirror_delete_pad_from_sketch(pad, footprint);
+    // Reuse the SAME centre id: selection state and any external
+    // handle on the pad's centre `Point` keep pointing at the pad
+    // rather than dangling on a fresh UUID.
+    pad.corner_entity_ids = None;
+    mint_pad_entities(pad, footprint, entity_id);
+    true
 }
 
 /// Branch on `pad.shape` to mint the correct sketch geometry — Circle
@@ -252,7 +325,11 @@ pub fn mirror_move_pad_in_sketch(pad: &EditorPad, footprint: &mut Footprint) {
     let already_translated = translate_profile_with_pad(sketch, entity_id, pad.position_mm);
     // A pad move is a pure translation, so a single delta covers every
     // shape — no per-shape position tables (those belong to `solve`,
-    // which handles radius / size changes). Lines, Arcs and the Round
+    // which handles radius / size changes). Every owned entity (centre,
+    // bbox corners, and the parametric anchors / arc-centres a RoundRect
+    // / Oval / Chamfered pad mints) rides the same delta through the one
+    // `ownership::owned_sketch_entities` ledger — no second, divergent
+    // "what does a pad own" enumeration (#424). Lines, Arcs and the Round
     // Circle follow their endpoints, and `set_point_xy` no-ops on them.
     let owned = ownership::owned_sketch_entities(pad, sketch);
     for id in owned {
@@ -291,16 +368,69 @@ fn reassert_bbox_corners(
     let Some(corners) = pad.corner_entity_ids else {
         return;
     };
-    let (xmin, ymin, xmax, ymax) = pad.bbox_mm();
     // `[ne, se, sw, nw]` — the order `helpers::bbox_corner_points` and
-    // `mint::mint_pad_corner_outline` both mint in.
-    let positions = [(xmax, ymin), (xmax, ymax), (xmin, ymax), (xmin, ymin)];
+    // `mint::mint_pad_corner_outline` both mint in. Uses the ROTATED
+    // corners (#433): for `rotation_deg == 0` these ARE the axis-aligned
+    // bbox corners (an unrotated pad is unchanged), but a rotated pad's
+    // corners follow its frame across a move instead of snapping back to
+    // axis-aligned. Parametric anchors (RoundRect / Oval / Chamfered) are
+    // NOT handled here — `mirror_move_pad_in_sketch`'s owned-entity delta
+    // pass already translated every one of them through the ownership
+    // ledger, so a second sweep here would double-apply the delta.
+    let positions = pad.rotated_corners_mm();
     for (id, (x, y)) in corners.into_iter().zip(positions) {
         if already_translated.contains(&id) {
             continue;
         }
         helpers::set_point_xy(sketch, id, x, y);
     }
+}
+
+/// THE SEEDING RULE, in one place. A `pad.shape_params` VALUE that
+/// parses as a UUID names one of this pad's own sidecar entities; a
+/// canonical parameter binding (`corner_r` -> `corner_r_<slug>`, see
+/// `helpers::bind_shape_param`) is a parameter NAME, does not parse,
+/// and falls through.
+///
+/// Three readers need it — the move path's sidecar sweep, the delete
+/// path's drop set, and the in-place re-mint's pairing — and their
+/// TRAVERSALS are deliberately different. The seed must not be: a
+/// future shape that records its ids under a new key convention has to
+/// be taught here once, or it gets anchors that translate on a drag
+/// and survive a delete.
+fn sidecar_id(value: &str) -> Option<SketchEntityId> {
+    uuid::Uuid::parse_str(value).ok().map(SketchEntityId)
+}
+
+/// A sketch-profile pad's copper is a traced loop, not a parametric
+/// shape — there is nothing on the pad for a frame transform to ride
+/// on, and the loop stays exactly as drawn. This is the warning
+/// [`remint_pad_geometry`]'s `false` return obliges its caller to
+/// emit, kept next to the function that owes it so every caller says
+/// the same thing.
+pub fn warn_profile_pad_untransformed(op: &str, pad_number: &str) {
+    crate::diagnostics::log_warning(format!(
+        "{op}: pad {pad_number} is a sketch-profile pad — its outline loop was NOT transformed. \
+         Transform the sketch loop by hand before baking."
+    ));
+}
+
+/// True when this pad's copper is a traced sketch loop ("Make Pad
+/// from Profile") rather than a parametric shape.
+///
+/// Such a pad owns no `size_mm` / `shape` geometry for a transform to
+/// ride on — its outline is the loop. A caller that mirrors or
+/// otherwise reshapes pad copper must either transform the loop too or
+/// say out loud that it did not; silently leaving the loop put bakes
+/// the un-transformed shape.
+pub fn is_sketch_profile_pad(pad: &EditorPad, footprint: &Footprint) -> bool {
+    let Some(centre) = pad.sketch_entity_id else {
+        return false;
+    };
+    let Some(sketch) = footprint.sketch.as_ref() else {
+        return false;
+    };
+    profile_seed_line(sketch, centre).is_some()
 }
 
 /// Raw x/y of a sketch `Point` entity, straight off `SketchData` —
@@ -449,9 +579,15 @@ pub fn mirror_delete_pad_from_sketch(pad: &EditorPad, footprint: &mut Footprint)
     });
     // Drop dangling constraint refs — coarse rule via Debug
     // stringification (mirrors the SketchEdit::DeleteEntity path).
-    // Swept against the WHOLE drop set: matching the centre id alone
-    // left every constraint on a dropped corner / anchor / inset / arc
-    // pointing at an entity that no longer exists.
+    //
+    // Tested against the WHOLE drop set, not the centre alone. Every
+    // outline corner and every anchor just went with it, so a
+    // constraint the user authored against a chamfer anchor is as
+    // dangling as one against the centre; matching only the centre
+    // left those rows behind pointing at entities that no longer
+    // exist. It matters more now that re-mint runs this path on every
+    // rotate and flip rather than only on a pad delete — the stale
+    // rows would otherwise accumulate one transform at a time.
     let dropped_ids: Vec<String> = drop_set.iter().map(|id| id.to_string()).collect();
     sketch.constraints.retain(|c| {
         let rendered = format!("{:?}", c.kind);
