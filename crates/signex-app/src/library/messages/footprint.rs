@@ -342,6 +342,33 @@ pub enum FootprintEditorMsg {
     /// for the per-operation geometry.
     AlignPads(crate::library::editor::footprint::state::AlignOp),
 
+    /// #370 — Active-bar Align ▸ "Align…". Opens the per-axis Align
+    /// dialog ([`FootprintEditorState::align_modal`]). Composes the
+    /// existing [`AlignOp`](crate::library::editor::footprint::state::AlignOp)
+    /// variants; adds no new geometry.
+    AlignOpen,
+
+    /// #370 — Align dialog: set (or clear, with `None`) the chosen
+    /// horizontal op. `Some(op)` restricted to the X-axis variants
+    /// (`Left` / `CenterH` / `Right` / `DistributeH`) by the view.
+    AlignSetHorizontal(Option<crate::library::editor::footprint::state::AlignOp>),
+
+    /// #370 — Align dialog: set (or clear, with `None`) the chosen
+    /// vertical op. `Some(op)` restricted to the Y-axis variants
+    /// (`Top` / `CenterV` / `Bottom` / `DistributeV`) by the view.
+    AlignSetVertical(Option<crate::library::editor::footprint::state::AlignOp>),
+
+    /// #370 — Confirm the Align dialog: apply both chosen axes under a
+    /// SINGLE undo snapshot, then close. Choosing neither axis (or a
+    /// selection too small for the chosen ops) is a clean no-op that
+    /// pushes no history and does not dirty the document.
+    AlignConfirm,
+
+    /// #370 — Cancel/dismiss the Align dialog without touching the
+    /// selection. Reached by the Cancel button, the close ✕, the
+    /// backdrop click, and Esc.
+    AlignCancel,
+
     /// Active-bar Selection → Select All. Pads mode picks the first
     /// pad; Sketch mode picks the first sketch entity.
     ActiveBarSelectAll,

@@ -73,6 +73,29 @@ impl MoveByModal {
     }
 }
 
+/// #370 — "Align…" dialog state. `None` on
+/// [`FootprintEditorState::align_modal`] means the modal is closed.
+///
+/// The dialog is a pure composition shell over the existing
+/// [`AlignOp`] variants — it introduces no new geometry. The user picks
+/// at most one horizontal op and at most one vertical op (each
+/// `None` = "leave that axis untouched"); Confirm applies both chosen
+/// ops under a SINGLE undo snapshot (see `updates::active_bar`). The two
+/// axes are independent — horizontal ops touch only X, vertical ops only
+/// Y — so applying both in sequence equals picking the two concrete
+/// dropdown rows one at a time.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AlignModal {
+    /// Chosen horizontal op ([`AlignOp::Left`] / [`AlignOp::CenterH`] /
+    /// [`AlignOp::Right`] / [`AlignOp::DistributeH`]), or `None` to
+    /// leave the X axis untouched.
+    pub horizontal: Option<AlignOp>,
+    /// Chosen vertical op ([`AlignOp::Top`] / [`AlignOp::CenterV`] /
+    /// [`AlignOp::Bottom`] / [`AlignOp::DistributeV`]), or `None` to
+    /// leave the Y axis untouched.
+    pub vertical: Option<AlignOp>,
+}
+
 /// Live, in-memory state of the Footprint canvas — drives interaction
 /// and rendering. The authoritative pad list lives on
 /// `ComponentEditorState.footprint.pads`; this struct mirrors it for
@@ -165,6 +188,10 @@ pub struct FootprintEditorState {
     /// Two erasable string buffers (same pattern as `dimension_input`)
     /// so typing "-" / "." mid-entry doesn't fight an f64 binding.
     pub move_by_modal: Option<MoveByModal>,
+    /// #370 — "Align…" dialog. `None` = closed. Holds the chosen
+    /// per-axis ops; Confirm composes the existing [`AlignOp`] variants
+    /// under one history snapshot (see [`AlignModal`]).
+    pub align_modal: Option<AlignModal>,
     /// v0.15 — Pads-mode tool.
     pub pads_tool: PadsTool,
     /// v0.16.1 — sticky construction-mode toggle.
@@ -283,6 +310,7 @@ impl FootprintEditorState {
             selected_sketch_extra: Vec::new(),
             dimension_input: String::new(),
             move_by_modal: None,
+            align_modal: None,
             pads_tool: PadsTool::default(),
             construction_mode: false,
             centerline_mode: false,

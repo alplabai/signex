@@ -4,6 +4,7 @@
 //! The router delegates all active_bar `FootprintEditorMsg` variants here;
 //! bodies are verbatim, so each arm keeps its own inner `use`s.
 
+use super::align_pads;
 use super::footprint_nudge_selection;
 use crate::library::editor::footprint::pad_to_sketch;
 use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
@@ -195,6 +196,104 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
         }
         FootprintEditorMsg::MoveByCancel => {
             editor.state.move_by_modal = None;
+        }
+        // #370 — "Align…" dialog. Open/edit/cancel mutate only the
+        // transient `align_modal` state; Confirm composes the chosen
+        // per-axis ops over the SAME `align_pads` helper the concrete
+        // `AlignPads` rows use, under exactly one history snapshot.
+        FootprintEditorMsg::AlignOpen => {
+            editor.state.align_modal = Some(Default::default());
+            editor.state.active_bar_menu = None;
+        }
+        FootprintEditorMsg::AlignSetHorizontal(op) => {
+            if let Some(m) = editor.state.align_modal.as_mut() {
+                m.horizontal = op;
+            }
+        }
+        FootprintEditorMsg::AlignSetVertical(op) => {
+            if let Some(m) = editor.state.align_modal.as_mut() {
+                m.vertical = op;
+            }
+        }
+        FootprintEditorMsg::AlignConfirm => {
+            use crate::library::editor::footprint::state::AlignOp;
+
+            // Read the two chosen ops before mutating anything.
+            let (chosen_h, chosen_v) = editor
+                .state
+                .align_modal
+                .as_ref()
+                .map(|m| (m.horizontal, m.vertical))
+                .unwrap_or((None, None));
+
+            // Collect + dedup the selection indices up front so we can
+            // decide whether ANY chosen op can apply before touching
+            // history. Mirrors the `AlignPads` handler's collection.
+            let mut indices: Vec<usize> = Vec::new();
+            if let Some(p) = editor.state.selected_pad {
+                indices.push(p);
+            }
+            indices.extend(editor.state.selected_pads_extra.iter().copied());
+            indices.sort_unstable();
+            indices.dedup();
+            indices.retain(|&i| i < editor.state.pads.len());
+
+            // Keep only the chosen ops the selection is large enough to
+            // apply — align needs ≥2 pads, distribute ≥3 (the exact gate
+            // `AlignPads` uses per concrete row). This makes Confirm
+            // identical to picking those rows one at a time: each too-
+            // small op falls through as a clean no-op.
+            let applicable: Vec<AlignOp> = [chosen_h, chosen_v]
+                .into_iter()
+                .flatten()
+                .filter(|op| {
+                    let min_needed = match op {
+                        AlignOp::DistributeH | AlignOp::DistributeV => 3,
+                        _ => 2,
+                    };
+                    indices.len() >= min_needed
+                })
+                .collect();
+
+            // Choosing neither axis (or a selection too small for every
+            // chosen op) is a clean no-op: no history, no dirty. Only
+            // when at least one op will actually move pads do we snapshot
+            // ONCE and apply every applicable op under it — that single
+            // `push_history` is what makes the whole confirm one undo
+            // step even when both axes are applied. The two axes are
+            // independent (H touches X, V touches Y), so applying them in
+            // sequence equals two separate `AlignPads` dispatches.
+            if !applicable.is_empty() {
+                editor.push_history();
+                editor.with_parts(|state, primitive| {
+                    // Reuse the active grid step for the (unused here, but
+                    // required) spacing increment, matching `AlignPads`.
+                    let step = state.snap_options.grid_step_mm.max(0.001);
+                    for op in &applicable {
+                        align_pads(state, &indices, *op, step);
+                    }
+                    // Mirror every selected pad's final centre into the
+                    // sketch once, after BOTH axes settle, then re-sync
+                    // the literal `Pad` list — same as `AlignPads`.
+                    let mut moved: Vec<crate::library::editor::footprint::state::EditorPad> =
+                        Vec::with_capacity(indices.len());
+                    for &i in &indices {
+                        if let Some(pad) = state.pads.get(i) {
+                            moved.push(pad.clone());
+                        }
+                    }
+                    for snapshot in &moved {
+                        pad_to_sketch::mirror_move_pad_in_sketch(snapshot, primitive);
+                    }
+                    CanvasState::sync_pads_to_primitive(state, primitive);
+                });
+                editor.canvas_cache.clear();
+                editor.dirty = true;
+            }
+            editor.state.align_modal = None;
+        }
+        FootprintEditorMsg::AlignCancel => {
+            editor.state.align_modal = None;
         }
         FootprintEditorMsg::ActiveBarAlignSelectionToGrid => {
             // #146 — gate history + dirty on a real selection (see rotate).

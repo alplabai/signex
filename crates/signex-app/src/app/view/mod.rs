@@ -375,6 +375,7 @@ impl Signex {
                     ed.state.placement_paused
                         || ed.state.active_bar_menu.is_some()
                         || ed.state.move_by_modal.is_some()
+                        || ed.state.align_modal.is_some()
                 })
                 .unwrap_or(false)
             || ui.panel_list_open
@@ -676,6 +677,7 @@ impl Signex {
         layers.extend(self.footprint_active_bar_overlay());
         layers.extend(self.footprint_context_menu_overlay());
         layers.extend(self.footprint_move_by_overlay());
+        layers.extend(self.footprint_align_overlay());
         layers.extend(self.symbol_editor_active_bar_overlay());
         layers.extend(self.symbol_context_menu_overlay());
         layers.extend(self.text_edit_overlay());
