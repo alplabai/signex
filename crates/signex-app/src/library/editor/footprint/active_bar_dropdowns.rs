@@ -6,10 +6,10 @@
 //! handled by the caller (`unified_active_bar`).
 //!
 //! Wiring philosophy: items that map to existing primitives (Selection
-//! Filter pills, Snap toggles, snap-mode picks, Place tools, Body3D,
-//! Extruded 3D Body, Move Selection by X,Y, Text Frame) emit the real
-//! `FootprintEditorMsg`; the few items that still need new primitives
-//! (Break Track, Drag Track End, the generic Align… dialog launcher)
+//! Filter pills, Snap toggles, snap-mode picks, Place tools, Drag Track
+//! End, Body3D, Extruded 3D Body, Move Selection by X,Y, Text Frame)
+//! emit the real `FootprintEditorMsg`; the few items that still need
+//! new primitives (Break Track, the generic Align… dialog launcher)
 //! emit `FootprintActiveBarStub` so the action logs a "coming soon"
 //! warn and dismisses the menu cleanly.
 
@@ -335,13 +335,23 @@ fn place_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessag
         DropdownEntry::Item(
             DropdownItem::new("Drag", activate_select(path.clone())).icon(ic::icon_dd_drag(tid)),
         ),
-        // Break Track / Drag Track End stay stubbed — they need
-        // track-segment split + endpoint-drag infrastructure that the
-        // footprint editor does not have yet.
+        // Break Track still needs the track-segment split primitive
+        // (out of scope for #361) so it stays a stub. Drag Track End no
+        // longer does: the endpoint-drag path already exists, so the row
+        // arms the real Sketch-mode DragTrackEnd tool below.
         // v0.15: needs track-segment split infra
         DropdownEntry::Item(stub("Break Track", path.clone())),
-        // v0.15: needs track-segment split infra
-        DropdownEntry::Item(stub("Drag Track End", path.clone())),
+        // #361 — arm the endpoint-biased segment grab. Switches to
+        // Sketch mode + the DragTrackEnd tool (see
+        // canvas/input/tools.rs::try_drag_track_end_grab); a left-press
+        // on any sketch Line then drags its nearer endpoint live.
+        DropdownEntry::Item(DropdownItem::new(
+            "Drag Track End",
+            fp(
+                path.clone(),
+                FootprintEditorMsg::ActiveBarSetSketchTool(SketchTool::DragTrackEnd),
+            ),
+        )),
         DropdownEntry::Separator,
         DropdownEntry::Item(
             DropdownItem::new("Move Selection", activate_select(path.clone()))
