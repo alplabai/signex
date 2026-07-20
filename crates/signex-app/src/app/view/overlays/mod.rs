@@ -250,10 +250,12 @@ impl Signex {
             Space::new().height(0).into()
         };
 
-        // Card width matches the chrome search bar exactly so the
-        // dropdown reads as an extension of the input rather than a
-        // floating popup that happens to be nearby.
-        let card_w = CHROME_SEARCH_BAR_WIDTH;
+        // Card width and x come from the same geometry the chrome strip
+        // lays the input out with, so the dropdown reads as an extension
+        // of the input rather than a floating popup that happens to be
+        // nearby — including after a resize shrinks the bar.
+        let (ww, _wh) = self.ui_state.window_size;
+        let (card_x, card_w) = super::chrome_search_bar_geometry(ww);
         let card = container(column![body, footer])
             .width(card_w)
             .max_height(360.0)
@@ -268,17 +270,8 @@ impl Signex {
                 ..container::Style::default()
             });
 
-        let (ww, _wh) = self.ui_state.window_size;
-        // Track the chrome search bar's actual layout position so the
-        // dropdown lines up with the input. The chrome row is
-        // `[menu, drag_fill, search, drag_fill, controls]`; the two
-        // Fill drag zones split the leftover evenly, so the search
-        // bar starts at `menu_w + leftover/2`.
-        let menu_w = crate::menu_bar::approx_menu_bar_width();
-        let leftover = (ww - menu_w - card_w - CHROME_CONTROLS_W).max(0.0);
-        let x = (menu_w + leftover / 2.0).max(8.0);
         let y = crate::menu_bar::MENU_BAR_HEIGHT + 4.0;
-        super::view::translate::Translate::new(card, (x, y)).into()
+        super::view::translate::Translate::new(card, (card_x, y)).into()
     }
 
     pub(super) fn dismiss_layer(on_press: Message) -> Element<'static, Message> {
