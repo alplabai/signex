@@ -167,7 +167,8 @@ impl LibraryUpdatesState {
     /// by `ref_des` and applies the `bump_kind.default_checked()`
     /// rule to each entry's checkbox.
     pub fn new(schematic_path: PathBuf, mut entries: Vec<LibraryUpdateEntry>) -> Self {
-        entries.sort_by(|a, b| a.ref_des.cmp(&b.ref_des));
+        entries
+            .sort_by(|a, b| signex_types::designator::compare_references(&a.ref_des, &b.ref_des));
         for entry in &mut entries {
             entry.selected = entry.bump_kind.default_checked();
         }
@@ -438,19 +439,23 @@ mod tests {
             path,
             vec![
                 mk("U3", BumpKind::Major),
+                mk("R10", BumpKind::Patch),
+                mk("R2", BumpKind::Patch),
                 mk("R1", BumpKind::Patch),
                 mk("C2", BumpKind::Minor),
             ],
         );
-        // Sorted ascending by ref_des: C2 < R1 < U3.
-        assert_eq!(state.entries[0].ref_des, "C2");
-        assert_eq!(state.entries[1].ref_des, "R1");
-        assert_eq!(state.entries[2].ref_des, "U3");
-        // Only patch is pre-checked.
+        // Sorted ascending by ref_des, naturally: R10 comes last, not
+        // between R1 and R2 the way `str::cmp` would place it.
+        let order: Vec<&str> = state.entries.iter().map(|e| e.ref_des.as_str()).collect();
+        assert_eq!(order, vec!["C2", "R1", "R2", "R10", "U3"]);
+        // Only patches are pre-checked.
         assert!(!state.entries[0].selected); // minor
         assert!(state.entries[1].selected); // patch
-        assert!(!state.entries[2].selected); // major
-        assert_eq!(state.selected_count(), 1);
+        assert!(state.entries[2].selected); // patch
+        assert!(state.entries[3].selected); // patch
+        assert!(!state.entries[4].selected); // major
+        assert_eq!(state.selected_count(), 3);
     }
 
     /// `toggle` flips the checkbox for a matching `symbol_uuid` and

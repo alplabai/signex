@@ -17,6 +17,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use signex_types::designator::compare_references;
 use signex_types::net::{Net, NetId, Netlist, Terminal};
 use signex_types::schematic::{Label, LabelType, SchematicSheet};
 use uuid::Uuid;
@@ -210,7 +211,10 @@ pub fn build_project_netlist(
             let id = NetId(idx as u32 + 1);
             let name = r.name.unwrap_or_else(|| format!("N${}", id.0));
             let mut terminals = r.terminals;
-            terminals.sort_by(|a, b| a.reference.cmp(&b.reference).then(a.pin.cmp(&b.pin)));
+            terminals.sort_by(|a, b| {
+                compare_references(&a.reference, &b.reference)
+                    .then_with(|| compare_references(&a.pin, &b.pin))
+            });
             Net {
                 id,
                 name,

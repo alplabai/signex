@@ -385,12 +385,14 @@ pub fn save_profile_set(set: &ShortcutProfileSet) -> Result<(), ProfileLoadError
     save_profile_set_at(&path, set)
 }
 
+/// Crash-safe: [`signex_types::atomic_io::atomic_write`] writes to a temp
+/// sibling, fsyncs it and renames over the destination, so a crash mid-save
+/// leaves the user's previously saved keymap profiles intact rather than a
+/// truncated file. It also creates the parent directory, so no separate
+/// `create_dir_all` here.
 pub fn save_profile_set_at(path: &Path, set: &ShortcutProfileSet) -> Result<(), ProfileLoadError> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(ProfileLoadError::Io)?;
-    }
     let source = export_custom_profiles(set)?;
-    std::fs::write(path, source).map_err(ProfileLoadError::Io)
+    signex_types::atomic_io::atomic_write(path, source.as_bytes()).map_err(ProfileLoadError::Io)
 }
 
 pub fn import_custom_profile(source: &str) -> Result<ShortcutProfile, ProfileLoadError> {

@@ -71,9 +71,9 @@ formats one-way. Run it once against your project; open the resulting
   (click-by-click), editable drawing Properties with live preview
 - Copy/paste, undo/redo (100 levels), save to the native `.snxsch` /
   `.snxprj` format (TOML envelope + TSV bulk blocks, line-diffable in git)
-- 6 built-in themes with customizable theme editor
+- 7 built-in themes with customizable theme editor
 - Altium-style docking panels with drag-to-undock/dock
-- Active Bar — 14-button floating toolbar with dropdown menus
+- Active Bar — 13-button floating toolbar with dropdown menus
 - Context menu, in-place text editing (F2), selection filter
 - Properties panel with context-aware field editing, Parameter Manager
 - **Multi-window editing (v0.7)** — undock any tab into its own OS window
@@ -151,7 +151,7 @@ formats one-way. Run it once against your project; open the resulting
   <br>
   <img src="assets/screenshots/solarized-theme.png" alt="Solarized Light theme" width="400">
   <br>
-  <em>Catppuccin Mocha, GitHub Dark, Solarized Light — 6 themes built in, fully customizable</em>
+  <em>Catppuccin Mocha, GitHub Dark, Solarized Light — 7 themes built in, fully customizable</em>
 </p>
 
 </details>

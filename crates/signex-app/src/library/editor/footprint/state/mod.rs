@@ -73,6 +73,29 @@ impl MoveByModal {
     }
 }
 
+/// #370 — "Align…" dialog state. `None` on
+/// [`FootprintEditorState::align_modal`] means the modal is closed.
+///
+/// The dialog is a pure composition shell over the existing
+/// [`AlignOp`] variants — it introduces no new geometry. The user picks
+/// at most one horizontal op and at most one vertical op (each
+/// `None` = "leave that axis untouched"); Confirm applies both chosen
+/// ops under a SINGLE undo snapshot (see `updates::active_bar`). The two
+/// axes are independent — horizontal ops touch only X, vertical ops only
+/// Y — so applying both in sequence equals picking the two concrete
+/// dropdown rows one at a time.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AlignModal {
+    /// Chosen horizontal op ([`AlignOp::Left`] / [`AlignOp::CenterH`] /
+    /// [`AlignOp::Right`] / [`AlignOp::DistributeH`]), or `None` to
+    /// leave the X axis untouched.
+    pub horizontal: Option<AlignOp>,
+    /// Chosen vertical op ([`AlignOp::Top`] / [`AlignOp::CenterV`] /
+    /// [`AlignOp::Bottom`] / [`AlignOp::DistributeV`]), or `None` to
+    /// leave the Y axis untouched.
+    pub vertical: Option<AlignOp>,
+}
+
 /// Live, in-memory state of the Footprint canvas — drives interaction
 /// and rendering. The authoritative pad list lives on
 /// `ComponentEditorState.footprint.pads`; this struct mirrors it for
@@ -165,6 +188,10 @@ pub struct FootprintEditorState {
     /// Two erasable string buffers (same pattern as `dimension_input`)
     /// so typing "-" / "." mid-entry doesn't fight an f64 binding.
     pub move_by_modal: Option<MoveByModal>,
+    /// #370 — "Align…" dialog. `None` = closed. Holds the chosen
+    /// per-axis ops; Confirm composes the existing [`AlignOp`] variants
+    /// under one history snapshot (see [`AlignModal`]).
+    pub align_modal: Option<AlignModal>,
     /// v0.15 — Pads-mode tool.
     pub pads_tool: PadsTool,
     /// v0.16.1 — sticky construction-mode toggle.
@@ -233,7 +260,10 @@ pub struct FootprintEditorState {
 impl FootprintEditorState {
     /// Build canvas state from the primitive's pad list.
     pub fn from_footprint(fp: &Footprint) -> Self {
-        let pads = fp.pads.iter().map(EditorPad::from_pad).collect();
+        let mut pads: Vec<EditorPad> = fp.pads.iter().map(EditorPad::from_pad).collect();
+        // Rebuild the sketch link from the sketch — `from_pad` cannot,
+        // and without it every mirror early-returns after a reopen.
+        pad::relink_pads_to_sketch(&mut pads, fp);
         let mut s = Self::with_pads(pads);
         s.recompute_courtyard();
         s
@@ -280,6 +310,7 @@ impl FootprintEditorState {
             selected_sketch_extra: Vec::new(),
             dimension_input: String::new(),
             move_by_modal: None,
+            align_modal: None,
             pads_tool: PadsTool::default(),
             construction_mode: false,
             centerline_mode: false,
@@ -616,47 +647,24 @@ impl FootprintEditorState {
     /// `sketch_entity_id: None`, so a Pads-mode move can't mirror into
     /// the sketch and the pad snaps back to its original position on the
     /// next bake.
+    ///
+    /// The number match is only applied where the number identifies ONE
+    /// pad on each side. Pad numbers are not unique in signex (a
+    /// shared-designator row / thermal / shield set is normal), and a
+    /// last-wins number map hands several pads the same
+    /// `sketch_entity_id` — after which a Pads-mode delete of one runs
+    /// the delete mirror over another pad's geometry and its copper
+    /// silently disappears from the bake. Ambiguous numbers are left
+    /// unlinked here and offered to `relink_pads_to_sketch`, which
+    /// disambiguates by exact position and refuses if even that ties.
     pub fn refresh_pads_from_primitive(&mut self, fp: &Footprint) {
-        use std::collections::HashMap;
-        type Link = (
-            Option<signex_sketch::id::SketchEntityId>,
-            Option<[signex_sketch::id::SketchEntityId; 4]>,
-            ShapeParamMap,
-        );
-        let old_links: HashMap<String, Link> = self
-            .pads
-            .iter()
-            .map(|p| {
-                (
-                    p.number.clone(),
-                    (
-                        p.sketch_entity_id,
-                        p.corner_entity_ids,
-                        p.shape_params.clone(),
-                    ),
-                )
-            })
-            .collect();
-        let sketch_links: HashMap<String, signex_sketch::id::SketchEntityId> = fp
-            .sketch
-            .as_ref()
-            .map(|s| {
-                s.entities
-                    .iter()
-                    .filter_map(|e| e.pad.as_ref().map(|attr| (attr.number.clone(), e.id)))
-                    .collect()
-            })
-            .unwrap_or_default();
         let mut new_pads: Vec<EditorPad> = fp.pads.iter().map(EditorPad::from_pad).collect();
-        for p in &mut new_pads {
-            if let Some((sid, cids, params)) = old_links.get(&p.number) {
-                p.sketch_entity_id = *sid;
-                p.corner_entity_ids = *cids;
-                p.shape_params = params.clone();
-            } else if let Some(sid) = sketch_links.get(&p.number) {
-                p.sketch_entity_id = Some(*sid);
-            }
-        }
+        pad::carry_links_by_unique_number(&self.pads, &mut new_pads);
+        // Anything the number carry could not supply a link for — a pad
+        // that first appears from the sketch side, one whose old link
+        // was itself `None` after a reopen, or one whose number is
+        // ambiguous — is relinked from the sketch.
+        pad::relink_pads_to_sketch(&mut new_pads, fp);
         self.pads = new_pads;
         if let Some(idx) = self.selected_pad {
             if idx >= self.pads.len() {

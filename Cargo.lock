@@ -5221,6 +5221,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "signex-app",
  "signex-bake",
  "signex-engine",
  "signex-erc",
@@ -5264,6 +5265,7 @@ name = "signex-bom"
 version = "0.14.0"
 dependencies = [
  "serde",
+ "signex-types",
 ]
 
 [[package]]

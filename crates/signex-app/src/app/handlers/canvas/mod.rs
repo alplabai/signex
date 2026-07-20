@@ -248,34 +248,24 @@ impl Signex {
     }
 
     fn resolve_child_sheet_path(&self, child_filename: &str) -> Option<std::path::PathBuf> {
-        let trimmed = child_filename.trim();
-        if trimmed.is_empty() {
-            return None;
-        }
-
-        let raw = std::path::PathBuf::from(trimmed);
-        if raw.is_absolute() {
-            return Some(raw);
-        }
-
-        // A `ChildSheet.filename` is relative to the PARENT SHEET's own
-        // directory, never to the project root — the convention every other
-        // consumer of it already uses (`state::scope::parent_of` and
-        // `project_sheets::project_children_map`, ADR-0002 D8). The sheet on
-        // screen *is* the parent, so its directory is the base. Resolving
-        // against the project directory instead breaks the moment a sheet
-        // lives in a subdirectory: /w/a/sub/mid.snxsch referencing
-        // "leaf.snxsch" resolved to /w/a/leaf.snxsch — the wrong file, or
-        // "Child-sheet file not found" for a child sitting right next to its
-        // parent (#339, #406).
-        let base_dir = self
+        // #339/#406 — resolve a relative child reference against the directory
+        // of the sheet that CARRIES the reference (the active tab's path), not
+        // the project directory. This matches `project_children_map` / the
+        // netlist, so navigation lands on the same file the netlist stitched
+        // instead of a phantom sibling beside the `.snxprj`. Falls back to the
+        // project directory when the active tab is unsaved (no path). Both call
+        // sites go through the one shared resolver (`resolve_child_reference`),
+        // which also handles the empty and absolute-reference cases.
+        let parent_dir = self
             .active_tab_path()
-            .and_then(|path| path.parent().map(std::path::PathBuf::from));
-
-        Some(match base_dir {
-            Some(base) => base.join(raw),
-            None => raw,
-        })
+            .and_then(|path| path.parent().map(std::path::PathBuf::from))
+            .or_else(|| {
+                self.document_state
+                    .active_loaded_project()
+                    .and_then(|p| p.path.parent().map(std::path::PathBuf::from))
+            })
+            .unwrap_or_default();
+        crate::app::project_sheets::resolve_child_reference(&parent_dir, child_filename)
     }
 
     pub(crate) fn open_or_focus_child_sheet(&mut self, child_filename: &str) {

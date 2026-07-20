@@ -304,8 +304,8 @@ impl SnxSchematic {
             bus_entries: sheet_extras.bus_entries,
             drawings: sheet_extras.drawings,
             no_erc_directives: sheet_extras.no_erc_directives,
-            title_block: sheet_extras.title_block,
-            lib_symbols: sheet_extras.lib_symbols,
+            title_block: sheet_extras.title_block.into_iter().collect(),
+            lib_symbols: sheet_extras.lib_symbols.into_iter().collect(),
         };
 
         Ok(SnxSchematic {

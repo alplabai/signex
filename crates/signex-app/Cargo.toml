@@ -67,7 +67,19 @@ dirs = "5"
 toml = { workspace = true }
 tokio = { workspace = true }
 
+[features]
+# Redirects `fonts::prefs_path()` to a per-process tempdir instead of the
+# real OS config file, and skips the legacy-prefs migration. Activated for
+# signex-app's own integration-test binaries below via a self-referential
+# dev-dependency — the same pattern tokio uses for its `test-util` feature
+# (a crate depending on itself as a dev-dependency to get test-only cfg
+# gating in code paths that regular `cargo build`/`cargo run` never see).
+# The workspace's `resolver = "2"` keeps this feature from leaking into
+# non-test builds of the `signex` binary. See issue #437.
+test-prefs-redirect = []
+
 [dev-dependencies]
+signex-app = { path = ".", features = ["test-prefs-redirect"] }
 tempfile = "3"
 wiremock = "0.6"
 

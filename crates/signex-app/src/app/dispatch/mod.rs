@@ -182,12 +182,25 @@ impl Signex {
                     .and_then(|t| t.kind.as_footprint_editor())
                     .cloned();
                 if let Some(path) = footprint_path {
+                    // #370 — when the "Align…" dialog is open, Esc just
+                    // dismisses it (leaving the selection intact) rather
+                    // than falling through to `ToolEscape`, which would
+                    // also clear the selected pad. Any other footprint
+                    // Esc keeps the tool-reset behaviour.
+                    let align_open = self
+                        .document_state
+                        .footprint_editors
+                        .get(&path)
+                        .is_some_and(|ed| ed.state.align_modal.is_some());
+                    let esc_msg = if align_open {
+                        crate::library::messages::FootprintEditorMsg::AlignCancel
+                    } else {
+                        crate::library::messages::FootprintEditorMsg::ToolEscape
+                    };
                     self.update(Message::Library(
                         crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                             path,
-                            msg: crate::library::messages::PrimitiveEdit::Footprint(
-                                crate::library::messages::FootprintEditorMsg::ToolEscape,
-                            ),
+                            msg: crate::library::messages::PrimitiveEdit::Footprint(esc_msg),
                         },
                     ))
                 } else if let Some(path) = self

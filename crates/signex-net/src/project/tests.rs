@@ -758,3 +758,31 @@ fn output_is_deterministic_across_map_order() {
     };
     assert_eq!(build(true), build(false));
 }
+
+#[test]
+fn project_terminals_order_designators_naturally() {
+    // Same rule as `build_netlist` — the project-level stitcher re-sorts
+    // its own terminal vec, so it needs the natural comparator too or a
+    // multi-sheet export reads R1, R10, R2 while a single-sheet one
+    // reads R1, R2, R10.
+    let mut sheet = empty_sheet();
+    sheet.wires.push(wire(pt(0.0, 0.0), pt(100.0, 0.0)));
+    add_lib(&mut sheet, "R");
+    for n in 1..=10 {
+        // Mid-span pins need a junction to count as terminals.
+        sheet.junctions.push(junction(pt(n as f64, 0.0)));
+        place(&mut sheet, &format!("R{n}"), "R", pt(n as f64, 0.0));
+    }
+
+    let project = build_project_netlist(&sheet, &HashMap::new(), None);
+    assert_eq!(project.netlist.nets.len(), 1);
+    let order: Vec<&str> = project.netlist.nets[0]
+        .terminals
+        .iter()
+        .map(|t| t.reference.as_str())
+        .collect();
+    assert_eq!(
+        order,
+        vec!["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10"]
+    );
+}
