@@ -567,14 +567,7 @@ fn footprint_nudge_selection(editor: &mut crate::app::FootprintEditorState, dx: 
     use crate::library::editor::footprint::pad_to_sketch;
     use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
 
-    let mut indices: Vec<usize> = Vec::new();
-    if let Some(p) = editor.state.selected_pad {
-        indices.push(p);
-    }
-    indices.extend(editor.state.selected_pads_extra.iter().copied());
-    indices.sort_unstable();
-    indices.dedup();
-    indices.retain(|&i| i < editor.state.pads.len());
+    let indices = editor.state.selected_pad_indices();
     if indices.is_empty() {
         return;
     }

@@ -178,17 +178,134 @@ impl EditorPad {
             .unwrap_or(FpLayer::FCu)
     }
 
-    /// Bounding box (min_x, min_y, max_x, max_y) in mm.
+    /// Un-rotated, axis-aligned half-extent box (min_x, min_y, max_x,
+    /// max_y) in mm.
+    ///
+    /// This is the PAD-LOCAL frame — `rotation_deg` is deliberately
+    /// ignored. Only callers that reason in the pad's own frame want
+    /// this (the chamfer / round-rect anchor derivation in
+    /// `pad_to_sketch::solve`). Anything asking "where does this pad
+    /// actually sit on the board" wants [`Self::rotated_aabb_mm`] or
+    /// [`Self::rotated_corners_mm`] instead — reading the un-rotated
+    /// box is what left hit-test, courtyard, rubber-band and the pad
+    /// renderer all disagreeing with the drawn copper.
     pub fn bbox_mm(&self) -> (f64, f64, f64, f64) {
         let (cx, cy) = self.position_mm;
         let (w, h) = self.size_mm;
         (cx - w / 2.0, cy - h / 2.0, cx + w / 2.0, cy + h / 2.0)
     }
 
-    /// AABB containment check.
-    pub fn contains_mm(&self, x: f64, y: f64) -> bool {
+    /// Rotate a free VECTOR (a delta — no translation applied) from the
+    /// pad's own frame into world mm.
+    pub fn rotate_delta_to_world_mm(&self, dx: f64, dy: f64) -> (f64, f64) {
+        if self.rotation_deg == 0.0 {
+            return (dx, dy);
+        }
+        let (sin, cos) = self.rotation_deg.to_radians().sin_cos();
+        (dx * cos - dy * sin, dx * sin + dy * cos)
+    }
+
+    /// Inverse of [`Self::rotate_delta_to_world_mm`].
+    pub fn rotate_delta_to_local_mm(&self, dx: f64, dy: f64) -> (f64, f64) {
+        if self.rotation_deg == 0.0 {
+            return (dx, dy);
+        }
+        let (sin, cos) = self.rotation_deg.to_radians().sin_cos();
+        (dx * cos + dy * sin, -dx * sin + dy * cos)
+    }
+
+    /// Map a POINT given in the pad's own frame — the frame
+    /// [`Self::bbox_mm`] is expressed in — into world mm.
+    ///
+    /// Every position derived off `bbox_mm` (round-rect arc anchors,
+    /// chamfer anchors, oval arc centres, the resized-edge corner
+    /// targets) has to come back through here, or the derived geometry
+    /// stays axis-aligned while the corners it is supposed to join turn
+    /// with the pad, and the outline no longer closes.
+    pub fn local_to_world_mm(&self, x: f64, y: f64) -> (f64, f64) {
+        let (cx, cy) = self.position_mm;
+        let (dx, dy) = self.rotate_delta_to_world_mm(x - cx, y - cy);
+        (cx + dx, cy + dy)
+    }
+
+    /// Inverse of [`Self::local_to_world_mm`] — takes a world point into
+    /// the pad's own frame, where the axis-aligned reasoning that
+    /// `bbox_mm` supports is valid again.
+    pub fn world_to_local_mm(&self, x: f64, y: f64) -> (f64, f64) {
+        let (cx, cy) = self.position_mm;
+        let (dx, dy) = self.rotate_delta_to_local_mm(x - cx, y - cy);
+        (cx + dx, cy + dy)
+    }
+
+    /// The four half-extent corners rotated about `position_mm` by
+    /// `rotation_deg`, in `[ne, se, sw, nw]` order — the order the
+    /// sketch-mirror corner code already assumes.
+    pub fn rotated_corners_mm(&self) -> [(f64, f64); 4] {
         let (xmin, ymin, xmax, ymax) = self.bbox_mm();
-        x >= xmin && x <= xmax && y >= ymin && y <= ymax
+        // [ne, se, sw, nw].
+        [(xmax, ymin), (xmax, ymax), (xmin, ymax), (xmin, ymin)]
+            .map(|(x, y)| self.local_to_world_mm(x, y))
+    }
+
+    /// Axis-aligned bounding box of the ROTATED pad, in mm. Equals
+    /// [`Self::bbox_mm`] at zero rotation and grows to enclose the
+    /// turned copper otherwise.
+    pub fn rotated_aabb_mm(&self) -> (f64, f64, f64, f64) {
+        if self.rotation_deg == 0.0 {
+            return self.bbox_mm();
+        }
+        let corners = self.rotated_corners_mm();
+        corners.iter().skip(1).fold(
+            (corners[0].0, corners[0].1, corners[0].0, corners[0].1),
+            |(x0, y0, x1, y1), &(x, y)| (x0.min(x), y0.min(y), x1.max(x), y1.max(y)),
+        )
+    }
+
+    /// Mirror every mirror-sensitive field about the pad's OWN
+    /// vertical axis (local `x → -x`). This is what moving a pad to
+    /// the other side of the board does to its copper.
+    ///
+    /// `signex_bake::pad` consumes each of these verbatim with no
+    /// side-based mirroring of its own, so the stored data IS the
+    /// baked geometry. Mirroring only a subset bakes a shape that is
+    /// neither the front nor the back one — a Chamfered pad flipped
+    /// with its angle negated but its corner flags left alone keeps
+    /// the chamfer on the wrong corner and the part will not seat.
+    /// Every field that changes under `x → -x` therefore moves here
+    /// together, or none of them do.
+    ///
+    /// Pad POSITION is deliberately untouched: this mirrors each pad
+    /// in place. Mirroring the layout about the footprint origin is a
+    /// different operation and does not exist yet.
+    pub fn mirror_about_own_vertical_axis(&mut self) {
+        self.rotation_deg = (-self.rotation_deg).rem_euclid(360.0);
+        self.hole_rotation_deg = self.hole_rotation_deg.map(|d| (-d).rem_euclid(360.0));
+        self.copper_offset_x_mm = self.copper_offset_x_mm.map(|v| -v);
+        match &mut self.shape {
+            PadShape::Chamfered { corners, .. } => {
+                std::mem::swap(&mut corners.top_left, &mut corners.top_right);
+                std::mem::swap(&mut corners.bottom_left, &mut corners.bottom_right);
+            }
+            PadShape::Custom(poly) => {
+                for p in poly.points.iter_mut() {
+                    p[0] = -p[0];
+                }
+            }
+            // Round / Rect / RoundRect / Oval are symmetric about
+            // their own vertical axis — nothing to mirror.
+            PadShape::Round | PadShape::Rect | PadShape::RoundRect { .. } | PadShape::Oval => {}
+        }
+    }
+
+    /// Point-in-pad containment, rotation-aware. Inverse-rotates the
+    /// probe into the pad's own frame and compares against the half
+    /// extents, so a turned pad is hit on its real copper rather than
+    /// on the axis-aligned box it would occupy unrotated.
+    pub fn contains_mm(&self, x: f64, y: f64) -> bool {
+        let (cx, cy) = self.position_mm;
+        let (hw, hh) = (self.size_mm.0 / 2.0, self.size_mm.1 / 2.0);
+        let (lx, ly) = self.rotate_delta_to_local_mm(x - cx, y - cy);
+        lx.abs() <= hw && ly.abs() <= hh
     }
 
     pub(super) fn from_pad(p: &Pad) -> Self {
