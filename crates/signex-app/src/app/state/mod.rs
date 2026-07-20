@@ -252,6 +252,30 @@ impl LoadedProject {
     }
 }
 
+/// #431 — pending "Export anyway (incomplete)?" prompt for netlist export.
+///
+/// Raised (instead of a dead-end error) when `File ▸ Export Netlist` derives a
+/// netlist that does not cover the whole project. Holds the picked `save_path`
+/// and the omitted-page `messages` so the two prompt actions can act without
+/// re-deriving: "Export anyway" writes the partial `.net` with these messages
+/// recorded in its INCOMPLETE header comment; "Cancel" writes nothing. The
+/// refusal stays the default — nothing reaches disk until the user acts.
+#[derive(Debug, Clone)]
+pub struct NetlistIncompletePrompt {
+    /// Where the file dialog said to write the `.net`.
+    pub save_path: PathBuf,
+    /// One user-facing line per omitted / uncovered page — the same
+    /// `ExportIssues::messages()` shown in the prompt and written into the
+    /// exported file's INCOMPLETE header.
+    pub messages: Vec<String>,
+    /// The export scope snapshotted when the prompt was raised. "Export anyway"
+    /// writes from THIS, never a fresh re-derivation — so the bytes on disk and
+    /// the INCOMPLETE header (drawn from `messages`, the same derivation) always
+    /// describe the same project state, even if the document changes while the
+    /// modal is up (#431 review).
+    pub ctx: signex_output::ExportContext,
+}
+
 pub struct DocumentState {
     pub dock: DockArea,
     pub tabs: Vec<TabInfo>,
@@ -341,6 +365,11 @@ pub struct DocumentState {
     /// Populated by ExportPdfFinished/ExportNetlistFinished when the export
     /// itself (not the file dialog) fails. Cleared by DismissExportError.
     pub export_error: Option<String>,
+    /// #431 — pending "Export anyway (incomplete)?" prompt. `Some` while the
+    /// netlist-incomplete modal is up, waiting on the user's choice. Set by
+    /// `handle_export_netlist_finished` when the derived netlist has a hole;
+    /// cleared by both prompt actions (Export anyway / Cancel).
+    pub netlist_incomplete_prompt: Option<NetlistIncompletePrompt>,
     /// BOM preview state. `Some` while the BOM Export modal is open.
     /// Mirrors the Print Preview pattern: the user adjusts grouping /
     /// include flags / format / variant in the modal and clicks

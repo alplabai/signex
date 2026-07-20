@@ -570,7 +570,10 @@ fn netlist_export_refuses_to_write_an_incomplete_netlist() {
     // The .net file is machine-consumed: a PCB imports it and a missing
     // subtree becomes missing components on the board, plus nets that stayed
     // split where they should have merged through the missing sheet's ports.
-    // Nothing downstream reads a warning, so nothing is written.
+    // Nothing downstream reads a warning, so refuse-by-default: #431 replaces
+    // the dead-end error with the "Export anyway (incomplete)?" prompt, but
+    // the refusal is still the default — NOTHING reaches disk until the user
+    // acts, and the prompt (not a silent write) is what the default raises.
     let mut app = app_with_missing_child("gone-net.snxsch");
     let out = std::env::temp_dir().join(format!("signex-refuse-{}.net", Uuid::new_v4()));
 
@@ -578,18 +581,142 @@ fn netlist_export_refuses_to_write_an_incomplete_netlist() {
 
     assert!(
         !out.exists(),
-        "an incomplete netlist must not reach disk: {}",
+        "an incomplete netlist must not reach disk by default: {}",
         out.display()
     );
-    let err = app
+    let prompt = app
         .document_state
-        .export_error
+        .netlist_incomplete_prompt
         .clone()
-        .expect("the refusal must be raised through the export_error modal");
+        .expect("the refusal must be raised through the incomplete-export prompt");
     assert!(
-        err.contains("gone-net.snxsch"),
-        "the modal must name what is missing: {err}"
+        prompt
+            .messages
+            .iter()
+            .any(|m| m.contains("gone-net.snxsch")),
+        "the prompt must name what is missing: {:?}",
+        prompt.messages
     );
+    assert!(
+        app.document_state.export_error.is_none(),
+        "the default path raises the prompt, not a dead-end error: {:?}",
+        app.document_state.export_error
+    );
+    std::fs::remove_file(&out).ok();
+}
+
+#[test]
+fn export_anyway_writes_a_partial_netlist_with_an_incomplete_header() {
+    // #431 Option 2: the user chose "Export anyway (incomplete)". The partial
+    // .net is written, and the omission is recorded IN THE FILE — an INCOMPLETE
+    // header comment naming the omitted page — not only in the dismissed
+    // dialog, so a downstream PCB import can see the netlist is partial.
+    let mut app = app_with_missing_child("gone-anyway.snxsch");
+    let out = std::env::temp_dir().join(format!("signex-anyway-{}.net", Uuid::new_v4()));
+
+    // Default path raises the prompt; nothing is written yet.
+    let _ = app.handle_export_netlist_finished(Ok(out.clone()));
+    assert!(!out.exists(), "nothing is written until the user acts");
+    assert!(
+        app.document_state.netlist_incomplete_prompt.is_some(),
+        "the prompt must be up before the user chooses"
+    );
+
+    // The user explicitly opts into the partial export.
+    let _ = app.handle_netlist_export_anyway();
+
+    assert!(
+        app.document_state.netlist_incomplete_prompt.is_none(),
+        "the prompt is cleared once the choice is made"
+    );
+    assert!(out.exists(), "Export anyway writes the partial .net");
+    let bytes = std::fs::read_to_string(&out).expect("read written netlist");
+    assert!(
+        bytes.starts_with("# "),
+        "the incomplete header must be comment-marked so an importer skips it: {bytes}"
+    );
+    assert!(
+        bytes.contains("INCOMPLETE"),
+        "the file itself must carry an INCOMPLETE header, not only the dialog: {bytes}"
+    );
+    assert!(
+        bytes.contains("gone-anyway.snxsch"),
+        "the header must name the omitted page: {bytes}"
+    );
+    std::fs::remove_file(&out).ok();
+}
+
+#[test]
+fn export_anyway_writes_from_the_prompt_snapshot_not_a_fresh_re_derivation() {
+    // #431 review (CRITICAL): the INCOMPLETE header names the pages omitted when
+    // the prompt was RAISED, so the written bytes must come from that same
+    // prompt-time derivation — never a fresh one at click time. The document can
+    // change while the modal is up (no modal-aware input gating exists), and a
+    // header describing a different state than the bytes is the exact fab hazard
+    // #431 exists to prevent, just relocated to "wrong header".
+    //
+    // Guard it by making a fresh derivation IMPOSSIBLE: drop the active engine
+    // after the prompt is raised. With the snapshot, Export anyway still writes
+    // the partial .net with its header; a re-derivation would find no active
+    // schematic and write nothing.
+    let mut app = app_with_missing_child("gone-snapshot.snxsch");
+    let out = std::env::temp_dir().join(format!("signex-snapshot-{}.net", Uuid::new_v4()));
+
+    let _ = app.handle_export_netlist_finished(Ok(out.clone()));
+    assert!(
+        app.document_state.netlist_incomplete_prompt.is_some(),
+        "the prompt must be raised on the default path"
+    );
+
+    // Make `build_export_scope()` return None: no active schematic to re-derive.
+    app.document_state.engines.clear();
+    app.document_state.active_path = None;
+
+    let _ = app.handle_netlist_export_anyway();
+
+    assert!(
+        out.exists(),
+        "Export anyway must write from the prompt-time snapshot even when the \
+         active schematic is gone by click time: {}",
+        out.display()
+    );
+    let bytes = std::fs::read_to_string(&out).expect("read written netlist");
+    assert!(
+        bytes.contains("INCOMPLETE"),
+        "the snapshot preserves the INCOMPLETE header: {bytes}"
+    );
+    assert!(
+        bytes.contains("gone-snapshot.snxsch"),
+        "the header names the page omitted at prompt time: {bytes}"
+    );
+    assert!(
+        app.document_state.export_error.is_none(),
+        "the snapshot made the write succeed — no re-derivation error: {:?}",
+        app.document_state.export_error
+    );
+    std::fs::remove_file(&out).ok();
+}
+
+#[test]
+fn cancel_on_the_incomplete_prompt_writes_nothing() {
+    // #431: "Cancel" clears the prompt and leaves the disk untouched — the
+    // refuse-by-default guarantee.
+    let mut app = app_with_missing_child("gone-cancel.snxsch");
+    let out = std::env::temp_dir().join(format!("signex-cancel-{}.net", Uuid::new_v4()));
+
+    let _ = app.handle_export_netlist_finished(Ok(out.clone()));
+    assert!(
+        app.document_state.netlist_incomplete_prompt.is_some(),
+        "precondition: the prompt is up"
+    );
+
+    app.handle_netlist_cancel_incomplete();
+
+    assert!(
+        app.document_state.netlist_incomplete_prompt.is_none(),
+        "Cancel clears the prompt"
+    );
+    assert!(!out.exists(), "Cancel writes nothing: {}", out.display());
     std::fs::remove_file(&out).ok();
 }
 
@@ -697,24 +824,27 @@ fn a_flat_projects_second_page_cannot_vanish_from_the_netlist_unannounced() {
         "a listed page outside the hierarchy is an incomplete netlist"
     );
 
-    // …and the machine-consumed deliverable therefore refuses, by the same
-    // per-deliverable policy that already covers MissingChild.
+    // …and the machine-consumed deliverable therefore refuses by default, by
+    // the same per-deliverable policy that already covers MissingChild: #431
+    // raises the "Export anyway?" prompt and writes nothing until the user
+    // acts.
     let out = std::env::temp_dir().join(format!("signex-flat-{}.net", Uuid::new_v4()));
     let _ = app.handle_export_netlist_finished(Ok(out.clone()));
 
     assert!(
         !out.exists(),
-        "a .net missing half the board must not reach disk: {}",
+        "a .net missing half the board must not reach disk by default: {}",
         out.display()
     );
-    let err = app
+    let prompt = app
         .document_state
-        .export_error
+        .netlist_incomplete_prompt
         .clone()
-        .expect("the refusal must be raised through the export_error modal");
+        .expect("the refusal must be raised through the incomplete-export prompt");
     assert!(
-        err.contains("b.snxsch"),
-        "the modal must name the page that is not in the netlist: {err}"
+        prompt.messages.iter().any(|m| m.contains("b.snxsch")),
+        "the prompt must name the page that is not in the netlist: {:?}",
+        prompt.messages
     );
     std::fs::remove_file(&out).ok();
 }
