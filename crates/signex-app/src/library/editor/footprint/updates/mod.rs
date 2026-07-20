@@ -692,7 +692,17 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         // message reaches the dispatcher like Track's 2-click
         // gesture does). It pushes its own snapshot inside the
         // handler, so keep it out of the blanket pre-push.
-        | AddTextFrame { .. } => false,
+        | AddTextFrame { .. }
+        // v0.15 (#146) — Rotate / Flip / Align-to-grid / Move-origin-
+        // to-grid each push their own snapshot inside the handler,
+        // gated on an actual mutation (a selected pad, or a non-empty
+        // pad list). The blanket pre-push must NOT fire here, or a
+        // no-op invocation with nothing selected would stack an empty
+        // undo entry and dirty the document.
+        | ActiveBarRotateSelection
+        | ActiveBarFlipSelection
+        | ActiveBarAlignSelectionToGrid
+        | ActiveBarMoveOriginToGrid => false,
         // All other variants either add/remove/move geometry,
         // mutate pad attributes, or rebuild the sketch — they all
         // need a history snapshot.

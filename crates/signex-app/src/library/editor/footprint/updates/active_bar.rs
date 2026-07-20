@@ -110,45 +110,59 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
             editor.canvas_cache.clear();
         }
         FootprintEditorMsg::ActiveBarRotateSelection => {
-            editor.with_parts(|state, primitive| {
-                if let Some(idx) = state.selected_pad
-                    && let Some(pad) = state.pads.get_mut(idx)
-                {
-                    pad.rotation_deg = (pad.rotation_deg + 90.0).rem_euclid(360.0);
-                    CanvasState::sync_pads_to_primitive(state, primitive);
-                }
-            });
+            // #146 — snapshot + dirty only when a pad is actually
+            // selected; a no-op rotate with nothing selected must not
+            // stack undo history or mark the document dirty.
+            if let Some(idx) = editor
+                .state
+                .selected_pad
+                .filter(|&i| i < editor.state.pads.len())
+            {
+                editor.push_history();
+                editor.with_parts(|state, primitive| {
+                    if let Some(pad) = state.pads.get_mut(idx) {
+                        pad.rotation_deg = (pad.rotation_deg + 90.0).rem_euclid(360.0);
+                        CanvasState::sync_pads_to_primitive(state, primitive);
+                    }
+                });
+                editor.canvas_cache.clear();
+                editor.dirty = true;
+            }
             editor.state.active_bar_menu = None;
-            editor.canvas_cache.clear();
-            editor.dirty = true;
         }
         FootprintEditorMsg::ActiveBarFlipSelection => {
-            editor.with_parts(|state, primitive| {
-                if let Some(idx) = state.selected_pad
-                    && let Some(pad) = state.pads.get_mut(idx)
-                {
-                    let new_layers: Vec<signex_library::LayerId> = pad
-                        .layers
-                        .iter()
-                        .map(|l| {
-                            let s = l.as_str();
-                            let flipped = if let Some(rest) = s.strip_prefix("F.") {
-                                format!("B.{rest}")
-                            } else if let Some(rest) = s.strip_prefix("B.") {
-                                format!("F.{rest}")
-                            } else {
-                                s.to_string()
-                            };
-                            signex_library::LayerId::new(flipped)
-                        })
-                        .collect();
-                    pad.layers = new_layers;
-                    CanvasState::sync_pads_to_primitive(state, primitive);
-                }
-            });
+            // #146 — gate history + dirty on a real selection (see rotate).
+            if let Some(idx) = editor
+                .state
+                .selected_pad
+                .filter(|&i| i < editor.state.pads.len())
+            {
+                editor.push_history();
+                editor.with_parts(|state, primitive| {
+                    if let Some(pad) = state.pads.get_mut(idx) {
+                        let new_layers: Vec<signex_library::LayerId> = pad
+                            .layers
+                            .iter()
+                            .map(|l| {
+                                let s = l.as_str();
+                                let flipped = if let Some(rest) = s.strip_prefix("F.") {
+                                    format!("B.{rest}")
+                                } else if let Some(rest) = s.strip_prefix("B.") {
+                                    format!("F.{rest}")
+                                } else {
+                                    s.to_string()
+                                };
+                                signex_library::LayerId::new(flipped)
+                            })
+                            .collect();
+                        pad.layers = new_layers;
+                        CanvasState::sync_pads_to_primitive(state, primitive);
+                    }
+                });
+                editor.canvas_cache.clear();
+                editor.dirty = true;
+            }
             editor.state.active_bar_menu = None;
-            editor.canvas_cache.clear();
-            editor.dirty = true;
         }
         FootprintEditorMsg::ActiveBarNudgeSelection => {
             // v0.14 — "Move Selection by X, Y…" one-step nudge: the
@@ -183,46 +197,57 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
             editor.state.move_by_modal = None;
         }
         FootprintEditorMsg::ActiveBarAlignSelectionToGrid => {
-            editor.with_parts(|state, primitive| {
-                let step = state.snap_options.grid_step_mm.max(0.001);
-                if let Some(idx) = state.selected_pad
-                    && let Some(pad) = state.pads.get_mut(idx)
-                {
-                    let (x, y) = pad.position_mm;
-                    pad.position_mm = ((x / step).round() * step, (y / step).round() * step);
-                    // v0.23 — mirror the snap into the sketch so the
-                    // construction outline + centre Point follow the
-                    // pad. Skipping this left the sketch primitive
-                    // stranded at the pre-snap position.
-                    let pad_snapshot = pad.clone();
-                    pad_to_sketch::mirror_move_pad_in_sketch(&pad_snapshot, primitive);
-                    CanvasState::sync_pads_to_primitive(state, primitive);
-                }
-            });
+            // #146 — gate history + dirty on a real selection (see rotate).
+            if let Some(idx) = editor
+                .state
+                .selected_pad
+                .filter(|&i| i < editor.state.pads.len())
+            {
+                editor.push_history();
+                editor.with_parts(|state, primitive| {
+                    let step = state.snap_options.grid_step_mm.max(0.001);
+                    if let Some(pad) = state.pads.get_mut(idx) {
+                        let (x, y) = pad.position_mm;
+                        pad.position_mm = ((x / step).round() * step, (y / step).round() * step);
+                        // v0.23 — mirror the snap into the sketch so the
+                        // construction outline + centre Point follow the
+                        // pad. Skipping this left the sketch primitive
+                        // stranded at the pre-snap position.
+                        let pad_snapshot = pad.clone();
+                        pad_to_sketch::mirror_move_pad_in_sketch(&pad_snapshot, primitive);
+                        CanvasState::sync_pads_to_primitive(state, primitive);
+                    }
+                });
+                editor.canvas_cache.clear();
+                editor.dirty = true;
+            }
             editor.state.active_bar_menu = None;
-            editor.canvas_cache.clear();
-            editor.dirty = true;
         }
         FootprintEditorMsg::ActiveBarMoveOriginToGrid => {
-            editor.with_parts(|state, primitive| {
-                let step = state.snap_options.grid_step_mm.max(0.001);
-                let mut snapshots: Vec<crate::library::editor::footprint::state::EditorPad> =
-                    Vec::with_capacity(state.pads.len());
-                for pad in state.pads.iter_mut() {
-                    let (x, y) = pad.position_mm;
-                    pad.position_mm = ((x / step).round() * step, (y / step).round() * step);
-                    snapshots.push(pad.clone());
-                }
-                // v0.23 — mirror every pad's new position into the
-                // sketch. Same fix as the single-pad align path.
-                for snapshot in &snapshots {
-                    pad_to_sketch::mirror_move_pad_in_sketch(snapshot, primitive);
-                }
-                CanvasState::sync_pads_to_primitive(state, primitive);
-            });
+            // #146 — snapshot + dirty only when there is at least one
+            // pad to move; an empty footprint must stay clean.
+            if !editor.state.pads.is_empty() {
+                editor.push_history();
+                editor.with_parts(|state, primitive| {
+                    let step = state.snap_options.grid_step_mm.max(0.001);
+                    let mut snapshots: Vec<crate::library::editor::footprint::state::EditorPad> =
+                        Vec::with_capacity(state.pads.len());
+                    for pad in state.pads.iter_mut() {
+                        let (x, y) = pad.position_mm;
+                        pad.position_mm = ((x / step).round() * step, (y / step).round() * step);
+                        snapshots.push(pad.clone());
+                    }
+                    // v0.23 — mirror every pad's new position into the
+                    // sketch. Same fix as the single-pad align path.
+                    for snapshot in &snapshots {
+                        pad_to_sketch::mirror_move_pad_in_sketch(snapshot, primitive);
+                    }
+                    CanvasState::sync_pads_to_primitive(state, primitive);
+                });
+                editor.canvas_cache.clear();
+                editor.dirty = true;
+            }
             editor.state.active_bar_menu = None;
-            editor.canvas_cache.clear();
-            editor.dirty = true;
         }
         FootprintEditorMsg::ActiveBarSelectAll => {
             // v0.27 — Altium-parity: Select All multi-selects every
