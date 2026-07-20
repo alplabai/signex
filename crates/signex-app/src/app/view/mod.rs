@@ -660,6 +660,7 @@ impl Signex {
         // Pre-blocking overlays: export-error, print/BOM preview, and
         // the custom net-colour picker.
         layers.extend(self.export_error_overlay());
+        layers.extend(self.netlist_incomplete_prompt_overlay());
         layers.extend(self.print_preview_overlay());
         layers.extend(self.bom_preview_overlay());
         layers.extend(self.net_color_custom_overlay());
