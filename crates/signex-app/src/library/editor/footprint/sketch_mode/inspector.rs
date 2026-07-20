@@ -160,6 +160,10 @@ fn view_tool_palette<'a>(
             SketchTool::Trim => {
                 "click a Line segment to remove it (cuts to nearest intersections)".into()
             }
+            // #372 — single click splits a Line in two at the click.
+            SketchTool::BreakTrack => {
+                "click a Line to split it in two at the click point".into()
+            }
             // #361 — endpoint-biased segment grab.
             SketchTool::DragTrackEnd => {
                 "press anywhere on a track and drag its nearer end to a new position".into()

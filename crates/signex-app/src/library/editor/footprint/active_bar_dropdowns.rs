@@ -5,13 +5,14 @@
 //! `signex_widgets::active_bar_dropdown::view`; overlay positioning is
 //! handled by the caller (`unified_active_bar`).
 //!
-//! Wiring philosophy: items that map to existing primitives (Selection
-//! Filter pills, Snap toggles, snap-mode picks, Place tools, Drag Track
-//! End, Body3D, Extruded 3D Body, Move Selection by X,Y, Text Frame)
-//! emit the real `FootprintEditorMsg`; the few items that still need
-//! new primitives (Break Track, the generic Align… dialog launcher)
-//! emit `FootprintActiveBarStub` so the action logs a "coming soon"
-//! warn and dismisses the menu cleanly.
+//! Wiring philosophy: every dropdown item here maps to an existing
+//! primitive and emits the real `FootprintEditorMsg` (Selection Filter
+//! pills, Snap toggles, snap-mode picks, Place tools, Drag Track End,
+//! Break Track, Body3D, Extruded 3D Body, Move Selection by X,Y, the
+//! Align… dialog, Text Frame). The [`stub`] helper + the
+//! `FootprintEditorMsg::ActiveBarStub` "coming soon" variant are retained
+//! (removing the variant is out of #372's scope) for any future
+//! not-yet-implemented row, even though no current dropdown row uses them.
 
 use std::path::PathBuf;
 
@@ -35,7 +36,12 @@ fn fp(path: PathBuf, msg: FootprintEditorMsg) -> LibraryMessage {
     }
 }
 
-/// "Coming soon" stub item — no icon.
+/// "Coming soon" stub item — no icon. Retained as the sole constructor of
+/// `FootprintEditorMsg::ActiveBarStub` now that every footprint dropdown
+/// row is wired to a real message (Break Track was the last, #372).
+/// Removing the variant is out of #372's scope, so the helper stays for
+/// future not-yet-implemented rows rather than orphaning the variant.
+#[allow(dead_code)]
 fn stub(label: &'static str, path: PathBuf) -> DropdownItem<LibraryMessage> {
     DropdownItem::new(label, fp(path, FootprintEditorMsg::ActiveBarStub(label)))
 }
@@ -326,12 +332,19 @@ fn place_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessag
         DropdownEntry::Item(
             DropdownItem::new("Drag", activate_select(path.clone())).icon(ic::icon_dd_drag(tid)),
         ),
-        // Break Track still needs the track-segment split primitive
-        // (out of scope for #361) so it stays a stub. Drag Track End no
-        // longer does: the endpoint-drag path already exists, so the row
-        // arms the real Sketch-mode DragTrackEnd tool below.
-        // v0.15: needs track-segment split infra
-        DropdownEntry::Item(stub("Break Track", path.clone())),
+        // #372 — Break Track arms the real Sketch-mode BreakTrack tool:
+        // it switches to Sketch mode, then a single click on a sketch
+        // Line splits it in two at the click via the `split_line`
+        // primitive (#360). Drag Track End (below) likewise arms a real
+        // tool now. The Shapes rows are the working reference for this
+        // `ActiveBarSetSketchTool` call shape.
+        DropdownEntry::Item(DropdownItem::new(
+            "Break Track",
+            fp(
+                path.clone(),
+                FootprintEditorMsg::ActiveBarSetSketchTool(SketchTool::BreakTrack),
+            ),
+        )),
         // #361 — arm the endpoint-biased segment grab. Switches to
         // Sketch mode + the DragTrackEnd tool (see
         // canvas/input/tools.rs::try_drag_track_end_grab); a left-press

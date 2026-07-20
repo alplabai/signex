@@ -448,7 +448,11 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                 | SketchTool::Offset
                 | SketchTool::RectPattern
                 | SketchTool::CircularPattern => transform::apply(editor, &ctx, tool),
-                SketchTool::Fillet | SketchTool::Trim => edit::apply(editor, &ctx, tool),
+                // #372 — Break Track joins Fillet / Trim as a curve
+                // edit: a single click hit-tests a Line and splits it.
+                SketchTool::Fillet | SketchTool::Trim | SketchTool::BreakTrack => {
+                    edit::apply(editor, &ctx, tool)
+                }
                 // #361 — Drag Track End is not a click-to-place gesture:
                 // it arms an endpoint drag on PRESS in the canvas
                 // (`try_drag_track_end_grab`) and never publishes a
