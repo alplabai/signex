@@ -320,7 +320,8 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
                     for idx in state.selected_pad_indices() {
                         if let Some(pad) = state.pads.get_mut(idx) {
                             let (x, y) = pad.position_mm;
-                            pad.position_mm = ((x / step).round() * step, (y / step).round() * step);
+                            pad.position_mm =
+                                ((x / step).round() * step, (y / step).round() * step);
                             snapshots.push(pad.clone());
                         }
                     }

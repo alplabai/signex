@@ -187,12 +187,7 @@ fn footprint_with_profile_pad() -> (Footprint, EditorPad, [SketchEntityId; 4]) {
     });
 
     // Rectangle (0,0)-(2,1): four corner Points, four connecting Lines.
-    let corners = [
-        (0.0_f64, 0.0_f64),
-        (2.0, 0.0),
-        (2.0, 1.0),
-        (0.0, 1.0),
-    ];
+    let corners = [(0.0_f64, 0.0_f64), (2.0, 0.0), (2.0, 1.0), (0.0, 1.0)];
     let corner_ids: [SketchEntityId; 4] = std::array::from_fn(|i| {
         let id = SketchEntityId::new();
         sketch.entities.push(Entity::new(
@@ -908,6 +903,63 @@ fn owned_set_excludes_ids_with_no_live_entity() {
     assert!(
         !owned.contains(&ghost),
         "a seed naming no live entity must not be reported as owned"
+    );
+}
+
+/// #433 review — the id-preserving IN-PLACE re-mint copied the centre's
+/// `PadAttr` from a SCRATCH reference mint, so the durable `owned` ledger
+/// ended up naming scratch-only ids that never existed in the real sketch.
+/// After save+reopen (which resets the volatile `corner_entity_ids` /
+/// `shape_params` fields) that ledger is the SOLE owner set, so the
+/// stranded ids would strand the outline on the next move / rotate —
+/// wrong copper, no warning. The in-place path now re-records the ledger
+/// against the real sketch; every owned id must be a live entity.
+#[test]
+fn in_place_remint_records_the_ledger_against_the_real_sketch() {
+    use signex_library::primitive::footprint::ChamferedCorners;
+
+    let mut fp = Footprint::empty("test");
+    let mut pad = editor_pad("X", 0.0, 0.0);
+    pad.size_mm = (2.0, 1.0);
+    pad.shape = LibPadShape::Chamfered {
+        chamfer_ratio: 0.25,
+        corners: ChamferedCorners {
+            top_right: true,
+            ..Default::default()
+        },
+    };
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+    // Simulate a live Sketch-mode drag tick's id-preserving re-mint.
+    assert!(
+        super::remint_in_place::remint_pad_geometry_in_place(&mut pad, &mut fp),
+        "a chamfered (non-profile) pad re-mints in place"
+    );
+
+    let sketch = fp.sketch.as_ref().unwrap();
+    let centre = pad.sketch_entity_id.unwrap();
+    let owned = sketch
+        .entities
+        .iter()
+        .find(|e| e.id == centre)
+        .and_then(|e| e.pad.as_ref())
+        .expect("the centre carries a PadAttr")
+        .owned
+        .clone();
+    let live: std::collections::HashSet<SketchEntityId> =
+        sketch.entities.iter().map(|e| e.id).collect();
+    let ghosts: Vec<SketchEntityId> = owned
+        .iter()
+        .copied()
+        .filter(|id| !live.contains(id))
+        .collect();
+    assert!(
+        ghosts.is_empty(),
+        "the durable `owned` ledger must name only live entities after an in-place \
+         re-mint; {} of {} were scratch-only ghosts: {:?}",
+        ghosts.len(),
+        owned.len(),
+        ghosts
     );
 }
 

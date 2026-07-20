@@ -77,6 +77,20 @@ pub fn remint_pad_geometry_in_place(pad: &mut EditorPad, footprint: &mut Footpri
     for (name, src) in reference_sketch.parameters.iter() {
         sketch.parameters.insert(name, src);
     }
+    // #433 review — `copy_entity_geometry` copied the centre's whole
+    // `PadAttr` from the REFERENCE mint, whose `owned` ledger names the
+    // scratch sketch's ids, not the real (preserved) ones. Re-record the
+    // ledger against the REAL sketch so the durable `PadAttr::owned` — the
+    // sole source of truth once save+reopen resets the volatile
+    // `corner_entity_ids` / `shape_params` id fields — names entities that
+    // actually exist; otherwise a later move / rotate strands the outline
+    // and bakes wrong copper. `owned_sketch_entities` seeds from the real
+    // pad's preserved ids, so this is the correct set. The discrete
+    // `remint_pad_geometry` gets this for free through
+    // `mint_shape_geometry_for → record_ledger`; the in-place path, which
+    // writes onto existing entities, must do it explicitly (the re-mint
+    // contract in `ownership.rs`).
+    super::ownership::record_ledger(sketch, pad, centre);
     true
 }
 

@@ -165,10 +165,11 @@ fn flip_moves_every_selected_pad_to_the_back_side() {
     }
 }
 
-/// `apply_footprint_primitive_edit` blanket-pushes a snapshot for every
-/// mutating message, and Rotate is not on its exemption list — so the
-/// arm must NOT push its own. One Ctrl+Z has to reverse the whole
-/// multi-pad rotate; two would mean the history got double-stacked.
+/// `apply_footprint_primitive_edit` does NOT push a snapshot for Rotate —
+/// #146 put it on `mutates_footprint_state`'s exemption list — so the arm
+/// pushes exactly ONE itself, gated on a non-empty selection. One Ctrl+Z
+/// has to reverse the whole multi-pad rotate; two would mean the history
+/// got double-stacked, zero would mean it could not be undone at all.
 #[test]
 fn one_undo_reverses_the_whole_multi_pad_rotate() {
     let (mut app, path, _tmp) = fixture("multi-rotate-undo", 3);

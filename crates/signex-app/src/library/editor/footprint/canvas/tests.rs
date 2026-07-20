@@ -106,7 +106,7 @@ fn arc_sketch(r_mm: f64) -> (signex_sketch::SketchData, signex_sketch::id::Sketc
     use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 
     let plane_id = PlaneId::new();
-    let mut push = |sketch: &mut signex_sketch::SketchData, kind| {
+    let push = |sketch: &mut signex_sketch::SketchData, kind| {
         let id = SketchEntityId::new();
         sketch.entities.push(Entity::new(id, plane_id, kind));
         id
