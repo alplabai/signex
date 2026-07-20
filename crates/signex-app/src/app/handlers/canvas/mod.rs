@@ -246,29 +246,24 @@ impl Signex {
     }
 
     fn resolve_child_sheet_path(&self, child_filename: &str) -> Option<std::path::PathBuf> {
-        let trimmed = child_filename.trim();
-        if trimmed.is_empty() {
-            return None;
-        }
-
-        let raw = std::path::PathBuf::from(trimmed);
-        if raw.is_absolute() {
-            return Some(raw);
-        }
-
-        let base_dir = self
-            .document_state
-            .active_loaded_project()
-            .and_then(|p| p.path.parent().map(std::path::PathBuf::from))
+        // #339 — resolve a relative child reference against the directory of the
+        // sheet that CARRIES the reference (the active tab's path), not the
+        // project directory. This matches `project_children_map` / the netlist,
+        // so navigation lands on the same file the netlist stitched instead of a
+        // phantom sibling beside the `.snxprj`. Falls back to the project
+        // directory when the active tab is unsaved (no path). Both call sites go
+        // through the one shared resolver, which also handles the empty and
+        // absolute-reference cases.
+        let parent_dir = self
+            .active_tab_path()
+            .and_then(|path| path.parent().map(std::path::PathBuf::from))
             .or_else(|| {
-                self.active_tab_path()
-                    .and_then(|path| path.parent().map(std::path::PathBuf::from))
-            });
-
-        Some(match base_dir {
-            Some(base) => base.join(raw),
-            None => raw,
-        })
+                self.document_state
+                    .active_loaded_project()
+                    .and_then(|p| p.path.parent().map(std::path::PathBuf::from))
+            })
+            .unwrap_or_default();
+        crate::app::project_sheets::resolve_child_reference(&parent_dir, child_filename)
     }
 
     pub(crate) fn open_or_focus_child_sheet(&mut self, child_filename: &str) {
