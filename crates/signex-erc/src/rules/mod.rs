@@ -2,6 +2,12 @@
 //! [`ErcContext`] and pushes [`Diagnostic`]s onto the accumulator.
 //! No render or parser imports — all geometry is already world-space inside
 //! the context.
+//!
+//! This file is already past the size a module should reach, so new rules land
+//! in their own sibling file rather than growing it further.
+
+mod ambiguous_label_anchor;
+pub(crate) use ambiguous_label_anchor::ambiguous_label_anchor;
 
 use std::collections::HashMap;
 
@@ -24,7 +30,7 @@ fn same(a: &Point, b: &Point) -> bool {
 
 /// Every wire on the sheet as a `(start, end)` pair, for anchoring queries
 /// against [`SheetConnectivity::root_of_anchored`] / [`on_any_wire`].
-fn wire_pairs(ctx: &ErcContext) -> Vec<(Point, Point)> {
+pub(super) fn wire_pairs(ctx: &ErcContext) -> Vec<(Point, Point)> {
     ctx.wires.iter().map(|w| (w.start, w.end)).collect()
 }
 

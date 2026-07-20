@@ -8,8 +8,26 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
-### Fixed
+### Fixed — netlist
 
+- **Netlist derivation no longer depends on wire order** (#402). `uf::union`
+  now keeps the smaller root, so a class's representative is a pure function of
+  the partition rather than of the order the unions were applied in, and
+  `anchor_point` resolves a label tapping several wire interiors by a total
+  order over the segments instead of by whichever the slice yielded first.
+- **Junction dots are reconciled on every command that changes wire geometry**
+  (#402). `PlaceWireSegment` reconciled both directions of a T; `MoveSelection`
+  / `RotateSelection` / `MirrorSelection` mutate the same coordinates and
+  reconciled nothing, so dragging a stub onto a trunk left a junction-less T —
+  which the netlist deliberately reads as disconnected (#107) — and the
+  connection was silently lost.
+- **Junction autoplacement no longer mints a dot the netlist will not honour**
+  (#402). The geometry helpers work in `f64` mm with a 0.01 mm tolerance, but
+  `SheetConnectivity` honours a junction only where the point is *exactly*
+  collinear in the 1 µm key space. A candidate a few µm off a wire produced a
+  dot asserting a connection the derivation refused to make. Every minted dot
+  is now gated on the netlist's own predicate; off-grid geometry gets no dot
+  rather than a lying one.
 - **Same-name label merging is applied by every connectivity consumer** (#404).
   `SheetConnectivity::merge_named_labels` is now called by `summarize_nets`
   (ERC/DSL), `net_label_conflict`, `missing_power_flag`, and
@@ -27,6 +45,33 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
   join — two differently-named `Net` labels pulled onto one net by a shared
   `Global`/`Power` label previously went unreported, and both signal names were
   silently dropped from the netlist.
+
+### Changed — netlist
+
+- **Auto-generated `N$k` net names change for existing schematics.** Making the
+  partition order-independent reorders the sorted roots that assign `NetId`
+  `1..=N`, and unlabelled nets are named from that id. An unchanged schematic
+  therefore exports a netlist whose `N$k` names differ from before this
+  release. This is a one-time, unavoidable consequence of the fix — the
+  alternative is keeping net numbering dependent on document order.
+
+  Constraint this records for later: `net_name` is a persisted field of the PCB
+  format (on pads, tracks and zones), so any future schematic → PCB net sync
+  **must match by terminal set, not by auto-generated `N$k` name.** Nothing
+  in-tree feeds `build_netlist` into `signex-pcb` today, so no routed copper is
+  remapped by this change.
+
+### Added — ERC
+
+- **`AmbiguousLabelAnchor`** (warning). A label sitting where two or more wires
+  cross with no junction is anchored to exactly one of them by the tiebreak
+  above. The answer is deterministic but not predictable from the geometry, so
+  ERC now says the net was decided by tiebreak instead of leaving the user to
+  guess. Labels on a wire endpoint, or on a dotted crossing, are not flagged.
+
+_v0.14.0 shipped 2026-07-18. The symbol polygon primitive, Place Polygon tool,
+Join into Polygon, right-click context menu, and the arc-sweep /
+legacy-migration fixes that briefly lived here all shipped in v0.14.0 below._
 
 ## [0.14.0] — 2026-07-18
 

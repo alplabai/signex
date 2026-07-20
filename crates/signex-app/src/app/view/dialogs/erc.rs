@@ -242,6 +242,7 @@ const ALL_RULES: &[signex_erc::RuleKind] = &[
     signex_erc::RuleKind::MissingPowerFlag,
     signex_erc::RuleKind::PowerPortShort,
     signex_erc::RuleKind::SymbolOutsideSheet,
+    signex_erc::RuleKind::AmbiguousLabelAnchor,
 ];
 
 /// Pin-connection matrix. Click a cell to cycle Error → Warning →
