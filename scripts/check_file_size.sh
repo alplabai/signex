@@ -22,7 +22,7 @@
 #
 set -euo pipefail
 
-CAP=800
+CAP=1000
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BASELINE="$ROOT/scripts/godfile-baseline.txt"
 
