@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use serde::{Deserialize, Serialize};
+use signex_types::designator::compare_references;
 
 /// Input context for BOM generation.
 #[derive(Debug, Clone)]
@@ -179,6 +180,10 @@ pub struct BomTable {
     pub metadata: BomMetadata,
 }
 
+fn first_reference(row: &BomRow) -> &str {
+    row.references.first().map(String::as_str).unwrap_or("")
+}
+
 /// Build a BOM table from a normalized BOM context.
 pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
     let mut components = ctx
@@ -191,7 +196,7 @@ pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
         .cloned()
         .collect::<Vec<_>>();
 
-    components.sort_by(|a, b| a.reference.cmp(&b.reference));
+    components.sort_by(|a, b| compare_references(&a.reference, &b.reference));
 
     let rows = match opts.grouping {
         BomGrouping::Grouped => {
@@ -249,7 +254,7 @@ pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
                 })
                 .collect::<Vec<_>>();
 
-            rows.sort_by(|a, b| a.references.first().cmp(&b.references.first()));
+            rows.sort_by(|a, b| compare_references(first_reference(a), first_reference(b)));
             rows
         }
         BomGrouping::Ungrouped | BomGrouping::Flat => {
@@ -270,7 +275,7 @@ pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
                 .collect::<Vec<_>>();
 
             if opts.grouping == BomGrouping::Flat {
-                rows.sort_by(|a, b| a.references.first().cmp(&b.references.first()));
+                rows.sort_by(|a, b| compare_references(first_reference(a), first_reference(b)));
             }
 
             rows
@@ -406,6 +411,102 @@ mod tests {
         assert_eq!(table.rows[1].qty, 2);
         assert_eq!(table.rows[1].fitted_qty, 2);
         assert_eq!(table.rows[1].not_fitted_qty, 0);
+    }
+
+    #[test]
+    fn sorts_references_naturally_when_grouped() {
+        let ctx = BomContext {
+            components: vec![
+                component("R1", "10k", "R_0603"),
+                component("R10", "10k", "R_0603"),
+                component("R2", "10k", "R_0603"),
+                component("R9", "10k", "R_0603"),
+            ],
+            metadata: BomMetadata::default(),
+        };
+
+        let table = build_table(&ctx, &BomEngineOptions::default());
+
+        assert_eq!(table.rows.len(), 1);
+        assert_eq!(table.rows[0].references, vec!["R1", "R2", "R9", "R10"]);
+    }
+
+    #[test]
+    fn sorts_rows_naturally_when_flat() {
+        let ctx = BomContext {
+            components: vec![
+                component("R1", "1k", "R_0603"),
+                component("R10", "10k", "R_0603"),
+                component("R2", "2k", "R_0603"),
+                component("R9", "9k", "R_0603"),
+            ],
+            metadata: BomMetadata::default(),
+        };
+
+        let table = build_table(
+            &ctx,
+            &BomEngineOptions {
+                grouping: BomGrouping::Flat,
+                ..BomEngineOptions::default()
+            },
+        );
+
+        let order = table
+            .rows
+            .iter()
+            .map(|row| row.references[0].as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(order, vec!["R1", "R2", "R9", "R10"]);
+    }
+
+    #[test]
+    fn sorts_rows_naturally_when_grouped_across_rows() {
+        let ctx = BomContext {
+            components: vec![
+                component("R10", "10k", "R_0805"),
+                component("R2", "2k", "R_0603"),
+            ],
+            metadata: BomMetadata::default(),
+        };
+
+        let table = build_table(&ctx, &BomEngineOptions::default());
+
+        let order = table
+            .rows
+            .iter()
+            .map(|row| row.references[0].as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(order, vec!["R2", "R10"]);
+    }
+
+    #[test]
+    fn sorts_references_without_or_with_oversized_numeric_tails() {
+        let huge = "R99999999999999999999999";
+        let ctx = BomContext {
+            components: vec![
+                component("VR", "reg", "SOT23"),
+                component(huge, "huge", "R_0603"),
+                component("R10", "10k", "R_0603"),
+                component("R", "bare", "R_0603"),
+                component("R2", "2k", "R_0603"),
+            ],
+            metadata: BomMetadata::default(),
+        };
+
+        let table = build_table(
+            &ctx,
+            &BomEngineOptions {
+                grouping: BomGrouping::Flat,
+                ..BomEngineOptions::default()
+            },
+        );
+
+        let order = table
+            .rows
+            .iter()
+            .map(|row| row.references[0].as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(order, vec!["R", "R2", "R10", huge, "VR"]);
     }
 
     #[test]

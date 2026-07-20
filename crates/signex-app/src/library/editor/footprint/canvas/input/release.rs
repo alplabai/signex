@@ -284,6 +284,11 @@ impl FootprintCanvas<'_> {
                 id: select_id,
                 shift: false,
             }),
+            // #361 — Drag Track End arms its endpoint grab on PRESS
+            // (`try_drag_track_end_grab`); a release reaching here means
+            // the press missed every line, so an un-moved empty click is
+            // a no-op — it never places geometry.
+            SketchTool::DragTrackEnd => return None,
             SketchTool::Point => EditorMsg::Footprint(FootprintEditorMsg::SketchPlacePoint {
                 x_mm: click_world.0,
                 y_mm: click_world.1,
@@ -299,7 +304,11 @@ impl FootprintCanvas<'_> {
             | SketchTool::CircularPattern
             | SketchTool::TangentArc
             | SketchTool::Fillet
-            | SketchTool::Trim => EditorMsg::Footprint(FootprintEditorMsg::SketchToolClick {
+            | SketchTool::Trim
+            // #372 — Break Track routes its single click through the
+            // same SketchToolClick path as Trim; the dispatcher's edit
+            // arm hit-tests the Line and hands off to `split_line`.
+            | SketchTool::BreakTrack => EditorMsg::Footprint(FootprintEditorMsg::SketchToolClick {
                 x_mm: click_world.0,
                 y_mm: click_world.1,
                 snap_id,

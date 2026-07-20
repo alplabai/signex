@@ -367,10 +367,25 @@ pub(crate) fn apply_footprint_clipboard_op(
                 new_pad.position_mm = (px, py);
                 new_pad.number = next_num.clone();
                 // Reset sketch links so the pad mirrors freshly into
-                // the sketch on the next mode switch (avoids two
-                // pads sharing an entity id).
+                // the sketch (avoids two pads sharing an entity id).
+                // `shape_params` is the third ownership field and was
+                // cloned wholesale above: leaving it aliased the
+                // TEMPLATE's parameter names and Arc ids, so editing
+                // the pasted pad's corner radius / width / height in
+                // the Properties panel silently resized the ORIGINAL.
                 new_pad.sketch_entity_id = None;
                 new_pad.corner_entity_ids = None;
+                new_pad.shape_params.clear();
+                // Mint the paste its own geometry NOW when the sketch
+                // is already authored — `auto_mint_for_literal_pads`
+                // early-returns on exactly that condition, so waiting
+                // for it would leave the pasted pad unlinked forever.
+                // When the sketch is NOT authored, auto-mint still
+                // covers this pad along with its siblings, and minting
+                // here would be what breaks it.
+                if pad_to_sketch::sketch_is_authored(primitive) {
+                    pad_to_sketch::mirror_add_pad_to_sketch(&mut new_pad, primitive);
+                }
                 state.pads.push(new_pad);
                 let new_idx = state.pads.len() - 1;
                 state.selected_pad = Some(new_idx);
@@ -529,6 +544,11 @@ pub(crate) fn apply_footprint_primitive_edit(
         | FootprintEditorMsg::MoveBySetY(..)
         | FootprintEditorMsg::MoveByConfirm
         | FootprintEditorMsg::MoveByCancel
+        | FootprintEditorMsg::AlignOpen
+        | FootprintEditorMsg::AlignSetHorizontal(..)
+        | FootprintEditorMsg::AlignSetVertical(..)
+        | FootprintEditorMsg::AlignConfirm
+        | FootprintEditorMsg::AlignCancel
         | FootprintEditorMsg::ActiveBarAlignSelectionToGrid
         | FootprintEditorMsg::ActiveBarMoveOriginToGrid
         | FootprintEditorMsg::ActiveBarSelectAll
@@ -660,6 +680,17 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         | MoveBySetY(_)
         | MoveByConfirm
         | MoveByCancel
+        // #370 — Align dialog open/edit/cancel are pure UI state (the
+        // chosen ops live on `align_modal`, not persisted geometry);
+        // Confirm pushes its OWN single snapshot inside the handler,
+        // gated on a large-enough selection and at least one chosen
+        // op — so keep every Align* variant out of the blanket
+        // pre-push to avoid double-stacking / snapshotting a no-op.
+        | AlignOpen
+        | AlignSetHorizontal(_)
+        | AlignSetVertical(_)
+        | AlignConfirm
+        | AlignCancel
         // v0.14 — 3D Body mint pushes its own snapshot inside the
         // handler (unconditionally, unlike nudge). Keep it out of the
         // blanket pre-push to avoid double-stacking the history.
@@ -670,7 +701,17 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         // message reaches the dispatcher like Track's 2-click
         // gesture does). It pushes its own snapshot inside the
         // handler, so keep it out of the blanket pre-push.
-        | AddTextFrame { .. } => false,
+        | AddTextFrame { .. }
+        // v0.15 (#146) — Rotate / Flip / Align-to-grid / Move-origin-
+        // to-grid each push their own snapshot inside the handler,
+        // gated on an actual mutation (a selected pad, or a non-empty
+        // pad list). The blanket pre-push must NOT fire here, or a
+        // no-op invocation with nothing selected would stack an empty
+        // undo entry and dirty the document.
+        | ActiveBarRotateSelection
+        | ActiveBarFlipSelection
+        | ActiveBarAlignSelectionToGrid
+        | ActiveBarMoveOriginToGrid => false,
         // All other variants either add/remove/move geometry,
         // mutate pad attributes, or rebuild the sketch — they all
         // need a history snapshot.

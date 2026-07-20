@@ -19,6 +19,7 @@ impl Signex {
     /// `collect_overlays` before any tool/menu overlay is pushed.
     pub(in crate::app::view) fn has_blocking_modal(&self) -> bool {
         self.document_state.export_error.is_some()
+            || self.document_state.netlist_incomplete_prompt.is_some()
             || self.document_state.preview.is_some()
             || self.ui_state.net_color_custom.show
     }
@@ -34,6 +35,22 @@ impl Signex {
         vec![
             Self::dismiss_layer(Message::Export(ExportMsg::DismissError)),
             self.view_export_error(),
+        ]
+    }
+
+    /// #431 — netlist-incomplete "Export anyway?" prompt. Same modal idiom as
+    /// [`Self::export_error_overlay`], but the card offers TWO actions —
+    /// "Export anyway (incomplete)" and "Cancel". Clicking outside cancels
+    /// (writes nothing). Pushes the dismiss backdrop then the prompt card.
+    pub(in crate::app::view) fn netlist_incomplete_prompt_overlay(
+        &self,
+    ) -> Vec<Element<'_, Message>> {
+        if self.document_state.netlist_incomplete_prompt.is_none() {
+            return Vec::new();
+        }
+        vec![
+            Self::dismiss_layer(Message::Export(ExportMsg::NetlistCancelIncomplete)),
+            self.view_netlist_incomplete_prompt(),
         ]
     }
 
@@ -339,6 +356,46 @@ impl Signex {
                 path: path.to_path_buf(),
                 msg: crate::library::messages::PrimitiveEdit::Footprint(
                     crate::library::messages::FootprintEditorMsg::MoveByCancel,
+                ),
+            },
+        );
+        vec![
+            Self::dismiss_layer(close_msg),
+            container(card.map(Message::Library))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x(Length::Fill)
+                .center_y(Length::Fill)
+                .into(),
+        ]
+    }
+
+    /// #370 — "Align…" dialog for the footprint editor. Mounted at the
+    /// same overlay layer as the Move-By modal (a blocking dialog once
+    /// open): a dismiss backdrop that routes to `AlignCancel`, then the
+    /// centered card.
+    pub(in crate::app::view) fn footprint_align_overlay(&self) -> Vec<Element<'_, Message>> {
+        let document = &self.document_state;
+        let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab) else {
+            return Vec::new();
+        };
+        let Some(path) = active_tab.kind.as_footprint_editor() else {
+            return Vec::new();
+        };
+        let Some(editor) = self.document_state.footprint_editors.get(path) else {
+            return Vec::new();
+        };
+        let tokens = &document.panel_ctx.tokens;
+        let Some(card) =
+            crate::library::editor::footprint::align_modal::view_align_modal(editor, tokens)
+        else {
+            return Vec::new();
+        };
+        let close_msg = Message::Library(
+            crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                path: path.to_path_buf(),
+                msg: crate::library::messages::PrimitiveEdit::Footprint(
+                    crate::library::messages::FootprintEditorMsg::AlignCancel,
                 ),
             },
         );

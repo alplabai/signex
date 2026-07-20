@@ -124,6 +124,134 @@ impl FootprintCanvas<'_> {
         None
     }
 
+    /// #361 — "Drag Track End" endpoint-biased segment grab. While the
+    /// DragTrackEnd tool is armed (Place ▸ Drag Track End), a left-press
+    /// anywhere on a sketch `Line` grabs that line's NEARER endpoint and
+    /// arms the existing Point-drag path — so the endpoint follows the
+    /// cursor with the solver live, regardless of the 12 px point-snap
+    /// radius that [`Self::try_sketch_point_grab`] requires.
+    ///
+    /// This runs BEFORE the Point / Line grabs in the press walk order
+    /// (`on_primary_pressed`) so the armed tool wins the click; the
+    /// whole-line drag (`try_sketch_line_grab`) is deliberately bypassed
+    /// because this tool is biased to the segment's END, not its body.
+    ///
+    /// Reuse, not new machinery: it arms a `DragState { sketch_point: … }`
+    /// — the identical state [`Self::try_sketch_point_grab`] arms — so the
+    /// per-tick `SketchMovePoint` streaming (`pointer.rs`) and the clean
+    /// sketch-point release path need no changes. The line hit-test is
+    /// solve-aware (same `pos_of` resolution as
+    /// [`Self::try_sketch_line_grab`]); a non-`Line` under the cursor
+    /// (arc / circle endpoints are out of scope for #361) falls through.
+    pub(in crate::library::editor::footprint::canvas) fn try_drag_track_end_grab(
+        &self,
+        cstate: &mut FootprintCanvasState,
+        cursor_pos: Point,
+        world: (f64, f64),
+    ) -> Option<canvas::Action<LibraryMessage>> {
+        if !(matches!(self.state.mode, EditorMode::Sketch)
+            && self.state.active_tool == SketchTool::DragTrackEnd)
+        {
+            return None;
+        }
+        let sketch_ref = self.sketch?;
+        // Resolve a Point id to its LIVE world position — the solved
+        // state when a solve is available (what the canvas renders), else
+        // the stored Point coords. Used BOTH to hit-test the line under
+        // the cursor and to pick its nearer endpoint.
+        //
+        // #361 review: the shared `sketch_hit_other` reads only the
+        // authored `EntityKind::Point` coords, so on solver-rubber-banded
+        // geometry (a constrained rectangle / chained track whose
+        // endpoints the solver has moved) it hit-tests stale positions and
+        // misses the very lines this tool targets. Hit-test with the same
+        // solve-aware resolution `try_sketch_line_grab` uses instead.
+        let pos_of = |id: signex_sketch::id::SketchEntityId| -> Option<(f64, f64)> {
+            if let Some(solve) = self.state.last_solve.as_ref()
+                && let Some(p) = signex_sketch::solver::state::point_xy(
+                    id,
+                    &solve.result.state,
+                    &solve.result.index,
+                    sketch_ref,
+                )
+            {
+                return Some(p);
+            }
+            sketch_ref
+                .entities
+                .iter()
+                .find(|e| e.id == id)
+                .and_then(|e| match e.kind {
+                    signex_sketch::entity::EntityKind::Point { x, y } => Some((x, y)),
+                    _ => None,
+                })
+        };
+
+        // Solve-aware nearest-Line hit-test within a ~10 px stroke band
+        // (mirrors `try_sketch_line_grab`). Only Lines carry a draggable
+        // "track end"; arcs / circles are out of scope for #361.
+        const LINE_HIT_TOL_PX: f32 = 10.0;
+        let tol_mm = (LINE_HIT_TOL_PX / cstate.scale.max(1.0)) as f64;
+        let mut best_line: Option<(
+            f64,
+            signex_sketch::id::SketchEntityId,
+            signex_sketch::id::SketchEntityId,
+        )> = None;
+        for ent in &sketch_ref.entities {
+            if let signex_sketch::entity::EntityKind::Line { start, end } = ent.kind
+                && let (Some(a), Some(b)) = (pos_of(start), pos_of(end))
+            {
+                let dx = b.0 - a.0;
+                let dy = b.1 - a.1;
+                let llen2 = dx * dx + dy * dy;
+                if llen2 <= 1e-12 {
+                    continue;
+                }
+                let t = (((world.0 - a.0) * dx + (world.1 - a.1) * dy) / llen2).clamp(0.0, 1.0);
+                let px = a.0 + t * dx;
+                let py = a.1 + t * dy;
+                let d2 = (px - world.0).powi(2) + (py - world.1).powi(2);
+                if d2 <= tol_mm * tol_mm && best_line.as_ref().is_none_or(|(b2, ..)| d2 < *b2) {
+                    best_line = Some((d2, start, end));
+                }
+            }
+        }
+        // Pick the endpoint nearer the click. `<` (not `<=`) means an
+        // equidistant press resolves to `start` deterministically.
+        let (_, start, end) = best_line?;
+        let (sp, ep) = (pos_of(start)?, pos_of(end)?);
+        let d2 = |p: (f64, f64)| (p.0 - world.0).powi(2) + (p.1 - world.1).powi(2);
+        let nearer = if d2(ep) < d2(sp) { end } else { start };
+
+        // Arm the existing Point-drag path — identical to
+        // `try_sketch_point_grab` from here on, so release + per-tick
+        // `SketchMovePoint` streaming are already handled (pointer.rs).
+        // Clear any stale rubber-band anchor first.
+        cstate.box_select_anchor_screen = None;
+        cstate.box_select_current_screen = None;
+        cstate.drag = Some(DragState {
+            pad_idx: usize::MAX,
+            sketch_point: Some(nearer),
+            sketch_line: None,
+            grab_offset_mm: (0.0, 0.0),
+            last_world: world,
+            press_screen: cursor_pos,
+            moved: false,
+        });
+        Some(
+            canvas::Action::publish(LibraryMessage::EditorEvent {
+                library_path: self.address.library_path.clone(),
+                table: self.address.table.clone(),
+                row_id: self.address.row_id,
+                msg: EditorMsg::Footprint(FootprintEditorMsg::SketchSelect {
+                    id: Some(nearer),
+                    shift: false,
+                }),
+            })
+            .and_capture(),
+        )
+    }
+
     /// v0.16 — Sketch mode + Select tool click within snap radius of a
     /// sketch `Point` starts a Point-drag gesture and publishes a
     /// select so the inspector + DOF overlay highlight immediately.

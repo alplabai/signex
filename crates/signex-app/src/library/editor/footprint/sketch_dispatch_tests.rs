@@ -554,4 +554,294 @@ mod tests {
             "expected SketchError surfaced in solve_warnings, got nothing"
         );
     }
+
+    // ----------------------------------------------------------------
+    // #372 — Break Track. Drives the real router
+    // (`apply_footprint_primitive_edit`) end-to-end so each test also
+    // exercises the one-history-snapshot pre-push that makes a split a
+    // single undo step. The click-resolution machinery shared by all
+    // sketch tools mints one throwaway "click" Point per click BEFORE
+    // the edit arm runs (same as Fillet / Trim); these tests therefore
+    // assert on the split-relevant geometry — the count of `Line`
+    // entities and their endpoints — rather than the raw entity total.
+    // ----------------------------------------------------------------
+
+    /// Build an `app::FootprintEditorState` holding a single sketch
+    /// Line from `p_start` to `p_end`, armed with the Break Track tool.
+    /// Returns the editor plus the start / end Point ids and the Line
+    /// id so tests can assert against the pre-split identities.
+    fn break_track_editor(
+        p_start: (f64, f64),
+        p_end: (f64, f64),
+    ) -> (
+        crate::app::FootprintEditorState,
+        SketchEntityId,
+        SketchEntityId,
+        SketchEntityId,
+    ) {
+        use crate::library::editor::footprint::state::SketchTool;
+        use signex_library::primitive::footprint::FootprintFile;
+        use std::path::PathBuf;
+
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        let sid = SketchEntityId::new();
+        let eid = SketchEntityId::new();
+        let lid = SketchEntityId::new();
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![
+                Entity::new(
+                    sid,
+                    plane,
+                    EntityKind::Point {
+                        x: p_start.0,
+                        y: p_start.1,
+                    },
+                ),
+                Entity::new(
+                    eid,
+                    plane,
+                    EntityKind::Point {
+                        x: p_end.0,
+                        y: p_end.1,
+                    },
+                ),
+                Entity::new(
+                    lid,
+                    plane,
+                    EntityKind::Line {
+                        start: sid,
+                        end: eid,
+                    },
+                ),
+            ],
+            ..SketchData::default()
+        });
+        let file = FootprintFile::from_footprint(fp);
+        let mut editor =
+            crate::app::FootprintEditorState::new(PathBuf::from("break-track.snxfpt"), file);
+        editor.state.active_tool = SketchTool::BreakTrack;
+        (editor, sid, eid, lid)
+    }
+
+    /// `(line_id, start_id, end_id)` for every `Line` in the active
+    /// footprint's sketch.
+    fn sketch_lines(
+        editor: &crate::app::FootprintEditorState,
+    ) -> Vec<(SketchEntityId, SketchEntityId, SketchEntityId)> {
+        editor
+            .primitive()
+            .sketch
+            .as_ref()
+            .unwrap()
+            .entities
+            .iter()
+            .filter_map(|e| match e.kind {
+                EntityKind::Line { start, end } => Some((e.id, start, end)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Coordinates of the Point `id` in the active footprint's sketch.
+    fn point_xy(editor: &crate::app::FootprintEditorState, id: SketchEntityId) -> (f64, f64) {
+        editor
+            .primitive()
+            .sketch
+            .as_ref()
+            .unwrap()
+            .entities
+            .iter()
+            .find(|e| e.id == id)
+            .map(|e| match e.kind {
+                EntityKind::Point { x, y } => (x, y),
+                _ => panic!("entity {id:?} is not a Point"),
+            })
+            .unwrap()
+    }
+
+    #[test]
+    fn break_track_split_at_mid_span_replaces_line_with_two_halves() {
+        use crate::library::messages::FootprintEditorMsg;
+
+        let (mut editor, sid, eid, lid) = break_track_editor((0.0, 0.0), (10.0, 0.0));
+        assert_eq!(sketch_lines(&editor).len(), 1, "starts with one Line");
+
+        // Click at the midpoint, 0.1 mm off the stroke (< 0.30 mm tol).
+        crate::library::editor::footprint::updates::apply_footprint_primitive_edit(
+            &mut editor,
+            FootprintEditorMsg::SketchToolClick {
+                x_mm: 5.0,
+                y_mm: 0.1,
+                snap_id: None,
+            },
+        );
+
+        // Exactly one undo snapshot captured for the whole click.
+        assert_eq!(
+            editor.history.len(),
+            1,
+            "a split must cost exactly one undo step"
+        );
+
+        let ls = sketch_lines(&editor);
+        assert_eq!(ls.len(), 2, "the Line is replaced by two halves");
+        let ends_a = [ls[0].1, ls[0].2];
+        let ends_b = [ls[1].1, ls[1].2];
+
+        // The two halves share exactly one endpoint — the new mid Point.
+        let shared: Vec<SketchEntityId> = ends_a
+            .iter()
+            .copied()
+            .filter(|p| ends_b.contains(p))
+            .collect();
+        assert_eq!(
+            shared.len(),
+            1,
+            "the halves share exactly the new mid Point"
+        );
+        let mid = shared[0];
+        assert_ne!(mid, sid);
+        assert_ne!(mid, eid);
+
+        // The mid Point sits at the click projected onto the line (5,0).
+        let (mx, my) = point_xy(&editor, mid);
+        assert!(
+            (mx - 5.0).abs() < 1e-6 && (my - 0.0).abs() < 1e-6,
+            "mid at the projected click, got ({mx}, {my})"
+        );
+
+        // The union of the two segments keeps the original endpoints.
+        let outer: Vec<SketchEntityId> = ends_a
+            .iter()
+            .chain(ends_b.iter())
+            .copied()
+            .filter(|p| *p != mid)
+            .collect();
+        assert!(
+            outer.contains(&sid) && outer.contains(&eid),
+            "union of the halves preserves the original endpoints"
+        );
+
+        // One undo reverses the entire split back to the single Line.
+        assert!(editor.undo(), "there is a snapshot to undo");
+        let restored = sketch_lines(&editor);
+        assert_eq!(restored.len(), 1, "undo restores the single original Line");
+        assert_eq!(
+            restored[0],
+            (lid, sid, eid),
+            "restored Line is byte-identical"
+        );
+    }
+
+    #[test]
+    fn break_track_reselects_line_a_not_line_b() {
+        use crate::library::messages::FootprintEditorMsg;
+
+        let (mut editor, sid, _eid, _lid) = break_track_editor((0.0, 0.0), (10.0, 0.0));
+        crate::library::editor::footprint::updates::apply_footprint_primitive_edit(
+            &mut editor,
+            FootprintEditorMsg::SketchToolClick {
+                x_mm: 4.0,
+                y_mm: 0.05,
+                snap_id: None,
+            },
+        );
+
+        let sel = editor
+            .state
+            .selected_sketch
+            .expect("selection is set to a split half after a successful split");
+        let ls = sketch_lines(&editor);
+        let selected = ls
+            .iter()
+            .find(|(id, _, _)| *id == sel)
+            .expect("selection resolves to one of the two new Lines");
+        // `line_a` is `start -> mid`, so its `start` is the ORIGINAL
+        // start; `line_b` is `mid -> end` (its start is the new mid).
+        assert_eq!(
+            selected.1, sid,
+            "selection is line_a (keeps the original start), never line_b"
+        );
+    }
+
+    #[test]
+    fn break_track_miss_warns_and_leaves_line_intact() {
+        use crate::library::editor::footprint::state::{SketchTool, ToolPending};
+        use crate::library::messages::FootprintEditorMsg;
+
+        let (mut editor, sid, eid, lid) = break_track_editor((0.0, 0.0), (10.0, 0.0));
+        // 5 mm off the stroke — far beyond the 0.30 mm tolerance.
+        crate::library::editor::footprint::updates::apply_footprint_primitive_edit(
+            &mut editor,
+            FootprintEditorMsg::SketchToolClick {
+                x_mm: 5.0,
+                y_mm: 5.0,
+                snap_id: None,
+            },
+        );
+
+        let ls = sketch_lines(&editor);
+        assert_eq!(ls.len(), 1, "a miss splits nothing");
+        assert_eq!(ls[0], (lid, sid, eid), "the original Line is untouched");
+        assert!(
+            editor
+                .state
+                .solve_warnings
+                .iter()
+                .any(|w| w.contains("Break Track")),
+            "a miss pushes a user-visible Break Track warning"
+        );
+        assert_eq!(
+            editor.state.active_tool,
+            SketchTool::BreakTrack,
+            "the tool stays armed after a miss"
+        );
+        assert!(
+            matches!(editor.state.tool_pending, ToolPending::Idle),
+            "the single-click tool resets to Idle (still armed)"
+        );
+    }
+
+    #[test]
+    fn break_track_click_near_endpoint_warns_no_split() {
+        use crate::library::editor::footprint::state::SketchTool;
+        use crate::library::messages::FootprintEditorMsg;
+
+        let (mut editor, sid, eid, lid) = break_track_editor((0.0, 0.0), (10.0, 0.0));
+        // ~0.05 mm off the stroke and ~0.0005 mm along it from the
+        // start: the click is on the segment (so `t ≈ 5e-5` is a valid
+        // parameter), but the mid Point would land within
+        // MIN_SEGMENT_LEN_MM of the start → SplitError::TooCloseToEndpoint
+        // → no split, just a warning.
+        crate::library::editor::footprint::updates::apply_footprint_primitive_edit(
+            &mut editor,
+            FootprintEditorMsg::SketchToolClick {
+                x_mm: 0.0005,
+                y_mm: 0.05,
+                snap_id: None,
+            },
+        );
+
+        let ls = sketch_lines(&editor);
+        assert_eq!(ls.len(), 1, "a near-endpoint click splits nothing");
+        assert_eq!(ls[0], (lid, sid, eid), "the original Line is untouched");
+        assert!(
+            editor
+                .state
+                .solve_warnings
+                .iter()
+                .any(|w| w.contains("Break Track")),
+            "a near-endpoint click pushes a user-visible Break Track warning"
+        );
+        assert_eq!(
+            editor.state.active_tool,
+            SketchTool::BreakTrack,
+            "the tool stays armed after a rejected split"
+        );
+    }
 }

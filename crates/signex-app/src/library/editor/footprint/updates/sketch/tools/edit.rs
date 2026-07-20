@@ -628,6 +628,142 @@ pub(super) fn apply(
             }
             editor.state.tool_pending = ToolPending::Idle;
         }
+        SketchTool::BreakTrack => {
+            // #372 — Break Track. Single click on a sketch Line:
+            // hit-test the click against every Line (0.30 mm
+            // tolerance, nearest stroke wins — the same pick shape as
+            // the Trim arm above), project the click onto that Line to
+            // a parameter `t`, and hand off to the `split_line`
+            // primitive (#360), which divides the Line into two Lines
+            // meeting at a new mid Point.
+            //
+            // History — ONE undo step. `SketchToolClick` is classified
+            // as a footprint mutation, so the router captured exactly
+            // one pre-mutation snapshot before dispatching here (see
+            // `updates/mod.rs::mutates_footprint_state` + its blanket
+            // pre-push). This arm must NOT push again — mirroring the
+            // Fillet / Trim arms — so a split stays a single undo step.
+            //
+            // Errors — graceful, no mutation. `split_line` leaves the
+            // sketch byte-for-byte unchanged on every failure (a
+            // degenerate line, a `t` too close to an endpoint, …). On
+            // ANY `Err` — and on a click that misses every Line — we
+            // surface a warning the same shape as the Trim miss, leave
+            // the tool armed, and mutate nothing.
+            fn pick_line_and_param(
+                sketch: &signex_sketch::SketchData,
+                x: f64,
+                y: f64,
+            ) -> Option<(SketchEntityId, f64)> {
+                const TOL_MM: f64 = 0.30;
+                let pos_of = |id: SketchEntityId| -> Option<(f64, f64)> {
+                    sketch
+                        .entities
+                        .iter()
+                        .find(|e| e.id == id)
+                        .and_then(|e| match e.kind {
+                            EntityKind::Point { x, y } => Some((x, y)),
+                            _ => None,
+                        })
+                };
+                let mut best: Option<(f64, SketchEntityId, f64)> = None;
+                for e in &sketch.entities {
+                    if let EntityKind::Line { start, end } = e.kind {
+                        let (Some(a), Some(b)) = (pos_of(start), pos_of(end)) else {
+                            continue;
+                        };
+                        let dx = b.0 - a.0;
+                        let dy = b.1 - a.1;
+                        let llen2 = dx * dx + dy * dy;
+                        if llen2 <= 1e-12 {
+                            continue;
+                        }
+                        // Unclamped parametric position of the click's
+                        // foot on the (infinite) line; `split_line`
+                        // validates `t ∈ (0, 1)` itself, so a click
+                        // that projects just past an endpoint arrives
+                        // as an out-of-range `t` and is rejected
+                        // gracefully rather than silently clamped onto
+                        // the endpoint.
+                        let t = ((x - a.0) * dx + (y - a.1) * dy) / llen2;
+                        // Distance is measured to the CLAMPED foot so
+                        // the tolerance test stays on the finite
+                        // segment (matching `pick_line_at_for_trim`).
+                        let tc = t.clamp(0.0, 1.0);
+                        let px = a.0 + tc * dx;
+                        let py = a.1 + tc * dy;
+                        let d2 = (px - x).powi(2) + (py - y).powi(2);
+                        if d2 <= TOL_MM * TOL_MM && best.as_ref().is_none_or(|(b2, _, _)| d2 < *b2)
+                        {
+                            best = Some((d2, e.id, t));
+                        }
+                    }
+                }
+                best.map(|(_, id, t)| (id, t))
+            }
+
+            let pick = match editor.primitive().sketch.as_ref() {
+                Some(s) => pick_line_and_param(s, ctx.x_mm, ctx.y_mm),
+                None => None,
+            };
+            let Some((line_id, t)) = pick else {
+                editor.state.solve_warnings.push(
+                    "Break Track: click missed any Line — try clicking closer to a line stroke"
+                        .into(),
+                );
+                editor.state.tool_pending = ToolPending::Idle;
+                return;
+            };
+
+            // Run the #360 primitive against the live sketch. On `Err`
+            // the sketch is left unchanged, so we only warn.
+            let outcome = editor
+                .primitive_mut()
+                .sketch
+                .as_mut()
+                .map(|s| signex_sketch::split_line(s, line_id, t));
+            match outcome {
+                Some(Ok(result)) => {
+                    // Re-select `line_a`. Only it keeps the original
+                    // `start` and any closed-profile seed role
+                    // (pour / keepout / cutout / pad seed); leaving the
+                    // user selected on `line_b` would present it as
+                    // "Unassigned" and invite them to re-tag it, which
+                    // plants a SECOND seed on the loop and reproduces
+                    // the double-emit `split_line` guards against (see
+                    // its doc). Clear the secondary / extra selection
+                    // so the split's `line_a` is the sole selection.
+                    editor.state.selected_sketch = Some(result.line_a);
+                    editor.state.selected_sketch_secondary = None;
+                    editor.state.selected_sketch_extra.clear();
+                    // Re-solve + bake so the two halves materialise in
+                    // the footprint output — the same trailing rebuild
+                    // the Trim arm runs.
+                    editor.with_parts(|state, primitive| {
+                        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+                    });
+                    // Surface a dropped-constraint note AFTER the
+                    // rebuild: `solve_and_bake` clears `solve_warnings`
+                    // on entry, so a warning pushed before it would be
+                    // wiped. `split_line` only drops a `Midpoint`
+                    // constraint (its midpoint belongs to neither half).
+                    if !result.dropped_constraints.is_empty() {
+                        editor.state.solve_warnings.push(
+                            "Break Track: a Midpoint constraint on the split Line was dropped"
+                                .into(),
+                        );
+                    }
+                }
+                Some(Err(e)) => {
+                    editor
+                        .state
+                        .solve_warnings
+                        .push(format!("Break Track: {e}"));
+                }
+                None => {}
+            }
+            editor.state.tool_pending = ToolPending::Idle;
+        }
         _ => unreachable!("non-curve edits tool routed here"),
     }
 }

@@ -1,6 +1,8 @@
 //! Standalone `.snxfpt` footprint-editor document tab view builders.
 //! Split from `library/editor/standalone.rs` as pure code motion.
 
+use std::path::Path;
+
 use iced::widget::{Space, button, column, container, row, scrollable, text};
 use iced::{Border, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
@@ -636,13 +638,7 @@ fn view_footprint_canvas<'a>(
         .height(Length::Fill)
         .into();
     let path = editor.path.clone();
-    let translated = canvas_widget.map(move |msg| match msg {
-        LibraryMessage::EditorEvent { msg, .. } => LibraryMessage::PrimitiveEditorEvent {
-            path: path.clone(),
-            msg: editor_msg_to_primitive_msg(msg),
-        },
-        other => other,
-    });
+    let translated = canvas_widget.map(move |msg| translate_footprint_canvas_msg(msg, &path));
 
     container(translated)
         .padding(0)
@@ -660,23 +656,41 @@ fn view_footprint_canvas<'a>(
         .into()
 }
 
-/// Translate a Footprint canvas `EditorMsg` into the standalone
-/// primitive-editor envelope. Only the canvas-emitted variants are
-/// ever produced here — non-footprint variants fall through to a
-/// no-op `Save` (the dispatcher discards on path-keyed lookup
-/// mismatch anyway).
-fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEdit {
+/// Translate a message emitted by the footprint canvas widget
+/// (`canvas::Program<LibraryMessage>` — see `canvas/mod.rs`) into the
+/// standalone `.snxfpt` tab's primitive-editor envelope. The canvas
+/// only ever emits `EditorEvent { msg: EditorMsg::Footprint(_), .. }`
+/// (every message it builds goes through that wrapper — see e.g.
+/// `canvas/input/tools.rs`'s `select_msg`), so that shape becomes a
+/// real, path-carrying `PrimitiveEditorEvent`. This routing decision
+/// used to live inline in the `.map()` closure at the call site, where
+/// nothing could unit-test it; it's a free function here so a
+/// regression (a special-cased variant routed to `PrimitiveEdit::Save`
+/// ahead of the general arm) is directly testable.
+fn translate_footprint_canvas_msg(msg: LibraryMessage, path: &Path) -> LibraryMessage {
     match msg {
-        // Pre-existing quirk preserved: Tab during sketch placement input
-        // is emitted by the canvas but was never wired through to the
-        // standalone dispatcher, so it lands as a no-op Save. Kept as-is
-        // to keep this refactor behavior-neutral.
-        EditorMsg::Footprint(FootprintEditorMsg::SketchPlacementInputTab) => PrimitiveEdit::Save,
-        EditorMsg::Footprint(fp) => PrimitiveEdit::Footprint(fp),
-        // Anything not emitted by the footprint canvas is dropped via a
-        // benign "save of the wrong tab" — the path-keyed dispatcher
-        // ignores mismatches.
-        _ => PrimitiveEdit::Save,
+        LibraryMessage::EditorEvent {
+            msg: EditorMsg::Footprint(msg),
+            ..
+        } => LibraryMessage::PrimitiveEditorEvent {
+            path: path.to_path_buf(),
+            msg: PrimitiveEdit::Footprint(msg),
+        },
+        other => {
+            // Enforced, not just documented: a future non-Footprint
+            // variant would otherwise pass through as a bare
+            // `EditorEvent` carrying the sentinel address built in
+            // `view_footprint_canvas` (empty `table`, nil `row_id`),
+            // which `handle_editor_event`
+            // (`app/dispatch/library/mod.rs`) hands to a path-keyed
+            // lookup that cannot match a standalone tab — the message
+            // would be silently dropped instead of erroring.
+            debug_assert!(
+                false,
+                "footprint canvas emitted a non-Footprint message: {other:?}"
+            );
+            other
+        }
     }
 }
 
@@ -717,4 +731,61 @@ fn view_footprint_footer<'a>(
     .style(crate::styles::modal_footer_strip(tokens))
     .width(Length::Fill)
     .into()
+}
+
+#[cfg(test)]
+mod tests {
+    //! Issue #180 — `translate_footprint_canvas_msg` is the canvas-to-
+    //! dispatcher bridge and is private to this module, so it can only
+    //! be exercised from an in-crate unit test (an integration test
+    //! under `tests/` has no visibility into it: `standalone::footprint`
+    //! is a private submodule re-exporting only `view_footprint`).
+    use super::*;
+    use std::path::PathBuf;
+
+    fn wrap(msg: FootprintEditorMsg) -> LibraryMessage {
+        LibraryMessage::EditorEvent {
+            library_path: PathBuf::new(),
+            table: String::new(),
+            row_id: signex_library::RowId::from_uuid(uuid::Uuid::nil()),
+            msg: EditorMsg::Footprint(msg),
+        }
+    }
+
+    #[test]
+    fn sketch_placement_tab_routes_to_footprint_not_save() {
+        let path = PathBuf::from("t.snxfpt");
+        let out = translate_footprint_canvas_msg(
+            wrap(FootprintEditorMsg::SketchPlacementInputTab),
+            &path,
+        );
+        match out {
+            LibraryMessage::PrimitiveEditorEvent {
+                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchPlacementInputTab),
+                ..
+            } => {}
+            other => panic!(
+                "expected SketchPlacementInputTab to pass through to the footprint \
+                 dispatcher (which cycles the placement-input field), got {other:?}"
+            ),
+        }
+    }
+
+    // Every other Footprint variant already passed through uniformly;
+    // pin that down too so a future special-case regresses loudly.
+    #[test]
+    fn sketch_placement_char_routes_to_footprint_uniformly() {
+        let path = PathBuf::from("t.snxfpt");
+        let out = translate_footprint_canvas_msg(
+            wrap(FootprintEditorMsg::SketchPlacementInputChar('5')),
+            &path,
+        );
+        match out {
+            LibraryMessage::PrimitiveEditorEvent {
+                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchPlacementInputChar('5')),
+                ..
+            } => {}
+            other => panic!("expected uniform Footprint passthrough, got {other:?}"),
+        }
+    }
 }
