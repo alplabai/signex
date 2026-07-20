@@ -304,7 +304,11 @@ impl FootprintCanvas<'_> {
             | SketchTool::CircularPattern
             | SketchTool::TangentArc
             | SketchTool::Fillet
-            | SketchTool::Trim => EditorMsg::Footprint(FootprintEditorMsg::SketchToolClick {
+            | SketchTool::Trim
+            // #372 — Break Track routes its single click through the
+            // same SketchToolClick path as Trim; the dispatcher's edit
+            // arm hit-tests the Line and hands off to `split_line`.
+            | SketchTool::BreakTrack => EditorMsg::Footprint(FootprintEditorMsg::SketchToolClick {
                 x_mm: click_world.0,
                 y_mm: click_world.1,
                 snap_id,
