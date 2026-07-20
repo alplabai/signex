@@ -134,3 +134,15 @@ jobs:
       - name: Check advisories
         run: cargo deny --all-features check advisories
         continue-on-error: true
+
+  no-god-files:
+    name: no god-files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # Hard gate (NOT continue-on-error): a PR may not add a new production
+      # god-file or grow a grandfathered one. Ratchet + rationale live in
+      # scripts/check_file_size.sh; the slice model it points to is ADR-0001.
+      - name: God-file ratchet gate
+        run: bash scripts/check_file_size.sh
