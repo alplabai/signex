@@ -479,7 +479,7 @@ fn history_entry_from_commit(commit: &git2::Commit<'_>, stats: CommitPathStats) 
 ///    when `EMAIL` is unset (`<user>@<hostname>`).
 ///
 /// Returns `Err(LibraryError::Backend("git identity not configured…"))`
-/// when none of the above resolves a name. CLAUDE.md durable rule:
+/// when none of the above resolves a name. Durable project rule:
 /// commits must carry the user's identity — never a generic
 /// "Signex Project" / "Signex bot" fallback. Surfaces through the
 /// async commit pipeline as a `Message::ProjectGitCommitDone` error

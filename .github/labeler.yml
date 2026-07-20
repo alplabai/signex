@@ -1,17 +1,26 @@
 # Path → area label rules for actions/labeler@v5.
 # A PR gets every `area:` label whose globs match its changed files.
 # Keep the label names in sync with the `area:` family in labels.yml.
+#
+# Note on tests: every crate except signex-app is matched by a crate-wide
+# `crates/<crate>/**` glob, which already covers its `tests/` directory.
+# signex-app cannot be matched crate-wide — it hosts most of the `area:`
+# families — so its rules are `src/`-scoped, and its `tests/` needed
+# explicit globs or a tests-only PR arrived with no `area:` label at all.
 
 "area: footprint-editor":
   - changed-files:
       - any-glob-to-any-file:
           - "crates/signex-app/src/library/editor/footprint/**"
           - "crates/signex-app/src/panels/footprint_editor_properties/**"
+          - "crates/signex-app/tests/regression/library_*.rs"
+          - "crates/signex-app/tests/footprint_*.rs"
 
 "area: symbol-editor":
   - changed-files:
       - any-glob-to-any-file:
           - "crates/signex-app/src/library/editor/symbol/**"
+          - "crates/signex-app/tests/symbol_*.rs"
 
 "area: library":
   - changed-files:
@@ -19,6 +28,7 @@
           - "crates/signex-library/**"
           - "crates/signex-library-server/**"
           - "crates/signex-app/src/library/*.rs"
+          - "crates/signex-app/tests/distributor_*.rs"
 
 "area: schematic":
   - changed-files:
@@ -36,6 +46,8 @@
   - changed-files:
       - any-glob-to-any-file:
           - "crates/signex-sketch/**"
+          - "crates/signex-app/tests/sketch_*.rs"
+          - "crates/signex-app/tests/regression/sketch_*.rs"
 
 "area: bake":
   - changed-files:
@@ -57,6 +69,7 @@
   - changed-files:
       - any-glob-to-any-file:
           - "crates/signex-output/**"
+          - "crates/signex-app/tests/export_*.rs"
 
 "area: rendering":
   - changed-files:
@@ -102,6 +115,10 @@
           - "crates/signex-app/src/chrome.rs"
           - "crates/signex-app/src/preferences.rs"
           - "crates/signex-app/src/undo.rs"
+          # Catch-all so no signex-app test change lands untriaged. The
+          # more specific globs above add their own area on top; a PR can
+          # carry several.
+          - "crates/signex-app/tests/**"
 
 "area: infra":
   - changed-files:

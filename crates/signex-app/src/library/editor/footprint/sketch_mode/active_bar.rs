@@ -299,6 +299,14 @@ pub fn items<'a>(
         SketchTool::Trim,
         ActiveBarIcon::Glyph("\u{2702}"), // ✂
     ));
+    // #372 — Break Track. A single click on a Line splits it in two at
+    // the click via the `split_line` primitive (#360). Distinct from
+    // Trim (which removes a segment) — Break Track keeps both halves.
+    items.push(mk_tool(
+        "Break Track — click a Line to split it in two at the click point",
+        SketchTool::BreakTrack,
+        ActiveBarIcon::Glyph("\u{2704}"), // ✄
+    ));
 
     // Section 3: Modify — only visible when an entity is selected
     // (these tools all consume `editor.state.selected_sketch`). With

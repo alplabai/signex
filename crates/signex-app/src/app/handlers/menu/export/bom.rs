@@ -20,12 +20,12 @@ impl Signex {
         }
         let active_variant = self
             .document_state
-            .active_loaded_project()
+            .active_document_project()
             .and_then(|p| p.data.active_variant.clone())
             .unwrap_or_else(|| "Base".to_string());
         let variants = self
             .document_state
-            .active_loaded_project()
+            .active_document_project()
             .map(|p| p.data.variant_definitions.clone())
             .unwrap_or_default();
         let opts = BomOptions {
@@ -307,7 +307,7 @@ impl Signex {
             None => {
                 let active_variant = self
                     .document_state
-                    .active_loaded_project()
+                    .active_document_project()
                     .and_then(|p| p.data.active_variant.clone())
                     .unwrap_or_else(|| "Base".to_string());
                 BomOptions {

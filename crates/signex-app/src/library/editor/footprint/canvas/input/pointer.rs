@@ -140,6 +140,12 @@ impl FootprintCanvas<'_> {
         if let Some(a) = self.try_round_handle_grab(cstate, cursor_pos, world) {
             return Some(a);
         }
+        // #361 — the armed "Drag Track End" tool wins the click before
+        // the generic Point / Line grabs so it can bias to the segment's
+        // nearer endpoint (see `try_drag_track_end_grab`).
+        if let Some(a) = self.try_drag_track_end_grab(cstate, cursor_pos, world) {
+            return Some(a);
+        }
         if let Some(a) = self.try_sketch_point_grab(cstate, cursor_pos, raw_world, world) {
             return Some(a);
         }
@@ -168,8 +174,18 @@ impl FootprintCanvas<'_> {
         raw_world: (f64, f64),
     ) -> (f64, f64) {
         use crate::library::editor::footprint::state::{EditorMode, PadsTool, SketchTool};
+        // #361 — DragTrackEnd is a grab gesture, not a placement tool:
+        // at press time it must hit-test the RAW cursor (so the line
+        // under the cursor is found, not a snapped position) and leave
+        // the snap badge clear, exactly like Select. Vertex snapping is
+        // re-enabled once the endpoint drag is in flight — see
+        // `pointer_move_world`, whose drag-active branch already keeps
+        // snapping alive for a `sketch_point` drag.
         let select_mode = (matches!(self.state.mode, EditorMode::Sketch)
-            && self.state.active_tool == SketchTool::Select)
+            && matches!(
+                self.state.active_tool,
+                SketchTool::Select | SketchTool::DragTrackEnd
+            ))
             || (matches!(self.state.mode, EditorMode::Normal)
                 && self.state.pads_tool == PadsTool::Select);
         if select_mode {

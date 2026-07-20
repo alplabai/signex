@@ -39,17 +39,6 @@ impl Signex {
             crate::schematic_runtime::SchematicRenderSnapshot,
         > = std::collections::HashMap::new();
 
-        let open_paths: std::collections::HashSet<std::path::PathBuf> = self
-            .document_state
-            .tabs
-            .iter()
-            .map(|t| t.path.clone())
-            .collect();
-        let project_root = self
-            .document_state
-            .active_loaded_project()
-            .and_then(|p| p.path.parent().map(std::path::PathBuf::from));
-
         // Active tab.
         if let Some(tab) = self.document_state.tabs.get(self.document_state.active_tab)
             && let Some(snapshot) = self.active_render_snapshot()
@@ -67,32 +56,28 @@ impl Signex {
                 snapshots_by_path.insert(tab.path.clone(), engine.document().clone());
             }
         }
-        // Unopened project sheets.
-        if let Some(pd) = self.document_state.active_loaded_project().map(|p| &p.data) {
-            for sheet in &pd.sheets {
-                let path = match project_root.as_ref() {
-                    Some(root) => root.join(&sheet.filename),
-                    None => std::path::PathBuf::from(&sheet.filename),
-                };
-                if open_paths.contains(&path) || snapshots_by_path.contains_key(&path) {
-                    continue;
-                }
-                let Ok(text) = std::fs::read_to_string(&path) else {
-                    continue;
-                };
-                let Ok(parsed) =
-                    signex_types::format::SnxSchematic::parse(&text).map(|snx| snx.sheet)
-                else {
-                    continue;
-                };
-                snapshots_by_path.insert(path, parsed);
-            }
-        }
+        // The project itself, from the one assembler the export and the cached
+        // canvas netlist also use: the declared pages *plus* everything
+        // reachable down the `child_sheets` graph. Reading the declared pages
+        // alone is what made `BadHierSheetPin` fire on a child that was
+        // sitting unopened on disk beside its parent (#406).
+        let (_pages, project_set) =
+            crate::app::project_sheets::assemble_active_project_sheets(&self.document_state);
 
         // The child sheet-map keyed by the exact `ChildSheet.filename` each
         // parent references (not the bare basename) — the shared view the
         // netlist stitcher and ERC's `BadHierSheetPin` both read (ADR-0002 D8).
-        let children = crate::app::project_sheets::project_children_map(&snapshots_by_path);
+        // Built from the project's own sheets only: an open tab belonging to
+        // some *other* project must never resolve this project's child
+        // references.
+        let children = crate::app::project_sheets::project_children_map(&project_set.sheets);
+
+        // ERC still reports on every sheet the user has open — a loose tab is
+        // not part of the project, but it is on screen and its violations are
+        // wanted — plus every project sheet, opened or not.
+        for (path, sheet) in project_set.sheets {
+            snapshots_by_path.entry(path).or_insert(sheet);
+        }
 
         // Second pass: run ERC with the shared children map so
         // BadHierSheetPin can cross-check each sheet symbol against
@@ -142,8 +127,8 @@ impl Signex {
     fn load_project_dsl_eval_fns(&self) -> Option<Vec<signex_erc::engine::EvalFn>> {
         let project_root = self
             .document_state
-            .active_loaded_project()
-            .and_then(|p| p.path.parent().map(std::path::PathBuf::from))?;
+            .active_document_project()
+            .map(|p| p.dir().to_path_buf())?;
 
         let dsl_path_candidates = [
             project_root.join("erc.dsl"),

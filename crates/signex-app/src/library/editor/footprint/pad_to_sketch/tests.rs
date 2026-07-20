@@ -292,6 +292,185 @@ fn mirror_move_profile_pad_translates_profile_geometry() {
     );
 }
 
+/// Read a Point's raw x/y, panicking with the id when it isn't one.
+fn point_of(fp: &Footprint, id: SketchEntityId) -> (f64, f64) {
+    let entity = fp
+        .sketch
+        .as_ref()
+        .expect("sketch present")
+        .entities
+        .iter()
+        .find(|e| e.id == id)
+        .unwrap_or_else(|| panic!("entity {id} present"));
+    match entity.kind {
+        EntityKind::Point { x, y } => (x, y),
+        _ => panic!("entity {id} must be a Point"),
+    }
+}
+
+/// Resolve a `shape_params` UUID-slug sidecar into its entity id.
+fn sidecar(pad: &EditorPad, key: &str) -> SketchEntityId {
+    let slug = pad
+        .shape_params
+        .get(key)
+        .unwrap_or_else(|| panic!("sidecar {key} bound"));
+    SketchEntityId(uuid::Uuid::parse_str(slug).expect("sidecar is a UUID slug"))
+}
+
+/// Moving a RoundRect pad must carry its arc anchors and inset
+/// arc-centres along.
+///
+/// Regression: `mirror_move_pad_in_sketch` repositioned only the centre
+/// Point and the four `corner_entity_ids`. RoundRect additionally mints
+/// 8 edge anchors + 4 inset arc-centres, all NON-construction, so they
+/// stayed at the old coordinates and the bake emitted copper from the
+/// stranded geometry. Nothing downstream repaired it —
+/// `sync_pads_to_primitive` copies attributes only, it never re-mints.
+#[test]
+fn mirror_move_roundrect_translates_anchors_and_arc_centres() {
+    let mut fp = Footprint::empty("test");
+    let mut pad = editor_pad("1", 0.0, 0.0);
+    pad.shape = LibPadShape::RoundRect { radius_ratio: 0.25 };
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+    // The 4 corner Arcs are the only RoundRect sidecars; each names an
+    // inset centre + 2 edge anchors, so the 4 reach all 12 Points.
+    let arc_ids: Vec<SketchEntityId> = ["ne", "se", "sw", "nw"]
+        .iter()
+        .map(|c| sidecar(&pad, &format!("corner_r_{c}_arc")))
+        .collect();
+    let mut tracked: Vec<SketchEntityId> = Vec::new();
+    for arc_id in &arc_ids {
+        let entity = fp
+            .sketch
+            .as_ref()
+            .unwrap()
+            .entities
+            .iter()
+            .find(|e| e.id == *arc_id)
+            .expect("arc present");
+        match entity.kind {
+            EntityKind::Arc {
+                center, start, end, ..
+            } => tracked.extend([center, start, end]),
+            _ => panic!("corner_r_*_arc must be an Arc"),
+        }
+    }
+    tracked.sort_by_key(|id| id.0);
+    tracked.dedup();
+    assert_eq!(tracked.len(), 12, "4 insets + 8 edge anchors");
+
+    let before: Vec<(f64, f64)> = tracked.iter().map(|id| point_of(&fp, *id)).collect();
+
+    pad.position_mm = (3.0, -2.0);
+    mirror_move_pad_in_sketch(&pad, &mut fp);
+
+    // Exact equality: the delta is ADDED, never recomputed from the
+    // bbox, so the arithmetic is bit-reproducible.
+    let expected: Vec<(f64, f64)> = before.iter().map(|(x, y)| (x + 3.0, y - 2.0)).collect();
+    let after: Vec<(f64, f64)> = tracked.iter().map(|id| point_of(&fp, *id)).collect();
+    assert_eq!(
+        after, expected,
+        "RoundRect anchors + inset arc-centres must translate with the pad, \
+         else the bake emits copper from the stranded geometry"
+    );
+    assert_eq!(point_of(&fp, pad.sketch_entity_id.unwrap()), (3.0, -2.0));
+}
+
+/// Same stranding, Oval's sidecar set: 4 edge anchors + 2 arc-centres.
+#[test]
+fn mirror_move_oval_translates_anchor_sidecars() {
+    let mut fp = Footprint::empty("test");
+    let mut pad = editor_pad("1", 0.0, 0.0);
+    pad.shape = LibPadShape::Oval;
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+    let tracked: Vec<SketchEntityId> = (0..4)
+        .map(|i| sidecar(&pad, &format!("oval_anchor_{i}")))
+        .chain((0..2).map(|i| sidecar(&pad, &format!("oval_centre_{i}"))))
+        .collect();
+    let before: Vec<(f64, f64)> = tracked.iter().map(|id| point_of(&fp, *id)).collect();
+
+    pad.position_mm = (3.0, -2.0);
+    mirror_move_pad_in_sketch(&pad, &mut fp);
+
+    let expected: Vec<(f64, f64)> = before.iter().map(|(x, y)| (x + 3.0, y - 2.0)).collect();
+    let after: Vec<(f64, f64)> = tracked.iter().map(|id| point_of(&fp, *id)).collect();
+    assert_eq!(
+        after, expected,
+        "Oval anchors + arc-centres must translate with the pad"
+    );
+}
+
+/// Deleting a pad must drop constraints on ANY entity it owned, not
+/// just the ones naming its centre Point.
+#[test]
+fn mirror_delete_drops_constraints_on_owned_corners() {
+    use signex_sketch::constraint::{Constraint, ConstraintKind};
+    use signex_sketch::id::ConstraintId;
+
+    let mut fp = Footprint::empty("test");
+    let mut pad = editor_pad("1", 0.0, 0.0);
+    pad.shape = LibPadShape::Rect;
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+    let corners = pad.corner_entity_ids.expect("corners minted");
+    fp.sketch.as_mut().unwrap().constraints.push(Constraint {
+        id: ConstraintId::new(),
+        // References two owned corners; the centre appears nowhere.
+        kind: ConstraintKind::Coincident {
+            p1: corners[0],
+            p2: corners[1],
+        },
+    });
+
+    mirror_delete_pad_from_sketch(&pad, &mut fp);
+
+    assert!(
+        fp.sketch.as_ref().unwrap().constraints.is_empty(),
+        "a constraint on a dropped corner must not survive the pad"
+    );
+}
+
+/// Deleting a pad must drop the per-corner unlink override parameter.
+///
+/// `pad_bridge.rs` mints it as `{shared_name}_{corner_suffix}`, i.e.
+/// `corner_r_<slug>_ne` — it ends with `_ne`, not the slug, so an
+/// `ends_with(&slug)` retain orphaned it in the parameter table.
+#[test]
+fn mirror_delete_drops_per_corner_unlink_parameter() {
+    let mut fp = Footprint::empty("test");
+    let mut pad = editor_pad("1", 0.0, 0.0);
+    pad.shape = LibPadShape::RoundRect { radius_ratio: 0.25 };
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+    let shared_name = pad
+        .shape_params
+        .get("corner_r")
+        .expect("shared corner_r bound")
+        .clone();
+    let per_corner = format!("{shared_name}_ne");
+    fp.sketch
+        .as_mut()
+        .unwrap()
+        .parameters
+        .insert(per_corner.clone(), "0.25mm");
+    pad.shape_params
+        .insert("corner_r_ne".into(), per_corner.clone());
+
+    mirror_delete_pad_from_sketch(&pad, &mut fp);
+
+    let params = &fp.sketch.as_ref().unwrap().parameters;
+    assert!(
+        params.get_raw(&per_corner).is_none(),
+        "per-corner unlink override {per_corner} must go with the pad"
+    );
+    assert!(
+        params.get_raw(&shared_name).is_none(),
+        "shared corner_r must go with the pad"
+    );
+}
+
 #[test]
 fn format_f64_trims_trailing_zeros() {
     use super::attr::format_f64;
@@ -344,5 +523,71 @@ fn shape_change_preserves_corner_positions() {
     assert_eq!(
         before, after,
         "corner positions must remain stable across shape changes"
+    );
+}
+
+/// The owned set must never name an entity the sketch does not have.
+///
+/// Seeds used to be pushed before the lookup that confirms them, so a
+/// stale or foreign UUID in the ledger reached the delete drop set —
+/// where ids are stringified and substring-matched against every
+/// constraint's `Debug` rendering. A dead id there is not a no-op; it
+/// deletes whatever constraint happens to mention it.
+#[test]
+fn owned_set_excludes_ids_with_no_live_entity() {
+    let mut fp = Footprint::empty("test");
+    let mut pad = editor_pad("1", 0.0, 0.0);
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+    let sketch = fp.sketch.as_mut().unwrap();
+
+    // A ledger entry naming nothing — a pad written by an older build,
+    // or geometry deleted from Sketch mode since.
+    let ghost = SketchEntityId::new();
+    let centre = pad.sketch_entity_id.unwrap();
+    sketch
+        .entities
+        .iter_mut()
+        .find(|e| e.id == centre)
+        .and_then(|e| e.pad.as_mut())
+        .unwrap()
+        .owned
+        .push(ghost);
+
+    let owned = ownership::owned_sketch_entities(&pad, sketch);
+    assert!(
+        !owned.contains(&ghost),
+        "a seed naming no live entity must not be reported as owned"
+    );
+}
+
+/// A profile pad that ALSO owns the loop's Points must take the move
+/// delta exactly once.
+///
+/// `mint_shape_geometry_for`'s catch-all arm sets `corner_entity_ids`
+/// for `LibPadShape::Custom`, so a Custom pad minted through
+/// `mirror_add_pad_to_sketch` whose `PadAttr` is a `SketchProfile` over
+/// that same outline sits in BOTH the traced loop and the owned set.
+/// The move translates the profile first and the owned set second, so
+/// the shared Points used to take the delta twice and the outline
+/// landed at double the offset — copper in the wrong place on the next
+/// bake. Correctness was resting on an undocumented "these two sets are
+/// disjoint" invariant that this configuration violates.
+#[test]
+fn mirror_move_profile_pad_owning_its_loop_applies_delta_once() {
+    let (mut fp, mut pad, corner_ids) = footprint_with_profile_pad();
+    // The one thing that differs from `footprint_with_profile_pad`'s
+    // "Make Pad from Profile" origin: the pad also claims the loop's
+    // corners, exactly as the Custom mint arm would have written them.
+    pad.corner_entity_ids = Some(corner_ids);
+
+    pad.position_mm = (4.0, 3.5); // centroid (1.0, 0.5) + (3.0, 3.0)
+    mirror_move_pad_in_sketch(&pad, &mut fp);
+
+    let expected = [(3.0, 3.0), (5.0, 3.0), (5.0, 4.0), (3.0, 4.0)];
+    let actual: Vec<(f64, f64)> = corner_ids.iter().map(|id| point_of(&fp, *id)).collect();
+    assert_eq!(
+        actual,
+        expected.to_vec(),
+        "the loop's Points took the pad delta more than once"
     );
 }
