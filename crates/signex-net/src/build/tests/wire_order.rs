@@ -134,3 +134,44 @@ fn a_label_on_an_x_crossing_picks_the_same_wire_in_either_order() {
         "exactly one net carries the label"
     );
 }
+
+#[test]
+fn net_wire_membership_order_is_independent_of_wire_order() {
+    // #420 review: `Net.wires` / `Net.junctions` membership must be a pure
+    // function of the partition, not of `sheet.wires` order — otherwise the
+    // net-colour flood / ratsnest / PCB net assignment (which read these fields,
+    // ADR-0002 D3.1/D7) diverge on a document reorder even while `NetId`/`name`/
+    // `terminals` stay stable. The other wire_order tests mint `Uuid::nil()`
+    // wires, so a permuted membership vec is invisible to their whole-`Netlist`
+    // `assert_eq!`; this one gives each wire a DISTINCT uuid so the ordering is
+    // actually observable.
+    let w1 = uuid::Uuid::from_u128(0xA);
+    let w2 = uuid::Uuid::from_u128(0xB);
+    let mut sheet = empty_sheet();
+    // Two wires meeting at (10,0): one net, both wires in its membership.
+    sheet.wires.push(wire_id(pt(0.0, 0.0), pt(10.0, 0.0), w1));
+    sheet.wires.push(wire_id(pt(10.0, 0.0), pt(10.0, 10.0), w2));
+    add_lib(
+        &mut sheet,
+        "R",
+        vec![lib_pin("1", pt(0.0, 0.0), PinDirection::Passive)],
+    );
+    place(&mut sheet, "R1", "R", pt(0.0, 0.0));
+
+    let (forward, reversed) = both_wire_orders(&sheet);
+    assert_eq!(
+        forward, reversed,
+        "Net.wires/junctions membership leaked the wire order"
+    );
+    let net = forward
+        .nets
+        .iter()
+        .find(|n| n.wires.len() == 2)
+        .expect("the two wires form a single net");
+    let mut want = vec![w1, w2];
+    want.sort_unstable();
+    assert_eq!(
+        net.wires, want,
+        "membership is the sorted partition, not document order"
+    );
+}

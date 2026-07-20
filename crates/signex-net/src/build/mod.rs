@@ -455,6 +455,17 @@ pub(crate) fn collect_membership(
         let root = uf_find(parent, pt_key(&j.position));
         m.entry(root).or_default().1.push(j.uuid);
     }
+    // #402/#420 — membership must be a pure function of the partition, not of
+    // `sheet.wires`/`sheet.junctions` iteration order, so `Net.wires` /
+    // `Net.junctions` stay byte-identical under a wire-order permutation — the
+    // same guarantee `terminals` already gets from its sort. Without this the
+    // net-colour flood / ratsnest / PCB net assignment (ADR-0002 D3.1/D7, the
+    // consumers of these fields) would diverge on a document reorder even
+    // though `NetId`/`name`/`terminals` do not.
+    for (wires, junctions) in m.values_mut() {
+        wires.sort_unstable();
+        junctions.sort_unstable();
+    }
     m
 }
 
