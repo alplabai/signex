@@ -70,7 +70,13 @@ impl Signex {
         // Built from the project's own sheets only: an open tab belonging to
         // some *other* project must never resolve this project's child
         // references.
-        let children = crate::app::project_sheets::project_children_map(&project_set.sheets);
+        let (children, children_issues) =
+            crate::app::project_sheets::project_children_map(&project_set.sheets);
+        for issue in &children_issues {
+            crate::diagnostics::log_warning(crate::app::project_sheets::stitch_issue_message(
+                issue,
+            ));
+        }
 
         // ERC still reports on every sheet the user has open — a loose tab is
         // not part of the project, but it is on screen and its violations are

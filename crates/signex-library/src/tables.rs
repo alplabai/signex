@@ -468,6 +468,68 @@ mod tests {
     use chrono::{Duration, TimeZone};
     use uuid::Uuid;
 
+    /// True if `dir` contains a leftover atomic-write temp sibling
+    /// (`*.tmp`). `atomic_write` picks a unique per-writer name (#416),
+    /// so tests must scan for any match instead of a fixed name.
+    fn has_stray_tmp(dir: &std::path::Path) -> bool {
+        std::fs::read_dir(dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .any(|entry| entry.path().extension().is_some_and(|ext| ext == "tmp"))
+    }
+
+    /// RAII guard: while alive, `dir` rejects new-file creation, so
+    /// `atomic_write`'s `File::create(&tmp)` fails deterministically
+    /// regardless of the unique per-writer temp name it picks (#416).
+    /// Restores permissions on drop.
+    struct DenyNewFiles {
+        dir: std::path::PathBuf,
+    }
+
+    impl DenyNewFiles {
+        fn on(dir: &std::path::Path) -> Self {
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o555))
+                    .expect("chmod dir read-only for test");
+            }
+            #[cfg(windows)]
+            {
+                let user = std::env::var("USERNAME").unwrap_or_else(|_| "Everyone".into());
+                let status = std::process::Command::new("icacls")
+                    .arg(dir)
+                    .arg("/deny")
+                    .arg(format!("{user}:(WD)"))
+                    .status()
+                    .expect("run icacls /deny for test");
+                assert!(status.success(), "icacls /deny failed");
+            }
+            Self {
+                dir: dir.to_path_buf(),
+            }
+        }
+    }
+
+    impl Drop for DenyNewFiles {
+        fn drop(&mut self) {
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(&self.dir, std::fs::Permissions::from_mode(0o755));
+            }
+            #[cfg(windows)]
+            {
+                let user = std::env::var("USERNAME").unwrap_or_else(|_| "Everyone".into());
+                let _ = std::process::Command::new("icacls")
+                    .arg(&self.dir)
+                    .arg("/remove:d")
+                    .arg(&user)
+                    .status();
+            }
+        }
+    }
+
     fn mk_row(internal_pn: &str, class: &str) -> ComponentRow {
         let lib = Uuid::nil();
         // Anchor timestamps so equality checks aren't flaky under
@@ -531,16 +593,18 @@ mod tests {
         append_row(&path, &b).unwrap();
         let back = read_table(&path).unwrap();
         assert_eq!(back, vec![a, b]);
-        assert!(!dir.path().join("table.tsv.tmp").exists());
+        assert!(!has_stray_tmp(dir.path()));
     }
 
     /// `write_table` must go through `atomic_write`, not `fs::write`:
     /// a failed save leaves the previous table fully intact.
     ///
-    /// Discriminator: pre-creating a *directory* at `<path>.tmp` makes
-    /// `atomic_write`'s `File::create(&tmp)` fail before it can touch the
-    /// destination. A plain `fs::write` would ignore the sibling entirely,
-    /// succeed, and clobber the old rows — so this test fails on a revert.
+    /// Discriminator: denying new-file creation in the destination's
+    /// parent directory makes `atomic_write`'s `File::create(&tmp)` fail
+    /// before it can touch the destination, regardless of the unique
+    /// per-writer temp name it picks (#416). A plain `fs::write` would
+    /// ignore that and clobber the old rows — so this test fails on a
+    /// revert.
     #[test]
     fn write_table_is_atomic_and_preserves_original_on_failure() {
         let dir = tempfile::tempdir().unwrap();
@@ -548,7 +612,7 @@ mod tests {
         let original = vec![mk_row("R1", "resistor"), mk_row("R2", "resistor")];
         write_table(&path, &original).unwrap();
 
-        std::fs::create_dir_all(dir.path().join("table.tsv.tmp")).unwrap();
+        let _deny = DenyNewFiles::on(dir.path());
         let err = write_table(&path, &[mk_row("C1", "capacitor")]).unwrap_err();
         assert!(matches!(err, LibraryError::Io(_)), "got {err:?}");
 
