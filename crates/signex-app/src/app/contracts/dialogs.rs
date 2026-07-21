@@ -264,8 +264,26 @@ pub enum FileMsg {
     /// parser is directory-driven) plus a blank `<stem>.snxsch` next
     /// to it, then loads the project + opens the schematic tab.
     NewProject(Option<PathBuf>),
-    #[allow(dead_code)]
-    SchematicLoaded(Box<SchematicSheet>),
+    /// Completion of the async schematic read+parse kicked off by
+    /// `open_schematic_file` — the `fs::read_to_string` +
+    /// `SnxSchematic::parse` run in `spawn_blocking` so `update()`
+    /// never blocks on disk IO (mirrors the `HistoryLoaded` pattern).
+    /// Carries the original path/title so the handler can open the
+    /// tab exactly as the old synchronous path did; the error is the
+    /// stringified `anyhow` context chain (`Message` is `Clone`,
+    /// `anyhow::Error` is not).
+    SchematicOpenFinished {
+        path: PathBuf,
+        title: String,
+        result: Result<Box<SchematicSheet>, String>,
+    },
+    /// Completion of the async PCB read+parse kicked off by
+    /// `open_pcb_file`. Same shape as `SchematicOpenFinished`.
+    PcbOpenFinished {
+        path: PathBuf,
+        title: String,
+        result: Result<Box<signex_types::pcb::PcbBoard>, String>,
+    },
     Save,
     SaveAs(PathBuf),
     /// User picked a destination from the Save-As dialog spawned the

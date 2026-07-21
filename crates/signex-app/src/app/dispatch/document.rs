@@ -79,16 +79,17 @@ impl Signex {
 
     /// File / save message handler (namespaced family, ADR-0001 D3).
     /// Covers open / new-project / save / save-as / save-primitive-as
-    /// plus the async `SchematicLoaded` completion.
+    /// plus the async `SchematicOpenFinished` / `PcbOpenFinished`
+    /// completions.
     pub(crate) fn dispatch_file_message(&mut self, msg: FileMsg) -> Task<Message> {
         match msg {
             FileMsg::Opened(path) => {
-                self.handle_document_file_opened(path);
-                self.finish_update()
+                let task = self.handle_document_file_opened(path);
+                Task::batch([task, self.finish_update()])
             }
             FileMsg::NewProject(path) => {
-                self.handle_new_project_file(path);
-                self.finish_update()
+                let task = self.handle_new_project_file(path);
+                Task::batch([task, self.finish_update()])
             }
             FileMsg::Save => {
                 let task = self.handle_active_document_save_requested();
@@ -102,8 +103,32 @@ impl Signex {
                 self.handle_save_primitive_as(&from_path, &to_path);
                 self.finish_update()
             }
-            FileMsg::SchematicLoaded(sheet) => {
-                self.load_schematic_into_active_tab(*sheet);
+            FileMsg::SchematicOpenFinished {
+                path,
+                title,
+                result,
+            } => {
+                match result {
+                    Ok(sheet) => self.open_schematic_tab(path, title, *sheet),
+                    Err(message) => crate::diagnostics::log_error(
+                        "Failed to open document path",
+                        &anyhow::anyhow!(message),
+                    ),
+                }
+                self.finish_update()
+            }
+            FileMsg::PcbOpenFinished {
+                path,
+                title,
+                result,
+            } => {
+                match result {
+                    Ok(board) => self.open_pcb_tab(path, title, *board),
+                    Err(message) => crate::diagnostics::log_error(
+                        "Failed to open document path",
+                        &anyhow::anyhow!(message),
+                    ),
+                }
                 self.finish_update()
             }
         }
