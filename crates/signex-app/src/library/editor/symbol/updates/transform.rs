@@ -17,6 +17,25 @@ pub(super) fn apply_symbol_transform(editor: &mut SymEditor, msg: SymbolEditorMs
             );
             mark_dirty(editor);
         }
+        SymbolEditorMsg::AlignSelectedToGrid => {
+            // #426 — mirrors the footprint editor's
+            // `ActiveBarAlignSelectionToGrid`: gate the undo snapshot
+            // on the selection actually being alignable (None/Field
+            // are clean no-ops), same discipline as DeleteSelected
+            // above, then snap onto the exact grid the canvas already
+            // places/drags onto.
+            let selected = editor.selected.clone();
+            if crate::library::editor::symbol::state::selected_is_alignable(&selected) {
+                push_undo(editor);
+                crate::library::editor::symbol::state::align_selected_to_grid(
+                    editor.primitive_mut(),
+                    &selected,
+                    crate::library::editor::symbol::canvas::SNAP_GRID_MM,
+                );
+                mark_dirty(editor);
+            }
+            editor.active_bar_menu = None;
+        }
         SymbolEditorMsg::DeleteSelected => {
             let selected = editor.selected.clone();
             // Validate before snapshotting: a no-op delete (None / All /
@@ -93,5 +112,75 @@ mod tests {
             editor.graphic_fill_picker.is_none(),
             "fill picker must close when its graphic is deleted"
         );
+    }
+
+    fn new_editor() -> SymbolEditorState {
+        SymbolEditorState::new(
+            PathBuf::from("t.snxsym"),
+            SymbolFile::from_symbol(Symbol::empty("T")),
+        )
+    }
+
+    /// #426 — no selection is a clean no-op: no dirty flag, no undo
+    /// snapshot. Mirrors the footprint editor's
+    /// `issue_146_align_to_grid_with_no_selection_stays_clean`.
+    #[test]
+    fn align_selected_to_grid_with_no_selection_stays_clean() {
+        let mut editor = new_editor();
+        editor.selected = None;
+
+        apply_symbol_transform(&mut editor, SymbolEditorMsg::AlignSelectedToGrid);
+
+        assert!(!editor.dirty, "no-op align must not dirty the document");
+        assert!(
+            editor.undo_snapshots.is_empty(),
+            "no-op align must not stack undo history"
+        );
+    }
+
+    /// #426 — a real selection snaps onto the 1.27 mm symbol-canvas
+    /// grid and dirties/snapshots exactly once (dispatch test, driving
+    /// the message through the same `apply_symbol_transform` entry
+    /// point the active bar uses).
+    #[test]
+    fn align_selected_to_grid_snaps_the_selected_pin_and_dirties_once() {
+        let mut sym = Symbol::empty("T");
+        let idx = crate::library::editor::symbol::state::add_pin(&mut sym, 1.0, 1.0, 1);
+        let mut editor =
+            SymbolEditorState::new(PathBuf::from("t.snxsym"), SymbolFile::from_symbol(sym));
+        editor.selected = Some(SymbolSelection::Pin(idx));
+
+        apply_symbol_transform(&mut editor, SymbolEditorMsg::AlignSelectedToGrid);
+
+        assert!(editor.dirty, "a real align dirties the document");
+        assert_eq!(
+            editor.undo_snapshots.len(),
+            1,
+            "exactly one undo snapshot per real align (no double-push)"
+        );
+        assert_eq!(
+            editor.primitive().pins[idx].position,
+            [1.27, 1.27],
+            "pin lands on the 1.27 mm snap grid"
+        );
+    }
+
+    /// #426 — `All` is alignable (unlike Delete, snapping never
+    /// destroys data), so a full-symbol Align To Grid actually snaps
+    /// every pin and graphic rather than silently no-op'ing.
+    #[test]
+    fn align_selected_to_grid_with_all_selection_snaps_every_pin() {
+        let mut sym = Symbol::empty("T");
+        crate::library::editor::symbol::state::add_pin(&mut sym, 1.0, 1.0, 1);
+        crate::library::editor::symbol::state::add_pin(&mut sym, 2.5, 2.5, 1);
+        let mut editor =
+            SymbolEditorState::new(PathBuf::from("t.snxsym"), SymbolFile::from_symbol(sym));
+        editor.selected = Some(SymbolSelection::All);
+
+        apply_symbol_transform(&mut editor, SymbolEditorMsg::AlignSelectedToGrid);
+
+        assert!(editor.dirty);
+        assert_eq!(editor.primitive().pins[0].position, [1.27, 1.27]);
+        assert_eq!(editor.primitive().pins[1].position, [2.54, 2.54]);
     }
 }

@@ -119,6 +119,13 @@ pub enum SymbolEditorMsg {
     /// Delete-key — drop the currently-selected element.
     DeleteSelected,
 
+    /// Active-bar Align ▸ "Align To Grid" — snap every pin/graphic
+    /// named by the current selection onto the symbol-canvas snap
+    /// grid, in place. No-op (no undo snapshot, no dirty flag) for
+    /// `None`/`Field` selections — see `state::selected_is_alignable`.
+    /// #426.
+    AlignSelectedToGrid,
+
     /// Properties pane — overwrite the pin number string at index.
     SetPinNumber { idx: usize, number: String },
 

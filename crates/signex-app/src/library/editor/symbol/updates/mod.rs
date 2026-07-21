@@ -411,6 +411,7 @@ pub(crate) fn apply_symbol_primitive_edit(
         // ── Transform ────────────────────────────────────────────
         SymbolEditorMsg::RotateSelected { .. }
         | SymbolEditorMsg::DeleteSelected
+        | SymbolEditorMsg::AlignSelectedToGrid
         | SymbolEditorMsg::SetPinNumber { .. }
         | SymbolEditorMsg::SetPinName { .. } => apply_symbol_transform(editor, msg),
 
