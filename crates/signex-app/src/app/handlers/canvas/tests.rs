@@ -96,12 +96,20 @@ fn a_relative_child_reference_keeps_its_own_subpath() {
 }
 
 #[test]
-fn an_absolute_child_reference_is_taken_verbatim() {
+fn an_absolute_child_reference_outside_the_root_is_rejected() {
+    // #463 — an absolute reference used to be taken verbatim, letting a
+    // malicious `.snxsch`/`.snxprj` point a child sheet anywhere on disk;
+    // it's writable via Ctrl+S once opened as a tab.
     let app = app_focused_on("/w/a/sub/mid.snxsch");
-    assert_eq!(
-        app.resolve_child_sheet_path("/elsewhere/leaf.snxsch"),
-        Some(PathBuf::from("/elsewhere/leaf.snxsch"))
-    );
+    assert_eq!(app.resolve_child_sheet_path("/elsewhere/leaf.snxsch"), None);
+}
+
+#[test]
+fn a_traversal_child_reference_outside_the_root_is_rejected() {
+    // #463 — a relative `..` reference used to be joined onto the parent
+    // directory verbatim with no containment check, walking out of it.
+    let app = app_focused_on("/w/a/sub/mid.snxsch");
+    assert_eq!(app.resolve_child_sheet_path("../../../etc/passwd"), None);
 }
 
 #[test]

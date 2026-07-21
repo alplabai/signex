@@ -54,10 +54,12 @@ impl ExportIssues {
     /// should merge through that sheet's ports stay split, so the surviving
     /// nets can carry the *wrong* names. `SheetCycle` truncates the walk with
     /// the same effect, and a page outside the hierarchy is a whole page of
-    /// components and nets that never made it in. The other `StitchIssue`
-    /// variants (duplicate UUIDs, shared references, name collisions) describe
-    /// a complete netlist with a naming or annotation problem — loud, but not
-    /// a hole.
+    /// components and nets that never made it in. `AmbiguousChildFilename` is a
+    /// hole for the same reason: the losing parent's subtree was stitched from
+    /// the *wrong* file, so that subtree's real nets are absent and the other
+    /// file's are grafted in twice. The remaining `StitchIssue` variants
+    /// (duplicate UUIDs, shared references, name collisions) describe a complete
+    /// netlist with a naming or annotation problem — loud, but not a hole.
     pub(crate) fn netlist_is_incomplete(&self) -> bool {
         !self.uncovered_pages.is_empty()
             || !self.missing_pages.is_empty()
@@ -67,6 +69,7 @@ impl ExportIssues {
                     issue,
                     signex_net::StitchIssue::MissingChild { .. }
                         | signex_net::StitchIssue::SheetCycle { .. }
+                        | signex_net::StitchIssue::AmbiguousChildFilename { .. }
                 )
             })
     }
@@ -304,7 +307,8 @@ fn build_export_scope(
         }
         issues.unreadable = set.unreadable.clone();
         let root = set.sheets.get(&root_path)?;
-        let children = crate::app::project_sheets::project_children_map(&set.sheets);
+        let (children, children_issues) =
+            crate::app::project_sheets::project_children_map(&set.sheets);
         let project_dir = owning_project.map(|p| p.dir().to_path_buf());
         let root_filename =
             crate::app::project_sheets::root_reference_name(&root_path, project_dir.as_deref());
@@ -313,7 +317,9 @@ fn build_export_scope(
         // rather than acted on here, because severity is a per-deliverable
         // policy: the .net refuses on a hole, the PDF proceeds and warns.
         let result = signex_net::build_project_netlist(root, &children, root_filename.as_deref());
-        issues.stitch = result.issues;
+        let mut stitch = result.issues;
+        stitch.extend(children_issues);
+        issues.stitch = stitch;
         Some(result.netlist)
     });
 
