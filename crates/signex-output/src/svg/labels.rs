@@ -65,7 +65,11 @@ pub(super) fn schematic_text_offset_net(spin: SpinStyle) -> (f64, f64) {
     }
 }
 
-pub(super) fn schematic_text_offset_hier(text: &str, font_size_mm: f64, spin: SpinStyle) -> (f64, f64) {
+pub(super) fn schematic_text_offset_hier(
+    text: &str,
+    font_size_mm: f64,
+    spin: SpinStyle,
+) -> (f64, f64) {
     let dist = font_size_mm * 0.4
         + (parse_signex_markup(&normalize_standard_text(text))
             .iter()

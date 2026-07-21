@@ -77,7 +77,10 @@ impl Signex {
                 self.interaction_state.last_mouse_pos,
             )
         } else {
-            detached_header(header_content, super::super::super::state::ModalId::BomPreview)
+            detached_header(
+                header_content,
+                super::super::super::state::ModalId::BomPreview,
+            )
         };
 
         let body = self.bom_table();

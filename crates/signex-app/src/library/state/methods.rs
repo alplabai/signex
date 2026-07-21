@@ -497,4 +497,3 @@ impl std::fmt::Debug for OpenLibrary {
             .finish()
     }
 }
-

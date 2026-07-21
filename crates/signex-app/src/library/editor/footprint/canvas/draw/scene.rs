@@ -8,9 +8,9 @@ use iced::{Color, Point};
 
 use crate::library::editor::footprint::layers::FpLayer;
 
+use super::super::{FootprintCanvas, FootprintCanvasState};
 use super::pad::draw_pad;
 use super::silk::draw_silk_graphics;
-use super::super::{FootprintCanvas, FootprintCanvasState};
 
 impl FootprintCanvas<'_> {
     /// v0.18.16 — silk-front + silk-back graphics.

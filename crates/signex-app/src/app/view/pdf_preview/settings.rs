@@ -5,7 +5,6 @@
 use super::super::*;
 
 impl Signex {
-
     /// Settings tab — stitches the three section helpers below into a
     /// single scrollable column. Each helper owns its own widgets and
     /// reads/writes through `preview.pdf_options.*` directly so the

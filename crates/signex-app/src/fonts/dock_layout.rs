@@ -133,5 +133,3 @@ fn parse_panel_kind(s: &str) -> Option<crate::panels::PanelKind> {
         _ => return None,
     })
 }
-
-

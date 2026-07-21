@@ -7,13 +7,13 @@
 //! `None` to fall through to the next handler — reproducing the
 //! original top-to-bottom `if … { return … }` order byte-for-byte.
 
-use iced::widget::canvas;
 use iced::Point;
+use iced::widget::canvas;
 
 use crate::library::editor::footprint::state::{EditorMode, PadsTool, SketchTool};
 use crate::library::messages::{EditorMsg, FootprintEditorMsg, LibraryMessage};
 
-use super::super::draw::{find_closed_loops, ClosedLoop};
+use super::super::draw::{ClosedLoop, find_closed_loops};
 use super::super::geometry::point_in_polygon;
 use super::super::hit_test::sketch_snap;
 use super::super::silk_f_hit_at;
@@ -92,7 +92,8 @@ impl FootprintCanvas<'_> {
         cursor_pos: Point,
         world: (f64, f64),
     ) -> Option<canvas::Action<LibraryMessage>> {
-        if matches!(self.state.mode, EditorMode::Sketch) && self.state.active_tool == SketchTool::Select
+        if matches!(self.state.mode, EditorMode::Sketch)
+            && self.state.active_tool == SketchTool::Select
         {
             const HANDLE_HIT_RADIUS_PX: f32 = 6.0;
             for (idx, pad) in self.state.pads.iter().enumerate() {
@@ -494,7 +495,8 @@ impl FootprintCanvas<'_> {
         cstate: &FootprintCanvasState,
         world: (f64, f64),
     ) -> Option<canvas::Action<LibraryMessage>> {
-        if matches!(self.state.mode, EditorMode::Normal) && self.state.pads_tool == PadsTool::Select {
+        if matches!(self.state.mode, EditorMode::Normal) && self.state.pads_tool == PadsTool::Select
+        {
             let tolerance = 4.0_f64 / (cstate.scale.max(1.0) as f64);
             if let Some(silk_idx) = silk_f_hit_at(self.silk_f, world.0, world.1, tolerance) {
                 use signex_library::primitive::footprint::FpGraphicKind;

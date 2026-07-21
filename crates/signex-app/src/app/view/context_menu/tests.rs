@@ -6,10 +6,10 @@
 use super::*;
 
 use super::items::{dd_disabled, dd_msg};
-use super::menus::{canvas_menu_entries, tab_menu_entries, CanvasShortcuts};
-use super::project_tree::{tree_node_role, TreeNodeRole};
+use super::menus::{CanvasShortcuts, canvas_menu_entries, tab_menu_entries};
+use super::project_tree::{TreeNodeRole, tree_node_role};
 use super::submenu::{align_entries, align_gate, place_entries};
-use signex_types::theme::{theme_tokens, ThemeId};
+use signex_types::theme::{ThemeId, theme_tokens};
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 use signex_widgets::tree_view::TreeIcon;
 

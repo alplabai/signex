@@ -146,7 +146,10 @@ pub(super) fn handle_recovery_library_missing_locate_result(
 }
 
 /// Handle the user's choice from the *Git missing* recovery dialog.
-pub(super) fn handle_recovery_git_missing(app: &mut Signex, choice: GitMissingChoice) -> Task<Message> {
+pub(super) fn handle_recovery_git_missing(
+    app: &mut Signex,
+    choice: GitMissingChoice,
+) -> Task<Message> {
     match choice {
         GitMissingChoice::Cancel | GitMissingChoice::Skip => {
             app.library.recovery = None;
@@ -190,7 +193,10 @@ pub(super) fn handle_recovery_git_missing(app: &mut Signex, choice: GitMissingCh
 /// therefore only knows how to close the dialog; the actual rebind /
 /// remove-row flows queue behind the detection plumbing. The dialog
 /// surface itself ships now so the overlay layer is in place.
-pub(super) fn handle_recovery_broken_binding(app: &mut Signex, _choice: BrokenBindingChoice) -> Task<Message> {
+pub(super) fn handle_recovery_broken_binding(
+    app: &mut Signex,
+    _choice: BrokenBindingChoice,
+) -> Task<Message> {
     app.library.recovery = None;
     Task::none()
 }

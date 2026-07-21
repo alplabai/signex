@@ -10,7 +10,9 @@ pub(super) fn content_component_classes<'a>(
     classes: &'a [crate::fonts::ComponentClassEntry],
 ) -> Element<'a, PrefMsg> {
     let header = column![
-        text("Default Component Classes").size(15).style(text_primary),
+        text("Default Component Classes")
+            .size(15)
+            .style(text_primary),
         text(
             "Seeds the class registry of newly-created libraries. \
               Per-library edits live inside each .snxlib's manifest \

@@ -294,4 +294,3 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
 
     col
 }
-
