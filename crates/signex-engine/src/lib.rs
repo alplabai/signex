@@ -897,6 +897,63 @@ mod tests {
         );
     }
 
+    /// Issue #422's root-cause gap: the stale-dot removal pass ran only via
+    /// `reconciled_patch()` for move/rotate/mirror. `DeleteSelection` and
+    /// `PlaceWireSegment` never reconciled, so a dot minted for a genuine T
+    /// could outlive the wire that justified it, then get silently
+    /// "reactivated" by an unrelated wire merely crossing the same point —
+    /// merging two nets the user never connected (a FAB short).
+    #[test]
+    fn deleting_a_stub_removes_the_stale_dot_so_a_later_crossing_wire_cannot_merge_nets() {
+        let mut engine = Engine::new(test_sheet()).expect("engine");
+
+        engine
+            .execute(Command::PlaceWireSegment {
+                wire: wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0)),
+            })
+            .expect("place trunk");
+
+        let stub = wire(Point::new(5.0, 0.0), Point::new(5.0, 10.0));
+        let stub_uuid = stub.uuid;
+        engine
+            .execute(Command::PlaceWireSegment { wire: stub })
+            .expect("place stub");
+        assert_eq!(
+            engine.document().junctions.len(),
+            1,
+            "{:?}",
+            engine.document().junctions
+        );
+        assert_eq!(
+            engine.document().junctions[0].position,
+            Point::new(5.0, 0.0)
+        );
+
+        engine
+            .execute(Command::DeleteSelection {
+                items: vec![SelectedItem::new(stub_uuid, SelectedKind::Wire)],
+            })
+            .expect("delete stub");
+        assert!(
+            engine.document().junctions.is_empty(),
+            "delete must reconcile the now-orphaned dot: {:?}",
+            engine.document().junctions
+        );
+
+        engine
+            .execute(Command::PlaceWireSegment {
+                wire: wire(Point::new(5.0, -5.0), Point::new(5.0, 5.0)),
+            })
+            .expect("place crossing wire");
+
+        assert!(
+            engine.document().junctions.is_empty(),
+            "a wire merely crossing the old dot's location must not silently \
+             merge the trunk and crossing-wire nets: {:?}",
+            engine.document().junctions
+        );
+    }
+
     #[test]
     fn delete_child_sheet_and_undo() {
         let mut document = test_sheet();

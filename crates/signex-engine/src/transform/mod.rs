@@ -130,12 +130,14 @@ impl Engine {
     /// changed shape, then drop any *minted* dot geometry no longer
     /// justifies. Returns `true` when at least one dot was added or removed.
     ///
-    /// `PlaceWireSegment` reconciles a new wire's T both ways, but move /
-    /// rotate / mirror mutate the very same wire coordinates and used to
-    /// reconcile nothing — dragging a stub onto a trunk's interior left a
-    /// junction-less T, which the netlist reads as disconnected (issue #107),
-    /// so the connection was silently lost exactly as in issue #402's draw
-    /// case. Every command that changes wire geometry routes through here.
+    /// Move / rotate / mirror mutate existing wire coordinates; delete and
+    /// place-wire change which wires exist. All five used to reconcile
+    /// nothing beyond place-wire's own ad hoc mint call — dragging a stub
+    /// onto a trunk's interior left a junction-less T, which the netlist
+    /// reads as disconnected (issue #107), so the connection was silently
+    /// lost exactly as in issue #402's draw case. Every command that
+    /// changes wire geometry — place, move, rotate, mirror, delete —
+    /// routes through here now.
     ///
     /// This used to be add-only: a dot left stale by geometry moving *apart*
     /// was left in place on the theory that it was still correct as long as
@@ -503,7 +505,6 @@ fn normalize_degrees(angle_degrees: f64) -> f64 {
 
 mod autoplace;
 use autoplace::autoplace_fields;
-pub(crate) use autoplace::junctions_for_wire;
 
 // ---------------------------------------------------------------------------
 // UUID-based collection helpers
