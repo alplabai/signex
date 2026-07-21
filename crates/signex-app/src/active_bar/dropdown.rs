@@ -82,9 +82,10 @@ fn dd_item(
     )
 }
 
-/// Route each `ActiveBarMenu` to its pure entry-builder. Uniform menus
-/// are one line each; the two irregular menus (Filter chip grid and
-/// NetColor swatches) use the widget's `Custom` escape hatch.
+/// Route each `ActiveBarMenu` to its entries. Uniform menus resolve
+/// through the `EntrySpec` data table + `render` below; the two
+/// irregular menus (Filter chip grid and NetColor swatches) use the
+/// widget's `Custom` escape hatch and keep their own builder.
 fn dropdown_entries(
     menu: ActiveBarMenu,
     tokens: &ThemeTokens,
@@ -98,594 +99,432 @@ fn dropdown_entries(
     let nc = has_net_colors;
     match menu {
         ActiveBarMenu::Filter => vec![filter_entry(tokens, filters, custom_presets)],
-        ActiveBarMenu::SelectMode => select_mode_entries(tid, sel, nc),
-        ActiveBarMenu::Select => select_entries(tid, sel, nc),
-        ActiveBarMenu::Align => align_entries(tid, sel, nc),
-        ActiveBarMenu::Wiring => wiring_entries(tid, sel, nc),
-        ActiveBarMenu::Power => power_entries(tid, sel, nc),
-        ActiveBarMenu::Harness => harness_entries(tid, sel, nc),
-        ActiveBarMenu::SheetSymbol => sheet_symbol_entries(tid, sel, nc),
-        ActiveBarMenu::Port => port_entries(tid, sel, nc),
-        ActiveBarMenu::Directives => directives_entries(tid, sel, nc),
-        ActiveBarMenu::TextTools => text_tools_entries(tid, sel, nc),
-        ActiveBarMenu::Shapes => shapes_entries(tid, sel, nc),
+        ActiveBarMenu::SelectMode => render(SELECT_MODE, tid, sel, nc),
+        ActiveBarMenu::Select => render(SELECT, tid, sel, nc),
+        ActiveBarMenu::Align => render(ALIGN, tid, sel, nc),
+        ActiveBarMenu::Wiring => render(WIRING, tid, sel, nc),
+        ActiveBarMenu::Power => render(POWER, tid, sel, nc),
+        ActiveBarMenu::Harness => render(HARNESS, tid, sel, nc),
+        ActiveBarMenu::SheetSymbol => render(SHEET_SYMBOL, tid, sel, nc),
+        ActiveBarMenu::Port => render(PORT, tid, sel, nc),
+        ActiveBarMenu::Directives => render(DIRECTIVES, tid, sel, nc),
+        ActiveBarMenu::TextTools => render(TEXT_TOOLS, tid, sel, nc),
+        ActiveBarMenu::Shapes => render(SHAPES, tid, sel, nc),
         ActiveBarMenu::NetColor => net_color_entries(tokens, tid, sel, nc),
     }
 }
 
-fn select_mode_entries(tid: ThemeId, sel: bool, nc: bool) -> Vec<DropdownEntry<ActiveBarMsg>> {
-    vec![
-        dd_item(
-            ic::icon_dd_select_lasso(tid),
-            "Lasso Select",
-            ActiveBarAction::LassoSelect,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_select_inside(tid),
-            "Inside Area",
-            ActiveBarAction::InsideArea,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_select_outside(tid),
-            "Outside Area",
-            ActiveBarAction::OutsideArea,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_select_touching_rect(tid),
-            "Touching Rectangle",
-            ActiveBarAction::TouchingRectangle,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_select_touching_line(tid),
-            "Touching Line",
-            ActiveBarAction::TouchingLine,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_select_all(tid),
-            "All",
-            ActiveBarAction::SelectAll,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_select_connection(tid),
-            "Connection",
-            ActiveBarAction::SelectConnection,
-            sel,
-            nc,
-        ),
-        DropdownEntry::Separator,
-        dd_item(
-            ic::icon_dd_select_toggle(tid),
-            "Toggle Selection",
-            ActiveBarAction::ToggleSelection,
-            sel,
-            nc,
-        ),
-    ]
+/// One row inside a uniform per-menu entry table — theme- and
+/// context-free, unlike `DropdownEntry`/`DropdownItem`, so the table
+/// itself can be a `const` array (icon fn pointers and fieldless enum
+/// variants are const-constructible; `ActiveBarAction` is not `Copy`,
+/// so `render` clones it per row). Collapses the ~78 near-identical
+/// `dd_item(...)` call sites this file used to carry across ~11
+/// uniform per-menu builder functions into ~11 data tables + one
+/// renderer (#457, epic #278).
+enum EntrySpec {
+    Separator,
+    Item {
+        icon: fn(ThemeId) -> svg::Handle,
+        label: &'static str,
+        action: ActiveBarAction,
+    },
 }
 
-fn select_entries(tid: ThemeId, sel: bool, nc: bool) -> Vec<DropdownEntry<ActiveBarMsg>> {
-    vec![
-        dd_item(
-            ic::icon_dd_drag(tid),
-            "Drag",
-            ActiveBarAction::Drag,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_move(tid),
-            "Move",
-            ActiveBarAction::MoveSelection,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_move_sel(tid),
-            "Move Selection",
-            ActiveBarAction::MoveSelection,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_move_xy(tid),
-            "Move Selection by X, Y...",
-            ActiveBarAction::MoveSelectionXY,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_drag_sel(tid),
-            "Drag Selection",
-            ActiveBarAction::DragSelection,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_move_to_front(tid),
-            "Move To Front",
-            ActiveBarAction::MoveToFront,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_rotate(tid),
-            "Rotate Selection",
-            ActiveBarAction::RotateSelection,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_rotate_cw(tid),
-            "Rotate Selection Clockwise",
-            ActiveBarAction::RotateSelectionCW,
-            sel,
-            nc,
-        ),
-        DropdownEntry::Separator,
-        dd_item(
-            ic::icon_dd_bring_front(tid),
-            "Bring To Front",
-            ActiveBarAction::BringToFront,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_send_back(tid),
-            "Send To Back",
-            ActiveBarAction::SendToBack,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_bring_front_of(tid),
-            "Bring To Front Of",
-            ActiveBarAction::BringToFrontOf,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_send_back_of(tid),
-            "Send To Back Of",
-            ActiveBarAction::SendToBackOf,
-            sel,
-            nc,
-        ),
-        DropdownEntry::Separator,
-        dd_item(
-            ic::icon_dd_flip_x(tid),
-            "Flip Selected Sheet Symbols Along X",
-            ActiveBarAction::FlipSelectedX,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_flip_y(tid),
-            "Flip Selected Sheet Symbols Along Y",
-            ActiveBarAction::FlipSelectedY,
-            sel,
-            nc,
-        ),
-    ]
+impl EntrySpec {
+    const fn item(
+        icon: fn(ThemeId) -> svg::Handle,
+        label: &'static str,
+        action: ActiveBarAction,
+    ) -> Self {
+        Self::Item {
+            icon,
+            label,
+            action,
+        }
+    }
 }
 
-fn align_entries(tid: ThemeId, sel: bool, nc: bool) -> Vec<DropdownEntry<ActiveBarMsg>> {
-    vec![
-        dd_item(
-            ic::icon_dd_align_left(tid),
-            "Align Left",
-            ActiveBarAction::AlignLeft,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_align_right(tid),
-            "Align Right",
-            ActiveBarAction::AlignRight,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_align_hcenter(tid),
-            "Align Horizontal Centers",
-            ActiveBarAction::AlignHorizontalCenters,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_dist_horiz(tid),
-            "Distribute Horizontally",
-            ActiveBarAction::DistributeHorizontally,
-            sel,
-            nc,
-        ),
-        DropdownEntry::Separator,
-        dd_item(
-            ic::icon_dd_align_top(tid),
-            "Align Top",
-            ActiveBarAction::AlignTop,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_align_bottom(tid),
-            "Align Bottom",
-            ActiveBarAction::AlignBottom,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_align_vcenter(tid),
-            "Align Vertical Centers",
-            ActiveBarAction::AlignVerticalCenters,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_dist_vert(tid),
-            "Distribute Vertically",
-            ActiveBarAction::DistributeVertically,
-            sel,
-            nc,
-        ),
-        DropdownEntry::Separator,
-        dd_item(
-            ic::icon_dd_align_grid(tid),
-            "Align To Grid",
-            ActiveBarAction::AlignToGrid,
-            sel,
-            nc,
-        ),
-    ]
-}
+const SELECT_MODE: &[EntrySpec] = &[
+    EntrySpec::item(
+        ic::icon_dd_select_lasso,
+        "Lasso Select",
+        ActiveBarAction::LassoSelect,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_select_inside,
+        "Inside Area",
+        ActiveBarAction::InsideArea,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_select_outside,
+        "Outside Area",
+        ActiveBarAction::OutsideArea,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_select_touching_rect,
+        "Touching Rectangle",
+        ActiveBarAction::TouchingRectangle,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_select_touching_line,
+        "Touching Line",
+        ActiveBarAction::TouchingLine,
+    ),
+    EntrySpec::item(ic::icon_dd_select_all, "All", ActiveBarAction::SelectAll),
+    EntrySpec::item(
+        ic::icon_dd_select_connection,
+        "Connection",
+        ActiveBarAction::SelectConnection,
+    ),
+    EntrySpec::Separator,
+    EntrySpec::item(
+        ic::icon_dd_select_toggle,
+        "Toggle Selection",
+        ActiveBarAction::ToggleSelection,
+    ),
+];
 
-fn wiring_entries(tid: ThemeId, sel: bool, nc: bool) -> Vec<DropdownEntry<ActiveBarMsg>> {
-    vec![
-        dd_item(
-            ic::icon_dd_wire(tid),
-            "Wire",
-            ActiveBarAction::DrawWire,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_bus(tid),
-            "Bus",
-            ActiveBarAction::DrawBus,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_bus_entry(tid),
-            "Bus Entry",
-            ActiveBarAction::PlaceBusEntry,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_net_label(tid),
-            "Net Label",
-            ActiveBarAction::PlaceNetLabel,
-            sel,
-            nc,
-        ),
-    ]
-}
+const SELECT: &[EntrySpec] = &[
+    EntrySpec::item(ic::icon_dd_drag, "Drag", ActiveBarAction::Drag),
+    EntrySpec::item(ic::icon_dd_move, "Move", ActiveBarAction::MoveSelection),
+    EntrySpec::item(
+        ic::icon_dd_move_sel,
+        "Move Selection",
+        ActiveBarAction::MoveSelection,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_move_xy,
+        "Move Selection by X, Y...",
+        ActiveBarAction::MoveSelectionXY,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_drag_sel,
+        "Drag Selection",
+        ActiveBarAction::DragSelection,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_move_to_front,
+        "Move To Front",
+        ActiveBarAction::MoveToFront,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_rotate,
+        "Rotate Selection",
+        ActiveBarAction::RotateSelection,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_rotate_cw,
+        "Rotate Selection Clockwise",
+        ActiveBarAction::RotateSelectionCW,
+    ),
+    EntrySpec::Separator,
+    EntrySpec::item(
+        ic::icon_dd_bring_front,
+        "Bring To Front",
+        ActiveBarAction::BringToFront,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_send_back,
+        "Send To Back",
+        ActiveBarAction::SendToBack,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_bring_front_of,
+        "Bring To Front Of",
+        ActiveBarAction::BringToFrontOf,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_send_back_of,
+        "Send To Back Of",
+        ActiveBarAction::SendToBackOf,
+    ),
+    EntrySpec::Separator,
+    EntrySpec::item(
+        ic::icon_dd_flip_x,
+        "Flip Selected Sheet Symbols Along X",
+        ActiveBarAction::FlipSelectedX,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_flip_y,
+        "Flip Selected Sheet Symbols Along Y",
+        ActiveBarAction::FlipSelectedY,
+    ),
+];
 
-fn power_entries(tid: ThemeId, sel: bool, nc: bool) -> Vec<DropdownEntry<ActiveBarMsg>> {
-    vec![
-        dd_item(
-            ic::icon_dd_gnd(tid),
-            "Place GND power port",
-            ActiveBarAction::PlacePowerGND,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_vcc(tid),
-            "Place VCC power port",
-            ActiveBarAction::PlacePowerVCC,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_pwr_plus12(tid),
-            "Place +12 power port",
-            ActiveBarAction::PlacePowerPlus12,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_pwr_plus5(tid),
-            "Place +5 power port",
-            ActiveBarAction::PlacePowerPlus5,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_pwr_minus5(tid),
-            "Place -5 power port",
-            ActiveBarAction::PlacePowerMinus5,
-            sel,
-            nc,
-        ),
-        DropdownEntry::Separator,
-        dd_item(
-            ic::icon_dd_pwr_arrow(tid),
-            "Place Arrow style power port",
-            ActiveBarAction::PlacePowerArrow,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_pwr_wave(tid),
-            "Place Wave style power port",
-            ActiveBarAction::PlacePowerWave,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_pwr_bar(tid),
-            "Place Bar style power port",
-            ActiveBarAction::PlacePowerBar,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_pwr_circle(tid),
-            "Place Circle style power port",
-            ActiveBarAction::PlacePowerCircle,
-            sel,
-            nc,
-        ),
-        DropdownEntry::Separator,
-        dd_item(
-            ic::icon_dd_pwr_signal_gnd(tid),
-            "Place Signal Ground power port",
-            ActiveBarAction::PlacePowerSignalGND,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_pwr_earth(tid),
-            "Place Earth power port",
-            ActiveBarAction::PlacePowerEarth,
-            sel,
-            nc,
-        ),
-    ]
-}
+const ALIGN: &[EntrySpec] = &[
+    EntrySpec::item(
+        ic::icon_dd_align_left,
+        "Align Left",
+        ActiveBarAction::AlignLeft,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_align_right,
+        "Align Right",
+        ActiveBarAction::AlignRight,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_align_hcenter,
+        "Align Horizontal Centers",
+        ActiveBarAction::AlignHorizontalCenters,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_dist_horiz,
+        "Distribute Horizontally",
+        ActiveBarAction::DistributeHorizontally,
+    ),
+    EntrySpec::Separator,
+    EntrySpec::item(
+        ic::icon_dd_align_top,
+        "Align Top",
+        ActiveBarAction::AlignTop,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_align_bottom,
+        "Align Bottom",
+        ActiveBarAction::AlignBottom,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_align_vcenter,
+        "Align Vertical Centers",
+        ActiveBarAction::AlignVerticalCenters,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_dist_vert,
+        "Distribute Vertically",
+        ActiveBarAction::DistributeVertically,
+    ),
+    EntrySpec::Separator,
+    EntrySpec::item(
+        ic::icon_dd_align_grid,
+        "Align To Grid",
+        ActiveBarAction::AlignToGrid,
+    ),
+];
 
-fn harness_entries(tid: ThemeId, sel: bool, nc: bool) -> Vec<DropdownEntry<ActiveBarMsg>> {
-    vec![
-        dd_item(
-            ic::icon_dd_harness(tid),
-            "Signal Harness",
-            ActiveBarAction::PlaceSignalHarness,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_harness_conn(tid),
-            "Harness Connector",
-            ActiveBarAction::PlaceHarnessConnector,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_harness_entry(tid),
-            "Harness Entry",
-            ActiveBarAction::PlaceHarnessEntry,
-            sel,
-            nc,
-        ),
-    ]
-}
+const WIRING: &[EntrySpec] = &[
+    EntrySpec::item(ic::icon_dd_wire, "Wire", ActiveBarAction::DrawWire),
+    EntrySpec::item(ic::icon_dd_bus, "Bus", ActiveBarAction::DrawBus),
+    EntrySpec::item(
+        ic::icon_dd_bus_entry,
+        "Bus Entry",
+        ActiveBarAction::PlaceBusEntry,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_net_label,
+        "Net Label",
+        ActiveBarAction::PlaceNetLabel,
+    ),
+];
 
-fn sheet_symbol_entries(tid: ThemeId, sel: bool, nc: bool) -> Vec<DropdownEntry<ActiveBarMsg>> {
-    vec![
-        dd_item(
-            ic::icon_dd_sheet_symbol(tid),
-            "Sheet Symbol",
-            ActiveBarAction::PlaceSheetSymbol,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_sheet_entry(tid),
-            "Sheet Entry",
-            ActiveBarAction::PlaceSheetEntry,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_device_sheet(tid),
-            "Device Sheet Symbol",
-            ActiveBarAction::PlaceDeviceSheetSymbol,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_reuse_block(tid),
-            "Reuse Block...",
-            ActiveBarAction::PlaceReuseBlock,
-            sel,
-            nc,
-        ),
-    ]
-}
+const POWER: &[EntrySpec] = &[
+    EntrySpec::item(
+        ic::icon_dd_gnd,
+        "Place GND power port",
+        ActiveBarAction::PlacePowerGND,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_vcc,
+        "Place VCC power port",
+        ActiveBarAction::PlacePowerVCC,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_pwr_plus12,
+        "Place +12 power port",
+        ActiveBarAction::PlacePowerPlus12,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_pwr_plus5,
+        "Place +5 power port",
+        ActiveBarAction::PlacePowerPlus5,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_pwr_minus5,
+        "Place -5 power port",
+        ActiveBarAction::PlacePowerMinus5,
+    ),
+    EntrySpec::Separator,
+    EntrySpec::item(
+        ic::icon_dd_pwr_arrow,
+        "Place Arrow style power port",
+        ActiveBarAction::PlacePowerArrow,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_pwr_wave,
+        "Place Wave style power port",
+        ActiveBarAction::PlacePowerWave,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_pwr_bar,
+        "Place Bar style power port",
+        ActiveBarAction::PlacePowerBar,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_pwr_circle,
+        "Place Circle style power port",
+        ActiveBarAction::PlacePowerCircle,
+    ),
+    EntrySpec::Separator,
+    EntrySpec::item(
+        ic::icon_dd_pwr_signal_gnd,
+        "Place Signal Ground power port",
+        ActiveBarAction::PlacePowerSignalGND,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_pwr_earth,
+        "Place Earth power port",
+        ActiveBarAction::PlacePowerEarth,
+    ),
+];
 
-fn port_entries(tid: ThemeId, sel: bool, nc: bool) -> Vec<DropdownEntry<ActiveBarMsg>> {
-    vec![
-        dd_item(
-            ic::icon_dd_port(tid),
-            "Port",
-            ActiveBarAction::PlacePort,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_off_sheet(tid),
-            "Off Sheet Connector",
-            ActiveBarAction::PlaceOffSheetConnector,
-            sel,
-            nc,
-        ),
-    ]
-}
+const HARNESS: &[EntrySpec] = &[
+    EntrySpec::item(
+        ic::icon_dd_harness,
+        "Signal Harness",
+        ActiveBarAction::PlaceSignalHarness,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_harness_conn,
+        "Harness Connector",
+        ActiveBarAction::PlaceHarnessConnector,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_harness_entry,
+        "Harness Entry",
+        ActiveBarAction::PlaceHarnessEntry,
+    ),
+];
 
-fn directives_entries(tid: ThemeId, sel: bool, nc: bool) -> Vec<DropdownEntry<ActiveBarMsg>> {
-    vec![
-        dd_item(
-            ic::icon_dd_param_set(tid),
-            "Parameter Set",
-            ActiveBarAction::PlaceParameterSet,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_no_erc(tid),
-            "Generic No ERC",
-            ActiveBarAction::PlaceNoERC,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_diff_pair(tid),
-            "Differential Pair",
-            ActiveBarAction::PlaceDiffPair,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_blanket(tid),
-            "Blanket",
-            ActiveBarAction::PlaceBlanket,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_blanket(tid),
-            "Compile Mask",
-            ActiveBarAction::PlaceCompileMask,
-            sel,
-            nc,
-        ),
-    ]
-}
+const SHEET_SYMBOL: &[EntrySpec] = &[
+    EntrySpec::item(
+        ic::icon_dd_sheet_symbol,
+        "Sheet Symbol",
+        ActiveBarAction::PlaceSheetSymbol,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_sheet_entry,
+        "Sheet Entry",
+        ActiveBarAction::PlaceSheetEntry,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_device_sheet,
+        "Device Sheet Symbol",
+        ActiveBarAction::PlaceDeviceSheetSymbol,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_reuse_block,
+        "Reuse Block...",
+        ActiveBarAction::PlaceReuseBlock,
+    ),
+];
 
-fn text_tools_entries(tid: ThemeId, sel: bool, nc: bool) -> Vec<DropdownEntry<ActiveBarMsg>> {
-    vec![
-        dd_item(
-            ic::icon_dd_text_string(tid),
-            "Text String",
-            ActiveBarAction::PlaceTextString,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_text_frame(tid),
-            "Text Frame",
-            ActiveBarAction::PlaceTextFrame,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_note(tid),
-            "Note",
-            ActiveBarAction::PlaceNote,
-            sel,
-            nc,
-        ),
-    ]
-}
+const PORT: &[EntrySpec] = &[
+    EntrySpec::item(ic::icon_dd_port, "Port", ActiveBarAction::PlacePort),
+    EntrySpec::item(
+        ic::icon_dd_off_sheet,
+        "Off Sheet Connector",
+        ActiveBarAction::PlaceOffSheetConnector,
+    ),
+];
 
-fn shapes_entries(tid: ThemeId, sel: bool, nc: bool) -> Vec<DropdownEntry<ActiveBarMsg>> {
-    vec![
-        dd_item(
-            ic::icon_dd_arc(tid),
-            "Arc",
-            ActiveBarAction::DrawArc,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_circle(tid),
-            "Full Circle",
-            ActiveBarAction::DrawFullCircle,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_arc(tid),
-            "Elliptical Arc",
-            ActiveBarAction::DrawEllipticalArc,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_ellipse(tid),
-            "Ellipse",
-            ActiveBarAction::DrawEllipse,
-            sel,
-            nc,
-        ),
-        DropdownEntry::Separator,
-        dd_item(
-            ic::icon_dd_line(tid),
-            "Line",
-            ActiveBarAction::DrawLine,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_rect(tid),
-            "Rectangle",
-            ActiveBarAction::DrawRectangle,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_round_rect(tid),
-            "Round Rectangle",
-            ActiveBarAction::DrawRoundRectangle,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_polygon(tid),
-            "Polygon",
-            ActiveBarAction::DrawPolygon,
-            sel,
-            nc,
-        ),
-        dd_item(
-            ic::icon_dd_bezier(tid),
-            "Bezier",
-            ActiveBarAction::DrawBezier,
-            sel,
-            nc,
-        ),
-        DropdownEntry::Separator,
-        dd_item(
-            ic::icon_dd_graphic(tid),
-            "Graphic...",
-            ActiveBarAction::PlaceGraphic,
-            sel,
-            nc,
-        ),
-    ]
+const DIRECTIVES: &[EntrySpec] = &[
+    EntrySpec::item(
+        ic::icon_dd_param_set,
+        "Parameter Set",
+        ActiveBarAction::PlaceParameterSet,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_no_erc,
+        "Generic No ERC",
+        ActiveBarAction::PlaceNoERC,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_diff_pair,
+        "Differential Pair",
+        ActiveBarAction::PlaceDiffPair,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_blanket,
+        "Blanket",
+        ActiveBarAction::PlaceBlanket,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_blanket,
+        "Compile Mask",
+        ActiveBarAction::PlaceCompileMask,
+    ),
+];
+
+const TEXT_TOOLS: &[EntrySpec] = &[
+    EntrySpec::item(
+        ic::icon_dd_text_string,
+        "Text String",
+        ActiveBarAction::PlaceTextString,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_text_frame,
+        "Text Frame",
+        ActiveBarAction::PlaceTextFrame,
+    ),
+    EntrySpec::item(ic::icon_dd_note, "Note", ActiveBarAction::PlaceNote),
+];
+
+const SHAPES: &[EntrySpec] = &[
+    EntrySpec::item(ic::icon_dd_arc, "Arc", ActiveBarAction::DrawArc),
+    EntrySpec::item(
+        ic::icon_dd_circle,
+        "Full Circle",
+        ActiveBarAction::DrawFullCircle,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_arc,
+        "Elliptical Arc",
+        ActiveBarAction::DrawEllipticalArc,
+    ),
+    EntrySpec::item(ic::icon_dd_ellipse, "Ellipse", ActiveBarAction::DrawEllipse),
+    EntrySpec::Separator,
+    EntrySpec::item(ic::icon_dd_line, "Line", ActiveBarAction::DrawLine),
+    EntrySpec::item(
+        ic::icon_dd_rect,
+        "Rectangle",
+        ActiveBarAction::DrawRectangle,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_round_rect,
+        "Round Rectangle",
+        ActiveBarAction::DrawRoundRectangle,
+    ),
+    EntrySpec::item(ic::icon_dd_polygon, "Polygon", ActiveBarAction::DrawPolygon),
+    EntrySpec::item(ic::icon_dd_bezier, "Bezier", ActiveBarAction::DrawBezier),
+    EntrySpec::Separator,
+    EntrySpec::item(
+        ic::icon_dd_graphic,
+        "Graphic...",
+        ActiveBarAction::PlaceGraphic,
+    ),
+];
+
+/// Render a uniform per-menu `EntrySpec` table into `DropdownEntry`
+/// rows, resolving each row's icon for the active theme and folding in
+/// the same `dd_item` enable/disable gating every row used before the
+/// table refactor.
+fn render(
+    specs: &'static [EntrySpec],
+    tid: ThemeId,
+    sel: bool,
+    nc: bool,
+) -> Vec<DropdownEntry<ActiveBarMsg>> {
+    specs
+        .iter()
+        .map(|spec| match spec {
+            EntrySpec::Separator => DropdownEntry::Separator,
+            EntrySpec::Item {
+                icon,
+                label,
+                action,
+            } => dd_item(icon(tid), label, action.clone(), sel, nc),
+        })
+        .collect()
 }
 
 /// NetColor menu: seven colour swatches (each an irregular `Custom` row —
@@ -1156,7 +995,7 @@ mod tests {
 
     #[test]
     fn wiring_menu_is_four_ungated_items() {
-        let e = wiring_entries(TID, false, false);
+        let e = render(WIRING, TID, false, false);
         assert_eq!(labels(&e), ["Wire", "Bus", "Bus Entry", "Net Label"]);
         assert!(items(&e).iter().all(|(_, d)| !d)); // wiring is never gated
         assert_eq!(seps(&e), 0);
@@ -1164,8 +1003,8 @@ mod tests {
 
     #[test]
     fn disabled_state_flips_but_labels_are_stable() {
-        let on = select_entries(TID, true, false);
-        let off = select_entries(TID, false, false);
+        let on = render(SELECT, TID, true, false);
+        let off = render(SELECT, TID, false, false);
         // same rows regardless of selection — only the disabled flag moves
         assert_eq!(labels(&on), labels(&off));
         // a selection-family row greys out with no selection
@@ -1175,17 +1014,17 @@ mod tests {
 
     #[test]
     fn select_mode_toggle_sits_after_the_separator() {
-        let e = select_mode_entries(TID, true, true);
+        let e = render(SELECT_MODE, TID, true, true);
         assert_eq!(seps(&e), 1);
         assert_eq!(items(&e).last().unwrap().0, "Toggle Selection");
     }
 
     #[test]
     fn align_and_shapes_have_expected_shape() {
-        let a = align_entries(TID, true, true);
+        let a = render(ALIGN, TID, true, true);
         assert_eq!(items(&a).len(), 9);
         assert_eq!(seps(&a), 2);
-        let s = shapes_entries(TID, true, true);
+        let s = render(SHAPES, TID, true, true);
         assert_eq!(items(&s).len(), 10);
         assert_eq!(seps(&s), 2);
     }
@@ -1211,5 +1050,772 @@ mod tests {
         let filters = std::collections::HashSet::new();
         let entry = filter_entry(&tokens, &filters, &[]);
         assert!(matches!(entry, DropdownEntry::Custom(_)));
+    }
+
+    /// Stable serializer for `DropdownEntry` rows, used by the
+    /// behaviour-proof golden test below (#457) to prove the
+    /// data-table refactor is byte-for-byte output identical to the
+    /// pre-refactor per-menu builder functions.
+    fn describe(entries: &[DropdownEntry<ActiveBarMsg>]) -> Vec<String> {
+        entries
+            .iter()
+            .map(|e| match e {
+                DropdownEntry::Separator => "SEP".to_string(),
+                DropdownEntry::Header(label) => format!("HEADER:{label}"),
+                DropdownEntry::Custom(_) => "CUSTOM".to_string(),
+                DropdownEntry::Item(it) => format!(
+                    "ITEM:{}|disabled={}|icon={}|checked={}|shortcut={:?}",
+                    it.label,
+                    it.disabled,
+                    it.icon.is_some(),
+                    it.checked,
+                    it.shortcut
+                ),
+            })
+            .collect()
+    }
+
+    /// GOLDEN (#457): `describe(dropdown_entries(menu, .., sel, nc))` for
+    /// every `ActiveBarMenu` variant x every `(has_selection,
+    /// has_net_colors)` combo, captured verbatim from the pre-refactor
+    /// per-menu builder functions (`select_mode_entries`,
+    /// `select_entries`, ... `shapes_entries`, plus `filter_entry` /
+    /// `net_color_entries`) before they were replaced by the `EntrySpec`
+    /// data table + generic `render`. If this test still passes after
+    /// the refactor, the refactor is output-identical.
+    const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
+        (ActiveBarMenu::Filter, false, false, &["CUSTOM"]),
+        (ActiveBarMenu::Filter, false, true, &["CUSTOM"]),
+        (ActiveBarMenu::Filter, true, false, &["CUSTOM"]),
+        (ActiveBarMenu::Filter, true, true, &["CUSTOM"]),
+        (
+            ActiveBarMenu::SelectMode,
+            false,
+            false,
+            &[
+                "ITEM:Lasso Select|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Inside Area|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Outside Area|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Touching Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Touching Line|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:All|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Connection|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Toggle Selection|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::SelectMode,
+            false,
+            true,
+            &[
+                "ITEM:Lasso Select|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Inside Area|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Outside Area|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Touching Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Touching Line|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:All|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Connection|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Toggle Selection|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::SelectMode,
+            true,
+            false,
+            &[
+                "ITEM:Lasso Select|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Inside Area|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Outside Area|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Touching Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Touching Line|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:All|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Connection|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Toggle Selection|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::SelectMode,
+            true,
+            true,
+            &[
+                "ITEM:Lasso Select|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Inside Area|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Outside Area|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Touching Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Touching Line|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:All|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Connection|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Toggle Selection|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Select,
+            false,
+            false,
+            &[
+                "ITEM:Drag|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Move|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Move Selection|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Move Selection by X, Y...|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Drag Selection|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Move To Front|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Rotate Selection|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Rotate Selection Clockwise|disabled=true|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Bring To Front|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Send To Back|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Bring To Front Of|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Send To Back Of|disabled=true|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Flip Selected Sheet Symbols Along X|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Flip Selected Sheet Symbols Along Y|disabled=true|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Select,
+            false,
+            true,
+            &[
+                "ITEM:Drag|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Move|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Move Selection|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Move Selection by X, Y...|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Drag Selection|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Move To Front|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Rotate Selection|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Rotate Selection Clockwise|disabled=true|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Bring To Front|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Send To Back|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Bring To Front Of|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Send To Back Of|disabled=true|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Flip Selected Sheet Symbols Along X|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Flip Selected Sheet Symbols Along Y|disabled=true|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Select,
+            true,
+            false,
+            &[
+                "ITEM:Drag|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Move|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Move Selection|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Move Selection by X, Y...|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Drag Selection|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Move To Front|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Rotate Selection|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Rotate Selection Clockwise|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Bring To Front|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Send To Back|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Bring To Front Of|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Send To Back Of|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Flip Selected Sheet Symbols Along X|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Flip Selected Sheet Symbols Along Y|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Select,
+            true,
+            true,
+            &[
+                "ITEM:Drag|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Move|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Move Selection|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Move Selection by X, Y...|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Drag Selection|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Move To Front|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Rotate Selection|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Rotate Selection Clockwise|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Bring To Front|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Send To Back|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Bring To Front Of|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Send To Back Of|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Flip Selected Sheet Symbols Along X|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Flip Selected Sheet Symbols Along Y|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Align,
+            false,
+            false,
+            &[
+                "ITEM:Align Left|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Align Right|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Align Horizontal Centers|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Distribute Horizontally|disabled=true|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Align Top|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Align Bottom|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Align Vertical Centers|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Distribute Vertically|disabled=true|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Align To Grid|disabled=true|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Align,
+            false,
+            true,
+            &[
+                "ITEM:Align Left|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Align Right|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Align Horizontal Centers|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Distribute Horizontally|disabled=true|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Align Top|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Align Bottom|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Align Vertical Centers|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Distribute Vertically|disabled=true|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Align To Grid|disabled=true|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Align,
+            true,
+            false,
+            &[
+                "ITEM:Align Left|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Align Right|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Align Horizontal Centers|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Distribute Horizontally|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Align Top|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Align Bottom|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Align Vertical Centers|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Distribute Vertically|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Align To Grid|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Align,
+            true,
+            true,
+            &[
+                "ITEM:Align Left|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Align Right|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Align Horizontal Centers|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Distribute Horizontally|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Align Top|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Align Bottom|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Align Vertical Centers|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Distribute Vertically|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Align To Grid|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Wiring,
+            false,
+            false,
+            &[
+                "ITEM:Wire|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Bus|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Bus Entry|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Net Label|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Wiring,
+            false,
+            true,
+            &[
+                "ITEM:Wire|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Bus|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Bus Entry|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Net Label|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Wiring,
+            true,
+            false,
+            &[
+                "ITEM:Wire|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Bus|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Bus Entry|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Net Label|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Wiring,
+            true,
+            true,
+            &[
+                "ITEM:Wire|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Bus|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Bus Entry|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Net Label|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Power,
+            false,
+            false,
+            &[
+                "ITEM:Place GND power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place VCC power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place +12 power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place +5 power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place -5 power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Place Arrow style power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place Wave style power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place Bar style power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place Circle style power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Place Signal Ground power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place Earth power port|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Power,
+            false,
+            true,
+            &[
+                "ITEM:Place GND power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place VCC power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place +12 power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place +5 power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place -5 power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Place Arrow style power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place Wave style power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place Bar style power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place Circle style power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Place Signal Ground power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place Earth power port|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Power,
+            true,
+            false,
+            &[
+                "ITEM:Place GND power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place VCC power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place +12 power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place +5 power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place -5 power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Place Arrow style power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place Wave style power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place Bar style power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place Circle style power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Place Signal Ground power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place Earth power port|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Power,
+            true,
+            true,
+            &[
+                "ITEM:Place GND power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place VCC power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place +12 power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place +5 power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place -5 power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Place Arrow style power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place Wave style power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place Bar style power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place Circle style power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Place Signal Ground power port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Place Earth power port|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Harness,
+            false,
+            false,
+            &[
+                "ITEM:Signal Harness|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Harness Connector|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Harness Entry|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Harness,
+            false,
+            true,
+            &[
+                "ITEM:Signal Harness|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Harness Connector|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Harness Entry|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Harness,
+            true,
+            false,
+            &[
+                "ITEM:Signal Harness|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Harness Connector|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Harness Entry|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Harness,
+            true,
+            true,
+            &[
+                "ITEM:Signal Harness|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Harness Connector|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Harness Entry|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::SheetSymbol,
+            false,
+            false,
+            &[
+                "ITEM:Sheet Symbol|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Sheet Entry|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Device Sheet Symbol|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Reuse Block...|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::SheetSymbol,
+            false,
+            true,
+            &[
+                "ITEM:Sheet Symbol|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Sheet Entry|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Device Sheet Symbol|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Reuse Block...|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::SheetSymbol,
+            true,
+            false,
+            &[
+                "ITEM:Sheet Symbol|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Sheet Entry|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Device Sheet Symbol|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Reuse Block...|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::SheetSymbol,
+            true,
+            true,
+            &[
+                "ITEM:Sheet Symbol|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Sheet Entry|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Device Sheet Symbol|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Reuse Block...|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Port,
+            false,
+            false,
+            &[
+                "ITEM:Port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Off Sheet Connector|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Port,
+            false,
+            true,
+            &[
+                "ITEM:Port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Off Sheet Connector|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Port,
+            true,
+            false,
+            &[
+                "ITEM:Port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Off Sheet Connector|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Port,
+            true,
+            true,
+            &[
+                "ITEM:Port|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Off Sheet Connector|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Directives,
+            false,
+            false,
+            &[
+                "ITEM:Parameter Set|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Compile Mask|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Directives,
+            false,
+            true,
+            &[
+                "ITEM:Parameter Set|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Compile Mask|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Directives,
+            true,
+            false,
+            &[
+                "ITEM:Parameter Set|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Compile Mask|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Directives,
+            true,
+            true,
+            &[
+                "ITEM:Parameter Set|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Compile Mask|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::TextTools,
+            false,
+            false,
+            &[
+                "ITEM:Text String|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Text Frame|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Note|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::TextTools,
+            false,
+            true,
+            &[
+                "ITEM:Text String|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Text Frame|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Note|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::TextTools,
+            true,
+            false,
+            &[
+                "ITEM:Text String|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Text Frame|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Note|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::TextTools,
+            true,
+            true,
+            &[
+                "ITEM:Text String|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Text Frame|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Note|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Shapes,
+            false,
+            false,
+            &[
+                "ITEM:Arc|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Full Circle|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Elliptical Arc|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Ellipse|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Line|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Round Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Polygon|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Bezier|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Graphic...|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Shapes,
+            false,
+            true,
+            &[
+                "ITEM:Arc|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Full Circle|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Elliptical Arc|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Ellipse|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Line|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Round Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Polygon|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Bezier|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Graphic...|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Shapes,
+            true,
+            false,
+            &[
+                "ITEM:Arc|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Full Circle|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Elliptical Arc|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Ellipse|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Line|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Round Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Polygon|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Bezier|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Graphic...|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::Shapes,
+            true,
+            true,
+            &[
+                "ITEM:Arc|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Full Circle|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Elliptical Arc|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Ellipse|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Line|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Round Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Polygon|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Bezier|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Graphic...|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::NetColor,
+            false,
+            false,
+            &[
+                "CUSTOM",
+                "CUSTOM",
+                "CUSTOM",
+                "CUSTOM",
+                "CUSTOM",
+                "CUSTOM",
+                "CUSTOM",
+                "SEP",
+                "ITEM:Custom Color...|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Clear Net Color|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Clear All Net Colors|disabled=true|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::NetColor,
+            false,
+            true,
+            &[
+                "CUSTOM",
+                "CUSTOM",
+                "CUSTOM",
+                "CUSTOM",
+                "CUSTOM",
+                "CUSTOM",
+                "CUSTOM",
+                "SEP",
+                "ITEM:Custom Color...|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Clear Net Color|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Clear All Net Colors|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::NetColor,
+            true,
+            false,
+            &[
+                "CUSTOM",
+                "CUSTOM",
+                "CUSTOM",
+                "CUSTOM",
+                "CUSTOM",
+                "CUSTOM",
+                "CUSTOM",
+                "SEP",
+                "ITEM:Custom Color...|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Clear Net Color|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Clear All Net Colors|disabled=true|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+        (
+            ActiveBarMenu::NetColor,
+            true,
+            true,
+            &[
+                "CUSTOM",
+                "CUSTOM",
+                "CUSTOM",
+                "CUSTOM",
+                "CUSTOM",
+                "CUSTOM",
+                "CUSTOM",
+                "SEP",
+                "ITEM:Custom Color...|disabled=false|icon=true|checked=false|shortcut=None",
+                "SEP",
+                "ITEM:Clear Net Color|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Clear All Net Colors|disabled=false|icon=true|checked=false|shortcut=None",
+            ],
+        ),
+    ];
+
+    #[test]
+    fn dropdown_entries_match_pre_refactor_golden() {
+        let tokens = signex_types::theme::theme_tokens(TID);
+        let filters: std::collections::HashSet<SelectionFilter> = std::collections::HashSet::new();
+        let presets: Vec<CustomFilterPreset> = vec![];
+        for &(menu, sel, nc, expected) in GOLDEN {
+            let entries = dropdown_entries(menu, &tokens, &filters, &presets, TID, sel, nc);
+            let actual = describe(&entries);
+            let actual_refs: Vec<&str> = actual.iter().map(String::as_str).collect();
+            assert_eq!(
+                actual_refs.as_slice(),
+                expected,
+                "menu={menu:?} sel={sel} nc={nc}: dropdown output diverged from the pre-refactor golden"
+            );
+        }
     }
 }
