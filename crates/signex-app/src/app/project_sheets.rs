@@ -225,27 +225,46 @@ fn walk(
 /// one slot for it; iterating a `HashMap` there made the winner — i.e. the
 /// connectivity written into a machine-consumed `.net` — depend on hash order.
 /// First-wins by sorted path is arbitrary but at least the same every run.
+///
+/// When two parents' filename strings resolve to two genuinely *different*
+/// files (not just the same file reached two ways), keeping the first winner
+/// silently would stitch the second parent's subtree from the wrong file with
+/// no trace of it — that collision is returned as a
+/// [`signex_net::StitchIssue::AmbiguousChildFilename`] alongside the map.
 pub(crate) fn project_children_map(
     sheets: &HashMap<PathBuf, SchematicSheet>,
-) -> HashMap<String, SchematicSheet> {
+) -> (
+    HashMap<String, SchematicSheet>,
+    Vec<signex_net::StitchIssue>,
+) {
     let mut children: HashMap<String, SchematicSheet> = HashMap::new();
+    let mut resolved_from: HashMap<String, PathBuf> = HashMap::new();
+    let mut issues: Vec<signex_net::StitchIssue> = Vec::new();
     let mut parents: Vec<(&PathBuf, &SchematicSheet)> = sheets.iter().collect();
     parents.sort_by(|a, b| a.0.cmp(b.0));
     for (parent_path, sheet) in parents {
         let dir = parent_path.parent().unwrap_or_else(|| Path::new(""));
         for cs in &sheet.child_sheets {
-            if children.contains_key(&cs.filename) {
-                continue;
-            }
             let Some(child_path) = resolve_child_reference(dir, &cs.filename) else {
                 continue;
             };
+            if let Some(existing_path) = resolved_from.get(&cs.filename) {
+                if *existing_path != child_path {
+                    issues.push(signex_net::StitchIssue::AmbiguousChildFilename {
+                        filename: cs.filename.clone(),
+                        path_a: existing_path.display().to_string(),
+                        path_b: child_path.display().to_string(),
+                    });
+                }
+                continue;
+            }
             if let Some(child) = sheets.get(&child_path) {
                 children.insert(cs.filename.clone(), child.clone());
+                resolved_from.insert(cs.filename.clone(), child_path);
             }
         }
     }
-    children
+    (children, issues)
 }
 
 /// Resolve a `ChildSheet.filename` reference against the directory of the sheet
@@ -324,6 +343,14 @@ pub(crate) fn stitch_issue_message(issue: &signex_net::StitchIssue) -> String {
                 "Netlist: two distinct nets are both named '{name}'; the later one was suffixed"
             )
         }
+        I::AmbiguousChildFilename {
+            filename,
+            path_a,
+            path_b,
+        } => format!(
+            "Netlist: child reference '{filename}' resolves to two different files ('{path_a}' \
+             and '{path_b}'); the netlist used '{path_a}'"
+        ),
     }
 }
 
@@ -388,11 +415,48 @@ mod tests {
         sheets.insert(PathBuf::from("/proj/a/power.snxsch"), sheet(0xA, &[]));
         sheets.insert(PathBuf::from("/proj/b/power.snxsch"), sheet(0xB, &[]));
 
-        let children = project_children_map(&sheets);
+        let (children, issues) = project_children_map(&sheets);
 
         assert_eq!(children.len(), 2, "both same-basename children present");
         assert_eq!(children["a/power.snxsch"].uuid, Uuid::from_u128(0xA));
         assert_eq!(children["b/power.snxsch"].uuid, Uuid::from_u128(0xB));
+        assert!(
+            issues.is_empty(),
+            "distinct reference strings, no collision"
+        );
+    }
+
+    #[test]
+    fn same_reference_string_across_different_dirs_is_a_stitch_issue_not_silent() {
+        // Two parents in *different* directories both reference a child by
+        // the SAME relative filename string ("power.snxsch"), so it resolves
+        // to two different files. The map has one slot for the string; the
+        // second parent's subtree must not be silently dropped without a
+        // trace — it has to surface as a StitchIssue.
+        let mut sheets = HashMap::new();
+        sheets.insert(
+            PathBuf::from("/proj/a/root.snxsch"),
+            sheet(1, &["power.snxsch"]),
+        );
+        sheets.insert(
+            PathBuf::from("/proj/b/root.snxsch"),
+            sheet(2, &["power.snxsch"]),
+        );
+        sheets.insert(PathBuf::from("/proj/a/power.snxsch"), sheet(0xA, &[]));
+        sheets.insert(PathBuf::from("/proj/b/power.snxsch"), sheet(0xB, &[]));
+
+        let (children, issues) = project_children_map(&sheets);
+
+        // Sorted-path first-wins: "/proj/a/root.snxsch" sorts before
+        // "/proj/b/root.snxsch", so its resolution keeps the slot.
+        assert_eq!(children.len(), 1);
+        assert_eq!(children["power.snxsch"].uuid, Uuid::from_u128(0xA));
+        assert_eq!(issues.len(), 1, "the collision must not be silent");
+        assert!(matches!(
+            &issues[0],
+            signex_net::StitchIssue::AmbiguousChildFilename { filename, .. }
+                if filename == "power.snxsch"
+        ));
     }
 
     #[test]
@@ -406,10 +470,11 @@ mod tests {
         );
         sheets.insert(PathBuf::from("/proj/child.snxsch"), sheet(2, &[]));
 
-        let children = project_children_map(&sheets);
+        let (children, issues) = project_children_map(&sheets);
 
         assert_eq!(children.len(), 1);
         assert_eq!(children["child.snxsch"].uuid, Uuid::from_u128(2));
+        assert!(issues.is_empty());
     }
 
     #[test]
@@ -423,8 +488,9 @@ mod tests {
         );
         sheets.insert(PathBuf::from("/proj/orphan.snxsch"), sheet(3, &[]));
 
-        let children = project_children_map(&sheets);
+        let (children, issues) = project_children_map(&sheets);
         assert!(children.is_empty());
+        assert!(issues.is_empty());
     }
 
     #[test]
@@ -484,7 +550,7 @@ mod tests {
         );
         sheets.insert(PathBuf::from("/proj/sub/leaf.snxsch"), sheet(0x222, &[]));
 
-        let children = project_children_map(&sheets);
+        let (children, _issues) = project_children_map(&sheets);
         assert_eq!(children["leaf.snxsch"].uuid, Uuid::from_u128(0x222));
 
         let nav = resolve_child_reference(Path::new("/proj/sub"), "leaf.snxsch")

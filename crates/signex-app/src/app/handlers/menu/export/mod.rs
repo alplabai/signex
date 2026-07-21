@@ -304,7 +304,8 @@ fn build_export_scope(
         }
         issues.unreadable = set.unreadable.clone();
         let root = set.sheets.get(&root_path)?;
-        let children = crate::app::project_sheets::project_children_map(&set.sheets);
+        let (children, children_issues) =
+            crate::app::project_sheets::project_children_map(&set.sheets);
         let project_dir = owning_project.map(|p| p.dir().to_path_buf());
         let root_filename =
             crate::app::project_sheets::root_reference_name(&root_path, project_dir.as_deref());
@@ -313,7 +314,9 @@ fn build_export_scope(
         // rather than acted on here, because severity is a per-deliverable
         // policy: the .net refuses on a hole, the PDF proceeds and warns.
         let result = signex_net::build_project_netlist(root, &children, root_filename.as_deref());
-        issues.stitch = result.issues;
+        let mut stitch = result.issues;
+        stitch.extend(children_issues);
+        issues.stitch = stitch;
         Some(result.netlist)
     });
 

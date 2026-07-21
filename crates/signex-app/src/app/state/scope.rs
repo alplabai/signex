@@ -61,9 +61,18 @@ fn project_listing_sheet<'a>(
 /// `child path → parent path` over every loaded sheet, built from the parents'
 /// own `child_sheets` references (each resolved against the parent's
 /// directory, matching `project_sheets::project_children_map`).
+///
+/// `loaded` is a `HashMap`, whose iteration order is per-instance random —
+/// sorted by parent path first so that when two parents claim the same
+/// resolved child key, the first-wins tie-break (lexicographically-smallest
+/// parent path) is the same every run, matching the identical hazard fixed in
+/// `project_sheets::project_children_map`.
 fn parent_of(loaded: &HashMap<PathBuf, Vec<String>>) -> HashMap<String, PathBuf> {
+    let mut entries: Vec<(&PathBuf, &Vec<String>)> = loaded.iter().collect();
+    entries.sort_by(|a, b| a.0.cmp(b.0));
+
     let mut parents: HashMap<String, PathBuf> = HashMap::new();
-    for (parent_path, child_refs) in loaded {
+    for (parent_path, child_refs) in entries {
         let dir = parent_path.parent().unwrap_or_else(|| Path::new(""));
         for filename in child_refs {
             parents
@@ -229,6 +238,35 @@ mod tests {
         assert!(
             project_owning_sheet(&projects, &open, &PathBuf::from("/w/loose/x.snxsch")).is_none()
         );
+    }
+
+    #[test]
+    fn shared_child_ownership_is_deterministic_across_repeated_calls() {
+        // Two loaded sheets in different directories both reference a child
+        // at the same resolved path — a real project would never intend
+        // this, but `parent_of` must still pick the same owner every call
+        // rather than whichever the HashMap iterates first.
+        let projects = vec![
+            project(1, "/w/a", &["top.snxsch"]),
+            project(2, "/w/b", &["top.snxsch"]),
+        ];
+        // Both "top.snxsch" sheets reference the same child by an absolute
+        // path, so they resolve to the exact same key regardless of the
+        // parent's own directory (/w/a vs /w/b).
+        let child = PathBuf::from("/w/shared/child.snxsch");
+        let child_ref = child.to_str().expect("utf8 test path");
+        let open = loaded(&[
+            ("/w/a/top.snxsch", &[child_ref]),
+            ("/w/b/top.snxsch", &[child_ref]),
+        ]);
+
+        let first = project_owning_sheet(&projects, &open, &child).map(|p| p.id);
+        for _ in 0..20 {
+            let found = project_owning_sheet(&projects, &open, &child).map(|p| p.id);
+            assert_eq!(found, first, "owner must not flip across repeated calls");
+        }
+        // Sorted by parent path, "/w/a/top.snxsch" < "/w/b/top.snxsch" wins.
+        assert_eq!(first, Some(ProjectId(1)));
     }
 
     #[test]
