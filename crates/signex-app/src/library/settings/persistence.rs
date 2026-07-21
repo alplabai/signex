@@ -223,17 +223,19 @@ mod tests {
         let read = load_preferred_order_at(&path);
         assert_eq!(read, original);
         // A successful atomic save strands no `.tmp` sibling.
-        assert!(!path.with_extension("toml.tmp").exists());
+        assert!(!crate::test_support::has_stray_tmp(path.parent().unwrap()));
     }
 
     /// `save_preferred_order_at` must go through `atomic_write`, not
     /// `fs::write`: a failed save leaves the previously persisted order
     /// fully intact, and reports the failure instead of swallowing it.
     ///
-    /// Discriminator: pre-creating a *directory* at `<path>.tmp` makes
-    /// `atomic_write`'s `File::create(&tmp)` fail before it can touch the
-    /// destination. A plain `fs::write` would ignore the sibling, succeed,
-    /// and clobber the old file — so this test fails on a revert.
+    /// Discriminator: denying new-file creation in the destination's
+    /// parent directory makes `atomic_write`'s `File::create(&tmp)` fail
+    /// before it can touch the destination, regardless of the unique
+    /// per-writer temp name it picks (#416). A plain `fs::write` would
+    /// ignore that and clobber the old file — so this test fails on a
+    /// revert.
     #[test]
     fn save_preferred_order_at_leaves_original_intact_when_write_fails() {
         let tmp = tempfile::tempdir().unwrap();
@@ -242,7 +244,7 @@ mod tests {
         save_preferred_order_at(&path, &original).unwrap();
         assert_eq!(load_preferred_order_at(&path), original);
 
-        std::fs::create_dir_all(path.with_extension("toml.tmp")).unwrap();
+        let _deny = crate::test_support::DenyNewFiles::on(path.parent().unwrap());
         // The failure is reported, not swallowed — the dispatcher needs it
         // to put an inline error in front of the user.
         assert!(save_preferred_order_at(&path, &[DistributorSource::Octopart]).is_err());
