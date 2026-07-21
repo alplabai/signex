@@ -257,21 +257,61 @@ pub(crate) fn project_children_map(
 /// coincidence.
 ///
 /// - An empty reference (after trimming) yields `None`.
-/// - An absolute reference is returned unchanged — `parent_dir` is ignored, so
-///   an explicit absolute path always wins.
-/// - A relative reference is joined onto `parent_dir`, so a sheet in a
-///   subdirectory resolves its children beside itself rather than beside the
-///   project root.
+/// - Both an absolute reference and a relative one are joined onto
+///   `parent_dir` (`Path::join` already replaces `parent_dir` outright when the
+///   reference is absolute, so one join covers both shapes) and the result is
+///   lexically normalized — `.`/`..` resolved without touching the
+///   filesystem, since the child file may not exist yet and
+///   `std::fs::canonicalize` both requires existence and adds a `\\?\` prefix
+///   on Windows.
+/// - A reference whose normalized path escapes `parent_dir` — a `..`
+///   traversal, or an absolute path elsewhere entirely — is rejected: logged
+///   through the app's normal error-surfacing path and returned as `None`,
+///   the same as a reference that does not resolve to a loaded sheet.
 pub(crate) fn resolve_child_reference(parent_dir: &Path, child_filename: &str) -> Option<PathBuf> {
     let trimmed = child_filename.trim();
     if trimmed.is_empty() {
         return None;
     }
     let raw = PathBuf::from(trimmed);
-    if raw.is_absolute() {
-        return Some(raw);
+    let resolved = lexically_normalize(&parent_dir.join(&raw));
+    let root = lexically_normalize(parent_dir);
+
+    if resolved.starts_with(&root) {
+        Some(resolved)
+    } else {
+        crate::diagnostics::log_error(
+            "Rejected child-sheet reference outside its resolution root",
+            &anyhow::anyhow!(
+                "'{trimmed}' resolves to {} which escapes {}",
+                resolved.display(),
+                root.display()
+            ),
+        );
+        None
     }
-    Some(parent_dir.join(raw))
+}
+
+/// Lexically normalize `path` — resolve `.` and `..` components without
+/// touching the filesystem (unlike `std::fs::canonicalize`, which needs the
+/// path to exist). A `..` with nothing left to pop is kept as a literal `..`
+/// component, so a reference that escapes its root still fails the caller's
+/// `starts_with(root)` check instead of silently collapsing onto the root.
+fn lexically_normalize(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => match out.components().next_back() {
+                Some(std::path::Component::Normal(_)) => {
+                    out.pop();
+                }
+                _ => out.push(".."),
+            },
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
 }
 
 /// The filename string the root sheet is referenced by — its path relative to
@@ -459,10 +499,30 @@ mod tests {
     }
 
     #[test]
-    fn absolute_child_reference_is_returned_unchanged() {
+    fn absolute_child_reference_outside_the_root_is_rejected() {
+        // #463 — an absolute reference used to win outright, letting a
+        // malicious `.snxsch`/`.snxprj` point a child sheet anywhere on disk.
         assert_eq!(
             resolve_child_reference(Path::new("/proj/sub"), "/elsewhere/x.snxsch"),
-            Some(PathBuf::from("/elsewhere/x.snxsch"))
+            None
+        );
+    }
+
+    #[test]
+    fn traversal_child_reference_outside_the_root_is_rejected() {
+        // #463 — a relative `..` reference used to be joined onto `parent_dir`
+        // verbatim with no containment check, walking out of the project.
+        assert_eq!(
+            resolve_child_reference(Path::new("/proj/sub"), "../../../etc/passwd"),
+            None
+        );
+    }
+
+    #[test]
+    fn sibling_child_reference_still_resolves() {
+        assert_eq!(
+            resolve_child_reference(Path::new("/proj/sub"), "sibling.snxsch"),
+            Some(PathBuf::from("/proj/sub/sibling.snxsch"))
         );
     }
 
