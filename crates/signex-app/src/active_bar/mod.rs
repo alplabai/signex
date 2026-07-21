@@ -712,4 +712,3 @@ pub fn view_bar<'a>(
 
     signex_widgets::active_bar::view(items, tokens)
 }
-

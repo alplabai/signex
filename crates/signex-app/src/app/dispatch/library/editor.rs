@@ -243,7 +243,9 @@ impl Signex {
                         path,
                     );
                 }
-                self.save_primitive_tab_at(&path);
+                if let Err(e) = self.save_primitive_tab_at(&path) {
+                    crate::diagnostics::log_error("Save failed", &e);
+                }
                 Task::none()
             }
             PrimitiveEdit::Symbol(msg) => self.handle_symbol_primitive_edit(path, msg),
@@ -409,7 +411,15 @@ impl Signex {
     /// mounted `.snxlib/`), mark the tab clean, and ask the
     /// `LibrarySet` to reload its cached copy so any open Component
     /// Preview tabs see the new bytes.
-    pub(crate) fn save_primitive_tab_at(&mut self, path: &std::path::Path) {
+    ///
+    /// Returns the save failure — serialize vs write, the target path,
+    /// and the underlying OS/serializer reason — so the caller can
+    /// surface WHY a save failed (Ctrl+S diagnostics, the Save-All-on-
+    /// exit dialog) instead of silently dropping it. Historically both
+    /// error legs emitted a `tracing::warn!` and returned `()`; those
+    /// events never reached `SignexLogger`, so a failed primitive save
+    /// was invisible in both stderr and the Messages panel.
+    pub(crate) fn save_primitive_tab_at(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
         // Symbol path — write the full multi-symbol container back to
         // disk so other symbols in the same file are preserved.
         if let Some(editor) = self.document_state.symbol_editors.get_mut(path) {
@@ -422,23 +432,14 @@ impl Signex {
             let toml_text = match editor.file.to_toml_string() {
                 Ok(s) => s,
                 Err(e) => {
-                    tracing::warn!(
-                        target: "signex::library",
-                        path = %path.display(),
-                        error = %e,
-                        "save primitive: serialize symbol file failed",
-                    );
-                    return;
+                    return Err(anyhow::anyhow!(
+                        "serialize symbol library {}: {e}",
+                        path.display()
+                    ));
                 }
             };
             if let Err(e) = atomic_write(path, toml_text.as_bytes()) {
-                tracing::warn!(
-                    target: "signex::library",
-                    path = %path.display(),
-                    error = %e,
-                    "save primitive: write .snxsym failed",
-                );
-                return;
+                return Err(anyhow::anyhow!("write .snxsym {}: {e}", path.display()));
             }
             // Capture the symbol name for the commit message before
             // dropping the editor borrow.
@@ -473,7 +474,7 @@ impl Signex {
             // dirty dot drops on the row (same F10 fix as the
             // footprint branch below + the schematic save handler).
             self.refresh_panel_ctx();
-            return;
+            return Ok(());
         }
 
         // Footprint path.
@@ -497,23 +498,14 @@ impl Signex {
             let toml_text = match editor.file.to_toml_string() {
                 Ok(s) => s,
                 Err(e) => {
-                    tracing::warn!(
-                        target: "signex::library",
-                        path = %path.display(),
-                        error = %e,
-                        "save primitive: serialize footprint failed",
-                    );
-                    return;
+                    return Err(anyhow::anyhow!(
+                        "serialize footprint library {}: {e}",
+                        path.display()
+                    ));
                 }
             };
             if let Err(e) = atomic_write(path, toml_text.as_bytes()) {
-                tracing::warn!(
-                    target: "signex::library",
-                    path = %path.display(),
-                    error = %e,
-                    "save primitive: write .snxfpt failed",
-                );
-                return;
+                return Err(anyhow::anyhow!("write .snxfpt {}: {e}", path.display()));
             }
             let fp_name = editor.primitive().name.clone();
             editor.dirty = false;
@@ -537,7 +529,14 @@ impl Signex {
             // call the dot lingers on the row even though
             // `dirty_paths` no longer contains the path.
             self.refresh_panel_ctx();
+            return Ok(());
         }
+
+        // Path backs no open primitive editor — nothing to write. The
+        // three direct callers gate on an open tab, and the Save-All
+        // dispatcher gates on `symbol_editors`/`footprint_editors`
+        // membership, so this leg is only reached on a stale path.
+        Ok(())
     }
 
     /// Find the open library whose root contains `path`, then ask its

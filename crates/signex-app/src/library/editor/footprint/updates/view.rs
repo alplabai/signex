@@ -204,14 +204,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
             // Collect + dedup the selection indices up front so we can
             // bail before touching history if there isn't enough to act
             // on. Align ops need ≥2 pads; distribute needs ≥3.
-            let mut indices: Vec<usize> = Vec::new();
-            if let Some(p) = editor.state.selected_pad {
-                indices.push(p);
-            }
-            indices.extend(editor.state.selected_pads_extra.iter().copied());
-            indices.sort_unstable();
-            indices.dedup();
-            indices.retain(|&i| i < editor.state.pads.len());
+            let indices = editor.state.selected_pad_indices();
 
             let min_needed = match op {
                 AlignOp::DistributeH | AlignOp::DistributeV => 3,

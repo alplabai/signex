@@ -5,13 +5,14 @@
 //! `signex_widgets::active_bar_dropdown::view`; overlay positioning is
 //! handled by the caller (`unified_active_bar`).
 //!
-//! Wiring philosophy: items that map to existing primitives (Selection
-//! Filter pills, Snap toggles, snap-mode picks, Place tools, Body3D,
-//! Extruded 3D Body, Move Selection by X,Y, Text Frame) emit the real
-//! `FootprintEditorMsg`; the few items that still need new primitives
-//! (Break Track, Drag Track End, the generic Align… dialog launcher)
-//! emit `FootprintActiveBarStub` so the action logs a "coming soon"
-//! warn and dismisses the menu cleanly.
+//! Wiring philosophy: every dropdown item here maps to an existing
+//! primitive and emits the real `FootprintEditorMsg` (Selection Filter
+//! pills, Snap toggles, snap-mode picks, Place tools, Drag Track End,
+//! Break Track, Body3D, Extruded 3D Body, Move Selection by X,Y, the
+//! Align… dialog, Text Frame). The [`stub`] helper + the
+//! `FootprintEditorMsg::ActiveBarStub` "coming soon" variant are retained
+//! (removing the variant is out of #372's scope) for any future
+//! not-yet-implemented row, even though no current dropdown row uses them.
 
 use std::path::PathBuf;
 
@@ -35,18 +36,14 @@ fn fp(path: PathBuf, msg: FootprintEditorMsg) -> LibraryMessage {
     }
 }
 
-/// "Coming soon" stub item — no icon.
+/// "Coming soon" stub item — no icon. Retained as the sole constructor of
+/// `FootprintEditorMsg::ActiveBarStub` now that every footprint dropdown
+/// row is wired to a real message (Break Track was the last, #372).
+/// Removing the variant is out of #372's scope, so the helper stays for
+/// future not-yet-implemented rows rather than orphaning the variant.
+#[allow(dead_code)]
 fn stub(label: &'static str, path: PathBuf) -> DropdownItem<LibraryMessage> {
     DropdownItem::new(label, fp(path, FootprintEditorMsg::ActiveBarStub(label)))
-}
-
-/// "Coming soon" stub item with an icon for visual recognition.
-fn stub_with_icon(
-    label: &'static str,
-    path: PathBuf,
-    icon: iced::widget::svg::Handle,
-) -> DropdownItem<LibraryMessage> {
-    DropdownItem::new(label, fp(path, FootprintEditorMsg::ActiveBarStub(label))).icon(icon)
 }
 
 /// v0.14 — real Align/Distribute/Spacing item, no icon. Emits
@@ -445,13 +442,30 @@ fn place_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessag
         DropdownEntry::Item(
             DropdownItem::new("Drag", activate_select(path.clone())).icon(ic::icon_dd_drag(tid)),
         ),
-        // Break Track / Drag Track End stay stubbed — they need
-        // track-segment split + endpoint-drag infrastructure that the
-        // footprint editor does not have yet.
-        // v0.15: needs track-segment split infra
-        DropdownEntry::Item(stub("Break Track", path.clone())),
-        // v0.15: needs track-segment split infra
-        DropdownEntry::Item(stub("Drag Track End", path.clone())),
+        // #372 — Break Track arms the real Sketch-mode BreakTrack tool:
+        // it switches to Sketch mode, then a single click on a sketch
+        // Line splits it in two at the click via the `split_line`
+        // primitive (#360). Drag Track End (below) likewise arms a real
+        // tool now. The Shapes rows are the working reference for this
+        // `ActiveBarSetSketchTool` call shape.
+        DropdownEntry::Item(DropdownItem::new(
+            "Break Track",
+            fp(
+                path.clone(),
+                FootprintEditorMsg::ActiveBarSetSketchTool(SketchTool::BreakTrack),
+            ),
+        )),
+        // #361 — arm the endpoint-biased segment grab. Switches to
+        // Sketch mode + the DragTrackEnd tool (see
+        // canvas/input/tools.rs::try_drag_track_end_grab); a left-press
+        // on any sketch Line then drags its nearer endpoint live.
+        DropdownEntry::Item(DropdownItem::new(
+            "Drag Track End",
+            fp(
+                path.clone(),
+                FootprintEditorMsg::ActiveBarSetSketchTool(SketchTool::DragTrackEnd),
+            ),
+        )),
         DropdownEntry::Separator,
         DropdownEntry::Item(
             DropdownItem::new("Move Selection", activate_select(path.clone()))
@@ -566,14 +580,13 @@ fn select_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessa
 fn align_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessage>> {
     use crate::library::editor::footprint::state::AlignOp;
     vec![
-        // The generic "Align…" dialog launcher stays a stub for v0.14 —
-        // the concrete operations below cover the day-to-day flow; the
-        // dialog (per-axis radio + reference picker) is a later task.
-        DropdownEntry::Item(stub_with_icon(
-            "Align…",
-            path.clone(),
-            ic::icon_dd_align_menu(tid),
-        )),
+        // #370 — the generic "Align…" launcher opens the per-axis Align
+        // dialog (horizontal + vertical op pickers). Label, position and
+        // icon are unchanged; only the wiring moved off the stub.
+        DropdownEntry::Item(
+            DropdownItem::new("Align…", fp(path.clone(), FootprintEditorMsg::AlignOpen))
+                .icon(ic::icon_dd_align_menu(tid)),
+        ),
         DropdownEntry::Separator,
         DropdownEntry::Item(align_item_with_icon(
             "Align Left",

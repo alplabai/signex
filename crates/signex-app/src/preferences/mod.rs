@@ -4,10 +4,10 @@
 //! Left side: tree of settings categories.
 //! Right side: settings panel for the selected category.
 
-use crate::render_config::{GridStyle, LabelStyle, MultisheetStyle, PinSelectionMode, PowerPortStyle};
-use iced::widget::{
-    Column, Space, button, column, container, row, scrollable, svg, text,
+use crate::render_config::{
+    GridStyle, LabelStyle, MultisheetStyle, PinSelectionMode, PowerPortStyle,
 };
+use iced::widget::{Column, Space, button, column, container, row, scrollable, svg, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use signex_types::theme::ThemeId;
 
@@ -405,7 +405,9 @@ fn build_dialog<'a>(
     .height(MODAL_HEADER_HEIGHT)
     .padding(MODAL_HEADER_PADDING)
     .style(move |theme: &Theme| container::Style {
-        background: Some(Background::Color(theme.extended_palette().background.weak.color)),
+        background: Some(Background::Color(
+            theme.extended_palette().background.weak.color,
+        )),
         border: Border {
             width: 0.0,
             radius: iced::border::Radius::default()
@@ -424,7 +426,9 @@ fn build_dialog<'a>(
             .width(1)
             .height(Length::Fill)
             .style(move |theme: &Theme| container::Style {
-                background: Some(Background::Color(theme.extended_palette().background.strong.color)),
+                background: Some(Background::Color(
+                    theme.extended_palette().background.strong.color
+                )),
                 ..container::Style::default()
             }),
         build_content(
@@ -462,7 +466,9 @@ fn build_dialog<'a>(
             .width(Length::Fill)
             .height(1)
             .style(move |theme: &Theme| container::Style {
-                background: Some(Background::Color(theme.extended_palette().background.strong.color)),
+                background: Some(Background::Color(
+                    theme.extended_palette().background.strong.color,
+                )),
                 ..container::Style::default()
             })
             .into()
@@ -482,7 +488,9 @@ fn build_dialog<'a>(
         .width(Length::Fill)
         .height(Length::Fill)
         .style(move |theme: &Theme| container::Style {
-            background: Some(Background::Color(theme.extended_palette().background.base.color)),
+            background: Some(Background::Color(
+                theme.extended_palette().background.base.color,
+            )),
             border: Border {
                 width: 1.0,
                 radius: MODAL_CORNER_RADIUS.into(),
@@ -528,7 +536,9 @@ fn build_nav<'a>(active: PrefNav) -> Element<'a, PrefMsg> {
         .width(NAV_W)
         .height(Length::Fill)
         .style(move |theme: &Theme| container::Style {
-            background: Some(Background::Color(theme.extended_palette().background.weak.color)),
+            background: Some(Background::Color(
+                theme.extended_palette().background.weak.color,
+            )),
             ..container::Style::default()
         })
         .into()
@@ -644,7 +654,9 @@ fn build_content<'a>(
         .height(Length::Fill)
         .padding(0)
         .style(move |theme: &Theme| container::Style {
-            background: Some(Background::Color(theme.extended_palette().background.base.color)),
+            background: Some(Background::Color(
+                theme.extended_palette().background.base.color,
+            )),
             ..container::Style::default()
         })
         .into()

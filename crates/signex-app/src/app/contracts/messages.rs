@@ -406,4 +406,3 @@ pub enum GridPropertiesMsg {
     /// v0.18.19 — Grid Properties modal: Multiplier (5x / 10x / 2x / 1x).
     SetMultiplier(u32),
 }
-

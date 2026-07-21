@@ -243,7 +243,10 @@ pub(super) fn build_page_content(
 
 /// Resolve a `PageRange` against the project's sheet count into a concrete
 /// list of zero-based sheet indices to export.
-pub(super) fn resolve_page_range(range: &PageRange, sheet_count: usize) -> Result<Vec<usize>, PdfError> {
+pub(super) fn resolve_page_range(
+    range: &PageRange,
+    sheet_count: usize,
+) -> Result<Vec<usize>, PdfError> {
     match range {
         PageRange::All => Ok((0..sheet_count).collect()),
         PageRange::Current => Ok(vec![0]),

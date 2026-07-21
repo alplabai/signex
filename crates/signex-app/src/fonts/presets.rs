@@ -84,5 +84,3 @@ pub fn write_footprint_filter_presets(presets: &[crate::active_bar::FootprintFil
         write_pref_atomic(&path, serialized.as_bytes(), "fonts_pref");
     }
 }
-
-

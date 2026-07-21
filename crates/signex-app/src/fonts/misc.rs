@@ -122,4 +122,3 @@ pub fn write_library_browser_search(library_path: &std::path::Path, query: &str)
         write_pref_atomic(&path, serialized.as_bytes(), "fonts_pref");
     }
 }
-

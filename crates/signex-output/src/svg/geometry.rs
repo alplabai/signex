@@ -51,7 +51,11 @@ pub(super) fn circle_path(cx: f32, cy: f32, r: f32, style: SvgStyle) -> SvgEleme
     }
 }
 
-pub(super) fn arc_path_commands(start: SvgPoint, mid: SvgPoint, end: SvgPoint) -> Vec<SvgPathCommand> {
+pub(super) fn arc_path_commands(
+    start: SvgPoint,
+    mid: SvgPoint,
+    end: SvgPoint,
+) -> Vec<SvgPathCommand> {
     if let Some((cx, cy, r)) = circle_from_three_points(start, mid, end) {
         let start_a = (start.y - cy).atan2(start.x - cx) as f64;
         let mid_a = (mid.y - cy).atan2(mid.x - cx) as f64;

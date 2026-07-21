@@ -210,8 +210,12 @@ impl GlyphonTextPipeline {
         let cache = cryoglyph::Cache::new(device);
         let viewport = cryoglyph::Viewport::new(device, &cache);
         let mut atlas = cryoglyph::TextAtlas::new(device, queue, &cache, target_format);
-        let text_renderer =
-            cryoglyph::TextRenderer::new(&mut atlas, device, wgpu::MultisampleState::default(), None);
+        let text_renderer = cryoglyph::TextRenderer::new(
+            &mut atlas,
+            device,
+            wgpu::MultisampleState::default(),
+            None,
+        );
 
         Self {
             font_system,

@@ -171,7 +171,6 @@ pub enum Message {
     Noop,
 }
 
-
 mod dialogs;
 mod messages;
 mod state;

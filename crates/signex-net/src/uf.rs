@@ -45,10 +45,18 @@ pub fn find<K: Eq + Hash + Copy>(parent: &mut HashMap<K, K>, x: K) -> K {
 }
 
 /// Union the two equivalence classes containing `a` and `b`.
-pub fn union<K: Eq + Hash + Copy>(parent: &mut HashMap<K, K>, a: K, b: K) {
+///
+/// The surviving representative is always the **smaller** of the two roots, so
+/// a class's representative is the minimum element of that class — a pure
+/// function of the partition, independent of the order the unions were applied
+/// in. Making `rb` the representative (the obvious "point a at b") instead
+/// leaks union order into the root, and `build_netlist` numbers nets by sorted
+/// root, so reversing document wire order could permute `NetId`s and `N$k`
+/// names for an otherwise identical partition (issue #402).
+pub fn union<K: Eq + Hash + Copy + Ord>(parent: &mut HashMap<K, K>, a: K, b: K) {
     let ra = find(parent, a);
     let rb = find(parent, b);
     if ra != rb {
-        parent.insert(ra, rb);
+        parent.insert(ra.max(rb), ra.min(rb));
     }
 }

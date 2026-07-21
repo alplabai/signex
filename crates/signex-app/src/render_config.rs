@@ -90,7 +90,8 @@ pub enum PinSelectionMode {
 }
 
 impl PinSelectionMode {
-    pub const ALL: [PinSelectionMode; 2] = [PinSelectionMode::PinOnly, PinSelectionMode::TextAndPin];
+    pub const ALL: [PinSelectionMode; 2] =
+        [PinSelectionMode::PinOnly, PinSelectionMode::TextAndPin];
     /// True when name/number labels are grabbable + glow.
     pub fn allows_label_grab(self) -> bool {
         matches!(self, PinSelectionMode::TextAndPin)

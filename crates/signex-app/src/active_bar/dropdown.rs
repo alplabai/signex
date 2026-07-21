@@ -115,138 +115,576 @@ fn dropdown_entries(
 
 fn select_mode_entries(tid: ThemeId, sel: bool, nc: bool) -> Vec<DropdownEntry<ActiveBarMsg>> {
     vec![
-        dd_item(ic::icon_dd_select_lasso(tid), "Lasso Select", ActiveBarAction::LassoSelect, sel, nc),
-        dd_item(ic::icon_dd_select_inside(tid), "Inside Area", ActiveBarAction::InsideArea, sel, nc),
-        dd_item(ic::icon_dd_select_outside(tid), "Outside Area", ActiveBarAction::OutsideArea, sel, nc),
-        dd_item(ic::icon_dd_select_touching_rect(tid), "Touching Rectangle", ActiveBarAction::TouchingRectangle, sel, nc),
-        dd_item(ic::icon_dd_select_touching_line(tid), "Touching Line", ActiveBarAction::TouchingLine, sel, nc),
-        dd_item(ic::icon_dd_select_all(tid), "All", ActiveBarAction::SelectAll, sel, nc),
-        dd_item(ic::icon_dd_select_connection(tid), "Connection", ActiveBarAction::SelectConnection, sel, nc),
+        dd_item(
+            ic::icon_dd_select_lasso(tid),
+            "Lasso Select",
+            ActiveBarAction::LassoSelect,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_select_inside(tid),
+            "Inside Area",
+            ActiveBarAction::InsideArea,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_select_outside(tid),
+            "Outside Area",
+            ActiveBarAction::OutsideArea,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_select_touching_rect(tid),
+            "Touching Rectangle",
+            ActiveBarAction::TouchingRectangle,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_select_touching_line(tid),
+            "Touching Line",
+            ActiveBarAction::TouchingLine,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_select_all(tid),
+            "All",
+            ActiveBarAction::SelectAll,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_select_connection(tid),
+            "Connection",
+            ActiveBarAction::SelectConnection,
+            sel,
+            nc,
+        ),
         DropdownEntry::Separator,
-        dd_item(ic::icon_dd_select_toggle(tid), "Toggle Selection", ActiveBarAction::ToggleSelection, sel, nc),
+        dd_item(
+            ic::icon_dd_select_toggle(tid),
+            "Toggle Selection",
+            ActiveBarAction::ToggleSelection,
+            sel,
+            nc,
+        ),
     ]
 }
 
 fn select_entries(tid: ThemeId, sel: bool, nc: bool) -> Vec<DropdownEntry<ActiveBarMsg>> {
     vec![
-        dd_item(ic::icon_dd_drag(tid), "Drag", ActiveBarAction::Drag, sel, nc),
-        dd_item(ic::icon_dd_move(tid), "Move", ActiveBarAction::MoveSelection, sel, nc),
-        dd_item(ic::icon_dd_move_sel(tid), "Move Selection", ActiveBarAction::MoveSelection, sel, nc),
-        dd_item(ic::icon_dd_move_xy(tid), "Move Selection by X, Y...", ActiveBarAction::MoveSelectionXY, sel, nc),
-        dd_item(ic::icon_dd_drag_sel(tid), "Drag Selection", ActiveBarAction::DragSelection, sel, nc),
-        dd_item(ic::icon_dd_move_to_front(tid), "Move To Front", ActiveBarAction::MoveToFront, sel, nc),
-        dd_item(ic::icon_dd_rotate(tid), "Rotate Selection", ActiveBarAction::RotateSelection, sel, nc),
-        dd_item(ic::icon_dd_rotate_cw(tid), "Rotate Selection Clockwise", ActiveBarAction::RotateSelectionCW, sel, nc),
+        dd_item(
+            ic::icon_dd_drag(tid),
+            "Drag",
+            ActiveBarAction::Drag,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_move(tid),
+            "Move",
+            ActiveBarAction::MoveSelection,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_move_sel(tid),
+            "Move Selection",
+            ActiveBarAction::MoveSelection,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_move_xy(tid),
+            "Move Selection by X, Y...",
+            ActiveBarAction::MoveSelectionXY,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_drag_sel(tid),
+            "Drag Selection",
+            ActiveBarAction::DragSelection,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_move_to_front(tid),
+            "Move To Front",
+            ActiveBarAction::MoveToFront,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_rotate(tid),
+            "Rotate Selection",
+            ActiveBarAction::RotateSelection,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_rotate_cw(tid),
+            "Rotate Selection Clockwise",
+            ActiveBarAction::RotateSelectionCW,
+            sel,
+            nc,
+        ),
         DropdownEntry::Separator,
-        dd_item(ic::icon_dd_bring_front(tid), "Bring To Front", ActiveBarAction::BringToFront, sel, nc),
-        dd_item(ic::icon_dd_send_back(tid), "Send To Back", ActiveBarAction::SendToBack, sel, nc),
-        dd_item(ic::icon_dd_bring_front_of(tid), "Bring To Front Of", ActiveBarAction::BringToFrontOf, sel, nc),
-        dd_item(ic::icon_dd_send_back_of(tid), "Send To Back Of", ActiveBarAction::SendToBackOf, sel, nc),
+        dd_item(
+            ic::icon_dd_bring_front(tid),
+            "Bring To Front",
+            ActiveBarAction::BringToFront,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_send_back(tid),
+            "Send To Back",
+            ActiveBarAction::SendToBack,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_bring_front_of(tid),
+            "Bring To Front Of",
+            ActiveBarAction::BringToFrontOf,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_send_back_of(tid),
+            "Send To Back Of",
+            ActiveBarAction::SendToBackOf,
+            sel,
+            nc,
+        ),
         DropdownEntry::Separator,
-        dd_item(ic::icon_dd_flip_x(tid), "Flip Selected Sheet Symbols Along X", ActiveBarAction::FlipSelectedX, sel, nc),
-        dd_item(ic::icon_dd_flip_y(tid), "Flip Selected Sheet Symbols Along Y", ActiveBarAction::FlipSelectedY, sel, nc),
+        dd_item(
+            ic::icon_dd_flip_x(tid),
+            "Flip Selected Sheet Symbols Along X",
+            ActiveBarAction::FlipSelectedX,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_flip_y(tid),
+            "Flip Selected Sheet Symbols Along Y",
+            ActiveBarAction::FlipSelectedY,
+            sel,
+            nc,
+        ),
     ]
 }
 
 fn align_entries(tid: ThemeId, sel: bool, nc: bool) -> Vec<DropdownEntry<ActiveBarMsg>> {
     vec![
-        dd_item(ic::icon_dd_align_left(tid), "Align Left", ActiveBarAction::AlignLeft, sel, nc),
-        dd_item(ic::icon_dd_align_right(tid), "Align Right", ActiveBarAction::AlignRight, sel, nc),
-        dd_item(ic::icon_dd_align_hcenter(tid), "Align Horizontal Centers", ActiveBarAction::AlignHorizontalCenters, sel, nc),
-        dd_item(ic::icon_dd_dist_horiz(tid), "Distribute Horizontally", ActiveBarAction::DistributeHorizontally, sel, nc),
+        dd_item(
+            ic::icon_dd_align_left(tid),
+            "Align Left",
+            ActiveBarAction::AlignLeft,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_align_right(tid),
+            "Align Right",
+            ActiveBarAction::AlignRight,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_align_hcenter(tid),
+            "Align Horizontal Centers",
+            ActiveBarAction::AlignHorizontalCenters,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_dist_horiz(tid),
+            "Distribute Horizontally",
+            ActiveBarAction::DistributeHorizontally,
+            sel,
+            nc,
+        ),
         DropdownEntry::Separator,
-        dd_item(ic::icon_dd_align_top(tid), "Align Top", ActiveBarAction::AlignTop, sel, nc),
-        dd_item(ic::icon_dd_align_bottom(tid), "Align Bottom", ActiveBarAction::AlignBottom, sel, nc),
-        dd_item(ic::icon_dd_align_vcenter(tid), "Align Vertical Centers", ActiveBarAction::AlignVerticalCenters, sel, nc),
-        dd_item(ic::icon_dd_dist_vert(tid), "Distribute Vertically", ActiveBarAction::DistributeVertically, sel, nc),
+        dd_item(
+            ic::icon_dd_align_top(tid),
+            "Align Top",
+            ActiveBarAction::AlignTop,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_align_bottom(tid),
+            "Align Bottom",
+            ActiveBarAction::AlignBottom,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_align_vcenter(tid),
+            "Align Vertical Centers",
+            ActiveBarAction::AlignVerticalCenters,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_dist_vert(tid),
+            "Distribute Vertically",
+            ActiveBarAction::DistributeVertically,
+            sel,
+            nc,
+        ),
         DropdownEntry::Separator,
-        dd_item(ic::icon_dd_align_grid(tid), "Align To Grid", ActiveBarAction::AlignToGrid, sel, nc),
+        dd_item(
+            ic::icon_dd_align_grid(tid),
+            "Align To Grid",
+            ActiveBarAction::AlignToGrid,
+            sel,
+            nc,
+        ),
     ]
 }
 
 fn wiring_entries(tid: ThemeId, sel: bool, nc: bool) -> Vec<DropdownEntry<ActiveBarMsg>> {
     vec![
-        dd_item(ic::icon_dd_wire(tid), "Wire", ActiveBarAction::DrawWire, sel, nc),
-        dd_item(ic::icon_dd_bus(tid), "Bus", ActiveBarAction::DrawBus, sel, nc),
-        dd_item(ic::icon_dd_bus_entry(tid), "Bus Entry", ActiveBarAction::PlaceBusEntry, sel, nc),
-        dd_item(ic::icon_dd_net_label(tid), "Net Label", ActiveBarAction::PlaceNetLabel, sel, nc),
+        dd_item(
+            ic::icon_dd_wire(tid),
+            "Wire",
+            ActiveBarAction::DrawWire,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_bus(tid),
+            "Bus",
+            ActiveBarAction::DrawBus,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_bus_entry(tid),
+            "Bus Entry",
+            ActiveBarAction::PlaceBusEntry,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_net_label(tid),
+            "Net Label",
+            ActiveBarAction::PlaceNetLabel,
+            sel,
+            nc,
+        ),
     ]
 }
 
 fn power_entries(tid: ThemeId, sel: bool, nc: bool) -> Vec<DropdownEntry<ActiveBarMsg>> {
     vec![
-        dd_item(ic::icon_dd_gnd(tid), "Place GND power port", ActiveBarAction::PlacePowerGND, sel, nc),
-        dd_item(ic::icon_dd_vcc(tid), "Place VCC power port", ActiveBarAction::PlacePowerVCC, sel, nc),
-        dd_item(ic::icon_dd_pwr_plus12(tid), "Place +12 power port", ActiveBarAction::PlacePowerPlus12, sel, nc),
-        dd_item(ic::icon_dd_pwr_plus5(tid), "Place +5 power port", ActiveBarAction::PlacePowerPlus5, sel, nc),
-        dd_item(ic::icon_dd_pwr_minus5(tid), "Place -5 power port", ActiveBarAction::PlacePowerMinus5, sel, nc),
+        dd_item(
+            ic::icon_dd_gnd(tid),
+            "Place GND power port",
+            ActiveBarAction::PlacePowerGND,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_vcc(tid),
+            "Place VCC power port",
+            ActiveBarAction::PlacePowerVCC,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_pwr_plus12(tid),
+            "Place +12 power port",
+            ActiveBarAction::PlacePowerPlus12,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_pwr_plus5(tid),
+            "Place +5 power port",
+            ActiveBarAction::PlacePowerPlus5,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_pwr_minus5(tid),
+            "Place -5 power port",
+            ActiveBarAction::PlacePowerMinus5,
+            sel,
+            nc,
+        ),
         DropdownEntry::Separator,
-        dd_item(ic::icon_dd_pwr_arrow(tid), "Place Arrow style power port", ActiveBarAction::PlacePowerArrow, sel, nc),
-        dd_item(ic::icon_dd_pwr_wave(tid), "Place Wave style power port", ActiveBarAction::PlacePowerWave, sel, nc),
-        dd_item(ic::icon_dd_pwr_bar(tid), "Place Bar style power port", ActiveBarAction::PlacePowerBar, sel, nc),
-        dd_item(ic::icon_dd_pwr_circle(tid), "Place Circle style power port", ActiveBarAction::PlacePowerCircle, sel, nc),
+        dd_item(
+            ic::icon_dd_pwr_arrow(tid),
+            "Place Arrow style power port",
+            ActiveBarAction::PlacePowerArrow,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_pwr_wave(tid),
+            "Place Wave style power port",
+            ActiveBarAction::PlacePowerWave,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_pwr_bar(tid),
+            "Place Bar style power port",
+            ActiveBarAction::PlacePowerBar,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_pwr_circle(tid),
+            "Place Circle style power port",
+            ActiveBarAction::PlacePowerCircle,
+            sel,
+            nc,
+        ),
         DropdownEntry::Separator,
-        dd_item(ic::icon_dd_pwr_signal_gnd(tid), "Place Signal Ground power port", ActiveBarAction::PlacePowerSignalGND, sel, nc),
-        dd_item(ic::icon_dd_pwr_earth(tid), "Place Earth power port", ActiveBarAction::PlacePowerEarth, sel, nc),
+        dd_item(
+            ic::icon_dd_pwr_signal_gnd(tid),
+            "Place Signal Ground power port",
+            ActiveBarAction::PlacePowerSignalGND,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_pwr_earth(tid),
+            "Place Earth power port",
+            ActiveBarAction::PlacePowerEarth,
+            sel,
+            nc,
+        ),
     ]
 }
 
 fn harness_entries(tid: ThemeId, sel: bool, nc: bool) -> Vec<DropdownEntry<ActiveBarMsg>> {
     vec![
-        dd_item(ic::icon_dd_harness(tid), "Signal Harness", ActiveBarAction::PlaceSignalHarness, sel, nc),
-        dd_item(ic::icon_dd_harness_conn(tid), "Harness Connector", ActiveBarAction::PlaceHarnessConnector, sel, nc),
-        dd_item(ic::icon_dd_harness_entry(tid), "Harness Entry", ActiveBarAction::PlaceHarnessEntry, sel, nc),
+        dd_item(
+            ic::icon_dd_harness(tid),
+            "Signal Harness",
+            ActiveBarAction::PlaceSignalHarness,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_harness_conn(tid),
+            "Harness Connector",
+            ActiveBarAction::PlaceHarnessConnector,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_harness_entry(tid),
+            "Harness Entry",
+            ActiveBarAction::PlaceHarnessEntry,
+            sel,
+            nc,
+        ),
     ]
 }
 
 fn sheet_symbol_entries(tid: ThemeId, sel: bool, nc: bool) -> Vec<DropdownEntry<ActiveBarMsg>> {
     vec![
-        dd_item(ic::icon_dd_sheet_symbol(tid), "Sheet Symbol", ActiveBarAction::PlaceSheetSymbol, sel, nc),
-        dd_item(ic::icon_dd_sheet_entry(tid), "Sheet Entry", ActiveBarAction::PlaceSheetEntry, sel, nc),
-        dd_item(ic::icon_dd_device_sheet(tid), "Device Sheet Symbol", ActiveBarAction::PlaceDeviceSheetSymbol, sel, nc),
-        dd_item(ic::icon_dd_reuse_block(tid), "Reuse Block...", ActiveBarAction::PlaceReuseBlock, sel, nc),
+        dd_item(
+            ic::icon_dd_sheet_symbol(tid),
+            "Sheet Symbol",
+            ActiveBarAction::PlaceSheetSymbol,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_sheet_entry(tid),
+            "Sheet Entry",
+            ActiveBarAction::PlaceSheetEntry,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_device_sheet(tid),
+            "Device Sheet Symbol",
+            ActiveBarAction::PlaceDeviceSheetSymbol,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_reuse_block(tid),
+            "Reuse Block...",
+            ActiveBarAction::PlaceReuseBlock,
+            sel,
+            nc,
+        ),
     ]
 }
 
 fn port_entries(tid: ThemeId, sel: bool, nc: bool) -> Vec<DropdownEntry<ActiveBarMsg>> {
     vec![
-        dd_item(ic::icon_dd_port(tid), "Port", ActiveBarAction::PlacePort, sel, nc),
-        dd_item(ic::icon_dd_off_sheet(tid), "Off Sheet Connector", ActiveBarAction::PlaceOffSheetConnector, sel, nc),
+        dd_item(
+            ic::icon_dd_port(tid),
+            "Port",
+            ActiveBarAction::PlacePort,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_off_sheet(tid),
+            "Off Sheet Connector",
+            ActiveBarAction::PlaceOffSheetConnector,
+            sel,
+            nc,
+        ),
     ]
 }
 
 fn directives_entries(tid: ThemeId, sel: bool, nc: bool) -> Vec<DropdownEntry<ActiveBarMsg>> {
     vec![
-        dd_item(ic::icon_dd_param_set(tid), "Parameter Set", ActiveBarAction::PlaceParameterSet, sel, nc),
-        dd_item(ic::icon_dd_no_erc(tid), "Generic No ERC", ActiveBarAction::PlaceNoERC, sel, nc),
-        dd_item(ic::icon_dd_diff_pair(tid), "Differential Pair", ActiveBarAction::PlaceDiffPair, sel, nc),
-        dd_item(ic::icon_dd_blanket(tid), "Blanket", ActiveBarAction::PlaceBlanket, sel, nc),
-        dd_item(ic::icon_dd_blanket(tid), "Compile Mask", ActiveBarAction::PlaceCompileMask, sel, nc),
+        dd_item(
+            ic::icon_dd_param_set(tid),
+            "Parameter Set",
+            ActiveBarAction::PlaceParameterSet,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_no_erc(tid),
+            "Generic No ERC",
+            ActiveBarAction::PlaceNoERC,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_diff_pair(tid),
+            "Differential Pair",
+            ActiveBarAction::PlaceDiffPair,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_blanket(tid),
+            "Blanket",
+            ActiveBarAction::PlaceBlanket,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_blanket(tid),
+            "Compile Mask",
+            ActiveBarAction::PlaceCompileMask,
+            sel,
+            nc,
+        ),
     ]
 }
 
 fn text_tools_entries(tid: ThemeId, sel: bool, nc: bool) -> Vec<DropdownEntry<ActiveBarMsg>> {
     vec![
-        dd_item(ic::icon_dd_text_string(tid), "Text String", ActiveBarAction::PlaceTextString, sel, nc),
-        dd_item(ic::icon_dd_text_frame(tid), "Text Frame", ActiveBarAction::PlaceTextFrame, sel, nc),
-        dd_item(ic::icon_dd_note(tid), "Note", ActiveBarAction::PlaceNote, sel, nc),
+        dd_item(
+            ic::icon_dd_text_string(tid),
+            "Text String",
+            ActiveBarAction::PlaceTextString,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_text_frame(tid),
+            "Text Frame",
+            ActiveBarAction::PlaceTextFrame,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_note(tid),
+            "Note",
+            ActiveBarAction::PlaceNote,
+            sel,
+            nc,
+        ),
     ]
 }
 
 fn shapes_entries(tid: ThemeId, sel: bool, nc: bool) -> Vec<DropdownEntry<ActiveBarMsg>> {
     vec![
-        dd_item(ic::icon_dd_arc(tid), "Arc", ActiveBarAction::DrawArc, sel, nc),
-        dd_item(ic::icon_dd_circle(tid), "Full Circle", ActiveBarAction::DrawFullCircle, sel, nc),
-        dd_item(ic::icon_dd_arc(tid), "Elliptical Arc", ActiveBarAction::DrawEllipticalArc, sel, nc),
-        dd_item(ic::icon_dd_ellipse(tid), "Ellipse", ActiveBarAction::DrawEllipse, sel, nc),
+        dd_item(
+            ic::icon_dd_arc(tid),
+            "Arc",
+            ActiveBarAction::DrawArc,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_circle(tid),
+            "Full Circle",
+            ActiveBarAction::DrawFullCircle,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_arc(tid),
+            "Elliptical Arc",
+            ActiveBarAction::DrawEllipticalArc,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_ellipse(tid),
+            "Ellipse",
+            ActiveBarAction::DrawEllipse,
+            sel,
+            nc,
+        ),
         DropdownEntry::Separator,
-        dd_item(ic::icon_dd_line(tid), "Line", ActiveBarAction::DrawLine, sel, nc),
-        dd_item(ic::icon_dd_rect(tid), "Rectangle", ActiveBarAction::DrawRectangle, sel, nc),
-        dd_item(ic::icon_dd_round_rect(tid), "Round Rectangle", ActiveBarAction::DrawRoundRectangle, sel, nc),
-        dd_item(ic::icon_dd_polygon(tid), "Polygon", ActiveBarAction::DrawPolygon, sel, nc),
-        dd_item(ic::icon_dd_bezier(tid), "Bezier", ActiveBarAction::DrawBezier, sel, nc),
+        dd_item(
+            ic::icon_dd_line(tid),
+            "Line",
+            ActiveBarAction::DrawLine,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_rect(tid),
+            "Rectangle",
+            ActiveBarAction::DrawRectangle,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_round_rect(tid),
+            "Round Rectangle",
+            ActiveBarAction::DrawRoundRectangle,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_polygon(tid),
+            "Polygon",
+            ActiveBarAction::DrawPolygon,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_bezier(tid),
+            "Bezier",
+            ActiveBarAction::DrawBezier,
+            sel,
+            nc,
+        ),
         DropdownEntry::Separator,
-        dd_item(ic::icon_dd_graphic(tid), "Graphic...", ActiveBarAction::PlaceGraphic, sel, nc),
+        dd_item(
+            ic::icon_dd_graphic(tid),
+            "Graphic...",
+            ActiveBarAction::PlaceGraphic,
+            sel,
+            nc,
+        ),
     ]
 }
 
@@ -261,47 +699,45 @@ fn net_color_entries(
     nc: bool,
 ) -> Vec<DropdownEntry<ActiveBarMsg>> {
     let ac = AbColors::from_tokens(tokens);
-    let color_item = |label: &str,
-                      color: Color,
-                      action: ActiveBarAction|
-     -> Element<'static, ActiveBarMsg> {
-        // The 14×14 swatch sits inside a 20×20 slot so the label column
-        // lines up with the SVG-icon rows below (the shared dropdown
-        // widget uses a 20-px icon column).
-        let swatch = container(Space::new())
-            .width(14)
-            .height(14)
-            .style(move |_: &Theme| container::Style {
-                background: Some(Background::Color(color)),
-                border: Border {
-                    width: 1.0,
-                    radius: 2.0.into(),
-                    color: Color::from_rgb(0.3, 0.3, 0.35),
-                },
-                ..container::Style::default()
-            });
-        let swatch_slot = container(swatch)
-            .width(20)
-            .height(20)
-            .align_x(iced::alignment::Horizontal::Center)
-            .align_y(iced::alignment::Vertical::Center);
-        button(
-            row![
-                swatch_slot,
-                text(label.to_string())
-                    .size(13)
-                    .color(ac.text)
-                    .wrapping(iced::widget::text::Wrapping::None),
-            ]
-            .spacing(8)
-            .align_y(iced::Alignment::Center),
-        )
-        .width(iced::Length::Fill)
-        .padding([5, 12])
-        .on_press(ActiveBarMsg::Action(action))
-        .style(dd_btn_style_f(ac.text, ac.hover))
-        .into()
-    };
+    let color_item =
+        |label: &str, color: Color, action: ActiveBarAction| -> Element<'static, ActiveBarMsg> {
+            // The 14×14 swatch sits inside a 20×20 slot so the label column
+            // lines up with the SVG-icon rows below (the shared dropdown
+            // widget uses a 20-px icon column).
+            let swatch = container(Space::new())
+                .width(14)
+                .height(14)
+                .style(move |_: &Theme| container::Style {
+                    background: Some(Background::Color(color)),
+                    border: Border {
+                        width: 1.0,
+                        radius: 2.0.into(),
+                        color: Color::from_rgb(0.3, 0.3, 0.35),
+                    },
+                    ..container::Style::default()
+                });
+            let swatch_slot = container(swatch)
+                .width(20)
+                .height(20)
+                .align_x(iced::alignment::Horizontal::Center)
+                .align_y(iced::alignment::Vertical::Center);
+            button(
+                row![
+                    swatch_slot,
+                    text(label.to_string())
+                        .size(13)
+                        .color(ac.text)
+                        .wrapping(iced::widget::text::Wrapping::None),
+                ]
+                .spacing(8)
+                .align_y(iced::Alignment::Center),
+            )
+            .width(iced::Length::Fill)
+            .padding([5, 12])
+            .on_press(ActiveBarMsg::Action(action))
+            .style(dd_btn_style_f(ac.text, ac.hover))
+            .into()
+        };
     vec![
         DropdownEntry::Custom(color_item(
             "Blue",
@@ -339,10 +775,28 @@ fn net_color_entries(
             ActiveBarAction::NetColorDarkGreen,
         )),
         DropdownEntry::Separator,
-        dd_item(ic::icon_dd_net_color_custom(tid), "Custom Color...", ActiveBarAction::NetColorCustom, sel, nc),
+        dd_item(
+            ic::icon_dd_net_color_custom(tid),
+            "Custom Color...",
+            ActiveBarAction::NetColorCustom,
+            sel,
+            nc,
+        ),
         DropdownEntry::Separator,
-        dd_item(ic::icon_dd_net_color_clear(tid), "Clear Net Color", ActiveBarAction::ClearNetColor, sel, nc),
-        dd_item(ic::icon_dd_net_color_clear_all(tid), "Clear All Net Colors", ActiveBarAction::ClearAllNetColors, sel, nc),
+        dd_item(
+            ic::icon_dd_net_color_clear(tid),
+            "Clear Net Color",
+            ActiveBarAction::ClearNetColor,
+            sel,
+            nc,
+        ),
+        dd_item(
+            ic::icon_dd_net_color_clear_all(tid),
+            "Clear All Net Colors",
+            ActiveBarAction::ClearAllNetColors,
+            sel,
+            nc,
+        ),
     ]
 }
 
@@ -374,11 +828,11 @@ fn filter_entry(
         let inactive_bg = Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0);
         let text_on = text_primary;
         let text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
-        button(text(label.to_string()).size(11).color(if enabled {
-            text_on
-        } else {
-            text_off
-        }))
+        button(
+            text(label.to_string())
+                .size(11)
+                .color(if enabled { text_on } else { text_off }),
+        )
         .padding([4, 10])
         .on_press(ActiveBarMsg::ToggleFilter(filter))
         .style(move |_: &Theme, status: button::Status| {
@@ -675,11 +1129,27 @@ mod tests {
     #[test]
     fn action_enable_predicate() {
         // selection-gated action
-        assert!(!dd_action_enabled(&ActiveBarAction::MoveSelection, false, true));
-        assert!(dd_action_enabled(&ActiveBarAction::MoveSelection, true, false));
+        assert!(!dd_action_enabled(
+            &ActiveBarAction::MoveSelection,
+            false,
+            true
+        ));
+        assert!(dd_action_enabled(
+            &ActiveBarAction::MoveSelection,
+            true,
+            false
+        ));
         // net-colour-gated action
-        assert!(!dd_action_enabled(&ActiveBarAction::ClearNetColor, true, false));
-        assert!(dd_action_enabled(&ActiveBarAction::ClearNetColor, true, true));
+        assert!(!dd_action_enabled(
+            &ActiveBarAction::ClearNetColor,
+            true,
+            false
+        ));
+        assert!(dd_action_enabled(
+            &ActiveBarAction::ClearNetColor,
+            true,
+            true
+        ));
         // ungated action is always on
         assert!(dd_action_enabled(&ActiveBarAction::DrawWire, false, false));
     }

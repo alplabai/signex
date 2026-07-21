@@ -138,9 +138,9 @@ impl Signex {
                     None,
                     "Add Existing to Project...",
                     "",
-                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::AddExistingToProject(
-                        path.clone(),
-                    ))),
+                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+                        A::AddExistingToProject(path.clone()),
+                    )),
                 ));
                 v.push(save_entry(can_save));
                 v.push(dd_msg(
@@ -157,7 +157,9 @@ impl Signex {
                         None,
                         "Close Project Documents",
                         "",
-                        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::CloseAllDocuments)),
+                        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+                            A::CloseAllDocuments,
+                        )),
                     )
                 } else {
                     dd_disabled(None, "Close Project Documents", None)
@@ -175,9 +177,9 @@ impl Signex {
                         None,
                         "Explore",
                         "",
-                        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::RevealInExplorer(
-                            path.clone(),
-                        ))),
+                        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+                            A::RevealInExplorer(path.clone()),
+                        )),
                     )
                 } else {
                     dd_disabled(None, "Explore", None)
@@ -327,9 +329,9 @@ impl Signex {
                         None,
                         "Explore",
                         "",
-                        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::RevealInExplorer(
-                            path.clone(),
-                        ))),
+                        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+                            A::RevealInExplorer(path.clone()),
+                        )),
                     )
                 } else {
                     dd_disabled(None, "Explore", None)

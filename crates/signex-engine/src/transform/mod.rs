@@ -126,6 +126,39 @@ impl Engine {
         }
     }
 
+    /// Mint any junction dots the sheet now needs because wires in `items`
+    /// changed shape. Returns `true` when at least one dot was added.
+    ///
+    /// `PlaceWireSegment` reconciles a new wire's T both ways, but move /
+    /// rotate / mirror mutate the very same wire coordinates and used to
+    /// reconcile nothing — dragging a stub onto a trunk's interior left a
+    /// junction-less T, which the netlist reads as disconnected (issue #107),
+    /// so the connection was silently lost exactly as in issue #402's draw
+    /// case. Every command that changes wire geometry routes through here.
+    ///
+    /// Adding only: a dot left stale by geometry moving *apart* is a separate
+    /// question (it asserts a connection the netlist no longer makes only if
+    /// it still sits on two wires, in which case it is still correct), and
+    /// deleting user-visible objects behind a drag is not this pass's call.
+    pub(super) fn reconcile_wire_junctions(&mut self, items: &[SelectedItem]) -> bool {
+        let touched: Vec<signex_types::schematic::Wire> = items
+            .iter()
+            .filter(|item| matches!(item.kind, SelectedKind::Wire))
+            .filter_map(|item| self.document.wires.iter().find(|w| w.uuid == item.uuid))
+            .cloned()
+            .collect();
+
+        let mut added = false;
+        for wire in touched {
+            let minted =
+                autoplace::junctions_for_wire(&wire, &self.document, crate::JUNCTION_TOLERANCE_MM);
+            added |= !minted.is_empty();
+            // Extend inside the loop so the next wire's dedup sees these.
+            self.document.junctions.extend(minted);
+        }
+        added
+    }
+
     pub(super) fn move_selected_item(&mut self, item: &SelectedItem, dx: f64, dy: f64) -> bool {
         match item.kind {
             SelectedKind::Symbol => self
@@ -428,8 +461,8 @@ fn normalize_degrees(angle_degrees: f64) -> f64 {
 }
 
 mod autoplace;
-pub(crate) use autoplace::needed_junction;
 use autoplace::autoplace_fields;
+pub(crate) use autoplace::junctions_for_wire;
 
 // ---------------------------------------------------------------------------
 // UUID-based collection helpers

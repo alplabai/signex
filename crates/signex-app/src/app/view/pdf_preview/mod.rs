@@ -17,7 +17,10 @@ impl Signex {
     /// the active tab, fill that fades for inactive. `is_last=true`
     /// on the rightmost so the trailing border doesn't double up
     /// against an adjacent tab's left edge.
-    pub(super) fn view_pdf_tab_strip(&self, active: crate::app::state::PdfPreviewTab) -> Element<'_, Message> {
+    pub(super) fn view_pdf_tab_strip(
+        &self,
+        active: crate::app::state::PdfPreviewTab,
+    ) -> Element<'_, Message> {
         use crate::app::state::PdfPreviewTab;
         use iced::widget::{Space, container, mouse_area, row, text};
         use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};

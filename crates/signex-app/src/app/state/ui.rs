@@ -1,7 +1,6 @@
 //! UI-surface state — theme, tool overlays, modal flags, dropdown and
 //! command-palette state. Split from `app/state.rs` as pure code motion.
 
-
 use crate::render_config::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeId;

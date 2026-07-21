@@ -514,4 +514,3 @@ fn view_pre_placement<'a>(
         .width(Length::Fill)
         .into()
 }
-

@@ -544,6 +544,11 @@ pub(crate) fn apply_footprint_primitive_edit(
         | FootprintEditorMsg::MoveBySetY(..)
         | FootprintEditorMsg::MoveByConfirm
         | FootprintEditorMsg::MoveByCancel
+        | FootprintEditorMsg::AlignOpen
+        | FootprintEditorMsg::AlignSetHorizontal(..)
+        | FootprintEditorMsg::AlignSetVertical(..)
+        | FootprintEditorMsg::AlignConfirm
+        | FootprintEditorMsg::AlignCancel
         | FootprintEditorMsg::ActiveBarAlignSelectionToGrid
         | FootprintEditorMsg::ActiveBarMoveOriginToGrid
         | FootprintEditorMsg::ActiveBarSelectAll
@@ -562,14 +567,7 @@ fn footprint_nudge_selection(editor: &mut crate::app::FootprintEditorState, dx: 
     use crate::library::editor::footprint::pad_to_sketch;
     use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
 
-    let mut indices: Vec<usize> = Vec::new();
-    if let Some(p) = editor.state.selected_pad {
-        indices.push(p);
-    }
-    indices.extend(editor.state.selected_pads_extra.iter().copied());
-    indices.sort_unstable();
-    indices.dedup();
-    indices.retain(|&i| i < editor.state.pads.len());
+    let indices = editor.state.selected_pad_indices();
     if indices.is_empty() {
         return;
     }
@@ -682,6 +680,17 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         | MoveBySetY(_)
         | MoveByConfirm
         | MoveByCancel
+        // #370 — Align dialog open/edit/cancel are pure UI state (the
+        // chosen ops live on `align_modal`, not persisted geometry);
+        // Confirm pushes its OWN single snapshot inside the handler,
+        // gated on a large-enough selection and at least one chosen
+        // op — so keep every Align* variant out of the blanket
+        // pre-push to avoid double-stacking / snapshotting a no-op.
+        | AlignOpen
+        | AlignSetHorizontal(_)
+        | AlignSetVertical(_)
+        | AlignConfirm
+        | AlignCancel
         // v0.14 — 3D Body mint pushes its own snapshot inside the
         // handler (unconditionally, unlike nudge). Keep it out of the
         // blanket pre-push to avoid double-stacking the history.
@@ -692,7 +701,17 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         // message reaches the dispatcher like Track's 2-click
         // gesture does). It pushes its own snapshot inside the
         // handler, so keep it out of the blanket pre-push.
-        | AddTextFrame { .. } => false,
+        | AddTextFrame { .. }
+        // v0.15 (#146) — Rotate / Flip / Align-to-grid / Move-origin-
+        // to-grid each push their own snapshot inside the handler,
+        // gated on an actual mutation (a selected pad, or a non-empty
+        // pad list). The blanket pre-push must NOT fire here, or a
+        // no-op invocation with nothing selected would stack an empty
+        // undo entry and dirty the document.
+        | ActiveBarRotateSelection
+        | ActiveBarFlipSelection
+        | ActiveBarAlignSelectionToGrid
+        | ActiveBarMoveOriginToGrid => false,
         // All other variants either add/remove/move geometry,
         // mutate pad attributes, or rebuild the sketch — they all
         // need a history snapshot.

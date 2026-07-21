@@ -769,5 +769,4 @@ impl Signex {
         self.refresh_panel_ctx();
         Task::none()
     }
-
 }

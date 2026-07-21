@@ -1,0 +1,8 @@
+# God-file baseline — production src/ .rs files currently over the 1000-line cap.
+# Format: <production_lines> <path>. Managed by scripts/check_file_size.sh.
+# The list only ever gets SHORTER: shrink a file under the cap, then drop its row.
+1184 crates/chrome-catalog/src/main.rs
+# TEMPORARY bump 1083 -> 1088 for #443's active-bar grouping. dropdown.rs is
+# mostly repetition (78 dd_item calls); refactoring it to a command/action
+# table (#457, epic #278) drops it below the 1000 cap and removes this row.
+1088 crates/signex-app/src/active_bar/dropdown.rs

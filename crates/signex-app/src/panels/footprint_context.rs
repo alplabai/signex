@@ -1,6 +1,5 @@
 //! Footprint-editor panel context and its summary view-models.
 
-
 /// Context handed to the Properties panel when a `.snxfpt` editor
 /// tab is active. Mirrors a small read-only slice of the live
 /// `FootprintEditorState` — the panel never mutates this, edits flow
@@ -622,4 +621,3 @@ pub struct FootprintSketchEntitySummary {
     /// endpoints'. Drives the "DOF" row in the Properties panel.
     pub dof_state: Option<signex_sketch::solver::dof::DofColor>,
 }
-

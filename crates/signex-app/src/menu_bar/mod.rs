@@ -324,7 +324,6 @@ impl MenuColors {
     }
 }
 
-
 mod view;
 
 pub use view::view;

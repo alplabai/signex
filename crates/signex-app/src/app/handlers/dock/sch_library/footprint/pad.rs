@@ -104,9 +104,25 @@ impl Signex {
     ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             if let Ok(parsed) = value.trim().parse::<f64>() {
-                if let Some(pad) = editor.state.pads.get_mut(idx) {
-                    pad.rotation_deg = parsed;
+                if editor.state.pads.get(idx).is_some() {
                     editor.with_parts(|state, primitive| {
+                        use crate::library::editor::footprint::pad_to_sketch;
+                        let Some(pad) = state.pads.get_mut(idx) else {
+                            return;
+                        };
+                        pad.rotation_deg = parsed;
+                        // The pad FRAME moved, exactly as it does on
+                        // the active-bar Rotate arm — so the sidecar
+                        // is regenerated through its one owner, not
+                        // re-placed corner by corner. Moving only the
+                        // four bbox corners turns them into the new
+                        // frame and leaves a parametric shape's
+                        // anchors in the old one, which is a
+                        // self-crossing outline rather than a stale
+                        // one.
+                        if !pad_to_sketch::remint_pad_geometry(pad, primitive) {
+                            pad_to_sketch::warn_profile_pad_untransformed("Rotate", &pad.number);
+                        }
                         crate::library::editor::footprint::state::FootprintEditorState::sync_pads_to_primitive(state, primitive);
                     });
                     editor.dirty = true;
@@ -316,14 +332,48 @@ impl Signex {
     // canvas cache so the new value renders. The `with_parts` block
     // syncs the pad list back onto the underlying primitive so the
     // saved file picks up the change.
-    pub(in crate::app::handlers::dock::sch_library) fn with_selected_pad<F>(&mut self, idx: usize, f: F) -> bool
+    pub(in crate::app::handlers::dock::sch_library) fn with_selected_pad<F>(
+        &mut self,
+        idx: usize,
+        f: F,
+    ) -> bool
     where
         F: FnOnce(&mut crate::library::editor::footprint::state::EditorPad),
     {
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(pad) = editor.state.pads.get_mut(idx) {
-                f(pad);
+            if editor.state.pads.get(idx).is_some() {
                 editor.with_parts(|state, primitive| {
+                    use crate::library::editor::footprint::pad_to_sketch;
+                    let Some(pad) = state.pads.get_mut(idx) else {
+                        return;
+                    };
+                    // This funnel carries `size_mm` and `shape` edits.
+                    // A size change moves the outline extents; a shape
+                    // change replaces the outline outright — a Rect
+                    // that becomes a RoundRect owns arcs and anchors
+                    // that were never minted, and the corner mover
+                    // cannot mint them. Both are re-mints.
+                    //
+                    // But only when the geometry ACTUALLY changed. A
+                    // re-mint drops the constraints the user authored
+                    // against the outline, and most of what comes
+                    // through this funnel is an ordinary field edit —
+                    // designator, layers, testpoint flags. Wiping
+                    // their constraints on every keystroke would be
+                    // far worse than the bug being fixed.
+                    let before = (pad.shape.clone(), pad.size_mm);
+                    f(pad);
+                    let changed = (pad.shape.clone(), pad.size_mm) != before;
+                    if changed {
+                        if !pad_to_sketch::remint_pad_geometry(pad, primitive) {
+                            pad_to_sketch::warn_profile_pad_untransformed("Edit", &pad.number);
+                        }
+                    } else {
+                        // Pure non-geometry edit: the outline is still
+                        // correct, so leave the entities — and the
+                        // constraints on them — exactly where they are.
+                        pad_to_sketch::mirror_move_pad_in_sketch(pad, primitive);
+                    }
                     crate::library::editor::footprint::state::FootprintEditorState::sync_pads_to_primitive(state, primitive);
                 });
                 editor.dirty = true;
@@ -630,7 +680,10 @@ impl Signex {
         true
     }
 
-    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_next_pad_net(&mut self, v: &str) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_next_pad_net(
+        &mut self,
+        v: &str,
+    ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.state.next_pad_defaults.net = v.to_string();
         }
@@ -638,7 +691,10 @@ impl Signex {
         true
     }
 
-    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_toggle_next_pad_locked(&mut self, on: &bool) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_toggle_next_pad_locked(
+        &mut self,
+        on: &bool,
+    ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.state.next_pad_defaults.locked = *on;
         }
@@ -646,7 +702,10 @@ impl Signex {
         true
     }
 
-    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_next_pad_hole_tolerance_plus(&mut self, v: &str) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_next_pad_hole_tolerance_plus(
+        &mut self,
+        v: &str,
+    ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.state.next_pad_defaults.hole_tolerance_plus_mm = fp_parse_optional_mm(v);
         }
@@ -654,7 +713,10 @@ impl Signex {
         true
     }
 
-    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_next_pad_hole_tolerance_minus(&mut self, v: &str) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_next_pad_hole_tolerance_minus(
+        &mut self,
+        v: &str,
+    ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.state.next_pad_defaults.hole_tolerance_minus_mm = fp_parse_optional_mm(v);
         }
@@ -662,7 +724,10 @@ impl Signex {
         true
     }
 
-    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_next_pad_hole_rotation(&mut self, v: &str) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_next_pad_hole_rotation(
+        &mut self,
+        v: &str,
+    ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.state.next_pad_defaults.hole_rotation_deg = v.trim().parse::<f64>().ok();
         }
@@ -670,7 +735,10 @@ impl Signex {
         true
     }
 
-    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_next_pad_copper_offset_x(&mut self, v: &str) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_next_pad_copper_offset_x(
+        &mut self,
+        v: &str,
+    ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.state.next_pad_defaults.copper_offset_x_mm = fp_parse_optional_mm(v);
         }
@@ -678,7 +746,10 @@ impl Signex {
         true
     }
 
-    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_next_pad_copper_offset_y(&mut self, v: &str) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_next_pad_copper_offset_y(
+        &mut self,
+        v: &str,
+    ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.state.next_pad_defaults.copper_offset_y_mm = fp_parse_optional_mm(v);
         }
@@ -686,7 +757,10 @@ impl Signex {
         true
     }
 
-    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_toggle_next_pad_plated(&mut self, plated: &bool) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_toggle_next_pad_plated(
+        &mut self,
+        plated: &bool,
+    ) -> bool {
         use signex_library::PadKind as Pk;
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.state.next_pad_defaults.kind = if *plated { Pk::Tht } else { Pk::NptHole };

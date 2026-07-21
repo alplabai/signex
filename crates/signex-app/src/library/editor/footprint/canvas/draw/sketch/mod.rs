@@ -33,4 +33,4 @@ pub(super) use snap::draw_sketch_snap_glyph;
 // The closed-loop walker + record are reached from `canvas::input`
 // through the `draw::` re-export; keep them at their original
 // canvas-wide reach.
-pub(in crate::library::editor::footprint::canvas) use fills::{find_closed_loops, ClosedLoop};
+pub(in crate::library::editor::footprint::canvas) use fills::{ClosedLoop, find_closed_loops};

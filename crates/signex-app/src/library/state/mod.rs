@@ -585,7 +585,6 @@ pub struct LibraryCreateOptionsState {
     pub use_lfs: bool,
 }
 
-
 mod methods;
 mod preview;
 #[cfg(test)]

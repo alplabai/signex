@@ -966,4 +966,3 @@ pub enum PanelMsg {
     /// No-op placeholder for unimplemented UI controls.
     Noop,
 }
-

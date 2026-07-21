@@ -437,6 +437,7 @@ impl Signex {
                     ed.state.placement_paused
                         || ed.state.active_bar_menu.is_some()
                         || ed.state.move_by_modal.is_some()
+                        || ed.state.align_modal.is_some()
                 })
                 .unwrap_or(false)
             || ui.panel_list_open
@@ -721,6 +722,7 @@ impl Signex {
         // Pre-blocking overlays: export-error, print/BOM preview, and
         // the custom net-colour picker.
         layers.extend(self.export_error_overlay());
+        layers.extend(self.netlist_incomplete_prompt_overlay());
         layers.extend(self.print_preview_overlay());
         layers.extend(self.bom_preview_overlay());
         layers.extend(self.net_color_custom_overlay());
@@ -738,6 +740,7 @@ impl Signex {
         layers.extend(self.footprint_active_bar_overlay());
         layers.extend(self.footprint_context_menu_overlay());
         layers.extend(self.footprint_move_by_overlay());
+        layers.extend(self.footprint_align_overlay());
         layers.extend(self.symbol_editor_active_bar_overlay());
         layers.extend(self.symbol_context_menu_overlay());
         layers.extend(self.text_edit_overlay());
