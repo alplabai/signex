@@ -293,14 +293,17 @@ impl Signex {
         let Some(root) = set.sheets.get(&active_path).cloned() else {
             return;
         };
-        let children = crate::app::project_sheets::project_children_map(&set.sheets);
+        let (children, children_issues) =
+            crate::app::project_sheets::project_children_map(&set.sheets);
         let project_dir = self
             .document_state
             .active_document_project()
             .map(|p| p.dir().to_path_buf());
         let root_filename =
             crate::app::project_sheets::root_reference_name(&active_path, project_dir.as_deref());
-        let result = signex_net::build_project_netlist(&root, &children, root_filename.as_deref());
+        let mut result =
+            signex_net::build_project_netlist(&root, &children, root_filename.as_deref());
+        result.issues.extend(children_issues);
         // A child that exists but will not parse reaches the stitcher as a
         // plain MissingChild; say which it was, or the user hunts for a file
         // that is sitting right there.

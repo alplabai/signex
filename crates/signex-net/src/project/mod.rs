@@ -55,6 +55,16 @@ pub enum StitchIssue {
     /// Two distinct nets resolved to the same final name; a deterministic
     /// suffix was applied.
     NameCollision { name: String },
+    /// Two parents in different directories reference a child by the same
+    /// `ChildSheet.filename` string, but it resolves to two different files —
+    /// the children map has one slot per filename, so only `path_a`'s sheet
+    /// was stitched in; the parent that resolved to `path_b` was silently
+    /// given the wrong subtree without this issue.
+    AmbiguousChildFilename {
+        filename: String,
+        path_a: String,
+        path_b: String,
+    },
 }
 
 /// The whole-project netlist plus any structural issues found while stitching.
