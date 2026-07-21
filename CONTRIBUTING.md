@@ -56,16 +56,23 @@ the project's design rules) help identify rendering discrepancies.
 
 ### Prerequisites
 
-- **Rust 1.97.0** — the toolchain is pinned in `rust-toolchain.toml`, so
-  `rustup` installs exactly this version automatically (no manual setup) and
-  your local `rustfmt`/`clippy` match CI byte-for-byte. When bumping it, edit
-  both `rust-toolchain.toml` (`channel`) and the four
-  `dtolnay/rust-toolchain@<version>` refs in `.github/workflows/ci.yml` — the
-  CI action does **not** read `rust-toolchain.toml`.
-- **MSRV is `rust-version = "1.88"`** (edition 2024 needs 1.85; the code also
-  uses let-chains, stable from 1.88). That is the *support floor*; 1.97.0 is the
-  canonical build/CI toolchain.
+- **Rust 1.97.0** — pinned in `rust-toolchain.toml`, so `rustup` installs
+  exactly this version automatically (no manual setup) and your local
+  `rustfmt`/`clippy` match CI byte-for-byte. This is **also the MSRV**
+  (`rust-version = "1.97"`): we build, test, and support exactly this one
+  toolchain, not older ones. (Edition 2024 needs 1.85 and let-chains need 1.88 —
+  both well below the pin.)
 - A GPU supporting Vulkan, Metal, or DX12 (for wgpu) — CI runs headless via lavapipe
+
+### Toolchain update cadence
+
+The pinned toolchain is bumped to the current stable roughly **once a quarter
+(every ~3 months)** so the pin never drifts far behind and we don't accumulate
+toolchain debt. A bump edits three places in lockstep — `rust-toolchain.toml`
+(`channel`), the `rust-version` in the root `Cargo.toml`, and the four
+`dtolnay/rust-toolchain@<version>` refs in `.github/workflows/ci.yml` (the CI
+action does **not** read `rust-toolchain.toml`) — then `cargo fmt --all` in case
+the new rustfmt reformats anything.
 
 ### Build and Run
 
