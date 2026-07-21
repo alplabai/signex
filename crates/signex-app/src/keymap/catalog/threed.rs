@@ -10,6 +10,7 @@ pub(super) const THREE_D: &[CommandMetadata] = &[
         label: "Switch footprint editor to Pads mode",
         menu_label: None,
         group: CommandGroup::ThreeD,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "footprint_mode_sketch",
@@ -17,6 +18,7 @@ pub(super) const THREE_D: &[CommandMetadata] = &[
         label: "Switch footprint editor to Sketch mode",
         menu_label: None,
         group: CommandGroup::ThreeD,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "footprint_mode_view_3d",
@@ -24,5 +26,6 @@ pub(super) const THREE_D: &[CommandMetadata] = &[
         label: "Switch footprint editor to 3D View mode",
         menu_label: None,
         group: CommandGroup::ThreeD,
+        ..CommandMetadata::DEFAULT
     },
 ];
