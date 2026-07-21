@@ -788,6 +788,115 @@ mod tests {
         );
     }
 
+    /// Issue #422: the old add-only reconcile left a minted dot in place once
+    /// the T that justified it lost its stub — the dot then sat electrically
+    /// inert on the trunk alone until some unrelated wire was later dragged
+    /// to merely cross the same point, at which point the stale dot silently
+    /// merged two nets the user never connected. Dragging the stub away must
+    /// remove the dot immediately, not wait for a crossing wire to expose it.
+    #[test]
+    fn dragging_a_minted_stub_off_the_trunk_removes_the_stale_dot() {
+        let mut document = test_sheet();
+        document
+            .wires
+            .push(wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0)));
+        let stub = wire(Point::new(5.0, 3.0), Point::new(5.0, 10.0));
+        let stub_uuid = stub.uuid;
+        document.wires.push(stub);
+        let mut engine = Engine::new(document).expect("engine");
+
+        // Drag the stub onto the trunk — mints a dot at (5, 0), same as
+        // `dragging_a_stub_onto_a_trunks_interior_gets_a_junction` above.
+        engine
+            .execute(Command::MoveSelection {
+                items: vec![SelectedItem {
+                    kind: SelectedKind::Wire,
+                    uuid: stub_uuid,
+                }],
+                dx: 0.0,
+                dy: -3.0,
+            })
+            .expect("drag stub onto trunk");
+        assert_eq!(engine.document().junctions.len(), 1);
+        assert!(engine.document().junctions[0].minted);
+
+        // Drag the same stub away again: the T it justified is gone, so the
+        // now-stale dot must be removed rather than left to assert a
+        // connection the wires no longer make.
+        let result = engine
+            .execute(Command::MoveSelection {
+                items: vec![SelectedItem {
+                    kind: SelectedKind::Wire,
+                    uuid: stub_uuid,
+                }],
+                dx: 0.0,
+                dy: 20.0,
+            })
+            .expect("drag stub away");
+
+        assert!(
+            engine.document().junctions.is_empty(),
+            "{:?}",
+            engine.document().junctions
+        );
+        assert!(
+            result
+                .patch_pair
+                .expect("changed command carries a patch")
+                .document
+                .contains(DocumentPatch::JUNCTIONS),
+            "a removed dot must be in the patch or the canvas keeps drawing it"
+        );
+    }
+
+    /// The other half of #422: a user-placed dot is user data. It must never
+    /// be swept up by the same removal pass just because it doesn't happen to
+    /// sit on a wire meeting.
+    #[test]
+    fn a_user_placed_junction_survives_reconcile_even_when_unjustified() {
+        let mut document = test_sheet();
+        document
+            .wires
+            .push(wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0)));
+        let mut engine = Engine::new(document).expect("engine");
+
+        let user_junction_uuid = uuid::Uuid::new_v4();
+        engine
+            .execute(Command::PlaceJunction {
+                junction: signex_types::schematic::Junction {
+                    uuid: user_junction_uuid,
+                    position: Point::new(50.0, 50.0),
+                    diameter: 0.0,
+                    minted: false,
+                },
+            })
+            .expect("place user junction");
+
+        // Any wire-geometry command runs reconcile. The user's dot sits
+        // nowhere near a wire meeting and would fail the mint test outright,
+        // but `minted == false` must keep it out of the removal pass.
+        let trunk_uuid = engine.document().wires[0].uuid;
+        engine
+            .execute(Command::MoveSelection {
+                items: vec![SelectedItem {
+                    kind: SelectedKind::Wire,
+                    uuid: trunk_uuid,
+                }],
+                dx: 1.0,
+                dy: 1.0,
+            })
+            .expect("move trunk");
+
+        assert!(
+            engine
+                .document()
+                .junctions
+                .iter()
+                .any(|j| j.uuid == user_junction_uuid),
+            "user-placed dot must never be auto-removed"
+        );
+    }
+
     #[test]
     fn delete_child_sheet_and_undo() {
         let mut document = test_sheet();
