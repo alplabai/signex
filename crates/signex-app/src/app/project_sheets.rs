@@ -286,21 +286,91 @@ pub(crate) fn project_children_map(
 /// coincidence.
 ///
 /// - An empty reference (after trimming) yields `None`.
-/// - An absolute reference is returned unchanged — `parent_dir` is ignored, so
-///   an explicit absolute path always wins.
-/// - A relative reference is joined onto `parent_dir`, so a sheet in a
-///   subdirectory resolves its children beside itself rather than beside the
-///   project root.
+/// - Both an absolute reference and a relative one are joined onto
+///   `parent_dir` (`Path::join` already replaces `parent_dir` outright when the
+///   reference is absolute, so one join covers both shapes) and the result is
+///   lexically normalized — `.`/`..` resolved without touching the
+///   filesystem, since the child file may not exist yet and
+///   `std::fs::canonicalize` both requires existence and adds a `\\?\` prefix
+///   on Windows.
+/// - A reference whose normalized path escapes `parent_dir` — a `..`
+///   traversal, or an absolute path elsewhere entirely — is rejected: logged
+///   through the app's normal error-surfacing path and returned as `None`,
+///   the same as a reference that does not resolve to a loaded sheet.
+/// - An empty `parent_dir` (an unsaved tab with no project loaded, or a bare
+///   filename tab — `resolve_child_sheet_path`'s `unwrap_or_default()`) has
+///   no real directory to contain anything against, so it is rejected
+///   outright: `Path::starts_with` treats an empty path as a prefix of *any*
+///   path (zero components to match), so checking containment against it is
+///   vacuously true and would let an absolute or `..`-escaping reference
+///   through unchecked (#463, re-opened at this exact boundary).
+/// - Lexical normalization resolves `.`/`..` components only; it does not
+///   touch the filesystem, so a symlink planted inside `parent_dir` that
+///   points back out is not detected here. That residual is accepted: it
+///   requires an attacker who can already write inside the project
+///   directory.
 pub(crate) fn resolve_child_reference(parent_dir: &Path, child_filename: &str) -> Option<PathBuf> {
     let trimmed = child_filename.trim();
     if trimmed.is_empty() {
         return None;
     }
     let raw = PathBuf::from(trimmed);
-    if raw.is_absolute() {
-        return Some(raw);
+    let resolved = lexically_normalize(&parent_dir.join(&raw));
+    let root = lexically_normalize(parent_dir);
+
+    // A resolved path that leads with a literal ".." (nothing left to pop,
+    // see `lexically_normalize`'s doc) or whose absoluteness disagrees with
+    // root's has escaped upward past whatever root it started from — kept as
+    // an explicit, independent check rather than trusting `starts_with`
+    // alone a second time.
+    let escapes_upward = matches!(
+        resolved.components().next(),
+        Some(std::path::Component::ParentDir)
+    );
+    let contained = !root.as_os_str().is_empty()
+        && resolved.is_absolute() == root.is_absolute()
+        && !escapes_upward
+        && resolved.starts_with(&root);
+
+    if contained {
+        Some(resolved)
+    } else {
+        crate::diagnostics::log_error(
+            "Rejected child-sheet reference outside its resolution root",
+            &anyhow::anyhow!(
+                "'{trimmed}' resolves to {} which escapes {}",
+                resolved.display(),
+                if root.as_os_str().is_empty() {
+                    "an empty resolution root".to_string()
+                } else {
+                    root.display().to_string()
+                }
+            ),
+        );
+        None
     }
-    Some(parent_dir.join(raw))
+}
+
+/// Lexically normalize `path` — resolve `.` and `..` components without
+/// touching the filesystem (unlike `std::fs::canonicalize`, which needs the
+/// path to exist). A `..` with nothing left to pop is kept as a literal `..`
+/// component, so a reference that escapes its root still fails the caller's
+/// `starts_with(root)` check instead of silently collapsing onto the root.
+fn lexically_normalize(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => match out.components().next_back() {
+                Some(std::path::Component::Normal(_)) => {
+                    out.pop();
+                }
+                _ => out.push(".."),
+            },
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
 }
 
 /// The filename string the root sheet is referenced by — its path relative to
@@ -595,16 +665,61 @@ mod tests {
     }
 
     #[test]
-    fn absolute_child_reference_is_returned_unchanged() {
+    fn absolute_child_reference_outside_the_root_is_rejected() {
+        // #463 — an absolute reference used to win outright, letting a
+        // malicious `.snxsch`/`.snxprj` point a child sheet anywhere on disk.
         assert_eq!(
             resolve_child_reference(Path::new("/proj/sub"), "/elsewhere/x.snxsch"),
-            Some(PathBuf::from("/elsewhere/x.snxsch"))
+            None
+        );
+    }
+
+    #[test]
+    fn traversal_child_reference_outside_the_root_is_rejected() {
+        // #463 — a relative `..` reference used to be joined onto `parent_dir`
+        // verbatim with no containment check, walking out of the project.
+        assert_eq!(
+            resolve_child_reference(Path::new("/proj/sub"), "../../../etc/passwd"),
+            None
+        );
+    }
+
+    #[test]
+    fn sibling_child_reference_still_resolves() {
+        assert_eq!(
+            resolve_child_reference(Path::new("/proj/sub"), "sibling.snxsch"),
+            Some(PathBuf::from("/proj/sub/sibling.snxsch"))
         );
     }
 
     #[test]
     fn empty_child_reference_resolves_to_none() {
         assert_eq!(resolve_child_reference(Path::new("/proj"), "   "), None);
+    }
+
+    #[test]
+    fn empty_parent_dir_rejects_an_escaping_reference() {
+        // The #463 escape re-opened at the fix's own boundary: an empty
+        // `parent_dir` (unsaved File->New sheet, or a bare-filename tab with
+        // no project loaded) normalizes to an empty root, which used to make
+        // `resolved.starts_with(&root)` vacuously true for ANY reference —
+        // absolute or `..`-traversal alike.
+        assert_eq!(resolve_child_reference(Path::new(""), "/etc/passwd"), None);
+        assert_eq!(
+            resolve_child_reference(Path::new(""), "../etc/passwd"),
+            None
+        );
+    }
+
+    #[test]
+    fn interior_dotdot_that_stays_inside_the_root_still_resolves() {
+        // Pins the `lexically_normalize` pop-branch against over-rejection:
+        // an interior ".." that never escapes `parent_dir` is not a
+        // traversal, just a slightly indirect way of writing a sibling path.
+        assert_eq!(
+            resolve_child_reference(Path::new("/proj/sub"), "a/../leaf.snxsch"),
+            Some(PathBuf::from("/proj/sub/leaf.snxsch"))
+        );
     }
 
     #[test]
