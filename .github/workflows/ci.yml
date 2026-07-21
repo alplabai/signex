@@ -34,7 +34,7 @@ jobs:
         with:
           submodules: false
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
 
       - uses: Swatinem/rust-cache@v2
 
@@ -67,7 +67,7 @@ jobs:
         with:
           submodules: false
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
 
       - uses: Swatinem/rust-cache@v2
 
@@ -97,7 +97,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
         with:
           components: rustfmt
 
@@ -110,7 +110,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
 
       - uses: Swatinem/rust-cache@v2
 
