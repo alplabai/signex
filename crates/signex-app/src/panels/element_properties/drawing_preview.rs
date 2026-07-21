@@ -123,7 +123,7 @@ impl<Message> canvas::Program<Message> for DrawingPreview {
                 start, mid, end, ..
             } => {
                 if let Some((cxw, cyw, rw)) =
-                    circumcircle_points_local((start.x, start.y), (mid.x, mid.y), (end.x, end.y))
+                    signex_types::schematic::circumcircle(*start, *mid, *end)
                 {
                     let cp = w2s(cxw, cyw);
                     let rs = (rw as f32) * scale;
@@ -235,30 +235,6 @@ fn shape_preview_bbox(d: &signex_types::schematic::SchDrawing) -> (f64, f64, f64
             (min_x, min_y, max_x, max_y)
         }
     }
-}
-
-fn circumcircle_points_local(
-    a: (f64, f64),
-    b: (f64, f64),
-    c: (f64, f64),
-) -> Option<(f64, f64, f64)> {
-    let (ax, ay) = a;
-    let (bx, by) = b;
-    let (cx, cy) = c;
-    let d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
-    if d.abs() < 1e-9 {
-        return None;
-    }
-    let ux = ((ax * ax + ay * ay) * (by - cy)
-        + (bx * bx + by * by) * (cy - ay)
-        + (cx * cx + cy * cy) * (ay - by))
-        / d;
-    let uy = ((ax * ax + ay * ay) * (cx - bx)
-        + (bx * bx + by * by) * (ax - cx)
-        + (cx * cx + cy * cy) * (bx - ax))
-        / d;
-    let r = ((ax - ux) * (ax - ux) + (ay - uy) * (ay - uy)).sqrt();
-    Some((ux, uy, r))
 }
 
 fn arc_sweep_local(s: f64, m: f64, e: f64) -> (f64, f64) {
