@@ -14,8 +14,11 @@
 //! `std::fs::rename` is atomic-replace on every platform we ship —
 //! POSIX `rename(2)` by spec, Windows `MoveFileExW` with
 //! `MOVEFILE_REPLACE_EXISTING`. A crash between the write and the
-//! rename leaves the original at the destination AND a `.tmp`
-//! sibling that future saves will overwrite.
+//! rename leaves the original at the destination AND a stranded `.tmp`
+//! sibling. The name is unique per writer now (#416), so a *crashed*
+//! writer's temp is not auto-reclaimed by a later save — harmless
+//! clutter, not lost data; every in-process failure path cleans its own
+//! temp up.
 //!
 //! The two `fsync`s are what make the power-loss guarantee real:
 //! without fsyncing the temp file before the rename, many filesystems
@@ -69,12 +72,24 @@ pub fn atomic_write(path: &Path, bytes: &[u8]) -> io::Result<()> {
 
     // Write the temp file and fsync it before the rename, so its bytes
     // are durable at the point the rename makes them visible at `path`.
+    //
+    // Clean up the temp sibling on any post-creation failure. The name is
+    // now unique per writer (#416), so — unlike the old fixed `<path>.tmp`,
+    // which the next write to the same target simply overwrote — a stranded
+    // temp would never be reclaimed and repeated failures (a full or flaky
+    // disk) would accumulate `<path>.<pid>-<n>.tmp` siblings unboundedly.
     {
         let mut file = File::create(&tmp)?;
-        file.write_all(bytes)?;
-        file.sync_all()?;
+        if let Err(e) = file.write_all(bytes).and_then(|()| file.sync_all()) {
+            drop(file);
+            let _ = std::fs::remove_file(&tmp);
+            return Err(e);
+        }
     }
-    std::fs::rename(&tmp, path)?;
+    if let Err(e) = std::fs::rename(&tmp, path) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
+    }
 
     // Fsync the destination directory so the rename entry itself is
     // durable (Unix only — Windows `MoveFileExW` is durable without
@@ -161,5 +176,30 @@ mod tests {
         // on the same filesystem.
         assert_eq!(a.parent(), path.parent());
         assert_eq!(b.parent(), path.parent());
+    }
+
+    #[test]
+    fn a_post_creation_failure_leaves_no_stray_tmp() {
+        // Force the rename to fail *after* the temp file is created: the
+        // target is a non-empty directory, which no platform lets a file
+        // rename replace. The unique-per-writer temp (#416) must still be
+        // cleaned up here — otherwise repeated failures would accumulate
+        // `<path>.<pid>-<n>.tmp` siblings, since (unlike the old fixed name)
+        // nothing ever overwrites them.
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("target");
+        std::fs::create_dir(&target).unwrap();
+        std::fs::write(target.join("occupant"), b"x").unwrap();
+
+        let result = atomic_write(&target, b"data");
+
+        assert!(
+            result.is_err(),
+            "rename onto a non-empty directory must fail"
+        );
+        assert!(
+            !has_stray_tmp(dir.path()),
+            "the temp sibling must be cleaned up after a failed rename",
+        );
     }
 }
