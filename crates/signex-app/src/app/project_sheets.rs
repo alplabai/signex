@@ -268,6 +268,18 @@ pub(crate) fn project_children_map(
 ///   traversal, or an absolute path elsewhere entirely — is rejected: logged
 ///   through the app's normal error-surfacing path and returned as `None`,
 ///   the same as a reference that does not resolve to a loaded sheet.
+/// - An empty `parent_dir` (an unsaved tab with no project loaded, or a bare
+///   filename tab — `resolve_child_sheet_path`'s `unwrap_or_default()`) has
+///   no real directory to contain anything against, so it is rejected
+///   outright: `Path::starts_with` treats an empty path as a prefix of *any*
+///   path (zero components to match), so checking containment against it is
+///   vacuously true and would let an absolute or `..`-escaping reference
+///   through unchecked (#463, re-opened at this exact boundary).
+/// - Lexical normalization resolves `.`/`..` components only; it does not
+///   touch the filesystem, so a symlink planted inside `parent_dir` that
+///   points back out is not detected here. That residual is accepted: it
+///   requires an attacker who can already write inside the project
+///   directory.
 pub(crate) fn resolve_child_reference(parent_dir: &Path, child_filename: &str) -> Option<PathBuf> {
     let trimmed = child_filename.trim();
     if trimmed.is_empty() {
@@ -277,7 +289,21 @@ pub(crate) fn resolve_child_reference(parent_dir: &Path, child_filename: &str) -
     let resolved = lexically_normalize(&parent_dir.join(&raw));
     let root = lexically_normalize(parent_dir);
 
-    if resolved.starts_with(&root) {
+    // A resolved path that leads with a literal ".." (nothing left to pop,
+    // see `lexically_normalize`'s doc) or whose absoluteness disagrees with
+    // root's has escaped upward past whatever root it started from — kept as
+    // an explicit, independent check rather than trusting `starts_with`
+    // alone a second time.
+    let escapes_upward = matches!(
+        resolved.components().next(),
+        Some(std::path::Component::ParentDir)
+    );
+    let contained = !root.as_os_str().is_empty()
+        && resolved.is_absolute() == root.is_absolute()
+        && !escapes_upward
+        && resolved.starts_with(&root);
+
+    if contained {
         Some(resolved)
     } else {
         crate::diagnostics::log_error(
@@ -285,7 +311,11 @@ pub(crate) fn resolve_child_reference(parent_dir: &Path, child_filename: &str) -
             &anyhow::anyhow!(
                 "'{trimmed}' resolves to {} which escapes {}",
                 resolved.display(),
-                root.display()
+                if root.as_os_str().is_empty() {
+                    "an empty resolution root".to_string()
+                } else {
+                    root.display().to_string()
+                }
             ),
         );
         None
@@ -529,6 +559,31 @@ mod tests {
     #[test]
     fn empty_child_reference_resolves_to_none() {
         assert_eq!(resolve_child_reference(Path::new("/proj"), "   "), None);
+    }
+
+    #[test]
+    fn empty_parent_dir_rejects_an_escaping_reference() {
+        // The #463 escape re-opened at the fix's own boundary: an empty
+        // `parent_dir` (unsaved File->New sheet, or a bare-filename tab with
+        // no project loaded) normalizes to an empty root, which used to make
+        // `resolved.starts_with(&root)` vacuously true for ANY reference —
+        // absolute or `..`-traversal alike.
+        assert_eq!(resolve_child_reference(Path::new(""), "/etc/passwd"), None);
+        assert_eq!(
+            resolve_child_reference(Path::new(""), "../etc/passwd"),
+            None
+        );
+    }
+
+    #[test]
+    fn interior_dotdot_that_stays_inside_the_root_still_resolves() {
+        // Pins the `lexically_normalize` pop-branch against over-rejection:
+        // an interior ".." that never escapes `parent_dir` is not a
+        // traversal, just a slightly indirect way of writing a sibling path.
+        assert_eq!(
+            resolve_child_reference(Path::new("/proj/sub"), "a/../leaf.snxsch"),
+            Some(PathBuf::from("/proj/sub/leaf.snxsch"))
+        );
     }
 
     #[test]
