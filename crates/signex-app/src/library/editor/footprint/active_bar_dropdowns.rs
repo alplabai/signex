@@ -768,13 +768,7 @@ fn shapes_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessa
             DropdownItem::new("Line", arm(SketchTool::Line)).icon(ic::icon_dd_line(tid)),
         ),
         DropdownEntry::Item(
-            DropdownItem::new("Arc (Center)", arm(SketchTool::Arc)).icon(ic::icon_dd_arc(tid)),
-        ),
-        DropdownEntry::Item(
-            DropdownItem::new("Arc (Edge)", arm(SketchTool::Arc)).icon(ic::icon_dd_arc(tid)),
-        ),
-        DropdownEntry::Item(
-            DropdownItem::new("Arc (Any Angle)", arm(SketchTool::Arc)).icon(ic::icon_dd_arc(tid)),
+            DropdownItem::new("Arc", arm(SketchTool::Arc)).icon(ic::icon_dd_arc(tid)),
         ),
         DropdownEntry::Item(
             DropdownItem::new("Full Circle", arm(SketchTool::Circle)).icon(ic::icon_dd_circle(tid)),
