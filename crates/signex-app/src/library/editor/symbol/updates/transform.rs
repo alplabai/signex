@@ -23,16 +23,25 @@ pub(super) fn apply_symbol_transform(editor: &mut SymEditor, msg: SymbolEditorMs
             // on the selection actually being alignable (None/Field
             // are clean no-ops), same discipline as DeleteSelected
             // above, then snap onto the exact grid the canvas already
-            // places/drags onto.
+            // places/drags onto. `All`/`Multiple` are alignable-shaped
+            // even when there's nothing to actually snap (e.g. Ctrl+A
+            // on an empty symbol), so mark_dirty — and the undo entry
+            // itself — are gated on align_selected_to_grid's own
+            // "did anything move" return value, not just the shape
+            // of the selection.
             let selected = editor.selected.clone();
             if crate::library::editor::symbol::state::selected_is_alignable(&selected) {
                 push_undo(editor);
-                crate::library::editor::symbol::state::align_selected_to_grid(
+                let changed = crate::library::editor::symbol::state::align_selected_to_grid(
                     editor.primitive_mut(),
                     &selected,
                     crate::library::editor::symbol::canvas::SNAP_GRID_MM,
                 );
-                mark_dirty(editor);
+                if changed {
+                    mark_dirty(editor);
+                } else {
+                    editor.undo_snapshots.pop();
+                }
             }
             editor.active_bar_menu = None;
         }
@@ -162,6 +171,27 @@ mod tests {
             editor.primitive().pins[idx].position,
             [1.27, 1.27],
             "pin lands on the 1.27 mm snap grid"
+        );
+    }
+
+    /// #477 — `All` is alignable-shaped even on an empty symbol
+    /// (Ctrl+A with nothing placed yet), but `align_selected_to_grid`
+    /// snaps zero pins/graphics, so the handler must not leave a
+    /// spurious undo snapshot or dirty flag behind.
+    #[test]
+    fn align_selected_to_grid_with_all_selection_on_empty_symbol_stays_clean() {
+        let mut editor = new_editor();
+        editor.selected = Some(SymbolSelection::All);
+
+        apply_symbol_transform(&mut editor, SymbolEditorMsg::AlignSelectedToGrid);
+
+        assert!(
+            !editor.dirty,
+            "no-op align on an empty symbol must not dirty the document"
+        );
+        assert!(
+            editor.undo_snapshots.is_empty(),
+            "no-op align on an empty symbol must not stack undo history"
         );
     }
 
