@@ -280,7 +280,7 @@ impl Signex {
             }
         };
 
-        let ctx = match super::build_export_context(&self.document_state) {
+        let (ctx, issues) = match super::build_export_scope(&self.document_state) {
             Some(c) => c,
             None => {
                 self.document_state.pending_bom_options = None;
@@ -289,6 +289,14 @@ impl Signex {
                 return Task::none();
             }
         };
+        // A BOM is a machine-and-procurement-consumed deliverable, not the
+        // print-preview intermediate `rebuild_bom_table` renders — so unlike
+        // that path it must not stay silent. A cross-dir child-filename
+        // collision (or a missing/cyclic child) can roll the BOM up from the
+        // *wrong* subtree — wrong parts, wrong quantities. Surface it loudly,
+        // once, from this user action, exactly like the PDF/netlist
+        // deliverables (ADR-0002 D8: degradation is reported, never silent).
+        super::log_stitch_issues(&self.document_state, &ctx, &issues);
 
         // Honour the user's picks from the BOM preview modal when
         // present. The pending slot is populated by
