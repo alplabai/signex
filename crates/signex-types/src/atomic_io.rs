@@ -5,8 +5,12 @@
 //! file untouched, or the new bytes fully present at the destination.
 //! There is no half-written-file outcome.
 //!
-//! Implementation: write to `<path>.tmp`, `fsync` it, then
-//! `rename(.tmp, path)`, then `fsync` the parent directory.
+//! Implementation: write to a `<path>.<pid>-<counter>.tmp` sibling,
+//! `fsync` it, then `rename(.tmp, path)`, then `fsync` the parent
+//! directory. The pid + per-process counter suffix keeps concurrent
+//! writers to the same target from colliding on one temp name (#416);
+//! the temp file still lives next to `path`, so the rename stays a
+//! same-filesystem atomic-replace.
 //! `std::fs::rename` is atomic-replace on every platform we ship —
 //! POSIX `rename(2)` by spec, Windows `MoveFileExW` with
 //! `MOVEFILE_REPLACE_EXISTING`. A crash between the write and the
@@ -27,7 +31,31 @@
 
 use std::fs::File;
 use std::io::{self, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// Per-process counter mixed into the temp file name so concurrent
+/// writers (threads in this process, or another process) never pick
+/// the same `<path>.<pid>-<n>.tmp` sibling and race each other's
+/// rename. See #416.
+static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+/// Build a temp sibling path for `path`, unique per call: `<pid>-<counter>`
+/// is appended before `.tmp` so concurrent writers to the same target
+/// never collide on the same temp name, while the rename below stays a
+/// same-directory (same-filesystem) atomic-replace.
+fn tmp_path_for(path: &Path) -> io::Result<PathBuf> {
+    let mut tmp = path.to_path_buf();
+    let name = tmp
+        .file_name()
+        .ok_or_else(|| io::Error::other("destination path has no file name"))?;
+    let pid = std::process::id();
+    let n = TMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let mut s = name.to_os_string();
+    s.push(format!(".{pid}-{n}.tmp"));
+    tmp.set_file_name(s);
+    Ok(tmp)
+}
 
 /// Atomically write `bytes` to `path`. Creates parent directories
 /// (if any) as a side effect — matches `std::fs::write` ergonomics.
@@ -37,16 +65,7 @@ pub fn atomic_write(path: &Path, bytes: &[u8]) -> io::Result<()> {
     {
         std::fs::create_dir_all(parent)?;
     }
-    let mut tmp = path.to_path_buf();
-    let tmp_name = match tmp.file_name() {
-        Some(name) => {
-            let mut s = name.to_os_string();
-            s.push(".tmp");
-            s
-        }
-        None => return Err(io::Error::other("destination path has no file name")),
-    };
-    tmp.set_file_name(tmp_name);
+    let tmp = tmp_path_for(path)?;
 
     // Write the temp file and fsync it before the rename, so its bytes
     // are durable at the point the rename makes them visible at `path`.
@@ -121,5 +140,17 @@ mod tests {
         atomic_write(&path, &big).unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), big);
         assert!(!tmp.exists());
+    }
+
+    #[test]
+    fn tmp_path_for_is_unique_per_call() {
+        let path = Path::new("/some/dir/table.json");
+        let a = tmp_path_for(path).unwrap();
+        let b = tmp_path_for(path).unwrap();
+        assert_ne!(a, b, "two writers must not pick the same tmp sibling");
+        // Both still live next to the target so the rename stays atomic
+        // on the same filesystem.
+        assert_eq!(a.parent(), path.parent());
+        assert_eq!(b.parent(), path.parent());
     }
 }
