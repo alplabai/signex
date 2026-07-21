@@ -98,13 +98,23 @@ pub fn atomic_write(path: &Path, bytes: &[u8]) -> io::Result<()> {
 mod tests {
     use super::*;
 
+    /// True if `dir` contains a leftover atomic-write temp sibling
+    /// (`*.tmp`). `atomic_write` picks a unique per-writer name (#416),
+    /// so tests must scan for any match instead of a fixed name.
+    fn has_stray_tmp(dir: &Path) -> bool {
+        std::fs::read_dir(dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .any(|entry| entry.path().extension().is_some_and(|ext| ext == "tmp"))
+    }
+
     #[test]
     fn round_trip_creates_destination() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("hello.txt");
         atomic_write(&path, b"hi").unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), b"hi");
-        assert!(!dir.path().join("hello.txt.tmp").exists());
+        assert!(!has_stray_tmp(dir.path()));
     }
 
     #[test]
@@ -128,18 +138,17 @@ mod tests {
     fn writes_empty_and_large_payloads_and_leaves_no_tmp() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("d.bin");
-        let tmp = dir.path().join("d.bin.tmp");
 
         atomic_write(&path, b"").unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), b"");
-        assert!(!tmp.exists());
+        assert!(!has_stray_tmp(dir.path()));
 
         // Overwrite with a multi-page payload to exercise write_all +
         // sync_all across more than one filesystem block.
         let big = vec![0xABu8; 256 * 1024];
         atomic_write(&path, &big).unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), big);
-        assert!(!tmp.exists());
+        assert!(!has_stray_tmp(dir.path()));
     }
 
     #[test]
