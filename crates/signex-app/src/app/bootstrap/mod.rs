@@ -32,7 +32,6 @@ fn selection_slot_from_key(key: &str) -> Option<usize> {
     }
 }
 
-
 mod new;
 mod subscription;
 

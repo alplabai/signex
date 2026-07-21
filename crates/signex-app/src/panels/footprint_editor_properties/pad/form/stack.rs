@@ -488,4 +488,3 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
 
     col
 }
-

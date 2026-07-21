@@ -6,8 +6,8 @@
 //! Extracted verbatim from the SVG exporter (`svg/mod.rs`); pure code
 //! motion, zero behaviour change.
 
-use super::*;
 use super::geometry::{arc_path_commands, circle_path, rect_path};
+use super::*;
 use crate::pdf::layout::PageTransform;
 use crate::pdf::palette::SchematicPalette;
 use signex_types::schematic::{FillType, SchDrawing};

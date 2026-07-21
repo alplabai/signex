@@ -603,11 +603,11 @@ impl Signex {
                 context,
                 trigger,
             } => {
-                match self.ui_state.preferences_keymap_editor.edit_active_trigger(
-                    command,
-                    context,
-                    trigger,
-                ) {
+                match self
+                    .ui_state
+                    .preferences_keymap_editor
+                    .edit_active_trigger(command, context, trigger)
+                {
                     Ok(()) => {
                         self.ui_state.preferences_keymap_status.clear();
                         self.ui_state.preferences_dirty = true;

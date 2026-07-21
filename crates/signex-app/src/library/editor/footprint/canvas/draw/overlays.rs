@@ -7,11 +7,11 @@
 use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point, Radians, Vector};
 
+use super::super::{DRAG_THRESHOLD_PX, FootprintCanvas, FootprintCanvasState};
 use super::sketch::{
     draw_dof_direction_arrows, draw_sketch_overlay, draw_sketch_snap_glyph,
     draw_sketch_tool_preview,
 };
-use super::super::{FootprintCanvas, FootprintCanvasState, DRAG_THRESHOLD_PX};
 
 impl FootprintCanvas<'_> {
     /// v0.27 — Fusion-style sketch reticle painted at the SNAP target

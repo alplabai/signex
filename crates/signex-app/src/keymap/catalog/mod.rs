@@ -141,7 +141,10 @@ mod tests {
         assert_eq!(group_of("place_symbol"), CommandGroup::Schematic);
         assert_eq!(group_of("run_erc"), CommandGroup::Schematic);
         assert_eq!(group_of("annotate_schematic"), CommandGroup::Schematic);
-        assert_eq!(group_of("update_pcb_from_schematic"), CommandGroup::Schematic);
+        assert_eq!(
+            group_of("update_pcb_from_schematic"),
+            CommandGroup::Schematic
+        );
         assert_eq!(group_of("next_sheet"), CommandGroup::Schematic);
         assert_eq!(
             group_of("highlight_net_under_cursor"),

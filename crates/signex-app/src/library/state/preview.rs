@@ -283,4 +283,3 @@ impl Default for DistributorSettings {
 // `ComponentPreviewState::from_row` is the canonical builder; the legacy
 // `from_head` helper that constructed an editor from a `Component` chain
 // is gone with the v0.9-refactor-2 DBLib model.
-

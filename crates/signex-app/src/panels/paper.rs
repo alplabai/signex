@@ -1,6 +1,5 @@
 //! Sheet colour, page format / origin and paper-size helpers.
 
-
 /// Sheet background colour presets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SheetColor {
@@ -90,4 +89,3 @@ pub fn paper_dimensions(size: &str) -> (f32, f32) {
         _ => (297.0, 210.0),
     }
 }
-

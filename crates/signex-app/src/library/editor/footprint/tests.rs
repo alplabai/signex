@@ -450,7 +450,12 @@ fn align_confirm_both_axes_matches_two_sequential_align_pads() {
     );
 
     let dialog_pos: Vec<_> = dialog.state.pads.iter().map(|p| p.position_mm).collect();
-    let sequential_pos: Vec<_> = sequential.state.pads.iter().map(|p| p.position_mm).collect();
+    let sequential_pos: Vec<_> = sequential
+        .state
+        .pads
+        .iter()
+        .map(|p| p.position_mm)
+        .collect();
     assert_eq!(
         dialog_pos, sequential_pos,
         "a both-axes dialog confirm must land bit-identically to two AlignPads picks (H then V)"

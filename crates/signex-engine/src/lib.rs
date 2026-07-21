@@ -506,7 +506,9 @@ mod tests {
 
         let engine = Engine::new(document).unwrap();
 
-        assert!(engine.has_selected_items(&[SelectedItem::new(sheet_uuid, SelectedKind::ChildSheet)]));
+        assert!(
+            engine.has_selected_items(&[SelectedItem::new(sheet_uuid, SelectedKind::ChildSheet)])
+        );
         assert!(engine.has_selected_items(&[SelectedItem::new(pin_uuid, SelectedKind::SheetPin)]));
     }
 
@@ -526,7 +528,9 @@ mod tests {
         document.bus_entries.push(bus_entry);
 
         let mut engine = Engine::new(document).unwrap();
-        assert!(engine.has_selected_items(&[SelectedItem::new(bus_entry_uuid, SelectedKind::BusEntry)]));
+        assert!(
+            engine.has_selected_items(&[SelectedItem::new(bus_entry_uuid, SelectedKind::BusEntry)])
+        );
 
         let result = engine
             .execute(Command::DeleteSelection {
@@ -809,7 +813,10 @@ mod tests {
 
         // Delete the child sheet
         let result = engine.execute(Command::DeleteSelection {
-            items: vec![SelectedItem::new(child_sheet_uuid, SelectedKind::ChildSheet)],
+            items: vec![SelectedItem::new(
+                child_sheet_uuid,
+                SelectedKind::ChildSheet,
+            )],
         });
         assert!(result.unwrap().changed);
         assert_eq!(engine.document().child_sheets.len(), 0);
@@ -872,6 +879,9 @@ mod tests {
         // Ensure the restored pin matches the original
         assert_eq!(engine.document().child_sheets[0].pins[0].name, "Pin1");
         assert_eq!(engine.document().child_sheets[0].pins[0].direction, "input");
-        assert_eq!(engine.document().child_sheets[0].pins[0].position, Point::new(15.0, 25.0));
+        assert_eq!(
+            engine.document().child_sheets[0].pins[0].position,
+            Point::new(15.0, 25.0)
+        );
     }
 }

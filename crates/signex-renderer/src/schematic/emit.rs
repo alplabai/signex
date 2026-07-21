@@ -147,7 +147,10 @@ pub(super) fn emit_overlay_circle_bucket(circles: &[OverlayCircleInput], output:
     }
 }
 
-pub(super) fn emit_overlay_polygon_bucket(polygons: &[OverlayPolygonInput], output: &mut Vec<GpuPolygon>) {
+pub(super) fn emit_overlay_polygon_bucket(
+    polygons: &[OverlayPolygonInput],
+    output: &mut Vec<GpuPolygon>,
+) {
     for polygon in polygons {
         output.push(GpuPolygon {
             vertices: polygon.vertices.clone(),
@@ -205,7 +208,11 @@ pub(super) fn erc_color_from_style(style: StyleRef, theme: &ResolvedTheme) -> [f
     color
 }
 
-pub(super) fn erc_marker_vertices(severity: Severity, center: [f32; 2], radius_mm: f32) -> Vec<[f32; 2]> {
+pub(super) fn erc_marker_vertices(
+    severity: Severity,
+    center: [f32; 2],
+    radius_mm: f32,
+) -> Vec<[f32; 2]> {
     let radius = radius_mm.max(0.05);
     let cx = center[0];
     let cy = center[1];
@@ -247,7 +254,11 @@ pub(super) fn erc_marker_line(marker: &ErcMarkerInput) -> ([f32; 2], [f32; 2]) {
     }
 }
 
-pub(super) fn emit_erc_markers(snapshot: &SchematicSnapshot, theme: &ResolvedTheme, scene: &mut Scene) {
+pub(super) fn emit_erc_markers(
+    snapshot: &SchematicSnapshot,
+    theme: &ResolvedTheme,
+    scene: &mut Scene,
+) {
     scene.erc_marker_lines.clear();
     scene.erc_marker_circles.clear();
     scene.erc_marker_polygons.clear();

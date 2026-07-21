@@ -592,4 +592,3 @@ pub fn view_library_row_properties<'a>(
 
     container(body).width(Length::Fill).into()
 }
-

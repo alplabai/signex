@@ -6,8 +6,8 @@
 //! - overlay: selection, cursor, wire-in-progress (cleared every frame)
 
 mod camera;
-pub mod grid;
 mod draw;
+pub mod grid;
 mod input;
 
 use iced::event::Event;

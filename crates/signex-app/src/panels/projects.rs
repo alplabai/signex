@@ -354,4 +354,3 @@ pub fn view_navigator<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     }
     container(col).width(Length::Fill).into()
 }
-

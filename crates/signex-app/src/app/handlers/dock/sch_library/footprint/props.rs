@@ -13,7 +13,9 @@ use iced::Task;
 use super::super::*;
 
 impl Signex {
-    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_toggle_auto_fit_courtyard(&mut self) -> Task<Message> {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_toggle_auto_fit_courtyard(
+        &mut self,
+    ) -> Task<Message> {
         let mut follow = Task::none();
         // v0.14.2 — resolve the active footprint editor's
         // path and route through the existing
@@ -75,7 +77,10 @@ impl Signex {
         follow
     }
 
-    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_footprint_description(&mut self, v: &str) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_footprint_description(
+        &mut self,
+        v: &str,
+    ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.primitive_mut().description = v.to_string();
             editor.dirty = true;
@@ -84,7 +89,10 @@ impl Signex {
         true
     }
 
-    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_footprint_default_designator(&mut self, v: &str) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_footprint_default_designator(
+        &mut self,
+        v: &str,
+    ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.primitive_mut().default_designator = v.to_string();
             editor.dirty = true;
@@ -105,7 +113,10 @@ impl Signex {
         true
     }
 
-    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_footprint_height(&mut self, v: &str) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_footprint_height(
+        &mut self,
+        v: &str,
+    ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.primitive_mut().height_mm = fp_parse_optional_mm(v);
             editor.dirty = true;
@@ -114,7 +125,10 @@ impl Signex {
         true
     }
 
-    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_footprint_name(&mut self, name: &str) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_footprint_name(
+        &mut self,
+        name: &str,
+    ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.primitive_mut().name = name.to_string();
             editor.dirty = true;

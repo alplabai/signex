@@ -59,7 +59,8 @@ impl FootprintCanvas<'_> {
         // the min-corner + abs-delta box as a single message. A drag
         // that collapses to ~0 in either axis is a cancelled gesture,
         // not a degenerate frame.
-        if self.state.pads_tool == crate::library::editor::footprint::state::PadsTool::PlaceTextFrame
+        if self.state.pads_tool
+            == crate::library::editor::footprint::state::PadsTool::PlaceTextFrame
         {
             let anchor = drag.grab_offset_mm;
             let release_world = cursor

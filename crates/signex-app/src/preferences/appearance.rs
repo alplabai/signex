@@ -6,7 +6,9 @@
 
 use super::*;
 use crate::fonts;
-use crate::render_config::{GridStyle, LabelStyle, MultisheetStyle, PinSelectionMode, PowerPortStyle};
+use crate::render_config::{
+    GridStyle, LabelStyle, MultisheetStyle, PinSelectionMode, PowerPortStyle,
+};
 use iced::widget::{Space, button, column, container, row, text};
 use iced::{Background, Border, Element, Length, Theme};
 use signex_types::theme::ThemeId;

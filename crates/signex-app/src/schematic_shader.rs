@@ -60,16 +60,9 @@ pub struct SchematicPipeline {
 }
 
 impl shader::Pipeline for SchematicPipeline {
-    fn new(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        format: wgpu::TextureFormat,
-    ) -> Self {
+    fn new(device: &wgpu::Device, queue: &wgpu::Queue, format: wgpu::TextureFormat) -> Self {
         // The camera bind-group layout is shared by every instanced pipeline.
-        let camera = CameraGpu::new(
-            device,
-            CameraUniform::ortho([1.0, 1.0], [0.0, 0.0], 1.0),
-        );
+        let camera = CameraGpu::new(device, CameraUniform::ortho([1.0, 1.0], [0.0, 0.0], 1.0));
         let layout = camera.bind_group_layout();
         Self {
             line: LinePipeline::new(device, format, layout),
@@ -132,11 +125,7 @@ impl shader::Primitive for SchematicPrimitive {
         );
     }
 
-    fn draw(
-        &self,
-        pipeline: &Self::Pipeline,
-        render_pass: &mut wgpu::RenderPass<'_>,
-    ) -> bool {
+    fn draw(&self, pipeline: &Self::Pipeline, render_pass: &mut wgpu::RenderPass<'_>) -> bool {
         let camera = pipeline.camera.bind_group();
         // Fills first, then strokes, then text on top — matches CPU z-order.
         pipeline.polygon.draw(render_pass, camera);
@@ -227,7 +216,11 @@ mod tests {
         });
 
         let program = SchematicShaderProgram::new(scene, &transform(5.0, 6.0, 3.0));
-        let primitive = program.draw(&(), iced::mouse::Cursor::Unavailable, iced::Rectangle::default());
+        let primitive = program.draw(
+            &(),
+            iced::mouse::Cursor::Unavailable,
+            iced::Rectangle::default(),
+        );
 
         assert_eq!(primitive.scene.lines.len(), 1);
         assert_eq!(primitive.offset_px, [5.0, 6.0]);

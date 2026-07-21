@@ -384,4 +384,3 @@ pub enum DrawingFieldEdit {
     /// Override the stroke colour; `None` restores the theme default.
     StrokeColor(Option<signex_types::schematic::StrokeColor>),
 }
-

@@ -130,7 +130,9 @@ impl FootprintCanvas<'_> {
         modifiers: &keyboard::Modifiers,
         typed_char: Option<char>,
     ) -> Option<canvas::Action<LibraryMessage>> {
-        use crate::library::editor::footprint::state::{EditorMode, PlacementInputKind, ToolPending};
+        use crate::library::editor::footprint::state::{
+            EditorMode, PlacementInputKind, ToolPending,
+        };
 
         if !matches!(self.state.mode, EditorMode::Sketch) {
             return None;
@@ -138,10 +140,8 @@ impl FootprintCanvas<'_> {
         // Only intercept when there's either an open buffer or an
         // in-progress gesture that could accept one.
         let has_open_buffer = self.state.placement_input.is_some();
-        let kind_for_active = PlacementInputKind::from_active_tool(
-            self.state.active_tool,
-            &self.state.tool_pending,
-        );
+        let kind_for_active =
+            PlacementInputKind::from_active_tool(self.state.active_tool, &self.state.tool_pending);
         if !has_open_buffer && kind_for_active.is_none() {
             return None;
         }

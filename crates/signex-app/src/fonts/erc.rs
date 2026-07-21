@@ -103,7 +103,6 @@ fn erc_severity_key(sev: signex_erc::Severity) -> &'static str {
     }
 }
 
-
 fn parse_erc_severity(s: &str) -> Option<signex_erc::Severity> {
     Some(match s {
         "error" => signex_erc::Severity::Error,
@@ -167,4 +166,3 @@ pub fn write_pin_matrix_overrides(
         write_pref_atomic(&path, serialized.as_bytes(), "fonts_pref");
     }
 }
-

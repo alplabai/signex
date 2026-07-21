@@ -2,7 +2,6 @@
 
 use std::path::PathBuf;
 
-
 use super::super::*;
 
 mod git;
