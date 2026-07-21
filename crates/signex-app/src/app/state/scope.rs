@@ -241,11 +241,21 @@ mod tests {
     }
 
     #[test]
-    fn shared_child_ownership_is_deterministic_across_repeated_calls() {
-        // Two loaded sheets in different directories both reference a child
-        // at the same resolved path — a real project would never intend
-        // this, but `parent_of` must still pick the same owner every call
-        // rather than whichever the HashMap iterates first.
+    fn shared_child_ownership_is_deterministic_regardless_of_map_order() {
+        // Two loaded sheets in different directories both reference a child at
+        // the same resolved path — a real project would never intend this, but
+        // `parent_of` must pick the SAME owner every run rather than whichever
+        // the HashMap iterates first.
+        //
+        // The nondeterminism only surfaces ACROSS separately-built maps
+        // (production rebuilds `child_sheet_refs()` on every call), so reusing
+        // one fixed instance proves nothing — a fixed map's iteration order
+        // never changes between reads. Rebuild a FRESH map, in BOTH insertion
+        // orders, on every iteration: sorted by parent path
+        // "/w/a/top.snxsch" < "/w/b/top.snxsch", so project 1 must win every
+        // time. Under the pre-fix unsorted first-wins the winner tracked the
+        // fresh map's arbitrary iteration order, so across this many fresh
+        // alternating-order builds a revert of the sort flips at least one.
         let projects = vec![
             project(1, "/w/a", &["top.snxsch"]),
             project(2, "/w/b", &["top.snxsch"]),
@@ -255,18 +265,25 @@ mod tests {
         // parent's own directory (/w/a vs /w/b).
         let child = PathBuf::from("/w/shared/child.snxsch");
         let child_ref = child.to_str().expect("utf8 test path");
-        let open = loaded(&[
-            ("/w/a/top.snxsch", &[child_ref]),
-            ("/w/b/top.snxsch", &[child_ref]),
-        ]);
-
-        let first = project_owning_sheet(&projects, &open, &child).map(|p| p.id);
-        for _ in 0..20 {
+        for i in 0..64 {
+            let open = if i % 2 == 0 {
+                loaded(&[
+                    ("/w/a/top.snxsch", &[child_ref]),
+                    ("/w/b/top.snxsch", &[child_ref]),
+                ])
+            } else {
+                loaded(&[
+                    ("/w/b/top.snxsch", &[child_ref]),
+                    ("/w/a/top.snxsch", &[child_ref]),
+                ])
+            };
             let found = project_owning_sheet(&projects, &open, &child).map(|p| p.id);
-            assert_eq!(found, first, "owner must not flip across repeated calls");
+            assert_eq!(
+                found,
+                Some(ProjectId(1)),
+                "owner must be the lexicographically-smallest parent path (iter {i})",
+            );
         }
-        // Sorted by parent path, "/w/a/top.snxsch" < "/w/b/top.snxsch" wins.
-        assert_eq!(first, Some(ProjectId(1)));
     }
 
     #[test]

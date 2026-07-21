@@ -239,6 +239,14 @@ pub(crate) fn project_children_map(
 ) {
     let mut children: HashMap<String, SchematicSheet> = HashMap::new();
     let mut resolved_from: HashMap<String, PathBuf> = HashMap::new();
+    // Collisions already reported, keyed by (filename, losing path): a third
+    // (or fourth) parent resolving the same filename string to the *same*
+    // losing file would otherwise push a content-identical
+    // `AmbiguousChildFilename` — the Messages panel has no dedupe and evicts
+    // oldest at 200, so repeats crowd out other diagnostics. Distinct losing
+    // paths still each get their own issue.
+    let mut reported: std::collections::HashSet<(String, PathBuf)> =
+        std::collections::HashSet::new();
     let mut issues: Vec<signex_net::StitchIssue> = Vec::new();
     let mut parents: Vec<(&PathBuf, &SchematicSheet)> = sheets.iter().collect();
     parents.sort_by(|a, b| a.0.cmp(b.0));
@@ -249,7 +257,9 @@ pub(crate) fn project_children_map(
                 continue;
             };
             if let Some(existing_path) = resolved_from.get(&cs.filename) {
-                if *existing_path != child_path {
+                if *existing_path != child_path
+                    && reported.insert((cs.filename.clone(), child_path.clone()))
+                {
                     issues.push(signex_net::StitchIssue::AmbiguousChildFilename {
                         filename: cs.filename.clone(),
                         path_a: existing_path.display().to_string(),
@@ -457,6 +467,66 @@ mod tests {
             signex_net::StitchIssue::AmbiguousChildFilename { filename, .. }
                 if filename == "power.snxsch"
         ));
+    }
+
+    #[test]
+    fn a_diamond_sharing_one_child_file_is_not_a_collision() {
+        // The safety-critical "do not cry wolf" case: two different parents in
+        // the same directory both pull in ONE shared sub-sheet by the same
+        // reference string, resolving to the SAME file. A legitimate diamond
+        // (a shared power / decoupling sub-sheet) — the same file reached two
+        // ways is NOT an ambiguity and must emit no issue.
+        let mut sheets = HashMap::new();
+        sheets.insert(
+            PathBuf::from("/proj/a.snxsch"),
+            sheet(1, &["shared.snxsch"]),
+        );
+        sheets.insert(
+            PathBuf::from("/proj/b.snxsch"),
+            sheet(2, &["shared.snxsch"]),
+        );
+        sheets.insert(PathBuf::from("/proj/shared.snxsch"), sheet(0xC, &[]));
+
+        let (children, issues) = project_children_map(&sheets);
+
+        assert_eq!(children.len(), 1);
+        assert_eq!(children["shared.snxsch"].uuid, Uuid::from_u128(0xC));
+        assert!(
+            issues.is_empty(),
+            "the same file reached from two parents is not a collision: {issues:?}"
+        );
+    }
+
+    #[test]
+    fn a_repeated_collision_on_the_same_losing_file_is_reported_once() {
+        // Three parents reference "power.snxsch". The sorted-first parent
+        // (/proj/a) wins; the two /proj/b parents both resolve it to the SAME
+        // losing file (/proj/b/power.snxsch). The collision must surface, but
+        // as ONE issue — not one per losing parent (the Messages panel has no
+        // dedupe and would crowd out other diagnostics).
+        let mut sheets = HashMap::new();
+        sheets.insert(
+            PathBuf::from("/proj/a/root.snxsch"),
+            sheet(1, &["power.snxsch"]),
+        );
+        sheets.insert(
+            PathBuf::from("/proj/b/root1.snxsch"),
+            sheet(2, &["power.snxsch"]),
+        );
+        sheets.insert(
+            PathBuf::from("/proj/b/root2.snxsch"),
+            sheet(3, &["power.snxsch"]),
+        );
+        sheets.insert(PathBuf::from("/proj/a/power.snxsch"), sheet(0xA, &[]));
+        sheets.insert(PathBuf::from("/proj/b/power.snxsch"), sheet(0xB, &[]));
+
+        let (_children, issues) = project_children_map(&sheets);
+
+        assert_eq!(
+            issues.len(),
+            1,
+            "the same losing file reported once, not per parent: {issues:?}"
+        );
     }
 
     #[test]
