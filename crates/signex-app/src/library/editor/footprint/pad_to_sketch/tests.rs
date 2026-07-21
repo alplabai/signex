@@ -965,12 +965,19 @@ fn in_place_remint_records_the_ledger_against_the_real_sketch() {
 
 /// #434 — every existing in-place-remint assertion above used a
 /// Chamfered pad, whose anchors are named directly on `shape_params`
-/// so `pair_sidecar_entities` finds them in one step. RoundRect's 12
-/// sidecars (8 edge anchors + 4 inset arc centres) are reachable only
-/// by descending through its 4 `Arc` entities, and Oval's 2 arc
-/// centres the same way through its 2 Arcs — neither Arc-descent path
-/// was ever driven. Parameterised over all four pad shapes so the next
-/// shape added to this walk has to earn the same coverage.
+/// so `pair_sidecar_entities` finds them in one step. RoundRect's 4
+/// inset arc centres are the one sidecar geometry reachable only by
+/// descending through its 4 `Arc` entities' `center` field (the Arc
+/// arm in `pair_sidecar_entities`, remint_in_place.rs ~167-184). Oval,
+/// by contrast, seeds its 2 arc centres (`oval_centre_0`/
+/// `oval_centre_1`) as direct sidecars exactly like Chamfered — it
+/// exercises no Arc-descent path here, and stays in this walk only for
+/// its own from-scratch-equality coverage. Parameterised over all four
+/// pad shapes so the next shape added to this walk has to earn the
+/// same coverage; the RoundRect case additionally asserts that the
+/// PRE-REMINT ids themselves survive, since a from-scratch-equality
+/// check alone stays green even when the pairing silently falls back
+/// to a full re-mint under fresh ids.
 #[test]
 fn in_place_remint_matches_a_fresh_mint_for_every_shape() {
     use signex_library::primitive::footprint::ChamferedCorners;
@@ -1042,6 +1049,27 @@ fn assert_in_place_remint_matches_fresh_mint(shape: LibPadShape) {
     pad.shape = shape.clone();
     mirror_add_pad_to_sketch(&mut pad, &mut fp);
 
+    // For RoundRect, snapshot every id `owned_sketch_entities` reports
+    // BEFORE the re-mint — centre, bbox corners, the 4
+    // `corner_r_*_arc` sidecars, and (via that fn's one-hop Arc
+    // expansion) the 4 inset arc-centre Points reachable only by
+    // descending through those Arcs. A from-scratch-mint EQUALITY
+    // check alone cannot guard this: if the Arc arm's centre push
+    // (`pair_sidecar_entities`, remint_in_place.rs ~167-184, the push
+    // itself at ~181) is ever dropped, `pairing_covers_all_geometry`
+    // rejects the pairing and `remint_pad_geometry_in_place` silently
+    // falls back to a full `remint_pad_geometry` — which deletes the
+    // pad's whole entity set and re-mints it under FRESH ids.
+    // Geometrically identical, but every one of these ids goes stale
+    // mid-drag, which IS the #434 regression: a live drag holds an id,
+    // not a position, so an id-agnostic comparison stays green while
+    // the drag freezes.
+    let pre_remint_owned: Vec<SketchEntityId> = if matches!(shape, LibPadShape::RoundRect { .. }) {
+        ownership::owned_sketch_entities(&pad, fp.sketch.as_ref().unwrap())
+    } else {
+        Vec::new()
+    };
+
     // Simulate a live Sketch-mode edge/corner drag tick: size AND
     // position change together, exactly as `remint_dragged_pad`'s two
     // callers (`updates/sketch/entities.rs`) write them before calling
@@ -1052,6 +1080,31 @@ fn assert_in_place_remint_matches_fresh_mint(shape: LibPadShape) {
         remint_pad_geometry_in_place(&mut pad, &mut fp),
         "{shape:?} is not a sketch-profile pad and must re-mint in place"
     );
+
+    if !pre_remint_owned.is_empty() {
+        let live: std::collections::HashSet<SketchEntityId> = fp
+            .sketch
+            .as_ref()
+            .unwrap()
+            .entities
+            .iter()
+            .map(|e| e.id)
+            .collect();
+        let churned: Vec<SketchEntityId> = pre_remint_owned
+            .iter()
+            .copied()
+            .filter(|id| !live.contains(id))
+            .collect();
+        assert!(
+            churned.is_empty(),
+            "in-place re-mint churned {} of {} pre-remint owned ids (incl. RoundRect's inset \
+             arc centres, reachable only via the Arc arm) — the pairing fell back to a full \
+             remint_pad_geometry, which is exactly the id churn that freezes a live drag \
+             (#434): {churned:?}",
+            churned.len(),
+            pre_remint_owned.len(),
+        );
+    }
 
     // Independent reference: mint the SAME final pad from scratch —
     // fresh ids throughout — into an empty footprint, and demand the
@@ -1073,9 +1126,10 @@ fn assert_in_place_remint_matches_fresh_mint(shape: LibPadShape) {
 
     // RoundRect specifically: assert the 4 inset ARC CENTRES, not just
     // the 8 outer edge anchors — dropping the centre push in
-    // `pair_sidecar_entities`'s Arc arm (remint_in_place.rs:153-170)
-    // is exactly the regression #434 warns would strand these on the
-    // pad's OLD frame while everything else moved.
+    // `pair_sidecar_entities`'s Arc arm (remint_in_place.rs ~167-184,
+    // the push itself at ~181) is exactly the regression #434 warns
+    // would strand these on the pad's OLD frame while everything else
+    // moved.
     if matches!(shape, LibPadShape::RoundRect { .. }) {
         let mut actual = roundrect_arc_centres(&pad, &fp);
         let mut expected = roundrect_arc_centres(&reference_pad, &reference_fp);
