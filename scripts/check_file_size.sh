@@ -39,12 +39,28 @@ list_files() {
     | sort
 }
 
-# Production line count: lines before the first `#[cfg(test)]`, else the whole
-# file. `grep -n -m1` gives the 1-based line of the first match; production
-# lines are everything above it.
+# Production line count: lines before a trailing INLINE test module
+# (`#[cfg(test)] mod tests { … }` running to EOF), else the whole file.
+#
+# An external declaration (`#[cfg(test)] mod tests;`, pointing at a dedicated
+# test file) must NOT truncate the count — it's a one-line pointer, not a
+# block of test code, and real production lines commonly follow it (#464).
+# Neither does a lone `#[cfg(test)] fn helper() { … }` test-only helper mid-file.
+# Only an attribute immediately followed by a `mod <name> {` block opener
+# counts as the start of the trailing test module; take the LAST such
+# occurrence in the file so earlier external declarations are ignored.
 prod_lines() {
   local f="$1" n
-  n=$(grep -n -m1 '#\[cfg(test)\]' "$f" | cut -d: -f1 || true)
+  n=$(awk '
+    /^#\[cfg\(test\)\][[:space:]]*$/ { pending = NR; next }
+    pending {
+      if ($0 ~ /^[[:space:]]*(pub(\([^)]*\))?[[:space:]]+)?mod[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\{[[:space:]]*$/) {
+        last = pending
+      }
+      pending = 0
+    }
+    END { if (last) print last }
+  ' "$f")
   if [[ -n "$n" ]]; then
     echo $((n - 1))
   else
