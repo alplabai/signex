@@ -1,7 +1,8 @@
 //! Live shape-preview canvas widget (`DrawingPreview`) shown above the
-//! Drawing properties rows, plus its bounding-box / circumcircle / arc-
-//! sweep geometry helpers. Moved verbatim from the former single-file
-//! `element_properties` module.
+//! Drawing properties rows, plus its bounding-box / arc-sweep geometry
+//! helpers (circumcircle now comes from the shared
+//! `signex_types::schematic::circumcircle`, #461). Moved verbatim from the
+//! former single-file `element_properties` module.
 
 use super::super::*;
 

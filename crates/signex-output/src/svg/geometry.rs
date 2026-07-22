@@ -103,27 +103,20 @@ pub(super) fn arc_path_commands(
     }
 }
 
+/// Circle through three SVG-space points. Delegates to the canonical
+/// `signex_types::schematic::circumcircle` (#483) so the SVG arc exporter
+/// shares the one collinearity epsilon instead of carrying a 5th copy of
+/// the formula. SVG geometry is `f32`; the math runs in `f64` (as it
+/// already did inline here) and casts back — byte-identical to the former
+/// hand-rolled version.
 fn circle_from_three_points(a: SvgPoint, b: SvgPoint, c: SvgPoint) -> Option<(f32, f32, f32)> {
-    let (ax, ay) = (a.x as f64, a.y as f64);
-    let (bx, by) = (b.x as f64, b.y as f64);
-    let (cx, cy) = (c.x as f64, c.y as f64);
-
-    let d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
-    if d.abs() < 1e-12 {
-        return None;
-    }
-
-    let ux = ((ax * ax + ay * ay) * (by - cy)
-        + (bx * bx + by * by) * (cy - ay)
-        + (cx * cx + cy * cy) * (ay - by))
-        / d;
-    let uy = ((ax * ax + ay * ay) * (cx - bx)
-        + (bx * bx + by * by) * (ax - cx)
-        + (cx * cx + cy * cy) * (bx - ax))
-        / d;
-    let r = ((ax - ux) * (ax - ux) + (ay - uy) * (ay - uy)).sqrt();
-
-    Some((ux as f32, uy as f32, r as f32))
+    use signex_types::schematic::{Point, circumcircle};
+    let (cx, cy, r) = circumcircle(
+        Point::new(a.x as f64, a.y as f64),
+        Point::new(b.x as f64, b.y as f64),
+        Point::new(c.x as f64, c.y as f64),
+    )?;
+    Some((cx as f32, cy as f32, r as f32))
 }
 
 fn arc_sweep(start: f64, mid: f64, end: f64) -> (f64, f64) {
