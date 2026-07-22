@@ -84,6 +84,31 @@ pub(crate) fn assemble_active_project_sheets(
     (pages, set)
 }
 
+/// The sheet-walk order every whole-project Annotate operation must agree
+/// on: `project_set.sheets` in sorted-path order, with `active_path`
+/// appended at the end if it has a path the set doesn't already cover (an
+/// active document the assembler can't place, e.g. one that hasn't been
+/// saved anywhere the project reaches).
+///
+/// One function for the action (`handle_annotate`) and the preview list it
+/// must match. #406 made them agree on *which* sheets to cover; they still
+/// disagreed on the *order* to walk them in, which is what decides which
+/// designator number each `?` symbol gets — a preview showing `R1` on sheet
+/// A while the action hands sheet A `R2` (#435).
+pub(crate) fn ordered_project_sheet_paths(
+    project_set: &ProjectSheetSet,
+    active_path: Option<&Path>,
+) -> Vec<PathBuf> {
+    let mut paths: Vec<PathBuf> = project_set.sheets.keys().cloned().collect();
+    paths.sort();
+    if let Some(active) = active_path
+        && !project_set.sheets.contains_key(active)
+    {
+        paths.push(active.to_path_buf());
+    }
+    paths
+}
+
 /// Absolute path of a project's root schematic — its declared
 /// `schematic_root`, falling back to the first entry in the sheet list.
 pub(crate) fn project_root_sheet_path(
