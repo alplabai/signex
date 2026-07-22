@@ -8,6 +8,14 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
+## [0.15.0] — 2026-07-23
+
+The **v0.15.0 "Editor Fixes"** milestone — 43 commits, 2026-07-15 → 2026-07-23.
+Footprint- and symbol-editor correctness, an order-independent netlist
+derivation with the ERC/BOM consumers reading the same topology, crash-safe
+persistence, and CI/toolchain hardening (pinned Rust 1.97.0, an enforced
+`rustfmt` gate, and the god-file ratchet).
+
 ### Fixed — netlist
 
 - **Netlist derivation no longer depends on wire order** (#402). `uf::union`
@@ -69,9 +77,75 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
   ERC now says the net was decided by tiebreak instead of leaving the user to
   guess. Labels on a wire endpoint, or on a dotted crossing, are not flagged.
 
-_v0.14.0 shipped 2026-07-18. The symbol polygon primitive, Place Polygon tool,
-Join into Polygon, right-click context menu, and the arc-sweep /
-legacy-migration fixes that briefly lived here all shipped in v0.14.0 below._
+### Added — footprint & symbol editor
+
+- **Real Align… dialog** composing the existing `AlignOps` (#370).
+- **Break Track** wired to the sketch `split_line` primitive (#372), backed by a
+  new `split_line` primitive that divides a `Line` at parameter *t* (#429).
+- **Drag Track End** as an endpoint-biased segment grab (#361).
+- **Sketch active bar** grouped under Create / Modify, with the chrome search
+  bar centred (#443).
+
+### Fixed — footprint & symbol editor
+
+- **Context-menu selection** no longer acts on a stale target, and no-op edits
+  stop dirtying the document or pushing history (#146).
+- **Pad geometry** — pad rotation is now real geometry that holds the sidecar
+  re-mint invariant (#433); a pad's ownership of its sketch geometry survives
+  reopen (#424); the Place/Move active-bar button drives the pad Select tool
+  (#427).
+- **Shapes dropdown** collapses the three phantom Arc rows to one (#462).
+- **Tab during footprint sketch placement** routes to the sketch instead of
+  triggering Save in the standalone editor (#428).
+
+### Fixed — schematic, ERC & export
+
+- **Child-sheet references** resolve parent-relative through one shared helper
+  (#339) and are rejected when they escape the resolution root (#473).
+- **Sheet delete** completes correctly, and cut/copy is gated on a preservable
+  selection subset (#425).
+- **Annotate** preview and action now agree on sheet-walk order (#470).
+- **Deterministic child-sheet ownership** with loud cross-directory filename
+  collisions (#459).
+- **Stale minted junction dots** are removed on wire-geometry reconcile (#480).
+- **ERC** merges same-name labels in the shared connectivity so it matches the
+  netlist (#418).
+- **Export** gained a project sheet-set assembler with per-deliverable stitch
+  severity, plus the Export-anyway netlist path (#436, #406, #431 via #449).
+
+### Fixed — BOM
+
+- Designators order naturally with Fitted ranked above DNP (#419), and field
+  lookup is deterministic and case-insensitive with base fit resolution (#474).
+
+### Fixed — persistence
+
+- **Save-All** routes every dirty document kind and surfaces the failure reason
+  (#452), covered by Cut/Save-All regression tests (#460).
+- **Crash-safe writes** — table and settings writes go through `atomic_write`
+  (#421), whose per-writer tmp sibling name is now unique (#469).
+- Schematic extras serialize deterministically (#409).
+- The test suite no longer touches the real `prefs.json`; the no-config-dir
+  fallback is surfaced (#439).
+
+### Fixed — geometry & output
+
+- **Circumcircle math unified** — four copies collapsed to one canonical helper
+  (#461), with the SVG output routed through it (#484).
+- **Bake/library** rejects unit-suffixed chamfer ratios and fixes a
+  byte-boundary panic in hash-cell parsing (#417).
+
+### Changed — tooling, CI & toolchain
+
+- **Rust pinned to 1.97.0** (`rust-toolchain.toml` + CI) for cargo/CI/fmt parity
+  (#454), the MSRV raised to match (#456), and the pin documented (#455).
+- **`rustfmt` is now an enforced gate** — `rustfmt --all` across the workspace
+  and the fmt job made blocking (#453).
+- **God-file ratchet gate** — no new or growing production god-files (#450), the
+  cap raised to 1000 lines (#451), counting production lines past an external
+  `mod tests;` (#468).
+- **Data-driven dropdown table** replaces the `dropdown.rs` god-file (#458).
+- The labeler matches `signex-app` tests so test-only PRs get area labels (#441).
 
 ## [0.14.0] — 2026-07-18
 
