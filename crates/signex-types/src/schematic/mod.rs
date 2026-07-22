@@ -204,9 +204,19 @@ mod circumcircle_tests {
             "test setup must land in the drifted-epsilon band, got |d|={}",
             d.abs()
         );
+        let (cx, cy, r) = circumcircle(a, b, c)
+            .expect("canonical 1e-12 epsilon must solve determinants in (1e-12, 1e-9)");
+        // The tiny denominator amplifies the numerator, so bound the result:
+        // it must stay finite (no inf/NaN blow-up), and a near-collinear
+        // triangle has a huge-but-bounded circumradius — here ~2.5e9 for a
+        // 2e-10 bulge over a chord of 2.
         assert!(
-            circumcircle(a, b, c).is_some(),
-            "canonical 1e-12 epsilon must solve determinants in (1e-12, 1e-9)"
+            cx.is_finite() && cy.is_finite() && r.is_finite(),
+            "near-collinear solve must stay finite, got ({cx}, {cy}, {r})"
+        );
+        assert!(
+            (1e8..1e12).contains(&r),
+            "near-collinear circumradius should be large but bounded, got r={r}"
         );
     }
 }
