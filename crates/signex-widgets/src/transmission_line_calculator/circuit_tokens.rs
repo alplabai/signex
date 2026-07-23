@@ -315,7 +315,7 @@ fn starts_with_smith_chart_element_kind(value: &str) -> bool {
 
 /// Serializes s parameter token to its compact textual form.
 fn serialize_s_parameter_token(block: &SParameterBlock) -> String {
-    let kind = match block.kind {
+    let kind = match block.kind() {
         SParameterKind::S1P => "s1p",
         SParameterKind::S2P => "s2p",
     };
@@ -327,19 +327,19 @@ fn serialize_s_parameter_token(block: &SParameterBlock) -> String {
         "sparam".to_string(),
         kind.to_string(),
         freq_unit.to_string(),
-        format_number(block.reference_impedance_ohm),
+        format_number(block.reference_impedance_ohm()),
     ];
     if block.raw.len() > 1000 {
         fields.push("tooLong".to_string());
         return fields.join("_");
     }
-    for point in &block.points {
+    for point in &block.points() {
         fields.push(format_number(
             point.frequency_hz / block.source_frequency_unit.multiplier(),
         ));
         fields.push(format_number(point.s11.magnitude()));
         fields.push(format_number(point.s11.phase_degrees()));
-        if block.kind == SParameterKind::S2P {
+        if block.kind() == SParameterKind::S2P {
             let s21 = point.s21.unwrap_or(Complex::ZERO);
             let s12 = point.s12.unwrap_or(Complex::ZERO);
             let s22 = point.s22.unwrap_or(Complex::ZERO);
@@ -351,9 +351,9 @@ fn serialize_s_parameter_token(block: &SParameterBlock) -> String {
             fields.push(format_number(s22.phase_degrees()));
         }
     }
-    if block.kind == SParameterKind::S2P && !block.noise.is_empty() {
+    if block.kind() == SParameterKind::S2P && !block.noise().is_empty() {
         fields.push("noise".to_string());
-        for point in &block.noise {
+        for point in &block.noise() {
             fields.push(format_number(
                 point.frequency_hz / block.source_frequency_unit.multiplier(),
             ));

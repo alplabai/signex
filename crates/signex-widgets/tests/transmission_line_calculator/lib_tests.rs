@@ -291,7 +291,7 @@ fn smith_chart_analysis_uses_noise_parameter_frequencies_for_noise_outputs() {
 1.8 1.2 0.30 45 0.1",
     )
     .unwrap();
-    assert_eq!(block.noise.len(), 2);
+    assert_eq!(block.noise().len(), 2);
     let active_frequency =
         select_active_frequency(&[SmithChartElement::SParameter(block.clone())], 1.0e9);
     assert_close(active_frequency, 1.0e9);

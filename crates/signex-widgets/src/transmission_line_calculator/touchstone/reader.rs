@@ -132,15 +132,14 @@ fn block_from_touchstone(
         .unwrap_or_default();
     replace_duplicate_noise(&mut noise);
 
-    Ok(SParameterBlock {
+    SParameterBlock::from_samples(
         kind,
-        reference_impedance_ohm,
-        port_reference_impedances_ohm: references,
-        source_frequency_unit: scalar_frequency_unit(touchstone.frequency_unit),
+        references,
+        scalar_frequency_unit(touchstone.frequency_unit),
         points,
         noise,
-        raw: raw.to_owned(),
-    })
+        raw.to_owned(),
+    )
 }
 
 fn infer_version_one_rank(raw: &str) -> Result<usize, SolveError> {

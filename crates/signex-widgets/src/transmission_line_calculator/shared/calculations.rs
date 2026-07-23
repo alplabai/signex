@@ -113,7 +113,7 @@ pub(in crate::transmission_line_calculator::tool) fn parse_touchstone_input(
 ) -> Result<SParameterBlock, String> {
     let normalized = value.replace('|', "\n");
     let block = parse_touchstone(&normalized).map_err(|err| err.to_string())?;
-    if matches!(block.kind, SParameterKind::S1P | SParameterKind::S2P) {
+    if matches!(block.kind(), SParameterKind::S1P | SParameterKind::S2P) {
         Ok(block)
     } else {
         Err("Unsupported Touchstone data".to_string())

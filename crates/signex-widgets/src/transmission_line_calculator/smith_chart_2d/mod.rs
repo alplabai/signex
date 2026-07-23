@@ -59,7 +59,7 @@ pub(super) fn s_parameter_chart_traces(state: &SmithChartState) -> Vec<SParamete
             &mut traces,
             "S11",
             Color::from_rgb8(0, 114, 178),
-            block.points.iter().map(|point| point.s11),
+            block.points().iter().map(|point| point.s11),
             state.conjugate_s_parameter_traces,
         );
     }
@@ -68,7 +68,7 @@ pub(super) fn s_parameter_chart_traces(state: &SmithChartState) -> Vec<SParamete
             &mut traces,
             "S21",
             Color::from_rgb8(230, 159, 0),
-            block.points.iter().filter_map(|point| point.s21),
+            block.points().iter().filter_map(|point| point.s21),
             state.conjugate_s_parameter_traces,
         );
     }
@@ -77,7 +77,7 @@ pub(super) fn s_parameter_chart_traces(state: &SmithChartState) -> Vec<SParamete
             &mut traces,
             "S12",
             Color::from_rgb8(204, 121, 167),
-            block.points.iter().filter_map(|point| point.s12),
+            block.points().iter().filter_map(|point| point.s12),
             state.conjugate_s_parameter_traces,
         );
     }
@@ -86,7 +86,7 @@ pub(super) fn s_parameter_chart_traces(state: &SmithChartState) -> Vec<SParamete
             &mut traces,
             "S22",
             Color::from_rgb8(0, 158, 115),
-            block.points.iter().filter_map(|point| point.s22),
+            block.points().iter().filter_map(|point| point.s22),
             state.conjugate_s_parameter_traces,
         );
     }

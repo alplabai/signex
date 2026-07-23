@@ -200,7 +200,7 @@ fn solve_smith_chart_nominal(
     let reference = circuit
         .iter()
         .find_map(|element| match element {
-            SmithChartElement::SParameter(block) => Some(block.reference_impedance_ohm),
+            SmithChartElement::SParameter(block) => Some(block.reference_impedance_ohm()),
             _ => None,
         })
         .unwrap_or(fallback_reference_ohm);
@@ -791,12 +791,12 @@ pub(crate) fn select_active_frequency(circuit: &[SmithChartElement], requested_h
         return requested_hz;
     };
     let minimum = block
-        .points
+        .points()
         .iter()
         .map(|point| point.frequency_hz)
         .min_by(f64::total_cmp);
     let maximum = block
-        .points
+        .points()
         .iter()
         .map(|point| point.frequency_hz)
         .max_by(f64::total_cmp);
@@ -1167,7 +1167,7 @@ fn frequency_samples(
         let min = active_frequency_hz - settings.span_hz;
         let max = active_frequency_hz + settings.span_hz;
         return block
-            .points
+            .points()
             .iter()
             .map(|point| point.frequency_hz)
             .filter(|frequency| *frequency >= min && *frequency <= max)
@@ -1225,7 +1225,7 @@ fn solve_s_parameter_gain(
     let SmithChartElement::SParameter(block) = &circuit[block_index] else {
         return Ok(Vec::new());
     };
-    if block.kind != SParameterKind::S2P {
+    if block.kind() != SParameterKind::S2P {
         return Ok(Vec::new());
     }
     let source_side = &circuit[..block_index];
@@ -1253,7 +1253,7 @@ fn solve_s_parameter_gain_variants(
     let SmithChartElement::SParameter(block) = &circuit[block_index] else {
         return Ok(Vec::new());
     };
-    if block.kind != SParameterKind::S2P {
+    if block.kind() != SParameterKind::S2P {
         return Ok(Vec::new());
     }
     let source_variants = gain_side_variants(&circuit[..block_index]);
@@ -1300,7 +1300,7 @@ fn solve_s1p_reflection_variants(
     let Some(block_index) = circuit.iter().position(|element| {
         matches!(
             element,
-            SmithChartElement::SParameter(block) if block.kind == SParameterKind::S1P
+            SmithChartElement::SParameter(block) if block.kind() == SParameterKind::S1P
         )
     }) else {
         return Ok(Vec::new());
@@ -1308,7 +1308,7 @@ fn solve_s1p_reflection_variants(
     let SmithChartElement::SParameter(block) = &circuit[block_index] else {
         return Ok(Vec::new());
     };
-    let reference_impedance = s1p_reference_impedance(circuit, block.reference_impedance_ohm);
+    let reference_impedance = s1p_reference_impedance(circuit, block.reference_impedance_ohm());
     let frequencies = frequency_samples(circuit, settings, active_frequency_hz);
     let mut out = Vec::new();
     for variant in tolerance_variants_with_nominal(circuit) {
@@ -1376,7 +1376,7 @@ fn solve_s_parameter_gain_for_sides(
         .map(|result| result.impedance)
         .unwrap_or(Complex::new(settings.reference_impedance_ohm, 0.0));
         let load_z = solve_smith_chart_nominal(
-            &load_side,
+            load_side,
             frequency_hz,
             settings.show_ideal,
             settings.reference_impedance_ohm,
@@ -1384,15 +1384,15 @@ fn solve_s_parameter_gain_for_sides(
         .map(|result| result.impedance)
         .unwrap_or(Complex::new(settings.reference_impedance_ohm, 0.0));
         let source_reference = block
-            .port_reference_impedances_ohm
+            .port_reference_impedances_ohm()
             .first()
             .copied()
-            .unwrap_or(block.reference_impedance_ohm);
+            .unwrap_or(block.reference_impedance_ohm());
         let load_reference = block
-            .port_reference_impedances_ohm
+            .port_reference_impedances_ohm()
             .get(1)
             .copied()
-            .unwrap_or(block.reference_impedance_ohm);
+            .unwrap_or(block.reference_impedance_ohm());
         let gamma_source = impedance_to_reflection(source_z, source_reference);
         let gamma_load = impedance_to_reflection(load_z, load_reference);
         let Some(transducer_gain_linear) = s_parameters.transducer_gain(gamma_source, gamma_load)
@@ -1414,7 +1414,7 @@ fn solve_stability_circles(
     active_frequency_hz: f64,
 ) -> Vec<StabilityCircle> {
     let Some(block) = circuit.iter().find_map(|element| match element {
-        SmithChartElement::SParameter(block) if block.kind == SParameterKind::S2P => Some(block),
+        SmithChartElement::SParameter(block) if block.kind() == SParameterKind::S2P => Some(block),
         _ => None,
     }) else {
         return Vec::new();
@@ -1463,7 +1463,7 @@ pub fn solve_s_parameter_gain_circles(
 ) -> Vec<GainCircle> {
     let active_frequency_hz = select_active_frequency(circuit, settings.frequency_hz);
     let Some(block) = circuit.iter().find_map(|element| match element {
-        SmithChartElement::SParameter(block) if block.kind == SParameterKind::S2P => Some(block),
+        SmithChartElement::SParameter(block) if block.kind() == SParameterKind::S2P => Some(block),
         _ => None,
     }) else {
         return Vec::new();
@@ -1525,14 +1525,17 @@ pub fn solve_noise_figure_circles(
         .iter()
         .copied()
         .filter_map(|target_noise_figure_db| {
-            noise_figure_circle(noise, block.reference_impedance_ohm, target_noise_figure_db).map(
-                |(center, radius)| NoiseFigureCircle {
-                    frequency_hz: active_noise_frequency_hz,
-                    target_noise_figure_db,
-                    center,
-                    radius,
-                },
+            noise_figure_circle(
+                &noise,
+                block.reference_impedance_ohm(),
+                target_noise_figure_db,
             )
+            .map(|(center, radius)| NoiseFigureCircle {
+                frequency_hz: active_noise_frequency_hz,
+                target_noise_figure_db,
+                center,
+                radius,
+            })
         })
         .collect()
 }
@@ -1639,11 +1642,11 @@ pub(crate) fn solve_noise_figure(
 
 /// Selects active noise frequency from the available candidates.
 fn select_active_noise_frequency(block: &SParameterBlock, requested_hz: f64) -> f64 {
-    block
-        .noise
+    let noise = block.noise();
+    noise
         .iter()
         .find(|point| point.frequency_hz >= requested_hz)
-        .or_else(|| block.noise.last())
+        .or_else(|| noise.last())
         .map(|point| point.frequency_hz)
         .unwrap_or(requested_hz)
 }
@@ -1657,7 +1660,7 @@ pub(crate) fn noise_frequency_samples(
     let min = active_frequency_hz - settings.span_hz;
     let max = active_frequency_hz + settings.span_hz;
     block
-        .noise
+        .noise()
         .iter()
         .map(|point| point.frequency_hz)
         .filter(|frequency| *frequency >= min && *frequency <= max)
@@ -1698,10 +1701,10 @@ fn custom_impedance(
 }
 
 /// Returns the noise-parameter point whose frequency exactly matches the request.
-fn exact_noise_point_at(block: &SParameterBlock, frequency_hz: f64) -> Option<&NoisePoint> {
+fn exact_noise_point_at(block: &SParameterBlock, frequency_hz: f64) -> Option<NoisePoint> {
     block
-        .noise
-        .iter()
+        .noise()
+        .into_iter()
         .find(|point| same_number(point.frequency_hz, frequency_hz))
 }
 

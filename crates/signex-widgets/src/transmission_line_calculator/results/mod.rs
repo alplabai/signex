@@ -146,7 +146,7 @@ pub(super) fn frequency_plot_panel<'a>(
                     circuit.into_iter().find_map(|element| match element {
                         SmithChartElement::SParameter(block) => Some(
                             block
-                                .points
+                                .points()
                                 .into_iter()
                                 .filter_map(|point| {
                                     point.s21.and_then(|s21| {

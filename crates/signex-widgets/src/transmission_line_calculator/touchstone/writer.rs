@@ -10,17 +10,20 @@ pub fn serialize_touchstone(
     block: &SParameterBlock,
     format: TouchstoneFormat,
 ) -> Result<String, SolveError> {
-    let port_count = port_count(block.kind);
+    let kind = block.kind();
+    let port_count = port_count(kind);
     let frequency_unit = touchstone_frequency_unit_name(block.source_frequency_unit)?;
     let frequency_multiplier = block.source_frequency_unit.multiplier();
     let references = effective_port_references(block, port_count)?;
-    let mut points = block.points.iter().collect::<Vec<_>>();
+    let point_values = block.points();
+    let mut points = point_values.iter().collect::<Vec<_>>();
     points.sort_by(|left, right| left.frequency_hz.total_cmp(&right.frequency_hz));
-    validate_points(&points, block.kind, format)?;
+    validate_points(&points, kind, format)?;
 
-    let mut noise = block.noise.iter().collect::<Vec<_>>();
+    let noise_values = block.noise();
+    let mut noise = noise_values.iter().collect::<Vec<_>>();
     noise.sort_by(|left, right| left.frequency_hz.total_cmp(&right.frequency_hz));
-    validate_noise(&noise, block.kind)?;
+    validate_noise(&noise, kind)?;
 
     let mut output = String::new();
     output.push_str("! Touchstone 2.1 file written by Signex\n");
@@ -31,7 +34,7 @@ pub fn serialize_touchstone(
         format_touchstone_number(references[0])
     ));
     output.push_str(&format!("[Number of Ports] {port_count}\n"));
-    if block.kind == SParameterKind::S2P {
+    if kind == SParameterKind::S2P {
         output.push_str("[Two-Port Data Order] 21_12\n");
     }
     output.push_str(&format!("[Number of Frequencies] {}\n", points.len()));
@@ -52,7 +55,7 @@ pub fn serialize_touchstone(
             point.frequency_hz / frequency_multiplier,
         )];
         append_formatted_pair(&mut values, point.s11, format)?;
-        if block.kind == SParameterKind::S2P {
+        if kind == SParameterKind::S2P {
             append_formatted_pair(&mut values, point.s21.unwrap(), format)?;
             append_formatted_pair(&mut values, point.s12.unwrap(), format)?;
             append_formatted_pair(&mut values, point.s22.unwrap(), format)?;
@@ -103,11 +106,13 @@ fn effective_port_references(
     block: &SParameterBlock,
     expected_port_count: usize,
 ) -> Result<Vec<f64>, SolveError> {
-    validate_positive_finite(block.reference_impedance_ohm, "reference impedance")?;
-    let references = if block.port_reference_impedances_ohm.is_empty() {
-        vec![block.reference_impedance_ohm; expected_port_count]
-    } else if block.port_reference_impedances_ohm.len() == expected_port_count {
-        block.port_reference_impedances_ohm.clone()
+    let reference_impedance_ohm = block.reference_impedance_ohm();
+    validate_positive_finite(reference_impedance_ohm, "reference impedance")?;
+    let port_references = block.port_reference_impedances_ohm();
+    let references = if port_references.is_empty() {
+        vec![reference_impedance_ohm; expected_port_count]
+    } else if port_references.len() == expected_port_count {
+        port_references
     } else {
         return Err(write_error(format!(
             "expected {expected_port_count} port reference impedances"
@@ -116,7 +121,7 @@ fn effective_port_references(
     for reference in &references {
         validate_positive_finite(*reference, "port reference impedance")?;
     }
-    if references[0] != block.reference_impedance_ohm {
+    if references[0] != reference_impedance_ohm {
         return Err(write_error(
             "the primary and port 1 reference impedances disagree",
         ));

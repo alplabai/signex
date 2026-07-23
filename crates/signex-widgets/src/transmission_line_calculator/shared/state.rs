@@ -919,11 +919,12 @@ impl SmithChartState {
         &mut self,
         block: &crate::transmission_line_calculator::SParameterBlock,
     ) {
-        let Some(first) = block.points.first() else {
+        let points = block.points();
+        let Some(first) = points.first() else {
             return;
         };
-        let middle = &block.points[block.points.len() / 2];
-        let last = block.points.last().unwrap_or(first);
+        let middle = &points[points.len() / 2];
+        let last = points.last().unwrap_or(first);
         let unit = block.source_frequency_unit;
         let multiplier = unit.multiplier();
         let span_hz = 2.0
@@ -1136,7 +1137,7 @@ impl SmithChartState {
         if self.s_parameter_enabled {
             let block = parse_touchstone_input(&self.s_parameter_text)?;
             let s_parameter = SmithChartElement::SParameter(block.clone());
-            if block.kind == SParameterKind::S1P {
+            if block.kind() == SParameterKind::S1P {
                 let load = SmithChartElement::LoadTermination {
                     impedance: black_box_impedance,
                     tolerance_percent: black_box_tolerance,

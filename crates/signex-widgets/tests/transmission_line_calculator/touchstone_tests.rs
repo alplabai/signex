@@ -25,12 +25,11 @@ fn assert_complex_close(actual: Complex, expected: Complex) {
 fn one_port_block() -> SParameterBlock {
     let reference_impedance_ohm = 75.0;
     let s11 = Complex::new(0.3, -0.4);
-    SParameterBlock {
-        kind: SParameterKind::S1P,
-        reference_impedance_ohm,
-        port_reference_impedances_ohm: vec![reference_impedance_ohm],
-        source_frequency_unit: ScalarUnit::MegaHertz,
-        points: vec![SParameterPoint {
+    SParameterBlock::from_samples(
+        SParameterKind::S1P,
+        vec![reference_impedance_ohm],
+        ScalarUnit::MegaHertz,
+        vec![SParameterPoint {
             frequency_hz: 2.0e6,
             s11,
             s21: None,
@@ -38,20 +37,20 @@ fn one_port_block() -> SParameterBlock {
             s22: None,
             z_s11: reflection_to_impedance(s11, reference_impedance_ohm),
         }],
-        noise: Vec::new(),
-        raw: String::new(),
-    }
+        Vec::new(),
+        String::new(),
+    )
+    .unwrap()
 }
 
 /// Creates a complete two-port block with per-port references and noise data.
 fn two_port_block() -> SParameterBlock {
     let s11 = Complex::new(0.1, 0.2);
-    SParameterBlock {
-        kind: SParameterKind::S2P,
-        reference_impedance_ohm: 50.0,
-        port_reference_impedances_ohm: vec![50.0, 75.0],
-        source_frequency_unit: ScalarUnit::MegaHertz,
-        points: vec![SParameterPoint {
+    SParameterBlock::from_samples(
+        SParameterKind::S2P,
+        vec![50.0, 75.0],
+        ScalarUnit::MegaHertz,
+        vec![SParameterPoint {
             frequency_hz: 100.0e6,
             s11,
             s21: Some(Complex::new(2.0, 0.5)),
@@ -59,15 +58,16 @@ fn two_port_block() -> SParameterBlock {
             s22: Some(Complex::new(-0.1, 0.3)),
             z_s11: reflection_to_impedance(s11, 50.0),
         }],
-        noise: vec![NoisePoint {
+        vec![NoisePoint {
             frequency_hz: 90.0e6,
             fmin_db: 1.2,
             optimum_gamma: Complex::from_polar(0.25, 30.0),
             rn_ohm: 7.5,
             optimum_admittance: Complex::ZERO,
         }],
-        raw: String::new(),
-    }
+        String::new(),
+    )
+    .unwrap()
 }
 
 /// Returns a unique path in the repository's temporary directory.
@@ -92,16 +92,16 @@ fn parses_version1_defaults_comments_and_option_order() {
         parse_touchstone("\u{feff}! leading comment\n# MHz S RI R 75 ! inline comment\n2 0.3 -0.4")
             .unwrap();
 
-    assert_eq!(block.kind, SParameterKind::S1P);
+    assert_eq!(block.kind(), SParameterKind::S1P);
     assert_eq!(block.source_frequency_unit, ScalarUnit::MegaHertz);
-    assert_eq!(block.port_reference_impedances_ohm, vec![75.0]);
-    assert_close(block.points[0].frequency_hz, 2.0e6);
-    assert_complex_close(block.points[0].s11, Complex::new(0.3, -0.4));
+    assert_eq!(block.port_reference_impedances_ohm(), vec![75.0]);
+    assert_close(block.points()[0].frequency_hz, 2.0e6);
+    assert_complex_close(block.points()[0].s11, Complex::new(0.3, -0.4));
 
     let defaults = parse_touchstone("#\n1 0.5 90").unwrap();
     assert_eq!(defaults.source_frequency_unit, ScalarUnit::GigaHertz);
-    assert_close(defaults.reference_impedance_ohm, 50.0);
-    assert_complex_close(defaults.points[0].s11, Complex::new(0.0, 0.5));
+    assert_close(defaults.reference_impedance_ohm(), 50.0);
+    assert_complex_close(defaults.points()[0].s11, Complex::new(0.0, 0.5));
 }
 
 /// Verifies all three standard complex-number encodings.
@@ -116,7 +116,7 @@ fn parses_real_imaginary_magnitude_angle_and_decibel_angle() {
     for (format, pair, expected) in cases {
         let raw = format!("# Hz S {format} R 50\n1 {pair}");
         let block = parse_touchstone(&raw).unwrap();
-        assert_complex_close(block.points[0].s11, expected);
+        assert_complex_close(block.points()[0].s11, expected);
     }
 }
 
@@ -131,13 +131,13 @@ fn parses_version1_two_port_data_and_independent_noise_frequencies() {
     )
     .unwrap();
 
-    assert_eq!(block.kind, SParameterKind::S2P);
-    assert_eq!(block.port_reference_impedances_ohm, vec![50.0, 50.0]);
-    assert_complex_close(block.points[0].s21.unwrap(), Complex::new(2.0, 0.5));
-    assert_complex_close(block.points[0].s12.unwrap(), Complex::new(0.05, -0.02));
-    assert_eq!(block.noise.len(), 1);
-    assert_close(block.noise[0].frequency_hz, 0.9e9);
-    assert_close(block.noise[0].rn_ohm, 5.0);
+    assert_eq!(block.kind(), SParameterKind::S2P);
+    assert_eq!(block.port_reference_impedances_ohm(), vec![50.0, 50.0]);
+    assert_complex_close(block.points()[0].s21.unwrap(), Complex::new(2.0, 0.5));
+    assert_complex_close(block.points()[0].s12.unwrap(), Complex::new(0.05, -0.02));
+    assert_eq!(block.noise().len(), 1);
+    assert_close(block.noise()[0].frequency_hz, 0.9e9);
+    assert_close(block.noise()[0].rn_ohm, 5.0);
 }
 
 /// Verifies that raw Version 1 text infers its port count without a filename.
@@ -146,9 +146,9 @@ fn infers_version1_rank_from_the_network_record() {
     let one_port = parse_touchstone("# Hz S RI R 50\n1 0.1 0.2").unwrap();
     let two_port = parse_touchstone("# Hz S RI R 50\n1 0 0 1 0 0 0 0 0").unwrap();
 
-    assert_eq!(one_port.kind, SParameterKind::S1P);
-    assert_eq!(two_port.kind, SParameterKind::S2P);
-    assert_complex_close(two_port.points[0].s21.unwrap(), Complex::new(1.0, 0.0));
+    assert_eq!(one_port.kind(), SParameterKind::S1P);
+    assert_eq!(two_port.kind(), SParameterKind::S2P);
+    assert_complex_close(two_port.points()[0].s21.unwrap(), Complex::new(1.0, 0.0));
 }
 
 /// Verifies Version 2.x keywords, continuations, alternate ordering, and noise units.
@@ -173,11 +173,11 @@ fn parses_version2_full_matrix_continuations_and_per_port_references() {
     )
     .unwrap();
 
-    assert_eq!(block.port_reference_impedances_ohm, vec![50.0, 75.0]);
-    assert_complex_close(block.points[0].s21.unwrap(), Complex::new(2.0, 0.5));
-    assert_complex_close(block.points[0].s12.unwrap(), Complex::new(0.05, -0.02));
-    assert_close(block.noise[0].frequency_hz, 90.0e6);
-    assert_close(block.noise[0].rn_ohm, 7.5);
+    assert_eq!(block.port_reference_impedances_ohm(), vec![50.0, 75.0]);
+    assert_complex_close(block.points()[0].s21.unwrap(), Complex::new(2.0, 0.5));
+    assert_complex_close(block.points()[0].s12.unwrap(), Complex::new(0.05, -0.02));
+    assert_close(block.noise()[0].frequency_hz, 90.0e6);
+    assert_close(block.noise()[0].rn_ohm, 7.5);
 }
 
 /// Verifies triangular two-port matrices are expanded symmetrically.
@@ -196,10 +196,10 @@ fn parses_version2_triangular_matrix() {
     )
     .unwrap();
 
-    assert_complex_close(block.points[0].s11, Complex::new(0.1, 0.2));
-    assert_complex_close(block.points[0].s21.unwrap(), Complex::new(0.3, 0.4));
-    assert_complex_close(block.points[0].s12.unwrap(), Complex::new(0.3, 0.4));
-    assert_complex_close(block.points[0].s22.unwrap(), Complex::new(0.5, 0.6));
+    assert_complex_close(block.points()[0].s11, Complex::new(0.1, 0.2));
+    assert_complex_close(block.points()[0].s21.unwrap(), Complex::new(0.3, 0.4));
+    assert_complex_close(block.points()[0].s12.unwrap(), Complex::new(0.3, 0.4));
+    assert_complex_close(block.points()[0].s22.unwrap(), Complex::new(0.5, 0.6));
 }
 
 /// Verifies the specification's two-port noise example and conventional default ordering.
@@ -223,13 +223,13 @@ fn parses_touchstone_2_1_specification_noise_example() {
     )
     .unwrap();
 
-    assert_eq!(block.kind, SParameterKind::S2P);
-    assert_eq!(block.port_reference_impedances_ohm, vec![50.0, 25.0]);
-    assert_close(block.points[0].frequency_hz, 2.0e9);
-    assert_close(block.points[0].s21.unwrap().magnitude(), 3.57);
-    assert_close(block.points[0].s12.unwrap().magnitude(), 0.04);
-    assert_close(block.noise[0].frequency_hz, 4.0e9);
-    assert_close(block.noise[0].rn_ohm, 19.0);
+    assert_eq!(block.kind(), SParameterKind::S2P);
+    assert_eq!(block.port_reference_impedances_ohm(), vec![50.0, 25.0]);
+    assert_close(block.points()[0].frequency_hz, 2.0e9);
+    assert_close(block.points()[0].s21.unwrap().magnitude(), 3.57);
+    assert_close(block.points()[0].s12.unwrap().magnitude(), 0.04);
+    assert_close(block.noise()[0].frequency_hz, 4.0e9);
+    assert_close(block.noise()[0].rn_ohm, 19.0);
 }
 
 /// Verifies optional information blocks and case-insensitive keywords are ignored safely.
@@ -250,8 +250,8 @@ fn parses_version2_information_block() {
     )
     .unwrap();
 
-    assert_close(block.points[0].frequency_hz, 2.0e3);
-    assert_complex_close(block.points[0].s11, Complex::new(0.0, 0.5));
+    assert_close(block.points()[0].frequency_hz, 2.0e3);
+    assert_complex_close(block.points()[0].s11, Complex::new(0.0, 0.5));
 }
 
 /// Verifies rounded duplicate frequency keys retain the last record.
@@ -264,9 +264,9 @@ fn replaces_duplicate_canonical_frequency_records() {
     )
     .unwrap();
 
-    assert_eq!(block.points.len(), 1);
-    assert_close(block.points[0].frequency_hz, 1000.0);
-    assert_close(block.points[0].s11.re, 0.2);
+    assert_eq!(block.points().len(), 1);
+    assert_close(block.points()[0].frequency_hz, 1000.0);
+    assert_close(block.points()[0].s11.re, 0.2);
 }
 
 /// Verifies malformed and unsupported documents return parsing errors.
@@ -319,9 +319,9 @@ fn serializes_and_parses_one_port_data_in_every_format() {
         assert!(raw.starts_with("! Touchstone 2.1 file written by Signex\n[Version] 2.1"));
         assert!(raw.ends_with("[End]\n"));
         let parsed = parse_touchstone(&raw).unwrap();
-        assert_eq!(parsed.kind, block.kind);
-        assert_eq!(parsed.port_reference_impedances_ohm, vec![75.0]);
-        assert_complex_close(parsed.points[0].s11, block.points[0].s11);
+        assert_eq!(parsed.kind(), block.kind());
+        assert_eq!(parsed.port_reference_impedances_ohm(), vec![75.0]);
+        assert_complex_close(parsed.points()[0].s11, block.points()[0].s11);
     }
 }
 
@@ -335,27 +335,69 @@ fn serializes_and_parses_two_port_data_with_noise() {
     assert!(raw.contains("[Reference] 50 75"));
     assert!(raw.contains("[Number of Noise Frequencies] 1"));
     let parsed = parse_touchstone(&raw).unwrap();
-    assert_eq!(parsed.port_reference_impedances_ohm, vec![50.0, 75.0]);
-    assert_complex_close(parsed.points[0].s21.unwrap(), block.points[0].s21.unwrap());
-    assert_complex_close(parsed.points[0].s12.unwrap(), block.points[0].s12.unwrap());
-    assert_close(parsed.noise[0].frequency_hz, 90.0e6);
-    assert_close(parsed.noise[0].rn_ohm, 7.5);
+    assert_eq!(parsed.port_reference_impedances_ohm(), vec![50.0, 75.0]);
+    assert_complex_close(
+        parsed.points()[0].s21.unwrap(),
+        block.points()[0].s21.unwrap(),
+    );
+    assert_complex_close(
+        parsed.points()[0].s12.unwrap(),
+        block.points()[0].s12.unwrap(),
+    );
+    assert_close(parsed.noise()[0].frequency_hz, 90.0e6);
+    assert_close(parsed.noise()[0].rn_ohm, 7.5);
+}
+
+/// Verifies the Network-backed wrapper preserves editor and RF metadata through serde.
+#[test]
+fn network_backed_block_round_trips_through_serde() {
+    let block = parse_touchstone(
+        "[Version] 2.1\n\
+         # MHz S RI R 50\n\
+         [Number of Ports] 2\n\
+         [Number of Frequencies] 1\n\
+         [Number of Noise Frequencies] 1\n\
+         [Reference] 50 75\n\
+         [Network Data]\n\
+         100 0.1 0.2 2 0.5 0.05 -0.02 -0.1 0.3\n\
+         [Noise Data]\n\
+         90 1.2 0.25 30 7.5\n\
+         [End]",
+    )
+    .unwrap();
+
+    let encoded = serde_json::to_string(&block).unwrap();
+    let restored: SParameterBlock = serde_json::from_str(&encoded).unwrap();
+
+    assert_eq!(restored, block);
+    assert_eq!(restored.raw, block.raw);
+    assert_eq!(restored.port_reference_impedances_ohm(), vec![50.0, 75.0]);
+    assert_complex_close(restored.points()[0].s21.unwrap(), Complex::new(2.0, 0.5));
+    assert_close(restored.noise()[0].rn_ohm, 7.5);
 }
 
 /// Verifies serialization orders frequency records deterministically.
 #[test]
 fn serializer_orders_frequency_records() {
-    let mut block = one_port_block();
-    let mut earlier = block.points[0].clone();
+    let original = one_port_block();
+    let mut earlier = original.points()[0].clone();
     earlier.frequency_hz = 1.0e6;
-    block.points.insert(0, block.points[0].clone());
-    block.points[0].frequency_hz = 3.0e6;
-    block.points.push(earlier);
+    let mut later = original.points()[0].clone();
+    later.frequency_hz = 3.0e6;
+    let block = SParameterBlock::from_samples(
+        SParameterKind::S1P,
+        vec![75.0],
+        ScalarUnit::MegaHertz,
+        vec![later, original.points()[0].clone(), earlier],
+        Vec::new(),
+        String::new(),
+    )
+    .unwrap();
 
     let raw = serialize_touchstone(&block, TouchstoneFormat::RealImaginary).unwrap();
     let parsed = parse_touchstone(&raw).unwrap();
     let frequencies = parsed
-        .points
+        .points()
         .iter()
         .map(|point| point.frequency_hz)
         .collect::<Vec<_>>();
@@ -372,10 +414,10 @@ fn reads_and_writes_touchstone_files() {
     let parsed = read_touchstone(&path).unwrap();
     fs::remove_file(&path).unwrap();
 
-    assert_eq!(parsed.kind, SParameterKind::S2P);
-    assert_eq!(parsed.port_reference_impedances_ohm, vec![50.0, 75.0]);
-    assert_complex_close(parsed.points[0].s11, block.points[0].s11);
-    assert_close(parsed.noise[0].rn_ohm, block.noise[0].rn_ohm);
+    assert_eq!(parsed.kind(), SParameterKind::S2P);
+    assert_eq!(parsed.port_reference_impedances_ohm(), vec![50.0, 75.0]);
+    assert_complex_close(parsed.points()[0].s11, block.points()[0].s11);
+    assert_close(parsed.noise()[0].rn_ohm, block.noise()[0].rn_ohm);
 }
 
 /// Verifies ISO/IEC 8859-1 files are decoded before rust-rf parses them.
@@ -388,9 +430,9 @@ fn reads_iso_8859_1_touchstone_files() {
     let parsed = read_touchstone(&path).unwrap();
     fs::remove_file(&path).unwrap();
 
-    assert_eq!(parsed.kind, SParameterKind::S1P);
+    assert_eq!(parsed.kind(), SParameterKind::S1P);
     assert!(parsed.raw.contains("ISO/IEC 8859-1 \u{00a3} comment"));
-    assert_close(parsed.points[0].frequency_hz, 2.0e6);
+    assert_close(parsed.points()[0].frequency_hz, 2.0e6);
 }
 
 /// Verifies file read failures retain path and I/O context.
@@ -428,22 +470,58 @@ fn reports_touchstone_file_write_errors() {
 /// Verifies the writer rejects empty, inconsistent, and non-finite blocks.
 #[test]
 fn serializer_rejects_invalid_blocks() {
-    let mut empty = one_port_block();
-    empty.points.clear();
+    let empty = SParameterBlock::from_samples(
+        SParameterKind::S1P,
+        vec![75.0],
+        ScalarUnit::MegaHertz,
+        Vec::new(),
+        Vec::new(),
+        String::new(),
+    )
+    .unwrap();
+    let one_port = one_port_block();
+    let one_port_noise = SParameterBlock::from_samples(
+        SParameterKind::S1P,
+        vec![75.0],
+        ScalarUnit::MegaHertz,
+        one_port.points(),
+        two_port_block().noise(),
+        String::new(),
+    )
+    .unwrap();
 
-    let mut incomplete_two_port = two_port_block();
-    incomplete_two_port.points[0].s21 = None;
-
-    let mut non_finite = one_port_block();
-    non_finite.points[0].frequency_hz = f64::INFINITY;
-
-    let mut one_port_noise = one_port_block();
-    one_port_noise.noise = two_port_block().noise;
-
-    for block in [empty, incomplete_two_port, non_finite, one_port_noise] {
+    for block in [empty, one_port_noise] {
         let error = serialize_touchstone(&block, TouchstoneFormat::RealImaginary).unwrap_err();
         assert!(matches!(error, SolveError::TouchstoneWriteFailed { .. }));
     }
+
+    let mut incomplete_point = two_port_block().points()[0].clone();
+    incomplete_point.s21 = None;
+    assert!(
+        SParameterBlock::from_samples(
+            SParameterKind::S2P,
+            vec![50.0, 75.0],
+            ScalarUnit::MegaHertz,
+            vec![incomplete_point],
+            Vec::new(),
+            String::new(),
+        )
+        .is_err()
+    );
+
+    let mut non_finite_point = one_port_block().points()[0].clone();
+    non_finite_point.frequency_hz = f64::INFINITY;
+    assert!(
+        SParameterBlock::from_samples(
+            SParameterKind::S1P,
+            vec![75.0],
+            ScalarUnit::MegaHertz,
+            vec![non_finite_point],
+            Vec::new(),
+            String::new(),
+        )
+        .is_err()
+    );
 }
 
 /// Verifies writer rules that are specific to units, references, and DB encoding.
@@ -452,22 +530,47 @@ fn serializer_rejects_unrepresentable_output_options() {
     let mut tera_hertz = one_port_block();
     tera_hertz.source_frequency_unit = ScalarUnit::TeraHertz;
 
-    let mut mismatched_references = one_port_block();
-    mismatched_references.port_reference_impedances_ohm = vec![50.0];
+    let one_port = one_port_block();
+    let mismatched_references = SParameterBlock::from_samples(
+        SParameterKind::S1P,
+        vec![50.0, 75.0],
+        ScalarUnit::MegaHertz,
+        one_port.points(),
+        Vec::new(),
+        String::new(),
+    );
 
-    let mut zero_decibels = one_port_block();
-    zero_decibels.points[0].s11 = Complex::ZERO;
+    let mut zero_point = one_port_block().points()[0].clone();
+    zero_point.s11 = Complex::ZERO;
+    let zero_decibels = SParameterBlock::from_samples(
+        SParameterKind::S1P,
+        vec![75.0],
+        ScalarUnit::MegaHertz,
+        vec![zero_point],
+        Vec::new(),
+        String::new(),
+    )
+    .unwrap();
 
     assert!(serialize_touchstone(&tera_hertz, TouchstoneFormat::RealImaginary).is_err());
-    assert!(serialize_touchstone(&mismatched_references, TouchstoneFormat::RealImaginary).is_err());
+    assert!(mismatched_references.is_err());
     assert!(serialize_touchstone(&zero_decibels, TouchstoneFormat::DecibelAngle).is_err());
 }
 
 /// Verifies duplicate output frequencies are rejected instead of emitting invalid data.
 #[test]
 fn serializer_rejects_duplicate_frequencies() {
-    let mut block = one_port_block();
-    block.points.push(block.points[0].clone());
+    let original = one_port_block();
+    let point = original.points()[0].clone();
+    let block = SParameterBlock::from_samples(
+        SParameterKind::S1P,
+        vec![75.0],
+        ScalarUnit::MegaHertz,
+        vec![point.clone(), point],
+        Vec::new(),
+        String::new(),
+    )
+    .unwrap();
 
     let error = serialize_touchstone(&block, TouchstoneFormat::RealImaginary).unwrap_err();
     assert!(matches!(error, SolveError::TouchstoneWriteFailed { .. }));

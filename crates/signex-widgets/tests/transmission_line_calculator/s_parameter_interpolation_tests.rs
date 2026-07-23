@@ -35,7 +35,7 @@ fn s_parameter_block_interpolates_all_two_port_values() {
     assert_complex_close(point.s22.unwrap(), Complex::new(0.3, -0.1));
     assert_complex_close(
         point.z_s11,
-        reflection_to_impedance(point.s11, block.reference_impedance_ohm),
+        reflection_to_impedance(point.s11, block.reference_impedance_ohm()),
     );
 }
 
@@ -56,8 +56,18 @@ fn s_parameter_block_clamps_outside_frequency_range() {
 /// Verifies that interpolation does not depend on input sample order.
 #[test]
 fn s_parameter_block_interpolates_unsorted_samples() {
-    let mut block = two_sample_block();
-    block.points.reverse();
+    let original = two_sample_block();
+    let mut points = original.points();
+    points.reverse();
+    let block = SParameterBlock::from_samples(
+        SParameterKind::S2P,
+        original.port_reference_impedances_ohm(),
+        original.source_frequency_unit,
+        points,
+        original.noise(),
+        original.raw.clone(),
+    )
+    .unwrap();
 
     let point = block.interpolate(1.25e9).unwrap();
 
@@ -88,11 +98,19 @@ fn one_port_interpolation_keeps_two_port_values_absent() {
 /// Verifies that invalid or empty interpolation requests return no sample.
 #[test]
 fn s_parameter_interpolation_rejects_invalid_requests() {
-    let mut block = two_sample_block();
+    let block = two_sample_block();
     assert_eq!(block.interpolate(f64::NAN), None);
 
-    block.points.clear();
-    assert_eq!(block.interpolate(1.0e9), None);
+    let empty = SParameterBlock::from_samples(
+        SParameterKind::S2P,
+        vec![50.0, 50.0],
+        ScalarUnit::GigaHertz,
+        Vec::new(),
+        Vec::new(),
+        String::new(),
+    )
+    .unwrap();
+    assert_eq!(empty.interpolate(1.0e9), None);
 }
 
 /// Verifies that Smith-chart gain analysis uses interpolated bilateral S-parameters.
