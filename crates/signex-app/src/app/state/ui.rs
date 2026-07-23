@@ -261,6 +261,6 @@ pub struct UiState {
     /// `open` gates the dropdown overlay only.
     pub command_palette: super::super::command_palette::CommandPaletteState,
     /// Tools -> Transmission Line Calculator window state. The RF math lives in the
-    /// dedicated `signex-transmission-line-calculator` crate; this holds editable buffers.
+    /// shared `signex-widgets` control; this holds editable buffers.
     pub transmission_line_calculator: crate::transmission_line_calculator::SmithChartState,
 }

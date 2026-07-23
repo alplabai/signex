@@ -731,7 +731,7 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
 name = "chrome-catalog"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "iced",
  "signex-types",
@@ -5199,7 +5199,7 @@ dependencies = [
 
 [[package]]
 name = "signex-3d-model-importer"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "base64",
  "serde",
@@ -5211,7 +5211,7 @@ dependencies = [
 
 [[package]]
 name = "signex-app"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5237,7 +5237,6 @@ dependencies = [
  "signex-output",
  "signex-renderer",
  "signex-sketch",
- "signex-transmission-line-calculator",
  "signex-types",
  "signex-widgets",
  "tempfile",
@@ -5254,7 +5253,7 @@ dependencies = [
 
 [[package]]
 name = "signex-bake"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -5268,7 +5267,7 @@ dependencies = [
 
 [[package]]
 name = "signex-bom"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "serde",
  "signex-types",
@@ -5276,7 +5275,7 @@ dependencies = [
 
 [[package]]
 name = "signex-engine"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "anyhow",
  "signex-net",
@@ -5287,7 +5286,7 @@ dependencies = [
 
 [[package]]
 name = "signex-erc"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "serde",
  "signex-net",
@@ -5297,7 +5296,7 @@ dependencies = [
 
 [[package]]
 name = "signex-erc-dsl"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "chumsky",
  "regex",
@@ -5308,7 +5307,7 @@ dependencies = [
 
 [[package]]
 name = "signex-gfx"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "bitflags 2.11.1",
  "bytemuck",
@@ -5323,7 +5322,7 @@ dependencies = [
 
 [[package]]
 name = "signex-library"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5355,7 +5354,7 @@ dependencies = [
 
 [[package]]
 name = "signex-library-server"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -5378,7 +5377,7 @@ dependencies = [
 
 [[package]]
 name = "signex-net"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "signex-types",
  "uuid",
@@ -5386,7 +5385,7 @@ dependencies = [
 
 [[package]]
 name = "signex-output"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "pdf-writer",
  "rust_xlsxwriter",
@@ -5401,7 +5400,7 @@ dependencies = [
 
 [[package]]
 name = "signex-renderer"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "regex",
  "serde",
@@ -5414,7 +5413,7 @@ dependencies = [
 
 [[package]]
 name = "signex-sketch"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "approx",
  "serde",
@@ -5426,18 +5425,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "signex-transmission-line-calculator"
-version = "0.14.0"
-dependencies = [
- "iced",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
-]
-
-[[package]]
 name = "signex-types"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -5449,11 +5438,14 @@ dependencies = [
 
 [[package]]
 name = "signex-widgets"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "chrono",
  "iced",
+ "serde",
+ "serde_json",
  "signex-types",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
