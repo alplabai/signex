@@ -202,6 +202,86 @@ fn passive_smith_chart_chain_produces_two_port_s_parameters() {
     assert_complex_close(points[0].s_parameters.s21, Complex::new(0.8, 0.0));
 }
 
+/// Verifies that one rust-rf network carries the complete frequency-dependent sweep.
+#[test]
+fn passive_two_port_solver_preserves_frequency_dependent_parasitics() {
+    let circuit = vec![
+        SmithChartElement::BlackBox {
+            impedance: Complex::new(50.0, 0.0),
+            tolerance_percent: None,
+        },
+        SmithChartElement::SeriesResistor {
+            resistance_ohm: 25.0,
+            esl_h: 10.0e-9,
+            tolerance_percent: None,
+        },
+    ];
+    let frequencies_hz = [1.0e6, 1.0e9];
+
+    let points = solve_two_port_s_parameters(&circuit, &frequencies_hz, false, 50.0).unwrap();
+
+    assert_eq!(points.len(), frequencies_hz.len());
+    assert_eq!(points[0].frequency_hz, frequencies_hz[0]);
+    assert_eq!(points[1].frequency_hz, frequencies_hz[1]);
+    assert!(points[1].s_parameters.s21.im.abs() > points[0].s_parameters.s21.im.abs());
+}
+
+/// Verifies rust-rf line, stub, and transformer networks match the impedance walk.
+#[test]
+fn distributed_two_port_chain_matches_smith_chart_impedance_walk() {
+    let frequency_hz = 1.0e9;
+    let wavelength_m = SPEED_OF_LIGHT_M_PER_S / frequency_hz;
+    let load = Complex::new(30.0, 10.0);
+    let circuit = vec![
+        SmithChartElement::BlackBox {
+            impedance: load,
+            tolerance_percent: None,
+        },
+        SmithChartElement::TransmissionLine {
+            length_m: wavelength_m / 8.0,
+            characteristic_impedance_ohm: 60.0,
+            effective_dielectric: 1.0,
+            tolerance_percent: None,
+        },
+        SmithChartElement::OpenStub {
+            length_m: wavelength_m / 10.0,
+            characteristic_impedance_ohm: 75.0,
+            effective_dielectric: 1.0,
+            tolerance_percent: None,
+        },
+        SmithChartElement::ShortedStub {
+            length_m: wavelength_m / 12.0,
+            characteristic_impedance_ohm: 45.0,
+            effective_dielectric: 1.0,
+            tolerance_percent: None,
+        },
+        SmithChartElement::Transformer {
+            model: TransformerModel::Ideal,
+            l1_h: 0.0,
+            l2_h: 0.0,
+            coupling_or_turns_ratio: 1.5,
+        },
+    ];
+    let settings = SmithChartSettings {
+        frequency_hz,
+        span_hz: 0.0,
+        ..SmithChartSettings::default()
+    };
+
+    let analysis = analyze_smith_chart(&circuit, settings).unwrap();
+    let s_parameters = solve_two_port_s_parameters(&circuit, &[frequency_hz], false, 50.0).unwrap()
+        [0]
+    .s_parameters;
+    let abcd = s_parameters
+        .to_abcd(Complex::new(50.0, 0.0), Complex::new(50.0, 0.0))
+        .unwrap();
+
+    assert_complex_close(
+        abcd.input_impedance(load).unwrap(),
+        analysis.nominal.impedance,
+    );
+}
+
 /// Verifies that ABCD element order matches the existing load-to-source impedance walk.
 #[test]
 fn passive_two_port_input_impedance_matches_smith_chart_solver() {

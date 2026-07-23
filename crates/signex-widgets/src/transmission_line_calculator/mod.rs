@@ -8,6 +8,7 @@ mod rust_rf_adapter;
 mod svg;
 pub mod tool;
 mod touchstone;
+mod two_port_solver;
 
 #[cfg(test)]
 pub(crate) use analysis::select_active_frequency;
@@ -19,7 +20,7 @@ pub(crate) use analysis::{
 };
 pub use analysis::{
     analyze_smith_chart, analyze_smith_chart_with_runtime_adjustments, apply_runtime_adjustments,
-    solve, solve_noise_figure_circles, solve_s_parameter_gain_circles, solve_two_port_s_parameters,
+    solve, solve_noise_figure_circles, solve_s_parameter_gain_circles,
 };
 pub(crate) use chart_geometry::SPEED_OF_LIGHT_M_PER_S;
 pub use chart_geometry::{
@@ -34,6 +35,7 @@ pub use svg::render_smith_chart_svg;
 pub use touchstone::{
     TouchstoneFormat, parse_touchstone, read_touchstone, serialize_touchstone, write_touchstone,
 };
+pub use two_port_solver::solve_two_port_s_parameters;
 
 pub const DEFAULT_REFERENCE_IMPEDANCE_OHM: f64 = 50.0;
 
