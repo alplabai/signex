@@ -9,8 +9,8 @@ use rust_rf::{
 use crate::transmission_line_calculator::{
     Complex, ElementKind, SParameterMatrix, SmithChartElement, SolveError, TransformerModel,
     TwoPortSParameterPoint,
-    analysis::custom_impedance,
     chart_geometry::SPEED_OF_LIGHT_M_PER_S,
+    element_analysis::custom_impedance,
     rust_rf_adapter::{
         RfComplex, RfFrequency, frequency_from_hz, from_rf_complex, lossless_line_input_impedance,
         to_rf_complex,

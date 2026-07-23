@@ -19,69 +19,9 @@ impl AbcdMatrix {
         Self { a, b, c, d }
     }
 
-    /// Creates the identity, or ideal through, two-port matrix.
-    pub const fn identity() -> Self {
-        Self::new(Complex::ONE, Complex::ZERO, Complex::ZERO, Complex::ONE)
-    }
-
-    /// Creates the ABCD matrix for a series impedance.
-    pub const fn series_impedance(impedance: Complex) -> Self {
-        Self::new(Complex::ONE, impedance, Complex::ZERO, Complex::ONE)
-    }
-
-    /// Creates the ABCD matrix for a shunt admittance.
-    pub const fn shunt_admittance(admittance: Complex) -> Self {
-        Self::new(Complex::ONE, Complex::ZERO, admittance, Complex::ONE)
-    }
-
-    /// Creates a lossless transmission-line ABCD matrix.
-    pub fn lossless_transmission_line(
-        characteristic_impedance: f64,
-        electrical_length_radians: f64,
-    ) -> Result<Self, TwoPortError> {
-        if !characteristic_impedance.is_finite()
-            || characteristic_impedance <= 0.0
-            || !electrical_length_radians.is_finite()
-        {
-            return Err(TwoPortError::InvalidReferenceImpedance);
-        }
-
-        let cosine = electrical_length_radians.cos();
-        let sine = electrical_length_radians.sin();
-        Ok(Self::new(
-            Complex::new(cosine, 0.0),
-            Complex::new(0.0, characteristic_impedance * sine),
-            Complex::new(0.0, sine / characteristic_impedance),
-            Complex::new(cosine, 0.0),
-        ))
-    }
-
-    /// Creates the ABCD matrix for an ideal voltage transformer.
-    pub fn ideal_transformer(turns_ratio: f64) -> Result<Self, TwoPortError> {
-        if !turns_ratio.is_finite() || turns_ratio <= 0.0 {
-            return Err(TwoPortError::InvalidReferenceImpedance);
-        }
-        Ok(Self::new(
-            Complex::new(turns_ratio, 0.0),
-            Complex::ZERO,
-            Complex::ZERO,
-            Complex::new(1.0 / turns_ratio, 0.0),
-        ))
-    }
-
     /// Returns the determinant of the matrix.
     pub fn determinant(self) -> Complex {
         self.a * self.d - self.b * self.c
-    }
-
-    /// Cascades this source-side network with the supplied load-side network.
-    pub fn cascade(self, load_side: Self) -> Self {
-        Self::new(
-            self.a * load_side.a + self.b * load_side.c,
-            self.a * load_side.b + self.b * load_side.d,
-            self.c * load_side.a + self.d * load_side.c,
-            self.c * load_side.b + self.d * load_side.d,
-        )
     }
 
     /// Converts the ABCD matrix to power-wave S-parameters.

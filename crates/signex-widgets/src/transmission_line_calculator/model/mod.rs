@@ -33,7 +33,6 @@ mod solve_step;
 mod stability_circle;
 mod transformer_model;
 mod two_port_error;
-mod two_port_network;
 mod two_port_s_parameter_point;
 
 pub use abcd_matrix::AbcdMatrix;
@@ -74,5 +73,4 @@ pub use stability_circle::StabilityCircle;
 pub(crate) use transformer_model::TRANSFORMER_MODELS;
 pub use transformer_model::TransformerModel;
 pub use two_port_error::TwoPortError;
-pub use two_port_network::TwoPortNetwork;
 pub use two_port_s_parameter_point::TwoPortSParameterPoint;
