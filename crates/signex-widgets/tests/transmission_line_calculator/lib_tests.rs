@@ -157,7 +157,8 @@ fn half_wave_open_stub_is_singular() {
 fn smith_chart_analysis_emits_s2p_stability_circles() {
     let block = parse_touchstone(
         "# GHz S MA R 50
-1.0 0.5 0 2.0 90 0.1 0 0.4 -45",
+1.0 0.5 0 2.0 90 0.1 0 0.4 -45
+1.4 0.6 10 1.8 80 0.08 -5 0.35 -35",
     )
     .unwrap();
     let circuit = vec![SmithChartElement::SParameter(block)];
@@ -166,15 +167,19 @@ fn smith_chart_analysis_emits_s2p_stability_circles() {
         SmithChartSettings {
             frequency_hz: 1.0e9,
             reference_impedance_ohm: 50.0,
-            span_hz: 0.0,
+            span_hz: 0.5e9,
             ..SmithChartSettings::default()
         },
     )
     .unwrap();
 
-    assert_eq!(result.stability_circles.len(), 1);
-    assert!(result.stability_circles[0].source_radius.is_finite());
-    assert!(result.stability_circles[0].load_radius.is_finite());
+    assert_eq!(result.stability_circles.len(), 2);
+    assert!(
+        result
+            .stability_circles
+            .iter()
+            .all(|circle| circle.source_radius.is_finite() && circle.load_radius.is_finite())
+    );
 }
 
 /// Verifies that smith chart analysis emits s2p gain and noise circles.
@@ -200,8 +205,16 @@ fn smith_chart_analysis_emits_s2p_gain_and_noise_circles() {
 
     assert_eq!(gain.len(), 2);
     assert!(gain.iter().all(|circle| circle.radius.is_finite()));
+    assert_close(gain[0].center.re, 0.478776675162869);
+    assert_close(gain[0].center.im, 0.0);
+    assert_close(gain[0].radius, 0.179681431352376);
     assert_eq!(noise.len(), 1);
-    assert!(noise[0].radius.is_finite());
+    assert_close(noise[0].center.re, 0.130828054247831);
+    assert_close(noise[0].center.im, 0.0916067897936398);
+    assert_close(noise[0].radius, 0.588840926050854);
+
+    assert!(solve_s_parameter_gain_circles(&circuit, &settings, &[2.0], &[]).is_empty());
+    assert!(solve_noise_figure_circles(&circuit, &settings, &[0.5, f64::NAN]).is_empty());
 }
 
 /// Verifies that smith chart analysis interpolates the active S-parameter point for zero span.

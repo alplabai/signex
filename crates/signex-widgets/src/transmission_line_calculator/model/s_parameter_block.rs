@@ -154,19 +154,22 @@ impl SParameterBlock {
         &self.network
     }
 
-    /// Returns a Cartesian-linear sample at the requested frequency.
-    pub fn interpolate(&self, frequency_hz: f64) -> Option<SParameterPoint> {
+    pub(crate) fn network_at(&self, frequency_hz: f64) -> Option<RfNetwork> {
         if !frequency_hz.is_finite() || self.network.frequency_points() == 0 {
             return None;
         }
         if self.network.frequency_points() == 1 {
-            return Some(point_from_network(&self.network, 0));
+            return Some((*self.network).clone());
         }
         let start = self.network.frequency.start()?;
         let stop = self.network.frequency.stop()?;
-        let clamped = frequency_hz.clamp(start, stop);
-        let target = frequency_from_hz(&[clamped]).ok()?;
-        let interpolated = self.network.interpolate(&target).ok()?;
+        let target = frequency_from_hz(&[frequency_hz.clamp(start, stop)]).ok()?;
+        self.network.interpolate(&target).ok()
+    }
+
+    /// Returns a Cartesian-linear sample at the requested frequency.
+    pub fn interpolate(&self, frequency_hz: f64) -> Option<SParameterPoint> {
+        let interpolated = self.network_at(frequency_hz)?;
         Some(point_from_network(&interpolated, 0))
     }
 }
