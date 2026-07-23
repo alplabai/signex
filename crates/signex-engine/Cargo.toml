@@ -3,10 +3,16 @@ name = "signex-engine"
 description = "Editing engine skeleton for Signex EDA"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
 signex-types = { workspace = true }
+# For `pt_key` / `point_on_segment` — the netlist's own "same point" and
+# "point on wire" predicates. Junction autoplacement gates every dot it mints
+# on the exact rule the netlist will apply to it, instead of hand-rolling a
+# second, more lenient answer (D5.5, issue #402).
+signex-net = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 uuid = { workspace = true }

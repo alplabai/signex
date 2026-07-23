@@ -10,8 +10,7 @@ use iced::widget::{Space, button, column, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
 use super::widgets::{
-    close_x_button, detached_header, draggable_header, primary_button, secondary_button,
-    wrap_modal,
+    close_x_button, detached_header, draggable_header, primary_button, secondary_button, wrap_modal,
 };
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 
@@ -60,7 +59,10 @@ impl Signex {
                 self.interaction_state.last_mouse_pos,
             )
         } else {
-            detached_header(header_content, super::super::super::state::ModalId::ErcDialog)
+            detached_header(
+                header_content,
+                super::super::super::state::ModalId::ErcDialog,
+            )
         };
 
         // Per-rule severity grid. 11 rules × 4 severities.
@@ -242,6 +244,7 @@ const ALL_RULES: &[signex_erc::RuleKind] = &[
     signex_erc::RuleKind::MissingPowerFlag,
     signex_erc::RuleKind::PowerPortShort,
     signex_erc::RuleKind::SymbolOutsideSheet,
+    signex_erc::RuleKind::AmbiguousLabelAnchor,
 ];
 
 /// Pin-connection matrix. Click a cell to cycle Error → Warning →

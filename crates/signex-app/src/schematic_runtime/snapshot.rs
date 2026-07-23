@@ -322,9 +322,7 @@ pub(super) fn build_renderer_snapshot(
                 stroke_color,
                 ..
             } => {
-                if let Some((cx, cy, r)) =
-                    circumcircle((start.x, start.y), (mid.x, mid.y), (end.x, end.y))
-                {
+                if let Some((cx, cy, r)) = circumcircle(*start, *mid, *end) {
                     let a0 = (start.y - cy).atan2(start.x - cx);
                     let am = (mid.y - cy).atan2(mid.x - cx);
                     let a1 = (end.y - cy).atan2(end.x - cx);

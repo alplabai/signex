@@ -248,4 +248,3 @@ fn is_false(v: &bool) -> bool {
 fn default_true_bool() -> bool {
     true
 }
-

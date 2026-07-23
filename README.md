@@ -8,9 +8,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/alplabai/signex/blob/dev/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License"></a>
+  <a href="https://github.com/alplabai/signex/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License"></a>
   <a href="https://github.com/alplabai/signex/releases/tag/v0.14.0"><img src="https://img.shields.io/badge/version-v0.14.0-green.svg" alt="Version"></a>
-  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.80%2B-orange.svg" alt="Rust"></a>
+  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.88%2B-orange.svg" alt="Rust"></a>
   <a href="https://github.com/alplabai/signex/wiki"><img src="https://img.shields.io/badge/wiki-user%20guide-blueviolet.svg" alt="Wiki"></a>
   <a href="https://github.com/alplabai/signex/discussions"><img src="https://img.shields.io/badge/discussions-join-brightgreen.svg" alt="Discussions"></a>
 </p>
@@ -60,7 +60,7 @@ formats one-way. Run it once against your project; open the resulting
 
 ## Features
 
-**What works today (v0.1–v0.8):**
+**What works today (v0.1–v0.14):**
 
 - Open native Signex schematics (`.snxsch`, `.snxsym`, `.snxprj`); migrate
   legacy KiCad files via the [signex-kicad-import](https://github.com/alplabai/signex-kicad-import)
@@ -69,10 +69,11 @@ formats one-way. Run it once against your project; open the resulting
   component placement (P), delete, rotate (Space), mirror (X/Y)
 - Advanced shape tools — Line, Rectangle, Circle, Arc (3-click), Polygon
   (click-by-click), editable drawing Properties with live preview
-- Copy/paste, undo/redo (100 levels), save back to KiCad format
-- 6 built-in themes with customizable theme editor
+- Copy/paste, undo/redo (100 levels), save to the native `.snxsch` /
+  `.snxprj` format (TOML envelope + TSV bulk blocks, line-diffable in git)
+- 7 built-in themes with customizable theme editor
 - Altium-style docking panels with drag-to-undock/dock
-- Active Bar — 14-button floating toolbar with dropdown menus
+- Active Bar — 13-button floating toolbar with dropdown menus
 - Context menu, in-place text editing (F2), selection filter
 - Properties panel with context-aware field editing, Parameter Manager
 - **Multi-window editing (v0.7)** — undock any tab into its own OS window
@@ -99,19 +100,37 @@ formats one-way. Run it once against your project; open the resulting
   per-sheet stroke/fill colours, multisheet style preference
 - **TabPill chrome refactor (v0.8)** — 3-sided shared borders, theme-aware
   inactive fill, drag accent from theme
+- **Apache-clean native formats (v0.9)** — `.snxsch` / `.snxpcb` are the
+  canonical format; KiCad I/O moved to the optional companion tool
+- **Component library subsystem (v0.10–v0.11)** — Library Browser tab, DBLib
+  row model, SCH Library editor, Component Preview, Pick Symbol/Footprint +
+  auto-mount, DigiKey / Mouser / LCSC / JLCPCB distributor adapters,
+  per-library git version control + History panel
+- **Clean-room schematic renderer + Symbol editor (v0.13)** — renderer
+  reimplemented against Signex-only specs (`docs/RENDERING_RULES.md`,
+  IEEE-Std-91); unified Active Bar and TOML `.snxsym` envelope
+- **Multi-unit symbols (v0.14)** — `part_count`, per-unit body geometry and
+  graphics, unit buttons, two-click rect / line / circle + three-click arc
+- **Footprint & sketch editor (v0.14)** — `.snxfpt` pad + parametric-sketch
+  editor driven by an Apache-clean Newton-LM constraint solver (19 constraint
+  kinds); bake to pads / silk / courtyard; Align / Distribute / Move / Fill /
+  Text tooling; CPU 3D-body extrude preview
+- **Authoritative netlist contract (v0.14)** — one connectivity derivation in
+  `signex-net` (`build_netlist` / `build_project_netlist`) consumed by ERC,
+  net-flood, and export; same-name labels + T-junctions merge correctly
+- **Configurable keyboard-shortcut profiles (v0.14)** — grouped, searchable
+  in-app editor; menu labels sourced from the command table
+- **GPU schematic render path (v0.14)** — `signex-gfx` aligned to iced's
+  wgpu 27; schematic render module via the shader widget (feature-gated)
 
 **What's next:**
 
 | Version | Milestone |
 |---|---|
-| v0.9 | Apache-clean cutover — native `.snxsch` / `.snxpcb` formats, KiCad I/O moved to optional [signex-kicad-import](https://github.com/alplabai/signex-kicad-import) companion |
-| v0.10 | Library Browser tab scaffold — read-only `.snxlib` table |
-| v0.11 | Library & Polish — full DBLib model, SCH Library editor, Component Preview, picker + auto-mount, distributor adapters |
-| v0.13 | Symbol & Library — clean-room schematic renderer, unified Active Bar in the symbol editor, `.snxsym` TOML envelope (footprint editor hidden) |
-| v0.14 | Footprint Editor — `.snxfpt` pad + parametric-sketch editor enabled, Newton-LM constraint solver (19 kinds), Align/Distribute/Move/Fill/Text tooling |
 | **v1.0** | **Community Preview** — schematic-only release |
-| **v2.0–v2.2** | **Community Release** — full PCB editor |
-| **v3.0** | **Pro Release** — Signal AI + collaboration |
+| **v2.0–v2.2** | **Community Release** — full PCB editor (viewer, routing, DRC, output) |
+| **v2.3–v2.5** | 3D Viewer, Advanced PCB, High-Speed Design |
+| **v3.0** | **Pro Release** — Signal AI + plugins + collaboration |
 | **v4.0** | Unified simulation view with SPICE, EM, thermal |
 | **v5.0** | Signex 365 cloud PLM |
 
@@ -132,33 +151,42 @@ formats one-way. Run it once against your project; open the resulting
   <br>
   <img src="assets/screenshots/solarized-theme.png" alt="Solarized Light theme" width="400">
   <br>
-  <em>Catppuccin Mocha, GitHub Dark, Solarized Light — 6 themes built in, fully customizable</em>
+  <em>Catppuccin Mocha, GitHub Dark, Solarized Light — 7 themes built in, fully customizable</em>
 </p>
 
 </details>
 
 ## Architecture
 
+A 17-crate Rust workspace (`edition = 2024`), an acyclic DAG with
+`signex-app` at the apex and `signex-types` as the shared foundation:
+
 ```
 signex/
 ├── crates/
-│   ├── signex-app/       # Main binary — Iced 0.14 application
-│   ├── signex-types/     # Domain types — NO rendering deps
-│   ├── signex-render/    # wgpu rendering (types → Canvas draw calls)
-│   ├── signex-widgets/   # Reusable Iced widgets (tree view, icon button)
-│   ├── kicad-parser/     # S-expression parser (.kicad_sch/.kicad_pcb/.kicad_sym)
-│   └── kicad-writer/     # S-expression serializer (write KiCad format)
+│   ├── signex-app/            # Main binary — iced 0.14 app (panels, dock, canvas, editors)
+│   ├── signex-types/          # Domain types — schematic/PCB/layer/theme — NO rendering deps
+│   ├── signex-engine/         # Command / patch / undo engine for schematic edits
+│   ├── signex-net/            # Authoritative netlist + connectivity contract
+│   ├── signex-erc/            # ERC rule engine (+ signex-erc-dsl)
+│   ├── signex-sketch/         # Apache-clean Newton-LM constraint solver + sketch schema
+│   ├── signex-bake/           # Sketch → footprint bake (pad / silk / courtyard / mask / …)
+│   ├── signex-output/         # PDF / netlist / BOM export pipeline (+ signex-bom)
+│   ├── signex-renderer/       # Domain types → render primitives (+ signex-gfx wgpu pipelines)
+│   ├── signex-library/        # .snxlib component library — port/adapter model (+ signex-library-server)
+│   ├── signex-widgets/        # Reusable iced widgets (tree view, active bar, previews)
+│   └── signex-3d-model-importer/  # STEP / WRL importer for 3D body attach
 └── Cargo.toml
 ```
 
 **Design principles:**
 
-- **KiCad compatibility first.** Open existing KiCad projects, save back losslessly. No proprietary format.
-- **Elm architecture.** Iced's `Message -> update -> view` cycle. No interior mutability.
+- **Native `.snx*` formats first.** `.snxsch` / `.snxpcb` / `.snxprj` are the canonical format (TOML envelope + TSV bulk blocks, line-diffable, ~5× smaller than JSON). One-way KiCad → Signex import is an optional, independently-distributed companion tool.
+- **Elm architecture (MVU).** iced's `state → view → Message → update` cycle; `view` is pure, `update` is the only mutation site and never blocks — all IO returns as a `Task`. No process-global mutable state.
+- **Domain logic in domain crates.** Types and engines below `signex-app` carry zero `iced`/`wgpu` deps (Cargo-enforced); connectivity is derived once in `signex-net` and read everywhere else, never re-derived.
 - **Multi-window by default.** Built on `iced::daemon`; every undocked tab gets its own engine + canvas keyed by window id, so two schematics can be edited in parallel without cross-talk.
-- **Nanometer coordinates.** `i64` nanometers internally; exact in both metric and imperial.
-- **Canvas for schematic, Shader for PCB.** CPU tessellation for schematics, GPU instanced rendering for 100K+ PCB elements.
-- **Types crate has zero rendering deps.** Clean separation between domain and display.
+- **Nanometer coordinates.** `i64` nanometers internally; exact in both metric and imperial — no float `EPS` comparisons for "same point".
+- **Canvas for schematic, Shader for PCB.** CPU tessellation for schematics, GPU instanced rendering (`signex-gfx`, wgpu 27) for large PCB scenes.
 
 ## Hardware Requirements
 
@@ -174,7 +202,9 @@ broken layout — these GPUs are not supported.
 
 ## Building
 
-**Prerequisites:** Rust 1.80+ and a GPU supporting Vulkan, Metal, or DX12.
+**Prerequisites:** Rust 1.97.0 — pinned via `rust-toolchain.toml`, so `rustup`
+installs it automatically; this is also the MSRV (we build and support exactly
+this toolchain) — and a GPU supporting Vulkan, Metal, or DX12.
 
 ```bash
 git clone https://github.com/alplabai/signex.git
@@ -215,26 +245,29 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for the detailed version plan.
 ## Documentation
 
 The **[Signex Wiki](https://github.com/alplabai/signex/wiki)** is the user
-guide — installation, quick start, keyboard shortcuts, feature-by-feature
-walkthroughs for every v0.1–v0.7 capability (ERC, annotation, multi-window
-editing, hierarchical sheets, net-color pen, themes, and more), plus an FAQ
-and roadmap.
+guide — installation, quick start, keyboard shortcuts, and feature-by-feature
+walkthroughs (ERC, annotation, multi-window editing, hierarchical sheets,
+net-color pen, the library subsystem, the symbol + footprint editors, themes,
+and more), plus an FAQ and roadmap.
 
 Start with **[Quick Start](https://github.com/alplabai/signex/wiki/Quick-Start)**
-to open your first KiCad project, or jump straight to
+to open your first Signex project, or jump straight to
 **[Keyboard Shortcuts](https://github.com/alplabai/signex/wiki/Keyboard-Shortcuts)**
-for the full Altium-compatible reference.
+for the full reference. In-repo docs live under
+[`docs/`](docs/) — see [ROADMAP.md](docs/ROADMAP.md),
+[LICENSING.md](docs/LICENSING.md), and
+[REPOSITORY_AND_CODEBASE.md](docs/REPOSITORY_AND_CODEBASE.md).
 
 ## Contributing
 
 Signex is open source and we welcome contributions from everyone — whether
-you're an EDA professional, a Rust developer, a KiCad user, or someone who
-just wants to help build a better design tool.
+you're an EDA professional, a Rust developer, or someone who just wants to
+help build a better design tool.
 
 **Ways to contribute:**
 
-- Report bugs or rendering discrepancies vs KiCad
-- Add KiCad test fixtures from real projects
+- Report bugs or rendering discrepancies
+- Add test fixtures from real projects
 - Implement a feature from the [roadmap](docs/ROADMAP.md)
 - Fix an [open issue](https://github.com/alplabai/signex/issues)
 - Improve documentation

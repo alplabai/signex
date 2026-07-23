@@ -18,15 +18,20 @@ pub(super) fn apply_symbol_transform(editor: &mut SymEditor, msg: SymbolEditorMs
             mark_dirty(editor);
         }
         SymbolEditorMsg::DeleteSelected => {
-            push_undo(editor);
             let selected = editor.selected.clone();
-            if let Some(new_sel) = crate::library::editor::symbol::state::delete_selected(
-                editor.primitive_mut(),
-                selected,
-            ) {
-                editor.selected = new_sel;
-                close_pickers(editor);
-                mark_dirty(editor);
+            // Validate before snapshotting: a no-op delete (None / All /
+            // Field selection) must not push an undo entry that would
+            // evict real history — same discipline as apply_symbol_join.
+            if crate::library::editor::symbol::state::selected_is_deletable(&selected) {
+                push_undo(editor);
+                if let Some(new_sel) = crate::library::editor::symbol::state::delete_selected(
+                    editor.primitive_mut(),
+                    selected,
+                ) {
+                    editor.selected = new_sel;
+                    close_pickers(editor);
+                    mark_dirty(editor);
+                }
             }
         }
         SymbolEditorMsg::SetPinNumber { idx, number } => {

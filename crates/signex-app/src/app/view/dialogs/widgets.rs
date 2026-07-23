@@ -9,9 +9,7 @@ use super::*;
 use iced::widget::{Space, button, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
-use super::{
-    MODAL_CLOSE_X_HIT_H, MODAL_CLOSE_X_HIT_W, MODAL_CLOSE_X_HOVER, MODAL_CLOSE_X_ICON,
-};
+use super::{MODAL_CLOSE_X_HIT_H, MODAL_CLOSE_X_HIT_W, MODAL_CLOSE_X_HOVER, MODAL_CLOSE_X_ICON};
 
 const BACKDROP: Color = Color::from_rgba(0.0, 0.0, 0.0, 0.55);
 
@@ -211,7 +209,11 @@ pub(super) fn secondary_button(
         .into()
 }
 
-pub(super) fn primary_button(label: &str, message: Option<Message>, border: Color) -> Element<'_, Message> {
+pub(super) fn primary_button(
+    label: &str,
+    message: Option<Message>,
+    border: Color,
+) -> Element<'_, Message> {
     primary_button_themed(label, message, border, None)
 }
 

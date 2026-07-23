@@ -2,6 +2,7 @@
 name = "signex-bom"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 
@@ -9,3 +10,4 @@ description = "BOM engine for Signex EDA"
 
 [dependencies]
 serde = { workspace = true }
+signex-types = { path = "../signex-types" }

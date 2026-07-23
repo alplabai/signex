@@ -20,7 +20,11 @@ impl FootprintCanvas<'_> {
     ) {
         use crate::library::editor::footprint::state::EditorMode;
         let in_sketch = matches!(self.state.mode, EditorMode::Sketch);
-        let bg = if in_sketch { Color::WHITE } else { self.bg_color };
+        let bg = if in_sketch {
+            Color::WHITE
+        } else {
+            self.bg_color
+        };
         // v0.27 — Fusion-style sketch grid: darker base (0.55 grey) so
         // it reads cleanly against the white canvas.
         let grid = if in_sketch {
@@ -39,7 +43,11 @@ impl FootprintCanvas<'_> {
         let fine_style = self.state.snap_options.fine_grid_display;
         let coarse_style = self.state.snap_options.coarse_grid_display;
         // Fine pass only when each cell is at least 6 px wide.
-        let (fine_alpha, coarse_alpha) = if in_sketch { (0.50, 0.55) } else { (0.10, 0.30) };
+        let (fine_alpha, coarse_alpha) = if in_sketch {
+            (0.50, 0.55)
+        } else {
+            (0.10, 0.30)
+        };
         if fine_step >= 6.0 {
             let fine_color = Color {
                 a: fine_alpha,

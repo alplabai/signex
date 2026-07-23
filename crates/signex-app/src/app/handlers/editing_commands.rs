@@ -203,7 +203,7 @@ fn apply_drawing_edit(
     edit: crate::app::contracts::DrawingFieldEdit,
 ) -> Option<signex_types::schematic::SchDrawing> {
     use crate::app::contracts::DrawingFieldEdit as E;
-    use signex_types::schematic::{Point, SchDrawing};
+    use signex_types::schematic::{Point, SchDrawing, circumcircle};
     let mut next = current;
     match (&mut next, edit) {
         // Stroke width applies to every variant.
@@ -288,7 +288,7 @@ fn apply_drawing_edit(
             } = &mut next
             {
                 let (cx, cy, r) =
-                    circumcircle_points(*start, *mid, *end).unwrap_or((start.x, start.y, 1.0));
+                    circumcircle(*start, *mid, *end).unwrap_or((start.x, start.y, 1.0));
                 let mut ncx = cx;
                 let mut ncy = cy;
                 let mut nr = r;
@@ -325,27 +325,6 @@ fn apply_drawing_edit(
         _ => return None,
     }
     Some(next)
-}
-
-fn circumcircle_points(
-    a: signex_types::schematic::Point,
-    b: signex_types::schematic::Point,
-    c: signex_types::schematic::Point,
-) -> Option<(f64, f64, f64)> {
-    let d = 2.0 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
-    if d.abs() < 1e-9 {
-        return None;
-    }
-    let ux = ((a.x * a.x + a.y * a.y) * (b.y - c.y)
-        + (b.x * b.x + b.y * b.y) * (c.y - a.y)
-        + (c.x * c.x + c.y * c.y) * (a.y - b.y))
-        / d;
-    let uy = ((a.x * a.x + a.y * a.y) * (c.x - b.x)
-        + (b.x * b.x + b.y * b.y) * (a.x - c.x)
-        + (c.x * c.x + c.y * c.y) * (b.x - a.x))
-        / d;
-    let r = ((a.x - ux) * (a.x - ux) + (a.y - uy) * (a.y - uy)).sqrt();
-    Some((ux, uy, r))
 }
 
 fn normalize_rad(a: f64) -> f64 {

@@ -118,14 +118,11 @@ pub(super) fn submenu_launcher(
         .width(Length::Fill);
     match icon {
         Some(handle) => {
-            row = row.push(
-                iced::widget::svg(handle)
-                    .width(20)
-                    .height(20)
-                    .style(move |_: &iced::Theme, _| iced::widget::svg::Style {
-                        color: Some(text_c),
-                    }),
-            );
+            row = row.push(iced::widget::svg(handle).width(20).height(20).style(
+                move |_: &iced::Theme, _| iced::widget::svg::Style {
+                    color: Some(text_c),
+                },
+            ));
         }
         None => {
             row = row.push(iced::widget::Space::new().width(iced::Length::Fixed(20.0)));
@@ -146,7 +143,9 @@ pub(super) fn submenu_launcher(
         );
 
     let btn = iced::widget::button(
-        iced::widget::container(row).padding([5, 12]).width(Length::Fill),
+        iced::widget::container(row)
+            .padding([5, 12])
+            .width(Length::Fill),
     )
     .padding(0)
     .on_press(Message::ContextMenu(ContextMenuMsg::SubmenuOpen(kind)))

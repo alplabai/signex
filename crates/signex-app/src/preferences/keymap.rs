@@ -29,8 +29,8 @@ pub(super) fn content_keyboard_shortcuts<'a>(
     // Delete is only wired for custom profiles — built-ins are
     // protected by the model, so the button is inert on a built-in.
     let delete_button = {
-        let base = button(container(text("Delete").size(11)).padding([5, 12]))
-            .style(danger_button_style);
+        let base =
+            button(container(text("Delete").size(11)).padding([5, 12])).style(danger_button_style);
         if active_is_custom {
             base.on_press(PrefMsg::KeymapDeleteActiveProfile)
         } else {
@@ -201,49 +201,56 @@ fn keymap_table_row<'a>(
     // Keyboard-editable rows in a custom profile get an inline Edit button
     // that opens the chord recorder; everything else is read-only (built-in
     // profiles, pointer gestures).
-    let trigger_cell: Element<'a, PrefMsg> = if active_profile_is_custom
-        && row_model.keyboard_editable
-    {
-        if let Some(command) = row_model.command.clone() {
-            let context = row_model.context;
-            let label = row_model.label.clone();
-            let trigger = row_model.trigger.clone();
-            let tone = if state_warn {
-                ChipTone::Warning
-            } else {
-                ChipTone::Neutral
-            };
-            row![
-                shortcut_chip(&row_model.trigger, tone),
-                button(container(text("Edit").size(10)).padding([3, 8]))
-                    .on_press(PrefMsg::KeymapRecorderOpen {
-                        command,
-                        label,
-                        context,
-                        trigger,
-                    })
-                    .style(secondary_button_style),
-            ]
-            .spacing(6)
-            .align_y(iced::Alignment::Center)
-            .into()
-        } else {
-            text(row_model.trigger.clone())
-                .size(11)
-                .style(text_muted)
+    let trigger_cell: Element<'a, PrefMsg> =
+        if active_profile_is_custom && row_model.keyboard_editable {
+            if let Some(command) = row_model.command.clone() {
+                let context = row_model.context;
+                let label = row_model.label.clone();
+                let trigger = row_model.trigger.clone();
+                let tone = if state_warn {
+                    ChipTone::Warning
+                } else {
+                    ChipTone::Neutral
+                };
+                row![
+                    shortcut_chip(&row_model.trigger, tone),
+                    button(container(text("Edit").size(10)).padding([3, 8]))
+                        .on_press(PrefMsg::KeymapRecorderOpen {
+                            command,
+                            label,
+                            context,
+                            trigger,
+                        })
+                        .style(secondary_button_style),
+                ]
+                .spacing(6)
+                .align_y(iced::Alignment::Center)
                 .into()
-        }
-    } else {
-        shortcut_chip(&row_model.trigger, ChipTone::Neutral)
-    };
+            } else {
+                text(row_model.trigger.clone())
+                    .size(11)
+                    .style(text_muted)
+                    .into()
+            }
+        } else {
+            shortcut_chip(&row_model.trigger, ChipTone::Neutral)
+        };
 
     row![
-        container(text(title_case(&row_model.category)).size(11).style(text_muted))
-            .width(Length::FillPortion(2)),
+        container(
+            text(title_case(&row_model.category))
+                .size(11)
+                .style(text_muted)
+        )
+        .width(Length::FillPortion(2)),
         container(text(row_model.label.clone()).size(11).style(text_primary))
             .width(Length::FillPortion(4)),
-        container(text(context_label(row_model.context)).size(11).style(text_muted))
-            .width(Length::FillPortion(2)),
+        container(
+            text(context_label(row_model.context))
+                .size(11)
+                .style(text_muted)
+        )
+        .width(Length::FillPortion(2)),
         container(trigger_cell).width(Length::FillPortion(2)),
         container(text(state).size(11).style(state_style)).width(Length::FillPortion(2)),
     ]

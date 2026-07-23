@@ -78,6 +78,125 @@ impl Signex {
             .into()
     }
 
+    /// #431 — netlist-incomplete "Export anyway (incomplete)?" prompt.
+    ///
+    /// Same card idiom as [`Self::view_export_error`] (theme-token panel /
+    /// text / border; the sibling modal's severity glyph), but it leads with
+    /// the refusal explanation — unchanged severity, this is a fab deliverable
+    /// — and offers TWO actions: write the partial `.net` anyway (with the
+    /// omission recorded in its header comment) or cancel and write nothing.
+    /// The refusal stays the default; "Export anyway" is an explicit choice.
+    pub(super) fn view_netlist_incomplete_prompt(&self) -> Element<'_, Message> {
+        use iced::widget::{button, column, container, row, text};
+        let Some(prompt) = self.document_state.netlist_incomplete_prompt.as_ref() else {
+            return iced::widget::Space::new().into();
+        };
+
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let panel_bg = crate::styles::ti(tokens.panel_bg);
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+        // The sibling export-error modal's severity cue — reused verbatim so
+        // the netlist-incomplete prompt reads as the same modal family.
+        let warn = iced::Color::from_rgb(0.85, 0.25, 0.25);
+
+        // Loud, deliberate action — mirrors the export-error OK button's red.
+        let export_anyway = button(
+            text("Export anyway (incomplete)")
+                .size(12)
+                .color(iced::Color::WHITE),
+        )
+        .padding([6, 16])
+        .on_press(Message::Export(ExportMsg::NetlistExportAnyway))
+        .style(
+            move |_: &iced::Theme, _status| iced::widget::button::Style {
+                background: Some(warn.into()),
+                text_color: iced::Color::WHITE,
+                border: iced::Border {
+                    radius: iced::border::Radius::from(4.0),
+                    ..iced::Border::default()
+                },
+                ..iced::widget::button::Style::default()
+            },
+        );
+
+        // Neutral default — themed panel background + border, no accent.
+        let cancel = button(text("Cancel").size(12).color(text_c))
+            .padding([6, 20])
+            .on_press(Message::Export(ExportMsg::NetlistCancelIncomplete))
+            .style(
+                move |_: &iced::Theme, _status| iced::widget::button::Style {
+                    background: Some(panel_bg.into()),
+                    text_color: text_c,
+                    border: iced::Border {
+                        color: border_c,
+                        width: 1.0,
+                        radius: iced::border::Radius::from(4.0),
+                    },
+                    ..iced::widget::button::Style::default()
+                },
+            );
+
+        // The omitted pages, one line each — the same detail the exported
+        // file's INCOMPLETE header will carry.
+        let detail = prompt.messages.join("\n");
+
+        let body = column![
+            row![
+                text("\u{26A0}").size(24).color(warn),
+                iced::widget::Space::new().width(10),
+                text("Netlist is incomplete").size(14).color(text_c),
+            ]
+            .align_y(iced::Alignment::Center),
+            iced::widget::Space::new().height(8),
+            text(
+                "The project netlist does not cover the whole project. Exporting it \
+                 would produce a file missing components and carrying the wrong net \
+                 names wherever nets merge through a page that is not in it — and a \
+                 PCB import cannot tell. You can export it anyway: the file will be \
+                 marked INCOMPLETE in its header and will list the omitted pages."
+            )
+            .size(12)
+            .color(text_c),
+            iced::widget::Space::new().height(8),
+            text(detail).size(11).color(text_muted),
+            iced::widget::Space::new().height(14),
+            row![
+                iced::widget::Space::new().width(Length::Fill),
+                cancel,
+                iced::widget::Space::new().width(8),
+                export_anyway,
+            ]
+            .align_y(iced::Alignment::Center),
+        ]
+        .padding(20);
+
+        let card = container(body)
+            .max_width(520)
+            .style(move |_: &iced::Theme| container::Style {
+                background: Some(panel_bg.into()),
+                border: iced::Border {
+                    color: border_c,
+                    width: 1.0,
+                    radius: iced::border::Radius::from(8.0),
+                },
+                shadow: iced::Shadow {
+                    color: iced::Color::from_rgba(0.0, 0.0, 0.0, 0.35),
+                    offset: iced::Vector::new(0.0, 4.0),
+                    blur_radius: 16.0,
+                },
+                ..container::Style::default()
+            });
+
+        container(card)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .align_x(iced::alignment::Horizontal::Center)
+            .align_y(iced::alignment::Vertical::Center)
+            .into()
+    }
+
     /// Print Preview overlay. Shows thumbnails of every rendered page on
     /// the left, the selected page full-size on the right, with Export PDF
     /// and Close buttons at the bottom. Triggered by File → Print Preview

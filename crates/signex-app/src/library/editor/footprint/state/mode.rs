@@ -35,6 +35,35 @@ pub enum FpActiveBarMenu {
     Text,
     /// Shapes — Sketch-mode only.
     Shapes,
+    /// Sketch ▸ Create — Line / Rectangle / Rounded Rectangle /
+    /// Circle / Arc / Tangent Arc. Sketch-mode only.
+    SketchCreate,
+    /// Sketch ▸ Modify — Fillet / Trim / Mirror / Offset /
+    /// Rectangular + Circular Pattern / Make Pad from Profile.
+    /// Sketch-mode only.
+    SketchModify,
+}
+
+/// Which sketch tools each Fusion-style group menu owns. The group's
+/// trigger button borrows the armed tool's icon when the armed tool
+/// belongs to it, so the collapsed bar still shows what's in hand.
+impl FpActiveBarMenu {
+    pub const SKETCH_CREATE_TOOLS: &'static [super::SketchTool] = &[
+        super::SketchTool::Line,
+        super::SketchTool::Rectangle,
+        super::SketchTool::RoundedRectangle,
+        super::SketchTool::Circle,
+        super::SketchTool::Arc,
+        super::SketchTool::TangentArc,
+    ];
+    pub const SKETCH_MODIFY_TOOLS: &'static [super::SketchTool] = &[
+        super::SketchTool::Fillet,
+        super::SketchTool::Trim,
+        super::SketchTool::Mirror,
+        super::SketchTool::Offset,
+        super::SketchTool::RectPattern,
+        super::SketchTool::CircularPattern,
+    ];
 }
 
 /// v0.20 — Pad Stack section's tab strip. Matches Altium's three tabs

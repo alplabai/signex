@@ -23,9 +23,148 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 - **GPU glyph atlas now trims each frame**, and GPU text prep/draw failures log once instead of being swallowed silently.
 - **Removed the dead `SCHEMATIC_GPU_RENDER` flag** — it gated no live path (the schematic GPU adapter is compiled and tested but not yet mounted).
 
-## [0.14.0] — unreleased
+## [0.15.0] — 2026-07-23
 
-**Everything since v0.13.0** — 170 commits, 2026-05-06 → 2026-07-15.
+The **v0.15.0 "Editor Fixes"** milestone — 43 commits, 2026-07-15 → 2026-07-23.
+Footprint- and symbol-editor correctness, an order-independent netlist
+derivation with the ERC/BOM consumers reading the same topology, crash-safe
+persistence, and CI/toolchain hardening (pinned Rust 1.97.0, an enforced
+`rustfmt` gate, and the god-file ratchet).
+
+### Fixed — netlist
+
+- **Netlist derivation no longer depends on wire order** (#402). `uf::union`
+  now keeps the smaller root, so a class's representative is a pure function of
+  the partition rather than of the order the unions were applied in, and
+  `anchor_point` resolves a label tapping several wire interiors by a total
+  order over the segments instead of by whichever the slice yielded first.
+- **Junction dots are reconciled on every command that changes wire geometry**
+  (#402). `PlaceWireSegment` reconciled both directions of a T; `MoveSelection`
+  / `RotateSelection` / `MirrorSelection` mutate the same coordinates and
+  reconciled nothing, so dragging a stub onto a trunk left a junction-less T —
+  which the netlist deliberately reads as disconnected (#107) — and the
+  connection was silently lost.
+- **Junction autoplacement no longer mints a dot the netlist will not honour**
+  (#402). The geometry helpers work in `f64` mm with a 0.01 mm tolerance, but
+  `SheetConnectivity` honours a junction only where the point is *exactly*
+  collinear in the 1 µm key space. A candidate a few µm off a wire produced a
+  dot asserting a connection the derivation refused to make. Every minted dot
+  is now gated on the netlist's own predicate; off-grid geometry gets no dot
+  rather than a lying one.
+- **Same-name label merging is applied by every connectivity consumer** (#404).
+  `SheetConnectivity::merge_named_labels` is now called by `summarize_nets`
+  (ERC/DSL), `net_label_conflict`, `missing_power_flag`, and
+  `flood_net_elements` (the net-colour highlight), so all of them derive the
+  same topology `build_netlist` does. Two physically disjoint wires sharing a
+  label name were previously separate nets to each of these, but one net to the
+  netlist.
+
+  **Behaviour change for existing projects.** Merging changes the net *name*
+  the ERC DSL sees, not just the net count: when a `VCC`-labelled fragment
+  merges with one carrying a higher-priority `Global`/`Power` label, the merged
+  net takes the higher-priority name. A DSL rule keyed on `net.name == "VCC"`
+  can therefore stop matching entirely rather than merely matching once instead
+  of twice. `net_label_conflict` also now reports conflicts created by such a
+  join — two differently-named `Net` labels pulled onto one net by a shared
+  `Global`/`Power` label previously went unreported, and both signal names were
+  silently dropped from the netlist.
+
+### Changed — netlist
+
+- **Auto-generated `N$k` net names change for existing schematics.** Making the
+  partition order-independent reorders the sorted roots that assign `NetId`
+  `1..=N`, and unlabelled nets are named from that id. An unchanged schematic
+  therefore exports a netlist whose `N$k` names differ from before this
+  release. This is a one-time, unavoidable consequence of the fix — the
+  alternative is keeping net numbering dependent on document order.
+
+  Constraint this records for later: `net_name` is a persisted field of the PCB
+  format (on pads, tracks and zones), so any future schematic → PCB net sync
+  **must match by terminal set, not by auto-generated `N$k` name.** Nothing
+  in-tree feeds `build_netlist` into `signex-pcb` today, so no routed copper is
+  remapped by this change.
+
+### Added — ERC
+
+- **`AmbiguousLabelAnchor`** (warning). A label sitting where two or more wires
+  cross with no junction is anchored to exactly one of them by the tiebreak
+  above. The answer is deterministic but not predictable from the geometry, so
+  ERC now says the net was decided by tiebreak instead of leaving the user to
+  guess. Labels on a wire endpoint, or on a dotted crossing, are not flagged.
+
+### Added — footprint & symbol editor
+
+- **Real Align… dialog** composing the existing `AlignOps` (#370).
+- **Break Track** wired to the sketch `split_line` primitive (#372), backed by a
+  new `split_line` primitive that divides a `Line` at parameter *t* (#429).
+- **Drag Track End** as an endpoint-biased segment grab (#361).
+- **Sketch active bar** grouped under Create / Modify, with the chrome search
+  bar centred (#443).
+
+### Fixed — footprint & symbol editor
+
+- **Context-menu selection** no longer acts on a stale target, and no-op edits
+  stop dirtying the document or pushing history (#146).
+- **Pad geometry** — pad rotation is now real geometry that holds the sidecar
+  re-mint invariant (#433); a pad's ownership of its sketch geometry survives
+  reopen (#424); the Place/Move active-bar button drives the pad Select tool
+  (#427).
+- **Shapes dropdown** collapses the three phantom Arc rows to one (#462).
+- **Tab during footprint sketch placement** routes to the sketch instead of
+  triggering Save in the standalone editor (#428).
+
+### Fixed — schematic, ERC & export
+
+- **Child-sheet references** resolve parent-relative through one shared helper
+  (#339) and are rejected when they escape the resolution root (#473).
+- **Sheet delete** completes correctly, and cut/copy is gated on a preservable
+  selection subset (#425).
+- **Annotate** preview and action now agree on sheet-walk order (#470).
+- **Deterministic child-sheet ownership** with loud cross-directory filename
+  collisions (#459).
+- **Stale minted junction dots** are removed on wire-geometry reconcile (#480).
+- **ERC** merges same-name labels in the shared connectivity so it matches the
+  netlist (#418).
+- **Export** gained a project sheet-set assembler with per-deliverable stitch
+  severity, plus the Export-anyway netlist path (#436, #406, #431 via #449).
+
+### Fixed — BOM
+
+- Designators order naturally with Fitted ranked above DNP (#419), and field
+  lookup is deterministic and case-insensitive with base fit resolution (#474).
+
+### Fixed — persistence
+
+- **Save-All** routes every dirty document kind and surfaces the failure reason
+  (#452), covered by Cut/Save-All regression tests (#460).
+- **Crash-safe writes** — table and settings writes go through `atomic_write`
+  (#421), whose per-writer tmp sibling name is now unique (#469).
+- Schematic extras serialize deterministically (#409).
+- The test suite no longer touches the real `prefs.json`; the no-config-dir
+  fallback is surfaced (#439).
+
+### Fixed — geometry & output
+
+- **Circumcircle math unified** — four copies collapsed to one canonical helper
+  (#461), with the SVG output routed through it (#484).
+- **Bake/library** rejects unit-suffixed chamfer ratios and fixes a
+  byte-boundary panic in hash-cell parsing (#417).
+
+### Changed — tooling, CI & toolchain
+
+- **Rust pinned to 1.97.0** (`rust-toolchain.toml` + CI) for cargo/CI/fmt parity
+  (#454), the MSRV raised to match (#456), and the pin documented (#455).
+- **`rustfmt` is now an enforced gate** — `rustfmt --all` across the workspace
+  and the fmt job made blocking (#453).
+- **God-file ratchet gate** — no new or growing production god-files (#450), the
+  cap raised to 1000 lines (#451), counting production lines past an external
+  `mod tests;` (#468).
+- **Data-driven dropdown table** replaces the `dropdown.rs` god-file (#458).
+- The labeler matches `signex-app` tests so test-only PRs get area labels (#441).
+
+## [0.14.0] — 2026-07-18
+
+**Everything since v0.13.0** — 221 commits, 2026-05-06 → 2026-07-18.
 
 This section was originally written on 2026-05-31 covering only the footprint
 editor, and never tagged. Work kept landing past it: symbol multi-unit, the
@@ -64,6 +203,13 @@ summarises by theme rather than listing every commit.
   off (#298).
 - **`anchor2d`** — pivot-aware 2D rotation with a compensated (B-type)
   `Transform2D`.
+- **Polygon graphic primitive + closed-shape authoring** (#378) — a
+  `SymbolGraphicKind::Polygon` (implicitly-closed ring) with fill/stroke,
+  concave-correct hit-test, and per-vertex handles; a **Place Polygon**
+  click-collect tool with the full close-gesture set; **Join into Polygon**,
+  which chains selected lines/arcs end-to-end into one closed polygon
+  (auto-closing an open chain) in a single undo step; and a **right-click
+  context menu** built from a pure data-to-menu row function.
 
 ### Added — keyboard and commands
 
@@ -99,13 +245,39 @@ summarises by theme rather than listing every commit.
 ### Fixed
 
 - **Data loss / persistence** — TSV cells are escaped so a schematic save can
-  always reopen (#96, #130); persistence made crash-safe with `fsync`
-  `atomic_write`, atomic `.snxprj`, and a corrupt-JSON guard (#104, #119);
-  residual document writes routed through `atomic_write`, New Project guarded
-  (#104, #128); prompt for unsaved changes on app exit (#95, #124).
+  always reopen (#96, #130); C0 control bytes in a TSV cell are escaped too, so
+  a stray control character in user text can no longer produce a `.snxsch` /
+  `.snxpcb` that will not reload (#386, #397); the footprint editor's STEP store
+  is written via `atomic_write`, so a crash mid-write can no longer strand a
+  corrupt 3D asset that is then served forever (#387, #398); persistence made
+  crash-safe with `fsync` `atomic_write`, atomic `.snxprj`, and a corrupt-JSON
+  guard (#104, #119); residual document writes routed through `atomic_write`,
+  New Project guarded (#104, #128); prompt for unsaved changes on app exit
+  (#95, #124).
+- **Footprint sketch-profile pads** — moving a pad made with "Make Pad from
+  Profile" left its sketch profile behind, and the bake then resolved the
+  copper back to the pad's original location, so an exported footprint placed
+  the pad in the wrong spot with no warning. The profile now travels with the
+  pad: the loop walker gained an id-level core that needs no solve, a pad that
+  first appears from the sketch side is relinked to its `PadAttr` entity by
+  number, and a whole-pad drag no longer snaps its cursor to the pad's own
+  outline vertices (#142, #311).
 - **Connectivity** — wires connect at T-junctions in net derivation (#107,
   #120); the net-colour flood runs on the authoritative connectivity core
   (#138).
+- **ERC agrees with the netlist on mid-wire taps** — ERC re-derived
+  connectivity with endpoint-only checks, so a label or pin tapping a wire's
+  interior was invisible to the rules while the netlist saw it. The rules now
+  read the shared wire-anchored connectivity (#388, #399); DSL net names are
+  anchored the same way, so rules keyed on `net.name` / `net.class` no longer
+  see an unnamed net plus a phantom (#396, #403); and bus range labels placed
+  mid-span — where they are normally drawn — are anchored to their bundle, so a
+  `D[0..7]` / `D[0..3]` width mismatch on one bus is reported instead of
+  silently passing (#395, #405).
+- **PDF and preview net names** — the exporters re-derived connectivity of
+  their own instead of reading the authoritative `Netlist` off
+  `ExportContext`, so an exported sheet could annotate a net differently from
+  the netlist it shipped with (#389, #400).
 - **Editing** — Ctrl+C/X/V/D and shift-chorded shortcuts un-broken (#103,
   #127); Find/Replace replaces the matched substring rather than the whole
   field (#102, #125).
@@ -115,9 +287,24 @@ summarises by theme rather than listing every commit.
   the screen-space y-flip; arc discontinuity past ±180° prevented; rotation
   angles normalised; `LineJoin::Round` for rectangle/polygon corners; round
   line caps.
+- **Symbol arc sweep convention unified, with a data-safe legacy migration**
+  (#378) — the CPU canvas draw path was the lone signed-sweep holdout while
+  hit-test, the GPU SDF shader, and rotation all read `start_deg`/`end_deg` as a
+  CCW sweep that wraps through 360°, so a rotated 0°-crossing arc drew its
+  complement while clicks landed on the real arc. All consumers now route
+  through one authority (`signex_gfx::primitive::arc::ccw_wrapped_sweep_rad`),
+  a full-turn arc draws and hit-tests as one circle, and a load-time migration
+  self-heals legacy clockwise-signed pairs on read. Every endpoint writer
+  (placement, rotation, the Properties panel, and the arc-endpoint drag handle)
+  normalises into `[0, 360)` so a saved arc round-trips instead of silently
+  reloading as its complement.
 - **Interaction** — unsnapped cursor position for Select-tool hit-testing,
   snapped coords retained for drag anchor and delta; `CursorAt` published
   during box-select drag to force redraw.
+- **Detached windows open in front** — a detached modal, undocked tab, or
+  detached panel opened at the default window level with no raise, so on
+  Windows it could appear *behind* the main window and the user had to move
+  the main window to find the dialog they had just opened (#311).
 - Preferences modal is responsive to window resize (#208) and the reopen
   regression is fixed; theme-aligned canvas backdrop, sheet tracks the stored
   paper size (#201); library server gains a persistent DB backend and rejects
@@ -130,6 +317,9 @@ summarises by theme rather than listing every commit.
 - CI and license guards run on `trunk` (#121); PR preconditions aligned with
   the org control-process convention (#134); Linux dependency install hardened
   against the `packages.microsoft.com` apt outage (#155).
+- **Declared the 1.88 MSRV** and corrected the README + CONTRIBUTING Rust
+  version references to match (#383).
+- README and codebase map refreshed to the v0.14 workspace reality (#385).
 
 ### Added — footprint editor (the original v0.14 scope)
 

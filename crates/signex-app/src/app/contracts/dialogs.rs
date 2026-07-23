@@ -221,6 +221,13 @@ pub enum ExportMsg {
     BomFinished(Result<std::path::PathBuf, String>),
     /// User clicked the OK button on the export-error modal.
     DismissError,
+    /// #431 — user clicked "Export anyway (incomplete)" on the
+    /// netlist-incomplete prompt. Writes the partial `.net` with an INCOMPLETE
+    /// header comment listing the omitted pages, then clears the prompt.
+    NetlistExportAnyway,
+    /// #431 — user clicked "Cancel" on the netlist-incomplete prompt (or
+    /// clicked outside it). Writes nothing and clears the prompt.
+    NetlistCancelIncomplete,
 }
 
 /// Custom Selection Filter modal message family (ADR-0001 D3).
@@ -377,4 +384,3 @@ pub enum DrawingFieldEdit {
     /// Override the stroke colour; `None` restores the theme default.
     StrokeColor(Option<signex_types::schematic::StrokeColor>),
 }
-

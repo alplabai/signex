@@ -116,4 +116,3 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
 
     col
 }
-

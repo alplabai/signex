@@ -1,0 +1,14 @@
+# Pinned Rust toolchain — single source of truth for LOCAL cargo/rustfmt/clippy.
+#
+# Why pin: keeps every machine (and the pre-commit fmt hook) on the exact same
+# rustfmt as CI, so formatting output is byte-identical and the required
+# `fmt · rustfmt` check never disagrees with a local `cargo fmt`. Also makes
+# builds deterministic — a new stable release can't silently reformat the whole
+# tree or change compilation out from under us.
+#
+# IMPORTANT: dtolnay/rust-toolchain in CI does NOT read this file — it pins via
+# its `@<version>` ref. Keep `.github/workflows/ci.yml` (`dtolnay/rust-toolchain@1.97.0`)
+# in lockstep with `channel` below whenever you bump the toolchain.
+[toolchain]
+channel = "1.97.0"
+components = ["rustfmt", "clippy"]

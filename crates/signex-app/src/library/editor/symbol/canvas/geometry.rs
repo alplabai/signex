@@ -115,6 +115,10 @@ pub(super) fn selection_anchor(symbol: &Symbol, selection: &SymbolSelection) -> 
                     SymbolGraphicKind::Circle { center, .. }
                     | SymbolGraphicKind::Arc { center, .. } => (center[0], center[1]),
                     SymbolGraphicKind::Text { position, .. } => (position[0], position[1]),
+                    SymbolGraphicKind::Polygon { vertices } => {
+                        let c = state::polygon_centroid(vertices);
+                        (c[0], c[1])
+                    }
                 })
         }
         SymbolSelection::Field(_) | SymbolSelection::All | SymbolSelection::Multiple { .. } => None,

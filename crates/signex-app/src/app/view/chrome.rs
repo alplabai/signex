@@ -12,7 +12,10 @@ impl Signex {
     /// Custom chrome for the borderless main window. Replaces the OS
     /// title bar with a 36 px strip:
     ///
-    /// `[wordmark + menus] [drag] [search bar] [drag] [min│max│×]`
+    /// `[wordmark + menus] [drag] [drag] [min│max│×]`
+    ///
+    /// with the search bar stacked on top of it, centred on the window
+    /// (see `chrome_search_bar_geometry`).
     ///
     /// The drag zones are the only mouse-area clickable regions — menu
     /// buttons, search, and window controls keep their own click
@@ -116,6 +119,11 @@ impl Signex {
             left: 8.0,
         });
 
+        // Shrinks with the window; the palette dropdown reads the same
+        // geometry so it stays glued to the input.
+        let (search_bar_x, search_bar_w) =
+            crate::app::view::chrome_search_bar_geometry(self.ui_state.window_size.0);
+
         // Chrome-strip command palette input — VS Code-style fuzzy
         // search over commands, placed symbols, and project files. The
         // text_input is always rendered; the dropdown overlay is gated
@@ -166,7 +174,7 @@ impl Signex {
             bottom: 0.0,
             left: 10.0,
         })
-        .width(crate::app::view::CHROME_SEARCH_BAR_WIDTH)
+        .width(search_bar_w)
         .height(28)
         .align_y(iced::alignment::Vertical::Center)
         .style(move |_: &iced::Theme| container::Style {
@@ -193,16 +201,34 @@ impl Signex {
             .into()
         };
 
-        // Original chrome layout — search bar centered between menu
-        // and controls (slightly right of true window center because
-        // the menu section is wider than the window-controls strip,
-        // but visually fine and the layout draggability + redraw
-        // characteristics are correct). Two Fill drag zones flank
-        // the search bar so the entire strip outside the input and
-        // controls is draggable.
-        let inner = row![menu_padded, drag_zone(), search_bar, drag_zone(), controls]
+        // Two layers. Underneath: menus, controls, and two Fill drag
+        // zones covering everything between them. On top: the search
+        // bar, centred on the window. Putting the bar in the row
+        // instead would centre it in the *gap*, which sits right of
+        // window centre because the menu section is far wider than the
+        // three control buttons.
+        //
+        // The top layer is a bare container — outside the bar's own
+        // bounds it captures nothing, so presses fall straight through
+        // to the drag zones below and the whole strip stays draggable.
+        let strip = row![menu_padded, drag_zone(), drag_zone(), controls]
             .width(Length::Fill)
             .align_y(Alignment::Center);
+        // Positioned by left padding rather than centre alignment so it
+        // lands on exactly the `x` the geometry helper reports — the
+        // dropdown anchors to that same `x`, and the helper stops
+        // centring on very narrow windows.
+        let centered_search = container(search_bar)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .padding(iced::Padding {
+                top: 0.0,
+                right: 0.0,
+                bottom: 0.0,
+                left: search_bar_x,
+            })
+            .align_y(iced::alignment::Vertical::Center);
+        let inner = iced::widget::Stack::new().push(strip).push(centered_search);
 
         container(inner)
             .width(Length::Fill)

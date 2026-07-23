@@ -163,6 +163,16 @@ mod tests {
 
     // ── Persistence robustness (issue #104) ──────────────────────────
 
+    /// True if `dir` contains a leftover atomic-write temp sibling
+    /// (`*.tmp`). `atomic_write` picks a unique per-writer name (#416),
+    /// so tests must scan for any match instead of a fixed name.
+    fn has_stray_tmp(dir: &Path) -> bool {
+        std::fs::read_dir(dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .any(|entry| entry.path().extension().is_some_and(|ext| ext == "tmp"))
+    }
+
     #[test]
     fn write_project_round_trips_atomically_leaving_no_tmp() {
         let dir = tempfile::tempdir().unwrap();
@@ -173,7 +183,7 @@ mod tests {
         .unwrap();
         write_project(&path, &data).unwrap();
         // The atomic writer must not leave its temp file behind.
-        assert!(!dir.path().join("Proj.snxprj.tmp").exists());
+        assert!(!has_stray_tmp(dir.path()));
         let back = parse_project(&path).unwrap();
         assert_eq!(back.schematic_root.as_deref(), Some("Proj.snxsch"));
     }

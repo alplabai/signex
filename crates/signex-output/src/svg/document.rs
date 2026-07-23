@@ -8,7 +8,6 @@
 //! Extracted verbatim from the SVG exporter (`svg/mod.rs`); pure code
 //! motion, zero behaviour change.
 
-use super::*;
 use super::drawings::push_sch_drawing_path;
 use super::geometry::{path_to_tiny_skia, rect_path};
 use super::labels::{
@@ -19,6 +18,7 @@ use super::symbols::{
     field_effective_style, push_symbol_lib_graphics, push_symbol_pins, symbol_eval_variables,
 };
 use super::text::draw_text_outline;
+use super::*;
 use crate::SheetSnapshot;
 use crate::pdf::layout::PageTransform;
 use crate::pdf::{ColourMode, PdfOptions};

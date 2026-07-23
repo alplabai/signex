@@ -41,8 +41,15 @@ default-members = [
 ]
 
 [workspace.package]
-version = "0.14.0"
+version = "0.15.0"
 edition = "2024"
+# MSRV tracks the pinned toolchain (`rust-toolchain.toml` channel). We build,
+# test, and support exactly one toolchain — the pinned stable — so the declared
+# minimum equals what CI actually enforces rather than an older, untested floor.
+# (Edition 2024 needs 1.85 and let-chains need 1.88; both are well below this.)
+# When bumping, keep `rust-toolchain.toml`, the CI `dtolnay/rust-toolchain@<ver>`
+# refs, and this line in lockstep.
+rust-version = "1.97"
 license = "Apache-2.0"
 repository = "https://github.com/alplabai/signex"
 

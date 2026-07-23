@@ -2,6 +2,7 @@
 name = "signex-3d-model-importer"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "STEP / VRML / GLTF → GLB conversion pipeline for signex-renderer"

@@ -265,6 +265,7 @@ impl Signex {
                 pending_pdf_files: None,
                 pending_bom_options: None,
                 export_error: None,
+                netlist_incomplete_prompt: None,
                 bom_preview: None,
                 pending_git_commits: Vec::new(),
                 inflight_git_commits: std::collections::HashSet::new(),

@@ -14,13 +14,18 @@ impl Signex {
             return iced::Task::none();
         }
 
-        let ctx = match super::build_export_context(&self.document_state) {
+        let (ctx, issues) = match super::build_export_scope(&self.document_state) {
             Some(c) => c,
             None => {
                 log::warn!("Print preview: no active schematic");
                 return iced::Task::none();
             }
         };
+        // Opening the modal is a user action, so the stitch issues surface
+        // here — once. `rerasterize_print_preview` below must stay silent: it
+        // fires on every settings toggle and on every keystroke in the
+        // specific-page input.
+        super::log_stitch_issues(&self.document_state, &ctx, &issues);
 
         // Derive page size and orientation from the active schematic document
         // so the preview matches the actual sheet dimensions rather than
@@ -76,7 +81,7 @@ impl Signex {
         log::info!("Print preview: rendered {} page(s)", pages.len());
         let variants = self
             .document_state
-            .active_loaded_project()
+            .active_document_project()
             .map(|p| p.data.variant_definitions.clone())
             .unwrap_or_default();
         // Seed `pdf_options.variant` from the project's active variant
@@ -85,23 +90,20 @@ impl Signex {
         let mut pdf_opts = pdf_opts;
         pdf_opts.variant = self
             .document_state
-            .active_loaded_project()
+            .active_document_project()
             .and_then(|p| p.data.active_variant.clone());
-        // Seed the file picker with every sheet from the active
-        // project — open-modal default is "export everything", and
-        // user toggles take the box from checked to unchecked.
-        let selected_files: std::collections::HashSet<PathBuf> = self
-            .document_state
-            .active_loaded_project()
-            .map(|p| {
-                let dir = std::path::PathBuf::from(&p.data.dir);
-                p.data
-                    .sheets
-                    .iter()
-                    .map(|s| dir.join(&s.filename))
-                    .collect()
-            })
-            .unwrap_or_default();
+        // Seed the file picker off the export context's own sheet set —
+        // open-modal default is "export everything", and user toggles
+        // take the box from checked to unchecked. Reading `ctx` rather
+        // than re-deriving from the project keeps the picker and the
+        // exported pages in lockstep for loose documents too.
+        let sheet_files: Vec<(PathBuf, String)> = ctx
+            .sheets
+            .iter()
+            .map(|s| (s.path.clone(), s.sheet_name.clone()))
+            .collect();
+        let selected_files: std::collections::HashSet<PathBuf> =
+            sheet_files.iter().map(|(p, _)| p.clone()).collect();
         self.document_state.preview = Some(crate::app::state::PreviewState {
             pages,
             page_handles,
@@ -112,6 +114,7 @@ impl Signex {
             active_tab: crate::app::state::PdfPreviewTab::Preview,
             pan: (0.0, 0.0),
             panning: None,
+            sheet_files,
             selected_files,
             variants,
             quality: initial_quality,
@@ -281,18 +284,41 @@ impl Signex {
     }
 
     fn rerasterize_print_preview(&mut self) {
-        let (pdf_opts, file_filter, preview_dpi) = match self.document_state.preview.as_ref() {
-            Some(preview) => (
-                preview.pdf_options.clone(),
-                preview.selected_files.clone(),
-                preview.quality.preview_dpi(),
-            ),
+        let (pdf_opts, preview_dpi) = match self.document_state.preview.as_ref() {
+            Some(preview) => (preview.pdf_options.clone(), preview.quality.preview_dpi()),
             None => return,
         };
 
         let mut ctx = match super::build_export_context(&self.document_state) {
             Some(c) => c,
             None => return,
+        };
+        // Re-seed the picker from the freshly built context. `sheet_files` was
+        // captured once at modal open; if the active document changed while the
+        // preview was up, the stale list names paths no longer in `ctx` and the
+        // filter below empties it — a blank preview with no explanation. Keep
+        // each surviving path's checked state and default genuinely-new sheets
+        // to checked, matching the open-modal "export everything" default.
+        let file_filter = {
+            let Some(preview) = self.document_state.preview.as_mut() else {
+                return;
+            };
+            let known: std::collections::HashSet<PathBuf> =
+                preview.sheet_files.iter().map(|(p, _)| p.clone()).collect();
+            let current: std::collections::HashSet<PathBuf> =
+                ctx.sheets.iter().map(|s| s.path.clone()).collect();
+            preview.selected_files.retain(|p| current.contains(p));
+            for path in &current {
+                if !known.contains(path) {
+                    preview.selected_files.insert(path.clone());
+                }
+            }
+            preview.sheet_files = ctx
+                .sheets
+                .iter()
+                .map(|s| (s.path.clone(), s.sheet_name.clone()))
+                .collect();
+            preview.selected_files.clone()
         };
         // Drop sheets the user unchecked in the file picker. An
         // empty filter set means "no files selected" — matches
@@ -421,20 +447,8 @@ impl Signex {
     }
 
     pub(crate) fn handle_print_preview_select_all_files(&mut self) {
-        let all: std::collections::HashSet<PathBuf> = self
-            .document_state
-            .active_loaded_project()
-            .map(|p| {
-                let dir = std::path::PathBuf::from(&p.data.dir);
-                p.data
-                    .sheets
-                    .iter()
-                    .map(|s| dir.join(&s.filename))
-                    .collect()
-            })
-            .unwrap_or_default();
         if let Some(preview) = self.document_state.preview.as_mut() {
-            preview.selected_files = all;
+            preview.selected_files = preview.sheet_files.iter().map(|(p, _)| p.clone()).collect();
         }
         self.rerasterize_print_preview();
     }

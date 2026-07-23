@@ -1,6 +1,6 @@
 use signex_types::schematic::{
     Bus, Junction, Label, NoConnect, SCHEMATIC_PT_TO_MM, SchDrawing, SelectedItem, SelectedKind,
-    Symbol, TextNote, Wire,
+    Symbol, TextNote, Wire, circumcircle,
 };
 
 use super::Engine;
@@ -446,9 +446,7 @@ impl Engine {
                         ..
                     } => {
                         info.push(("Type".into(), "Arc".into()));
-                        if let Some((cx, cy, radius)) =
-                            circumcircle((start.x, start.y), (mid.x, mid.y), (end.x, end.y))
-                        {
+                        if let Some((cx, cy, radius)) = circumcircle(*start, *mid, *end) {
                             let sa: f64 = (start.y - cy).atan2(start.x - cx);
                             let ea: f64 = (end.y - cy).atan2(end.x - cx);
                             let norm = |a: f64| -> f64 {
@@ -578,28 +576,34 @@ impl Engine {
 }
 
 // ---------------------------------------------------------------------------
-// Arc geometry helper
+// Cut = copy + delete, but the two must agree on what they carry
 // ---------------------------------------------------------------------------
 
-/// Circle through three non-collinear points — converts the Signex
-/// (start, mid, end) arc storage into (center, radius, angles) for
-/// rendering and hit-testing.
-fn circumcircle(a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> Option<(f64, f64, f64)> {
-    let (ax, ay) = a;
-    let (bx, by) = b;
-    let (cx, cy) = c;
-    let d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
-    if d.abs() < 1e-9 {
-        return None;
-    }
-    let ux = ((ax * ax + ay * ay) * (by - cy)
-        + (bx * bx + by * by) * (cy - ay)
-        + (cx * cx + cy * cy) * (ay - by))
-        / d;
-    let uy = ((ax * ax + ay * ay) * (cx - bx)
-        + (bx * bx + by * by) * (ax - cx)
-        + (cx * cx + cy * cy) * (bx - ax))
-        / d;
-    let r = ((ax - ux) * (ax - ux) + (ay - uy) * (ay - uy)).sqrt();
-    Some((ux, uy, r))
+/// Kinds `collect_selection_clipboard` (above) captures. Single source of
+/// truth for `partition_cuttable` — keep this in sync with that match.
+fn clipboard_can_carry(kind: SelectedKind) -> bool {
+    matches!(
+        kind,
+        SelectedKind::Wire
+            | SelectedKind::Bus
+            | SelectedKind::Label
+            | SelectedKind::Symbol
+            | SelectedKind::Junction
+            | SelectedKind::NoConnect
+            | SelectedKind::TextNote
+    )
+}
+
+/// Splits a selection into the subset Cut can safely copy-then-delete and
+/// the remainder it must leave untouched. Cut is copy + delete; a kind
+/// `collect_selection_clipboard` can't carry (`ChildSheet`, `SheetPin`,
+/// `Drawing`, `BusEntry`, …) would otherwise get deleted with nothing in
+/// the clipboard to restore it — a silent destroy, not a no-op (#341:
+/// sheet clipboard support itself is out of scope, but Cut must not desync
+/// from what Copy can actually carry).
+pub fn partition_cuttable(items: &[SelectedItem]) -> (Vec<SelectedItem>, Vec<SelectedItem>) {
+    items
+        .iter()
+        .copied()
+        .partition(|item| clipboard_can_carry(item.kind))
 }

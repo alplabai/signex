@@ -20,10 +20,10 @@
 //!   and sketch (entity overlay, DOF arrows, snap glyph, constraint
 //!   icons, filled closed loops, and the multi-click ghost preview).
 
+mod draw;
 mod geometry;
 mod hit_test;
 mod input;
-mod draw;
 
 #[cfg(test)]
 mod tests;

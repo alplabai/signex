@@ -78,16 +78,16 @@
 # open because the work is outstanding; a spec section says only that
 # someone once intended it.
 - title: "v0.14.0 — Footprint, Symbol Units & Netlist"
-  description: "Everything since v0.13.0: footprint editor enabled + parity, symbol multi-unit, signex-net netlist contract, keyboard-shortcut profiles, schematic GPU render, ADR-0001 decomposition."
-  state: open
+  description: "Everything since v0.13.0: footprint editor enabled + parity, symbol multi-unit, signex-net netlist contract, keyboard-shortcut profiles, schematic GPU render, ADR-0001 decomposition, symbol polygon primitive. Shipped 2026-07-18."
+  state: closed
   # Was "Footprint Editor". Renamed because the section was written
   # 2026-05-31 and never tagged while 170 further commits landed past it;
   # v0.14.0 claims all of it rather than minting a phantom version.
   aliases: ["v0.14.0 — Footprint Editor"]
 
 - title: "v0.15.0 — Editor Fixes"
-  description: "Editor defects carrying tier: p0, plus Break Track / Drag Track End — the one item v0.14.0 actually deferred."
-  state: open
+  description: "Editor defects carrying tier: p0, plus Break Track / Drag Track End — the one item v0.14.0 actually deferred. Shipped 2026-07-23."
+  state: closed
   # Was "Footprint Editor Parity" — that work was already on trunk when
   # the milestone was created. v0.14.0's own CHANGELOG names its only
   # v0.15 deferral as Break Track / Drag Track End.

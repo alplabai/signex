@@ -138,14 +138,66 @@ fn draw_arc_bucket<F>(
         let center = world_to_screen(arc.center);
         let radius = options.radius_px(arc.radius);
         // canvas::path::Arc operates in screen space (y-down). Arc angles are
-        // stored as world-space radians (y-up), so negate to convert:
-        // screen_angle = -world_angle.
+        // stored as world-space radians (y-up) using this codebase's
+        // CCW-wraparound sweep convention (see
+        // `signex_gfx::primitive::arc::ccw_wrapped_sweep_rad`'s doc
+        // comment — same rule as `arc.wgsl`'s `sdf_arc` and
+        // `hit_test.rs`'s `Arc` arm): `start..end` always sweeps
+        // counter-clockwise from `start`, wrapping through a full turn
+        // when `end < start`, never the signed `end - start` delta.
+        //
+        // iced/lyon's `builder.arc` does NOT know this convention — it
+        // draws `end_angle - start_angle` as a raw signed sweep with no
+        // wraparound (iced_graphics 0.14's `Builder::ellipse`). Feeding
+        // it the negated world angles directly (as this used to do)
+        // only happened to match for already-non-wrapped arcs
+        // (`start <= end`, where the raw difference already equals the
+        // CCW-wraparound sweep); any arc stored in wrapped form
+        // (`end < start`, e.g. after a 0°-crossing rotation, or a
+        // placement drag before the endpoint-swap fix in
+        // `symbol::updates::apply_symbol_primitive_edit`'s `AddArc`
+        // handler) drew as the wrong complement — the opposite arc
+        // from the one hit-test and the GPU shader respond on.
+        //
+        // The fix: derive `end_angle` for the builder from the
+        // wraparound sweep instead of trusting the stored `end_angle`
+        // directly. `start_angle` still negates exactly as before
+        // (screen_angle = -world_angle correctly places the start
+        // point); `end_angle` is `start_angle - sweep` — subtracting
+        // because negating a CCW (increasing) world angle produces a
+        // DECREASING screen angle, so a positive CCW world sweep
+        // becomes a negative delta in screen-angle space. For
+        // already-non-wrapped arcs this reduces to exactly `-arc.
+        // end_angle` (the previous, correct behaviour is unchanged);
+        // only wrapped arcs draw differently now — correctly.
+        let start_angle = -arc.start_angle;
+        let sweep =
+            signex_gfx::primitive::arc::ccw_wrapped_sweep_rad(arc.start_angle, arc.end_angle);
+        // A full-turn Arc (raw span a nonzero whole number of turns)
+        // is a circle, not the degenerate zero-sweep point its
+        // collapsed CCW-wraparound sweep would otherwise draw. Reaches
+        // an in-memory Arc that bypassed the load-time full-turn-to-
+        // Circle migration — e.g. a Properties-panel start_deg/end_deg
+        // edit typed against an already-loaded graphic.
+        // `arc_is_full_turn_rad` is the shared authority the symbol
+        // body hit-test also consults, so the circle drawn here is the
+        // same circle the user can click-select.
+        if signex_gfx::primitive::arc::arc_is_full_turn_rad(arc.start_angle, arc.end_angle) {
+            frame.stroke(
+                &canvas::Path::circle(center, radius),
+                canvas::Stroke::default()
+                    .with_width(options.stroke_px(arc.width))
+                    .with_color(color_from_rgba(arc.color)),
+            );
+            continue;
+        }
+        let end_angle = start_angle - sweep;
         let path = canvas::Path::new(|builder| {
             builder.arc(canvas::path::Arc {
                 center,
                 radius,
-                start_angle: iced::Radians(-arc.start_angle),
-                end_angle: iced::Radians(-arc.end_angle),
+                start_angle: iced::Radians(start_angle),
+                end_angle: iced::Radians(end_angle),
             });
         });
         frame.stroke(

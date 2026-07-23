@@ -1,6 +1,5 @@
 //! Project git-commit handlers. Split from `handlers/document_files.rs`.
 
-
 use anyhow::Result;
 
 use super::super::super::*;

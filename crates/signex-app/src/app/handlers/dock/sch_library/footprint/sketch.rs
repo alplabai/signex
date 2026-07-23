@@ -14,7 +14,10 @@ use iced::Task;
 use super::super::*;
 
 impl Signex {
-    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_edit_pad_in_sketch(&mut self, pad_idx: &usize) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_edit_pad_in_sketch(
+        &mut self,
+        pad_idx: &usize,
+    ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             let entity_id = editor
                 .state

@@ -93,17 +93,26 @@ pub fn load() -> Vec<GlobalLibraryEntry> {
 /// inline error in the Components Panel.
 pub fn save(entries: &[GlobalLibraryEntry]) -> Result<(), String> {
     let path = prefs_path().ok_or_else(|| "no user config dir available".to_string())?;
-    if let Some(parent) = path.parent()
-        && let Err(e) = std::fs::create_dir_all(parent)
-    {
-        return Err(format!("create_dir_all({}): {}", parent.display(), e));
-    }
+    save_at(&path, entries)
+}
+
+/// Variant for tests / explicit paths — [`prefs_path`] is config-dir-global,
+/// so the real `save` is untestable without one. Mirrors the
+/// `save_preferred_order` / `save_preferred_order_at` split in
+/// `library::settings::persistence`.
+///
+/// Crash-safe: [`signex_types::atomic_io::atomic_write`] writes to a temp
+/// sibling, fsyncs it and renames over the destination, so a crash mid-save
+/// leaves the previous library list intact rather than a truncated file. It
+/// also creates the parent directory, so no separate `create_dir_all` here.
+pub fn save_at(path: &Path, entries: &[GlobalLibraryEntry]) -> Result<(), String> {
     let file = GlobalPrefsFile {
         libraries: entries.to_vec(),
     };
     let text = toml::to_string_pretty(&file)
         .map_err(|e| format!("serialise global_libraries.toml: {e}"))?;
-    std::fs::write(&path, text).map_err(|e| format!("write {}: {}", path.display(), e))?;
+    signex_types::atomic_io::atomic_write(path, text.as_bytes())
+        .map_err(|e| format!("write {}: {}", path.display(), e))?;
     Ok(())
 }
 
@@ -204,6 +213,39 @@ mod tests {
         let text = toml::to_string_pretty(&file).unwrap();
         let back: GlobalPrefsFile = toml::from_str(&text).unwrap();
         assert_eq!(back.libraries, entries);
+    }
+
+    /// `save_at` must go through `atomic_write`, not `fs::write`: a failed
+    /// save leaves the previously persisted list fully intact.
+    ///
+    /// Discriminator: denying new-file creation in the destination's
+    /// parent directory makes `atomic_write`'s `File::create(&tmp)` fail
+    /// before it can touch the destination, regardless of the unique
+    /// per-writer temp name it picks (#416). A plain `fs::write` would
+    /// ignore that and clobber the old file — so this test fails on a
+    /// revert.
+    #[test]
+    fn save_at_leaves_original_intact_when_write_fails() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("global_libraries.toml");
+        let original = vec![GlobalLibraryEntry {
+            path: PathBuf::from("/tmp/keep-me.snxlib"),
+            remote: None,
+            auto_pull: None,
+        }];
+        save_at(&path, &original).unwrap();
+        let before = std::fs::read_to_string(&path).unwrap();
+        assert!(!crate::test_support::has_stray_tmp(path.parent().unwrap()));
+
+        let _deny = crate::test_support::DenyNewFiles::on(path.parent().unwrap());
+        let replacement = vec![GlobalLibraryEntry {
+            path: PathBuf::from("/tmp/clobber.snxlib"),
+            remote: None,
+            auto_pull: None,
+        }];
+        assert!(save_at(&path, &replacement).is_err());
+
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
     }
 
     #[test]

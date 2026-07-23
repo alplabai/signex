@@ -38,4 +38,4 @@ mod sketch;
 // deeper, re-exported here so consumers name `draw::<item>` rather than
 // reaching into the private renderer submodules.
 pub(in crate::library::editor::footprint::canvas) use pad::draw_pads_tool_preview;
-pub(in crate::library::editor::footprint::canvas) use sketch::{find_closed_loops, ClosedLoop};
+pub(in crate::library::editor::footprint::canvas) use sketch::{ClosedLoop, find_closed_loops};

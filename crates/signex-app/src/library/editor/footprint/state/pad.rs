@@ -178,17 +178,134 @@ impl EditorPad {
             .unwrap_or(FpLayer::FCu)
     }
 
-    /// Bounding box (min_x, min_y, max_x, max_y) in mm.
+    /// Un-rotated, axis-aligned half-extent box (min_x, min_y, max_x,
+    /// max_y) in mm.
+    ///
+    /// This is the PAD-LOCAL frame — `rotation_deg` is deliberately
+    /// ignored. Only callers that reason in the pad's own frame want
+    /// this (the chamfer / round-rect anchor derivation in
+    /// `pad_to_sketch::solve`). Anything asking "where does this pad
+    /// actually sit on the board" wants [`Self::rotated_aabb_mm`] or
+    /// [`Self::rotated_corners_mm`] instead — reading the un-rotated
+    /// box is what left hit-test, courtyard, rubber-band and the pad
+    /// renderer all disagreeing with the drawn copper.
     pub fn bbox_mm(&self) -> (f64, f64, f64, f64) {
         let (cx, cy) = self.position_mm;
         let (w, h) = self.size_mm;
         (cx - w / 2.0, cy - h / 2.0, cx + w / 2.0, cy + h / 2.0)
     }
 
-    /// AABB containment check.
-    pub fn contains_mm(&self, x: f64, y: f64) -> bool {
+    /// Rotate a free VECTOR (a delta — no translation applied) from the
+    /// pad's own frame into world mm.
+    pub fn rotate_delta_to_world_mm(&self, dx: f64, dy: f64) -> (f64, f64) {
+        if self.rotation_deg == 0.0 {
+            return (dx, dy);
+        }
+        let (sin, cos) = self.rotation_deg.to_radians().sin_cos();
+        (dx * cos - dy * sin, dx * sin + dy * cos)
+    }
+
+    /// Inverse of [`Self::rotate_delta_to_world_mm`].
+    pub fn rotate_delta_to_local_mm(&self, dx: f64, dy: f64) -> (f64, f64) {
+        if self.rotation_deg == 0.0 {
+            return (dx, dy);
+        }
+        let (sin, cos) = self.rotation_deg.to_radians().sin_cos();
+        (dx * cos + dy * sin, -dx * sin + dy * cos)
+    }
+
+    /// Map a POINT given in the pad's own frame — the frame
+    /// [`Self::bbox_mm`] is expressed in — into world mm.
+    ///
+    /// Every position derived off `bbox_mm` (round-rect arc anchors,
+    /// chamfer anchors, oval arc centres, the resized-edge corner
+    /// targets) has to come back through here, or the derived geometry
+    /// stays axis-aligned while the corners it is supposed to join turn
+    /// with the pad, and the outline no longer closes.
+    pub fn local_to_world_mm(&self, x: f64, y: f64) -> (f64, f64) {
+        let (cx, cy) = self.position_mm;
+        let (dx, dy) = self.rotate_delta_to_world_mm(x - cx, y - cy);
+        (cx + dx, cy + dy)
+    }
+
+    /// Inverse of [`Self::local_to_world_mm`] — takes a world point into
+    /// the pad's own frame, where the axis-aligned reasoning that
+    /// `bbox_mm` supports is valid again.
+    pub fn world_to_local_mm(&self, x: f64, y: f64) -> (f64, f64) {
+        let (cx, cy) = self.position_mm;
+        let (dx, dy) = self.rotate_delta_to_local_mm(x - cx, y - cy);
+        (cx + dx, cy + dy)
+    }
+
+    /// The four half-extent corners rotated about `position_mm` by
+    /// `rotation_deg`, in `[ne, se, sw, nw]` order — the order the
+    /// sketch-mirror corner code already assumes.
+    pub fn rotated_corners_mm(&self) -> [(f64, f64); 4] {
         let (xmin, ymin, xmax, ymax) = self.bbox_mm();
-        x >= xmin && x <= xmax && y >= ymin && y <= ymax
+        // [ne, se, sw, nw].
+        [(xmax, ymin), (xmax, ymax), (xmin, ymax), (xmin, ymin)]
+            .map(|(x, y)| self.local_to_world_mm(x, y))
+    }
+
+    /// Axis-aligned bounding box of the ROTATED pad, in mm. Equals
+    /// [`Self::bbox_mm`] at zero rotation and grows to enclose the
+    /// turned copper otherwise.
+    pub fn rotated_aabb_mm(&self) -> (f64, f64, f64, f64) {
+        if self.rotation_deg == 0.0 {
+            return self.bbox_mm();
+        }
+        let corners = self.rotated_corners_mm();
+        corners.iter().skip(1).fold(
+            (corners[0].0, corners[0].1, corners[0].0, corners[0].1),
+            |(x0, y0, x1, y1), &(x, y)| (x0.min(x), y0.min(y), x1.max(x), y1.max(y)),
+        )
+    }
+
+    /// Mirror every mirror-sensitive field about the pad's OWN
+    /// vertical axis (local `x → -x`). This is what moving a pad to
+    /// the other side of the board does to its copper.
+    ///
+    /// `signex_bake::pad` consumes each of these verbatim with no
+    /// side-based mirroring of its own, so the stored data IS the
+    /// baked geometry. Mirroring only a subset bakes a shape that is
+    /// neither the front nor the back one — a Chamfered pad flipped
+    /// with its angle negated but its corner flags left alone keeps
+    /// the chamfer on the wrong corner and the part will not seat.
+    /// Every field that changes under `x → -x` therefore moves here
+    /// together, or none of them do.
+    ///
+    /// Pad POSITION is deliberately untouched: this mirrors each pad
+    /// in place. Mirroring the layout about the footprint origin is a
+    /// different operation and does not exist yet.
+    pub fn mirror_about_own_vertical_axis(&mut self) {
+        self.rotation_deg = (-self.rotation_deg).rem_euclid(360.0);
+        self.hole_rotation_deg = self.hole_rotation_deg.map(|d| (-d).rem_euclid(360.0));
+        self.copper_offset_x_mm = self.copper_offset_x_mm.map(|v| -v);
+        match &mut self.shape {
+            PadShape::Chamfered { corners, .. } => {
+                std::mem::swap(&mut corners.top_left, &mut corners.top_right);
+                std::mem::swap(&mut corners.bottom_left, &mut corners.bottom_right);
+            }
+            PadShape::Custom(poly) => {
+                for p in poly.points.iter_mut() {
+                    p[0] = -p[0];
+                }
+            }
+            // Round / Rect / RoundRect / Oval are symmetric about
+            // their own vertical axis — nothing to mirror.
+            PadShape::Round | PadShape::Rect | PadShape::RoundRect { .. } | PadShape::Oval => {}
+        }
+    }
+
+    /// Point-in-pad containment, rotation-aware. Inverse-rotates the
+    /// probe into the pad's own frame and compares against the half
+    /// extents, so a turned pad is hit on its real copper rather than
+    /// on the axis-aligned box it would occupy unrotated.
+    pub fn contains_mm(&self, x: f64, y: f64) -> bool {
+        let (cx, cy) = self.position_mm;
+        let (hw, hh) = (self.size_mm.0 / 2.0, self.size_mm.1 / 2.0);
+        let (lx, ly) = self.rotate_delta_to_local_mm(x - cx, y - cy);
+        lx.abs() <= hw && ly.abs() <= hh
     }
 
     pub(super) fn from_pad(p: &Pad) -> Self {
@@ -428,4 +545,181 @@ pub enum AlignOp {
     IncreaseVSpacing,
     /// Contract vertical gaps by one grid step.
     DecreaseVSpacing,
+}
+
+/// Carry the three session-volatile link fields from the pre-refresh
+/// pad list onto the freshly-rebuilt one, matching by pad number.
+///
+/// Only where the number identifies exactly ONE pad on each side.
+/// Numbers are not unique in signex, and a last-wins number map hands
+/// several pads the same `sketch_entity_id` — after which a Pads-mode
+/// delete of one pad runs the delete mirror over another's geometry
+/// and that pad's copper silently disappears from the bake. An
+/// ambiguous number is left unlinked here and picked up by
+/// [`relink_pads_to_sketch`], which disambiguates by exact position
+/// and refuses if even that ties.
+pub(super) fn carry_links_by_unique_number(old: &[EditorPad], new_pads: &mut [EditorPad]) {
+    use std::collections::HashMap;
+    type Link<'a> = (
+        Option<signex_sketch::id::SketchEntityId>,
+        Option<[signex_sketch::id::SketchEntityId; 4]>,
+        &'a ShapeParamMap,
+    );
+
+    // `None` = the number is claimed by more than one old pad.
+    let mut old_links: HashMap<&str, Option<Link<'_>>> = HashMap::new();
+    for p in old {
+        old_links
+            .entry(p.number.as_str())
+            .and_modify(|slot| *slot = None)
+            .or_insert(Some((
+                p.sketch_entity_id,
+                p.corner_entity_ids,
+                &p.shape_params,
+            )));
+    }
+    let mut new_counts: HashMap<&str, usize> = HashMap::new();
+    for p in new_pads.iter() {
+        *new_counts.entry(p.number.as_str()).or_default() += 1;
+    }
+    // Resolved up front: `new_counts` borrows `new_pads` immutably.
+    let resolved: Vec<Option<Link<'_>>> = new_pads
+        .iter()
+        .map(|p| match new_counts.get(p.number.as_str()) {
+            Some(1) => old_links.get(p.number.as_str()).copied().flatten(),
+            _ => None,
+        })
+        .collect();
+    for (p, link) in new_pads.iter_mut().zip(resolved) {
+        if let Some((sid, cids, params)) = link {
+            p.sketch_entity_id = sid;
+            p.corner_entity_ids = cids;
+            p.shape_params = params.clone();
+        }
+    }
+}
+
+/// Re-attach each pad's `sketch_entity_id` from the sketch itself, by
+/// matching the `PadAttr.number` the centre `Point` carries.
+///
+/// `EditorPad::from_pad` cannot restore it — the link has no home on
+/// `Pad`, so every pad rebuilt from the primitive comes back with
+/// `sketch_entity_id: None`. That is silent data loss on the next
+/// edit, not a cosmetic gap: `mirror_move_pad_in_sketch` and
+/// `mirror_delete_pad_from_sketch` both early-return on a `None` link,
+/// so after a save + reopen a Pads-mode move left the pad's whole
+/// outline stranded at its old position (the bake then emits copper
+/// from the stranded geometry) and a Pads-mode delete left the outline
+/// AND its `PadAttr`-carrying centre behind, resurrecting the deleted
+/// pad on the next bake.
+///
+/// The sketch is the durable side of the link, so it is the side the
+/// link is rebuilt from. Shared by [`super::FootprintEditorState::from_footprint`]
+/// (open / reopen) and `refresh_pads_from_primitive` (post-bake
+/// refresh) so the two loaders cannot drift apart.
+///
+/// # Pad numbers are NOT unique
+///
+/// Nothing in signex enforces a unique pad number — the Properties
+/// field takes any string and `next_pad_defaults.designator_override`
+/// stamps one number onto every pad placed after it, which is how a
+/// shared-designator row / thermal / shield pad set is authored. Each
+/// such pad still mints its OWN `PadAttr`-bearing centre, so a plain
+/// number → id map is last-wins and hands several pads the SAME
+/// centre. Aliased that way, a Pads-mode delete of one pad runs the
+/// delete mirror against ANOTHER pad's geometry and its `PadAttr`
+/// ledger: that pad's whole outline goes, the pad itself stays in the
+/// list, and since the bake resolves copper from the sketch its copper
+/// silently vanishes from the export. A move aliases the same way.
+///
+/// So the number is only the first half of the key. Positions
+/// disambiguate a collision — exactly, never by epsilon, and the pad
+/// centre's `Point` is written from `pad.position_mm` verbatim. If a
+/// collision survives that (two pads sharing a number AND a position),
+/// the link is REFUSED: an unlinked pad makes both mirrors early-return,
+/// which is the pre-fix #142 behaviour — stale geometry, but never
+/// another pad's geometry destroyed.
+pub(super) fn relink_pads_to_sketch(pads: &mut [EditorPad], fp: &signex_library::Footprint) {
+    use std::collections::HashMap;
+
+    let Some(sketch) = fp.sketch.as_ref() else {
+        return;
+    };
+    let mut by_number: HashMap<&str, Vec<(PosKey, signex_sketch::id::SketchEntityId)>> =
+        HashMap::new();
+    for e in &sketch.entities {
+        if let (Some(attr), signex_sketch::entity::EntityKind::Point { x, y }) =
+            (e.pad.as_ref(), &e.kind)
+        {
+            by_number
+                .entry(attr.number.as_str())
+                .or_default()
+                .push((pos_key(*x, *y), e.id));
+        }
+    }
+    // Two pads that share a number are ambiguous from the pad side
+    // too, and two that share a number AND a position are ambiguous
+    // even after the tie-break. Counted up front so the loop below can
+    // refuse instead of aliasing.
+    let mut number_claims: HashMap<String, usize> = HashMap::new();
+    let mut exact_claims: HashMap<(String, PosKey), usize> = HashMap::new();
+    for pad in pads.iter() {
+        *number_claims.entry(pad.number.clone()).or_default() += 1;
+        *exact_claims
+            .entry((pad.number.clone(), pad_pos_key(pad)))
+            .or_default() += 1;
+    }
+    for pad in pads.iter_mut() {
+        if pad.sketch_entity_id.is_some() {
+            continue;
+        }
+        let Some(candidates) = by_number.get(pad.number.as_str()) else {
+            continue;
+        };
+        pad.sketch_entity_id = resolve_link(pad, candidates, &number_claims, &exact_claims);
+    }
+}
+
+/// Bit-exact position key. `f64::to_bits` because "same point" in this
+/// repo is exact equality — an epsilon compare here would be the same
+/// aliasing bug with extra steps.
+type PosKey = (u64, u64);
+
+fn pos_key(x: f64, y: f64) -> PosKey {
+    (x.to_bits(), y.to_bits())
+}
+
+fn pad_pos_key(pad: &EditorPad) -> PosKey {
+    pos_key(pad.position_mm.0, pad.position_mm.1)
+}
+
+/// Pick `pad`'s centre out of the candidates sharing its number, or
+/// `None` when the answer is not unambiguous. See the collision section
+/// on [`relink_pads_to_sketch`] for why `None` is the safe answer.
+fn resolve_link(
+    pad: &EditorPad,
+    candidates: &[(PosKey, signex_sketch::id::SketchEntityId)],
+    number_claims: &std::collections::HashMap<String, usize>,
+    exact_claims: &std::collections::HashMap<(String, PosKey), usize>,
+) -> Option<signex_sketch::id::SketchEntityId> {
+    let key = pad_pos_key(pad);
+    // Fast path: the number identifies exactly one pad and exactly one
+    // centre. No position involved, so a solver-nudged centre still
+    // relinks.
+    if candidates.len() == 1 && number_claims.get(&pad.number).copied().unwrap_or(0) == 1 {
+        return Some(candidates[0].1);
+    }
+    if exact_claims
+        .get(&(pad.number.clone(), key))
+        .copied()
+        .unwrap_or(0)
+        != 1
+    {
+        return None;
+    }
+    let mut hits = candidates.iter().filter(|(k, _)| *k == key);
+    match (hits.next(), hits.next()) {
+        (Some((_, id)), None) => Some(*id),
+        _ => None,
+    }
 }

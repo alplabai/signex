@@ -121,12 +121,18 @@ signex/
 ├── README.md
 ├── LICENSE
 ├── crates/
-│   ├── signex-app/
-│   ├── signex-engine/
-│   ├── signex-erc/
-│   ├── signex-render/
-│   ├── signex-types/
-│   └── signex-widgets/
+│   ├── signex-app/                 # desktop application shell (apex)
+│   ├── signex-types/               # shared domain types (foundation)
+│   ├── signex-engine/              # command / patch / undo engine
+│   ├── signex-net/                 # authoritative netlist + connectivity
+│   ├── signex-erc/                 # ERC rule engine (+ signex-erc-dsl)
+│   ├── signex-sketch/              # Newton-LM constraint solver + sketch schema
+│   ├── signex-bake/                # sketch → footprint bake pipeline
+│   ├── signex-output/              # PDF / netlist / BOM export (+ signex-bom)
+│   ├── signex-renderer/            # domain types → render primitives (+ signex-gfx)
+│   ├── signex-library/             # .snxlib library model (+ signex-library-server)
+│   ├── signex-widgets/             # reusable iced widgets
+│   └── signex-3d-model-importer/   # STEP / WRL importer
 └── docs/
 ```
 
@@ -185,9 +191,9 @@ Responsibilities:
 This crate must stay lightweight and should not depend on rendering or UI
 frameworks.
 
-### 5.3. `signex-render`
+### 5.3. `signex-renderer`
 
-The rendering crate.
+The rendering crate (with `signex-gfx` for the wgpu pipeline layer).
 
 Responsibilities:
 
@@ -288,7 +294,7 @@ The repository should evolve toward a stricter structure where:
 ## 8. Desired Medium-Term Expansion
 
 As the project matures, this repository is expected to grow beyond the current
-six-crate layout.
+crate layout.
 
 The most likely additions are:
 

@@ -3,6 +3,7 @@ name = "signex-types"
 description = "Domain types for Signex EDA — schematic, PCB, net, layer, theme"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 
 [dependencies]

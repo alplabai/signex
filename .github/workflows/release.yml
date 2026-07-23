@@ -75,7 +75,7 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
         with:
           targets: ${{ matrix.target }}
 

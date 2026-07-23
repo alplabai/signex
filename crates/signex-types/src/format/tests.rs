@@ -10,10 +10,13 @@ use crate::pcb::{
     Zone,
 };
 use crate::schematic::{
-    HAlign, Junction, Label, LabelType as LType, Point as SchPoint, SchematicSheet, Symbol, VAlign,
-    Wire,
+    HAlign, Junction, Label, LabelType as LType, LibSymbol, Point as SchPoint, SchematicSheet,
+    Symbol, VAlign, Wire,
 };
+use std::collections::BTreeMap;
 use uuid::Uuid;
+
+fn assert_btree_map<K, V>(_: &BTreeMap<K, V>) {}
 
 fn empty_sheet() -> SchematicSheet {
     SchematicSheet {
@@ -126,6 +129,26 @@ fn snxsch_survives_backslash_and_quote_in_label_text() {
     let back = SnxSchematic::parse(&s).expect("dangerous label text must not corrupt the file");
     assert_eq!(back.sheet.labels.len(), 1);
     assert_eq!(back.sheet.labels[0].text, "NET_C:\\x \"1/4\"");
+}
+
+#[test]
+fn snxsch_survives_c0_control_bytes_in_label_text() {
+    // A C0 control byte other than tab/newline/CR (BEL, VT, FF here)
+    // used to pass through `escape_tsv_body_for_toml` raw, producing
+    // a `.snxsch` that saved fine but `toml::from_str` rejected on
+    // reopen — total document loss (#386).
+    let text = "BEL\u{0007}VT\u{000B}FF\u{000C}end";
+    let mut sheet = empty_sheet();
+    sheet.labels.push(label_with_text(text));
+    let s = SnxSchematic::new(sheet).write_string().expect("serialise");
+
+    // Must be valid TOML on its own terms, not just parseable by our
+    // own (possibly too-lenient) reader.
+    toml::from_str::<toml::Value>(&s).expect("emitted file must be valid TOML");
+
+    let back = SnxSchematic::parse(&s).expect("C0 control bytes must not corrupt the file");
+    assert_eq!(back.sheet.labels.len(), 1);
+    assert_eq!(back.sheet.labels[0].text, text);
 }
 
 #[test]
@@ -286,6 +309,7 @@ fn snxsch_round_trip_with_data() {
         uuid: Uuid::parse_str("0192a8c0-0002-7000-8000-000000000001").unwrap(),
         position: SchPoint { x: 30.0, y: 20.0 },
         diameter: 0.5,
+        minted: true,
     });
     sheet.labels.push(Label {
         uuid: Uuid::parse_str("0192a8c0-0003-7000-8000-000000000001").unwrap(),
@@ -317,10 +341,62 @@ fn snxsch_round_trip_with_data() {
 
     assert_eq!(back.sheet.junctions.len(), 1);
     assert_eq!(back.sheet.junctions[0].diameter, 0.5);
+    assert!(
+        back.sheet.junctions[0].minted,
+        "minted provenance must survive the extras round-trip"
+    );
 
     assert_eq!(back.sheet.labels.len(), 1);
     assert_eq!(back.sheet.labels[0].text, "VIN");
     assert_eq!(back.sheet.labels[0].label_type, LType::Net);
+
+    // encode -> decode -> encode must be stable (issue #422 added a new
+    // persisted field; a re-serialise of the round-tripped sheet must not
+    // drift byte-for-byte from the original).
+    let re_serialised = SnxSchematic::new(back.sheet)
+        .write_string()
+        .expect("re-serialise");
+    assert_eq!(
+        serialised, re_serialised,
+        "encode -> decode -> encode must be stable"
+    );
+}
+
+/// A `.snxsch` written before issue #422 added `Junction::minted` never
+/// emitted `[extras.junctions.<uuid>]`. Loading one must not error and
+/// must treat every junction it names as user-placed (never auto-removed),
+/// not as an unminted/undefined provenance.
+#[test]
+fn snxsch_without_junction_extras_defaults_to_user_placed() {
+    let mut sheet = empty_sheet();
+    sheet.junctions.push(Junction {
+        uuid: Uuid::parse_str("0192a8c0-0002-7000-8000-000000000002").unwrap(),
+        position: SchPoint { x: 5.0, y: 0.0 },
+        diameter: 0.0,
+        minted: true,
+    });
+
+    let full = SnxSchematic::new(sheet).write_string().expect("serialise");
+
+    // Simulate the pre-#422 writer: strip the `[extras...]` tail this
+    // writer added for the minted dot, leaving only what an older Signex
+    // would have written for the same sheet.
+    let legacy = full
+        .split("\n[extras")
+        .next()
+        .expect("split always yields the head")
+        .to_string();
+    assert!(
+        !legacy.contains("[extras"),
+        "test fixture must actually drop the extras tail"
+    );
+
+    let back = SnxSchematic::parse(&legacy).expect("legacy file still loads");
+    assert_eq!(back.sheet.junctions.len(), 1);
+    assert!(
+        !back.sheet.junctions[0].minted,
+        "a junction with no extras entry must default to user-placed, never minted"
+    );
 }
 
 #[test]
@@ -539,4 +615,86 @@ fn extras_preserve_symbol_fields() {
     // Tolerance survived through extras.
     assert_eq!(recovered.fields.get("Tolerance").unwrap(), "1%");
     assert!(recovered.dnp);
+}
+
+#[test]
+fn schematic_extras_are_byte_identical_after_parse() {
+    let mut sheet = empty_sheet();
+    for (key, value) in [
+        ("title", "Deterministic extras"),
+        ("company", "Alp Lab"),
+        ("date", "2026-07-18"),
+        ("revision", "A"),
+    ] {
+        sheet.title_block.insert(key.into(), value.into());
+    }
+
+    for id in ["zeta", "alpha", "middle"] {
+        sheet.lib_symbols.insert(
+            id.into(),
+            LibSymbol {
+                id: id.into(),
+                reference: "U".into(),
+                value: id.into(),
+                footprint: String::new(),
+                datasheet: String::new(),
+                description: format!("{id} library symbol"),
+                keywords: String::new(),
+                fp_filters: String::new(),
+                in_bom: true,
+                on_board: true,
+                in_pos_files: true,
+                duplicate_pin_numbers_are_jumpers: false,
+                graphics: Vec::new(),
+                pins: Vec::new(),
+                show_pin_numbers: true,
+                show_pin_names: true,
+                pin_name_offset: 0.0,
+            },
+        );
+    }
+
+    let mut symbol = sample_symbol();
+    for (key, value) in [
+        ("Tolerance", "1%"),
+        ("MPN", "LM2596S-5.0"),
+        ("Manufacturer", "Example Semi"),
+        ("Rating", "5V"),
+    ] {
+        symbol.fields.insert(key.into(), value.into());
+    }
+    for (pin, uuid) in [
+        ("VIN", "0192a8c0-0001-7000-8000-000000000010"),
+        ("GND", "0192a8c0-0001-7000-8000-000000000011"),
+        ("VOUT", "0192a8c0-0001-7000-8000-000000000012"),
+    ] {
+        symbol
+            .pin_uuids
+            .insert(pin.into(), Uuid::parse_str(uuid).unwrap());
+    }
+
+    let symbol_extras = SymbolExtras::from_symbol(&symbol);
+    assert_btree_map(&symbol_extras.fields);
+    assert_btree_map(&symbol_extras.pin_uuids);
+    sheet.symbols.push(symbol);
+
+    let sheet_extras = SheetExtras::from_sheet(&sheet);
+    assert_btree_map(&sheet_extras.title_block);
+    assert_btree_map(&sheet_extras.lib_symbols);
+
+    let first = SnxSchematic::new(sheet).write_string().unwrap();
+    let parsed = SnxSchematic::parse(&first).unwrap();
+    let second = parsed.write_string().unwrap();
+
+    assert_eq!(first, second);
+    assert_eq!(parsed.sheet.title_block["revision"], "A");
+    assert_eq!(parsed.sheet.lib_symbols["alpha"].value, "alpha");
+    assert_eq!(
+        parsed.sheet.symbols[0].fields["Manufacturer"],
+        "Example Semi"
+    );
+    assert_eq!(
+        parsed.sheet.symbols[0].pin_uuids["VOUT"],
+        Uuid::parse_str("0192a8c0-0001-7000-8000-000000000012").unwrap()
+    );
 }
