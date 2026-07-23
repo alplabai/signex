@@ -11,5 +11,5 @@ pub use control::{CalculatorControl, CalculatorMessage};
 pub use domain::{
     ComponentKind, ESeries, PreferredComponent, PreferredNumber, SiPrefix, Tolerance,
 };
-pub use network::{Connection, Network};
+pub use network::{BoundaryCondition, Connection, Network};
 pub use solver::{MAX_PARTS, SolveOptions, solve};

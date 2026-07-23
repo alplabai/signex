@@ -120,11 +120,14 @@ impl CalculatorControl {
     pub fn target_value(&self) -> Result<f64, &'static str> {
         let state = self.active_state();
         let normalized = state.target_input.trim().replace(',', ".");
-        let value = normalized
-            .parse::<f64>()
-            .map_err(|_| "Enter a valid positive number")?;
-        if !value.is_finite() || value <= 0.0 {
-            return Err("Enter a value greater than zero");
+        let value = match normalized.to_ascii_lowercase().as_str() {
+            "∞" | "inf" | "infinity" => f64::INFINITY,
+            _ => normalized
+                .parse::<f64>()
+                .map_err(|_| "Enter a valid non-negative number or infinity")?,
+        };
+        if value.is_nan() || value < 0.0 || value == f64::NEG_INFINITY {
+            return Err("Enter a non-negative number or positive infinity");
         }
         Ok(value * state.prefix.multiplier())
     }
@@ -305,16 +308,26 @@ impl CalculatorControl {
         ]
         .spacing(9);
 
-        let header = row![
-            table_cell("Part", 90.0, tokens),
-            table_cell("Value", 125.0, tokens),
-            table_cell("Tolerance", 125.0, tokens),
-            table_cell("Color code", 420.0, tokens),
-        ]
-        .spacing(8);
-
-        let mut table = column![header].spacing(6);
-        for (index, (component, tolerance)) in result.components().into_iter().enumerate() {
+        let components = result.components();
+        let mut table = column![].spacing(6);
+        if components.is_empty() {
+            table = table.push(
+                text("No discrete component is required.")
+                    .size(13)
+                    .color(token_color(tokens.text_secondary)),
+            );
+        } else {
+            table = table.push(
+                row![
+                    table_cell("Part", 90.0, tokens),
+                    table_cell("Value", 125.0, tokens),
+                    table_cell("Tolerance", 125.0, tokens),
+                    table_cell("Color code", 420.0, tokens),
+                ]
+                .spacing(8),
+            );
+        }
+        for (index, (component, tolerance)) in components.into_iter().enumerate() {
             let designator = format!("{}{}", self.kind.symbol(), subscript(index + 1));
             let color_code: Element<'a, CalculatorMessage> =
                 match ComponentColorCode::for_kind(self.kind, component, tolerance) {
@@ -426,6 +439,12 @@ fn table_cell<'a>(
 }
 
 fn format_difference(value: f64, target: f64) -> String {
+    if value == target {
+        return "0 (0%)".to_string();
+    }
+    if target == 0.0 || target == f64::INFINITY {
+        return "unbounded".to_string();
+    }
     let difference = value - target;
     let percentage = difference / target * 100.0;
     format!("{:+} ({:+.4}%)", format_number(difference), percentage)

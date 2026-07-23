@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="EMPTY_MODULE" version="4">
+  <component name="NewModuleRootManager">
+    <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/crates/chrome-catalog/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/signex-3d-model-importer/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/signex-3d-model-importer/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/signex-app/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/signex-app/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/signex-app/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/signex-bake/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/signex-bake/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/signex-bom/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/signex-engine/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/signex-erc-dsl/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/signex-erc/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/signex-erc/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/signex-gfx/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/signex-gfx/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/signex-library-server/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/signex-library-server/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/signex-library/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/signex-library/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/signex-net/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/signex-output/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/signex-output/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/signex-renderer/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/signex-renderer/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/signex-sketch/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/signex-sketch/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/signex-sketch/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/signex-types/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/signex-widgets/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/signex-widgets/tests" isTestSource="true" />
+      <excludeFolder url="file://$MODULE_DIR$/target" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+</module>

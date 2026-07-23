@@ -1,5 +1,6 @@
 use signex_widgets::passive_calculator::{
-    CalculatorControl, CalculatorMessage, ComponentKind, ESeries, SiPrefix, Tolerance,
+    BoundaryCondition, CalculatorControl, CalculatorMessage, ComponentKind, ESeries, Network,
+    SiPrefix, Tolerance,
 };
 
 #[test]
@@ -21,13 +22,31 @@ fn decimal_comma_is_accepted() {
 }
 
 #[test]
-fn invalid_or_non_positive_input_is_rejected() {
-    for input in ["", "abc", "0", "-2", "NaN"] {
+fn invalid_or_negative_input_is_rejected() {
+    for input in ["", "abc", "-2", "NaN", "-inf"] {
         let mut control = CalculatorControl::default();
         control.update(CalculatorMessage::TargetChanged(input.to_string()));
         control.update(CalculatorMessage::Calculate);
         assert!(control.active_state().result.is_none(), "{input}");
         assert!(control.active_state().validation_error.is_some(), "{input}");
+    }
+}
+
+#[test]
+fn zero_and_infinity_inputs_produce_terminal_networks() {
+    for (input, expected) in [
+        ("0", BoundaryCondition::WireBridge),
+        ("∞", BoundaryCondition::OpenCircuit),
+        ("infinity", BoundaryCondition::OpenCircuit),
+    ] {
+        let mut control = CalculatorControl::default();
+        control.update(CalculatorMessage::TargetChanged(input.to_string()));
+        control.update(CalculatorMessage::Calculate);
+        assert!(control.active_state().validation_error.is_none(), "{input}");
+        assert!(matches!(
+            control.active_state().result.as_ref(),
+            Some(Network::Boundary { condition }) if *condition == expected
+        ));
     }
 }
 

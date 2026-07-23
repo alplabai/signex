@@ -6,8 +6,17 @@ pub enum Connection {
     Parallel,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BoundaryCondition {
+    WireBridge,
+    OpenCircuit,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Network {
+    Boundary {
+        condition: BoundaryCondition,
+    },
     Component {
         component: PreferredComponent,
         tolerance: Tolerance,
@@ -20,6 +29,10 @@ pub enum Network {
 }
 
 impl Network {
+    pub fn boundary(condition: BoundaryCondition) -> Self {
+        Self::Boundary { condition }
+    }
+
     pub fn component(component: PreferredComponent, tolerance: Tolerance) -> Self {
         Self::Component {
             component,
@@ -37,6 +50,7 @@ impl Network {
 
     pub fn part_count(&self) -> usize {
         match self {
+            Self::Boundary { .. } => 0,
             Self::Component { .. } => 1,
             Self::Connected { left, right, .. } => left.part_count() + right.part_count(),
         }
@@ -81,6 +95,7 @@ impl Network {
 
     fn evaluate(&self, kind: ComponentKind, bound: Bound) -> f64 {
         match self {
+            Self::Boundary { condition } => condition.value(kind),
             Self::Component {
                 component,
                 tolerance,
@@ -115,6 +130,7 @@ impl Network {
         current: &mut usize,
     ) -> bool {
         match self {
+            Self::Boundary { .. } => false,
             Self::Component {
                 tolerance: current_tolerance,
                 ..
@@ -136,6 +152,7 @@ impl Network {
 
     fn collect_components(&self, output: &mut Vec<(PreferredComponent, Tolerance)>) {
         match self {
+            Self::Boundary { .. } => {}
             Self::Component {
                 component,
                 tolerance,
@@ -149,6 +166,7 @@ impl Network {
 
     fn format_expression(&self, symbol: &str, index: &mut usize, subscripts: bool) -> String {
         match self {
+            Self::Boundary { condition } => condition.label().to_string(),
             Self::Component { .. } => {
                 let result = if subscripts {
                     format!("{symbol}{}", to_subscript(*index))
@@ -175,6 +193,34 @@ impl Network {
     }
 }
 
+impl BoundaryCondition {
+    pub fn exact_for_target(kind: ComponentKind, target: f64) -> Option<Self> {
+        match (kind, target) {
+            (ComponentKind::Resistor | ComponentKind::Inductor, 0.0)
+            | (ComponentKind::Capacitor, f64::INFINITY) => Some(Self::WireBridge),
+            (ComponentKind::Resistor | ComponentKind::Inductor, f64::INFINITY)
+            | (ComponentKind::Capacitor, 0.0) => Some(Self::OpenCircuit),
+            _ => None,
+        }
+    }
+
+    fn value(self, kind: ComponentKind) -> f64 {
+        match (self, kind) {
+            (Self::WireBridge, ComponentKind::Resistor | ComponentKind::Inductor)
+            | (Self::OpenCircuit, ComponentKind::Capacitor) => 0.0,
+            (Self::OpenCircuit, ComponentKind::Resistor | ComponentKind::Inductor)
+            | (Self::WireBridge, ComponentKind::Capacitor) => f64::INFINITY,
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::WireBridge => "Wire bridge",
+            Self::OpenCircuit => "Open circuit",
+        }
+    }
+}
+
 pub fn is_additive(kind: ComponentKind, connection: Connection) -> bool {
     match kind {
         ComponentKind::Resistor | ComponentKind::Inductor => connection == Connection::Series,
@@ -183,10 +229,21 @@ pub fn is_additive(kind: ComponentKind, connection: Connection) -> bool {
 }
 
 pub fn parallel_value(left: f64, right: f64) -> f64 {
-    left * right / (left + right)
+    let (smaller, larger) = if left <= right {
+        (left, right)
+    } else {
+        (right, left)
+    };
+    if smaller == 0.0 || larger == f64::INFINITY {
+        return smaller;
+    }
+    smaller / (1.0 + smaller / larger)
 }
 
 pub fn format_value(value: f64, kind: ComponentKind) -> String {
+    if value == f64::INFINITY {
+        return format!("∞ {}", SiPrefix::None.unit(kind));
+    }
     let prefix = best_prefix(value);
     format!(
         "{} {}",

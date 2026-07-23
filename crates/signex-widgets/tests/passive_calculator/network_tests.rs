@@ -1,5 +1,5 @@
 use signex_widgets::passive_calculator::{
-    ComponentKind, Connection, ESeries, Network, PreferredComponent, Tolerance,
+    BoundaryCondition, ComponentKind, Connection, ESeries, Network, PreferredComponent, Tolerance,
 };
 
 fn component(significand: u16, decade: i8, tolerance: Tolerance) -> Network {
@@ -84,4 +84,29 @@ fn expressions_use_unicode_subscripts_and_plain_text_fallback() {
             .plain_expression(ComponentKind::Resistor)
             .contains("R10")
     );
+}
+
+#[test]
+fn boundary_networks_own_their_electrical_behavior() {
+    let mut wire = Network::boundary(BoundaryCondition::WireBridge);
+    assert_eq!(wire.nominal(ComponentKind::Resistor), 0.0);
+    assert_eq!(wire.nominal(ComponentKind::Inductor), 0.0);
+    assert_eq!(wire.nominal(ComponentKind::Capacitor), f64::INFINITY);
+    assert_eq!(wire.expression(ComponentKind::Resistor), "Wire bridge");
+    assert!(wire.components().is_empty());
+    assert!(!wire.set_tolerance(0, Tolerance::Percent1));
+
+    let open = Network::boundary(BoundaryCondition::OpenCircuit);
+    assert_eq!(open.nominal(ComponentKind::Resistor), f64::INFINITY);
+    assert_eq!(open.nominal(ComponentKind::Inductor), f64::INFINITY);
+    assert_eq!(open.nominal(ComponentKind::Capacitor), 0.0);
+    assert_eq!(open.expression(ComponentKind::Capacitor), "Open circuit");
+
+    let parallel_open = Network::connected(Connection::Parallel, open.clone(), open);
+    assert_eq!(
+        parallel_open.nominal(ComponentKind::Resistor),
+        f64::INFINITY
+    );
+    let parallel_wire = Network::connected(Connection::Parallel, wire.clone(), wire);
+    assert_eq!(parallel_wire.nominal(ComponentKind::Resistor), 0.0);
 }
