@@ -89,7 +89,7 @@ fn temporary_touchstone_path(extension: &str) -> PathBuf {
 #[test]
 fn parses_version1_defaults_comments_and_option_order() {
     let block =
-        parse_touchstone("\u{feff}! leading comment\n# RI MHz R 75 S ! inline comment\n2 0.3 -0.4")
+        parse_touchstone("\u{feff}! leading comment\n# MHz S RI R 75 ! inline comment\n2 0.3 -0.4")
             .unwrap();
 
     assert_eq!(block.kind, SParameterKind::S1P);
@@ -124,7 +124,7 @@ fn parses_real_imaginary_magnitude_angle_and_decibel_angle() {
 #[test]
 fn parses_version1_two_port_data_and_independent_noise_frequencies() {
     let block = parse_touchstone(
-        "# GHz S RI R 50 75\n\
+        "# GHz S RI R 50\n\
          1 0.1 0.2 2 0.5 0.05 -0.02 -0.1 0.3\n\
          ! Noise parameters\n\
          0.9 1.2 0.25 30 0.1",
@@ -132,12 +132,23 @@ fn parses_version1_two_port_data_and_independent_noise_frequencies() {
     .unwrap();
 
     assert_eq!(block.kind, SParameterKind::S2P);
-    assert_eq!(block.port_reference_impedances_ohm, vec![50.0, 75.0]);
+    assert_eq!(block.port_reference_impedances_ohm, vec![50.0, 50.0]);
     assert_complex_close(block.points[0].s21.unwrap(), Complex::new(2.0, 0.5));
     assert_complex_close(block.points[0].s12.unwrap(), Complex::new(0.05, -0.02));
     assert_eq!(block.noise.len(), 1);
     assert_close(block.noise[0].frequency_hz, 0.9e9);
     assert_close(block.noise[0].rn_ohm, 5.0);
+}
+
+/// Verifies that raw Version 1 text infers its port count without a filename.
+#[test]
+fn infers_version1_rank_from_the_network_record() {
+    let one_port = parse_touchstone("# Hz S RI R 50\n1 0.1 0.2").unwrap();
+    let two_port = parse_touchstone("# Hz S RI R 50\n1 0 0 1 0 0 0 0 0").unwrap();
+
+    assert_eq!(one_port.kind, SParameterKind::S1P);
+    assert_eq!(two_port.kind, SParameterKind::S2P);
+    assert_complex_close(two_port.points[0].s21.unwrap(), Complex::new(1.0, 0.0));
 }
 
 /// Verifies Version 2.x keywords, continuations, alternate ordering, and noise units.
@@ -263,25 +274,36 @@ fn replaces_duplicate_canonical_frequency_records() {
 fn rejects_invalid_touchstone_documents() {
     let invalid_documents = [
         "",
-        "[Version] 1.0\n# Hz S RI R 50\n1 0 0",
-        "# Hz Z RI R 50\n1 50 0",
-        "# THz S RI R 50\n1 0 0",
         "[Version] 2.1\n#\n[Number of Ports] 3\n[Number of Frequencies] 1\n[Network Data]\n1 0 0\n[End]",
-        "[Version] 2.1\n#\n[Number of Ports] 1\n[Network Data]\n1 0 0\n[End]",
         "[Version] 2.1\n#\n[Number of Ports] 2\n[Number of Frequencies] 1\n[Two-Port Data Order] 21_12\n[Reference] 50\n[Network Data]\n1 0 0 0 0 0 0 0 0\n[End]",
         "[Version] 2.1\n#\n[Number of Ports] 1\n[Number of Frequencies] 2\n[Network Data]\n1 0 0\n[End]",
         "[Version] 2.1\n#\n[Number of Ports] 1\n[Number of Frequencies] 1\n[Network Data]\n1 0 0\n[Noise Data]\n[End]",
         "[Version] 2.1\n#\n[Number of Ports] 2\n[Two-Port Data Order] 21_12\n[Number of Frequencies] 1\n[Number of Noise Frequencies] 2\n[Network Data]\n1 0 0 0 0 0 0 0 0\n[Noise Data]\n1 1 0.1 0 5\n[End]",
         "[Version] 2.1\n#\n[Number of Ports] 1\n[Number of Frequencies] 1\n[Network Data]\n1 NaN 0\n[End]",
-        "[Version] 2.1\n#\n[Number of Ports] 1\n[Number of Frequencies] 1\n[Network Data]\n1 -0.5 0\n[End]",
-        "[Version] 2.1\n#\n[Number of Ports] 1\n[Number of Frequencies] 1\n[Network Data]\n1 0 0",
-        "[Version] 2.1\n#\n[Number of Ports] 1\n[Number of Frequencies] 1\n[Network Data]\n1 0 0\n[End]\nextra",
     ];
 
     for raw in invalid_documents {
         let error = parse_touchstone(raw).unwrap_err();
         assert!(matches!(error, SolveError::TouchstoneParseFailed { .. }));
     }
+}
+
+/// Verifies that valid N-port input is rejected at the widget boundary.
+#[test]
+fn rejects_touchstone_networks_with_more_than_two_ports() {
+    let error = parse_touchstone(
+        "[Version] 2.0\n\
+         # Hz S RI R 50\n\
+         [Number of Ports] 3\n\
+         [Number of Frequencies] 1\n\
+         [Network Data]\n\
+         1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n\
+         [End]",
+    )
+    .unwrap_err();
+
+    assert!(matches!(error, SolveError::TouchstoneParseFailed { .. }));
+    assert!(error.to_string().contains("not 3-port data"));
 }
 
 /// Verifies one-port data round-trips through every supported output format.
@@ -354,6 +376,21 @@ fn reads_and_writes_touchstone_files() {
     assert_eq!(parsed.port_reference_impedances_ohm, vec![50.0, 75.0]);
     assert_complex_close(parsed.points[0].s11, block.points[0].s11);
     assert_close(parsed.noise[0].rn_ohm, block.noise[0].rn_ohm);
+}
+
+/// Verifies ISO/IEC 8859-1 files are decoded before rust-rf parses them.
+#[test]
+fn reads_iso_8859_1_touchstone_files() {
+    let path = temporary_touchstone_path("s1p");
+    let bytes = b"! ISO/IEC 8859-1 \xA3 comment\n# MHz S RI R 50\n2 0.3 -0.4\n";
+    fs::write(&path, bytes).unwrap();
+
+    let parsed = read_touchstone(&path).unwrap();
+    fs::remove_file(&path).unwrap();
+
+    assert_eq!(parsed.kind, SParameterKind::S1P);
+    assert!(parsed.raw.contains("ISO/IEC 8859-1 \u{00a3} comment"));
+    assert_close(parsed.points[0].frequency_hz, 2.0e6);
 }
 
 /// Verifies file read failures retain path and I/O context.

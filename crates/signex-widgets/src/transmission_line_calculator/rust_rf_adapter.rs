@@ -30,3 +30,9 @@ pub(crate) fn map_rf_error(error: rust_rf::Error) -> SolveError {
         reason: error.to_string(),
     }
 }
+
+pub(crate) fn map_touchstone_parse_error(error: rust_rf::Error) -> SolveError {
+    SolveError::TouchstoneParseFailed {
+        reason: error.to_string(),
+    }
+}
