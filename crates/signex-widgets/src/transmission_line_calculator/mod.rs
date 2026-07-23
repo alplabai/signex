@@ -1,5 +1,4 @@
 mod analysis;
-mod binary_tiling;
 mod chart_geometry;
 mod circuit_tokens;
 mod element_analysis;
@@ -7,6 +6,7 @@ mod model;
 #[allow(dead_code)]
 mod rust_rf_adapter;
 mod s_parameter_analysis;
+mod smith_chart_grid;
 mod svg;
 pub mod tool;
 mod touchstone;
@@ -42,9 +42,6 @@ pub use two_port_solver::solve_two_port_s_parameters;
 pub const DEFAULT_REFERENCE_IMPEDANCE_OHM: f64 = 50.0;
 
 #[cfg(test)]
-#[path = "../../tests/transmission_line_calculator/binary_tiling_tests.rs"]
-mod binary_tiling_tests;
-#[cfg(test)]
 #[path = "../../tests/transmission_line_calculator/lib_tests.rs"]
 mod lib_tests;
 #[cfg(test)]
@@ -53,6 +50,9 @@ mod rust_rf_adapter_tests;
 #[cfg(test)]
 #[path = "../../tests/transmission_line_calculator/s_parameter_interpolation_tests.rs"]
 mod s_parameter_interpolation_tests;
+#[cfg(test)]
+#[path = "../../tests/transmission_line_calculator/smith_chart_grid_tests.rs"]
+mod smith_chart_grid_tests;
 #[cfg(test)]
 #[path = "../../tests/transmission_line_calculator/two_port_tests.rs"]
 mod two_port_tests;

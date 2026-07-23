@@ -3,7 +3,7 @@ use iced::{Color, Point};
 
 use crate::transmission_line_calculator::Complex;
 use crate::transmission_line_calculator::tool::smith_chart_2d::{
-    draw_binary_tiling_grid, draw_label, draw_polyline,
+    draw_label, draw_polyline, draw_smith_chart_grid,
 };
 
 use super::admittance_chart_point;
@@ -17,7 +17,14 @@ pub(in crate::transmission_line_calculator::tool) fn draw_admittance_grid(
     susceptance_labels: &[f64],
     show_labels: bool,
 ) {
-    draw_binary_tiling_grid(frame, center, radius, true);
+    draw_smith_chart_grid(
+        frame,
+        center,
+        radius,
+        conductance_labels,
+        susceptance_labels,
+        true,
+    );
     if show_labels {
         draw_admittance_grid_labels(
             frame,

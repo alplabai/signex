@@ -1,5 +1,5 @@
-use crate::transmission_line_calculator::binary_tiling::{
-    BinaryTilingHierarchy, smith_binary_tiling,
+use crate::transmission_line_calculator::smith_chart_grid::{
+    SmithChartGridHierarchy, SmithChartGridLineKind, smith_chart_grid,
 };
 use crate::transmission_line_calculator::*;
 use std::fmt::Write as _;
@@ -53,13 +53,14 @@ pub fn render_smith_chart_svg(
     );
 
     if options.show_grid {
-        push_svg_binary_tiling(
+        push_svg_smith_chart_grid(
             &mut svg,
             center_x,
             center_y,
             radius,
             false,
-            "binary-tiling-grid",
+            "smith-chart-grid",
+            &options,
         );
         push_svg_grid_labels(
             &mut svg,
@@ -71,13 +72,14 @@ pub fn render_smith_chart_svg(
         );
     }
     if options.show_admittance {
-        push_svg_binary_tiling(
+        push_svg_smith_chart_grid(
             &mut svg,
             center_x,
             center_y,
             radius,
             true,
-            "admittance-binary-tiling-grid",
+            "admittance-smith-chart-grid",
+            &options,
         );
     }
     if options.show_vswr {
@@ -298,30 +300,35 @@ pub fn render_smith_chart_svg(
     svg
 }
 
-/// Appends SVG binary tiling to the destination collection or output.
-fn push_svg_binary_tiling(
+/// Appends the conventional Smith-chart grid to SVG output.
+fn push_svg_smith_chart_grid(
     svg: &mut String,
     center_x: f64,
     center_y: f64,
     radius: f64,
     reflected: bool,
     id: &str,
+    options: &SmithChartSvgOptions,
 ) {
     write!(svg, r#"<g id="{id}" clip-path="url(#smith-chart-disk)">"#)
         .expect("write to string cannot fail");
-    for edge in smith_binary_tiling() {
-        let (hierarchy, color, width, opacity) = match (reflected, edge.hierarchy) {
-            (false, BinaryTilingHierarchy::Major) => ("major", "#4a6f9e", 0.85, 0.72),
-            (false, BinaryTilingHierarchy::Minor) => ("minor", "#3a567a", 0.45, 0.28),
-            (true, BinaryTilingHierarchy::Major) => ("major", "#4a8970", 0.8, 0.64),
-            (true, BinaryTilingHierarchy::Minor) => ("minor", "#456f5b", 0.4, 0.24),
+    for line in smith_chart_grid(&options.resistance_labels, &options.reactance_labels) {
+        let (hierarchy, color, width, opacity) = match (reflected, line.hierarchy) {
+            (false, SmithChartGridHierarchy::Major) => ("major", "#4a6f9e", 0.85, 0.72),
+            (false, SmithChartGridHierarchy::Minor) => ("minor", "#3a567a", 0.45, 0.28),
+            (true, SmithChartGridHierarchy::Major) => ("major", "#4a8970", 0.8, 0.64),
+            (true, SmithChartGridHierarchy::Minor) => ("minor", "#456f5b", 0.4, 0.24),
+        };
+        let (kind, value) = match line.kind {
+            SmithChartGridLineKind::Resistance { value } => ("resistance", value),
+            SmithChartGridLineKind::Reactance { value } => ("reactance", value),
         };
         write!(
             svg,
-            r#"<polyline data-binary-hierarchy="{hierarchy}" fill="none" stroke="{color}" stroke-width="{width:.3}" opacity="{opacity:.3}" points=""#
+            r#"<polyline data-grid-kind="{kind}" data-grid-value="{value:.6}" data-grid-hierarchy="{hierarchy}" fill="none" stroke="{color}" stroke-width="{width:.3}" opacity="{opacity:.3}" points=""#
         )
         .expect("write to string cannot fail");
-        for (x, y) in &edge.points {
+        for (x, y) in &line.points {
             let direction = if reflected { -1.0 } else { 1.0 };
             write!(
                 svg,

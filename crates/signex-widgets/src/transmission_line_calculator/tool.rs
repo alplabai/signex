@@ -71,12 +71,9 @@ pub fn view(state: &SmithChartState) -> Element<'_, SmithChartMessage> {
     let vswr_circles = parse_vswr_circle_list(&state.vswr_circle_list, state.vswr_circle_input_db)
         .unwrap_or_default();
     let resistance_labels = parse_scalar_list(&state.resistance_label_list)
-        .unwrap_or_else(|_| vec![0.0, 0.2, 0.5, 1.0, 2.0, 4.0, 10.0]);
-    let reactance_labels = parse_scalar_list(&state.reactance_label_list).unwrap_or_else(|_| {
-        vec![
-            0.2, 0.5, 1.0, 2.0, 4.0, 10.0, -0.2, -0.5, -1.0, -2.0, -4.0, -10.0,
-        ]
-    });
+        .unwrap_or_else(|_| vec![0.0, 0.2, 0.5, 1.0, 2.0, 5.0]);
+    let reactance_labels = parse_scalar_list(&state.reactance_label_list)
+        .unwrap_or_else(|_| vec![0.2, 0.5, 1.0, 2.0, 5.0, -0.2, -0.5, -1.0, -2.0, -5.0]);
     let s_parameter_traces = s_parameter_chart_traces(state);
     let reference_impedance_ohm = parse_field("reference impedance", &state.reference_ohm)
         .ok()

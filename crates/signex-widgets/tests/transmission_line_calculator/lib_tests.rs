@@ -830,10 +830,12 @@ fn smith_chart_svg_export_contains_chart_and_result_marker() {
     assert!(svg.starts_with(r#"<svg xmlns="http://www.w3.org/2000/svg""#));
     assert!(svg.contains(r#"aria-label="Smith chart""#));
     assert!(svg.contains(r#"clipPath id="smith-chart-disk""#));
-    assert!(svg.contains(r#"id="binary-tiling-grid""#));
-    assert!(svg.contains(r#"id="admittance-binary-tiling-grid""#));
-    assert!(svg.contains(r#"data-binary-hierarchy="major""#));
-    assert!(svg.contains(r#"data-binary-hierarchy="minor""#));
+    assert!(svg.contains(r#"id="smith-chart-grid""#));
+    assert!(svg.contains(r#"id="admittance-smith-chart-grid""#));
+    assert!(svg.contains(r#"data-grid-kind="resistance""#));
+    assert!(svg.contains(r#"data-grid-kind="reactance""#));
+    assert!(svg.contains(r#"data-grid-hierarchy="major""#));
+    assert!(svg.contains(r#"data-grid-hierarchy="minor""#));
     assert!(svg.contains(r#"<polyline fill="none""#));
     assert!(svg.contains(r#"<text "#));
     assert!(svg.contains(">VSWR 2.0<"));

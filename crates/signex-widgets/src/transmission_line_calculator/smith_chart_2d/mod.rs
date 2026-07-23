@@ -1,7 +1,7 @@
 use super::*;
 use crate::transmission_line_calculator::SmithViewTransform;
-use crate::transmission_line_calculator::binary_tiling::{
-    BinaryTilingHierarchy, smith_binary_tiling,
+use crate::transmission_line_calculator::smith_chart_grid::{
+    SmithChartGridHierarchy, smith_chart_grid,
 };
 use crate::transmission_line_calculator::tool::smith_chart_y::{
     admittance_chart_point, draw_admittance_grid, draw_admittance_q_arc,
@@ -730,33 +730,44 @@ fn draw_impedance_grid(
     resistance_labels: &[f64],
     reactance_labels: &[f64],
 ) {
-    draw_binary_tiling_grid(frame, center, radius, false);
+    draw_smith_chart_grid(
+        frame,
+        center,
+        radius,
+        resistance_labels,
+        reactance_labels,
+        false,
+    );
     draw_grid_labels(frame, center, radius, resistance_labels, reactance_labels);
 }
 
-/// Draws binary tiling grid into the target drawing surface.
-pub(in crate::transmission_line_calculator::tool) fn draw_binary_tiling_grid(
+/// Draws the conventional constant-resistance and constant-reactance grid.
+pub(in crate::transmission_line_calculator::tool) fn draw_smith_chart_grid(
     frame: &mut canvas::Frame,
     center: Point,
     radius: f32,
+    resistance_values: &[f64],
+    reactance_values: &[f64],
     reflected: bool,
 ) {
-    for edge in smith_binary_tiling() {
-        let (color, width) = match (reflected, edge.hierarchy) {
-            (false, BinaryTilingHierarchy::Major) => (Color::from_rgba8(74, 111, 158, 0.72), 0.85),
-            (false, BinaryTilingHierarchy::Minor) => (Color::from_rgba8(58, 86, 122, 0.28), 0.45),
-            (true, BinaryTilingHierarchy::Major) => (Color::from_rgba8(74, 137, 112, 0.64), 0.8),
-            (true, BinaryTilingHierarchy::Minor) => (Color::from_rgba8(69, 111, 91, 0.24), 0.4),
+    for line in smith_chart_grid(resistance_values, reactance_values) {
+        let (color, width) = match (reflected, line.hierarchy) {
+            (false, SmithChartGridHierarchy::Major) => {
+                (Color::from_rgba8(74, 111, 158, 0.72), 0.85)
+            }
+            (false, SmithChartGridHierarchy::Minor) => (Color::from_rgba8(58, 86, 122, 0.28), 0.45),
+            (true, SmithChartGridHierarchy::Major) => (Color::from_rgba8(74, 137, 112, 0.64), 0.8),
+            (true, SmithChartGridHierarchy::Minor) => (Color::from_rgba8(69, 111, 91, 0.24), 0.4),
         };
         if reflected {
-            let points = edge
+            let points = line
                 .points
                 .iter()
                 .map(|(x, y)| (-x, -y))
                 .collect::<Vec<_>>();
             draw_polyline(frame, center, radius, &points, color, width);
         } else {
-            draw_polyline(frame, center, radius, &edge.points, color, width);
+            draw_polyline(frame, center, radius, &line.points, color, width);
         }
     }
 }
