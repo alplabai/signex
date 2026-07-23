@@ -1,4 +1,8 @@
 use super::*;
+use crate::transmission_line_calculator::FrequencyScale;
+
+const EMPTY_FREQUENCY_RANGE_HZ: (f64, f64) = (MINIMUM_FREQUENCY_HZ, 1.0e6);
+const EMPTY_VALUE_RANGE: (f64, f64) = (-1.0, 1.0);
 
 /// Draws frequency track into the target drawing surface.
 pub(super) fn draw_frequency_track(
@@ -6,14 +10,13 @@ pub(super) fn draw_frequency_track(
     width: f32,
     top: f32,
     height: f32,
-    label: &str,
-    points: &[(f64, f64)],
-    color: Color,
+    track: &PlotTrack,
+    frequency_scale: FrequencyScale,
 ) {
     let left = 58.0;
     let right = (width - 16.0).max(left + 24.0);
     let bottom = top + height;
-    let Some((x_min, x_max, y_min, y_max)) = frequency_track_ranges(points) else {
+    let Some((x_min, x_max, y_min, y_max)) = frequency_track_ranges(&track.points) else {
         return;
     };
 
@@ -41,6 +44,7 @@ pub(super) fn draw_frequency_track(
         x_max,
         y_min,
         y_max,
+        frequency_scale,
     )
     .y;
     draw_screen_line(
@@ -52,7 +56,7 @@ pub(super) fn draw_frequency_track(
     );
     draw_label(
         frame,
-        label.to_string(),
+        track.label.clone(),
         Point::new(8.0, top + 10.0),
         Color::from_rgb8(198, 207, 218),
     );
@@ -70,7 +74,7 @@ pub(super) fn draw_frequency_track(
     );
     draw_label(
         frame,
-        format!("{:.3} MHz", x_min / 1.0e6),
+        format_frequency(x_min, ScalarUnit::Hertz),
         Point::new(left, bottom + 10.0),
         Color::from_rgba8(198, 207, 218, 0.72),
     );
@@ -82,21 +86,41 @@ pub(super) fn draw_frequency_track(
     );
 
     let path = canvas::Path::new(|builder| {
-        let mut iter = points.iter();
+        let mut iter = track.points.iter();
         if let Some(first) = iter.next() {
             builder.move_to(plot_point(
-                *first, left, right, top, bottom, x_min, x_max, y_min, y_max,
+                *first,
+                left,
+                right,
+                top,
+                bottom,
+                x_min,
+                x_max,
+                y_min,
+                y_max,
+                frequency_scale,
             ));
         }
         for point in iter {
             builder.line_to(plot_point(
-                *point, left, right, top, bottom, x_min, x_max, y_min, y_max,
+                *point,
+                left,
+                right,
+                top,
+                bottom,
+                x_min,
+                x_max,
+                y_min,
+                y_max,
+                frequency_scale,
             ));
         }
     });
     frame.stroke(
         &path,
-        canvas::Stroke::default().with_width(1.6).with_color(color),
+        canvas::Stroke::default()
+            .with_width(1.6)
+            .with_color(track.color),
     );
 }
 
@@ -108,6 +132,7 @@ pub(super) fn draw_frequency_hover(
     height: f32,
     track: &PlotTrack,
     cursor_position: Point,
+    frequency_scale: FrequencyScale,
 ) {
     let left = 58.0;
     let right = (bounds.width - 16.0).max(left + 24.0);
@@ -122,8 +147,11 @@ pub(super) fn draw_frequency_hover(
     let Some((x_min, x_max, y_min, y_max)) = frequency_track_ranges(&track.points) else {
         return;
     };
-    let frequency_hz =
-        x_min + (cursor_position.x - left) as f64 / (right - left) as f64 * (x_max - x_min);
+    let frequency_hz = frequency_scale.frequency_at(
+        x_min,
+        x_max,
+        (cursor_position.x - left) as f64 / (right - left) as f64,
+    );
     let Some(value) = interpolate_plot_value(&track.points, frequency_hz) else {
         return;
     };
@@ -137,6 +165,7 @@ pub(super) fn draw_frequency_hover(
         x_max,
         y_min,
         y_max,
+        frequency_scale,
     );
     draw_screen_line(
         frame,
@@ -160,7 +189,15 @@ pub(super) fn draw_frequency_hover(
 
 /// Computes the frequency track display ranges.
 pub(super) fn frequency_track_ranges(points: &[(f64, f64)]) -> Option<(f64, f64, f64, f64)> {
-    let x_min = 0.0_f64;
+    if points.is_empty() {
+        return Some((
+            EMPTY_FREQUENCY_RANGE_HZ.0,
+            EMPTY_FREQUENCY_RANGE_HZ.1,
+            EMPTY_VALUE_RANGE.0,
+            EMPTY_VALUE_RANGE.1,
+        ));
+    }
+    let x_min = MINIMUM_FREQUENCY_HZ;
     let x_max = points
         .iter()
         .map(|(frequency, _)| *frequency)
@@ -236,8 +273,9 @@ pub(super) fn plot_point(
     x_max: f64,
     y_min: f64,
     y_max: f64,
+    frequency_scale: FrequencyScale,
 ) -> Point {
-    let x = (point.0 - x_min) / (x_max - x_min);
+    let x = frequency_scale.normalize(point.0, x_min, x_max);
     let y = (point.1 - y_min) / (y_max - y_min);
     Point::new(
         left + x as f32 * (right - left),

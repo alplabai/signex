@@ -68,22 +68,44 @@ fn plot_hover_interpolates_the_value_at_the_cursor_frequency() {
     assert!((value - 50.0).abs() < f64::EPSILON);
 }
 
-/// Verifies that frequency plot ranges start at zero and include the zero value line.
+/// Verifies that frequency plot ranges start at one hertz and include the zero value line.
 #[test]
-fn frequency_plot_ranges_start_at_zero_and_include_the_zero_value_line() {
+fn frequency_plot_ranges_start_at_one_hertz_and_include_the_zero_value_line() {
     let positive_points = [(2.4e9, 40.0), (2.5e9, 60.0)];
     let negative_points = [(2.4e9, -20.0), (2.5e9, -10.0)];
 
     let positive_range = frequency_track_ranges(&positive_points).unwrap();
     let negative_range = frequency_track_ranges(&negative_points).unwrap();
 
-    assert_eq!(positive_range, (0.0, 2.5e9, 0.0, 60.0));
-    assert_eq!(negative_range, (0.0, 2.5e9, -20.0, 0.0));
+    assert_eq!(positive_range, (1.0, 2.5e9, 0.0, 60.0));
+    assert_eq!(negative_range, (1.0, 2.5e9, -20.0, 0.0));
 }
 
-/// Verifies that plot hover does not extend a trace into the empty zero to start range.
+/// Verifies that an empty frequency plot uses a readable positive fallback range.
 #[test]
-fn plot_hover_does_not_extend_a_trace_into_the_empty_zero_to_start_range() {
+fn empty_frequency_plot_uses_default_ranges() {
+    assert_eq!(frequency_track_ranges(&[]), Some((1.0, 1.0e6, -1.0, 1.0)));
+}
+
+/// Verifies that empty plot tracks are retained so the fallback axes can be drawn.
+#[test]
+fn empty_frequency_plot_track_is_retained() {
+    let mut tracks = Vec::new();
+
+    push_plot_track(
+        &mut tracks,
+        "|S11| [dB]",
+        Vec::new(),
+        Color::from_rgb8(229, 184, 99),
+    );
+
+    assert_eq!(tracks.len(), 1);
+    assert!(tracks[0].points.is_empty());
+}
+
+/// Verifies that plot hover does not extend a trace into the empty pre-sweep range.
+#[test]
+fn plot_hover_does_not_extend_a_trace_into_the_empty_pre_sweep_range() {
     let points = [(2.4e9, 40.0), (2.5e9, 60.0)];
 
     assert_eq!(interpolate_plot_value(&points, 1.0e9), None);

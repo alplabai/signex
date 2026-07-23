@@ -1,11 +1,14 @@
 use super::*;
+use crate::transmission_line_calculator::{
+    FrequencyScale, solve_frequency_points, solve_two_port_s_parameters,
+};
 use iced::widget::column;
 
 mod csv_export_configuration;
 mod estimated_s21_summary;
 mod result_diagram_kind;
 
-pub(super) use csv_export_configuration::CsvExportConfiguration;
+pub(super) use csv_export_configuration::{CSV_FREQUENCY_UNITS, CsvExportConfiguration};
 pub(super) use estimated_s21_summary::EstimatedS21Summary;
 pub use result_diagram_kind::ResultDiagramKind;
 
@@ -107,34 +110,20 @@ pub(super) fn frequency_plot_panel<'a>(
 ) -> Element<'a, SmithChartMessage> {
     match result {
         Ok(result) => {
+            let diagram_result = diagram_analysis(state, result).unwrap_or_else(|| result.clone());
             let mut impedance_tracks = Vec::new();
-            let impedance_magnitude = result
-                .frequency_results
-                .iter()
-                .map(|point| (point.frequency_hz, point.impedance.magnitude()))
-                .filter(|(_, value)| value.is_finite())
-                .collect::<Vec<_>>();
             push_plot_track(
                 &mut impedance_tracks,
                 "|Z| [Ω]",
-                impedance_magnitude,
+                impedance_magnitude_points(&diagram_result),
                 Color::from_rgb8(122, 167, 255),
             );
 
             let mut s11_tracks = Vec::new();
-            let s11_db = result
-                .frequency_results
-                .iter()
-                .filter_map(|point| {
-                    let magnitude = point.reflection_coefficient.magnitude();
-                    (magnitude > 0.0).then_some((point.frequency_hz, 20.0 * magnitude.log10()))
-                })
-                .filter(|(_, value)| value.is_finite())
-                .collect::<Vec<_>>();
             push_plot_track(
                 &mut s11_tracks,
                 "|S11| [dB]",
-                s11_db,
+                s11_db_points(&diagram_result),
                 Color::from_rgb8(229, 184, 99),
             );
 
@@ -145,17 +134,20 @@ pub(super) fn frequency_plot_panel<'a>(
                 .and_then(|circuit| {
                     circuit.into_iter().find_map(|element| match element {
                         SmithChartElement::SParameter(block) => Some(
-                            block
-                                .points()
-                                .into_iter()
+                            diagram_result
+                                .frequency_results
+                                .iter()
                                 .filter_map(|point| {
-                                    point.s21.and_then(|s21| {
-                                        let magnitude = s21.magnitude();
-                                        (magnitude > 0.0).then_some((
-                                            point.frequency_hz,
-                                            20.0 * magnitude.log10(),
-                                        ))
-                                    })
+                                    block
+                                        .interpolate(point.frequency_hz)
+                                        .and_then(|sample| sample.s21)
+                                        .and_then(|s21| {
+                                            let magnitude = s21.magnitude();
+                                            (magnitude > 0.0).then_some((
+                                                point.frequency_hz,
+                                                20.0 * magnitude.log10(),
+                                            ))
+                                        })
                                 })
                                 .filter(|(_, value)| value.is_finite())
                                 .collect::<Vec<_>>(),
@@ -164,7 +156,7 @@ pub(super) fn frequency_plot_panel<'a>(
                     })
                 })
                 .filter(|points| points.len() >= 2);
-            let s21_db = measured_s21.unwrap_or_else(|| estimated_s21_points(result));
+            let s21_db = measured_s21.unwrap_or_else(|| estimated_s21_points(&diagram_result));
             push_plot_track(
                 &mut s21_tracks,
                 "|S21| [dB]",
@@ -175,6 +167,7 @@ pub(super) fn frequency_plot_panel<'a>(
             section(
                 "Final Result Diagrams",
                 vec![
+                    frequency_scale_controls(state),
                     result_diagram(
                         state,
                         ResultDiagramKind::ImpedanceMagnitude,
@@ -196,6 +189,108 @@ pub(super) fn frequency_plot_panel<'a>(
     }
 }
 
+/// Re-solves final-result diagrams over their complete positive frequency range.
+fn diagram_analysis(
+    state: &SmithChartState,
+    result: &SmithChartAnalysis,
+) -> Option<SmithChartAnalysis> {
+    let stop_frequency_hz = result
+        .frequency_results
+        .last()
+        .map(|point| point.frequency_hz)
+        .unwrap_or(result.active_frequency_hz);
+    let frequencies_hz = diagram_frequencies(
+        MINIMUM_FREQUENCY_HZ,
+        stop_frequency_hz,
+        result.frequency_results.len().max(2),
+        state.result_frequency_scale,
+    );
+    let (circuit, settings) = state.solve_state().ok()?;
+    let frequency_results = solve_frequency_points(
+        &circuit,
+        &frequencies_hz,
+        settings.show_ideal,
+        settings.reference_impedance_ohm,
+    )
+    .ok()?;
+    let two_port_s_parameters = solve_two_port_s_parameters(
+        &circuit,
+        &frequencies_hz,
+        settings.show_ideal,
+        settings.reference_impedance_ohm,
+    )
+    .unwrap_or_default();
+
+    let mut diagram_result = result.clone();
+    diagram_result.frequency_results = frequency_results;
+    diagram_result.two_port_s_parameters = two_port_s_parameters;
+    Some(diagram_result)
+}
+
+/// Creates inclusive frequencies distributed according to the selected scale.
+fn diagram_frequencies(
+    start_frequency_hz: f64,
+    stop_frequency_hz: f64,
+    samples: usize,
+    scale: FrequencyScale,
+) -> Vec<f64> {
+    if samples < 2
+        || !start_frequency_hz.is_finite()
+        || !stop_frequency_hz.is_finite()
+        || start_frequency_hz <= 0.0
+        || stop_frequency_hz <= start_frequency_hz
+    {
+        return Vec::new();
+    }
+
+    (0..samples)
+        .map(|index| {
+            scale.frequency_at(
+                start_frequency_hz,
+                stop_frequency_hz,
+                index as f64 / (samples - 1) as f64,
+            )
+        })
+        .collect()
+}
+
+/// Builds mutually exclusive checkbox controls for the diagram frequency scale.
+fn frequency_scale_controls(state: &SmithChartState) -> Element<'_, SmithChartMessage> {
+    let mut controls = row![text("Frequency scale")].spacing(12);
+    for scale in FrequencyScale::ALL {
+        controls = controls.push(
+            checkbox(state.result_frequency_scale == scale)
+                .label(scale.label())
+                .on_toggle(move |_| SmithChartMessage::ResultFrequencyScaleChanged(scale)),
+        );
+    }
+    controls.align_y(Alignment::Center).into()
+}
+
+/// Collects finite impedance-magnitude points for the final result diagram.
+fn impedance_magnitude_points(result: &SmithChartAnalysis) -> Vec<(f64, f64)> {
+    result
+        .frequency_results
+        .iter()
+        .map(|point| (point.frequency_hz, point.impedance.magnitude()))
+        .filter(|(_, value)| value.is_finite())
+        .collect()
+}
+
+/// Collects finite S11 points, using a display floor for a perfect match.
+fn s11_db_points(result: &SmithChartAnalysis) -> Vec<(f64, f64)> {
+    result
+        .frequency_results
+        .iter()
+        .filter_map(|point| {
+            let magnitude = point.reflection_coefficient.magnitude();
+            magnitude
+                .is_finite()
+                .then_some((point.frequency_hz, 20.0 * magnitude.max(1.0e-12).log10()))
+        })
+        .collect()
+}
+
 /// Builds one frequency-result plot and its CSV export controls.
 fn result_diagram<'a>(
     state: &'a SmithChartState,
@@ -207,10 +302,13 @@ fn result_diagram<'a>(
             .size(12)
             .into()
     } else {
-        canvas(FrequencyPlotCanvas { tracks })
-            .width(Length::Fill)
-            .height(Length::Fixed(240.0))
-            .into()
+        canvas(FrequencyPlotCanvas {
+            tracks,
+            frequency_scale: state.result_frequency_scale,
+        })
+        .width(Length::Fill)
+        .height(Length::Fixed(240.0))
+        .into()
     };
     let mut diagram = column![
         text(kind.title()).size(14),
@@ -226,20 +324,41 @@ fn result_diagram<'a>(
         let mut export_editor = column![
             text("CSV export range").size(13),
             row![
+                text("CSV output unit").width(Length::Fixed(116.0)),
+                pick_list(
+                    CSV_FREQUENCY_UNITS,
+                    Some(configuration.output_frequency_unit),
+                    SmithChartMessage::CsvExportOutputFrequencyUnitChanged,
+                )
+                .width(Length::Fixed(92.0)),
+            ]
+            .align_y(Alignment::Center)
+            .spacing(8),
+            row![
                 text("Start frequency").width(Length::Fixed(116.0)),
-                text_input("", &configuration.start_frequency_mhz)
+                text_input("", &configuration.start_frequency)
                     .on_input(SmithChartMessage::CsvExportStartFrequencyChanged)
                     .width(Length::Fixed(140.0)),
-                text("MHz"),
+                pick_list(
+                    CSV_FREQUENCY_UNITS,
+                    Some(configuration.start_frequency_unit),
+                    SmithChartMessage::CsvExportStartFrequencyUnitChanged,
+                )
+                .width(Length::Fixed(92.0)),
             ]
             .align_y(Alignment::Center)
             .spacing(8),
             row![
                 text("Stop frequency").width(Length::Fixed(116.0)),
-                text_input("", &configuration.stop_frequency_mhz)
+                text_input("", &configuration.stop_frequency)
                     .on_input(SmithChartMessage::CsvExportStopFrequencyChanged)
                     .width(Length::Fixed(140.0)),
-                text("MHz"),
+                pick_list(
+                    CSV_FREQUENCY_UNITS,
+                    Some(configuration.stop_frequency_unit),
+                    SmithChartMessage::CsvExportStopFrequencyUnitChanged,
+                )
+                .width(Length::Fixed(92.0)),
             ]
             .align_y(Alignment::Center)
             .spacing(8),

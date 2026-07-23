@@ -35,7 +35,7 @@ pub(super) fn push_plot_track(
     points: Vec<(f64, f64)>,
     color: Color,
 ) {
-    if points.len() >= 2 {
+    if points.is_empty() || points.len() >= 2 {
         tracks.push(PlotTrack {
             label: label.into(),
             points,
@@ -201,12 +201,19 @@ impl canvas::Program<SmithChartMessage> for FrequencyPlotCanvas {
                     bounds.width,
                     top,
                     height,
-                    &track.label,
-                    &track.points,
-                    track.color,
+                    track,
+                    self.frequency_scale,
                 );
                 if let Some(cursor_position) = cursor.position_in(bounds) {
-                    draw_frequency_hover(frame, bounds, top, height, track, cursor_position);
+                    draw_frequency_hover(
+                        frame,
+                        bounds,
+                        top,
+                        height,
+                        track,
+                        cursor_position,
+                        self.frequency_scale,
+                    );
                 }
             }
         });

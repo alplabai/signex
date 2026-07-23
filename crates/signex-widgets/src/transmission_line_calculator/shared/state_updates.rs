@@ -15,7 +15,7 @@ use crate::transmission_line_calculator::tool::results::{
     CsvExportConfiguration, ResultDiagramKind,
 };
 use crate::transmission_line_calculator::tool::{
-    color_to_svg_hex, impedance_arc_chart_traces, s_parameter_chart_traces,
+    MINIMUM_FREQUENCY_HZ, color_to_svg_hex, impedance_arc_chart_traces, s_parameter_chart_traces,
 };
 
 use super::state::{
@@ -381,14 +381,29 @@ impl SmithChartState {
             SmithChartMessage::OpenCsvExport(kind) => self.open_csv_export(kind),
             SmithChartMessage::CsvExportStartFrequencyChanged(value) => {
                 if let Some(configuration) = &mut self.csv_export_configuration {
-                    configuration.start_frequency_mhz = value;
+                    configuration.start_frequency = value;
                     configuration.error = None;
                 }
             }
             SmithChartMessage::CsvExportStopFrequencyChanged(value) => {
                 if let Some(configuration) = &mut self.csv_export_configuration {
-                    configuration.stop_frequency_mhz = value;
+                    configuration.stop_frequency = value;
                     configuration.error = None;
+                }
+            }
+            SmithChartMessage::CsvExportStartFrequencyUnitChanged(unit) => {
+                if let Some(configuration) = &mut self.csv_export_configuration {
+                    configuration.set_start_frequency_unit(unit);
+                }
+            }
+            SmithChartMessage::CsvExportStopFrequencyUnitChanged(unit) => {
+                if let Some(configuration) = &mut self.csv_export_configuration {
+                    configuration.set_stop_frequency_unit(unit);
+                }
+            }
+            SmithChartMessage::CsvExportOutputFrequencyUnitChanged(unit) => {
+                if let Some(configuration) = &mut self.csv_export_configuration {
+                    configuration.set_output_frequency_unit(unit);
                 }
             }
             SmithChartMessage::CsvExportSamplesChanged(value) => {
@@ -396,6 +411,9 @@ impl SmithChartState {
                     configuration.samples = value;
                     configuration.error = None;
                 }
+            }
+            SmithChartMessage::ResultFrequencyScaleChanged(scale) => {
+                self.result_frequency_scale = scale;
             }
             SmithChartMessage::CancelCsvExport => self.csv_export_configuration = None,
             SmithChartMessage::SaveCsvFile => {}
@@ -504,11 +522,12 @@ impl SmithChartState {
             .csv_export_configuration
             .as_ref()
             .ok_or_else(|| "Select a result diagram to export first.".to_string())?;
-        let start_frequency_mhz =
-            parse_csv_frequency("start frequency", &configuration.start_frequency_mhz)?;
-        let stop_frequency_mhz =
-            parse_csv_frequency("stop frequency", &configuration.stop_frequency_mhz)?;
-        if stop_frequency_mhz <= start_frequency_mhz {
+        let start_frequency =
+            parse_csv_frequency("start frequency", &configuration.start_frequency)?;
+        let stop_frequency = parse_csv_frequency("stop frequency", &configuration.stop_frequency)?;
+        let start_frequency_hz = start_frequency * configuration.start_frequency_unit.multiplier();
+        let stop_frequency_hz = stop_frequency * configuration.stop_frequency_unit.multiplier();
+        if stop_frequency_hz <= start_frequency_hz {
             return Err("Stop frequency must be greater than start frequency.".to_string());
         }
         let samples = configuration
@@ -520,8 +539,7 @@ impl SmithChartState {
             return Err("Samples must be between 2 and 100000.".to_string());
         }
 
-        let start_frequency_hz = start_frequency_mhz * 1.0e6;
-        let stop_frequency_hz = stop_frequency_mhz * 1.0e6;
+        let output_frequency_multiplier = configuration.output_frequency_unit.multiplier();
         let step_hz = (stop_frequency_hz - start_frequency_hz) / (samples - 1) as f64;
         let frequencies_hz = (0..samples)
             .map(|index| start_frequency_hz + index as f64 * step_hz)
@@ -546,7 +564,14 @@ impl SmithChartState {
             _ => None,
         });
 
-        let mut csv = format!("Frequency [MHz],{}\r\n", configuration.kind.value_label());
+        let frequency_symbol = configuration
+            .output_frequency_unit
+            .frequency_symbol()
+            .unwrap_or("Hz");
+        let mut csv = format!(
+            "Frequency [{frequency_symbol}],{}\r\n",
+            configuration.kind.value_label()
+        );
         for (index, result) in results.into_iter().enumerate() {
             let value = match configuration.kind {
                 ResultDiagramKind::ImpedanceMagnitude => result.impedance.magnitude(),
@@ -564,7 +589,7 @@ impl SmithChartState {
             };
             csv.push_str(&format!(
                 "{:.12},{value:.12}\r\n",
-                result.frequency_hz / 1.0e6
+                result.frequency_hz / output_frequency_multiplier
             ));
         }
         Ok((configuration.kind.file_name().to_string(), csv))
@@ -574,21 +599,16 @@ impl SmithChartState {
     fn open_csv_export(&mut self, kind: ResultDiagramKind) {
         match self.solve() {
             Ok(result) => {
-                let start_frequency_mhz = result
-                    .frequency_results
-                    .first()
-                    .map(|point| point.frequency_hz / 1.0e6)
-                    .unwrap_or(result.active_frequency_hz / 1.0e6);
-                let stop_frequency_mhz = result
+                let stop_frequency_hz = result
                     .frequency_results
                     .last()
-                    .map(|point| point.frequency_hz / 1.0e6)
-                    .unwrap_or(result.active_frequency_hz / 1.0e6);
+                    .map(|point| point.frequency_hz)
+                    .unwrap_or(result.active_frequency_hz);
                 let samples = result.frequency_results.len().max(2);
                 self.csv_export_configuration = Some(CsvExportConfiguration::new(
                     kind,
-                    start_frequency_mhz,
-                    stop_frequency_mhz,
+                    MINIMUM_FREQUENCY_HZ,
+                    stop_frequency_hz,
                     samples,
                 ));
             }
@@ -624,7 +644,9 @@ impl SmithChartState {
     }
 
     /// Solves state from the supplied circuit and settings.
-    fn solve_state(&self) -> Result<(Vec<SmithChartElement>, SmithChartSettings), String> {
+    pub(in crate::transmission_line_calculator::tool) fn solve_state(
+        &self,
+    ) -> Result<(Vec<SmithChartElement>, SmithChartSettings), String> {
         let circuit = self.active_circuit()?;
         let resolution = parse_optional("resolution", &self.resolution)?
             .round()

@@ -1,5 +1,5 @@
 use crate::transmission_line_calculator::{
-    CustomInterpolation, ScalarUnit, SmithViewTransform, TransformerModel,
+    CustomInterpolation, FrequencyScale, ScalarUnit, SmithViewTransform, TransformerModel,
 };
 use iced::widget::text_editor;
 
@@ -143,7 +143,11 @@ pub enum SmithChartMessage {
     OpenCsvExport(ResultDiagramKind),
     CsvExportStartFrequencyChanged(String),
     CsvExportStopFrequencyChanged(String),
+    CsvExportStartFrequencyUnitChanged(ScalarUnit),
+    CsvExportStopFrequencyUnitChanged(ScalarUnit),
+    CsvExportOutputFrequencyUnitChanged(ScalarUnit),
     CsvExportSamplesChanged(String),
+    ResultFrequencyScaleChanged(FrequencyScale),
     CancelCsvExport,
     SaveCsvFile,
     CsvFileSaved(Result<Option<String>, String>),

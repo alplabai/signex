@@ -1,5 +1,5 @@
 use crate::transmission_line_calculator::{
-    Complex, CustomInterpolation, ScalarUnit, SmithViewTransform, TransformerModel,
+    Complex, CustomInterpolation, FrequencyScale, ScalarUnit, SmithViewTransform, TransformerModel,
 };
 use iced::widget::text_editor;
 
@@ -28,6 +28,7 @@ pub struct SmithChartState {
     pub span_unit: ScalarUnit,
     pub resolution: String,
     pub show_ideal: bool,
+    pub result_frequency_scale: FrequencyScale,
     pub diagram_mode: SmithChartDiagramMode,
     pub smith_sphere_yaw: f32,
     pub smith_sphere_pitch: f32,
@@ -145,6 +146,7 @@ impl SmithChartState {
             span_unit: ScalarUnit::MegaHertz,
             resolution: "10".to_string(),
             show_ideal: false,
+            result_frequency_scale: FrequencyScale::Linear,
             diagram_mode: SmithChartDiagramMode::TwoDimensional,
             smith_sphere_yaw: -0.65,
             smith_sphere_pitch: 0.35,

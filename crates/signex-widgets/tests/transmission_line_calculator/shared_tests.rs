@@ -59,6 +59,15 @@ fn csv_export_uses_the_selected_inclusive_range_and_sample_count() {
     state.update(SmithChartMessage::OpenCsvExport(
         crate::transmission_line_calculator::tool::ResultDiagramKind::ImpedanceMagnitude,
     ));
+    state.update(SmithChartMessage::CsvExportStartFrequencyUnitChanged(
+        ScalarUnit::MegaHertz,
+    ));
+    state.update(SmithChartMessage::CsvExportStopFrequencyUnitChanged(
+        ScalarUnit::MegaHertz,
+    ));
+    state.update(SmithChartMessage::CsvExportOutputFrequencyUnitChanged(
+        ScalarUnit::MegaHertz,
+    ));
     state.update(SmithChartMessage::CsvExportStartFrequencyChanged(
         "2400".to_string(),
     ));
@@ -75,6 +84,39 @@ fn csv_export_uses_the_selected_inclusive_range_and_sample_count() {
     assert_eq!(lines[0], "Frequency [MHz],|Z| [Ω]");
     assert!(lines[1].starts_with("2400.000000000000,"));
     assert!(lines[5].starts_with("2500.000000000000,"));
+}
+
+/// Verifies that CSV export defaults to one hertz and converts each range unit independently.
+#[test]
+fn csv_export_defaults_to_one_hertz_and_converts_frequency_units() {
+    let mut state = SmithChartState::default();
+    state.update(SmithChartMessage::OpenCsvExport(
+        crate::transmission_line_calculator::tool::ResultDiagramKind::S11Db,
+    ));
+
+    let configuration = state.csv_export_configuration.as_ref().unwrap();
+    assert_eq!(configuration.start_frequency_unit, ScalarUnit::Hertz);
+    assert_eq!(configuration.stop_frequency_unit, ScalarUnit::Hertz);
+    assert_eq!(configuration.output_frequency_unit, ScalarUnit::Hertz);
+    assert_eq!(configuration.start_frequency, "1");
+    assert_eq!(configuration.stop_frequency, "2440500000");
+
+    state.update(SmithChartMessage::CsvExportStartFrequencyUnitChanged(
+        ScalarUnit::GigaHertz,
+    ));
+    state.update(SmithChartMessage::CsvExportStopFrequencyUnitChanged(
+        ScalarUnit::MegaHertz,
+    ));
+    state.update(SmithChartMessage::CsvExportOutputFrequencyUnitChanged(
+        ScalarUnit::KiloHertz,
+    ));
+
+    let configuration = state.csv_export_configuration.as_ref().unwrap();
+    assert_eq!(configuration.start_frequency_unit, ScalarUnit::GigaHertz);
+    assert_eq!(configuration.stop_frequency_unit, ScalarUnit::MegaHertz);
+    assert_eq!(configuration.output_frequency_unit, ScalarUnit::KiloHertz);
+    assert_eq!(configuration.start_frequency, "0.000000001");
+    assert_eq!(configuration.stop_frequency, "2440.5");
 }
 
 /// Verifies that CSV export rejects a reversed frequency range.

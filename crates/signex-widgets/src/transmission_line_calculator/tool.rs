@@ -41,6 +41,8 @@ use smith_chart_2d::*;
 use smith_chart_3d::*;
 use smith_chart_y::*;
 
+const MINIMUM_FREQUENCY_HZ: f64 = 1.0;
+
 /// Builds the transmission-line calculator user interface.
 pub fn view(state: &SmithChartState) -> Element<'_, SmithChartMessage> {
     let result = state.solve();
