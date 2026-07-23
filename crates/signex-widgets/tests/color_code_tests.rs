@@ -1,5 +1,5 @@
 use iced::Color;
-use signex_passive_calculator::{
+use signex_widgets::passive_calculator::{
     BandColor, ComponentKind, ESeries, PreferredComponent, ResistorColorCode, Tolerance,
 };
 

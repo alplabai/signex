@@ -1,6 +1,6 @@
 use iced::Color;
 
-use crate::domain::{ComponentKind, PreferredComponent, Tolerance};
+use super::domain::{ComponentKind, PreferredComponent, Tolerance};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BandColor {

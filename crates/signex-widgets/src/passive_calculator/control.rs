@@ -2,10 +2,10 @@ use iced::widget::{button, column, container, pick_list, row, scrollable, text, 
 use iced::{Alignment, Background, Border, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 
-use crate::color_code::ComponentColorCode;
-use crate::domain::{ComponentKind, ESeries, SiPrefix, Tolerance};
-use crate::network::{Network, format_number, format_value};
-use crate::solver::{MAX_PARTS, SolveOptions, solve};
+use super::color_code::ComponentColorCode;
+use super::domain::{ComponentKind, ESeries, SiPrefix, Tolerance};
+use super::network::{Network, format_number, format_value};
+use super::solver::{MAX_PARTS, SolveOptions, solve};
 
 const MAX_COMPONENT_OPTIONS: [usize; MAX_PARTS] = [1, 2, 3, 4];
 

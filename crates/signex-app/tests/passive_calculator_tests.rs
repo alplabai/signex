@@ -1,6 +1,6 @@
 use signex_app::app::{Message, Signex, WindowKind, WindowMsg};
 use signex_app::menu_bar::MenuMessage;
-use signex_passive_calculator::{CalculatorMessage, ComponentKind};
+use signex_widgets::passive_calculator::{CalculatorMessage, ComponentKind};
 
 #[test]
 fn calculator_messages_update_the_dedicated_control_state() {

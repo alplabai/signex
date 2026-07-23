@@ -1,4 +1,4 @@
-use crate::domain::{ComponentKind, PreferredComponent, SiPrefix, Tolerance};
+use super::domain::{ComponentKind, PreferredComponent, SiPrefix, Tolerance};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Connection {

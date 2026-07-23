@@ -1,8 +1,8 @@
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
-use crate::domain::{ComponentKind, ESeries, PreferredComponent, Tolerance};
-use crate::network::{Connection, Network};
+use super::domain::{ComponentKind, ESeries, PreferredComponent, Tolerance};
+use super::network::{Connection, Network};
 
 pub const MAX_PARTS: usize = 4;
 const FRONTIER_LIMIT: usize = 400;

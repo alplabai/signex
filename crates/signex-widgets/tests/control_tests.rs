@@ -1,4 +1,4 @@
-use signex_passive_calculator::{
+use signex_widgets::passive_calculator::{
     CalculatorControl, CalculatorMessage, ComponentKind, ESeries, SiPrefix, Tolerance,
 };
 

@@ -1,4 +1,4 @@
-use signex_passive_calculator::{ComponentKind, ESeries, SolveOptions, Tolerance, solve};
+use signex_widgets::passive_calculator::{ComponentKind, ESeries, SolveOptions, Tolerance, solve};
 
 fn options(kind: ComponentKind, target: f64, max_parts: usize) -> SolveOptions {
     SolveOptions {

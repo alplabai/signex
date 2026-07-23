@@ -142,7 +142,8 @@ impl Signex {
                 tab_dragging: None,
                 main_window_id: None,
                 windows: std::collections::HashMap::new(),
-                passive_calculator: signex_passive_calculator::CalculatorControl::default(),
+                passive_calculator: signex_widgets::passive_calculator::CalculatorControl::default(
+                ),
                 move_selection: crate::app::state::MoveSelectionState::default(),
                 net_color_palette_open: false,
                 parameter_manager_open: false,

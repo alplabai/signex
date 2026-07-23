@@ -1,4 +1,6 @@
-use signex_passive_calculator::{ComponentKind, ESeries, PreferredComponent, SiPrefix, Tolerance};
+use signex_widgets::passive_calculator::{
+    ComponentKind, ESeries, PreferredComponent, SiPrefix, Tolerance,
+};
 
 #[test]
 fn every_e_series_has_the_standard_length_and_is_sorted() {

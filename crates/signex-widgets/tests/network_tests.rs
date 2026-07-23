@@ -1,4 +1,4 @@
-use signex_passive_calculator::{
+use signex_widgets::passive_calculator::{
     ComponentKind, Connection, ESeries, Network, PreferredComponent, Tolerance,
 };
 

@@ -26,8 +26,8 @@ use std::sync::OnceLock;
 
 use iced::widget::{Column, Row, Space, button, column, container, row, scrollable, svg, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
-use signex_passive_calculator::{CalculatorControl, CalculatorMessage};
 use signex_types::theme::{Color as TokColor, ThemeId, ThemeTokens, theme_tokens};
+use signex_widgets::passive_calculator::{CalculatorControl, CalculatorMessage};
 use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
 
 /// Minimal X-mark SVG matched to the chrome window-close icon so
