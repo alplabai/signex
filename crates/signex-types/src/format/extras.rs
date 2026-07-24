@@ -17,14 +17,37 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::pcb::{Footprint, Pad, PcbBoard, Point as PcbPoint};
-use crate::schematic::{SchematicSheet, Symbol};
+use crate::schematic::{Junction, SchematicSheet, Symbol};
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub(in crate::format) struct SchExtrasRaw {
     #[serde(default)]
     pub(in crate::format) symbols: BTreeMap<String, SymbolExtras>,
     #[serde(default)]
+    pub(in crate::format) junctions: BTreeMap<String, JunctionExtras>,
+    #[serde(default)]
     pub(in crate::format) sheet: Option<SheetExtras>,
+}
+
+/// Per-junction auxiliary fields that don't fit into [`SchJunctionRow`] —
+/// today just the minted-vs-user-placed provenance bit (issue #422). Only
+/// emitted for a junction where `minted` differs from the on-disk default
+/// (`false`, i.e. user-placed), so a `.snxsch` predating this field round-
+/// trips unchanged and every dot it names loads as user-placed.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub(in crate::format) struct JunctionExtras {
+    #[serde(default)]
+    pub(in crate::format) minted: bool,
+}
+
+impl JunctionExtras {
+    pub(in crate::format) fn is_default(&self) -> bool {
+        !self.minted
+    }
+
+    pub(in crate::format) fn from_junction(j: &Junction) -> Self {
+        JunctionExtras { minted: j.minted }
+    }
 }
 
 /// Per-symbol auxiliary fields that don't fit into [`SchComponentRow`].

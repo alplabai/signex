@@ -6,7 +6,6 @@ use super::super::super::*;
 
 impl Signex {
     pub(crate) fn handle_annotate(&mut self, mode: signex_engine::AnnotateMode) -> Task<Message> {
-        use std::path::PathBuf;
         // Share one per-prefix counter across every open sheet so designators
         // don't collide across sheets of the same project.
         let mut next_by_prefix: std::collections::HashMap<String, u32> =
@@ -52,62 +51,62 @@ impl Signex {
             }
         }
 
-        // Pass B: apply to cached (non-active) tabs via the shared counter.
+        // Pass B: walk every sheet the counter must cover — cached tabs,
+        // unopened sheets, and the active engine alike — in the ONE order
+        // `ordered_project_sheet_paths` defines. The preview walks the exact
+        // same order over the exact same set, so the number it promises for
+        // a sheet is the number this pass assigns it (#435): the active
+        // engine no longer gets an unconditional last turn regardless of
+        // where its path sorts.
         let locked = self.ui_state.annotate_locked.clone();
+        let active_path = self.document_state.active_path.clone();
+        let ordered_paths = crate::app::project_sheets::ordered_project_sheet_paths(
+            &project_set,
+            active_path.as_deref(),
+        );
         let mut any_cached_changed = false;
-        let active_idx = self.document_state.active_tab;
-        let paths: Vec<(usize, PathBuf)> = self
-            .document_state
-            .tabs
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, tab)| {
-                // This project's sheets only — a loose tab from elsewhere was
-                // never seeded, so it must not draw from this counter.
-                if idx == active_idx || !project_set.sheets.contains_key(&tab.path) {
-                    None
-                } else {
-                    Some((idx, tab.path.clone()))
-                }
-            })
-            .collect();
-        for (idx, path) in paths {
-            let result = self.document_state.engines.get_mut(&path).map(|engine| {
-                engine.annotate_with_seed_and_locks(mode, &mut next_by_prefix, &locked)
-            });
-            if let Some(Ok(true)) = result {
-                if let Some(tab) = self.document_state.tabs.get_mut(idx) {
-                    tab.dirty = true;
-                }
-                any_cached_changed = true;
-            }
-        }
-
-        // Pass B2: every project sheet that isn't currently open as a tab —
-        // annotate the already-parsed copy with the shared counter and write
-        // it back. Altium's Annotate-Across-Project covers even the sheets
-        // the user hasn't opened so designators stay unique project-wide.
-        let mut unopened_sheets: Vec<(
-            std::path::PathBuf,
-            signex_types::schematic::SchematicSheet,
-        )> = project_set
-            .sheets
-            .iter()
-            .filter(|(path, _)| !self.document_state.engines.contains_key(*path))
-            .map(|(path, sheet)| (path.clone(), sheet.clone()))
-            .collect();
-        // Deterministic: `sheets` is a `HashMap`, and the counter hands out
-        // numbers in walk order.
-        unopened_sheets.sort_by(|a, b| a.0.cmp(&b.0));
         let mut disk_touched = 0usize;
         for (path, why) in &project_set.unreadable {
             crate::diagnostics::log_info(format!("Annotate: sheet '{}' {why}", path.display()));
         }
-        for (sheet_path, sheet) in unopened_sheets {
+        for path in &ordered_paths {
+            if active_path.as_deref() == Some(path.as_path()) {
+                // The active engine — run through the raw engine method (not
+                // Command) so it shares the same counter.
+                if let Some(engine) = self.document_state.active_engine_mut() {
+                    let _ = engine.annotate_with_seed_and_locks(mode, &mut next_by_prefix, &locked);
+                }
+                continue;
+            }
+            if let Some(tab_idx) = self
+                .document_state
+                .tabs
+                .iter()
+                .position(|t| &t.path == path)
+            {
+                // An open, non-active (cached) tab.
+                let result = self.document_state.engines.get_mut(path).map(|engine| {
+                    engine.annotate_with_seed_and_locks(mode, &mut next_by_prefix, &locked)
+                });
+                if let Some(Ok(true)) = result {
+                    if let Some(tab) = self.document_state.tabs.get_mut(tab_idx) {
+                        tab.dirty = true;
+                    }
+                    any_cached_changed = true;
+                }
+                continue;
+            }
+            // A project sheet that isn't currently open as a tab — annotate
+            // the already-parsed copy with the shared counter and write it
+            // back. Altium's Annotate-Across-Project covers even the sheets
+            // the user hasn't opened so designators stay unique project-wide.
+            let Some(sheet) = project_set.sheets.get(path).cloned() else {
+                continue;
+            };
             let Ok(mut engine) = signex_engine::Engine::new(sheet) else {
                 continue;
             };
-            engine.set_path(Some(sheet_path.clone()));
+            engine.set_path(Some(path.clone()));
             let Ok(changed) =
                 engine.annotate_with_seed_and_locks(mode, &mut next_by_prefix, &locked)
             else {
@@ -118,16 +117,9 @@ impl Signex {
             }
             if engine.save().is_ok() {
                 disk_touched += 1;
-                self.document_state.dirty_paths.remove(&sheet_path);
-                crate::diagnostics::log_info(format!("Annotate: saved {}", sheet_path.display()));
+                self.document_state.dirty_paths.remove(path);
+                crate::diagnostics::log_info(format!("Annotate: saved {}", path.display()));
             }
-        }
-
-        // Pass C: apply to the active engine so the canvas, Properties
-        // panel, and render cache all refresh. Run through the raw engine
-        // method (not Command) so it shares the same counter.
-        if let Some(engine) = self.document_state.active_engine_mut() {
-            let _ = engine.annotate_with_seed_and_locks(mode, &mut next_by_prefix, &locked);
         }
         if disk_touched > 0 {
             crate::diagnostics::log_info(format!(

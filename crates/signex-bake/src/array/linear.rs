@@ -83,9 +83,11 @@ pub(super) fn bake_linear(
 
     for i in 0..count {
         // MD-2: re-evaluating dx/dy needs only the `array_index` change,
-        // but `EvalContext.params` is owned by value. Cloning the full
-        // BTreeMap per step is `O(count × params)` work. Build the
-        // cloned params once and only swap the index per iteration.
+        // but `EvalContext.params` is owned by value, so this still
+        // clones the full `BTreeMap` on every iteration — `O(count ×
+        // params)` work. Not hoisted: array counts are small (pad
+        // arrays, not bulk geometry), so this hasn't been worth the
+        // added complexity of an index-swappable `EvalContext`.
         let step_ctx = EvalContext {
             params: params_ast.clone(),
             array_index: Some((i, 0)),

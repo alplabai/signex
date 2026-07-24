@@ -5,7 +5,6 @@
 use super::*;
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum FootprintEditorMsg {
     // ── Footprint ──────────────────────────────────────────
     /// v0.18.7 — switch which footprint inside the multi-footprint
