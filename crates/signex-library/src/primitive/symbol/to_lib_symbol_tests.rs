@@ -106,16 +106,22 @@ fn positions_carry_over_unchanged_no_y_flip() {
 }
 
 /// Acceptance criterion: pin the complete `PinOrientation` -> rotation
-/// table (all four variants). `Up`/`Down` are the non-obvious ones — see
-/// `to_lib_symbol`'s module doc for why they swap instead of mapping
-/// straight across.
+/// table (all four variants). The mapping is the identity on angle —
+/// `LibPin.pin.rotation` is read as the same y-up, CCW-from-+x,
+/// tip->body angle as the source `PinOrientation` by every real
+/// consumer: `signex_types::schematic::SymbolTransform::apply` (the
+/// single y-flip is applied there, not here), the autoplace pin-bbox
+/// walk (`crates/signex-engine/src/transform/autoplace.rs`), and the
+/// SVG/PDF exporter's `pin_direction`
+/// (`crates/signex-output/src/svg/symbols.rs`, `90 => (0.0, 1.0)`). See
+/// `to_lib_symbol`'s module doc for the full derivation.
 #[test]
 fn pin_orientation_maps_to_rotation_degrees_for_all_four_variants() {
     let table = [
         (PinOrientation::Right, 0.0),
-        (PinOrientation::Up, 270.0),
+        (PinOrientation::Up, 90.0),
         (PinOrientation::Left, 180.0),
-        (PinOrientation::Down, 90.0),
+        (PinOrientation::Down, 270.0),
     ];
     for (orientation, expected_deg) in table {
         let mut sym = Symbol::empty("ROT-CHECK");

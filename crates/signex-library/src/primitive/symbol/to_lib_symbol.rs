@@ -15,7 +15,7 @@
 //! [`signex_types::schematic::SymbolTransform::apply`]. Every position
 //! here carries over unchanged.
 //!
-//! ## Pin rotation convention (load-bearing — the two sides disagree in y)
+//! ## Pin rotation convention (both sides agree — identity mapping)
 //!
 //! `.snxsym`'s [`PinOrientation`] is the tip→body direction as a CCW angle
 //! from +x in that same y-up space: `Right = 0°`, `Up = +90°`,
@@ -23,16 +23,20 @@
 //! `crates/signex-app/src/library/editor/symbol/canvas/pins.rs`, where
 //! `tip = pin.position` and `body_end = tip + unit(angle_rad) * length`.
 //!
-//! `LibPin.pin.rotation` extends the pin stub using the OPPOSITE sign in
-//! y: `crates/signex-widgets/src/symbol_preview.rs`'s `bounds()` computes
-//! the far end as `0° => (+len, 0)`, `90° => (0, -len)`, `180° => (-len,
-//! 0)`, `270° => (0, +len)` — i.e. its `90°` extends toward **-y**, not
-//! +y. Since positions are not flipped (previous section), naively
-//! copying the source angle (`Up -> 90`) would draw the pin extending
-//! downward instead of up. The x-axis orientations already agree between
-//! the two conventions (`Right -> 0°`, `Left -> 180°` extend the same way
-//! in both), so only the y-axis orientations are swapped: `Up -> 270°`,
-//! `Down -> 90°`. [`to_lib_symbol_tests`] pins all four.
+//! `LibPin.pin.rotation` is read by every real consumer as the SAME
+//! y-up, CCW-from-+x, tip→body angle, with the single y-flip applied
+//! later — never here — by
+//! [`signex_types::schematic::SymbolTransform::apply`] (`y = -local.y`).
+//! `crates/signex-engine/src/transform/autoplace.rs` derives a pin's far
+//! end as `(sx + length*cos(rotation), sy + length*sin(rotation))` in
+//! this same pre-flip local space before handing the point to
+//! `transform_local_point`, and the SVG/PDF exporter's `pin_direction`
+//! (`crates/signex-output/src/svg/symbols.rs`) maps `90° => (0.0, 1.0)`,
+//! `270° => (0.0, -1.0)` — both agree `90°` means "toward +y" in
+//! pre-flip space, matching the source convention exactly. Since
+//! positions are not flipped either (previous section), the faithful
+//! conversion is the identity on angle: `Right -> 0°`, `Up -> 90°`,
+//! `Left -> 180°`, `Down -> 270°`. [`to_lib_symbol_tests`] pins all four.
 //!
 //! ## Pin direction — total, no panic
 //!
@@ -126,8 +130,8 @@ fn lib_pin_from(pin: &SymbolPin) -> LibPin {
     }
 }
 
-/// See the module doc's "Pin rotation convention" section for the full
-/// derivation of why `Up`/`Down` swap while `Right`/`Left` pass through.
+/// See the module doc's "Pin rotation convention" section for why this
+/// is the identity on angle — both sides already agree.
 ///
 /// `PinOrientation` is `#[non_exhaustive]` for downstream crates, but
 /// this match lives in the crate that defines it, so it stays exhaustive
@@ -136,9 +140,9 @@ fn lib_pin_from(pin: &SymbolPin) -> LibPin {
 fn pin_rotation_deg(orientation: PinOrientation) -> f64 {
     match orientation {
         PinOrientation::Right => 0.0,
-        PinOrientation::Up => 270.0,
+        PinOrientation::Up => 90.0,
         PinOrientation::Left => 180.0,
-        PinOrientation::Down => 90.0,
+        PinOrientation::Down => 270.0,
     }
 }
 
