@@ -56,11 +56,23 @@ the project's design rules) help identify rendering discrepancies.
 
 ### Prerequisites
 
-- **Rust 1.88+** — edition 2024 needs 1.85, but the workspace also uses
-  let-chains (`if cond && let Some(x) = ...`), stable only from 1.88. The
-  workspace declares `rust-version = "1.88"`, so an older toolchain fails with
-  a clear "requires rustc 1.88.0 or newer" instead of confusing errors.
+- **Rust 1.97.0** — pinned in `rust-toolchain.toml`, so `rustup` installs
+  exactly this version automatically (no manual setup) and your local
+  `rustfmt`/`clippy` match CI byte-for-byte. This is **also the MSRV**
+  (`rust-version = "1.97"`): we build, test, and support exactly this one
+  toolchain, not older ones. (Edition 2024 needs 1.85 and let-chains need 1.88 —
+  both well below the pin.)
 - A GPU supporting Vulkan, Metal, or DX12 (for wgpu) — CI runs headless via lavapipe
+
+### Toolchain update cadence
+
+The pinned toolchain is bumped to the current stable roughly **once a quarter
+(every ~3 months)** so the pin never drifts far behind and we don't accumulate
+toolchain debt. A bump edits three places in lockstep — `rust-toolchain.toml`
+(`channel`), the `rust-version` in the root `Cargo.toml`, and the four
+`dtolnay/rust-toolchain@<version>` refs in `.github/workflows/ci.yml` (the CI
+action does **not** read `rust-toolchain.toml`) — then `cargo fmt --all` in case
+the new rustfmt reformats anything.
 
 ### Build and Run
 
@@ -76,12 +88,16 @@ cargo run -p signex-app
 ```bash
 cargo test --workspace        # hard gate — must pass
 cargo check --workspace       # hard gate — must compile
-cargo fmt --all               # advisory in CI, but keep it clean
+cargo fmt --all               # hard gate — the tree must be rustfmt-clean
 cargo clippy --workspace      # advisory in CI, but review the warnings
 ```
 
-`cargo test` and `cargo check` are the CI hard gates. `fmt` and `clippy`
-are surfaced but don't block a merge — see "Merge rules for `trunk`" below.
+`cargo test`, `cargo check`, and `cargo fmt --all -- --check` are the CI hard
+gates; `clippy` is surfaced but doesn't block — see "Merge rules for `trunk`"
+below. Because the toolchain is pinned (`rust-toolchain.toml`, Rust 1.97.0),
+your local `cargo fmt` output is identical to CI's — run it before you commit
+(or wire it into a local `pre-commit` hook) so the required `fmt · rustfmt`
+check stays green.
 
 ## Git Workflow
 
@@ -175,8 +191,9 @@ the importable ruleset is in [`.github/rulesets/`](.github/rulesets/). In short:
   Conversations must be resolved and the branch up to date with `trunk`.
 - CI hard gates must be green before merge: `check · ubuntu-latest`,
   `test · workspace`, `deny · licenses + deps`, `PR-description self-declaration`,
-  and `No KiCad-shaped names anywhere in crates/`. `fmt · rustfmt`, `clippy`, and
-  the advisory `cargo-deny` steps are informational and don't block.
+  `No GPL-tool-shaped names anywhere in crates/`, and `fmt · rustfmt`. `clippy`
+  and the advisory `cargo-deny` (sources/advisories) steps are informational and
+  don't block.
 - Merge with a **merge commit** (to preserve a contributor's per-commit history)
   or **squash** (one logical change → one commit).
 

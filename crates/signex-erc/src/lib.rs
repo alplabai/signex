@@ -56,6 +56,11 @@ pub enum RuleKind {
     PowerPortShort,
     /// A symbol or wire sits outside the active sheet's page boundary.
     SymbolOutsideSheet,
+    /// A label sits where two or more wires cross with no junction. The
+    /// netlist anchors it to exactly one of them by a deterministic tiebreak
+    /// (issue #402) — a defensible runtime answer, but not one the user can
+    /// predict from the geometry, so it is surfaced rather than assumed.
+    AmbiguousLabelAnchor,
 }
 
 impl RuleKind {
@@ -73,6 +78,7 @@ impl RuleKind {
             RuleKind::MissingPowerFlag => "Missing power flag",
             RuleKind::PowerPortShort => "Power port short",
             RuleKind::SymbolOutsideSheet => "Symbol outside sheet boundary",
+            RuleKind::AmbiguousLabelAnchor => "Ambiguous label anchor",
         }
     }
 
@@ -89,7 +95,8 @@ impl RuleKind {
             | RuleKind::DanglingWire
             | RuleKind::NetLabelConflict
             | RuleKind::OrphanLabel
-            | RuleKind::MissingPowerFlag => Severity::Warning,
+            | RuleKind::MissingPowerFlag
+            | RuleKind::AmbiguousLabelAnchor => Severity::Warning,
             RuleKind::SymbolOutsideSheet => Severity::Info,
         }
     }

@@ -1,6 +1,6 @@
 use signex_types::schematic::{
     Bus, Junction, Label, NoConnect, SCHEMATIC_PT_TO_MM, SchDrawing, SelectedItem, SelectedKind,
-    Symbol, TextNote, Wire,
+    Symbol, TextNote, Wire, circumcircle,
 };
 
 use super::Engine;
@@ -53,34 +53,37 @@ impl Engine {
         let mut clipboard = ClipboardSelection::default();
 
         for item in items {
-            match item.kind {
-                SelectedKind::Wire => {
+            let Some(slot) = clipboard_slot(item.kind) else {
+                continue;
+            };
+            match slot {
+                ClipboardSlot::Wire => {
                     if let Some(wire) = self.document.wires.iter().find(|w| w.uuid == item.uuid) {
                         clipboard.wires.push(wire.clone());
                     }
                 }
-                SelectedKind::Bus => {
+                ClipboardSlot::Bus => {
                     if let Some(bus) = self.document.buses.iter().find(|b| b.uuid == item.uuid) {
                         clipboard.buses.push(bus.clone());
                     }
                 }
-                SelectedKind::Label => {
+                ClipboardSlot::Label => {
                     if let Some(label) = self.document.labels.iter().find(|l| l.uuid == item.uuid) {
                         clipboard.labels.push(label.clone());
                     }
                 }
-                SelectedKind::Symbol => {
+                ClipboardSlot::Symbol => {
                     if let Some(symbol) = self.document.symbols.iter().find(|s| s.uuid == item.uuid)
                     {
                         clipboard.symbols.push(symbol.clone());
                     }
                 }
-                SelectedKind::Junction => {
+                ClipboardSlot::Junction => {
                     if let Some(j) = self.document.junctions.iter().find(|j| j.uuid == item.uuid) {
                         clipboard.junctions.push(j.clone());
                     }
                 }
-                SelectedKind::NoConnect => {
+                ClipboardSlot::NoConnect => {
                     if let Some(nc) = self
                         .document
                         .no_connects
@@ -90,7 +93,7 @@ impl Engine {
                         clipboard.no_connects.push(nc.clone());
                     }
                 }
-                SelectedKind::TextNote => {
+                ClipboardSlot::TextNote => {
                     if let Some(tn) = self
                         .document
                         .text_notes
@@ -100,7 +103,6 @@ impl Engine {
                         clipboard.text_notes.push(tn.clone());
                     }
                 }
-                _ => {}
             }
         }
 
@@ -446,9 +448,7 @@ impl Engine {
                         ..
                     } => {
                         info.push(("Type".into(), "Arc".into()));
-                        if let Some((cx, cy, radius)) =
-                            circumcircle((start.x, start.y), (mid.x, mid.y), (end.x, end.y))
-                        {
+                        if let Some((cx, cy, radius)) = circumcircle(*start, *mid, *end) {
                             let sa: f64 = (start.y - cy).atan2(start.x - cx);
                             let ea: f64 = (end.y - cy).atan2(end.x - cx);
                             let norm = |a: f64| -> f64 {
@@ -578,28 +578,101 @@ impl Engine {
 }
 
 // ---------------------------------------------------------------------------
-// Arc geometry helper
+// Cut = copy + delete, but the two must agree on what they carry
 // ---------------------------------------------------------------------------
 
-/// Circle through three non-collinear points — converts the Signex
-/// (start, mid, end) arc storage into (center, radius, angles) for
-/// rendering and hit-testing.
-fn circumcircle(a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> Option<(f64, f64, f64)> {
-    let (ax, ay) = a;
-    let (bx, by) = b;
-    let (cx, cy) = c;
-    let d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
-    if d.abs() < 1e-9 {
-        return None;
+/// Which `ClipboardSelection` field a kind is copied into by
+/// `collect_selection_clipboard` (above). The match is exhaustive over
+/// `SelectedKind` (no `_` arm), so a new variant is a compile error here
+/// until it's classified — this is the one place that decides what
+/// clipboard-based Copy/Cut/Paste can carry; `clipboard_can_carry` and
+/// `collect_selection_clipboard` both derive from it instead of keeping
+/// their own list.
+enum ClipboardSlot {
+    Wire,
+    Bus,
+    Label,
+    Symbol,
+    Junction,
+    NoConnect,
+    TextNote,
+}
+
+fn clipboard_slot(kind: SelectedKind) -> Option<ClipboardSlot> {
+    match kind {
+        SelectedKind::Wire => Some(ClipboardSlot::Wire),
+        SelectedKind::Bus => Some(ClipboardSlot::Bus),
+        SelectedKind::Label => Some(ClipboardSlot::Label),
+        SelectedKind::Symbol => Some(ClipboardSlot::Symbol),
+        SelectedKind::Junction => Some(ClipboardSlot::Junction),
+        SelectedKind::NoConnect => Some(ClipboardSlot::NoConnect),
+        SelectedKind::TextNote => Some(ClipboardSlot::TextNote),
+        SelectedKind::BusEntry
+        | SelectedKind::SheetPin
+        | SelectedKind::ChildSheet
+        | SelectedKind::Drawing
+        | SelectedKind::SymbolRefField
+        | SelectedKind::SymbolValField => None,
     }
-    let ux = ((ax * ax + ay * ay) * (by - cy)
-        + (bx * bx + by * by) * (cy - ay)
-        + (cx * cx + cy * cy) * (ay - by))
-        / d;
-    let uy = ((ax * ax + ay * ay) * (cx - bx)
-        + (bx * bx + by * by) * (ax - cx)
-        + (cx * cx + cy * cy) * (bx - ax))
-        / d;
-    let r = ((ax - ux) * (ax - ux) + (ay - uy) * (ay - uy)).sqrt();
-    Some((ux, uy, r))
+}
+
+fn clipboard_can_carry(kind: SelectedKind) -> bool {
+    clipboard_slot(kind).is_some()
+}
+
+/// Splits a selection into the subset Cut can safely copy-then-delete and
+/// the remainder it must leave untouched. Cut is copy + delete; a kind
+/// `collect_selection_clipboard` can't carry (`ChildSheet`, `SheetPin`,
+/// `Drawing`, `BusEntry`, …) would otherwise get deleted with nothing in
+/// the clipboard to restore it — a silent destroy, not a no-op (#341:
+/// sheet clipboard support itself is out of scope, but Cut must not desync
+/// from what Copy can actually carry).
+pub fn partition_cuttable(items: &[SelectedItem]) -> (Vec<SelectedItem>, Vec<SelectedItem>) {
+    items
+        .iter()
+        .copied()
+        .partition(|item| clipboard_can_carry(item.kind))
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clipboard_can_carry_matches_the_documented_seven_kinds() {
+        // #465: `clipboard_can_carry` and `collect_selection_clipboard` both
+        // derive from `clipboard_slot`'s single exhaustive match, so this
+        // pins down which kinds that match currently classifies as
+        // carryable rather than trusting two independently-maintained lists.
+        let carryable: Vec<SelectedKind> = [
+            SelectedKind::Symbol,
+            SelectedKind::Wire,
+            SelectedKind::Bus,
+            SelectedKind::BusEntry,
+            SelectedKind::Junction,
+            SelectedKind::NoConnect,
+            SelectedKind::Label,
+            SelectedKind::SheetPin,
+            SelectedKind::TextNote,
+            SelectedKind::ChildSheet,
+            SelectedKind::Drawing,
+            SelectedKind::SymbolRefField,
+            SelectedKind::SymbolValField,
+        ]
+        .into_iter()
+        .filter(|k| clipboard_can_carry(*k))
+        .collect();
+
+        assert_eq!(
+            carryable,
+            vec![
+                SelectedKind::Symbol,
+                SelectedKind::Wire,
+                SelectedKind::Bus,
+                SelectedKind::Junction,
+                SelectedKind::NoConnect,
+                SelectedKind::Label,
+                SelectedKind::TextNote,
+            ]
+        );
+    }
 }

@@ -196,6 +196,15 @@ pub fn view<'a>(
         .size(10)
         .color(muted),
     );
+    // A failed save must be visible here and now — otherwise the reorder
+    // looks applied and silently reverts on next launch.
+    if let Some(error) = settings.preferred_order_error.as_deref() {
+        order_col = order_col.push(
+            text(format!("Could not save the order: {error}"))
+                .size(10)
+                .color(iced::Color::from_rgb(0.90, 0.40, 0.40)),
+        );
+    }
 
     container(
         column![

@@ -27,7 +27,11 @@ impl Signex {
     }
 
     /// Component Preview event handler.
-    pub(super) fn handle_editor_event(&mut self, address: EditorAddress, msg: EditorMsg) -> Task<Message> {
+    pub(super) fn handle_editor_event(
+        &mut self,
+        address: EditorAddress,
+        msg: EditorMsg,
+    ) -> Task<Message> {
         match msg {
             EditorMsg::CloseEditor => {
                 let synthetic = address.synthetic_tab_path();
@@ -201,5 +205,4 @@ impl Signex {
             }
         }
     }
-
 }

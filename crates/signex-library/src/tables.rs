@@ -137,10 +137,13 @@ pub fn read_table(path: &Path) -> Result<Vec<ComponentRow>, LibraryError> {
 
 /// Replace the contents of `path` with `rows`. Creates parent directories
 /// if they don't exist.
+///
+/// Crash-safe: the bytes land via [`signex_types::atomic_io::atomic_write`]
+/// (temp file + fsync + rename), so a crash or power loss mid-save leaves
+/// either the previous table or the new one — never a truncated file. Every
+/// mutator here ([`append_row`], [`delete_row`], [`update_row`]) rewrites the
+/// whole table through this one funnel, so they inherit the guarantee.
 pub fn write_table(path: &Path, rows: &[ComponentRow]) -> Result<(), LibraryError> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
     let mut wtr = WriterBuilder::new()
         .delimiter(b'\t')
         .quote_style(QuoteStyle::Necessary)
@@ -154,7 +157,7 @@ pub fn write_table(path: &Path, rows: &[ComponentRow]) -> Result<(), LibraryErro
     let bytes = wtr
         .into_inner()
         .map_err(|e| LibraryError::Backend(format!("flush table: {e}")))?;
-    std::fs::write(path, bytes)?;
+    signex_types::atomic_io::atomic_write(path, &bytes)?;
     Ok(())
 }
 
@@ -289,11 +292,22 @@ fn hash_from_cell(s: &str) -> Result<[u8; 32], LibraryError> {
     if s.is_empty() {
         return Ok([0u8; 32]);
     }
-    if s.len() != 64 {
+    // Validate on bytes before slicing: `s.len()` is a BYTE count, so a
+    // hand-edited cell of 61×'a' + '€' is 64 bytes and clears a naive
+    // length guard, then `&s[60..62]` splits the 3-byte '€' and panics.
+    // Requiring every byte to be ASCII hex makes each `i*2` offset a
+    // provable char boundary.
+    let bytes = s.as_bytes();
+    if bytes.len() != 64 {
         return Err(LibraryError::Backend(format!(
             "content_hash must be 64 hex chars, got {}",
-            s.len()
+            bytes.len()
         )));
+    }
+    if !bytes.iter().all(u8::is_ascii_hexdigit) {
+        return Err(LibraryError::Backend(
+            "content_hash must be 64 hex chars".to_string(),
+        ));
     }
     let mut out = [0u8; 32];
     for (i, byte) in out.iter_mut().enumerate() {
@@ -454,6 +468,68 @@ mod tests {
     use chrono::{Duration, TimeZone};
     use uuid::Uuid;
 
+    /// True if `dir` contains a leftover atomic-write temp sibling
+    /// (`*.tmp`). `atomic_write` picks a unique per-writer name (#416),
+    /// so tests must scan for any match instead of a fixed name.
+    fn has_stray_tmp(dir: &std::path::Path) -> bool {
+        std::fs::read_dir(dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .any(|entry| entry.path().extension().is_some_and(|ext| ext == "tmp"))
+    }
+
+    /// RAII guard: while alive, `dir` rejects new-file creation, so
+    /// `atomic_write`'s `File::create(&tmp)` fails deterministically
+    /// regardless of the unique per-writer temp name it picks (#416).
+    /// Restores permissions on drop.
+    struct DenyNewFiles {
+        dir: std::path::PathBuf,
+    }
+
+    impl DenyNewFiles {
+        fn on(dir: &std::path::Path) -> Self {
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o555))
+                    .expect("chmod dir read-only for test");
+            }
+            #[cfg(windows)]
+            {
+                let user = std::env::var("USERNAME").unwrap_or_else(|_| "Everyone".into());
+                let status = std::process::Command::new("icacls")
+                    .arg(dir)
+                    .arg("/deny")
+                    .arg(format!("{user}:(WD)"))
+                    .status()
+                    .expect("run icacls /deny for test");
+                assert!(status.success(), "icacls /deny failed");
+            }
+            Self {
+                dir: dir.to_path_buf(),
+            }
+        }
+    }
+
+    impl Drop for DenyNewFiles {
+        fn drop(&mut self) {
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(&self.dir, std::fs::Permissions::from_mode(0o755));
+            }
+            #[cfg(windows)]
+            {
+                let user = std::env::var("USERNAME").unwrap_or_else(|_| "Everyone".into());
+                let _ = std::process::Command::new("icacls")
+                    .arg(&self.dir)
+                    .arg("/remove:d")
+                    .arg(&user)
+                    .status();
+            }
+        }
+    }
+
     fn mk_row(internal_pn: &str, class: &str) -> ComponentRow {
         let lib = Uuid::nil();
         // Anchor timestamps so equality checks aren't flaky under
@@ -505,16 +581,42 @@ mod tests {
         assert!(rows.is_empty());
     }
 
-    /// `append_row` honours an empty file, then keeps growing it.
+    /// `append_row` honours an empty file, then keeps growing it — and
+    /// leaves no stranded `.tmp` sibling behind.
     #[test]
     fn append_row_grows_the_file() {
-        let tmp = tempfile::NamedTempFile::new().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("table.tsv");
         let a = mk_row("R1", "resistor");
         let b = mk_row("R2", "resistor");
-        append_row(tmp.path(), &a).unwrap();
-        append_row(tmp.path(), &b).unwrap();
-        let back = read_table(tmp.path()).unwrap();
+        append_row(&path, &a).unwrap();
+        append_row(&path, &b).unwrap();
+        let back = read_table(&path).unwrap();
         assert_eq!(back, vec![a, b]);
+        assert!(!has_stray_tmp(dir.path()));
+    }
+
+    /// `write_table` must go through `atomic_write`, not `fs::write`:
+    /// a failed save leaves the previous table fully intact.
+    ///
+    /// Discriminator: denying new-file creation in the destination's
+    /// parent directory makes `atomic_write`'s `File::create(&tmp)` fail
+    /// before it can touch the destination, regardless of the unique
+    /// per-writer temp name it picks (#416). A plain `fs::write` would
+    /// ignore that and clobber the old rows — so this test fails on a
+    /// revert.
+    #[test]
+    fn write_table_is_atomic_and_preserves_original_on_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("table.tsv");
+        let original = vec![mk_row("R1", "resistor"), mk_row("R2", "resistor")];
+        write_table(&path, &original).unwrap();
+
+        let _deny = DenyNewFiles::on(dir.path());
+        let err = write_table(&path, &[mk_row("C1", "capacitor")]).unwrap_err();
+        assert!(matches!(err, LibraryError::Io(_)), "got {err:?}");
+
+        assert_eq!(read_table(&path).unwrap(), original);
     }
 
     /// `delete_row` removes the matching id, leaves others alone.
@@ -582,6 +684,22 @@ mod tests {
         let s = hash_to_cell(&h);
         let back = hash_from_cell(&s).unwrap();
         assert_eq!(h, back);
+    }
+
+    /// A 64-BYTE cell whose bytes are not all ASCII hex is a recoverable
+    /// error, never a char-boundary panic.
+    #[test]
+    fn hash_from_cell_rejects_multibyte_cell() {
+        let cell = format!("{}{}", "a".repeat(61), '€');
+        assert_eq!(cell.len(), 64, "cell must be 64 BYTES to reach the slicing");
+        assert!(matches!(
+            hash_from_cell(&cell),
+            Err(LibraryError::Backend(_))
+        ));
+        assert!(matches!(
+            hash_from_cell(&"z".repeat(64)),
+            Err(LibraryError::Backend(_))
+        ));
     }
 
     #[test]

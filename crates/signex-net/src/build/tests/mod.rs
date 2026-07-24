@@ -1,5 +1,7 @@
 //! Tests for single-sheet netlist building.
 use super::*;
+
+mod wire_order;
 use signex_types::schematic::{
     Junction, Label, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Symbol, Wire,
 };
@@ -48,6 +50,7 @@ fn junction(pos: Point) -> Junction {
         uuid: Uuid::nil(),
         position: pos,
         diameter: 0.0,
+        minted: false,
     }
 }
 
@@ -406,6 +409,7 @@ fn net_records_its_wire_and_junction_membership() {
         uuid: jn,
         position: pt(5.0, 0.0),
         diameter: 0.0,
+        minted: false,
     });
     add_lib(
         &mut sheet,
@@ -646,6 +650,7 @@ fn flood_follows_a_t_junction_and_paints_the_dot() {
         uuid: j,
         position: pt(5.0, 0.0),
         diameter: 0.0,
+        minted: false,
     });
 
     let mut flood = flood_net_elements(&sheet, h).expect("clicked wire exists");
@@ -671,6 +676,33 @@ fn flood_respects_micron_precision_and_does_not_leak() {
 
     let flood = flood_net_elements(&sheet, a).expect("clicked wire exists");
     assert_eq!(flood.wires, vec![a], "must not leak into the 4 µm-away net");
+}
+
+#[test]
+fn flood_follows_a_same_name_label_merge() {
+    // Regression for #404. Two physically disjoint wires, each carrying the
+    // Net label `VCC`: `build_netlist` returns ONE net. A flood that derives
+    // only the physical connectivity painted the clicked wire alone, so the
+    // highlight contradicted the netlist it claims to colour.
+    let mut sheet = empty_sheet();
+    let a = Uuid::from_u128(30);
+    let b = Uuid::from_u128(31);
+    sheet.wires.push(wire_id(pt(0.0, 0.0), pt(10.0, 0.0), a));
+    sheet.wires.push(wire_id(pt(50.0, 0.0), pt(60.0, 0.0), b));
+    sheet
+        .labels
+        .push(label("VCC", pt(5.0, 0.0), LabelType::Net));
+    sheet
+        .labels
+        .push(label("VCC", pt(55.0, 0.0), LabelType::Net));
+
+    let mut flood = flood_net_elements(&sheet, a).expect("clicked wire exists");
+    flood.wires.sort();
+    assert_eq!(
+        flood.wires,
+        vec![a, b],
+        "the highlight must paint the whole net the netlist derives"
+    );
 }
 
 #[test]
@@ -700,4 +732,59 @@ fn net_numbering_is_deterministic() {
     assert_eq!(a.nets.len(), 2);
     assert_eq!(a.nets[0].id, NetId(1));
     assert_eq!(a.nets[1].id, NetId(2));
+}
+
+#[test]
+fn terminals_order_designators_and_pins_naturally() {
+    // Ten resistors sit on one wire. `str::cmp` would list R1, R10, R2…;
+    // an exported netlist has to read R1, R2, … R10 like every other
+    // reference-ordered list in the app. The two-pin part additionally
+    // proves the pin tiebreak is natural too — pin 10 after pin 2.
+    let mut sheet = empty_sheet();
+    sheet.wires.push(wire(pt(0.0, 0.0), pt(100.0, 0.0)));
+    add_lib(
+        &mut sheet,
+        "R",
+        vec![lib_pin("1", pt(0.0, 0.0), PinDirection::Passive)],
+    );
+    add_lib(
+        &mut sheet,
+        "MULTI",
+        vec![
+            lib_pin("2", pt(0.0, 0.0), PinDirection::Passive),
+            lib_pin("10", pt(0.0, 0.0), PinDirection::Passive),
+        ],
+    );
+    for n in 1..=10 {
+        // Mid-span pins need a junction to count as terminals.
+        sheet.junctions.push(junction(pt(n as f64, 0.0)));
+        place(&mut sheet, &format!("R{n}"), "R", pt(n as f64, 0.0));
+    }
+    sheet.junctions.push(junction(pt(50.0, 0.0)));
+    place(&mut sheet, "U1", "MULTI", pt(50.0, 0.0));
+
+    let netlist = build_netlist(&sheet);
+    assert_eq!(netlist.nets.len(), 1);
+    let order: Vec<(&str, &str)> = netlist.nets[0]
+        .terminals
+        .iter()
+        .map(|t| (t.reference.as_str(), t.pin.as_str()))
+        .collect();
+    assert_eq!(
+        order,
+        vec![
+            ("R1", "1"),
+            ("R2", "1"),
+            ("R3", "1"),
+            ("R4", "1"),
+            ("R5", "1"),
+            ("R6", "1"),
+            ("R7", "1"),
+            ("R8", "1"),
+            ("R9", "1"),
+            ("R10", "1"),
+            ("U1", "2"),
+            ("U1", "10"),
+        ]
+    );
 }

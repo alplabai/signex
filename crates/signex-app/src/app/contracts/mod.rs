@@ -20,7 +20,6 @@ pub enum DragTarget {
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum Message {
     Menu(MenuMessage),
     Tool(ToolMessage),
@@ -170,7 +169,6 @@ pub enum Message {
     EscapePressed,
     Noop,
 }
-
 
 mod dialogs;
 mod messages;

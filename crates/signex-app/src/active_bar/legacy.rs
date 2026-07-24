@@ -149,4 +149,3 @@ fn sep(sep_c: Color) -> Element<'static, ActiveBarMsg> {
         })
         .into()
 }
-

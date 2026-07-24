@@ -130,7 +130,6 @@ pub struct SchematicSnapshot {
     pub wire_color_overrides: HashMap<u64, [f32; 4]>,
 }
 
-
 mod emit;
 use emit::*;
 

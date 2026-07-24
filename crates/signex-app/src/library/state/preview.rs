@@ -252,6 +252,10 @@ pub struct DistributorSettings {
     pub mouser_status: Option<String>,
     pub mouser_in_flight: bool,
     pub preferred_order: Vec<DistributorSource>,
+    /// Inline error from the last preferred-order save, `None` when the
+    /// last save succeeded. Without this a failed write was invisible
+    /// until the user found the order reverted on next launch.
+    pub preferred_order_error: Option<String>,
 }
 
 impl Default for DistributorSettings {
@@ -271,6 +275,7 @@ impl Default for DistributorSettings {
                 DistributorSource::Lcsc,
                 DistributorSource::Jlcpcb,
             ],
+            preferred_order_error: None,
         }
     }
 }
@@ -278,4 +283,3 @@ impl Default for DistributorSettings {
 // `ComponentPreviewState::from_row` is the canonical builder; the legacy
 // `from_head` helper that constructed an editor from a `Component` chain
 // is gone with the v0.9-refactor-2 DBLib model.
-

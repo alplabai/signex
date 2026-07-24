@@ -37,9 +37,9 @@
 //! the view-side overlay flow renders it from
 //! `app/view/mod.rs::collect_overlays`. The overlay predicate in the
 //! same file gates whether `collect_overlays` runs at all (see the
-//! `[needs_overlay predicate gates modal rendering]` invariant in
-//! `.claude/CLAUDE.md`'s memory notes — without that flag the modal
-//! just doesn't paint and clicks vanish).
+//! `[needs_overlay predicate gates modal rendering]` invariant —
+//! without that flag the modal just doesn't paint and clicks
+//! vanish).
 
 use std::path::PathBuf;
 

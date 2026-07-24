@@ -3,5 +3,4 @@
 
 use super::CommandMetadata;
 
-pub(super) const PCB: &[CommandMetadata] = &[
-];
+pub(super) const PCB: &[CommandMetadata] = &[];

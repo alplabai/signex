@@ -1,7 +1,7 @@
 //! Primitive read/write + git-commit inherent methods on `LocalGitAdapter`.
 
-use super::*;
 use super::helpers::*;
+use super::*;
 
 impl LocalGitAdapter {
     fn primitive_dir(&self, kind: PrimitiveKind) -> PathBuf {
@@ -337,7 +337,11 @@ impl LocalGitAdapter {
         Ok(out)
     }
 
-    pub(super) fn save_symbol_in_container(&self, sym: Symbol, message: &str) -> Result<(), LibraryError> {
+    pub(super) fn save_symbol_in_container(
+        &self,
+        sym: Symbol,
+        message: &str,
+    ) -> Result<(), LibraryError> {
         let dir = self.primitive_dir(PrimitiveKind::Symbol);
         fs::create_dir_all(&dir)?;
 

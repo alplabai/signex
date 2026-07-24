@@ -56,5 +56,5 @@ pub(crate) const MODAL_CLOSE_X_ICON: f32 = 14.0;
 /// Hover background for the close-X (Windows-native destructive red).
 pub(crate) const MODAL_CLOSE_X_HOVER: Color = Color::from_rgba(0.78, 0.22, 0.22, 1.0);
 
-pub(in crate::app::view) use widgets::{draggable_header, wrap_modal};
 pub(crate) use widgets::{close_x_button, detached_header};
+pub(in crate::app::view) use widgets::{draggable_header, wrap_modal};

@@ -24,6 +24,12 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
                 FootprintContextTarget::Pad(idx) => {
                     if editor.state.selected_pad != Some(idx) {
                         editor.state.selected_pad = Some(idx);
+                        // #146 — a context click that changes the primary
+                        // selection must drop stale multi-select extras;
+                        // otherwise a later menu action (Align, Delete…)
+                        // would silently act on pads the user no longer
+                        // sees selected.
+                        editor.state.selected_pads_extra.clear();
                         editor.state.selected_silk_f = None;
                         editor.canvas_cache.clear();
                     }
@@ -32,6 +38,10 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
                     if editor.state.selected_silk_f != Some(idx) {
                         editor.state.selected_silk_f = Some(idx);
                         editor.state.selected_pad = None;
+                        // #146 — selecting a silk item abandons any pad
+                        // selection; clear the pad extras too so they
+                        // don't linger as an invisible multi-selection.
+                        editor.state.selected_pads_extra.clear();
                         editor.canvas_cache.clear();
                     }
                 }
@@ -58,15 +68,14 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
             use crate::library::editor::footprint::state::FootprintContextAction as Act;
             match action {
                 Act::SelectAllPads => {
-                    // Existing semantics: SelectAll only meaningful
-                    // when there's at least one pad. With multi-
-                    // select not yet implemented, "Select All" maps
-                    // to selecting the first pad as a stand-in until
-                    // the v0.26 multi-pad selection lands. The dock
-                    // SelectAll path on the active bar already does
-                    // the right thing — defer to it once it grows.
+                    // #146 — mirror the active-bar Select All model: pad 0
+                    // becomes the primary selection and every remaining
+                    // pad lands in `selected_pads_extra`, so context-menu
+                    // Select All and the active-bar action select the same
+                    // set (previously this only picked pad 0).
                     if !editor.state.pads.is_empty() {
                         editor.state.selected_pad = Some(0);
+                        editor.state.selected_pads_extra = (1..editor.state.pads.len()).collect();
                     }
                     editor.state.context_menu = None;
                     editor.canvas_cache.clear();

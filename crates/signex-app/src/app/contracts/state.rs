@@ -1,6 +1,5 @@
 //! Context actions + modal/dialog state structs.
 
-
 /// R / G / B channel selector for the custom net-colour picker inputs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Channel {
@@ -10,7 +9,6 @@ pub enum Channel {
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum ContextAction {
     Copy,
     Cut,

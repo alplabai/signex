@@ -105,13 +105,8 @@ pub(super) fn bbox_corner_points(
     plane_id: PlaneId,
     pad: &EditorPad,
 ) -> [SketchEntityId; 4] {
-    let (xmin, ymin, xmax, ymax) = pad.bbox_mm();
-    [
-        push_point(sketch, plane_id, xmax, ymin), // ne
-        push_point(sketch, plane_id, xmax, ymax), // se
-        push_point(sketch, plane_id, xmin, ymax), // sw
-        push_point(sketch, plane_id, xmin, ymin), // nw
-    ]
+    let c = pad.rotated_corners_mm(); // [ne, se, sw, nw]
+    std::array::from_fn(|i| push_point(sketch, plane_id, c[i].0, c[i].1))
 }
 
 /// Set an existing Point entity's coordinates by ID. Returns `true`

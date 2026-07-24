@@ -1447,3 +1447,71 @@ fn placement_input_rounded_rect_commits_typed_size_and_radius() {
         "corner radius should be the typed 1.5 mm; got {arc_r}"
     );
 }
+
+/// Issue #180 — complementary user-visible coverage for the standalone
+/// canvas-to-dispatcher routing fix (`translate_footprint_canvas_msg`
+/// in `standalone/footprint.rs`). The in-crate mapping test living
+/// alongside that function is what actually catches the routing bug —
+/// it proves the bridge no longer discards `SketchPlacementInputTab`
+/// into a no-op `Save`. This test complements it (not replaces it) by
+/// proving what a user sees once the message correctly reaches the
+/// dispatcher: Tab advances the focused placement-input field instead
+/// of silently doing nothing.
+#[test]
+fn issue_180_sketch_placement_tab_advances_placement_input_kind() {
+    use signex_app::app::FootprintEditorState;
+    use signex_app::library::editor::footprint::state::{
+        EditorMode, PlacementInput, PlacementInputKind, SketchTool, ToolPending,
+    };
+    use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
+    use signex_library::{Footprint, FootprintFile};
+    let tmp = TempDir::new().expect("tempdir");
+    let path = tmp.path().join("issue-180-tab.snxfpt");
+    fs::write(&path, b"{}").expect("write .snxfpt placeholder");
+    let (mut app, _initial_task) = Signex::new();
+    let fp = Footprint::empty("issue-180-fixture");
+    let file = FootprintFile::from_footprint(fp);
+    let mut editor = FootprintEditorState::new(path.clone(), file);
+    editor.state.mode = EditorMode::Sketch;
+    editor.state.active_tool = SketchTool::Line;
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+    // Anchor the first endpoint so a placement-input field is live.
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchToolClick {
+            x_mm: 0.0,
+            y_mm: 0.0,
+            snap_id: None,
+        }),
+    }));
+    {
+        let editor = app.document_state.footprint_editors.get_mut(&path).unwrap();
+        assert!(
+            matches!(editor.state.tool_pending, ToolPending::LineFirst { .. }),
+            "sanity: first click arms LineFirst"
+        );
+        editor.state.placement_input = Some(PlacementInput {
+            buffer: "10".into(),
+            kind: PlacementInputKind::LineLength,
+        });
+        editor.state.placement_input_others.clear();
+    }
+
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchPlacementInputTab),
+    }));
+
+    let kind = app.document_state.footprint_editors[&path]
+        .state
+        .placement_input
+        .as_ref()
+        .map(|p| p.kind);
+    assert_eq!(
+        kind,
+        Some(PlacementInputKind::LineAngle),
+        "Tab must advance the focused placement-input field, not no-op"
+    );
+}

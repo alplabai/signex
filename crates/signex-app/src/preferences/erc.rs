@@ -22,6 +22,7 @@ pub(super) fn content_erc<'a>(
         RuleKind::MissingPowerFlag,
         RuleKind::PowerPortShort,
         RuleKind::SymbolOutsideSheet,
+        RuleKind::AmbiguousLabelAnchor,
     ];
     const CHOICES: &[Severity] = &[
         Severity::Error,

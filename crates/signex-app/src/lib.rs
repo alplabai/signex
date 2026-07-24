@@ -14,6 +14,7 @@ pub mod active_bar;
 pub mod app;
 pub mod canvas;
 pub mod chrome;
+pub mod config_root;
 pub mod diagnostics;
 pub mod dock;
 pub mod feature_flags;
@@ -35,5 +36,7 @@ pub mod schematic_shader;
 pub mod status_bar;
 pub mod styles;
 pub mod tab_bar;
+#[cfg(test)]
+pub(crate) mod test_support;
 pub mod toolbar;
 pub mod undo;

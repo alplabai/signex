@@ -1,7 +1,5 @@
 //! History restore + reload-from-disk handlers. Split from `handlers/document_files.rs`.
 
-
-
 use super::super::super::*;
 
 impl Signex {
@@ -284,5 +282,4 @@ impl Signex {
             }
         }
     }
-
 }

@@ -1,4 +1,4 @@
-//! 6 built-in themes for the Signex EDA application.
+//! Built-in themes for the Signex EDA application.
 
 use serde::{Deserialize, Serialize};
 
@@ -56,7 +56,7 @@ pub enum ThemeId {
 }
 
 impl ThemeId {
-    /// All 6 built-in themes (excludes Custom).
+    /// All built-in themes (excludes Custom).
     pub const BUILTINS: &[ThemeId] = &[
         ThemeId::Signex,
         ThemeId::Alplab,

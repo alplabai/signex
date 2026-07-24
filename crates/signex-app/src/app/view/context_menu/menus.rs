@@ -321,7 +321,11 @@ pub(super) fn canvas_menu_entries(
         v.push(DropdownEntry::Separator);
     }
 
-    v.push(dd_disabled(Some(ic::icon_dd_comment(tid)), "Comment...", None));
+    v.push(dd_disabled(
+        Some(ic::icon_dd_comment(tid)),
+        "Comment...",
+        None,
+    ));
     v.push(dd_disabled(
         Some(ic::icon_dd_pin_mapping(tid)),
         "Pin Mapping...",

@@ -142,9 +142,9 @@ fn message_for_keymap_command(command: &AppCommandId) -> Option<Message> {
         "footprint_mode_pads" => Message::FootprintModeShortcut(EditorMode::Normal),
         "footprint_mode_sketch" => Message::FootprintModeShortcut(EditorMode::Sketch),
         "footprint_mode_view_3d" => Message::FootprintModeShortcut(EditorMode::View3d),
-        "force_annotate_all_schematics" => {
-            Message::Annotate(AnnotateMsg::Run(signex_engine::AnnotateMode::ResetAndRenumber))
-        }
+        "force_annotate_all_schematics" => Message::Annotate(AnnotateMsg::Run(
+            signex_engine::AnnotateMode::ResetAndRenumber,
+        )),
         // Visual-flip semantics (preserved from the pre-keymap hardcoded map):
         // the `X` key = a horizontal (left-right) flip = internal MirrorSelectedY,
         // and `Y` = vertical (top-bottom) flip = MirrorSelectedX. The presets

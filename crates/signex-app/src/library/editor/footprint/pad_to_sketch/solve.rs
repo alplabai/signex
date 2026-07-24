@@ -149,9 +149,13 @@ pub fn mirror_solve_to_chamfer_anchors(
             ),
         ];
 
+        // Derived in the pad frame off `bbox_mm`; every anchor goes back
+        // out through the pad's rotation before it is written, or a
+        // solver run silently un-rotates geometry that `mint` placed
+        // turned.
         for (key1, key2, pos1, pos2) in corners {
-            move_anchor_via_sidecar(pad, sketch, key1, pos1);
-            move_anchor_via_sidecar(pad, sketch, key2, pos2);
+            move_anchor_via_sidecar(pad, sketch, key1, pad.local_to_world_mm(pos1.0, pos1.1));
+            move_anchor_via_sidecar(pad, sketch, key2, pad.local_to_world_mm(pos2.0, pos2.1));
         }
     }
 }
@@ -193,13 +197,18 @@ pub fn mirror_solve_to_round_rect_geometry(
 
         // Per-corner expected positions for the Arc's three Point refs
         // given a resolved radius `r`. Order matches mint's arc_keys.
+        // Pad-frame positions, taken back out through `rotation_deg` —
+        // `mint` places these turned, so re-deriving them axis-aligned
+        // here would un-rotate the arcs on the next solve.
         let positions = |r: f64| -> [((f64, f64), (f64, f64), (f64, f64)); 4] {
+            let w = |p: (f64, f64)| pad.local_to_world_mm(p.0, p.1);
             [
                 ((xmax - r, ymin + r), (xmax - r, ymin), (xmax, ymin + r)), // NE
                 ((xmax - r, ymax - r), (xmax, ymax - r), (xmax - r, ymax)), // SE
                 ((xmin + r, ymax - r), (xmin + r, ymax), (xmin, ymax - r)), // SW
                 ((xmin + r, ymin + r), (xmin, ymin + r), (xmin + r, ymin)), // NW
             ]
+            .map(|(c, s, e)| (w(c), w(s), w(e)))
         };
 
         for (idx, (arc_key, per_corner_key)) in
@@ -272,6 +281,8 @@ pub fn mirror_solve_to_oval_geometry(
         let short_axis = width_mm.min(height_mm);
         let inset = (long_axis - short_axis) / 2.0;
 
+        // Pad-frame → world on every derived point; see the chamfer /
+        // round-rect mirrors above.
         let anchor_positions: [(f64, f64); 4] = if wide {
             [
                 (xmin + inset, ymin),
@@ -286,7 +297,8 @@ pub fn mirror_solve_to_oval_geometry(
                 (xmin, ymax - inset),
                 (xmin, ymin + inset),
             ]
-        };
+        }
+        .map(|(x, y)| pad.local_to_world_mm(x, y));
         let centre_positions: [(f64, f64); 2] = if wide {
             [
                 (xmin + inset, (ymin + ymax) / 2.0),
@@ -297,7 +309,8 @@ pub fn mirror_solve_to_oval_geometry(
                 ((xmin + xmax) / 2.0, ymin + inset),
                 ((xmin + xmax) / 2.0, ymax - inset),
             ]
-        };
+        }
+        .map(|(x, y)| pad.local_to_world_mm(x, y));
 
         for (idx, target) in anchor_positions.iter().enumerate() {
             move_anchor_via_sidecar(pad, sketch, &format!("oval_anchor_{idx}"), *target);

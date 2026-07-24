@@ -321,13 +321,41 @@ fn property_variant_kind(key: &str) -> Option<VariantFieldKind> {
     None
 }
 
+/// Rank a parsed fit-state field so Fitted always outranks DNP on a tie.
+///
+/// Shared by every path that must arbitrate more than one candidate field for
+/// the same symbol, so a Fitted-vs-DNP conflict resolves the same way
+/// regardless of which path resolved it — encoding the precedence twice is
+/// exactly how the base `custom_properties` path and the variant `fields`
+/// path drifted apart.
+fn rank_fitted_over_dnp(kind: VariantFieldKind, parsed: bool) -> (u8, bool) {
+    match kind {
+        VariantFieldKind::Fitted => (0, parsed),
+        VariantFieldKind::Dnp => (1, !parsed),
+    }
+}
+
+/// Case-insensitive field lookup, deterministic on a case collision.
+///
+/// `fields` is a `HashMap`, so naively taking the first case-insensitive
+/// match via `.iter().find()` depends on hash-iteration order — a symbol
+/// carrying both `Fitted` and `fitted` with contradictory values could
+/// resolve either way, run to run. Prefer the exact-case match when one
+/// exists (the unambiguous, intended lookup); otherwise fall back to the
+/// case-insensitive match with the lexicographically smallest key, which is
+/// a pure function of the map's contents rather than of the allocator's
+/// `RandomState` seed.
 fn field_value_ci<'a>(
     fields: &'a std::collections::HashMap<String, String>,
     key: &str,
 ) -> Option<&'a str> {
+    if let Some(exact) = fields.get(key) {
+        return Some(exact.as_str());
+    }
     fields
         .iter()
-        .find(|(candidate, _)| candidate.eq_ignore_ascii_case(key))
+        .filter(|(candidate, _)| candidate.eq_ignore_ascii_case(key))
+        .min_by_key(|(candidate, _)| candidate.as_str())
         .map(|(_, value)| value.as_str())
 }
 
@@ -365,20 +393,50 @@ fn resolve_base_variant_fitted(symbol: &signex_types::schematic::Symbol) -> Opti
         return parse_bool_field(raw).map(|value| !value);
     }
 
-    for property in &symbol.custom_properties {
-        let Some(kind) = property_variant_kind(&property.key) else {
-            continue;
-        };
-        let Some(parsed) = parse_bool_field(&property.value) else {
-            continue;
-        };
-        return Some(match kind {
-            VariantFieldKind::Fitted => parsed,
-            VariantFieldKind::Dnp => !parsed,
-        });
-    }
+    // `custom_properties` is a `Vec`, so its order is already deterministic
+    // per file — but a first-match return still lets a symbol that lists DNP
+    // before Fitted resolve as DNP here and as Fitted via `field_value_ci`
+    // (which checks "Fitted" ahead of "DNP" explicitly). Rank every
+    // candidate with the same Fitted-over-DNP precedence the variant path
+    // uses so the two paths never disagree on the same symbol.
+    symbol
+        .custom_properties
+        .iter()
+        .filter_map(|property| {
+            let kind = property_variant_kind(&property.key)?;
+            let parsed = parse_bool_field(&property.value)?;
+            Some(rank_fitted_over_dnp(kind, parsed))
+        })
+        .min_by_key(|(rank, _)| *rank)
+        .map(|(_, fitted)| fitted)
+}
 
-    None
+/// Fit state for `active_variant` taken from `symbol.fields`.
+///
+/// `fields` is a `HashMap`, so a symbol carrying contradictory entries
+/// (`Fitted@LITE=yes` alongside `DNP@LITE=yes`) would resolve by hash order and
+/// export a different fit state from one run to the next. Resolve with the same
+/// precedence `resolve_base_variant_fitted` applies — Fitted ahead of DNP — and
+/// break any remaining tie on the field key, so the answer is a pure function
+/// of the file rather than of the allocator.
+fn resolve_variant_fitted_from_fields(
+    symbol: &signex_types::schematic::Symbol,
+    active_variant: &str,
+) -> Option<bool> {
+    symbol
+        .fields
+        .iter()
+        .filter_map(|(key, value)| {
+            let (variant_name, kind) = parse_variant_field_key(key)?;
+            if !variant_name.eq_ignore_ascii_case(active_variant) {
+                return None;
+            }
+            let parsed = parse_bool_field(value)?;
+            let (rank, fitted) = rank_fitted_over_dnp(kind, parsed);
+            Some(((rank, key.as_str()), fitted))
+        })
+        .min_by_key(|(precedence, _)| *precedence)
+        .map(|(_, fitted)| fitted)
 }
 
 fn resolve_variant_fitted(
@@ -393,16 +451,8 @@ fn resolve_variant_fitted(
             {
                 return Some(property_override);
             }
-            for (key, value) in &symbol.fields {
-                if let Some((variant_name, kind)) = parse_variant_field_key(key)
-                    && variant_name.eq_ignore_ascii_case(active_variant)
-                {
-                    let parsed = parse_bool_field(value)?;
-                    return Some(match kind {
-                        VariantFieldKind::Fitted => parsed,
-                        VariantFieldKind::Dnp => !parsed,
-                    });
-                }
+            if let Some(from_fields) = resolve_variant_fitted_from_fields(symbol, active_variant) {
+                return Some(from_fields);
             }
         }
     }
@@ -506,6 +556,106 @@ mod tests {
         assert_eq!(resolve_variant_fitted(&symbol, Some("LITE")), Some(false));
         assert_eq!(resolve_variant_fitted(&symbol, Some("PRO")), Some(true));
         assert_eq!(resolve_variant_fitted(&symbol, None), Some(true));
+    }
+
+    #[test]
+    fn variant_fitted_falls_back_to_base_when_variant_value_unparseable() {
+        let mut symbol = test_symbol();
+        symbol
+            .fields
+            .insert("Fitted@LITE".to_string(), "maybe".to_string());
+        symbol
+            .fields
+            .insert("Fitted".to_string(), "yes".to_string());
+
+        assert_eq!(resolve_variant_fitted(&symbol, Some("LITE")), Some(true));
+
+        // A parseable sibling variant field must still be reached after the
+        // unparseable one is skipped.
+        symbol
+            .fields
+            .insert("DNP@LITE".to_string(), "no".to_string());
+        assert_eq!(resolve_variant_fitted(&symbol, Some("LITE")), Some(true));
+    }
+
+    /// `symbol.fields` is a `HashMap`, so a symbol carrying contradictory
+    /// variant entries used to resolve by whichever key the allocator handed
+    /// over first — the same file could export a different fit state run to
+    /// run. Fitted wins over DNP, deterministically. Rebuilt per iteration
+    /// because `RandomState` re-seeds per map, not per process.
+    #[test]
+    fn contradictory_variant_fields_resolve_deterministically() {
+        for _ in 0..64 {
+            let mut symbol = test_symbol();
+            symbol
+                .fields
+                .insert("Fitted@LITE".to_string(), "no".to_string());
+            symbol
+                .fields
+                .insert("DNP@LITE".to_string(), "no".to_string());
+            // Fitted@LITE=no → not fitted; DNP@LITE=no → fitted. Fitted wins.
+            assert_eq!(resolve_variant_fitted(&symbol, Some("LITE")), Some(false));
+        }
+    }
+
+    /// A symbol carrying both `Fitted` and `fitted` used to resolve by
+    /// whichever key the `HashMap` handed back first. The exact-case match
+    /// must win, deterministically. Rebuilt per iteration because
+    /// `RandomState` re-seeds per map, not per process.
+    #[test]
+    fn field_value_ci_prefers_exact_case_on_collision() {
+        for _ in 0..64 {
+            let mut fields = std::collections::HashMap::new();
+            fields.insert("Fitted".to_string(), "yes".to_string());
+            fields.insert("fitted".to_string(), "no".to_string());
+            assert_eq!(field_value_ci(&fields, "Fitted"), Some("yes"));
+        }
+    }
+
+    /// With no exact-case match, the fallback must still be a pure function
+    /// of the map's contents (lexicographically smallest key), not of hash
+    /// order.
+    #[test]
+    fn field_value_ci_falls_back_to_smallest_key_without_exact_match() {
+        for _ in 0..64 {
+            let mut fields = std::collections::HashMap::new();
+            fields.insert("FITTED".to_string(), "no".to_string());
+            fields.insert("fitted".to_string(), "yes".to_string());
+            assert_eq!(field_value_ci(&fields, "Fitted"), Some("no"));
+        }
+    }
+
+    /// `resolve_base_variant_fitted`'s `custom_properties` loop used to return
+    /// on the first parseable match with no ranking, so a symbol listing DNP
+    /// before Fitted resolved as DNP — disagreeing with the variant path,
+    /// which always ranks Fitted ahead of DNP. Both orderings must now agree.
+    #[test]
+    fn base_custom_properties_prefers_fitted_over_dnp_regardless_of_order() {
+        let mut dnp_first = test_symbol();
+        dnp_first.custom_properties.push(SchematicProperty {
+            key: "DNP".to_string(),
+            value: "no".to_string(), // DNP=no -> fitted
+            ..Default::default()
+        });
+        dnp_first.custom_properties.push(SchematicProperty {
+            key: "Fitted".to_string(),
+            value: "no".to_string(), // Fitted=no -> not fitted
+            ..Default::default()
+        });
+        assert_eq!(resolve_variant_fitted(&dnp_first, None), Some(false));
+
+        let mut fitted_first = test_symbol();
+        fitted_first.custom_properties.push(SchematicProperty {
+            key: "Fitted".to_string(),
+            value: "no".to_string(),
+            ..Default::default()
+        });
+        fitted_first.custom_properties.push(SchematicProperty {
+            key: "DNP".to_string(),
+            value: "no".to_string(),
+            ..Default::default()
+        });
+        assert_eq!(resolve_variant_fitted(&fitted_first, None), Some(false));
     }
 
     #[test]

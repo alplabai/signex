@@ -16,6 +16,7 @@
 //! - [`mode`] — `EditorMode`, `FpActiveBarMenu`, `PadStackTab`.
 //! - [`context_menu`] — right-click menu state types.
 //! - [`placement`] — `PlacementInput*`, `PlaceArcPending`.
+//! - [`selection`] — `selected_pad_indices`, the shared selection union.
 //! - [`tool`] — `PadsTool`, `SketchTool`, `ToolPending`.
 //! - [`selection_filter`] — `SelectionFilter`, `SelectionFilterKind`.
 //! - [`snap_options`] — `SnapOptions`, `GridDef`, `Guide*`, `SnapSubTab`,
@@ -25,6 +26,7 @@ pub mod context_menu;
 pub mod mode;
 pub mod pad;
 pub mod placement;
+pub mod selection;
 pub mod selection_filter;
 pub mod snap_options;
 pub mod tool;
@@ -71,6 +73,29 @@ impl MoveByModal {
             self.dy_buf.trim().parse().ok()?,
         ))
     }
+}
+
+/// #370 — "Align…" dialog state. `None` on
+/// [`FootprintEditorState::align_modal`] means the modal is closed.
+///
+/// The dialog is a pure composition shell over the existing
+/// [`AlignOp`] variants — it introduces no new geometry. The user picks
+/// at most one horizontal op and at most one vertical op (each
+/// `None` = "leave that axis untouched"); Confirm applies both chosen
+/// ops under a SINGLE undo snapshot (see `updates::active_bar`). The two
+/// axes are independent — horizontal ops touch only X, vertical ops only
+/// Y — so applying both in sequence equals picking the two concrete
+/// dropdown rows one at a time.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AlignModal {
+    /// Chosen horizontal op ([`AlignOp::Left`] / [`AlignOp::CenterH`] /
+    /// [`AlignOp::Right`] / [`AlignOp::DistributeH`]), or `None` to
+    /// leave the X axis untouched.
+    pub horizontal: Option<AlignOp>,
+    /// Chosen vertical op ([`AlignOp::Top`] / [`AlignOp::CenterV`] /
+    /// [`AlignOp::Bottom`] / [`AlignOp::DistributeV`]), or `None` to
+    /// leave the Y axis untouched.
+    pub vertical: Option<AlignOp>,
 }
 
 /// Live, in-memory state of the Footprint canvas — drives interaction
@@ -165,6 +190,10 @@ pub struct FootprintEditorState {
     /// Two erasable string buffers (same pattern as `dimension_input`)
     /// so typing "-" / "." mid-entry doesn't fight an f64 binding.
     pub move_by_modal: Option<MoveByModal>,
+    /// #370 — "Align…" dialog. `None` = closed. Holds the chosen
+    /// per-axis ops; Confirm composes the existing [`AlignOp`] variants
+    /// under one history snapshot (see [`AlignModal`]).
+    pub align_modal: Option<AlignModal>,
     /// v0.15 — Pads-mode tool.
     pub pads_tool: PadsTool,
     /// v0.16.1 — sticky construction-mode toggle.
@@ -233,7 +262,10 @@ pub struct FootprintEditorState {
 impl FootprintEditorState {
     /// Build canvas state from the primitive's pad list.
     pub fn from_footprint(fp: &Footprint) -> Self {
-        let pads = fp.pads.iter().map(EditorPad::from_pad).collect();
+        let mut pads: Vec<EditorPad> = fp.pads.iter().map(EditorPad::from_pad).collect();
+        // Rebuild the sketch link from the sketch — `from_pad` cannot,
+        // and without it every mirror early-returns after a reopen.
+        pad::relink_pads_to_sketch(&mut pads, fp);
         let mut s = Self::with_pads(pads);
         s.recompute_courtyard();
         s
@@ -280,6 +312,7 @@ impl FootprintEditorState {
             selected_sketch_extra: Vec::new(),
             dimension_input: String::new(),
             move_by_modal: None,
+            align_modal: None,
             pads_tool: PadsTool::default(),
             construction_mode: false,
             centerline_mode: false,
@@ -318,7 +351,7 @@ impl FootprintEditorState {
             });
         };
         for pad in &self.pads {
-            let (x0, y0, x1, y1) = pad.bbox_mm();
+            let (x0, y0, x1, y1) = pad.rotated_aabb_mm();
             expand(x0, y0, x1, y1);
         }
         if let Some(c) = self.courtyard_mm {
@@ -483,7 +516,7 @@ impl FootprintEditorState {
         let mut max_x = f64::NEG_INFINITY;
         let mut max_y = f64::NEG_INFINITY;
         for pad in &self.pads {
-            let (x0, y0, x1, y1) = pad.bbox_mm();
+            let (x0, y0, x1, y1) = pad.rotated_aabb_mm();
             if x0 < min_x {
                 min_x = x0;
             }
@@ -527,22 +560,20 @@ impl FootprintEditorState {
             return false;
         }
 
-        // Per-pad bbox polygon, CCW. Round/Oval/RoundRect/etc. fall
-        // back to bbox here for v0.27; a follow-up can mint the
-        // shape-accurate outline (sampled circle for Round, arc-
-        // anchor for RoundRect, etc.) so the courtyard hugs the
-        // copper rather than the enclosing rectangle.
+        // Per-pad quad from the ROTATED corners, so a turned pad's
+        // courtyard hugs the copper instead of the box it would
+        // occupy unrotated. Round/Oval/RoundRect/etc. still fall back
+        // to the enclosing quad; a follow-up can mint the shape-
+        // accurate outline (sampled circle for Round, arc-anchor for
+        // RoundRect, etc.).
         let pad_polys: Vec<Vec<Point2>> = self
             .pads
             .iter()
             .map(|p| {
-                let (x0, y0, x1, y1) = p.bbox_mm();
-                vec![
-                    Point2::new(x0, y0),
-                    Point2::new(x1, y0),
-                    Point2::new(x1, y1),
-                    Point2::new(x0, y1),
-                ]
+                p.rotated_corners_mm()
+                    .iter()
+                    .map(|&(x, y)| Point2::new(x, y))
+                    .collect()
             })
             .collect();
 
@@ -616,47 +647,24 @@ impl FootprintEditorState {
     /// `sketch_entity_id: None`, so a Pads-mode move can't mirror into
     /// the sketch and the pad snaps back to its original position on the
     /// next bake.
+    ///
+    /// The number match is only applied where the number identifies ONE
+    /// pad on each side. Pad numbers are not unique in signex (a
+    /// shared-designator row / thermal / shield set is normal), and a
+    /// last-wins number map hands several pads the same
+    /// `sketch_entity_id` — after which a Pads-mode delete of one runs
+    /// the delete mirror over another pad's geometry and its copper
+    /// silently disappears from the bake. Ambiguous numbers are left
+    /// unlinked here and offered to `relink_pads_to_sketch`, which
+    /// disambiguates by exact position and refuses if even that ties.
     pub fn refresh_pads_from_primitive(&mut self, fp: &Footprint) {
-        use std::collections::HashMap;
-        type Link = (
-            Option<signex_sketch::id::SketchEntityId>,
-            Option<[signex_sketch::id::SketchEntityId; 4]>,
-            ShapeParamMap,
-        );
-        let old_links: HashMap<String, Link> = self
-            .pads
-            .iter()
-            .map(|p| {
-                (
-                    p.number.clone(),
-                    (
-                        p.sketch_entity_id,
-                        p.corner_entity_ids,
-                        p.shape_params.clone(),
-                    ),
-                )
-            })
-            .collect();
-        let sketch_links: HashMap<String, signex_sketch::id::SketchEntityId> = fp
-            .sketch
-            .as_ref()
-            .map(|s| {
-                s.entities
-                    .iter()
-                    .filter_map(|e| e.pad.as_ref().map(|attr| (attr.number.clone(), e.id)))
-                    .collect()
-            })
-            .unwrap_or_default();
         let mut new_pads: Vec<EditorPad> = fp.pads.iter().map(EditorPad::from_pad).collect();
-        for p in &mut new_pads {
-            if let Some((sid, cids, params)) = old_links.get(&p.number) {
-                p.sketch_entity_id = *sid;
-                p.corner_entity_ids = *cids;
-                p.shape_params = params.clone();
-            } else if let Some(sid) = sketch_links.get(&p.number) {
-                p.sketch_entity_id = Some(*sid);
-            }
-        }
+        pad::carry_links_by_unique_number(&self.pads, &mut new_pads);
+        // Anything the number carry could not supply a link for — a pad
+        // that first appears from the sketch side, one whose old link
+        // was itself `None` after a reopen, or one whose number is
+        // ambiguous — is relinked from the sketch.
+        pad::relink_pads_to_sketch(&mut new_pads, fp);
         self.pads = new_pads;
         if let Some(idx) = self.selected_pad {
             if idx >= self.pads.len() {
@@ -679,33 +687,10 @@ impl FootprintEditorState {
                 [c.min_x, c.max_y],
             ]);
         }
-        // v0.22 Phase D1 — Pads-mode → Sketch attribute mirror.
+        // v0.22 Phase D1 — Pads-mode → Sketch attribute mirror. The
+        // mapping itself is `pad_to_sketch` policy and lives there.
         if let Some(sketch) = fp.sketch.as_mut() {
-            for pad in &canvas.pads {
-                let Some(id) = pad.sketch_entity_id else {
-                    continue;
-                };
-                let Some(entity) = sketch.entities.iter_mut().find(|e| e.id == id) else {
-                    continue;
-                };
-                let Some(attr) = entity.pad.as_mut() else {
-                    continue;
-                };
-                attr.number = pad.number.clone();
-                attr.net = pad.net.clone();
-                attr.locked = pad.locked;
-                attr.electrical_type = pad.electrical_type;
-                attr.template = pad.template.clone();
-                attr.library = pad.template_library.clone();
-                attr.feature_top = pad.feature_top;
-                attr.feature_bottom = pad.feature_bottom;
-                attr.testpoint = pad.testpoint;
-                attr.hole_tolerance_plus_mm = pad.hole_tolerance_plus_mm;
-                attr.hole_tolerance_minus_mm = pad.hole_tolerance_minus_mm;
-                attr.hole_rotation_deg = pad.hole_rotation_deg;
-                attr.copper_offset_x_mm = pad.copper_offset_x_mm;
-                attr.copper_offset_y_mm = pad.copper_offset_y_mm;
-            }
+            super::pad_to_sketch::mirror_pad_attrs_into_sketch(&canvas.pads, sketch);
         }
     }
 }

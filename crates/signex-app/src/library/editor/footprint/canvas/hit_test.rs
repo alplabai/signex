@@ -66,15 +66,24 @@ pub(super) fn sketch_hit_other(
                 let edge_dist = (dist - r_screen).abs();
                 edge_dist * edge_dist
             }
-            EntityKind::Arc { center, .. } => {
-                let c = match resolve_pt(center) {
-                    Some(c) => c,
-                    None => continue,
+            // `EntityKind::Arc` carries no radius field, so this branch
+            // used to score the distance to the arc's CENTRE — clicking
+            // the stroke missed, clicking the empty middle hit. Derive
+            // the radius from the start point and mirror the Circle
+            // branch's edge-distance metric.
+            EntityKind::Arc { center, start, .. } => {
+                let (c, s) = match (resolve_pt(center), resolve_pt(start)) {
+                    (Some(c), Some(s)) => (c, s),
+                    _ => continue,
                 };
                 let centre = cstate.world_to_screen(c);
                 let dx = click_screen.x - centre.x;
                 let dy = click_screen.y - centre.y;
-                dx * dx + dy * dy
+                let dist = (dx * dx + dy * dy).sqrt();
+                let radius = (s.0 - c.0).hypot(s.1 - c.1);
+                let r_screen = (radius as f32) * cstate.scale;
+                let edge_dist = (dist - r_screen).abs();
+                edge_dist * edge_dist
             }
             EntityKind::Point { .. } => continue,
         };

@@ -5,13 +5,14 @@
 //! `signex_widgets::active_bar_dropdown::view`; overlay positioning is
 //! handled by the caller (`unified_active_bar`).
 //!
-//! Wiring philosophy: items that map to existing primitives (Selection
-//! Filter pills, Snap toggles, snap-mode picks, Place tools, Body3D,
-//! Extruded 3D Body, Move Selection by X,Y, Text Frame) emit the real
-//! `FootprintEditorMsg`; the few items that still need new primitives
-//! (Break Track, Drag Track End, the generic Align… dialog launcher)
-//! emit `FootprintActiveBarStub` so the action logs a "coming soon"
-//! warn and dismisses the menu cleanly.
+//! Wiring philosophy: every dropdown item here maps to an existing
+//! primitive and emits the real `FootprintEditorMsg` (Selection Filter
+//! pills, Snap toggles, snap-mode picks, Place tools, Drag Track End,
+//! Break Track, Body3D, Extruded 3D Body, Move Selection by X,Y, the
+//! Align… dialog, Text Frame). The [`stub`] helper + the
+//! `FootprintEditorMsg::ActiveBarStub` "coming soon" variant are retained
+//! (removing the variant is out of #372's scope) for any future
+//! not-yet-implemented row, even though no current dropdown row uses them.
 
 use std::path::PathBuf;
 
@@ -35,18 +36,14 @@ fn fp(path: PathBuf, msg: FootprintEditorMsg) -> LibraryMessage {
     }
 }
 
-/// "Coming soon" stub item — no icon.
+/// "Coming soon" stub item — no icon. Retained as the sole constructor of
+/// `FootprintEditorMsg::ActiveBarStub` now that every footprint dropdown
+/// row is wired to a real message (Break Track was the last, #372).
+/// Removing the variant is out of #372's scope, so the helper stays for
+/// future not-yet-implemented rows rather than orphaning the variant.
+#[allow(dead_code)]
 fn stub(label: &'static str, path: PathBuf) -> DropdownItem<LibraryMessage> {
     DropdownItem::new(label, fp(path, FootprintEditorMsg::ActiveBarStub(label)))
-}
-
-/// "Coming soon" stub item with an icon for visual recognition.
-fn stub_with_icon(
-    label: &'static str,
-    path: PathBuf,
-    icon: iced::widget::svg::Handle,
-) -> DropdownItem<LibraryMessage> {
-    DropdownItem::new(label, fp(path, FootprintEditorMsg::ActiveBarStub(label))).icon(icon)
 }
 
 /// v0.14 — real Align/Distribute/Spacing item, no icon. Emits
@@ -93,7 +90,117 @@ pub fn entries(
         FpActiveBarMenu::Body3d => body3d_entries(state, path),
         FpActiveBarMenu::Text => text_entries(state, path, tid),
         FpActiveBarMenu::Shapes => shapes_entries(path, tid),
+        FpActiveBarMenu::SketchCreate => sketch_create_entries(state, path, tid),
+        FpActiveBarMenu::SketchModify => sketch_modify_entries(state, path, tid),
     }
+}
+
+/// Sketch ▸ Create — the six geometry tools that used to sit as six
+/// separate always-visible buttons on the sketch bar. Each row arms
+/// the tool via [`FootprintEditorMsg::ActiveBarSetSketchTool`], which
+/// also dismisses the menu; the armed one carries a checkmark so the
+/// user can see what's in hand without closing the menu first.
+fn sketch_create_entries(
+    state: &FootprintEditorState,
+    path: PathBuf,
+    tid: ThemeId,
+) -> Vec<DropdownEntry<LibraryMessage>> {
+    let armed = state.active_tool;
+    let arm = |tool: SketchTool| -> LibraryMessage {
+        fp(
+            path.clone(),
+            FootprintEditorMsg::ActiveBarSetSketchTool(tool),
+        )
+    };
+    let row = |label: &'static str,
+               tool: SketchTool,
+               icon: iced::widget::svg::Handle|
+     -> DropdownEntry<LibraryMessage> {
+        DropdownEntry::Item(
+            DropdownItem::new(label, arm(tool))
+                .icon(icon)
+                .checked(armed == tool),
+        )
+    };
+    vec![
+        DropdownEntry::Header("Create".into()),
+        row("Line", SketchTool::Line, ic::icon_shape_line(tid)),
+        row("Rectangle", SketchTool::Rectangle, ic::icon_shape_rect(tid)),
+        row(
+            "Rounded Rectangle",
+            SketchTool::RoundedRectangle,
+            ic::icon_sk_rounded_rect(tid),
+        ),
+        row("Circle", SketchTool::Circle, ic::icon_shape_circle(tid)),
+        row("Arc", SketchTool::Arc, ic::icon_shape_arc(tid)),
+        row(
+            "Tangent Arc",
+            SketchTool::TangentArc,
+            ic::icon_shape_arc(tid),
+        ),
+    ]
+}
+
+/// Sketch ▸ Modify — the six edit tools plus the one-shot Make Pad
+/// action. Mirror / Offset / the two Pattern tools consume a
+/// selection, so they grey out with an explanatory label when nothing
+/// is selected rather than arming a tool that would only warn.
+fn sketch_modify_entries(
+    state: &FootprintEditorState,
+    path: PathBuf,
+    tid: ThemeId,
+) -> Vec<DropdownEntry<LibraryMessage>> {
+    let armed = state.active_tool;
+    let has_selection = state.selected_sketch.is_some()
+        || state.selected_sketch_secondary.is_some()
+        || !state.selected_sketch_extra.is_empty();
+    let arm = |tool: SketchTool| -> LibraryMessage {
+        fp(
+            path.clone(),
+            FootprintEditorMsg::ActiveBarSetSketchTool(tool),
+        )
+    };
+    let row = |label: &'static str,
+               tool: SketchTool,
+               icon: iced::widget::svg::Handle,
+               needs_selection: bool|
+     -> DropdownEntry<LibraryMessage> {
+        DropdownEntry::Item(
+            DropdownItem::new(label, arm(tool))
+                .icon(icon)
+                .checked(armed == tool)
+                .disabled(needs_selection && !has_selection),
+        )
+    };
+    vec![
+        DropdownEntry::Header("Modify".into()),
+        row("Fillet", SketchTool::Fillet, ic::icon_sk_fillet(tid), false),
+        row("Trim", SketchTool::Trim, ic::icon_sk_trim(tid), false),
+        DropdownEntry::Separator,
+        DropdownEntry::Header("Needs a selection".into()),
+        row("Mirror", SketchTool::Mirror, ic::icon_sk_mirror(tid), true),
+        row("Offset", SketchTool::Offset, ic::icon_sk_offset(tid), true),
+        row(
+            "Rectangular Pattern",
+            SketchTool::RectPattern,
+            ic::icon_sk_rect_pattern(tid),
+            true,
+        ),
+        row(
+            "Circular Pattern",
+            SketchTool::CircularPattern,
+            ic::icon_sk_circular_pattern(tid),
+            true,
+        ),
+        DropdownEntry::Separator,
+        DropdownEntry::Item(
+            DropdownItem::new(
+                "Make Pad from Profile",
+                fp(path, FootprintEditorMsg::SketchMakePadFromProfile),
+            )
+            .icon(ic::icon_sk_make_pad(tid)),
+        ),
+    ]
 }
 
 fn filter_entries(
@@ -335,13 +442,30 @@ fn place_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessag
         DropdownEntry::Item(
             DropdownItem::new("Drag", activate_select(path.clone())).icon(ic::icon_dd_drag(tid)),
         ),
-        // Break Track / Drag Track End stay stubbed — they need
-        // track-segment split + endpoint-drag infrastructure that the
-        // footprint editor does not have yet.
-        // v0.15: needs track-segment split infra
-        DropdownEntry::Item(stub("Break Track", path.clone())),
-        // v0.15: needs track-segment split infra
-        DropdownEntry::Item(stub("Drag Track End", path.clone())),
+        // #372 — Break Track arms the real Sketch-mode BreakTrack tool:
+        // it switches to Sketch mode, then a single click on a sketch
+        // Line splits it in two at the click via the `split_line`
+        // primitive (#360). Drag Track End (below) likewise arms a real
+        // tool now. The Shapes rows are the working reference for this
+        // `ActiveBarSetSketchTool` call shape.
+        DropdownEntry::Item(DropdownItem::new(
+            "Break Track",
+            fp(
+                path.clone(),
+                FootprintEditorMsg::ActiveBarSetSketchTool(SketchTool::BreakTrack),
+            ),
+        )),
+        // #361 — arm the endpoint-biased segment grab. Switches to
+        // Sketch mode + the DragTrackEnd tool (see
+        // canvas/input/tools.rs::try_drag_track_end_grab); a left-press
+        // on any sketch Line then drags its nearer endpoint live.
+        DropdownEntry::Item(DropdownItem::new(
+            "Drag Track End",
+            fp(
+                path.clone(),
+                FootprintEditorMsg::ActiveBarSetSketchTool(SketchTool::DragTrackEnd),
+            ),
+        )),
         DropdownEntry::Separator,
         DropdownEntry::Item(
             DropdownItem::new("Move Selection", activate_select(path.clone()))
@@ -456,14 +580,13 @@ fn select_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessa
 fn align_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessage>> {
     use crate::library::editor::footprint::state::AlignOp;
     vec![
-        // The generic "Align…" dialog launcher stays a stub for v0.14 —
-        // the concrete operations below cover the day-to-day flow; the
-        // dialog (per-axis radio + reference picker) is a later task.
-        DropdownEntry::Item(stub_with_icon(
-            "Align…",
-            path.clone(),
-            ic::icon_dd_align_menu(tid),
-        )),
+        // #370 — the generic "Align…" launcher opens the per-axis Align
+        // dialog (horizontal + vertical op pickers). Label, position and
+        // icon are unchanged; only the wiring moved off the stub.
+        DropdownEntry::Item(
+            DropdownItem::new("Align…", fp(path.clone(), FootprintEditorMsg::AlignOpen))
+                .icon(ic::icon_dd_align_menu(tid)),
+        ),
         DropdownEntry::Separator,
         DropdownEntry::Item(align_item_with_icon(
             "Align Left",
@@ -645,13 +768,7 @@ fn shapes_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessa
             DropdownItem::new("Line", arm(SketchTool::Line)).icon(ic::icon_dd_line(tid)),
         ),
         DropdownEntry::Item(
-            DropdownItem::new("Arc (Center)", arm(SketchTool::Arc)).icon(ic::icon_dd_arc(tid)),
-        ),
-        DropdownEntry::Item(
-            DropdownItem::new("Arc (Edge)", arm(SketchTool::Arc)).icon(ic::icon_dd_arc(tid)),
-        ),
-        DropdownEntry::Item(
-            DropdownItem::new("Arc (Any Angle)", arm(SketchTool::Arc)).icon(ic::icon_dd_arc(tid)),
+            DropdownItem::new("Arc", arm(SketchTool::Arc)).icon(ic::icon_dd_arc(tid)),
         ),
         DropdownEntry::Item(
             DropdownItem::new("Full Circle", arm(SketchTool::Circle)).icon(ic::icon_dd_circle(tid)),
@@ -687,4 +804,37 @@ fn shapes_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessa
             DropdownItem::new("Rectangle", arm(SketchTool::Rectangle)).icon(ic::icon_dd_rect(tid)),
         ),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // #373: the footprint Shapes dropdown once offered three rows — "Arc
+    // (Center)", "Arc (Edge)", "Arc (Any Angle)" — all arming the single
+    // `SketchTool::Arc` gesture, silently handing the user a gesture they did
+    // not pick. The fix collapses them to one "Arc" row. Guard against a
+    // duplicate arc row returning. ("Fill" / "Solid Region" are a deliberate
+    // synonym pair for `PadsTool::PlaceRegion`; this SketchTool-scoped arc
+    // check does not touch them.)
+    #[test]
+    fn shapes_dropdown_has_exactly_one_arc_row() {
+        let labels: Vec<String> =
+            shapes_entries(PathBuf::from("t.snxfp"), ThemeId::CatppuccinMocha)
+                .into_iter()
+                .filter_map(|e| match e {
+                    DropdownEntry::Item(it) => Some(it.label),
+                    _ => None,
+                })
+                .collect();
+        assert!(
+            labels.iter().any(|l| l == "Arc"),
+            "expected a single 'Arc' row, got {labels:?}"
+        );
+        assert_eq!(
+            labels.iter().filter(|l| l.starts_with("Arc")).count(),
+            1,
+            "exactly one arc row must exist; no 'Arc (…)' duplicates: {labels:?}"
+        );
+    }
 }

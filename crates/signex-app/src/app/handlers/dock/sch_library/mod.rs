@@ -682,7 +682,9 @@ impl Signex {
             PanelMsg::SymEditorOpenLocalColorAdvanced(slot) => {
                 self.sym_editor_open_local_color_advanced(*slot)
             }
-            PanelMsg::SymEditorCancelLocalColorPicker => self.sym_editor_cancel_local_color_picker(),
+            PanelMsg::SymEditorCancelLocalColorPicker => {
+                self.sym_editor_cancel_local_color_picker()
+            }
             PanelMsg::SymEditorSetLocalColor { slot, color } => {
                 self.sym_editor_set_local_color(*slot, Some(*color))
             }

@@ -1,4 +1,4 @@
-//! Sketch-array expansion — v0.13 bakes ArrayKind::Linear only.
+//! Sketch-array expansion — bakes all three `ArrayKind` variants.
 //!
 //! Phase 7 Task 7.2 of the v0.13 sketch-mode plan. Walks every
 //! `Array` in the sketch and produces baked
@@ -9,12 +9,12 @@
 //! machinery. No third-party constraint-solver, footprint-generator,
 //! or numerical-library source consulted.
 //!
-//! # v0.13 scope
+//! # Scope
 //!
 //! - `ArrayKind::Linear { source, count_expr, dx_expr, dy_expr }` —
-//!   bakes natively.
-//! - `ArrayKind::Grid { .. }` — emits a single warning, no bake.
-//! - `ArrayKind::Polar { .. }` — emits a single warning, no bake.
+//!   bakes natively (`array::linear`).
+//! - `ArrayKind::Grid { .. }` — bakes natively (`array::grid`).
+//! - `ArrayKind::Polar { .. }` — bakes natively (`array::polar`).
 //!
 //! Numbering:
 //! - `LinearIncrement { start, step }` — pad number =
@@ -50,8 +50,7 @@ use linear::bake_linear;
 use polar::bake_polar;
 
 /// Walk every [`signex_sketch::array::Array`] and append baked pads
-/// to `out`. v0.13 bakes `ArrayKind::Linear` only; Grid + Polar emit
-/// a single warning each and produce no pads.
+/// to `out`. Bakes `ArrayKind::Linear`, `Grid`, and `Polar` natively.
 pub fn bake_arrays(
     sketch: &SketchData,
     solve: &FullSolveOutput,

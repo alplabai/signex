@@ -3,8 +3,8 @@
 //! exposes the `ClosedLoop` records so the click handler can select an
 //! entire loop from a single fill click.
 
-use iced::widget::canvas::{self, Path};
 use iced::Color;
+use iced::widget::canvas::{self, Path};
 
 use crate::library::editor::footprint::canvas::FootprintCanvasState;
 use crate::library::editor::footprint::layers::FpLayer;

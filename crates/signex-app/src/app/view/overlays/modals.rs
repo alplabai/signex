@@ -134,9 +134,9 @@ impl Signex {
     pub(in crate::app::view) fn detachable_dialogs_overlay(&self) -> Vec<Element<'_, Message>> {
         let ui = &self.ui_state;
         let modal_detached = |m: crate::app::state::ModalId| -> bool {
-            ui.windows.values().any(|kind| {
-                matches!(kind, crate::app::state::WindowKind::DetachedModal(x) if *x == m)
-            })
+            ui.windows.values().any(
+                |kind| matches!(kind, crate::app::state::WindowKind::DetachedModal(x) if *x == m),
+            )
         };
         let mut out: Vec<Element<'_, Message>> = Vec::new();
         if ui.annotate_dialog_open && !modal_detached(crate::app::state::ModalId::AnnotateDialog) {
@@ -366,7 +366,9 @@ impl Signex {
     }
 
     /// Close-Library — Unsaved Drafts confirm modal.
-    pub(in crate::app::view) fn close_library_confirm_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn close_library_confirm_overlay(
+        &self,
+    ) -> Option<Element<'_, Message>> {
         let document = &self.document_state;
         let confirm = self.library.close_library_confirm.as_ref()?;
         let card =

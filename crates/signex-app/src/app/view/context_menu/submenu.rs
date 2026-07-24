@@ -40,7 +40,11 @@ pub(super) fn place_entries(tid: ThemeId) -> Vec<DropdownEntry<Message>> {
         // Power ports (the four most common)
         ab(ic::icon_dd_gnd(tid), "GND Power Port", A::PlacePowerGND),
         ab(ic::icon_dd_vcc(tid), "VCC Power Port", A::PlacePowerVCC),
-        ab(ic::icon_dd_pwr_plus5(tid), "+5 Power Port", A::PlacePowerPlus5),
+        ab(
+            ic::icon_dd_pwr_plus5(tid),
+            "+5 Power Port",
+            A::PlacePowerPlus5,
+        ),
         ab(
             ic::icon_dd_pwr_plus12(tid),
             "+12 Power Port",
@@ -131,7 +135,12 @@ pub(super) fn align_entries(tid: ThemeId, selected: usize) -> Vec<DropdownEntry<
         }
     };
     vec![
-        row(ic::icon_dd_align_left(tid), "Align Left", A::AlignLeft, pair),
+        row(
+            ic::icon_dd_align_left(tid),
+            "Align Left",
+            A::AlignLeft,
+            pair,
+        ),
         row(
             ic::icon_dd_align_right(tid),
             "Align Right",
@@ -210,9 +219,9 @@ pub(super) fn add_new_entries(tid: ThemeId, target: Vec<usize>) -> Vec<DropdownE
         Some(ic::icon_component(tid)),
         "Symbol Library",
         "",
-        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(P::AddProjectSymbolLibrary(
-            target.clone(),
-        ))),
+        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+            P::AddProjectSymbolLibrary(target.clone()),
+        )),
     ));
     v.push(dd_disabled(
         Some(ic::icon_dd_part_actions(tid)),

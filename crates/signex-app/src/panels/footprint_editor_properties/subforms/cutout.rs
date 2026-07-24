@@ -70,4 +70,3 @@ pub(in crate::panels::footprint_editor_properties) fn render_cutout_subform<'a>(
 
     col
 }
-

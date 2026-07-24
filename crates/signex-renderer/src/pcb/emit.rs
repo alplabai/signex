@@ -140,7 +140,11 @@ pub(super) fn rectangle_vertices(center: [f32; 2], size_mm: [f32; 2]) -> Vec<[f3
     ]
 }
 
-pub(super) fn ellipse_vertices(center: [f32; 2], radius_xy: [f32; 2], segments: usize) -> Vec<[f32; 2]> {
+pub(super) fn ellipse_vertices(
+    center: [f32; 2],
+    radius_xy: [f32; 2],
+    segments: usize,
+) -> Vec<[f32; 2]> {
     let count = segments.max(8);
     let mut vertices = Vec::with_capacity(count);
 
@@ -222,7 +226,11 @@ pub(super) fn emit_vias(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene: &m
     }
 }
 
-pub(super) fn emit_static_polygons(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene: &mut Scene) {
+pub(super) fn emit_static_polygons(
+    snapshot: &PcbSnapshot,
+    theme: &ResolvedTheme,
+    scene: &mut Scene,
+) {
     scene.polygons.clear();
     scene
         .polygons

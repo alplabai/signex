@@ -9,6 +9,9 @@ use super::Engine;
 
 impl Engine {
     pub(crate) fn contains_selected_item(&self, item: &SelectedItem) -> bool {
+        if let Some(found) = self.contains_selected_sheet_item(item) {
+            return found;
+        }
         match item.kind {
             SelectedKind::Wire => self
                 .document
@@ -16,6 +19,11 @@ impl Engine {
                 .iter()
                 .any(|wire| wire.uuid == item.uuid),
             SelectedKind::Bus => self.document.buses.iter().any(|bus| bus.uuid == item.uuid),
+            SelectedKind::BusEntry => self
+                .document
+                .bus_entries
+                .iter()
+                .any(|bus_entry| bus_entry.uuid == item.uuid),
             SelectedKind::Label => self
                 .document
                 .labels
@@ -41,23 +49,35 @@ impl Engine {
                 .text_notes
                 .iter()
                 .any(|text_note| text_note.uuid == item.uuid),
-            SelectedKind::SheetPin => self.document.child_sheets.iter().any(|child_sheet| {
+            SelectedKind::Drawing => self
+                .document
+                .drawings
+                .iter()
+                .any(|d| drawing_uuid(d) == item.uuid),
+            _ => false,
+        }
+    }
+
+    /// `ChildSheet` / `SheetPin` share the same nested-ownership shape in
+    /// both `contains_selected_item` and `remove_selected_item`, which
+    /// pushed both matches past the house ~50-line cap. Split out so
+    /// each caller stays a flat, single-purpose match. `None` means
+    /// "not a sheet-owned kind — fall through to the caller's match".
+    fn contains_selected_sheet_item(&self, item: &SelectedItem) -> Option<bool> {
+        match item.kind {
+            SelectedKind::SheetPin => Some(self.document.child_sheets.iter().any(|child_sheet| {
                 child_sheet
                     .pins
                     .iter()
                     .any(|sheet_pin| sheet_pin.uuid == item.uuid)
-            }),
-            SelectedKind::Drawing => self.document.drawings.iter().any(|d| {
-                let u = match d {
-                    SchDrawing::Line { uuid, .. }
-                    | SchDrawing::Rect { uuid, .. }
-                    | SchDrawing::Circle { uuid, .. }
-                    | SchDrawing::Arc { uuid, .. }
-                    | SchDrawing::Polyline { uuid, .. } => *uuid,
-                };
-                u == item.uuid
-            }),
-            _ => false,
+            })),
+            SelectedKind::ChildSheet => Some(
+                self.document
+                    .child_sheets
+                    .iter()
+                    .any(|child_sheet| child_sheet.uuid == item.uuid),
+            ),
+            _ => None,
         }
     }
 
@@ -65,6 +85,7 @@ impl Engine {
         match item.kind {
             SelectedKind::Wire => remove_by_uuid(&mut self.document.wires, item.uuid),
             SelectedKind::Bus => remove_by_uuid(&mut self.document.buses, item.uuid),
+            SelectedKind::BusEntry => remove_by_uuid(&mut self.document.bus_entries, item.uuid),
             SelectedKind::Label => remove_by_uuid(&mut self.document.labels, item.uuid),
             SelectedKind::Junction => remove_by_uuid(&mut self.document.junctions, item.uuid),
             SelectedKind::NoConnect => remove_by_uuid(&mut self.document.no_connects, item.uuid),
@@ -72,20 +93,113 @@ impl Engine {
             SelectedKind::TextNote => remove_by_uuid(&mut self.document.text_notes, item.uuid),
             SelectedKind::Drawing => {
                 let before_len = self.document.drawings.len();
-                self.document.drawings.retain(|d| {
-                    let u = match d {
-                        SchDrawing::Line { uuid, .. }
-                        | SchDrawing::Rect { uuid, .. }
-                        | SchDrawing::Circle { uuid, .. }
-                        | SchDrawing::Arc { uuid, .. }
-                        | SchDrawing::Polyline { uuid, .. } => *uuid,
-                    };
-                    u != item.uuid
-                });
+                self.document
+                    .drawings
+                    .retain(|d| drawing_uuid(d) != item.uuid);
                 self.document.drawings.len() != before_len
+            }
+            // A child sheet owns its pins (`ChildSheet::pins`); removing the
+            // sheet entry removes them with it in one shot — no separate
+            // reconcile step needed, the whole owning document goes away.
+            SelectedKind::ChildSheet => remove_by_uuid(&mut self.document.child_sheets, item.uuid),
+            // A pin is owned by whichever child sheet holds it; delete just
+            // that pin from its `pins` vec, leaving the sheet in place.
+            //
+            // This does NOT survive `reconcile_child_sheet_pins` (sheet.rs;
+            // not yet wired into the app — #359). Reconcile derives a
+            // sheet's pins from its currently-exposed hierarchical/global
+            // ports, matched BY NAME: if a port with the deleted pin's name
+            // is still exposed, the next reconcile recreates the pin from
+            // scratch (fresh uuid, `auto_generated: true`) — the delete
+            // doesn't stick. Only a pin whose backing port is also gone (or
+            // that never had one, e.g. a hand-added `auto_generated: false`
+            // pin with no matching port) stays deleted.
+            SelectedKind::SheetPin => {
+                for child_sheet in &mut self.document.child_sheets {
+                    if remove_by_uuid(&mut child_sheet.pins, item.uuid) {
+                        return true;
+                    }
+                }
+                false
             }
             _ => false,
         }
+    }
+
+    /// Mint any junction dots the sheet now needs because wires in `items`
+    /// changed shape, then drop any *minted* dot geometry no longer
+    /// justifies. Returns `true` when at least one dot was added or removed.
+    ///
+    /// Move / rotate / mirror mutate existing wire coordinates; delete and
+    /// place-wire change which wires exist. All five used to reconcile
+    /// nothing beyond place-wire's own ad hoc mint call — dragging a stub
+    /// onto a trunk's interior left a junction-less T, which the netlist
+    /// reads as disconnected (issue #107), so the connection was silently
+    /// lost exactly as in issue #402's draw case. Every command that
+    /// changes wire geometry — place, move, rotate, mirror, delete —
+    /// routes through here now.
+    ///
+    /// This used to be add-only: a dot left stale by geometry moving *apart*
+    /// was left in place on the theory that it was still correct as long as
+    /// it still sat on two wires. That theory doesn't hold — two wires can
+    /// come to sit on the same point by merely *crossing*, with neither one
+    /// terminating there, and geometric "on two wires" does not distinguish
+    /// that from a real T. A stale dot from a T that lost its stub then
+    /// re-asserts a connection on the first unrelated wire dragged across the
+    /// same point, silently merging two nets the user never connected (issue
+    /// #422). So every minted dot is re-validated here on every wire-geometry
+    /// command and removed once [`autoplace::wire_meeting_justifies_junction`]
+    /// no longer holds for it. A user-placed dot (`Junction::minted == false`)
+    /// is user data and is never considered for removal.
+    pub(super) fn reconcile_wire_junctions(&mut self, items: &[SelectedItem]) -> bool {
+        let touched: Vec<signex_types::schematic::Wire> = items
+            .iter()
+            .filter(|item| matches!(item.kind, SelectedKind::Wire))
+            .filter_map(|item| self.document.wires.iter().find(|w| w.uuid == item.uuid))
+            .cloned()
+            .collect();
+
+        let mut changed = false;
+        for wire in touched {
+            let minted =
+                autoplace::junctions_for_wire(&wire, &self.document, crate::JUNCTION_TOLERANCE_MM);
+            changed |= !minted.is_empty();
+            // Extend inside the loop so the next wire's dedup sees these.
+            self.document.junctions.extend(minted);
+        }
+
+        changed |= self.remove_unjustified_minted_junctions();
+        changed
+    }
+
+    /// Drop every minted junction no longer justified by a genuine wire
+    /// meeting (see [`autoplace::wire_meeting_justifies_junction`]).
+    /// User-placed dots (`minted == false`) are never inspected here.
+    fn remove_unjustified_minted_junctions(&mut self) -> bool {
+        let tolerance = crate::JUNCTION_TOLERANCE_MM;
+        let stale: Vec<uuid::Uuid> = self
+            .document
+            .junctions
+            .iter()
+            .filter(|junction| junction.minted)
+            .filter(|junction| {
+                !autoplace::wire_meeting_justifies_junction(
+                    junction.position,
+                    &self.document,
+                    tolerance,
+                )
+            })
+            .map(|junction| junction.uuid)
+            .collect();
+
+        if stale.is_empty() {
+            return false;
+        }
+
+        self.document
+            .junctions
+            .retain(|junction| !stale.contains(&junction.uuid));
+        true
     }
 
     pub(super) fn move_selected_item(&mut self, item: &SelectedItem, dx: f64, dy: f64) -> bool {
@@ -258,16 +372,7 @@ impl Engine {
                 .document
                 .drawings
                 .iter_mut()
-                .find(|d| {
-                    let u = match d {
-                        SchDrawing::Line { uuid, .. }
-                        | SchDrawing::Rect { uuid, .. }
-                        | SchDrawing::Circle { uuid, .. }
-                        | SchDrawing::Arc { uuid, .. }
-                        | SchDrawing::Polyline { uuid, .. } => *uuid,
-                    };
-                    u == item.uuid
-                })
+                .find(|d| drawing_uuid(d) == item.uuid)
                 .map(|d| {
                     match d {
                         SchDrawing::Line { start, end, .. } => {
@@ -399,12 +504,25 @@ fn normalize_degrees(angle_degrees: f64) -> f64 {
 }
 
 mod autoplace;
-pub(crate) use autoplace::needed_junction;
 use autoplace::autoplace_fields;
 
 // ---------------------------------------------------------------------------
 // UUID-based collection helpers
 // ---------------------------------------------------------------------------
+
+/// `SchDrawing` doesn't implement `HasUuid` (its uuid lives inside each
+/// enum variant, not on a common struct field) — shared by
+/// `contains_selected_item`, `remove_selected_item` and
+/// `move_selected_item` so the five-variant match lives in one place.
+fn drawing_uuid(d: &SchDrawing) -> uuid::Uuid {
+    match d {
+        SchDrawing::Line { uuid, .. }
+        | SchDrawing::Rect { uuid, .. }
+        | SchDrawing::Circle { uuid, .. }
+        | SchDrawing::Arc { uuid, .. }
+        | SchDrawing::Polyline { uuid, .. } => *uuid,
+    }
+}
 
 fn remove_by_uuid<T>(items: &mut Vec<T>, uuid: uuid::Uuid) -> bool
 where
@@ -434,9 +552,12 @@ macro_rules! impl_has_uuid {
 impl_has_uuid!(
     signex_types::schematic::Wire,
     signex_types::schematic::Bus,
+    signex_types::schematic::BusEntry,
     signex_types::schematic::Label,
     signex_types::schematic::Junction,
     signex_types::schematic::NoConnect,
     signex_types::schematic::Symbol,
     signex_types::schematic::TextNote,
+    signex_types::schematic::ChildSheet,
+    signex_types::schematic::SheetPin,
 );

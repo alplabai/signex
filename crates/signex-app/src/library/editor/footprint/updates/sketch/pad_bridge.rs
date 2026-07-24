@@ -107,6 +107,11 @@ pub(in crate::library::editor::footprint::updates) fn apply(
             editor.dirty = true;
         }
         FootprintEditorMsg::SketchMakePadFromProfile => {
+            // Reachable from the Sketch ▸ Modify dropdown as well as the
+            // bar itself, and it is a one-shot action rather than a tool
+            // arm — so it has to dismiss the menu on its own. (Tool-arming
+            // rows go through `ActiveBarSetSketchTool`, which already does.)
+            editor.state.active_bar_menu = None;
             // v0.22 Phase D4 — convert the closed-loop profile that
             // includes the currently-selected Line into a
             // `PadShape::Custom(SketchProfile)` pad.
