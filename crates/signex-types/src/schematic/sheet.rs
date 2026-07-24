@@ -21,6 +21,16 @@ pub struct Junction {
     /// 0.0 means use the theme default size.
     #[serde(default)]
     pub diameter: f64,
+    /// `true` when this dot was minted by the wire-junction autoplacer
+    /// (`reconcile_wire_junctions` / `junctions_for_wire` in
+    /// `signex-engine`) rather than placed by the user. Minted dots are
+    /// re-validated on every wire-geometry command and removed once no
+    /// wire meeting justifies them any more; a user-placed dot — which
+    /// includes every junction in a `.snxsch` written before this field
+    /// existed, via the `#[serde(default)]` below — is left alone even
+    /// if it no longer sits on a wire (issue #422).
+    #[serde(default)]
+    pub minted: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
