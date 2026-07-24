@@ -118,23 +118,28 @@ impl ArcPipeline {
     }
 
     pub fn upload(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, arcs: &[Arc]) {
-        self.instance_count = arcs.len() as u32;
-
         if arcs.is_empty() {
+            self.instance_count = 0;
             return;
         }
 
-        if arcs.len() > self.instance_capacity {
-            self.instance_capacity = arcs.len().next_power_of_two();
-            self.instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("signex_gfx_arc_instances"),
-                size: (self.instance_capacity * std::mem::size_of::<Arc>()) as wgpu::BufferAddress,
-                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
-        }
+        let writable = super::growth::ensure_capacity(
+            device,
+            &mut self.instance_buffer,
+            &mut self.instance_capacity,
+            arcs.len(),
+            std::mem::size_of::<Arc>(),
+            "signex_gfx_arc_instances",
+            wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            device.limits().max_buffer_size,
+        );
+        self.instance_count = writable as u32;
 
-        queue.write_buffer(&self.instance_buffer, 0, bytemuck::cast_slice(arcs));
+        queue.write_buffer(
+            &self.instance_buffer,
+            0,
+            bytemuck::cast_slice(&arcs[..writable]),
+        );
     }
 
     pub fn draw(

@@ -1,4 +1,4 @@
-//! Keymap bridge + chord resolution.
+//! Keymap chord resolution.
 //!
 //! The keyboard subscription forwards each raw keystroke as
 //! [`UiMsg::KeymapStroke`]. Resolution happens here, in `update`, where
@@ -6,17 +6,14 @@
 //! [`UiState::keymap_pending_sequence`] instead of a process-global
 //! static (sound across multiple windows, MVU-clean).
 //!
-//! [`message_for_keymap_command`] is the bridge from a stable
-//! `AppCommandId` (the id a profile TOML binds a key to) onto the app's
-//! namespaced [`Message`] tree (ADR-0001 D3). Only the commands with a
-//! live dispatch arm are mapped; the remaining catalog entries resolve
-//! to `None` and no-op (tracked separately as the catalog/dispatch
-//! triplication follow-up).
+//! A resolved command id is turned into a [`Message`] by
+//! [`crate::app::command::core_to_message`] — the app's single
+//! id→`Message` bridge, no longer owned by this module.
 
 use iced::Task;
 
 use super::super::*;
-use crate::keymap::{AppCommandId, KeyStroke, ShortcutContext};
+use crate::keymap::{KeyStroke, ShortcutContext};
 
 impl Signex {
     /// Resolve one forwarded keystroke against the active keymap,
@@ -65,7 +62,7 @@ impl Signex {
 
         if let Some(command) = lookup.command.as_ref() {
             self.ui_state.keymap_pending_sequence.clear();
-            return Some(match message_for_keymap_command(command) {
+            return Some(match crate::app::command::core_to_message(command) {
                 Some(message) => self.dispatch_update(message),
                 None => Task::none(),
             });
@@ -110,83 +107,4 @@ impl Signex {
         }
         contexts
     }
-}
-
-/// Map a stable keymap command id onto the app's namespaced message tree.
-///
-/// Commands without a live dispatch arm return `None` (they resolve in
-/// the keymap but no-op) — that gap is the deferred catalog/dispatch
-/// triplication, not a regression here.
-fn message_for_keymap_command(command: &AppCommandId) -> Option<Message> {
-    use crate::library::editor::footprint::state::EditorMode;
-
-    let message = match command.as_str() {
-        "annotate_schematic" => Message::Annotate(AnnotateMsg::OpenDialog),
-        "annotate_schematic_quietly" => {
-            Message::Annotate(AnnotateMsg::Run(signex_engine::AnnotateMode::Incremental))
-        }
-        "cancel_current_tool" => Message::EscapePressed,
-        "center_view_at_cursor" | "show_all_design_objects" | "zoom_to_fit" => {
-            Message::CanvasEvent(CanvasEvent::FitAll)
-        }
-        "copy" => Message::Edit(EditMsg::Copy),
-        "cycle_selection_mode" => Message::CycleSelectionMode,
-        "cycle_snap_grid_forward" | "open_grid_picker" => Message::Ui(UiMsg::GridPickerOpen),
-        "cycle_unit" => Message::Ui(UiMsg::UnitCycled),
-        "cycle_wire_bus_graphic_mode" => Message::Tool(ToolMessage::CycleDrawMode),
-        "cut" => Message::Edit(EditMsg::Cut),
-        "delete_selection" | "remove_last_vertex" => Message::Edit(EditMsg::DeleteSelected),
-        "duplicate" => Message::Edit(EditMsg::Duplicate),
-        "find" | "find_text" => Message::Overlay(OverlayMsg::OpenFind),
-        "find_and_replace" => Message::Overlay(OverlayMsg::OpenReplace),
-        "footprint_mode_pads" => Message::FootprintModeShortcut(EditorMode::Normal),
-        "footprint_mode_sketch" => Message::FootprintModeShortcut(EditorMode::Sketch),
-        "footprint_mode_view_3d" => Message::FootprintModeShortcut(EditorMode::View3d),
-        "force_annotate_all_schematics" => Message::Annotate(AnnotateMsg::Run(
-            signex_engine::AnnotateMode::ResetAndRenumber,
-        )),
-        // Visual-flip semantics (preserved from the pre-keymap hardcoded map):
-        // the `X` key = a horizontal (left-right) flip = internal MirrorSelectedY,
-        // and `Y` = vertical (top-bottom) flip = MirrorSelectedX. The presets
-        // bind physical `X`->mirror_x / `Y`->mirror_y, so the command id names
-        // the KEY, and the arm names the AXIS it flips — hence the cross.
-        "mirror_x" => Message::Edit(EditMsg::MirrorSelectedY),
-        "mirror_y" => Message::Edit(EditMsg::MirrorSelectedX),
-        "open_components_panel" | "place_symbol" => {
-            Message::Tool(ToolMessage::SelectTool(Tool::Component))
-        }
-        "new_document" => Message::Menu(MenuMessage::NewProject),
-        "open_command_palette" => Message::CommandPalette(CommandPaletteMsg::Open),
-        "open_document" => Message::Menu(MenuMessage::OpenProject),
-        "open_grid_properties" => Message::GridProperties(GridPropertiesMsg::Open),
-        "open_net_color_palette" => Message::NetColor(NetColorMsg::Open),
-        "open_preferences" => Message::Preferences(PreferencesMsg::Open),
-        "paste" => Message::Edit(EditMsg::Paste),
-        "paste_special" | "smart_paste" => Message::Edit(EditMsg::SmartPaste),
-        "place_bus" => Message::Tool(ToolMessage::SelectTool(Tool::Bus)),
-        "place_local_net_label" | "place_net_label" => {
-            Message::Tool(ToolMessage::SelectTool(Tool::Label))
-        }
-        "place_text" => Message::Tool(ToolMessage::SelectTool(Tool::Text)),
-        "place_wire" => Message::Tool(ToolMessage::SelectTool(Tool::Wire)),
-        "placement_accept" => Message::LassoCommit,
-        "placement_properties" => Message::Tool(ToolMessage::PrePlacementTab),
-        "print" => Message::PrintPreview(PrintPreviewMsg::Requested),
-        "redo" => Message::Edit(EditMsg::Redo),
-        "reset_schematic_designators" => Message::Annotate(AnnotateMsg::OpenResetConfirm),
-        "rotate_clockwise" | "rotate_counterclockwise" => Message::Edit(EditMsg::RotateSelected),
-        "run_erc" | "update_pcb_from_schematic" => Message::Erc(ErcMsg::Run),
-        "save_document" => Message::File(FileMsg::Save),
-        "save_document_as" => Message::Menu(MenuMessage::SaveAs),
-        "select_all" => Message::Selection(selection_request::SelectionRequest::SelectAll),
-        "show_current_command_hotkeys" | "show_current_command_shortcuts" => {
-            Message::Menu(MenuMessage::OpenKeyboardShortcuts)
-        }
-        "toggle_visible_grid" => Message::Ui(UiMsg::GridToggle),
-        "toggle_auto_focus" => Message::Overlay(OverlayMsg::ToggleAutoFocus),
-        "toggle_electrical_grid" => Message::Ui(UiMsg::ToggleSnapHotspots),
-        "undo" => Message::Edit(EditMsg::Undo),
-        _ => return None,
-    };
-    Some(message)
 }

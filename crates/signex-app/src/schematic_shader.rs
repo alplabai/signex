@@ -122,6 +122,12 @@ impl shader::Primitive for SchematicPrimitive {
             &self.scene.texts,
             scale_px,
             [vp_px[0] as u32, vp_px[1] as u32],
+            // Screen-space pan offset in physical px. Glyphon text bypasses the
+            // camera ortho (which pans the instanced primitives via `offset_mm`),
+            // so the pan must be applied to text explicitly — mirrors
+            // `scene_shader::ScenePrimitive::prepare`. Without it, schematic GPU
+            // text stays pinned while the geometry pans.
+            [self.offset_px[0] * dpi, self.offset_px[1] * dpi],
         );
     }
 

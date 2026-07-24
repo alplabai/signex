@@ -67,6 +67,117 @@ pub fn move_multiple(
     }
 }
 
+/// Snap every pin/graphic named by `sel` onto the nearest multiple of
+/// `step_mm`, in place. Mirrors the footprint editor's
+/// `ActiveBarAlignSelectionToGrid` (#426): each element's own anchor
+/// point(s) land on the grid independently — a `Rectangle`/`Line`
+/// snaps `from` and `to` separately (so a shape already square with
+/// the grid on one corner doesn't get skewed to keep it), `Circle`/
+/// `Arc` snap `center` only (radius untouched), `Text` snaps
+/// `position`, and `Polygon` snaps every vertex. Returns `true` only
+/// when a snap actually moved a coordinate — a delta check against the
+/// pre-snap value, not merely "the selection resolved to an existing
+/// pin/graphic" (#477: a pin or shape already sitting exactly on the
+/// grid, or an `All`/`Multiple` selection made entirely of such
+/// elements, must report `changed = false` so the caller's undo/redo
+/// gate treats it as the no-op it is). See [`super::selected_is_alignable`]
+/// for the selection-kind precheck most callers should run first.
+pub fn align_selected_to_grid(
+    sym: &mut Symbol,
+    sel: &Option<SymbolSelection>,
+    step_mm: f64,
+) -> bool {
+    let step = step_mm.max(1e-6);
+    match sel {
+        Some(SymbolSelection::Pin(idx)) => match sym.pins.get_mut(*idx) {
+            Some(pin) => {
+                let before = pin.position;
+                snap_pin_to_grid(pin, step);
+                pin.position != before
+            }
+            None => false,
+        },
+        Some(SymbolSelection::Graphic(idx)) => match sym.graphics.get_mut(*idx) {
+            Some(g) => {
+                let before = g.kind.clone();
+                snap_graphic_to_grid(&mut g.kind, step);
+                g.kind != before
+            }
+            None => false,
+        },
+        Some(SymbolSelection::Multiple {
+            pin_indices,
+            graphic_indices,
+        }) => {
+            let mut changed = false;
+            for &i in pin_indices {
+                if let Some(pin) = sym.pins.get_mut(i) {
+                    let before = pin.position;
+                    snap_pin_to_grid(pin, step);
+                    changed |= pin.position != before;
+                }
+            }
+            for &i in graphic_indices {
+                if let Some(g) = sym.graphics.get_mut(i) {
+                    let before = g.kind.clone();
+                    snap_graphic_to_grid(&mut g.kind, step);
+                    changed |= g.kind != before;
+                }
+            }
+            changed
+        }
+        Some(SymbolSelection::All) => {
+            let mut changed = false;
+            for pin in sym.pins.iter_mut() {
+                let before = pin.position;
+                snap_pin_to_grid(pin, step);
+                changed |= pin.position != before;
+            }
+            for g in sym.graphics.iter_mut() {
+                let before = g.kind.clone();
+                snap_graphic_to_grid(&mut g.kind, step);
+                changed |= g.kind != before;
+            }
+            changed
+        }
+        Some(SymbolSelection::Field(_)) | None => false,
+    }
+}
+
+fn snap_pin_to_grid(pin: &mut SymbolPin, step: f64) {
+    pin.position[0] = snap_value_to_grid(pin.position[0], step);
+    pin.position[1] = snap_value_to_grid(pin.position[1], step);
+}
+
+fn snap_graphic_to_grid(kind: &mut SymbolGraphicKind, step: f64) {
+    match kind {
+        SymbolGraphicKind::Rectangle { from, to } | SymbolGraphicKind::Line { from, to } => {
+            from[0] = snap_value_to_grid(from[0], step);
+            from[1] = snap_value_to_grid(from[1], step);
+            to[0] = snap_value_to_grid(to[0], step);
+            to[1] = snap_value_to_grid(to[1], step);
+        }
+        SymbolGraphicKind::Circle { center, .. } | SymbolGraphicKind::Arc { center, .. } => {
+            center[0] = snap_value_to_grid(center[0], step);
+            center[1] = snap_value_to_grid(center[1], step);
+        }
+        SymbolGraphicKind::Text { position, .. } => {
+            position[0] = snap_value_to_grid(position[0], step);
+            position[1] = snap_value_to_grid(position[1], step);
+        }
+        SymbolGraphicKind::Polygon { vertices } => {
+            for v in vertices.iter_mut() {
+                v[0] = snap_value_to_grid(v[0], step);
+                v[1] = snap_value_to_grid(v[1], step);
+            }
+        }
+    }
+}
+
+fn snap_value_to_grid(v: f64, step: f64) -> f64 {
+    (v / step).round() * step
+}
+
 /// Perform a rubber-band box selection against all symbol primitives.
 ///
 /// The selection kind (`Window` / `Crossing`) is determined by the

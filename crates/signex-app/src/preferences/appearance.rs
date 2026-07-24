@@ -21,6 +21,7 @@ pub(super) fn content_appearance<'a>(
     draft_label_style: LabelStyle,
     draft_multisheet_style: MultisheetStyle,
     draft_grid_style: GridStyle,
+    draft_pcb_gpu_render: bool,
     draft_symbol_grid_size_mm: f32,
     draft_symbol_grid_style: GridStyle,
     draft_symbol_pin_selection: PinSelectionMode,
@@ -171,6 +172,38 @@ pub(super) fn content_appearance<'a>(
             )
             .text_size(12)
             .width(200),
+        ]
+        .align_y(iced::Alignment::Center),
+    );
+    col = col.push(Space::new().height(20));
+
+    // ── Section: PCB Editor ──
+    col = col.push(h_sep());
+    col = col.push(Space::new().height(16));
+    col = col.push(section_title("PCB Editor"));
+    col = col.push(Space::new().height(10));
+    col = col.push(
+        row![
+            column![
+                text("GPU Render (experimental)")
+                    .size(12)
+                    .style(text_primary),
+                text("Draw the PCB canvas on the GPU (shader) instead of the CPU. Applies immediately.")
+                    .size(10)
+                    .style(text_muted),
+                // Honest surface for the known CPU/GPU divergences pinned by
+                // the `scene::order` parity tests — the toggle ships
+                // default-off until these are reconciled.
+                text("Known gaps: dashed lines draw solid, concave pours can over-fill, overlay highlights may sit under traces.")
+                    .size(10)
+                    .style(text_muted),
+            ]
+            .spacing(3)
+            .width(200),
+            Space::new().width(Length::Fill),
+            iced::widget::checkbox(draft_pcb_gpu_render)
+                .size(16)
+                .on_toggle(PrefMsg::DraftPcbGpuRender),
         ]
         .align_y(iced::Alignment::Center),
     );

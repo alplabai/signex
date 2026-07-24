@@ -335,7 +335,23 @@ impl Signex {
                                 self.ui_state.annotate_reset_confirm = false
                             }
                             ModalId::ErcDialog => self.ui_state.erc_dialog_open = false,
-                            ModalId::Preferences => self.ui_state.preferences_open = false,
+                            ModalId::Preferences => {
+                                // Backstop for a Preferences window destroyed
+                                // outside the guarded close paths (which all
+                                // refuse to close while dirty): if unsaved
+                                // live previews are still active, revert them
+                                // so e.g. the experimental PCB GPU render
+                                // toggle can't linger enabled with the
+                                // checkbox showing unchecked. Gated on dirty
+                                // so a clean close doesn't pay the full
+                                // revert (keymap-profile rebuild + canvas
+                                // cache clears — a visible re-tessellation
+                                // hitch on a large board) for a no-op.
+                                if self.ui_state.preferences_dirty {
+                                    self.revert_preferences_drafts();
+                                }
+                                self.ui_state.preferences_open = false;
+                            }
                             ModalId::FindReplace => self.ui_state.find_replace.open = false,
                             ModalId::MoveSelection => self.ui_state.move_selection.open = false,
                             ModalId::NetColorPalette => {
@@ -550,6 +566,19 @@ impl Signex {
                 // directly.
                 if self.ui_state.main_window_id == Some(id) {
                     self.handle_app_quit_requested()
+                } else if matches!(
+                    self.ui_state.windows.get(&id),
+                    Some(super::state::WindowKind::DetachedModal(
+                        super::state::ModalId::Preferences
+                    ))
+                ) && self.ui_state.preferences_dirty
+                {
+                    // Same dirty-close guard as the in-dialog X / Esc: an
+                    // OS close request on a dirty Preferences window must
+                    // not silently discard unsaved edits. The window stays
+                    // open; the footer's "Unsaved changes" bar (Save /
+                    // Discard & Close) is the visible way out.
+                    Task::none()
                 } else {
                     iced::window::close(id)
                 }

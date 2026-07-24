@@ -53,34 +53,37 @@ impl Engine {
         let mut clipboard = ClipboardSelection::default();
 
         for item in items {
-            match item.kind {
-                SelectedKind::Wire => {
+            let Some(slot) = clipboard_slot(item.kind) else {
+                continue;
+            };
+            match slot {
+                ClipboardSlot::Wire => {
                     if let Some(wire) = self.document.wires.iter().find(|w| w.uuid == item.uuid) {
                         clipboard.wires.push(wire.clone());
                     }
                 }
-                SelectedKind::Bus => {
+                ClipboardSlot::Bus => {
                     if let Some(bus) = self.document.buses.iter().find(|b| b.uuid == item.uuid) {
                         clipboard.buses.push(bus.clone());
                     }
                 }
-                SelectedKind::Label => {
+                ClipboardSlot::Label => {
                     if let Some(label) = self.document.labels.iter().find(|l| l.uuid == item.uuid) {
                         clipboard.labels.push(label.clone());
                     }
                 }
-                SelectedKind::Symbol => {
+                ClipboardSlot::Symbol => {
                     if let Some(symbol) = self.document.symbols.iter().find(|s| s.uuid == item.uuid)
                     {
                         clipboard.symbols.push(symbol.clone());
                     }
                 }
-                SelectedKind::Junction => {
+                ClipboardSlot::Junction => {
                     if let Some(j) = self.document.junctions.iter().find(|j| j.uuid == item.uuid) {
                         clipboard.junctions.push(j.clone());
                     }
                 }
-                SelectedKind::NoConnect => {
+                ClipboardSlot::NoConnect => {
                     if let Some(nc) = self
                         .document
                         .no_connects
@@ -90,7 +93,7 @@ impl Engine {
                         clipboard.no_connects.push(nc.clone());
                     }
                 }
-                SelectedKind::TextNote => {
+                ClipboardSlot::TextNote => {
                     if let Some(tn) = self
                         .document
                         .text_notes
@@ -100,7 +103,6 @@ impl Engine {
                         clipboard.text_notes.push(tn.clone());
                     }
                 }
-                _ => {}
             }
         }
 
@@ -579,19 +581,43 @@ impl Engine {
 // Cut = copy + delete, but the two must agree on what they carry
 // ---------------------------------------------------------------------------
 
-/// Kinds `collect_selection_clipboard` (above) captures. Single source of
-/// truth for `partition_cuttable` — keep this in sync with that match.
+/// Which `ClipboardSelection` field a kind is copied into by
+/// `collect_selection_clipboard` (above). The match is exhaustive over
+/// `SelectedKind` (no `_` arm), so a new variant is a compile error here
+/// until it's classified — this is the one place that decides what
+/// clipboard-based Copy/Cut/Paste can carry; `clipboard_can_carry` and
+/// `collect_selection_clipboard` both derive from it instead of keeping
+/// their own list.
+enum ClipboardSlot {
+    Wire,
+    Bus,
+    Label,
+    Symbol,
+    Junction,
+    NoConnect,
+    TextNote,
+}
+
+fn clipboard_slot(kind: SelectedKind) -> Option<ClipboardSlot> {
+    match kind {
+        SelectedKind::Wire => Some(ClipboardSlot::Wire),
+        SelectedKind::Bus => Some(ClipboardSlot::Bus),
+        SelectedKind::Label => Some(ClipboardSlot::Label),
+        SelectedKind::Symbol => Some(ClipboardSlot::Symbol),
+        SelectedKind::Junction => Some(ClipboardSlot::Junction),
+        SelectedKind::NoConnect => Some(ClipboardSlot::NoConnect),
+        SelectedKind::TextNote => Some(ClipboardSlot::TextNote),
+        SelectedKind::BusEntry
+        | SelectedKind::SheetPin
+        | SelectedKind::ChildSheet
+        | SelectedKind::Drawing
+        | SelectedKind::SymbolRefField
+        | SelectedKind::SymbolValField => None,
+    }
+}
+
 fn clipboard_can_carry(kind: SelectedKind) -> bool {
-    matches!(
-        kind,
-        SelectedKind::Wire
-            | SelectedKind::Bus
-            | SelectedKind::Label
-            | SelectedKind::Symbol
-            | SelectedKind::Junction
-            | SelectedKind::NoConnect
-            | SelectedKind::TextNote
-    )
+    clipboard_slot(kind).is_some()
 }
 
 /// Splits a selection into the subset Cut can safely copy-then-delete and
@@ -606,4 +632,47 @@ pub fn partition_cuttable(items: &[SelectedItem]) -> (Vec<SelectedItem>, Vec<Sel
         .iter()
         .copied()
         .partition(|item| clipboard_can_carry(item.kind))
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clipboard_can_carry_matches_the_documented_seven_kinds() {
+        // #465: `clipboard_can_carry` and `collect_selection_clipboard` both
+        // derive from `clipboard_slot`'s single exhaustive match, so this
+        // pins down which kinds that match currently classifies as
+        // carryable rather than trusting two independently-maintained lists.
+        let carryable: Vec<SelectedKind> = [
+            SelectedKind::Symbol,
+            SelectedKind::Wire,
+            SelectedKind::Bus,
+            SelectedKind::BusEntry,
+            SelectedKind::Junction,
+            SelectedKind::NoConnect,
+            SelectedKind::Label,
+            SelectedKind::SheetPin,
+            SelectedKind::TextNote,
+            SelectedKind::ChildSheet,
+            SelectedKind::Drawing,
+            SelectedKind::SymbolRefField,
+            SelectedKind::SymbolValField,
+        ]
+        .into_iter()
+        .filter(|k| clipboard_can_carry(*k))
+        .collect();
+
+        assert_eq!(
+            carryable,
+            vec![
+                SelectedKind::Symbol,
+                SelectedKind::Wire,
+                SelectedKind::Bus,
+                SelectedKind::Junction,
+                SelectedKind::NoConnect,
+                SelectedKind::Label,
+                SelectedKind::TextNote,
+            ]
+        );
+    }
 }

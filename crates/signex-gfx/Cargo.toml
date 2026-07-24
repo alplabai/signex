@@ -13,6 +13,7 @@ bytemuck = { version = "1", features = ["derive"] }
 cryoglyph = "0.1.0"
 rstar = "0.12"
 bitflags = "2"
+log = "0.4"
 
 [dev-dependencies]
 pollster = "0.4"

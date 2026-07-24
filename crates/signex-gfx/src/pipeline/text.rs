@@ -10,10 +10,15 @@ fn text_size_px(item: &TextItem, scale_px_per_mm: f32) -> f32 {
     (item.size_mm.max(0.01) * scale_px_per_mm.max(0.01)).max(1.0)
 }
 
-fn text_position_px(item: &TextItem, scale_px_per_mm: f32) -> [f32; 2] {
+fn text_position_px(item: &TextItem, scale_px_per_mm: f32, offset_px: [f32; 2]) -> [f32; 2] {
+    // Full screen mapping `screen_px = world_mm * scale + offset_px`. Unlike the
+    // instanced primitives — which stay in world space and let the camera ortho
+    // apply pan on the GPU — glyphon rasterises text CPU-side in screen space,
+    // so the pan term must be added here or the labels stay pinned while the
+    // geometry they annotate scrolls out from under them.
     [
-        item.position[0] * scale_px_per_mm,
-        item.position[1] * scale_px_per_mm,
+        item.position[0] * scale_px_per_mm + offset_px[0],
+        item.position[1] * scale_px_per_mm + offset_px[1],
     ]
 }
 
@@ -237,6 +242,7 @@ impl GlyphonTextPipeline {
         texts: &[TextItem],
         scale_px_per_mm: f32,
         viewport_size_px: [u32; 2],
+        offset_px: [f32; 2],
     ) -> Result<(), cryoglyph::PrepareError> {
         self.text_count = 0;
         self.viewport_size_px = viewport_size_px;
@@ -279,7 +285,7 @@ impl GlyphonTextPipeline {
             );
             buffer.shape_until_scroll(&mut self.font_system, false);
 
-            let anchor_px = text_position_px(text, scale_px_per_mm);
+            let anchor_px = text_position_px(text, scale_px_per_mm, offset_px);
             let text_bounds_px = measure_text_bounds_px(&buffer);
             let top_left_px = anchored_top_left_px(text, anchor_px, text_bounds_px);
             let text_rect = rect_from_top_left_size(top_left_px, text_bounds_px);
@@ -385,11 +391,14 @@ mod tests {
         };
 
         let size_px = text_size_px(&item, 32.0);
-        let position_px = text_position_px(&item, 32.0);
+        let position_px = text_position_px(&item, 32.0, [0.0, 0.0]);
+        let panned_px = text_position_px(&item, 32.0, [15.0, -7.0]);
         let bounds = viewport_bounds([128, 96]);
 
         assert_eq!(size_px, 32.0);
         assert_eq!(position_px, [80.0, 128.0]);
+        // Pan translates the anchor by the screen-space offset.
+        assert_eq!(panned_px, [95.0, 121.0]);
         assert_eq!(bounds.left, 0);
         assert_eq!(bounds.top, 0);
         assert_eq!(bounds.right, 128);

@@ -1,4 +1,4 @@
-use crate::keymap::AppCommandId;
+use crate::keymap::{AppCommandId, Modifiers};
 
 mod general;
 mod pcb;
@@ -43,6 +43,65 @@ impl CommandGroup {
     }
 }
 
+/// Surface-agnostic icon key. A view surface (menu, toolbar, command
+/// palette) maps the key to its actual glyph/asset; the catalog stays a
+/// plain identifier so adding an icon never means adding a variant here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IconId(pub &'static str);
+
+/// A command's suggested default keyboard shortcut, carried on its
+/// catalog entry. Distinct from a bound [`crate::keymap::KeyStroke`] in a
+/// keymap profile: a profile's own binding always overrides this
+/// default. `key` is a canonical token spelling (e.g. `"c"`, `"delete"`,
+/// `"f1"`), matching [`crate::keymap::KeyToken`]'s serde naming.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KeyBind {
+    pub modifiers: Modifiers,
+    pub key: &'static str,
+}
+
+/// Coarse document-kind gate for [`Enablement::RequiresDocument`]. Mirrors
+/// the primary editor surfaces.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DocumentKind {
+    Schematic,
+    Pcb,
+    Footprint,
+    Symbol,
+    Library,
+}
+
+/// Fixed predicate gating when a command is enabled. Evaluating this
+/// against live application state is future work (a command
+/// registry/dispatch consumer, tracked separately) — today it only
+/// travels with the catalog entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Enablement {
+    /// Always enabled, regardless of selection/document state.
+    #[default]
+    Always,
+    /// Enabled only when the active surface has a non-empty selection.
+    RequiresSelection,
+    /// Enabled only when the active document matches the given kind.
+    RequiresDocument(DocumentKind),
+    /// Enabled only when a net color is active/selected.
+    RequiresNetColor,
+}
+
+/// GUI/undo/visibility flags for a command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct CommandFlags {
+    /// Only meaningful/available when driven from the GUI (no headless
+    /// or scripted equivalent).
+    pub gui_only: bool,
+    /// Mutates the open document.
+    pub mutates_doc: bool,
+    /// Its mutation is recorded on the undo stack.
+    pub undoable: bool,
+    /// Hidden from menus/command-palette listings (still dispatchable).
+    pub hidden: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CommandMetadata {
     pub id: &'static str,
@@ -58,9 +117,39 @@ pub struct CommandMetadata {
     /// [`CommandMetadata::menu_label`].
     pub menu_label: Option<&'static str>,
     pub group: CommandGroup,
+    /// Surface-agnostic icon key. `None` until a command is given one.
+    pub icon: Option<IconId>,
+    /// Suggested default keyboard shortcut. `None` until filled in.
+    pub keybind: Option<KeyBind>,
+    /// Fixed enablement predicate. Defaults to [`Enablement::Always`].
+    pub enable: Enablement,
+    /// GUI/undo/visibility flags. Defaults to all-`false`.
+    pub flags: CommandFlags,
 }
 
 impl CommandMetadata {
+    /// Base value for struct-update syntax (`..CommandMetadata::DEFAULT`)
+    /// in the const catalog tables below — every entry there
+    /// re-specifies `id`/`category`/`label`/`menu_label`/`group`
+    /// explicitly, so only the four descriptor fields actually take this
+    /// default (`None` / `None` / `Always` / all-`false`).
+    pub const DEFAULT: Self = Self {
+        id: "",
+        category: "",
+        label: "",
+        menu_label: None,
+        group: CommandGroup::General,
+        icon: None,
+        keybind: None,
+        enable: Enablement::Always,
+        flags: CommandFlags {
+            gui_only: false,
+            mutates_doc: false,
+            undoable: false,
+            hidden: false,
+        },
+    };
+
     /// The label a menu surface should display: the terse `menu_label`
     /// override when present, else the descriptive `label`.
     pub const fn menu_label(&self) -> &'static str {
@@ -224,6 +313,40 @@ mod tests {
             let md = metadata_for(&AppCommandId::new(*id).unwrap())
                 .unwrap_or_else(|| panic!("missing catalog entry for `{id}`"));
             assert_eq!(md.menu_label(), *expected, "menu label drift for `{id}`");
+        }
+    }
+
+    #[test]
+    fn descriptor_fields_default_for_existing_catalog_entries() {
+        // Every catalog row today inherits the four descriptor fields from
+        // `CommandMetadata::DEFAULT` via struct-update syntax (`icon`,
+        // `keybind`, `enable`, `flags`). Assert that for *every* entry, not
+        // just one, so a future edit that drops the `..CommandMetadata::
+        // DEFAULT` tail on some row (and silently changes its defaults) is
+        // caught rather than passing unnoticed.
+        for metadata in all_metadata() {
+            assert_eq!(
+                metadata.icon, None,
+                "`{}` should default to no icon",
+                metadata.id
+            );
+            assert_eq!(
+                metadata.keybind, None,
+                "`{}` should default to no keybind",
+                metadata.id
+            );
+            assert_eq!(
+                metadata.enable,
+                Enablement::Always,
+                "`{}` should default to Enablement::Always",
+                metadata.id
+            );
+            assert_eq!(
+                metadata.flags,
+                CommandFlags::default(),
+                "`{}` should default to all-false flags",
+                metadata.id
+            );
         }
     }
 }
