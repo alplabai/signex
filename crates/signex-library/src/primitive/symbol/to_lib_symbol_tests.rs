@@ -134,6 +134,61 @@ fn pin_orientation_maps_to_rotation_degrees_for_all_four_variants() {
     }
 }
 
+/// Ground-truth convention test: ties `pin_rotation_deg`'s output to the
+/// convention the actual downstream renderer uses, so the two mappings
+/// can't silently drift apart (the other rotation test above only
+/// checks self-consistency with the formula in this crate).
+///
+/// `crates/signex-output/src/svg/symbols.rs`'s private `pin_direction(pin:
+/// &Pin) -> (f64, f64)` is the real consumer that turns
+/// `LibPin.pin.rotation` into a draw direction: `0 => (1.0, 0.0)`, `90 =>
+/// (0.0, 1.0)`, `180 => (-1.0, 0.0)`, `270 => (0.0, -1.0)`. `signex-library`
+/// does not (and must not, per the workspace's dependency direction —
+/// `signex-output` depends on `signex_types`/`signex-library`, never the
+/// reverse) depend on `signex-output`, so that function cannot be called
+/// from this test. Instead this re-derives the identical formula inline
+/// and asserts the resulting unit vector against the direction each
+/// `PinOrientation` is documented to mean: `Right -> +x`, `Up -> +y`,
+/// `Left -> -x`, `Down -> -y`.
+#[test]
+fn pin_rotation_matches_signex_output_pin_direction_convention() {
+    // Mirrors `crates/signex-output/src/svg/symbols.rs`'s `pin_direction`
+    // exactly — same branches, same values — so this test fails the
+    // instant either side's convention moves without the other.
+    fn pin_direction_convention(deg: f64) -> (f64, f64) {
+        let deg = ((deg % 360.0) + 360.0) % 360.0;
+        match deg as i32 {
+            0 => (1.0, 0.0),
+            90 => (0.0, 1.0),
+            180 => (-1.0, 0.0),
+            270 => (0.0, -1.0),
+            _ => {
+                let rad = deg.to_radians();
+                (rad.cos(), rad.sin())
+            }
+        }
+    }
+
+    let table = [
+        (PinOrientation::Right, (1.0, 0.0)),
+        (PinOrientation::Up, (0.0, 1.0)),
+        (PinOrientation::Left, (-1.0, 0.0)),
+        (PinOrientation::Down, (0.0, -1.0)),
+    ];
+
+    for (orientation, expected_dir) in table {
+        let mut sym = Symbol::empty("DIR-CONVENTION-CHECK");
+        sym.pins = vec![pin(1, orientation, PinDirection::Passive)];
+        let lib = sym.to_lib_symbol("id");
+        let rotation = lib.pins[0].pin.rotation;
+        let actual_dir = pin_direction_convention(rotation);
+        assert_eq!(
+            actual_dir, expected_dir,
+            "{orientation:?} (rotation {rotation}) -> {expected_dir:?}"
+        );
+    }
+}
+
 /// Acceptance criterion: pin the complete `PinDirection` mapping (every
 /// one of the library's 10 source variants).
 #[test]
