@@ -191,12 +191,10 @@ pub(super) fn content_appearance<'a>(
                 text("Draw the PCB canvas on the GPU (shader) instead of the CPU. Applies immediately.")
                     .size(10)
                     .style(text_muted),
-                // Honest surface for the known CPU/GPU divergences pinned by
-                // the `scene::order` parity tests — the toggle ships
-                // default-off until these are reconciled.
-                text("Known gaps: dashed lines draw solid, concave pours can over-fill, overlay highlights may sit under traces.")
-                    .size(10)
-                    .style(text_muted),
+                // The dashed-line, concave-fill, and overlay-z-order gaps this
+                // note used to warn about are fixed (see the `scene::order`
+                // parity tests); the toggle stays default-off pending
+                // hardware visual-parity sign-off, not a known-bug list.
             ]
             .spacing(3)
             .width(200),
