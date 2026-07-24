@@ -76,16 +76,32 @@ fn changing_kind_selects_a_practical_default_prefix() {
 }
 
 #[test]
-fn changing_a_result_tolerance_updates_only_that_leaf() {
+fn changing_a_result_tolerance_updates_the_selected_leaf() {
     let mut control = CalculatorControl::default();
     control.active_state_mut().series = ESeries::E24;
     control.active_state_mut().max_components = 3;
     control.update(CalculatorMessage::Calculate);
-    let before = control.active_state().result.as_ref().unwrap().components();
     control.update(CalculatorMessage::ToleranceChanged(0, Tolerance::Percent1));
     let after = control.active_state().result.as_ref().unwrap().components();
     assert_eq!(after[0].1, Tolerance::Percent1);
-    assert_eq!(before[1..], after[1..]);
+}
+
+#[test]
+fn changing_a_result_tolerance_leaves_other_leaves_unchanged() {
+    let mut control = CalculatorControl::default();
+    control.update(CalculatorMessage::TargetChanged("235".to_string()));
+    control.active_state_mut().series = ESeries::E24;
+    control.active_state_mut().max_components = 3;
+    control.update(CalculatorMessage::Calculate);
+    let before = control.active_state().result.as_ref().unwrap().components();
+    assert_eq!(before.len(), 2, "the fixture must produce two components");
+    let mut expected = before.clone();
+    expected[0].1 = Tolerance::Percent1;
+
+    control.update(CalculatorMessage::ToleranceChanged(0, Tolerance::Percent1));
+
+    let after = control.active_state().result.as_ref().unwrap().components();
+    assert_eq!(after, expected);
 }
 
 #[test]
