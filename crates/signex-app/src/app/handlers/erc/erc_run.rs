@@ -64,15 +64,28 @@ impl Signex {
         let (_pages, project_set) =
             crate::app::project_sheets::assemble_active_project_sheets(&self.document_state);
 
-        // The child sheet-map keyed by the exact `ChildSheet.filename` each
-        // parent references (not the bare basename) — the shared view the
-        // netlist stitcher and ERC's `BadHierSheetPin` both read (ADR-0002 D8).
+        // Per-sheet resolution submap + the shared key->sheet table — the
+        // view the netlist stitcher and ERC's `BadHierSheetPin` both read
+        // (ADR-0002 D8). Each sheet gets its OWN resolution submap, not one
+        // project-wide filename map (#466): two parents in different
+        // directories that reference a child by the same filename string
+        // each resolve their own file instead of colliding into one slot.
         // Built from the project's own sheets only: an open tab belonging to
         // some *other* project must never resolve this project's child
         // references.
-        let (children, children_issues) =
-            crate::app::project_sheets::project_children_map(&project_set.sheets);
-        for issue in &children_issues {
+        let project_dir = self
+            .document_state
+            .active_document_project()
+            .map(|p| p.dir().to_path_buf());
+        let base_dir = project_dir.clone().or_else(|| {
+            project_set
+                .root
+                .as_ref()
+                .and_then(|r| r.parent().map(std::path::PathBuf::from))
+        });
+        let graph =
+            crate::app::project_sheets::project_graph(&project_set.sheets, base_dir.as_deref());
+        for issue in &graph.issues {
             crate::diagnostics::log_warning(crate::app::project_sheets::stitch_issue_message(
                 issue,
             ));
@@ -85,16 +98,28 @@ impl Signex {
             snapshots_by_path.entry(path).or_insert(sheet);
         }
 
-        // Second pass: run ERC with the shared children map so
-        // BadHierSheetPin can cross-check each sheet symbol against
-        // the actual child schematic.
+        // Second pass: run ERC with each sheet's own resolution submap so
+        // BadHierSheetPin can cross-check each sheet symbol against the
+        // actual child schematic — the same file the netlist stitcher
+        // resolved for that same reference.
+        let empty_resolved: std::collections::HashMap<String, signex_net::SheetKey> =
+            std::collections::HashMap::new();
         for (path, snapshot) in &snapshots_by_path {
+            let key = crate::app::project_sheets::sheet_key(path, base_dir.as_deref());
+            let resolved = graph.resolved.get(&key).unwrap_or(&empty_resolved);
             let violations = if let Some(eval_fns) = dsl_eval_fns.as_ref() {
                 apply_overrides(signex_erc::run_with_project_and_dsl(
-                    snapshot, &children, eval_fns,
+                    snapshot,
+                    resolved,
+                    &graph.sheets,
+                    eval_fns,
                 ))
             } else {
-                apply_overrides(signex_erc::run_with_project(snapshot, &children))
+                apply_overrides(signex_erc::run_with_project(
+                    snapshot,
+                    resolved,
+                    &graph.sheets,
+                ))
             };
             by_path.insert(path.clone(), violations);
         }

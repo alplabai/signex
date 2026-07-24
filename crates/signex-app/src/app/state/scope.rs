@@ -60,13 +60,13 @@ fn project_listing_sheet<'a>(
 
 /// `child path → parent path` over every loaded sheet, built from the parents'
 /// own `child_sheets` references (each resolved against the parent's
-/// directory, matching `project_sheets::project_children_map`).
+/// directory, matching `project_sheets::project_graph`).
 ///
 /// `loaded` is a `HashMap`, whose iteration order is per-instance random —
 /// sorted by parent path first so that when two parents claim the same
 /// resolved child key, the first-wins tie-break (lexicographically-smallest
 /// parent path) is the same every run, matching the identical hazard fixed in
-/// `project_sheets::project_children_map`.
+/// `project_sheets::project_graph`.
 fn parent_of(loaded: &HashMap<PathBuf, Vec<String>>) -> HashMap<String, PathBuf> {
     let mut entries: Vec<(&PathBuf, &Vec<String>)> = loaded.iter().collect();
     entries.sort_by(|a, b| a.0.cmp(b.0));
