@@ -9,7 +9,6 @@ pub enum Channel {
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum ContextAction {
     Copy,
     Cut,

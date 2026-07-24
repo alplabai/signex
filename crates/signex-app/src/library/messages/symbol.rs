@@ -5,7 +5,6 @@
 use super::*;
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum SymbolEditorMsg {
     // ── Symbol ─────────────────────────────────────────────
     /// Set the active drawing tool on the Symbol canvas.
