@@ -27,6 +27,9 @@ mod project;
 #[path = "regression/prefs.rs"]
 mod prefs;
 
+#[path = "regression/preferences_dirty_guard.rs"]
+mod preferences_dirty_guard;
+
 #[path = "regression/library_undo.rs"]
 mod library_undo;
 
