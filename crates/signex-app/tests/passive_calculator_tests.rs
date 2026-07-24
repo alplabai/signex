@@ -15,14 +15,13 @@ fn calculator_messages_update_the_dedicated_control_state() {
 }
 
 #[test]
-fn tools_menu_message_routes_to_the_calculator_open_flow() {
+fn tools_menu_message_produces_a_window_open_task() {
     let (mut app, _startup) = Signex::new();
-    let _task = app.update(Message::Menu(MenuMessage::OpenPassiveCalculator));
-    assert!(
-        app.ui_state
-            .windows
-            .values()
-            .all(|kind| !matches!(kind, WindowKind::PassiveCalculator))
+    let task = app.update(Message::Menu(MenuMessage::OpenPassiveCalculator));
+    assert_eq!(
+        task.units(),
+        1,
+        "opening the passive calculator should produce a window task"
     );
 }
 
