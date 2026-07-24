@@ -27,7 +27,12 @@ struct VertexOut {
     @location(2) p1: vec2<f32>,
     @location(3) half_width: f32,
     @location(4) color: vec4<f32>,
+    @location(5) @interpolate(flat) style: u32,
 };
+
+// Low `style` bit selects the dash pattern — mirrors `LineSegment::STYLE_DASHED`
+// (`crates/signex-gfx/src/primitive/line.rs`).
+const STYLE_DASHED: u32 = 1u;
 
 fn sdf_segment(p: vec2<f32>, a: vec2<f32>, b: vec2<f32>) -> f32 {
     let pa = p - a;
@@ -80,6 +85,7 @@ fn vs_main(@builtin(vertex_index) vi: u32, inst: LineInstance) -> VertexOut {
     out.p1 = inst.p1;
     out.half_width = hw;
     out.color = inst.color;
+    out.style = inst.style;
     return out;
 }
 
@@ -87,6 +93,22 @@ fn vs_main(@builtin(vertex_index) vi: u32, inst: LineInstance) -> VertexOut {
 fn fs_main(input: VertexOut) -> @location(0) vec4<f32> {
     let edge_soft = camera.mm_per_px * 0.4;
     let d = sdf_segment(input.world_pos, input.p0, input.p1);
-    let alpha = 1.0 - smoothstep(input.half_width - edge_soft, input.half_width + edge_soft, d);
+    var alpha = 1.0 - smoothstep(input.half_width - edge_soft, input.half_width + edge_soft, d);
+
+    if ((input.style & STYLE_DASHED) != 0u) {
+        // Dash/gap length in world mm, derived from `camera.mm_per_px` so the
+        // pattern reads the same physical pixel size at any zoom — matching
+        // the CPU `pcb_canvas::draw_dashed_line` dash=8px / gap=5px constants.
+        let dir = normalize(input.p1 - input.p0);
+        let along_mm = dot(input.world_pos - input.p0, dir);
+        let dash_mm = 8.0 * camera.mm_per_px;
+        let gap_mm = 5.0 * camera.mm_per_px;
+        let period_mm = dash_mm + gap_mm;
+        let pos_in_period = along_mm - period_mm * floor(along_mm / period_mm);
+        if (pos_in_period > dash_mm) {
+            alpha = 0.0;
+        }
+    }
+
     return vec4<f32>(input.color.rgb, input.color.a * alpha);
 }

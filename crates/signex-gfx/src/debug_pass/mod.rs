@@ -170,6 +170,161 @@ pub async fn run_line_circle_smoke_pass(scale_px_per_mm: f32) -> Result<SmokePas
     })
 }
 
+/// Render one dashed [`LineSegment`] and read back the framebuffer's red
+/// channel at a handful of x pixels along the line's centre row. Proves
+/// `line.wgsl` actually honours `LineSegment::STYLE_DASHED` on the GPU
+/// (rather than just in the Rust-side `is_dashed()` predicate `order.rs`
+/// pins): a solid white line over a black clear reads bright everywhere,
+/// while a real dash pattern reads bright only where the shader's dash math
+/// says it should. Returns the sampled red-channel bytes (0-255) at the given
+/// world-mm x offsets along the line.
+///
+/// Geometry is chosen so the shader's dash math (`dash_mm = 8 * mm_per_px`,
+/// `gap_mm = 5 * mm_per_px`) lands on exact pixel boundaries at
+/// `scale_px_per_mm = 4.0` (`mm_per_px = 0.25`): an 8px dash then a 5px gap,
+/// repeating every 13px — independent of zoom, since `dash_mm *
+/// scale_px_per_mm` always collapses back to the literal `8`.
+async fn run_line_dash_readback_smoke_pass(sample_x_px: &[u32]) -> Result<Vec<u8>, String> {
+    let instance = wgpu::Instance::default();
+
+    let adapter = instance
+        .request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::LowPower,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        })
+        .await
+        .map_err(|err| format!("failed to acquire adapter: {err}"))?;
+
+    let (device, queue) = adapter
+        .request_device(&wgpu::DeviceDescriptor {
+            label: Some("signex_gfx_dash_readback_device"),
+            required_features: wgpu::Features::empty(),
+            required_limits: wgpu::Limits::downlevel_defaults(),
+            experimental_features: wgpu::ExperimentalFeatures::disabled(),
+            memory_hints: wgpu::MemoryHints::Performance,
+            trace: wgpu::Trace::Off,
+        })
+        .await
+        .map_err(|err| format!("failed to acquire device: {err}"))?;
+
+    let target_format = wgpu::TextureFormat::Bgra8Unorm;
+    const WIDTH: u32 = 128;
+    const HEIGHT: u32 = 8;
+    let scale_px_per_mm = 4.0f32;
+    let camera = CameraUniform::ortho([WIDTH as f32, HEIGHT as f32], [0.0, 0.0], scale_px_per_mm);
+    let camera_gpu = CameraGpu::new(&device, camera);
+
+    let mut line_pipeline =
+        LinePipeline::new(&device, target_format, camera_gpu.bind_group_layout());
+
+    // Centre row (world y = 1mm = HEIGHT/2 px), spanning almost the full
+    // viewport width so several dash/gap periods land inside it.
+    let lines = [LineSegment {
+        p0: [0.0, 1.0],
+        p1: [30.0, 1.0],
+        width: 1.0,
+        color: [1.0, 1.0, 1.0, 1.0],
+        style: LineSegment::STYLE_DASHED,
+        _pad: 0,
+    }];
+    line_pipeline.upload(&device, &queue, &lines);
+
+    let target = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("signex_gfx_dash_readback_target"),
+        size: wgpu::Extent3d {
+            width: WIDTH,
+            height: HEIGHT,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: target_format,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    let target_view = target.create_view(&wgpu::TextureViewDescriptor::default());
+
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("signex_gfx_dash_readback_encoder"),
+    });
+    {
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("signex_gfx_dash_readback_render_pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &target_view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+        line_pipeline.draw(&mut pass, camera_gpu.bind_group());
+    }
+
+    // Bgra8Unorm is 4 bytes/pixel; WIDTH * 4 = 512 is already a multiple of
+    // wgpu::COPY_BYTES_PER_ROW_ALIGNMENT (256), so no row padding is needed.
+    let bytes_per_row = WIDTH * 4;
+    let buffer_size = (bytes_per_row * HEIGHT) as wgpu::BufferAddress;
+    let readback = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("signex_gfx_dash_readback_buffer"),
+        size: buffer_size,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    encoder.copy_texture_to_buffer(
+        wgpu::TexelCopyTextureInfo {
+            texture: &target,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(bytes_per_row),
+                rows_per_image: Some(HEIGHT),
+            },
+        },
+        wgpu::Extent3d {
+            width: WIDTH,
+            height: HEIGHT,
+            depth_or_array_layers: 1,
+        },
+    );
+
+    queue.submit(Some(encoder.finish()));
+
+    let slice = readback.slice(..);
+    slice.map_async(wgpu::MapMode::Read, |result| {
+        result.expect("readback buffer map failed");
+    });
+    let _ = device.poll(wgpu::PollType::wait_indefinitely());
+
+    let row = HEIGHT / 2;
+    let samples = {
+        let data = slice.get_mapped_range();
+        sample_x_px
+            .iter()
+            .map(|&x| {
+                let offset = (row * bytes_per_row + x * 4) as usize;
+                // Bgra8Unorm byte order is [B, G, R, A]; red is byte index 2.
+                data[offset + 2]
+            })
+            .collect::<Vec<u8>>()
+    };
+    readback.unmap();
+
+    Ok(samples)
+}
+
 async fn run_arc_smoke_pass_with(scale_px_per_mm: f32, arcs: &[Arc]) -> Result<u32, String> {
     let instance = wgpu::Instance::default();
 

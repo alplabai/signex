@@ -9,9 +9,10 @@
 //! `scene_shader::ScenePrimitive::draw` walks [`GPU_SCENE_DRAW_ORDER`] and
 //! `pcb_canvas::draw_scene` walks [`CPU_PCB_DRAW_ORDER`], so reordering either
 //! path means editing the const here — and the parity tests below fail until
-//! both sides agree. Those tests also pin the CPU↔GPU divergences PR #308 has
-//! *not* yet reconciled (issue #1 dashed lines, issue #4 polygon z-order),
-//! turning any future fix into a mechanical, test-guarded change.
+//! both sides agree. Issue #1 (dashed lines render solid on GPU) is fixed —
+//! `line.wgsl` now honours the dash style bit. Issue #4 (polygon z-order,
+//! including the overlay-under-base-content case) remains open, turning any
+//! future fix into a mechanical, test-guarded change.
 
 /// A drawable bucket of a [`Scene`](crate::scene::Scene). Every variant maps
 /// 1:1 to a `Vec` field on the scene; the order of a slice of these is a draw
@@ -150,25 +151,12 @@ mod tests {
         assert!(!line.is_dashed());
     }
 
-    /// #1 (unreconciled): `is_dashed` is honoured by the CPU renderer, but the
-    /// GPU `line.wgsl` shader drops the `style` attribute (VertexOut has no
-    /// style field and `fs_main` has no dash/gap discard), so a dashed segment
-    /// renders SOLID on the GPU. This pins the contract both sides must meet;
-    /// wiring dash into the shader (issue #1) is the fix and flips this test's
-    /// intent.
-    #[test]
-    fn dashed_lines_are_a_known_gpu_gap() {
-        let line = LineSegment {
-            p0: [0.0, 0.0],
-            p1: [1.0, 0.0],
-            width: 0.2,
-            color: [1.0, 1.0, 1.0, 1.0],
-            style: LineSegment::STYLE_DASHED,
-            _pad: 0,
-        };
-        // Rust-side contract says "dashed"; the GPU shader does not yet obey it.
-        assert!(line.is_dashed());
-    }
+    // #1 (fixed): `is_dashed()` above is the Rust-side contract; the actual
+    // GPU-visible fix — `line.wgsl` forwarding `style` and discarding the
+    // gap portions of a dashed segment — is pixel-verified by
+    // `debug_pass::tests::line_wgsl_actually_renders_a_dashed_pattern`
+    // (a Rust-only assertion here can't see shader text, so it belongs
+    // there, not as a second copy of the predicate check above).
 
     #[test]
     fn circle_fill_predicate_splits_on_stroke_width() {
