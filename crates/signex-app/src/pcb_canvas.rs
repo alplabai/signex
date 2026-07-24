@@ -736,20 +736,19 @@ mod tests {
     }
 
     #[test]
-    fn gpu_scene_folds_an_overlay_polygon_into_the_main_bucket_known_z_order_divergence() {
-        // Known divergence pinned in `Self::gpu_scene`'s doc comment (Caner's
-        // finding, `scene::order`'s parity tests are BLIND to this: the fold
-        // happens upstream of the shared draw-order consts). The CPU
-        // `draw_scene` path walks `CPU_PCB_DRAW_ORDER`, which paints
-        // `OverlayPolygons` LAST -- on top of every line/circle/polygon. But
-        // `gpu_scene()` folds `overlay_polygons` into the main `polygons`
-        // Vec *before* the GPU shader ever sees the scene, so
-        // `GPU_SCENE_DRAW_ORDER` (which has no overlay buckets at all) draws
-        // that geometry as an ordinary member of the early `Polygons` bucket
-        // -- under traces, not on top of them. Reconciling this wants
-        // dedicated late-overlay buckets on the GPU side, tied to the
-        // pending z-order work; until then this test pins the fold so it
-        // cannot silently change.
+    fn gpu_scene_keeps_an_overlay_polygon_out_of_the_main_bucket() {
+        // #4 (fixed, review #308 finding 4): `gpu_scene()` used to fold
+        // `overlay_polygons` into the main `polygons` Vec *before* the GPU
+        // shader ever saw the scene, so `GPU_SCENE_DRAW_ORDER` (which has no
+        // overlay buckets at all) drew that geometry as an ordinary member of
+        // the early `Polygons` bucket -- under traces, not on top of them --
+        // while the CPU `draw_scene` path walks `CPU_PCB_DRAW_ORDER`, which
+        // paints `OverlayPolygons` LAST. `gpu_scene()` now leaves overlay
+        // geometry in its own field, and `scene_shader::ScenePrimitive::draw`
+        // composites it in a dedicated pass strictly after every base bucket
+        // -- matching the CPU path exactly. This pins that CPU==GPU parity by
+        // comparing the same distinctly-coloured overlay polygon across both
+        // scene builds.
         let mut canvas = PcbCanvas::new();
         let snapshot = PcbSnapshot::default().with_drc_markers(vec![DrcMarkerInput {
             center: [5.0, 5.0],
@@ -758,8 +757,7 @@ mod tests {
             violation_type: None,
         }]);
 
-        // Pre-fold reference, built with the exact same theme resolution
-        // `gpu_scene` uses: a DRC marker is the one thing an otherwise-empty
+        // CPU reference: a DRC marker is the one thing an otherwise-empty
         // board contributes to `overlay_polygons`, distinctly coloured by
         // severity (`ColorSlot::ErcError`) and nothing else lands in the
         // plain `polygons` bucket for an empty board.
@@ -778,19 +776,18 @@ mod tests {
         canvas.set_renderer_snapshot(Some(snapshot));
         let gpu_scene = canvas.gpu_scene().expect("snapshot is set");
 
-        // The fold: the same distinctly-coloured polygon now lives in
-        // `polygons`, not `overlay_polygons` -- proving it draws in the
-        // early Polygons bucket (under traces) on the GPU path, while the
-        // CPU path keeps it in OverlayPolygons (drawn last, on top).
+        // Parity: the same distinctly-coloured polygon stays in
+        // `overlay_polygons` on the GPU path too, never folded into the main
+        // `polygons` bucket -- CPU and GPU agree on where it lives.
         assert!(
-            gpu_scene.overlay_polygons.is_empty(),
-            "gpu_scene must drain overlay_polygons"
+            gpu_scene.polygons.is_empty(),
+            "the overlay polygon must not be folded into the main polygons bucket"
         );
         assert_eq!(
-            gpu_scene.polygons.len(),
+            gpu_scene.overlay_polygons.len(),
             1,
-            "the overlay polygon must be folded into the main polygons bucket"
+            "gpu_scene must keep the overlay polygon in its own bucket"
         );
-        assert_eq!(gpu_scene.polygons[0].fill_color, overlay_fill_color);
+        assert_eq!(gpu_scene.overlay_polygons[0].fill_color, overlay_fill_color);
     }
 }
