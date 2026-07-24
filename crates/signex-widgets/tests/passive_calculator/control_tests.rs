@@ -1,3 +1,4 @@
+use signex_widgets::passive_calculator::control::format_difference;
 use signex_widgets::passive_calculator::{
     BoundaryCondition, CalculatorControl, CalculatorMessage, CalculatorTab, ComponentKind, ESeries,
     Network, ProductionDateCycle, ProductionMonth, RatedPower, RkmEncoderMessage, SiPrefix,
@@ -24,6 +25,16 @@ fn decimal_comma_is_accepted() {
     control.update(CalculatorMessage::TargetChanged("2,2".to_string()));
     control.update(CalculatorMessage::PrefixChanged(SiPrefix::Kilo));
     assert_eq!(control.target_value().unwrap(), 2_200.0);
+}
+
+#[test]
+fn differences_use_compact_signed_percentages() {
+    assert_eq!(format_difference(120.0, 100.0), "20 (+20%)");
+    assert_eq!(format_difference(80.0, 100.0), "20 (-20%)");
+    assert_eq!(format_difference(120.56, 100.0), "20.56 (+20.56%)");
+    assert_eq!(format_difference(84.5, 100.0), "15.5 (-15.5%)");
+    assert_eq!(format_difference(100.0, 100.0), "0 (0%)");
+    assert_eq!(format_difference(20.0, 0.0), "unbounded");
 }
 
 #[test]

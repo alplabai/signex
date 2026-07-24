@@ -428,7 +428,7 @@ fn metric<'a>(
     .into()
 }
 
-fn format_difference(value: f64, target: f64) -> String {
+pub fn format_difference(value: f64, target: f64) -> String {
     if value == target {
         return "0 (0%)".to_string();
     }
@@ -437,7 +437,12 @@ fn format_difference(value: f64, target: f64) -> String {
     }
     let difference = value - target;
     let percentage = difference / target * 100.0;
-    format!("{:+} ({:+.4}%)", format_number(difference), percentage)
+    let percentage_sign = if percentage > 0.0 { "+" } else { "" };
+    format!(
+        "{} ({percentage_sign}{}%)",
+        format_number(difference.abs()),
+        format_number(percentage),
+    )
 }
 
 fn token_color(color: signex_types::theme::Color) -> iced::Color {
