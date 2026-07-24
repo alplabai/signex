@@ -8,12 +8,26 @@
 //! so `build_project_netlist(root, &{}, None).netlist` is byte-identical to
 //! `build_netlist(root)`.
 //!
+//! **Multi-root / flat-stitch traversal (#430):** the root's hierarchy is
+//! walked first, exactly as before; any `children` entry that walk never
+//! reaches is then visited *again*, as an independent top-level page of its
+//! own (own subtree, own cycle-detection path, unqualified name chain — a
+//! peer of the root, not nested under it). This is what lets a flat,
+//! multi-page project — several sibling sheets, none referencing any other,
+//! which is exactly what `Add Existing Sheet` produces — stitch into one
+//! netlist instead of leaving every sheet but the root out of it: pass every
+//! sheet the project consists of in `children` (whether or not anything
+//! references it) and every one of them contributes.
+//!
 //! Two-level union-find: **level 1** is the per-sheet derivation (wires,
 //! junctions, on-sheet label merge) plus sheet-pin anchoring; **level 2** joins
 //! the resulting per-occurrence net roots across the project by three rules —
 //! same-name Global/Power labels, power-port symbols as global name carriers,
-//! and sheet-pin ↔ child-label binding. Structural problems are reported as
-//! [`StitchIssue`]s in-band; the netlist is always produced, deterministically.
+//! and sheet-pin ↔ child-label binding. These rules run over *every* occurrence
+//! regardless of which root's subtree it came from, so cross-page merging for
+//! a flat project falls out of the existing machinery unchanged — no new net
+//! model. Structural problems are reported as [`StitchIssue`]s in-band; the
+//! netlist is always produced, deterministically.
 
 use std::collections::{HashMap, HashSet};
 
@@ -108,10 +122,15 @@ struct Analysis<'a> {
 }
 
 /// Build the whole-project [`Netlist`] by stitching the root sheet to its
-/// children.
+/// children — plus, per #430, any `children` entry the root's hierarchy never
+/// reaches, stitched in as its own independent top-level page.
 ///
 /// `children` is keyed by the exact `ChildSheet.filename` string as written on
-/// the parent (not a basename); `root_filename` — the root's own filename, if
+/// the parent for a sheet reached by a real reference (not a basename); a
+/// flat sibling with no reference pointing at it can be keyed by whatever
+/// stable string the caller resolves it by (e.g. its own path or basename) —
+/// nothing needs to reference that key for the sheet to be stitched in, only
+/// the map entry needs to exist. `root_filename` — the root's own filename, if
 /// known — lets a child that re-references the root be caught as a cycle. See
 /// the module docs for the stitching rules. `build_project_netlist(root, &{},
 /// None).netlist` equals `build_netlist(root)` byte-for-byte.
@@ -128,6 +147,11 @@ pub fn build_project_netlist(
     let mut occs: Vec<Occ> = Vec::new();
     let mut edges: Vec<(usize, usize, usize)> = Vec::new(); // (parent occ, cs index, child occ)
     let mut path: Vec<String> = Vec::new();
+    // Every `children` key the walk actually reaches (root's own filename
+    // included) — not the ancestor-only `path`, this only ever grows, so
+    // after the root's hierarchy is fully walked it tells us exactly which
+    // map entries are still orphans.
+    let mut visited: HashSet<String> = HashSet::new();
     visit(
         root,
         Vec::new(),
@@ -136,8 +160,35 @@ pub fn build_project_netlist(
         &mut occs,
         &mut edges,
         children,
+        &mut visited,
         &mut issues,
     );
+
+    // ---- Multi-root / flat-stitch (#430): visit every still-unreached ------
+    // `children` entry as its own top-level page. Sorted key order keeps
+    // occurrence numbering (and therefore NetId assignment) deterministic
+    // regardless of the map's hash order; membership is rechecked on every
+    // iteration (not precomputed) because visiting one orphan's own subtree
+    // can reach another — e.g. a flat sibling that itself has child sheets.
+    let mut orphan_keys: Vec<&String> = children.keys().collect();
+    orphan_keys.sort();
+    for key in orphan_keys {
+        if visited.contains(key) {
+            continue;
+        }
+        path.clear();
+        visit(
+            &children[key],
+            Vec::new(),
+            Some(key.as_str()),
+            &mut path,
+            &mut occs,
+            &mut edges,
+            children,
+            &mut visited,
+            &mut issues,
+        );
+    }
 
     detect_shared_references(&occs, &mut issues);
 
@@ -394,7 +445,9 @@ fn analyze(sheet: &SchematicSheet) -> Analysis<'_> {
 }
 
 /// DFS the hierarchy, recording occurrences, parent→child edges, and structural
-/// issues (missing children, cycles).
+/// issues (missing children, cycles). Also records every `children` key
+/// reached into `visited`, so the caller can tell which map entries this walk
+/// never touched (#430's flat-sibling promotion).
 #[allow(clippy::too_many_arguments)]
 fn visit<'a>(
     sheet: &'a SchematicSheet,
@@ -404,6 +457,7 @@ fn visit<'a>(
     occs: &mut Vec<Occ<'a>>,
     edges: &mut Vec<(usize, usize, usize)>,
     children: &'a HashMap<String, SchematicSheet>,
+    visited: &mut HashSet<String>,
     issues: &mut Vec<StitchIssue>,
 ) -> usize {
     let my_id = occs.len();
@@ -419,6 +473,7 @@ fn visit<'a>(
     });
     if let Some(k) = this_key {
         path.push(k.to_string());
+        visited.insert(k.to_string());
     }
 
     for (cs_index, cs) in sheet.child_sheets.iter().enumerate() {
@@ -447,6 +502,7 @@ fn visit<'a>(
                     occs,
                     edges,
                     children,
+                    visited,
                     issues,
                 );
                 edges.push((my_id, cs_index, cid));
