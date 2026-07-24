@@ -161,7 +161,6 @@ pub fn handle_interaction(handle: GraphicHandle) -> mouse::Interaction {
 /// Default new-pin layout: place new pins to the right of the body.
 const DEFAULT_PIN_LENGTH_MM: f64 = 2.54;
 
-/// Highest declared part number across every pin on `sym`. `0`
 /// v0.13 — SchLib editor active-bar dropdown menu identifier. One
 /// per chevron-bearing button on the unified active bar. Mirrors the
 /// footprint editor's `FpActiveBarMenu`.
@@ -269,10 +268,14 @@ impl SymbolSelectionFilter {
     }
 }
 
-/// (Part Zero) is excluded — it's the special "appears on every
-/// part" marker, not a real part. Returns `1` for symbols with no
-/// pins or only Part Zero pins so multi-part wiring still has a
-/// sensible "current max part = 1" baseline.
+/// Highest declared part number across every pin on `sym`, reconciled
+/// with the first-class `Symbol.part_count`. `0` (Part Zero) is
+/// excluded — it's the special "appears on every part" marker, not a
+/// real part. Maxing against `part_count` (rather than reading pins
+/// alone) is what lets an empty New Part (no pins yet) survive
+/// navigate + save. Returns `1` for symbols with no pins or only Part
+/// Zero pins so multi-part wiring still has a sensible "current max
+/// part = 1" baseline.
 pub fn max_part_number(sym: &Symbol) -> u8 {
     let pin_max = sym
         .pins

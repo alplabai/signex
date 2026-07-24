@@ -6541,3 +6541,211 @@ fn placement_input_rounded_rect_commits_typed_size_and_radius() {
         "corner radius should be the typed 1.5 mm; got {arc_r}"
     );
 }
+
+// ─────────────────────────────────────────────────────────────────
+// #425 — Cut's preservable-selection gating (`partition_cuttable`)
+//
+// `handle_selection_cut_requested` partitions the active selection
+// into what `collect_selection_clipboard` can carry (cuttable) and
+// what it silently drops (kept — ChildSheet/SheetPin/…). Only the
+// cuttable subset gets copy+deleted; the rest stays on the canvas
+// and stays selected. Exercised at signex-engine unit level in
+// `partition_cuttable_keeps_child_sheet_and_pin_out_of_cut`; this is
+// the app-level end-to-end route via `Message::Edit(EditMsg::Cut)`.
+// ─────────────────────────────────────────────────────────────────
+
+/// A schematic engine with one plain `Symbol` (cuttable) and one
+/// `ChildSheet` (not cuttable — Copy drops it) already loaded and
+/// made active, so `EditMsg::Cut` routes to
+/// `handle_selection_cut_requested` against real engine state.
+/// Returns the app plus both element UUIDs.
+fn fixture_schematic_with_symbol_and_child_sheet()
+-> (signex_app::app::Signex, uuid::Uuid, uuid::Uuid) {
+    use signex_types::schematic::{ChildSheet, FillType, Point, SchematicSheet, Symbol};
+    use std::collections::HashMap;
+
+    let symbol_uuid = uuid::Uuid::new_v4();
+    let sheet_uuid = uuid::Uuid::new_v4();
+
+    let sheet = SchematicSheet {
+        uuid: uuid::Uuid::new_v4(),
+        version: 0,
+        generator: String::new(),
+        generator_version: String::new(),
+        paper_size: "A4".to_string(),
+        root_sheet_page: "1".to_string(),
+        symbols: vec![Symbol {
+            uuid: symbol_uuid,
+            lib_id: "Device:R".to_string(),
+            reference: "R1".to_string(),
+            value: "10k".to_string(),
+            footprint: String::new(),
+            datasheet: String::new(),
+            position: Point::new(0.0, 0.0),
+            rotation: 0.0,
+            mirror_x: false,
+            mirror_y: false,
+            unit: 1,
+            is_power: false,
+            ref_text: None,
+            val_text: None,
+            fields_autoplaced: false,
+            fields_user_placed: false,
+            dnp: false,
+            in_bom: true,
+            on_board: true,
+            exclude_from_sim: false,
+            locked: false,
+            fields: HashMap::new(),
+            custom_properties: Vec::new(),
+            pin_uuids: HashMap::new(),
+            instances: Vec::new(),
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
+        }],
+        wires: Vec::new(),
+        junctions: Vec::new(),
+        labels: Vec::new(),
+        child_sheets: vec![ChildSheet {
+            uuid: sheet_uuid,
+            name: "Power".to_string(),
+            filename: "power.snxsch".to_string(),
+            position: Point::new(20.0, 20.0),
+            size: (30.0, 30.0),
+            stroke_width: 0.12,
+            fill: FillType::None,
+            stroke_color: None,
+            fill_color: None,
+            fields_autoplaced: false,
+            pins: Vec::new(),
+            instances: Vec::new(),
+        }],
+        no_connects: Vec::new(),
+        text_notes: Vec::new(),
+        buses: Vec::new(),
+        bus_entries: Vec::new(),
+        drawings: Vec::new(),
+        no_erc_directives: Vec::new(),
+        title_block: HashMap::new(),
+        lib_symbols: HashMap::new(),
+    };
+
+    let path = PathBuf::from("cut-gating.snxsch");
+    let engine = signex_engine::Engine::new(sheet).expect("engine");
+    let (mut app, _initial_task) = Signex::new();
+    app.document_state.engines.insert(path.clone(), engine);
+    app.document_state.active_path = Some(path.clone());
+    // `finish_schematic_mutation` (the tail of every engine-command
+    // apply, including Delete inside Cut) round-trips through
+    // `with_active_schematic_session_mut`, which requires a `TabInfo`
+    // at `active_tab` whose path matches — without one it silently
+    // no-ops and the post-delete `selected.clear()` never runs.
+    app.document_state.tabs.push(signex_app::app::TabInfo {
+        title: "cut-gating".to_string(),
+        path: path.clone(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: signex_app::app::TabKind::Schematic,
+    });
+    app.document_state.active_tab = 0;
+
+    (app, symbol_uuid, sheet_uuid)
+}
+
+#[test]
+fn cut_leaves_non_cuttable_child_sheet_in_place_and_selected() {
+    use signex_types::schematic::{SelectedItem, SelectedKind};
+
+    let (mut app, symbol_uuid, sheet_uuid) = fixture_schematic_with_symbol_and_child_sheet();
+
+    app.interaction_state.active_canvas_mut().selected = vec![
+        SelectedItem::new(symbol_uuid, SelectedKind::Symbol),
+        SelectedItem::new(sheet_uuid, SelectedKind::ChildSheet),
+    ];
+
+    let _ = app.update(Message::Edit(EditMsg::Cut));
+
+    let doc = app
+        .document_state
+        .active_engine()
+        .expect("engine still loaded")
+        .document();
+
+    // The Symbol was cut: gone from the document, landed on the clipboard.
+    assert!(
+        doc.symbols.is_empty(),
+        "Cut must remove the cuttable Symbol from the engine document"
+    );
+    assert_eq!(
+        app.interaction_state.clipboard_symbols.len(),
+        1,
+        "Cut must populate the clipboard with the cuttable Symbol"
+    );
+    assert_eq!(app.interaction_state.clipboard_symbols[0].uuid, symbol_uuid);
+
+    // The ChildSheet is not cuttable: still in the document, still selected.
+    assert_eq!(
+        doc.child_sheets.len(),
+        1,
+        "Cut must leave the non-cuttable ChildSheet in the document"
+    );
+    assert_eq!(doc.child_sheets[0].uuid, sheet_uuid);
+    assert_eq!(
+        app.interaction_state.active_canvas().selected,
+        vec![SelectedItem::new(sheet_uuid, SelectedKind::ChildSheet)],
+        "the ChildSheet must remain selected after Cut"
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────
+// #452 — Save-All routes a dirty .snxprj through save_project_at_path
+//
+// `try_save_dirty_path` (wired from both the project-close and the
+// app-quit `ProjectCloseChoice::SaveAll` confirm handlers) routes a
+// dirty `.snxprj` path to `save_project_at_path`. Drives the app-quit
+// leg: a real project's `.snxprj` marked dirty, then
+// `Message::Window(WindowMsg::CloseMainWindow)` to raise the confirm
+// modal, then `ProjectCloseChoice::SaveAll` to resolve it.
+// ─────────────────────────────────────────────────────────────────
+
+#[test]
+fn save_all_writes_dirty_snxprj_and_clears_dirty_marker() {
+    let (mut app, _tmp, prj_path) = fixture_project_with_companions("SaveAllProj");
+
+    app.document_state.dirty_paths.insert(prj_path.clone());
+    assert!(app.document_state.dirty_paths.contains(&prj_path));
+
+    // Raise the app-quit confirm modal (dirty workspace).
+    let _ = app.update(Message::Window(WindowMsg::CloseMainWindow));
+    assert!(
+        app.ui_state.app_quit_confirm.is_some(),
+        "a dirty workspace must open the app-quit confirm modal"
+    );
+
+    // Resolve it with Save All.
+    let _ = app.update(Message::Project(ProjectMsg::AppQuitConfirm(
+        ProjectCloseChoice::SaveAll,
+    )));
+
+    assert!(
+        app.ui_state.app_quit_confirm.is_none(),
+        "Save All must resolve the modal"
+    );
+    assert!(
+        app.document_state.export_error.is_none(),
+        "the real project's .snxprj is saveable — Save All must not report a failure"
+    );
+    assert!(
+        !app.document_state.dirty_paths.contains(&prj_path),
+        "Save All must clear the dirty marker once the .snxprj is written"
+    );
+
+    // The file on disk must exist, be non-empty, and round-trip.
+    let bytes = fs::read(&prj_path).expect("save_project_at_path must write the .snxprj");
+    assert!(!bytes.is_empty(), "saved .snxprj must not be empty");
+    let reloaded = signex_types::project::parse_project(&prj_path)
+        .expect("saved .snxprj must parse back as valid project JSON");
+    assert_eq!(reloaded.name, "SaveAllProj");
+}

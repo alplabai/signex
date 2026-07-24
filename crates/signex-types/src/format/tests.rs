@@ -309,6 +309,7 @@ fn snxsch_round_trip_with_data() {
         uuid: Uuid::parse_str("0192a8c0-0002-7000-8000-000000000001").unwrap(),
         position: SchPoint { x: 30.0, y: 20.0 },
         diameter: 0.5,
+        minted: true,
     });
     sheet.labels.push(Label {
         uuid: Uuid::parse_str("0192a8c0-0003-7000-8000-000000000001").unwrap(),
@@ -340,10 +341,62 @@ fn snxsch_round_trip_with_data() {
 
     assert_eq!(back.sheet.junctions.len(), 1);
     assert_eq!(back.sheet.junctions[0].diameter, 0.5);
+    assert!(
+        back.sheet.junctions[0].minted,
+        "minted provenance must survive the extras round-trip"
+    );
 
     assert_eq!(back.sheet.labels.len(), 1);
     assert_eq!(back.sheet.labels[0].text, "VIN");
     assert_eq!(back.sheet.labels[0].label_type, LType::Net);
+
+    // encode -> decode -> encode must be stable (issue #422 added a new
+    // persisted field; a re-serialise of the round-tripped sheet must not
+    // drift byte-for-byte from the original).
+    let re_serialised = SnxSchematic::new(back.sheet)
+        .write_string()
+        .expect("re-serialise");
+    assert_eq!(
+        serialised, re_serialised,
+        "encode -> decode -> encode must be stable"
+    );
+}
+
+/// A `.snxsch` written before issue #422 added `Junction::minted` never
+/// emitted `[extras.junctions.<uuid>]`. Loading one must not error and
+/// must treat every junction it names as user-placed (never auto-removed),
+/// not as an unminted/undefined provenance.
+#[test]
+fn snxsch_without_junction_extras_defaults_to_user_placed() {
+    let mut sheet = empty_sheet();
+    sheet.junctions.push(Junction {
+        uuid: Uuid::parse_str("0192a8c0-0002-7000-8000-000000000002").unwrap(),
+        position: SchPoint { x: 5.0, y: 0.0 },
+        diameter: 0.0,
+        minted: true,
+    });
+
+    let full = SnxSchematic::new(sheet).write_string().expect("serialise");
+
+    // Simulate the pre-#422 writer: strip the `[extras...]` tail this
+    // writer added for the minted dot, leaving only what an older Signex
+    // would have written for the same sheet.
+    let legacy = full
+        .split("\n[extras")
+        .next()
+        .expect("split always yields the head")
+        .to_string();
+    assert!(
+        !legacy.contains("[extras"),
+        "test fixture must actually drop the extras tail"
+    );
+
+    let back = SnxSchematic::parse(&legacy).expect("legacy file still loads");
+    assert_eq!(back.sheet.junctions.len(), 1);
+    assert!(
+        !back.sheet.junctions[0].minted,
+        "a junction with no extras entry must default to user-placed, never minted"
+    );
 }
 
 #[test]
