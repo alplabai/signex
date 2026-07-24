@@ -184,6 +184,11 @@ pub async fn run_line_circle_smoke_pass(scale_px_per_mm: f32) -> Result<SmokePas
 /// `scale_px_per_mm = 4.0` (`mm_per_px = 0.25`): an 8px dash then a 5px gap,
 /// repeating every 13px — independent of zoom, since `dash_mm *
 /// scale_px_per_mm` always collapses back to the literal `8`.
+///
+/// `cfg(test)` (unlike the other smoke-pass helpers above, which are `pub`
+/// for `tests/regression_golden.rs` to call as a separate crate): this one
+/// has no caller outside `debug_pass::tests`.
+#[cfg(test)]
 async fn run_line_dash_readback_smoke_pass(sample_x_px: &[u32]) -> Result<Vec<u8>, String> {
     let instance = wgpu::Instance::default();
 
