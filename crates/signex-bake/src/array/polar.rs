@@ -1,5 +1,6 @@
-//! Polar (rotational) array baking —  instances around a
-//! centre point, sweeping  total degrees.
+//! Polar (rotational) array baking — `count` instances around a
+//! centre point, sweeping `sweep_angle_expr` total degrees, with
+//! optional per-instance depopulation.
 
 use std::collections::{BTreeMap, HashMap};
 

@@ -10,9 +10,9 @@
 //! as when they lived in the single-file module.
 //!
 //! NB: this module keeps its *own* `NM_PER_MM` (an `f64` scale used by
-//! the file-format rounding logic). It is intentionally distinct from
-//! [`crate::coord::NM_PER_MM`] (an integer `Coord`) and is not merged
-//! with `coord.rs`.
+//! the file-format rounding logic) — the on-disk wire format is the
+//! only place nanometres are used; `crate::coord` no longer defines a
+//! competing integer-nm coordinate type (#394).
 
 const MM_PER_NM: f64 = 1.0e-6;
 const NM_PER_MM: f64 = 1.0e6;
