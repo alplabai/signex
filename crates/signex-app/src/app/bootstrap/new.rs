@@ -6,6 +6,7 @@ use super::super::*;
 use crate::canvas::SchematicCanvas;
 use crate::dock::{DockArea, PanelPosition};
 use crate::panels::PanelKind;
+use crate::pcb_trace_calculator::PcbTraceCalculatorState;
 
 impl Signex {
     pub fn new() -> (Self, Task<Message>) {
@@ -155,6 +156,7 @@ impl Signex {
                 net_color_undo: Vec::new(),
                 net_color_custom: crate::app::state::NetColorCustomState::default(),
                 command_palette: crate::app::command_palette::CommandPaletteState::default(),
+                pcb_trace_calculator: PcbTraceCalculatorState::default(),
             },
             document_state: DocumentState {
                 dock,

@@ -7,6 +7,7 @@ mod document;
 mod keymap;
 pub(crate) mod library;
 mod overlay;
+mod pcb_trace_calculator;
 mod text_edit;
 mod tool;
 mod ui;
@@ -150,6 +151,7 @@ impl Signex {
             Message::UpdateDrawingField(uuid, edit) => self.handle_update_drawing_field(uuid, edit),
             Message::Library(msg) => self.dispatch_library_message(msg),
             Message::CommandPalette(msg) => self.dispatch_command_palette_message(msg),
+            Message::PcbTraceCalculator(msg) => self.dispatch_pcb_trace_calculator_message(msg),
             Message::HistoryLoaded {
                 generation,
                 path: _,
@@ -274,6 +276,15 @@ impl Signex {
     /// / maximize buttons. Routed from `dispatch_update`.
     pub(crate) fn dispatch_window_message(&mut self, message: WindowMsg) -> Task<Message> {
         match message {
+            WindowMsg::OpenPcbTraceCalculator => self.open_pcb_trace_calculator(),
+            WindowMsg::PcbTraceCalculatorOpened(id) => {
+                if self.ui_state.windows.contains_key(&id) {
+                    self.ui_state
+                        .windows
+                        .insert(id, super::state::WindowKind::PcbTraceCalculator);
+                }
+                Task::none()
+            }
             WindowMsg::WindowResizedFor(id, w, h) => {
                 // Only main-window resizes drive layout math. Detached
                 // modal + undocked-tab windows have their own sizes
@@ -388,6 +399,7 @@ impl Signex {
                         // here beyond letting the window-id mapping
                         // drop above.
                         WindowKind::ComponentEditor { .. } => {}
+                        WindowKind::PcbTraceCalculator => {}
                     }
                 }
                 Task::none()

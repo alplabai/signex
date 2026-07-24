@@ -142,6 +142,8 @@ pub enum Message {
     /// `Message::CommandPalette` and routed to
     /// `dispatch_command_palette_message`.
     CommandPalette(CommandPaletteMsg),
+    /// Editable PCB Trace Calculator state changed.
+    PcbTraceCalculator(crate::pcb_trace_calculator::PcbTraceCalculatorMessage),
     /// Async result of a per-file Git history load issued by the
     /// right-dock History panel. `generation` is the value of
     /// `DocumentState.history.generation` at the time the load was

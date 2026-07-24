@@ -260,4 +260,6 @@ pub struct UiState {
     /// row. The chrome-strip search bar is the always-rendered input;
     /// `open` gates the dropdown overlay only.
     pub command_palette: super::super::command_palette::CommandPaletteState,
+    /// Tools -> PCB Trace Calculator window state.
+    pub pcb_trace_calculator: crate::pcb_trace_calculator::PcbTraceCalculatorState,
 }

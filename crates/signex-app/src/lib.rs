@@ -27,6 +27,7 @@ pub mod library;
 pub mod menu_bar;
 pub mod panels;
 pub mod pcb_canvas;
+pub use signex_pcb_trace_calculator::tool as pcb_trace_calculator;
 pub mod preferences;
 pub mod render_config;
 pub mod renderer_scene_canvas;

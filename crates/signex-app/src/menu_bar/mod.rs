@@ -196,6 +196,8 @@ pub enum MenuMessage {
     /// Altium's Tools ▸ Document Options entry. No-op when not on
     /// a SchLib tab.
     ToolsDocumentOptions,
+    /// Tools -> PCB Trace Calculator opens the IPC-2221 sizing tool.
+    OpenPcbTraceCalculator,
 }
 
 /// Context passed into `view` so each menu leaf can decide whether to

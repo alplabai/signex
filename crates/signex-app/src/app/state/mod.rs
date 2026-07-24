@@ -103,6 +103,8 @@ pub enum WindowKind {
         table: String,
         row_id: signex_library::RowId,
     },
+    /// Dedicated Tools -> PCB Trace Calculator utility window.
+    PcbTraceCalculator,
 }
 
 /// Kind of z-order picker currently armed. Drives the first-click

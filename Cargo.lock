@@ -5230,6 +5230,7 @@ dependencies = [
  "signex-library",
  "signex-net",
  "signex-output",
+ "signex-pcb-trace-calculator",
  "signex-renderer",
  "signex-sketch",
  "signex-types",
@@ -5391,6 +5392,14 @@ dependencies = [
  "tiny-skia",
  "ttf-parser",
  "uuid",
+]
+
+[[package]]
+name = "signex-pcb-trace-calculator"
+version = "0.14.0"
+dependencies = [
+ "iced",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
