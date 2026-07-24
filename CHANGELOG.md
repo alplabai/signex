@@ -1,8 +1,18 @@
 # Changelog
 
-All notable changes to Signex ship here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely and [Semantic Versioning](https://semver.org/spec/v2.0.0.html) strictly.
+All notable changes to Signex ship here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html), both strictly.
 
-Each release section is authored **before** the `vX.Y.Z` tag is created, so the release workflow picks it up as the GitHub Release body. `.github/workflows/release.yml` ("Extract CHANGELOG entry for this tag") matches `## [X.Y.Z]` against the tag with the leading `v` stripped.
+## Format
+
+- **Release heading:** `## [X.Y.Z] — YYYY-MM-DD`, newest first, directly under `## [Unreleased]`. Never `— unreleased` on a section you intend to tag.
+- **Section heading:** `### <Type> — <scope>`, where `<Type>` is one of Keep a Changelog's six — **Added**, **Changed**, **Deprecated**, **Removed**, **Fixed**, **Security**. The scope suffix is free text (`### Fixed — netlist`); drop it when the section covers the whole release (`### Changed`). Lead with the type so a reader scanning for regressions finds every `Fixed` without reading section titles.
+- **No `####`.** Sub-scope goes in the suffix after a colon: `### Added — footprint editor: sketch constraints`.
+- **Note sections** are allowed alongside the types, because they record something other than a change: `### Breaking changes`, `### Deferred to <version>`, `### Constraints — …`, `### Upgrade notes`, `### Known issues / workarounds`, `### Issues closed`, `### Provenance`, `### Versions affected`. Anything that *is* a change takes a type instead — don't reach for a note heading to avoid choosing one.
+- **Close every section** with `[Full changelog](https://github.com/alplabai/signex/compare/v<prev>...v<this>)`, where `<prev>` is the previous *tag* — not the previous section. v0.12.0 and v0.6.2 have no section, and v0.6.2 has a tag with none.
+
+## Release mechanics
+
+Each release section is authored **before** the `vX.Y.Z` tag is created, so the release workflow picks it up as the GitHub Release body. `.github/workflows/release.yml` ("Extract CHANGELOG entry for this tag") matches `## [X.Y.Z]` against the tag with the leading `v` stripped — so that heading line is load-bearing and must not be reworded.
 
 **Nothing enforces this.** A missing section is not an error — the workflow silently falls back to auto-generated notes, so a tag cut without a section still ships, just with a worse release page. This file previously cited `.claude/hooks/pre-release-guard.sh` as the enforcement; that path is gitignored and no such hook exists.
 
@@ -162,6 +172,8 @@ persistence, and CI/toolchain hardening (pinned Rust 1.97.0, an enforced
 - **Data-driven dropdown table** replaces the `dropdown.rs` god-file (#458).
 - The labeler matches `signex-app` tests so test-only PRs get area labels (#441).
 
+[Full changelog](https://github.com/alplabai/signex/compare/v0.14.0...v0.15.0)
+
 ## [0.14.0] — 2026-07-18
 
 **Everything since v0.13.0** — 221 commits, 2026-05-06 → 2026-07-18.
@@ -211,7 +223,7 @@ summarises by theme rather than listing every commit.
   (auto-closing an open chain) in a single undo step; and a **right-click
   context menu** built from a pure data-to-menu row function.
 
-### Added — keyboard and commands
+### Added — keyboard & commands
 
 - **Configurable keyboard-shortcut profiles with an in-app editor** (#202,
   supersedes #116).
@@ -310,7 +322,7 @@ summarises by theme rather than listing every commit.
   paper size (#201); library server gains a persistent DB backend and rejects
   duplicate-row POST (#97, #122).
 
-### CI
+### Changed — CI
 
 - lavapipe installed so `signex-gfx` GPU smoke tests run headless (#126).
 - `cargo-deny` advisories are informational, not a merge gate (#123).
@@ -328,7 +340,7 @@ feature flag while it was finished; v0.14 completes the remaining active-bar
 tooling and **enables the editor** — opening a `.snxfpt` now opens an editable
 tab, and the New Footprint / PCB Library create flow is live again.
 
-#### Sketch constraints
+### Added — footprint editor: sketch constraints
 
 - **Nine more sketch constraints exposed** in the sketch-mode active
   bar: Tangent (line-arc + arc-arc), Angle, Equal-Radius, Point-on-Arc,
@@ -339,7 +351,7 @@ tab, and the New Footprint / PCB Library create flow is live again.
   constraint buttons light up. The two 3-entity Symmetric constraints
   take their third entity from the multi-select extra slot.
 
-#### Active-bar tools wired
+### Added — footprint editor: active-bar tools
 
 - **Align / Distribute / Spacing** (12 ops) — Align Left/Right/Top/
   Bottom + center H/V, Distribute Horizontally/Vertically (equal centre
@@ -357,7 +369,7 @@ tab, and the New Footprint / PCB Library create flow is live again.
 - **Selection-filter "All - On / All - Off"** toggle wired to a new
   `SelectionFilter::set_all`.
 
-#### Deferred cleanup
+### Added — footprint editor: deferred cleanup
 
 - **Move Selection by X, Y…** now opens a typed-delta modal (two mm
   inputs) that nudges the pad selection by the entered amount, reusing
@@ -375,21 +387,21 @@ tab, and the New Footprint / PCB Library create flow is live again.
   in prefs, with a "Save current filter as preset" capture. (Replaces the
   schematic-typed presets that could not apply to footprints.)
 
-#### Fixed — footprint editor
+### Fixed — footprint editor
 
 - **Pad shape-param leak** — `mint_shape_geometry_for` now clears a
   pad's `shape_params` before regenerating geometry, so changing a pad's
   shape (e.g. RoundRect → Round) no longer strands stale parameter keys
   for the solver / next bake.
 
-#### Changed — footprint editor
+### Changed — footprint editor
 
 - `FOOTPRINT_EDITOR_ENABLED` flipped `false` → `true`
   (`crates/signex-app/src/feature_flags.rs`). The
   `opening_snxfpt_does_not_create_editable_tab_when_gated` regression
   test branches on the flag and now asserts the enabled behaviour.
 
-#### Deferred to v0.15
+### Deferred to v0.15
 
 - Break Track / Drag Track End (need track-segment split infra).
 
@@ -400,6 +412,8 @@ tab, and the New Footprint / PCB Library create flow is live again.
   `cargo-deny` advisories + licenses green; full `cargo test --workspace`
   green (GPU smoke tests skip headlessly).
 
+[Full changelog](https://github.com/alplabai/signex/compare/v0.13.0...v0.14.0)
+
 ## [0.13.0] — 2026-05-31
 
 The **v0.13 Symbol & Library** milestone. This release pairs the
@@ -409,7 +423,7 @@ cleanroom rewrite ships here. The workspace version had already advanced
 to `0.13.0`, so this release adopts that number rather than bumping
 backward.
 
-### Headline — cleanroom schematic renderer
+### Changed — cleanroom schematic renderer
 
 - **Clean-room reimplementation** of `crates/signex-renderer/src/schematic.rs`
   (label / symbol / field-style rendering) and the field-autoplace
@@ -467,7 +481,7 @@ backward.
   surface is hidden. The full editor returns in a later release by
   flipping the flag.
 
-### Tests
+### Added — tests
 
 - New regression coverage pinning the footprint gate
   (`opening_snxfpt_does_not_create_editable_tab_when_gated`) plus a
@@ -482,6 +496,8 @@ backward.
   surface re-introduced; `cargo-deny check licenses` green. The
   cleanroom renderer was authored against Signex-only specs with no
   third-party EDA source in context.
+
+[Full changelog](https://github.com/alplabai/signex/compare/v0.11.0...v0.13.0)
 
 ## [0.11.0] — 2026-05-01
 
@@ -548,7 +564,7 @@ The library subsystem follows the **DBLib model** specified in the v0.9 plan ser
 - **Per-file Git history right-dock panel** — new `PanelKind::History` follows the active tab and renders the file's last 50 commits via `signex_widgets::history_pane`. Wires on a new `signex_library::project_file_history(project_dir, rel_path)` helper that walks any `git2::Repository` (not just library-rooted ones). Async-loaded with a generation counter to drop stale results on tab switch. States: not-in-git / no-commits / dirty-only / normal. Working-tree pseudo-card on top when the active path is in `dirty_paths`.
 - **Per-class filter in Library Browser sidebar** — clicking a class row in the master-detail layout's left sidebar filters the right-side component grid to rows whose `class` field matches. Clicking the active class clears the filter; `LibraryBrowserState.class_filter: Option<String>` applied alongside `lifecycle_filter`. Active class row renders with the same accent-tint background as the table sidebar's selected row for visual feedback.
 
-### Documentation (2026-05-01)
+### Added — documentation (2026-05-01)
 
 - **Hardware Requirements** section in `README.md` (addresses #63) — Vulkan 1.1 / DirectX 12 / Metal floor (~2014+ GPU). Older GPUs that fall back to legacy OpenGL may render incorrectly.
 - **`docs/RENDERING_RULES.md`** (new public doc) — Apache-2.0 prose describing label rendering, field rotation/justify rules, and IEEE-Std-91 pin shape decorators. Sourced from `crates/signex-types/` (Signex's own `.snxsch` format), Altium parity goals, and public industry standards. Source comments in `signex-render` reference this spec instead of citing third-party EDA tooling.
@@ -561,17 +577,17 @@ The library subsystem follows the **DBLib model** specified in the v0.9 plan ser
 - `no-derivation-attribution-markers` job (new) forbids `DeepWiki`, `KiCad mirror source`, `extracted from KiCad`, `based on KiCad source` anywhere in the repo (excluding the audit trail and `docs/LICENSING.md`).
 - Total License Guard jobs: 6 → 8.
 
-### Changed — minor
+### Changed — minor allocations
 
 - `LibraryCreateOptionsState` and the Enable Version Control modal hoist the `intro` paragraph `format!` out of the view-body function — built once at modal-open time and stored on the state, no per-frame allocation.
 
-### Changed
+### Changed — types & samples
 
 - **`PinElectricalType` → `PinDirection`** in the new `signex-library` crate to satisfy the License Guard's `no-removed-kicad-api` strict job. Variant set unchanged. Note: this is a different enum from `signex_types::schematic::PinDirection` (which has Signex-original variants); the two coexist as path-qualified `signex_library::PinDirection` vs `signex_types::schematic::PinDirection`. Consolidating them is a follow-up refactor.
 - `crates/signex-types/src/library.rs` — the v0.10.0 thin `Library` / `LibraryComponent` types are removed. Library Browser tab content now reads through the `signex-library` adapter trait.
 - `assets/samples/library/resistors-standard.snxlib` — removed; the obsolete v0.10.0 sample no longer fits the DBLib data model.
 
-### Documentation
+### Added — documentation
 
 - Three internal-docs plans landed in `docs/internal/docs/` via the private subrepo: `v0.9-library-plan.md` (foundation), `v0.9-library-refactor-plan.md` (primitive split / DBLib shape), `v0.9-refactor-2-plan.md` (table-row + UI layout spec). The older `LIBRARY_PLAN.md` design-intent doc is retired in favour of the concrete implementation plans.
 - `docs/audit/history-rewrite-2026-04-29.md` — records the rationale, scope, and audit trail of the 2026-04-29 KiCad-name scrub history rewrite. Cosmetic, not a license remediation; full pre-rewrite chain preserved in the maintainer's backup repo.
@@ -595,6 +611,8 @@ The squash here is a tree-only restoration; full per-commit authorship and histo
 - `cargo-deny check licenses` green — every transitive dep is permissive.
 - Every PR description carries the self-declaration block (Source basis / LLM-assisted / KiCad source consulted).
 
+[Full changelog](https://github.com/alplabai/signex/compare/v0.10.0...v0.11.0)
+
 
 ## [0.10.0] — 2026-04-29
 
@@ -616,7 +634,7 @@ The library subsystem paused on 2026-04-29 alongside the v0.9.0 Apache-clean cut
 
 - **Project tree click semantics — single click highlights, double click opens.** Previously a single click on a leaf both highlighted and opened the file, which was easy to trigger accidentally while navigating. Now a single click only highlights the row (`panel_ctx.selected_tree_path`); a second click on the same row within 500 ms opens the file. The icon-gate (only schematic / PCB / `.snxprj` / `.snxlib` / `.snxsym` / `.snxfpt` / `.snxsim` leaves open) is unchanged. Right-click → Open in the context menu still opens immediately, bypassing the double-click latch. Folder rows still toggle expand/collapse on a single click. Implementation lives in `signex-app::handlers::dock::project_navigation::handle_dock_project_navigation_panel_message` and routes through a new `open_tree_path_if_document` helper shared with the right-click menu path.
 
-### Apache-clean residual polish (bundled)
+### Changed — Apache-clean residual polish
 
 In response to ongoing discussion on [issue #62](https://github.com/alplabai/signex/issues/62), v0.10.0 also lands a residual-polish pass that removes vestigial KiCad-shaped names from the codebase. None of these changes alter user-visible functionality, but they reduce the surface that reads as "Signex was once derived from KiCad" — the substantive change was already delivered in v0.9.0; this is the cosmetic follow-through.
 
@@ -626,7 +644,7 @@ In response to ongoing discussion on [issue #62](https://github.com/alplabai/sig
 - **`docs/LICENSING.md` strengthened.** New "LLM context discipline" section documenting that post-cutover development uses LLM-assisted workflows where KiCad source code is never placed in agent context, prompts, retrieval indexes, or reference material. Versions table updated through v0.10.0.
 - **License Guard CI tightened.** Three new jobs added to `.github/workflows/license-guard.yml`: forbid re-introduction of the v0.10.0-renamed names (`MultisheetStyle::KiCad`, `find_kicad_symbols_dir`, etc.); forbid KiCad-numbered layer-id constants (`F_CU = 0`, `B_CU = 31`, …); forbid the `Net-(<r>-Pad<p>)` auto-net-name format string.
 
-### Tests
+### Added — tests
 
 - `signex_types::format::tests::snxlibrary_round_trip_preserves_components` — locks parser/writer round-trip parity.
 - `signex_types::format::tests::snxlibrary_borrow_matches_owned` — owned/borrowed serialise parity.
@@ -639,6 +657,8 @@ In response to ongoing discussion on [issue #62](https://github.com/alplabai/sig
 - No `use kicad_parser` / `use kicad_writer` in `crates/`.
 - No `kicad-parser` / `kicad-writer` Cargo.toml deps.
 - License Guard 4 jobs and `cargo-deny` continue to gate every PR.
+
+[Full changelog](https://github.com/alplabai/signex/compare/v0.9.1...v0.10.0)
 
 ## [0.9.1] — 2026-04-29
 
@@ -654,12 +674,14 @@ The **async save + borrow-based serialise** patch deferred from v0.9.0. Schemati
 - New `Message::SaveFileFinished(PathBuf, Result<(), String>)` completion arm.
 - Status bar shows a small "Saving…" pill for the duration of the off-thread write; transient save errors surface as a 3-second pill before fading.
 
-### Tests
+### Added — tests
 
 - `signex_types::format::tests::schematic_borrow_matches_owned_serialise` — locks owned/borrowed parity for `SnxSchematic`.
 - `signex_types::format::tests::pcb_borrow_matches_owned_serialise` — same, for `SnxPcb`.
 - `signex_engine::tests::serialize_for_save_returns_parseable_bytes` — serialise + reparse round-trip.
 - `signex_engine::tests::write_to_file_writes_serialised_bytes` — disk write + reparse round-trip via tempfile.
+
+[Full changelog](https://github.com/alplabai/signex/compare/v0.9.0...v0.9.1)
 
 ## [0.9.0] — 2026-04-29
 
@@ -667,14 +689,14 @@ The **Apache-clean cutover** release. Resolves [issue #62](https://github.com/al
 
 The library subsystem (Library Browser, SCH Library editor, Component Editor) that was in flight on `feature/v0.9-snxlib-as-file` is preserved at the `v0.9-snxlib-paused-2026-04-29` tag and ships as **v0.10.0** on top of the Apache-clean foundations from this release.
 
-### Native file formats — TOML + TSV bulk blocks
+### Added — native file formats (TOML + TSV bulk blocks)
 
 - **`.snxsch`** schematic format — TOML manifest (`format = "snxsch/1"`) wrapping the `SchematicSheet` payload via 4 adapter row tables (`[sheets.components]`, `[sheets.wires]`, `[sheets.junctions]`, `[sheets.labels]`) plus an `[extras.*]` TOML block for fields that don't fit a flat row schema. Same format family as `.snxlib` / `.snxsym` / `.snxfpt`.
 - **`.snxpcb`** PCB format — same shape with adapter rows for `[footprints]`, `[pads]`, `[tracks]`, `[vias]`, plus `[stackup]` / `[[zones]]` in regular TOML for hierarchical data.
 - Format chosen for line-diff-friendly git workflows, ~5× smaller than the equivalent JSON, single file per design, and zero S-expression-shaped grammar that could regress KiCad-derivation exposure.
 - Round-trip preserves every field on `SchematicSheet` / `PcbBoard`.
 
-### Apache-clean signex-types
+### Changed — Apache-clean signex-types
 
 - `PinElectricalType` (12-variant, KiCad-shaped) → **`PinDirection`** (14 variants — adds Signex-original `GroundReference`, `Differential`, `Clock`; collapses `Free`+`Unspecified` into `Unclassified`; renames `OpenCollector`/`OpenEmitter` → `OpenDrainLow`/`OpenDrainHigh`). Design rationale in `crates/signex-types/docs/pin-design.md`.
 - `PinShape` (9-variant) → **`PinShapeStyle`** (7 variants — drops per-direction-low modifiers since polarity is now on `PinDirection`; adds `HysteresisInput` / `HysteresisOutput` / `Schmitt`).
@@ -682,20 +704,20 @@ The library subsystem (Library Browser, SCH Library editor, Component Editor) th
 - KiCad markup parser (`~{X}` / `^{X}` / `_{X}` curly-brace syntax) → **`parse_signex_markup`** using a Markdown subset: `**bold**`, `*italic*`, `~~strike~~`, `^superscript^`, `~subscript~`, `_~overbar~_` (Signex extension for active-low signal naming), `[label](url)`, `\X` escape.
 - `kicad_auto_net_name_from_pins` (`Net-(<r>-Pad<p>)` format string) → **`auto_net_name`** returning `unnamed-<sheet>:<ref>:<pin>`.
 
-### Crates removed from main repo
+### Removed — crates moved to the GPL-3.0 companion repo
 
 - `crates/kicad-parser/` (3,938 LOC) — moved to the GPL-3.0 companion repo.
 - `crates/kicad-writer/` (2,274 LOC) — moved to the GPL-3.0 companion repo.
 - `crates/signex-output/src/netlist/kicad_sexpr.rs` (336 LOC) — KiCad netlist exporter; moved to the companion or a future `signex-kicad-export` sibling.
 
-### Companion repo `signex-kicad-import` (GPL-3.0-or-later)
+### Added — companion repo `signex-kicad-import` (GPL-3.0-or-later)
 
 - New separate repository at <https://github.com/alplabai/signex-kicad-import>.
 - Houses the relocated `kicad-parser` + `kicad-writer` crates plus a CLI binary `signex-kicad-import`.
 - One-way conversion: `.kicad_sch` / `.kicad_pcb` / `.kicad_pro` → `.snxsch` / `.snxpcb` / `.snxprj`. Originals remain intact.
 - Distributed independently — Apache consumers of Signex Community see no GPL aggregation in their build closure.
 
-### Performance (deferred to v0.9.1)
+### Deferred to v0.9.1 — performance
 
 **Async save** and **borrow-based serialise** were planned for v0.9.0 but
 are deferred to **v0.9.1** to bound the v0.9.0 release scope. The
@@ -712,14 +734,14 @@ follow-up:
 Schematics save instantly today; the perf work is targeted at the
 high-end PCB case.
 
-### CI guards
+### Added — CI guards
 
 - `.github/workflows/license-guard.yml` — fails any push or PR that re-introduces `kicad-parser` / `kicad-writer` imports or removed KiCad-shaped types.
 - `.github/workflows/pr-license-declaration.yml` — fails PRs whose description is missing the contributor self-declaration block or whose author marked `KiCad source consulted: yes`.
 - `cargo-deny` license job in `.github/workflows/ci.yml` — rejects GPL / AGPL / LGPL / unlicensed transitive dependencies.
 - `deny.toml` — Apache-compatible permissive allowlist.
 
-### Documentation
+### Added — documentation
 
 - `docs/LICENSING.md` — canonical licensing rationale + audit-trail pointers + contributor guidance.
 - `docs/audit/kicad-derivation.md` — file-by-file audit of every removed item plus the residual-mention catalog.
@@ -742,18 +764,20 @@ high-end PCB case.
 
 The v0.7.0 / v0.7.1 / v0.8.0 release notes have been edited to flag those releases as superseded with the licensing notice. Binaries remain available for historical use; please prefer v0.9.0 (or later) for new installations.
 
+[Full changelog](https://github.com/alplabai/signex/compare/v0.8.0...v0.9.0)
+
 ## [0.8.0] — 2026-04-27
 
 The output-and-polish release. Adds the full PDF / BOM / netlist export pipeline, multi-project workspaces, Altium-style dirty tracking, a chrome refactor with the new `TabPill` widget, hierarchical-sheet rendering parity, and KiCad-parity field autoplace. Every v0.8.x sub-feature ships under this one tag.
 
-### Output subsystem
+### Added — output subsystem
 
 - **PDF export** — tabbed Export modal (file picker / settings / pan-drag preview), bookmarks per sheet, theme palette aware, DPI hookup, physical-structure tokens
 - **BOM** — Altium-spec preview modal with column picker, variant picker, sort / drag / scroll, options applied on export, format-layer export (CSV / HTML / XLSX-ready)
 - **Netlist** — date + path polish, KiCad-format export, output engine validation
 - Unified PDF preview modal — File ▸ Export PDF and File ▸ Print Preview both open the same overlay; legacy `view_pdf_options_dialog` + 12 `ExportPdfSet*` / `ExportPdfDialog*` variants pruned
 
-### Multi-project workspace
+### Added — multi-project workspace
 
 - Multiple `.snxprj` projects open side-by-side in the same window
 - `TabInfo` carries `Option<ProjectId>`; `active_project` scoped to focused tab
@@ -761,13 +785,13 @@ The output-and-polish release. Adds the full PDF / BOM / netlist export pipeline
 - Per-tree-path semantics for project tree actions (right-click on project B with project A active still operates on B)
 - Phase 2.5 cleanup — legacy single-project fields removed from `DocumentState` (#54, #55, #56)
 
-### Dirty tracking + tab right-click menu
+### Added — dirty tracking & tab right-click menu
 
 - Altium-style `dirty_paths` model — closing a tab never prompts; engines park while dirty
 - Project-close prompts with a Save All / Discard All / Cancel modal listing every dirty file
 - Tab bar right-click menu replaces the inline close / undock buttons
 
-### Hierarchical sheets
+### Added — hierarchical sheets
 
 - Child-sheet pins rendered as Altium-style ports (no protruding stubs), inward direction
 - Pin labels rotate vertical on top / bottom edges for parity
@@ -777,7 +801,7 @@ The output-and-polish release. Adds the full PDF / BOM / netlist export pipeline
 - Inline preset palette under the colour row before opening the picker
 - Altium-green default sheet palette
 
-### Symbol field handling (KiCad parity)
+### Fixed — symbol field handling
 
 - Autoplace fields on rotate / mirror — body-bbox classification, full text-height clearance, anchored to selection bbox including pins, two-text-height autoplace clearance, body-edge stack alignment
 - Reference and Value rotate independently; rotate / mirror compose with symbol orientation
@@ -788,7 +812,7 @@ The output-and-polish release. Adds the full PDF / BOM / netlist export pipeline
 - Pin numbers rotate along the pin axis for vertical pins
 - Single em-size used for schematic text (parity with KiCad)
 
-### Chrome refactor
+### Changed — chrome refactor
 
 - New `TabPill` custom widget — 3-sided borders sharing L / R edges between adjacent tabs, permanent strip baseline, theme-border instead of pure black, drag accent follows theme accent
 - Modal close button unified across all 11 modals; chrome icon sizes bumped; thicker panel strokes; modal alignment so borders trace rounded corners
@@ -796,12 +820,12 @@ The output-and-polish release. Adds the full PDF / BOM / netlist export pipeline
 - New `chrome-catalog` crate + UI iteration workflow doc
 - Taller top-chrome search bar (24 → 28); narrow Justification labels in Properties
 
-### Canvas + engine
+### Added — canvas & engine
 
 - Adaptive multi-level grid that scales smoothly with zoom
 - Schematic editor grid style preference
 
-### Plumbing
+### Changed — plumbing
 
 - `kicad-parser` / `kicad-writer` round-trip per-sheet stroke / fill colours and respect label style for defaults
 - `signex-types::Label` gains `justify_v` to match renderer + parser contract
@@ -840,11 +864,13 @@ Patch release addressing a macOS launch failure on Apple Silicon.
   `xattr -dr com.apple.quarantine /Applications/Signex.app` in
   Terminal. Subsequent launches work without prompts.
 
+[Full changelog](https://github.com/alplabai/signex/compare/v0.7.0...v0.7.1)
+
 ## [0.7.0] — 2026-04-22
 
 The schematic-phase release. Adds ERC & validation, project-wide annotation, real multi-window architecture via `iced::daemon`, per-window engine/canvas, borderless chrome, and a full Signex brand rollout. Every v0.7.x sub-feature ships under this one tag.
 
-### ERC & validation
+### Added — ERC & validation
 
 - New `signex-erc` crate with **11 rule kinds** (`run()` single-sheet, `run_with_project()` cross-sheet)
 - Project-wide ERC across open, cached, and unopened sheets
@@ -855,7 +881,7 @@ The schematic-phase release. Adds ERC & validation, project-wide annotation, rea
 - `ErcContext` abstraction + rule metadata infrastructure
 - Shortcuts: `F8` Run ERC, `F9` AutoFocus, `Alt+A` Annotate, `Shift+Alt+A` Reset & Renumber
 
-### Annotation
+### Added — annotation
 
 - Project-wide change list parsed from every sheet in the project
 - Altium two-column Annotate dialog with Reset All / Reset & Renumber / Reset Duplicates
@@ -863,7 +889,7 @@ The schematic-phase release. Adds ERC & validation, project-wide annotation, rea
 - Power-port skip in both annotation and change list
 - Design → Annotation submenu matching Altium's layout
 
-### Multi-window (`iced::daemon`)
+### Added — multi-window (`iced::daemon`)
 
 - Borderless main window + OS-decorated secondary windows
 - Modals, tabs, and panels all detach into real OS windows
@@ -873,7 +899,7 @@ The schematic-phase release. Adds ERC & validation, project-wide annotation, rea
 - Canvas events routed via `CanvasEventInWindow { window_id, event }`
 - macOS: process exits when main window closes
 
-### Editor & tools
+### Added — editor & tools
 
 - Lasso freehand select (Altium), bbox child-sheet hit, detached-field support
 - Tab / panel drag-reorder with visual feedback
@@ -890,13 +916,13 @@ The schematic-phase release. Adds ERC & validation, project-wide annotation, rea
 - Reset Duplicate Designators (project-wide, undoable for open tabs)
 - Arc (3-click) + Polygon (click-by-click) placement tools
 
-### Hierarchical sheets
+### Added — hierarchical sheets
 
 - Double-click a sheet block → opens the child schematic
 - Sheet-pin snaps to all four edges of the hierarchical sheet block
 - Sheet-pin interactions + Altium label-style option
 
-### Borderless chrome & brand
+### Added — borderless chrome & brand
 
 - Custom title bar: wordmark + menus + drag zone + search bar + min / max / close
 - Per-monitor v2 DPI manifest (no bitmap stretching on hi-DPI)
@@ -905,7 +931,7 @@ The schematic-phase release. Adds ERC & validation, project-wide annotation, rea
 - Diagonal resize hit zones (NW / NE / SW / SE) via Stack overlay — keeps content y-origin natural
 - Header logo bumped 74×24 → 96×31 for readability
 
-### Icons & installer
+### Added — icons & installer
 
 - Signex brand SVGs (mark, wordmark, logo variants)
 - Panton Bold wordmark regenerated from actual font (not fallback outlines)
@@ -915,7 +941,7 @@ The schematic-phase release. Adds ERC & validation, project-wide annotation, rea
 - `signex.exe` icon + DPI manifest embedded at build time via `winres`
 - Pure-Python fallback for `build-icons.sh` — `tools/build_icons.py`, no rsvg-convert / magick / inkscape needed
 
-### Refactors
+### Changed — refactors
 
 - `signex-engine/src/lib.rs` split into semantic modules
 - `kicad-writer` migrated from `wln!` string formatting to full SExpr AST (`kicad-parser/sexpr_builder` → `kicad-writer/sexpr_render`)
@@ -923,7 +949,7 @@ The schematic-phase release. Adds ERC & validation, project-wide annotation, rea
 - Wire rendering chains connected segments into polylines (rounded corners)
 - Font-size constants corrected, hidden refs and pin-name rotation fixed
 
-### Merged-in dependencies
+### Changed — merged-in dependencies
 
 - v0.6.1 render fixes (font scale, pin numbers, power-ref visibility)
 - v0.6.2 AST sexpr pipeline
@@ -931,7 +957,7 @@ The schematic-phase release. Adds ERC & validation, project-wide annotation, rea
 - v0.6.4 per-OS installers (`.exe`, `.dmg`, `.deb`, `.AppImage`)
 - Node.js 24 Actions bump
 
-### Performance
+### Changed — performance
 
 - `expand_to_net` is now `O(N)` via quantised `HashSet` (was `O(P²·N²)`)
 
@@ -941,18 +967,18 @@ The schematic-phase release. Adds ERC & validation, project-wide annotation, rea
 
 First cumulative release since v0.6.1. Rolls in the abandoned v0.6.2 and the CI-fix-only v0.6.3.
 
-### Installers (new)
+### Added — installers
 
 - **Windows** — `signex-setup-x86_64-0.6.4.exe` / `signex-setup-aarch64-0.6.4.exe` via InnoSetup. Installs to `Program Files`, adds Start Menu entry and optional Desktop shortcut, proper uninstaller. Portable `.zip` also attached for scripted installs.
 - **macOS** — `signex-macos-aarch64-0.6.4.dmg` with a full `Signex.app` bundle and `/Applications` drag-target. Registered as the editor for `.kicad_sch` / `.kicad_pro` files.
 - **Linux** — native `.deb` (with `.desktop` entry + MIME types) plus a portable `.AppImage`. `.tar.gz` fallback also attached.
 
-### KiCad pipeline refactor (from v0.6.2)
+### Changed — KiCad pipeline refactor (from v0.6.2)
 
 - AST-based S-expression pipeline in `kicad-parser` / `kicad-writer` with a property-metadata layer. More robust round-trip, less fragile than prior ad-hoc string handling.
 - Named constants replace the magic numbers scattered through `signex-types`, `kicad-parser`, and `kicad-writer`.
 
-### Release pipeline fixes (from v0.6.3)
+### Fixed — release pipeline (from v0.6.3)
 
 - `aarch64-apple-darwin` pinned to `macos-14` so GitHub's `macos-latest` queue stalls don't take the whole release down (symptom that killed v0.6.2).
 

@@ -170,8 +170,26 @@ fn snap_entries(path: PathBuf) -> Vec<DropdownEntry<LibraryMessage>> {
 }
 
 fn place_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessage>> {
+    // #426 — a symbol has no separate move tool: dragging a pin or a
+    // graphic under the Select tool IS the move, exactly like the
+    // footprint editor (see `footprint::active_bar_dropdowns::
+    // place_entries`'s "no ratlines" comment) — a symbol has no
+    // ratsnest connectivity to preserve either, so Move arms Select
+    // directly rather than routing through `ActiveBarStub`. `Drag`
+    // stays a stub for now (Altium's Move/Drag split on whether
+    // connected wires stretch with the move — the schematic wiring
+    // side of that distinction isn't decided yet for SchLib).
     vec![
-        DropdownEntry::Item(stub_with_icon("Move", path.clone(), ic::icon_dd_move(tid))),
+        DropdownEntry::Item(
+            DropdownItem::new(
+                "Move",
+                sym(
+                    path.clone(),
+                    SymbolEditorMsg::SetTool(SymbolToolMsg::Select),
+                ),
+            )
+            .icon(ic::icon_dd_move(tid)),
+        ),
         DropdownEntry::Item(stub_with_icon("Drag", path.clone(), ic::icon_dd_drag(tid))),
         DropdownEntry::Separator,
         DropdownEntry::Item(stub_with_icon(
@@ -286,11 +304,15 @@ fn align_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessag
             ic::icon_dd_dist_vert(tid),
         )),
         DropdownEntry::Separator,
-        DropdownEntry::Item(stub_with_icon(
-            "Align To Grid",
-            path,
-            ic::icon_dd_align_grid(tid),
-        )),
+        // #426 — real implementation: snaps every pin/graphic named by
+        // the current selection onto the symbol canvas's snap grid.
+        DropdownEntry::Item(
+            DropdownItem::new(
+                "Align To Grid",
+                sym(path, SymbolEditorMsg::AlignSelectedToGrid),
+            )
+            .icon(ic::icon_dd_align_grid(tid)),
+        ),
     ]
 }
 
@@ -385,4 +407,60 @@ fn shapes_entries(
         DropdownEntry::Item(stub("Pie Chart", path.clone())),
         DropdownEntry::Item(stub("Elliptical Arc", path)),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_types::theme::ThemeId;
+
+    /// Look up a dropdown row by its exact label — robust against the
+    /// row's position shifting as sibling stub rows are wired up.
+    fn item_msg<'a>(
+        entries: &'a [DropdownEntry<LibraryMessage>],
+        label: &str,
+    ) -> &'a SymbolEditorMsg {
+        let item = entries
+            .iter()
+            .find_map(|e| match e {
+                DropdownEntry::Item(item) if item.label == label => Some(item),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("no dropdown row labelled {label:?}"));
+        match item
+            .on_press
+            .as_ref()
+            .unwrap_or_else(|| panic!("row {label:?} has no left-click action"))
+        {
+            LibraryMessage::PrimitiveEditorEvent {
+                msg: PrimitiveEdit::Symbol(sym_msg),
+                ..
+            } => sym_msg,
+            _ => panic!("expected a Symbol primitive-editor event on row {label:?}"),
+        }
+    }
+
+    /// #426 — the Place dropdown's "Move" row used to be a dead
+    /// `ActiveBarStub("Move")`. It now arms the Select tool, same
+    /// decision recorded on `place_entries`'s doc comment.
+    #[test]
+    fn place_move_row_arms_select_tool() {
+        let entries = place_entries(PathBuf::from("t.snxsym"), ThemeId::Signex);
+        assert!(matches!(
+            item_msg(&entries, "Move"),
+            SymbolEditorMsg::SetTool(SymbolToolMsg::Select)
+        ));
+    }
+
+    /// #426 — the Align dropdown's "Align To Grid" row used to be a
+    /// dead `ActiveBarStub`. It now dispatches the real
+    /// `AlignSelectedToGrid` snap.
+    #[test]
+    fn align_to_grid_row_snaps_selection() {
+        let entries = align_entries(PathBuf::from("t.snxsym"), ThemeId::Signex);
+        assert!(matches!(
+            item_msg(&entries, "Align To Grid"),
+            SymbolEditorMsg::AlignSelectedToGrid
+        ));
+    }
 }

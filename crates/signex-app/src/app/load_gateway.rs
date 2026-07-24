@@ -283,10 +283,6 @@ impl Signex {
         self.apply_loaded_pcb_document(true, true);
     }
 
-    pub(crate) fn load_schematic_into_active_tab(&mut self, sheet: SchematicSheet) {
-        self.apply_loaded_schematic(Some(sheet), false, false, true, false);
-    }
-
     pub(crate) fn sync_visible_document_from_active_tab(&mut self) {
         self.interaction_state.editing_text = None;
 

@@ -39,6 +39,19 @@ type SymEditor = crate::app::SymbolEditorState;
 /// Capped at 100 entries — oldest entry is evicted when the cap is hit.
 fn push_undo(editor: &mut SymEditor) {
     let snapshot = editor.primitive().clone();
+    push_undo_snapshot(editor, snapshot);
+}
+
+/// Push a pre-captured snapshot onto the undo stack and clear the redo
+/// stack. Split out of [`push_undo`] so a caller that must know
+/// *whether* a mutation actually happened before committing to the undo
+/// push (e.g. a snap that can be a no-op) can clone the pre-mutation
+/// state up front, perform the mutation, and only call this — snapshot
+/// push and redo-clear together, as one unit — once it has confirmed
+/// something changed. Doing the two independently (push now, maybe pop
+/// the snapshot back off later) still leaves the redo stack cleared on
+/// a no-op, which is the bug this split exists to prevent.
+fn push_undo_snapshot(editor: &mut SymEditor, snapshot: signex_library::Symbol) {
     editor.undo_snapshots.push(snapshot);
     if editor.undo_snapshots.len() > 100 {
         editor.undo_snapshots.remove(0);
@@ -411,6 +424,7 @@ pub(crate) fn apply_symbol_primitive_edit(
         // ── Transform ────────────────────────────────────────────
         SymbolEditorMsg::RotateSelected { .. }
         | SymbolEditorMsg::DeleteSelected
+        | SymbolEditorMsg::AlignSelectedToGrid
         | SymbolEditorMsg::SetPinNumber { .. }
         | SymbolEditorMsg::SetPinName { .. } => apply_symbol_transform(editor, msg),
 

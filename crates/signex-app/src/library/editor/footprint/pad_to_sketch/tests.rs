@@ -963,6 +963,186 @@ fn in_place_remint_records_the_ledger_against_the_real_sketch() {
     );
 }
 
+/// #434 — every existing in-place-remint assertion above used a
+/// Chamfered pad, whose anchors are named directly on `shape_params`
+/// so `pair_sidecar_entities` finds them in one step. RoundRect's 4
+/// inset arc centres are the one sidecar geometry reachable only by
+/// descending through its 4 `Arc` entities' `center` field (the Arc
+/// arm in `pair_sidecar_entities`, remint_in_place.rs ~167-184). Oval,
+/// by contrast, seeds its 2 arc centres (`oval_centre_0`/
+/// `oval_centre_1`) as direct sidecars exactly like Chamfered — it
+/// exercises no Arc-descent path here, and stays in this walk only for
+/// its own from-scratch-equality coverage. Parameterised over all four
+/// pad shapes so the next shape added to this walk has to earn the
+/// same coverage; the RoundRect case additionally asserts that the
+/// PRE-REMINT ids themselves survive, since a from-scratch-equality
+/// check alone stays green even when the pairing silently falls back
+/// to a full re-mint under fresh ids.
+#[test]
+fn in_place_remint_matches_a_fresh_mint_for_every_shape() {
+    use signex_library::primitive::footprint::ChamferedCorners;
+
+    for shape in [
+        LibPadShape::Rect,
+        LibPadShape::RoundRect { radius_ratio: 0.25 },
+        LibPadShape::Oval,
+        LibPadShape::Chamfered {
+            chamfer_ratio: 0.25,
+            corners: ChamferedCorners {
+                top_right: true,
+                ..Default::default()
+            },
+        },
+    ] {
+        assert_in_place_remint_matches_fresh_mint(shape);
+    }
+}
+
+/// Every Point this pad owns — centre, bbox corners, and (via
+/// `ownership`'s forward expansion through Line / Arc / Circle) every
+/// shape's arc centres and edge anchors — read by VALUE rather than by
+/// id, so a from-scratch mint (fresh ids throughout) can be compared
+/// against an in-place re-mint (old ids preserved) even though the two
+/// name their entities differently.
+fn owned_point_positions(pad: &EditorPad, fp: &Footprint) -> Vec<(f64, f64)> {
+    let sketch = fp.sketch.as_ref().expect("sketch present");
+    let mut points: Vec<(f64, f64)> = ownership::owned_sketch_entities(pad, sketch)
+        .into_iter()
+        .filter_map(|id| sketch.entities.iter().find(|e| e.id == id))
+        .filter_map(|e| match e.kind {
+            EntityKind::Point { x, y } => Some((x, y)),
+            _ => None,
+        })
+        .collect();
+    points.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    points
+}
+
+/// The `center` Point of each of RoundRect's 4 corner Arcs, resolved
+/// through the same `corner_r_{c}_arc` sidecar keys
+/// `mirror_move_roundrect_translates_anchors_and_arc_centres` uses —
+/// independent of `pair_sidecar_entities`'s own internal traversal, so
+/// this cannot pass merely because that traversal and this assertion
+/// share a bug.
+fn roundrect_arc_centres(pad: &EditorPad, fp: &Footprint) -> Vec<(f64, f64)> {
+    let sketch = fp.sketch.as_ref().expect("sketch present");
+    ["ne", "se", "sw", "nw"]
+        .iter()
+        .map(|c| sidecar(pad, &format!("corner_r_{c}_arc")))
+        .map(|arc_id| {
+            let entity = sketch
+                .entities
+                .iter()
+                .find(|e| e.id == arc_id)
+                .expect("arc present");
+            match entity.kind {
+                EntityKind::Arc { center, .. } => point_of(fp, center),
+                _ => panic!("corner_r_*_arc must be an Arc"),
+            }
+        })
+        .collect()
+}
+
+fn assert_in_place_remint_matches_fresh_mint(shape: LibPadShape) {
+    let mut fp = Footprint::empty("test");
+    let mut pad = editor_pad("1", 0.0, 0.0);
+    pad.shape = shape.clone();
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+    // For RoundRect, snapshot every id `owned_sketch_entities` reports
+    // BEFORE the re-mint — centre, bbox corners, the 4
+    // `corner_r_*_arc` sidecars, and (via that fn's one-hop Arc
+    // expansion) the 4 inset arc-centre Points reachable only by
+    // descending through those Arcs. A from-scratch-mint EQUALITY
+    // check alone cannot guard this: if the Arc arm's centre push
+    // (`pair_sidecar_entities`, remint_in_place.rs ~167-184, the push
+    // itself at ~181) is ever dropped, `pairing_covers_all_geometry`
+    // rejects the pairing and `remint_pad_geometry_in_place` silently
+    // falls back to a full `remint_pad_geometry` — which deletes the
+    // pad's whole entity set and re-mints it under FRESH ids.
+    // Geometrically identical, but every one of these ids goes stale
+    // mid-drag, which IS the #434 regression: a live drag holds an id,
+    // not a position, so an id-agnostic comparison stays green while
+    // the drag freezes.
+    let pre_remint_owned: Vec<SketchEntityId> = if matches!(shape, LibPadShape::RoundRect { .. }) {
+        ownership::owned_sketch_entities(&pad, fp.sketch.as_ref().unwrap())
+    } else {
+        Vec::new()
+    };
+
+    // Simulate a live Sketch-mode edge/corner drag tick: size AND
+    // position change together, exactly as `remint_dragged_pad`'s two
+    // callers (`updates/sketch/entities.rs`) write them before calling
+    // in — the frame change an in-place re-mint exists to carry.
+    pad.size_mm = (2.0, 1.2);
+    pad.position_mm = (3.0, -1.0);
+    assert!(
+        remint_pad_geometry_in_place(&mut pad, &mut fp),
+        "{shape:?} is not a sketch-profile pad and must re-mint in place"
+    );
+
+    if !pre_remint_owned.is_empty() {
+        let live: std::collections::HashSet<SketchEntityId> = fp
+            .sketch
+            .as_ref()
+            .unwrap()
+            .entities
+            .iter()
+            .map(|e| e.id)
+            .collect();
+        let churned: Vec<SketchEntityId> = pre_remint_owned
+            .iter()
+            .copied()
+            .filter(|id| !live.contains(id))
+            .collect();
+        assert!(
+            churned.is_empty(),
+            "in-place re-mint churned {} of {} pre-remint owned ids (incl. RoundRect's inset \
+             arc centres, reachable only via the Arc arm) — the pairing fell back to a full \
+             remint_pad_geometry, which is exactly the id churn that freezes a live drag \
+             (#434): {churned:?}",
+            churned.len(),
+            pre_remint_owned.len(),
+        );
+    }
+
+    // Independent reference: mint the SAME final pad from scratch —
+    // fresh ids throughout — into an empty footprint, and demand the
+    // two produce identical geometry by value. Chamfered already had
+    // this property covered; #434 is that RoundRect and Oval never
+    // exercised it.
+    let mut reference_pad = pad.clone();
+    reference_pad.sketch_entity_id = None;
+    reference_pad.corner_entity_ids = None;
+    reference_pad.shape_params.clear();
+    let mut reference_fp = Footprint::empty("reference");
+    mirror_add_pad_to_sketch(&mut reference_pad, &mut reference_fp);
+
+    assert_eq!(
+        owned_point_positions(&pad, &fp),
+        owned_point_positions(&reference_pad, &reference_fp),
+        "{shape:?}: in-place re-mint must equal a from-scratch mint at the same frame"
+    );
+
+    // RoundRect specifically: assert the 4 inset ARC CENTRES, not just
+    // the 8 outer edge anchors — dropping the centre push in
+    // `pair_sidecar_entities`'s Arc arm (remint_in_place.rs ~167-184,
+    // the push itself at ~181) is exactly the regression #434 warns
+    // would strand these on the pad's OLD frame while everything else
+    // moved.
+    if matches!(shape, LibPadShape::RoundRect { .. }) {
+        let mut actual = roundrect_arc_centres(&pad, &fp);
+        let mut expected = roundrect_arc_centres(&reference_pad, &reference_fp);
+        actual.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        expected.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        assert_eq!(
+            actual, expected,
+            "RoundRect's 4 inset arc centres must land on the new frame after an in-place \
+             re-mint, matching a from-scratch mint"
+        );
+    }
+}
+
 /// A profile pad that ALSO owns the loop's Points must take the move
 /// delta exactly once.
 ///

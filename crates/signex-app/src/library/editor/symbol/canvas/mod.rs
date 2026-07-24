@@ -292,7 +292,11 @@ impl<'a> SymbolCanvas<'a> {
 /// mm visible grid still snaps to 1.27 mm — Altium's "smaller grid
 /// for visual precision, larger for commit". Future toolbar work
 /// could expose a separate snap-grid picker.
-const SNAP_GRID_MM: f64 = 1.27;
+///
+/// `pub(crate)` (not module-private) so the active-bar's "Align To
+/// Grid" dispatch (`updates::transform`) snaps selections onto the
+/// exact same grid the canvas already places/drags things onto (#426).
+pub(crate) const SNAP_GRID_MM: f64 = 1.27;
 const ORIGIN_MARKER_MM: f32 = 1.27;
 const MM_PER_EM: f32 = 0.72;
 const SYMBOL_AXIS_STROKE_PX_AT_100: f32 = 1.0;

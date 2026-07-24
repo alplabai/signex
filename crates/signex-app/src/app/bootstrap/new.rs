@@ -269,6 +269,7 @@ impl Signex {
                 bom_preview: None,
                 pending_git_commits: Vec::new(),
                 inflight_git_commits: std::collections::HashSet::new(),
+                pending_opens: std::collections::HashSet::new(),
             },
             interaction_state: InteractionState {
                 current_tool: Tool::Select,

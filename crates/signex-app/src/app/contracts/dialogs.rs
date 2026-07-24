@@ -6,7 +6,6 @@ use super::*;
 /// under `Message::NetColor` and routed to
 /// `dispatch_net_color_message`.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum NetColorMsg {
     /// Open the F5 Net Color palette (detached modal).
     Open,
@@ -32,7 +31,6 @@ pub enum NetColorMsg {
 /// under `Message::ParameterManager` and routed to
 /// `dispatch_parameter_manager_message`.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum ParameterManagerMsg {
     /// Open the Parameter Manager dialog (bulk parameter editor).
     Open,
@@ -49,7 +47,6 @@ pub enum ParameterManagerMsg {
 /// Annotate dialog message family (ADR-0001 D3). Namespaced under
 /// `Message::Annotate` and routed to `dispatch_annotate_message`.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum AnnotateMsg {
     /// Auto-annotate every unannotated symbol (reference ends in `?`).
     /// Three modes: incremental, reset+renumber, reset-only.
@@ -73,7 +70,6 @@ pub enum AnnotateMsg {
 /// ERC dialog message family (ADR-0001 D3). Namespaced under
 /// `Message::Erc` and routed to `dispatch_erc_message`.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum ErcMsg {
     /// Run the ERC engine against the active schematic snapshot and populate
     /// `ui_state.erc_violations`. Bound to F8.
@@ -92,7 +88,6 @@ pub enum ErcMsg {
 /// Preferences modal message family (ADR-0001 D3). Namespaced under
 /// `Message::Preferences` and routed to `dispatch_preferences_message`.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum PreferencesMsg {
     /// Open the Preferences modal.
     Open,
@@ -108,7 +103,6 @@ pub enum PreferencesMsg {
 /// Namespaced under `Message::EnableVersionControl` and routed to
 /// `dispatch_enable_version_control_message`.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum EnableVersionControlMsg {
     /// Toggle the LFS checkbox on the Enable Version Control modal.
     ToggleLfs,
@@ -128,7 +122,6 @@ pub enum EnableVersionControlMsg {
 /// Rename modal message family (ADR-0001 D3). Namespaced under
 /// `Message::Rename` and routed to `dispatch_rename_message`.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum RenameMsg {
     /// Text input in the rename modal — updates the live buffer.
     BufferChanged(String),
@@ -142,7 +135,6 @@ pub enum RenameMsg {
 /// Remove-from-project modal message family (ADR-0001 D3). Namespaced
 /// under `Message::Remove` and routed to `dispatch_remove_message`.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum RemoveMsg {
     /// User picked Delete / Exclude in the Remove modal.
     Confirm(RemoveChoice),
@@ -156,7 +148,6 @@ pub enum RemoveMsg {
 /// menu, the Projects-panel tree right-click menu, the document-tab
 /// right-click menu, and the shared submenu hover/open state machine.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum ContextMenuMsg {
     Show(f32, f32),
     Close,
@@ -202,7 +193,6 @@ pub enum ContextMenuMsg {
 /// the PDF / netlist / BOM export lifecycle plus the export-error
 /// modal dismiss.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum ExportMsg {
     /// Open the unified PDF Export overlay (File → Export → PDF…). Now
     /// delegates to `handle_print_preview_requested`, which sets up
@@ -235,7 +225,6 @@ pub enum ExportMsg {
 /// `dispatch_selection_filter_message`. Drives the footprint editor's
 /// selection-filter customization modal.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum SelectionFilterMsg {
     /// v0.18.14.1 — Custom Selection Filter modal launcher. Opens
     /// the 8-row checkbox table over the active footprint editor.
@@ -255,7 +244,6 @@ pub enum SelectionFilterMsg {
 /// File / save message family (ADR-0001 D3). Namespaced under
 /// `Message::File` and routed to `dispatch_file_message`.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum FileMsg {
     Opened(Option<PathBuf>),
     /// File ▸ New Project — destination picked by the Save-As dialog.
@@ -264,8 +252,26 @@ pub enum FileMsg {
     /// parser is directory-driven) plus a blank `<stem>.snxsch` next
     /// to it, then loads the project + opens the schematic tab.
     NewProject(Option<PathBuf>),
-    #[allow(dead_code)]
-    SchematicLoaded(Box<SchematicSheet>),
+    /// Completion of the async schematic read+parse kicked off by
+    /// `open_schematic_file` — the `fs::read_to_string` +
+    /// `SnxSchematic::parse` run in `spawn_blocking` so `update()`
+    /// never blocks on disk IO (mirrors the `HistoryLoaded` pattern).
+    /// Carries the original path/title so the handler can open the
+    /// tab exactly as the old synchronous path did; the error is the
+    /// stringified `anyhow` context chain (`Message` is `Clone`,
+    /// `anyhow::Error` is not).
+    SchematicOpenFinished {
+        path: PathBuf,
+        title: String,
+        result: Result<Box<SchematicSheet>, String>,
+    },
+    /// Completion of the async PCB read+parse kicked off by
+    /// `open_pcb_file`. Same shape as `SchematicOpenFinished`.
+    PcbOpenFinished {
+        path: PathBuf,
+        title: String,
+        result: Result<Box<signex_types::pcb::PcbBoard>, String>,
+    },
     Save,
     SaveAs(PathBuf),
     /// User picked a destination from the Save-As dialog spawned the
@@ -284,7 +290,6 @@ pub enum FileMsg {
 /// Project lifecycle message family (ADR-0001 D3). Namespaced under
 /// `Message::Project` and routed to `dispatch_project_message`.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum ProjectMsg {
     /// User picked an option in the project-close confirmation modal
     /// (Save All / Discard All / Cancel) shown when closing a
@@ -329,7 +334,6 @@ pub enum ProjectMsg {
 /// Edit-command message family (ADR-0001 D3). Namespaced under
 /// `Message::Edit` and routed to `dispatch_edit_message`.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum EditMsg {
     /// Delete the current selection. In a footprint editor this routes
     /// to the footprint dispatcher's `DeleteSelected`; otherwise the
