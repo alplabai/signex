@@ -160,12 +160,6 @@ impl CommandMetadata {
     }
 }
 
-impl Default for CommandMetadata {
-    fn default() -> Self {
-        Self::DEFAULT
-    }
-}
-
 /// Every command-metadata table, one per surface group. `metadata_for`
 /// and the tests iterate across all of them; the split keeps each table
 /// file within the size cap without changing lookup behaviour (command
@@ -324,49 +318,35 @@ mod tests {
 
     #[test]
     fn descriptor_fields_default_for_existing_catalog_entries() {
-        // Every existing catalog row inherits the four new fields from
-        // `CommandMetadata::DEFAULT` via struct-update syntax; lock that
-        // in so a future edit doesn't silently pick up a non-default row.
-        let copy = metadata_for(&AppCommandId::new("copy").unwrap()).unwrap();
-        assert_eq!(copy.icon, None);
-        assert_eq!(copy.keybind, None);
-        assert_eq!(copy.enable, Enablement::Always);
-        assert_eq!(copy.flags, CommandFlags::default());
-    }
-
-    #[test]
-    fn command_descriptor_constructs_with_all_new_fields_set() {
-        // Full descriptor construction — the shape #367/#368 will read.
-        let descriptor = CommandMetadata {
-            id: "run_erc",
-            category: "validation",
-            label: "Run electrical rules check",
-            menu_label: None,
-            group: CommandGroup::Schematic,
-            icon: Some(IconId("erc")),
-            keybind: Some(KeyBind {
-                modifiers: Modifiers {
-                    ctrl: true,
-                    alt: false,
-                    shift: false,
-                    command: false,
-                },
-                key: "f8",
-            }),
-            enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-            flags: CommandFlags {
-                gui_only: false,
-                mutates_doc: false,
-                undoable: false,
-                hidden: false,
-            },
-        };
-        assert_eq!(descriptor.icon, Some(IconId("erc")));
-        assert_eq!(descriptor.keybind.unwrap().key, "f8");
-        assert_eq!(
-            descriptor.enable,
-            Enablement::RequiresDocument(DocumentKind::Schematic)
-        );
-        assert!(!descriptor.flags.mutates_doc);
+        // Every catalog row today inherits the four descriptor fields from
+        // `CommandMetadata::DEFAULT` via struct-update syntax (`icon`,
+        // `keybind`, `enable`, `flags`). Assert that for *every* entry, not
+        // just one, so a future edit that drops the `..CommandMetadata::
+        // DEFAULT` tail on some row (and silently changes its defaults) is
+        // caught rather than passing unnoticed.
+        for metadata in all_metadata() {
+            assert_eq!(
+                metadata.icon, None,
+                "`{}` should default to no icon",
+                metadata.id
+            );
+            assert_eq!(
+                metadata.keybind, None,
+                "`{}` should default to no keybind",
+                metadata.id
+            );
+            assert_eq!(
+                metadata.enable,
+                Enablement::Always,
+                "`{}` should default to Enablement::Always",
+                metadata.id
+            );
+            assert_eq!(
+                metadata.flags,
+                CommandFlags::default(),
+                "`{}` should default to all-false flags",
+                metadata.id
+            );
+        }
     }
 }
