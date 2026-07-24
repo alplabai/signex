@@ -21,17 +21,22 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 ### Added — PCB GPU shader render (experimental, default-off)
 
 - **GPU scene render path** — the PCB editor canvas can render traces, pads, vias, and zones through the `signex_gfx` wgpu pipelines via iced's `shader` widget instead of CPU `canvas::Frame` tessellation. Gated behind `feature_flags::PCB_GPU_RENDER` (default `false`) plus a Preferences toggle; the CPU path stays the default until GPU visual parity is confirmed on hardware.
-- **CPU↔GPU draw-order parity lock** — a shared `signex_gfx::scene::order` module defines the canonical bucket draw order both paths walk and pins the known divergences (polygon z-order, dashed lines) with tests, so neither path can drift silently.
+- **CPU↔GPU draw-order parity lock** — a shared `signex_gfx::scene::order` module defines the canonical bucket draw order both paths walk, so neither path can drift silently.
 
 ### Fixed
 
+- **GPU concave polygon fill** — the polygon pipeline fanned every contour from its first vertex, which is exact only for convex shapes; a concave copper pour/rule-area bridged triangles across the notch and painted copper where the pour had none. `append_fill` now triangulates via `signex_sketch::ear_clip`, matching the CPU `frame.fill` (lyon) result exactly (pinned by a shoelace-area regression test). Found and fixed a latent bug in `ear_clip` itself while wiring it up: a bridge edge created by clipping one ear could pass exactly through another still-remaining vertex, letting the algorithm approve an invalid ear and collapse the rest of the polygon into a self-intersecting remainder — `is_ear`'s occlusion test now also blocks on a non-corner vertex sitting exactly on the ear's boundary.
+- **GPU overlay z-order** — `gpu_scene()` folded overlay geometry (active-layer zone highlight, selection highlight, DRC markers, ratsnest) into the base `polygons`/`lines`/`circles` buckets, which the GPU draws before other base content — so an overlay meant to sit on top rendered underneath it. Overlays now stay in their own buffers and composite in a dedicated pass strictly after every base bucket, matching the CPU `draw_scene` overlay pass.
+- **GPU dashed lines** — `line.wgsl` declared the per-instance `style` field but never consumed it, so `RATSNEST_STYLE_DASHED` / keepout / DRC-overlay segments rendered solid on the GPU. The fragment shader now derives a dash/gap pattern from `camera.mm_per_px` (reproducing the CPU's literal 8px dash / 5px gap at any zoom) and discards the gap portions.
 - **GPU text now pans with the view** — glyph text rasterised for the GPU path was scaled by zoom but never translated by the pan offset, so labels drifted off the geometry they annotate on any pan; the screen-space pan term is now applied.
 - **Bounded GPU buffer growth** — the line/circle/arc/polygon instance buffers are clamped to the device `max_buffer_size` before reallocation, so a pathological board degrades to a truncated draw instead of panicking the render thread.
+- **Preferences dirty-tracking (review #308 findings 1-2)** — `preferences_draft_differs()` compared only the 7 appearance drafts, so theme import (a same-tag `custom_theme` content swap), a pending keymap rebind, or a component-class edit could get silently clobbered back to "clean" by the next unrelated appearance-draft change, letting Close discard it with no prompt. A `preferences_dirty_sticky` flag now pins the one imperative edit the comparator structurally cannot see (theme import); `preferences_has_unsaved_changes()` (`sticky || comparator`) is the single source every dismiss route checks. Every dismiss route — the in-dialog X, Esc, and an OS close request (Alt+F4 / native ✕) on the detached Preferences window — now refuses to close while dirty instead of silently reverting.
 
 ### Changed
 
 - **GPU glyph atlas now trims each frame**, and GPU text prep/draw failures log once instead of being swallowed silently.
 - **Removed the dead `SCHEMATIC_GPU_RENDER` flag** — it gated no live path (the schematic GPU adapter is compiled and tested but not yet mounted).
+- **Preferences draft-seeding deduplicated** — opening and reverting the dialog now share one `seed_preferences_drafts_from_live()` helper instead of two independently-maintained copies of the same 8 assignments, closing the add-a-field-to-one-but-not-the-other drift hazard. The native-close revert backstop is now gated on the dirty flag (skips the keymap-profile rebuild + canvas cache clears on a no-op close), the double content-cache invalidation in `revert_preferences_drafts` is gone, and boot reads the persisted GPU-render preference once instead of three times.
 
 ## [0.15.0] — 2026-07-23
 
