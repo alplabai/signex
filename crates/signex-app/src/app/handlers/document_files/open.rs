@@ -227,7 +227,33 @@ impl Signex {
         Ok(id)
     }
 
+    /// #478 review — dedup guard shared by `open_schematic_file` /
+    /// `open_pcb_file`. Mirrors the activate-existing convention in
+    /// `handle_open_primitive`: if `path` already has a tab, activate
+    /// it. If it doesn't, but an async open for it is already in
+    /// flight (spawned by a previous call, not yet completed), do
+    /// nothing and let that completion create the tab — spawning a
+    /// second `Task::perform` for the same path would let both
+    /// completions push a tab aliasing one `document_state.engines`
+    /// entry, and closing one would orphan the other. Returns `true`
+    /// when the caller must stop and not spawn a new open `Task`.
+    fn activate_or_skip_duplicate_open(&mut self, path: &std::path::Path) -> bool {
+        if let Some(idx) = self.document_state.tabs.iter().position(|t| t.path == path) {
+            if idx != self.document_state.active_tab {
+                self.park_active_schematic_session();
+                self.document_state.active_tab = idx;
+                self.sync_active_tab();
+            }
+            return true;
+        }
+        self.document_state.pending_opens.contains(path)
+    }
+
     fn open_schematic_file(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
+        if self.activate_or_skip_duplicate_open(&path) {
+            return Ok(iced::Task::none());
+        }
+
         // Try to load the companion project so the schematic tab gets
         // a `project_id` via `project_for_path`. Best-effort: a missing
         // or unparseable `.snxprj` doesn't block opening the loose
@@ -263,6 +289,10 @@ impl Signex {
         // message (`FileMsg::SchematicOpenFinished`) carries the
         // original path/title so the dispatch handler opens the tab
         // exactly as this function used to do inline.
+        //
+        // Mark the path in flight right before spawning — cleared in
+        // both arms of `FileMsg::SchematicOpenFinished` (#478 review).
+        self.document_state.pending_opens.insert(path.clone());
         let read_path = path.clone();
         Ok(iced::Task::perform(
             async move {
@@ -281,6 +311,10 @@ impl Signex {
     }
 
     fn open_pcb_file(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
+        if self.activate_or_skip_duplicate_open(&path) {
+            return Ok(iced::Task::none());
+        }
+
         // Same companion-project resolution as `open_schematic_file` so
         // the PCB tab can resolve `project_id` for project-scoped
         // handlers.
@@ -301,7 +335,10 @@ impl Signex {
             .map(|stem| stem.to_string_lossy().to_string())
             .unwrap_or_else(|| "PCB".to_string());
         // Read + parse off the UI thread — same reasoning as
-        // `open_schematic_file` above.
+        // `open_schematic_file` above. Mark the path in flight right
+        // before spawning — cleared in both arms of
+        // `FileMsg::PcbOpenFinished` (#478 review).
+        self.document_state.pending_opens.insert(path.clone());
         let read_path = path.clone();
         Ok(iced::Task::perform(
             async move {

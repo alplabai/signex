@@ -108,6 +108,10 @@ impl Signex {
                 title,
                 result,
             } => {
+                // #478 review — clear the in-flight guard before acting
+                // on the result so a duplicate open fired while this one
+                // was in flight is free to spawn again from here on.
+                self.document_state.pending_opens.remove(&path);
                 match result {
                     Ok(sheet) => self.open_schematic_tab(path, title, *sheet),
                     Err(message) => crate::diagnostics::log_error(
@@ -122,6 +126,8 @@ impl Signex {
                 title,
                 result,
             } => {
+                // #478 review — same in-flight guard clear as above.
+                self.document_state.pending_opens.remove(&path);
                 match result {
                     Ok(board) => self.open_pcb_tab(path, title, *board),
                     Err(message) => crate::diagnostics::log_error(

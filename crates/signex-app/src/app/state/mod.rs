@@ -390,6 +390,15 @@ pub struct DocumentState {
     /// [`Signex::commit_save_to_project_git`] enqueues the work and
     /// clears on `Message::Project(ProjectMsg::GitCommitDone)`.
     pub inflight_git_commits: std::collections::HashSet<(PathBuf, PathBuf)>,
+    /// #478 review — paths whose async schematic/PCB read+parse
+    /// (`open_schematic_file` / `open_pcb_file`) has been spawned but
+    /// hasn't completed yet. Without this, firing the same open twice
+    /// before the first `Task::perform` resolves races two tabs into
+    /// existence aliasing one `engines` entry; closing either then
+    /// orphans the other. Inserted right before the `Task::perform` is
+    /// spawned; cleared in both the `Ok` and `Err` arms of
+    /// `FileMsg::SchematicOpenFinished` / `FileMsg::PcbOpenFinished`.
+    pub pending_opens: std::collections::HashSet<PathBuf>,
 }
 
 /// v0.23 — One queued commit for the async git pipeline. Stays
