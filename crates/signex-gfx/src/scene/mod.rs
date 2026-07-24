@@ -9,6 +9,9 @@ pub mod frame;
 pub mod order;
 pub mod upload;
 
+#[cfg(test)]
+mod scenario_tests;
+
 pub use dirty::DirtyFlags;
 pub use frame::Scene;
 pub use order::{CPU_PCB_DRAW_ORDER, GPU_SCENE_DRAW_ORDER, SceneBucket};

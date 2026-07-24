@@ -9,9 +9,9 @@ use crate::shader;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct PolygonVertex {
-    position: [f32; 2],
-    color: [f32; 4],
+pub(crate) struct PolygonVertex {
+    pub(crate) position: [f32; 2],
+    pub(crate) color: [f32; 4],
 }
 
 /// Build the triangle-list vertices for a batch of polygons: a triangle-fan
@@ -30,7 +30,11 @@ struct PolygonVertex {
 /// triangles across the notch and over-fill — a GPU-only limitation: the CPU
 /// path (`frame.fill`, lyon) tessellates the same contour correctly. Needs a
 /// real tessellator (lyon/earcut) for parity before the toggle defaults on.
-fn triangulate_polygons(polygons: &[GpuPolygon]) -> Vec<PolygonVertex> {
+///
+/// `pub(crate)` (rather than private) so `scene::scenario_tests`'s full-board
+/// scenario can exercise this exact CPU-side vertex generation instead of
+/// re-deriving the vertex-count formula independently.
+pub(crate) fn triangulate_polygons(polygons: &[GpuPolygon]) -> Vec<PolygonVertex> {
     let mut vertices = Vec::new();
 
     for polygon in polygons {
