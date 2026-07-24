@@ -13,6 +13,12 @@ pub struct CirclePipeline {
     instance_buffer: wgpu::Buffer,
     instance_capacity: usize,
     instance_count: u32,
+    /// Second, independent instance buffer for overlay geometry — see
+    /// `LinePipeline`'s equivalent field doc for why this is a separate
+    /// buffer rather than a shared one with a base/overlay split index.
+    overlay_instance_buffer: wgpu::Buffer,
+    overlay_instance_capacity: usize,
+    overlay_instance_count: u32,
 }
 
 impl CirclePipeline {
@@ -99,39 +105,83 @@ impl CirclePipeline {
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+        let overlay_instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("signex_gfx_circle_overlay_instances"),
+            size: std::mem::size_of::<Circle>() as wgpu::BufferAddress,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
 
         Self {
             render_pipeline,
             instance_buffer,
             instance_capacity: initial_capacity,
             instance_count: 0,
+            overlay_instance_buffer,
+            overlay_instance_capacity: initial_capacity,
+            overlay_instance_count: 0,
         }
     }
 
     /// Upload circle instances into the instance buffer.
     pub fn upload(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, circles: &[Circle]) {
+        Self::upload_into(
+            device,
+            queue,
+            circles,
+            &mut self.instance_buffer,
+            &mut self.instance_capacity,
+            &mut self.instance_count,
+            "signex_gfx_circle_instances",
+        );
+    }
+
+    /// Upload overlay circle instances into the dedicated overlay buffer,
+    /// drawn by [`Self::draw_overlay`] in a separate later pass.
+    pub fn upload_overlay(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        circles: &[Circle],
+    ) {
+        Self::upload_into(
+            device,
+            queue,
+            circles,
+            &mut self.overlay_instance_buffer,
+            &mut self.overlay_instance_capacity,
+            &mut self.overlay_instance_count,
+            "signex_gfx_circle_overlay_instances",
+        );
+    }
+
+    fn upload_into(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        circles: &[Circle],
+        buffer: &mut wgpu::Buffer,
+        capacity: &mut usize,
+        count: &mut u32,
+        label: &'static str,
+    ) {
         if circles.is_empty() {
-            self.instance_count = 0;
+            *count = 0;
             return;
         }
 
         let writable = super::growth::ensure_capacity(
             device,
-            &mut self.instance_buffer,
-            &mut self.instance_capacity,
+            buffer,
+            capacity,
             circles.len(),
             std::mem::size_of::<Circle>(),
-            "signex_gfx_circle_instances",
+            label,
             wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             device.limits().max_buffer_size,
         );
-        self.instance_count = writable as u32;
+        *count = writable as u32;
 
-        queue.write_buffer(
-            &self.instance_buffer,
-            0,
-            bytemuck::cast_slice(&circles[..writable]),
-        );
+        queue.write_buffer(buffer, 0, bytemuck::cast_slice(&circles[..writable]));
     }
 
     /// Draw all uploaded circle instances.
@@ -140,14 +190,47 @@ impl CirclePipeline {
         render_pass: &mut wgpu::RenderPass<'_>,
         camera_bind_group: &wgpu::BindGroup,
     ) {
-        if self.instance_count == 0 {
+        Self::draw_from(
+            render_pass,
+            camera_bind_group,
+            &self.render_pipeline,
+            &self.instance_buffer,
+            self.instance_count,
+        );
+    }
+
+    /// Draw all uploaded overlay circle instances. Callers composite this in
+    /// a pass strictly after every base bucket, so overlay content always
+    /// renders on top.
+    pub fn draw_overlay(
+        &self,
+        render_pass: &mut wgpu::RenderPass<'_>,
+        camera_bind_group: &wgpu::BindGroup,
+    ) {
+        Self::draw_from(
+            render_pass,
+            camera_bind_group,
+            &self.render_pipeline,
+            &self.overlay_instance_buffer,
+            self.overlay_instance_count,
+        );
+    }
+
+    fn draw_from(
+        render_pass: &mut wgpu::RenderPass<'_>,
+        camera_bind_group: &wgpu::BindGroup,
+        render_pipeline: &wgpu::RenderPipeline,
+        instance_buffer: &wgpu::Buffer,
+        instance_count: u32,
+    ) {
+        if instance_count == 0 {
             return;
         }
 
-        render_pass.set_pipeline(&self.render_pipeline);
+        render_pass.set_pipeline(render_pipeline);
         render_pass.set_bind_group(0, camera_bind_group, &[]);
-        render_pass.set_vertex_buffer(0, self.instance_buffer.slice(..));
-        render_pass.draw(0..6, 0..self.instance_count);
+        render_pass.set_vertex_buffer(0, instance_buffer.slice(..));
+        render_pass.draw(0..6, 0..instance_count);
     }
 
     pub fn instance_count(&self) -> u32 {

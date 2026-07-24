@@ -11,9 +11,9 @@
 //! primitive is meant to render, the CPU-side vertex generation
 //! (`triangulate_polygons`) the GPU polygon pipeline uploads verbatim, and
 //! the draw order both renderers are supposed to share. It deliberately does
-//! NOT duplicate `order`'s own nine tests (the const-array parity checks and
-//! `dashed_lines_are_a_known_gpu_gap`/`polygon_z_order_diverges_between_cpu_and_gpu`)
-//! — it builds on top of them with real, concretely-populated scene content.
+//! NOT duplicate `order`'s own tests (the const-array parity checks and
+//! `overlays_composite_above_base_buckets`) — it builds on top of them with
+//! real, concretely-populated scene content.
 
 use super::{CPU_PCB_DRAW_ORDER, GPU_SCENE_DRAW_ORDER, Scene, SceneBucket};
 use crate::pipeline::polygon::triangulate_polygons;
@@ -191,12 +191,10 @@ fn full_board_scenario_populates_every_bucket() {
 
 #[test]
 fn line_style_bit_is_preserved_in_the_scene_ir() {
-    // The shader-renders-solid gap for dashed segments is the KNOWN GPU
-    // divergence already pinned by
-    // `scene::order::tests::dashed_lines_are_a_known_gpu_gap` — not
-    // re-tested here. This only asserts the Rust-side Scene IR faithfully
-    // carries the style bit for every line the CPU renderer (and eventually
-    // the GPU shader) has to honour.
+    // The dash style bit is now honoured on both engines (GPU pixel-verified
+    // by `debug_pass::tests::line_wgsl_actually_renders_a_dashed_pattern`) —
+    // not re-tested here. This only asserts the Rust-side Scene IR faithfully
+    // carries the style bit for every line either renderer has to honour.
     let scene = build_full_board_scene();
     let dashed = scene.lines.iter().filter(|l| l.is_dashed()).count();
     let solid = scene.lines.iter().filter(|l| !l.is_dashed()).count();
@@ -239,28 +237,52 @@ fn triangulate_convex_pad_fans_exactly_n_minus_2_fill_triangles() {
     assert_eq!(vertices.len(), (n - 2) * 3);
 }
 
+/// Shoelace area of a closed contour — the ground truth a correct
+/// triangulation's total triangle area must equal exactly, whether the
+/// contour is convex or concave.
+fn shoelace_area(points: &[[f32; 2]]) -> f64 {
+    let mut sum = 0.0f64;
+    for i in 0..points.len() {
+        let [x0, y0] = points[i].map(f64::from);
+        let [x1, y1] = points[(i + 1) % points.len()].map(f64::from);
+        sum += x0 * y1 - x1 * y0;
+    }
+    (sum / 2.0).abs()
+}
+
+fn triangle_area(a: [f32; 2], b: [f32; 2], c: [f32; 2]) -> f64 {
+    shoelace_area(&[a, b, c])
+}
+
 #[test]
-fn triangulate_concave_zone_over_fills_with_the_same_fan_count() {
-    // GPU-only limitation (see `pipeline::polygon::triangulate_polygons`'s
-    // doc comment): the fan triangulation is exact for convex contours ONLY.
-    // A concave contour — a real pour routed around an obstacle — bridges
-    // triangles straight across the notch instead of respecting it, so it
-    // gets the exact SAME `(n - 2) * 3` vertex count as if it were convex,
-    // silently over-filling outside the true polygon boundary. The CPU
-    // `frame.fill` (lyon) path tessellates the identical contour correctly;
-    // this divergence is why the GPU toggle stays default-off until a real
-    // tessellator (lyon/earcut) lands.
+fn concave_zone_fills_exactly_its_area() {
+    // #3 (fixed): `append_fill` triangulates via `signex_sketch::ear_clip`,
+    // which partitions a concave contour exactly instead of fanning it from
+    // vertex 0 — the fan's over-fill-across-the-notch bug no longer applies.
+    // A vertex count alone can't prove this (ear-clip still emits
+    // `(n - 2)` triangles for this contour, same as a fan would), so this
+    // checks the actual covered area against the contour's shoelace area,
+    // matching the CPU `frame.fill` (lyon) result exactly.
     let zone = concave_zone();
     let n = zone.vertices.len();
     assert!(
         n >= 6,
         "scenario requires a genuinely non-trivial concave contour"
     );
+
     let vertices = triangulate_polygons(std::slice::from_ref(&zone));
-    assert_eq!(
-        vertices.len(),
-        (n - 2) * 3,
-        "concave contour fans to the SAME count a convex n-gon would -- the over-fill bug"
+    assert_eq!(vertices.len(), (n - 2) * 3);
+
+    let expected_area = shoelace_area(&zone.vertices);
+    let total_area: f64 = vertices
+        .chunks_exact(3)
+        .map(|tri| triangle_area(tri[0].position, tri[1].position, tri[2].position))
+        .sum();
+    assert!(
+        (total_area - expected_area).abs() < 1e-6,
+        "concave fill must cover exactly the contour's area: expected \
+         {expected_area}, got {total_area} (a fan would over-fill across \
+         the notch)"
     );
 }
 
@@ -340,69 +362,66 @@ fn nonempty_bucket_sequence(scene: &Scene, order: &[SceneBucket]) -> Vec<SceneBu
         .collect()
 }
 
-/// #4 (unreconciled), tied to real content: `scene::order`'s own tests pin
-/// `GPU_SCENE_DRAW_ORDER`/`CPU_PCB_DRAW_ORDER` as abstract const arrays. This
-/// walks both orders over a full-board scene where every bucket actually
-/// holds geometry and asserts the concrete consequence: the GPU paints
-/// pad/pour polygons FIRST (bottom of the stack, underneath every line and
-/// circle drawn after), while the CPU PCB path paints copper lines first and
-/// polygons over them, finishing with overlay polygons painted LAST (top of
-/// everything). A pour or overlay meant to sit on top of copper therefore
-/// renders UNDER it on the GPU path.
+/// #4 (fixed for overlays), tied to real content: `scene::order`'s own
+/// `overlays_composite_above_base_buckets` pins the abstract per-bucket
+/// constants; this walks the SAME full-board scene used above — every bucket
+/// actually holds geometry, including the overlay trio — and asserts the
+/// concrete consequence now holds: an overlay meant to sit on top of copper
+/// (the active-layer zone highlight, selection highlight, or a DRC marker)
+/// lands there on BOTH engines. On GPU this holds structurally — no overlay
+/// bucket is ever a member of `GPU_SCENE_DRAW_ORDER`, so the scene shader's
+/// dedicated overlay pass runs strictly after every base bucket regardless of
+/// scene content — and on CPU, every populated overlay bucket's position in
+/// `CPU_PCB_DRAW_ORDER` is after every populated base bucket's. (The base
+/// `Polygons`-vs-`Lines` order — pad/pour geometry, not overlays — remains a
+/// separate, deliberately open question pinned exactly by `scene::order`'s
+/// own `gpu_scene_draw_order_is_fills_then_strokes_then_text` /
+/// `cpu_pcb_draw_order_is_main_geometry_then_overlays`, unaffected by this
+/// fix.)
 #[test]
-fn draw_order_divergence_is_concrete_for_a_fully_populated_scene() {
+fn overlays_composite_above_base_content_in_a_fully_populated_scene() {
     let scene = build_full_board_scene();
+    let base_buckets = [
+        SceneBucket::Lines,
+        SceneBucket::Circles,
+        SceneBucket::Polygons,
+    ];
+    let overlay_buckets = [
+        SceneBucket::OverlayLines,
+        SceneBucket::OverlayCircles,
+        SceneBucket::OverlayPolygons,
+    ];
 
-    let gpu_sequence = nonempty_bucket_sequence(&scene, GPU_SCENE_DRAW_ORDER);
+    // Sanity: this scenario actually populates every overlay bucket, so the
+    // parity claim below is exercised against real content, not empty ones.
+    for bucket in overlay_buckets {
+        assert!(
+            bucket_count(&scene, bucket) > 0,
+            "scenario must populate every overlay bucket"
+        );
+    }
+
+    // GPU: no overlay bucket is ever a member of the base draw order -- the
+    // overlay trio composites in its own pass strictly after, unconditionally.
+    for bucket in overlay_buckets {
+        assert!(!GPU_SCENE_DRAW_ORDER.contains(&bucket));
+    }
+
+    // CPU: every populated overlay bucket's position in the real draw order
+    // is after every populated base bucket's.
     let cpu_sequence = nonempty_bucket_sequence(&scene, CPU_PCB_DRAW_ORDER);
-
-    // Sanity: every bucket walked below is actually populated, so this is a
-    // real content ordering, not an artifact of empty buckets being skipped.
-    assert_eq!(gpu_sequence.len(), GPU_SCENE_DRAW_ORDER.len());
-    assert_eq!(cpu_sequence.len(), CPU_PCB_DRAW_ORDER.len());
-
-    assert_eq!(
-        gpu_sequence.first(),
-        Some(&SceneBucket::Polygons),
-        "GPU: polygons (pads/pours) paint first -- bottom of the stack"
-    );
-    assert_eq!(
-        cpu_sequence.first(),
-        Some(&SceneBucket::Lines),
-        "CPU: copper lines paint first -- bottom of the stack"
-    );
-    assert_eq!(
-        cpu_sequence.last(),
-        Some(&SceneBucket::OverlayPolygons),
-        "CPU: overlay polygons paint last -- top of the stack"
-    );
-
-    // The concrete flip: on GPU, Polygons is strictly before Lines; on CPU,
-    // Lines is strictly before Polygons. Same scene, same two buckets,
-    // opposite relative order.
-    let gpu_polygon_index = gpu_sequence
+    let max_base_idx = base_buckets
         .iter()
-        .position(|b| *b == SceneBucket::Polygons)
-        .unwrap();
-    let gpu_line_index = gpu_sequence
+        .filter_map(|b| cpu_sequence.iter().position(|x| x == b))
+        .max()
+        .expect("scenario populates the base buckets");
+    let min_overlay_idx = overlay_buckets
         .iter()
-        .position(|b| *b == SceneBucket::Lines)
-        .unwrap();
-    let cpu_polygon_index = cpu_sequence
-        .iter()
-        .position(|b| *b == SceneBucket::Polygons)
-        .unwrap();
-    let cpu_line_index = cpu_sequence
-        .iter()
-        .position(|b| *b == SceneBucket::Lines)
-        .unwrap();
-
+        .filter_map(|b| cpu_sequence.iter().position(|x| x == b))
+        .min()
+        .expect("overlay buckets are populated above");
     assert!(
-        gpu_polygon_index < gpu_line_index,
-        "GPU draws polygons under lines"
-    );
-    assert!(
-        cpu_line_index < cpu_polygon_index,
-        "CPU draws polygons over lines"
+        min_overlay_idx > max_base_idx,
+        "CPU must draw every populated overlay bucket after every populated base bucket"
     );
 }

@@ -116,34 +116,62 @@ fn is_ear(polygon: &[Point2], ring: &[usize], prev: usize, curr: usize, next: us
     if !matches!(orient2d(a, b, c), Sign::Positive) {
         return false;
     }
-    // No other vertex of the polygon may lie strictly inside the
-    // triangle. We allow on-edge / on-vertex matches at the three
-    // corners themselves.
+    // No other vertex of the polygon may lie inside the triangle, INCLUDING
+    // exactly on one of its edges. We allow on-edge / on-vertex matches at
+    // the three corners themselves (excluded above) — but nowhere else: a
+    // bridge edge (prev -> next) created by clipping this ear that happens
+    // to pass exactly through another remaining vertex corrupts the
+    // topology (the two rings the bridge was meant to separate collapse
+    // into a self-intersecting remainder). See
+    // `ear_clip_partitions_l_shape_area_exactly` below — the regression
+    // test for a real failure this produced on an axis-aligned L-shape.
+    //
+    // Exception: a ring vertex whose COORDINATES coincide exactly with one
+    // of this ear's own corners is the same geometric point under a
+    // different index — `ear_clip_with_holes`'s bridge stitch deliberately
+    // duplicates the two cut vertices this way, so a coincident duplicate
+    // must not block the ear it is itself a corner of.
     for &i in ring.iter() {
         if i == prev || i == curr || i == next {
             continue;
         }
-        if point_in_triangle(polygon[i], a, b, c) {
+        let p = polygon[i];
+        if p == a || p == b || p == c {
+            continue;
+        }
+        if point_in_triangle(p, a, b, c) {
             return false;
         }
     }
     true
 }
 
-/// Strict interior test for a point in a triangle. Uses three
-/// orientation predicates — when all three return the same sign,
-/// the point is on the appropriate side of every edge. Boundary
-/// hits (Sign::Zero) count as "outside" so a vertex coincident
-/// with an edge doesn't disqualify the candidate ear.
+/// Whether `p` lies inside the triangle `a,b,c`, OR exactly on one of its
+/// edges/their infinite extension. Uses three orientation predicates: `p` is
+/// strictly OUTSIDE only when it falls on opposite sides of at least two of
+/// the triangle's edges (one `Positive`, one `Negative`) — anything else
+/// (all one sign, or one/more `Sign::Zero` alongside a single consistent
+/// sign) counts as blocking.
+///
+/// A point exactly on an edge is intentionally NOT treated as "outside"
+/// here (unlike the classic strict-interior test), because when `p` is some
+/// OTHER remaining polygon vertex rather than one of `a`/`b`/`c` themselves,
+/// clipping this ear would create a new bridge edge running exactly through
+/// `p` — collapsing the remaining ring into a self-intersecting polygon
+/// (zero or negative net area) instead of a simple one. The caller already
+/// excludes the ear's own three corners from this check, so every point
+/// tested here is a genuinely different vertex.
 fn point_in_triangle(p: Point2, a: Point2, b: Point2, c: Point2) -> bool {
     let s_ab = orient2d(a, b, p);
     let s_bc = orient2d(b, c, p);
     let s_ca = orient2d(c, a, p);
-    matches!(
-        (s_ab, s_bc, s_ca),
-        (Sign::Positive, Sign::Positive, Sign::Positive)
-            | (Sign::Negative, Sign::Negative, Sign::Negative)
-    )
+    let has_negative = matches!(s_ab, Sign::Negative)
+        || matches!(s_bc, Sign::Negative)
+        || matches!(s_ca, Sign::Negative);
+    let has_positive = matches!(s_ab, Sign::Positive)
+        || matches!(s_bc, Sign::Positive)
+        || matches!(s_ca, Sign::Positive);
+    !(has_negative && has_positive)
 }
 
 /// Triangulate an outer polygon with optional hole rings. Each
@@ -307,6 +335,46 @@ mod tests {
         ];
         let tris = ear_clip(&pts);
         assert_eq!(tris.len(), 4, "L-shape should triangulate into 4 tris");
+    }
+
+    /// Regression: on this exact L-shape, the first ear-clip (removing
+    /// vertex 0) creates a bridge edge from vertex 5 to vertex 1 that passes
+    /// exactly through vertex 3 — `(0,2)` to `(2,0)` is the line `x+y=2`,
+    /// and vertex 3 is `(1,1)`. A point-in-triangle test that treats
+    /// boundary hits as "outside" for vertices other than the ear's own
+    /// corners approves the next ear (removing vertex 1) anyway, because
+    /// vertex 3 is exactly ON that bridge edge rather than strictly inside
+    /// the candidate triangle. The result: the remaining ring collapses to
+    /// zero net area (self-intersecting) instead of a simple quad, so two
+    /// of the emitted "triangles" overlap with opposite winding rather than
+    /// partitioning the polygon. Every triangle's contribution to the
+    /// total area must sum to exactly the polygon's own area — the bug
+    /// this pins produced 4.0 instead of the correct 3.0.
+    #[test]
+    fn ear_clip_partitions_l_shape_area_exactly() {
+        let pts = [
+            p(0.0, 0.0),
+            p(2.0, 0.0),
+            p(2.0, 1.0),
+            p(1.0, 1.0),
+            p(1.0, 2.0),
+            p(0.0, 2.0),
+        ];
+        let tris = ear_clip(&pts);
+        assert_eq!(tris.len(), 4);
+
+        let total_area: f64 = tris
+            .iter()
+            .map(|&[a, b, c]| {
+                let (a, b, c) = (pts[a], pts[b], pts[c]);
+                ((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)).abs() / 2.0
+            })
+            .sum();
+
+        assert!(
+            (total_area - 3.0).abs() < 1e-9,
+            "L-shape area is 3.0 (2x2 square minus a 1x1 notch), got {total_area}"
+        );
     }
 
     #[test]
