@@ -146,13 +146,21 @@ pub fn run_with_dsl(snapshot: &SchematicSheet, dsl_rules: &[engine::EvalFn]) -> 
 }
 
 /// Run ERC for a schematic in the context of a whole project. Cross-sheet
-/// rules consult `children` keyed by the child's filename as it appears
-/// on the parent's sheet symbol. Pass an empty map for top-only runs.
+/// rules consult `resolved` — THIS sheet's own `ChildSheet.filename ->
+/// SheetKey` submap — resolved through the shared `sheets` table. Pass an
+/// empty `resolved` map for top-only runs.
+///
+/// `resolved` must be the caller's per-parent submap for `snapshot`, not a
+/// single project-wide map: keying it that way is what stops two parents in
+/// different directories that reference a child by the same filename string
+/// from resolving to the wrong file (#466), and is what keeps this in step
+/// with `signex_net::build_project_netlist`, which takes the same shape.
 pub fn run_with_project(
     snapshot: &SchematicSheet,
-    children: &std::collections::HashMap<String, SchematicSheet>,
+    resolved: &std::collections::HashMap<String, signex_net::SheetKey>,
+    sheets: &std::collections::HashMap<signex_net::SheetKey, SchematicSheet>,
 ) -> Vec<Violation> {
-    let ctx = ErcContext::from_snapshot_with_children(snapshot, children);
+    let ctx = ErcContext::from_snapshot_with_children(snapshot, resolved, sheets);
     engine::run_all(&ctx)
         .into_iter()
         .map(Violation::from)
@@ -160,12 +168,14 @@ pub fn run_with_project(
 }
 
 /// Run project-scoped ERC with built-in rules plus caller-provided DSL rules.
+/// See [`run_with_project`] for what `resolved` / `sheets` must be.
 pub fn run_with_project_and_dsl(
     snapshot: &SchematicSheet,
-    children: &std::collections::HashMap<String, SchematicSheet>,
+    resolved: &std::collections::HashMap<String, signex_net::SheetKey>,
+    sheets: &std::collections::HashMap<signex_net::SheetKey, SchematicSheet>,
     dsl_rules: &[engine::EvalFn],
 ) -> Vec<Violation> {
-    let ctx = ErcContext::from_snapshot_with_children(snapshot, children);
+    let ctx = ErcContext::from_snapshot_with_children(snapshot, resolved, sheets);
     engine::run_all_with_dsl(&ctx, dsl_rules)
         .into_iter()
         .map(Violation::from)

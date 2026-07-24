@@ -2,7 +2,7 @@
 //!
 //! A `ChildSheet.filename` is relative to the sheet that references it, not to
 //! the project root — the convention `state::scope::parent_of` and
-//! `project_sheets::project_children_map` already use. Resolving it against the
+//! `project_sheets::project_graph` already use. Resolving it against the
 //! project directory instead opens the wrong file (or reports "not found") for
 //! any sheet that does not sit directly in the project root.
 

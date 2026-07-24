@@ -276,8 +276,8 @@ fn build_export_scope(
 
     // Derive the authoritative project netlist off that same sheet set, so the
     // netlist exporter reads the contract instead of re-deriving connectivity
-    // (ADR-0002 D7). The children map is keyed by the exact
-    // `ChildSheet.filename` each parent references (ADR-0002 D8).
+    // (ADR-0002 D7). The graph is re-keyed by resolved path, per parent
+    // (ADR-0002 D8, #466), not by the bare `ChildSheet.filename` string.
     let mut issues = ExportIssues::default();
     let set = sheet_set;
     let netlist = set.root.clone().and_then(|root_path| {
@@ -306,19 +306,30 @@ fn build_export_scope(
             }
         }
         issues.unreadable = set.unreadable.clone();
-        let root = set.sheets.get(&root_path)?;
-        let (children, children_issues) =
-            crate::app::project_sheets::project_children_map(&set.sheets);
         let project_dir = owning_project.map(|p| p.dir().to_path_buf());
-        let root_filename =
-            crate::app::project_sheets::root_reference_name(&root_path, project_dir.as_deref());
+        let base_dir = project_dir
+            .clone()
+            .or_else(|| root_path.parent().map(PathBuf::from));
+        let graph = crate::app::project_sheets::project_graph(&set.sheets, base_dir.as_deref());
+        let root_key = crate::app::project_sheets::sheet_key(&root_path, base_dir.as_deref());
+        if !graph.sheets.contains_key(&root_key) {
+            return None;
+        }
+        let roots = [signex_net::ProjectRoot {
+            key: root_key,
+            name: None,
+        }];
         // `build_project_netlist` always produces a netlist and reports what
         // it could not stitch in-band. The issues are returned to the caller
         // rather than acted on here, because severity is a per-deliverable
         // policy: the .net refuses on a hole, the PDF proceeds and warns.
-        let result = signex_net::build_project_netlist(root, &children, root_filename.as_deref());
+        let result = signex_net::build_project_netlist(&signex_net::ProjectGraph {
+            sheets: &graph.sheets,
+            resolved: &graph.resolved,
+            roots: &roots,
+        });
         let mut stitch = result.issues;
-        stitch.extend(children_issues);
+        stitch.extend(graph.issues);
         issues.stitch = stitch;
         Some(result.netlist)
     });
