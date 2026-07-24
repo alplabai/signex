@@ -10,6 +10,7 @@ pub mod status_bar;
 pub mod symbol_preview;
 pub mod tab_pill;
 pub mod theme_ext;
+pub mod transmission_line_calculator;
 pub mod tree_view;
 
 // The dropdown widget now lives at `active_bar::dropdown`; keep the

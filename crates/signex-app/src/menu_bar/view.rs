@@ -370,6 +370,13 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
             leaf_stub("Design Rule Check", None, mc),
             leaf_stub("Net Inspector", None, mc),
             separator(mc),
+            leaf(
+                "Transmission Line Calculator...",
+                None,
+                MenuMessage::OpenTransmissionLineCalculator,
+                mc,
+            ),
+            separator(mc),
             // Multi-part component flow — only meaningful when the
             // active tab is a `.snxsym` standalone editor; the
             // dispatcher silently no-ops on non-Symbol tabs.
