@@ -1,0 +1,672 @@
+[
+  {
+    "id": "annotate_schematic",
+    "group": "Schematic",
+    "category": "design"
+  },
+  {
+    "id": "annotate_schematic_quietly",
+    "group": "Schematic",
+    "category": "design"
+  },
+  {
+    "id": "autoplace_fields",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "break_wire",
+    "group": "General",
+    "category": "modify"
+  },
+  {
+    "id": "cancel_current_tool",
+    "group": "General",
+    "category": "interactive"
+  },
+  {
+    "id": "center_on_cursor",
+    "group": "General",
+    "category": "view"
+  },
+  {
+    "id": "center_view_at_cursor",
+    "group": "General",
+    "category": "view"
+  },
+  {
+    "id": "clear_net_highlighting",
+    "group": "Schematic",
+    "category": "select"
+  },
+  {
+    "id": "close_active_document",
+    "group": "General",
+    "category": "file"
+  },
+  {
+    "id": "copy",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "copy_attributes_or_add_vertex",
+    "group": "General",
+    "category": "interactive"
+  },
+  {
+    "id": "cut",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "cycle_fast_grid",
+    "group": "General",
+    "category": "view"
+  },
+  {
+    "id": "cycle_selection_mode",
+    "group": "General",
+    "category": "select"
+  },
+  {
+    "id": "cycle_snap_grid_backward",
+    "group": "General",
+    "category": "view"
+  },
+  {
+    "id": "cycle_snap_grid_forward",
+    "group": "General",
+    "category": "view"
+  },
+  {
+    "id": "cycle_unit",
+    "group": "General",
+    "category": "view"
+  },
+  {
+    "id": "cycle_wire_bus_graphic_mode",
+    "group": "General",
+    "category": "interactive"
+  },
+  {
+    "id": "cycle_wiring_mode",
+    "group": "General",
+    "category": "interactive"
+  },
+  {
+    "id": "delete_selection",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "drag_keep_connections",
+    "group": "General",
+    "category": "modify"
+  },
+  {
+    "id": "draw_graphic_line",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "draw_hierarchical_sheet",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "duplicate",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "edit_footprint_field",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "edit_library_symbol",
+    "group": "General",
+    "category": "library"
+  },
+  {
+    "id": "edit_object_properties",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "edit_reference_designator",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "edit_selected_object_properties",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "edit_selected_symbol_in_symbol_editor",
+    "group": "General",
+    "category": "library"
+  },
+  {
+    "id": "edit_text_in_place",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "edit_value",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "fast_grid_1",
+    "group": "General",
+    "category": "view"
+  },
+  {
+    "id": "fast_grid_2",
+    "group": "General",
+    "category": "view"
+  },
+  {
+    "id": "find",
+    "group": "General",
+    "category": "search"
+  },
+  {
+    "id": "find_and_replace",
+    "group": "General",
+    "category": "search"
+  },
+  {
+    "id": "find_next",
+    "group": "General",
+    "category": "search"
+  },
+  {
+    "id": "find_previous",
+    "group": "General",
+    "category": "search"
+  },
+  {
+    "id": "find_similar_objects",
+    "group": "General",
+    "category": "select"
+  },
+  {
+    "id": "find_text",
+    "group": "General",
+    "category": "search"
+  },
+  {
+    "id": "footprint_mode_pads",
+    "group": "ThreeD",
+    "category": "library"
+  },
+  {
+    "id": "footprint_mode_sketch",
+    "group": "ThreeD",
+    "category": "library"
+  },
+  {
+    "id": "footprint_mode_view_3d",
+    "group": "ThreeD",
+    "category": "library"
+  },
+  {
+    "id": "force_annotate_all_schematics",
+    "group": "Schematic",
+    "category": "design"
+  },
+  {
+    "id": "highlight_net_under_cursor",
+    "group": "Schematic",
+    "category": "select"
+  },
+  {
+    "id": "highlight_related_net_objects",
+    "group": "Schematic",
+    "category": "select"
+  },
+  {
+    "id": "import_graphics",
+    "group": "General",
+    "category": "library"
+  },
+  {
+    "id": "leave_sheet",
+    "group": "Schematic",
+    "category": "navigation"
+  },
+  {
+    "id": "measure_distance",
+    "group": "General",
+    "category": "view"
+  },
+  {
+    "id": "mirror_x",
+    "group": "General",
+    "category": "modify"
+  },
+  {
+    "id": "mirror_y",
+    "group": "General",
+    "category": "modify"
+  },
+  {
+    "id": "move_object",
+    "group": "General",
+    "category": "modify"
+  },
+  {
+    "id": "move_selection",
+    "group": "General",
+    "category": "modify"
+  },
+  {
+    "id": "navigate_up_hierarchy",
+    "group": "Schematic",
+    "category": "navigation"
+  },
+  {
+    "id": "new_document",
+    "group": "General",
+    "category": "file"
+  },
+  {
+    "id": "next_document_tab",
+    "group": "General",
+    "category": "window"
+  },
+  {
+    "id": "next_grid",
+    "group": "General",
+    "category": "view"
+  },
+  {
+    "id": "next_highlighted_net_item",
+    "group": "Schematic",
+    "category": "select"
+  },
+  {
+    "id": "next_sheet",
+    "group": "Schematic",
+    "category": "navigation"
+  },
+  {
+    "id": "open_command_palette",
+    "group": "General",
+    "category": "commands"
+  },
+  {
+    "id": "open_components_panel",
+    "group": "Schematic",
+    "category": "panels"
+  },
+  {
+    "id": "open_datasheet",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "open_document",
+    "group": "General",
+    "category": "file"
+  },
+  {
+    "id": "open_grid_picker",
+    "group": "General",
+    "category": "view"
+  },
+  {
+    "id": "open_grid_properties",
+    "group": "General",
+    "category": "view"
+  },
+  {
+    "id": "open_net_color_palette",
+    "group": "Schematic",
+    "category": "view"
+  },
+  {
+    "id": "open_preferences",
+    "group": "General",
+    "category": "preferences"
+  },
+  {
+    "id": "open_schematic_preferences",
+    "group": "General",
+    "category": "preferences"
+  },
+  {
+    "id": "paste",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "paste_special",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "place_bus",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_compile_mask",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_design_block",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_global_label",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_hierarchical_label",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_junction",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_local_net_label",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_net_label",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_no_connect",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_no_erc",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_power_symbol",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_symbol",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_text",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_wire",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_wire_to_bus_entry",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "placement_accept",
+    "group": "General",
+    "category": "interactive"
+  },
+  {
+    "id": "placement_properties",
+    "group": "General",
+    "category": "interactive"
+  },
+  {
+    "id": "previous_document_tab",
+    "group": "General",
+    "category": "window"
+  },
+  {
+    "id": "previous_grid",
+    "group": "General",
+    "category": "view"
+  },
+  {
+    "id": "previous_highlighted_net_item",
+    "group": "Schematic",
+    "category": "select"
+  },
+  {
+    "id": "previous_sheet",
+    "group": "Schematic",
+    "category": "navigation"
+  },
+  {
+    "id": "print",
+    "group": "General",
+    "category": "file"
+  },
+  {
+    "id": "redo",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "refresh_view",
+    "group": "General",
+    "category": "view"
+  },
+  {
+    "id": "remove_last_vertex",
+    "group": "General",
+    "category": "interactive"
+  },
+  {
+    "id": "repeat_last_item",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "report_manager_bom",
+    "group": "General",
+    "category": "reports"
+  },
+  {
+    "id": "reset_local_coordinates",
+    "group": "General",
+    "category": "view"
+  },
+  {
+    "id": "reset_schematic_designators",
+    "group": "Schematic",
+    "category": "design"
+  },
+  {
+    "id": "rotate_clockwise",
+    "group": "General",
+    "category": "modify"
+  },
+  {
+    "id": "rotate_counterclockwise",
+    "group": "General",
+    "category": "modify"
+  },
+  {
+    "id": "rubber_stamp_copy",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "run_erc",
+    "group": "Schematic",
+    "category": "validation"
+  },
+  {
+    "id": "save_document",
+    "group": "General",
+    "category": "file"
+  },
+  {
+    "id": "save_document_as",
+    "group": "General",
+    "category": "file"
+  },
+  {
+    "id": "select_all",
+    "group": "General",
+    "category": "select"
+  },
+  {
+    "id": "select_expand_connection",
+    "group": "General",
+    "category": "select"
+  },
+  {
+    "id": "select_node_or_connection_item",
+    "group": "General",
+    "category": "select"
+  },
+  {
+    "id": "sheet_navigation_back",
+    "group": "Schematic",
+    "category": "navigation"
+  },
+  {
+    "id": "sheet_navigation_forward",
+    "group": "Schematic",
+    "category": "navigation"
+  },
+  {
+    "id": "show_all_design_objects",
+    "group": "General",
+    "category": "view"
+  },
+  {
+    "id": "show_current_command_hotkeys",
+    "group": "General",
+    "category": "help"
+  },
+  {
+    "id": "show_current_command_shortcuts",
+    "group": "General",
+    "category": "help"
+  },
+  {
+    "id": "smart_paste",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "switch_segment_posture",
+    "group": "General",
+    "category": "interactive"
+  },
+  {
+    "id": "toggle_auto_focus",
+    "group": "General",
+    "category": "view"
+  },
+  {
+    "id": "toggle_cross_select_mode",
+    "group": "General",
+    "category": "select"
+  },
+  {
+    "id": "toggle_electrical_grid",
+    "group": "General",
+    "category": "view"
+  },
+  {
+    "id": "toggle_floating_panels",
+    "group": "General",
+    "category": "window"
+  },
+  {
+    "id": "toggle_properties_panel",
+    "group": "General",
+    "category": "panels"
+  },
+  {
+    "id": "toggle_schematic_filter_panel",
+    "group": "General",
+    "category": "panels"
+  },
+  {
+    "id": "toggle_schematic_list_panel",
+    "group": "General",
+    "category": "panels"
+  },
+  {
+    "id": "toggle_search_panel",
+    "group": "General",
+    "category": "search"
+  },
+  {
+    "id": "toggle_selection",
+    "group": "General",
+    "category": "select"
+  },
+  {
+    "id": "toggle_visible_grid",
+    "group": "General",
+    "category": "view"
+  },
+  {
+    "id": "undo",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "undo_last_segment",
+    "group": "General",
+    "category": "interactive"
+  },
+  {
+    "id": "unselect_all",
+    "group": "General",
+    "category": "select"
+  },
+  {
+    "id": "update_pcb_from_schematic",
+    "group": "Schematic",
+    "category": "pcb_sync"
+  },
+  {
+    "id": "zoom_in_at_cursor",
+    "group": "General",
+    "category": "view"
+  },
+  {
+    "id": "zoom_out_at_cursor",
+    "group": "General",
+    "category": "view"
+  },
+  {
+    "id": "zoom_to_all_objects",
+    "group": "General",
+    "category": "view"
+  },
+  {
+    "id": "zoom_to_fit",
+    "group": "General",
+    "category": "view"
+  },
+  {
+    "id": "zoom_to_selection_area",
+    "group": "General",
+    "category": "view"
+  }
+]

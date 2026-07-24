@@ -349,4 +349,53 @@ mod tests {
             );
         }
     }
+
+    /// Golden-snapshot test (signex#276): locks the STABLE command-id
+    /// surface — `id` + `group` + `category` — because external CLI/plugin
+    /// tooling depends on ids staying put. The churny descriptor fields
+    /// (`icon`/`keybind`/`enable`/`flags`, added by #275/#479) are
+    /// deliberately NOT captured here and may change freely.
+    ///
+    /// A failing diff means one of two things:
+    ///   - a command was renamed or removed. This is a breaking change for
+    ///     downstream consumers: add an alias + a deprecation note, do NOT
+    ///     just regenerate the golden to make the test pass again.
+    ///   - a command was added, or an existing one's `group`/`category`
+    ///     changed on purpose. Regenerate with:
+    ///       `UPDATE_GOLDEN=1 cargo test -p signex-app command_id_surface_matches_golden_snapshot`
+    #[test]
+    fn command_id_surface_matches_golden_snapshot() {
+        #[derive(serde::Serialize)]
+        struct CommandIdSnapshot {
+            id: &'static str,
+            group: String,
+            category: &'static str,
+        }
+
+        let mut snapshot: Vec<CommandIdSnapshot> = all_metadata()
+            .map(|metadata| CommandIdSnapshot {
+                id: metadata.id,
+                group: format!("{:?}", metadata.group),
+                category: metadata.category,
+            })
+            .collect();
+        snapshot.sort_by_key(|entry| entry.id);
+
+        let actual = serde_json::to_string_pretty(&snapshot).unwrap() + "\n";
+        let golden_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden/commands.json");
+
+        if std::env::var_os("UPDATE_GOLDEN").is_some() {
+            std::fs::write(golden_path, &actual)
+                .unwrap_or_else(|err| panic!("failed to write golden {golden_path}: {err}"));
+            return;
+        }
+
+        let expected = std::fs::read_to_string(golden_path)
+            .unwrap_or_else(|err| panic!("failed to read golden {golden_path}: {err}"));
+        assert_eq!(
+            actual, expected,
+            "command-id surface drifted from crates/signex-app/tests/golden/commands.json — \
+             see this test's doc comment before regenerating"
+        );
+    }
 }
