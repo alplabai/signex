@@ -550,6 +550,79 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
             let label = Point::new(cursor_screen.x + 24.0, cursor_screen.y + 24.0);
             draw_dim_pill(frame, label, &format!("{:.1} deg", sweep_deg));
         }
+        // #467 — Edge Arc, start placed. Cursor previews where `end`
+        // will land; a plain dashed segment, since there's no
+        // radius/sweep to show until the third "point on arc" click
+        // supplies it.
+        ToolPending::EdgeArcStart { start } => {
+            let Some(s_world) = resolve_point(start) else {
+                return;
+            };
+            let s_screen = cstate.world_to_screen(s_world);
+            dashed(frame, s_screen, cursor_screen);
+        }
+        // #467 — Edge Arc, start + end placed. Cursor previews the
+        // third "point on arc" pick — mirror the dispatcher's
+        // circumcircle geometry (#461/#483) so the ghost arc matches
+        // exactly what a click would commit. Falls back to the plain
+        // start-end chord while the cursor sits on the collinear line
+        // (no solvable circle yet).
+        ToolPending::EdgeArcEnd { start, end } => {
+            let (Some(s_world), Some(e_world)) = (resolve_point(start), resolve_point(end)) else {
+                return;
+            };
+            use signex_types::schematic::{Point as SchPoint, circumcircle};
+            match circumcircle(
+                SchPoint::new(s_world.0, s_world.1),
+                SchPoint::new(cursor.0, cursor.1),
+                SchPoint::new(e_world.0, e_world.1),
+            ) {
+                Some((cx, cy, r)) => {
+                    use signex_sketch::geom::{Sign, orient2d};
+                    let sweep_ccw = match orient2d(s_world.into(), cursor.into(), e_world.into()) {
+                        Sign::Negative => false,
+                        Sign::Positive | Sign::Zero => true,
+                    };
+                    let c_screen = cstate.world_to_screen((cx, cy));
+                    let r_screen = (r as f32) * cstate.scale;
+                    let start_angle = (s_world.1 - cy).atan2(s_world.0 - cx) as f32;
+                    let end_angle = (e_world.1 - cy).atan2(e_world.0 - cx) as f32;
+                    let mut delta = end_angle - start_angle;
+                    if sweep_ccw {
+                        while delta < 0.0 {
+                            delta += std::f32::consts::TAU;
+                        }
+                    } else {
+                        while delta > 0.0 {
+                            delta -= std::f32::consts::TAU;
+                        }
+                    }
+                    let segments = 32;
+                    for i in (0..segments).step_by(2) {
+                        let t0 = i as f32 / segments as f32;
+                        let t1 = (i + 1) as f32 / segments as f32;
+                        let a0 = start_angle + delta * t0;
+                        let a1 = start_angle + delta * t1;
+                        let q0 = Point::new(
+                            c_screen.x + r_screen * a0.cos(),
+                            c_screen.y + r_screen * a0.sin(),
+                        );
+                        let q1 = Point::new(
+                            c_screen.x + r_screen * a1.cos(),
+                            c_screen.y + r_screen * a1.sin(),
+                        );
+                        frame.stroke(&Path::line(q0, q1), stroke);
+                    }
+                    let label = Point::new(cursor_screen.x + 24.0, cursor_screen.y + 24.0);
+                    draw_dim_pill(frame, label, &format!("r {:.3} mm", r));
+                }
+                None => {
+                    let s_screen = cstate.world_to_screen(s_world);
+                    let e_screen = cstate.world_to_screen(e_world);
+                    dashed(frame, s_screen, e_screen);
+                }
+            }
+        }
         // v0.23 — Polar centre re-pick has no preview shape; the
         // cursor PIP at the top of this match is the only visual cue.
         ToolPending::RepickPolarCenter { .. } => {}

@@ -440,6 +440,107 @@ pub(super) fn apply(
                 };
             }
         },
+        // #467 — Edge Arc: click start, click end, click a third point
+        // the arc must pass through. Unlike `Arc` (centre-first), the
+        // centre is *derived* — not clicked — from the circumcircle of
+        // the three picks, reusing the shared solver (#461/#483)
+        // instead of re-deriving the geometry here.
+        SketchTool::EdgeArc => match editor.state.tool_pending {
+            ToolPending::Idle => {
+                editor.state.tool_pending = ToolPending::EdgeArcStart {
+                    start: ctx.resolved_id,
+                };
+            }
+            ToolPending::EdgeArcStart { start } => {
+                editor.state.tool_pending = ToolPending::EdgeArcEnd {
+                    start,
+                    end: ctx.resolved_id,
+                };
+            }
+            ToolPending::EdgeArcEnd { start, end } => {
+                use signex_sketch::geom::{Sign, orient2d};
+                use signex_types::schematic::{Point as SchPoint, circumcircle};
+
+                let pos_of = |id: SketchEntityId| -> Option<(f64, f64)> {
+                    editor
+                        .primitive()
+                        .sketch
+                        .as_ref()
+                        .and_then(|s| s.entities.iter().find(|e| e.id == id))
+                        .and_then(|e| match e.kind {
+                            EntityKind::Point { x, y } => Some((x, y)),
+                            _ => None,
+                        })
+                };
+                let positions = (pos_of(start), pos_of(end), pos_of(ctx.resolved_id));
+                let (Some(start_pos), Some(end_pos), Some(mid_pos)) = positions else {
+                    editor.state.tool_pending = ToolPending::Idle;
+                    return;
+                };
+
+                match circumcircle(
+                    SchPoint::new(start_pos.0, start_pos.1),
+                    SchPoint::new(mid_pos.0, mid_pos.1),
+                    SchPoint::new(end_pos.0, end_pos.1),
+                ) {
+                    Some((cx, cy, _radius)) => {
+                        // Sweep direction: for three points on a common
+                        // circle, the (start, mid, end) triangle's
+                        // winding matches their cyclic order around it —
+                        // CCW winding means walking CCW from `start`
+                        // reaches `mid` before `end`.
+                        let sweep_ccw =
+                            match orient2d(start_pos.into(), mid_pos.into(), end_pos.into()) {
+                                Sign::Negative => false,
+                                Sign::Positive | Sign::Zero => true,
+                            };
+                        let center_id = SketchEntityId::new();
+                        let center = ctx.flag(Entity::new(
+                            center_id,
+                            ctx.plane_id,
+                            EntityKind::Point { x: cx, y: cy },
+                        ));
+                        editor.with_parts(|state, primitive| {
+                            apply_sketch_edit_with_warnings(
+                                state,
+                                primitive,
+                                SketchEdit::AddEntity(center),
+                            );
+                        });
+                        let arc_id = SketchEntityId::new();
+                        let arc = ctx.flag(Entity::new(
+                            arc_id,
+                            ctx.plane_id,
+                            EntityKind::Arc {
+                                center: center_id,
+                                start,
+                                end,
+                                sweep_ccw,
+                            },
+                        ));
+                        editor.with_parts(|state, primitive| {
+                            apply_sketch_edit_with_warnings(
+                                state,
+                                primitive,
+                                SketchEdit::AddEntity(arc),
+                            );
+                        });
+                    }
+                    None => {
+                        editor.state.solve_warnings.push(
+                            "Edge Arc: the three picks are collinear — no arc passes through them"
+                                .into(),
+                        );
+                    }
+                }
+                editor.state.tool_pending = ToolPending::Idle;
+            }
+            _ => {
+                editor.state.tool_pending = ToolPending::EdgeArcStart {
+                    start: ctx.resolved_id,
+                };
+            }
+        },
         SketchTool::TangentArc => {
             // v0.24 Track C — Tangent Arc. Two-click chained
             // arc segment that mints an Arc tangent to the

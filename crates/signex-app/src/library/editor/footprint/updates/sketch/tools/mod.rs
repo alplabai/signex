@@ -443,6 +443,7 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                 | SketchTool::RoundedRectangle
                 | SketchTool::Rectangle
                 | SketchTool::Arc
+                | SketchTool::EdgeArc
                 | SketchTool::TangentArc => draw::apply(editor, &ctx, tool),
                 SketchTool::Mirror
                 | SketchTool::Offset

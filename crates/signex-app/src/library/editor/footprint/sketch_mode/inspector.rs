@@ -141,6 +141,8 @@ fn view_tool_palette<'a>(
             SketchTool::RoundedRectangle => "click first corner (radius from input)".into(),
             SketchTool::Circle => "click centre".into(),
             SketchTool::Arc => "click centre".into(),
+            // #467 — 3-point Edge Arc.
+            SketchTool::EdgeArc => "click start point".into(),
             SketchTool::Mirror => {
                 "select a Line first, then click a Point to mirror".into()
             }
@@ -175,6 +177,10 @@ fn view_tool_palette<'a>(
         ToolPending::CircleCenter { .. } => "click radius point (Esc to cancel)".into(),
         ToolPending::ArcCenter { .. } => "click start (Esc to cancel)".into(),
         ToolPending::ArcStart { .. } => "click end (Esc to cancel)".into(),
+        ToolPending::EdgeArcStart { .. } => "click end point (Esc to cancel)".into(),
+        ToolPending::EdgeArcEnd { .. } => {
+            "click a point the arc passes through (Esc to cancel)".into()
+        }
         ToolPending::RepickPolarCenter { .. } => {
             "click a Point to set polar centre (Esc to cancel)".into()
         }

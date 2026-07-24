@@ -111,6 +111,11 @@ pub fn anchor_for_tool(
         // For ArcStart we anchor to the START point — that's the one
         // the cursor's sweeping around to define `end`.
         ToolPending::ArcStart { start, .. } => start,
+        // #467 — Edge Arc anchors to the most recently placed point:
+        // `start` while picking `end`, then `end` while picking the
+        // third "point on arc" click.
+        ToolPending::EdgeArcStart { start } => start,
+        ToolPending::EdgeArcEnd { end, .. } => end,
         // v0.23 — Polar centre re-pick has no anchor; the click sets
         // the centre directly without a tethered preview.
         ToolPending::RepickPolarCenter { .. } => return None,

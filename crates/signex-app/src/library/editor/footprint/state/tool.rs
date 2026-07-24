@@ -45,6 +45,11 @@ pub enum SketchTool {
     RoundedRectangle,
     Circle,
     Arc,
+    /// #467 — 3-point Edge Arc: click start, click end, click a third
+    /// point the arc passes through. Centre + radius are derived from
+    /// the circumcircle of the three picks (shared solver, #461/#483)
+    /// instead of the centre-first `Arc` tool's gesture.
+    EdgeArc,
     /// v0.22 Phase B1 — Mirror tool.
     Mirror,
     /// v0.22 Phase B2 — Offset tool.
@@ -121,6 +126,19 @@ pub enum ToolPending {
     ArcStart {
         center: signex_sketch::id::SketchEntityId,
         start: signex_sketch::id::SketchEntityId,
+    },
+    /// #467 — Edge Arc tool, start click landed; awaiting end click.
+    EdgeArcStart {
+        start: signex_sketch::id::SketchEntityId,
+    },
+    /// #467 — Edge Arc tool, start + end clicks landed; awaiting the
+    /// third "point on arc" click. That click's position is fed into
+    /// the circumcircle of (start, third, end) to derive the centre +
+    /// sweep direction; collinear picks are rejected via
+    /// `solve_warnings` instead of minting a degenerate arc.
+    EdgeArcEnd {
+        start: signex_sketch::id::SketchEntityId,
+        end: signex_sketch::id::SketchEntityId,
     },
     /// v0.23 — "Re-pick centre" affordance from the Pattern Properties
     /// sub-form.
