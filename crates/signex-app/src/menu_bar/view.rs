@@ -369,6 +369,12 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
             separator(mc),
             leaf_stub("Design Rule Check", None, mc),
             leaf_stub("Net Inspector", None, mc),
+            leaf(
+                "PCB Trace Calculator...",
+                None,
+                MenuMessage::OpenPcbTraceCalculator,
+                mc,
+            ),
             separator(mc),
             // Multi-part component flow — only meaningful when the
             // active tab is a `.snxsym` standalone editor; the

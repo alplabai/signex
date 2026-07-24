@@ -26,6 +26,10 @@ pub enum WindowMsg {
     /// corresponding entry in `ui_state.windows` so the app can re-attach
     /// the modal or tab to the main window's overlay stack.
     SecondaryWindowClosed(iced::window::Id),
+    /// Tools -> PCB Trace Calculator opens the IPC-2221 utility window.
+    OpenPcbTraceCalculator,
+    /// `iced::window::open` resolved for the PCB Trace Calculator.
+    PcbTraceCalculatorOpened(iced::window::Id),
     /// OS-level close request (native close button, Alt+F4, taskbar
     /// close) for a window. In `iced::daemon` mode windows do NOT
     /// auto-close on this event, so the app decides what to do: the
