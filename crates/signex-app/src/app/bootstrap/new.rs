@@ -155,6 +155,8 @@ impl Signex {
                 net_color_undo: Vec::new(),
                 net_color_custom: crate::app::state::NetColorCustomState::default(),
                 command_palette: crate::app::command_palette::CommandPaletteState::default(),
+                transmission_line_calculator:
+                    crate::transmission_line_calculator::SmithChartState::new(),
             },
             document_state: DocumentState {
                 dock,

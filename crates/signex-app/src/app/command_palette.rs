@@ -351,6 +351,10 @@ fn menu_command_table() -> &'static [(&'static str, MenuMessage)] {
         ("Toggle Auto-Focus", MenuMessage::ToggleAutoFocus),
         ("Generate BOM", MenuMessage::GenerateBom),
         // Tools
+        (
+            "Transmission Line Calculator…",
+            MenuMessage::OpenTransmissionLineCalculator,
+        ),
         ("Open Preferences", MenuMessage::OpenPreferences),
         ("New Part", MenuMessage::ToolsNewPart),
         ("Remove Part", MenuMessage::ToolsRemovePart),

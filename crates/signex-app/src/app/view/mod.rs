@@ -152,6 +152,12 @@ impl Signex {
                         iced::widget::container(iced::widget::Space::new()).into()
                     }
                 }
+                super::state::WindowKind::TransmissionLineCalculator => {
+                    crate::transmission_line_calculator::view(
+                        &self.ui_state.transmission_line_calculator,
+                    )
+                    .map(Message::TransmissionLineCalculator)
+                }
             };
         }
         self.view_main_for(window_id)
