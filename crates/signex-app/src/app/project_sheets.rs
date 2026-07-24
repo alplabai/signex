@@ -84,6 +84,31 @@ pub(crate) fn assemble_active_project_sheets(
     (pages, set)
 }
 
+/// The sheet-walk order every whole-project Annotate operation must agree
+/// on: `project_set.sheets` in sorted-path order, with `active_path`
+/// appended at the end if it has a path the set doesn't already cover (an
+/// active document the assembler can't place, e.g. one that hasn't been
+/// saved anywhere the project reaches).
+///
+/// One function for the action (`handle_annotate`) and the preview list it
+/// must match. #406 made them agree on *which* sheets to cover; they still
+/// disagreed on the *order* to walk them in, which is what decides which
+/// designator number each `?` symbol gets — a preview showing `R1` on sheet
+/// A while the action hands sheet A `R2` (#435).
+pub(crate) fn ordered_project_sheet_paths(
+    project_set: &ProjectSheetSet,
+    active_path: Option<&Path>,
+) -> Vec<PathBuf> {
+    let mut paths: Vec<PathBuf> = project_set.sheets.keys().cloned().collect();
+    paths.sort();
+    if let Some(active) = active_path
+        && !project_set.sheets.contains_key(active)
+    {
+        paths.push(active.to_path_buf());
+    }
+    paths
+}
+
 /// Absolute path of a project's root schematic — its declared
 /// `schematic_root`, falling back to the first entry in the sheet list.
 pub(crate) fn project_root_sheet_path(
@@ -225,27 +250,56 @@ fn walk(
 /// one slot for it; iterating a `HashMap` there made the winner — i.e. the
 /// connectivity written into a machine-consumed `.net` — depend on hash order.
 /// First-wins by sorted path is arbitrary but at least the same every run.
+///
+/// When two parents' filename strings resolve to two genuinely *different*
+/// files (not just the same file reached two ways), keeping the first winner
+/// silently would stitch the second parent's subtree from the wrong file with
+/// no trace of it — that collision is returned as a
+/// [`signex_net::StitchIssue::AmbiguousChildFilename`] alongside the map.
 pub(crate) fn project_children_map(
     sheets: &HashMap<PathBuf, SchematicSheet>,
-) -> HashMap<String, SchematicSheet> {
+) -> (
+    HashMap<String, SchematicSheet>,
+    Vec<signex_net::StitchIssue>,
+) {
     let mut children: HashMap<String, SchematicSheet> = HashMap::new();
+    let mut resolved_from: HashMap<String, PathBuf> = HashMap::new();
+    // Collisions already reported, keyed by (filename, losing path): a third
+    // (or fourth) parent resolving the same filename string to the *same*
+    // losing file would otherwise push a content-identical
+    // `AmbiguousChildFilename` — the Messages panel has no dedupe and evicts
+    // oldest at 200, so repeats crowd out other diagnostics. Distinct losing
+    // paths still each get their own issue.
+    let mut reported: std::collections::HashSet<(String, PathBuf)> =
+        std::collections::HashSet::new();
+    let mut issues: Vec<signex_net::StitchIssue> = Vec::new();
     let mut parents: Vec<(&PathBuf, &SchematicSheet)> = sheets.iter().collect();
     parents.sort_by(|a, b| a.0.cmp(b.0));
     for (parent_path, sheet) in parents {
         let dir = parent_path.parent().unwrap_or_else(|| Path::new(""));
         for cs in &sheet.child_sheets {
-            if children.contains_key(&cs.filename) {
-                continue;
-            }
             let Some(child_path) = resolve_child_reference(dir, &cs.filename) else {
                 continue;
             };
+            if let Some(existing_path) = resolved_from.get(&cs.filename) {
+                if *existing_path != child_path
+                    && reported.insert((cs.filename.clone(), child_path.clone()))
+                {
+                    issues.push(signex_net::StitchIssue::AmbiguousChildFilename {
+                        filename: cs.filename.clone(),
+                        path_a: existing_path.display().to_string(),
+                        path_b: child_path.display().to_string(),
+                    });
+                }
+                continue;
+            }
             if let Some(child) = sheets.get(&child_path) {
                 children.insert(cs.filename.clone(), child.clone());
+                resolved_from.insert(cs.filename.clone(), child_path);
             }
         }
     }
-    children
+    (children, issues)
 }
 
 /// Resolve a `ChildSheet.filename` reference against the directory of the sheet
@@ -257,21 +311,91 @@ pub(crate) fn project_children_map(
 /// coincidence.
 ///
 /// - An empty reference (after trimming) yields `None`.
-/// - An absolute reference is returned unchanged — `parent_dir` is ignored, so
-///   an explicit absolute path always wins.
-/// - A relative reference is joined onto `parent_dir`, so a sheet in a
-///   subdirectory resolves its children beside itself rather than beside the
-///   project root.
+/// - Both an absolute reference and a relative one are joined onto
+///   `parent_dir` (`Path::join` already replaces `parent_dir` outright when the
+///   reference is absolute, so one join covers both shapes) and the result is
+///   lexically normalized — `.`/`..` resolved without touching the
+///   filesystem, since the child file may not exist yet and
+///   `std::fs::canonicalize` both requires existence and adds a `\\?\` prefix
+///   on Windows.
+/// - A reference whose normalized path escapes `parent_dir` — a `..`
+///   traversal, or an absolute path elsewhere entirely — is rejected: logged
+///   through the app's normal error-surfacing path and returned as `None`,
+///   the same as a reference that does not resolve to a loaded sheet.
+/// - An empty `parent_dir` (an unsaved tab with no project loaded, or a bare
+///   filename tab — `resolve_child_sheet_path`'s `unwrap_or_default()`) has
+///   no real directory to contain anything against, so it is rejected
+///   outright: `Path::starts_with` treats an empty path as a prefix of *any*
+///   path (zero components to match), so checking containment against it is
+///   vacuously true and would let an absolute or `..`-escaping reference
+///   through unchecked (#463, re-opened at this exact boundary).
+/// - Lexical normalization resolves `.`/`..` components only; it does not
+///   touch the filesystem, so a symlink planted inside `parent_dir` that
+///   points back out is not detected here. That residual is accepted: it
+///   requires an attacker who can already write inside the project
+///   directory.
 pub(crate) fn resolve_child_reference(parent_dir: &Path, child_filename: &str) -> Option<PathBuf> {
     let trimmed = child_filename.trim();
     if trimmed.is_empty() {
         return None;
     }
     let raw = PathBuf::from(trimmed);
-    if raw.is_absolute() {
-        return Some(raw);
+    let resolved = lexically_normalize(&parent_dir.join(&raw));
+    let root = lexically_normalize(parent_dir);
+
+    // A resolved path that leads with a literal ".." (nothing left to pop,
+    // see `lexically_normalize`'s doc) or whose absoluteness disagrees with
+    // root's has escaped upward past whatever root it started from — kept as
+    // an explicit, independent check rather than trusting `starts_with`
+    // alone a second time.
+    let escapes_upward = matches!(
+        resolved.components().next(),
+        Some(std::path::Component::ParentDir)
+    );
+    let contained = !root.as_os_str().is_empty()
+        && resolved.is_absolute() == root.is_absolute()
+        && !escapes_upward
+        && resolved.starts_with(&root);
+
+    if contained {
+        Some(resolved)
+    } else {
+        crate::diagnostics::log_error(
+            "Rejected child-sheet reference outside its resolution root",
+            &anyhow::anyhow!(
+                "'{trimmed}' resolves to {} which escapes {}",
+                resolved.display(),
+                if root.as_os_str().is_empty() {
+                    "an empty resolution root".to_string()
+                } else {
+                    root.display().to_string()
+                }
+            ),
+        );
+        None
     }
-    Some(parent_dir.join(raw))
+}
+
+/// Lexically normalize `path` — resolve `.` and `..` components without
+/// touching the filesystem (unlike `std::fs::canonicalize`, which needs the
+/// path to exist). A `..` with nothing left to pop is kept as a literal `..`
+/// component, so a reference that escapes its root still fails the caller's
+/// `starts_with(root)` check instead of silently collapsing onto the root.
+fn lexically_normalize(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => match out.components().next_back() {
+                Some(std::path::Component::Normal(_)) => {
+                    out.pop();
+                }
+                _ => out.push(".."),
+            },
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
 }
 
 /// The filename string the root sheet is referenced by — its path relative to
@@ -324,6 +448,14 @@ pub(crate) fn stitch_issue_message(issue: &signex_net::StitchIssue) -> String {
                 "Netlist: two distinct nets are both named '{name}'; the later one was suffixed"
             )
         }
+        I::AmbiguousChildFilename {
+            filename,
+            path_a,
+            path_b,
+        } => format!(
+            "Netlist: child reference '{filename}' resolves to two different files ('{path_a}' \
+             and '{path_b}'); the netlist used '{path_a}'"
+        ),
     }
 }
 
@@ -388,11 +520,108 @@ mod tests {
         sheets.insert(PathBuf::from("/proj/a/power.snxsch"), sheet(0xA, &[]));
         sheets.insert(PathBuf::from("/proj/b/power.snxsch"), sheet(0xB, &[]));
 
-        let children = project_children_map(&sheets);
+        let (children, issues) = project_children_map(&sheets);
 
         assert_eq!(children.len(), 2, "both same-basename children present");
         assert_eq!(children["a/power.snxsch"].uuid, Uuid::from_u128(0xA));
         assert_eq!(children["b/power.snxsch"].uuid, Uuid::from_u128(0xB));
+        assert!(
+            issues.is_empty(),
+            "distinct reference strings, no collision"
+        );
+    }
+
+    #[test]
+    fn same_reference_string_across_different_dirs_is_a_stitch_issue_not_silent() {
+        // Two parents in *different* directories both reference a child by
+        // the SAME relative filename string ("power.snxsch"), so it resolves
+        // to two different files. The map has one slot for the string; the
+        // second parent's subtree must not be silently dropped without a
+        // trace — it has to surface as a StitchIssue.
+        let mut sheets = HashMap::new();
+        sheets.insert(
+            PathBuf::from("/proj/a/root.snxsch"),
+            sheet(1, &["power.snxsch"]),
+        );
+        sheets.insert(
+            PathBuf::from("/proj/b/root.snxsch"),
+            sheet(2, &["power.snxsch"]),
+        );
+        sheets.insert(PathBuf::from("/proj/a/power.snxsch"), sheet(0xA, &[]));
+        sheets.insert(PathBuf::from("/proj/b/power.snxsch"), sheet(0xB, &[]));
+
+        let (children, issues) = project_children_map(&sheets);
+
+        // Sorted-path first-wins: "/proj/a/root.snxsch" sorts before
+        // "/proj/b/root.snxsch", so its resolution keeps the slot.
+        assert_eq!(children.len(), 1);
+        assert_eq!(children["power.snxsch"].uuid, Uuid::from_u128(0xA));
+        assert_eq!(issues.len(), 1, "the collision must not be silent");
+        assert!(matches!(
+            &issues[0],
+            signex_net::StitchIssue::AmbiguousChildFilename { filename, .. }
+                if filename == "power.snxsch"
+        ));
+    }
+
+    #[test]
+    fn a_diamond_sharing_one_child_file_is_not_a_collision() {
+        // The safety-critical "do not cry wolf" case: two different parents in
+        // the same directory both pull in ONE shared sub-sheet by the same
+        // reference string, resolving to the SAME file. A legitimate diamond
+        // (a shared power / decoupling sub-sheet) — the same file reached two
+        // ways is NOT an ambiguity and must emit no issue.
+        let mut sheets = HashMap::new();
+        sheets.insert(
+            PathBuf::from("/proj/a.snxsch"),
+            sheet(1, &["shared.snxsch"]),
+        );
+        sheets.insert(
+            PathBuf::from("/proj/b.snxsch"),
+            sheet(2, &["shared.snxsch"]),
+        );
+        sheets.insert(PathBuf::from("/proj/shared.snxsch"), sheet(0xC, &[]));
+
+        let (children, issues) = project_children_map(&sheets);
+
+        assert_eq!(children.len(), 1);
+        assert_eq!(children["shared.snxsch"].uuid, Uuid::from_u128(0xC));
+        assert!(
+            issues.is_empty(),
+            "the same file reached from two parents is not a collision: {issues:?}"
+        );
+    }
+
+    #[test]
+    fn a_repeated_collision_on_the_same_losing_file_is_reported_once() {
+        // Three parents reference "power.snxsch". The sorted-first parent
+        // (/proj/a) wins; the two /proj/b parents both resolve it to the SAME
+        // losing file (/proj/b/power.snxsch). The collision must surface, but
+        // as ONE issue — not one per losing parent (the Messages panel has no
+        // dedupe and would crowd out other diagnostics).
+        let mut sheets = HashMap::new();
+        sheets.insert(
+            PathBuf::from("/proj/a/root.snxsch"),
+            sheet(1, &["power.snxsch"]),
+        );
+        sheets.insert(
+            PathBuf::from("/proj/b/root1.snxsch"),
+            sheet(2, &["power.snxsch"]),
+        );
+        sheets.insert(
+            PathBuf::from("/proj/b/root2.snxsch"),
+            sheet(3, &["power.snxsch"]),
+        );
+        sheets.insert(PathBuf::from("/proj/a/power.snxsch"), sheet(0xA, &[]));
+        sheets.insert(PathBuf::from("/proj/b/power.snxsch"), sheet(0xB, &[]));
+
+        let (_children, issues) = project_children_map(&sheets);
+
+        assert_eq!(
+            issues.len(),
+            1,
+            "the same losing file reported once, not per parent: {issues:?}"
+        );
     }
 
     #[test]
@@ -406,10 +635,11 @@ mod tests {
         );
         sheets.insert(PathBuf::from("/proj/child.snxsch"), sheet(2, &[]));
 
-        let children = project_children_map(&sheets);
+        let (children, issues) = project_children_map(&sheets);
 
         assert_eq!(children.len(), 1);
         assert_eq!(children["child.snxsch"].uuid, Uuid::from_u128(2));
+        assert!(issues.is_empty());
     }
 
     #[test]
@@ -423,8 +653,9 @@ mod tests {
         );
         sheets.insert(PathBuf::from("/proj/orphan.snxsch"), sheet(3, &[]));
 
-        let children = project_children_map(&sheets);
+        let (children, issues) = project_children_map(&sheets);
         assert!(children.is_empty());
+        assert!(issues.is_empty());
     }
 
     #[test]
@@ -459,16 +690,61 @@ mod tests {
     }
 
     #[test]
-    fn absolute_child_reference_is_returned_unchanged() {
+    fn absolute_child_reference_outside_the_root_is_rejected() {
+        // #463 — an absolute reference used to win outright, letting a
+        // malicious `.snxsch`/`.snxprj` point a child sheet anywhere on disk.
         assert_eq!(
             resolve_child_reference(Path::new("/proj/sub"), "/elsewhere/x.snxsch"),
-            Some(PathBuf::from("/elsewhere/x.snxsch"))
+            None
+        );
+    }
+
+    #[test]
+    fn traversal_child_reference_outside_the_root_is_rejected() {
+        // #463 — a relative `..` reference used to be joined onto `parent_dir`
+        // verbatim with no containment check, walking out of the project.
+        assert_eq!(
+            resolve_child_reference(Path::new("/proj/sub"), "../../../etc/passwd"),
+            None
+        );
+    }
+
+    #[test]
+    fn sibling_child_reference_still_resolves() {
+        assert_eq!(
+            resolve_child_reference(Path::new("/proj/sub"), "sibling.snxsch"),
+            Some(PathBuf::from("/proj/sub/sibling.snxsch"))
         );
     }
 
     #[test]
     fn empty_child_reference_resolves_to_none() {
         assert_eq!(resolve_child_reference(Path::new("/proj"), "   "), None);
+    }
+
+    #[test]
+    fn empty_parent_dir_rejects_an_escaping_reference() {
+        // The #463 escape re-opened at the fix's own boundary: an empty
+        // `parent_dir` (unsaved File->New sheet, or a bare-filename tab with
+        // no project loaded) normalizes to an empty root, which used to make
+        // `resolved.starts_with(&root)` vacuously true for ANY reference —
+        // absolute or `..`-traversal alike.
+        assert_eq!(resolve_child_reference(Path::new(""), "/etc/passwd"), None);
+        assert_eq!(
+            resolve_child_reference(Path::new(""), "../etc/passwd"),
+            None
+        );
+    }
+
+    #[test]
+    fn interior_dotdot_that_stays_inside_the_root_still_resolves() {
+        // Pins the `lexically_normalize` pop-branch against over-rejection:
+        // an interior ".." that never escapes `parent_dir` is not a
+        // traversal, just a slightly indirect way of writing a sibling path.
+        assert_eq!(
+            resolve_child_reference(Path::new("/proj/sub"), "a/../leaf.snxsch"),
+            Some(PathBuf::from("/proj/sub/leaf.snxsch"))
+        );
     }
 
     #[test]
@@ -484,7 +760,7 @@ mod tests {
         );
         sheets.insert(PathBuf::from("/proj/sub/leaf.snxsch"), sheet(0x222, &[]));
 
-        let children = project_children_map(&sheets);
+        let (children, _issues) = project_children_map(&sheets);
         assert_eq!(children["leaf.snxsch"].uuid, Uuid::from_u128(0x222));
 
         let nav = resolve_child_reference(Path::new("/proj/sub"), "leaf.snxsch")

@@ -768,13 +768,7 @@ fn shapes_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessa
             DropdownItem::new("Line", arm(SketchTool::Line)).icon(ic::icon_dd_line(tid)),
         ),
         DropdownEntry::Item(
-            DropdownItem::new("Arc (Center)", arm(SketchTool::Arc)).icon(ic::icon_dd_arc(tid)),
-        ),
-        DropdownEntry::Item(
-            DropdownItem::new("Arc (Edge)", arm(SketchTool::Arc)).icon(ic::icon_dd_arc(tid)),
-        ),
-        DropdownEntry::Item(
-            DropdownItem::new("Arc (Any Angle)", arm(SketchTool::Arc)).icon(ic::icon_dd_arc(tid)),
+            DropdownItem::new("Arc", arm(SketchTool::Arc)).icon(ic::icon_dd_arc(tid)),
         ),
         DropdownEntry::Item(
             DropdownItem::new("Full Circle", arm(SketchTool::Circle)).icon(ic::icon_dd_circle(tid)),
@@ -810,4 +804,37 @@ fn shapes_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessa
             DropdownItem::new("Rectangle", arm(SketchTool::Rectangle)).icon(ic::icon_dd_rect(tid)),
         ),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // #373: the footprint Shapes dropdown once offered three rows — "Arc
+    // (Center)", "Arc (Edge)", "Arc (Any Angle)" — all arming the single
+    // `SketchTool::Arc` gesture, silently handing the user a gesture they did
+    // not pick. The fix collapses them to one "Arc" row. Guard against a
+    // duplicate arc row returning. ("Fill" / "Solid Region" are a deliberate
+    // synonym pair for `PadsTool::PlaceRegion`; this SketchTool-scoped arc
+    // check does not touch them.)
+    #[test]
+    fn shapes_dropdown_has_exactly_one_arc_row() {
+        let labels: Vec<String> =
+            shapes_entries(PathBuf::from("t.snxfp"), ThemeId::CatppuccinMocha)
+                .into_iter()
+                .filter_map(|e| match e {
+                    DropdownEntry::Item(it) => Some(it.label),
+                    _ => None,
+                })
+                .collect();
+        assert!(
+            labels.iter().any(|l| l == "Arc"),
+            "expected a single 'Arc' row, got {labels:?}"
+        );
+        assert_eq!(
+            labels.iter().filter(|l| l.starts_with("Arc")).count(),
+            1,
+            "exactly one arc row must exist; no 'Arc (…)' duplicates: {labels:?}"
+        );
+    }
 }

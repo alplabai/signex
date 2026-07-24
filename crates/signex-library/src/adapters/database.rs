@@ -13,7 +13,6 @@
 //! `LocalGitAdapter` does — see TODO around the `audit_log` table
 //! below).
 
-use std::sync::OnceLock;
 use std::time::Duration;
 
 use serde::{Serialize, de::DeserializeOwned};
@@ -509,10 +508,6 @@ impl LibraryAdapter for DatabaseAdapter {
         self.list_primitives_json("sims")
     }
 }
-
-// Suppress dead-code warning for the OnceLock when we add caching later.
-#[allow(dead_code)]
-static CACHE_DIR: OnceLock<std::path::PathBuf> = OnceLock::new();
 
 /// Build a legacy [`Manifest`] from the v0.9 [`SnxlibManifest`] header.
 ///

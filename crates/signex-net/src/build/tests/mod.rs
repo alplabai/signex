@@ -50,6 +50,7 @@ fn junction(pos: Point) -> Junction {
         uuid: Uuid::nil(),
         position: pos,
         diameter: 0.0,
+        minted: false,
     }
 }
 
@@ -408,6 +409,7 @@ fn net_records_its_wire_and_junction_membership() {
         uuid: jn,
         position: pt(5.0, 0.0),
         diameter: 0.0,
+        minted: false,
     });
     add_lib(
         &mut sheet,
@@ -648,6 +650,7 @@ fn flood_follows_a_t_junction_and_paints_the_dot() {
         uuid: j,
         position: pt(5.0, 0.0),
         diameter: 0.0,
+        minted: false,
     });
 
     let mut flood = flood_net_elements(&sheet, h).expect("clicked wire exists");

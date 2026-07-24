@@ -1,7 +1,7 @@
 //! Annotate preview — the project-wide proposed-designator list the Annotate
 //! modal shows before the user commits.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use signex_types::schematic::{SchematicSheet, Symbol};
 
@@ -87,14 +87,18 @@ impl super::super::super::Signex {
             .to_string()
     }
 
-    /// The sheets the change list spans, in path order.
+    /// The sheets the change list spans, in the one order
+    /// [`crate::app::project_sheets::ordered_project_sheet_paths`] defines —
+    /// the same order `handle_annotate` walks, so the row order (and the
+    /// designator numbers derived from it) can't drift from what the action
+    /// assigns (#435).
     ///
     /// The set comes from the one assembler — the same call `handle_annotate`
     /// makes — rather than a private rule of its own. A preview that disagrees
     /// with the action it previews is worse than no preview, and this one
-    /// disagreed in both directions: it listed loose and other-project tabs the
-    /// action refuses to touch, and it hid the unlisted hierarchical children
-    /// the action renumbers *and writes back to disk* (#406).
+    /// used to disagree in both directions: it listed loose and other-project
+    /// tabs the action refuses to touch, and it hid the unlisted hierarchical
+    /// children the action renumbers *and writes back to disk* (#406).
     ///
     /// This reads sheets that are not open from disk, and it runs from `view`.
     /// See the module note in `view/dialogs/annotate/mod.rs` on why that is
@@ -102,29 +106,33 @@ impl super::super::super::Signex {
     fn preview_sheets(&self) -> Vec<(String, SchematicSheet)> {
         let (_pages, set) =
             crate::app::project_sheets::assemble_active_project_sheets(&self.document_state);
-        let mut sheets: Vec<(PathBuf, SchematicSheet)> = set.sheets.into_iter().collect();
-        sheets.sort_by(|a, b| a.0.cmp(&b.0));
-        // `handle_annotate`'s last pass annotates the active engine
-        // unconditionally, so it belongs in the change list even where the
-        // assembler cannot place it — an unsaved document has no path to
-        // assemble from.
-        let active_covered = self
-            .document_state
-            .active_path
-            .as_ref()
-            .is_some_and(|p| sheets.iter().any(|(path, _)| path == p));
-        let mut out: Vec<(String, SchematicSheet)> = sheets
-            .into_iter()
-            .map(|(path, sheet)| (self.sheet_display_title(&path), sheet))
-            .collect();
-        if !active_covered && let Some(engine) = self.document_state.active_engine() {
-            let title = self
-                .document_state
-                .active_path
-                .as_deref()
-                .map(|p| self.sheet_display_title(p))
-                .unwrap_or_else(|| "(untitled)".to_string());
-            out.push((title, engine.document().clone()));
+        let active_path = self.document_state.active_path.as_deref();
+        let ordered_paths =
+            crate::app::project_sheets::ordered_project_sheet_paths(&set, active_path);
+        let mut sheets = set.sheets;
+        let mut out: Vec<(String, SchematicSheet)> = Vec::with_capacity(ordered_paths.len() + 1);
+        for path in &ordered_paths {
+            let sheet = match sheets.remove(path) {
+                Some(sheet) => sheet,
+                // The active document's own path, appended by the ordering
+                // helper because the assembler doesn't cover it — read it
+                // straight from the live engine instead of the (empty) set.
+                None => match self.document_state.active_engine() {
+                    Some(engine) if Some(path.as_path()) == active_path => {
+                        engine.document().clone()
+                    }
+                    _ => continue,
+                },
+            };
+            out.push((self.sheet_display_title(path), sheet));
+        }
+        // A never-saved active document has no path at all, so it can't
+        // appear in `ordered_paths` either — same unconditional last slot
+        // `handle_annotate` gives the active engine in that case.
+        if active_path.is_none()
+            && let Some(engine) = self.document_state.active_engine()
+        {
+            out.push(("(untitled)".to_string(), engine.document().clone()));
         }
         out
     }
