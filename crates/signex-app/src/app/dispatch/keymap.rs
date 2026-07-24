@@ -6,9 +6,10 @@
 //! [`UiState::keymap_pending_sequence`] instead of a process-global
 //! static (sound across multiple windows, MVU-clean).
 //!
-//! A resolved command id is turned into a [`Message`] by
-//! [`crate::app::command::core_to_message`] — the app's single
-//! id→`Message` bridge, no longer owned by this module.
+//! A resolved command id is run through [`Signex::dispatch_command`] —
+//! the Command Registry's dispatch entry point (#278) — so the
+//! keyboard is a plain consumer of the registry rather than owning
+//! bridge logic itself.
 
 use iced::Task;
 
@@ -62,10 +63,7 @@ impl Signex {
 
         if let Some(command) = lookup.command.as_ref() {
             self.ui_state.keymap_pending_sequence.clear();
-            return Some(match crate::app::command::core_to_message(command) {
-                Some(message) => self.dispatch_update(message),
-                None => Task::none(),
-            });
+            return Some(self.dispatch_command(command, crate::app::command::CommandArgs::none()));
         }
         if lookup.matched {
             self.ui_state.keymap_pending_sequence.clear();
