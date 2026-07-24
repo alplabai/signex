@@ -47,3 +47,6 @@ mod library_bga;
 
 #[path = "regression/sketch_state.rs"]
 mod sketch_state;
+
+#[path = "regression/file_open_async.rs"]
+mod file_open_async;
