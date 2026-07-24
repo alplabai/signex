@@ -33,7 +33,6 @@ pub use library_message::LibraryMessage;
 
 /// User choice from the close-library confirmation modal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum CloseLibraryChoice {
     SaveAll,
     DiscardAll,
@@ -46,7 +45,6 @@ pub enum CloseLibraryChoice {
 /// them, but they no longer dispatch through the Component Preview
 /// tab.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum EditorMsg {
     /// User clicked a Preview tab pill (Preview / Parameters / Supply /
     /// Datasheet / Simulation).
@@ -283,7 +281,6 @@ pub enum EditorMsg {
 /// Pure-data alias for `ParamKind` so messages don't depend on
 /// `signex_library::ParamKind` at the message layer.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum ParamKindMsg {
     Text,
     Number,
@@ -296,7 +293,6 @@ pub enum ParamKindMsg {
 /// canvas's own `SymbolTool` so messages don't depend on the canvas
 /// module type tree.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum SymbolToolMsg {
     Select,
     AddPin,
@@ -453,7 +449,6 @@ impl std::fmt::Display for RoleTag {
 /// Selection target on the Symbol canvas — pure-data version of
 /// `editor::symbol::state::SymbolSelection`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum SymbolSelectionMsg {
     Pin(usize),
     FieldReference,
@@ -474,7 +469,6 @@ pub enum SymbolSelectionMsg {
 /// Symbol field key — pure-data alias of
 /// `editor::symbol::state::FieldKey`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum FieldKeyMsg {
     Reference,
     Value,
@@ -485,7 +479,6 @@ pub enum FieldKeyMsg {
 /// `SymbolEditorMsg::MoveGraphicHandle` so the dispatcher
 /// knows which handle of which graphic the canvas is dragging.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[allow(dead_code)]
 pub enum GraphicHandleMsg {
     /// Rectangle corner — `0=TL, 1=TR, 2=BR, 3=BL` (Standard y-up).
     RectCorner(u8),
@@ -508,7 +501,6 @@ pub enum GraphicHandleMsg {
 
 /// Pivot mode for Symbol-graphic rotate operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[allow(dead_code)]
 pub enum SymbolRotatePivotMsg {
     /// Legacy orbit around world origin `(0, 0)`.
     WorldOrigin,
@@ -545,7 +537,6 @@ pub use symbol::SymbolEditorMsg;
 /// dispatch (`handle_primitive_editor_event`) routes each surface to the
 /// matching editor state per the active tab's [`crate::app::TabKind`].
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum PrimitiveEdit {
     /// Footprint canvas editing.
     Footprint(FootprintEditorMsg),
@@ -558,7 +549,6 @@ pub enum PrimitiveEdit {
 
 /// Picker modal interaction sub-message tree.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum PickerMsg {
     FilterChanged(String),
     SelectComponent(ComponentSummary),
@@ -569,7 +559,6 @@ pub enum PickerMsg {
 /// `LibraryMessage` digestible by grouping all the per-field setters
 /// under a single sub-enum.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum BrowserEditMsg {
     SetInternalPn(String),
     SetClass(ComponentClass),
@@ -616,7 +605,6 @@ pub enum BrowserEditMsg {
 
 /// Primitive picker modal sub-messages.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum PrimitivePickerMsg {
     /// Live update of the filter text input.
     SetFilter(String),
@@ -634,7 +622,6 @@ pub enum PrimitivePickerMsg {
 
 /// Settings → Library → Distributor APIs panel messages.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum SettingsMsg {
     DigiKeyConnect,
     DigiKeyCancel,

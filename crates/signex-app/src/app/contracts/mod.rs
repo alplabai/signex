@@ -20,7 +20,6 @@ pub enum DragTarget {
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum Message {
     Menu(MenuMessage),
     Tool(ToolMessage),
