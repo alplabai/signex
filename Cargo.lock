@@ -5313,6 +5313,7 @@ dependencies = [
  "rstar",
  "serde",
  "serde_json",
+ "signex-sketch",
  "wgpu",
 ]
 
