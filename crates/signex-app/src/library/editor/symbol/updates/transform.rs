@@ -241,4 +241,39 @@ mod tests {
         assert_eq!(editor.primitive().pins[0].position, [1.27, 1.27]);
         assert_eq!(editor.primitive().pins[1].position, [2.54, 2.54]);
     }
+
+    /// #477 — a selection that resolves to a real pin is
+    /// "alignable-shaped", but when that pin already sits exactly on
+    /// the 1.27 mm grid, snapping it moves nothing. `changed` must be
+    /// delta-based (did a coordinate actually move), not existence-
+    /// based (did the index resolve to a pin) — otherwise this no-op
+    /// still pushes an undo snapshot and clears the redo stack, same
+    /// bug as the empty-`All` case above just reached through a
+    /// different selection shape. Seed one redo entry and assert
+    /// neither stack moves.
+    #[test]
+    fn align_selected_to_grid_with_already_aligned_pin_stays_clean() {
+        let mut sym = Symbol::empty("T");
+        let idx = crate::library::editor::symbol::state::add_pin(&mut sym, 1.27, 1.27, 1);
+        let mut editor =
+            SymbolEditorState::new(PathBuf::from("t.snxsym"), SymbolFile::from_symbol(sym));
+        editor.selected = Some(SymbolSelection::Pin(idx));
+        editor.redo_snapshots.push(editor.primitive().clone());
+
+        apply_symbol_transform(&mut editor, SymbolEditorMsg::AlignSelectedToGrid);
+
+        assert!(
+            !editor.dirty,
+            "aligning an already-on-grid pin must not dirty the document"
+        );
+        assert!(
+            editor.undo_snapshots.is_empty(),
+            "aligning an already-on-grid pin must not stack undo history"
+        );
+        assert_eq!(
+            editor.redo_snapshots.len(),
+            1,
+            "no-op align of an already-aligned pin must not clear the redo stack"
+        );
+    }
 }

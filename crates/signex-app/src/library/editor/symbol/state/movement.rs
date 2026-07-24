@@ -74,9 +74,13 @@ pub fn move_multiple(
 /// snaps `from` and `to` separately (so a shape already square with
 /// the grid on one corner doesn't get skewed to keep it), `Circle`/
 /// `Arc` snap `center` only (radius untouched), `Text` snaps
-/// `position`, and `Polygon` snaps every vertex. Returns `true` when
-/// at least one pin or graphic was touched, so a caller can gate an
-/// undo snapshot on an actual change — see [`super::selected_is_alignable`]
+/// `position`, and `Polygon` snaps every vertex. Returns `true` only
+/// when a snap actually moved a coordinate — a delta check against the
+/// pre-snap value, not merely "the selection resolved to an existing
+/// pin/graphic" (#477: a pin or shape already sitting exactly on the
+/// grid, or an `All`/`Multiple` selection made entirely of such
+/// elements, must report `changed = false` so the caller's undo/redo
+/// gate treats it as the no-op it is). See [`super::selected_is_alignable`]
 /// for the selection-kind precheck most callers should run first.
 pub fn align_selected_to_grid(
     sym: &mut Symbol,
@@ -85,16 +89,22 @@ pub fn align_selected_to_grid(
 ) -> bool {
     let step = step_mm.max(1e-6);
     match sel {
-        Some(SymbolSelection::Pin(idx)) => sym
-            .pins
-            .get_mut(*idx)
-            .map(|pin| snap_pin_to_grid(pin, step))
-            .is_some(),
-        Some(SymbolSelection::Graphic(idx)) => sym
-            .graphics
-            .get_mut(*idx)
-            .map(|g| snap_graphic_to_grid(&mut g.kind, step))
-            .is_some(),
+        Some(SymbolSelection::Pin(idx)) => match sym.pins.get_mut(*idx) {
+            Some(pin) => {
+                let before = pin.position;
+                snap_pin_to_grid(pin, step);
+                pin.position != before
+            }
+            None => false,
+        },
+        Some(SymbolSelection::Graphic(idx)) => match sym.graphics.get_mut(*idx) {
+            Some(g) => {
+                let before = g.kind.clone();
+                snap_graphic_to_grid(&mut g.kind, step);
+                g.kind != before
+            }
+            None => false,
+        },
         Some(SymbolSelection::Multiple {
             pin_indices,
             graphic_indices,
@@ -102,26 +112,33 @@ pub fn align_selected_to_grid(
             let mut changed = false;
             for &i in pin_indices {
                 if let Some(pin) = sym.pins.get_mut(i) {
+                    let before = pin.position;
                     snap_pin_to_grid(pin, step);
-                    changed = true;
+                    changed |= pin.position != before;
                 }
             }
             for &i in graphic_indices {
                 if let Some(g) = sym.graphics.get_mut(i) {
+                    let before = g.kind.clone();
                     snap_graphic_to_grid(&mut g.kind, step);
-                    changed = true;
+                    changed |= g.kind != before;
                 }
             }
             changed
         }
         Some(SymbolSelection::All) => {
+            let mut changed = false;
             for pin in sym.pins.iter_mut() {
+                let before = pin.position;
                 snap_pin_to_grid(pin, step);
+                changed |= pin.position != before;
             }
             for g in sym.graphics.iter_mut() {
+                let before = g.kind.clone();
                 snap_graphic_to_grid(&mut g.kind, step);
+                changed |= g.kind != before;
             }
-            !sym.pins.is_empty() || !sym.graphics.is_empty()
+            changed
         }
         Some(SymbolSelection::Field(_)) | None => false,
     }
