@@ -122,20 +122,18 @@ fn persistence_round_trip_keeps_bundled_profiles_and_active_custom_profile() {
     assert!(loaded.profile("my-altium").is_some());
 
     // A successful atomic save strands no `.tmp` sibling.
-    let mut tmp_name = path.file_name().unwrap().to_os_string();
-    tmp_name.push(".tmp");
-    assert!(!path.with_file_name(tmp_name).exists());
+    assert!(!crate::test_support::has_stray_tmp(path.parent().unwrap()));
 }
 
 /// `save_profile_set_at` must go through `atomic_write`, not `fs::write`:
 /// a failed save leaves the user's previously saved custom keymap profiles
 /// fully intact instead of truncating them.
 ///
-/// Discriminator: pre-creating a *directory* at `<path>.tmp` makes
-/// `atomic_write`'s `File::create(&tmp)` fail before it can touch the
-/// destination, and the call returns `Err`. A plain `fs::write` would ignore
-/// the sibling, succeed, and clobber the old file — so this test fails on a
-/// revert.
+/// Discriminator: denying new-file creation in the destination's parent
+/// directory makes `atomic_write`'s `File::create(&tmp)` fail before it can
+/// touch the destination, regardless of the unique per-writer temp name it
+/// picks (#416), and the call returns `Err`. A plain `fs::write` would
+/// ignore that and clobber the old file — so this test fails on a revert.
 #[test]
 fn save_profile_set_at_leaves_previous_profiles_intact_when_write_fails() {
     let tmp = tempfile::tempdir().unwrap();
@@ -151,9 +149,7 @@ fn save_profile_set_at_leaves_previous_profiles_intact_when_write_fails() {
     save_profile_set_at(&path, &first).unwrap();
     let before = std::fs::read_to_string(&path).unwrap();
 
-    let mut tmp_name = path.file_name().unwrap().to_os_string();
-    tmp_name.push(".tmp");
-    std::fs::create_dir_all(path.with_file_name(tmp_name)).unwrap();
+    let _deny = crate::test_support::DenyNewFiles::on(path.parent().unwrap());
 
     let mut second = ShortcutProfileSet::built_ins().unwrap();
     let other = second

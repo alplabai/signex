@@ -1,13 +1,15 @@
 //! `Engine::exec_place` — see `exec/mod.rs`.
 
 use crate::*;
-use signex_types::schematic::SelectedItem;
+use signex_types::schematic::{SelectedItem, SelectedKind};
 
 impl Engine {
-    /// Reconcile junction dots after a move / rotate / mirror mutated wire
-    /// geometry, and return the document patch including `JUNCTIONS` if any
-    /// dot was minted. Shared by all three arms so none of them can drift
-    /// back into leaving a junction-less T behind (issue #402).
+    /// Reconcile junction dots after a command mutated wire geometry (move /
+    /// rotate / mirror), removed wires (delete), or added one (place), and
+    /// return the document patch including `JUNCTIONS` if any dot was
+    /// minted or removed. Shared by all five arms so none of them can drift
+    /// back into leaving a junction-less T (issue #402) or a stale,
+    /// silently net-merging dot (issue #422) behind.
     fn reconciled_patch(&mut self, items: &[SelectedItem]) -> DocumentPatch {
         let mut patch = DocumentPatch::from_selected_items(items);
         if self.reconcile_wire_junctions(items) {
@@ -35,7 +37,7 @@ impl Engine {
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::SelectionDeleted,
-                    document: DocumentPatch::from_selected_items(&items),
+                    document: self.reconciled_patch(&items),
                 };
 
                 self.record_history(before, patch_pair);
@@ -142,18 +144,18 @@ impl Engine {
                 Ok(CommandResult::changed(patch_pair))
             }
             Command::PlaceWireSegment { wire } => {
-                self.document.wires.push(wire.clone());
+                let wire_item = SelectedItem::new(wire.uuid, SelectedKind::Wire);
+                self.document.wires.push(wire);
 
-                // Both directions of the T: the new wire's own endpoints
-                // landing on something, and something else's endpoint landing
-                // on the new wire's interior.
-                let minted =
-                    transform::junctions_for_wire(&wire, &self.document, JUNCTION_TOLERANCE_MM);
-                self.document.junctions.extend(minted);
-
+                // Reconcile through the same shared path move / rotate /
+                // mirror / delete use: mints the new wire's T both ways (its
+                // own endpoints landing on something, and something else's
+                // endpoint landing on its interior) and drops any stale
+                // minted dot the new wire's own placement would otherwise
+                // silently re-justify into merging two nets (issue #422).
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::ObjectPlaced,
-                    document: DocumentPatch::WIRES | DocumentPatch::JUNCTIONS,
+                    document: self.reconciled_patch(&[wire_item]),
                 };
 
                 self.record_history(before, patch_pair);

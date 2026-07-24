@@ -365,6 +365,9 @@ fn junction_at(point: signex_types::schematic::Point) -> signex_types::schematic
         uuid: uuid::Uuid::new_v4(),
         position: point,
         diameter: 0.0,
+        // Every dot this module places is algorithmically derived, never
+        // user-placed — see `Junction::minted` (issue #422).
+        minted: true,
     }
 }
 
@@ -412,7 +415,7 @@ pub(crate) fn junctions_under_new_wire(
         .iter()
         .flat_map(|w| [w.start, w.end])
         .filter(|p| point_on_wire_interior(*p, wire, tolerance))
-        .filter(|p| junction_is_honoured(*p, document))
+        .filter(|p| wire_meeting_justifies_junction(*p, document, tolerance))
     {
         let already = document.junctions.iter().chain(placed.iter()).any(|j| {
             (j.position.x - point.x).abs() < tolerance && (j.position.y - point.y).abs() < tolerance
@@ -423,6 +426,56 @@ pub(crate) fn junctions_under_new_wire(
         placed.push(junction_at(point));
     }
     placed
+}
+
+/// Number of the sheet's wires that terminate (start or end) at `point`.
+fn wire_endpoint_count(
+    point: signex_types::schematic::Point,
+    document: &SchematicSheet,
+    tolerance: f64,
+) -> usize {
+    document
+        .wires
+        .iter()
+        .filter(|wire| {
+            let at_start = (wire.start.x - point.x).abs() < tolerance
+                && (wire.start.y - point.y).abs() < tolerance;
+            let at_end = (wire.end.x - point.x).abs() < tolerance
+                && (wire.end.y - point.y).abs() < tolerance;
+            at_start || at_end
+        })
+        .count()
+}
+
+/// True when a genuine wire *meeting* at `point` justifies a junction dot —
+/// a T (one wire terminates here, on the interior of another) or a star
+/// (3+ wires terminate here) — as opposed to two wires' interiors merely
+/// *crossing* at `point` with neither one ending there.
+///
+/// This is the shared gate for both minting a new dot ([`needed_junction`])
+/// and re-validating one that already exists (`reconcile_wire_junctions`,
+/// `transform/mod.rs`): a point no wire terminates at is never a real
+/// connection, no matter how many wire interiors happen to pass through it.
+/// Without the `endpoint_count == 0` guard, a stale dot at a former T can
+/// look "still honoured" once an unrelated wire is later dragged to merely
+/// cross the same point — silently merging two nets the user never
+/// connected (issue #422).
+pub(crate) fn wire_meeting_justifies_junction(
+    point: signex_types::schematic::Point,
+    document: &SchematicSheet,
+    tolerance: f64,
+) -> bool {
+    let endpoint_count = wire_endpoint_count(point, document, tolerance);
+    if endpoint_count == 0 {
+        return false;
+    }
+
+    let on_wire_interior = document
+        .wires
+        .iter()
+        .any(|wire| point_on_wire_interior(point, wire, tolerance));
+
+    (on_wire_interior || endpoint_count >= 3) && junction_is_honoured(point, document)
 }
 
 pub(crate) fn needed_junction(
@@ -438,26 +491,9 @@ pub(crate) fn needed_junction(
         return None;
     }
 
-    let on_wire_interior = document
-        .wires
-        .iter()
-        .any(|wire| point_on_wire_interior(point, wire, tolerance));
-
-    let endpoint_count = document
-        .wires
-        .iter()
-        .filter(|wire| {
-            let at_start = (wire.start.x - point.x).abs() < tolerance
-                && (wire.start.y - point.y).abs() < tolerance;
-            let at_end = (wire.end.x - point.x).abs() < tolerance
-                && (wire.end.y - point.y).abs() < tolerance;
-            at_start || at_end
-        })
-        .count();
-
-    if !(on_wire_interior || endpoint_count >= 3) {
+    if !wire_meeting_justifies_junction(point, document, tolerance) {
         return None;
     }
 
-    junction_is_honoured(point, document).then(|| junction_at(point))
+    Some(junction_at(point))
 }

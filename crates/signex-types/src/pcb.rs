@@ -60,9 +60,6 @@ pub const PCB_TEXT_THICKNESS_MM: f64 = 0.15;
 /// Vertical offset for auto-placed Reference / Value fp_text in mm (2.0 mm = ~79 mil).
 pub const PCB_FP_TEXT_OFFSET_MM: f64 = 2.0;
 
-/// Point-coincidence epsilon for outline deduplication (0.01 mm).
-pub const PCB_COINCIDENCE_EPS: f64 = 0.01;
-
 // ---------------------------------------------------------------------------
 // Pad / Via enums
 // ---------------------------------------------------------------------------

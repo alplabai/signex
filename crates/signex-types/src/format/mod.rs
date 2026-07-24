@@ -44,8 +44,8 @@ pub use tsv::{parse_tsv_block, write_tsv_block};
 
 // Subtree-internal helpers used by the container types below.
 use extras::{
-    BoardExtras, FootprintExtras, PadExtras, PcbExtras, PcbExtrasRaw, SchExtrasRaw, SheetExtras,
-    SymbolExtras,
+    BoardExtras, FootprintExtras, JunctionExtras, PadExtras, PcbExtras, PcbExtrasRaw, SchExtrasRaw,
+    SheetExtras, SymbolExtras,
 };
 use pcb_rows::{
     footprint_to_row, pad_to_row, row_to_footprint, row_to_pad, row_to_track, row_to_via,
@@ -208,6 +208,14 @@ impl SnxSchematic {
             .filter(|(_, e)| !e.is_default())
             .collect();
 
+        let junctions_extras: BTreeMap<String, JunctionExtras> = self
+            .sheet
+            .junctions
+            .iter()
+            .map(|j| (j.uuid.to_string(), JunctionExtras::from_junction(j)))
+            .filter(|(_, e)| !e.is_default())
+            .collect();
+
         let sheet_extras = SheetExtras::from_sheet(&self.sheet);
         let sheet_extras_opt = if sheet_extras.is_default() {
             None
@@ -215,7 +223,8 @@ impl SnxSchematic {
             Some(sheet_extras)
         };
 
-        if !symbols_extras.is_empty() || sheet_extras_opt.is_some() {
+        if !symbols_extras.is_empty() || !junctions_extras.is_empty() || sheet_extras_opt.is_some()
+        {
             #[derive(Serialize)]
             struct ExtrasWrapper {
                 extras: ExtrasInner,
@@ -224,12 +233,15 @@ impl SnxSchematic {
             struct ExtrasInner {
                 #[serde(skip_serializing_if = "BTreeMap::is_empty")]
                 symbols: BTreeMap<String, SymbolExtras>,
+                #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+                junctions: BTreeMap<String, JunctionExtras>,
                 #[serde(skip_serializing_if = "Option::is_none")]
                 sheet: Option<SheetExtras>,
             }
             let body = toml::to_string_pretty(&ExtrasWrapper {
                 extras: ExtrasInner {
                     symbols: symbols_extras,
+                    junctions: junctions_extras,
                     sheet: sheet_extras_opt,
                 },
             })?;
@@ -283,7 +295,14 @@ impl SnxSchematic {
             })
             .collect();
         let wires = wire_rows.into_iter().map(row_to_wire).collect();
-        let junctions = junction_rows.into_iter().map(row_to_junction).collect();
+        let junctions = junction_rows
+            .into_iter()
+            .map(|row| {
+                let key = row.uuid.to_string();
+                let extra = extras.junctions.get(&key).cloned().unwrap_or_default();
+                row_to_junction(row, extra)
+            })
+            .collect();
         let labels = label_rows.into_iter().map(row_to_label).collect();
 
         let sheet = SchematicSheet {
