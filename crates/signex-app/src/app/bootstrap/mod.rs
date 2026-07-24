@@ -44,7 +44,14 @@ impl Signex {
     pub(super) const PDF_MODAL_W: f32 = 1180.0;
     pub(super) const PDF_MODAL_H: f32 = 760.0;
 
-    pub fn title(&self, _id: iced::window::Id) -> String {
+    pub fn title(&self, id: iced::window::Id) -> String {
+        if matches!(
+            self.ui_state.windows.get(&id),
+            Some(super::state::WindowKind::PassiveCalculator)
+        ) {
+            return "Signex — Passive Network Calculator".to_string();
+        }
+
         let version = env!("CARGO_PKG_VERSION");
         let dirty_count = self.document_state.dirty_paths.len();
         if dirty_count == 0 {

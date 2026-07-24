@@ -1,4 +1,3 @@
 # God-file baseline — production src/ .rs files currently over the 1000-line cap.
 # Format: <production_lines> <path>. Managed by scripts/check_file_size.sh.
 # The list only ever gets SHORTER: shrink a file under the cap, then drop its row.
-1184 crates/chrome-catalog/src/main.rs
