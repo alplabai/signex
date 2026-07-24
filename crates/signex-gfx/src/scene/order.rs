@@ -9,10 +9,15 @@
 //! `scene_shader::ScenePrimitive::draw` walks [`GPU_SCENE_DRAW_ORDER`] and
 //! `pcb_canvas::draw_scene` walks [`CPU_PCB_DRAW_ORDER`], so reordering either
 //! path means editing the const here — and the parity tests below fail until
-//! both sides agree. Issue #1 (dashed lines render solid on GPU) is fixed —
-//! `line.wgsl` now honours the dash style bit. Issue #4 (polygon z-order,
-//! including the overlay-under-base-content case) remains open, turning any
-//! future fix into a mechanical, test-guarded change.
+//! both sides agree. Issue #1 (dashed lines render solid on GPU) and the
+//! overlay half of issue #4 (an overlay polygon drawing under base content)
+//! are fixed — `line.wgsl` now honours the dash style bit and
+//! `scene_shader::ScenePrimitive::draw` composites overlays in a dedicated
+//! pass after every base bucket. The remaining, deliberately-unreconciled
+//! divergence is the BASE bucket order: GPU draws Polygons before
+//! Lines/Circles, CPU draws them after — visual-authority call reserved for
+//! Caner/Hakan, pinned by `polygon_z_order_diverges_between_cpu_and_gpu`
+//! below.
 
 /// A drawable bucket of a [`Scene`](crate::scene::Scene). Every variant maps
 /// 1:1 to a `Vec` field on the scene; the order of a slice of these is a draw
@@ -33,9 +38,11 @@ pub enum SceneBucket {
 }
 
 /// Draw order of the GPU scene shader (`scene_shader::ScenePrimitive::draw`):
-/// fills, then strokes, then text on top. The PCB path folds overlays into the
-/// main buffers upstream (`pcb_canvas::gpu_scene`), so no overlay or ERC
-/// buckets appear here.
+/// fills, then strokes, then text on top. Overlay and ERC buckets never
+/// appear here — `ScenePrimitive::draw` composites overlay geometry in its
+/// own dedicated pass strictly AFTER this order (so it always renders on
+/// top, matching the CPU's separate overlay pass below), and ERC markers are
+/// schematic-only.
 pub const GPU_SCENE_DRAW_ORDER: &[SceneBucket] = &[
     SceneBucket::Polygons,
     SceneBucket::Lines,
@@ -119,9 +126,11 @@ mod tests {
         }
     }
 
-    /// Neither draw order composites overlay or ERC buckets through the shader:
-    /// the PCB GPU path folds overlays into the main buffers upstream, and ERC
-    /// markers are schematic-only.
+    /// Neither draw order composites overlay or ERC buckets through the
+    /// shader's base pass: overlay geometry gets its own dedicated pass
+    /// strictly after `GPU_SCENE_DRAW_ORDER` (see
+    /// `scene_shader::ScenePrimitive::draw`), and ERC markers are
+    /// schematic-only.
     #[test]
     fn scene_shader_composites_no_overlay_or_erc_buckets() {
         for bucket in [

@@ -162,6 +162,12 @@ pub struct PolygonPipeline {
     vertex_buffer: wgpu::Buffer,
     vertex_capacity: usize,
     vertex_count: u32,
+    /// Second, independent vertex buffer for overlay geometry — see
+    /// `LinePipeline`'s equivalent field doc for why this is a separate
+    /// buffer rather than a shared one with a base/overlay split index.
+    overlay_vertex_buffer: wgpu::Buffer,
+    overlay_vertex_capacity: usize,
+    overlay_vertex_count: u32,
 }
 
 impl PolygonPipeline {
@@ -237,40 +243,84 @@ impl PolygonPipeline {
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+        let overlay_vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("signex_gfx_polygon_overlay_vertices"),
+            size: std::mem::size_of::<PolygonVertex>() as wgpu::BufferAddress,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
 
         Self {
             render_pipeline,
             vertex_buffer,
             vertex_capacity,
             vertex_count: 0,
+            overlay_vertex_buffer,
+            overlay_vertex_capacity: vertex_capacity,
+            overlay_vertex_count: 0,
         }
     }
 
     pub fn upload(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, polygons: &[GpuPolygon]) {
         let vertices = triangulate_polygons(polygons);
+        Self::upload_into(
+            device,
+            queue,
+            &vertices,
+            &mut self.vertex_buffer,
+            &mut self.vertex_capacity,
+            &mut self.vertex_count,
+            "signex_gfx_polygon_vertices",
+        );
+    }
 
+    /// Upload overlay polygon geometry into the dedicated overlay buffer,
+    /// drawn by [`Self::draw_overlay`] in a separate later pass.
+    pub fn upload_overlay(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        polygons: &[GpuPolygon],
+    ) {
+        let vertices = triangulate_polygons(polygons);
+        Self::upload_into(
+            device,
+            queue,
+            &vertices,
+            &mut self.overlay_vertex_buffer,
+            &mut self.overlay_vertex_capacity,
+            &mut self.overlay_vertex_count,
+            "signex_gfx_polygon_overlay_vertices",
+        );
+    }
+
+    fn upload_into(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        vertices: &[PolygonVertex],
+        buffer: &mut wgpu::Buffer,
+        capacity: &mut usize,
+        count: &mut u32,
+        label: &'static str,
+    ) {
         if vertices.is_empty() {
-            self.vertex_count = 0;
+            *count = 0;
             return;
         }
 
         let writable = super::growth::ensure_capacity(
             device,
-            &mut self.vertex_buffer,
-            &mut self.vertex_capacity,
+            buffer,
+            capacity,
             vertices.len(),
             std::mem::size_of::<PolygonVertex>(),
-            "signex_gfx_polygon_vertices",
+            label,
             wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             device.limits().max_buffer_size,
         );
-        self.vertex_count = writable as u32;
+        *count = writable as u32;
 
-        queue.write_buffer(
-            &self.vertex_buffer,
-            0,
-            bytemuck::cast_slice(&vertices[..writable]),
-        );
+        queue.write_buffer(buffer, 0, bytemuck::cast_slice(&vertices[..writable]));
     }
 
     pub fn draw(
@@ -278,14 +328,47 @@ impl PolygonPipeline {
         render_pass: &mut wgpu::RenderPass<'_>,
         camera_bind_group: &wgpu::BindGroup,
     ) {
-        if self.vertex_count == 0 {
+        Self::draw_from(
+            render_pass,
+            camera_bind_group,
+            &self.render_pipeline,
+            &self.vertex_buffer,
+            self.vertex_count,
+        );
+    }
+
+    /// Draw all uploaded overlay polygon geometry. Callers composite this in
+    /// a pass strictly after every base bucket, so overlay content always
+    /// renders on top — see `crate::scene_shader::ScenePrimitive::draw`.
+    pub fn draw_overlay(
+        &self,
+        render_pass: &mut wgpu::RenderPass<'_>,
+        camera_bind_group: &wgpu::BindGroup,
+    ) {
+        Self::draw_from(
+            render_pass,
+            camera_bind_group,
+            &self.render_pipeline,
+            &self.overlay_vertex_buffer,
+            self.overlay_vertex_count,
+        );
+    }
+
+    fn draw_from(
+        render_pass: &mut wgpu::RenderPass<'_>,
+        camera_bind_group: &wgpu::BindGroup,
+        render_pipeline: &wgpu::RenderPipeline,
+        vertex_buffer: &wgpu::Buffer,
+        vertex_count: u32,
+    ) {
+        if vertex_count == 0 {
             return;
         }
 
-        render_pass.set_pipeline(&self.render_pipeline);
+        render_pass.set_pipeline(render_pipeline);
         render_pass.set_bind_group(0, camera_bind_group, &[]);
-        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        render_pass.draw(0..self.vertex_count, 0..1);
+        render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        render_pass.draw(0..vertex_count, 0..1);
     }
 
     pub fn vertex_count(&self) -> u32 {
