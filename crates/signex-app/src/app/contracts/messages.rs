@@ -184,7 +184,6 @@ pub enum OverlayMsg {
 #[derive(Debug, Clone)]
 pub enum UiMsg {
     /// Switch the active colour theme and persist the preference.
-    #[allow(dead_code)]
     ThemeChanged(ThemeId),
     /// Cycle the display unit (mm / mil / inch).
     UnitCycled,
@@ -245,7 +244,6 @@ pub enum MoveSelectionMsg {
 /// BOM-preview modal message family (ADR-0001 D3). Namespaced under
 /// `Message::BomPreview` and routed to `dispatch_bom_preview_message`.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum BomPreviewMsg {
     /// User changed BOM grouping (Grouped / Ungrouped / Flat).
     SetGrouping(signex_output::BomGrouping),
@@ -301,7 +299,6 @@ pub enum BomPreviewMsg {
 /// Print-preview modal message family (ADR-0001 D3). Namespaced under
 /// `Message::PrintPreview` and routed to `dispatch_print_preview_message`.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum PrintPreviewMsg {
     /// User triggered print preview via Ctrl+P or menu. Open preview dialog.
     Requested,
@@ -376,7 +373,6 @@ pub enum PrintPreviewMsg {
 /// under `Message::GridProperties` and routed to
 /// `dispatch_grid_properties_message`.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum GridPropertiesMsg {
     /// v0.18.11 — open the Cartesian Grid Editor modal (Ctrl+G).
     /// Footprint editor only; other contexts no-op.
@@ -406,4 +402,3 @@ pub enum GridPropertiesMsg {
     /// v0.18.19 — Grid Properties modal: Multiplier (5x / 10x / 2x / 1x).
     SetMultiplier(u32),
 }
-

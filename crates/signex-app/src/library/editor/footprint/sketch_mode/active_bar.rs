@@ -1,28 +1,38 @@
 //! Sketch-mode Active Bar — floating toolbar over the footprint
 //! canvas when the editor is in [`EditorMode::Sketch`].
 //!
-//! Mirrors the Fusion 360 sketch toolbar layout: grouped sections for
-//! **Select / Create / Constrain / Dimension / Solve**, separated by
-//! the [`signex_widgets::active_bar`] thin vertical separators. Each
-//! section's enabled state derives from the editor's current
-//! selection so disabled buttons grey out exactly when their
-//! constraint can't apply.
+//! Mirrors the Fusion 360 sketch toolbar layout, including its
+//! grouping: the geometry tools collapse into two dropdown triggers
+//! (**Create ▾** and **Modify ▾**) while the constraints stay a flat,
+//! selection-driven strip — exactly the split Fusion uses, and for the
+//! same reason. A constraint is applied to a selection you already
+//! made, so burying it costs a click on the most frequent action;
+//! arming a drawing tool happens once and then you draw many, so the
+//! extra click amortises to nothing.
 //!
 //! Layout (left → right):
 //!
 //! 1. **Select** — sketch entity selection tool.
-//! 2. **Create** — Point / Line / Circle / Arc multi-click drawing
-//!    tools.
-//! 3. **Constrain** — 19 selection-aware constraint authoring
-//!    buttons. Enabled state derives from the kinds of the primary
-//!    + secondary selection slots (+ the extra slot for the two
-//!    3-entity Symmetric constraints).
-//! 4. **Dimension input** — `Custom` slot with a `text_input` for
+//! 2. **Create ▾** — Line / Rectangle / Rounded Rectangle / Circle /
+//!    Arc / Tangent Arc. The trigger borrows the armed tool's icon so
+//!    the collapsed bar still shows what's in hand.
+//! 3. **Modify ▾** — Fillet / Trim / Mirror / Offset / Rectangular +
+//!    Circular Pattern / Make Pad from Profile.
+//! 4. **Constrain** — 19 selection-aware constraint buttons. Only the
+//!    ones the current selection actually permits are rendered, so
+//!    this section is empty until something is selected. Enabled state
+//!    derives from the kinds of the primary + secondary selection
+//!    slots (+ the extra slot for the two 3-entity Symmetric
+//!    constraints).
+//! 5. **Dimension input** — `Custom` slot with a `text_input` for
 //!    the `DistancePtPt` numeric value.
-//! 5. **Solve toggle** — pause / resume the live solver.
+//! 6. **Linetype** — Normal / Construction / Centerline tri-state pill.
 //!
-//! The bar floats over the canvas (Stack overlay layer) so it
-//! doesn't steal vertical space from the drawing area.
+//! Both dropdown menus live in
+//! [`crate::library::editor::footprint::active_bar_dropdowns`]; this
+//! module only builds their trigger buttons. The bar floats over the
+//! canvas (Stack overlay layer) so it doesn't steal vertical space
+//! from the drawing area.
 
 use std::path::PathBuf;
 
@@ -34,7 +44,7 @@ use signex_widgets::theme_ext;
 
 use crate::app::FootprintEditorState;
 use crate::icons;
-use crate::library::editor::footprint::state::SketchTool;
+use crate::library::editor::footprint::state::{FpActiveBarMenu, SketchTool};
 use crate::library::messages::{
     FootprintEditorMsg, LibraryMessage, PrimitiveEdit, SketchConstraintTag,
 };
@@ -77,14 +87,14 @@ pub fn items<'a>(
     // removes ~10 buttons from the no-selection state.
     let mk_constraint = |tag: SketchConstraintTag,
                          tooltip: &str,
-                         glyph: &'static str|
+                         icon: iced::widget::svg::Handle|
      -> Option<ActiveBarItem<LibraryMessage>> {
         if !enabled[tag_index(tag)] {
             return None;
         }
         let p = path.clone();
         Some(ActiveBarItem::Button(ActiveBarButton {
-            icon: ActiveBarIcon::Glyph(glyph),
+            icon: ActiveBarIcon::Svg(icon),
             tooltip: tooltip.to_string(),
             enabled: true,
             selected: false,
@@ -146,76 +156,40 @@ pub fn items<'a>(
         ..ActiveBarButton::default()
     });
 
-    // v0.22 Phase D4 — Make Pad from Profile button. One-shot action
-    // (not a tool mode): converts the closed-loop profile that
-    // includes the currently-selected Line into a Custom-shape pad.
-    // Enabled only when a Line is selected; the dispatcher itself
-    // verifies the loop closes and pushes a warning otherwise.
-    let make_pad_path = path.clone();
-    // v0.27 — accept any selection (primary, secondary, or extras)
-    // that touches a Line directly OR a Point that's incident to a
-    // Line. The dispatcher itself walks the closed loop and warns
-    // if the seed isn't on one. Always-enabled when the sketch has
-    // ≥1 Line so a "no selection — just convert the only loop"
-    // workflow also works.
-    let make_pad_enabled = {
-        let sketch_ref = editor.primitive().sketch.as_ref();
-        let any_line_in_sketch = sketch_ref
-            .map(|s| {
-                s.entities
-                    .iter()
-                    .any(|e| matches!(e.kind, signex_sketch::entity::EntityKind::Line { .. }))
-            })
-            .unwrap_or(false);
-        let mut selection_iter = editor
-            .state
-            .selected_sketch
-            .into_iter()
-            .chain(editor.state.selected_sketch_secondary)
-            .chain(editor.state.selected_sketch_extra.iter().copied());
-        let selection_has_line_or_pointed_line = selection_iter.any(|id| {
-            let Some(s) = sketch_ref else { return false };
-            let Some(ent) = s.entities.iter().find(|e| e.id == id) else {
-                return false;
-            };
-            match ent.kind {
-                signex_sketch::entity::EntityKind::Line { .. } => true,
-                signex_sketch::entity::EntityKind::Point { .. } => s.entities.iter().any(|other| {
-                    matches!(
-                        other.kind,
-                        signex_sketch::entity::EntityKind::Line { start, end }
-                            if start == id || end == id
-                    )
-                }),
-                _ => false,
-            }
-        });
-        any_line_in_sketch
-            && (selection_has_line_or_pointed_line
-                || editor.state.selected_sketch.is_none()
-                    && editor.state.selected_sketch_secondary.is_none()
-                    && editor.state.selected_sketch_extra.is_empty())
+    // Create ▾ / Modify ▾ group triggers. Both clicks open the menu —
+    // there is no sensible "default action" for a group of six tools,
+    // and guessing one would make the button do different things on
+    // different days. The trigger instead reports state: it borrows
+    // the armed tool's icon when the armed tool belongs to the group,
+    // and paints selected while either that tool is armed or the menu
+    // is open.
+    let mk_group = |menu: FpActiveBarMenu,
+                    label: &str,
+                    fallback: iced::widget::svg::Handle|
+     -> ActiveBarItem<LibraryMessage> {
+        let tools = match menu {
+            FpActiveBarMenu::SketchModify => FpActiveBarMenu::SKETCH_MODIFY_TOOLS,
+            _ => FpActiveBarMenu::SKETCH_CREATE_TOOLS,
+        };
+        let owns_armed = tools.contains(&active_tool);
+        let toggle = LibraryMessage::PrimitiveEditorEvent {
+            path: path.clone(),
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::ToggleActiveBarMenu(menu)),
+        };
+        ActiveBarItem::Button(ActiveBarButton {
+            icon: ActiveBarIcon::Svg(if owns_armed {
+                sketch_tool_icon(active_tool, theme_id)
+            } else {
+                fallback
+            }),
+            tooltip: label.to_string(),
+            enabled: true,
+            selected: owns_armed || editor.state.active_bar_menu == Some(menu),
+            on_press: Some(toggle.clone()),
+            on_right_press: Some(toggle),
+            dropdown_indicator: Some(ActiveBarIcon::Svg(icons::icon_chevron_45(theme_id))),
+        })
     };
-    let make_pad_button = ActiveBarItem::Button(ActiveBarButton {
-        icon: ActiveBarIcon::Glyph("\u{2B22}"), // ⬢ black hexagon (custom polygon → pad)
-        tooltip: if make_pad_enabled {
-            "Make Pad from Profile — walk the closed loop containing the selected Line and convert it into a Custom-shape pad"
-                .into()
-        } else {
-            "Make Pad from Profile (select a Line that's part of a closed loop)".into()
-        },
-        enabled: make_pad_enabled,
-        selected: false,
-        on_press: if make_pad_enabled {
-            Some(LibraryMessage::PrimitiveEditorEvent {
-                path: make_pad_path,
-                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchMakePadFromProfile),
-            })
-        } else {
-            None
-        },
-        ..ActiveBarButton::default()
-    });
 
     // Section 4 — Dimension input as a Custom slot. Sized to fit
     // ~6 digits + "mm" hint inside the bar's vertical rhythm.
@@ -223,10 +197,17 @@ pub fn items<'a>(
 
     let _ = tokens;
 
-    // v0.22 — Build the bar in three groups: always-visible Create,
-    // selection-gated Modify, and selection-driven Constrain. Empty
-    // groups collapse cleanly so the no-selection bar reads compact:
-    // Select | Point Line Rect RRect Circle Arc | DimInput | Linetype.
+    // Bar shape: Select | Create ▾ Modify ▾ | <constraints the current
+    // selection permits> | DimInput | Linetype. The two group triggers
+    // replace what used to be twelve always-visible tool buttons; the
+    // constraint section still collapses to nothing when no selection
+    // is active, so the resting bar is six slots wide.
+    //
+    // NOTE — `unified_active_bar::dropdown_x_offset` mirrors the first
+    // four slots below (Select, Separator, Create, Modify) to place the
+    // Create / Modify dropdown panels. Reordering them without updating
+    // that function puts the panels under the wrong button;
+    // `sketch_group_triggers_sit_where_the_offsets_say` pins it.
     let mut items: Vec<ActiveBarItem<LibraryMessage>> = Vec::new();
 
     // Section 1: Select
@@ -237,105 +218,24 @@ pub fn items<'a>(
     ));
     items.push(ActiveBarItem::Separator);
 
-    // Section 2: Create — primitive geometry tools.
-    // v0.14 — Place Point removed from the palette. Intersections snap
-    // automatically (Line×Line / Line×Arc / Arc×Arc, see snap.rs
+    // Section 2 + 3: the Create / Modify group triggers.
+    // v0.14 — Place Point is absent from Create by design. Intersections
+    // snap automatically (Line×Line / Line×Arc / Arc×Arc, see snap.rs
     // SnapKind::Intersection) and the Line/Rect/Circle/Arc tools
     // auto-create their own endpoint Points, so a manual free-point tool
     // was clutter in the footprint context. The SketchTool::Point
     // variant + dispatch stay (constraints + pad auto-mint reference
     // Points internally).
-    items.push(mk_tool(
-        "Place Line (2 clicks)",
-        SketchTool::Line,
-        ActiveBarIcon::Svg(icons::icon_shape_line(theme_id)),
+    items.push(mk_group(
+        FpActiveBarMenu::SketchCreate,
+        "Create — Line / Rectangle / Rounded Rectangle / Circle / Arc / Tangent Arc",
+        icons::icon_sk_create(theme_id),
     ));
-    items.push(mk_tool(
-        "Place Rectangle (corner + opposite corner)",
-        SketchTool::Rectangle,
-        ActiveBarIcon::Svg(icons::icon_shape_rect(theme_id)),
+    items.push(mk_group(
+        FpActiveBarMenu::SketchModify,
+        "Modify — Fillet / Trim / Mirror / Offset / Patterns / Make Pad from Profile",
+        icons::icon_sk_modify(theme_id),
     ));
-    items.push(mk_tool(
-        "Place Rounded Rectangle (corner + opposite corner; radius from dim input)",
-        SketchTool::RoundedRectangle,
-        ActiveBarIcon::Glyph("\u{25A2}"), // ▢
-    ));
-    items.push(mk_tool(
-        "Place Circle (centre + radius)",
-        SketchTool::Circle,
-        ActiveBarIcon::Svg(icons::icon_shape_circle(theme_id)),
-    ));
-    items.push(mk_tool(
-        "Place Arc (centre + start + end)",
-        SketchTool::Arc,
-        ActiveBarIcon::Svg(icons::icon_shape_arc(theme_id)),
-    ));
-    // v0.24 Track C — Tangent Arc. Two-click chained arc segment that
-    // mints an Arc tangent to whatever Line ends at the first click.
-    // Mirrors the Arc entry visually (same arc SVG glyph) but emits a
-    // distinct SketchTool variant + adds a TangentLineArc constraint
-    // when committed so the tangency survives further edits.
-    items.push(mk_tool(
-        "Place Tangent Arc (chains tangent to previous Line)",
-        SketchTool::TangentArc,
-        ActiveBarIcon::Svg(icons::icon_shape_arc(theme_id)),
-    ));
-
-    // v0.27 — Fillet + Trim. Always available (no pre-selection
-    // required). Fillet picks two adjacent Lines via two clicks
-    // and rounds the corner with a tangent arc; Trim removes the
-    // segment of a Line/Arc bounded by its nearest intersections
-    // with other sketch entities. These are EDA-shaped — typical
-    // use is rounding silk / courtyard corners + cleaning up
-    // overlapping outline geometry.
-    items.push(ActiveBarItem::Separator);
-    items.push(mk_tool(
-        "Fillet — click two adjacent Lines to round the corner with a tangent arc",
-        SketchTool::Fillet,
-        ActiveBarIcon::Glyph("\u{231C}"), // ⌜
-    ));
-    items.push(mk_tool(
-        "Trim — click a segment to remove it up to its nearest intersections",
-        SketchTool::Trim,
-        ActiveBarIcon::Glyph("\u{2702}"), // ✂
-    ));
-
-    // Section 3: Modify — only visible when an entity is selected
-    // (these tools all consume `editor.state.selected_sketch`). With
-    // nothing selected they would all be silent no-ops with warnings,
-    // so hiding them removes 5 buttons of width from the most-common
-    // bar state and surfaces them right when they're useful.
-    // v0.27 — also count rubber-band extras / secondary as a
-    // selection. The Modify section was hiding when the user
-    // rubber-banded a closed shape because the primary
-    // `selected_sketch` could be empty even with 4 extras present.
-    let any_selection = editor.state.selected_sketch.is_some()
-        || editor.state.selected_sketch_secondary.is_some()
-        || !editor.state.selected_sketch_extra.is_empty();
-    if any_selection {
-        items.push(ActiveBarItem::Separator);
-        items.push(mk_tool(
-            "Mirror — pre-select a Line, then click a Point/Line/Arc/Circle to mirror",
-            SketchTool::Mirror,
-            ActiveBarIcon::Glyph("\u{29B5}"), // ⦵
-        ));
-        items.push(mk_tool(
-            "Offset — pre-select a Line / Arc / Circle, then click on the side to offset (distance from dim input)",
-            SketchTool::Offset,
-            ActiveBarIcon::Glyph("\u{29C8}"), // ⧈
-        ));
-        items.push(mk_tool(
-            "Rectangular Pattern — click an entity to mint a 2×2 grid array (5 mm × 5 mm)",
-            SketchTool::RectPattern,
-            ActiveBarIcon::Glyph("\u{229E}"), // ⊞
-        ));
-        items.push(mk_tool(
-            "Circular Pattern — click an entity to mint a 4-instance polar array (360°)",
-            SketchTool::CircularPattern,
-            ActiveBarIcon::Glyph("\u{233E}"), // ⌾
-        ));
-        items.push(make_pad_button);
-    }
 
     // Section 4: Constrain — only the buttons whose precondition is
     // met by the current selection are rendered (mk_constraint
@@ -345,87 +245,87 @@ pub fn items<'a>(
         mk_constraint(
             SketchConstraintTag::Fixed,
             "Fix point in place (needs 1 Point)",
-            "\u{2693}",
+            icons::icon_sk_c_fixed(theme_id),
         ),
         mk_constraint(
             SketchConstraintTag::Coincident,
             "Coincident (needs 2 Points)",
-            "\u{2299}",
+            icons::icon_sk_c_coincident(theme_id),
         ),
         mk_constraint(
             SketchConstraintTag::DistancePtPt,
             "Distance between Points (needs 2 Points + dim input)",
-            "\u{27F7}",
+            icons::icon_sk_c_distance_pt_pt(theme_id),
         ),
         mk_constraint(
             SketchConstraintTag::Horizontal,
             "Horizontal (needs 1 Line)",
-            "\u{2500}",
+            icons::icon_sk_c_horizontal(theme_id),
         ),
         mk_constraint(
             SketchConstraintTag::Vertical,
             "Vertical (needs 1 Line)",
-            "\u{2502}",
+            icons::icon_sk_c_vertical(theme_id),
         ),
         mk_constraint(
             SketchConstraintTag::Parallel,
             "Parallel (needs 2 Lines)",
-            "\u{2225}",
+            icons::icon_sk_c_parallel(theme_id),
         ),
         mk_constraint(
             SketchConstraintTag::Perpendicular,
             "Perpendicular (needs 2 Lines)",
-            "\u{27C2}",
+            icons::icon_sk_c_perpendicular(theme_id),
         ),
         mk_constraint(
             SketchConstraintTag::EqualLength,
             "Equal length (needs 2 Lines)",
-            "\u{2261}",
+            icons::icon_sk_c_equal_length(theme_id),
         ),
         mk_constraint(
             SketchConstraintTag::PointOnLine,
             "Point on line (needs 1 Point + 1 Line)",
-            "\u{22A2}",
+            icons::icon_sk_c_point_on_line(theme_id),
         ),
         mk_constraint(
             SketchConstraintTag::Midpoint,
             "Midpoint (needs 1 Point + 1 Line)",
-            "\u{25C7}",
+            icons::icon_sk_c_midpoint(theme_id),
         ),
         mk_constraint(
             SketchConstraintTag::TangentLineArc,
             "Tangent (needs 1 Line + 1 Arc)",
-            "T",
+            icons::icon_sk_c_tangent_line_arc(theme_id),
         ),
         mk_constraint(
             SketchConstraintTag::TangentArcArc,
             "Tangent (needs 2 Arcs)",
-            "T",
+            icons::icon_sk_c_tangent_arc_arc(theme_id),
         ),
         mk_constraint(
             SketchConstraintTag::Angle,
             "Angle between Lines (needs 2 Lines + dim input, degrees)",
-            "\u{2220}", // ∠
+            icons::icon_sk_c_angle(theme_id),
         ),
         mk_constraint(
             SketchConstraintTag::EqualRadius,
             "Equal radius (needs 2 Circles/Arcs)",
-            "\u{2261}R", // ≡R
+            icons::icon_sk_c_equal_radius(theme_id),
         ),
         mk_constraint(
             SketchConstraintTag::PointOnArc,
             "Point on arc (needs 1 Point + 1 Arc)",
-            "\u{2312}", // ⌒
+            icons::icon_sk_c_point_on_arc(theme_id),
         ),
         mk_constraint(
             SketchConstraintTag::DistancePtLine,
             "Distance Point↔Line (needs 1 Point + 1 Line + dim input)",
-            "\u{27F7}", // ⟷
+            icons::icon_sk_c_distance_pt_line(theme_id),
         ),
         mk_constraint(
             SketchConstraintTag::DistancePtCircle,
             "Distance Point↔Circle (needs 1 Point + 1 Circle/Arc + dim input)",
-            "\u{27F7}", // ⟷
+            icons::icon_sk_c_distance_pt_circle(theme_id),
         ),
         // v0.15 — 3-entity Symmetric constraints. Primary + secondary
         // hold the two Points; the third entity (mirror Line / centre
@@ -434,12 +334,12 @@ pub fn items<'a>(
         mk_constraint(
             SketchConstraintTag::SymmetricAboutLine,
             "Symmetric about line (needs 2 Points + 1 Line in selection)",
-            "\u{25C3}\u{25B9}", // ◃▹
+            icons::icon_sk_c_symmetric_line(theme_id),
         ),
         mk_constraint(
             SketchConstraintTag::SymmetricAboutPoint,
             "Symmetric about point (needs 3 Points: 2 + a centre)",
-            "\u{25C3}\u{25B9}", // ◃▹
+            icons::icon_sk_c_symmetric_point(theme_id),
         ),
     ]
     .into_iter()
@@ -453,7 +353,7 @@ pub fn items<'a>(
     // Section 5: Dimension input + Linetype tri-state pill — always
     // visible.
     items.push(ActiveBarItem::Separator);
-    items.push(ActiveBarItem::Custom(dim_input));
+    items.push(ActiveBarItem::custom(dim_input, DIM_INPUT_W));
     items.push(ActiveBarItem::Separator);
     items.push(linetype_button);
 
@@ -468,6 +368,35 @@ pub fn view<'a>(
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     signex_widgets::active_bar::view(items(editor, theme_id, tokens), tokens)
+}
+
+/// Icon for an armed sketch tool, so a collapsed group trigger can
+/// show what's in hand instead of the generic group glyph. `Select`
+/// and `Point` never reach a group trigger (neither belongs to one);
+/// they fall back to the Create glyph.
+fn sketch_tool_icon(
+    tool: SketchTool,
+    theme_id: signex_types::theme::ThemeId,
+) -> iced::widget::svg::Handle {
+    match tool {
+        SketchTool::Line => icons::icon_shape_line(theme_id),
+        SketchTool::Rectangle => icons::icon_shape_rect(theme_id),
+        SketchTool::RoundedRectangle => icons::icon_sk_rounded_rect(theme_id),
+        SketchTool::Circle => icons::icon_shape_circle(theme_id),
+        SketchTool::Arc | SketchTool::TangentArc => icons::icon_shape_arc(theme_id),
+        SketchTool::Fillet => icons::icon_sk_fillet(theme_id),
+        SketchTool::Trim => icons::icon_sk_trim(theme_id),
+        SketchTool::Mirror => icons::icon_sk_mirror(theme_id),
+        SketchTool::Offset => icons::icon_sk_offset(theme_id),
+        SketchTool::RectPattern => icons::icon_sk_rect_pattern(theme_id),
+        SketchTool::CircularPattern => icons::icon_sk_circular_pattern(theme_id),
+        // BreakTrack (#372) / DragTrackEnd (#361) land on this file via the
+        // trunk merge; they are armed from the main bar's "Modify Tracks"
+        // dropdown, not a sketch group trigger, so this icon is only a
+        // fallback — use the Modify glyph, both being track-edit tools.
+        SketchTool::BreakTrack | SketchTool::DragTrackEnd => icons::icon_sk_modify(theme_id),
+        SketchTool::Select | SketchTool::Point => icons::icon_sk_create(theme_id),
+    }
 }
 
 /// Compute the per-tag enable state from the current selection slots.
@@ -582,6 +511,19 @@ const fn tag_index(tag: SketchConstraintTag) -> usize {
     }
 }
 
+/// Declared width of the dimension-input slot, handed to
+/// [`ActiveBarItem::custom`] so the bar can measure itself.
+///
+/// FIXED, not shrink-to-fit, and that is the point: `slot_offsets`
+/// can't run a layout pass, so a Custom slot's width has to be stated
+/// rather than discovered. Left to auto-size, this one's width would
+/// depend on how wide the font renders "mm" — and because the bar is
+/// centre-aligned, any error here moves *every* dropdown by half of it.
+///
+/// Content is `4 + "mm" + 4 + 58 px input + 4` ≈ 87 px; the value has
+/// slack over that so a wider font can't clip the input.
+pub(crate) const DIM_INPUT_W: f32 = 92.0;
+
 /// Build the inline dimension `text_input` slot. Sized to read like
 /// the rest of the bar (matches the BTN_SIZE vertical rhythm).
 fn build_dimension_input<'a>(
@@ -624,6 +566,7 @@ fn build_dimension_input<'a>(
         .align_y(iced::Alignment::Center),
     )
     .padding([2, 4])
+    .width(Length::Fixed(DIM_INPUT_W))
     .style(move |_: &Theme| iced::widget::container::Style {
         background: None,
         border: Border {

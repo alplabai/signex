@@ -223,10 +223,12 @@ mod tests {
     /// `save_at` must go through `atomic_write`, not `fs::write`: a failed
     /// save leaves the previously persisted list fully intact.
     ///
-    /// Discriminator: pre-creating a *directory* at `<path>.tmp` makes
-    /// `atomic_write`'s `File::create(&tmp)` fail before it can touch the
-    /// destination. A plain `fs::write` would ignore the sibling, succeed,
-    /// and clobber the old file — so this test fails on a revert.
+    /// Discriminator: denying new-file creation in the destination's
+    /// parent directory makes `atomic_write`'s `File::create(&tmp)` fail
+    /// before it can touch the destination, regardless of the unique
+    /// per-writer temp name it picks (#416). A plain `fs::write` would
+    /// ignore that and clobber the old file — so this test fails on a
+    /// revert.
     #[test]
     fn save_at_leaves_original_intact_when_write_fails() {
         let dir = tempfile::tempdir().unwrap();
@@ -238,9 +240,9 @@ mod tests {
         }];
         save_at(&path, &original).unwrap();
         let before = std::fs::read_to_string(&path).unwrap();
-        assert!(!dir.path().join("global_libraries.toml.tmp").exists());
+        assert!(!crate::test_support::has_stray_tmp(path.parent().unwrap()));
 
-        std::fs::create_dir_all(dir.path().join("global_libraries.toml.tmp")).unwrap();
+        let _deny = crate::test_support::DenyNewFiles::on(path.parent().unwrap());
         let replacement = vec![GlobalLibraryEntry {
             path: PathBuf::from("/tmp/clobber.snxlib"),
             remote: None,

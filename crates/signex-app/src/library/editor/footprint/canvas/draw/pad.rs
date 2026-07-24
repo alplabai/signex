@@ -1,7 +1,7 @@
 //! Pad rendering + Pads-mode multi-click gesture preview.
 
 use iced::widget::canvas::{self, Path, Stroke};
-use iced::{Color, Point};
+use iced::{Color, Point, Radians, Vector};
 
 use super::super::super::state::{EditorPad, FootprintEditorState, PadsTool, PlaceArcPending};
 use super::super::FootprintCanvasState;
@@ -17,13 +17,14 @@ pub(super) fn draw_pad(
     use signex_library::PadShape as PS;
     let layer = pad.primary_layer();
     let color = layer.color();
-    let (x0, y0, x1, y1) = pad.bbox_mm();
-    let p0 = cstate.world_to_screen((x0, y0));
-    let p1 = cstate.world_to_screen((x1, y1));
-    let size = iced::Size::new(p1.x - p0.x, p1.y - p0.y);
-    let centre = cstate.world_to_screen(pad.position_mm);
-    let half_w = size.width / 2.0;
-    let half_h = size.height / 2.0;
+    // Pad-local extents: the shape is built around the origin and the
+    // whole path is placed by the saved transform below, so rotation
+    // is applied once here rather than smeared through every vertex.
+    let half_w = (pad.size_mm.0 as f32) * 0.5 * cstate.scale;
+    let half_h = (pad.size_mm.1 as f32) * 0.5 * cstate.scale;
+    let size = iced::Size::new(half_w * 2.0, half_h * 2.0);
+    let p0 = Point::new(-half_w, -half_h);
+    let centre = Point::ORIGIN;
 
     // v0.20 — branch on pad.shape to render the actual copper
     // outline. Round/Oval use a stretched circle; RoundRect uses
@@ -116,14 +117,15 @@ pub(super) fn draw_pad(
             })
         }
         PS::Custom(poly) => Path::new(|b| {
+            // Polygon points are already pad-local offsets in mm; scale
+            // them into the local pixel frame the transform places.
+            let local = |pt: &[f64; 2]| {
+                Point::new(pt[0] as f32 * cstate.scale, pt[1] as f32 * cstate.scale)
+            };
             if let Some((first, rest)) = poly.points.split_first() {
-                let p0 = cstate
-                    .world_to_screen((pad.position_mm.0 + first[0], pad.position_mm.1 + first[1]));
-                b.move_to(p0);
+                b.move_to(local(first));
                 for pt in rest {
-                    let p = cstate
-                        .world_to_screen((pad.position_mm.0 + pt[0], pad.position_mm.1 + pt[1]));
-                    b.line_to(p);
+                    b.line_to(local(pt));
                 }
                 b.close();
             }
@@ -131,54 +133,64 @@ pub(super) fn draw_pad(
         _ => Path::rectangle(p0, size),
     };
 
-    frame.fill(&shape_path, Color { a: 0.85, ..color });
     let outline_color = if is_selected {
         Color::from_rgb(1.0, 1.0, 1.0)
     } else {
         Color { a: 1.0, ..color }
     };
-    frame.stroke(
-        &shape_path,
-        Stroke::default()
-            .with_width(if is_selected { 1.6 } else { 0.8 })
-            .with_color(outline_color),
-    );
-
-    // v0.23 — Pad hole. Through-hole / NPT pads carry a positive
-    // `drill_diameter_mm`; render it as a black "punched" disc on
-    // top of the copper.
-    if let Some(d_mm) = pad.drill_diameter_mm.filter(|d| *d > 1e-6) {
-        let drill_r = (d_mm * 0.5) as f32 * cstate.scale;
-        let hole_path = Path::new(|b| {
-            let segments = 24;
-            for i in 0..=segments {
-                let t = i as f32 / segments as f32 * std::f32::consts::TAU;
-                let x = centre.x + drill_r * t.cos();
-                let y = centre.y + drill_r * t.sin();
-                if i == 0 {
-                    b.move_to(Point::new(x, y));
-                } else {
-                    b.line_to(Point::new(x, y));
-                }
-            }
-            b.close();
-        });
-        frame.fill(&hole_path, Color::BLACK);
-        frame.stroke(
-            &hole_path,
+    // Place the whole copper shape with one saved transform. World and
+    // screen share a handedness here — `world_to_screen` applies no Y
+    // flip — so the screen rotation takes the world sign unnegated.
+    let screen_centre = cstate.world_to_screen(pad.position_mm);
+    frame.with_save(|inner| {
+        inner.translate(Vector::new(screen_centre.x, screen_centre.y));
+        inner.rotate(Radians(pad.rotation_deg.to_radians() as f32));
+        inner.fill(&shape_path, Color { a: 0.85, ..color });
+        inner.stroke(
+            &shape_path,
             Stroke::default()
-                .with_width(0.8)
-                .with_color(if is_selected {
-                    Color::WHITE
-                } else {
-                    Color::from_rgba(0.0, 0.0, 0.0, 0.85)
-                }),
+                .with_width(if is_selected { 1.6 } else { 0.8 })
+                .with_color(outline_color),
         );
-    }
 
-    // Pad number — only when zoomed in enough to read.
+        // v0.23 — Pad hole. Through-hole / NPT pads carry a positive
+        // `drill_diameter_mm`; render it as a black "punched" disc on
+        // top of the copper. Rotation-invariant, but it rides inside
+        // the transform so it stays centred on the copper.
+        if let Some(d_mm) = pad.drill_diameter_mm.filter(|d| *d > 1e-6) {
+            let drill_r = (d_mm * 0.5) as f32 * cstate.scale;
+            let hole_path = Path::new(|b| {
+                let segments = 24;
+                for i in 0..=segments {
+                    let t = i as f32 / segments as f32 * std::f32::consts::TAU;
+                    let x = centre.x + drill_r * t.cos();
+                    let y = centre.y + drill_r * t.sin();
+                    if i == 0 {
+                        b.move_to(Point::new(x, y));
+                    } else {
+                        b.line_to(Point::new(x, y));
+                    }
+                }
+                b.close();
+            });
+            inner.fill(&hole_path, Color::BLACK);
+            inner.stroke(
+                &hole_path,
+                Stroke::default()
+                    .with_width(0.8)
+                    .with_color(if is_selected {
+                        Color::WHITE
+                    } else {
+                        Color::from_rgba(0.0, 0.0, 0.0, 0.85)
+                    }),
+            );
+        }
+    });
+
+    // Pad number — deliberately OUTSIDE the saved transform. Inside it
+    // the label would turn with the pad and read upside down at 180°.
     if cstate.scale >= 25.0 && !pad.number.is_empty() {
-        let centre = cstate.world_to_screen(pad.position_mm);
+        let centre = screen_centre;
         let text_size = (cstate.scale * 0.35).clamp(8.0, 16.0);
         frame.fill_text(canvas::Text {
             content: pad.number.clone(),

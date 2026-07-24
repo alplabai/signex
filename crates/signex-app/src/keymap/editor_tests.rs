@@ -1,4 +1,6 @@
-use super::{AppCommandId, CommandGroup, KeyStroke, KeymapEditorModel, ShortcutContext, metadata_for};
+use super::{
+    AppCommandId, CommandGroup, KeyStroke, KeymapEditorModel, ShortcutContext, metadata_for,
+};
 use std::str::FromStr;
 
 #[test]
@@ -37,7 +39,11 @@ fn custom_profile_trigger_edit_updates_compiled_keymap() {
     let command = AppCommandId::new("save_document").unwrap();
 
     editor
-        .edit_active_trigger(command.clone(), ShortcutContext::Global, "Ctrl+Alt+S".into())
+        .edit_active_trigger(
+            command.clone(),
+            ShortcutContext::Global,
+            "Ctrl+Alt+S".into(),
+        )
         .unwrap();
 
     let keymap = editor.active_keymap();

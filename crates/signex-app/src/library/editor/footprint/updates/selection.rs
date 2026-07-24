@@ -392,7 +392,11 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
                 .iter()
                 .enumerate()
                 .filter_map(|(idx, p)| {
-                    let (x0, y0, x1, y1) = p.bbox_mm();
+                    // Rotated AABB, same as rubber-band select. Against
+                    // the un-rotated box a turned pad is scored on
+                    // copper it does not occupy, and missed on copper it
+                    // does — the hit-test defect, one message over.
+                    let (x0, y0, x1, y1) = p.rotated_aabb_mm();
                     if segment_hits_aabb(x0, y0, x1, y1) {
                         Some(idx)
                     } else {

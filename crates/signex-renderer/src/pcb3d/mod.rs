@@ -244,7 +244,6 @@ impl fmt::Display for RuntimeModelBridgeError {
 
 impl std::error::Error for RuntimeModelBridgeError {}
 
-
 mod glb;
 mod projection;
 

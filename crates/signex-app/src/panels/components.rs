@@ -292,4 +292,3 @@ pub fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     .spacing(0)
     .into()
 }
-

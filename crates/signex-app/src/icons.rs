@@ -226,6 +226,50 @@ canonical_icon!(icon_dd_unions, "dropdown/unions.svg");
 canonical_icon!(icon_dd_vcc, "dropdown/vcc.svg");
 canonical_icon!(icon_dd_wire, "dropdown/wire.svg");
 
+// ─── Sketch mode (footprint editor sketch active bar) ──────────────
+//
+// Fusion 360-style icon set: the geometry draws in the neutral
+// `#6b7280` stroke, and the part of the glyph that carries the
+// *meaning* — the constraint marker, the seed instance of a pattern,
+// the mirror axis — draws in the `#f59e0b` accent sentinel so it
+// tints to the active theme. Constraint icons use `stroke-width 2`
+// (vs 2.5 for the tools) because they carry more elements in the
+// same 24×24 box.
+
+canonical_icon!(icon_sk_circular_pattern, "sketch/circular_pattern.svg");
+canonical_icon!(icon_sk_create, "sketch/create.svg");
+canonical_icon!(icon_sk_fillet, "sketch/fillet.svg");
+canonical_icon!(icon_sk_make_pad, "sketch/make_pad.svg");
+canonical_icon!(icon_sk_mirror, "sketch/mirror.svg");
+canonical_icon!(icon_sk_modify, "sketch/modify.svg");
+canonical_icon!(icon_sk_offset, "sketch/offset.svg");
+canonical_icon!(icon_sk_rect_pattern, "sketch/rect_pattern.svg");
+canonical_icon!(icon_sk_rounded_rect, "sketch/rounded_rect.svg");
+canonical_icon!(icon_sk_trim, "sketch/trim.svg");
+
+canonical_icon!(icon_sk_c_angle, "sketch/c_angle.svg");
+canonical_icon!(icon_sk_c_coincident, "sketch/c_coincident.svg");
+canonical_icon!(
+    icon_sk_c_distance_pt_circle,
+    "sketch/c_distance_pt_circle.svg"
+);
+canonical_icon!(icon_sk_c_distance_pt_line, "sketch/c_distance_pt_line.svg");
+canonical_icon!(icon_sk_c_distance_pt_pt, "sketch/c_distance_pt_pt.svg");
+canonical_icon!(icon_sk_c_equal_length, "sketch/c_equal_length.svg");
+canonical_icon!(icon_sk_c_equal_radius, "sketch/c_equal_radius.svg");
+canonical_icon!(icon_sk_c_fixed, "sketch/c_fixed.svg");
+canonical_icon!(icon_sk_c_horizontal, "sketch/c_horizontal.svg");
+canonical_icon!(icon_sk_c_midpoint, "sketch/c_midpoint.svg");
+canonical_icon!(icon_sk_c_parallel, "sketch/c_parallel.svg");
+canonical_icon!(icon_sk_c_perpendicular, "sketch/c_perpendicular.svg");
+canonical_icon!(icon_sk_c_point_on_arc, "sketch/c_point_on_arc.svg");
+canonical_icon!(icon_sk_c_point_on_line, "sketch/c_point_on_line.svg");
+canonical_icon!(icon_sk_c_symmetric_line, "sketch/c_symmetric_line.svg");
+canonical_icon!(icon_sk_c_symmetric_point, "sketch/c_symmetric_point.svg");
+canonical_icon!(icon_sk_c_tangent_arc_arc, "sketch/c_tangent_arc_arc.svg");
+canonical_icon!(icon_sk_c_tangent_line_arc, "sketch/c_tangent_line_arc.svg");
+canonical_icon!(icon_sk_c_vertical, "sketch/c_vertical.svg");
+
 // ─── Justify picker (9-cell property panel) ────────────────────────
 
 canonical_icon!(icon_justify_b, "justify/b.svg");

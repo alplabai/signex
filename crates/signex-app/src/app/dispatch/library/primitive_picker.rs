@@ -358,5 +358,4 @@ impl Signex {
             PrimitivePickerMsg::Pick(primitive_ref),
         )))
     }
-
 }

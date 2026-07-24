@@ -66,6 +66,26 @@ pub enum SketchTool {
     /// you want gone. EDA use: cleaning up overlapping silk/outline
     /// without manual delete + redraw.
     Trim,
+    /// #372 — Break Track. Single click on a sketch `Line`: hit-test
+    /// the click against every Line (0.30 mm tolerance, nearest stroke
+    /// wins — the same pick as Trim), project it onto that Line to a
+    /// parameter `t`, and call the `split_line` primitive (#360) to
+    /// divide the Line into two Lines meeting at a new mid `Point`. EDA
+    /// use: dropping a vertex into a silk / courtyard / outline segment
+    /// so each half can be dragged or re-routed independently — unlike
+    /// Trim (which deletes a segment), Break Track keeps both halves.
+    /// Splits only sketch Lines — arcs, circles, pads and regions are
+    /// out of scope.
+    BreakTrack,
+    /// #361 — "Drag Track End" (Place ▸ Drag Track End). An
+    /// endpoint-biased segment grab: a left-press anywhere on a sketch
+    /// `Line` grabs that line's NEARER endpoint and drives the existing
+    /// Point-drag path (`try_drag_track_end_grab` → `DragState.sketch_point`
+    /// in `canvas/input/`), so the endpoint follows the cursor with the
+    /// solver live — no 12 px point-snap precision required. Not a
+    /// placement tool: it never mints geometry, it only re-arms the
+    /// endpoint drag. Arc / circle endpoints are out of scope.
+    DragTrackEnd,
 }
 
 /// Transient per-tool gesture state. The canvas Program reads + writes

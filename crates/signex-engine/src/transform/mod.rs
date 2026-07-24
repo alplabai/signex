@@ -126,6 +126,82 @@ impl Engine {
         }
     }
 
+    /// Mint any junction dots the sheet now needs because wires in `items`
+    /// changed shape, then drop any *minted* dot geometry no longer
+    /// justifies. Returns `true` when at least one dot was added or removed.
+    ///
+    /// Move / rotate / mirror mutate existing wire coordinates; delete and
+    /// place-wire change which wires exist. All five used to reconcile
+    /// nothing beyond place-wire's own ad hoc mint call — dragging a stub
+    /// onto a trunk's interior left a junction-less T, which the netlist
+    /// reads as disconnected (issue #107), so the connection was silently
+    /// lost exactly as in issue #402's draw case. Every command that
+    /// changes wire geometry — place, move, rotate, mirror, delete —
+    /// routes through here now.
+    ///
+    /// This used to be add-only: a dot left stale by geometry moving *apart*
+    /// was left in place on the theory that it was still correct as long as
+    /// it still sat on two wires. That theory doesn't hold — two wires can
+    /// come to sit on the same point by merely *crossing*, with neither one
+    /// terminating there, and geometric "on two wires" does not distinguish
+    /// that from a real T. A stale dot from a T that lost its stub then
+    /// re-asserts a connection on the first unrelated wire dragged across the
+    /// same point, silently merging two nets the user never connected (issue
+    /// #422). So every minted dot is re-validated here on every wire-geometry
+    /// command and removed once [`autoplace::wire_meeting_justifies_junction`]
+    /// no longer holds for it. A user-placed dot (`Junction::minted == false`)
+    /// is user data and is never considered for removal.
+    pub(super) fn reconcile_wire_junctions(&mut self, items: &[SelectedItem]) -> bool {
+        let touched: Vec<signex_types::schematic::Wire> = items
+            .iter()
+            .filter(|item| matches!(item.kind, SelectedKind::Wire))
+            .filter_map(|item| self.document.wires.iter().find(|w| w.uuid == item.uuid))
+            .cloned()
+            .collect();
+
+        let mut changed = false;
+        for wire in touched {
+            let minted =
+                autoplace::junctions_for_wire(&wire, &self.document, crate::JUNCTION_TOLERANCE_MM);
+            changed |= !minted.is_empty();
+            // Extend inside the loop so the next wire's dedup sees these.
+            self.document.junctions.extend(minted);
+        }
+
+        changed |= self.remove_unjustified_minted_junctions();
+        changed
+    }
+
+    /// Drop every minted junction no longer justified by a genuine wire
+    /// meeting (see [`autoplace::wire_meeting_justifies_junction`]).
+    /// User-placed dots (`minted == false`) are never inspected here.
+    fn remove_unjustified_minted_junctions(&mut self) -> bool {
+        let tolerance = crate::JUNCTION_TOLERANCE_MM;
+        let stale: Vec<uuid::Uuid> = self
+            .document
+            .junctions
+            .iter()
+            .filter(|junction| junction.minted)
+            .filter(|junction| {
+                !autoplace::wire_meeting_justifies_junction(
+                    junction.position,
+                    &self.document,
+                    tolerance,
+                )
+            })
+            .map(|junction| junction.uuid)
+            .collect();
+
+        if stale.is_empty() {
+            return false;
+        }
+
+        self.document
+            .junctions
+            .retain(|junction| !stale.contains(&junction.uuid));
+        true
+    }
+
     pub(super) fn move_selected_item(&mut self, item: &SelectedItem, dx: f64, dy: f64) -> bool {
         match item.kind {
             SelectedKind::Symbol => self
@@ -428,7 +504,6 @@ fn normalize_degrees(angle_degrees: f64) -> f64 {
 }
 
 mod autoplace;
-pub(crate) use autoplace::needed_junction;
 use autoplace::autoplace_fields;
 
 // ---------------------------------------------------------------------------

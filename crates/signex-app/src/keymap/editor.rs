@@ -1,6 +1,6 @@
 use crate::keymap::{
-    AppCommandId, BindingConflict, CommandGroup, CompiledKeymap, ProfileLoadError, ShortcutContext,
-    ShortcutBinding, ShortcutBindingAction, ShortcutProfile, ShortcutProfileKind,
+    AppCommandId, BindingConflict, CommandGroup, CompiledKeymap, ProfileLoadError, ShortcutBinding,
+    ShortcutBindingAction, ShortcutContext, ShortcutProfile, ShortcutProfileKind,
     ShortcutProfileSet, ShortcutTrigger, fallback_label, metadata_for,
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -156,7 +156,8 @@ impl KeymapEditorModel {
         trigger_text: String,
     ) -> Result<(), ProfileLoadError> {
         let key = (command.clone(), context);
-        self.trigger_drafts.insert(key.clone(), trigger_text.clone());
+        self.trigger_drafts
+            .insert(key.clone(), trigger_text.clone());
 
         if !self.active_profile_is_custom() {
             self.invalid_trigger_drafts.insert(key);

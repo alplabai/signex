@@ -13,9 +13,7 @@
 //! - `pad_input_row` / `pad_pick_row` / `pad_check_row` are the row-
 //!   chrome primitives; `subforms` and `pad_table` import them.
 
-use iced::widget::{
-    Column, container, pick_list, row, text, text_input,
-};
+use iced::widget::{Column, container, pick_list, row, text, text_input};
 use iced::{Color, Length, Theme};
 
 use super::super::super::{

@@ -164,9 +164,10 @@ impl Signex {
             decorations: true,
             ..Default::default()
         });
-        self.ui_state
-            .windows
-            .insert(id, super::super::super::state::WindowKind::DetachedPanel(kind));
+        self.ui_state.windows.insert(
+            id,
+            super::super::super::state::WindowKind::DetachedPanel(kind),
+        );
         open_task.map(move |settled_id| {
             Message::Window(WindowMsg::DetachedPanelOpened {
                 kind,
@@ -247,9 +248,10 @@ impl Signex {
         // Stash the mapping right away — view(id) for the new window
         // fires before open_task resolves on some platforms, and without
         // the entry the detached window would render empty.
-        self.ui_state
-            .windows
-            .insert(id, super::super::super::state::WindowKind::DetachedModal(modal));
+        self.ui_state.windows.insert(
+            id,
+            super::super::super::state::WindowKind::DetachedModal(modal),
+        );
         // When the OS finishes opening the window, forward the id so the
         // update can double-check and clear any leftover drag state.
         open_task.map(move |settled_id| {

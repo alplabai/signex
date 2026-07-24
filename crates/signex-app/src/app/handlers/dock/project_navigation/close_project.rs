@@ -132,6 +132,81 @@ impl Signex {
         }
     }
 
+    /// Attempt to save a single dirty path during a Save-All flow
+    /// (project close or app exit), routing by the kind of document the
+    /// path backs:
+    ///
+    /// * a live schematic **engine** → `engine.save()`;
+    /// * an open **symbol/footprint primitive editor** → `save_primitive_tab_at`;
+    /// * the project's own **`.snxprj`** → `save_project_at_path`.
+    ///
+    /// Both Save-All loops previously handled *only* engines, so a dirty
+    /// `.snxsym`/`.snxfpt` draft (e.g. a freshly-added symbol library
+    /// like `SymbolLibrary5.snxsym`) or a dirty `.snxprj` always fell
+    /// through to the failure list and blocked the close with a bogus
+    /// "Could not save …" — the file was never actually attempted (#104).
+    ///
+    /// On success the path's dirty markers are cleared: the primitive
+    /// and project savers clear their own; the engine leg clears them
+    /// here. Returns the failure reason so the caller can tell the user
+    /// WHY a file couldn't be saved instead of only naming it.
+    fn try_save_dirty_path(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
+        use anyhow::Context as _;
+        if let Some(engine) = self.document_state.engines.get_mut(path) {
+            engine
+                .save()
+                .with_context(|| format!("save schematic {}", path.display()))?;
+            self.document_state.dirty_paths.remove(path);
+            if let Some(tab) = self
+                .document_state
+                .tabs
+                .iter_mut()
+                .find(|t| t.path == *path)
+            {
+                tab.dirty = false;
+            }
+            // Parity with the Ctrl+S schematic path (`save_active_document`):
+            // auto-commit the saved sheet into the owning project's git
+            // repo. Best-effort, no-op when `enable_git` is off — the
+            // primitive and project legs already do the equivalent
+            // internally, so the three routes stay uniform.
+            let label = path
+                .file_name()
+                .map(|f| f.to_string_lossy().into_owned())
+                .unwrap_or_else(|| path.display().to_string());
+            self.commit_save_to_project_git(path, &format!("Save {label}"));
+            return Ok(());
+        }
+        if self.document_state.symbol_editors.contains_key(path)
+            || self.document_state.footprint_editors.contains_key(path)
+        {
+            return self.save_primitive_tab_at(path);
+        }
+        if self.document_state.projects.iter().any(|p| p.path == path) {
+            return self.save_project_at_path(path);
+        }
+        anyhow::bail!(
+            "no open editor, engine, or project backs this file — it can't be saved automatically"
+        )
+    }
+
+    /// Format the per-file failure lines (`name — reason`) for a
+    /// Save-All error modal so the user sees *why* each file couldn't
+    /// be saved, not just its name.
+    fn save_all_failure_listing(failed: &[(std::path::PathBuf, String)]) -> String {
+        failed
+            .iter()
+            .map(|(p, reason)| {
+                let name = p
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("(unnamed file)");
+                format!("{name} — {reason}")
+            })
+            .collect::<Vec<_>>()
+            .join("\n  ")
+    }
+
     /// Resolve the user's Save All / Discard All / Cancel choice on
     /// the project-close confirmation modal. Owned by this module
     /// because it's a follow-up of `close_project_at_tree_path`.
@@ -146,57 +221,33 @@ impl Signex {
         match choice {
             ProjectCloseChoice::Cancel => Task::none(),
             ProjectCloseChoice::SaveAll => {
-                // Save every dirty file. Files without a live engine
-                // shouldn't exist if `dirty_paths` is consistent with
-                // `engines` — count those as failures so the user
-                // sees something is wrong instead of silently losing
-                // the dirty state. If ANY save fails, the project
-                // stays open + the user gets an error modal listing
-                // the unsaved files.
-                let mut failed: Vec<std::path::PathBuf> = Vec::new();
+                // Save every dirty file, routing each path to the right
+                // saver (schematic engine / symbol/footprint editor /
+                // project `.snxprj`) via `try_save_dirty_path`. If ANY
+                // save fails the project stays open and the user gets an
+                // error modal naming the file AND the reason it couldn't
+                // be saved.
+                let mut failed: Vec<(std::path::PathBuf, String)> = Vec::new();
                 for path in &state.dirty_paths {
-                    if let Some(engine) = self.document_state.engines.get_mut(path) {
-                        match engine.save() {
-                            Ok(_) => {
-                                self.document_state.dirty_paths.remove(path);
-                                if let Some(tab) = self
-                                    .document_state
-                                    .tabs
-                                    .iter_mut()
-                                    .find(|t| &t.path == path)
-                                {
-                                    tab.dirty = false;
-                                }
-                            }
-                            Err(err) => {
-                                crate::diagnostics::log_error(
-                                    "Failed to save during project close",
-                                    &anyhow::anyhow!("{err}"),
-                                );
-                                failed.push(path.clone());
-                            }
-                        }
-                    } else {
-                        crate::diagnostics::log_info(format!(
-                            "Project close: no live engine for dirty {} — cannot save",
-                            path.display()
-                        ));
-                        failed.push(path.clone());
+                    if let Err(err) = self.try_save_dirty_path(path) {
+                        crate::diagnostics::log_error(
+                            &format!("Save All: could not save {}", path.display()),
+                            &err,
+                        );
+                        failed.push((path.clone(), format!("{err:#}")));
                     }
                 }
+                // Drop dirty dots for the paths that DID save (the engine
+                // leg clears markers but doesn't refresh; the full-success
+                // close path refreshes via `execute_close_project_at_tree_path`,
+                // but the partial-failure path below would otherwise leave
+                // stale red dots on already-saved sheets).
+                self.refresh_panel_ctx();
                 if !failed.is_empty() {
-                    let listing: Vec<String> = failed
-                        .iter()
-                        .filter_map(|p| {
-                            p.file_name()
-                                .and_then(|s| s.to_str())
-                                .map(|s| s.to_string())
-                        })
-                        .collect();
                     self.document_state.export_error = Some(format!(
                         "Could not save {} file(s) — project not closed:\n  {}",
                         failed.len(),
-                        listing.join("\n  ")
+                        Self::save_all_failure_listing(&failed)
                     ));
                     return Task::none();
                 }
@@ -273,59 +324,101 @@ impl Signex {
             ProjectCloseChoice::Cancel => Task::none(),
             ProjectCloseChoice::DiscardAll => self.close_main_window_now(),
             ProjectCloseChoice::SaveAll => {
-                // Save every dirty file that has a live engine. A dirty
-                // `.snxprj` or a symbol/footprint editor draft has no
-                // engine and cannot be saved through this path yet
-                // (tracked in #104). Rather than exit and lose them, we
-                // keep Signex open and tell the user which files still
-                // need a manual save.
-                let mut failed: Vec<std::path::PathBuf> = Vec::new();
+                // Save every dirty file, routing each path to the right
+                // saver (schematic engine / symbol/footprint editor /
+                // project `.snxprj`) via `try_save_dirty_path`. A dirty
+                // symbol/footprint draft (e.g. a freshly-added
+                // `SymbolLibrary5.snxsym`) or a dirty `.snxprj` used to
+                // have no route here and always tripped a bogus "Export
+                // Failed" (#104); they are now saved like any other.
+                // Anything still un-saveable keeps Signex open with a
+                // reason so nothing is lost.
+                let mut failed: Vec<(std::path::PathBuf, String)> = Vec::new();
                 for path in &state.dirty_paths {
-                    if let Some(engine) = self.document_state.engines.get_mut(path) {
-                        match engine.save() {
-                            Ok(_) => {
-                                self.document_state.dirty_paths.remove(path);
-                                if let Some(tab) = self
-                                    .document_state
-                                    .tabs
-                                    .iter_mut()
-                                    .find(|t| &t.path == path)
-                                {
-                                    tab.dirty = false;
-                                }
-                            }
-                            Err(err) => {
-                                crate::diagnostics::log_error(
-                                    "Failed to save during app exit",
-                                    &anyhow::anyhow!("{err}"),
-                                );
-                                failed.push(path.clone());
-                            }
-                        }
-                    } else {
-                        failed.push(path.clone());
+                    if let Err(err) = self.try_save_dirty_path(path) {
+                        crate::diagnostics::log_error(
+                            &format!("Save All (exit): could not save {}", path.display()),
+                            &err,
+                        );
+                        failed.push((path.clone(), format!("{err:#}")));
                     }
                 }
+                // Refresh so already-saved sheets drop their dirty dots on
+                // the partial-failure path (the engine leg clears markers
+                // but doesn't refresh); a no-op on the clean-exit path.
+                self.refresh_panel_ctx();
                 if failed.is_empty() {
                     self.close_main_window_now()
                 } else {
-                    let listing: Vec<String> = failed
-                        .iter()
-                        .filter_map(|p| {
-                            p.file_name()
-                                .and_then(|s| s.to_str())
-                                .map(|s| s.to_string())
-                        })
-                        .collect();
                     self.document_state.export_error = Some(format!(
                         "Could not save {} file(s) — Signex stayed open so nothing is lost. \
                          Save them manually, or choose Discard All to exit anyway:\n  {}",
                         failed.len(),
-                        listing.join("\n  ")
+                        Self::save_all_failure_listing(&failed)
                     ));
                     Task::none()
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use crate::app::{Signex, SymbolEditorState};
+
+    /// Build a minimal app carrying one dirty, open symbol-library
+    /// editor keyed at `path` — mirrors the state right after
+    /// `Add New ▸ Symbol Library` followed by an edit (the exact repro
+    /// for the "Export Failed — SymbolLibrary5.snxsym" close bug).
+    fn app_with_dirty_symbol(path: &std::path::Path) -> Signex {
+        let (mut app, _task) = Signex::new();
+        let symbol = signex_library::Symbol::empty("Sym1");
+        let file = signex_library::SymbolFile::from_symbol(symbol);
+        app.document_state.symbol_editors.insert(
+            path.to_path_buf(),
+            SymbolEditorState::new(path.to_path_buf(), file),
+        );
+        app.document_state.dirty_paths.insert(path.to_path_buf());
+        app
+    }
+
+    #[test]
+    fn save_all_writes_a_dirty_symbol_library_instead_of_failing() {
+        // Regression (#104): the Save-All loops routed only through
+        // `engines`, so a dirty `.snxsym` editor draft — which has no
+        // engine — always fell into the failure list and tripped a
+        // bogus "Could not save … SymbolLibrary5.snxsym" instead of
+        // ever being written.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("SymbolLibrary5.snxsym");
+        let mut app = app_with_dirty_symbol(&path);
+
+        let result = app.try_save_dirty_path(&path);
+
+        assert!(result.is_ok(), "symbol draft should save, got {result:?}");
+        assert!(path.exists(), "the .snxsym must be written to disk");
+        assert!(
+            !app.document_state.dirty_paths.contains(&path),
+            "dirty marker must clear once the symbol is saved",
+        );
+    }
+
+    #[test]
+    fn save_all_reports_a_reason_for_an_unbacked_path() {
+        // A dirty path backing no engine / editor / project must
+        // surface a descriptive error (not a silent failure) so the
+        // Save-All dialog can tell the user WHY it couldn't save.
+        let (mut app, _task) = Signex::new();
+        let path = PathBuf::from("/nonexistent/Ghost.snxsym");
+
+        let err = app.try_save_dirty_path(&path).unwrap_err();
+
+        assert!(
+            format!("{err:#}").contains("can't be saved automatically"),
+            "unexpected error: {err:#}",
+        );
     }
 }

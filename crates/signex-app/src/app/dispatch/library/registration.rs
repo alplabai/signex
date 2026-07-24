@@ -429,5 +429,4 @@ impl Signex {
         self.document_state.dirty_paths.insert(project_path);
         self.refresh_panel_ctx();
     }
-
 }

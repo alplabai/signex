@@ -36,7 +36,9 @@ impl Signex {
         true
     }
 
-    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_grid_manager_add(&mut self) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_grid_manager_add(
+        &mut self,
+    ) -> bool {
         // v0.18.21 — append a fresh `GridDef` clone of the
         // active row (so the new grid inherits the user's last
         // step + display picks). The new row activates so the
@@ -75,7 +77,9 @@ impl Signex {
         true
     }
 
-    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_grid_manager_properties(&mut self) -> Task<Message> {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_grid_manager_properties(
+        &mut self,
+    ) -> Task<Message> {
         // Reuses the Ctrl+G modal so the user can edit the
         // active grid via the same dialog. The modal open
         // handler reads `snap_options.grid_step_mm` and seeds
@@ -84,7 +88,9 @@ impl Signex {
         self.update(Message::GridProperties(GridPropertiesMsg::Open))
     }
 
-    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_grid_manager_delete(&mut self) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_grid_manager_delete(
+        &mut self,
+    ) -> bool {
         // v0.18.21 — remove the active row. Always keep at
         // least one grid (UI gates the button when only one
         // remains, so this branch should normally only fire
@@ -109,7 +115,10 @@ impl Signex {
         true
     }
 
-    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_grid_set_active(&mut self, idx: &usize) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_grid_set_active(
+        &mut self,
+        idx: &usize,
+    ) -> bool {
         let idx = *idx;
         if let Some(editor) = self.active_footprint_editor_mut() {
             if idx < editor.state.grids.len() {
@@ -126,7 +135,9 @@ impl Signex {
         true
     }
 
-    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_guide_manager_add(&mut self) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_guide_manager_add(
+        &mut self,
+    ) -> bool {
         // v0.18.20 — bare "Add" button defaults to a vertical
         // guide at world X = 0; users can flip via the row's
         // axis label and edit the position field afterwards.
@@ -145,7 +156,9 @@ impl Signex {
         true
     }
 
-    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_guide_add_vertical(&mut self) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_guide_add_vertical(
+        &mut self,
+    ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor
                 .state
@@ -161,7 +174,9 @@ impl Signex {
         true
     }
 
-    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_guide_add_horizontal(&mut self) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_guide_add_horizontal(
+        &mut self,
+    ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor
                 .state
@@ -177,7 +192,10 @@ impl Signex {
         true
     }
 
-    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_guide_delete(&mut self, idx: &usize) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_guide_delete(
+        &mut self,
+        idx: &usize,
+    ) -> bool {
         let idx = *idx;
         if let Some(editor) = self.active_footprint_editor_mut() {
             if idx < editor.state.guides.len() {
@@ -189,7 +207,10 @@ impl Signex {
         true
     }
 
-    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_guide_toggle(&mut self, idx: &usize) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_guide_toggle(
+        &mut self,
+        idx: &usize,
+    ) -> bool {
         let idx = *idx;
         if let Some(editor) = self.active_footprint_editor_mut() {
             if let Some(g) = editor.state.guides.get_mut(idx) {
@@ -201,7 +222,11 @@ impl Signex {
         true
     }
 
-    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_guide_set_position(&mut self, idx: &usize, raw: &str) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_guide_set_position(
+        &mut self,
+        idx: &usize,
+        raw: &str,
+    ) -> bool {
         let idx = *idx;
         if let Ok(parsed) = raw.trim().parse::<f64>() {
             if let Some(editor) = self.active_footprint_editor_mut() {

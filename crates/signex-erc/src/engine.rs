@@ -28,6 +28,7 @@ pub fn run_all(ctx: &ErcContext) -> Vec<Diagnostic> {
     rules::missing_power_flag(ctx, &mut out);
     rules::power_port_short(ctx, &mut out);
     rules::symbol_outside_sheet(ctx, &mut out);
+    rules::ambiguous_label_anchor(ctx, &mut out);
     out
 }
 

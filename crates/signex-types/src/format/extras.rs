@@ -17,14 +17,37 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::pcb::{Footprint, Pad, PcbBoard, Point as PcbPoint};
-use crate::schematic::{SchematicSheet, Symbol};
+use crate::schematic::{Junction, SchematicSheet, Symbol};
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub(in crate::format) struct SchExtrasRaw {
     #[serde(default)]
     pub(in crate::format) symbols: BTreeMap<String, SymbolExtras>,
     #[serde(default)]
+    pub(in crate::format) junctions: BTreeMap<String, JunctionExtras>,
+    #[serde(default)]
     pub(in crate::format) sheet: Option<SheetExtras>,
+}
+
+/// Per-junction auxiliary fields that don't fit into [`SchJunctionRow`] —
+/// today just the minted-vs-user-placed provenance bit (issue #422). Only
+/// emitted for a junction where `minted` differs from the on-disk default
+/// (`false`, i.e. user-placed), so a `.snxsch` predating this field round-
+/// trips unchanged and every dot it names loads as user-placed.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub(in crate::format) struct JunctionExtras {
+    #[serde(default)]
+    pub(in crate::format) minted: bool,
+}
+
+impl JunctionExtras {
+    pub(in crate::format) fn is_default(&self) -> bool {
+        !self.minted
+    }
+
+    pub(in crate::format) fn from_junction(j: &Junction) -> Self {
+        JunctionExtras { minted: j.minted }
+    }
 }
 
 /// Per-symbol auxiliary fields that don't fit into [`SchComponentRow`].
@@ -57,11 +80,11 @@ pub(in crate::format) struct SymbolExtras {
     #[serde(default)]
     pub(in crate::format) locked: bool,
     #[serde(default)]
-    pub(in crate::format) fields: std::collections::HashMap<String, String>,
+    pub(in crate::format) fields: BTreeMap<String, String>,
     #[serde(default)]
     pub(in crate::format) custom_properties: Vec<crate::property::SchematicProperty>,
     #[serde(default)]
-    pub(in crate::format) pin_uuids: std::collections::HashMap<String, Uuid>,
+    pub(in crate::format) pin_uuids: BTreeMap<String, Uuid>,
     #[serde(default)]
     pub(in crate::format) instances: Vec<crate::schematic::SymbolInstance>,
     #[serde(default)]
@@ -108,9 +131,17 @@ impl SymbolExtras {
             on_board: s.on_board,
             exclude_from_sim: s.exclude_from_sim,
             locked: s.locked,
-            fields: s.fields.clone(),
+            fields: s
+                .fields
+                .iter()
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect(),
             custom_properties: s.custom_properties.clone(),
-            pin_uuids: s.pin_uuids.clone(),
+            pin_uuids: s
+                .pin_uuids
+                .iter()
+                .map(|(key, value)| (key.clone(), *value))
+                .collect(),
             instances: s.instances.clone(),
             ref_text: s.ref_text.clone(),
             val_text: s.val_text.clone(),
@@ -140,10 +171,9 @@ pub(in crate::format) struct SheetExtras {
     #[serde(default)]
     pub(in crate::format) no_erc_directives: Vec<crate::schematic::NoConnect>,
     #[serde(default)]
-    pub(in crate::format) title_block: std::collections::HashMap<String, String>,
+    pub(in crate::format) title_block: BTreeMap<String, String>,
     #[serde(default)]
-    pub(in crate::format) lib_symbols:
-        std::collections::HashMap<String, crate::schematic::LibSymbol>,
+    pub(in crate::format) lib_symbols: BTreeMap<String, crate::schematic::LibSymbol>,
 }
 
 impl SheetExtras {
@@ -168,8 +198,16 @@ impl SheetExtras {
             bus_entries: s.bus_entries.clone(),
             drawings: s.drawings.clone(),
             no_erc_directives: s.no_erc_directives.clone(),
-            title_block: s.title_block.clone(),
-            lib_symbols: s.lib_symbols.clone(),
+            title_block: s
+                .title_block
+                .iter()
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect(),
+            lib_symbols: s
+                .lib_symbols
+                .iter()
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect(),
         }
     }
 }

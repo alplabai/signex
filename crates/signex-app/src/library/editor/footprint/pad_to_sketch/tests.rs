@@ -187,12 +187,7 @@ fn footprint_with_profile_pad() -> (Footprint, EditorPad, [SketchEntityId; 4]) {
     });
 
     // Rectangle (0,0)-(2,1): four corner Points, four connecting Lines.
-    let corners = [
-        (0.0_f64, 0.0_f64),
-        (2.0, 0.0),
-        (2.0, 1.0),
-        (0.0, 1.0),
-    ];
+    let corners = [(0.0_f64, 0.0_f64), (2.0, 0.0), (2.0, 1.0), (0.0, 1.0)];
     let corner_ids: [SketchEntityId; 4] = std::array::from_fn(|i| {
         let id = SketchEntityId::new();
         sketch.entities.push(Entity::new(
@@ -526,6 +521,357 @@ fn shape_change_preserves_corner_positions() {
     );
 }
 
+// ─────────────────────────────────────────────────────────────────
+// Rotation reaches the SKETCH persistence path.
+//
+// `pad_attr_from_editor_pad` hardcoded `rotation_expr: None` and
+// `sync_pads_to_primitive` never wrote the field, so
+// `signex_bake::pad::rotation_deg` mapped `None -> 0.0` while
+// `EditorPad::to_pad` wrote the true angle onto the literal `Pad`.
+// Two persistence paths, two answers for the same pad.
+// ─────────────────────────────────────────────────────────────────
+
+#[test]
+fn minted_pad_attr_carries_the_rotation() {
+    let mut fp = Footprint::empty("test");
+    let mut pad = editor_pad("1", 0.0, 0.0);
+    pad.rotation_deg = 45.0;
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+    let id = pad.sketch_entity_id.expect("centre Point minted");
+    let attr = fp
+        .sketch
+        .as_ref()
+        .unwrap()
+        .entities
+        .iter()
+        .find(|e| e.id == id)
+        .and_then(|e| e.pad.as_ref())
+        .expect("PadAttr on the centre Point");
+    assert_eq!(
+        attr.rotation_expr.as_deref(),
+        Some("45deg"),
+        "the minted PadAttr must carry the pad's rotation"
+    );
+}
+
+#[test]
+fn rotation_survives_a_bake_round_trip() {
+    use signex_sketch::solver::Solver;
+    use signex_sketch::solver::residual::ResolvedParams;
+
+    let mut fp = Footprint::empty("test");
+    let mut pad = editor_pad("1", 0.0, 0.0);
+    pad.rotation_deg = 45.0;
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+    let sketch = fp.sketch.as_ref().unwrap();
+    let solve = Solver::default()
+        .solve(sketch, &ResolvedParams::new())
+        .expect("solve");
+    let mut out = Vec::new();
+    let mut warnings = Vec::new();
+    signex_bake::bake_pads(
+        sketch,
+        &solve,
+        &std::collections::HashMap::new(),
+        &mut out,
+        &mut warnings,
+    )
+    .expect("bake_pads ok");
+
+    assert_eq!(out.len(), 1, "one pad baked");
+    assert_eq!(
+        out[0].rotation, 45.0,
+        "the sketch-baked pad must carry the authored rotation, not 0°"
+    );
+}
+
+#[test]
+fn sync_preserves_an_authored_rotation_expression() {
+    use crate::library::editor::footprint::state::FootprintEditorState;
+
+    let mut fp = Footprint::empty("test");
+    let mut pad = editor_pad("1", 0.0, 0.0);
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+    let id = pad.sketch_entity_id.expect("centre Point minted");
+
+    // The user binds rotation to a parameter. The Pads→Sketch mirror
+    // must not clobber it with the editor's literal angle.
+    let set_expr = |fp: &mut Footprint, expr: Option<String>| {
+        fp.sketch
+            .as_mut()
+            .unwrap()
+            .entities
+            .iter_mut()
+            .find(|e| e.id == id)
+            .and_then(|e| e.pad.as_mut())
+            .unwrap()
+            .rotation_expr = expr;
+    };
+    let read_expr = |fp: &Footprint| -> Option<String> {
+        fp.sketch
+            .as_ref()
+            .unwrap()
+            .entities
+            .iter()
+            .find(|e| e.id == id)
+            .and_then(|e| e.pad.as_ref())
+            .unwrap()
+            .rotation_expr
+            .clone()
+    };
+
+    set_expr(&mut fp, Some("= leg_angle".into()));
+    pad.rotation_deg = 90.0;
+    let mut s = FootprintEditorState::empty();
+    s.pads = vec![pad.clone()];
+    FootprintEditorState::sync_pads_to_primitive(&s, &mut fp);
+    assert_eq!(
+        read_expr(&fp).as_deref(),
+        Some("= leg_angle"),
+        "an authored `= expr` binding is the user's and must survive the sync"
+    );
+
+    // A plain literal, by contrast, is ours to keep current.
+    set_expr(&mut fp, Some("0deg".into()));
+    FootprintEditorState::sync_pads_to_primitive(&s, &mut fp);
+    assert_eq!(
+        read_expr(&fp).as_deref(),
+        Some("90deg"),
+        "a plain literal must track the editor's rotation"
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Rotation reaches the MINTED GEOMETRY, not just the bbox corners.
+//
+// `bbox_corner_points` emits rotated corners, but the arc anchors,
+// arc centres and chamfer anchors of RoundRect / Oval / Chamfered
+// were all still derived straight off the un-rotated `bbox_mm()`.
+// The result was an outline whose corners had turned with the pad
+// while the edges and arcs joining them had not — geometry that no
+// longer closes. The invariant below catches the whole class: every
+// Point a shape mints has to sit on or inside the pad's real copper
+// quad, which an un-rotated anchor does not at 45°.
+// ─────────────────────────────────────────────────────────────────
+
+/// Every `Point` in `fp`'s sketch, expressed in the pad's own frame.
+fn minted_points_in_pad_frame(fp: &Footprint, pad: &EditorPad) -> Vec<(f64, f64)> {
+    fp.sketch
+        .as_ref()
+        .expect("mint produced a sketch")
+        .entities
+        .iter()
+        .filter_map(|e| match e.kind {
+            EntityKind::Point { x, y } => Some(pad.world_to_local_mm(x, y)),
+            _ => None,
+        })
+        .collect()
+}
+
+fn assert_minted_geometry_stays_inside_the_turned_copper(shape: LibPadShape) {
+    let mut fp = Footprint::empty("test");
+    let mut pad = editor_pad("1", 0.0, 0.0);
+    pad.size_mm = (2.0, 1.0);
+    pad.shape = shape.clone();
+    pad.rotation_deg = 45.0;
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+    let (xmin, ymin, xmax, ymax) = pad.bbox_mm();
+    const EPS: f64 = 1e-9;
+    let points = minted_points_in_pad_frame(&fp, &pad);
+    assert!(
+        points.len() > 5,
+        "{shape:?} must mint more than the centre + 4 corners; got {}",
+        points.len()
+    );
+    for (lx, ly) in points {
+        assert!(
+            lx >= xmin - EPS && lx <= xmax + EPS && ly >= ymin - EPS && ly <= ymax + EPS,
+            "{shape:?}: minted Point maps to ({lx}, {ly}) in the pad frame, outside the copper \
+             [{xmin}, {xmax}] × [{ymin}, {ymax}] — it was derived off the un-rotated bbox while \
+             the corners it joins were rotated, so the outline does not close"
+        );
+    }
+}
+
+#[test]
+fn rotated_round_rect_mints_geometry_that_closes() {
+    assert_minted_geometry_stays_inside_the_turned_copper(LibPadShape::RoundRect {
+        radius_ratio: 0.25,
+    });
+}
+
+#[test]
+fn rotated_oval_mints_geometry_that_closes() {
+    assert_minted_geometry_stays_inside_the_turned_copper(LibPadShape::Oval);
+}
+
+#[test]
+fn rotated_chamfered_mints_geometry_that_closes() {
+    use signex_library::primitive::footprint::ChamferedCorners;
+    assert_minted_geometry_stays_inside_the_turned_copper(LibPadShape::Chamfered {
+        chamfer_ratio: 0.25,
+        corners: ChamferedCorners {
+            top_left: true,
+            top_right: true,
+            bottom_left: true,
+            bottom_right: true,
+        },
+    });
+}
+
+#[test]
+fn sync_preserves_a_bare_parameter_binding_with_no_eq_prefix() {
+    use crate::library::editor::footprint::state::FootprintEditorState;
+
+    // The `=` prefix is OPTIONAL — `resolve_dim` strips it before
+    // parsing and `signex_bake::pad::rotation_deg` does the same — so
+    // a bare `leg_angle` is a fully valid authored binding. Keying the
+    // data-loss guard on the prefix destroyed exactly these.
+    let mut fp = Footprint::empty("test");
+    let mut pad = editor_pad("1", 0.0, 0.0);
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+    let id = pad.sketch_entity_id.expect("centre Point minted");
+    fp.sketch
+        .as_mut()
+        .unwrap()
+        .entities
+        .iter_mut()
+        .find(|e| e.id == id)
+        .and_then(|e| e.pad.as_mut())
+        .unwrap()
+        .rotation_expr = Some("leg_angle".into());
+
+    pad.rotation_deg = 90.0;
+    let mut s = FootprintEditorState::empty();
+    s.pads = vec![pad];
+    FootprintEditorState::sync_pads_to_primitive(&s, &mut fp);
+
+    let after = fp
+        .sketch
+        .as_ref()
+        .unwrap()
+        .entities
+        .iter()
+        .find(|e| e.id == id)
+        .and_then(|e| e.pad.as_ref())
+        .unwrap()
+        .rotation_expr
+        .clone();
+    assert_eq!(
+        after.as_deref(),
+        Some("leg_angle"),
+        "a prefix-less parameter binding is still the user's authored expression and must \
+         survive the Pads→Sketch mirror"
+    );
+}
+
+#[test]
+fn sync_overwrites_every_bare_literal_form() {
+    use crate::library::editor::footprint::state::FootprintEditorState;
+
+    for literal in ["0deg", "= 0deg", "12.5", "-45deg", "1rad"] {
+        let mut fp = Footprint::empty("test");
+        let mut pad = editor_pad("1", 0.0, 0.0);
+        mirror_add_pad_to_sketch(&mut pad, &mut fp);
+        let id = pad.sketch_entity_id.expect("centre Point minted");
+        fp.sketch
+            .as_mut()
+            .unwrap()
+            .entities
+            .iter_mut()
+            .find(|e| e.id == id)
+            .and_then(|e| e.pad.as_mut())
+            .unwrap()
+            .rotation_expr = Some(literal.into());
+
+        pad.rotation_deg = 90.0;
+        let mut s = FootprintEditorState::empty();
+        s.pads = vec![pad.clone()];
+        FootprintEditorState::sync_pads_to_primitive(&s, &mut fp);
+
+        let after = fp
+            .sketch
+            .as_ref()
+            .unwrap()
+            .entities
+            .iter()
+            .find(|e| e.id == id)
+            .and_then(|e| e.pad.as_ref())
+            .unwrap()
+            .rotation_expr
+            .clone();
+        assert_eq!(
+            after.as_deref(),
+            Some("90deg"),
+            "{literal:?} carries no parameter reference, so the editor owns it and must keep \
+             it current"
+        );
+    }
+}
+
+/// The delete sweep drops the pad's whole entity set, so a constraint
+/// authored against ANY of those entities is dangling afterwards — not
+/// just one authored against the centre. Matching the centre id alone
+/// left the rest behind pointing at entities that no longer exist.
+///
+/// It matters more now that a frame transform re-mints through this
+/// path: a user who constrains a chamfer anchor accumulates a stale
+/// row on every rotate and flip, not once on a pad delete.
+#[test]
+fn mirror_delete_pad_drops_constraints_on_the_whole_entity_set() {
+    use signex_library::primitive::footprint::ChamferedCorners;
+    use signex_sketch::constraint::{Constraint, ConstraintKind};
+    use signex_sketch::id::ConstraintId;
+
+    let mut fp = Footprint::empty("test");
+    let mut pad = editor_pad("X", 0.0, 0.0);
+    pad.size_mm = (2.0, 1.0);
+    pad.shape = LibPadShape::Chamfered {
+        chamfer_ratio: 0.25,
+        corners: ChamferedCorners {
+            top_right: true,
+            ..Default::default()
+        },
+    };
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+    // A free Point the user owns, constrained to a chamfer anchor —
+    // the anchor is a pad-owned entity that is NOT the centre.
+    let anchor_raw = pad
+        .shape_params
+        .get("chamfer_ne_anchor1")
+        .expect("a chamfered pad binds its NE anchor");
+    let anchor = SketchEntityId(uuid::Uuid::parse_str(anchor_raw).expect("sidecar is a UUID slug"));
+    let plane_id = fp.sketch.as_ref().unwrap().planes[0].id;
+    let free = SketchEntityId::new();
+    let sketch = fp.sketch.as_mut().unwrap();
+    sketch.entities.push(Entity::new(
+        free,
+        plane_id,
+        EntityKind::Point { x: 9.0, y: 9.0 },
+    ));
+    sketch.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::Coincident {
+            p1: free,
+            p2: anchor,
+        },
+    });
+
+    mirror_delete_pad_from_sketch(&pad, &mut fp);
+
+    let sketch = fp.sketch.as_ref().unwrap();
+    assert!(
+        sketch.constraints.is_empty(),
+        "a constraint referencing the deleted NE chamfer anchor must be swept with it; \
+         {} survived pointing at an entity that no longer exists",
+        sketch.constraints.len()
+    );
+}
+
 /// The owned set must never name an entity the sketch does not have.
 ///
 /// Seeds used to be pushed before the lookup that confirms them, so a
@@ -558,6 +904,243 @@ fn owned_set_excludes_ids_with_no_live_entity() {
         !owned.contains(&ghost),
         "a seed naming no live entity must not be reported as owned"
     );
+}
+
+/// #433 review — the id-preserving IN-PLACE re-mint copied the centre's
+/// `PadAttr` from a SCRATCH reference mint, so the durable `owned` ledger
+/// ended up naming scratch-only ids that never existed in the real sketch.
+/// After save+reopen (which resets the volatile `corner_entity_ids` /
+/// `shape_params` fields) that ledger is the SOLE owner set, so the
+/// stranded ids would strand the outline on the next move / rotate —
+/// wrong copper, no warning. The in-place path now re-records the ledger
+/// against the real sketch; every owned id must be a live entity.
+#[test]
+fn in_place_remint_records_the_ledger_against_the_real_sketch() {
+    use signex_library::primitive::footprint::ChamferedCorners;
+
+    let mut fp = Footprint::empty("test");
+    let mut pad = editor_pad("X", 0.0, 0.0);
+    pad.size_mm = (2.0, 1.0);
+    pad.shape = LibPadShape::Chamfered {
+        chamfer_ratio: 0.25,
+        corners: ChamferedCorners {
+            top_right: true,
+            ..Default::default()
+        },
+    };
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+    // Simulate a live Sketch-mode drag tick's id-preserving re-mint.
+    assert!(
+        super::remint_in_place::remint_pad_geometry_in_place(&mut pad, &mut fp),
+        "a chamfered (non-profile) pad re-mints in place"
+    );
+
+    let sketch = fp.sketch.as_ref().unwrap();
+    let centre = pad.sketch_entity_id.unwrap();
+    let owned = sketch
+        .entities
+        .iter()
+        .find(|e| e.id == centre)
+        .and_then(|e| e.pad.as_ref())
+        .expect("the centre carries a PadAttr")
+        .owned
+        .clone();
+    let live: std::collections::HashSet<SketchEntityId> =
+        sketch.entities.iter().map(|e| e.id).collect();
+    let ghosts: Vec<SketchEntityId> = owned
+        .iter()
+        .copied()
+        .filter(|id| !live.contains(id))
+        .collect();
+    assert!(
+        ghosts.is_empty(),
+        "the durable `owned` ledger must name only live entities after an in-place \
+         re-mint; {} of {} were scratch-only ghosts: {:?}",
+        ghosts.len(),
+        owned.len(),
+        ghosts
+    );
+}
+
+/// #434 — every existing in-place-remint assertion above used a
+/// Chamfered pad, whose anchors are named directly on `shape_params`
+/// so `pair_sidecar_entities` finds them in one step. RoundRect's 4
+/// inset arc centres are the one sidecar geometry reachable only by
+/// descending through its 4 `Arc` entities' `center` field (the Arc
+/// arm in `pair_sidecar_entities`, remint_in_place.rs ~167-184). Oval,
+/// by contrast, seeds its 2 arc centres (`oval_centre_0`/
+/// `oval_centre_1`) as direct sidecars exactly like Chamfered — it
+/// exercises no Arc-descent path here, and stays in this walk only for
+/// its own from-scratch-equality coverage. Parameterised over all four
+/// pad shapes so the next shape added to this walk has to earn the
+/// same coverage; the RoundRect case additionally asserts that the
+/// PRE-REMINT ids themselves survive, since a from-scratch-equality
+/// check alone stays green even when the pairing silently falls back
+/// to a full re-mint under fresh ids.
+#[test]
+fn in_place_remint_matches_a_fresh_mint_for_every_shape() {
+    use signex_library::primitive::footprint::ChamferedCorners;
+
+    for shape in [
+        LibPadShape::Rect,
+        LibPadShape::RoundRect { radius_ratio: 0.25 },
+        LibPadShape::Oval,
+        LibPadShape::Chamfered {
+            chamfer_ratio: 0.25,
+            corners: ChamferedCorners {
+                top_right: true,
+                ..Default::default()
+            },
+        },
+    ] {
+        assert_in_place_remint_matches_fresh_mint(shape);
+    }
+}
+
+/// Every Point this pad owns — centre, bbox corners, and (via
+/// `ownership`'s forward expansion through Line / Arc / Circle) every
+/// shape's arc centres and edge anchors — read by VALUE rather than by
+/// id, so a from-scratch mint (fresh ids throughout) can be compared
+/// against an in-place re-mint (old ids preserved) even though the two
+/// name their entities differently.
+fn owned_point_positions(pad: &EditorPad, fp: &Footprint) -> Vec<(f64, f64)> {
+    let sketch = fp.sketch.as_ref().expect("sketch present");
+    let mut points: Vec<(f64, f64)> = ownership::owned_sketch_entities(pad, sketch)
+        .into_iter()
+        .filter_map(|id| sketch.entities.iter().find(|e| e.id == id))
+        .filter_map(|e| match e.kind {
+            EntityKind::Point { x, y } => Some((x, y)),
+            _ => None,
+        })
+        .collect();
+    points.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    points
+}
+
+/// The `center` Point of each of RoundRect's 4 corner Arcs, resolved
+/// through the same `corner_r_{c}_arc` sidecar keys
+/// `mirror_move_roundrect_translates_anchors_and_arc_centres` uses —
+/// independent of `pair_sidecar_entities`'s own internal traversal, so
+/// this cannot pass merely because that traversal and this assertion
+/// share a bug.
+fn roundrect_arc_centres(pad: &EditorPad, fp: &Footprint) -> Vec<(f64, f64)> {
+    let sketch = fp.sketch.as_ref().expect("sketch present");
+    ["ne", "se", "sw", "nw"]
+        .iter()
+        .map(|c| sidecar(pad, &format!("corner_r_{c}_arc")))
+        .map(|arc_id| {
+            let entity = sketch
+                .entities
+                .iter()
+                .find(|e| e.id == arc_id)
+                .expect("arc present");
+            match entity.kind {
+                EntityKind::Arc { center, .. } => point_of(fp, center),
+                _ => panic!("corner_r_*_arc must be an Arc"),
+            }
+        })
+        .collect()
+}
+
+fn assert_in_place_remint_matches_fresh_mint(shape: LibPadShape) {
+    let mut fp = Footprint::empty("test");
+    let mut pad = editor_pad("1", 0.0, 0.0);
+    pad.shape = shape.clone();
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+    // For RoundRect, snapshot every id `owned_sketch_entities` reports
+    // BEFORE the re-mint — centre, bbox corners, the 4
+    // `corner_r_*_arc` sidecars, and (via that fn's one-hop Arc
+    // expansion) the 4 inset arc-centre Points reachable only by
+    // descending through those Arcs. A from-scratch-mint EQUALITY
+    // check alone cannot guard this: if the Arc arm's centre push
+    // (`pair_sidecar_entities`, remint_in_place.rs ~167-184, the push
+    // itself at ~181) is ever dropped, `pairing_covers_all_geometry`
+    // rejects the pairing and `remint_pad_geometry_in_place` silently
+    // falls back to a full `remint_pad_geometry` — which deletes the
+    // pad's whole entity set and re-mints it under FRESH ids.
+    // Geometrically identical, but every one of these ids goes stale
+    // mid-drag, which IS the #434 regression: a live drag holds an id,
+    // not a position, so an id-agnostic comparison stays green while
+    // the drag freezes.
+    let pre_remint_owned: Vec<SketchEntityId> = if matches!(shape, LibPadShape::RoundRect { .. }) {
+        ownership::owned_sketch_entities(&pad, fp.sketch.as_ref().unwrap())
+    } else {
+        Vec::new()
+    };
+
+    // Simulate a live Sketch-mode edge/corner drag tick: size AND
+    // position change together, exactly as `remint_dragged_pad`'s two
+    // callers (`updates/sketch/entities.rs`) write them before calling
+    // in — the frame change an in-place re-mint exists to carry.
+    pad.size_mm = (2.0, 1.2);
+    pad.position_mm = (3.0, -1.0);
+    assert!(
+        remint_pad_geometry_in_place(&mut pad, &mut fp),
+        "{shape:?} is not a sketch-profile pad and must re-mint in place"
+    );
+
+    if !pre_remint_owned.is_empty() {
+        let live: std::collections::HashSet<SketchEntityId> = fp
+            .sketch
+            .as_ref()
+            .unwrap()
+            .entities
+            .iter()
+            .map(|e| e.id)
+            .collect();
+        let churned: Vec<SketchEntityId> = pre_remint_owned
+            .iter()
+            .copied()
+            .filter(|id| !live.contains(id))
+            .collect();
+        assert!(
+            churned.is_empty(),
+            "in-place re-mint churned {} of {} pre-remint owned ids (incl. RoundRect's inset \
+             arc centres, reachable only via the Arc arm) — the pairing fell back to a full \
+             remint_pad_geometry, which is exactly the id churn that freezes a live drag \
+             (#434): {churned:?}",
+            churned.len(),
+            pre_remint_owned.len(),
+        );
+    }
+
+    // Independent reference: mint the SAME final pad from scratch —
+    // fresh ids throughout — into an empty footprint, and demand the
+    // two produce identical geometry by value. Chamfered already had
+    // this property covered; #434 is that RoundRect and Oval never
+    // exercised it.
+    let mut reference_pad = pad.clone();
+    reference_pad.sketch_entity_id = None;
+    reference_pad.corner_entity_ids = None;
+    reference_pad.shape_params.clear();
+    let mut reference_fp = Footprint::empty("reference");
+    mirror_add_pad_to_sketch(&mut reference_pad, &mut reference_fp);
+
+    assert_eq!(
+        owned_point_positions(&pad, &fp),
+        owned_point_positions(&reference_pad, &reference_fp),
+        "{shape:?}: in-place re-mint must equal a from-scratch mint at the same frame"
+    );
+
+    // RoundRect specifically: assert the 4 inset ARC CENTRES, not just
+    // the 8 outer edge anchors — dropping the centre push in
+    // `pair_sidecar_entities`'s Arc arm (remint_in_place.rs ~167-184,
+    // the push itself at ~181) is exactly the regression #434 warns
+    // would strand these on the pad's OLD frame while everything else
+    // moved.
+    if matches!(shape, LibPadShape::RoundRect { .. }) {
+        let mut actual = roundrect_arc_centres(&pad, &fp);
+        let mut expected = roundrect_arc_centres(&reference_pad, &reference_fp);
+        actual.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        expected.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        assert_eq!(
+            actual, expected,
+            "RoundRect's 4 inset arc centres must land on the new frame after an in-place \
+             re-mint, matching a from-scratch mint"
+        );
+    }
 }
 
 /// A profile pad that ALSO owns the loop's Points must take the move

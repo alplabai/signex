@@ -28,8 +28,12 @@ impl Signex {
                     if !path.exists() {
                         return Ok(super::spawn_save_as_for_new_primitive(path));
                     }
-                    self.save_primitive_tab_at(&path);
-                    crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()));
+                    match self.save_primitive_tab_at(&path) {
+                        Ok(()) => {
+                            crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()))
+                        }
+                        Err(e) => crate::diagnostics::log_error("Save failed", &e),
+                    }
                     // v0.14.2: also save the active project's
                     // `.snxprj` if it's dirty + refresh panel ctx so
                     // the project-root red dot drops. Adding a
@@ -124,6 +128,45 @@ impl Signex {
         if !self.document_state.dirty_paths.contains(&project_path) {
             return;
         }
+        if let Err(error) = self.persist_project_by_id(project_id) {
+            crate::diagnostics::log_error("Failed to save project file", &error);
+        }
+    }
+
+    /// Save the loaded project whose `.snxprj` sits at `path`. Thin
+    /// path-keyed wrapper over [`persist_project_by_id`] used by the
+    /// Save-All-on-close/exit dispatcher, which iterates dirty paths and
+    /// cannot assume the dirty `.snxprj` belongs to the *active*
+    /// project. Returns an error when no loaded project owns `path`, or
+    /// when the underlying `.snxprj` write fails.
+    pub(crate) fn save_project_at_path(&mut self, path: &std::path::Path) -> Result<()> {
+        let project_id = self
+            .document_state
+            .projects
+            .iter()
+            .find(|p| p.path == path)
+            .map(|p| p.id)
+            .with_context(|| format!("no loaded project at {}", path.display()))?;
+        self.persist_project_by_id(project_id)
+    }
+
+    /// Materialise any pending libraries, then write the identified
+    /// project's `.snxprj` to disk. On success clears the project's
+    /// dirty marker, auto-commits to the project git repo, and
+    /// refreshes the panel context. Returns the *write* failure (the
+    /// per-library materialise errors are logged and the entry re-
+    /// stashed for retry, matching the historical behaviour) so callers
+    /// can surface a real save failure instead of swallowing it.
+    fn persist_project_by_id(&mut self, project_id: crate::app::state::ProjectId) -> Result<()> {
+        let project_path = match self
+            .document_state
+            .projects
+            .iter()
+            .find(|p| p.id == project_id)
+        {
+            Some(p) => p.path.clone(),
+            None => anyhow::bail!("project {project_id} is no longer loaded"),
+        };
 
         // Drain the pending-library map first so the snxprj save below
         // captures the freshly-materialised LibraryEntry rows.
@@ -193,37 +236,28 @@ impl Signex {
             .find(|p| p.id == project_id)
         {
             Some(p) => p.data.clone(),
-            None => return,
+            None => anyhow::bail!("project {project_id} vanished before write"),
         };
-        match signex_types::project::write_project(&project_path, &data) {
-            Ok(()) => {
-                self.document_state.dirty_paths.remove(&project_path);
-                crate::diagnostics::log_info(format!(
-                    "[save] Wrote project {}",
-                    project_path.display()
-                ));
-                // v0.22 Phase 8.4 — auto-commit the .snxprj file into
-                // its own project git repo when enable_git is on.
-                let label = project_path
-                    .file_name()
-                    .map(|f| f.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| project_path.display().to_string());
-                let msg = format!("Save {label}");
-                self.commit_save_to_project_git(&project_path, &msg);
-                // Rebuild the panel ctx so the project root row drops
-                // its dirty marker. Without this, the cached
-                // `ProjectPanelInfo.is_dirty` snapshot stays `true`
-                // until the next user action triggers a refresh and
-                // the red dot lingers despite the file being clean.
-                self.refresh_panel_ctx();
-            }
-            Err(error) => {
-                crate::diagnostics::log_error(
-                    "Failed to save project file",
-                    &anyhow::anyhow!("{}", error),
-                );
-            }
-        }
+        signex_types::project::write_project(&project_path, &data)
+            .with_context(|| format!("write project {}", project_path.display()))?;
+
+        self.document_state.dirty_paths.remove(&project_path);
+        crate::diagnostics::log_info(format!("[save] Wrote project {}", project_path.display()));
+        // v0.22 Phase 8.4 — auto-commit the .snxprj file into
+        // its own project git repo when enable_git is on.
+        let label = project_path
+            .file_name()
+            .map(|f| f.to_string_lossy().into_owned())
+            .unwrap_or_else(|| project_path.display().to_string());
+        let msg = format!("Save {label}");
+        self.commit_save_to_project_git(&project_path, &msg);
+        // Rebuild the panel ctx so the project root row drops
+        // its dirty marker. Without this, the cached
+        // `ProjectPanelInfo.is_dirty` snapshot stays `true`
+        // until the next user action triggers a refresh and
+        // the red dot lingers despite the file being clean.
+        self.refresh_panel_ctx();
+        Ok(())
     }
 
     pub(crate) fn save_active_document_as(&mut self, path: PathBuf) -> Result<()> {
@@ -317,8 +351,12 @@ impl Signex {
         // Now write the file at the new path. `atomic_write` inside
         // `save_primitive_tab_at` handles `create_dir_all(parent)` so
         // saving into a fresh `<lib>/symbols/` directory just works.
-        self.save_primitive_tab_at(to_path);
-        crate::diagnostics::log_info(format!("[save-as] Wrote {}", to_path.display()));
+        match self.save_primitive_tab_at(to_path) {
+            Ok(()) => {
+                crate::diagnostics::log_info(format!("[save-as] Wrote {}", to_path.display()))
+            }
+            Err(e) => crate::diagnostics::log_error("Save As failed", &e),
+        }
 
         // Library-tracking step. If the user saved into a `.snxlib`
         // directory that isn't mounted yet, mount it so the project

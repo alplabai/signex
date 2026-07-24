@@ -136,7 +136,6 @@ impl PcbSnapshot {
     }
 }
 
-
 mod emit;
 use emit::*;
 

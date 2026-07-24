@@ -506,7 +506,9 @@ mod tests {
 
         let engine = Engine::new(document).unwrap();
 
-        assert!(engine.has_selected_items(&[SelectedItem::new(sheet_uuid, SelectedKind::ChildSheet)]));
+        assert!(
+            engine.has_selected_items(&[SelectedItem::new(sheet_uuid, SelectedKind::ChildSheet)])
+        );
         assert!(engine.has_selected_items(&[SelectedItem::new(pin_uuid, SelectedKind::SheetPin)]));
     }
 
@@ -526,7 +528,9 @@ mod tests {
         document.bus_entries.push(bus_entry);
 
         let mut engine = Engine::new(document).unwrap();
-        assert!(engine.has_selected_items(&[SelectedItem::new(bus_entry_uuid, SelectedKind::BusEntry)]));
+        assert!(
+            engine.has_selected_items(&[SelectedItem::new(bus_entry_uuid, SelectedKind::BusEntry)])
+        );
 
         let result = engine
             .execute(Command::DeleteSelection {
@@ -629,6 +633,327 @@ mod tests {
         assert_eq!(engine.document().paper_size, "A4");
     }
 
+    fn wire(a: Point, b: Point) -> signex_types::schematic::Wire {
+        signex_types::schematic::Wire {
+            uuid: uuid::Uuid::new_v4(),
+            start: a,
+            end: b,
+            stroke_width: 0.0,
+        }
+    }
+
+    /// Drawing a stub and then a trunk through the stub's endpoint is the
+    /// ordinary way a T gets drawn, and it used to leave no junction dot:
+    /// `needed_junction` only ever inspected the *new* wire's own two
+    /// endpoints. The netlist treats an undotted T as disconnected (issue
+    /// #107), so the connection was silently lost (issue #402).
+    #[test]
+    fn a_trunk_drawn_through_an_existing_wires_endpoint_gets_a_junction() {
+        let mut document = test_sheet();
+        document
+            .wires
+            .push(wire(Point::new(5.0, 0.0), Point::new(5.0, 10.0)));
+        let mut engine = Engine::new(document).expect("engine");
+
+        engine
+            .execute(Command::PlaceWireSegment {
+                wire: wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0)),
+            })
+            .expect("place trunk");
+
+        let junctions = &engine.document().junctions;
+        assert_eq!(junctions.len(), 1, "{junctions:?}");
+        assert_eq!(junctions[0].position, Point::new(5.0, 0.0));
+    }
+
+    /// The negative twin: a trunk merely *crossing* another wire's interior is
+    /// not a connection, so it must not mint a dot.
+    #[test]
+    fn a_trunk_crossing_another_wires_interior_gets_no_junction() {
+        let mut document = test_sheet();
+        document
+            .wires
+            .push(wire(Point::new(5.0, -5.0), Point::new(5.0, 5.0)));
+        let mut engine = Engine::new(document).expect("engine");
+
+        engine
+            .execute(Command::PlaceWireSegment {
+                wire: wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0)),
+            })
+            .expect("place trunk");
+
+        assert!(
+            engine.document().junctions.is_empty(),
+            "{:?}",
+            engine.document().junctions
+        );
+    }
+
+    /// Dragging a stub onto a trunk is at least as ordinary as drawing through
+    /// one, and it produced the identical defect: `MoveSelection` mutates wire
+    /// coordinates but reconciled no junctions, so the drag landed a real
+    /// junction-less T the netlist reads as disconnected (issues #107, #402).
+    /// Fixing only `PlaceWireSegment` left this sibling caller broken.
+    #[test]
+    fn dragging_a_stub_onto_a_trunks_interior_gets_a_junction() {
+        let mut document = test_sheet();
+        document
+            .wires
+            .push(wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0)));
+        let stub = wire(Point::new(5.0, 3.0), Point::new(5.0, 10.0));
+        let stub_uuid = stub.uuid;
+        document.wires.push(stub);
+        let mut engine = Engine::new(document).expect("engine");
+
+        let result = engine
+            .execute(Command::MoveSelection {
+                items: vec![SelectedItem {
+                    kind: SelectedKind::Wire,
+                    uuid: stub_uuid,
+                }],
+                dx: 0.0,
+                dy: -3.0,
+            })
+            .expect("drag stub");
+
+        let junctions = &engine.document().junctions;
+        assert_eq!(junctions.len(), 1, "{junctions:?}");
+        assert_eq!(junctions[0].position, Point::new(5.0, 0.0));
+        assert!(
+            result
+                .patch_pair
+                .expect("changed command carries a patch")
+                .document
+                .contains(DocumentPatch::JUNCTIONS),
+            "a minted dot must be in the patch or the canvas never redraws it"
+        );
+    }
+
+    /// The negative twin of the drag: sliding a stub so it merely *crosses* the
+    /// trunk is not a connection either.
+    #[test]
+    fn dragging_a_stub_across_a_trunk_gets_no_junction() {
+        let mut document = test_sheet();
+        document
+            .wires
+            .push(wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0)));
+        let stub = wire(Point::new(5.0, 3.0), Point::new(5.0, 13.0));
+        let stub_uuid = stub.uuid;
+        document.wires.push(stub);
+        let mut engine = Engine::new(document).expect("engine");
+
+        engine
+            .execute(Command::MoveSelection {
+                items: vec![SelectedItem {
+                    kind: SelectedKind::Wire,
+                    uuid: stub_uuid,
+                }],
+                dx: 0.0,
+                dy: -8.0,
+            })
+            .expect("drag stub");
+
+        assert!(
+            engine.document().junctions.is_empty(),
+            "{:?}",
+            engine.document().junctions
+        );
+    }
+
+    /// A dot the netlist will not honour is worse than no dot: it asserts a
+    /// connection the derivation refuses to make, with a reassuring visual.
+    ///
+    /// The stub's endpoint sits 5 µm off the trunk — inside the 0.01 mm float
+    /// tolerance the geometry helpers use, but *not* exactly collinear in the
+    /// netlist's 1 µm key space, so `SheetConnectivity` would drop the dot and
+    /// leave the two wires on separate nets. Mint nothing rather than lie.
+    #[test]
+    fn an_endpoint_off_the_trunk_in_key_space_gets_no_lying_junction() {
+        let mut document = test_sheet();
+        document
+            .wires
+            .push(wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0)));
+        let mut engine = Engine::new(document).expect("engine");
+
+        engine
+            .execute(Command::PlaceWireSegment {
+                wire: wire(Point::new(5.0, 0.005), Point::new(5.0, 10.0)),
+            })
+            .expect("place off-grid stub");
+
+        assert!(
+            engine.document().junctions.is_empty(),
+            "dot minted where the netlist would not honour it: {:?}",
+            engine.document().junctions
+        );
+    }
+
+    /// Issue #422: the old add-only reconcile left a minted dot in place once
+    /// the T that justified it lost its stub — the dot then sat electrically
+    /// inert on the trunk alone until some unrelated wire was later dragged
+    /// to merely cross the same point, at which point the stale dot silently
+    /// merged two nets the user never connected. Dragging the stub away must
+    /// remove the dot immediately, not wait for a crossing wire to expose it.
+    #[test]
+    fn dragging_a_minted_stub_off_the_trunk_removes_the_stale_dot() {
+        let mut document = test_sheet();
+        document
+            .wires
+            .push(wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0)));
+        let stub = wire(Point::new(5.0, 3.0), Point::new(5.0, 10.0));
+        let stub_uuid = stub.uuid;
+        document.wires.push(stub);
+        let mut engine = Engine::new(document).expect("engine");
+
+        // Drag the stub onto the trunk — mints a dot at (5, 0), same as
+        // `dragging_a_stub_onto_a_trunks_interior_gets_a_junction` above.
+        engine
+            .execute(Command::MoveSelection {
+                items: vec![SelectedItem {
+                    kind: SelectedKind::Wire,
+                    uuid: stub_uuid,
+                }],
+                dx: 0.0,
+                dy: -3.0,
+            })
+            .expect("drag stub onto trunk");
+        assert_eq!(engine.document().junctions.len(), 1);
+        assert!(engine.document().junctions[0].minted);
+
+        // Drag the same stub away again: the T it justified is gone, so the
+        // now-stale dot must be removed rather than left to assert a
+        // connection the wires no longer make.
+        let result = engine
+            .execute(Command::MoveSelection {
+                items: vec![SelectedItem {
+                    kind: SelectedKind::Wire,
+                    uuid: stub_uuid,
+                }],
+                dx: 0.0,
+                dy: 20.0,
+            })
+            .expect("drag stub away");
+
+        assert!(
+            engine.document().junctions.is_empty(),
+            "{:?}",
+            engine.document().junctions
+        );
+        assert!(
+            result
+                .patch_pair
+                .expect("changed command carries a patch")
+                .document
+                .contains(DocumentPatch::JUNCTIONS),
+            "a removed dot must be in the patch or the canvas keeps drawing it"
+        );
+    }
+
+    /// The other half of #422: a user-placed dot is user data. It must never
+    /// be swept up by the same removal pass just because it doesn't happen to
+    /// sit on a wire meeting.
+    #[test]
+    fn a_user_placed_junction_survives_reconcile_even_when_unjustified() {
+        let mut document = test_sheet();
+        document
+            .wires
+            .push(wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0)));
+        let mut engine = Engine::new(document).expect("engine");
+
+        let user_junction_uuid = uuid::Uuid::new_v4();
+        engine
+            .execute(Command::PlaceJunction {
+                junction: signex_types::schematic::Junction {
+                    uuid: user_junction_uuid,
+                    position: Point::new(50.0, 50.0),
+                    diameter: 0.0,
+                    minted: false,
+                },
+            })
+            .expect("place user junction");
+
+        // Any wire-geometry command runs reconcile. The user's dot sits
+        // nowhere near a wire meeting and would fail the mint test outright,
+        // but `minted == false` must keep it out of the removal pass.
+        let trunk_uuid = engine.document().wires[0].uuid;
+        engine
+            .execute(Command::MoveSelection {
+                items: vec![SelectedItem {
+                    kind: SelectedKind::Wire,
+                    uuid: trunk_uuid,
+                }],
+                dx: 1.0,
+                dy: 1.0,
+            })
+            .expect("move trunk");
+
+        assert!(
+            engine
+                .document()
+                .junctions
+                .iter()
+                .any(|j| j.uuid == user_junction_uuid),
+            "user-placed dot must never be auto-removed"
+        );
+    }
+
+    /// Issue #422's root-cause gap: the stale-dot removal pass ran only via
+    /// `reconciled_patch()` for move/rotate/mirror. `DeleteSelection` and
+    /// `PlaceWireSegment` never reconciled, so a dot minted for a genuine T
+    /// could outlive the wire that justified it, then get silently
+    /// "reactivated" by an unrelated wire merely crossing the same point —
+    /// merging two nets the user never connected (a FAB short).
+    #[test]
+    fn deleting_a_stub_removes_the_stale_dot_so_a_later_crossing_wire_cannot_merge_nets() {
+        let mut engine = Engine::new(test_sheet()).expect("engine");
+
+        engine
+            .execute(Command::PlaceWireSegment {
+                wire: wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0)),
+            })
+            .expect("place trunk");
+
+        let stub = wire(Point::new(5.0, 0.0), Point::new(5.0, 10.0));
+        let stub_uuid = stub.uuid;
+        engine
+            .execute(Command::PlaceWireSegment { wire: stub })
+            .expect("place stub");
+        assert_eq!(
+            engine.document().junctions.len(),
+            1,
+            "{:?}",
+            engine.document().junctions
+        );
+        assert_eq!(
+            engine.document().junctions[0].position,
+            Point::new(5.0, 0.0)
+        );
+
+        engine
+            .execute(Command::DeleteSelection {
+                items: vec![SelectedItem::new(stub_uuid, SelectedKind::Wire)],
+            })
+            .expect("delete stub");
+        assert!(
+            engine.document().junctions.is_empty(),
+            "delete must reconcile the now-orphaned dot: {:?}",
+            engine.document().junctions
+        );
+
+        engine
+            .execute(Command::PlaceWireSegment {
+                wire: wire(Point::new(5.0, -5.0), Point::new(5.0, 5.0)),
+            })
+            .expect("place crossing wire");
+
+        assert!(
+            engine.document().junctions.is_empty(),
+            "a wire merely crossing the old dot's location must not silently \
+             merge the trunk and crossing-wire nets: {:?}",
+            engine.document().junctions
+        );
+    }
+
     #[test]
     fn delete_child_sheet_and_undo() {
         let mut document = test_sheet();
@@ -654,7 +979,10 @@ mod tests {
 
         // Delete the child sheet
         let result = engine.execute(Command::DeleteSelection {
-            items: vec![SelectedItem::new(child_sheet_uuid, SelectedKind::ChildSheet)],
+            items: vec![SelectedItem::new(
+                child_sheet_uuid,
+                SelectedKind::ChildSheet,
+            )],
         });
         assert!(result.unwrap().changed);
         assert_eq!(engine.document().child_sheets.len(), 0);
@@ -717,6 +1045,9 @@ mod tests {
         // Ensure the restored pin matches the original
         assert_eq!(engine.document().child_sheets[0].pins[0].name, "Pin1");
         assert_eq!(engine.document().child_sheets[0].pins[0].direction, "input");
-        assert_eq!(engine.document().child_sheets[0].pins[0].position, Point::new(15.0, 25.0));
+        assert_eq!(
+            engine.document().child_sheets[0].pins[0].position,
+            Point::new(15.0, 25.0)
+        );
     }
 }

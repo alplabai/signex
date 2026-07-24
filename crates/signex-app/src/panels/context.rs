@@ -178,4 +178,3 @@ pub struct PanelContext {
     /// borrow into the document state.
     pub history: history::HistoryPanelState,
 }
-

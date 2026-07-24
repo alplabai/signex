@@ -34,7 +34,7 @@ jobs:
         with:
           submodules: false
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
 
       - uses: Swatinem/rust-cache@v2
 
@@ -67,7 +67,7 @@ jobs:
         with:
           submodules: false
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
 
       - uses: Swatinem/rust-cache@v2
 
@@ -97,13 +97,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
         with:
           components: rustfmt
 
       - name: Check formatting
         run: cargo fmt --all -- --check
-        continue-on-error: true
 
   deny:
     name: deny · licenses + deps
@@ -111,7 +110,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
 
       - uses: Swatinem/rust-cache@v2
 
@@ -134,3 +133,15 @@ jobs:
       - name: Check advisories
         run: cargo deny --all-features check advisories
         continue-on-error: true
+
+  no-god-files:
+    name: no god-files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # Hard gate (NOT continue-on-error): a PR may not add a new production
+      # god-file or grow a grandfathered one. Ratchet + rationale live in
+      # scripts/check_file_size.sh; the slice model it points to is ADR-0001.
+      - name: God-file ratchet gate
+        run: bash scripts/check_file_size.sh

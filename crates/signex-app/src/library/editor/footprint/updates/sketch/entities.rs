@@ -140,94 +140,16 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                     let new_cx = (min_x + max_x) / 2.0;
                     let new_cy = (min_y + max_y) / 2.0;
                     let pad = &mut editor.state.pads[pad_idx];
-                    let old_centre = pad.position_mm;
                     pad.position_mm = (new_cx, new_cy);
                     pad.size_mm = (new_w, new_h);
-                    let centre_id = pad.sketch_entity_id;
-                    // v0.18.12.1 bugfix — re-align the OTHER three
-                    // corner Points to the new pad bbox. Previously
-                    // only the dragged corner moved, leaving the
-                    // pad rectangle (drawn at the new bbox) and the
-                    // non-dragged corners stranded at their old
-                    // positions — visible as the dashed-construction
-                    // outline drifting off the rendered pad on
-                    // subsequent corner drags.
-                    let new_positions: [(f64, f64); 4] = [
-                        (max_x, min_y), // ne
-                        (max_x, max_y), // se
-                        (min_x, max_y), // sw
-                        (min_x, min_y), // nw
-                    ];
-                    for (corner_id, (target_x, target_y)) in
-                        corners.iter().zip(new_positions.iter())
-                    {
-                        // Skip the corner the user just dragged — it's
-                        // already at the right position, and emitting
-                        // a zero-delta MovePoint would still trip the
-                        // solver.
-                        if *corner_id == id {
-                            continue;
-                        }
-                        let cur = editor
-                            .primitive()
-                            .sketch
-                            .as_ref()
-                            .and_then(|s| s.entities.iter().find(|e| e.id == *corner_id))
-                            .and_then(|e| {
-                                if let signex_sketch::entity::EntityKind::Point { x, y } = e.kind {
-                                    Some((x, y))
-                                } else {
-                                    None
-                                }
-                            });
-                        if let Some((cx, cy)) = cur {
-                            let cdx = *target_x - cx;
-                            let cdy = *target_y - cy;
-                            if cdx.abs() > 1e-9 || cdy.abs() > 1e-9 {
-                                editor.with_parts(|state, primitive| {
-                                    apply_sketch_edit_with_warnings(
-                                        state,
-                                        primitive,
-                                        SketchEdit::MovePoint {
-                                            id: *corner_id,
-                                            dx: cdx,
-                                            dy: cdy,
-                                        },
-                                    );
-                                });
-                            }
-                        }
-                    }
-                    // Move the centre Point to the new bbox centre +
-                    // rewrite the PadAttr size exprs so the bake
-                    // emits the new size.
-                    if let Some(centre_id) = centre_id {
-                        let cdx = new_cx - old_centre.0;
-                        let cdy = new_cy - old_centre.1;
-                        if cdx.abs() > 1e-9 || cdy.abs() > 1e-9 {
-                            editor.with_parts(|state, primitive| {
-                                apply_sketch_edit_with_warnings(
-                                    state,
-                                    primitive,
-                                    SketchEdit::MovePoint {
-                                        id: centre_id,
-                                        dx: cdx,
-                                        dy: cdy,
-                                    },
-                                );
-                            });
-                        }
-                        if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
-                            if let Some(centre) =
-                                sketch.entities.iter_mut().find(|e| e.id == centre_id)
-                            {
-                                if let Some(attr) = centre.pad.as_mut() {
-                                    attr.size_x_expr = format!("{:.4}mm", new_w);
-                                    attr.size_y_expr = format!("{:.4}mm", new_h);
-                                }
-                            }
-                        }
-                    }
+                    // Same frame change as the edge drag on the same
+                    // pad, so the same obligation: regenerate the whole
+                    // sidecar through its one owner rather than
+                    // re-placing the four bbox corners and leaving a
+                    // parametric shape's anchors on the old extents.
+                    // In place, because the pointer is still holding
+                    // the id of the corner Point it grabbed.
+                    remint_dragged_pad(editor, pad_idx, "Sketch corner drag");
                     editor.with_parts(|state, primitive| {
                         CanvasState::sync_pads_to_primitive(state, primitive);
                     });
@@ -451,10 +373,17 @@ pub(in crate::library::editor::footprint::updates) fn apply(
             // (top / bottom / left / right). Only axis-aligned lines
             // qualify — diagonal sketch lines are never pad edges
             // for Rect / RoundRect / Oval / Chamfered shapes.
+            //
+            // "Axis-aligned" means axis-aligned IN THE PAD'S FRAME. A
+            // turned pad's edges are diagonal in world space, so the
+            // line, the drag delta and the resulting corner targets all
+            // go through `world_to_local_mm` / `local_to_world_mm`.
+            // Classifying a rotated pad in world coordinates rejects
+            // every edge and the propagation silently no-ops — the exact
+            // "line moves, copper doesn't" failure this block exists to
+            // prevent.
             const EDGE_EPS: f64 = 1e-4;
-            if let Some(((sx, sy), (ex, ey))) = pre_drag_endpoints {
-                let is_horizontal = (sy - ey).abs() < EDGE_EPS;
-                let is_vertical = (sx - ex).abs() < EDGE_EPS;
+            if let Some((world_start, world_end)) = pre_drag_endpoints {
                 let pad_count = editor.state.pads.len();
                 for pad_idx in 0..pad_count {
                     let bbox_data = {
@@ -462,6 +391,11 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                         if pad.corner_entity_ids.is_none() {
                             continue;
                         }
+                        let (sx, sy) = pad.world_to_local_mm(world_start.0, world_start.1);
+                        let (ex, ey) = pad.world_to_local_mm(world_end.0, world_end.1);
+                        let (dx, dy) = pad.rotate_delta_to_local_mm(dx, dy);
+                        let is_horizontal = (sy - ey).abs() < EDGE_EPS;
+                        let is_vertical = (sx - ex).abs() < EDGE_EPS;
                         let (xmin, ymin, xmax, ymax) = pad.bbox_mm();
                         // Both endpoints must lie on the same bbox
                         // side; partial overlap (line extends past a
@@ -509,115 +443,38 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                     let Some((new_xmin, new_ymin, new_xmax, new_ymax)) = bbox_data else {
                         continue;
                     };
-                    let new_w = new_xmax - new_xmin;
-                    let new_h = new_ymax - new_ymin;
-                    let new_cx = (new_xmin + new_xmax) / 2.0;
-                    let new_cy = (new_ymin + new_ymax) / 2.0;
-                    let (corners_arr, centre_id) = {
+                    // Extents are rotation-invariant; the centre is
+                    // not — it came out of the pad frame and goes back
+                    // to world here.
+                    let new_size = (new_xmax - new_xmin, new_ymax - new_ymin);
+                    let new_centre = {
                         let pad = &editor.state.pads[pad_idx];
-                        (
-                            pad.corner_entity_ids.expect("checked is_some above"),
-                            pad.sketch_entity_id,
+                        pad.local_to_world_mm(
+                            (new_xmin + new_xmax) / 2.0,
+                            (new_ymin + new_ymax) / 2.0,
                         )
                     };
-                    // Rewrite the centre Point's PadAttr size exprs
-                    // FIRST so the next solve+bake reads the new
-                    // size. solve_and_bake → refresh_pads_from_primitive
-                    // overwrites state.pads.size_mm from the bake
-                    // output, so any earlier write here gets wiped.
-                    // Updating PadAttr ahead of the solve makes the
-                    // bake produce the resized pad on its own.
-                    if let Some(centre_id) = centre_id
-                        && let Some(sketch) = editor.primitive_mut().sketch.as_mut()
-                        && let Some(centre) = sketch.entities.iter_mut().find(|e| e.id == centre_id)
-                        && let Some(attr) = centre.pad.as_mut()
-                    {
-                        attr.size_x_expr = format!("{:.4}mm", new_w);
-                        attr.size_y_expr = format!("{:.4}mm", new_h);
+                    // The pad FRAME moved — extents AND centre. The
+                    // four bbox corners are not the whole outline: a
+                    // parametric shape's anchors and arc centres are
+                    // placed off the same frame, and a Chamfered pad's
+                    // chamfer length is a function of min(w, h), so
+                    // catching the corners up alone leaves the chamfer
+                    // at its old length. Regenerate through the single
+                    // owner instead, as the Properties-panel Size field
+                    // does — in place, because this is a live drag and
+                    // the pointer is still holding the id of the Line
+                    // it grabbed.
+                    //
+                    // Only on a REAL change: a drag emits one of these
+                    // per cursor tick.
+                    let pad = &mut editor.state.pads[pad_idx];
+                    if (pad.size_mm, pad.position_mm) == (new_size, new_centre) {
+                        continue;
                     }
-                    // Move the centre Point to the new bbox centre.
-                    // Each apply_sketch_edit_with_warnings runs the
-                    // solver + bake; refresh_pads_from_primitive then
-                    // pulls state.pads from `footprint.pads`, so
-                    // reading the centre's pre-edit position needs to
-                    // happen RIGHT BEFORE this MovePoint emission.
-                    if let Some(centre_id) = centre_id {
-                        let cur_centre = editor
-                            .primitive()
-                            .sketch
-                            .as_ref()
-                            .and_then(|s| s.entities.iter().find(|e| e.id == centre_id))
-                            .and_then(|e| {
-                                if let EntityKind::Point { x, y } = e.kind {
-                                    Some((x, y))
-                                } else {
-                                    None
-                                }
-                            });
-                        if let Some((cur_cx, cur_cy)) = cur_centre {
-                            let cdx = new_cx - cur_cx;
-                            let cdy = new_cy - cur_cy;
-                            if cdx.abs() > 1e-9 || cdy.abs() > 1e-9 {
-                                editor.with_parts(|state, primitive| {
-                                    apply_sketch_edit_with_warnings(
-                                        state,
-                                        primitive,
-                                        SketchEdit::MovePoint {
-                                            id: centre_id,
-                                            dx: cdx,
-                                            dy: cdy,
-                                        },
-                                    );
-                                });
-                            }
-                        }
-                    }
-                    // Realign the 4 bbox corner Points to match the
-                    // resized bbox. For Rect pads the line drag's
-                    // victim loop already shifted the affected
-                    // corners; for RoundRect / Oval / Chamfered the
-                    // bbox corners aren't in `victims` so they need
-                    // explicit catch-up here. Order: [ne, se, sw, nw]
-                    // — see mint_pad_corner_outline.
-                    let target_positions: [(f64, f64); 4] = [
-                        (new_xmax, new_ymin), // ne
-                        (new_xmax, new_ymax), // se
-                        (new_xmin, new_ymax), // sw
-                        (new_xmin, new_ymin), // nw
-                    ];
-                    for (corner_id, (target_x, target_y)) in
-                        corners_arr.iter().zip(target_positions.iter())
-                    {
-                        let cur = editor
-                            .primitive()
-                            .sketch
-                            .as_ref()
-                            .and_then(|s| s.entities.iter().find(|e| e.id == *corner_id))
-                            .and_then(|e| {
-                                if let EntityKind::Point { x, y } = e.kind {
-                                    Some((x, y))
-                                } else {
-                                    None
-                                }
-                            });
-                        if let Some((cx, cy)) = cur {
-                            let cdx = *target_x - cx;
-                            let cdy = *target_y - cy;
-                            if cdx.abs() > 1e-9 || cdy.abs() > 1e-9 {
-                                editor.with_parts(|state, primitive| {
-                                    apply_sketch_edit_with_warnings(
-                                        state,
-                                        primitive,
-                                        SketchEdit::MovePoint {
-                                            id: *corner_id,
-                                            dx: cdx,
-                                            dy: cdy,
-                                        },
-                                    );
-                                });
-                            }
-                        }
-                    }
+                    pad.size_mm = new_size;
+                    pad.position_mm = new_centre;
+                    remint_dragged_pad(editor, pad_idx, "Sketch edge drag");
                 }
             }
             editor.with_parts(|state, primitive| {
@@ -687,4 +544,23 @@ pub(in crate::library::editor::footprint::updates) fn apply(
             "non-entity placement & drag geometry sketch variant routed to sketch_entities.rs"
         ),
     }
+}
+
+/// Regenerate the sidecar geometry of a pad whose frame a live Sketch
+/// mode drag just changed — the corner drag and the edge drag, which
+/// make the same frame change and owe the same thing.
+///
+/// In place: the pointer holds the id of the entity the user grabbed
+/// for the whole drag and streams one message per cursor tick against
+/// it, so a drop-and-re-mint would freeze the drag one frame in.
+fn remint_dragged_pad(editor: &mut crate::app::FootprintEditorState, pad_idx: usize, op: &str) {
+    editor.with_parts(|state, primitive| {
+        use crate::library::editor::footprint::pad_to_sketch;
+        let Some(pad) = state.pads.get_mut(pad_idx) else {
+            return;
+        };
+        if !pad_to_sketch::remint_pad_geometry_in_place(pad, primitive) {
+            pad_to_sketch::warn_profile_pad_untransformed(op, &pad.number);
+        }
+    });
 }

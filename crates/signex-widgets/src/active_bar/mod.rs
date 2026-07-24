@@ -58,7 +58,17 @@ pub enum ActiveBarItem<M: 'static + Clone> {
     /// 1 px-wide vertical separator between groups.
     Separator,
     /// Arbitrary user-supplied widget — drops into the row as-is.
-    Custom(Element<'static, M>),
+    ///
+    /// `width` is the width the element renders at, and the producer
+    /// has to give the element that exact width (a `Length::Fixed`, not
+    /// a Shrink that happens to land there). [`slot_offsets`] can't
+    /// measure an arbitrary `Element` without a layout pass, so this
+    /// number is the only thing standing between a Custom slot and
+    /// every dropdown on the bar being anchored wrong.
+    Custom {
+        content: Element<'static, M>,
+        width: f32,
+    },
 }
 
 impl<M: 'static + Clone> ActiveBarItem<M> {
@@ -66,6 +76,43 @@ impl<M: 'static + Clone> ActiveBarItem<M> {
     pub fn button(button: ActiveBarButton<M>) -> Self {
         Self::Button(button)
     }
+
+    /// Convenience — build a Custom item of a declared width.
+    pub fn custom(content: Element<'static, M>, width: f32) -> Self {
+        Self::Custom { content, width }
+    }
+
+    /// Width this slot renders at, excluding the row spacing around it.
+    pub fn width(&self) -> f32 {
+        match self {
+            Self::Button(_) => BTN_SIZE,
+            Self::Separator => SEP_W,
+            Self::Custom { width, .. } => *width,
+        }
+    }
+}
+
+/// Left-edge x of every slot (measured from the bar's own left edge)
+/// plus the bar's total width.
+///
+/// The bar is `Length::Shrink` and the caller centres it, so a consumer
+/// that wants to anchor an overlay under button N has to know both
+/// numbers: `bar_left = (window_w - total) / 2`, then
+/// `offsets[n] + bar_left`. Deriving it here rather than in each
+/// consumer is the point — the layout constants are private and the
+/// item list is the only truth about what got drawn, so a bar that
+/// gains, loses, or reorders a slot moves its dropdowns automatically.
+pub fn slot_offsets<M: 'static + Clone>(items: &[ActiveBarItem<M>]) -> (Vec<f32>, f32) {
+    let mut offsets = Vec::with_capacity(items.len());
+    let mut x = BAR_PADDING;
+    for (i, item) in items.iter().enumerate() {
+        if i > 0 {
+            x += ROW_SPACING;
+        }
+        offsets.push(x);
+        x += item.width();
+    }
+    (offsets, x + BAR_PADDING)
 }
 
 /// One clickable button in the Active Bar.
@@ -132,11 +179,22 @@ pub enum ActiveBarIcon {
 
 /// Pixel sizes — match the schematic editor's existing visual
 /// rhythm so the bar reads identically across every editor.
-const BTN_SIZE: f32 = 26.0;
+///
+/// The four that decide *horizontal* layout are public: consumers
+/// anchor dropdown panels under specific buttons, which they cannot do
+/// without them. Prefer [`slot_offsets`] over doing that arithmetic by
+/// hand — copies of these numbers in consumer crates are exactly the
+/// drift this is here to prevent.
+pub const BTN_SIZE: f32 = 26.0;
+/// Width of a [`ActiveBarItem::Separator`].
+pub const SEP_W: f32 = 1.0;
+/// Padding inside the bar container, all four sides.
+pub const BAR_PADDING: f32 = 2.0;
+/// Gap the row puts between adjacent slots.
+pub const ROW_SPACING: f32 = 2.0;
+
 const ICON_SIZE: f32 = 20.0;
-const SEP_W: f32 = 1.0;
 const SEP_H: f32 = 18.0;
-const BAR_PADDING: f32 = 2.0;
 const BAR_RADIUS: f32 = 4.0;
 
 /// Render the bar + an open dropdown overlay (when one is open).
@@ -230,7 +288,7 @@ where
     let bar_bg = theme_ext::to_color(&tokens.panel_bg);
     let border = theme_ext::border_color(tokens);
 
-    let mut row_widget = row![].spacing(2).align_y(iced::Alignment::Center);
+    let mut row_widget = row![].spacing(ROW_SPACING).align_y(iced::Alignment::Center);
     for item in items {
         row_widget = row_widget.push(view_item(item, tokens));
     }
@@ -271,7 +329,11 @@ where
                 })
                 .into()
         }
-        ActiveBarItem::Custom(elem) => elem,
+        // Pinned to the declared width so `slot_offsets` can't be lied
+        // to: whatever the producer says it is, that is what draws.
+        ActiveBarItem::Custom { content, width } => {
+            container(content).width(Length::Fixed(width)).into()
+        }
     }
 }
 

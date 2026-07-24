@@ -1,7 +1,7 @@
 //! `LibraryAdapter` trait implementation for `LocalGitAdapter`.
 
-use super::*;
 use super::helpers::*;
+use super::*;
 
 impl LibraryAdapter for LocalGitAdapter {
     fn manifest(&self) -> &Manifest {

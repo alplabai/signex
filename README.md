@@ -202,8 +202,9 @@ broken layout — these GPUs are not supported.
 
 ## Building
 
-**Prerequisites:** Rust 1.88+ (edition 2024 plus let-chains) and a GPU supporting
-Vulkan, Metal, or DX12.
+**Prerequisites:** Rust 1.97.0 — pinned via `rust-toolchain.toml`, so `rustup`
+installs it automatically; this is also the MSRV (we build and support exactly
+this toolchain) — and a GPU supporting Vulkan, Metal, or DX12.
 
 ```bash
 git clone https://github.com/alplabai/signex.git

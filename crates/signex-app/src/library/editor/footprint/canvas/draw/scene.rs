@@ -8,9 +8,9 @@ use iced::{Color, Point};
 
 use crate::library::editor::footprint::layers::FpLayer;
 
+use super::super::{FootprintCanvas, FootprintCanvasState};
 use super::pad::draw_pad;
 use super::silk::draw_silk_graphics;
-use super::super::{FootprintCanvas, FootprintCanvasState};
 
 impl FootprintCanvas<'_> {
     /// v0.18.16 — silk-front + silk-back graphics.
@@ -147,7 +147,7 @@ impl FootprintCanvas<'_> {
                     if !self.state.layer_visibility.get(pad.primary_layer()) {
                         continue;
                     }
-                    let (_, _, x1, y1) = pad.bbox_mm();
+                    let (_, _, x1, y1) = pad.rotated_aabb_mm();
                     let p1 = cstate.world_to_screen((x1, y1));
                     // Badge: 22×12 px rounded rect, accent fill, white
                     // "+N" text, positioned above + right of the bbox.

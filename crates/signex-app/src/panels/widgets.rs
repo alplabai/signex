@@ -324,4 +324,3 @@ pub fn shape_fill_row<'a>(
     .align_y(iced::Alignment::Center)
     .into()
 }
-

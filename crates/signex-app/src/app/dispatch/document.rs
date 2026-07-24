@@ -131,6 +131,14 @@ impl Signex {
                 self.handle_dismiss_export_error();
                 self.finish_update()
             }
+            ExportMsg::NetlistExportAnyway => {
+                let task = self.handle_netlist_export_anyway();
+                iced::Task::batch([task, self.finish_update()])
+            }
+            ExportMsg::NetlistCancelIncomplete => {
+                self.handle_netlist_cancel_incomplete();
+                self.finish_update()
+            }
             ExportMsg::BomRequested => {
                 let task = self.handle_bom_preview_open();
                 iced::Task::batch([task, self.finish_update()])
