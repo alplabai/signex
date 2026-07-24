@@ -43,12 +43,12 @@ struct GlobalPrefsFile {
     libraries: Vec<GlobalLibraryEntry>,
 }
 
-/// Resolved on-disk path of `global_libraries.toml`. `None` when
-/// `dirs::config_dir()` can't resolve a config dir (very rare — a
-/// stripped-down headless environment).
+/// Resolved on-disk path of `global_libraries.toml`. `None` when the
+/// platform can't resolve a config dir (very rare — a stripped-down
+/// headless environment). See [`crate::config_root::config_root`].
 pub fn prefs_path() -> Option<PathBuf> {
-    let base = dirs::config_dir()?;
-    Some(base.join("signex").join("global_libraries.toml"))
+    let root = crate::config_root::config_root()?;
+    Some(root.join("global_libraries.toml"))
 }
 
 /// Load the global library list from disk. Returns an empty Vec when
@@ -59,10 +59,16 @@ pub fn load() -> Vec<GlobalLibraryEntry> {
     let Some(path) = prefs_path() else {
         return Vec::new();
     };
+    load_at(&path)
+}
+
+/// Load from a specific path — extracted so tests can hit the actual
+/// parse path without going through `prefs_path()`/`config_root()`.
+pub fn load_at(path: &Path) -> Vec<GlobalLibraryEntry> {
     if !path.exists() {
         return Vec::new();
     }
-    match std::fs::read_to_string(&path) {
+    match std::fs::read_to_string(path) {
         Ok(text) => match toml::from_str::<GlobalPrefsFile>(&text) {
             Ok(file) => file.libraries,
             Err(e) => {
@@ -179,10 +185,9 @@ mod tests {
 
     #[test]
     fn load_returns_empty_when_file_missing() {
-        // The default config-dir-relative path almost certainly doesn't
-        // exist on a fresh CI runner; if it does, the test fixture is
-        // tolerant either way. The contract under test is "no panic".
-        let _ = load();
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("does-not-exist.toml");
+        assert_eq!(load_at(&path), Vec::new());
     }
 
     #[test]
@@ -218,10 +223,12 @@ mod tests {
     /// `save_at` must go through `atomic_write`, not `fs::write`: a failed
     /// save leaves the previously persisted list fully intact.
     ///
-    /// Discriminator: pre-creating a *directory* at `<path>.tmp` makes
-    /// `atomic_write`'s `File::create(&tmp)` fail before it can touch the
-    /// destination. A plain `fs::write` would ignore the sibling, succeed,
-    /// and clobber the old file — so this test fails on a revert.
+    /// Discriminator: denying new-file creation in the destination's
+    /// parent directory makes `atomic_write`'s `File::create(&tmp)` fail
+    /// before it can touch the destination, regardless of the unique
+    /// per-writer temp name it picks (#416). A plain `fs::write` would
+    /// ignore that and clobber the old file — so this test fails on a
+    /// revert.
     #[test]
     fn save_at_leaves_original_intact_when_write_fails() {
         let dir = tempfile::tempdir().unwrap();
@@ -233,9 +240,9 @@ mod tests {
         }];
         save_at(&path, &original).unwrap();
         let before = std::fs::read_to_string(&path).unwrap();
-        assert!(!dir.path().join("global_libraries.toml.tmp").exists());
+        assert!(!crate::test_support::has_stray_tmp(path.parent().unwrap()));
 
-        std::fs::create_dir_all(dir.path().join("global_libraries.toml.tmp")).unwrap();
+        let _deny = crate::test_support::DenyNewFiles::on(path.parent().unwrap());
         let replacement = vec![GlobalLibraryEntry {
             path: PathBuf::from("/tmp/clobber.snxlib"),
             remote: None,

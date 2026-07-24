@@ -48,6 +48,7 @@ fn junction(pos: Point) -> Junction {
         uuid: Uuid::nil(),
         position: pos,
         diameter: 0.0,
+        minted: false,
     }
 }
 
