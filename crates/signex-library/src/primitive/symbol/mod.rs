@@ -891,6 +891,9 @@ mod chain_tests;
 mod serde_tsv;
 #[cfg(test)]
 mod tests;
+mod to_lib_symbol;
+#[cfg(test)]
+mod to_lib_symbol_tests;
 
 pub use chain::{
     CHAIN_ARC_SAMPLES, CHAIN_ENDPOINT_EPSILON_MM, ChainError, ChainSegment,
