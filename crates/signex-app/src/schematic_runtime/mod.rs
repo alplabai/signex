@@ -14,7 +14,7 @@ use signex_renderer::schematic::{
 use signex_renderer::theme::ResolvedTheme;
 use signex_types::schematic::{
     Aabb, FillType, HAlign, Label, LabelType, Point, SchDrawing, SchematicSheet, SelectedItem,
-    SelectedKind, Symbol, TextNote, TextProp, VAlign,
+    SelectedKind, Symbol, TextNote, TextProp, VAlign, circumcircle,
 };
 use signex_types::theme::{CanvasColors, Color as ThemeColor};
 use std::collections::{HashMap, HashSet};
@@ -645,9 +645,7 @@ fn drawing_aabb(drawing: &SchDrawing) -> Aabb {
         SchDrawing::Arc {
             start, mid, end, ..
         } => {
-            if let Some((cx, cy, r)) =
-                circumcircle((start.x, start.y), (mid.x, mid.y), (end.x, end.y))
-            {
+            if let Some((cx, cy, r)) = circumcircle(*start, *mid, *end) {
                 Aabb::new(cx - r, cy - r, cx + r, cy + r)
             } else {
                 Aabb::new(start.x, start.y, end.x, end.y)
@@ -746,26 +744,6 @@ fn fill_color_for(
         FillType::Outline => Some(resolve_stroke_color(stroke_color, to_iced(&colors.body))),
         FillType::Background => Some(to_iced(&colors.body_fill)),
     }
-}
-
-fn circumcircle(a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> Option<(f64, f64, f64)> {
-    let (ax, ay) = a;
-    let (bx, by) = b;
-    let (cx, cy) = c;
-    let d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
-    if d.abs() < 1e-12 {
-        return None;
-    }
-    let ux = ((ax * ax + ay * ay) * (by - cy)
-        + (bx * bx + by * by) * (cy - ay)
-        + (cx * cx + cy * cy) * (ay - by))
-        / d;
-    let uy = ((ax * ax + ay * ay) * (cx - bx)
-        + (bx * bx + by * by) * (ax - cx)
-        + (cx * cx + cy * cy) * (bx - ax))
-        / d;
-    let radius = ((ax - ux).powi(2) + (ay - uy).powi(2)).sqrt();
-    Some((ux, uy, radius))
 }
 
 fn arc_sweeps_through_mid(a0: f64, am: f64, a1: f64) -> bool {

@@ -1,5 +1,7 @@
-//! Grid (2D) array baking —  instances stepped by
-//! .
+//! Grid (2D) array baking — `nx` × `ny` instances stepped by
+//! (`dx_expr`, `dy_expr`) per axis, with optional per-cell
+//! depopulation (a mask predicate and/or an explicit suppressed-cell
+//! list).
 
 use std::collections::{BTreeMap, HashMap};
 

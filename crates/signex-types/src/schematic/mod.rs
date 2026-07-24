@@ -126,6 +126,101 @@ impl Default for Point {
     }
 }
 
+/// Circle through three non-collinear points — converts the Signex
+/// (start, mid, end) arc storage into (center, radius) for rendering,
+/// hit-testing, and the properties-panel arc editor. Returns `None` when
+/// `a`, `b`, `c` are (numerically) collinear, i.e. no finite circumcircle
+/// exists.
+///
+/// Canonical home for this math: it used to be copied into 4 call sites
+/// with a drifted collinearity epsilon (1e-9 in three places, 1e-12 in a
+/// fourth) — a determinant landing in (1e-12, 1e-9) was a valid arc to one
+/// path and "degenerate" (silently falling back to a wrong center) to the
+/// others. `1e-12` is the deliberate choice here: it's the tighter, safer
+/// "still solvable" threshold — `d` only needs to be far enough from exact
+/// zero that dividing by it doesn't blow up, and schematic coordinates are
+/// small enough (mm-scale) that `1e-9` was rejecting perfectly good arcs.
+pub fn circumcircle(a: Point, b: Point, c: Point) -> Option<(f64, f64, f64)> {
+    let d = 2.0 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
+    if d.abs() < 1e-12 {
+        return None;
+    }
+    let ux = ((a.x * a.x + a.y * a.y) * (b.y - c.y)
+        + (b.x * b.x + b.y * b.y) * (c.y - a.y)
+        + (c.x * c.x + c.y * c.y) * (a.y - b.y))
+        / d;
+    let uy = ((a.x * a.x + a.y * a.y) * (c.x - b.x)
+        + (b.x * b.x + b.y * b.y) * (a.x - c.x)
+        + (c.x * c.x + c.y * c.y) * (b.x - a.x))
+        / d;
+    let radius = ((a.x - ux).powi(2) + (a.y - uy).powi(2)).sqrt();
+    Some((ux, uy, radius))
+}
+
+#[cfg(test)]
+mod circumcircle_tests {
+    use super::{Point, circumcircle};
+
+    #[test]
+    fn solves_a_simple_right_triangle() {
+        let (cx, cy, r) = circumcircle(
+            Point::new(0.0, 0.0),
+            Point::new(2.0, 0.0),
+            Point::new(0.0, 2.0),
+        )
+        .expect("non-collinear points must solve");
+        assert!((cx - 1.0).abs() < 1e-9);
+        assert!((cy - 1.0).abs() < 1e-9);
+        assert!((r - 2.0_f64.sqrt()).abs() < 1e-9);
+    }
+
+    #[test]
+    fn rejects_exactly_collinear_points() {
+        assert!(
+            circumcircle(
+                Point::new(0.0, 0.0),
+                Point::new(1.0, 0.0),
+                Point::new(2.0, 0.0),
+            )
+            .is_none()
+        );
+    }
+
+    /// Regression for the drifted-epsilon bug: a near-collinear triangle
+    /// whose determinant falls in (1e-12, 1e-9) is a solvable arc under
+    /// the canonical `1e-12` threshold, but was silently treated as
+    /// degenerate by the three call sites that used `1e-9`.
+    #[test]
+    fn solves_near_collinear_triangle_in_the_drifted_epsilon_band() {
+        let a = Point::new(0.0, 0.0);
+        let c = Point::new(2.0, 0.0);
+        // d = 2*(a.x*(b.y-c.y) + b.x*(c.y-a.y) + c.x*(a.y-b.y))
+        //   = 2*(0 + 0 + 2*(0 - b.y)) = -4*b.y
+        // Solve for a b.y that puts |d| strictly inside (1e-12, 1e-9).
+        let b = Point::new(1.0, 2e-10);
+        let d = 2.0 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
+        assert!(
+            d.abs() > 1e-12 && d.abs() < 1e-9,
+            "test setup must land in the drifted-epsilon band, got |d|={}",
+            d.abs()
+        );
+        let (cx, cy, r) = circumcircle(a, b, c)
+            .expect("canonical 1e-12 epsilon must solve determinants in (1e-12, 1e-9)");
+        // The tiny denominator amplifies the numerator, so bound the result:
+        // it must stay finite (no inf/NaN blow-up), and a near-collinear
+        // triangle has a huge-but-bounded circumradius — here ~2.5e9 for a
+        // 2e-10 bulge over a chord of 2.
+        assert!(
+            cx.is_finite() && cy.is_finite() && r.is_finite(),
+            "near-collinear solve must stay finite, got ({cx}, {cy}, {r})"
+        );
+        assert!(
+            (1e8..1e12).contains(&r),
+            "near-collinear circumradius should be large but bounded, got r={r}"
+        );
+    }
+}
+
 // ---------------------------------------------------------------------------
 // SymbolTransform — Y-up library → Y-down schematic placement
 // ---------------------------------------------------------------------------
