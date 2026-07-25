@@ -3,8 +3,9 @@ use super::composite::run_grid_overlay_text_composite_smoke_pass_with;
 use super::{
     CompositeStage, run_arc_smoke_pass, run_arc_smoke_pass_with,
     run_grid_overlay_text_composite_smoke_pass, run_grid_smoke_pass, run_grid_smoke_pass_with,
-    run_line_circle_smoke_pass, run_polygon_smoke_pass, run_polygon_smoke_pass_with,
-    run_text_geometry_composite_smoke_pass, run_text_smoke_pass, run_text_smoke_pass_with,
+    run_line_circle_smoke_pass, run_line_dash_readback_smoke_pass, run_polygon_smoke_pass,
+    run_polygon_smoke_pass_with, run_text_geometry_composite_smoke_pass, run_text_smoke_pass,
+    run_text_smoke_pass_with,
 };
 use crate::primitive::arc::Arc;
 use crate::primitive::line::LineSegment;
@@ -20,6 +21,41 @@ fn line_circle_smoke_pass_runs_for_multiple_scales() {
     assert_eq!(low_zoom.circle_instances, 1);
     assert_eq!(high_zoom.line_instances, 2);
     assert_eq!(high_zoom.circle_instances, 1);
+}
+
+/// Correctness — thread #5: `line.wgsl` must actually paint gaps for a
+/// `STYLE_DASHED` segment, not just carry the unused attribute. Samples the
+/// rendered red channel at pixel x offsets chosen to land mid-dash and
+/// mid-gap under the shader's `dash_mm = 8 * mm_per_px` / `gap_mm = 5 *
+/// mm_per_px` pattern (see `run_line_dash_readback_smoke_pass`). Before the
+/// fix every sample reads bright (solid line); after it, gap samples read
+/// dark (background shows through).
+#[test]
+fn line_wgsl_actually_renders_a_dashed_pattern() {
+    // Period = 13px (8px dash + 5px gap); 8*13 = 104 puts a period boundary
+    // well clear of the line's start/end so the sample isn't an edge effect.
+    let dash_samples = [107u32, 111]; // offsets 3, 7 into the dash (< 8)
+    let gap_samples = [113u32, 116]; // offsets 9, 12 into the gap (>= 8)
+
+    let mut sample_points = dash_samples.to_vec();
+    sample_points.extend_from_slice(&gap_samples);
+
+    let reds = pollster::block_on(run_line_dash_readback_smoke_pass(&sample_points))
+        .expect("dash readback pass");
+
+    for (x, red) in dash_samples.iter().zip(&reds[..dash_samples.len()]) {
+        assert!(
+            *red > 200,
+            "expected a bright (dash) pixel at x={x}, got red={red}"
+        );
+    }
+    for (x, red) in gap_samples.iter().zip(&reds[dash_samples.len()..]) {
+        assert!(
+            *red < 50,
+            "expected a dark (gap) pixel at x={x}, got red={red} — the GPU \
+             line pipeline is still ignoring the dash style bit"
+        );
+    }
 }
 
 #[test]

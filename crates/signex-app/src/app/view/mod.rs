@@ -444,6 +444,7 @@ impl Signex {
             || ui.find_replace.open
             || ui.preferences_open
             || ui.keyboard_shortcuts_open
+            || ui.passive_calculator_open
             || ui.first_run_tour_open
             || ui.rename_dialog.is_some()
             || ui.remove_dialog.is_some()
@@ -785,6 +786,7 @@ impl Signex {
         layers.extend(self.preferences_overlay());
         layers.extend(self.find_replace_overlay());
         layers.extend(self.keyboard_shortcuts_overlay());
+        layers.extend(self.passive_calculator_overlay());
         layers.extend(self.first_run_tour_overlay());
         layers.extend(self.simple_dialogs_overlay());
         layers.extend(self.detachable_dialogs_overlay());

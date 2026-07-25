@@ -6,6 +6,7 @@
 pub mod active_bar;
 pub mod history_pane;
 pub mod icon_button;
+pub mod passive_calculator;
 pub mod status_bar;
 pub mod symbol_preview;
 pub mod tab_pill;

@@ -383,7 +383,12 @@ fn sketch_tool_icon(
         SketchTool::Rectangle => icons::icon_shape_rect(theme_id),
         SketchTool::RoundedRectangle => icons::icon_sk_rounded_rect(theme_id),
         SketchTool::Circle => icons::icon_shape_circle(theme_id),
-        SketchTool::Arc | SketchTool::TangentArc => icons::icon_shape_arc(theme_id),
+        // #467 — Edge Arc isn't in a group's tool list (no dropdown row
+        // yet, see the issue's menu-content note), so this arm only
+        // keeps the icon match exhaustive; it shares the Arc glyph.
+        SketchTool::Arc | SketchTool::EdgeArc | SketchTool::TangentArc => {
+            icons::icon_shape_arc(theme_id)
+        }
         SketchTool::Fillet => icons::icon_sk_fillet(theme_id),
         SketchTool::Trim => icons::icon_sk_trim(theme_id),
         SketchTool::Mirror => icons::icon_sk_mirror(theme_id),

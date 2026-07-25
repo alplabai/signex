@@ -27,6 +27,7 @@ pub mod keymap;
 pub mod library;
 pub mod menu_bar;
 pub mod panels;
+pub mod passive_calculator_modal;
 pub mod pcb_canvas;
 pub mod preferences;
 pub mod render_config;

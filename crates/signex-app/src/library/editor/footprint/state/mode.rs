@@ -55,6 +55,7 @@ impl FpActiveBarMenu {
         super::SketchTool::Circle,
         super::SketchTool::Arc,
         super::SketchTool::TangentArc,
+        super::SketchTool::EdgeArc,
     ];
     pub const SKETCH_MODIFY_TOOLS: &'static [super::SketchTool] = &[
         super::SketchTool::Fillet,

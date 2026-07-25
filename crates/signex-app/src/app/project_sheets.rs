@@ -302,6 +302,44 @@ pub(crate) fn project_children_map(
     (children, issues)
 }
 
+/// Extend a [`project_children_map`] result with every declared page the
+/// root's hierarchy does not reach but that was still loaded successfully —
+/// exactly [`ProjectSheetSet::pages_outside_the_hierarchy`] minus the ones
+/// that are absent or unreadable, which stay diagnosed as such rather than
+/// stitched from nothing.
+///
+/// A flat project's second, third, ... page has no `ChildSheet` reference
+/// pointing at it — nothing gave `project_children_map` a key to file it
+/// under — so it is invisible to [`signex_net::build_project_netlist`] unless
+/// something puts it in the map anyway. Keyed the same way the root itself is
+/// (via [`root_reference_name`]) so it cannot collide with a real reference
+/// string naming a *different* file; `entry().or_insert` additionally leaves
+/// any real reference that happens to resolve to the identical string alone.
+/// Once in the map, [`signex_net::build_project_netlist`]'s multi-root /
+/// flat-stitch traversal (#430) visits it as its own independent top-level
+/// page — a peer of the root, not nested under it — so its nets merge into
+/// the project the same way a hierarchical child's do: by shared Global/Power
+/// label name.
+pub(crate) fn add_flat_siblings_as_extra_roots(
+    children: &mut HashMap<String, SchematicSheet>,
+    project_set: &ProjectSheetSet,
+    project_dir: Option<&Path>,
+) {
+    let unreadable: HashSet<&PathBuf> = project_set.unreadable.iter().map(|(p, _)| p).collect();
+    for path in &project_set.pages_outside_the_hierarchy {
+        if unreadable.contains(path) {
+            continue; // diagnosed as unreadable, not silently stitched from stale data
+        }
+        let Some(sheet) = project_set.sheets.get(path) else {
+            continue; // genuinely missing on disk — nothing to stitch
+        };
+        let Some(key) = root_reference_name(path, project_dir) else {
+            continue;
+        };
+        children.entry(key).or_insert_with(|| sheet.clone());
+    }
+}
+
 /// Resolve a `ChildSheet.filename` reference against the directory of the sheet
 /// that carries it — the single definition of child-reference resolution shared
 /// by the project children-map assembly ([`project_children_map`]) and in-app
@@ -770,5 +808,108 @@ mod tests {
             sheets.contains_key(&nav),
             "navigation lands on the loaded child, not a phantom sibling"
         );
+    }
+
+    // #430 — `add_flat_siblings_as_extra_roots`: a flat project's second page
+    // has no `ChildSheet` reference pointing at it, so it must be added to the
+    // `children` map under its own name for the stitcher's multi-root
+    // traversal to see it at all.
+
+    fn set_with(
+        sheets: HashMap<PathBuf, SchematicSheet>,
+        outside: &[&str],
+        unreadable: &[&str],
+        root: &str,
+    ) -> ProjectSheetSet {
+        ProjectSheetSet {
+            sheets,
+            pages_outside_the_hierarchy: outside.iter().map(PathBuf::from).collect(),
+            unreadable: unreadable
+                .iter()
+                .map(|p| (PathBuf::from(*p), "could not be read".to_string()))
+                .collect(),
+            root: Some(PathBuf::from(root)),
+        }
+    }
+
+    #[test]
+    fn a_loadable_flat_sibling_is_added_under_its_own_name() {
+        let mut sheets = HashMap::new();
+        sheets.insert(PathBuf::from("/proj/a.snxsch"), sheet(1, &[]));
+        sheets.insert(PathBuf::from("/proj/b.snxsch"), sheet(2, &[]));
+        let set = set_with(sheets, &["/proj/b.snxsch"], &[], "/proj/a.snxsch");
+
+        let mut children = HashMap::new();
+        add_flat_siblings_as_extra_roots(&mut children, &set, Some(Path::new("/proj")));
+
+        assert_eq!(
+            children.len(),
+            1,
+            "the flat sibling was added: {children:?}"
+        );
+        assert_eq!(children["b.snxsch"].uuid, Uuid::from_u128(2));
+    }
+
+    #[test]
+    fn an_unreadable_page_is_not_stitched_from_stale_data() {
+        let mut sheets = HashMap::new();
+        sheets.insert(PathBuf::from("/proj/a.snxsch"), sheet(1, &[]));
+        // Deliberately no entry for b.snxsch in `sheets` — it failed to parse.
+        let set = set_with(
+            sheets,
+            &["/proj/b.snxsch"],
+            &["/proj/b.snxsch"],
+            "/proj/a.snxsch",
+        );
+
+        let mut children = HashMap::new();
+        add_flat_siblings_as_extra_roots(&mut children, &set, Some(Path::new("/proj")));
+
+        assert!(
+            children.is_empty(),
+            "a page reported unreadable must not be silently stitched: {children:?}"
+        );
+    }
+
+    #[test]
+    fn a_page_with_no_file_at_all_is_not_stitched() {
+        let mut sheets = HashMap::new();
+        sheets.insert(PathBuf::from("/proj/a.snxsch"), sheet(1, &[]));
+        // "b.snxsch" is declared and outside the hierarchy, but was never
+        // loaded (no file on disk) — absent from `sheets` and from
+        // `unreadable` alike.
+        let set = set_with(sheets, &["/proj/b.snxsch"], &[], "/proj/a.snxsch");
+
+        let mut children = HashMap::new();
+        add_flat_siblings_as_extra_roots(&mut children, &set, Some(Path::new("/proj")));
+
+        assert!(
+            children.is_empty(),
+            "there is nothing to stitch for a page that does not exist: {children:?}"
+        );
+    }
+
+    #[test]
+    fn a_real_reference_already_in_the_map_is_left_alone() {
+        // "b.snxsch" is BOTH a real ChildSheet reference from a.snxsch AND —
+        // pathologically — also listed as its own declared page. The real
+        // reference's resolution must win; the flat-sibling pass must not
+        // clobber an entry a real reference already produced.
+        let mut sheets = HashMap::new();
+        sheets.insert(PathBuf::from("/proj/a.snxsch"), sheet(1, &["b.snxsch"]));
+        sheets.insert(PathBuf::from("/proj/b.snxsch"), sheet(2, &[]));
+        let set = set_with(sheets.clone(), &["/proj/b.snxsch"], &[], "/proj/a.snxsch");
+
+        let (mut children, _issues) = project_children_map(&sheets);
+        assert_eq!(
+            children.len(),
+            1,
+            "precondition: the real reference resolved"
+        );
+
+        add_flat_siblings_as_extra_roots(&mut children, &set, Some(Path::new("/proj")));
+
+        assert_eq!(children.len(), 1, "no duplicate entry was added");
+        assert_eq!(children["b.snxsch"].uuid, Uuid::from_u128(2));
     }
 }

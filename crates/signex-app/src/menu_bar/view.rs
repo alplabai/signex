@@ -387,6 +387,13 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
             ),
             separator(mc),
             leaf(
+                "Passive Network Calculator...",
+                None,
+                MenuMessage::OpenPassiveCalculator,
+                mc,
+            ),
+            separator(mc),
+            leaf(
                 &cmd_label("open_preferences", "Preferences..."),
                 shortcut_for(&ctx, "open_preferences", "Ctrl+,"),
                 MenuMessage::OpenPreferences,

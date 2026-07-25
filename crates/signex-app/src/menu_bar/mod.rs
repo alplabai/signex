@@ -178,6 +178,9 @@ pub enum MenuMessage {
     // Tools
     /// Open the Preferences dialog.
     OpenPreferences,
+    /// Tools ▸ Passive Network Calculator — opens or focuses the dedicated
+    /// resistor/capacitor/inductor calculator window.
+    OpenPassiveCalculator,
     /// Open the Keyboard Shortcuts reference modal — a single page
     /// listing every binding from `shortcuts.rs`, callable from
     /// Help ▸ Keyboard Shortcuts and from F1.
