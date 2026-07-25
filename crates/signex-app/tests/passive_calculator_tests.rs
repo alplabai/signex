@@ -40,6 +40,25 @@ fn reopening_while_open_is_a_no_op() {
     assert!(app.ui_state.passive_calculator_open);
 }
 
+/// Open and close are both `OverlayMsg` leaves, so the pair can be driven
+/// without going through the menu at all — the route a keybinding or the
+/// command registry would take.
+#[test]
+fn overlay_open_and_close_round_trip_without_the_menu() {
+    let (mut app, _startup) = Signex::new();
+
+    let task = app.update(Message::Overlay(OverlayMsg::OpenPassiveCalculator));
+    assert!(app.ui_state.passive_calculator_open);
+    assert_eq!(
+        task.units(),
+        0,
+        "the modal is an overlay, so no OS window task should be emitted"
+    );
+
+    let _ = app.update(Message::Overlay(OverlayMsg::ClosePassiveCalculator));
+    assert!(!app.ui_state.passive_calculator_open);
+}
+
 #[test]
 fn close_message_dismisses_the_modal() {
     let (mut app, _startup) = Signex::new();

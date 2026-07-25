@@ -178,8 +178,11 @@ pub enum MenuMessage {
     // Tools
     /// Open the Preferences dialog.
     OpenPreferences,
-    /// Tools ▸ Passive Network Calculator — opens or focuses the dedicated
-    /// resistor/capacitor/inductor calculator window.
+    /// Tools ▸ Passive Network Calculator — opens the in-app
+    /// resistor/capacitor/inductor calculator modal. Not an OS window
+    /// (see `passive_calculator_modal.rs` for why); re-invoking while it
+    /// is already open is a no-op, and the entered state survives a
+    /// close/reopen. Routed to `OverlayMsg::OpenPassiveCalculator`.
     OpenPassiveCalculator,
     /// Open the Keyboard Shortcuts reference modal — a single page
     /// listing every binding from `shortcuts.rs`, callable from

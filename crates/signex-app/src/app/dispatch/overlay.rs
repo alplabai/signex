@@ -23,6 +23,17 @@ impl Signex {
                 self.ui_state.keyboard_shortcuts_open = false;
                 Task::none()
             }
+            // Tools > Passive Network Calculator. Deliberately an in-app
+            // modal and not an OS window: Signex runs borderless
+            // (`bootstrap/new.rs` - `decorations: false`), so a default
+            // `iced::window::open` would arrive with a native title bar
+            // that appears nowhere else in the app. Setting the flag while
+            // it is already open is a no-op, matching every other modal
+            // here.
+            OverlayMsg::OpenPassiveCalculator => {
+                self.ui_state.passive_calculator_open = true;
+                Task::none()
+            }
             OverlayMsg::ClosePassiveCalculator => {
                 self.ui_state.passive_calculator_open = false;
                 Task::none()
