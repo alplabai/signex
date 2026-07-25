@@ -176,6 +176,16 @@ fn all_metadata() -> impl Iterator<Item = &'static CommandMetadata> {
     TABLES.iter().flat_map(|table| table.iter())
 }
 
+/// Every command id in the catalog, in table order.
+///
+/// Exists so a consumer can ask "what is in the catalog?" without
+/// needing `CommandMetadata` itself — the bridge's coverage ratchet
+/// (`app::command::bridge`) compares this against the ids
+/// `core_to_message` actually matches.
+pub fn all_command_ids() -> impl Iterator<Item = &'static str> {
+    all_metadata().map(|metadata| metadata.id)
+}
+
 pub fn metadata_for(command: &AppCommandId) -> Option<&'static CommandMetadata> {
     all_metadata().find(|metadata| metadata.id == command.as_str())
 }
