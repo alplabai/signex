@@ -290,20 +290,28 @@ impl Signex {
             &[],
             &active_path,
         );
-        let Some(root) = set.sheets.get(&active_path).cloned() else {
-            return;
-        };
-        let (children, children_issues) =
-            crate::app::project_sheets::project_children_map(&set.sheets);
         let project_dir = self
             .document_state
             .active_document_project()
             .map(|p| p.dir().to_path_buf());
-        let root_filename =
-            crate::app::project_sheets::root_reference_name(&active_path, project_dir.as_deref());
-        let mut result =
-            signex_net::build_project_netlist(&root, &children, root_filename.as_deref());
-        result.issues.extend(children_issues);
+        let base_dir = project_dir
+            .clone()
+            .or_else(|| active_path.parent().map(std::path::PathBuf::from));
+        let graph = crate::app::project_sheets::project_graph(&set.sheets, base_dir.as_deref());
+        let root_key = crate::app::project_sheets::sheet_key(&active_path, base_dir.as_deref());
+        if !graph.sheets.contains_key(&root_key) {
+            return;
+        }
+        let roots = [signex_net::ProjectRoot {
+            key: root_key,
+            name: None,
+        }];
+        let mut result = signex_net::build_project_netlist(&signex_net::ProjectGraph {
+            sheets: &graph.sheets,
+            resolved: &graph.resolved,
+            roots: &roots,
+        });
+        result.issues.extend(graph.issues);
         // A child that exists but will not parse reaches the stitcher as a
         // plain MissingChild; say which it was, or the user hunts for a file
         // that is sitting right there.
