@@ -273,6 +273,11 @@ pub struct UiState {
     /// (later) undocked tabs. `SecondaryWindowClosed` removes entries so
     /// the detached content reattaches to the main window.
     pub windows: std::collections::HashMap<iced::window::Id, WindowKind>,
+    /// Calculator state, owned here so the modal view stays a pure
+    /// function of the model (ADR-0001 A1).
+    pub passive_calculator: signex_widgets::passive_calculator::CalculatorControl,
+    /// Whether the Tools > Passive Network Calculator modal is open.
+    pub passive_calculator_open: bool,
     /// Command palette state — query / dropdown open flag / selected
     /// row. The chrome-strip search bar is the always-rendered input;
     /// `open` gates the dropdown overlay only.

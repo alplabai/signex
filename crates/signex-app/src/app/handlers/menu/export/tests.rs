@@ -797,55 +797,50 @@ fn app_flat_project() -> Signex {
 }
 
 #[test]
-fn a_flat_projects_second_page_cannot_vanish_from_the_netlist_unannounced() {
-    // Rooting the netlist at the project root is right, but the stitcher only
-    // walks *down* from that root: a listed page nothing references is not in
-    // the netlist at all. Nothing is formally `MissingChild`, so before this
-    // the issue list was empty, the refusal gate never fired, and a .net
-    // holding one page of a two-page board was written to disk in silence —
-    // strictly worse than shipping the focused page, because the file looks
-    // like the whole project.
+fn a_flat_projects_second_page_no_longer_vanishes_from_the_netlist() {
+    // #406 made the shortfall loud (refuse rather than silently ship a .net
+    // covering only the reachable page). #430 fixes the shortfall itself: the
+    // stitcher's multi-root / flat-stitch traversal now visits a page nothing
+    // references as its own independent top-level page, so both of this
+    // flat project's pages contribute and the export goes ahead.
     let mut app = app_flat_project();
 
     let (ctx, issues) = super::build_export_scope(&app.document_state).expect("context");
 
-    // The shortfall is real, not hypothetical.
     assert_eq!(
         netlist_references(&ctx),
-        vec!["R_A".to_string()],
-        "precondition: the stitcher does not reach an unreferenced page"
+        vec!["R_A".to_string(), "R_B".to_string()],
+        "both pages of the flat project contribute to the netlist"
     );
     assert!(
         issues.stitch.is_empty(),
-        "precondition: nothing is formally MissingChild here — that is the trap"
+        "a flat sibling is routine, not a structural stitch problem: {:?}",
+        issues.messages()
     );
     assert!(
-        issues.netlist_is_incomplete(),
-        "a listed page outside the hierarchy is an incomplete netlist"
+        !issues.netlist_is_incomplete(),
+        "both declared pages are in the netlist: {:?}",
+        issues.messages()
     );
 
-    // …and the machine-consumed deliverable therefore refuses by default, by
-    // the same per-deliverable policy that already covers MissingChild: #431
-    // raises the "Export anyway?" prompt and writes nothing until the user
-    // acts.
+    // …and the machine-consumed deliverable is therefore written, not held
+    // behind the incomplete-export prompt.
     let out = std::env::temp_dir().join(format!("signex-flat-{}.net", Uuid::new_v4()));
     let _ = app.handle_export_netlist_finished(Ok(out.clone()));
 
     assert!(
-        !out.exists(),
-        "a .net missing half the board must not reach disk by default: {}",
+        out.exists(),
+        "a complete flat-project .net must reach disk without the user having to \
+         click through an incomplete-export prompt: {}",
         out.display()
     );
-    let prompt = app
-        .document_state
-        .netlist_incomplete_prompt
-        .clone()
-        .expect("the refusal must be raised through the incomplete-export prompt");
     assert!(
-        prompt.messages.iter().any(|m| m.contains("b.snxsch")),
-        "the prompt must name the page that is not in the netlist: {:?}",
-        prompt.messages
+        app.document_state.netlist_incomplete_prompt.is_none(),
+        "nothing is incomplete, so the prompt must not be raised"
     );
+    let bytes = std::fs::read_to_string(&out).expect("read exported netlist");
+    assert!(bytes.contains("R_A"), "R_A is in the exported file");
+    assert!(bytes.contains("R_B"), "R_B is in the exported file");
     std::fs::remove_file(&out).ok();
 }
 

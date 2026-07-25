@@ -151,6 +151,9 @@ pub enum OverlayMsg {
     /// Close the Help ▸ Keyboard Shortcuts modal — fired by the close
     /// chrome ✕ and by Esc dismiss handling.
     CloseKeyboardShortcuts,
+    /// Close the Tools > Passive Network Calculator modal - fired by
+    /// the close chrome X.
+    ClosePassiveCalculator,
     /// Dismiss the first-run tour card and persist the flag so it
     /// never reappears. Fired by the card's ✕ button, by Esc, and by
     /// the first canvas interaction after launch.

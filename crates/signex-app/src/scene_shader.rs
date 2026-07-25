@@ -172,6 +172,19 @@ impl shader::Primitive for ScenePrimitive {
             pipeline.line.upload(device, queue, &self.scene.lines);
             pipeline.arc.upload(device, queue, &self.scene.arcs);
             pipeline.circle.upload(device, queue, &self.scene.circles);
+            // Overlay geometry uploads into each pipeline's dedicated overlay
+            // buffer (never folded into the base buckets above — see
+            // `pcb_canvas::gpu_scene`), so `Self::draw`'s later overlay pass
+            // always composites on top of every base bucket.
+            pipeline
+                .polygon
+                .upload_overlay(device, queue, &self.scene.overlay_polygons);
+            pipeline
+                .line
+                .upload_overlay(device, queue, &self.scene.overlay_lines);
+            pipeline
+                .circle
+                .upload_overlay(device, queue, &self.scene.overlay_circles);
             pipeline.uploaded_generation = self.generation;
         }
 
@@ -199,9 +212,10 @@ impl shader::Primitive for ScenePrimitive {
         // Composite in the shared `GPU_SCENE_DRAW_ORDER` (fills, then strokes,
         // then text on top). The order lives in one const so it can be diffed
         // against the CPU `pcb_canvas::draw_scene` order: polygons draw *first*
-        // here but *last* on the CPU — a known z-order divergence (issue #4)
+        // here but *last* on the CPU — a known base-bucket z-order divergence
         // the `scene::order` parity test pins until visual authority
-        // reconciles it. GPU parity stays unconfirmed on hardware (feature-off).
+        // reconciles it (reserved for Caner/Hakan). GPU parity stays
+        // unconfirmed on hardware (feature-off).
         for &bucket in GPU_SCENE_DRAW_ORDER {
             match bucket {
                 SceneBucket::Polygons => pipeline.polygon.draw(render_pass, camera),
@@ -213,10 +227,10 @@ impl shader::Primitive for ScenePrimitive {
                         log_text_error_once(&TEXT_DRAW_WARNED, "draw", error);
                     }
                 }
-                // Not composited by the scene shader: the PCB path folds
-                // overlays into the main buffers upstream and ERC markers are
-                // schematic-only. Handled for exhaustiveness so adding a Scene
-                // bucket forces a decision here.
+                // Not composited here — overlays get their own pass below
+                // (always after every base bucket) and ERC markers are
+                // schematic-only. Handled for exhaustiveness so adding a
+                // Scene bucket forces a decision here.
                 SceneBucket::OverlayLines
                 | SceneBucket::OverlayCircles
                 | SceneBucket::OverlayPolygons
@@ -225,6 +239,18 @@ impl shader::Primitive for ScenePrimitive {
                 | SceneBucket::ErcMarkerPolygons => {}
             }
         }
+
+        // Overlay pass: strictly after every base bucket above, so overlay
+        // content (active-layer zone highlight, selection highlight, DRC
+        // markers, ratsnest) always renders on top — matching the CPU
+        // `pcb_canvas::draw_scene` overlay pass, which draws
+        // OverlayLines/OverlayCircles/OverlayPolygons last. Order within the
+        // pass mirrors the CPU's (lines, then circles, then polygon fills +
+        // strokes on top).
+        pipeline.line.draw_overlay(render_pass, camera);
+        pipeline.circle.draw_overlay(render_pass, camera);
+        pipeline.polygon.draw_overlay(render_pass, camera);
+
         true
     }
 }

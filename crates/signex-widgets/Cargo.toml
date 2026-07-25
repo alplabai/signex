@@ -9,4 +9,5 @@ license.workspace = true
 [dependencies]
 signex-types = { workspace = true }
 iced = { workspace = true }
+iced_aw = { workspace = true }
 chrono = { workspace = true }
