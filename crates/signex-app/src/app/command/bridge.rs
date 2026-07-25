@@ -12,11 +12,11 @@ use super::super::*;
 
 /// Map a stable command id onto the app's namespaced [`Message`] tree.
 ///
-/// Commands without a live dispatch arm return `None`. They still
-/// resolve in the keymap, so the caller consumes the stroke and no-ops —
-/// `take_keymap_match` logs a warning naming the id rather than letting
-/// the key die silently. 75 catalog ids are in that state, every one of
-/// them key-bound in a shipped profile; the set is pinned by
+/// Commands without a live dispatch arm return `None`, and
+/// [`log_unmapped`] says so — naming the id and which of the two
+/// failure modes it hit — so an invocation can no longer vanish without
+/// a trace. 75 catalog ids are in that state, every one of them bound to
+/// a trigger in a shipped profile; the set is pinned by
 /// `tests::UNMAPPED_CATALOG_IDS` and may only shrink.
 pub(crate) fn core_to_message(command: &AppCommandId) -> Option<Message> {
     use crate::library::editor::footprint::state::EditorMode;
@@ -87,9 +87,44 @@ pub(crate) fn core_to_message(command: &AppCommandId) -> Option<Message> {
         "toggle_auto_focus" => Message::Overlay(OverlayMsg::ToggleAutoFocus),
         "toggle_electrical_grid" => Message::Ui(UiMsg::ToggleSnapHotspots),
         "undo" => Message::Edit(EditMsg::Undo),
-        _ => return None,
+        _ => {
+            log_unmapped(command);
+            return None;
+        }
     };
     Some(message)
+}
+
+/// Report an id that reached the bridge and found no arm.
+///
+/// Lives here, not at a call site, so every consumer of the registry
+/// inherits it — the keyboard today, and the menu bar, command palette
+/// and CLI as they are rewired onto `dispatch_command` (#367, #366).
+///
+/// The two failure modes want different words because they need
+/// different fixes:
+/// - a real catalog id with no arm — the binding is advertised in the
+///   Keyboard Shortcuts pane and does nothing. 75 ids are in this state;
+///   see `tests::UNMAPPED_CATALOG_IDS`.
+/// - an id that is in no catalog at all — almost always a typo in a
+///   user-edited keymap TOML, which `keymap::profile` accepts without
+///   ever validating against the catalog.
+///
+/// Deliberately `log_warning`, not `log_error`: neither case loses data
+/// or leaves the app wrong, and neither is actionable mid-edit.
+fn log_unmapped(command: &AppCommandId) {
+    let id = command.as_str();
+    if crate::keymap::metadata_for(command).is_some() {
+        crate::diagnostics::log_warning(format!(
+            "command '{id}' is a catalog command with no dispatch arm yet — \
+             invoking it did nothing"
+        ));
+    } else {
+        crate::diagnostics::log_warning(format!(
+            "command '{id}' is not in the command catalog — check the id in \
+             your keyboard-shortcuts profile"
+        ));
+    }
 }
 
 #[cfg(test)]
@@ -115,8 +150,12 @@ mod tests {
             .find("let message = match command.as_str() {")
             .expect("core_to_message's match block moved — update match_block");
         let rest = &src[start..];
+        // Ends at the fallthrough arm, whatever shape it currently has
+        // (`_ => return None,` or a block). Everything after it —
+        // `log_unmapped`'s message literals, the pinned id list — must
+        // stay out of the scan.
         let end = rest
-            .find("_ => return None,")
+            .find("\n        _ => ")
             .expect("core_to_message's fallthrough arm moved — update match_block");
         &rest[..end]
     }

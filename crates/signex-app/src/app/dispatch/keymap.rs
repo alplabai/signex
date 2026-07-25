@@ -64,21 +64,7 @@ impl Signex {
             self.ui_state.keymap_pending_sequence.clear();
             return Some(match crate::app::command::core_to_message(command) {
                 Some(message) => self.dispatch_update(message),
-                // Resolved to a real command id, but the bridge has no
-                // arm for it. The stroke is still consumed here — the
-                // binding exists, so falling through to the canvas would
-                // be wrong — which is exactly why this has to be logged:
-                // otherwise the key does nothing and leaves no trace.
-                // 72 ids in the shipped profiles are in this state today;
-                // see the coverage ratchet in `app::command::bridge`.
-                None => {
-                    crate::diagnostics::log_warning(format!(
-                        "keymap: command '{}' is bound to a key but has no \
-                         dispatch arm yet — the shortcut did nothing",
-                        command.as_str()
-                    ));
-                    Task::none()
-                }
+                None => Task::none(),
             });
         }
         if lookup.matched {
