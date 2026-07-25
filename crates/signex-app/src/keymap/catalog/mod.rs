@@ -102,6 +102,48 @@ pub struct CommandFlags {
     pub hidden: bool,
 }
 
+impl CommandFlags {
+    /// No flags — the command neither touches the document nor needs a
+    /// pointer. Spelled out on every entry so "nobody decided yet" and
+    /// "deliberately none" stay distinguishable.
+    pub const NONE: Self = Self {
+        gui_only: false,
+        mutates_doc: false,
+        undoable: false,
+        hidden: false,
+    };
+
+    /// Needs the GUI — an interactive placement, a cursor-relative view
+    /// operation, a modal, or a panel toggle. No headless equivalent.
+    pub const GUI_ONLY: Self = Self {
+        gui_only: true,
+        ..Self::NONE
+    };
+
+    /// Mutates the open document and lands on the undo stack.
+    pub const MUTATES: Self = Self {
+        mutates_doc: true,
+        undoable: true,
+        ..Self::NONE
+    };
+
+    /// Mutates the document, undoable, and only reachable interactively
+    /// (in-place edits, drag/place gestures, cursor-anchored actions).
+    pub const GUI_MUTATES: Self = Self {
+        gui_only: true,
+        mutates_doc: true,
+        undoable: true,
+        ..Self::NONE
+    };
+
+    /// Mutates the document but is NOT itself undoable — `undo` / `redo`,
+    /// which drive the stack rather than push onto it.
+    pub const MUTATES_NOT_UNDOABLE: Self = Self {
+        mutates_doc: true,
+        ..Self::NONE
+    };
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CommandMetadata {
     pub id: &'static str,
@@ -317,13 +359,19 @@ mod tests {
     }
 
     #[test]
-    fn descriptor_fields_default_for_existing_catalog_entries() {
-        // Every catalog row today inherits the four descriptor fields from
-        // `CommandMetadata::DEFAULT` via struct-update syntax (`icon`,
-        // `keybind`, `enable`, `flags`). Assert that for *every* entry, not
-        // just one, so a future edit that drops the `..CommandMetadata::
-        // DEFAULT` tail on some row (and silently changes its defaults) is
-        // caught rather than passing unnoticed.
+    fn icon_and_keybind_still_inherit_the_default() {
+        // `icon` and `keybind` are the two descriptor fields still
+        // unpopulated: an icon needs a design decision per command, and a
+        // catalog `keybind` is only a *suggested* default that any profile
+        // binding overrides, so nothing reads it yet. Asserting them for
+        // every entry catches a row that drops its
+        // `..CommandMetadata::DEFAULT` tail and silently changes what it
+        // inherits.
+        //
+        // `enable` and `flags` used to be asserted here too, at their
+        // defaults. They are now populated per command
+        // (`every_catalog_entry_sets_enable_and_flags` below), so pinning
+        // them at the default would pin the *absence* of the decision.
         for metadata in all_metadata() {
             assert_eq!(
                 metadata.icon, None,
@@ -335,18 +383,60 @@ mod tests {
                 "`{}` should default to no keybind",
                 metadata.id
             );
-            assert_eq!(
-                metadata.enable,
-                Enablement::Always,
-                "`{}` should default to Enablement::Always",
-                metadata.id
-            );
-            assert_eq!(
-                metadata.flags,
-                CommandFlags::default(),
-                "`{}` should default to all-false flags",
-                metadata.id
-            );
         }
+    }
+
+    /// Every catalog row must state `enable` and `flags` explicitly.
+    ///
+    /// A source scan rather than a value check, because the two cannot be
+    /// told apart at runtime: `Enablement::Always` + `CommandFlags::NONE`
+    /// is both a legitimate answer and what an unpopulated row inherits
+    /// from `..CommandMetadata::DEFAULT`. Only the source says whether
+    /// somebody decided. Mirrors the source-scanning style of
+    /// `keymap::menu_command_tests` and `app::command::bridge`'s guards.
+    #[test]
+    fn every_catalog_entry_sets_enable_and_flags() {
+        const TABLE_SRC: &[(&str, &str)] = &[
+            ("general.rs", include_str!("general.rs")),
+            ("schematic.rs", include_str!("schematic.rs")),
+            ("pcb.rs", include_str!("pcb.rs")),
+            ("threed.rs", include_str!("threed.rs")),
+        ];
+
+        let mut missing: Vec<String> = Vec::new();
+        let mut seen = 0usize;
+        for (file, src) in TABLE_SRC {
+            for entry in src.split("    CommandMetadata {").skip(1) {
+                let body = entry.split("    },").next().unwrap_or(entry);
+                let id = body
+                    .split("id: \"")
+                    .nth(1)
+                    .and_then(|rest| rest.split('"').next())
+                    .unwrap_or("<unparsed>");
+                seen += 1;
+                if !body.contains("enable: ") {
+                    missing.push(format!("{file}: `{id}` has no `enable:`"));
+                }
+                if !body.contains("flags: ") {
+                    missing.push(format!("{file}: `{id}` has no `flags:`"));
+                }
+            }
+        }
+
+        assert_eq!(
+            seen,
+            all_metadata().count(),
+            "the source scan found {seen} entries but the tables hold {} — \
+             the `CommandMetadata {{` split in this test has drifted from \
+             how the tables are written",
+            all_metadata().count()
+        );
+        assert!(
+            missing.is_empty(),
+            "catalog entries must state `enable` and `flags` rather than \
+             inheriting them from ..CommandMetadata::DEFAULT — an inherited \
+             `Always` / all-false is indistinguishable from nobody having \
+             decided: {missing:#?}"
+        );
     }
 }
