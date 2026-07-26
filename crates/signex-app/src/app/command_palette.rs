@@ -352,9 +352,17 @@ mod tests {
         let dead: Vec<String> = build_catalog(&app)
             .into_iter()
             .filter_map(|entry| match entry.action {
-                CommandAction::Command(command) => crate::app::command::core_to_message(&command)
-                    .is_none()
-                    .then(|| command.as_str().to_string()),
+                // `bridge::` and not the `command::core_to_message`
+                // re-export, which #367 (PR #504) makes private — the
+                // same reason `build_catalog` above spells out the full
+                // path. Using the re-export here compiles today and
+                // stops compiling the moment #504 lands ahead of this
+                // branch in the merge order.
+                CommandAction::Command(command) => {
+                    crate::app::command::bridge::core_to_message(&command)
+                        .is_none()
+                        .then(|| command.as_str().to_string())
+                }
                 _ => None,
             })
             .collect();
