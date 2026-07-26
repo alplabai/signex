@@ -15,7 +15,7 @@ use super::super::*;
 /// Commands without a live dispatch arm return `None`, and
 /// [`log_unmapped`] says so — naming the id and which of the two
 /// failure modes it hit — so an invocation can no longer vanish without
-/// a trace. 71 catalog ids are in that state, every one of them bound to
+/// a trace. 64 catalog ids are in that state, every one of them bound to
 /// a trigger in a shipped profile; the set is pinned by
 /// `tests::UNMAPPED_CATALOG_IDS` and may only shrink.
 pub(crate) fn core_to_message(command: &AppCommandId) -> Option<Message> {
@@ -27,9 +27,10 @@ pub(crate) fn core_to_message(command: &AppCommandId) -> Option<Message> {
             Message::Annotate(AnnotateMsg::Run(signex_engine::AnnotateMode::Incremental))
         }
         "cancel_current_tool" => Message::EscapePressed,
-        "center_view_at_cursor" | "show_all_design_objects" | "zoom_to_fit" => {
-            Message::CanvasEvent(CanvasEvent::FitAll)
-        }
+        "center_view_at_cursor"
+        | "show_all_design_objects"
+        | "zoom_to_all_objects"
+        | "zoom_to_fit" => Message::CanvasEvent(CanvasEvent::FitAll),
         "copy" => Message::Edit(EditMsg::Copy),
         "cycle_selection_mode" => Message::CycleSelectionMode,
         "cycle_snap_grid_forward" | "open_grid_picker" => Message::Ui(UiMsg::GridPickerOpen),
@@ -37,6 +38,7 @@ pub(crate) fn core_to_message(command: &AppCommandId) -> Option<Message> {
         "cycle_wire_bus_graphic_mode" => Message::Tool(ToolMessage::CycleDrawMode),
         "cut" => Message::Edit(EditMsg::Cut),
         "delete_selection" | "remove_last_vertex" => Message::Edit(EditMsg::DeleteSelected),
+        "draw_graphic_line" => Message::Tool(ToolMessage::SelectTool(Tool::Line)),
         "duplicate" => Message::Edit(EditMsg::Duplicate),
         "find" | "find_text" => Message::Overlay(OverlayMsg::OpenFind),
         "find_and_replace" => Message::Overlay(OverlayMsg::OpenReplace),
@@ -57,23 +59,33 @@ pub(crate) fn core_to_message(command: &AppCommandId) -> Option<Message> {
             Message::Tool(ToolMessage::SelectTool(Tool::Component))
         }
         "new_document" => Message::Menu(MenuMessage::NewProject),
+        "next_grid" => Message::Ui(UiMsg::GridCycle),
         "open_command_palette" => Message::CommandPalette(CommandPaletteMsg::Open),
         "open_document" => Message::Menu(MenuMessage::OpenProject),
         "open_grid_properties" => Message::GridProperties(GridPropertiesMsg::Open),
         "open_net_color_palette" => Message::NetColor(NetColorMsg::Open),
-        "open_preferences" => Message::Preferences(PreferencesMsg::Open),
+        // One dialog, two ids: the preferences window opens on the
+        // schematic page for a schematic document, so "open schematic
+        // preferences" is the same command reached from a different
+        // surface, not a second dialog.
+        "open_preferences" | "open_schematic_preferences" => {
+            Message::Preferences(PreferencesMsg::Open)
+        }
         "paste" => Message::Edit(EditMsg::Paste),
         "paste_special" | "smart_paste" => Message::Edit(EditMsg::SmartPaste),
         "place_bus" => Message::Tool(ToolMessage::SelectTool(Tool::Bus)),
         "place_local_net_label" | "place_net_label" => {
             Message::Tool(ToolMessage::SelectTool(Tool::Label))
         }
+        "place_no_connect" => Message::Tool(ToolMessage::SelectTool(Tool::NoConnect)),
         "place_text" => Message::Tool(ToolMessage::SelectTool(Tool::Text)),
         "place_wire" => Message::Tool(ToolMessage::SelectTool(Tool::Wire)),
+        "place_wire_to_bus_entry" => Message::Tool(ToolMessage::SelectTool(Tool::BusEntry)),
         "placement_accept" => Message::LassoCommit,
         "placement_properties" => Message::Tool(ToolMessage::PrePlacementTab),
         "print" => Message::PrintPreview(PrintPreviewMsg::Requested),
         "redo" => Message::Edit(EditMsg::Redo),
+        "report_manager_bom" => Message::Menu(MenuMessage::GenerateBom),
         "reset_schematic_designators" => Message::Annotate(AnnotateMsg::OpenResetConfirm),
         "rotate_clockwise" | "rotate_counterclockwise" => Message::Edit(EditMsg::RotateSelected),
         "run_erc" | "update_pcb_from_schematic" => Message::Erc(ErcMsg::Run),
@@ -115,7 +127,7 @@ pub(crate) fn core_to_message(command: &AppCommandId) -> Option<Message> {
 /// The two failure modes want different words because they need
 /// different fixes:
 /// - a real catalog id with no arm — the binding is advertised in the
-///   Keyboard Shortcuts pane and does nothing. 71 ids are in this state;
+///   Keyboard Shortcuts pane and does nothing. 64 ids are in this state;
 ///   see `tests::UNMAPPED_CATALOG_IDS`.
 /// - an id that is in no catalog at all — almost always a typo in a
 ///   user-edited keymap TOML, which `keymap::profile` accepts without
@@ -153,7 +165,7 @@ mod tests {
     /// The `core_to_message` match block alone, cut out of `src`.
     ///
     /// Load-bearing: `BRIDGE_SRC` is the WHOLE file, tests included, and
-    /// this module now holds `UNMAPPED_CATALOG_IDS` — 75 string literals
+    /// this module now holds `UNMAPPED_CATALOG_IDS` — 64 string literals
     /// on lines that start with `"`. Scanning the whole file would read
     /// every one of them as a bridge arm and quietly invert the ratchet.
     fn match_block(src: &str) -> &str {
@@ -172,9 +184,9 @@ mod tests {
     }
 
     /// Pull every quoted command-id literal out of `src`'s match-arm
-    /// lines (each starts, once trimmed, with `"`). Deliberately tiny,
-    /// no regex dependency — mirrors `keymap::menu_command_tests`'s
-    /// `ids_from_call`.
+    /// lines (each starts, once trimmed, with `"` or — on a wrapped
+    /// multi-id arm — with `|`). Deliberately tiny, no regex dependency
+    /// — mirrors `keymap::menu_command_tests`'s `ids_from_call`.
     /// Every id `core_to_message` can resolve: the match arms it names
     /// literally, plus the Active Bar table its fallthrough consults.
     /// A source scan alone would miss the table and report all 59 Active
@@ -188,7 +200,13 @@ mod tests {
     fn bridged_command_ids(src: &str) -> Vec<String> {
         let mut ids = Vec::new();
         for line in match_block(src).lines() {
-            if !line.trim_start().starts_with('"') {
+            // Once an arm lists enough ids to pass the width limit,
+            // rustfmt puts each one on its own line starting with `|`.
+            // Reading only `"`-lines drops those ids, and the ratchet
+            // then reports live commands as dead — it fails loudly
+            // rather than silently, but it still fails.
+            let trimmed = line.trim_start();
+            if !trimmed.starts_with('"') && !trimmed.starts_with('|') {
                 continue;
             }
             let mut rest = line;
@@ -247,16 +265,22 @@ mod tests {
     /// arm, or deleting an arm, fails `unmapped_command_ids_only_shrink`.
     /// Wiring one up means deleting its line here, in the same commit.
     ///
-    /// The 71 are a mix, and the distinction decides the fix:
-    /// - **bridge gap** — the action exists and is clickable, only the
-    ///   keyboard route is dead (`place_no_erc` →
-    ///   `ActiveBarAction::PlaceNoERC`, `place_compile_mask`,
-    ///   `place_power_symbol`, `place_wire_to_bus_entry`, `move_selection`).
-    ///   One match arm each.
+    /// The 64 are a mix, and the distinction decides the fix:
     /// - **unimplemented** — the catalog entry and the binding are the only
     ///   occurrences in the tree (`measure_distance`, `break_wire`,
     ///   `place_global_label`, `place_hierarchical_label`,
     ///   `repeat_last_item`, `rubber_stamp_copy`). A feature, not an arm.
+    ///   This is most of what is left.
+    /// - **needs an argument** — the target `Message` carries data this
+    ///   entry point cannot supply. `select_expand_connection` wants
+    ///   `SelectionRequest::SelectConnected { world_x, world_y }`, and a
+    ///   bare id has no cursor. Unblocked by `dispatch(id, args)` (#367),
+    ///   not by a match arm.
+    /// - **half an API** — the state change exists in one direction only.
+    ///   `dock::state` has `add_panel` and no remove/toggle, so every
+    ///   `toggle_*_panel` id would have to lie about what it does; and
+    ///   nothing in the tree clears a selection, which strands
+    ///   `unselect_all`.
     ///
     /// Full analysis:
     /// `docs/audit/command-registry-action-surface-2026-07-25.md` §5.
@@ -265,26 +289,26 @@ mod tests {
         "autoplace_fields", "break_wire", "center_on_cursor", "clear_net_highlighting",
         "close_active_document", "copy_attributes_or_add_vertex", "cycle_fast_grid",
         "cycle_snap_grid_backward", "cycle_wiring_mode", "drag_keep_connections",
-        "draw_graphic_line", "draw_hierarchical_sheet", "edit_footprint_field",
+        "draw_hierarchical_sheet", "edit_footprint_field",
         "edit_library_symbol", "edit_object_properties", "edit_reference_designator",
         "edit_selected_object_properties", "edit_selected_symbol_in_symbol_editor",
         "edit_text_in_place", "edit_value", "fast_grid_1", "fast_grid_2", "find_next",
         "find_previous", "find_similar_objects", "highlight_net_under_cursor",
         "highlight_related_net_objects", "import_graphics", "leave_sheet", "measure_distance",
         "move_object", "navigate_up_hierarchy", "next_document_tab",
-        "next_grid", "next_highlighted_net_item", "next_sheet", "open_datasheet",
-        "open_schematic_preferences", "place_design_block",
-        "place_global_label", "place_hierarchical_label", "place_junction", "place_no_connect",
-        "place_power_symbol", "place_wire_to_bus_entry",
+        "next_highlighted_net_item", "next_sheet", "open_datasheet",
+        "place_design_block",
+        "place_global_label", "place_hierarchical_label", "place_junction",
+        "place_power_symbol",
         "previous_document_tab", "previous_grid", "previous_highlighted_net_item",
-        "previous_sheet", "refresh_view", "repeat_last_item", "report_manager_bom",
+        "previous_sheet", "refresh_view", "repeat_last_item",
         "reset_local_coordinates", "rubber_stamp_copy", "select_expand_connection",
         "select_node_or_connection_item", "sheet_navigation_back", "sheet_navigation_forward",
         "switch_segment_posture", "toggle_cross_select_mode", "toggle_floating_panels",
         "toggle_properties_panel", "toggle_schematic_filter_panel",
         "toggle_schematic_list_panel", "toggle_search_panel",
         "undo_last_segment", "unselect_all", "zoom_in_at_cursor", "zoom_out_at_cursor",
-        "zoom_to_all_objects", "zoom_to_selection_area",
+        "zoom_to_selection_area",
     ];
 
     /// Coverage ratchet: the set of catalog ids with no dispatch arm may
@@ -328,6 +352,47 @@ mod tests {
              UNMAPPED_CATALOG_IDS in the same commit that wires them up — \
              the ratchet only means anything if it tightens."
         );
+    }
+
+    /// The ratchet proves the seven ids this slice drained now *resolve*;
+    /// it cannot tell a right arm from a wrong one. A typo that sent
+    /// `place_no_connect` to `Tool::Wire` would leave the ratchet green
+    /// and the shortcut quietly drawing wires, so pin each target here.
+    #[test]
+    fn the_newly_wired_ids_reach_their_named_messages() {
+        fn resolve(id: &str) -> Message {
+            let command = AppCommandId::new(id).expect("a catalog id is a valid AppCommandId");
+            core_to_message(&command).unwrap_or_else(|| panic!("'{id}' no longer resolves"))
+        }
+
+        assert!(matches!(
+            resolve("draw_graphic_line"),
+            Message::Tool(ToolMessage::SelectTool(Tool::Line))
+        ));
+        assert!(matches!(
+            resolve("next_grid"),
+            Message::Ui(UiMsg::GridCycle)
+        ));
+        assert!(matches!(
+            resolve("open_schematic_preferences"),
+            Message::Preferences(PreferencesMsg::Open)
+        ));
+        assert!(matches!(
+            resolve("place_no_connect"),
+            Message::Tool(ToolMessage::SelectTool(Tool::NoConnect))
+        ));
+        assert!(matches!(
+            resolve("place_wire_to_bus_entry"),
+            Message::Tool(ToolMessage::SelectTool(Tool::BusEntry))
+        ));
+        assert!(matches!(
+            resolve("report_manager_bom"),
+            Message::Menu(MenuMessage::GenerateBom)
+        ));
+        assert!(matches!(
+            resolve("zoom_to_all_objects"),
+            Message::CanvasEvent(CanvasEvent::FitAll)
+        ));
     }
 
     /// The pinned ids must still exist in the catalog, so the list cannot
