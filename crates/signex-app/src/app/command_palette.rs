@@ -100,7 +100,11 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
         let Ok(command) = AppCommandId::new(id) else {
             continue;
         };
-        if crate::app::command::core_to_message(&command).is_none() {
+        // Through `bridge::` rather than the `command::core_to_message`
+        // re-export: #367 (PR #504) narrows that re-export to private, and
+        // the two changes merge cleanly but would not compile together.
+        // The module path holds either way.
+        if crate::app::command::bridge::core_to_message(&command).is_none() {
             continue;
         }
         let Some(metadata) = metadata_for(&command) else {
