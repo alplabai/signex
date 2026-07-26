@@ -82,10 +82,10 @@ impl Signex {
     ) -> Task<Message> {
         match msg {
             MoveSelectionMsg::Open => self.handle_open_move_selection_dialog(),
-            MoveSelectionMsg::Close => {
-                let _ = self.handle_close_move_selection_dialog();
-                self.close_detached_modal(super::state::ModalId::MoveSelection)
-            }
+            MoveSelectionMsg::Close => Task::batch([
+                self.handle_close_move_selection_dialog(),
+                self.close_detached_modal(super::state::ModalId::MoveSelection),
+            ]),
             MoveSelectionMsg::DxChanged(s) => {
                 self.ui_state.move_selection.dx = s;
                 Task::none()

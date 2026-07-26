@@ -152,19 +152,13 @@ impl Signex {
             }
             "standard_sch" | "snxsch" => self.open_schematic_file(path)?,
             "standard_pcb" | "snxpcb" => self.open_pcb_file(path)?,
-            "snxsym" | "snxfpt" => {
-                let _ = self.handle_open_primitive(path);
-                iced::Task::none()
-            }
+            "snxsym" | "snxfpt" => self.handle_open_primitive(path),
             // `.snxlib/` is a directory package — open it as a Library
             // Browser tab in the main canvas area. The handler mounts
             // the library if not already mounted and pushes the tab
             // (or activates it if a tab for the same library is
             // already open).
-            "snxlib" => {
-                let _ = self.handle_open_library_browser(path);
-                iced::Task::none()
-            }
+            "snxlib" => self.handle_open_library_browser(path),
             _ => anyhow::bail!("unsupported file type: .{ext}"),
         };
 

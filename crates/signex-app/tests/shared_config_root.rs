@@ -21,6 +21,12 @@
 //! against the developer's real config dir) — see the commit message
 //! for the red/green run.
 
+// This integration-test binary discards fallible test-setup calls with
+// `let _ = ...` routinely (not a production `Task` getting dropped — see
+// GH #99 part 1). `[lints]` in Cargo.toml is package-scoped, not
+// target-scoped, so each integration-test crate root needs its own allow.
+#![allow(clippy::let_underscore_must_use)]
+
 #[test]
 fn config_root_resolves_under_the_os_temp_dir_during_tests() {
     let root = signex_app::config_root::config_root().expect("test redirect always resolves");

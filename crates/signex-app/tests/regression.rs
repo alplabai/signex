@@ -21,6 +21,14 @@
 //! shared `support` module, since no helper is called from more than
 //! one module (confirmed while doing the split).
 
+// This integration-test binary discards fallible test-setup calls with
+// `let _ = ...` routinely (not a production `Task` getting dropped — see
+// GH #99 part 1 / crates/signex-app/src/lib.rs's crate-level suppression
+// for the equivalent in-src-test-module allow). `[lints]` in Cargo.toml
+// is package-scoped, not target-scoped, so each integration-test crate
+// root needs its own allow.
+#![allow(clippy::let_underscore_must_use)]
+
 #[path = "regression/project.rs"]
 mod project;
 

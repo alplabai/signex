@@ -13,6 +13,12 @@
 //! the dispatcher and is covered by the underlying
 //! `KeyringStore::set_secret` tests in `signex-library`.
 
+// This integration-test binary discards fallible test-setup calls with
+// `let _ = ...` routinely (not a production `Task` getting dropped — see
+// GH #99 part 1). `[lints]` in Cargo.toml is package-scoped, not
+// target-scoped, so each integration-test crate root needs its own allow.
+#![allow(clippy::let_underscore_must_use)]
+
 use std::future::Future;
 
 use serde_json::json;

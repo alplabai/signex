@@ -281,13 +281,27 @@ impl Signex {
                     false,
                     false,
                 );
-                // Re-run ERC so the cleared violation drops out of
-                // the panel without forcing the user to press F8.
-                let _ = self.handle_run_erc();
-                // Focus the cleared point so the new NoConnect marker
-                // is visible — a small but reassuring "the fix landed
-                // here" cue.
-                self.handle_focus_at(target.world_x, target.world_y, None)
+                // Re-run ERC so the cleared violation drops out of the
+                // panel without forcing the user to press F8, then focus
+                // the cleared point so the new NoConnect marker is visible
+                // — a small but reassuring "the fix landed here" cue.
+                //
+                // `Task::batch` gives no ordering between the two Tasks it
+                // merges — they run concurrently. What IS ordered here is
+                // the state mutation: `self.handle_run_erc()` and
+                // `self.handle_focus_at(...)` are plain `&mut self` calls,
+                // and Rust evaluates the two array elements left to right,
+                // so the ERC re-run fully completes before focus is
+                // computed — that ordering is free today only because
+                // both calls happen to be synchronous (`Task::none()` on
+                // every path). If either one ever becomes real async work,
+                // this batch stops guaranteeing "ERC re-run lands before
+                // focus settles" — reach for `Task::chain` instead if that
+                // sequencing is ever load-bearing.
+                Task::batch([
+                    self.handle_run_erc(),
+                    self.handle_focus_at(target.world_x, target.world_y, None),
+                ])
             }
             _ => {
                 self.ui_state.erc_focus_global_index = Some(clamped);

@@ -11,13 +11,19 @@ mod rename;
 mod version_control;
 
 impl Signex {
+    /// Returns `None` when the message isn't a project-navigation message
+    /// (so the caller falls through to the next dock handler), or
+    /// `Some(task)` when handled — the task carries the follow-up work
+    /// from opening a project-tree document (library-browser mount /
+    /// primitive-editor open) so it isn't dropped.
     pub(super) fn handle_dock_project_navigation_panel_message(
         &mut self,
         panel_msg: &crate::panels::PanelMsg,
-    ) -> bool {
+    ) -> Option<Task<Message>> {
         use signex_widgets::tree_view::{TreeIcon, TreeMsg, get_node};
 
-        match panel_msg {
+        let mut follow = Task::none();
+        let handled = match panel_msg {
             crate::panels::PanelMsg::Tree(TreeMsg::Toggle(path)) => {
                 signex_widgets::tree_view::toggle(
                     &mut self.document_state.panel_ctx.project_tree,
@@ -44,7 +50,11 @@ impl Signex {
                 });
                 if !is_openable {
                     self.interaction_state.last_tree_click = None;
-                    return true;
+                    // `follow` is still its initial `Task::none()` here —
+                    // nothing between the `let mut follow` above and this
+                    // early return assigns it. Spelled out explicitly so
+                    // a reader doesn't have to scan upward to confirm it.
+                    return Some(Task::none());
                 }
                 // Single-click highlight: every leaf click sets the
                 // tree's "selected" path so the row gets the active
@@ -66,14 +76,14 @@ impl Signex {
                 );
                 if is_double {
                     self.interaction_state.last_tree_click = None;
-                    if let Some(node) = selected_node
-                        && let Err(error) =
-                            self.open_project_tree_document(path, node.label.clone())
-                    {
-                        crate::diagnostics::log_error(
-                            "Failed to open project tree document",
-                            &error,
-                        );
+                    if let Some(node) = selected_node {
+                        match self.open_project_tree_document(path, node.label.clone()) {
+                            Ok(task) => follow = task,
+                            Err(error) => crate::diagnostics::log_error(
+                                "Failed to open project tree document",
+                                &error,
+                            ),
+                        }
                     }
                 } else {
                     self.interaction_state.last_tree_click = Some((path.clone(), now));
@@ -83,9 +93,6 @@ impl Signex {
             crate::panels::PanelMsg::Tree(TreeMsg::ContextMenu(path)) => {
                 // Routed up to the app level as a Message so the overlay
                 // dispatcher can anchor the menu at `last_mouse_pos`.
-                // `handle_*_panel_message` returns `bool` and has no
-                // way to emit a follow-up Task, so we poke the state
-                // directly — same shape as the canvas menu wiring.
                 self.dispatch_show_project_tree_context_menu(Some(path.clone()));
                 true
             }
@@ -94,7 +101,8 @@ impl Signex {
                 true
             }
             _ => false,
-        }
+        };
+        if handled { Some(follow) } else { None }
     }
 
     fn dispatch_show_project_tree_context_menu(&mut self, path: Option<Vec<usize>>) {
@@ -123,7 +131,9 @@ impl Signex {
                 // logic (only schematic / pcb / snx* leaves open) in
                 // one place.
                 let msg = crate::panels::PanelMsg::Tree(TreeMsg::Select(path));
-                self.handle_dock_project_navigation_panel_message(&msg);
+                if let Some(task) = self.handle_dock_project_navigation_panel_message(&msg) {
+                    return task;
+                }
             }
             ProjectTreeAction::ToggleNode(path) => {
                 signex_widgets::tree_view::toggle(
@@ -280,5 +290,43 @@ fn reveal_in_file_manager(path: &std::path::Path) -> anyhow::Result<()> {
             .spawn()
             .map_err(|e| anyhow::anyhow!("xdg-open failed to spawn: {e}"))?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_widgets::tree_view::TreeMsg;
+
+    /// Regression (#99 part 1): `handle_dock_project_navigation_panel_message`
+    /// used to return `bool` and its `TreeMsg::Select` double-click arm
+    /// discarded `open_project_tree_document`'s `Task` via `let _ = ...`.
+    /// The explicit `Option<Task<Message>>` annotation is a compile-time
+    /// tripwire — this test stops compiling if the signature regresses
+    /// back to `bool`.
+    #[test]
+    fn handled_tree_message_returns_some_task() {
+        let (mut app, _bootstrap_task) = Signex::new();
+        let msg = crate::panels::PanelMsg::Tree(TreeMsg::Toggle(vec![]));
+
+        let result: Option<Task<Message>> = app.handle_dock_project_navigation_panel_message(&msg);
+
+        assert!(
+            result.is_some(),
+            "a Tree message must be reported as handled"
+        );
+    }
+
+    /// A message this handler doesn't own must fall through as `None`
+    /// so the dock dispatcher tries the next handler in the chain
+    /// (`handlers/dock/mod.rs`), rather than swallowing it.
+    #[test]
+    fn unrelated_panel_message_falls_through_as_none() {
+        let (mut app, _bootstrap_task) = Signex::new();
+        let msg = crate::panels::PanelMsg::SetUnit(signex_types::coord::Unit::Mm);
+
+        let result = app.handle_dock_project_navigation_panel_message(&msg);
+
+        assert!(result.is_none(), "non-tree messages must fall through");
     }
 }
