@@ -69,12 +69,19 @@ fn dd_action_enabled(action: &ActiveBarAction, has_selection: bool, has_net_colo
 /// (the widget greys the row and ignores clicks — Altium parity).
 fn dd_item(
     icon: svg::Handle,
-    label: &str,
+    label: &'static str,
     action: ActiveBarAction,
     has_selection: bool,
     has_net_colors: bool,
 ) -> DropdownEntry<ActiveBarMsg> {
     let enabled = dd_action_enabled(&action, has_selection, has_net_colors);
+    // #271 — the visible text comes from the command catalog when the
+    // action has an id, so the Active Bar stops being the only surface
+    // keeping its own copy of a command's wording. `label` is the
+    // fallback for actions still without an id (the parameterised
+    // families awaiting `CommandArgs`), and a test pins the catalog text
+    // to these literals so nothing the user sees moves.
+    let label = crate::app::command::active_bar::action_label(&action, label);
     DropdownEntry::Item(
         DropdownItem::new(label, ActiveBarMsg::Action(action))
             .icon(icon)

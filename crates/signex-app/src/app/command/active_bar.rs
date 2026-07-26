@@ -138,6 +138,70 @@ pub(crate) fn action_for_id(id: &str) -> Option<ActiveBarAction> {
         .map(|(_, action)| action.clone())
 }
 
+/// The command id naming an action, if it has one.
+///
+/// The reverse of [`action_for_id`], for view code that holds an action
+/// and wants the catalog entry behind it — the Active Bar renders its
+/// row labels through this so the visible text lives in the command
+/// table rather than in the view (#271).
+pub(crate) fn id_for_action(action: &ActiveBarAction) -> Option<&'static str> {
+    ACTIVE_BAR_COMMANDS
+        .iter()
+        .find(|(_, candidate)| candidate == action)
+        .map(|(id, _)| *id)
+}
+
+/// Actions the Active Bar renders under MORE THAN ONE label, which one
+/// command id therefore cannot describe.
+///
+/// `MoveSelection` is shown twice in the same Select menu — as "Move"
+/// with `icon_dd_move`, and as "Move Selection" with `icon_dd_move_sel`
+/// (`active_bar/dropdown.rs`, the `SELECT` table) — and both rows
+/// dispatch the identical action. Whether that is two rows that should be
+/// two actions, or one row too many, is a menu-content question and not
+/// this change's to answer; sourcing the label from the catalog would
+/// silently rename one of them.
+///
+/// So these keep the literal the view passes. `catalog_labels_match_the_
+/// active_bar_literals` asserts this list is exactly the set of actions
+/// that really are ambiguous, so a new one cannot be added silently — and
+/// so this one gets removed the day the duplicate is resolved.
+const AMBIGUOUS_LABELS: &[&str] = &["MoveSelection"];
+
+/// The variant name of an action, for the by-name comparisons above.
+/// `ActiveBarAction` has no discriminant accessor, and `Debug` is stable
+/// for the unit variants this is used on.
+fn variant_name(action: &ActiveBarAction) -> String {
+    let rendered = format!("{action:?}");
+    rendered
+        .split(['(', ' ', '{'])
+        .next()
+        .unwrap_or(&rendered)
+        .to_string()
+}
+
+/// The label a surface should show for an action: the catalog's
+/// `menu_label` when the action has an id, else `fallback`.
+///
+/// The Active Bar's row text now lives in the command table (#271), so a
+/// menu, the palette and the shortcuts pane can render the same command
+/// without a second copy of its wording. `fallback` covers the actions
+/// still without an id — the parameterised families awaiting
+/// `CommandArgs` — so no row can lose its label.
+pub(crate) fn action_label(action: &ActiveBarAction, fallback: &'static str) -> &'static str {
+    if AMBIGUOUS_LABELS
+        .iter()
+        .any(|name| variant_name(action) == *name)
+    {
+        return fallback;
+    }
+    id_for_action(action)
+        .and_then(|id| crate::keymap::AppCommandId::new(id).ok())
+        .and_then(|command| crate::keymap::metadata_for(&command))
+        .map(|metadata| metadata.menu_label())
+        .unwrap_or(fallback)
+}
+
 /// Every id this table carries. The bridge's coverage guard folds these
 /// into the set of ids `core_to_message` can resolve.
 ///
@@ -240,6 +304,120 @@ mod tests {
             );
         }
         assert!(action_for_id("definitely_not_a_command").is_none());
+    }
+
+    /// Behaviour proof for #271: for every Active Bar row the catalog now
+    /// labels, the catalog's `menu_label` must equal the literal that used
+    /// to be rendered — so routing labels through the registry changes
+    /// nothing the user sees.
+    ///
+    /// Scans `dropdown.rs`'s own source for the `(literal, action)` pairs
+    /// rather than trusting a hand-kept copy, which is the same reason
+    /// `bridge.rs` scans itself. If a row's wording is ever changed in the
+    /// view without the catalog following, this fails and names it.
+    ///
+    /// Changing an Active Bar label is menu content and needs Caner's or
+    /// Hakan's sign-off; this test exists so such a change cannot happen
+    /// by accident inside a refactor.
+    #[test]
+    fn catalog_labels_match_the_active_bar_literals() {
+        const DROPDOWN_SRC: &str = include_str!("../../active_bar/dropdown.rs");
+
+        let rows = scan_dropdown_rows(DROPDOWN_SRC);
+
+        // The ambiguity list must be exactly the actions the view really
+        // does render under more than one label — no stale entries, and
+        // no new ones slipping in unlisted.
+        let mut labels_per_action: std::collections::BTreeMap<&str, HashSet<&str>> =
+            Default::default();
+        for (literal, variant) in &rows {
+            labels_per_action
+                .entry(variant.as_str())
+                .or_default()
+                .insert(literal.as_str());
+        }
+        let actually_ambiguous: HashSet<&str> = labels_per_action
+            .iter()
+            .filter(|(_, labels)| labels.len() > 1)
+            .map(|(variant, _)| *variant)
+            .collect();
+        let listed: HashSet<&str> = AMBIGUOUS_LABELS.iter().copied().collect();
+        assert_eq!(
+            actually_ambiguous, listed,
+            "AMBIGUOUS_LABELS is out of step with the view. Left = actions \
+             dropdown.rs renders under several labels, right = what the list \
+             claims. An unlisted one would get one of its rows silently \
+             renamed; a stale one keeps a row off the registry for no reason."
+        );
+
+        let mut checked = 0usize;
+        let mut drift: Vec<String> = Vec::new();
+        for (literal, variant) in rows.iter().cloned() {
+            if listed.contains(variant.as_str()) {
+                continue;
+            }
+            let Some((id, _)) = ACTIVE_BAR_COMMANDS
+                .iter()
+                .find(|(_, action)| format!("{action:?}") == variant)
+            else {
+                // No id yet — a parameterised family. `dd_item` falls back
+                // to the literal, so there is nothing to compare.
+                continue;
+            };
+            let command = AppCommandId::new(*id).expect("table ids are valid");
+            let metadata = metadata_for(&command)
+                .unwrap_or_else(|| panic!("`{id}` is in the table but not the catalog"));
+            checked += 1;
+            if metadata.menu_label() != literal {
+                drift.push(format!(
+                    "`{id}`: catalog says {:?}, dropdown.rs says {literal:?}",
+                    metadata.menu_label()
+                ));
+            }
+        }
+
+        assert!(
+            checked >= 50,
+            "the dropdown source scan matched only {checked} labelled rows — \
+             `EntrySpec::item` / `dd_item` call shapes have drifted from what \
+             `scan_dropdown_rows` looks for, so this proof is not proving \
+             anything"
+        );
+        assert!(
+            drift.is_empty(),
+            "Active Bar label drift — the catalog and the view disagree on \
+             what the user sees. Changing this text is menu content and needs \
+             sign-off; if the change is intended, update `menu_label` in \
+             keymap/catalog/: {drift:#?}"
+        );
+    }
+
+    /// `(visible label, ActiveBarAction variant name)` for every uniform
+    /// dropdown row in `src`, from both row-building shapes.
+    fn scan_dropdown_rows(src: &str) -> Vec<(String, String)> {
+        let mut out = Vec::new();
+        for marker in ["EntrySpec::item(", "dd_item("] {
+            for chunk in src.split(marker).skip(1) {
+                // ... icon, "Label", ActiveBarAction::Variant
+                let Some((_, after_first_quote)) = chunk.split_once('"') else {
+                    continue;
+                };
+                let Some((literal, rest)) = after_first_quote.split_once('"') else {
+                    continue;
+                };
+                let Some((_, after_path)) = rest.split_once("ActiveBarAction::") else {
+                    continue;
+                };
+                let variant: String = after_path
+                    .chars()
+                    .take_while(|c| c.is_alphanumeric() || *c == '_')
+                    .collect();
+                if !variant.is_empty() {
+                    out.push((literal.to_string(), variant));
+                }
+            }
+        }
+        out
     }
 
     /// Ratchet in the other direction: every `ActiveBarAction` must have an
