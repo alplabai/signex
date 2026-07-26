@@ -15,7 +15,7 @@ use super::super::*;
 /// Commands without a live dispatch arm return `None`, and
 /// [`log_unmapped`] says so — naming the id and which of the two
 /// failure modes it hit — so an invocation can no longer vanish without
-/// a trace. 75 catalog ids are in that state, every one of them bound to
+/// a trace. 71 catalog ids are in that state, every one of them bound to
 /// a trigger in a shipped profile; the set is pinned by
 /// `tests::UNMAPPED_CATALOG_IDS` and may only shrink.
 pub(crate) fn core_to_message(command: &AppCommandId) -> Option<Message> {
@@ -87,10 +87,21 @@ pub(crate) fn core_to_message(command: &AppCommandId) -> Option<Message> {
         "toggle_auto_focus" => Message::Overlay(OverlayMsg::ToggleAutoFocus),
         "toggle_electrical_grid" => Message::Ui(UiMsg::ToggleSnapHotspots),
         "undo" => Message::Edit(EditMsg::Undo),
-        _ => {
-            log_unmapped(command);
-            return None;
-        }
+        // BRIDGE_ARMS_END — `tests::match_block` scans for command-id
+        // literals up to this marker and no further. Everything below is
+        // fallthrough machinery whose own string literals must not be
+        // mistaken for bridge arms. Move the marker, not the anchor.
+        //
+        // The schematic Active Bar's 59 actions are a table, not 59 arms
+        // here — see `super::active_bar`. Consulted before giving up, so
+        // adding an Active Bar command means adding one table row.
+        id => match super::active_bar::action_for_id(id) {
+            Some(action) => Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(action)),
+            None => {
+                log_unmapped(command);
+                return None;
+            }
+        },
     };
     Some(message)
 }
@@ -104,7 +115,7 @@ pub(crate) fn core_to_message(command: &AppCommandId) -> Option<Message> {
 /// The two failure modes want different words because they need
 /// different fixes:
 /// - a real catalog id with no arm — the binding is advertised in the
-///   Keyboard Shortcuts pane and does nothing. 75 ids are in this state;
+///   Keyboard Shortcuts pane and does nothing. 71 ids are in this state;
 ///   see `tests::UNMAPPED_CATALOG_IDS`.
 /// - an id that is in no catalog at all — almost always a typo in a
 ///   user-edited keymap TOML, which `keymap::profile` accepts without
@@ -150,13 +161,13 @@ mod tests {
             .find("let message = match command.as_str() {")
             .expect("core_to_message's match block moved — update match_block");
         let rest = &src[start..];
-        // Ends at the fallthrough arm, whatever shape it currently has
-        // (`_ => return None,` or a block). Everything after it —
-        // `log_unmapped`'s message literals, the pinned id list — must
+        // Ends at an explicit marker rather than at the fallthrough arm's
+        // text, which has already changed shape once. Everything after it
+        // — `log_unmapped`'s message literals, the pinned id list — must
         // stay out of the scan.
         let end = rest
-            .find("\n        _ => ")
-            .expect("core_to_message's fallthrough arm moved — update match_block");
+            .find("BRIDGE_ARMS_END")
+            .expect("the BRIDGE_ARMS_END marker is gone — restore it in core_to_message");
         &rest[..end]
     }
 
@@ -164,6 +175,16 @@ mod tests {
     /// lines (each starts, once trimmed, with `"`). Deliberately tiny,
     /// no regex dependency — mirrors `keymap::menu_command_tests`'s
     /// `ids_from_call`.
+    /// Every id `core_to_message` can resolve: the match arms it names
+    /// literally, plus the Active Bar table its fallthrough consults.
+    /// A source scan alone would miss the table and report all 59 Active
+    /// Bar commands as dead.
+    fn resolvable_command_ids(src: &str) -> HashSet<String> {
+        let mut ids: HashSet<String> = bridged_command_ids(src).into_iter().collect();
+        ids.extend(crate::app::command::active_bar::command_ids().map(str::to_string));
+        ids
+    }
+
     fn bridged_command_ids(src: &str) -> Vec<String> {
         let mut ids = Vec::new();
         for line in match_block(src).lines() {
@@ -226,7 +247,7 @@ mod tests {
     /// arm, or deleting an arm, fails `unmapped_command_ids_only_shrink`.
     /// Wiring one up means deleting its line here, in the same commit.
     ///
-    /// The 75 are a mix, and the distinction decides the fix:
+    /// The 71 are a mix, and the distinction decides the fix:
     /// - **bridge gap** — the action exists and is clickable, only the
     ///   keyboard route is dead (`place_no_erc` →
     ///   `ActiveBarAction::PlaceNoERC`, `place_compile_mask`,
@@ -250,18 +271,18 @@ mod tests {
         "edit_text_in_place", "edit_value", "fast_grid_1", "fast_grid_2", "find_next",
         "find_previous", "find_similar_objects", "highlight_net_under_cursor",
         "highlight_related_net_objects", "import_graphics", "leave_sheet", "measure_distance",
-        "move_object", "move_selection", "navigate_up_hierarchy", "next_document_tab",
+        "move_object", "navigate_up_hierarchy", "next_document_tab",
         "next_grid", "next_highlighted_net_item", "next_sheet", "open_datasheet",
-        "open_schematic_preferences", "place_compile_mask", "place_design_block",
+        "open_schematic_preferences", "place_design_block",
         "place_global_label", "place_hierarchical_label", "place_junction", "place_no_connect",
-        "place_no_erc", "place_power_symbol", "place_wire_to_bus_entry",
+        "place_power_symbol", "place_wire_to_bus_entry",
         "previous_document_tab", "previous_grid", "previous_highlighted_net_item",
         "previous_sheet", "refresh_view", "repeat_last_item", "report_manager_bom",
         "reset_local_coordinates", "rubber_stamp_copy", "select_expand_connection",
         "select_node_or_connection_item", "sheet_navigation_back", "sheet_navigation_forward",
         "switch_segment_posture", "toggle_cross_select_mode", "toggle_floating_panels",
         "toggle_properties_panel", "toggle_schematic_filter_panel",
-        "toggle_schematic_list_panel", "toggle_search_panel", "toggle_selection",
+        "toggle_schematic_list_panel", "toggle_search_panel",
         "undo_last_segment", "unselect_all", "zoom_in_at_cursor", "zoom_out_at_cursor",
         "zoom_to_all_objects", "zoom_to_selection_area",
     ];
@@ -272,7 +293,7 @@ mod tests {
     /// The bridge's `_ => return None` fallthrough makes an unmapped id
     /// indistinguishable from a mapped one at the call site — the keymap
     /// resolves it, consumes the stroke, and no-ops. Nothing measured that
-    /// gap before this test, so it grew to 75 of 134 unnoticed.
+    /// gap before this test, so it grew to 75 of 134 unnoticed before anything measured it.
     ///
     /// Deliberately two assertions rather than one set equality: the
     /// "no longer unmapped" direction is a fix and gets its own message
@@ -280,7 +301,7 @@ mod tests {
     /// direction is the regression this exists to catch.
     #[test]
     fn unmapped_command_ids_only_shrink() {
-        let bridged: HashSet<String> = bridged_command_ids(BRIDGE_SRC).into_iter().collect();
+        let bridged = resolvable_command_ids(BRIDGE_SRC);
         let pinned: HashSet<&str> = UNMAPPED_CATALOG_IDS.iter().copied().collect();
 
         let newly_unmapped: Vec<&'static str> = crate::keymap::all_command_ids()

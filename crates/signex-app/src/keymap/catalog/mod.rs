@@ -1,5 +1,6 @@
 use crate::keymap::{AppCommandId, Modifiers};
 
+mod active_bar;
 mod general;
 mod pcb;
 mod schematic;
@@ -209,6 +210,7 @@ impl CommandMetadata {
 const TABLES: &[&[CommandMetadata]] = &[
     general::GENERAL,
     schematic::SCHEMATIC,
+    active_bar::ACTIVE_BAR,
     pcb::PCB,
     threed::THREE_D,
 ];
@@ -409,6 +411,7 @@ mod tests {
         const TABLE_SRC: &[(&str, &str)] = &[
             ("general.rs", include_str!("general.rs")),
             ("schematic.rs", include_str!("schematic.rs")),
+            ("active_bar.rs", include_str!("active_bar.rs")),
             ("pcb.rs", include_str!("pcb.rs")),
             ("threed.rs", include_str!("threed.rs")),
         ];
