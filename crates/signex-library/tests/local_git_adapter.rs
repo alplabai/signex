@@ -22,8 +22,9 @@ use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig, Workflo
 use signex_library::manufacturer::ManufacturerPart;
 use signex_library::param::ParamMap;
 use signex_library::primitive::{
-    Body3D, BodyShape, Footprint, LayerId, Pad, PadKind, PadShape, PinDirection, PinOrientation,
-    Polygon, PrimitiveKind, PrimitiveRef, SimKind, SimModel, Symbol, SymbolPin,
+    Body3D, BodyShape, Footprint, FootprintFile, LayerId, Pad, PadKind, PadShape, PinDirection,
+    PinOrientation, Polygon, PrimitiveKind, PrimitiveRef, SimFile, SimKind, SimModel, Symbol,
+    SymbolPin,
 };
 use uuid::Uuid;
 
@@ -409,6 +410,136 @@ fn list_primitives_returns_alphabetic_summaries() {
     assert_eq!(fps.len(), 1);
     assert_eq!(fps[0].kind, PrimitiveKind::Footprint);
     assert_eq!(fps[0].name, "SOIC-8");
+}
+
+/// `list_footprints` / `list_sims` read the name out of every
+/// `<uuid>.<ext>` envelope in the per-kind directory, tag each summary
+/// with the right [`PrimitiveKind`], and hand the whole list back
+/// sorted by name — not by uuid and not in directory-walk order.
+///
+/// The save order below is deliberately not alphabetic, and the uuids
+/// are `now_v7` so filename order tracks save order: a listing that
+/// forgot to sort would come back in save order and fail here.
+#[test]
+fn list_footprints_and_sims_are_name_sorted() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_file, adapter) = init_adapter(&dir, "Listing", false);
+
+    for name in ["QFN-32", "SOIC-8", "0402", "TSSOP-20"] {
+        adapter
+            .save_footprint(fixture_footprint(name), "add")
+            .unwrap();
+    }
+    for name in ["LM358", "2N3904", "TL072"] {
+        adapter.save_sim(fixture_sim(name), "add").unwrap();
+    }
+
+    let fps = adapter.list_footprints().unwrap();
+    let fp_names: Vec<&str> = fps.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(fp_names, vec!["0402", "QFN-32", "SOIC-8", "TSSOP-20"]);
+    for s in &fps {
+        assert_eq!(s.kind, PrimitiveKind::Footprint);
+        assert_eq!(s.used_by_count, 0);
+    }
+
+    let sims = adapter.list_sims().unwrap();
+    let sim_names: Vec<&str> = sims.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(sim_names, vec!["2N3904", "LM358", "TL072"]);
+    for s in &sims {
+        assert_eq!(s.kind, PrimitiveKind::Sim);
+        assert_eq!(s.used_by_count, 0);
+    }
+
+    // Every summary's uuid must be the one the primitive was saved
+    // under — the listing parses it out of the filename stem, so a
+    // uuid/name mismatch here means the two halves drifted apart.
+    for summary in fps.iter().chain(sims.iter()) {
+        let fetched_name = match summary.kind {
+            PrimitiveKind::Footprint => adapter.get_footprint(summary.uuid).unwrap().name,
+            PrimitiveKind::Sim => adapter.get_sim(summary.uuid).unwrap().name,
+            _ => unreachable!("only footprints and sims in this listing"),
+        };
+        assert_eq!(fetched_name, summary.name);
+    }
+}
+
+/// Files whose stem is not a uuid, and files with a foreign extension,
+/// are skipped rather than surfaced or errored on. A `README.md` or a
+/// stray editor backup dropped into `footprints/` must not break the
+/// Library Browser.
+#[test]
+fn list_primitives_skips_non_uuid_and_foreign_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "Skip", false);
+    adapter
+        .save_footprint(fixture_footprint("SOIC-8"), "add")
+        .unwrap();
+
+    let fpt_dir = file.parent().unwrap().join("footprints");
+    std::fs::write(fpt_dir.join("README.md"), b"not a footprint").unwrap();
+    std::fs::write(fpt_dir.join("notauuid.snxfpt"), b"garbage").unwrap();
+
+    let fps = adapter.list_footprints().unwrap();
+    assert_eq!(fps.len(), 1);
+    assert_eq!(fps[0].name, "SOIC-8");
+}
+
+/// A well-formed envelope carrying *zero* primitives is a corrupt
+/// library, not an empty one: the listing must fail loudly with the
+/// `empty .snxfpt <file>` / `empty .snxsim <file>` diagnostic rather
+/// than silently dropping the entry.
+#[test]
+fn list_primitives_rejects_zero_primitive_envelope() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "Envelope", false);
+    let root = file.parent().unwrap();
+    let now = chrono::Utc::now();
+
+    let fpt_uuid = Uuid::now_v7();
+    let empty_fpt = FootprintFile {
+        format: "snxfpt/1".into(),
+        file_uuid: Uuid::now_v7(),
+        display_name: "empty".into(),
+        footprints: Vec::new(),
+        created: now,
+        updated: now,
+    };
+    let fpt_dir = root.join("footprints");
+    std::fs::create_dir_all(&fpt_dir).unwrap();
+    std::fs::write(
+        fpt_dir.join(format!("{fpt_uuid}.snxfpt")),
+        empty_fpt.to_toml_string().unwrap(),
+    )
+    .unwrap();
+
+    let err = adapter.list_footprints().unwrap_err();
+    let LibraryError::Backend(msg) = &err else {
+        panic!("expected Backend, got {err:?}");
+    };
+    assert_eq!(msg, &format!("empty .snxfpt {fpt_uuid}.snxfpt"));
+
+    let sim_uuid = Uuid::now_v7();
+    let empty_sim = SimFile {
+        format: "snxsim/v1".into(),
+        file_uuid: Uuid::now_v7(),
+        display_name: "empty".into(),
+        models: Vec::new(),
+        created: now,
+        updated: now,
+    };
+    let sim_dir = root.join("sims");
+    std::fs::create_dir_all(&sim_dir).unwrap();
+    std::fs::write(
+        sim_dir.join(format!("{sim_uuid}.snxsim")),
+        empty_sim.to_toml_string().unwrap(),
+    )
+    .unwrap();
+
+    let err = adapter.list_sims().unwrap_err();
+    let LibraryError::Backend(msg) = &err else {
+        panic!("expected Backend, got {err:?}");
+    };
+    assert_eq!(msg, &format!("empty .snxsim {sim_uuid}.snxsim"));
 }
 
 /// LibrarySet integration test — mount two LocalGit libraries and resolve a

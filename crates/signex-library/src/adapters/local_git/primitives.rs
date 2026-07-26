@@ -423,14 +423,20 @@ impl LocalGitAdapter {
         Ok(dir.join(format!("{}.{SYMBOL_EXT}", file.file_uuid)))
     }
 
-    pub(super) fn list_primitive_summaries<T>(
+    /// One [`PrimitiveSummary`] per `<uuid>.<ext>` file directly under
+    /// `<root>/<subdir>`, sorted by name.
+    ///
+    /// Only the primitive's *name* survives, so the envelope is parsed
+    /// into its concrete type and `.name` lifted straight off it. This
+    /// used to be generic over `T: DeserializeOwned` with a `name_of`
+    /// extractor, which forced a full `serde_json` serialise +
+    /// deserialise **per file** purely to teach the compiler that
+    /// `T == Footprint` / `T == SimModel` — every byte of which was
+    /// discarded on the next line (#99).
+    pub(super) fn list_primitive_summaries(
         &self,
         kind: PrimitiveKind,
-        name_of: impl Fn(&T) -> &str,
-    ) -> Result<Vec<PrimitiveSummary>, LibraryError>
-    where
-        T: DeserializeOwned,
-    {
+    ) -> Result<Vec<PrimitiveSummary>, LibraryError> {
         let dir = self.primitive_dir(kind);
         if !dir.exists() {
             return Ok(Vec::new());
@@ -458,48 +464,67 @@ impl LocalGitAdapter {
                 continue;
             };
             let bytes = fs::read(path)?;
-            // v0.18.4/v0.18.5 — `.snxfpt` and `.snxsim` migrated to
-            // TOML envelopes. Read the envelope, pull the first
-            // contained primitive, then JSON-round-trip into the
-            // generic T (= Footprint or = SimModel).
-            let value: T = if matches!(kind, PrimitiveKind::Footprint) {
-                let file = crate::primitive::FootprintFile::from_bytes(&bytes)
-                    .map_err(|e| LibraryError::Backend(format!("list primitive {name}: {e}")))?;
-                let fp = file
-                    .footprints
-                    .into_iter()
-                    .next()
-                    .ok_or_else(|| LibraryError::Backend(format!("empty .snxfpt {name}")))?;
-                let buf = serde_json::to_vec(&fp).map_err(|e| {
-                    LibraryError::Backend(format!("re-serialise .snxfpt {name}: {e}"))
-                })?;
-                serde_json::from_slice(&buf)
-                    .map_err(|e| LibraryError::Backend(format!("list primitive {name}: {e}")))?
-            } else if matches!(kind, PrimitiveKind::Sim) {
-                let file = SimFile::from_bytes(&bytes)
-                    .map_err(|e| LibraryError::Backend(format!("list primitive {name}: {e}")))?;
-                let model = file
-                    .models
-                    .into_iter()
-                    .next()
-                    .ok_or_else(|| LibraryError::Backend(format!("empty .snxsim {name}")))?;
-                let buf = serde_json::to_vec(&model).map_err(|e| {
-                    LibraryError::Backend(format!("re-serialise .snxsim {name}: {e}"))
-                })?;
-                serde_json::from_slice(&buf)
-                    .map_err(|e| LibraryError::Backend(format!("list primitive {name}: {e}")))?
-            } else {
-                serde_json::from_slice(&bytes)
-                    .map_err(|e| LibraryError::Backend(format!("list primitive {name}: {e}")))?
-            };
             out.push(PrimitiveSummary {
                 uuid,
-                name: name_of(&value).to_string(),
+                name: primitive_name_in_envelope(kind, &bytes, name)?,
                 kind,
                 used_by_count: 0,
             });
         }
         out.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(out)
+    }
+}
+
+/// Name of the first primitive inside a `.snxfpt` / `.snxsim` envelope.
+///
+/// `file_name` is diagnostic only — it names the offending file in the
+/// error text, which is what the user sees when a container is corrupt.
+/// A well-formed envelope carrying *zero* primitives is corrupt, not
+/// empty, and must fail loudly rather than vanish from the listing.
+///
+/// HI-8: [`PrimitiveKind::Symbol`] cannot arrive here. Symbol
+/// containers are `<slug>.snxsym`, so the uuid-stem parse in
+/// `list_primitive_summaries` would skip them anyway, and
+/// `list_symbols` walks them through `scan_symbol_files` instead. The
+/// match is spelled out per variant with no `_` arm, so a kind added
+/// to [`PrimitiveKind`] later is a compile error here rather than a
+/// listing that silently comes back empty.
+fn primitive_name_in_envelope(
+    kind: PrimitiveKind,
+    bytes: &[u8],
+    file_name: &str,
+) -> Result<String, LibraryError> {
+    match kind {
+        PrimitiveKind::Footprint => {
+            let file = crate::primitive::FootprintFile::from_bytes(bytes)
+                .map_err(|e| LibraryError::Backend(format!("list primitive {file_name}: {e}")))?;
+            let fp = file
+                .footprints
+                .into_iter()
+                .next()
+                .ok_or_else(|| LibraryError::Backend(format!("empty .snxfpt {file_name}")))?;
+            Ok(fp.name)
+        }
+        PrimitiveKind::Sim => {
+            let file = SimFile::from_bytes(bytes)
+                .map_err(|e| LibraryError::Backend(format!("list primitive {file_name}: {e}")))?;
+            let model = file
+                .models
+                .into_iter()
+                .next()
+                .ok_or_else(|| LibraryError::Backend(format!("empty .snxsim {file_name}")))?;
+            Ok(model.name)
+        }
+        PrimitiveKind::Symbol => {
+            debug_assert!(
+                false,
+                "list_primitive_summaries(Symbol) must route through scan_symbol_files; \
+                 a .snxsym is a multi-symbol container, not one uuid-named primitive"
+            );
+            Err(LibraryError::Backend(format!(
+                "list primitive {file_name}: symbols are listed via scan_symbol_files"
+            )))
+        }
     }
 }
