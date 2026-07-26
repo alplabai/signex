@@ -40,6 +40,11 @@ pub(crate) fn core_to_message(command: &AppCommandId) -> Option<Message> {
         "delete_selection" | "remove_last_vertex" => Message::Edit(EditMsg::DeleteSelected),
         "draw_graphic_line" => Message::Tool(ToolMessage::SelectTool(Tool::Line)),
         "duplicate" => Message::Edit(EditMsg::Duplicate),
+        // Docking the Properties panel IS how this app shows the
+        // selection's properties: the status bar's
+        // `OpenPropertiesForSelection` and the canvas context menu's
+        // "Properties..." row both send this same message.
+        "edit_selected_object_properties" => Message::Menu(MenuMessage::OpenPropertiesPanel),
         "find" | "find_text" => Message::Overlay(OverlayMsg::OpenFind),
         "find_and_replace" => Message::Overlay(OverlayMsg::OpenReplace),
         "footprint_mode_pads" => Message::FootprintModeShortcut(EditorMode::Normal),
@@ -59,15 +64,16 @@ pub(crate) fn core_to_message(command: &AppCommandId) -> Option<Message> {
             Message::Tool(ToolMessage::SelectTool(Tool::Component))
         }
         "new_document" => Message::Menu(MenuMessage::NewProject),
-        "next_grid" => Message::Ui(UiMsg::GridCycle),
         "open_command_palette" => Message::CommandPalette(CommandPaletteMsg::Open),
         "open_document" => Message::Menu(MenuMessage::OpenProject),
         "open_grid_properties" => Message::GridProperties(GridPropertiesMsg::Open),
         "open_net_color_palette" => Message::NetColor(NetColorMsg::Open),
-        // One dialog, two ids: the preferences window opens on the
-        // schematic page for a schematic document, so "open schematic
-        // preferences" is the same command reached from a different
-        // surface, not a second dialog.
+        // One dialog, two ids. `PrefNav` has no schematic page —
+        // Appearance / Keyboard / Erc / LibraryDistributors /
+        // ComponentClasses — and the open handler picks no page, so
+        // both ids land on whichever page was last visited. The label
+        // "Open schematic preferences" therefore over-promises; the
+        // dialog it opens is the only preferences dialog there is.
         "open_preferences" | "open_schematic_preferences" => {
             Message::Preferences(PreferencesMsg::Open)
         }
@@ -85,7 +91,12 @@ pub(crate) fn core_to_message(command: &AppCommandId) -> Option<Message> {
         "placement_properties" => Message::Tool(ToolMessage::PrePlacementTab),
         "print" => Message::PrintPreview(PrintPreviewMsg::Requested),
         "redo" => Message::Edit(EditMsg::Redo),
-        "report_manager_bom" => Message::Menu(MenuMessage::GenerateBom),
+        // `ExportBom`, NOT `GenerateBom`. The latter is the stub behind
+        // the greyed-out "Generate BOM" menu row — it logs "Generate BOM
+        // is v0.8 scope" and returns `Task::none()`. `ExportBom` reaches
+        // `handle_bom_preview_open`, which is the BOM this app actually
+        // has.
+        "report_manager_bom" => Message::Menu(MenuMessage::ExportBom),
         "reset_schematic_designators" => Message::Annotate(AnnotateMsg::OpenResetConfirm),
         "rotate_clockwise" | "rotate_counterclockwise" => Message::Edit(EditMsg::RotateSelected),
         "run_erc" | "update_pcb_from_schematic" => Message::Erc(ErcMsg::Run),
@@ -209,7 +220,13 @@ mod tests {
             if !trimmed.starts_with('"') && !trimmed.starts_with('|') {
                 continue;
             }
-            let mut rest = line;
+            // Only the pattern side of an arm can name a command id.
+            // Everything past `=>` is the body — a trailing comment or a
+            // `&str` argument there is not an id, and scanning it would
+            // mark a command bridged that has no arm. That failure is
+            // SILENT: the ratchet would pass while the shortcut stays
+            // dead, which is the one thing it exists to prevent.
+            let mut rest = trimmed.split_once("=>").map_or(trimmed, |(head, _)| head);
             while let Some(open) = rest.find('"') {
                 let after = &rest[open + 1..];
                 match after.find('"') {
@@ -270,17 +287,24 @@ mod tests {
     ///   occurrences in the tree (`measure_distance`, `break_wire`,
     ///   `place_global_label`, `place_hierarchical_label`,
     ///   `repeat_last_item`, `rubber_stamp_copy`). A feature, not an arm.
-    ///   This is most of what is left.
+    ///   This is most of what is left. It also covers ids whose obvious
+    ///   target turns out to be a STUB: `next_grid` looks wirable to
+    ///   `Ui(GridCycle)`, but that handler only calls `clear_bg_cache()`
+    ///   and cycles nothing, so the arm would trade a logged warning for
+    ///   a silent no-op. Read the handler body, not just its existence.
     /// - **needs an argument** — the target `Message` carries data this
     ///   entry point cannot supply. `select_expand_connection` wants
     ///   `SelectionRequest::SelectConnected { world_x, world_y }`, and a
     ///   bare id has no cursor. Unblocked by `dispatch(id, args)` (#367),
     ///   not by a match arm.
-    /// - **half an API** — the state change exists in one direction only.
-    ///   `dock::state` has `add_panel` and no remove/toggle, so every
-    ///   `toggle_*_panel` id would have to lie about what it does; and
-    ///   nothing in the tree clears a selection, which strands
-    ///   `unselect_all`.
+    /// - **not addressable from a bare id** — the operation exists but
+    ///   only in a form this entry point cannot name. `DockMessage` does
+    ///   have `ClosePanel` and `ToggleCollapse`, but both are addressed
+    ///   by `(PanelPosition, index)`, and no kind-addressed toggle
+    ///   exists — so every `toggle_*_panel` id could only ever open,
+    ///   never toggle. `unselect_all` is stranded for the neighbouring
+    ///   reason: every `selected.clear()` in the tree is a step inside
+    ///   some larger operation, never a message of its own.
     ///
     /// Full analysis:
     /// `docs/audit/command-registry-action-surface-2026-07-25.md` §5.
@@ -291,12 +315,12 @@ mod tests {
         "cycle_snap_grid_backward", "cycle_wiring_mode", "drag_keep_connections",
         "draw_hierarchical_sheet", "edit_footprint_field",
         "edit_library_symbol", "edit_object_properties", "edit_reference_designator",
-        "edit_selected_object_properties", "edit_selected_symbol_in_symbol_editor",
+        "edit_selected_symbol_in_symbol_editor",
         "edit_text_in_place", "edit_value", "fast_grid_1", "fast_grid_2", "find_next",
         "find_previous", "find_similar_objects", "highlight_net_under_cursor",
         "highlight_related_net_objects", "import_graphics", "leave_sheet", "measure_distance",
         "move_object", "navigate_up_hierarchy", "next_document_tab",
-        "next_highlighted_net_item", "next_sheet", "open_datasheet",
+        "next_grid", "next_highlighted_net_item", "next_sheet", "open_datasheet",
         "place_design_block",
         "place_global_label", "place_hierarchical_label", "place_junction",
         "place_power_symbol",
@@ -370,8 +394,8 @@ mod tests {
             Message::Tool(ToolMessage::SelectTool(Tool::Line))
         ));
         assert!(matches!(
-            resolve("next_grid"),
-            Message::Ui(UiMsg::GridCycle)
+            resolve("edit_selected_object_properties"),
+            Message::Menu(MenuMessage::OpenPropertiesPanel)
         ));
         assert!(matches!(
             resolve("open_schematic_preferences"),
@@ -385,9 +409,11 @@ mod tests {
             resolve("place_wire_to_bus_entry"),
             Message::Tool(ToolMessage::SelectTool(Tool::BusEntry))
         ));
+        // `ExportBom`, not the `GenerateBom` stub — pinned because the
+        // two are one variant apart and the wrong one is silent.
         assert!(matches!(
             resolve("report_manager_bom"),
-            Message::Menu(MenuMessage::GenerateBom)
+            Message::Menu(MenuMessage::ExportBom)
         ));
         assert!(matches!(
             resolve("zoom_to_all_objects"),
