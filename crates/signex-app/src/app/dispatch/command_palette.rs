@@ -87,7 +87,17 @@ impl Signex {
         self.ui_state.command_palette.selected_index = 0;
 
         match action {
-            CommandAction::Menu(menu_msg) => Task::done(Message::Menu(menu_msg)),
+            // Through the same bridge the keyboard uses. The palette
+            // carries an id and never learns which `Message` it becomes
+            // — Command ≠ Message (#278). An id that stopped resolving
+            // between `build_catalog` and here is a no-op rather than a
+            // panic; `core_to_message` logs which one and why.
+            CommandAction::Command(command) => {
+                match crate::app::command::core_to_message(&command) {
+                    Some(message) => self.dispatch_update(message),
+                    None => Task::none(),
+                }
+            }
             CommandAction::Panel(panel) => {
                 Task::done(Message::Overlay(OverlayMsg::OpenPanel(panel)))
             }
