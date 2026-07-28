@@ -272,30 +272,51 @@ pub(crate) struct AssembledGraph {
 /// (#540, inherited from #430 and not introduced by the re-key).
 ///
 /// Order is the caller's contract — it decides occurrence numbering and hence
-/// `NetId` assignment — so pages are taken in `pages_outside_the_hierarchy`'s
-/// already-sorted order, never a map's. That order is sorted *absolute paths*,
-/// where the pre-#466 code sorted the relative reference keys; the two agree
-/// for every page under the project directory and disagree for one declared
-/// with an absolute path elsewhere (#541).
+/// `NetId` assignment, so it is part of the exported `.net` — and pages are
+/// therefore sorted by their own [`signex_net::SheetKey`], the identity every
+/// other part of the graph is keyed by (#541).
+///
+/// Sorting `pages_outside_the_hierarchy` directly would be the obvious
+/// shortcut and is wrong twice over. That `Vec` holds *absolute* paths
+/// (`dir.join(&s.filename)`), and `Path`'s `Ord` is **component-wise** where
+/// `SheetKey`'s is byte-wise over the whole string — a different comparison
+/// function, not merely a different string. They disagree on an ordinary
+/// nested project, no exotic input required: for `sub/a.snxsch` against
+/// `sub-b.snxsch`, `Path` compares the component `sub` against `sub-b.snxsch`
+/// and puts the nested page first, while the byte-wise compare reaches `-`
+/// (`0x2d`) before `/` (`0x2f`) and puts the sibling first.
+///
+/// Keying the order to `SheetKey` also reproduces the pre-#466 order, which
+/// sorted the children-map key `String`s — so an existing project's `.net` is
+/// unchanged by the re-key rather than silently renumbered. And a relative,
+/// base-anchored key cannot make net numbering depend on where the project
+/// directory happens to sit on disk, which an absolute-path sort can for any
+/// page declared outside it.
 pub(crate) fn project_roots(
     root_key: signex_net::SheetKey,
     project_set: &ProjectSheetSet,
     graph: &AssembledGraph,
     base_dir: Option<&Path>,
 ) -> Vec<signex_net::ProjectRoot> {
-    let mut roots = vec![signex_net::ProjectRoot {
-        key: root_key.clone(),
-    }];
-    for page in &project_set.pages_outside_the_hierarchy {
-        let key = sheet_key(page, base_dir);
+    let mut page_keys: Vec<signex_net::SheetKey> = project_set
+        .pages_outside_the_hierarchy
+        .iter()
+        .map(|page| sheet_key(page, base_dir))
         // A page that is absent or unreadable stays diagnosed as such rather
         // than stitched from nothing; only keys that actually assembled are
         // walkable.
-        if key == root_key || !graph.sheets.contains_key(&key) {
-            continue;
-        }
-        roots.push(signex_net::ProjectRoot { key });
-    }
+        .filter(|key| *key != root_key && graph.sheets.contains_key(key))
+        .collect();
+    page_keys.sort();
+
+    let mut roots = vec![signex_net::ProjectRoot {
+        key: root_key.clone(),
+    }];
+    roots.extend(
+        page_keys
+            .into_iter()
+            .map(|key| signex_net::ProjectRoot { key }),
+    );
     roots
 }
 
@@ -895,6 +916,52 @@ mod tests {
             sheet_key(&nav, Some(Path::new("/proj"))),
             leaf_key,
             "navigation lands on the key the graph resolved"
+        );
+    }
+
+    #[test]
+    fn pages_are_ordered_by_sheet_key_not_by_absolute_path() {
+        // Occurrence order is NetId order, so root order is part of the
+        // exported `.net`. `Path`'s Ord is component-wise and `SheetKey`'s is
+        // byte-wise over the whole string, and they disagree on an ordinary
+        // nested project: `Path` compares the component "sub" against
+        // "sub-b.snxsch" and puts the nested page first, while the byte-wise
+        // compare reaches '-' (0x2d) before '/' (0x2f) and puts the sibling
+        // first. The byte-wise one is what the pre-#466 children-map keys
+        // produced, so keying the order to `SheetKey` leaves an existing
+        // project's netlist unrenumbered (#541).
+        let base = Path::new("/proj");
+        let root_path = PathBuf::from("/proj/root.snxsch");
+        let nested = PathBuf::from("/proj/sub/a.snxsch");
+        let sibling = PathBuf::from("/proj/sub-b.snxsch");
+
+        let mut sheets = HashMap::new();
+        sheets.insert(root_path.clone(), sheet(0x1, &[]));
+        sheets.insert(nested.clone(), sheet(0x2, &[]));
+        sheets.insert(sibling.clone(), sheet(0x3, &[]));
+
+        let mut pages = vec![nested, sibling];
+        pages.sort();
+        assert_eq!(
+            pages[0],
+            PathBuf::from("/proj/sub/a.snxsch"),
+            "sorted absolute paths put the nested page first — the order NOT to inherit"
+        );
+
+        let set = ProjectSheetSet {
+            sheets: sheets.clone(),
+            pages_outside_the_hierarchy: pages,
+            unreadable: Vec::new(),
+            root: Some(root_path.clone()),
+        };
+        let graph = project_graph(&sheets, Some(base));
+        let root_key = sheet_key(&root_path, Some(base));
+        let roots = project_roots(root_key.clone(), &set, &graph, Some(base));
+
+        assert_eq!(
+            roots.into_iter().map(|r| r.key).collect::<Vec<_>>(),
+            vec![root_key, key("sub-b.snxsch"), key("sub/a.snxsch")],
+            "root first, then pages in SheetKey order"
         );
     }
 }
