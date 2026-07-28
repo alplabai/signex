@@ -43,12 +43,12 @@ struct GlobalPrefsFile {
     libraries: Vec<GlobalLibraryEntry>,
 }
 
-/// Resolved on-disk path of `global_libraries.toml`. `None` when
-/// `dirs::config_dir()` can't resolve a config dir (very rare — a
-/// stripped-down headless environment).
+/// Resolved on-disk path of `global_libraries.toml`. `None` when the
+/// platform can't resolve a config dir (very rare — a stripped-down
+/// headless environment). See [`crate::config_root::config_root`].
 pub fn prefs_path() -> Option<PathBuf> {
-    let base = dirs::config_dir()?;
-    Some(base.join("signex").join("global_libraries.toml"))
+    let root = crate::config_root::config_root()?;
+    Some(root.join("global_libraries.toml"))
 }
 
 /// Load the global library list from disk. Returns an empty Vec when
@@ -59,10 +59,16 @@ pub fn load() -> Vec<GlobalLibraryEntry> {
     let Some(path) = prefs_path() else {
         return Vec::new();
     };
+    load_at(&path)
+}
+
+/// Load from a specific path — extracted so tests can hit the actual
+/// parse path without going through `prefs_path()`/`config_root()`.
+pub fn load_at(path: &Path) -> Vec<GlobalLibraryEntry> {
     if !path.exists() {
         return Vec::new();
     }
-    match std::fs::read_to_string(&path) {
+    match std::fs::read_to_string(path) {
         Ok(text) => match toml::from_str::<GlobalPrefsFile>(&text) {
             Ok(file) => file.libraries,
             Err(e) => {
@@ -179,10 +185,9 @@ mod tests {
 
     #[test]
     fn load_returns_empty_when_file_missing() {
-        // The default config-dir-relative path almost certainly doesn't
-        // exist on a fresh CI runner; if it does, the test fixture is
-        // tolerant either way. The contract under test is "no panic".
-        let _ = load();
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("does-not-exist.toml");
+        assert_eq!(load_at(&path), Vec::new());
     }
 
     #[test]

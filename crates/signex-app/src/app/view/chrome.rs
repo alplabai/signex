@@ -251,6 +251,7 @@ impl Signex {
             ui.preferences_draft_label_style,
             ui.preferences_draft_multisheet_style,
             ui.preferences_draft_grid_style,
+            ui.preferences_draft_pcb_gpu_render,
             ui.preferences_draft_symbol_grid_size_mm,
             ui.preferences_draft_symbol_grid_style,
             ui.preferences_draft_symbol_pin_selection,

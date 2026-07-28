@@ -6,41 +6,133 @@ use super::super::*;
 use crate::keymap::KeyStroke;
 use iced::Subscription;
 
+/// Which overlays are open, as the keyboard subscription sees them.
+///
+/// A named struct rather than the positional tuple this used to be, for
+/// two reasons. The flag list had reached twelve entries, which is where
+/// std's tuple impls stop — `Subscription::with` requires
+/// `Hash + Clone + Send + Sync + 'static`, and neither `Hash` nor
+/// `Clone` is implemented for a 13-tuple, so a thirteenth modal could
+/// not be added at all. And with twelve same-typed `bool`s, swapping two
+/// of them in either the `with(...)` list or the destructuring pattern
+/// silently routed Esc to the wrong modal, with nothing to catch it.
+///
+/// `Hash` is load-bearing, not decorative: iced re-keys the subscription
+/// from it, so every flag must stay inside the hash for a modal opening
+/// to be observed.
+#[derive(Clone, Copy, Default, Hash)]
+struct OpenOverlays {
+    find_replace_open: bool,
+    palette_open: bool,
+    kbd_shortcuts_open: bool,
+    first_run_tour_open: bool,
+    prefs_open: bool,
+    annotate_open: bool,
+    erc_open: bool,
+    rename_open: bool,
+    remove_open: bool,
+    enable_vc_open: bool,
+    library_create_options_open: bool,
+    keymap_recorder_open: bool,
+    passive_calculator_open: bool,
+}
+
+impl OpenOverlays {
+    /// The Esc ladder: which modal a bare Esc dismisses. `None` means no
+    /// modal claimed the key, so the caller falls through to
+    /// `Message::EscapePressed` (the tool reset).
+    ///
+    /// Every modal in the app needs a rung here. A missing one is not a
+    /// no-op: Esc falls through and silently resets the active canvas
+    /// tool *behind* the open modal. That has cost the repo twice — the
+    /// Library Options gap below, and #511 (the passive calculator, which
+    /// shipped in #490 with no rung). Which is why this is a plain
+    /// function over a `Copy` struct instead of arms buried in the
+    /// subscription closure: the ladder is now covered by `tests` at the
+    /// foot of this file, so the next omission fails a test.
+    ///
+    /// Order is "user-facing top → bottom" — the deepest modal wins. The
+    /// command palette and the keymap chord recorder are absent on
+    /// purpose: both swallow keyboard input wholesale before the Esc
+    /// ladder is reached, and are handled in the closure.
+    fn escape_message(self) -> Option<Message> {
+        if self.find_replace_open {
+            return Some(Message::FindReplaceMsg(
+                crate::find_replace::FindReplaceMsg::Close,
+            ));
+        }
+        if self.kbd_shortcuts_open {
+            return Some(Message::Overlay(OverlayMsg::CloseKeyboardShortcuts));
+        }
+        if self.first_run_tour_open {
+            return Some(Message::Overlay(OverlayMsg::DismissFirstRunTour));
+        }
+        if self.erc_open {
+            return Some(Message::Erc(ErcMsg::CloseDialog));
+        }
+        if self.annotate_open {
+            return Some(Message::Annotate(AnnotateMsg::CloseDialog));
+        }
+        if self.prefs_open {
+            return Some(Message::Preferences(PreferencesMsg::Close));
+        }
+        if self.rename_open {
+            return Some(Message::Rename(RenameMsg::Close));
+        }
+        if self.remove_open {
+            return Some(Message::Remove(RemoveMsg::Close));
+        }
+        if self.enable_vc_open {
+            return Some(Message::EnableVersionControl(
+                EnableVersionControlMsg::Close,
+            ));
+        }
+        // F12 — Library Options modal Esc gap. Without this rung, Esc
+        // fell through to the `Tool::Select` reset; users hit Create
+        // Library out of frustration thinking that was the only way out,
+        // which actually wrote the .snxlib to disk (violating the "no
+        // disk writes without user save" invariant when the user hadn't
+        // intended to confirm).
+        if self.library_create_options_open {
+            return Some(Message::Library(
+                crate::library::messages::LibraryMessage::LibraryCreateOptionsCancel,
+            ));
+        }
+        if self.passive_calculator_open {
+            return Some(Message::Overlay(OverlayMsg::ClosePassiveCalculator));
+        }
+        None
+    }
+}
+
 impl Signex {
     pub fn subscription(&self) -> Subscription<Message> {
         use iced::keyboard;
 
         let kbd = keyboard::listen()
-            .with((
-                self.ui_state.find_replace.open,
-                self.ui_state.command_palette.open,
-                self.ui_state.keyboard_shortcuts_open,
-                self.ui_state.first_run_tour_open,
-                self.ui_state.preferences_open,
-                self.ui_state.annotate_dialog_open,
-                self.ui_state.erc_dialog_open,
-                self.ui_state.rename_dialog.is_some(),
-                self.ui_state.remove_dialog.is_some(),
-                self.ui_state.enable_version_control.is_some(),
-                self.library.create_options.is_some(),
-                self.ui_state.preferences_keymap_recorder.is_some(),
-            ))
+            .with(OpenOverlays {
+                find_replace_open: self.ui_state.find_replace.open,
+                palette_open: self.ui_state.command_palette.open,
+                kbd_shortcuts_open: self.ui_state.keyboard_shortcuts_open,
+                first_run_tour_open: self.ui_state.first_run_tour_open,
+                prefs_open: self.ui_state.preferences_open,
+                annotate_open: self.ui_state.annotate_dialog_open,
+                erc_open: self.ui_state.erc_dialog_open,
+                rename_open: self.ui_state.rename_dialog.is_some(),
+                remove_open: self.ui_state.remove_dialog.is_some(),
+                enable_vc_open: self.ui_state.enable_version_control.is_some(),
+                library_create_options_open: self.library.create_options.is_some(),
+                keymap_recorder_open: self.ui_state.preferences_keymap_recorder.is_some(),
+                passive_calculator_open: self.ui_state.passive_calculator_open,
+            })
             .map(
                 |(
-                    (
-                        find_replace_open,
+                    overlays @ OpenOverlays {
                         palette_open,
                         kbd_shortcuts_open,
-                        first_run_tour_open,
-                        prefs_open,
-                        annotate_open,
-                        erc_open,
-                        rename_open,
-                        remove_open,
-                        enable_vc_open,
-                        library_create_options_open,
                         keymap_recorder_open,
-                    ),
+                        ..
+                    },
                     event,
                 )| match event {
                     // Chord recorder open (Preferences ▸ Keyboard
@@ -108,76 +200,17 @@ impl Signex {
                         // Everything else is forwarded to the keymap resolver
                         // in `update`.
                         match (key.as_ref(), m) {
-                            (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                                if find_replace_open =>
-                            {
-                                Message::FindReplaceMsg(crate::find_replace::FindReplaceMsg::Close)
-                            }
-                            (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                                if kbd_shortcuts_open =>
-                            {
-                                Message::Overlay(OverlayMsg::CloseKeyboardShortcuts)
-                            }
-                            (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                                if first_run_tour_open =>
-                            {
-                                Message::Overlay(OverlayMsg::DismissFirstRunTour)
-                            }
-                            // Esc closes the deepest open modal first (UX §1.3).
-                            // The order here goes "user-facing top → bottom":
-                            // ERC, then Annotate, then Preferences. Once those
-                            // are closed, Esc falls through to the tool reset.
-                            (keyboard::Key::Named(keyboard::key::Named::Escape), _) if erc_open => {
-                                Message::Erc(ErcMsg::CloseDialog)
-                            }
-                            (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                                if annotate_open =>
-                            {
-                                Message::Annotate(AnnotateMsg::CloseDialog)
-                            }
-                            (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                                if prefs_open =>
-                            {
-                                Message::Preferences(PreferencesMsg::Close)
-                            }
-                            (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                                if rename_open =>
-                            {
-                                Message::Rename(RenameMsg::Close)
-                            }
-                            (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                                if remove_open =>
-                            {
-                                Message::Remove(RemoveMsg::Close)
-                            }
-                            (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                                if enable_vc_open =>
-                            {
-                                Message::EnableVersionControl(EnableVersionControlMsg::Close)
-                            }
-                            // F12 — Library Options modal Esc gap. Without
-                            // this, Esc fell through to `Tool::Select`
-                            // reset; users hit Create Library out of
-                            // frustration thinking that was the only way
-                            // out, which actually wrote the .snxlib to disk
-                            // (violating the "no disk writes without user
-                            // save" invariant when the user hadn't intended
-                            // to confirm).
-                            (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                                if library_create_options_open =>
-                            {
-                                Message::Library(
-                                    crate::library::messages::LibraryMessage::LibraryCreateOptionsCancel,
-                                )
-                            }
+                            // Esc closes the deepest open modal first
+                            // (UX §1.3) — the ladder lives in
+                            // `OpenOverlays::escape_message`, which is where
+                            // a new modal's rung belongs. `None` means no
+                            // modal claimed the key, so it falls through to
+                            // the dispatcher (v0.15): Esc resets the
+                            // footprint editor's tool state when a `.snxfpt`
+                            // tab is active, and falls back to the schematic
+                            // `Tool::Select` reset otherwise.
                             (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
-                                // v0.15 — route through the
-                                // dispatcher so Esc resets the
-                                // footprint editor's tool state when
-                                // a `.snxfpt` tab is active, and
-                                // falls back to the schematic
-                                // Tool::Select reset otherwise.
-                                Message::EscapePressed
+                                overlays.escape_message().unwrap_or(Message::EscapePressed)
                             }
                             (keyboard::Key::Named(keyboard::key::Named::F1), _) => {
                                 // F1 toggles: open if closed, close if open.
@@ -196,7 +229,9 @@ impl Signex {
                             // shadow Ctrl+C/X/V/D before they reach the keymap
                             // resolver below.
                             (keyboard::Key::Character(c), m)
-                                if m.command() && !m.alt() && super::selection_slot_from_key(c).is_some() =>
+                                if m.command()
+                                    && !m.alt()
+                                    && super::selection_slot_from_key(c).is_some() =>
                             {
                                 match super::selection_slot_from_key(c) {
                                     Some(slot) => Message::Selection(
@@ -206,7 +241,9 @@ impl Signex {
                                 }
                             }
                             (keyboard::Key::Character(c), m)
-                                if m.alt() && !m.command() && super::selection_slot_from_key(c).is_some() =>
+                                if m.alt()
+                                    && !m.command()
+                                    && super::selection_slot_from_key(c).is_some() =>
                             {
                                 match super::selection_slot_from_key(c) {
                                     Some(slot) => Message::Selection(
@@ -368,5 +405,117 @@ impl Signex {
             hover_tick,
             hover_tooltip_tick,
         ])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Set one flag on an otherwise-closed set and resolve the Esc ladder.
+    fn only(set: impl FnOnce(&mut OpenOverlays)) -> Option<Message> {
+        let mut overlays = OpenOverlays::default();
+        set(&mut overlays);
+        overlays.escape_message()
+    }
+
+    #[test]
+    fn nothing_open_falls_through_to_the_tool_reset() {
+        assert!(
+            OpenOverlays::default().escape_message().is_none(),
+            "with no modal open Esc must reach `Message::EscapePressed`"
+        );
+    }
+
+    /// #511 — the passive calculator shipped in #490 with no rung here, so
+    /// Esc left the modal open AND fell through to the tool reset, silently
+    /// reverting the active canvas tool behind it.
+    #[test]
+    fn passive_calculator_claims_escape() {
+        assert!(matches!(
+            only(|o| o.passive_calculator_open = true),
+            Some(Message::Overlay(OverlayMsg::ClosePassiveCalculator))
+        ));
+    }
+
+    /// Every modal that can be open needs a rung — a missing one is not a
+    /// no-op, it mutates the editor behind the modal. This is the check that
+    /// fails when a new modal forgets one.
+    #[test]
+    fn every_modal_claims_escape() {
+        assert!(matches!(
+            only(|o| o.find_replace_open = true),
+            Some(Message::FindReplaceMsg(
+                crate::find_replace::FindReplaceMsg::Close
+            ))
+        ));
+        assert!(matches!(
+            only(|o| o.kbd_shortcuts_open = true),
+            Some(Message::Overlay(OverlayMsg::CloseKeyboardShortcuts))
+        ));
+        assert!(matches!(
+            only(|o| o.first_run_tour_open = true),
+            Some(Message::Overlay(OverlayMsg::DismissFirstRunTour))
+        ));
+        assert!(matches!(
+            only(|o| o.erc_open = true),
+            Some(Message::Erc(ErcMsg::CloseDialog))
+        ));
+        assert!(matches!(
+            only(|o| o.annotate_open = true),
+            Some(Message::Annotate(AnnotateMsg::CloseDialog))
+        ));
+        assert!(matches!(
+            only(|o| o.prefs_open = true),
+            Some(Message::Preferences(PreferencesMsg::Close))
+        ));
+        assert!(matches!(
+            only(|o| o.rename_open = true),
+            Some(Message::Rename(RenameMsg::Close))
+        ));
+        assert!(matches!(
+            only(|o| o.remove_open = true),
+            Some(Message::Remove(RemoveMsg::Close))
+        ));
+        assert!(matches!(
+            only(|o| o.enable_vc_open = true),
+            Some(Message::EnableVersionControl(
+                EnableVersionControlMsg::Close
+            ))
+        ));
+        assert!(matches!(
+            only(|o| o.library_create_options_open = true),
+            Some(Message::Library(
+                crate::library::messages::LibraryMessage::LibraryCreateOptionsCancel
+            ))
+        ));
+    }
+
+    /// The palette and the chord recorder are absent from the ladder on
+    /// purpose: both swallow keyboard input wholesale earlier in the
+    /// subscription, so a rung here would be dead code that outranks a real
+    /// modal.
+    #[test]
+    fn palette_and_keymap_recorder_are_not_on_the_ladder() {
+        assert!(only(|o| o.palette_open = true).is_none());
+        assert!(only(|o| o.keymap_recorder_open = true).is_none());
+    }
+
+    /// Order is load-bearing — the deepest modal wins, so a shallower flag
+    /// being set must not steal Esc from Find & Replace.
+    #[test]
+    fn the_deepest_modal_wins() {
+        let overlays = OpenOverlays {
+            find_replace_open: true,
+            prefs_open: true,
+            passive_calculator_open: true,
+            ..OpenOverlays::default()
+        };
+        assert!(matches!(
+            overlays.escape_message(),
+            Some(Message::FindReplaceMsg(
+                crate::find_replace::FindReplaceMsg::Close
+            ))
+        ));
     }
 }

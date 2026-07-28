@@ -13,3 +13,13 @@ pub struct Circle {
     pub stroke_width: f32,
     pub color: [f32; 4],
 }
+
+impl Circle {
+    /// Whether this circle renders as a filled disc (rather than a stroked
+    /// ring). A non-positive `stroke_width` means "fill"; any positive width
+    /// strokes a ring of that width. Shared CPU↔GPU predicate the parity test
+    /// locks against.
+    pub fn is_filled(&self) -> bool {
+        self.stroke_width <= 0.0
+    }
+}

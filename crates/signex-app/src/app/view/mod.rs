@@ -1,4 +1,4 @@
-use iced::widget::{canvas, column, container, row, text_input};
+use iced::widget::{canvas, column, container, row, shader, stack, text_input};
 use iced::{Element, Length};
 
 pub(crate) mod dialogs;
@@ -444,6 +444,7 @@ impl Signex {
             || ui.find_replace.open
             || ui.preferences_open
             || ui.keyboard_shortcuts_open
+            || ui.passive_calculator_open
             || ui.first_run_tour_open
             || ui.rename_dialog.is_some()
             || ui.remove_dialog.is_some()
@@ -666,10 +667,35 @@ impl Signex {
                 })
             }
         } else if self.has_active_pcb() {
-            canvas(&self.interaction_state.pcb_canvas)
+            let pcb_canvas = &self.interaction_state.pcb_canvas;
+            let base: Element<'_, Message> = canvas(pcb_canvas)
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .into()
+                .into();
+            if pcb_canvas.gpu_render {
+                // Stack the GPU shader ABOVE the CPU canvas: the canvas paints
+                // the opaque background + grid and owns pan/zoom/cursor/fit;
+                // the shader draws the board content on top, compositing over
+                // the grid. The shader's `update` is a no-op that never
+                // captures, so pointer events fall through to the canvas below.
+                let scene = pcb_canvas.gpu_scene().unwrap_or_default();
+                // Read the generation after `gpu_scene()` so it matches the
+                // geometry just returned; it lets the shader skip re-uploading
+                // unchanged geometry on pan/zoom.
+                let generation = pcb_canvas.scene_generation();
+                let (offset_x, offset_y, scale) = pcb_canvas.live_camera();
+                let content_shader = shader(crate::scene_shader::SceneShaderProgram::new(
+                    scene,
+                    Some(generation),
+                    [offset_x, offset_y],
+                    scale,
+                ))
+                .width(Length::Fill)
+                .height(Length::Fill);
+                stack![base, content_shader].into()
+            } else {
+                base
+            }
         } else {
             // Distinguish "nothing loaded at all" from "project loaded,
             // but no document picked yet" — the second case is what
@@ -760,6 +786,7 @@ impl Signex {
         layers.extend(self.preferences_overlay());
         layers.extend(self.find_replace_overlay());
         layers.extend(self.keyboard_shortcuts_overlay());
+        layers.extend(self.passive_calculator_overlay());
         layers.extend(self.first_run_tour_overlay());
         layers.extend(self.simple_dialogs_overlay());
         layers.extend(self.detachable_dialogs_overlay());

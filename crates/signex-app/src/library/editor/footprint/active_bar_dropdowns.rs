@@ -138,6 +138,7 @@ fn sketch_create_entries(
             SketchTool::TangentArc,
             ic::icon_shape_arc(tid),
         ),
+        row("Edge Arc", SketchTool::EdgeArc, ic::icon_shape_arc(tid)),
     ]
 }
 

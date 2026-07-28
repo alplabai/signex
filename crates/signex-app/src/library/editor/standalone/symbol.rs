@@ -199,9 +199,9 @@ fn view_symbol_toolbar<'a>(
                 .color(text_c),
             btn("\u{2192}", PrimitiveEdit::Symbol(SymbolEditorMsg::NextPart)),
             Space::new().width(6),
-            // Add-unit (+) / remove-unit (−). Wire the existing
-            // NewPart / RemovePart messages; Phase B fixes their
-            // semantics (real delete + persistent empty unit).
+            // Add-unit (+) / remove-unit (−), wired to NewPart /
+            // RemovePart, which add a part and call `delete_unit`
+            // (real delete, refusing to remove the only part).
             btn("+", PrimitiveEdit::Symbol(SymbolEditorMsg::NewPart)),
             btn(
                 "\u{2212}",

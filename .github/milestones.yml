@@ -86,8 +86,8 @@
   aliases: ["v0.14.0 — Footprint Editor"]
 
 - title: "v0.15.0 — Editor Fixes"
-  description: "Editor defects carrying tier: p0, plus Break Track / Drag Track End — the one item v0.14.0 actually deferred."
-  state: open
+  description: "Editor defects carrying tier: p0, plus Break Track / Drag Track End — the one item v0.14.0 actually deferred. Shipped 2026-07-23."
+  state: closed
   # Was "Footprint Editor Parity" — that work was already on trunk when
   # the milestone was created. v0.14.0's own CHANGELOG names its only
   # v0.15 deferral as Break Track / Drag Track End.

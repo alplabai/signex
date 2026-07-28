@@ -151,9 +151,10 @@ pub struct SymbolPin {
     /// to. `1` is the default (single-part components); `0` is the
     /// special "Part Zero" Altium uses for pins that appear on every
     /// part (typically power / ground). Higher numbers (`2..=N`)
-    /// scope the pin to a specific part. The canvas + SCH Library
-    /// panel will honour this in a future commit; for now every pin
-    /// is rendered regardless of part_number.
+    /// scope the pin to a specific part. The canvas gates the pin
+    /// draw on this via `pin_visible_on_active_part`, and the SCH
+    /// Library panel renders a per-part tree-expander so only pins
+    /// on the selected part show.
     #[serde(default = "default_part_number")]
     pub part_number: u8,
 }
@@ -890,6 +891,9 @@ mod chain_tests;
 mod serde_tsv;
 #[cfg(test)]
 mod tests;
+mod to_lib_symbol;
+#[cfg(test)]
+mod to_lib_symbol_tests;
 
 pub use chain::{
     CHAIN_ARC_SAMPLES, CHAIN_ENDPOINT_EPSILON_MM, ChainError, ChainSegment,

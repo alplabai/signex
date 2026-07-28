@@ -39,7 +39,14 @@ async fn run_text_geometry_composite_smoke_pass_with(
 
     polygon_pipeline.upload(&device, &queue, polygons);
     text_pipeline
-        .upload(&device, &queue, texts, scale_px_per_mm, [128, 128])
+        .upload(
+            &device,
+            &queue,
+            texts,
+            scale_px_per_mm,
+            [128, 128],
+            [0.0, 0.0],
+        )
         .map_err(|err| format!("failed to prepare text: {err}"))?;
 
     let target = device.create_texture(&wgpu::TextureDescriptor {
@@ -180,7 +187,14 @@ pub(super) async fn run_grid_overlay_text_composite_smoke_pass_with(
     let empty_texts: [TextItem; 0] = [];
     let text_items = if text_enabled { texts } else { &empty_texts };
     text_pipeline
-        .upload(&device, &queue, text_items, scale_px_per_mm, [128, 128])
+        .upload(
+            &device,
+            &queue,
+            text_items,
+            scale_px_per_mm,
+            [128, 128],
+            [0.0, 0.0],
+        )
         .map_err(|err| format!("failed to prepare text: {err}"))?;
 
     let target = device.create_texture(&wgpu::TextureDescriptor {

@@ -47,19 +47,29 @@ impl Signex {
 
         // If the active tab already belongs to this project we're good;
         // otherwise open the schematic_root so ERC has a sheet to walk.
+        // The open is now async (`open_schematic_file` reads+parses off
+        // the UI thread), so batch its Task instead of assuming it has
+        // landed before the ERC dialog opens — the dialog itself just
+        // flips a flag and reads the active document at render time, so
+        // it degrades gracefully if the schematic is still in flight.
         let active_belongs = self
             .document_state
             .tabs
             .get(self.document_state.active_tab)
             .map(|t| t.project_id == Some(project_id))
             .unwrap_or(false);
-        if !active_belongs && let Some(root) = schematic_root {
+        let open_task = if !active_belongs && let Some(root) = schematic_root {
             let path = project_dir.join(&root);
             if path.exists() {
-                self.handle_document_file_opened(Some(path));
+                self.handle_document_file_opened(Some(path))
+            } else {
+                iced::Task::none()
             }
-        }
+        } else {
+            iced::Task::none()
+        };
         self.refresh_panel_ctx();
-        self.update(Message::Erc(ErcMsg::OpenDialog))
+        let erc_task = self.update(Message::Erc(ErcMsg::OpenDialog));
+        iced::Task::batch([open_task, erc_task])
     }
 }

@@ -13,7 +13,6 @@ use super::{
 
 /// Top-level library message — folded into [`Message::Library`].
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum LibraryMessage {
     /// File ▸ Library ▸ Open Library… — runs `rfd::AsyncFileDialog`
     /// on the directory level and lands in [`LibraryMessage::OpenLibraryAt`].
@@ -498,23 +497,19 @@ pub enum LibraryMessage {
     /// Promote an Installed library to Global — moves the path from
     /// the session-scoped Vec to the persisted TOML file. No-op when
     /// the path isn't currently Installed.
-    #[allow(dead_code)]
     ComponentsPanelPromoteToGlobal(PathBuf),
     /// "Manage…" button on the Global section header — opens the
     /// global libraries management dialog. Stage 9 stub: logs and
     /// no-ops so the wiring path is observable.
-    #[allow(dead_code)]
     ComponentsPanelManageGlobal,
     /// "Add to Project" button on a Components Panel row — adds
     /// the row's library to the active project's
     /// `Project.libraries` list. Stage 9 stub.
-    #[allow(dead_code)]
     ComponentsPanelAddToProject {
         library_path: PathBuf,
     },
     /// "Place into Schematic" button on a Components Panel row.
     /// Stage 9 stub — full ghost-component drag is polish work.
-    #[allow(dead_code)]
     ComponentsPanelPlace {
         library_path: PathBuf,
         table: String,
