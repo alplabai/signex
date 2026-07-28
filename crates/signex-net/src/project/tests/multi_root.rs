@@ -17,9 +17,9 @@
 
 use std::collections::HashMap;
 
-use signex_types::schematic::{LabelType, SchematicSheet};
+use signex_types::schematic::LabelType;
 
-use super::super::{ProjectGraph, ProjectRoot, SheetKey, StitchIssue, build_project_netlist};
+use super::super::StitchIssue;
 use super::{
     add_lib, child_sheet, empty_sheet, label, names, place, place_power, pt, sheet_pin,
     stitch_pages, wire,
@@ -356,69 +356,6 @@ fn flat_page_traversal_is_deterministic_across_map_insertion_order() {
         stitch_pages(&root, "root", &children, &["b.snxsch", "c.snxsch"])
     };
     assert_eq!(build(true), build(false));
-}
-
-// 9 ── What `ProjectRoot.name` is for, and why the app leaves it `None`.
-//      A page seeded with a name qualifies its own sheet-scoped labels with
-//      that chain, so an identically-named local net on two pages stays two
-//      *distinguishably named* nets instead of two suffixed ones. Global and
-//      Power labels are project-wide by definition and cross regardless — the
-//      seed does not change what merges, only what the sheet-scoped result is
-//      called. #430 ships `None` (a page is a peer of the root, not nested
-//      under it); this pins the other setting so the field cannot rot into a
-//      no-op unnoticed.
-#[test]
-fn name_seeded_page_qualifies_its_own_labels() {
-    let mut root = empty_sheet();
-    root.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
-    root.labels.push(label("SDA", pt(0.0, 0.0), LabelType::Net));
-    add_lib(&mut root, "R");
-    place(&mut root, "R_ROOT", "R", pt(10.0, 0.0));
-
-    let mut page = empty_sheet();
-    page.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
-    page.labels.push(label("SDA", pt(0.0, 0.0), LabelType::Net));
-    add_lib(&mut page, "R");
-    place(&mut page, "R_PAGE", "R", pt(10.0, 0.0));
-
-    let mut sheets: HashMap<SheetKey, SchematicSheet> = HashMap::new();
-    sheets.insert(SheetKey::new("root"), root);
-    sheets.insert(SheetKey::new("b.snxsch"), page);
-    let resolved = HashMap::new();
-
-    let roots = [
-        ProjectRoot {
-            key: SheetKey::new("root"),
-            name: None,
-        },
-        ProjectRoot {
-            key: SheetKey::new("b.snxsch"),
-            name: Some("page2".to_string()),
-        },
-    ];
-    let p = build_project_netlist(&ProjectGraph {
-        sheets: &sheets,
-        resolved: &resolved,
-        roots: &roots,
-    });
-
-    assert_eq!(p.netlist.nets.len(), 2, "{:?}", names(&p.netlist));
-    let ns = names(&p.netlist);
-    assert!(
-        ns.contains(&"SDA"),
-        "the unseeded root keeps the bare name: {ns:?}"
-    );
-    assert!(
-        ns.iter().any(|n| n.contains("page2")),
-        "the seeded page's own net carries its chain: {ns:?}"
-    );
-    assert!(
-        !p.issues
-            .iter()
-            .any(|i| matches!(i, StitchIssue::NameCollision { .. })),
-        "distinct names, so no collision suffix was needed: {:?}",
-        p.issues
-    );
 }
 
 // 10 ── #466 × #430: a page listed twice contributes one occurrence, not two.

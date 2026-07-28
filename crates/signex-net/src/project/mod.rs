@@ -19,7 +19,9 @@
 //! cycle-detection path, own name-chain seed; a peer of the first root, not
 //! nested under it. A root already reached as an earlier root's child is
 //! skipped rather than walked twice, so a declared page that another page also
-//! references contributes exactly one occurrence. This is what lets a flat,
+//! references contributes one occurrence — but only when the referencing page
+//! sorts first; the reverse order still walks it twice (#540, inherited from
+//! #430). This is what lets a flat,
 //! multi-page project — several sibling sheets, none referencing any other,
 //! which is what `Add Existing Sheet` produces — stitch into one netlist
 //! instead of leaving every page but the first out of it.
@@ -82,14 +84,21 @@ impl std::fmt::Display for SheetKey {
 }
 
 /// One entry point the stitcher walks the hierarchy from.
+///
+/// Every root starts with an **empty** name chain, so its qualifiable
+/// (Hierarchical/Net) label names stay bare. For the primary root that is what
+/// keeps the single-root byte-identity contract with `build_netlist`; for a
+/// declared page (#430) it is the deliberate reading of what a page *is* — a
+/// peer of the root rather than something nested under it, so a `VCC` on page
+/// two is the same net as a `VCC` on page one.
+///
+/// A per-root name seed would be the knob for the other reading — qualifying a
+/// page's sheet-scoped labels by its own stem, which changes exported net
+/// names. Nothing asks for it, so it is not carried: add it back with the first
+/// caller that wants it rather than shipping a field only a test ever sets.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProjectRoot {
     pub key: SheetKey,
-    /// Name-chain seed for this root's qualifiable (Hierarchical/Net) label
-    /// names: `None` for the primary root — names stay bare, which is what
-    /// keeps the single-root byte-identity contract with `build_netlist`.
-    /// `Some(page stem as declared)` seeds a flat page's own chain (#430).
-    pub name: Option<String>,
 }
 
 /// Pre-resolved input to [`build_project_netlist`]. The caller (the app) owns
@@ -220,10 +229,18 @@ pub fn build_project_netlist(graph: &ProjectGraph) -> ProjectNetlist {
     // (#430). `visited` accumulates every key any walk reaches — it only ever
     // grows, and it is consulted per iteration rather than precomputed,
     // because walking one root's subtree can reach a later root: a declared
-    // page that another page happens to reference must contribute one
-    // occurrence, not two. Two occurrences of one sheet would duplicate its
+    // page that another page happens to reference should contribute one
+    // occurrence, not two. Two occurrences of one sheet duplicate its
     // terminals, raise a spurious `SharedReferenceAcrossInstances`, and shift
     // every subsequent `NetId`.
+    //
+    // That skip is order-dependent and therefore incomplete: it only fires
+    // when the *referencing* page is walked first, which sorted root order
+    // decides for reasons unrelated to who references whom. A page that
+    // sorts before the page referencing it is still walked twice. Carried
+    // over from #430 unchanged, tracked as #540 — re-keying does not touch
+    // it either way, so fixing it here would bury an independent behaviour
+    // change inside #466.
     let mut occs: Vec<Occ> = Vec::new();
     let mut edges: Vec<(usize, usize, usize)> = Vec::new(); // (parent occ, cs index, child occ)
     let mut path: Vec<SheetKey> = Vec::new();
@@ -236,12 +253,11 @@ pub fn build_project_netlist(graph: &ProjectGraph) -> ProjectNetlist {
             continue;
         };
         path.clear();
-        let name_chain: Vec<String> = root.name.iter().cloned().collect();
         visit(
             graph,
             &root.key,
             sheet,
-            name_chain,
+            Vec::new(),
             &mut path,
             &mut occs,
             &mut edges,

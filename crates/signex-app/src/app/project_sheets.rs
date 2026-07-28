@@ -259,19 +259,24 @@ pub(crate) struct AssembledGraph {
 /// `.net` export refuses as incomplete, and the PDF still prints every page
 /// while resolving `NET_NAME()` against a netlist those pages are absent from.
 ///
-/// Pages are seeded `name: None` — a page is a *peer* of the root, not nested
-/// under it, so its labels stay unqualified and a `VCC` on page two is the
-/// same net as a `VCC` on page one. That is the whole point of stitching the
-/// pages into one netlist.
+/// Every root walks with an empty name chain — a page is a *peer* of the root,
+/// not nested under it, so its labels stay unqualified and a `VCC` on page two
+/// is the same net as a `VCC` on page one. That is the whole point of stitching
+/// the pages into one netlist, and it is why `ProjectRoot` carries no name
+/// seed.
 ///
 /// A page that another page *does* reach is still on this list, because
 /// `pages_outside_the_hierarchy` means "not reachable **from the root**".
-/// Listing it is harmless: the stitcher's visited set walks it once, through
-/// whichever root reached it first.
+/// Listing it is *mostly* harmless: the stitcher's visited set walks it once
+/// when the page referencing it sorts first, but twice in the reverse order
+/// (#540, inherited from #430 and not introduced by the re-key).
 ///
 /// Order is the caller's contract — it decides occurrence numbering and hence
 /// `NetId` assignment — so pages are taken in `pages_outside_the_hierarchy`'s
-/// already-sorted order, never a map's.
+/// already-sorted order, never a map's. That order is sorted *absolute paths*,
+/// where the pre-#466 code sorted the relative reference keys; the two agree
+/// for every page under the project directory and disagree for one declared
+/// with an absolute path elsewhere (#541).
 pub(crate) fn project_roots(
     root_key: signex_net::SheetKey,
     project_set: &ProjectSheetSet,
@@ -280,7 +285,6 @@ pub(crate) fn project_roots(
 ) -> Vec<signex_net::ProjectRoot> {
     let mut roots = vec![signex_net::ProjectRoot {
         key: root_key.clone(),
-        name: None,
     }];
     for page in &project_set.pages_outside_the_hierarchy {
         let key = sheet_key(page, base_dir);
@@ -290,7 +294,7 @@ pub(crate) fn project_roots(
         if key == root_key || !graph.sheets.contains_key(&key) {
             continue;
         }
-        roots.push(signex_net::ProjectRoot { key, name: None });
+        roots.push(signex_net::ProjectRoot { key });
     }
     roots
 }

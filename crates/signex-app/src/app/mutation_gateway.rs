@@ -302,10 +302,7 @@ impl Signex {
         if !graph.sheets.contains_key(&root_key) {
             return;
         }
-        let roots = [signex_net::ProjectRoot {
-            key: root_key,
-            name: None,
-        }];
+        let roots = [signex_net::ProjectRoot { key: root_key }];
         let mut result = signex_net::build_project_netlist(&signex_net::ProjectGraph {
             sheets: &graph.sheets,
             resolved: &graph.resolved,

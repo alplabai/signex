@@ -251,11 +251,9 @@ fn stitch_pages(
 
     let mut roots = vec![ProjectRoot {
         key: SheetKey::new(root_key),
-        name: None,
     }];
     roots.extend(pages.iter().map(|p| ProjectRoot {
         key: SheetKey::new(*p),
-        name: None,
     }));
 
     build_project_netlist(&ProjectGraph {
@@ -923,7 +921,6 @@ fn same_filename_children_of_different_parents_stitch_from_their_own_files() {
 
     let roots = [ProjectRoot {
         key: SheetKey::new("root"),
-        name: None,
     }];
     let p = build_project_netlist(&ProjectGraph {
         sheets: &sheets,
