@@ -4,6 +4,7 @@
 //! its argument type ([`CommandArgs`]); enablement gating (slice 3) and
 //! rewiring menus/palette onto it (slice 4) are still ahead.
 
+pub(crate) mod active_bar;
 mod args;
 pub(crate) mod bridge;
 
