@@ -1,5 +1,40 @@
 [
   {
+    "id": "align_bottom",
+    "group": "Schematic",
+    "category": "modify"
+  },
+  {
+    "id": "align_horizontal_centers",
+    "group": "Schematic",
+    "category": "modify"
+  },
+  {
+    "id": "align_left",
+    "group": "Schematic",
+    "category": "modify"
+  },
+  {
+    "id": "align_right",
+    "group": "Schematic",
+    "category": "modify"
+  },
+  {
+    "id": "align_to_grid",
+    "group": "Schematic",
+    "category": "modify"
+  },
+  {
+    "id": "align_top",
+    "group": "Schematic",
+    "category": "modify"
+  },
+  {
+    "id": "align_vertical_centers",
+    "group": "Schematic",
+    "category": "modify"
+  },
+  {
     "id": "annotate_schematic",
     "group": "Schematic",
     "category": "design"
@@ -20,6 +55,16 @@
     "category": "modify"
   },
   {
+    "id": "bring_to_front",
+    "group": "Schematic",
+    "category": "modify"
+  },
+  {
+    "id": "bring_to_front_of",
+    "group": "Schematic",
+    "category": "modify"
+  },
+  {
     "id": "cancel_current_tool",
     "group": "General",
     "category": "interactive"
@@ -32,6 +77,16 @@
   {
     "id": "center_view_at_cursor",
     "group": "General",
+    "category": "view"
+  },
+  {
+    "id": "clear_all_net_colors",
+    "group": "Schematic",
+    "category": "view"
+  },
+  {
+    "id": "clear_net_color",
+    "group": "Schematic",
     "category": "view"
   },
   {
@@ -100,9 +155,59 @@
     "category": "edit"
   },
   {
+    "id": "distribute_horizontally",
+    "group": "Schematic",
+    "category": "modify"
+  },
+  {
+    "id": "distribute_vertically",
+    "group": "Schematic",
+    "category": "modify"
+  },
+  {
+    "id": "drag",
+    "group": "Schematic",
+    "category": "modify"
+  },
+  {
     "id": "drag_keep_connections",
     "group": "General",
     "category": "modify"
+  },
+  {
+    "id": "drag_selection",
+    "group": "Schematic",
+    "category": "modify"
+  },
+  {
+    "id": "draw_arc",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "draw_bezier",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "draw_bus",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "draw_ellipse",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "draw_elliptical_arc",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "draw_full_circle",
+    "group": "Schematic",
+    "category": "place"
   },
   {
     "id": "draw_graphic_line",
@@ -111,6 +216,31 @@
   },
   {
     "id": "draw_hierarchical_sheet",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "draw_line",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "draw_polygon",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "draw_rectangle",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "draw_round_rectangle",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "draw_wire",
     "group": "Schematic",
     "category": "place"
   },
@@ -200,6 +330,16 @@
     "category": "search"
   },
   {
+    "id": "flip_selected_x",
+    "group": "Schematic",
+    "category": "modify"
+  },
+  {
+    "id": "flip_selected_y",
+    "group": "Schematic",
+    "category": "modify"
+  },
+  {
     "id": "footprint_mode_pads",
     "group": "ThreeD",
     "category": "library"
@@ -235,6 +375,11 @@
     "category": "library"
   },
   {
+    "id": "lasso_select",
+    "group": "Schematic",
+    "category": "select"
+  },
+  {
     "id": "leave_sheet",
     "group": "Schematic",
     "category": "navigation"
@@ -262,6 +407,16 @@
   {
     "id": "move_selection",
     "group": "General",
+    "category": "modify"
+  },
+  {
+    "id": "move_selection_xy",
+    "group": "Schematic",
+    "category": "modify"
+  },
+  {
+    "id": "move_to_front",
+    "group": "Schematic",
     "category": "modify"
   },
   {
@@ -350,7 +505,17 @@
     "category": "edit"
   },
   {
+    "id": "place_blanket",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
     "id": "place_bus",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_bus_entry",
     "group": "Schematic",
     "category": "place"
   },
@@ -360,12 +525,42 @@
     "category": "place"
   },
   {
+    "id": "place_component",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
     "id": "place_design_block",
     "group": "Schematic",
     "category": "place"
   },
   {
+    "id": "place_device_sheet_symbol",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_diff_pair",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
     "id": "place_global_label",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_graphic",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_harness_connector",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_harness_entry",
     "group": "Schematic",
     "category": "place"
   },
@@ -400,7 +595,47 @@
     "category": "place"
   },
   {
+    "id": "place_note",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_off_sheet_connector",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_parameter_set",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_port",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
     "id": "place_power_symbol",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_reuse_block",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_sheet_entry",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_sheet_symbol",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_signal_harness",
     "group": "Schematic",
     "category": "place"
   },
@@ -411,6 +646,16 @@
   },
   {
     "id": "place_text",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_text_frame",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_text_string",
     "group": "Schematic",
     "category": "place"
   },
@@ -505,6 +750,16 @@
     "category": "modify"
   },
   {
+    "id": "rotate_selection",
+    "group": "Schematic",
+    "category": "modify"
+  },
+  {
+    "id": "rotate_selection_cw",
+    "group": "Schematic",
+    "category": "modify"
+  },
+  {
     "id": "rubber_stamp_copy",
     "group": "General",
     "category": "edit"
@@ -530,6 +785,11 @@
     "category": "select"
   },
   {
+    "id": "select_connection",
+    "group": "Schematic",
+    "category": "select"
+  },
+  {
     "id": "select_expand_connection",
     "group": "General",
     "category": "select"
@@ -538,6 +798,16 @@
     "id": "select_node_or_connection_item",
     "group": "General",
     "category": "select"
+  },
+  {
+    "id": "send_to_back",
+    "group": "Schematic",
+    "category": "modify"
+  },
+  {
+    "id": "send_to_back_of",
+    "group": "Schematic",
+    "category": "modify"
   },
   {
     "id": "sheet_navigation_back",
@@ -623,6 +893,11 @@
     "id": "toggle_visible_grid",
     "group": "General",
     "category": "view"
+  },
+  {
+    "id": "tool_select",
+    "group": "Schematic",
+    "category": "select"
   },
   {
     "id": "undo",
