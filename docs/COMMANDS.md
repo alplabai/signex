@@ -124,41 +124,96 @@ shrink.
 
 | command id | label | category | Altium | Classic |
 | --- | --- | --- | --- | --- |
+| `align_bottom` | Align bottom | modify | — | — |
+| `align_horizontal_centers` | Align horizontal centers | modify | — | — |
+| `align_left` | Align left | modify | — | — |
+| `align_right` | Align right | modify | — | — |
+| `align_to_grid` | Align to grid | modify | — | — |
+| `align_top` | Align top | modify | — | — |
+| `align_vertical_centers` | Align vertical centers | modify | — | — |
 | `annotate_schematic` | Annotate schematic | design | `T A` | — |
 | `annotate_schematic_quietly` | Annotate schematic quietly | design | `Alt+A` | `Alt+A` |
+| `bring_to_front` | Bring to front | modify | — | — |
+| `bring_to_front_of` | Bring to front of | modify | — | — |
+| `clear_all_net_colors` | Clear all net colors | view | — | — |
+| `clear_net_color` | Clear net color | view | — | — |
 | `clear_net_highlighting` | Clear net highlighting | select | — | `~` |
+| `distribute_horizontally` | Distribute horizontally | modify | — | — |
+| `distribute_vertically` | Distribute vertically | modify | — | — |
+| `drag` | Drag | modify | — | — |
+| `drag_selection` | Drag selection | modify | — | — |
+| `draw_arc` | Draw arc | place | — | — |
+| `draw_bezier` | Draw bezier | place | — | — |
+| `draw_bus` | Draw bus | place | — | — |
+| `draw_ellipse` | Draw ellipse | place | — | — |
+| `draw_elliptical_arc` | Draw elliptical arc | place | — | — |
+| `draw_full_circle` | Draw full circle | place | — | — |
 | `draw_graphic_line` | Draw graphic line | place | — | `I` |
 | `draw_hierarchical_sheet` | Draw hierarchical sheet | place | — | `S` |
+| `draw_line` | Draw line | place | — | — |
+| `draw_polygon` | Draw polygon | place | — | — |
+| `draw_rectangle` | Draw rectangle | place | — | — |
+| `draw_round_rectangle` | Draw round rectangle | place | — | — |
+| `draw_wire` | Draw wire | place | — | — |
+| `flip_selected_x` | Flip selected x | modify | — | — |
+| `flip_selected_y` | Flip selected y | modify | — | — |
 | `force_annotate_all_schematics` | Force annotate all schematics | design | `Shift+Alt+A` | `Shift+Alt+A` |
 | `highlight_net_under_cursor` | Highlight net under cursor | select | — | ``` |
 | `highlight_related_net_objects` | Highlight/select related net objects across sheets | select | `Alt+Click` | — |
+| `lasso_select` | Lasso select | select | — | — |
 | `leave_sheet` | Leave sheet / go to parent sheet | navigation | — | `Alt+Backspace` |
+| `move_selection_xy` | Move selection x y | modify | — | — |
+| `move_to_front` | Move to front | modify | — | — |
 | `navigate_up_hierarchy` | Navigate up hierarchy | navigation | — | `Alt+Up` |
 | `next_highlighted_net_item` | Next item on highlighted net | select | — | `Tab` |
 | `next_sheet` | Next sheet | navigation | — | `PageDown` |
 | `open_components_panel` | Open Components panel / place components | panels | `P P` | — |
 | `open_net_color_palette` | Open net color palette | view | `F5` | — |
+| `place_blanket` | Place blanket | place | — | — |
 | `place_bus` | Draw bus | place | — | `B` |
+| `place_bus_entry` | Place bus entry | place | — | — |
 | `place_compile_mask` | Place Compile Mask directive | place | `P V K` | — |
+| `place_component` | Place component | place | — | — |
 | `place_design_block` | Place design block | place | — | `Shift+B` |
+| `place_device_sheet_symbol` | Place device sheet symbol | place | — | — |
+| `place_diff_pair` | Place diff pair | place | — | — |
 | `place_global_label` | Place global label | place | — | `Ctrl+L` |
+| `place_graphic` | Place graphic | place | — | — |
+| `place_harness_connector` | Place harness connector | place | — | — |
+| `place_harness_entry` | Place harness entry | place | — | — |
 | `place_hierarchical_label` | Place hierarchical label | place | — | `H` |
 | `place_junction` | Place junction | place | — | `J` |
 | `place_local_net_label` | Place local net label | place | — | `L` |
 | `place_net_label` | Place net label | place | `P N` | — |
 | `place_no_connect` | Place no-connect flag | place | — | `Q` |
 | `place_no_erc` | Place Generic No ERC directive | place | `P V N` | — |
+| `place_note` | Place note | place | — | — |
+| `place_off_sheet_connector` | Place off sheet connector | place | — | — |
+| `place_parameter_set` | Place parameter set | place | — | — |
+| `place_port` | Place port | place | — | — |
 | `place_power_symbol` | Place power symbol | place | — | `P` |
+| `place_reuse_block` | Place reuse block | place | — | — |
+| `place_sheet_entry` | Place sheet entry | place | — | — |
+| `place_sheet_symbol` | Place sheet symbol | place | — | — |
+| `place_signal_harness` | Place signal harness | place | — | — |
 | `place_symbol` | Place symbol | place | — | `A` |
 | `place_text` | Place text | place | — | `T` |
+| `place_text_frame` | Place text frame | place | — | — |
+| `place_text_string` | Place text string | place | — | — |
 | `place_wire` | Place wire | place | `P W`, `Ctrl+W` | `W` |
 | `place_wire_to_bus_entry` | Place wire-to-bus entry | place | — | `Z` |
 | `previous_highlighted_net_item` | Previous item on highlighted net | select | — | `Shift+Tab` |
 | `previous_sheet` | Previous sheet | navigation | — | `PageUp` |
 | `reset_schematic_designators` | Reset schematic designators | design | `T A E` | — |
+| `rotate_selection` | Rotate selection | modify | — | — |
+| `rotate_selection_cw` | Rotate selection c w | modify | — | — |
 | `run_erc` | Run electrical rules check | validation | `F8` | `F8` |
+| `select_connection` | Select connection | select | — | — |
+| `send_to_back` | Send to back | modify | — | — |
+| `send_to_back_of` | Send to back of | modify | — | — |
 | `sheet_navigation_back` | Sheet navigation back | navigation | — | `Alt+Left` |
 | `sheet_navigation_forward` | Sheet navigation forward | navigation | — | `Alt+Right` |
+| `tool_select` | Tool select | select | — | — |
 | `update_pcb_from_schematic` | Update PCB from schematic | pcb_sync | — | — |
 
 ## PCB
