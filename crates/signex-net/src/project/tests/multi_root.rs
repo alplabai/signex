@@ -390,3 +390,130 @@ fn a_page_listed_twice_still_contributes_one_occurrence() {
         twice.issues
     );
 }
+
+/// Test 5's topology with the names swapped: the referenced page is
+/// `a.snxsch` and the page referencing it is `z.snxsch`, so sorted page order
+/// hands the *referenced* one over first. Takes the page order so the two
+/// tests below can vary only that.
+fn stitch_referencing_page_last(pages: &[&str]) -> super::super::ProjectNetlist {
+    let root = empty_sheet();
+
+    // The referenced page. Sorts first — which is the whole point.
+    let mut a = empty_sheet();
+    a.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+    a.labels
+        .push(label("BUS", pt(0.0, 0.0), LabelType::Hierarchical));
+    add_lib(&mut a, "R");
+    place(&mut a, "R_A", "R", pt(10.0, 0.0));
+
+    // The page that references it. Sorts last.
+    let mut z = empty_sheet();
+    z.wires.push(wire(pt(0.0, 0.0), pt(5.0, 0.0)));
+    add_lib(&mut z, "R");
+    place(&mut z, "R_Z", "R", pt(5.0, 0.0));
+    z.child_sheets.push(child_sheet(
+        "leaf",
+        "a.snxsch",
+        vec![sheet_pin("BUS", pt(0.0, 0.0))],
+    ));
+
+    let mut children = HashMap::new();
+    children.insert("a.snxsch".to_string(), a);
+    children.insert("z.snxsch".to_string(), z);
+
+    stitch_pages(&root, "root", &children, pages)
+}
+
+// 11 ── #540. Test 5 proved the visited-set skip works when the *referencing*
+//       page is walked first. Sorted page order decides that, and page names
+//       have nothing to do with who references whom — so here the referenced
+//       page sorts first, and the skip has to be arranged rather than
+//       inherited. Walking it twice would duplicate `R_A`, raise a spurious
+//       `SharedReferenceAcrossInstances`, and shift every subsequent `NetId`.
+#[test]
+fn a_page_referenced_by_a_later_sorting_page_is_still_stitched_once() {
+    let p = stitch_referencing_page_last(&["a.snxsch", "z.snxsch"]);
+
+    assert!(
+        p.issues.is_empty(),
+        "a.snxsch is reached once, through z's subtree — not a second instance: {:?}",
+        p.issues
+    );
+    assert_eq!(
+        p.netlist.nets.len(),
+        1,
+        "the sheet-pin binding merges the two pages into one net: {:?}",
+        names(&p.netlist)
+    );
+    let mut refs: Vec<&str> = p.netlist.nets[0]
+        .terminals
+        .iter()
+        .map(|t| t.reference.as_str())
+        .collect();
+    refs.sort_unstable();
+    assert_eq!(
+        refs,
+        vec!["R_A", "R_Z"],
+        "R_A appears exactly once, so no refdes collides with itself"
+    );
+}
+
+// 12 ── ...and the caller's page order does not change the answer. Whichever
+//       way the two pages are handed over — which is to say, whatever the two
+//       files are named — the netlist is the same one.
+#[test]
+fn page_order_does_not_change_a_referenced_pages_occurrence_count() {
+    assert_eq!(
+        stitch_referencing_page_last(&["a.snxsch", "z.snxsch"]),
+        stitch_referencing_page_last(&["z.snxsch", "a.snxsch"]),
+    );
+}
+
+// 13 ── The same rule applied to the project root: a page that references the
+//       root makes the root that page's child, so the root contributes one
+//       occurrence rather than one as a top-level page plus one nested. The
+//       root is deliberately not pinned to the front of the walk — nothing
+//       downstream needs it to be occurrence 0, and pinning it is exactly what
+//       would duplicate it here.
+#[test]
+fn a_page_referencing_the_project_root_does_not_stitch_the_root_twice() {
+    let mut root = empty_sheet();
+    root.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+    root.labels
+        .push(label("TOP", pt(0.0, 0.0), LabelType::Hierarchical));
+    add_lib(&mut root, "R");
+    place(&mut root, "R_ROOT", "R", pt(10.0, 0.0));
+
+    let mut z = empty_sheet();
+    z.wires.push(wire(pt(0.0, 0.0), pt(5.0, 0.0)));
+    add_lib(&mut z, "R");
+    place(&mut z, "R_Z", "R", pt(5.0, 0.0));
+    z.child_sheets.push(child_sheet(
+        "top",
+        "root",
+        vec![sheet_pin("TOP", pt(0.0, 0.0))],
+    ));
+
+    let mut children = HashMap::new();
+    children.insert("z.snxsch".to_string(), z);
+
+    let p = stitch_pages(&root, "root", &children, &["z.snxsch"]);
+    assert!(
+        p.issues.is_empty(),
+        "the root is reached once, as z's child: {:?}",
+        p.issues
+    );
+    let mut refs: Vec<&str> = p
+        .netlist
+        .nets
+        .iter()
+        .flat_map(|n| n.terminals.iter())
+        .map(|t| t.reference.as_str())
+        .collect();
+    refs.sort_unstable();
+    assert_eq!(
+        refs,
+        vec!["R_ROOT", "R_Z"],
+        "R_ROOT appears exactly once across the whole netlist"
+    );
+}

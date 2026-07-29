@@ -14,14 +14,13 @@
 //! so one root with an empty `resolved` map is byte-identical to
 //! `build_netlist(root)`.
 //!
-//! **Multi-root / flat-stitch traversal (#430):** `graph.roots` is walked in
-//! order, each root an independent top-level page — own subtree, own
-//! cycle-detection path, own name-chain seed; a peer of the first root, not
-//! nested under it. A root already reached as an earlier root's child is
-//! skipped rather than walked twice, so a declared page that another page also
-//! references contributes one occurrence — but only when the referencing page
-//! sorts first; the reverse order still walks it twice (#540, inherited from
-//! #430). This is what lets a flat,
+//! **Multi-root / flat-stitch traversal (#430):** `graph.roots` is walked as
+//! ordered by `root_order::order_roots`, each root an independent top-level
+//! page — own subtree, own cycle-detection path, own name-chain seed; a peer
+//! of the first root, not nested under it. A root already reached as an
+//! earlier root's child is skipped rather than walked twice, so a declared
+//! page that another page also references contributes exactly one occurrence
+//! whichever way the two are named (#540). This is what lets a flat,
 //! multi-page project — several sibling sheets, none referencing any other,
 //! which is what `Add Existing Sheet` produces — stitch into one netlist
 //! instead of leaving every page but the first out of it.
@@ -48,6 +47,8 @@ use crate::build::{
     label_priority, merged_sheet_parent, power_name_carriers, pt_key,
 };
 use crate::uf::{Key, find as uf_find, union as uf_union};
+
+mod root_order;
 
 /// Opaque, host-neutral identifier for one sheet within a [`ProjectGraph`] —
 /// a resolved path made relative to a fixed base and normalized by the
@@ -117,10 +118,15 @@ pub struct ProjectGraph<'a> {
     /// A parent absent from this map, or a `cs.filename` missing from its
     /// submap, stitches as [`StitchIssue::MissingChild`].
     pub resolved: &'a HashMap<SheetKey, HashMap<String, SheetKey>>,
-    /// Entry points the stitcher walks from, in order: the project root
-    /// first, then every declared page the root's hierarchy does not reach
-    /// (#430). Order decides occurrence numbering and therefore [`NetId`]
-    /// assignment, so the caller must produce it deterministically.
+    /// Entry points the stitcher walks from: the project root first, then
+    /// every declared page the root's hierarchy does not reach (#430). Order
+    /// decides occurrence numbering and therefore [`NetId`] assignment, so the
+    /// caller must produce it deterministically.
+    ///
+    /// This crate reorders one case before walking: a root that reaches
+    /// another root is moved ahead of it, so the page contributing the nested
+    /// occurrence is never stitched twice (#540). Everything else keeps the
+    /// caller's order, which is what breaks ties.
     pub roots: &'a [ProjectRoot],
 }
 
@@ -225,37 +231,34 @@ pub fn build_project_netlist(graph: &ProjectGraph) -> ProjectNetlist {
     detect_duplicate_uuids(graph.sheets, &mut issues);
 
     // ---- Traverse: build the occurrence tree (pre-order, document order) ----
-    // Every root is walked as its own top-level page, in the caller's order
-    // (#430). `visited` accumulates every key any walk reaches — it only ever
-    // grows, and it is consulted per iteration rather than precomputed,
-    // because walking one root's subtree can reach a later root: a declared
-    // page that another page happens to reference should contribute one
-    // occurrence, not two. Two occurrences of one sheet duplicate its
-    // terminals, raise a spurious `SharedReferenceAcrossInstances`, and shift
-    // every subsequent `NetId`.
+    // Every root is walked as its own top-level page (#430). `visited`
+    // accumulates every key any walk reaches — it only ever grows, and it is
+    // consulted per iteration rather than precomputed, because walking one
+    // root's subtree can reach a later root: a declared page that another page
+    // happens to reference should contribute one occurrence, not two. Two
+    // occurrences of one sheet duplicate its terminals, raise a spurious
+    // `SharedReferenceAcrossInstances`, and shift every subsequent `NetId`.
     //
-    // That skip is order-dependent and therefore incomplete: it only fires
-    // when the *referencing* page is walked first, which sorted root order
-    // decides for reasons unrelated to who references whom. A page that
-    // sorts before the page referencing it is still walked twice. Carried
-    // over from #430 unchanged, tracked as #540 — re-keying does not touch
-    // it either way, so fixing it here would bury an independent behaviour
-    // change inside #466.
+    // For that skip to fire, the *referencing* page has to be walked first,
+    // which the caller's own order decides for reasons unrelated to who
+    // references whom. `order_roots` is what puts the two in that order (#540);
+    // the caller's order is kept as the tiebreak, so a flat project is walked
+    // exactly as handed.
     let mut occs: Vec<Occ> = Vec::new();
     let mut edges: Vec<(usize, usize, usize)> = Vec::new(); // (parent occ, cs index, child occ)
     let mut path: Vec<SheetKey> = Vec::new();
     let mut visited: HashSet<SheetKey> = HashSet::new();
-    for root in graph.roots {
-        if visited.contains(&root.key) {
+    for key in root_order::order_roots(graph) {
+        if visited.contains(&key) {
             continue;
         }
-        let Some(sheet) = graph.sheets.get(&root.key) else {
+        let Some(sheet) = graph.sheets.get(&key) else {
             continue;
         };
         path.clear();
         visit(
             graph,
-            &root.key,
+            &key,
             sheet,
             Vec::new(),
             &mut path,
