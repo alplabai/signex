@@ -2,6 +2,7 @@
 //! id→[`crate::app::Message`] bridge; the registry struct, dispatch,
 //! args, and enablement are later slices.
 
+pub(crate) mod active_bar;
 pub(crate) mod bridge;
 
 pub(crate) use bridge::core_to_message;

@@ -37,11 +37,11 @@ pub(crate) struct ExportIssues {
     /// short a page.
     ///
     /// A page that exists and was read but that nothing hierarchically
-    /// references is *not* a shortfall of its own (#430): the stitcher's
-    /// multi-root / flat-stitch traversal visits it as its own independent
-    /// top-level page — `add_flat_siblings_as_extra_roots` puts it in the
-    /// `children` map before the stitcher ever runs, so a flat multi-page
-    /// project's second, third, ... page contributes instead of vanishing.
+    /// references is *not* a shortfall of its own (#430): `project_roots`
+    /// names it as an entry point in its own right, so the stitcher's
+    /// multi-root traversal walks it as an independent top-level page and a
+    /// flat multi-page project's second, third, … page contributes instead of
+    /// vanishing.
     pub(crate) missing_pages: Vec<PathBuf>,
     /// Sheets that exist but could not be read: `(path, why)`.
     pub(crate) unreadable: Vec<(PathBuf, String)>,
@@ -54,12 +54,16 @@ impl ExportIssues {
     /// A `MissingChild` subtree does not just leave its own nets out: nets that
     /// should merge through that sheet's ports stay split, so the surviving
     /// nets can carry the *wrong* names. `SheetCycle` truncates the walk with
-    /// the same effect. `AmbiguousChildFilename` is a hole for the same reason:
-    /// the losing parent's subtree was stitched from the *wrong* file, so that
-    /// subtree's real nets are absent and the other file's are grafted in
-    /// twice. The remaining `StitchIssue` variants (duplicate UUIDs, shared
-    /// references, name collisions) describe a complete netlist with a naming
-    /// or annotation problem — loud, but not a hole.
+    /// the same effect, and a declared page with no file behind it is a whole
+    /// page of components and nets that never made it in. `SheetKeyCollision`
+    /// is a hole too, though a different one: the dropped sheet never entered
+    /// the graph at all, so its components and nets are simply absent —
+    /// nothing is stitched from the wrong file and nothing is grafted in
+    /// twice, which is what the pre-#466 filename-keyed model did and what
+    /// this variant's predecessor described. The remaining `StitchIssue`
+    /// variants (duplicate UUIDs, shared references, name collisions) describe
+    /// a complete netlist with a naming or annotation problem — loud, but not
+    /// a hole.
     pub(crate) fn netlist_is_incomplete(&self) -> bool {
         !self.missing_pages.is_empty()
             || !self.unreadable.is_empty()
@@ -68,7 +72,7 @@ impl ExportIssues {
                     issue,
                     signex_net::StitchIssue::MissingChild { .. }
                         | signex_net::StitchIssue::SheetCycle { .. }
-                        | signex_net::StitchIssue::AmbiguousChildFilename { .. }
+                        | signex_net::StitchIssue::SheetKeyCollision { .. }
                 )
             })
     }
@@ -83,7 +87,7 @@ impl ExportIssues {
         // Reported separately from MissingChild on purpose: "could not be
         // found" sends the user hunting for a file that is sitting right
         // there, when the real problem is its contents. Listed first so it
-        // explains any page below that is affected *because* of it.
+        // explains any page below that is uncovered *because* of it.
         for (path, why) in &self.unreadable {
             out.push(format!("Netlist: sheet '{}' {why}", path.display()));
         }
@@ -268,15 +272,15 @@ fn build_export_scope(
 
     // Derive the authoritative project netlist off that same sheet set, so the
     // netlist exporter reads the contract instead of re-deriving connectivity
-    // (ADR-0002 D7). The children map is keyed by the exact
-    // `ChildSheet.filename` each parent references (ADR-0002 D8).
+    // (ADR-0002 D7). The graph is re-keyed by resolved path, per parent
+    // (ADR-0002 D8, #466), not by the bare `ChildSheet.filename` string.
     let mut issues = ExportIssues::default();
     let set = sheet_set;
     let netlist = set.root.clone().and_then(|root_path| {
-        // A declared page that exists but that nothing hierarchically
-        // references is stitched in below as its own independent top-level
-        // page (#430) — see `add_flat_siblings_as_extra_roots` — so it is only
-        // a genuine shortfall here when it could not be loaded at all.
+        // A declared page that exists and was read but that nothing
+        // hierarchically references is stitched in below as its own
+        // independent top-level page (#430) — see `project_roots` — so it is
+        // only a genuine shortfall here when it could not be loaded at all.
         //
         // "No file exists at that path" sends the user to the right place; a
         // page that exists but will not parse is already reported verbatim
@@ -284,34 +288,36 @@ fn build_export_scope(
         let unreadable: std::collections::HashSet<&PathBuf> =
             set.unreadable.iter().map(|(path, _)| path).collect();
         for path in &set.pages_outside_the_hierarchy {
-            if unreadable.contains(path) || set.sheets.contains_key(path) {
-                continue;
+            if !unreadable.contains(path) && !set.sheets.contains_key(path) {
+                issues.missing_pages.push(path.clone());
             }
-            issues.missing_pages.push(path.clone());
         }
         issues.unreadable = set.unreadable.clone();
-        let root = set.sheets.get(&root_path)?;
         let project_dir = owning_project.map(|p| p.dir().to_path_buf());
-        let (mut children, children_issues) =
-            crate::app::project_sheets::project_children_map(&set.sheets);
-        // #430: a flat project's second, third, ... page has no `ChildSheet`
-        // reference pointing at it, so `project_children_map` never keys it —
-        // add it to the map under its own resolved name so the stitcher's
-        // multi-root traversal visits it as a top-level page in its own right.
-        crate::app::project_sheets::add_flat_siblings_as_extra_roots(
-            &mut children,
-            &set,
-            project_dir.as_deref(),
-        );
-        let root_filename =
-            crate::app::project_sheets::root_reference_name(&root_path, project_dir.as_deref());
+        let base_dir = project_dir
+            .clone()
+            .or_else(|| root_path.parent().map(PathBuf::from));
+        let graph = crate::app::project_sheets::project_graph(&set.sheets, base_dir.as_deref());
+        let root_key = crate::app::project_sheets::sheet_key(&root_path, base_dir.as_deref());
+        if !graph.sheets.contains_key(&root_key) {
+            return None;
+        }
+        // Root + every declared page its hierarchy never reaches (#430) —
+        // a flat multi-page project stitches into one netlist only if each
+        // page is named as a root of its own.
+        let roots =
+            crate::app::project_sheets::project_roots(root_key, &set, &graph, base_dir.as_deref());
         // `build_project_netlist` always produces a netlist and reports what
         // it could not stitch in-band. The issues are returned to the caller
         // rather than acted on here, because severity is a per-deliverable
         // policy: the .net refuses on a hole, the PDF proceeds and warns.
-        let result = signex_net::build_project_netlist(root, &children, root_filename.as_deref());
+        let result = signex_net::build_project_netlist(&signex_net::ProjectGraph {
+            sheets: &graph.sheets,
+            resolved: &graph.resolved,
+            roots: &roots,
+        });
         let mut stitch = result.issues;
-        stitch.extend(children_issues);
+        stitch.extend(graph.issues);
         issues.stitch = stitch;
         Some(result.netlist)
     });
