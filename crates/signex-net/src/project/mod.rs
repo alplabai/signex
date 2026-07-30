@@ -1,33 +1,39 @@
 //! Cross-sheet netlist stitching — [`build_project_netlist`] (ADR-0002 D8,
-//! A3.1 increment 2c).
+//! A3.1 increment 2c; re-keyed by resolved path in #466).
 //!
-//! A schematic project is a root sheet plus a map of child sheets keyed by the
-//! exact `ChildSheet.filename` string written on the parent. This module walks
-//! that hierarchy and derives one [`Netlist`] for the whole design, on top of
+//! A schematic project is a [`ProjectGraph`]: every sheet keyed by an opaque,
+//! caller-resolved [`SheetKey`], plus a per-parent resolution map from each
+//! `ChildSheet.filename` string to the child's key. The app resolves every
+//! reference against its own parent's directory before handing this crate the
+//! graph — this crate never joins paths, normalizes separators, or folds case;
+//! it only compares keys. Which host decisions the caller applies (and where
+//! it stops) is the caller's business, documented at its own key-assembly
+//! step; nothing here depends on them. This module walks the hierarchy from
+//! `graph.roots` and derives one [`Netlist`] for the whole design, on top of
 //! the same per-sheet analysis [`build_netlist`](crate::build_netlist) uses —
-//! so `build_project_netlist(root, &{}, None).netlist` is byte-identical to
+//! so one root with an empty `resolved` map is byte-identical to
 //! `build_netlist(root)`.
 //!
-//! **Multi-root / flat-stitch traversal (#430):** the root's hierarchy is
-//! walked first, exactly as before; any `children` entry that walk never
-//! reaches is then visited *again*, as an independent top-level page of its
-//! own (own subtree, own cycle-detection path, unqualified name chain — a
-//! peer of the root, not nested under it). This is what lets a flat,
+//! **Multi-root / flat-stitch traversal (#430):** `graph.roots` is walked as
+//! ordered by `root_order::order_roots`, each root an independent top-level
+//! page — own subtree, own cycle-detection path, own name-chain seed; a peer
+//! of the first root, not nested under it. A root already reached as an
+//! earlier root's child is skipped rather than walked twice, so a declared
+//! page that another page also references contributes exactly one occurrence
+//! whichever way the two are named (#540). This is what lets a flat,
 //! multi-page project — several sibling sheets, none referencing any other,
-//! which is exactly what `Add Existing Sheet` produces — stitch into one
-//! netlist instead of leaving every sheet but the root out of it: pass every
-//! sheet the project consists of in `children` (whether or not anything
-//! references it) and every one of them contributes.
+//! which is what `Add Existing Sheet` produces — stitch into one netlist
+//! instead of leaving every page but the first out of it.
 //!
 //! Two-level union-find: **level 1** is the per-sheet derivation (wires,
 //! junctions, on-sheet label merge) plus sheet-pin anchoring; **level 2** joins
 //! the resulting per-occurrence net roots across the project by three rules —
 //! same-name Global/Power labels, power-port symbols as global name carriers,
-//! and sheet-pin ↔ child-label binding. These rules run over *every* occurrence
-//! regardless of which root's subtree it came from, so cross-page merging for
-//! a flat project falls out of the existing machinery unchanged — no new net
-//! model. Structural problems are reported as [`StitchIssue`]s in-band; the
-//! netlist is always produced, deterministically.
+//! and sheet-pin ↔ child-label binding. These rules run over *every*
+//! occurrence regardless of which root's subtree it came from, so cross-page
+//! merging for a flat project falls out of the existing machinery unchanged —
+//! no new net model. Structural problems are reported as [`StitchIssue`]s
+//! in-band; the netlist is always produced, deterministically.
 
 use std::collections::{HashMap, HashSet};
 
@@ -42,23 +48,106 @@ use crate::build::{
 };
 use crate::uf::{Key, find as uf_find, union as uf_union};
 
+mod root_order;
+
+/// Opaque, host-neutral identifier for one sheet within a [`ProjectGraph`] —
+/// a resolved path made relative to a fixed base and normalized by the
+/// caller. This crate never interprets a `SheetKey` as a path: no joining,
+/// normalizing, or case-folding happens here, only comparison.
+///
+/// A newtype, not an alias, on purpose. The whole point of #466 is that a
+/// resolved key and a raw `ChildSheet.filename` reference string are
+/// different things that happen to share a representation — they sit side by
+/// side in [`ProjectGraph::resolved`], and under an alias every one of those
+/// call sites would still compile with the two swapped, silently resolving
+/// the wrong sheet. That is the defect this module exists to remove, so the
+/// distinction is carried in the type system rather than in a comment.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct SheetKey(String);
+
+impl SheetKey {
+    /// Wrap a string the caller has already resolved and normalized.
+    pub fn new(key: impl Into<String>) -> Self {
+        Self(key.into())
+    }
+
+    /// Borrow the underlying string — for display and for hashing into
+    /// caller-side maps, never for path interpretation.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for SheetKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// One entry point the stitcher walks the hierarchy from.
+///
+/// Every root starts with an **empty** name chain, so its qualifiable
+/// (Hierarchical/Net) label names stay bare. For the primary root that is what
+/// keeps the single-root byte-identity contract with `build_netlist`; for a
+/// declared page (#430) it is the deliberate reading of what a page *is* — a
+/// peer of the root rather than something nested under it, so a `VCC` on page
+/// two is the same net as a `VCC` on page one.
+///
+/// A per-root name seed would be the knob for the other reading — qualifying a
+/// page's sheet-scoped labels by its own stem, which changes exported net
+/// names. Nothing asks for it, so it is not carried: add it back with the first
+/// caller that wants it rather than shipping a field only a test ever sets.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectRoot {
+    pub key: SheetKey,
+}
+
+/// Pre-resolved input to [`build_project_netlist`]. The caller (the app) owns
+/// every path/host decision — resolving a `ChildSheet.filename` against its
+/// parent's directory, joining, normalizing, case-folding — and hands this
+/// crate opaque keys; this crate only compares them.
+#[derive(Debug, Clone, Copy)]
+pub struct ProjectGraph<'a> {
+    /// Every sheet in the project, keyed by its own [`SheetKey`] (root
+    /// included).
+    pub sheets: &'a HashMap<SheetKey, SchematicSheet>,
+    /// Per-parent resolution: `resolved[parent_key][cs.filename]` is the
+    /// child's [`SheetKey`]. The outer key is a resolved [`SheetKey`], the
+    /// inner one the raw `ChildSheet.filename` string exactly as written on
+    /// that parent — the newtype is what keeps the two from being transposed.
+    /// A parent absent from this map, or a `cs.filename` missing from its
+    /// submap, stitches as [`StitchIssue::MissingChild`].
+    pub resolved: &'a HashMap<SheetKey, HashMap<String, SheetKey>>,
+    /// Entry points the stitcher walks from: the project root first, then
+    /// every declared page the root's hierarchy does not reach (#430). Order
+    /// decides occurrence numbering and therefore [`NetId`] assignment, so the
+    /// caller must produce it deterministically.
+    ///
+    /// This crate reorders one case before walking: a root that reaches
+    /// another root is moved ahead of it, so the page contributing the nested
+    /// occurrence is never stitched twice (#540). Everything else keeps the
+    /// caller's order, which is what breaks ties.
+    pub roots: &'a [ProjectRoot],
+}
+
 /// A structural problem found while stitching. The netlist is still produced
 /// (best-effort, deterministic); issues tell consumers where it is degraded.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StitchIssue {
-    /// A `ChildSheet` names a file with no entry in the children map.
+    /// A `ChildSheet` names a reference with no entry in the parent's
+    /// resolution map, or one that resolves to a key absent from `sheets`.
     MissingChild {
         parent_path: String,
         sheet_name: String,
         filename: String,
     },
-    /// A child reference closes a cycle (its filename is already on the DFS
-    /// path, or equals the root filename); the edge is not stitched.
+    /// A child reference closes a cycle (its resolved key is already on the
+    /// DFS path); the edge is not stitched.
     SheetCycle {
         parent_path: String,
         filename: String,
     },
-    /// Two different files carry the same schematic uuid (copy-as-template).
+    /// Two different sheets carry the same schematic uuid (copy-as-template).
     DuplicateSheetUuid {
         filename_a: String,
         filename_b: String,
@@ -69,15 +158,26 @@ pub enum StitchIssue {
     /// Two distinct nets resolved to the same final name; a deterministic
     /// suffix was applied.
     NameCollision { name: String },
-    /// Two parents in different directories reference a child by the same
-    /// `ChildSheet.filename` string, but it resolves to two different files —
-    /// the children map has one slot per filename, so only `path_a`'s sheet
-    /// was stitched in; the parent that resolved to `path_b` was silently
-    /// given the wrong subtree without this issue.
-    AmbiguousChildFilename {
-        filename: String,
-        path_a: String,
-        path_b: String,
+    /// Two distinct sheets the caller loaded collapsed onto one [`SheetKey`],
+    /// so only one of them is in `sheets` at all — e.g. a case-fold collision
+    /// on a case-insensitive host (`A.snxsch` vs `a.snxsch`). The caller's
+    /// key-assembly step decides which one survives; `dropped` contributes
+    /// nothing to the netlist and would be missing without this issue.
+    ///
+    /// Renamed from `AmbiguousChildFilename` in #466: the old name (and its
+    /// message) described a *reference* string resolving two ways under the
+    /// filename-keyed model, which per-parent resolution removed. What is
+    /// left is a collision between two loaded sheets over one key, which is a
+    /// different thing with a different remedy — renaming rather than reusing
+    /// the name keeps a consumer from silently inheriting the old story.
+    SheetKeyCollision {
+        /// The key both sheets assembled to, as the caller derived it — not
+        /// a string the user typed anywhere.
+        key: String,
+        /// The sheet that kept the key and is in the netlist.
+        kept: String,
+        /// The sheet that lost it and is absent from the netlist entirely.
+        dropped: String,
     },
 }
 
@@ -98,10 +198,10 @@ struct Occ<'a> {
     /// The `ChildSheet.name` chain from the root (empty for the root sheet);
     /// used to qualify Hierarchical / Net names chosen off a non-root sheet.
     name_chain: Vec<String>,
-    /// The children-map key (filename) this occurrence was reached by; `None`
-    /// for the root unless `root_filename` was given. Occurrences that share a
-    /// filename are instances of one file.
-    filename: Option<String>,
+    /// The [`SheetKey`] this occurrence was reached by (a root's own key, or
+    /// the child's resolved key). Occurrences that share a key are instances
+    /// of one sheet.
+    key: SheetKey,
 }
 
 /// Per-occurrence level-1 analysis, sampled after every level-1 union.
@@ -121,70 +221,49 @@ struct Analysis<'a> {
     membership: HashMap<Key, (Vec<Uuid>, Vec<Uuid>)>,
 }
 
-/// Build the whole-project [`Netlist`] by stitching the root sheet to its
-/// children — plus, per #430, any `children` entry the root's hierarchy never
-/// reaches, stitched in as its own independent top-level page.
-///
-/// `children` is keyed by the exact `ChildSheet.filename` string as written on
-/// the parent for a sheet reached by a real reference (not a basename); a
-/// flat sibling with no reference pointing at it can be keyed by whatever
-/// stable string the caller resolves it by (e.g. its own path or basename) —
-/// nothing needs to reference that key for the sheet to be stitched in, only
-/// the map entry needs to exist. `root_filename` — the root's own filename, if
-/// known — lets a child that re-references the root be caught as a cycle. See
-/// the module docs for the stitching rules. `build_project_netlist(root, &{},
-/// None).netlist` equals `build_netlist(root)` byte-for-byte.
-pub fn build_project_netlist(
-    root: &SchematicSheet,
-    children: &HashMap<String, SchematicSheet>,
-    root_filename: Option<&str>,
-) -> ProjectNetlist {
+/// Build the whole-project [`Netlist`] by stitching `graph.roots` down
+/// through `graph.resolved`. See the module docs for the stitching rules —
+/// and for the byte-identity contract with `build_netlist` for a single-root,
+/// unresolved graph.
+pub fn build_project_netlist(graph: &ProjectGraph) -> ProjectNetlist {
     let mut issues: Vec<StitchIssue> = Vec::new();
 
-    detect_duplicate_uuids(root, children, root_filename, &mut issues);
+    detect_duplicate_uuids(graph.sheets, &mut issues);
 
     // ---- Traverse: build the occurrence tree (pre-order, document order) ----
+    // Every root is walked as its own top-level page (#430). `visited`
+    // accumulates every key any walk reaches — it only ever grows, and it is
+    // consulted per iteration rather than precomputed, because walking one
+    // root's subtree can reach a later root: a declared page that another page
+    // happens to reference should contribute one occurrence, not two. Two
+    // occurrences of one sheet duplicate its terminals, raise a spurious
+    // `SharedReferenceAcrossInstances`, and shift every subsequent `NetId`.
+    //
+    // For that skip to fire, the *referencing* page has to be walked first,
+    // which the caller's own order decides for reasons unrelated to who
+    // references whom. `order_roots` is what puts the two in that order (#540);
+    // the caller's order is kept as the tiebreak, so a flat project is walked
+    // exactly as handed.
     let mut occs: Vec<Occ> = Vec::new();
     let mut edges: Vec<(usize, usize, usize)> = Vec::new(); // (parent occ, cs index, child occ)
-    let mut path: Vec<String> = Vec::new();
-    // Every `children` key the walk actually reaches (root's own filename
-    // included) — not the ancestor-only `path`, this only ever grows, so
-    // after the root's hierarchy is fully walked it tells us exactly which
-    // map entries are still orphans.
-    let mut visited: HashSet<String> = HashSet::new();
-    visit(
-        root,
-        Vec::new(),
-        root_filename,
-        &mut path,
-        &mut occs,
-        &mut edges,
-        children,
-        &mut visited,
-        &mut issues,
-    );
-
-    // ---- Multi-root / flat-stitch (#430): visit every still-unreached ------
-    // `children` entry as its own top-level page. Sorted key order keeps
-    // occurrence numbering (and therefore NetId assignment) deterministic
-    // regardless of the map's hash order; membership is rechecked on every
-    // iteration (not precomputed) because visiting one orphan's own subtree
-    // can reach another — e.g. a flat sibling that itself has child sheets.
-    let mut orphan_keys: Vec<&String> = children.keys().collect();
-    orphan_keys.sort();
-    for key in orphan_keys {
-        if visited.contains(key) {
+    let mut path: Vec<SheetKey> = Vec::new();
+    let mut visited: HashSet<SheetKey> = HashSet::new();
+    for key in root_order::order_roots(graph) {
+        if visited.contains(&key) {
             continue;
         }
+        let Some(sheet) = graph.sheets.get(&key) else {
+            continue;
+        };
         path.clear();
         visit(
-            &children[key],
+            graph,
+            &key,
+            sheet,
             Vec::new(),
-            Some(key.as_str()),
             &mut path,
             &mut occs,
             &mut edges,
-            children,
             &mut visited,
             &mut issues,
         );
@@ -445,63 +524,70 @@ fn analyze(sheet: &SchematicSheet) -> Analysis<'_> {
 }
 
 /// DFS the hierarchy, recording occurrences, parent→child edges, and structural
-/// issues (missing children, cycles). Also records every `children` key
-/// reached into `visited`, so the caller can tell which map entries this walk
-/// never touched (#430's flat-sibling promotion).
+/// issues (missing children, cycles).
+///
+/// Every key this walk reaches is inserted into `visited`, so the caller can
+/// tell which of its remaining roots are already covered (#430).
 #[allow(clippy::too_many_arguments)]
 fn visit<'a>(
+    graph: &ProjectGraph<'a>,
+    key: &SheetKey,
     sheet: &'a SchematicSheet,
     name_chain: Vec<String>,
-    this_key: Option<&str>,
-    path: &mut Vec<String>,
+    path: &mut Vec<SheetKey>,
     occs: &mut Vec<Occ<'a>>,
     edges: &mut Vec<(usize, usize, usize)>,
-    children: &'a HashMap<String, SchematicSheet>,
-    visited: &mut HashSet<String>,
+    visited: &mut HashSet<SheetKey>,
     issues: &mut Vec<StitchIssue>,
 ) -> usize {
     let my_id = occs.len();
     let parent_path = if name_chain.is_empty() {
-        this_key.unwrap_or("<root>").to_string()
+        key.to_string()
     } else {
         name_chain.join("/")
     };
     occs.push(Occ {
         sheet,
         name_chain,
-        filename: this_key.map(|k| k.to_string()),
+        key: key.clone(),
     });
-    if let Some(k) = this_key {
-        path.push(k.to_string());
-        visited.insert(k.to_string());
-    }
+    path.push(key.clone());
+    visited.insert(key.clone());
 
+    let submap = graph.resolved.get(key);
     for (cs_index, cs) in sheet.child_sheets.iter().enumerate() {
-        let key = cs.filename.as_str();
-        if path.iter().any(|p| p == key) {
+        let Some(child_key) = submap.and_then(|m| m.get(cs.filename.as_str())) else {
+            issues.push(StitchIssue::MissingChild {
+                parent_path: parent_path.clone(),
+                sheet_name: cs.name.clone(),
+                filename: cs.filename.clone(),
+            });
+            continue;
+        };
+        if path.contains(child_key) {
             issues.push(StitchIssue::SheetCycle {
                 parent_path: parent_path.clone(),
-                filename: key.to_string(),
+                filename: cs.filename.clone(),
             });
             continue;
         }
-        match children.get(key) {
+        match graph.sheets.get(child_key) {
             None => issues.push(StitchIssue::MissingChild {
                 parent_path: parent_path.clone(),
                 sheet_name: cs.name.clone(),
-                filename: key.to_string(),
+                filename: cs.filename.clone(),
             }),
             Some(child_sheet) => {
                 let mut child_chain = occs[my_id].name_chain.clone();
                 child_chain.push(cs.name.clone());
                 let cid = visit(
+                    graph,
+                    child_key,
                     child_sheet,
                     child_chain,
-                    Some(key),
                     path,
                     occs,
                     edges,
-                    children,
                     visited,
                     issues,
                 );
@@ -510,9 +596,7 @@ fn visit<'a>(
         }
     }
 
-    if this_key.is_some() {
-        path.pop();
-    }
+    path.pop();
     my_id
 }
 
@@ -528,26 +612,24 @@ fn bucket_join(l2: &mut HashMap<L2, L2>, bucket: &mut HashMap<String, L2>, name:
     }
 }
 
-/// Report each reference designator carried by a file instantiated more than
-/// once: per-occurrence expansion keeps the instances electrically distinct,
-/// but the refdes collide until per-instance annotation exists. One issue per
-/// `(filename, reference)`, in sorted-filename then document order.
+/// Report each reference designator carried by a sheet key instantiated more
+/// than once: per-occurrence expansion keeps the instances electrically
+/// distinct, but the refdes collide until per-instance annotation exists. One
+/// issue per `(key, reference)`, in sorted-key then document order.
 fn detect_shared_references(occs: &[Occ], issues: &mut Vec<StitchIssue>) {
-    let mut by_file: HashMap<&str, Vec<usize>> = HashMap::new();
+    let mut by_key: HashMap<&str, Vec<usize>> = HashMap::new();
     for (i, o) in occs.iter().enumerate() {
-        if let Some(f) = &o.filename {
-            by_file.entry(f.as_str()).or_default().push(i);
-        }
+        by_key.entry(o.key.as_str()).or_default().push(i);
     }
-    let mut files: Vec<&str> = by_file.keys().copied().collect();
-    files.sort_unstable();
-    for filename in files {
-        let occ_ids = &by_file[filename];
+    let mut keys: Vec<&str> = by_key.keys().copied().collect();
+    keys.sort_unstable();
+    for key in keys {
+        let occ_ids = &by_key[key];
         if occ_ids.len() < 2 {
             continue;
         }
-        // Instances of one file share the same symbols; report each reference
-        // once, in the sheet's document order.
+        // Instances of one sheet share the same symbols; report each
+        // reference once, in the sheet's document order.
         let sheet = occs[occ_ids[0]].sheet;
         let mut seen: HashSet<&str> = HashSet::new();
         for sym in &sheet.symbols {
@@ -556,7 +638,7 @@ fn detect_shared_references(occs: &[Occ], issues: &mut Vec<StitchIssue>) {
             }
             if seen.insert(sym.reference.as_str()) {
                 issues.push(StitchIssue::SharedReferenceAcrossInstances {
-                    filename: filename.to_string(),
+                    filename: key.to_string(),
                     reference: sym.reference.clone(),
                 });
             }
@@ -564,36 +646,29 @@ fn detect_shared_references(occs: &[Occ], issues: &mut Vec<StitchIssue>) {
     }
 }
 
-/// Report every pair of children-map entries (and the root, when its filename
-/// is known) that share a schematic uuid — copy-as-template corruption. Sheet
-/// identity is the filename key, never the uuid.
+/// Report every pair of sheets that share a schematic uuid — copy-as-template
+/// corruption. Sheet identity is the [`SheetKey`], never the uuid; every sheet
+/// in the graph is checked uniformly, root included, since the root is just
+/// another entry in `sheets`.
 fn detect_duplicate_uuids(
-    root: &SchematicSheet,
-    children: &HashMap<String, SchematicSheet>,
-    root_filename: Option<&str>,
+    sheets: &HashMap<SheetKey, SchematicSheet>,
     issues: &mut Vec<StitchIssue>,
 ) {
-    let mut by_uuid: HashMap<Uuid, String> = HashMap::new();
-    let mut entries: Vec<(String, Uuid)> = Vec::new();
-    if let Some(rf) = root_filename {
-        entries.push((rf.to_string(), root.uuid));
-    }
-    let mut keys: Vec<&String> = children.keys().collect();
+    let mut by_uuid: HashMap<Uuid, &SheetKey> = HashMap::new();
+    let mut keys: Vec<&SheetKey> = sheets.keys().collect();
     keys.sort();
-    for k in keys {
-        entries.push((k.clone(), children[k].uuid));
-    }
-    for (filename, uuid) in entries {
+    for key in keys {
+        let uuid = sheets[key].uuid;
         if uuid == Uuid::nil() {
             continue;
         }
         match by_uuid.get(&uuid) {
             Some(prev) => issues.push(StitchIssue::DuplicateSheetUuid {
-                filename_a: prev.clone(),
-                filename_b: filename,
+                filename_a: prev.to_string(),
+                filename_b: key.to_string(),
             }),
             None => {
-                by_uuid.insert(uuid, filename);
+                by_uuid.insert(uuid, key);
             }
         }
     }
