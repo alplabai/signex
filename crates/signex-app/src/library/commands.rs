@@ -25,10 +25,32 @@ use uuid::Uuid;
 
 use super::state::LibraryState;
 
-/// Open a `*.snxlib/` and refresh its component list.
+/// Open a `*.snxlib/` and, when it was already mounted, refresh its
+/// component list.
+///
+/// The refresh is warm-path only — the same split #528 made in
+/// `auto_mount_project_libraries`, applied here to the interactive path
+/// (#530). Not a micro-optimisation: the duplicate scan measured
+/// **128.653 ms** for a medium library (500 symbols + 500 footprints) and
+/// **540.508 ms** for a large one (2000 + 2000), and every manual "open a
+/// library" gesture paid it.
+///
+/// COLD (not yet mounted): [`LibraryState::open_library`] has just run
+/// `reload_tables` → `reload_primitives`, priming all five caches off the
+/// exact adapter calls a refresh would repeat. Refreshing here recomputes
+/// identical values.
+///
+/// WARM (already mounted): `open_library` early-returns at
+/// `state/methods.rs:83-85` and never reaches `reload_tables`, so this
+/// refresh is the *only* thing that rescans. Dropping it unconditionally
+/// would leave an already-mounted library showing a stale snapshot —
+/// which is why this is a guard and not a deletion. Reachable from every
+/// caller: `self.library` is app-global, so re-opening an
+/// already-mounted library lands here.
 pub fn open_library(state: &mut LibraryState, root: PathBuf) -> Result<(), LibraryError> {
+    let already_open = state.library_at(&root).is_some();
     state.open_library(root.clone())?;
-    if let Err(e) = state.refresh_components(&root) {
+    if already_open && let Err(e) = state.refresh_components(&root) {
         tracing::warn!(target: "signex::library", path = %root.display(), error = %e, "refresh_components failed; UI starts with empty list");
     }
     Ok(())
@@ -192,19 +214,24 @@ pub fn materialize_pending_library(
         library_id: Some(library_id),
     });
 
+    // No `refresh_components` chaser here (#530). This mount is
+    // provably cold and the library is provably empty, so a refresh
+    // could only recompute what `open_library` just cached:
+    //
+    // - `spec.lib_path` was rejected above if it existed on disk, and
+    //   `LocalGitAdapter::init` created it moments ago. A path that did
+    //   not exist cannot have been mounted, because mounting requires
+    //   `LocalGitAdapter::open` on an existing path — so the warm branch
+    //   that keeps the refresh alive in `open_library` is unreachable.
+    // - The library `init` writes has zero rows and no `symbols/` /
+    //   `footprints/` / `sims/` entries, so every cache it primes is
+    //   empty by construction.
     if let Err(e) = state.open_library(spec.lib_path.clone()) {
         tracing::warn!(
             target: "signex::library",
             path = %spec.lib_path.display(),
             error = %e,
             "freshly-materialised library failed initial open — entry registered, retry from tree"
-        );
-    } else if let Err(e) = state.refresh_components(&spec.lib_path) {
-        tracing::warn!(
-            target: "signex::library",
-            path = %spec.lib_path.display(),
-            error = %e,
-            "freshly-materialised library failed initial refresh"
         );
     }
 
@@ -344,22 +371,24 @@ pub fn create_library_at(
         library_id: Some(library_id),
     });
 
-    // Best-effort runtime mount + initial component-cache refresh.
-    // Errors here downgrade to warnings so the entry stays
-    // registered and the user can retry from the tree later.
+    // Best-effort runtime mount. Errors here downgrade to warnings so
+    // the entry stays registered and the user can retry from the tree
+    // later.
+    //
+    // No `refresh_components` chaser (#530) — same proof as
+    // `materialize_pending_library`: `lib_path` was rejected above if it
+    // existed, `LocalGitAdapter::init` created it moments ago, and a path
+    // that did not exist cannot already be mounted. So the mount is
+    // provably cold (the warm branch in `open_library` is unreachable)
+    // and the library is provably empty (zero rows, no primitive files).
+    // A refresh could only recompute the empty caches `open_library` just
+    // primed.
     if let Err(e) = state.open_library(lib_path.clone()) {
         tracing::warn!(
             target: "signex::library",
             path = %lib_path.display(),
             error = %e,
             "freshly-created library failed initial open — entry registered, retry from tree"
-        );
-    } else if let Err(e) = state.refresh_components(&lib_path) {
-        tracing::warn!(
-            target: "signex::library",
-            path = %lib_path.display(),
-            error = %e,
-            "freshly-created library failed initial refresh"
         );
     }
 

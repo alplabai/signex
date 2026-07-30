@@ -269,6 +269,102 @@ fn project_referencing(dir: &Path, libs: &[PathBuf]) -> ProjectData {
 }
 
 /// Order-independent fingerprint of the five cached fields — row ids,
+/// #530 — the same warm/cold split, on the *interactive* path.
+///
+/// `commands::open_library` now refreshes only when the library was
+/// already mounted. The cold half is covered by
+/// `refresh_components_after_open_changes_nothing` above (the refresh was
+/// a no-op there, which is why dropping it is safe); this pins the warm
+/// half, which is the part a blanket deletion would break.
+///
+/// Every caller can reach this branch: `self.library` is app-global, so
+/// re-opening an already-mounted library from the Components Panel, the
+/// primitive picker, the lifecycle handler or a project save all land
+/// here.
+#[test]
+fn commands_open_library_refreshes_an_already_mounted_library() {
+    let scale = Scale::new("warmcmd", SYMBOLS, FOOTPRINTS);
+    let tmp = tempfile::Builder::new()
+        .prefix("signex-warm-cmd-")
+        .tempdir()
+        .expect("tempdir");
+    let snxlib = generate_library(tmp.path(), "warmcmd", &scale).expect("generate_library");
+
+    let mut state = LibraryState::default();
+    signex_app::library::commands::open_library(&mut state, snxlib.clone()).expect("cold open");
+    assert_eq!(
+        state
+            .library_at(&snxlib)
+            .expect("mounted")
+            .cached_symbols
+            .len(),
+        scale.symbols,
+        "the cold open must have primed cached_symbols on its own, with no refresh chaser"
+    );
+
+    // Someone writes a new `.snxsym` behind our back.
+    append_component(&snxlib, SYMBOLS).expect("append_component");
+
+    // Re-open the same library — the warm branch.
+    signex_app::library::commands::open_library(&mut state, snxlib.clone()).expect("warm open");
+
+    let lib = state.library_at(&snxlib).expect("still mounted");
+    assert_eq!(
+        lib.cached_symbols.len(),
+        scale.symbols + 1,
+        "a warm open must rescan symbols/ — it is the only thing that can, since \
+         LibraryState::open_library early-returns before reload_tables when already mounted"
+    );
+    assert_eq!(
+        state.open_libraries.len(),
+        1,
+        "re-opening must not duplicate the entry"
+    );
+}
+
+/// #530 — the two removals rest on a claim, so the claim gets a test: a
+/// freshly created library is mounted with its caches already primed, and
+/// they are empty because the library is empty.
+///
+/// If `create_library_at` ever stops priming, or starts creating seeded
+/// content, this fails and the dropped `refresh_components` has to come
+/// back.
+#[test]
+fn create_library_at_mounts_with_primed_empty_caches() {
+    let tmp = tempfile::Builder::new()
+        .prefix("signex-create-empty-")
+        .tempdir()
+        .expect("tempdir");
+    let lib_path = tmp.path().join("fresh.snxlib");
+
+    let mut state = LibraryState::default();
+    let mut project = project_referencing(tmp.path(), &[]);
+    signex_app::library::commands::create_library_at(
+        &mut state,
+        &mut project,
+        lib_path.clone(),
+        false,
+        false,
+    )
+    .expect("create_library_at");
+
+    let lib = state
+        .library_at(&lib_path)
+        .expect("a freshly created library must be mounted, not merely registered on the project");
+    assert!(
+        lib.cached_components.is_empty()
+            && lib.cached_symbols.is_empty()
+            && lib.cached_footprints.is_empty()
+            && lib.cached_sims.is_empty(),
+        "a freshly created library is empty by construction, so a refresh chaser could only \
+         recompute empty caches: components={} symbols={} footprints={} sims={}",
+        lib.cached_components.len(),
+        lib.cached_symbols.len(),
+        lib.cached_footprints.len(),
+        lib.cached_sims.len()
+    );
+}
+
 /// summary part numbers and primitive uuids. Enough to catch a field that
 /// only one of the two paths populates.
 fn snapshot(state: &LibraryState, snxlib: &Path) -> Vec<String> {
