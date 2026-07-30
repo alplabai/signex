@@ -122,8 +122,15 @@ xcuserdata/
 
 # Custom rules (everything added below won't be overriden by 'Generate .gitignore File' if you use 'Update' option)
 
-# Claude Code working directory — kept local, not tracked.
+# Local AI assistant and task-orchestration state.
+.agents/
+.beads/
 .claude/
+.codex/
+.continue/
+.gemini/
+.junie/
+.roo/
 .github/copilot-instructions.md
 status.txt
 .git_commit_msg.txt
@@ -131,7 +138,33 @@ status.txt
 # Runtime debug logs (e.g. iced_debug.log)
 *.log
 
-# Local-only editor + orchestrator config (not shared).
-# Placed last so it overrides the earlier !.vscode/* whitelist above.
+# Local-only IDE and editor state.
+# Placed last so these rules override the earlier VS Code whitelist.
+.cursor/
+.eclipse/
+.fleet/
+.idea/
+.metadata/
+.run/
+.settings/
+.vs/
 .vscode/
+.windsurf/
+.zed/
+
+# Local environments, caches, and tool state.
+.cache/
+.direnv/
+.dotnet/
+.gradle/
+.mypy_cache/
+.nox/
+.nuget/
+.pytest_cache/
+.ruff_cache/
+.temp/
+.tmp/
+.tox/
+.venv/
+
 CLAUDE.md

@@ -13,6 +13,40 @@ pub struct SymbolPreview {
     cache: Cache,
 }
 
+/// Direction vector for a pin's stub in **library space** (Y-up): the pin
+/// extends from its anchor position toward this unit vector, scaled by
+/// `pin.length`. Rotation is in degrees.
+///
+/// This is the same library-space convention as `signex-output`'s
+/// `pin_direction` (`crates/signex-output/src/svg/symbols.rs`) and
+/// `signex-engine`'s autoplace pass (`transform/autoplace.rs`): 90°
+/// points "up" (`+y`) in Y-up library space. [`library_to_screen`] then
+/// applies the single y-flip that turns that "up" into a smaller
+/// screen-space y, matching every other consumer of library coordinates.
+fn pin_stub_direction(rotation: f64) -> (f64, f64) {
+    match rotation as i32 {
+        0 => (1.0, 0.0),
+        90 => (0.0, 1.0),
+        180 => (-1.0, 0.0),
+        270 => (0.0, -1.0),
+        _ => (1.0, 0.0),
+    }
+}
+
+/// Map a library-space point (Y-up) to frame/screen space (Y-down),
+/// centered and scaled to fit the preview box.
+///
+/// Mirrors the single y-flip in `signex_types::schematic::SymbolTransform
+/// ::apply` / `signex-output`'s `symbol_world_point`: library Y grows
+/// up, frame Y grows down, so the y term must be negated (about the
+/// bounding-box midpoint) rather than passed through unchanged.
+fn library_to_screen(x: f64, y: f64, mid_x: f64, mid_y: f64, scale: f64, center: Point) -> Point {
+    Point::new(
+        center.x + ((x - mid_x) * scale) as f32,
+        center.y + ((mid_y - y) * scale) as f32,
+    )
+}
+
 impl SymbolPreview {
     pub fn new(symbol: LibSymbol) -> Self {
         Self {
@@ -80,15 +114,15 @@ impl SymbolPreview {
         for lib_pin in &self.symbol.pins {
             let pin = &lib_pin.pin;
             expand(pin.position.x, pin.position.y);
-            // Pin extends by length in the pin's direction
-            let (dx, dy) = match pin.rotation as i32 {
-                0 => (pin.length, 0.0),
-                90 => (0.0, -pin.length),
-                180 => (-pin.length, 0.0),
-                270 => (0.0, pin.length),
-                _ => (pin.length, 0.0),
-            };
-            expand(pin.position.x + dx, pin.position.y + dy);
+            // Pin extends by length in the pin's direction, in the same
+            // library-space (Y-up) convention as everywhere else in this
+            // function -- no screen-space flip here, that happens once in
+            // `library_to_screen`.
+            let (dx, dy) = pin_stub_direction(pin.rotation);
+            expand(
+                pin.position.x + dx * pin.length,
+                pin.position.y + dy * pin.length,
+            );
         }
 
         if min_x > max_x {
@@ -131,14 +165,12 @@ impl canvas::Program<(), Theme> for SymbolPreview {
             let mid_x = (bx0 + bx1) / 2.0;
             let mid_y = (by0 + by1) / 2.0;
 
-            // Transform: Standard coords → frame coords
-            // Standard Y is inverted (positive down in Standard schematic)
-            let tx = |x: f64, y: f64| -> Point {
-                Point::new(
-                    cx + ((x - mid_x) * scale) as f32,
-                    cy + ((y - mid_y) * scale) as f32,
-                )
-            };
+            // Transform: library coords (Y-up) → frame coords (Y-down).
+            // Library space is Y-up (a pin at `(0, +len)` points up);
+            // frame/canvas space is Y-down. See `library_to_screen`.
+            let center = Point::new(cx, cy);
+            let tx =
+                |x: f64, y: f64| -> Point { library_to_screen(x, y, mid_x, mid_y, scale, center) };
 
             let body_color = Color::from_rgb(0.4, 0.65, 0.85);
             let fill_color = Color::from_rgb(0.15, 0.20, 0.28);
@@ -222,14 +254,15 @@ impl canvas::Program<(), Theme> for SymbolPreview {
             for lib_pin in &self.symbol.pins {
                 let pin = &lib_pin.pin;
                 let origin = tx(pin.position.x, pin.position.y);
-                let (dx, dy) = match pin.rotation as i32 {
-                    0 => (pin.length * scale, 0.0),
-                    90 => (0.0, -pin.length * scale),
-                    180 => (-pin.length * scale, 0.0),
-                    270 => (0.0, pin.length * scale),
-                    _ => (pin.length * scale, 0.0),
-                };
-                let tip = Point::new(origin.x + dx as f32, origin.y + dy as f32);
+                // Compute the tip in library space, then run it through the
+                // same `tx` as everything else -- this keeps the single
+                // y-flip in one place instead of re-deriving a screen-space
+                // sign here.
+                let (dx, dy) = pin_stub_direction(pin.rotation);
+                let tip = tx(
+                    pin.position.x + dx * pin.length,
+                    pin.position.y + dy * pin.length,
+                );
 
                 // Pin line
                 frame.stroke(
@@ -281,4 +314,151 @@ pub fn symbol_preview(symbol: LibSymbol, height: f32) -> Element<'static, ()> {
         .width(Length::Fill)
         .height(height)
         .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_types::schematic::{LibPin, Pin, PinDirection, PinShapeStyle, Point as LibPoint};
+
+    fn up_down_pin(rotation: f64) -> Pin {
+        Pin {
+            direction: PinDirection::Passive,
+            shape_style: PinShapeStyle::Plain,
+            position: LibPoint::ZERO,
+            rotation,
+            length: 3.0,
+            name: String::new(),
+            number: "1".to_string(),
+            visible: true,
+            name_visible: true,
+            number_visible: true,
+        }
+    }
+
+    fn symbol_with_pin(rotation: f64) -> LibSymbol {
+        LibSymbol {
+            id: "test".to_string(),
+            reference: String::new(),
+            value: String::new(),
+            footprint: String::new(),
+            datasheet: String::new(),
+            description: String::new(),
+            keywords: String::new(),
+            fp_filters: String::new(),
+            in_bom: true,
+            on_board: true,
+            in_pos_files: true,
+            duplicate_pin_numbers_are_jumpers: false,
+            graphics: Vec::new(),
+            pins: vec![LibPin {
+                unit: 0,
+                body_style: 1,
+                pin: up_down_pin(rotation),
+            }],
+            show_pin_numbers: true,
+            show_pin_names: true,
+            pin_name_offset: 0.0,
+        }
+    }
+
+    #[test]
+    fn pin_stub_direction_matches_canonical_library_space_convention() {
+        // Must match `signex-output`'s `pin_direction` (svg/symbols.rs)
+        // and `signex-engine`'s autoplace pass -- 90 deg is "up" (+y) in
+        // library space, 270 deg is "down" (-y).
+        assert_eq!(pin_stub_direction(0.0), (1.0, 0.0));
+        assert_eq!(pin_stub_direction(90.0), (0.0, 1.0));
+        assert_eq!(pin_stub_direction(180.0), (-1.0, 0.0));
+        assert_eq!(pin_stub_direction(270.0), (0.0, -1.0));
+    }
+
+    #[test]
+    fn library_to_screen_flips_y_about_the_midpoint() {
+        let center = Point::new(50.0, 50.0);
+        // A point "above" the midpoint in library space (larger y) must
+        // land at a *smaller* screen y (canvas y grows downward) --
+        // this is the flip issue #495 says `tx` was missing.
+        let above = library_to_screen(0.0, 5.0, 0.0, 0.0, 10.0, center);
+        let below = library_to_screen(0.0, -5.0, 0.0, 0.0, 10.0, center);
+        assert!(
+            above.y < center.y,
+            "library +y must map above screen center"
+        );
+        assert!(
+            below.y > center.y,
+            "library -y must map below screen center"
+        );
+        assert!(above.y < below.y);
+    }
+
+    /// Regression test for issue #495: an Up (90 deg) pin's on-screen tip
+    /// must land above (smaller y) its anchor, and a Down (270 deg) pin's
+    /// tip must land below (larger y) its anchor -- not mirrored.
+    ///
+    /// This exercises the exact same pipeline `draw()` uses (`bounds()`
+    /// to derive `mid_x`/`mid_y`/`scale`, then `pin_stub_direction` +
+    /// `library_to_screen` for the pin endpoints) without needing an
+    /// `iced::Renderer`.
+    #[test]
+    fn up_pin_screen_tip_is_above_anchor_down_pin_is_below() {
+        let up_preview = SymbolPreview::new(symbol_with_pin(90.0));
+        let (bx0, by0, bx1, by1) = up_preview.bounds();
+        let mid_x = (bx0 + bx1) / 2.0;
+        let mid_y = (by0 + by1) / 2.0;
+        let scale = 10.0;
+        let center = Point::new(100.0, 100.0);
+
+        let pin = &up_preview.symbol.pins[0].pin;
+        let origin = library_to_screen(pin.position.x, pin.position.y, mid_x, mid_y, scale, center);
+        let (dx, dy) = pin_stub_direction(pin.rotation);
+        let tip = library_to_screen(
+            pin.position.x + dx * pin.length,
+            pin.position.y + dy * pin.length,
+            mid_x,
+            mid_y,
+            scale,
+            center,
+        );
+        assert!(
+            tip.y < origin.y,
+            "an Up pin must render its stub going up (smaller screen y): origin={origin:?} tip={tip:?}"
+        );
+
+        let down_preview = SymbolPreview::new(symbol_with_pin(270.0));
+        let (bx0, by0, bx1, by1) = down_preview.bounds();
+        let mid_x = (bx0 + bx1) / 2.0;
+        let mid_y = (by0 + by1) / 2.0;
+
+        let pin = &down_preview.symbol.pins[0].pin;
+        let origin = library_to_screen(pin.position.x, pin.position.y, mid_x, mid_y, scale, center);
+        let (dx, dy) = pin_stub_direction(pin.rotation);
+        let tip = library_to_screen(
+            pin.position.x + dx * pin.length,
+            pin.position.y + dy * pin.length,
+            mid_x,
+            mid_y,
+            scale,
+            center,
+        );
+        assert!(
+            tip.y > origin.y,
+            "a Down pin must render its stub going down (larger screen y): origin={origin:?} tip={tip:?}"
+        );
+    }
+
+    /// Regression test for the `bounds()` half of #495: the pin-tip
+    /// expansion must stay in the same library-space (Y-up) convention as
+    /// the rest of `bounds()`, so an Up pin grows the box toward +y, not
+    /// -y (the box's vertical midpoint tells them apart).
+    #[test]
+    fn bounds_grows_toward_positive_y_for_an_up_pin() {
+        let preview = SymbolPreview::new(symbol_with_pin(90.0));
+        let (_, min_y, _, max_y) = preview.bounds();
+        let mid_y = (min_y + max_y) / 2.0;
+        assert!(
+            mid_y > 0.0,
+            "Up pin's tip must pull the bbox toward +y in library space, got mid_y={mid_y}"
+        );
+    }
 }

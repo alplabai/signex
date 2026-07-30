@@ -2,7 +2,10 @@
 //!
 //! VS Code-style Ctrl+Shift+P entry. Three sources feed one flat catalog:
 //!
-//! 1. **Commands** — every menu action + every panel open.
+//! 1. **Commands** — every registry command the bridge can resolve
+//!    (#366), plus every panel open. Rows carry the command id, not a
+//!    `Message`, and show the binding the active keymap profile gives
+//!    them (#374).
 //! 2. **Symbols** — placed designators in the active project (zoom-to).
 //! 3. **Files** — sheets/PCB/libraries in every loaded project (open).
 //!
@@ -15,7 +18,7 @@ use std::sync::LazyLock;
 
 use iced::widget::Id;
 
-use crate::menu_bar::MenuMessage;
+use crate::keymap::{AppCommandId, metadata_for};
 use crate::panels::{ALL_PANELS, PanelKind};
 
 /// Stable widget id for the chrome-strip palette `text_input`. Used by
@@ -60,7 +63,11 @@ pub struct CommandEntry {
 
 #[derive(Debug, Clone)]
 pub enum CommandAction {
-    Menu(MenuMessage),
+    /// A registry command, named by its stable id (#366). The palette
+    /// does not know which `Message` this becomes — that is the point of
+    /// the registry, and the dispatcher resolves it through the same
+    /// bridge the keyboard uses.
+    Command(AppCommandId),
     Panel(PanelKind),
     OpenFile(PathBuf),
     /// Focus a placed symbol on the canvas by reference designator.
@@ -78,20 +85,47 @@ pub enum CommandAction {
 pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
     let mut out = Vec::with_capacity(256);
 
-    // 1. Commands — menu actions.
-    for (label, msg) in menu_command_table() {
-        // v0.13.0 — footprint editor gated off; keep its create
-        // command out of the palette so there's no dead entry.
-        if !crate::feature_flags::FOOTPRINT_EDITOR_ENABLED
-            && matches!(msg, MenuMessage::AddLibraryFootprint)
-        {
+    // 1. Commands — straight from the registry (#366).
+    //
+    // Was a hand-kept 48-row `(label, MenuMessage)` table that named no
+    // command ids at all, so a command added to the catalog never
+    // appeared here and nothing failed. Now the catalog is the source,
+    // which is the epic's founding principle: menus, keybindings and the
+    // palette are consumers of one table.
+    //
+    // Filtered to ids the bridge can actually resolve. 71 catalog ids
+    // have no dispatch arm yet (see `app::command::bridge`), and a
+    // palette row that silently does nothing is worse than no row.
+    for id in crate::keymap::all_command_ids() {
+        let Ok(command) = AppCommandId::new(id) else {
+            continue;
+        };
+        // Through `bridge::` rather than the `command::core_to_message`
+        // re-export: #367 (PR #504) narrows that re-export to private, and
+        // the two changes merge cleanly but would not compile together.
+        // The module path holds either way.
+        if crate::app::command::bridge::core_to_message(&command).is_none() {
             continue;
         }
+        let Some(metadata) = metadata_for(&command) else {
+            continue;
+        };
         out.push(CommandEntry {
             source: CommandSource::Command,
-            label: label.to_string(),
-            detail: String::new(),
-            action: CommandAction::Menu(msg.clone()),
+            // The descriptive `label`, not `menu_label`: the palette is
+            // the surface where the full phrasing helps ("Place wire",
+            // not "Wire"). That split is exactly why #281 added the
+            // second field.
+            label: metadata.label.to_string(),
+            // #374 — the binding from the ACTIVE profile, not the
+            // catalog's suggested `keybind`, because a profile always
+            // overrides the default.
+            detail: app
+                .ui_state
+                .active_keymap
+                .shortcut_label(&command)
+                .unwrap_or_default(),
+            action: CommandAction::Command(command),
         });
     }
 
@@ -292,72 +326,6 @@ pub fn fuzzy_score(query: &str, target: &str) -> Option<i32> {
     Some(score)
 }
 
-/// User-facing label for every menu action that's worth surfacing in
-/// the palette. Order influences the empty-query default ranking via
-/// `rank_results`'s stable secondary sort on index — keep frequently-
-/// used items near the top. NoOp / passive headers are excluded.
-fn menu_command_table() -> &'static [(&'static str, MenuMessage)] {
-    &[
-        // File
-        ("New Project", MenuMessage::NewProject),
-        ("Open Project…", MenuMessage::OpenProject),
-        ("Save", MenuMessage::Save),
-        ("Save As…", MenuMessage::SaveAs),
-        ("Print Preview…", MenuMessage::PrintPreview),
-        ("Export PDF…", MenuMessage::ExportPdf),
-        ("Export Netlist…", MenuMessage::ExportNetlist),
-        ("Export Bill of Materials…", MenuMessage::ExportBom),
-        ("Open Library…", MenuMessage::LibraryOpenLibrary),
-        ("Place Component…", MenuMessage::LibraryPlaceComponent),
-        ("Add Component Library", MenuMessage::AddComponentLibrary),
-        ("Add New Component", MenuMessage::AddLibraryComponent),
-        ("Add New Symbol", MenuMessage::AddLibrarySymbol),
-        ("Add New Footprint", MenuMessage::AddLibraryFootprint),
-        // Edit
-        ("Undo", MenuMessage::Undo),
-        ("Redo", MenuMessage::Redo),
-        ("Cut", MenuMessage::Cut),
-        ("Copy", MenuMessage::Copy),
-        ("Paste", MenuMessage::Paste),
-        ("Paste Special", MenuMessage::SmartPaste),
-        ("Delete", MenuMessage::Delete),
-        ("Select All", MenuMessage::SelectAll),
-        ("Duplicate", MenuMessage::Duplicate),
-        ("Find…", MenuMessage::Find),
-        ("Find and Replace…", MenuMessage::Replace),
-        // View
-        ("Zoom In", MenuMessage::ZoomIn),
-        ("Zoom Out", MenuMessage::ZoomOut),
-        ("Zoom to Fit", MenuMessage::ZoomFit),
-        ("Toggle Grid", MenuMessage::ToggleGrid),
-        ("Cycle Grid Size", MenuMessage::CycleGrid),
-        // Place
-        ("Place Wire", MenuMessage::PlaceWire),
-        ("Place Bus", MenuMessage::PlaceBus),
-        ("Place Net Label", MenuMessage::PlaceLabel),
-        ("Place Component", MenuMessage::PlaceComponent),
-        // Design
-        ("Annotate Schematics", MenuMessage::Annotate),
-        ("Annotate Quietly", MenuMessage::AnnotateQuietly),
-        ("Reset Annotations", MenuMessage::AnnotateReset),
-        (
-            "Reset Duplicate Annotations",
-            MenuMessage::AnnotateResetDuplicates,
-        ),
-        ("Force Annotate All", MenuMessage::AnnotateForceAll),
-        ("Back-Annotate from PCB", MenuMessage::AnnotateBack),
-        ("Annotate Sheets", MenuMessage::AnnotateSheets),
-        ("Run ERC", MenuMessage::Erc),
-        ("Toggle Auto-Focus", MenuMessage::ToggleAutoFocus),
-        ("Generate BOM", MenuMessage::GenerateBom),
-        // Tools
-        ("Open Preferences", MenuMessage::OpenPreferences),
-        ("New Part", MenuMessage::ToolsNewPart),
-        ("Remove Part", MenuMessage::ToolsRemovePart),
-        ("Document Options", MenuMessage::ToolsDocumentOptions),
-    ]
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -368,10 +336,77 @@ mod tests {
             source: CommandSource::Command,
             label: "Open Preferences".into(),
             detail: String::new(),
-            action: CommandAction::Menu(MenuMessage::OpenPreferences),
+            action: CommandAction::Command(AppCommandId::new("open_preferences").unwrap()),
         }];
         let ranked = rank_results(&entries, "");
         assert_eq!(ranked.len(), 1);
+    }
+
+    /// #366 — every command row the palette offers must resolve through
+    /// the bridge. A row that dispatches nothing looks identical to one
+    /// that works, so this is the only thing standing between the user
+    /// and a menu of silent no-ops.
+    #[test]
+    fn every_palette_command_row_resolves_through_the_bridge() {
+        let (app, _task) = crate::app::Signex::new();
+        let dead: Vec<String> = build_catalog(&app)
+            .into_iter()
+            .filter_map(|entry| match entry.action {
+                // `bridge::` and not the `command::core_to_message`
+                // re-export, which #367 (PR #504) makes private — the
+                // same reason `build_catalog` above spells out the full
+                // path. Using the re-export here compiles today and
+                // stops compiling the moment #504 lands ahead of this
+                // branch in the merge order.
+                CommandAction::Command(command) => {
+                    crate::app::command::bridge::core_to_message(&command)
+                        .is_none()
+                        .then(|| command.as_str().to_string())
+                }
+                _ => None,
+            })
+            .collect();
+        assert!(
+            dead.is_empty(),
+            "the palette is offering command rows the bridge cannot \
+             resolve, which would silently do nothing when picked: {dead:?}"
+        );
+    }
+
+    /// #366 — the palette must actually be reading the catalog. A build
+    /// that produced zero command rows would pass the guard above
+    /// vacuously.
+    #[test]
+    fn the_palette_offers_command_rows_from_the_catalog() {
+        let (app, _task) = crate::app::Signex::new();
+        let commands = build_catalog(&app)
+            .into_iter()
+            .filter(|entry| matches!(entry.action, CommandAction::Command(_)))
+            .count();
+        assert!(
+            commands >= 100,
+            "only {commands} command rows — the catalog-driven source in \
+             build_catalog has stopped finding commands"
+        );
+    }
+
+    /// #374 — a command the active profile binds shows that binding as
+    /// its detail text.
+    #[test]
+    fn a_bound_command_row_shows_its_shortcut() {
+        let (app, _task) = crate::app::Signex::new();
+        let undo = build_catalog(&app)
+            .into_iter()
+            .find(|entry| match &entry.action {
+                CommandAction::Command(command) => command.as_str() == "undo",
+                _ => false,
+            })
+            .expect("`undo` should be offered by the palette");
+        assert!(
+            !undo.detail.is_empty(),
+            "`undo` is bound in the default profile, so its palette row \
+             should carry the shortcut — detail was empty"
+        );
     }
 
     #[test]
@@ -412,13 +447,13 @@ mod tests {
                 source: CommandSource::Command,
                 label: "Preferences".into(),
                 detail: String::new(),
-                action: CommandAction::Menu(MenuMessage::OpenPreferences),
+                action: CommandAction::Command(AppCommandId::new("open_preferences").unwrap()),
             },
             CommandEntry {
                 source: CommandSource::Command,
                 label: "Save".into(),
                 detail: String::new(),
-                action: CommandAction::Menu(MenuMessage::Save),
+                action: CommandAction::Command(AppCommandId::new("save_document").unwrap()),
             },
             CommandEntry {
                 source: CommandSource::File,

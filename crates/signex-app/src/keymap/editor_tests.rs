@@ -1,5 +1,6 @@
 use super::{
-    AppCommandId, CommandGroup, KeyStroke, KeymapEditorModel, ShortcutContext, metadata_for,
+    AppCommandId, CommandGroup, KeyStroke, KeymapEditorModel, ShortcutContext, ShortcutProfileSet,
+    metadata_for,
 };
 use std::str::FromStr;
 
@@ -122,4 +123,54 @@ fn built_in_profile_trigger_edit_is_rejected() {
 
     assert!(error.contains("built-in profile `altium` cannot be modified"));
     assert!(editor.has_invalid_trigger_drafts());
+}
+
+#[test]
+fn fresh_editor_does_not_differ_from_its_live_set() {
+    let live = ShortcutProfileSet::built_ins().unwrap();
+    let editor = KeymapEditorModel::new(live.clone());
+    assert!(!editor.differs_from(&live));
+}
+
+#[test]
+fn valid_trigger_edit_marks_editor_as_differing() {
+    let live = ShortcutProfileSet::built_ins().unwrap();
+    let mut editor = KeymapEditorModel::new(live.clone());
+    editor
+        .create_custom_from_active("custom-altium", "Custom Altium")
+        .unwrap();
+    let command = AppCommandId::new("save_document").unwrap();
+    editor
+        .edit_active_trigger(command, ShortcutContext::Global, "Ctrl+Alt+S".into())
+        .unwrap();
+
+    assert!(editor.differs_from(&live));
+}
+
+#[test]
+fn rejected_built_in_edit_still_counts_as_differing() {
+    // The profile set is untouched (the edit was refused), but the invalid
+    // draft is pending user input — closing now would silently drop it, so
+    // the comparator must report dirty.
+    let live = ShortcutProfileSet::built_ins().unwrap();
+    let mut editor = KeymapEditorModel::new(live.clone());
+    let command = AppCommandId::new("save_document").unwrap();
+    let _ = editor.edit_active_trigger(command, ShortcutContext::Global, "Ctrl+Alt+S".into());
+
+    assert!(editor.has_invalid_trigger_drafts());
+    assert!(editor.differs_from(&live));
+}
+
+#[test]
+fn switching_active_profile_marks_editor_as_differing() {
+    let live = ShortcutProfileSet::built_ins().unwrap();
+    let mut editor = KeymapEditorModel::new(live.clone());
+    let inactive = editor
+        .profiles()
+        .into_iter()
+        .find(|profile| !profile.active)
+        .expect("built-ins ship more than one profile");
+    editor.set_active_profile(&inactive.id).unwrap();
+
+    assert!(editor.differs_from(&live));
 }

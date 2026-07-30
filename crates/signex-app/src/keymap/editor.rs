@@ -183,6 +183,16 @@ impl KeymapEditorModel {
         !self.invalid_trigger_drafts.is_empty()
     }
 
+    /// True when this working copy has diverged from the live profile set —
+    /// feeds the Preferences dirty comparator. Valid trigger edits are
+    /// applied straight into `profiles` (so the set comparison sees them,
+    /// including an edit retyped back to the original, which compares
+    /// clean); an *invalid* draft counts as dirty on its own because it is
+    /// pending user input that Save refuses to commit.
+    pub fn differs_from(&self, live: &ShortcutProfileSet) -> bool {
+        self.profiles != *live || !self.invalid_trigger_drafts.is_empty()
+    }
+
     pub fn active_conflicts(&self) -> Vec<BindingConflict> {
         self.active_keymap().conflicts()
     }

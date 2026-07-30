@@ -1,0 +1,69 @@
+use signex_app::app::{Message, OverlayMsg, Signex};
+use signex_app::menu_bar::MenuMessage;
+use signex_widgets::passive_calculator::{CalculatorMessage, ComponentKind};
+
+#[test]
+fn calculator_messages_update_the_dedicated_control_state() {
+    let (mut app, _startup) = Signex::new();
+    let _task = app.update(Message::PassiveCalculator(CalculatorMessage::KindChanged(
+        ComponentKind::Capacitor,
+    )));
+    assert_eq!(
+        app.ui_state.passive_calculator.kind,
+        ComponentKind::Capacitor
+    );
+}
+
+#[test]
+fn tools_menu_message_opens_the_modal_without_a_window_task() {
+    let (mut app, _startup) = Signex::new();
+    assert!(!app.ui_state.passive_calculator_open);
+
+    let task = app.update(Message::Menu(MenuMessage::OpenPassiveCalculator));
+
+    assert!(
+        app.ui_state.passive_calculator_open,
+        "the Tools menu entry should open the in-app modal"
+    );
+    assert_eq!(
+        task.units(),
+        0,
+        "the modal is an overlay, so no OS window task should be emitted"
+    );
+}
+
+#[test]
+fn reopening_while_open_is_a_no_op() {
+    let (mut app, _startup) = Signex::new();
+    let _ = app.update(Message::Menu(MenuMessage::OpenPassiveCalculator));
+    let _ = app.update(Message::Menu(MenuMessage::OpenPassiveCalculator));
+    assert!(app.ui_state.passive_calculator_open);
+}
+
+#[test]
+fn close_message_dismisses_the_modal() {
+    let (mut app, _startup) = Signex::new();
+    let _ = app.update(Message::Menu(MenuMessage::OpenPassiveCalculator));
+
+    let _task = app.update(Message::Overlay(OverlayMsg::ClosePassiveCalculator));
+
+    assert!(!app.ui_state.passive_calculator_open);
+}
+
+#[test]
+fn closing_the_modal_keeps_the_entered_state() {
+    let (mut app, _startup) = Signex::new();
+    let _ = app.update(Message::Menu(MenuMessage::OpenPassiveCalculator));
+    let _ = app.update(Message::PassiveCalculator(CalculatorMessage::KindChanged(
+        ComponentKind::Inductor,
+    )));
+
+    let _ = app.update(Message::Overlay(OverlayMsg::ClosePassiveCalculator));
+    let _ = app.update(Message::Menu(MenuMessage::OpenPassiveCalculator));
+
+    assert_eq!(
+        app.ui_state.passive_calculator.kind,
+        ComponentKind::Inductor,
+        "reopening should show the state the user left behind"
+    );
+}
