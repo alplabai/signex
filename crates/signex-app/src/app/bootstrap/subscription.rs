@@ -6,21 +6,24 @@ use super::super::*;
 use crate::keymap::KeyStroke;
 use iced::Subscription;
 
-/// Which overlays are open, as the keyboard subscription sees them.
+/// Which overlays are open, as the Esc ladder sees them.
 ///
-/// A named struct rather than the positional tuple this used to be, for
-/// two reasons. The flag list had reached twelve entries, which is where
-/// std's tuple impls stop — `Subscription::with` requires
-/// `Hash + Clone + Send + Sync + 'static`, and neither `Hash` nor
-/// `Clone` is implemented for a 13-tuple, so a thirteenth modal could
-/// not be added at all. And with twelve same-typed `bool`s, swapping two
-/// of them in either the `with(...)` list or the destructuring pattern
-/// silently routed Esc to the wrong modal, with nothing to catch it.
+/// A named struct rather than the positional tuple this used to be: with
+/// twelve same-typed `bool`s, swapping two of them silently routed Esc to
+/// the wrong modal, with nothing to catch it.
 ///
-/// `Hash` is load-bearing, not decorative: iced re-keys the subscription
-/// from it, so every flag must stay inside the hash for a modal opening
-/// to be observed.
-#[derive(Clone, Copy, Default, Hash)]
+/// **Built in `update`, not in the subscription** (#535). Until then this
+/// was baked into `Subscription::with`, which forced `Hash` and — by
+/// choice, not by the bound — `Copy`. That made per-modal payloads
+/// unrepresentable: the per-browser delete-confirm rung could not exist,
+/// because its Cancel message needs an owned `PathBuf`. Resolving against
+/// live state instead drops both, and removes a one-update staleness
+/// window as well, since the subscription snapshot was rebuilt only
+/// *after* `update` returned — so an Esc in the same frame as a
+/// click-Close saw the pre-click world.
+///
+/// Only [`KeyContext`] stays in the hashed subscription payload now.
+#[derive(Clone, Default)]
 struct OpenOverlays {
     find_replace_open: bool,
     palette_open: bool,
@@ -60,6 +63,35 @@ struct OpenOverlays {
     print_preview_open: bool,
     bom_preview_open: bool,
     net_color_custom_open: bool,
+    /// The `.snxlib` whose Library Browser has a delete-row confirm open,
+    /// if any.
+    ///
+    /// A payload, not a `bool`, because
+    /// `LibraryMessage::BrowserDeleteRowCancel` is addressed to a specific
+    /// library — the modal is per-browser-tab. This is the field that
+    /// could not exist while the struct travelled through
+    /// `Subscription::with` as a `Copy` type, which is why this modal was
+    /// the one documented hole in the ladder (#514, #526).
+    delete_confirm: Option<std::path::PathBuf>,
+}
+
+/// The slice of modal state the *subscription closure* still needs.
+///
+/// Everything else moved to [`OpenOverlays`], which is now built in
+/// `update`. These three stay because the closure branches on them before
+/// any message is produced: the chord recorder and the command palette
+/// swallow raw strokes wholesale, and F1 toggles on whether the shortcuts
+/// sheet is already open.
+///
+/// Keeping this small is the point. `Hash` here is load-bearing — iced
+/// re-keys the subscription whenever it changes — so every field is a
+/// re-key on every open/close. Three flags re-key far less often than
+/// thirty did.
+#[derive(Clone, Copy, Default, Hash)]
+struct KeyContext {
+    palette_open: bool,
+    kbd_shortcuts_open: bool,
+    keymap_recorder_open: bool,
 }
 
 /// Which of the three library-recovery flows is open — see
@@ -225,6 +257,23 @@ impl OpenOverlays {
                 ),
             ));
         }
+        // Ranks directly below the primitive picker and above the library
+        // picker, matching paint order: `delete_confirm_overlay` sits
+        // between `edit_row_modal_overlay` and `primitive_picker_overlay`
+        // in `collect_overlays`.
+        //
+        // This rung is why the ladder moved to `update` (#535): the Cancel
+        // message is addressed to one library, and an owned `PathBuf`
+        // could not ride inside the old `Copy` subscription payload. It
+        // was the one modal documented as having no rung at all — Esc fell
+        // through to `Message::EscapePressed` and reset the canvas tool
+        // behind the still-open confirm, which is exactly the bug class
+        // #514 exists for.
+        if let Some(library_path) = self.delete_confirm.clone() {
+            return Some(Message::Library(
+                crate::library::messages::LibraryMessage::BrowserDeleteRowCancel { library_path },
+            ));
+        }
         if self.library_picker_open {
             return Some(Message::Library(
                 crate::library::messages::LibraryMessage::ClosePicker,
@@ -306,9 +355,24 @@ impl OpenOverlays {
 }
 
 impl Signex {
-    pub fn subscription(&self) -> Subscription<Message> {
-        use iced::keyboard;
+    /// Resolve the Esc ladder against live state, or `None` when no
+    /// overlay claims the key.
+    ///
+    /// The single entry point for the `Message::EscapePressed` handler
+    /// (#535). `OpenOverlays` stays private to this module: the ladder is
+    /// one concern in one file, and callers only ever want the answer.
+    pub(crate) fn escape_overlay_message(&self) -> Option<Message> {
+        self.open_overlays().escape_message()
+    }
 
+    /// Snapshot the open overlays for Esc resolution, from live state.
+    ///
+    /// Called from the `Message::EscapePressed` handler in
+    /// `app/dispatch/mod.rs`, not from the subscription (#535). Building it
+    /// here rather than inside `Subscription::with` is what lets a rung
+    /// carry owned data (see `OpenOverlays::delete_confirm`) and what
+    /// removes the one-update staleness the subscription snapshot had.
+    fn open_overlays(&self) -> OpenOverlays {
         // True while `modal` is showing in its own detached OS window
         // rather than as an in-window overlay. Several builders skip
         // painting the in-window card in that case (`view/overlays/bars.rs`,
@@ -322,69 +386,92 @@ impl Signex {
             })
         };
 
+        OpenOverlays {
+            find_replace_open: self.ui_state.find_replace.open,
+            palette_open: self.ui_state.command_palette.open,
+            kbd_shortcuts_open: self.ui_state.keyboard_shortcuts_open,
+            first_run_tour_open: self.ui_state.first_run_tour_open,
+            prefs_open: self.ui_state.preferences_open
+                && !modal_detached(crate::app::state::ModalId::Preferences),
+            annotate_open: self.ui_state.annotate_dialog_open
+                && !modal_detached(crate::app::state::ModalId::AnnotateDialog),
+            erc_open: self.ui_state.erc_dialog_open
+                && !modal_detached(crate::app::state::ModalId::ErcDialog),
+            rename_open: self.ui_state.rename_dialog.is_some(),
+            remove_open: self.ui_state.remove_dialog.is_some(),
+            enable_vc_open: self.ui_state.enable_version_control.is_some(),
+            library_create_options_open: self.library.create_options.is_some(),
+            keymap_recorder_open: self.ui_state.preferences_keymap_recorder.is_some(),
+            passive_calculator_open: self.ui_state.passive_calculator_open,
+            annotate_reset_confirm_open: self.ui_state.annotate_reset_confirm
+                && !modal_detached(crate::app::state::ModalId::AnnotateResetConfirm),
+            app_quit_confirm_open: self.ui_state.app_quit_confirm.is_some(),
+            project_close_confirm_open: self.ui_state.project_close_confirm.is_some(),
+            project_options_open: self.ui_state.project_options.is_some(),
+            grid_properties_open: self.ui_state.grid_properties.is_some(),
+            selection_filter_custom_open: self.ui_state.selection_filter_custom.is_some(),
+            library_picker_open: self.library.picker.is_some(),
+            library_document_options_open: self.library.document_options.is_some(),
+            library_updates_open: self.library.library_updates.is_some(),
+            library_primitive_picker_open: self.library.primitive_picker.is_some(),
+            close_library_confirm_open: self.library.close_library_confirm.is_some(),
+            recovery_kind: self
+                .library
+                .recovery
+                .as_ref()
+                .map(|recovery| match recovery {
+                    crate::library::recovery::RecoveryDialog::LibraryMissing { .. } => {
+                        RecoveryKind::LibraryMissing
+                    }
+                    crate::library::recovery::RecoveryDialog::GitMissing { .. } => {
+                        RecoveryKind::GitMissing
+                    }
+                    crate::library::recovery::RecoveryDialog::BrokenPrimitiveBinding { .. } => {
+                        RecoveryKind::BrokenBinding
+                    }
+                }),
+            export_error_open: self.document_state.export_error.is_some(),
+            netlist_incomplete_prompt_open: self.document_state.netlist_incomplete_prompt.is_some(),
+            print_preview_open: self.document_state.preview.is_some()
+                && !modal_detached(crate::app::state::ModalId::PrintPreview),
+            bom_preview_open: self.document_state.bom_preview.is_some()
+                && !modal_detached(crate::app::state::ModalId::BomPreview),
+            net_color_custom_open: self.ui_state.net_color_custom.show,
+            // MUST mirror `delete_confirm_overlay`'s pick
+            // (`view/overlays/modals.rs:291-316`): it iterates
+            // `library_browsers` and returns on the FIRST entry with a
+            // confirm open, so Esc has to cancel that same one or it
+            // dismisses a card the user is not looking at.
+            //
+            // Two browser tabs can hold a confirm at once, and which of
+            // them paints is then decided by `HashMap` iteration order.
+            // That ambiguity predates this change and is not fixed here —
+            // mirroring the builder keeps Esc and paint agreeing on
+            // whichever one wins.
+            delete_confirm: self
+                .library
+                .library_browsers
+                .iter()
+                .find(|(_, browser)| browser.delete_confirm.is_some())
+                .map(|(path, _)| path.clone()),
+        }
+    }
+
+    pub fn subscription(&self) -> Subscription<Message> {
+        use iced::keyboard;
+
         let kbd = keyboard::listen()
-            .with(OpenOverlays {
-                find_replace_open: self.ui_state.find_replace.open,
+            .with(KeyContext {
                 palette_open: self.ui_state.command_palette.open,
                 kbd_shortcuts_open: self.ui_state.keyboard_shortcuts_open,
-                first_run_tour_open: self.ui_state.first_run_tour_open,
-                prefs_open: self.ui_state.preferences_open
-                    && !modal_detached(crate::app::state::ModalId::Preferences),
-                annotate_open: self.ui_state.annotate_dialog_open
-                    && !modal_detached(crate::app::state::ModalId::AnnotateDialog),
-                erc_open: self.ui_state.erc_dialog_open
-                    && !modal_detached(crate::app::state::ModalId::ErcDialog),
-                rename_open: self.ui_state.rename_dialog.is_some(),
-                remove_open: self.ui_state.remove_dialog.is_some(),
-                enable_vc_open: self.ui_state.enable_version_control.is_some(),
-                library_create_options_open: self.library.create_options.is_some(),
                 keymap_recorder_open: self.ui_state.preferences_keymap_recorder.is_some(),
-                passive_calculator_open: self.ui_state.passive_calculator_open,
-                annotate_reset_confirm_open: self.ui_state.annotate_reset_confirm
-                    && !modal_detached(crate::app::state::ModalId::AnnotateResetConfirm),
-                app_quit_confirm_open: self.ui_state.app_quit_confirm.is_some(),
-                project_close_confirm_open: self.ui_state.project_close_confirm.is_some(),
-                project_options_open: self.ui_state.project_options.is_some(),
-                grid_properties_open: self.ui_state.grid_properties.is_some(),
-                selection_filter_custom_open: self.ui_state.selection_filter_custom.is_some(),
-                library_picker_open: self.library.picker.is_some(),
-                library_document_options_open: self.library.document_options.is_some(),
-                library_updates_open: self.library.library_updates.is_some(),
-                library_primitive_picker_open: self.library.primitive_picker.is_some(),
-                close_library_confirm_open: self.library.close_library_confirm.is_some(),
-                recovery_kind: self
-                    .library
-                    .recovery
-                    .as_ref()
-                    .map(|recovery| match recovery {
-                        crate::library::recovery::RecoveryDialog::LibraryMissing { .. } => {
-                            RecoveryKind::LibraryMissing
-                        }
-                        crate::library::recovery::RecoveryDialog::GitMissing { .. } => {
-                            RecoveryKind::GitMissing
-                        }
-                        crate::library::recovery::RecoveryDialog::BrokenPrimitiveBinding {
-                            ..
-                        } => RecoveryKind::BrokenBinding,
-                    }),
-                export_error_open: self.document_state.export_error.is_some(),
-                netlist_incomplete_prompt_open: self
-                    .document_state
-                    .netlist_incomplete_prompt
-                    .is_some(),
-                print_preview_open: self.document_state.preview.is_some()
-                    && !modal_detached(crate::app::state::ModalId::PrintPreview),
-                bom_preview_open: self.document_state.bom_preview.is_some()
-                    && !modal_detached(crate::app::state::ModalId::BomPreview),
-                net_color_custom_open: self.ui_state.net_color_custom.show,
             })
             .map(
                 |(
-                    overlays @ OpenOverlays {
+                    KeyContext {
                         palette_open,
                         kbd_shortcuts_open,
                         keymap_recorder_open,
-                        ..
                     },
                     event,
                 )| match event {
@@ -453,17 +540,22 @@ impl Signex {
                         // Everything else is forwarded to the keymap resolver
                         // in `update`.
                         match (key.as_ref(), m) {
-                            // Esc closes the deepest open modal first
-                            // (UX §1.3) — the ladder lives in
-                            // `OpenOverlays::escape_message`, which is where
-                            // a new modal's rung belongs. `None` means no
-                            // modal claimed the key, so it falls through to
-                            // the dispatcher (v0.15): Esc resets the
-                            // footprint editor's tool state when a `.snxfpt`
-                            // tab is active, and falls back to the schematic
-                            // `Tool::Select` reset otherwise.
+                            // Esc is forwarded raw (#535). The ladder used to
+                            // be resolved right here, against a snapshot
+                            // baked when this subscription was last built —
+                            // i.e. up to one update stale. It now runs in
+                            // the `Message::EscapePressed` handler
+                            // (`app/dispatch/mod.rs`) against live state,
+                            // which is what the user is actually looking at,
+                            // and which lets a rung carry owned data.
+                            //
+                            // Deliberately NOT routed through
+                            // `resolve_keymap_stroke`: that advances the
+                            // multi-stroke chord buffer and consults the
+                            // active profile, neither of which Esc has ever
+                            // done.
                             (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
-                                overlays.escape_message().unwrap_or(Message::EscapePressed)
+                                Message::EscapePressed
                             }
                             (keyboard::Key::Named(keyboard::key::Named::F1), _) => {
                                 // F1 toggles: open if closed, close if open.
@@ -880,6 +972,52 @@ mod tests {
     /// that visually painted on top of it — fixed as a side effect of
     /// deriving the whole ladder from paint order instead of hand-ordering
     /// it (see the doc comment on `escape_message`).
+    /// #535 — the rung that could not exist before the ladder moved to
+    /// `update`, pinned in both directions.
+    ///
+    /// Membership is already forced by `every_ladder_field_claims_escape`;
+    /// this is about *position*. `delete_confirm_overlay` paints between
+    /// `edit_row_modal_overlay` and `primitive_picker_overlay`, so the rung
+    /// must lose to the primitive picker and beat the library picker. Get
+    /// this backwards and Esc dismisses a card underneath the one the user
+    /// is looking at.
+    #[test]
+    fn delete_confirm_ranks_below_the_primitive_picker_and_above_the_library_picker() {
+        let overlays = OpenOverlays {
+            delete_confirm: Some(std::path::PathBuf::from("parts.snxlib")),
+            library_primitive_picker_open: true,
+            ..OpenOverlays::default()
+        };
+        assert!(
+            matches!(
+                overlays.escape_message(),
+                Some(Message::Library(
+                    crate::library::messages::LibraryMessage::PrimitivePicker(_)
+                ))
+            ),
+            "the primitive picker paints above the delete confirm, so it must win"
+        );
+
+        let overlays = OpenOverlays {
+            delete_confirm: Some(std::path::PathBuf::from("parts.snxlib")),
+            library_picker_open: true,
+            ..OpenOverlays::default()
+        };
+        match overlays.escape_message() {
+            Some(Message::Library(
+                crate::library::messages::LibraryMessage::BrowserDeleteRowCancel { library_path },
+            )) => assert_eq!(
+                library_path,
+                std::path::PathBuf::from("parts.snxlib"),
+                "the Cancel must be addressed to the library whose confirm is open — \
+                 carrying that path is the entire reason this rung needs live state"
+            ),
+            other => panic!(
+                "delete confirm paints above the library picker, so it must win; got {other:?}"
+            ),
+        }
+    }
+
     #[test]
     fn the_deepest_modal_wins() {
         let overlays = OpenOverlays {
@@ -1241,6 +1379,7 @@ mod tests {
             print_preview_open,
             bom_preview_open,
             net_color_custom_open,
+            delete_confirm,
         ];
 
         // Documented, deliberate absences from the ladder — see the doc
@@ -1307,6 +1446,13 @@ mod tests {
             ("print_preview_open", |o| o.print_preview_open = true),
             ("bom_preview_open", |o| o.bom_preview_open = true),
             ("net_color_custom_open", |o| o.net_color_custom_open = true),
+            // Not a `bool` — the rung carries the owning library path, which
+            // is the whole reason the ladder had to leave the subscription
+            // (#535). Any path works here; the assertion is on which
+            // message the rung resolves to, not on the path's value.
+            ("delete_confirm", |o| {
+                o.delete_confirm = Some(std::path::PathBuf::from("fixture.snxlib"))
+            }),
         ];
 
         let macro_fields: std::collections::BTreeSet<&str> = field_names.into_iter().collect();

@@ -176,6 +176,28 @@ impl Signex {
                 Task::none()
             }
             Message::EscapePressed => {
+                // The modal Esc ladder resolves FIRST, and here rather
+                // than in the keyboard subscription (#535). Two things
+                // follow from resolving it against live state:
+                //
+                // - a rung can carry owned data, which is what finally
+                //   gives the per-browser delete-confirm modal a rung at
+                //   all (its Cancel is addressed to one library path);
+                // - there is no one-update staleness. The subscription
+                //   snapshot was rebuilt only after `update` returned, so
+                //   an Esc arriving in the same frame as a click-Close was
+                //   resolved against the pre-click world.
+                //
+                // A behaviour change falls out of the second point, and it
+                // is deliberate: when a click closes the LAST open modal
+                // and an Esc is queued behind it, that Esc now falls
+                // through to the tool reset below instead of being
+                // swallowed as a Cancel for an already-closed modal. No
+                // modal is open at that point, so the reset is what the
+                // user is looking at.
+                if let Some(overlay_msg) = self.escape_overlay_message() {
+                    return self.update(overlay_msg);
+                }
                 // v0.15 — if active tab is a footprint editor, reset
                 // its tool state via `FootprintToolEscape`; otherwise
                 // fall back to the schematic Tool::Select reset.
