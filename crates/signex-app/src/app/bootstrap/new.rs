@@ -32,7 +32,14 @@ impl Signex {
         let _ = &mut dock;
 
         let sch_canvas = SchematicCanvas::new();
-        let pcb_canvas = crate::pcb_canvas::PcbCanvas::new();
+        let mut pcb_canvas = crate::pcb_canvas::PcbCanvas::new();
+        // Read the persisted GPU-render preference ONCE — each read is a full
+        // `prefs.json` parse and three consumers need the same value: the
+        // widget's effective flag (so the very first PCB frame honours the
+        // saved toggle before the user opens Preferences) plus the
+        // `ui_state.pcb_gpu_render` saved mirror and its Preferences draft.
+        let pcb_gpu_render = crate::fonts::read_pcb_gpu_render_pref();
+        pcb_canvas.gpu_render = pcb_gpu_render;
         // Default to the 50-mil Altium grid; user-set value overrides
         // through the prefs file (UX §1.5 — last-used grid persists).
         let grid_size_mm =
@@ -107,6 +114,8 @@ impl Signex {
                 preferences_draft_multisheet_style: crate::fonts::read_multisheet_style_pref(),
                 grid_style: crate::fonts::read_grid_style_pref(),
                 preferences_draft_grid_style: crate::fonts::read_grid_style_pref(),
+                pcb_gpu_render,
+                preferences_draft_pcb_gpu_render: pcb_gpu_render,
                 preferences_draft_symbol_grid_size_mm: crate::fonts::read_symbol_grid_size_mm_pref(
                 ),
                 preferences_draft_symbol_grid_style: crate::fonts::read_symbol_grid_style_pref(),
@@ -117,6 +126,7 @@ impl Signex {
                 preferences_keymap_search: String::new(),
                 preferences_keymap_recorder: None,
                 preferences_dirty: false,
+                preferences_dirty_sticky: false,
                 custom_theme: None,
                 rename_dialog: None,
                 remove_dialog: None,
@@ -142,6 +152,9 @@ impl Signex {
                 tab_dragging: None,
                 main_window_id: None,
                 windows: std::collections::HashMap::new(),
+                passive_calculator: signex_widgets::passive_calculator::CalculatorControl::default(
+                ),
+                passive_calculator_open: false,
                 move_selection: crate::app::state::MoveSelectionState::default(),
                 net_color_palette_open: false,
                 parameter_manager_open: false,

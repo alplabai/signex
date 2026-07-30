@@ -15,3 +15,16 @@ pub struct LineSegment {
     pub style: u32,
     pub _pad: u32,
 }
+
+impl LineSegment {
+    /// `style` bit that marks a dashed (rather than solid) segment.
+    pub const STYLE_DASHED: u32 = 1;
+
+    /// Whether this segment renders dashed. The low `style` bit selects the
+    /// dash pattern; the rest is reserved. This is the shared predicate the CPU
+    /// renderer honours and the GPU `line.wgsl` shader must match — the CPU↔GPU
+    /// parity test locks both paths to it.
+    pub fn is_dashed(&self) -> bool {
+        (self.style & Self::STYLE_DASHED) == Self::STYLE_DASHED
+    }
+}

@@ -136,6 +136,7 @@ fn handle_tool_click(
         | SketchTool::RoundedRectangle
         | SketchTool::Rectangle
         | SketchTool::Arc
+        | SketchTool::EdgeArc
         | SketchTool::TangentArc => draw::apply(editor, &ctx, tool),
         SketchTool::Mirror
         | SketchTool::Offset

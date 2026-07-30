@@ -40,6 +40,7 @@ impl Signex {
             ui.preferences_draft_label_style,
             ui.preferences_draft_multisheet_style,
             ui.preferences_draft_grid_style,
+            ui.preferences_draft_pcb_gpu_render,
             ui.preferences_draft_symbol_grid_size_mm,
             ui.preferences_draft_symbol_grid_style,
             ui.preferences_draft_symbol_pin_selection,
@@ -81,6 +82,19 @@ impl Signex {
             &self.document_state.panel_ctx.tokens,
             ui.theme_id,
             &ui.keymap_profiles,
+        ))
+    }
+
+    /// Tools > Passive Network Calculator modal.
+    pub(in crate::app::view) fn passive_calculator_overlay(&self) -> Option<Element<'_, Message>> {
+        let ui = &self.ui_state;
+        if !ui.passive_calculator_open {
+            return None;
+        }
+        Some(crate::passive_calculator_modal::view(
+            &self.document_state.panel_ctx.tokens,
+            ui.theme_id,
+            &ui.passive_calculator,
         ))
     }
 

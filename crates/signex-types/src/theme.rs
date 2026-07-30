@@ -1,4 +1,27 @@
 //! Built-in themes for the Signex EDA application.
+//!
+//! # The one central theme source
+//!
+//! This module is the **single source of truth** for every colour in Signex.
+//! [`ThemeId`] selects a theme; [`ThemeTokens`] holds the UI-chrome palette
+//! (backgrounds, text, accent, panels, status colours) and [`CanvasColors`]
+//! holds the drawing palette (wire, junction, body, pad, silk, …). Nothing
+//! else defines colours — every surface *consumes* these tokens:
+//!
+//! - `signex-widgets` (`theme_ext.rs`) bridges tokens into per-widget iced
+//!   [`Style`](https://docs.rs/iced/0.14/iced/widget/container/struct.Style.html)
+//!   values — the iced 0.14 Catalog route. iced's own `Theme`/`Palette` is
+//!   therefore just *one consumer* of these tokens, not a second source.
+//! - `signex-renderer` / the `signex-gfx` wgpu path read the same tokens for
+//!   the GPU/canvas draw colours.
+//! - `signex-output` reads them for SVG / PDF export.
+//! - `signex-app` and `chrome-catalog` read them for the shell UI.
+//!
+//! This crate has **zero `iced` / `wgpu` dependency** on purpose (ADR: separate
+//! types from rendering): because the tokens live in the domain layer, the
+//! non-iced surfaces (GPU shader, export) can share them, so the wgpu PCB
+//! renderer and the SVG/PDF export stay in lock-step with the iced UI. A
+//! re-skin is one edit to [`ThemeId`]'s token tables; every surface follows.
 
 use serde::{Deserialize, Serialize};
 

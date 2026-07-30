@@ -1,7 +1,7 @@
 //! Schematic-surface command metadata — placement, net, annotation,
 //! sheet-navigation. Split from `keymap/catalog.rs`; entries verbatim.
 
-use super::{CommandGroup, CommandMetadata};
+use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement};
 
 pub(super) const SCHEMATIC: &[CommandMetadata] = &[
     CommandMetadata {
@@ -10,6 +10,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Annotate schematic",
         menu_label: None,
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "annotate_schematic_quietly",
@@ -17,6 +20,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Annotate schematic quietly",
         menu_label: Some("Annotate Schematics Quietly"),
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "clear_net_highlighting",
@@ -24,6 +30,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Clear net highlighting",
         menu_label: None,
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::NONE,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "draw_graphic_line",
@@ -31,6 +40,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Draw graphic line",
         menu_label: None,
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "draw_hierarchical_sheet",
@@ -38,6 +50,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Draw hierarchical sheet",
         menu_label: None,
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "force_annotate_all_schematics",
@@ -45,6 +60,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Force annotate all schematics",
         menu_label: Some("Force Annotate All Schematics"),
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "highlight_net_under_cursor",
@@ -52,6 +70,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Highlight net under cursor",
         menu_label: None,
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "highlight_related_net_objects",
@@ -59,6 +80,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Highlight/select related net objects across sheets",
         menu_label: None,
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "leave_sheet",
@@ -66,6 +90,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Leave sheet / go to parent sheet",
         menu_label: None,
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "navigate_up_hierarchy",
@@ -73,6 +100,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Navigate up hierarchy",
         menu_label: None,
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "next_highlighted_net_item",
@@ -80,6 +110,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Next item on highlighted net",
         menu_label: None,
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "next_sheet",
@@ -87,6 +120,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Next sheet",
         menu_label: None,
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "open_components_panel",
@@ -94,6 +130,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Open Components panel / place components",
         menu_label: Some("Component..."),
         group: CommandGroup::Schematic,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "open_net_color_palette",
@@ -101,6 +140,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Open net color palette",
         menu_label: None,
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "place_bus",
@@ -108,13 +150,19 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Draw bus",
         menu_label: Some("Bus"),
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "place_compile_mask",
         category: "place",
         label: "Place Compile Mask directive",
-        menu_label: None,
+        menu_label: Some("Compile Mask"),
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "place_design_block",
@@ -122,6 +170,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Place design block",
         menu_label: None,
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "place_global_label",
@@ -129,6 +180,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Place global label",
         menu_label: None,
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "place_hierarchical_label",
@@ -136,6 +190,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Place hierarchical label",
         menu_label: None,
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "place_junction",
@@ -143,6 +200,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Place junction",
         menu_label: None,
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "place_local_net_label",
@@ -150,6 +210,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Place local net label",
         menu_label: None,
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "place_net_label",
@@ -157,6 +220,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Place net label",
         menu_label: Some("Net Label"),
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "place_no_connect",
@@ -164,13 +230,19 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Place no-connect flag",
         menu_label: None,
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "place_no_erc",
         category: "place",
         label: "Place Generic No ERC directive",
-        menu_label: None,
+        menu_label: Some("Generic No ERC"),
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "place_power_symbol",
@@ -178,6 +250,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Place power symbol",
         menu_label: None,
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "place_symbol",
@@ -185,6 +260,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Place symbol",
         menu_label: None,
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "place_text",
@@ -192,6 +270,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Place text",
         menu_label: None,
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "place_wire",
@@ -199,6 +280,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Place wire",
         menu_label: Some("Wire"),
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "place_wire_to_bus_entry",
@@ -206,6 +290,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Place wire-to-bus entry",
         menu_label: None,
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "previous_highlighted_net_item",
@@ -213,6 +300,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Previous item on highlighted net",
         menu_label: None,
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "previous_sheet",
@@ -220,6 +310,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Previous sheet",
         menu_label: None,
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "run_erc",
@@ -227,6 +320,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Run electrical rules check",
         menu_label: Some("Electrical Rules Check"),
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::NONE,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "reset_schematic_designators",
@@ -234,6 +330,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Reset schematic designators",
         menu_label: None,
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "sheet_navigation_back",
@@ -241,6 +340,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Sheet navigation back",
         menu_label: None,
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "sheet_navigation_forward",
@@ -248,6 +350,9 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Sheet navigation forward",
         menu_label: None,
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
         id: "update_pcb_from_schematic",
@@ -255,5 +360,8 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         label: "Update PCB from schematic",
         menu_label: None,
         group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES_NOT_UNDOABLE,
+        ..CommandMetadata::DEFAULT
     },
 ];

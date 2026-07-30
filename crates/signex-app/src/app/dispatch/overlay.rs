@@ -23,6 +23,10 @@ impl Signex {
                 self.ui_state.keyboard_shortcuts_open = false;
                 Task::none()
             }
+            OverlayMsg::ClosePassiveCalculator => {
+                self.ui_state.passive_calculator_open = false;
+                Task::none()
+            }
             OverlayMsg::DismissFirstRunTour => {
                 self.ui_state.first_run_tour_open = false;
                 crate::fonts::write_first_run_tour_dismissed(true);

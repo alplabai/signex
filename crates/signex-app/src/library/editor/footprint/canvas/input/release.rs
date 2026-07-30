@@ -299,6 +299,7 @@ impl FootprintCanvas<'_> {
             | SketchTool::RoundedRectangle
             | SketchTool::Circle
             | SketchTool::Arc
+            | SketchTool::EdgeArc
             | SketchTool::Mirror
             | SketchTool::Offset
             | SketchTool::RectPattern
