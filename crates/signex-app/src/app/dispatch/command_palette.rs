@@ -87,7 +87,22 @@ impl Signex {
         self.ui_state.command_palette.selected_index = 0;
 
         match action {
-            CommandAction::Menu(menu_msg) => Task::done(Message::Menu(menu_msg)),
+            // Through the same bridge the keyboard uses. The palette
+            // carries an id and never learns which `Message` it becomes
+            // — Command ≠ Message (#278). An id that stopped resolving
+            // between `build_catalog` and here is a no-op rather than a
+            // panic; `core_to_message` logs which one and why.
+            CommandAction::Command(command) => {
+                // `bridge::` rather than the `command::core_to_message`
+                // re-export — #367 (PR #504) makes that re-export private.
+                // Once #504 lands this becomes
+                // `self.dispatch_command(&command, CommandArgs::none())`,
+                // which is the single funnel the epic is aiming at.
+                match crate::app::command::bridge::core_to_message(&command) {
+                    Some(message) => self.dispatch_update(message),
+                    None => Task::none(),
+                }
+            }
             CommandAction::Panel(panel) => {
                 Task::done(Message::Overlay(OverlayMsg::OpenPanel(panel)))
             }
