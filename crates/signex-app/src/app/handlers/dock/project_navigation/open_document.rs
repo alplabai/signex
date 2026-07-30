@@ -6,6 +6,7 @@
 
 use super::*;
 use anyhow::{Context, Result};
+use iced::Task;
 
 impl Signex {
     /// Resolve a project-tree path (indices) to the file path on disk
@@ -69,7 +70,7 @@ impl Signex {
         &mut self,
         tree_path: &[usize],
         filename: String,
-    ) -> Result<()> {
+    ) -> Result<Task<Message>> {
         // F24 — strip the "  (missing)" suffix `build_project_tree`
         // appends to orphan rows so filename-matching downstream
         // still resolves the correct entry.
@@ -140,8 +141,7 @@ impl Signex {
         // still error early because they have no recovery surface.
         if !file_path.exists() {
             if filename.ends_with(".snxlib") {
-                let _ = self.handle_open_library_browser(file_path);
-                return Ok(());
+                return Ok(self.handle_open_library_browser(file_path));
             }
             anyhow::bail!("project tree file does not exist: {}", file_path.display());
         }
@@ -157,7 +157,7 @@ impl Signex {
                 self.document_state.active_tab = index;
                 self.sync_active_tab();
             }
-            return Ok(());
+            return Ok(Task::none());
         }
 
         if filename.ends_with(".snxsch") {
@@ -170,7 +170,7 @@ impl Signex {
                 && self.document_state.dirty_paths.contains(&file_path)
             {
                 self.attach_parked_schematic_tab(file_path, title);
-                return Ok(());
+                return Ok(Task::none());
             }
             let text = std::fs::read_to_string(&file_path)
                 .with_context(|| format!("read schematic {}", file_path.display()))?;
@@ -178,7 +178,7 @@ impl Signex {
                 .with_context(|| format!("parse schematic {}", file_path.display()))?
                 .sheet;
             self.open_schematic_tab(file_path, title, schematic);
-            return Ok(());
+            return Ok(Task::none());
         }
 
         if filename.ends_with(".snxpcb") {
@@ -189,7 +189,7 @@ impl Signex {
                 .board;
             let title = filename.trim_end_matches(".snxpcb").to_string();
             self.open_pcb_tab(file_path, title, board);
-            return Ok(());
+            return Ok(Task::none());
         }
 
         // Standalone primitive editor tabs — `.snxsym` / `.snxfpt`
@@ -197,8 +197,7 @@ impl Signex {
         // `OpenPrimitiveEditor` path used by the Library panel
         // right-click handles project-tree double-clicks too.
         if filename.ends_with(".snxsym") || filename.ends_with(".snxfpt") {
-            let _ = self.handle_open_primitive(file_path);
-            return Ok(());
+            return Ok(self.handle_open_primitive(file_path));
         }
 
         // `.snxlib/` is a directory package, not a document. Open it
@@ -206,11 +205,7 @@ impl Signex {
         // browser is the primary surface for working with library rows
         // (table grid + symbol/footprint preview).
         if filename.ends_with(".snxlib") {
-            // The browser handler returns a Task; in this synchronous
-            // path we can drop it because mount + open are all
-            // immediate-side-effecting (no async file dialogs etc.).
-            let _ = self.handle_open_library_browser(file_path);
-            return Ok(());
+            return Ok(self.handle_open_library_browser(file_path));
         }
 
         anyhow::bail!("unsupported project tree document: {filename}")
@@ -223,4 +218,49 @@ impl Signex {
 /// Returns the original `&str` when no suffix is present (zero-copy).
 fn canonical_tree_label(label: &str) -> &str {
     label.trim_end_matches("  (missing)")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::Signex;
+
+    /// Regression (#99 part 1): `open_project_tree_document` used to
+    /// return `Result<()>` and the `.snxsym` / `.snxlib` branches
+    /// discarded the `Task` from `handle_open_primitive` /
+    /// `handle_open_library_browser` via `let _ = ...`. The signature
+    /// now carries the `Task` out — the explicit `Task<Message>`
+    /// annotation below is a compile-time tripwire: this test stops
+    /// compiling (rather than merely failing) if that return type is
+    /// ever swallowed back down to `Result<()>`.
+    ///
+    /// A Task-*value* assertion isn't meaningful here: every callee on
+    /// this path returns `Task::none()` unconditionally today (async
+    /// `.snxlib` mounting lands in part 2 of #99), so the propagated
+    /// and dropped cases are runtime-indistinguishable until then.
+    #[test]
+    fn open_project_tree_document_snxsym_carries_the_task_out() {
+        let (mut app, _bootstrap_task) = Signex::new();
+
+        let dir = tempfile::tempdir().unwrap();
+        let project_path = dir.path().join("proj.snxprj");
+        std::fs::write(&project_path, b"").unwrap();
+        // Content doesn't need to parse — `handle_open_primitive`
+        // returns `Task::none()` on a parse failure too, and this test
+        // only needs the file to exist so the tree-document lookup
+        // doesn't bail with "does not exist".
+        std::fs::write(dir.path().join("Comp.snxsym"), b"").unwrap();
+
+        let opened: iced::Task<Message> = app.handle_document_file_opened(Some(project_path));
+        drop(opened);
+        assert_eq!(
+            app.document_state.projects.len(),
+            1,
+            "project must have loaded before resolving a tree document against it"
+        );
+
+        let result: anyhow::Result<iced::Task<Message>> =
+            app.open_project_tree_document(&[0], "Comp.snxsym".to_string());
+        assert!(result.is_ok(), "expected Ok(Task), got {result:?}");
+    }
 }

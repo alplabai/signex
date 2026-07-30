@@ -15,6 +15,12 @@
 //! Oval pad also owns anchors and arc centres that the corner mover
 //! never touches.
 
+// This integration-test binary discards fallible test-setup calls with
+// `let _ = ...` routinely (not a production `Task` getting dropped — see
+// GH #99 part 1). `[lints]` in Cargo.toml is package-scoped, not
+// target-scoped, so each integration-test crate root needs its own allow.
+#![allow(clippy::let_underscore_must_use)]
+
 use signex_app::app::{EditMsg, Message, Signex};
 use signex_app::library::editor::footprint::state::EditorPad;
 use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};

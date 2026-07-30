@@ -145,3 +145,22 @@ jobs:
       # scripts/check_file_size.sh; the slice model it points to is ADR-0001.
       - name: God-file ratchet gate
         run: bash scripts/check_file_size.sh
+
+  no-discarded-tasks:
+    name: no discarded tasks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # This job fails hard (NOT continue-on-error) on a violation — but a
+      # failing job only blocks a merge if it's listed as a required status
+      # check in the branch-protection ruleset, and as of this writing it
+      # is NOT (neither is `no-god-files`). Until it's added there, a PR
+      # reintroducing `let _ = self.handle_x(...)` goes red here and stays
+      # mergeable. `let _ = self.handle_x(...)` silently drops an
+      # `iced::Task<Message>` and neither the compiler nor clippy's
+      # warn-level gate catches it (see the script header for why).
+      # Rationale + known blind spots live in
+      # scripts/check_discarded_tasks.sh; GH #99 part 1.
+      - name: Discarded-Task ratchet gate
+        run: bash scripts/check_discarded_tasks.sh

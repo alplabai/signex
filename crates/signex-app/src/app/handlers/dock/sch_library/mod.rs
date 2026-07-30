@@ -57,7 +57,8 @@ impl Signex {
         let mut follow = Task::none();
         let handled = match panel_msg {
             PanelMsg::FpLibraryOpenSibling(sibling_path) => {
-                self.handle_fp_library_open_sibling(sibling_path)
+                follow = self.handle_fp_library_open_sibling(sibling_path);
+                true
             }
             PanelMsg::FpLibrarySelectInternal(idx) => self.handle_fp_library_select_internal(idx),
             PanelMsg::FpLibraryAddInternal => {

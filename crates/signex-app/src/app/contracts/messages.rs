@@ -151,6 +151,9 @@ pub enum OverlayMsg {
     /// Close the Help ▸ Keyboard Shortcuts modal — fired by the close
     /// chrome ✕ and by Esc dismiss handling.
     CloseKeyboardShortcuts,
+    /// Open the Tools > Passive Network Calculator modal — fired by the
+    /// Tools menu entry. Re-invoking while it is already open is a no-op.
+    OpenPassiveCalculator,
     /// Close the Tools > Passive Network Calculator modal - fired by
     /// the close chrome X.
     ClosePassiveCalculator,

@@ -398,6 +398,15 @@ pub fn create_library(
 /// once when a project loads. Failures are logged and skipped — a
 /// missing or corrupt library shouldn't block the rest of the project
 /// from opening.
+///
+/// The `refresh_components` chaser runs on the warm path **only** —
+/// see the comment on the `already_open` binding below. On the cold
+/// path [`LibraryState::open_library`] has already primed all five
+/// caches and re-running it was pure duplicate work: it roughly doubled
+/// every project open (#99), costing a six-medium-library project
+/// 795.7 ms of its 1 622.571 ms mount. `tests/library_open_cache.rs`
+/// pins both halves — that the cold path primes everything, and that
+/// the warm path still rescans the primitive directories.
 pub fn auto_mount_project_libraries(state: &mut LibraryState, project: &ProjectData) -> usize {
     let mut mounted = 0usize;
     for entry in &project.libraries {
@@ -415,14 +424,45 @@ pub fn auto_mount_project_libraries(state: &mut LibraryState, project: &ProjectD
         if !is_snxlib {
             continue;
         }
+        // Cold vs warm mount — do NOT collapse this into an
+        // unconditional refresh, and do NOT delete the refresh outright.
+        //
+        // COLD (not yet mounted): `open_library` has just primed all
+        // five caches — `tables` + `cached_components` via
+        // `reload_tables`, then `cached_symbols` / `cached_footprints` /
+        // `cached_sims` via `reload_primitives` — off exactly the
+        // adapter calls a refresh would repeat. Skipping it here is
+        // where the whole #99 win lives.
+        //
+        // WARM (already mounted): `open_library` early-returns `Ok(())`
+        // at `state/methods.rs:83-85` and never reaches
+        // `reload_tables`, so the refresh below is the only thing that
+        // rescans. It is reachable in normal use — `self.library` is
+        // app-global, not per-project (see
+        // `app/handlers/document_files/open.rs:209`), so a second
+        // project referencing an already-mounted `.snxlib` lands here.
+        //
+        // What the warm refresh actually buys, precisely: `list_symbols`
+        // / `list_footprints` / `list_sims` walk `symbols/` /
+        // `footprints/` / `sims/` on every call, so it DOES pick up
+        // primitive files another process wrote. It does NOT pick up
+        // rows added to the `.snxlib` itself — `LocalGitAdapter` parses
+        // that once at `open()` into `RwLock<LibraryFile>`
+        // (`adapters/local_git/mod.rs:88-92`) and `list_tables` /
+        // `read_table` serve from that in-memory copy. Seeing external
+        // row edits needs a re-opened adapter, which only
+        // `app/handlers/document_files/history.rs:259` does today.
+        let already_open = state.library_at(&resolved).is_some();
+        // One bad library must not sink the rest of the project: warn,
+        // skip, and keep `mounted` counting successes only.
         match state.open_library(resolved.clone()) {
             Ok(()) => {
-                if let Err(e) = state.refresh_components(&resolved) {
+                if already_open && let Err(e) = state.refresh_components(&resolved) {
                     tracing::warn!(
                         target: "signex::library",
                         path = %resolved.display(),
                         error = %e,
-                        "auto-mount: refresh_components failed"
+                        "auto-mount: refresh of already-mounted library failed; cache may be stale"
                     );
                 }
                 mounted += 1;

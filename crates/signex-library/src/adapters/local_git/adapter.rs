@@ -436,11 +436,11 @@ impl LibraryAdapter for LocalGitAdapter {
     }
 
     fn list_footprints(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
-        self.list_primitive_summaries::<Footprint>(PrimitiveKind::Footprint, |f| &f.name)
+        self.list_primitive_summaries(PrimitiveKind::Footprint)
     }
 
     fn list_sims(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
-        self.list_primitive_summaries::<SimModel>(PrimitiveKind::Sim, |s| &s.name)
+        self.list_primitive_summaries(PrimitiveKind::Sim)
     }
 
     fn root_path(&self) -> Option<PathBuf> {

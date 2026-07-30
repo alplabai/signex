@@ -11,6 +11,7 @@
 #![cfg(feature = "search-tantivy")]
 
 use std::collections::BTreeMap;
+use std::sync::Mutex;
 
 use chrono::Utc;
 use signex_library::{
@@ -18,6 +19,23 @@ use signex_library::{
     ParamMap, ParamValue, PlmReserved, PrimitiveRef, SearchIndex, SearchQuery, TantivySearchIndex,
 };
 use uuid::Uuid;
+
+// Every test below opens its own `tempfile::tempdir()` — none of them share
+// an on-disk path. The flake this guards against (#482) is Tantivy's own
+// commit/merge/GC I/O: libtest runs this file's tests concurrently by
+// default, so several `IndexWriter`s can be committing (each spawning its
+// own background merge/GC work) at the same moment, and on Windows that
+// concurrent segment-file churn has intermittently turned into
+// `Tantivy(IoError(Os { code: 5, PermissionDenied }))` on `commit()` under
+// full-workspace parallel load — passes reliably alone. Run them one at a
+// time instead of pulling in a `serial_test` dependency for a single file.
+static SERIAL: Mutex<()> = Mutex::new(());
+
+fn serial_guard() -> std::sync::MutexGuard<'static, ()> {
+    SERIAL
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
 
 // ── fixture builders ───────────────────────────────────────────────────
 
@@ -161,6 +179,7 @@ fn fixture_corpus() -> Vec<ComponentRow> {
 
 #[test]
 fn text_query_pinpoints_the_single_matching_part() {
+    let _guard = serial_guard();
     let dir = tempfile::tempdir().unwrap();
     let idx = TantivySearchIndex::open(dir.path()).expect("open index");
 
@@ -203,6 +222,7 @@ fn text_query_pinpoints_the_single_matching_part() {
 
 #[test]
 fn numeric_facet_lt_returns_only_sub_threshold_parts() {
+    let _guard = serial_guard();
     let dir = tempfile::tempdir().unwrap();
     let idx = TantivySearchIndex::open(dir.path()).expect("open index");
 
@@ -255,6 +275,7 @@ fn numeric_facet_lt_returns_only_sub_threshold_parts() {
 
 #[test]
 fn index_persists_across_drop_and_reopen() {
+    let _guard = serial_guard();
     let dir = tempfile::tempdir().unwrap();
     let dir_path = dir.path().to_path_buf();
 
@@ -283,6 +304,7 @@ fn index_persists_across_drop_and_reopen() {
 
 #[test]
 fn add_or_update_replaces_existing_doc() {
+    let _guard = serial_guard();
     let dir = tempfile::tempdir().unwrap();
     let idx = TantivySearchIndex::open(dir.path()).expect("open index");
 
@@ -330,6 +352,7 @@ fn add_or_update_replaces_existing_doc() {
 
 #[test]
 fn category_only_query_filters_corpus() {
+    let _guard = serial_guard();
     let dir = tempfile::tempdir().unwrap();
     let idx = TantivySearchIndex::open(dir.path()).expect("open index");
 

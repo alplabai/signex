@@ -168,7 +168,9 @@ impl Signex {
     }
 
     /// v0.9 Library — picker modal overlay. Centered card on a dim
-    /// backdrop; dismiss-on-ESC handled via the close X.
+    /// backdrop; Esc dismisses via `OpenOverlays::escape_message`'s
+    /// `library_picker_open` rung (`app/bootstrap/subscription.rs`), the
+    /// close X is the mouse-click path.
     pub(in crate::app::view) fn library_picker_overlay(&self) -> Option<Element<'_, Message>> {
         let document = &self.document_state;
         let picker = self.library.picker.as_ref()?;

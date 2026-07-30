@@ -10,6 +10,17 @@
 //! dispatch handlers, and inspect dirty bits / panel context — there's
 //! no narrow public API to design here, the test harness IS the audit.
 
+// `clippy::let_underscore_must_use` (Cargo.toml `[lints.clippy]`, GH #99
+// part 1) is warn-level in production code on purpose — it flags the 13
+// pre-existing discarded-`Result` sites tracked separately, plus it would
+// re-catch a regression of the `let _ = self.handle_x(...)` class this PR
+// just fixed. In-src `#[cfg(test)] mod tests { ... }` blocks are a much
+// noisier, lower-stakes surface (assertions like `let _ = fallible_call();`
+// are routine test-setup idiom, not a production Task getting dropped), so
+// suppress it there rather than let ~30 test-only warnings dilute the
+// production signal.
+#![cfg_attr(test, allow(clippy::let_underscore_must_use))]
+
 pub mod active_bar;
 pub mod app;
 pub mod canvas;

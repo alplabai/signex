@@ -90,10 +90,19 @@ impl LibraryState {
         let manifest = adapter.manifest();
         let display_name = manifest.library.name.clone();
         let library_id = manifest.library.library_id;
-        // `LibrarySet::mount` rejects duplicate `library_id`s — this
-        // surfaces the case where the user has copy-pasted a `.snxlib/`
-        // without regenerating the manifest UUID, so cross-library
-        // `PrimitiveRef`s can't silently resolve to the wrong file.
+        // `LibrarySet::mount` keys file-backed adapters by their
+        // `.snxlib` *path*, so the `Conflict` it can return here means
+        // "this same path is already mounted" — not "this library_id is
+        // already taken". Two copies of a library sharing a `library_id`
+        // at different paths both mount fine, by design (see
+        // `adapters/library_set.rs`, "Resolution semantics").
+        //
+        // So this is NOT a guard against the copy-pasted-`.snxlib`-
+        // without-a-regenerated-manifest-UUID case: `set.get(library_id)`
+        // returns the *first* match, and a cross-library `PrimitiveRef`
+        // can still resolve to whichever copy wins. Detecting and
+        // surfacing that collision is the Components Panel's job at
+        // presentation time.
         self.set.mount(Box::new(adapter))?;
         let mut entry = OpenLibrary {
             root,

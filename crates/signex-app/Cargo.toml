@@ -10,6 +10,14 @@ license.workspace = true
 name = "signex_app"
 path = "src/lib.rs"
 
+[lints.clippy]
+# Warn-level only (GH #99 part 1) — `Task` is `#[must_use]` but `let _ =`
+# defeats that (see scripts/check_discarded_tasks.sh for the full story).
+# This lint also catches discarded `Result`s the same way; 13 pre-existing
+# sites are tracked separately and are NOT fixed by this change, so the
+# lint stays warn rather than deny.
+let_underscore_must_use = "warn"
+
 [[bin]]
 name = "signex"
 path = "src/main.rs"

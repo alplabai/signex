@@ -7,7 +7,6 @@ mod document;
 mod keymap;
 pub(crate) mod library;
 mod overlay;
-mod passive_calculator;
 mod text_edit;
 mod tool;
 mod ui;
@@ -17,7 +16,6 @@ impl Signex {
         self.apply_pcb_renderer_dirty_hint(&message);
 
         match message {
-            Message::OpenPassiveCalculator => self.handle_open_passive_calculator(),
             Message::PassiveCalculator(message) => {
                 self.ui_state.passive_calculator.update(message);
                 Task::none()

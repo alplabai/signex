@@ -32,7 +32,7 @@ impl Signex {
                 self.ui_state.unit = *unit;
             }
             crate::panels::PanelMsg::RunErc => {
-                let _ = self.handle_run_erc();
+                follow = self.handle_run_erc();
                 self.refresh_panel_ctx();
             }
             crate::panels::PanelMsg::ClearErc => {
@@ -49,16 +49,16 @@ impl Signex {
                 self.refresh_panel_ctx();
             }
             crate::panels::PanelMsg::FocusErcViolation(idx) => {
-                let _ = self.handle_focus_erc_diagnostic_index(*idx);
+                follow = self.handle_focus_erc_diagnostic_index(*idx);
             }
             crate::panels::PanelMsg::ErcQuickFix(idx) => {
-                let _ = self.handle_erc_quick_fix(*idx);
+                follow = self.handle_erc_quick_fix(*idx);
             }
             crate::panels::PanelMsg::FocusPrevErcDiagnostic => {
-                let _ = self.handle_focus_erc_diagnostic_offset(-1);
+                follow = self.handle_focus_erc_diagnostic_offset(-1);
             }
             crate::panels::PanelMsg::FocusNextErcDiagnostic => {
-                let _ = self.handle_focus_erc_diagnostic_offset(1);
+                follow = self.handle_focus_erc_diagnostic_offset(1);
             }
             crate::panels::PanelMsg::ToggleGrid => {
                 self.ui_state.grid_visible = !self.ui_state.grid_visible;
@@ -387,10 +387,10 @@ impl Signex {
                     self.document_state.panel_ctx.components_split;
             }
             crate::panels::PanelMsg::ToggleSelectionFilter(filter) => {
-                let _ = self.handle_active_bar_filter_toggle(*filter);
+                follow = self.handle_active_bar_filter_toggle(*filter);
             }
             crate::panels::PanelMsg::ToggleAllSelectionFilters => {
-                let _ = self.handle_active_bar_all_filters_toggle();
+                follow = self.handle_active_bar_all_filters_toggle();
             }
             crate::panels::PanelMsg::AddCustomFilterPreset => {
                 self.handle_add_custom_filter_preset();

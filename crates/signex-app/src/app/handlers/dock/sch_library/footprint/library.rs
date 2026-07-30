@@ -15,13 +15,13 @@ impl Signex {
     pub(in crate::app::handlers::dock::sch_library) fn handle_fp_library_open_sibling(
         &mut self,
         sibling_path: &std::path::Path,
-    ) -> bool {
+    ) -> Task<Message> {
         // v0.14.2 — open the sibling .snxfpt as a new tab
         // (or activate an existing tab if it's already open)
         // via the existing primitive-open flow.
-        let _ = self.handle_open_primitive(sibling_path.to_path_buf());
+        let task = self.handle_open_primitive(sibling_path.to_path_buf());
         self.refresh_panel_ctx();
-        true
+        task
     }
 
     // v0.18.8 — Footprint Library panel internal-row select.
@@ -131,5 +131,22 @@ impl Signex {
             self.refresh_panel_ctx();
         }
         follow
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Regression (#99 part 1): this method used to return `bool` and
+    /// discard `handle_open_primitive`'s `Task` via `let _ = ...`. This
+    /// is a pure compile-time tripwire — the assignment only type-checks
+    /// if the signature stays `fn(&mut Signex, &Path) -> Task<Message>`;
+    /// it stops compiling (not merely failing) if that regresses back to
+    /// `bool`. No runtime setup needed, so no `Signex::new()` / tempdir.
+    #[test]
+    fn open_sibling_returns_the_primitive_open_task() {
+        const _: fn(&mut Signex, &std::path::Path) -> Task<Message> =
+            Signex::handle_fp_library_open_sibling;
     }
 }

@@ -1,0 +1,9 @@
+# Discarded-Task allowlist — path:line entries exempted from
+# scripts/check_discarded_tasks.sh. See that script's header for what the
+# gate checks and its known blind spots.
+#
+# This list should stay EMPTY. After GH #99 part 1 there are zero known
+# `let _ = self.handle_...` discards in the tree; do not add a row here to
+# grandfather a new one in — fix the discard instead. A row only belongs
+# here for a `handle_*` method that provably does not return a `Task`,
+# where renaming the method off the `handle_` prefix isn't practical.
