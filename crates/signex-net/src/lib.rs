@@ -17,4 +17,6 @@ pub use build::{
 };
 
 mod project;
-pub use project::{ProjectNetlist, StitchIssue, build_project_netlist};
+pub use project::{
+    ProjectGraph, ProjectNetlist, ProjectRoot, SheetKey, StitchIssue, build_project_netlist,
+};

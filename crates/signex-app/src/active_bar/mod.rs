@@ -300,7 +300,11 @@ impl SelectionFilter {
 }
 
 /// All actions available from Active Bar buttons and dropdown items.
-#[derive(Debug, Clone)]
+///
+/// `PartialEq` so `app::command::active_bar` can look an action up in its
+/// id table by value, rather than formatting `Debug` on every dropdown
+/// row render (#271).
+#[derive(Debug, Clone, PartialEq)]
 #[allow(dead_code)]
 pub enum ActiveBarAction {
     // Selection modes
