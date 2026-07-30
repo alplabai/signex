@@ -146,10 +146,12 @@ impl Signex {
             .and_then(|extension| extension.to_str())
             .unwrap_or("");
         let task = match ext {
-            "standard_pro" | "snxprj" => {
-                self.open_project_file(path)?;
-                iced::Task::none()
-            }
+            // Returns the project's cold `.snxlib` mount preparations
+            // (#99 part 2c) — must be propagated, not dropped. Dropping
+            // it leaves every library recorded as pending and never
+            // spawned, so the project opens with no libraries mounted and
+            // nothing logs a failure.
+            "standard_pro" | "snxprj" => self.open_project_file(path)?,
             "standard_sch" | "snxsch" => self.open_schematic_file(path)?,
             "standard_pcb" | "snxpcb" => self.open_pcb_file(path)?,
             "snxsym" | "snxfpt" => self.handle_open_primitive(path),
@@ -165,10 +167,10 @@ impl Signex {
         Ok(task)
     }
 
-    fn open_project_file(&mut self, path: PathBuf) -> Result<()> {
-        self.load_or_activate_project(&path)?;
+    fn open_project_file(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
+        let (_, mount_task) = self.load_or_activate_project(&path)?;
         self.refresh_panel_ctx();
-        Ok(())
+        Ok(mount_task)
     }
 
     /// Append a `LoadedProject` for `project_path` to the workspace if
@@ -176,11 +178,20 @@ impl Signex {
     /// so re-opening the same project just switches activity. Used by
     /// both `open_project_file` (direct .standard_pro open) and the
     /// companion-project path inside `open_schematic_file` /
-    /// `open_pcb_file`. Returns the resolved `ProjectId`.
+    /// `open_pcb_file`.
+    ///
+    /// Returns the resolved `ProjectId` **plus** a `Task` that prepares
+    /// the project's cold `.snxlib` mounts off the UI thread (#99 part
+    /// 2c). The `ProjectId` still comes back synchronously because every
+    /// caller uses it immediately — `.snxprj` parsing itself stays
+    /// synchronous on purpose: `parse_project` measures 0.018 ms and does
+    /// not scale with library count, so making it async would buy nothing
+    /// and would break that immediate use. The library mounts are the
+    /// part that actually costs frames.
     fn load_or_activate_project(
         &mut self,
         project_path: &std::path::Path,
-    ) -> Result<crate::app::state::ProjectId> {
+    ) -> Result<(crate::app::state::ProjectId, iced::Task<Message>)> {
         if let Some(existing) = self
             .document_state
             .projects
@@ -189,7 +200,7 @@ impl Signex {
         {
             let id = existing.id;
             self.document_state.active_project = Some(id);
-            return Ok(id);
+            return Ok((id, iced::Task::none()));
         }
         let data = signex_types::project::parse_project(project_path)
             .with_context(|| format!("parse project {}", project_path.display()))?;
@@ -199,16 +210,34 @@ impl Signex {
         // fires. Errors are logged inside `auto_mount_project_libraries`
         // and never bubble: a missing library shouldn't block the
         // project from loading.
-        let mounted =
+        let outcome =
             crate::library::commands::auto_mount_project_libraries(&mut self.library, &data);
-        if mounted > 0 {
+        if outcome.refreshed > 0 || !outcome.pending.is_empty() {
             tracing::info!(
                 target: "signex::library",
                 project = %project_path.display(),
-                mounted,
+                refreshed = outcome.refreshed,
+                pending = outcome.pending.len(),
                 "auto-mounted project libraries"
             );
         }
+        // Fan the cold mounts out — one `spawn_blocking` per `.snxlib`,
+        // all in flight at once. The work is CPU-parse-bound (~40 MB/s on
+        // hardware that does GB/s), so six libraries are embarrassingly
+        // parallel. `request_mount` already recorded each path as pending
+        // inside `auto_mount_project_libraries`, so no path spawns twice.
+        let mount_task = iced::Task::batch(outcome.pending.into_iter().map(|library_path| {
+            let completion_path = library_path.clone();
+            iced::Task::perform(
+                crate::library::mount::prepare_mount_off_thread(library_path),
+                move |prepared| {
+                    Message::Library(crate::library::LibraryMessage::MountFinished {
+                        path: completion_path.clone(),
+                        prepared,
+                    })
+                },
+            )
+        }));
         self.document_state
             .projects
             .push(super::super::super::state::LoadedProject {
@@ -218,7 +247,7 @@ impl Signex {
                 pending_libraries: std::collections::HashMap::new(),
             });
         self.document_state.active_project = Some(id);
-        Ok(id)
+        Ok((id, mount_task))
     }
 
     /// #478 review — dedup guard shared by `open_schematic_file` /
@@ -252,16 +281,24 @@ impl Signex {
         // a `project_id` via `project_for_path`. Best-effort: a missing
         // or unparseable `.snxprj` doesn't block opening the loose
         // schematic.
+        let mut companion_mounts = iced::Task::none();
         if let Some(dir) = path.parent() {
             let stem = path
                 .file_stem()
                 .and_then(|segment| segment.to_str())
                 .unwrap_or("");
             let companion = dir.join(format!("{stem}.snxprj"));
-            if companion.exists()
-                && let Err(error) = self.load_or_activate_project(&companion)
-            {
-                crate::diagnostics::log_error("Failed to parse companion project", &error);
+            if companion.exists() {
+                match self.load_or_activate_project(&companion) {
+                    // The companion project's cold `.snxlib` mounts
+                    // prepare off-thread (#99 part 2c); its task is
+                    // batched with this document's own read below so
+                    // neither waits on the other.
+                    Ok((_, mount_task)) => companion_mounts = mount_task,
+                    Err(error) => {
+                        crate::diagnostics::log_error("Failed to parse companion project", &error);
+                    }
+                }
             }
         }
         let title = path
@@ -288,20 +325,26 @@ impl Signex {
         // both arms of `FileMsg::SchematicOpenFinished` (#478 review).
         self.document_state.pending_opens.insert(path.clone());
         let read_path = path.clone();
-        Ok(iced::Task::perform(
-            async move {
-                tokio::task::spawn_blocking(move || read_and_parse_schematic(&read_path))
-                    .await
-                    .unwrap_or_else(|e| Err(format!("spawn_blocking: {e}")))
-            },
-            move |result| {
-                Message::File(FileMsg::SchematicOpenFinished {
-                    path,
-                    title,
-                    result: result.map(Box::new),
-                })
-            },
-        ))
+        // Batched, not sequenced: the companion project's library mounts
+        // and this schematic's own read are independent, so neither waits
+        // on the other (#99 part 2c).
+        Ok(iced::Task::batch([
+            companion_mounts,
+            iced::Task::perform(
+                async move {
+                    tokio::task::spawn_blocking(move || read_and_parse_schematic(&read_path))
+                        .await
+                        .unwrap_or_else(|e| Err(format!("spawn_blocking: {e}")))
+                },
+                move |result| {
+                    Message::File(FileMsg::SchematicOpenFinished {
+                        path,
+                        title,
+                        result: result.map(Box::new),
+                    })
+                },
+            ),
+        ]))
     }
 
     fn open_pcb_file(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
@@ -312,16 +355,24 @@ impl Signex {
         // Same companion-project resolution as `open_schematic_file` so
         // the PCB tab can resolve `project_id` for project-scoped
         // handlers.
+        let mut companion_mounts = iced::Task::none();
         if let Some(dir) = path.parent() {
             let stem = path
                 .file_stem()
                 .and_then(|segment| segment.to_str())
                 .unwrap_or("");
             let companion = dir.join(format!("{stem}.snxprj"));
-            if companion.exists()
-                && let Err(error) = self.load_or_activate_project(&companion)
-            {
-                crate::diagnostics::log_error("Failed to parse companion project", &error);
+            if companion.exists() {
+                match self.load_or_activate_project(&companion) {
+                    // The companion project's cold `.snxlib` mounts
+                    // prepare off-thread (#99 part 2c); its task is
+                    // batched with this document's own read below so
+                    // neither waits on the other.
+                    Ok((_, mount_task)) => companion_mounts = mount_task,
+                    Err(error) => {
+                        crate::diagnostics::log_error("Failed to parse companion project", &error);
+                    }
+                }
             }
         }
         let title = path
@@ -334,20 +385,25 @@ impl Signex {
         // `FileMsg::PcbOpenFinished` (#478 review).
         self.document_state.pending_opens.insert(path.clone());
         let read_path = path.clone();
-        Ok(iced::Task::perform(
-            async move {
-                tokio::task::spawn_blocking(move || read_and_parse_pcb(&read_path))
-                    .await
-                    .unwrap_or_else(|e| Err(format!("spawn_blocking: {e}")))
-            },
-            move |result| {
-                Message::File(FileMsg::PcbOpenFinished {
-                    path,
-                    title,
-                    result: result.map(Box::new),
-                })
-            },
-        ))
+        // Batched, not sequenced — same reasoning as
+        // `open_schematic_file` above (#99 part 2c).
+        Ok(iced::Task::batch([
+            companion_mounts,
+            iced::Task::perform(
+                async move {
+                    tokio::task::spawn_blocking(move || read_and_parse_pcb(&read_path))
+                        .await
+                        .unwrap_or_else(|e| Err(format!("spawn_blocking: {e}")))
+                },
+                move |result| {
+                    Message::File(FileMsg::PcbOpenFinished {
+                        path,
+                        title,
+                        result: result.map(Box::new),
+                    })
+                },
+            ),
+        ]))
     }
 }
 

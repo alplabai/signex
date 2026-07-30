@@ -24,6 +24,7 @@ pub mod document_options;
 pub mod edit_row_modal;
 pub mod editor;
 pub mod messages;
+pub mod mount;
 pub mod new_component;
 pub mod panel;
 pub mod picker;

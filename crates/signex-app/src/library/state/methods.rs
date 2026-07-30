@@ -30,6 +30,7 @@ impl Default for LibraryState {
             installed_libraries: Vec::new(),
             global_libraries: Vec::new(),
             components_panel: ComponentsPanelState::default(),
+            pending_mounts: HashMap::new(),
         }
     }
 }
@@ -134,6 +135,15 @@ impl LibraryState {
     /// every editor pointing at it. (TODO(v0.9): unsaved-edits prompt
     /// is wired from the dispatcher via `dirty_editors_for_library`.)
     pub fn close_library(&mut self, root: &Path) {
+        // Cancel any mount still being prepared off-thread for this path
+        // (#99 part 2c). `pending_mounts` doubles as the cancellation
+        // tombstone: `take_mount_intent` returns `None` for a path that
+        // is gone, so an in-flight preparation that lands after this
+        // point drops its payload instead of re-mounting a library the
+        // user just closed. Unconditional — the entry only exists while
+        // a preparation is in flight, and closing a library that was
+        // mounted synchronously simply has nothing to remove.
+        self.pending_mounts.remove(root);
         if let Some(idx) = self.open_libraries.iter().position(|lib| lib.root == root) {
             let entry = self.open_libraries.remove(idx);
             self.set.unmount(entry.library_id);

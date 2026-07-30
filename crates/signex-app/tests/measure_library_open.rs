@@ -27,6 +27,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use signex_app::library::commands::auto_mount_project_libraries;
+use signex_app::library::mount::prepare_mount;
 use signex_app::library::state::{LibraryDisplaySettings, LibraryState, OpenLibrary};
 use signex_library::adapter::LibraryAdapter;
 use signex_library::adapters::local_git::LocalGitAdapter;
@@ -302,12 +303,53 @@ fn measure_library_open() {
 
     // ── auto_mount_project_libraries, 6 medium libraries ─────────────────
     let project_data = parse_project(&proj6).expect("parse_project");
-    measure("project", "auto_mount (6x medium)", &mut rows, || {
-        let mut state = LibraryState::default();
-        let (n, d) = timed(|| auto_mount_project_libraries(&mut state, &project_data));
-        assert_eq!(n, 6, "expected 6 libraries mounted, got {n}");
-        d
-    });
+    // Since #99 part 2c this is the UI-thread half only: it records six
+    // cold mounts and returns, and the parsing moved off-thread into
+    // `prepare_mount` (measured on the next line). A number here that is
+    // not ~0 means mount work crept back onto the UI thread.
+    measure(
+        "project",
+        "auto_mount record (6x medium, UI thread)",
+        &mut rows,
+        || {
+            let mut state = LibraryState::default();
+            let (outcome, d) = timed(|| auto_mount_project_libraries(&mut state, &project_data));
+            assert_eq!(
+                outcome.pending.len(),
+                6,
+                "expected 6 cold mounts recorded, got {}",
+                outcome.pending.len()
+            );
+            assert_eq!(
+                outcome.refreshed, 0,
+                "nothing was mounted beforehand, so nothing can take the warm path"
+            );
+            d
+        },
+    );
+
+    // The off-thread half. Run serially here so the total stays directly
+    // comparable with the pre-2c `auto_mount` line (826.229 ms after
+    // #528); in the app these six run concurrently, so the wall-clock the
+    // user waits is a fraction of this.
+    measure(
+        "project",
+        "prepare_mount x6 (off-thread work, serial)",
+        &mut rows,
+        || {
+            let paths: Vec<PathBuf> = project_data
+                .libraries
+                .iter()
+                .map(|e| project_data.resolve_library_path(e))
+                .collect();
+            timed(|| {
+                for path in &paths {
+                    prepare_mount(path).expect("prepare_mount");
+                }
+            })
+            .1
+        },
+    );
 
     // Control line: the same six libraries opened by hand, `open_library`
     // only. Before #99 part 2a, `auto_mount_project_libraries` chased every

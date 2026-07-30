@@ -263,6 +263,9 @@ impl Signex {
             }
             // ── Library Browser tab ──────────────────────────────────
             LibraryMessage::OpenLibraryBrowser(path) => self.handle_open_library_browser(path),
+            LibraryMessage::MountFinished { path, prepared } => {
+                self.handle_mount_finished(path, prepared)
+            }
             LibraryMessage::BrowserSelectTable {
                 library_path,
                 table,

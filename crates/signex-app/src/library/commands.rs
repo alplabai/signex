@@ -394,21 +394,52 @@ pub fn create_library(
     create_library_at(state, project, lib_path, false, false)
 }
 
+/// What one `auto_mount_project_libraries` pass decided — issue #99
+/// part 2c.
+///
+/// Two numbers instead of one count, because a cold mount is no longer
+/// finished when this function returns: it has only been *recorded*. A
+/// single `mounted: usize` would have claimed work that has not happened
+/// yet. Total libraries handled is `refreshed + pending.len()`.
+#[derive(Debug, Default, Clone)]
+pub struct AutoMountOutcome {
+    /// Already-mounted libraries refreshed synchronously (the warm path).
+    pub refreshed: usize,
+    /// `.snxlib` paths recorded as pending mounts. The caller must spawn
+    /// one `mount::prepare_mount_off_thread` per path; each lands as a
+    /// `LibraryMessage::MountFinished`.
+    pub pending: Vec<PathBuf>,
+}
+
 /// Auto-mount every library referenced by `project.libraries`. Called
 /// once when a project loads. Failures are logged and skipped — a
 /// missing or corrupt library shouldn't block the rest of the project
 /// from opening.
 ///
-/// The `refresh_components` chaser runs on the warm path **only** —
-/// see the comment on the `already_open` binding below. On the cold
-/// path [`LibraryState::open_library`] has already primed all five
-/// caches and re-running it was pure duplicate work: it roughly doubled
-/// every project open (#99), costing a six-medium-library project
-/// 795.7 ms of its 1 622.571 ms mount. `tests/library_open_cache.rs`
-/// pins both halves — that the cold path primes everything, and that
-/// the warm path still rescans the primitive directories.
-pub fn auto_mount_project_libraries(state: &mut LibraryState, project: &ProjectData) -> usize {
-    let mut mounted = 0usize;
+/// **Cold mounts are prepared off the UI thread** (#99 part 2c): this
+/// function records them and returns their paths, and the caller fans
+/// them out. Six libraries then parse in parallel instead of serially
+/// inside `update()` — the measured cost was 826.229 ms after #528, about
+/// 50 dropped frames, and a single mount already crosses one 60 Hz frame
+/// at ~58 symbols + 58 footprints.
+///
+/// The `refresh_components` chaser still runs on the warm path **only**.
+/// On the cold path the caches are primed by `mount::prepare_mount`
+/// (off-thread) exactly as [`LibraryState::open_library`] primed them
+/// inline before, so re-running it would be the same pure duplicate work
+/// #528 removed: it roughly doubled every project open, costing a
+/// six-medium-library project 795.7 ms of its 1 622.571 ms mount.
+/// `tests/library_open_cache.rs` pins both halves — that the cold path
+/// primes everything, and that the warm path still rescans the primitive
+/// directories.
+pub fn auto_mount_project_libraries(
+    state: &mut LibraryState,
+    project: &ProjectData,
+) -> AutoMountOutcome {
+    use super::mount::{MountIntent, MountRequest};
+
+    let mut refreshed = 0usize;
+    let mut pending: Vec<PathBuf> = Vec::new();
     for entry in &project.libraries {
         let resolved = project.resolve_library_path(entry);
         // Standalone `.snxsym` / `.snxfpt` files are tracked on
@@ -452,12 +483,21 @@ pub fn auto_mount_project_libraries(state: &mut LibraryState, project: &ProjectD
         // `read_table` serve from that in-memory copy. Seeing external
         // row edits needs a re-opened adapter, which only
         // `app/handlers/document_files/history.rs:259` does today.
-        let already_open = state.library_at(&resolved).is_some();
-        // One bad library must not sink the rest of the project: warn,
-        // skip, and keep `mounted` counting successes only.
-        match state.open_library(resolved.clone()) {
-            Ok(()) => {
-                if already_open && let Err(e) = state.refresh_components(&resolved) {
+        // COLD vs WARM, decided by `request_mount` rather than by a
+        // `library_at` probe here (#99 part 2c). `AlreadyMounted` is the
+        // warm path and keeps its synchronous refresh — that refresh is
+        // the only thing that rescans `symbols/` / `footprints/` /
+        // `sims/`, so dropping it would lose primitive files another
+        // process wrote (#528's `library_open_cache.rs` pins this).
+        //
+        // `Spawn` is the cold path and no longer mounts here: the caller
+        // fans the returned paths out through
+        // `mount::prepare_mount_off_thread`, so six libraries prepare in
+        // parallel off the UI thread instead of serially inside
+        // `update()`.
+        match state.request_mount(&resolved, MountIntent::Silent) {
+            MountRequest::AlreadyMounted => {
+                if let Err(e) = state.refresh_components(&resolved) {
                     tracing::warn!(
                         target: "signex::library",
                         path = %resolved.display(),
@@ -465,19 +505,18 @@ pub fn auto_mount_project_libraries(state: &mut LibraryState, project: &ProjectD
                         "auto-mount: refresh of already-mounted library failed; cache may be stale"
                     );
                 }
-                mounted += 1;
+                refreshed += 1;
             }
-            Err(e) => {
-                tracing::warn!(
-                    target: "signex::library",
-                    path = %resolved.display(),
-                    error = %e,
-                    "auto-mount: open_library failed; skipping"
-                );
-            }
+            // Another request for this path is already in flight — a
+            // second project referencing the same `.snxlib`, or a user
+            // double-click that beat the project open. Its completion
+            // mounts the library once; recording it twice would spawn a
+            // duplicate preparation.
+            MountRequest::InFlight => {}
+            MountRequest::Spawn => pending.push(resolved),
         }
     }
-    mounted
+    AutoMountOutcome { refreshed, pending }
 }
 
 // ─────────────────────────────────────────────────────────────────────

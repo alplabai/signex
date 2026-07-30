@@ -16,13 +16,25 @@ mod tables;
 use super::*;
 
 impl Signex {
-    /// Open `.snxlib` at `path` as a Library Browser tab. Mounts the
-    /// library if not already mounted, seeds the browser state, and
-    /// pushes (or activates) a `TabKind::LibraryBrowser` tab. Phase 1.
+    /// Open `.snxlib` at `path` as a Library Browser tab.
+    ///
+    /// Step 1 — the mount — now happens **off the UI thread** (#99 part
+    /// 2c). `LocalGitAdapter::open` plus the table/primitive scans are
+    /// the expensive half of this gesture and blocking `update()` on them
+    /// dropped frames; the tab opens one update tick later instead, when
+    /// `LibraryMessage::MountFinished` lands and
+    /// [`Self::finish_open_library_browser`] runs steps 2 and 3.
+    ///
+    /// Three outcomes, and conflating any two of them is a bug:
+    /// already-mounted finishes immediately, an in-flight preparation
+    /// does nothing (its completion will finish, on the upgraded intent),
+    /// and only a fresh request spawns.
     pub(crate) fn handle_open_library_browser(
         &mut self,
         path: std::path::PathBuf,
     ) -> Task<Message> {
+        use crate::library::mount::{MountIntent, MountRequest};
+
         tracing::info!(
             target: "signex::library",
             path = %path.display(),
@@ -30,18 +42,49 @@ impl Signex {
             already_mounted = self.library.library_at(&path).is_some(),
             "open_library_browser: enter"
         );
-        // 1. Mount the library if it isn't already. `open_library` is
-        //    idempotent — re-mounting an already-open library is a
-        //    no-op.
-        if let Err(e) = commands::open_library(&mut self.library, path.clone()) {
-            tracing::warn!(
-                target: "signex::library",
-                path = %path.display(),
-                error = %e,
-                "open_library_browser: open_library failed"
-            );
+        match self
+            .library
+            .request_mount(&path, MountIntent::OpenBrowserTab)
+        {
+            MountRequest::AlreadyMounted => self.finish_open_library_browser(path),
+            MountRequest::InFlight => {
+                // A preparation for this path is already running and the
+                // call above upgraded its intent to `OpenBrowserTab`, so
+                // its completion opens the tab. Spawning a second
+                // preparation here would race two adapters onto one path.
+                tracing::debug!(
+                    target: "signex::library",
+                    path = %path.display(),
+                    "open_library_browser: mount already in flight; intent upgraded"
+                );
+                Task::none()
+            }
+            MountRequest::Spawn => {
+                let spawn_path = path.clone();
+                Task::perform(
+                    crate::library::mount::prepare_mount_off_thread(spawn_path),
+                    move |prepared| {
+                        Message::Library(LibraryMessage::MountFinished {
+                            path: path.clone(),
+                            prepared,
+                        })
+                    },
+                )
+            }
         }
+    }
 
+    /// Steps 2 and 3 of opening a Library Browser tab — seed the
+    /// per-browser state, then activate or push the tab.
+    ///
+    /// Split out of [`Self::handle_open_library_browser`] so the mount
+    /// completion handler (`handle_mount_finished`) can finish the
+    /// gesture without re-running the mount. Pure code motion: the body
+    /// below is what ran inline before #99 part 2c, in the same order.
+    pub(super) fn finish_open_library_browser(
+        &mut self,
+        path: std::path::PathBuf,
+    ) -> Task<Message> {
         // 2. Seed per-browser state if the path isn't already there.
         // 2b. Default `active_table` to the first table the library
         //     exposes, if any. Compute it through an immutable borrow

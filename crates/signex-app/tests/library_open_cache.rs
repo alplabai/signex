@@ -166,13 +166,22 @@ fn auto_mount_refreshes_an_already_mounted_library() {
     // Act 2 — project B references the same `.snxlib`. `self.library` is
     // app-global, so this hits the already-mounted branch.
     let project = project_referencing(tmp.path(), std::slice::from_ref(&snxlib));
-    let mounted = auto_mount_project_libraries(&mut state, &project);
+    let outcome = auto_mount_project_libraries(&mut state, &project);
 
     // Assert — the library is still mounted exactly once, and the caches
     // that *can* see the edit have seen it.
     assert_eq!(
-        mounted, 1,
-        "the already-mounted library still counts as one"
+        outcome.refreshed, 1,
+        "the already-mounted library takes the warm path and is refreshed in place"
+    );
+    // Since #99 part 2c a cold mount is only *recorded* here and prepared
+    // off-thread. An already-mounted library must never land in that
+    // queue: doing so would re-open an adapter for a library that is
+    // already resolvable, and the refresh above would be dead work.
+    assert!(
+        outcome.pending.is_empty(),
+        "an already-mounted library must not be recorded as a pending cold mount, got {:?}",
+        outcome.pending
     );
     assert_eq!(
         state.open_libraries.len(),

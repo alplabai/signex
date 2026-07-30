@@ -33,6 +33,79 @@ impl Signex {
         Task::none()
     }
 
+    /// A `.snxlib` mount prepared off the UI thread has landed — issue
+    /// #99 part 2c.
+    ///
+    /// Order matters and both early returns are load-bearing:
+    ///
+    /// 1. **Intent first, from the map.** `take_mount_intent` returning
+    ///    `None` means `close_library` cancelled this request while the
+    ///    preparation was in flight, so the payload is dropped rather
+    ///    than re-mounting a library the user just closed. Reading the
+    ///    intent from the map — not from a value captured at spawn time —
+    ///    is what preserves a `Silent` → `OpenBrowserTab` upgrade made by
+    ///    a second request.
+    /// 2. **Then the payload.** The cell is one-shot; a second read
+    ///    yields `None`. iced does not clone a `Task::perform` result
+    ///    today, so that should be unreachable — it warns instead of
+    ///    panicking because a dropped mount is a stale cache, not a
+    ///    corrupt one.
+    ///
+    /// A prepare error only warns, which is exactly what both converted
+    /// call sites did synchronously. The `rfd` directory-pick path
+    /// (`handle_open_library_at`) is deliberately still synchronous and
+    /// keeps routing its errors into the recovery flow.
+    pub(super) fn handle_mount_finished(
+        &mut self,
+        path: std::path::PathBuf,
+        prepared: crate::library::mount::PreparedMountCell,
+    ) -> Task<Message> {
+        let Some(intent) = self.library.take_mount_intent(&path) else {
+            tracing::debug!(
+                target: "signex::library",
+                path = %path.display(),
+                "mount_finished: no longer pending (closed while preparing); discarding"
+            );
+            return Task::none();
+        };
+        let Some(result) = prepared.take() else {
+            tracing::warn!(
+                target: "signex::library",
+                path = %path.display(),
+                "mount_finished: payload already taken; library not mounted"
+            );
+            return Task::none();
+        };
+        match result {
+            Ok(prepared) => {
+                if let Err(e) = self.library.mount_prepared(prepared) {
+                    tracing::warn!(
+                        target: "signex::library",
+                        path = %path.display(),
+                        error = %e,
+                        "mount_finished: mount_prepared failed"
+                    );
+                    return Task::none();
+                }
+            }
+            Err(e) => {
+                tracing::warn!(
+                    target: "signex::library",
+                    path = %path.display(),
+                    error = %e,
+                    "mount_finished: prepare failed; library not mounted"
+                );
+                return Task::none();
+            }
+        }
+        match intent {
+            crate::library::mount::MountIntent::Silent => Task::none(),
+            crate::library::mount::MountIntent::OpenBrowserTab => {
+                self.finish_open_library_browser(path)
+            }
+        }
+    }
+
     /// Close an open library — diverts to the confirm modal when any
     /// Component Preview editor against it is dirty.
     pub(super) fn handle_close_library(&mut self, path: std::path::PathBuf) -> Task<Message> {
