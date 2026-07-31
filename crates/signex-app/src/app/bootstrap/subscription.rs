@@ -59,7 +59,7 @@ struct OpenOverlays {
     /// is the cheap stand-in that lets Esc still pick the right one of
     /// the three dialogs' own Cancel-choice messages.
     recovery_kind: Option<RecoveryKind>,
-    export_error_open: bool,
+    error_notice_open: bool,
     netlist_incomplete_prompt_open: bool,
     print_preview_open: bool,
     bom_preview_open: bool,
@@ -152,7 +152,7 @@ impl OpenOverlays {
     /// and it is left alone here on purpose — see
     /// `overlay_id::visible`'s docs.
     fn has_blocking_modal(&self) -> bool {
-        self.export_error_open
+        self.error_notice_open
             || self.netlist_incomplete_prompt_open
             || self.print_preview_open
             || self.net_color_custom_open
@@ -178,9 +178,9 @@ impl OpenOverlays {
             // `BomPreview` sits in this prefix without being one of the
             // four blocking members — the "five, not four" oddity the old
             // guard spelled out in prose.
-            OverlayId::ExportError => self
-                .export_error_open
-                .then(|| Message::Export(ExportMsg::DismissError)),
+            OverlayId::ErrorNotice => self
+                .error_notice_open
+                .then(|| Message::Overlay(OverlayMsg::DismissErrorNotice)),
             // Cancel path only — the prompt's other action is "Export
             // anyway (incomplete)", which Esc must never trigger.
             OverlayId::NetlistIncompletePrompt => self
@@ -424,7 +424,7 @@ impl Signex {
                         RecoveryKind::BrokenBinding
                     }
                 }),
-            export_error_open: self.document_state.export_error.is_some(),
+            error_notice_open: self.document_state.error_notice.is_some(),
             netlist_incomplete_prompt_open: self.document_state.netlist_incomplete_prompt.is_some(),
             print_preview_open: self.document_state.preview.is_some()
                 && !modal_detached(crate::app::state::ModalId::PrintPreview),
@@ -790,9 +790,9 @@ mod tests {
             }
         };
         claims_escape(
-            "export_error",
+            "error_notice",
             OpenOverlays {
-                export_error_open: true,
+                error_notice_open: true,
                 ..OpenOverlays::default()
             },
         );
@@ -978,8 +978,8 @@ mod tests {
             ))
         ));
         assert!(matches!(
-            only(|o| o.export_error_open = true),
-            Some(Message::Export(ExportMsg::DismissError))
+            only(|o| o.error_notice_open = true),
+            Some(Message::Overlay(OverlayMsg::DismissErrorNotice))
         ));
         assert!(matches!(
             only(|o| o.netlist_incomplete_prompt_open = true),
@@ -1127,12 +1127,12 @@ mod tests {
     fn blocking_modal_outranks_a_quit_gate_set_behind_it() {
         assert!(matches!(
             OpenOverlays {
-                export_error_open: true,
+                error_notice_open: true,
                 app_quit_confirm_open: true,
                 ..OpenOverlays::default()
             }
             .escape_message(),
-            Some(Message::Export(ExportMsg::DismissError))
+            Some(Message::Overlay(OverlayMsg::DismissErrorNotice))
         ));
         assert!(matches!(
             OpenOverlays {
@@ -1164,7 +1164,7 @@ mod tests {
     }
 
     /// The concrete reachable repro from round 4's review: export fails
-    /// (`export_error_open` set, only the error card paints, per
+    /// (`error_notice_open` set, only the error card paints, per
     /// `has_blocking_modal`'s early return), then the user hits Alt+F4 /
     /// the OS close button with dirty documents, which sets
     /// `app_quit_confirm_open` with no regard for what's currently
@@ -1172,15 +1172,15 @@ mod tests {
     /// silently cancel a quit gate they never saw — leaving them stuck
     /// staring at an export-error card that Esc appears to do nothing to.
     #[test]
-    fn alt_f4_behind_an_export_error_card_does_not_steal_escape() {
+    fn alt_f4_behind_an_error_notice_card_does_not_steal_escape() {
         let overlays = OpenOverlays {
-            export_error_open: true,
+            error_notice_open: true,
             app_quit_confirm_open: true,
             ..OpenOverlays::default()
         };
         assert!(matches!(
             overlays.escape_message(),
-            Some(Message::Export(ExportMsg::DismissError))
+            Some(Message::Overlay(OverlayMsg::DismissErrorNotice))
         ));
     }
 
@@ -1222,7 +1222,7 @@ mod tests {
         assert!(matches!(
             OpenOverlays {
                 netlist_incomplete_prompt_open: true,
-                export_error_open: true,
+                error_notice_open: true,
                 ..OpenOverlays::default()
             }
             .escape_message(),
@@ -1323,7 +1323,7 @@ mod tests {
     }
 
     /// #514-followup — `bom_preview_open` is NOT a `has_blocking_modal`
-    /// member (only `export_error` / `netlist_incomplete_prompt` /
+    /// member (only `error_notice` / `netlist_incomplete_prompt` /
     /// `preview` / `net_color_custom.show` are), so it must not steal Esc
     /// from a quit/close gate the way the four true blocking modals do.
     #[test]
@@ -1421,7 +1421,7 @@ mod tests {
             library_primitive_picker_open,
             close_library_confirm_open,
             recovery_kind,
-            export_error_open,
+            error_notice_open,
             netlist_incomplete_prompt_open,
             print_preview_open,
             bom_preview_open,
@@ -1486,7 +1486,7 @@ mod tests {
             ("recovery_kind", |o| {
                 o.recovery_kind = Some(RecoveryKind::BrokenBinding)
             }),
-            ("export_error_open", |o| o.export_error_open = true),
+            ("error_notice_open", |o| o.error_notice_open = true),
             ("netlist_incomplete_prompt_open", |o| {
                 o.netlist_incomplete_prompt_open = true
             }),

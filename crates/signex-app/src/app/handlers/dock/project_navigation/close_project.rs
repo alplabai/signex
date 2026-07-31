@@ -244,11 +244,12 @@ impl Signex {
                 // stale red dots on already-saved sheets).
                 self.refresh_panel_ctx();
                 if !failed.is_empty() {
-                    self.document_state.export_error = Some(format!(
-                        "Could not save {} file(s) — project not closed:\n  {}",
-                        failed.len(),
-                        Self::save_all_failure_listing(&failed)
-                    ));
+                    self.document_state.error_notice =
+                        Some(crate::app::state::ErrorNotice::save(format!(
+                            "Could not save {} file(s) — project not closed:\n  {}",
+                            failed.len(),
+                            Self::save_all_failure_listing(&failed)
+                        )));
                     return Task::none();
                 }
                 self.execute_close_project_at_tree_path(&state.tree_path)
@@ -350,12 +351,13 @@ impl Signex {
                 if failed.is_empty() {
                     self.close_main_window_now()
                 } else {
-                    self.document_state.export_error = Some(format!(
-                        "Could not save {} file(s) — Signex stayed open so nothing is lost. \
+                    self.document_state.error_notice =
+                        Some(crate::app::state::ErrorNotice::save(format!(
+                            "Could not save {} file(s) — Signex stayed open so nothing is lost. \
                          Save them manually, or choose Discard All to exit anyway:\n  {}",
-                        failed.len(),
-                        Self::save_all_failure_listing(&failed)
-                    ));
+                            failed.len(),
+                            Self::save_all_failure_listing(&failed)
+                        )));
                     Task::none()
                 }
             }

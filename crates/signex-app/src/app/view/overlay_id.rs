@@ -34,7 +34,13 @@ use super::*;
 pub(crate) enum OverlayId {
     // Pre-blocking block — painted before the blocking-modal cutoff, so
     // these are the only overlays that survive it. See `visible`.
-    ExportError,
+    //
+    // `ErrorNotice` is the app's one generic error card: an export
+    // failure, a save that blocked a project close, a primitive that
+    // would not open. It carried the hardcoded heading "Export Failed"
+    // until #532, which is why a failed project close used to announce
+    // itself as an export problem.
+    ErrorNotice,
     NetlistIncompletePrompt,
     PrintPreview,
     BomPreview,
@@ -112,7 +118,7 @@ const PRE_BLOCKING: usize = 5;
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
 pub(crate) const PAINT_ORDER: [OverlayId; 50] = [
-    OverlayId::ExportError,
+    OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
     OverlayId::BomPreview,
@@ -202,7 +208,7 @@ impl Signex {
         id: OverlayId,
     ) {
         match id {
-            OverlayId::ExportError => layers.extend(self.export_error_overlay()),
+            OverlayId::ErrorNotice => layers.extend(self.error_notice_overlay()),
             OverlayId::NetlistIncompletePrompt => {
                 layers.extend(self.netlist_incomplete_prompt_overlay())
             }
@@ -298,7 +304,7 @@ mod tests {
         assert_eq!(
             visible(true),
             [
-                OverlayId::ExportError,
+                OverlayId::ErrorNotice,
                 OverlayId::NetlistIncompletePrompt,
                 OverlayId::PrintPreview,
                 OverlayId::BomPreview,

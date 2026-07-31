@@ -598,9 +598,9 @@ fn netlist_export_refuses_to_write_an_incomplete_netlist() {
         prompt.messages
     );
     assert!(
-        app.document_state.export_error.is_none(),
+        app.document_state.error_notice.is_none(),
         "the default path raises the prompt, not a dead-end error: {:?}",
-        app.document_state.export_error
+        app.document_state.error_notice
     );
     std::fs::remove_file(&out).ok();
 }
@@ -690,9 +690,9 @@ fn export_anyway_writes_from_the_prompt_snapshot_not_a_fresh_re_derivation() {
         "the header names the page omitted at prompt time: {bytes}"
     );
     assert!(
-        app.document_state.export_error.is_none(),
+        app.document_state.error_notice.is_none(),
         "the snapshot made the write succeed — no re-derivation error: {:?}",
-        app.document_state.export_error
+        app.document_state.error_notice
     );
     std::fs::remove_file(&out).ok();
 }
@@ -735,9 +735,9 @@ fn pdf_export_proceeds_and_warns_once_per_user_action() {
     let _ = app.handle_export_pdf_finished(Ok(out.clone()));
 
     assert!(
-        app.document_state.export_error.is_none(),
+        app.document_state.error_notice.is_none(),
         "a partial PDF proceeds: {:?}",
-        app.document_state.export_error
+        app.document_state.error_notice
     );
     assert!(out.exists(), "the PDF must still be written");
     assert_eq!(

@@ -141,6 +141,47 @@ pub struct MoveSelectionState {
     pub dy: String,
 }
 
+/// A user-visible error card: a short heading plus the detail line.
+///
+/// One card serves every operation that has to stop and tell the user
+/// something failed. The heading is data rather than a literal in the
+/// view because the card was already shared by operations that are not
+/// exports — see [`DocumentState::error_notice`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ErrorNotice {
+    /// Heading, e.g. "Export Failed". Names the operation, not the cause.
+    pub title: String,
+    /// What went wrong, in the user's terms. May span several lines.
+    pub detail: String,
+}
+
+impl ErrorNotice {
+    /// An export deliverable (PDF, netlist, BOM) could not be produced.
+    pub fn export(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Export Failed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
+    /// A write failed, and the operation that needed it did not proceed.
+    pub fn save(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Save Failed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
+    /// A file could not be opened — unreadable, unparseable, or empty
+    /// where it must not be (#532).
+    pub fn open(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Open Failed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[allow(dead_code)]
 pub enum ModalId {
@@ -360,10 +401,14 @@ pub struct DocumentState {
     /// be dropped on export and the actual file would be a default
     /// 6-column Grouped Base BOM. Cleared after export.
     pub pending_bom_options: Option<signex_output::BomOptions>,
-    /// User-visible export error. `Some(msg)` while the error modal is shown.
-    /// Populated by ExportPdfFinished/ExportNetlistFinished when the export
-    /// itself (not the file dialog) fails. Cleared by DismissExportError.
-    pub export_error: Option<String>,
+    /// The app's one user-visible error card. `Some` while it is shown;
+    /// cleared by `OverlayMsg::DismissErrorNotice`.
+    ///
+    /// Not export-only, despite the heading it used to hardcode: the
+    /// project-close path already raised it for "could not save N
+    /// file(s)", so a failed close announced itself to the user as
+    /// "Export Failed" (#532). The title now travels with the message.
+    pub error_notice: Option<ErrorNotice>,
     /// #431 — pending "Export anyway (incomplete)?" prompt. `Some` while the
     /// netlist-incomplete modal is up, waiting on the user's choice. Set by
     /// `handle_export_netlist_finished` when the derived netlist has a hole;

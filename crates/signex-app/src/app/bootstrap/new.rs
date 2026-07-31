@@ -267,7 +267,7 @@ impl Signex {
                 pending_pdf_options: None,
                 pending_pdf_files: None,
                 pending_bom_options: None,
-                export_error: None,
+                error_notice: None,
                 netlist_incomplete_prompt: None,
                 bom_preview: None,
                 pending_git_commits: Vec::new(),

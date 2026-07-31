@@ -38,6 +38,13 @@ impl Signex {
                 self.ui_state.passive_calculator_open = false;
                 Task::none()
             }
+            OverlayMsg::DismissErrorNotice => {
+                // Inlined rather than a handler in `menu/export`, which
+                // is where it used to live: the card is not export-only
+                // (#532), so neither is clearing it.
+                self.document_state.error_notice = None;
+                Task::none()
+            }
             OverlayMsg::DismissFirstRunTour => {
                 self.ui_state.first_run_tour_open = false;
                 crate::fonts::write_first_run_tour_dismissed(true);

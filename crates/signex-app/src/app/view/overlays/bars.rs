@@ -18,7 +18,7 @@ impl Signex {
     /// Mirrors the inline guard that early-returns from
     /// `collect_overlays` before any tool/menu overlay is pushed.
     pub(in crate::app::view) fn has_blocking_modal(&self) -> bool {
-        self.document_state.export_error.is_some()
+        self.document_state.error_notice.is_some()
             || self.document_state.netlist_incomplete_prompt.is_some()
             || self.document_state.preview.is_some()
             || self.ui_state.net_color_custom.show
@@ -28,18 +28,18 @@ impl Signex {
     /// hits a user-actionable failure (write permission, invalid path,
     /// empty schematic). Dismiss via OK button or clicking outside.
     /// Pushes the dismiss backdrop then the error card.
-    pub(in crate::app::view) fn export_error_overlay(&self) -> Vec<Element<'_, Message>> {
-        if self.document_state.export_error.is_none() {
+    pub(in crate::app::view) fn error_notice_overlay(&self) -> Vec<Element<'_, Message>> {
+        if self.document_state.error_notice.is_none() {
             return Vec::new();
         }
         vec![
-            Self::dismiss_layer(Message::Export(ExportMsg::DismissError)),
-            self.view_export_error(),
+            Self::dismiss_layer(Message::Overlay(OverlayMsg::DismissErrorNotice)),
+            self.view_error_notice(),
         ]
     }
 
     /// #431 — netlist-incomplete "Export anyway?" prompt. Same modal idiom as
-    /// [`Self::export_error_overlay`], but the card offers TWO actions —
+    /// [`Self::error_notice_overlay`], but the card offers TWO actions —
     /// "Export anyway (incomplete)" and "Cancel". Clicking outside cancels
     /// (writes nothing). Pushes the dismiss backdrop then the prompt card.
     pub(in crate::app::view) fn netlist_incomplete_prompt_overlay(

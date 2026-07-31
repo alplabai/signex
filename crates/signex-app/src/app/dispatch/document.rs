@@ -158,10 +158,6 @@ impl Signex {
                 let task = self.handle_export_pdf_open_dialog();
                 iced::Task::batch([task, self.finish_update()])
             }
-            ExportMsg::DismissError => {
-                self.handle_dismiss_export_error();
-                self.finish_update()
-            }
             ExportMsg::NetlistExportAnyway => {
                 let task = self.handle_netlist_export_anyway();
                 iced::Task::batch([task, self.finish_update()])

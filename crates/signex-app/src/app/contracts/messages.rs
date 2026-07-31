@@ -161,6 +161,14 @@ pub enum OverlayMsg {
     /// never reappears. Fired by the card's ✕ button, by Esc, and by
     /// the first canvas interaction after launch.
     DismissFirstRunTour,
+    /// Dismiss the shared error card (`DocumentState::error_notice`).
+    /// Fired by its OK button, its click-outside backdrop, and Esc.
+    ///
+    /// Lived on `ExportMsg` as `DismissError` until #532. The card was
+    /// never export-only — the project-close path raised it too — and a
+    /// message named for one caller is how it ended up showing "Export
+    /// Failed" over a failed save.
+    DismissErrorNotice,
     /// User pressed the title bar of a modal at window-space (x, y) —
     /// begin dragging it. The next DragMove events update its offset.
     ModalDragStart {

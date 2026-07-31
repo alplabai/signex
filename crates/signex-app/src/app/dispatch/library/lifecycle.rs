@@ -76,25 +76,28 @@ impl Signex {
             );
             return Task::none();
         };
+        // Raised only for a mount the user asked for by name (#532).
+        // `MountIntent::Silent` is the background auto-mount of a
+        // project's libraries — popping a blocking card there would
+        // greet the user with one modal per stale path at startup, for
+        // an operation they never invoked.
+        let mut report = |path: &std::path::Path, reason: &str| {
+            let error = anyhow::anyhow!("could not open library {}: {reason}", path.display());
+            crate::diagnostics::log_error("Failed to mount library", &error);
+            if matches!(intent, crate::library::mount::MountIntent::OpenBrowserTab) {
+                self.document_state.error_notice =
+                    Some(crate::app::state::ErrorNotice::open(format!("{error:#}")));
+            }
+        };
         match result {
             Ok(prepared) => {
                 if let Err(e) = self.library.mount_prepared(prepared) {
-                    tracing::warn!(
-                        target: "signex::library",
-                        path = %path.display(),
-                        error = %e,
-                        "mount_finished: mount_prepared failed"
-                    );
+                    report(&path, &e.to_string());
                     return Task::none();
                 }
             }
             Err(e) => {
-                tracing::warn!(
-                    target: "signex::library",
-                    path = %path.display(),
-                    error = %e,
-                    "mount_finished: prepare failed; library not mounted"
-                );
+                report(&path, &e);
                 return Task::none();
             }
         }

@@ -37,8 +37,9 @@ impl Signex {
             ..BomOptions::default()
         };
         let Some(table) = self.rebuild_bom_table(&opts) else {
-            self.document_state.export_error =
-                Some("Cannot build BOM: no active schematic.".to_string());
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
+                "Cannot build BOM: no active schematic.".to_string(),
+            ));
             return Task::none();
         };
         // Default sort: ascending by the Designator column when it
@@ -284,8 +285,9 @@ impl Signex {
             Some(c) => c,
             None => {
                 self.document_state.pending_bom_options = None;
-                self.document_state.export_error =
-                    Some("Cannot export BOM: no active schematic.".to_string());
+                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
+                    "Cannot export BOM: no active schematic.".to_string(),
+                ));
                 return Task::none();
             }
         };
@@ -349,14 +351,17 @@ impl Signex {
                     output.bytes.len(),
                 ),
                 Err(e) => {
-                    self.document_state.export_error = Some(format!(
-                        "Could not write BOM to {}:\n{e}",
-                        save_path.display(),
-                    ));
+                    self.document_state.error_notice =
+                        Some(crate::app::state::ErrorNotice::export(format!(
+                            "Could not write BOM to {}:\n{e}",
+                            save_path.display(),
+                        )));
                 }
             },
             Err(e) => {
-                self.document_state.export_error = Some(format!("BOM export failed: {e}"));
+                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
+                    format!("BOM export failed: {e}"),
+                ));
             }
         }
 
