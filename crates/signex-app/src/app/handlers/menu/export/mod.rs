@@ -297,9 +297,26 @@ fn build_export_scope(
         let base_dir = project_dir
             .clone()
             .or_else(|| root_path.parent().map(PathBuf::from));
-        let graph = crate::app::project_sheets::project_graph(&set.sheets, base_dir.as_deref());
+        let graph = crate::app::project_sheets::project_graph(
+            &set.sheets,
+            base_dir.as_deref(),
+            Some(&root_path),
+        );
         let root_key = crate::app::project_sheets::sheet_key(&root_path, base_dir.as_deref());
         if !graph.sheets.contains_key(&root_key) {
+            // The root is exempt from losing a SheetKey collision (#536),
+            // so reaching here means it was never loaded at all — absent,
+            // or present and unparseable. Either way there is no netlist
+            // to derive, but the user still has to be told: bailing with
+            // `issues` left empty is what produced no `.net`, a PDF whose
+            // `NET_NAME()` resolved against nothing, and not one line in
+            // the Messages panel.
+            issues.stitch.extend(graph.issues);
+            crate::diagnostics::log_warning(format!(
+                "Netlist: root sheet '{}' is not part of the assembled project, so no netlist \
+                 was derived",
+                root_path.display()
+            ));
             return None;
         }
         // Root + every declared page its hierarchy never reaches (#430) —
