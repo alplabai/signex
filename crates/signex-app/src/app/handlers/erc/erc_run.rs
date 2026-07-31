@@ -83,8 +83,14 @@ impl Signex {
                 .as_ref()
                 .and_then(|r| r.parent().map(std::path::PathBuf::from))
         });
-        let graph =
-            crate::app::project_sheets::project_graph(&project_set.sheets, base_dir.as_deref());
+        // `None`: ERC has no single entry point — it reports on every
+        // sheet regardless of reachability (see the loop below), so the
+        // root-exemption #536 added has nothing to exempt here.
+        let graph = crate::app::project_sheets::project_graph(
+            &project_set.sheets,
+            base_dir.as_deref(),
+            None,
+        );
         for issue in &graph.issues {
             crate::diagnostics::log_warning(crate::app::project_sheets::stitch_issue_message(
                 issue,

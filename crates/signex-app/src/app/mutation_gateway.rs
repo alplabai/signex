@@ -297,9 +297,30 @@ impl Signex {
         let base_dir = project_dir
             .clone()
             .or_else(|| active_path.parent().map(std::path::PathBuf::from));
-        let graph = crate::app::project_sheets::project_graph(&set.sheets, base_dir.as_deref());
+        let graph = crate::app::project_sheets::project_graph(
+            &set.sheets,
+            base_dir.as_deref(),
+            Some(&active_path),
+        );
         let root_key = crate::app::project_sheets::sheet_key(&active_path, base_dir.as_deref());
         if !graph.sheets.contains_key(&root_key) {
+            // The active sheet is exempt from losing a SheetKey collision
+            // (#536), so reaching here means it was never assembled at
+            // all. Report what the assembler did find, and say why the
+            // netlist is not being refreshed: the success path below logs
+            // every issue, and returning here skipped all of it — leaving
+            // `NET_NAME()` resolving against a stale cache with nothing
+            // in the Messages panel to explain it.
+            for issue in &graph.issues {
+                crate::diagnostics::log_warning(crate::app::project_sheets::stitch_issue_message(
+                    issue,
+                ));
+            }
+            crate::diagnostics::log_warning(format!(
+                "Netlist: active sheet '{}' is not part of the assembled project, so the \
+                 project netlist was not refreshed",
+                active_path.display()
+            ));
             return;
         }
         let roots = [signex_net::ProjectRoot { key: root_key }];

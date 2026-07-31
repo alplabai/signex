@@ -366,16 +366,36 @@ pub(crate) fn sheet_key(path: &Path, base: Option<&Path>) -> signex_net::SheetKe
 /// first-wins keeps which one survives deterministic; the loser is reported as
 /// [`signex_net::StitchIssue::SheetKeyCollision`] and contributes nothing to
 /// the netlist, which is silent without that issue.
+///
+/// `root` is the path the caller is about to stitch from, and it is exempt
+/// from losing such a collision (#536). Sorted-path first-wins had no notion
+/// of a root, so `/proj/Top.snxsch` beat `/proj/top.snxsch` on a plain byte
+/// compare (`T` = `0x54` sorts before `t` = `0x74`) and evicted the root — at
+/// which point both netlist callers found no root key and bailed, producing
+/// no `.net`, no connectivity for `NET_NAME()`, and no explanation. A root
+/// that loses to a stray case-variant copy is never what the user meant, so
+/// the copy is dropped instead; it is still reported as a collision, and the
+/// project still exports. Pass `None` when the assembly has no single entry
+/// point (ERC reports on every sheet regardless of reachability).
 pub(crate) fn project_graph(
     sheets: &HashMap<PathBuf, SchematicSheet>,
     base_dir: Option<&Path>,
+    root: Option<&Path>,
 ) -> AssembledGraph {
     let mut keyed_sheets: HashMap<signex_net::SheetKey, SchematicSheet> = HashMap::new();
     let mut key_to_path: HashMap<signex_net::SheetKey, PathBuf> = HashMap::new();
     let mut issues: Vec<signex_net::StitchIssue> = Vec::new();
 
+    // Root first, then sorted-path order for everything else. First-wins
+    // below then cannot evict the root, and the tie-break is still a total
+    // order, so which non-root path survives a collision stays as
+    // deterministic as it was before.
     let mut paths: Vec<&PathBuf> = sheets.keys().collect();
-    paths.sort();
+    paths.sort_by(|a, b| {
+        let a_is_root = root == Some(a.as_path());
+        let b_is_root = root == Some(b.as_path());
+        b_is_root.cmp(&a_is_root).then_with(|| a.cmp(b))
+    });
     for path in paths {
         let key = sheet_key(path, base_dir);
         if let Some(existing) = key_to_path.get(&key) {
@@ -631,7 +651,7 @@ mod tests {
         sheets.insert(PathBuf::from("/proj/a/power.snxsch"), sheet(0xA, &[]));
         sheets.insert(PathBuf::from("/proj/b/power.snxsch"), sheet(0xB, &[]));
 
-        let graph = project_graph(&sheets, Some(Path::new("/proj")));
+        let graph = project_graph(&sheets, Some(Path::new("/proj")), None);
 
         assert_eq!(graph.sheets.len(), 3, "root + both same-basename children");
         assert_eq!(
@@ -678,7 +698,7 @@ mod tests {
         sheets.insert(PathBuf::from("/proj/a/power.snxsch"), sheet(0xA, &[]));
         sheets.insert(PathBuf::from("/proj/b/power.snxsch"), sheet(0xB, &[]));
 
-        let graph = project_graph(&sheets, Some(Path::new("/proj")));
+        let graph = project_graph(&sheets, Some(Path::new("/proj")), None);
 
         assert!(
             graph.issues.is_empty(),
@@ -715,7 +735,7 @@ mod tests {
         );
         sheets.insert(PathBuf::from("/proj/shared.snxsch"), sheet(0xC, &[]));
 
-        let graph = project_graph(&sheets, Some(Path::new("/proj")));
+        let graph = project_graph(&sheets, Some(Path::new("/proj")), None);
 
         let a_key = sheet_key(Path::new("/proj/a.snxsch"), Some(Path::new("/proj")));
         let b_key = sheet_key(Path::new("/proj/b.snxsch"), Some(Path::new("/proj")));
@@ -742,7 +762,7 @@ mod tests {
         sheets.insert(PathBuf::from("/proj/A.snxsch"), sheet(0xA, &[]));
         sheets.insert(PathBuf::from("/proj/a.snxsch"), sheet(0xB, &[]));
 
-        let graph = project_graph(&sheets, Some(Path::new("/proj")));
+        let graph = project_graph(&sheets, Some(Path::new("/proj")), None);
 
         if cfg!(windows) {
             assert_eq!(graph.sheets.len(), 1, "one key wins the collision");
@@ -773,7 +793,7 @@ mod tests {
         );
         sheets.insert(PathBuf::from("/proj/child.snxsch"), sheet(2, &[]));
 
-        let graph = project_graph(&sheets, Some(Path::new("/proj")));
+        let graph = project_graph(&sheets, Some(Path::new("/proj")), None);
 
         let root_key = sheet_key(Path::new("/proj/root.snxsch"), Some(Path::new("/proj")));
         let child_key = graph.resolved[&root_key]["child.snxsch"].clone();
@@ -793,7 +813,7 @@ mod tests {
         );
         sheets.insert(PathBuf::from("/proj/orphan.snxsch"), sheet(3, &[]));
 
-        let graph = project_graph(&sheets, Some(Path::new("/proj")));
+        let graph = project_graph(&sheets, Some(Path::new("/proj")), None);
         let root_key = sheet_key(Path::new("/proj/root.snxsch"), Some(Path::new("/proj")));
         assert!(graph.resolved[&root_key].is_empty());
         assert!(graph.issues.is_empty());
@@ -904,7 +924,7 @@ mod tests {
         );
         sheets.insert(PathBuf::from("/proj/sub/leaf.snxsch"), sheet(0x222, &[]));
 
-        let graph = project_graph(&sheets, Some(Path::new("/proj")));
+        let graph = project_graph(&sheets, Some(Path::new("/proj")), None);
         let mid_key = sheet_key(Path::new("/proj/sub/mid.snxsch"), Some(Path::new("/proj")));
         let leaf_key = graph.resolved[&mid_key]["leaf.snxsch"].clone();
         assert_eq!(graph.sheets[&leaf_key].uuid, Uuid::from_u128(0x222));
@@ -954,7 +974,7 @@ mod tests {
             unreadable: Vec::new(),
             root: Some(root_path.clone()),
         };
-        let graph = project_graph(&sheets, Some(base));
+        let graph = project_graph(&sheets, Some(base), None);
         let root_key = sheet_key(&root_path, Some(base));
         let roots = project_roots(root_key.clone(), &set, &graph, Some(base));
 
@@ -962,6 +982,78 @@ mod tests {
             roots.into_iter().map(|r| r.key).collect::<Vec<_>>(),
             vec![root_key, key("sub-b.snxsch"), key("sub/a.snxsch")],
             "root first, then pages in SheetKey order"
+        );
+    }
+
+    /// #536 — the root must survive a `SheetKey` collision.
+    ///
+    /// Reproducible on EVERY platform, not just Windows as the issue
+    /// first read. `path_key` folds case only under `cfg!(windows)`, but
+    /// `sheet_key` relativizes against `base` and falls back to the bare
+    /// `file_name()` when a path is not under it. A sheet living outside
+    /// the project directory therefore keys as `top.snxsch` and collides
+    /// with the project's own `/proj/top.snxsch`, case-folding or not.
+    ///
+    /// Sorted first-wins then handed the slot to the outsider — `/other`
+    /// sorts before `/proj` — and both netlist callers, finding no root
+    /// key, bailed without a word.
+    #[test]
+    fn an_out_of_tree_namesake_cannot_evict_the_root() {
+        let root_path = PathBuf::from("/proj/top.snxsch");
+        let mut sheets = HashMap::new();
+        sheets.insert(root_path.clone(), sheet(0x0777, &[]));
+        sheets.insert(PathBuf::from("/other/top.snxsch"), sheet(0x0BAD, &[]));
+
+        let graph = project_graph(&sheets, Some(Path::new("/proj")), Some(&root_path));
+
+        assert_eq!(
+            graph.sheets[&key("top.snxsch")].uuid,
+            Uuid::from_u128(0x0777),
+            "the root must own its key, not the out-of-tree namesake"
+        );
+    }
+
+    /// The exemption does not hide the collision — the outsider is still
+    /// reported, just as `dropped` rather than `kept`. Silently preferring
+    /// the root would trade one invisible failure for another.
+    #[test]
+    fn the_namesake_the_root_displaces_is_still_reported() {
+        let root_path = PathBuf::from("/proj/top.snxsch");
+        let mut sheets = HashMap::new();
+        sheets.insert(root_path.clone(), sheet(0x0777, &[]));
+        sheets.insert(PathBuf::from("/other/top.snxsch"), sheet(0x0BAD, &[]));
+
+        let graph = project_graph(&sheets, Some(Path::new("/proj")), Some(&root_path));
+
+        assert!(
+            matches!(
+                graph.issues.as_slice(),
+                [signex_net::StitchIssue::SheetKeyCollision { key, kept, dropped }]
+                    if key == "top.snxsch"
+                        && kept == "/proj/top.snxsch"
+                        && dropped == "/other/top.snxsch"
+            ),
+            "expected one collision naming the root as kept, got {:?}",
+            graph.issues
+        );
+    }
+
+    /// `None` is what ERC passes, and it must keep the old rule exactly:
+    /// sorted-path first-wins, no notion of a root. Without this the
+    /// exemption could quietly become "whichever path the caller happened
+    /// to mention", which is not a total order.
+    #[test]
+    fn without_a_root_the_winner_is_still_sorted_first_wins() {
+        let mut sheets = HashMap::new();
+        sheets.insert(PathBuf::from("/proj/top.snxsch"), sheet(0x0777, &[]));
+        sheets.insert(PathBuf::from("/other/top.snxsch"), sheet(0x0BAD, &[]));
+
+        let graph = project_graph(&sheets, Some(Path::new("/proj")), None);
+
+        assert_eq!(
+            graph.sheets[&key("top.snxsch")].uuid,
+            Uuid::from_u128(0x0BAD),
+            "/other sorts before /proj, so it wins when no root is named"
         );
     }
 }
