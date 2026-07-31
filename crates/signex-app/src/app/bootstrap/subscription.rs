@@ -3,6 +3,7 @@
 
 use super::super::*;
 
+use crate::app::view::overlay_id::OverlayId;
 use crate::keymap::KeyStroke;
 use iced::Subscription;
 
@@ -108,114 +109,215 @@ impl OpenOverlays {
     /// modal claimed the key, so the caller falls through to
     /// `Message::EscapePressed` (the tool reset).
     ///
-    /// This quantifies over *fields of `OpenOverlays`*, not over every
-    /// modal in the app — that gap is real (see `every_modal_claims_escape`
-    /// at the foot of this file) and is exactly what let #511 (the passive
-    /// calculator) and #514 (~14 more modals) ship with no rung. A field
-    /// that IS here and has no rung is a real bug — Esc falls through and
-    /// silently resets the active canvas tool *behind* the open modal —
-    /// which is why this is a plain function over a `Copy` struct instead
-    /// of arms buried in the subscription closure:
-    /// `every_ladder_field_claims_escape` fails if a new field is added
+    /// **Ordering is not decided here.** It is read off
+    /// [`PAINT_ORDER`](crate::app::view::overlay_id::PAINT_ORDER) walked
+    /// BACKWARD — whatever paints on top wins Esc — so a reorder happens
+    /// in exactly one place and reaches the painter and this ladder at
+    /// once. Until #535 part 2 this was 25 hand-written `if`s that a doc
+    /// comment asked you to keep in the exact reverse of a list in
+    /// another file; every ordering bug found across #514's review rounds
+    /// was that request not honoured in one spot, and patching the pairs
+    /// one at a time kept reintroducing new violations elsewhere.
+    ///
+    /// [`visible`](crate::app::view::overlay_id::visible) supplies the
+    /// blocking-modal cutoff, so the "resolve only within the visible
+    /// five" guard is no longer written out here either — it falls out of
+    /// walking a shorter slice.
+    ///
+    /// What this still does NOT quantify over is every modal in the app —
+    /// only over *fields of `OpenOverlays`*. That gap is real (see
+    /// `every_modal_claims_escape` at the foot of this file) and is
+    /// exactly what let #511 (the passive calculator) and #514 (~14 more
+    /// modals) ship with no rung at all. A field that IS here and has no
+    /// rung is a live bug: Esc falls through and silently resets the
+    /// active canvas tool *behind* the open modal.
+    /// `every_ladder_field_claims_escape` fails if a new field arrives
     /// without one.
+    fn escape_message(&self) -> Option<Message> {
+        crate::app::view::overlay_id::visible(self.has_blocking_modal())
+            .iter()
+            .rev()
+            .find_map(|id| self.rung(*id))
+    }
+
+    /// Whether a blocking modal owns the overlay stack — i.e. whether
+    /// everything painted after the pre-blocking block is suppressed.
     ///
-    /// Order is **the exact reverse of paint order**: rung N outranks rung
-    /// N+1 iff modal N's layer is pushed LATER than modal N+1's in
-    /// `collect_overlays` (`app/view/mod.rs:750-807`, plus the intra-vec
-    /// push order of `simple_dialogs_overlay` and `detachable_dialogs_overlay`
-    /// in `app/view/overlays/modals.rs`) — i.e. whatever is drawn on top of
-    /// everything else also wins Esc. This is a derivation, not a
-    /// hand-tuned priority list: if you change the push order in either of
-    /// those three places, change this ladder to match, in the same
-    /// direction. Do not reorder rungs below for any other reason — every
-    /// ordering bug found across #514's review rounds was exactly this
-    /// rule violated in one spot, and patching pairs one at a time kept
-    /// reintroducing new violations elsewhere.
-    ///
-    /// The "topmost painted wins" premise above only holds in the
-    /// no-blocking regime, which is why the function opens with a guard
-    /// instead of a plain top-to-bottom read: `export_error_open` /
-    /// `netlist_incomplete_prompt_open` / `print_preview_open` /
-    /// `net_color_custom_open` are the `has_blocking_modal` members
-    /// (`view/overlays/bars.rs:20-25`) — when one is set,
-    /// `collect_overlays` returns early at `:758-759` and nothing from
-    /// `:764` onward paints. But their `bool`s are NOT exclusive with
-    /// rungs 1-23's — Alt+F4 / native window close sets
-    /// `app_quit_confirm` unconditionally
-    /// (`handle_app_quit_requested`, no `has_blocking_modal` check
-    /// anywhere on that path) and keymap strokes are not modal-gated
-    /// either (`dispatch/keymap.rs`'s `shortcut_contexts` has no modal
-    /// awareness), so e.g. an export failure followed by Alt+F4, or by
-    /// Ctrl+G, really does leave `app_quit_confirm_open` / `grid_properties_open`
-    /// set while only the export-error card paints. Without the guard,
-    /// Esc would then resolve to one of rungs 1-23 — cancelling an
-    /// invisible dialog while the visible blocking modal stays open. The
-    /// guard forces resolution within the actually-visible five, ranked
-    /// `net_color_custom_open` first, then `bom_preview_open`, then
-    /// `print_preview_open`, then `netlist_incomplete_prompt_open`, then
-    /// `export_error_open` last — FIVE, not four, because
-    /// `bom_preview_open` also paints in that same early block (`:753`)
-    /// without itself being a `has_blocking_modal` member.
-    ///
-    /// The command palette and the keymap chord recorder are absent on
-    /// purpose: both swallow keyboard input wholesale before the Esc
-    /// ladder is reached, and are handled in the closure. Also absent: the
-    /// Edit Component Details modal (`edit_row_modal_overlay`), gated dead
-    /// behind `EDIT_MODAL_ENABLED = false` — it needs a rung the day it's
-    /// re-enabled, not before — and the per-browser delete-confirm modal
-    /// (`delete_confirm_overlay`), whose Cancel message
-    /// (`LibraryMessage::BrowserDeleteRowCancel`) needs the owning
-    /// `library_path`, which a `Copy` struct like this one has no way to
-    /// carry.
-    ///
-    /// One rung is a KNOWN behaviour change from trunk, not an accident:
-    /// `find_replace_open` now ranks BELOW `passive_calculator_open`
-    /// (`find_replace_overlay` paints at `:787`, `passive_calculator_overlay`
-    /// at `:789` — later, i.e. on top). Trunk had this the other way
-    /// around; that was a latent bug (find_replace won Esc despite painting
-    /// underneath the passive calculator), fixed here as a side effect of
-    /// deriving the whole ladder from one rule instead of hand-ordering it.
-    fn escape_message(self) -> Option<Message> {
-        // Guard: whenever any of the four `has_blocking_modal` members is
-        // set, resolve ONLY within the actually-visible five (the four
-        // plus `bom_preview_open`, which shares their early paint slot
-        // without being one of them) and never fall through to rungs
-        // 1-23 — see the doc comment above for why their `bool`s are
-        // reachable together with a rung 1-23 flag even though only one
-        // of the two ever paints.
-        if self.export_error_open
+    /// Mirrors `Signex::has_blocking_modal`
+    /// (`app/view/overlays/bars.rs:20-25`), with one known divergence:
+    /// `print_preview_open` is already false here once Print Preview has
+    /// been detached into its own OS window, while the painter's
+    /// predicate ignores detachment and keeps suppressing. That is a
+    /// pre-existing bug on both sides, not something part 2 introduced,
+    /// and it is left alone here on purpose — see
+    /// `overlay_id::visible`'s docs.
+    fn has_blocking_modal(&self) -> bool {
+        self.export_error_open
             || self.netlist_incomplete_prompt_open
             || self.print_preview_open
             || self.net_color_custom_open
-        {
-            if self.net_color_custom_open {
-                return Some(Message::NetColor(NetColorMsg::CustomShow(false)));
-            }
-            if self.bom_preview_open {
-                return Some(Message::BomPreview(BomPreviewMsg::Close));
-            }
-            if self.print_preview_open {
-                return Some(Message::PrintPreview(PrintPreviewMsg::Close));
-            }
-            if self.netlist_incomplete_prompt_open {
-                // Cancel path only — the prompt's other action is "Export
-                // anyway (incomplete)", which Esc must never trigger.
-                return Some(Message::Export(ExportMsg::NetlistCancelIncomplete));
-            }
-            debug_assert!(
-                self.export_error_open,
-                "has_blocking_modal guard entered but none of its four \
-                 members were set"
-            );
-            return Some(Message::Export(ExportMsg::DismissError));
-        }
-        if self.library_updates_open {
-            return Some(Message::Library(
-                crate::library::messages::LibraryMessage::LibraryUpdatesCancel,
-            ));
-        }
-        if let Some(kind) = self.recovery_kind {
-            return Some(match kind {
+    }
+
+    /// The Cancel/Close message `id` claims for Esc, or `None` when that
+    /// overlay is closed — or has no rung by design.
+    ///
+    /// Arms are listed in `PAINT_ORDER` sequence so a reviewer can read
+    /// the array and this match side by side. The match is exhaustive,
+    /// which is what makes "a new overlay silently has no Esc" a compile
+    /// error instead of a bug report.
+    fn rung(&self, id: OverlayId) -> Option<Message> {
+        match id {
+            // ── Pre-blocking block ──────────────────────────────────
+            // When a blocking modal is up these five are the ONLY ids
+            // `visible` hands back, which is what stops Esc cancelling an
+            // invisible dialog behind an export-error card: Alt+F4 sets
+            // `app_quit_confirm` with no modal check on that path, and
+            // keymap strokes are not modal-gated either, so those flags
+            // really can be set while only the blocking card paints.
+            //
+            // `BomPreview` sits in this prefix without being one of the
+            // four blocking members — the "five, not four" oddity the old
+            // guard spelled out in prose.
+            OverlayId::ExportError => self
+                .export_error_open
+                .then(|| Message::Export(ExportMsg::DismissError)),
+            // Cancel path only — the prompt's other action is "Export
+            // anyway (incomplete)", which Esc must never trigger.
+            OverlayId::NetlistIncompletePrompt => self
+                .netlist_incomplete_prompt_open
+                .then(|| Message::Export(ExportMsg::NetlistCancelIncomplete)),
+            OverlayId::PrintPreview => self
+                .print_preview_open
+                .then(|| Message::PrintPreview(PrintPreviewMsg::Close)),
+            OverlayId::BomPreview => self
+                .bom_preview_open
+                .then(|| Message::BomPreview(BomPreviewMsg::Close)),
+            OverlayId::NetColorCustom => self
+                .net_color_custom_open
+                .then(|| Message::NetColor(NetColorMsg::CustomShow(false))),
+
+            // ── Editor chrome, menus, pickers, panels: no rung ───────
+            // None of these is a modal; Esc over a context menu resets
+            // the tool, as it always has.
+            //
+            // `FootprintAlign` looks like an omission and is not. #370
+            // gives the footprint Align… dialog an Esc of its own,
+            // resolved in `dispatch/mod.rs` AFTER this ladder returns
+            // `None`. Folding it in here would rank it at paint slot 11,
+            // i.e. above `BomPreview` at slot 4, changing what Esc does
+            // when both are open. Arguably a fix — align does paint on
+            // top — but a behaviour change, and part 2 is a derivation.
+            OverlayId::PlacementPaused
+            | OverlayId::SchematicActiveBar
+            | OverlayId::FootprintActiveBar
+            | OverlayId::FootprintContextMenu
+            | OverlayId::FootprintMoveBy
+            | OverlayId::FootprintAlign
+            | OverlayId::SymbolEditorActiveBar
+            | OverlayId::SymbolContextMenu
+            | OverlayId::TextEdit
+            | OverlayId::ActiveBarMenu
+            | OverlayId::ContextMenu
+            | OverlayId::TabContextMenu
+            | OverlayId::ProjectTreeContextMenu
+            | OverlayId::GridPicker
+            | OverlayId::PanelList
+            | OverlayId::DockDragZone
+            | OverlayId::FloatingPanels => None,
+
+            // ── Dialogs ─────────────────────────────────────────────
+            OverlayId::Preferences => self
+                .prefs_open
+                .then(|| Message::Preferences(PreferencesMsg::Close)),
+            OverlayId::FindReplace => self
+                .find_replace_open
+                .then(|| Message::FindReplaceMsg(crate::find_replace::FindReplaceMsg::Close)),
+            OverlayId::KeyboardShortcuts => self
+                .kbd_shortcuts_open
+                .then(|| Message::Overlay(OverlayMsg::CloseKeyboardShortcuts)),
+            OverlayId::PassiveCalculator => self
+                .passive_calculator_open
+                .then(|| Message::Overlay(OverlayMsg::ClosePassiveCalculator)),
+            OverlayId::FirstRunTour => self
+                .first_run_tour_open
+                .then(|| Message::Overlay(OverlayMsg::DismissFirstRunTour)),
+            OverlayId::RenameDialog => self.rename_open.then(|| Message::Rename(RenameMsg::Close)),
+            OverlayId::RemoveDialog => self.remove_open.then(|| Message::Remove(RemoveMsg::Close)),
+            OverlayId::ProjectCloseConfirm => self
+                .project_close_confirm_open
+                .then(|| Message::Project(ProjectMsg::CloseConfirm(ProjectCloseChoice::Cancel))),
+            OverlayId::AppQuitConfirm => self
+                .app_quit_confirm_open
+                .then(|| Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::Cancel))),
+            OverlayId::ProjectOptions => self
+                .project_options_open
+                .then(|| Message::Project(ProjectMsg::CloseOptions)),
+            OverlayId::EnableVersionControl => self
+                .enable_vc_open
+                .then(|| Message::EnableVersionControl(EnableVersionControlMsg::Close)),
+            OverlayId::GridProperties => self
+                .grid_properties_open
+                .then(|| Message::GridProperties(GridPropertiesMsg::Close)),
+            OverlayId::SelectionFilterCustom => self
+                .selection_filter_custom_open
+                .then(|| Message::SelectionFilter(SelectionFilterMsg::CloseCustom)),
+            OverlayId::AnnotateDialog => self
+                .annotate_open
+                .then(|| Message::Annotate(AnnotateMsg::CloseDialog)),
+            // Child confirm of the annotate dialog, with its own Cancel
+            // (`CloseResetConfirm`, not `CloseDialog`). It outranks its
+            // parent — closing the parent first would orphan the confirm —
+            // and it outranks it because it paints later, which
+            // `PAINT_ORDER` now states instead of a comment asking you to
+            // take it on trust.
+            OverlayId::AnnotateResetConfirm => self
+                .annotate_reset_confirm_open
+                .then(|| Message::Annotate(AnnotateMsg::CloseResetConfirm)),
+            OverlayId::ErcDialog => self.erc_open.then(|| Message::Erc(ErcMsg::CloseDialog)),
+
+            // ── Library modals ──────────────────────────────────────
+            OverlayId::LibraryPicker => self
+                .library_picker_open
+                .then(|| Message::Library(crate::library::messages::LibraryMessage::ClosePicker)),
+            // Two known gaps, both pre-dating #535 and neither closed
+            // here: the New Component modal has no `OpenOverlays` field
+            // at all (one of the modals `every_modal_claims_escape` still
+            // allows through), and the Edit Component Details modal is
+            // gated dead behind `EDIT_MODAL_ENABLED = false` — it needs a
+            // rung the day it is re-enabled, not before.
+            OverlayId::NewComponent | OverlayId::EditRowModal => None,
+            // The one rung carrying owned data, and the reason the ladder
+            // moved out of the subscription in part 1: this Cancel is
+            // addressed to ONE library, and a `PathBuf` could not ride
+            // inside the old `Copy` payload.
+            OverlayId::DeleteConfirm => self.delete_confirm.clone().map(|library_path| {
+                Message::Library(
+                    crate::library::messages::LibraryMessage::BrowserDeleteRowCancel {
+                        library_path,
+                    },
+                )
+            }),
+            OverlayId::PrimitivePicker => self.library_primitive_picker_open.then(|| {
+                Message::Library(crate::library::messages::LibraryMessage::PrimitivePicker(
+                    crate::library::messages::PrimitivePickerMsg::Cancel,
+                ))
+            }),
+            OverlayId::DocumentOptions => self.library_document_options_open.then(|| {
+                Message::Library(crate::library::messages::LibraryMessage::DocumentOptionsCancel)
+            }),
+            OverlayId::CreateOptions => self.library_create_options_open.then(|| {
+                Message::Library(
+                    crate::library::messages::LibraryMessage::LibraryCreateOptionsCancel,
+                )
+            }),
+            OverlayId::CloseLibraryConfirm => self.close_library_confirm_open.then(|| {
+                Message::Library(
+                    crate::library::messages::LibraryMessage::CloseLibraryConfirm(
+                        crate::library::messages::CloseLibraryChoice::Cancel,
+                    ),
+                )
+            }),
+            OverlayId::LibraryRecovery => self.recovery_kind.map(|kind| match kind {
                 RecoveryKind::LibraryMissing => Message::Library(
                     crate::library::messages::LibraryMessage::RecoveryLibraryMissing(
                         crate::library::recovery::LibraryMissingChoice::Cancel,
@@ -231,126 +333,18 @@ impl OpenOverlays {
                         crate::library::recovery::BrokenBindingChoice::Cancel,
                     ),
                 ),
-            });
+            }),
+
+            // ── Painted last ────────────────────────────────────────
+            // The command palette and the chord recorder swallow keyboard
+            // input wholesale before the ladder is reached, so their Esc
+            // lives in the subscription closure. The hover tooltip is not
+            // dismissible at all.
+            OverlayId::CommandPalette | OverlayId::HoverTooltip => None,
+            OverlayId::LibraryUpdates => self.library_updates_open.then(|| {
+                Message::Library(crate::library::messages::LibraryMessage::LibraryUpdatesCancel)
+            }),
         }
-        if self.close_library_confirm_open {
-            return Some(Message::Library(
-                crate::library::messages::LibraryMessage::CloseLibraryConfirm(
-                    crate::library::messages::CloseLibraryChoice::Cancel,
-                ),
-            ));
-        }
-        if self.library_create_options_open {
-            return Some(Message::Library(
-                crate::library::messages::LibraryMessage::LibraryCreateOptionsCancel,
-            ));
-        }
-        if self.library_document_options_open {
-            return Some(Message::Library(
-                crate::library::messages::LibraryMessage::DocumentOptionsCancel,
-            ));
-        }
-        if self.library_primitive_picker_open {
-            return Some(Message::Library(
-                crate::library::messages::LibraryMessage::PrimitivePicker(
-                    crate::library::messages::PrimitivePickerMsg::Cancel,
-                ),
-            ));
-        }
-        // Ranks directly below the primitive picker and above the library
-        // picker, matching paint order: `delete_confirm_overlay` sits
-        // between `edit_row_modal_overlay` and `primitive_picker_overlay`
-        // in `collect_overlays`.
-        //
-        // This rung is why the ladder moved to `update` (#535): the Cancel
-        // message is addressed to one library, and an owned `PathBuf`
-        // could not ride inside the old `Copy` subscription payload. It
-        // was the one modal documented as having no rung at all — Esc fell
-        // through to `Message::EscapePressed` and reset the canvas tool
-        // behind the still-open confirm, which is exactly the bug class
-        // #514 exists for.
-        if let Some(library_path) = self.delete_confirm.clone() {
-            return Some(Message::Library(
-                crate::library::messages::LibraryMessage::BrowserDeleteRowCancel { library_path },
-            ));
-        }
-        if self.library_picker_open {
-            return Some(Message::Library(
-                crate::library::messages::LibraryMessage::ClosePicker,
-            ));
-        }
-        if self.erc_open {
-            return Some(Message::Erc(ErcMsg::CloseDialog));
-        }
-        // Must outrank `annotate_open` below — it's a child confirm of the
-        // annotate dialog, with its own Cancel message
-        // (`CloseResetConfirm`, not `CloseDialog`), and it also paints
-        // later than `annotate_open` inside `detachable_dialogs_overlay`
-        // (`modals.rs:159` vs `:156`). Checking the parent first would
-        // close the annotate dialog out from under the confirm and orphan
-        // it.
-        if self.annotate_reset_confirm_open {
-            return Some(Message::Annotate(AnnotateMsg::CloseResetConfirm));
-        }
-        if self.annotate_open {
-            return Some(Message::Annotate(AnnotateMsg::CloseDialog));
-        }
-        if self.selection_filter_custom_open {
-            return Some(Message::SelectionFilter(SelectionFilterMsg::CloseCustom));
-        }
-        if self.grid_properties_open {
-            return Some(Message::GridProperties(GridPropertiesMsg::Close));
-        }
-        if self.enable_vc_open {
-            return Some(Message::EnableVersionControl(
-                EnableVersionControlMsg::Close,
-            ));
-        }
-        if self.project_options_open {
-            return Some(Message::Project(ProjectMsg::CloseOptions));
-        }
-        if self.app_quit_confirm_open {
-            return Some(Message::Project(ProjectMsg::AppQuitConfirm(
-                ProjectCloseChoice::Cancel,
-            )));
-        }
-        if self.project_close_confirm_open {
-            return Some(Message::Project(ProjectMsg::CloseConfirm(
-                ProjectCloseChoice::Cancel,
-            )));
-        }
-        if self.remove_open {
-            return Some(Message::Remove(RemoveMsg::Close));
-        }
-        if self.rename_open {
-            return Some(Message::Rename(RenameMsg::Close));
-        }
-        if self.first_run_tour_open {
-            return Some(Message::Overlay(OverlayMsg::DismissFirstRunTour));
-        }
-        if self.passive_calculator_open {
-            return Some(Message::Overlay(OverlayMsg::ClosePassiveCalculator));
-        }
-        if self.kbd_shortcuts_open {
-            return Some(Message::Overlay(OverlayMsg::CloseKeyboardShortcuts));
-        }
-        if self.find_replace_open {
-            return Some(Message::FindReplaceMsg(
-                crate::find_replace::FindReplaceMsg::Close,
-            ));
-        }
-        if self.prefs_open {
-            return Some(Message::Preferences(PreferencesMsg::Close));
-        }
-        // Reached only when none of the four `has_blocking_modal` members
-        // are set (the guard above would have returned otherwise) —
-        // `bom_preview_open` is not itself one of them, so it can still be
-        // independently true here and keeps its own rung at its derived
-        // position.
-        if self.bom_preview_open {
-            return Some(Message::BomPreview(BomPreviewMsg::Close));
-        }
-        None
     }
 }
 
@@ -769,6 +763,59 @@ mod tests {
         assert!(
             OpenOverlays::default().escape_message().is_none(),
             "with no modal open Esc must reach `Message::EscapePressed`"
+        );
+    }
+
+    /// The hand-written ladder closed its blocking-modal guard with a
+    /// `debug_assert!` that at least one of the four members really was
+    /// set once the guard had been entered. Deriving the walk from
+    /// `PAINT_ORDER` deletes the guard, so the invariant it protected
+    /// gets a test instead: in the blocking regime Esc must always be
+    /// claimed by one of the visible five and never fall through to the
+    /// tool reset.
+    #[test]
+    fn a_blocking_modal_always_claims_escape_itself() {
+        // Each member alone, then with a suppressed dialog set behind
+        // it. The second case is the one that matters: Alt+F4 and keymap
+        // strokes are not modal-gated, so a rung below the cutoff really
+        // can be open while only the blocking card paints.
+        let claims_escape = |name: &str, mut overlays: OpenOverlays| {
+            for behind in [false, true] {
+                overlays.grid_properties_open = behind;
+                assert!(
+                    overlays.escape_message().is_some(),
+                    "{name} owns the stack but let Esc fall through \
+                     (grid_properties open behind it: {behind})"
+                );
+            }
+        };
+        claims_escape(
+            "export_error",
+            OpenOverlays {
+                export_error_open: true,
+                ..OpenOverlays::default()
+            },
+        );
+        claims_escape(
+            "netlist_incomplete_prompt",
+            OpenOverlays {
+                netlist_incomplete_prompt_open: true,
+                ..OpenOverlays::default()
+            },
+        );
+        claims_escape(
+            "print_preview",
+            OpenOverlays {
+                print_preview_open: true,
+                ..OpenOverlays::default()
+            },
+        );
+        claims_escape(
+            "net_color_custom",
+            OpenOverlays {
+                net_color_custom_open: true,
+                ..OpenOverlays::default()
+            },
         );
     }
 

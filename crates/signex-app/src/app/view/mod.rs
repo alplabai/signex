@@ -2,6 +2,10 @@ use iced::widget::{canvas, column, container, row, shader, stack, text_input};
 use iced::{Element, Length};
 
 pub(crate) mod dialogs;
+/// Overlay identity + paint order — shared with the Esc ladder in
+/// `app/bootstrap/subscription.rs`, hence `pub(crate)` and not a child
+/// of the private `overlays` module.
+pub(crate) mod overlay_id;
 pub(crate) mod translate;
 
 mod chrome;
@@ -737,91 +741,23 @@ impl Signex {
     ///
     /// Pure assembler: each overlay's guard + widget tree lives in a
     /// dedicated `*_overlay` builder (see the `overlays` module and its
-    /// `bars` / `modals` submodules). Call ORDER here is
-    /// load-bearing — overlays stack visually in push order, so the
-    /// sequence below reproduces the original inline push order exactly.
-    /// `has_blocking_modal` short-circuits the tool/menu overlays just as
-    /// the inline code did once a blocking modal owns the stack.
+    /// `bars` / `modals` submodules), and the order they stack in lives
+    /// in [`overlay_id::PAINT_ORDER`] — walked FORWARD here, so later
+    /// entries paint on top of earlier ones.
+    ///
+    /// That same array is walked BACKWARD by the Esc ladder
+    /// (`app/bootstrap/subscription.rs`), which is the whole point of
+    /// #535: "Esc closes the topmost overlay" stops being a rule two
+    /// files must obey by hand — in opposite directions — and becomes
+    /// one list read from both ends.
+    ///
+    /// [`overlay_id::visible`] applies the blocking-modal cutoff, which
+    /// is why this loop has no early return of its own.
     fn collect_overlays(&self) -> Vec<Element<'_, Message>> {
         let mut layers = Vec::new();
-
-        // Pre-blocking overlays: export-error, print/BOM preview, and
-        // the custom net-colour picker.
-        layers.extend(self.export_error_overlay());
-        layers.extend(self.netlist_incomplete_prompt_overlay());
-        layers.extend(self.print_preview_overlay());
-        layers.extend(self.bom_preview_overlay());
-        layers.extend(self.net_color_custom_overlay());
-
-        // Blocking modals must own the overlay stack — stop here so no
-        // tool/menu overlay paints above them.
-        if self.has_blocking_modal() {
-            return layers;
+        for id in overlay_id::visible(self.has_blocking_modal()) {
+            self.extend_overlay(&mut layers, *id);
         }
-
-        // Editor-surface chrome: pause card, active bars (schematic /
-        // footprint / symbol), and the in-canvas text-edit input.
-        layers.extend(self.placement_paused_overlay());
-        layers.extend(self.schematic_active_bar_overlay());
-        layers.extend(self.footprint_active_bar_overlay());
-        layers.extend(self.footprint_context_menu_overlay());
-        layers.extend(self.footprint_move_by_overlay());
-        layers.extend(self.footprint_align_overlay());
-        layers.extend(self.symbol_editor_active_bar_overlay());
-        layers.extend(self.symbol_context_menu_overlay());
-        layers.extend(self.text_edit_overlay());
-
-        // Right-click menus, grid picker, panel list, dock drag zones,
-        // and floating panels.
-        layers.extend(self.active_bar_menu_overlay());
-        layers.extend(self.context_menu_overlay());
-        layers.extend(self.tab_context_menu_overlay());
-        layers.extend(self.project_tree_context_menu_overlay());
-        layers.extend(self.grid_picker_overlay());
-        layers.extend(self.panel_list_overlay());
-        layers.extend(self.dock_drag_zone_overlay());
-        layers.extend(self.floating_panels_overlay());
-
-        // Dialogs + library modals.
-        layers.extend(self.preferences_overlay());
-        layers.extend(self.find_replace_overlay());
-        layers.extend(self.keyboard_shortcuts_overlay());
-        layers.extend(self.passive_calculator_overlay());
-        layers.extend(self.first_run_tour_overlay());
-        // Two `layers.extend(composite())` calls until #535 part 2a. The
-        // order below is byte-for-byte the order those composites pushed
-        // internally; it is spelled out here because paint order is what
-        // the Esc ladder derives from, and an order living inside a
-        // builder's `Vec` is invisible to the place that owns it. Both
-        // round-2 Esc regressions were exactly that — grid-properties vs
-        // enable-VC, and annotate vs its reset confirm.
-        layers.extend(self.rename_dialog_overlay());
-        layers.extend(self.remove_dialog_overlay());
-        layers.extend(self.project_close_confirm_overlay());
-        layers.extend(self.app_quit_confirm_overlay());
-        layers.extend(self.project_options_overlay());
-        layers.extend(self.enable_version_control_overlay());
-        layers.extend(self.grid_properties_overlay());
-        layers.extend(self.selection_filter_custom_overlay());
-        layers.extend(self.annotate_dialog_overlay());
-        layers.extend(self.annotate_reset_confirm_overlay());
-        layers.extend(self.erc_dialog_overlay());
-        layers.extend(self.library_picker_overlay());
-        layers.extend(self.new_component_overlay());
-        layers.extend(self.edit_row_modal_overlay());
-        layers.extend(self.delete_confirm_overlay());
-        layers.extend(self.primitive_picker_overlay());
-        layers.extend(self.document_options_overlay());
-        layers.extend(self.create_options_overlay());
-        layers.extend(self.close_library_confirm_overlay());
-        layers.extend(self.library_recovery_overlay());
-
-        // Command palette dropdown, hover tooltip, and library-updates
-        // modal — painted last so they sit above every other layer.
-        layers.extend(self.command_palette_overlay());
-        layers.extend(self.view_hover_tooltip());
-        layers.extend(self.library_updates_overlay());
-
         layers
     }
 }
