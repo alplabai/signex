@@ -788,8 +788,24 @@ impl Signex {
         layers.extend(self.keyboard_shortcuts_overlay());
         layers.extend(self.passive_calculator_overlay());
         layers.extend(self.first_run_tour_overlay());
-        layers.extend(self.simple_dialogs_overlay());
-        layers.extend(self.detachable_dialogs_overlay());
+        // Two `layers.extend(composite())` calls until #535 part 2a. The
+        // order below is byte-for-byte the order those composites pushed
+        // internally; it is spelled out here because paint order is what
+        // the Esc ladder derives from, and an order living inside a
+        // builder's `Vec` is invisible to the place that owns it. Both
+        // round-2 Esc regressions were exactly that — grid-properties vs
+        // enable-VC, and annotate vs its reset confirm.
+        layers.extend(self.rename_dialog_overlay());
+        layers.extend(self.remove_dialog_overlay());
+        layers.extend(self.project_close_confirm_overlay());
+        layers.extend(self.app_quit_confirm_overlay());
+        layers.extend(self.project_options_overlay());
+        layers.extend(self.enable_version_control_overlay());
+        layers.extend(self.grid_properties_overlay());
+        layers.extend(self.selection_filter_custom_overlay());
+        layers.extend(self.annotate_dialog_overlay());
+        layers.extend(self.annotate_reset_confirm_overlay());
+        layers.extend(self.erc_dialog_overlay());
         layers.extend(self.library_picker_overlay());
         layers.extend(self.new_component_overlay());
         layers.extend(self.edit_row_modal_overlay());

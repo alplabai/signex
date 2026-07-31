@@ -108,63 +108,113 @@ impl Signex {
         ))
     }
 
-    /// The simple, non-detachable confirm/property dialogs. Each is an
-    /// independent single-condition push; order matches the inline
-    /// sequence exactly (rename → remove → project-close → app-quit →
-    /// project-options → enable-VC → grid-properties → selection-filter).
-    pub(in crate::app::view) fn simple_dialogs_overlay(&self) -> Vec<Element<'_, Message>> {
-        let ui = &self.ui_state;
-        let mut out: Vec<Element<'_, Message>> = Vec::new();
-        if ui.rename_dialog.is_some() {
-            out.push(self.view_rename_dialog());
-        }
-        if ui.remove_dialog.is_some() {
-            out.push(self.view_remove_dialog());
-        }
-        if ui.project_close_confirm.is_some() {
-            out.push(self.view_project_close_confirm());
-        }
-        if ui.app_quit_confirm.is_some() {
-            out.push(self.view_app_quit_confirm());
-        }
-        if ui.project_options.is_some() {
-            out.push(self.view_project_options_dialog());
-        }
-        if ui.enable_version_control.is_some() {
-            out.push(self.view_enable_version_control_dialog());
-        }
-        if ui.grid_properties.is_some() {
-            out.push(self.view_grid_properties_dialog());
-        }
-        if ui.selection_filter_custom.is_some() {
-            out.push(self.view_selection_filter_custom_dialog());
-        }
-        out
+    // ── Simple, non-detachable confirm / property dialogs ────────────
+    //
+    // These eight used to be pushed into one `Vec` by a single
+    // `simple_dialogs_overlay`, and the three below them by
+    // `detachable_dialogs_overlay` (#535 part 2a). Splitting them is not
+    // cosmetic: both round-2 Esc regressions lived in the *intra-vec*
+    // push order inside those composites — grid-properties vs enable-VC,
+    // and annotate vs its reset confirm — where paint order was real but
+    // invisible from `collect_overlays`. The order is now stated once, in
+    // the one place that owns paint order, which is also what lets the
+    // upcoming `PAINT_ORDER` express it at all.
+    //
+    // Pure code motion: same conditions, same `view_*` calls, same
+    // sequence.
+
+    /// True while `modal` is showing in its own detached OS window rather
+    /// than as an in-window card. The detachable builders below skip
+    /// painting in that case, so the modal never renders in both windows
+    /// at once.
+    fn modal_detached(&self, modal: crate::app::state::ModalId) -> bool {
+        self.ui_state.windows.values().any(
+            |kind| matches!(kind, crate::app::state::WindowKind::DetachedModal(x) if *x == modal),
+        )
     }
 
-    /// Detachable dialogs (annotate, annotate-reset confirm, ERC). Each
-    /// is skipped when its detached OS window owns the view so the modal
-    /// never renders in both windows at once.
-    pub(in crate::app::view) fn detachable_dialogs_overlay(&self) -> Vec<Element<'_, Message>> {
-        let ui = &self.ui_state;
-        let modal_detached = |m: crate::app::state::ModalId| -> bool {
-            ui.windows.values().any(
-                |kind| matches!(kind, crate::app::state::WindowKind::DetachedModal(x) if *x == m),
-            )
-        };
-        let mut out: Vec<Element<'_, Message>> = Vec::new();
-        if ui.annotate_dialog_open && !modal_detached(crate::app::state::ModalId::AnnotateDialog) {
-            out.push(self.view_annotate_dialog());
-        }
-        if ui.annotate_reset_confirm
-            && !modal_detached(crate::app::state::ModalId::AnnotateResetConfirm)
-        {
-            out.push(self.view_annotate_reset_confirm());
-        }
-        if ui.erc_dialog_open && !modal_detached(crate::app::state::ModalId::ErcDialog) {
-            out.push(self.view_erc_dialog());
-        }
-        out
+    pub(in crate::app::view) fn rename_dialog_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .rename_dialog
+            .is_some()
+            .then(|| self.view_rename_dialog())
+    }
+
+    pub(in crate::app::view) fn remove_dialog_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .remove_dialog
+            .is_some()
+            .then(|| self.view_remove_dialog())
+    }
+
+    pub(in crate::app::view) fn project_close_confirm_overlay(
+        &self,
+    ) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .project_close_confirm
+            .is_some()
+            .then(|| self.view_project_close_confirm())
+    }
+
+    pub(in crate::app::view) fn app_quit_confirm_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .app_quit_confirm
+            .is_some()
+            .then(|| self.view_app_quit_confirm())
+    }
+
+    pub(in crate::app::view) fn project_options_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .project_options
+            .is_some()
+            .then(|| self.view_project_options_dialog())
+    }
+
+    pub(in crate::app::view) fn enable_version_control_overlay(
+        &self,
+    ) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .enable_version_control
+            .is_some()
+            .then(|| self.view_enable_version_control_dialog())
+    }
+
+    pub(in crate::app::view) fn grid_properties_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .grid_properties
+            .is_some()
+            .then(|| self.view_grid_properties_dialog())
+    }
+
+    pub(in crate::app::view) fn selection_filter_custom_overlay(
+        &self,
+    ) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .selection_filter_custom
+            .is_some()
+            .then(|| self.view_selection_filter_custom_dialog())
+    }
+
+    // ── Detachable dialogs ───────────────────────────────────────────
+
+    pub(in crate::app::view) fn annotate_dialog_overlay(&self) -> Option<Element<'_, Message>> {
+        (self.ui_state.annotate_dialog_open
+            && !self.modal_detached(crate::app::state::ModalId::AnnotateDialog))
+        .then(|| self.view_annotate_dialog())
+    }
+
+    pub(in crate::app::view) fn annotate_reset_confirm_overlay(
+        &self,
+    ) -> Option<Element<'_, Message>> {
+        (self.ui_state.annotate_reset_confirm
+            && !self.modal_detached(crate::app::state::ModalId::AnnotateResetConfirm))
+        .then(|| self.view_annotate_reset_confirm())
+    }
+
+    pub(in crate::app::view) fn erc_dialog_overlay(&self) -> Option<Element<'_, Message>> {
+        (self.ui_state.erc_dialog_open
+            && !self.modal_detached(crate::app::state::ModalId::ErcDialog))
+        .then(|| self.view_erc_dialog())
     }
 
     /// v0.9 Library — picker modal overlay. Centered card on a dim
