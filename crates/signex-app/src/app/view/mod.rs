@@ -756,7 +756,28 @@ impl Signex {
     fn collect_overlays(&self) -> Vec<Element<'_, Message>> {
         let mut layers = Vec::new();
         for id in overlay_id::visible(self.has_blocking_modal()) {
+            let first_new = layers.len();
             self.extend_overlay(&mut layers, *id);
+            // #562 — stop the wheel here rather than let it reach the
+            // canvas. Applied per overlay id, not per builder: most
+            // builders wrap their card in neither `wrap_modal` nor
+            // `dismiss_layer` (Preferences renders its body directly), so
+            // a guard placed in those two helpers alone missed them.
+            // Every overlay passes through this loop exactly once.
+            //
+            // `mouse_area` captures the wheel only where the cursor is
+            // over the wrapped element, and only wheel events — clicks
+            // still fall through exactly as before, which matters for the
+            // overlays that deliberately leave the canvas its right-press
+            // pan (see `dismiss_layer`).
+            if overlay_id::swallows_scroll(*id) {
+                for layer in &mut layers[first_new..] {
+                    let inner = std::mem::replace(layer, iced::widget::Space::new().into());
+                    *layer = iced::widget::mouse_area(inner)
+                        .on_scroll(|_| Message::Noop)
+                        .into();
+                }
+            }
         }
         layers
     }

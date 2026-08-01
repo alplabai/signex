@@ -188,6 +188,87 @@ pub(crate) const PAINT_ORDER: [OverlayId; 50] = [
 /// module; #535 part 2 wrote it down here rather than fix it, because
 /// unifying it inside a refactor whose whole claim is behaviour-neutrality
 /// would have smuggled a real behaviour change through that claim.
+/// Whether this overlay must stop a mouse wheel from reaching the canvas
+/// underneath it (#562).
+///
+/// The bug: scrolling past the end of a modal's content kept going and
+/// panned/zoomed the schematic behind it. Two facts compose into that —
+/// `scrollable` stops capturing once it hits its limit (ordinary scroll
+/// chaining), and nothing below it captured either. `Stack::update`
+/// walks its layers top-down and returns on `shell.is_event_captured()`
+/// (`iced_widget-0.14.2/src/stack.rs`), so a layer that captures does
+/// shield what is under it — there simply was not one.
+///
+/// Wiring `on_scroll` on the two backdrops (`wrap_modal`,
+/// `dismiss_layer`) was necessary but not sufficient: most overlays build
+/// neither. Preferences, for one, renders its body directly. So the
+/// guard is applied in `collect_overlays` instead, where every overlay
+/// passes through exactly once no matter how its builder is written.
+///
+/// Exhaustive on purpose: a new overlay has to say whether the wheel
+/// stops at it.
+pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
+    match id {
+        // The hover tooltip follows the cursor and paints nothing the
+        // user aims at. Capturing there would kill wheel-zoom over the
+        // canvas whenever a tooltip happened to be showing.
+        OverlayId::HoverTooltip => false,
+
+        // Everything else paints a surface over the canvas. Scrolling on
+        // it — or past the end of its own scrollable — must not reach
+        // through.
+        OverlayId::ErrorNotice
+        | OverlayId::NetlistIncompletePrompt
+        | OverlayId::PrintPreview
+        | OverlayId::BomPreview
+        | OverlayId::NetColorCustom
+        | OverlayId::PlacementPaused
+        | OverlayId::SchematicActiveBar
+        | OverlayId::FootprintActiveBar
+        | OverlayId::FootprintContextMenu
+        | OverlayId::FootprintMoveBy
+        | OverlayId::FootprintAlign
+        | OverlayId::SymbolEditorActiveBar
+        | OverlayId::SymbolContextMenu
+        | OverlayId::TextEdit
+        | OverlayId::ActiveBarMenu
+        | OverlayId::ContextMenu
+        | OverlayId::TabContextMenu
+        | OverlayId::ProjectTreeContextMenu
+        | OverlayId::GridPicker
+        | OverlayId::PanelList
+        | OverlayId::DockDragZone
+        | OverlayId::FloatingPanels
+        | OverlayId::Preferences
+        | OverlayId::FindReplace
+        | OverlayId::KeyboardShortcuts
+        | OverlayId::PassiveCalculator
+        | OverlayId::FirstRunTour
+        | OverlayId::RenameDialog
+        | OverlayId::RemoveDialog
+        | OverlayId::ProjectCloseConfirm
+        | OverlayId::AppQuitConfirm
+        | OverlayId::ProjectOptions
+        | OverlayId::EnableVersionControl
+        | OverlayId::GridProperties
+        | OverlayId::SelectionFilterCustom
+        | OverlayId::AnnotateDialog
+        | OverlayId::AnnotateResetConfirm
+        | OverlayId::ErcDialog
+        | OverlayId::LibraryPicker
+        | OverlayId::NewComponent
+        | OverlayId::EditRowModal
+        | OverlayId::DeleteConfirm
+        | OverlayId::PrimitivePicker
+        | OverlayId::DocumentOptions
+        | OverlayId::CreateOptions
+        | OverlayId::CloseLibraryConfirm
+        | OverlayId::LibraryRecovery
+        | OverlayId::CommandPalette
+        | OverlayId::LibraryUpdates => true,
+    }
+}
+
 pub(crate) fn visible(has_blocking_modal: bool) -> &'static [OverlayId] {
     if has_blocking_modal {
         &PAINT_ORDER[..PRE_BLOCKING]

@@ -286,6 +286,12 @@ impl Signex {
         // closes the context menu once the pan actually starts moving
         // (see `canvas/mod.rs`'s `CursorMoved` handler, which fires
         // `ContextMenuMsg::Close` the moment `pan_moved` flips on).
+        //
+        // The wheel is a separate matter, handled one level up:
+        // `collect_overlays` wraps every overlay whose id
+        // `overlay_id::swallows_scroll` marks, so scroll cannot reach the
+        // canvas through an overlay regardless of whether that overlay
+        // built a dismiss layer at all (#562).
         const BACKDROP_OPACITY: f32 = 0.55;
         iced::widget::mouse_area(
             container(iced::widget::Space::new())
