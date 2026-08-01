@@ -461,6 +461,57 @@ mod tests {
     }
 
     #[test]
+    fn an_undocked_tabs_esc_never_reaches_the_main_windows_footprint_editor() {
+        // The headline #554 bug. The post-ladder branch read the MAIN
+        // window's active tab, so with a footprint editor open there and
+        // the user wiring in an undocked schematic window, Esc fired
+        // `FootprintEditorMsg::ToolEscape` at an editor in another
+        // window. `view_center` gates the footprint surface on `is_main`,
+        // so an undocked window can never be showing that editor.
+        let mut app = quiet_app();
+        let footprint = std::path::PathBuf::from("/tmp/part.snxfpt");
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "part".to_string(),
+            path: footprint.clone(),
+            cached_document: None,
+            dirty: false,
+            project_id: None,
+            kind: crate::app::TabKind::FootprintEditor(footprint),
+        });
+        app.document_state.active_tab = 0;
+        app.interaction_state.current_tool = Tool::Wire;
+
+        // Baseline: a MAIN-window Esc takes the footprint branch, so the
+        // schematic tool reset deliberately does NOT run.
+        let _task = app.update(Message::EscapePressed {
+            window: app.ui_state.main_window_id,
+        });
+        assert_eq!(
+            app.interaction_state.current_tool,
+            Tool::Wire,
+            "the main window's Esc belongs to its footprint editor"
+        );
+
+        // Same state, Esc typed in an undocked schematic window. That
+        // editor is in another window, so the branch must be skipped and
+        // the schematic reset must run instead.
+        let tab = open_window(
+            &mut app,
+            WindowKind::UndockedTab {
+                path: std::path::PathBuf::from("/tmp/sheet.snxsch"),
+                title: "sheet".to_string(),
+            },
+        );
+        let _task = app.update(Message::EscapePressed { window: Some(tab) });
+        assert_eq!(
+            app.interaction_state.current_tool,
+            Tool::Select,
+            "an undocked window's Esc must not be answered by an editor \
+             living in the main window"
+        );
+    }
+
+    #[test]
     fn esc_in_an_undocked_tab_window_falls_through_to_the_tool_reset() {
         let mut app = quiet_app();
         app.interaction_state.current_tool = Tool::Wire;
