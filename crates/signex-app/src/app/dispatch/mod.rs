@@ -5,6 +5,7 @@ use super::*;
 mod command_palette;
 mod document;
 mod escape;
+mod input;
 mod keymap;
 pub(crate) mod library;
 mod overlay;
@@ -179,6 +180,11 @@ impl Signex {
             // Esc means different things in different OS windows, so its
             // whole resolution lives in `dispatch/escape.rs` (#554).
             Message::EscapePressed { window } => self.handle_escape_pressed(window),
+            // Every other key the widgets didn't want. Which consumer
+            // owns it is decided in `dispatch/input.rs` against live
+            // state (#557 phase 1) — the subscription no longer decides
+            // anything.
+            Message::KeyInput { window, event } => self.handle_key_input(window, event),
             Message::FootprintModeShortcut(target) => {
                 // v0.14.2 — gate on "active tab is a footprint
                 // editor". When yes, route through the existing

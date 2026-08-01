@@ -4,7 +4,6 @@
 use super::super::*;
 
 use crate::app::view::overlay_id::OverlayId;
-use crate::keymap::KeyStroke;
 use iced::Subscription;
 
 /// Which overlays are open, as the Esc ladder sees them.
@@ -76,24 +75,12 @@ struct OpenOverlays {
     delete_confirm: Option<std::path::PathBuf>,
 }
 
-/// The slice of modal state the *subscription closure* still needs.
-///
-/// Everything else moved to [`OpenOverlays`], which is now built in
-/// `update`. These three stay because the closure branches on them before
-/// any message is produced: the chord recorder and the command palette
-/// swallow raw strokes wholesale, and F1 toggles on whether the shortcuts
-/// sheet is already open.
-///
-/// Keeping this small is the point. `Hash` here is load-bearing — iced
-/// re-keys the subscription whenever it changes — so every field is a
-/// re-key on every open/close. Three flags re-key far less often than
-/// thirty did.
-#[derive(Clone, Copy, Default, Hash)]
-struct KeyContext {
-    palette_open: bool,
-    kbd_shortcuts_open: bool,
-    keymap_recorder_open: bool,
-}
+// `KeyContext` used to live here — the slice of modal state the
+// subscription closure branched on before producing any message. #557
+// phase 1 deleted it along with the closure: those branches now run in
+// `app/dispatch/input.rs` against live state, so the keyboard
+// subscription carries no state at all and its identity is constant for
+// the process lifetime.
 
 /// Which of the three library-recovery flows is open — see
 /// `OpenOverlays::recovery_kind`.
@@ -523,181 +510,32 @@ impl Signex {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        use iced::keyboard;
-
-        // `keyboard::listen()` would be the obvious source here, and was
-        // until #547 — but it drops the window id. Its filter matches
-        // `subscription::Event::Interaction { .. }` and the `..` swallows
-        // `window` (`iced_futures-0.14.0/src/keyboard.rs`), so an Esc
-        // typed in a detached modal's own window arrived indistinguishable
-        // from one typed in the main window, and reset the main window's
-        // canvas tool. `event::listen_with` hands the id to its filter
-        // (`iced_futures-0.14.0/src/event.rs:26`); the predicate below is
-        // otherwise the same one `keyboard::listen()` applies — keyboard
-        // events, `Status::Ignored` — so no other stroke changes.
+        // A pure transport, nothing more (#557 phase 1). It filters and
+        // forwards; which app-level consumer owns the key is decided in
+        // `app/dispatch/input.rs` against live state.
         //
-        // The filter must be a plain `fn` (that is `listen_with`'s
-        // parameter type), which is why the context still rides in via
-        // `.with` rather than being captured here.
+        // `keyboard::listen()` cannot be the source: it drops the window
+        // id, because its filter matches `subscription::Event::Interaction
+        // { .. }` and the `..` swallows `window`
+        // (`iced_futures-0.14.0/src/keyboard.rs`). `event::listen_with`
+        // hands the id to its filter (`iced_futures-0.14.0/src/event.rs:26`);
+        // the predicate here is otherwise the one `keyboard::listen()`
+        // applies — keyboard events, `Status::Ignored`.
+        //
+        // No `.with(...)` and no `.map(...)`: the message is built in the
+        // filter itself. That matters twice over. `listen_with` takes a
+        // plain `fn`, and this closure captures nothing, so it coerces.
+        // And `Subscription::with` folds its value into the subscription's
+        // IDENTITY hash — the old `KeyContext` meant every command-palette
+        // / recorder / shortcuts open-close tore down and respawned the
+        // keyboard stream. This subscription's identity is now constant
+        // for the process lifetime.
         let kbd = iced::event::listen_with(|event, status, window| match (event, status) {
-            (iced::Event::Keyboard(event), iced::event::Status::Ignored) => Some((window, event)),
+            (iced::Event::Keyboard(event), iced::event::Status::Ignored) => {
+                Some(Message::KeyInput { window, event })
+            }
             _ => None,
-        })
-        .with(KeyContext {
-            palette_open: self.ui_state.command_palette.open,
-            kbd_shortcuts_open: self.ui_state.keyboard_shortcuts_open,
-            keymap_recorder_open: self.ui_state.preferences_keymap_recorder.is_some(),
-        })
-        .map(
-            |(
-                KeyContext {
-                    palette_open,
-                    kbd_shortcuts_open,
-                    keymap_recorder_open,
-                },
-                (window, event),
-            )| match event {
-                // Chord recorder open (Preferences ▸ Keyboard
-                // Shortcuts): held modifiers drive the live
-                // "Ctrl+…" hint before a key lands.
-                keyboard::Event::ModifiersChanged(modifiers) if keymap_recorder_open => {
-                    Message::Preferences(PreferencesMsg::Inner(
-                        crate::preferences::PrefMsg::KeymapRecorderModifiersChanged(
-                            crate::keymap::Modifiers::from_iced(modifiers),
-                        ),
-                    ))
-                }
-                keyboard::Event::KeyPressed {
-                    key, modifiers: m, ..
-                } => {
-                    // While the recorder is open, every raw stroke
-                    // is captured for the binding under edit — it
-                    // must NOT reach the live keymap resolver, or
-                    // recording a shortcut would also fire it. The
-                    // pending chord buffer is left untouched (it is
-                    // only advanced by the resolver, which we skip).
-                    if keymap_recorder_open {
-                        return KeyStroke::from_iced(&key, m)
-                            .map(|stroke| {
-                                Message::Preferences(PreferencesMsg::Inner(
-                                    crate::preferences::PrefMsg::KeymapRecorderKeyPressed(stroke),
-                                ))
-                            })
-                            .unwrap_or(Message::Noop);
-                    }
-                    // Command palette captures most input while open so
-                    // typing into the search field doesn't fire tool
-                    // shortcuts (`p`, `w`, `l`, …). Only navigation
-                    // and dismiss keys leak through.
-                    if palette_open {
-                        return match (key.as_ref(), m) {
-                            (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
-                                Message::CommandPalette(CommandPaletteMsg::Close)
-                            }
-                            (keyboard::Key::Named(keyboard::key::Named::ArrowDown), _) => {
-                                Message::CommandPalette(CommandPaletteMsg::MoveSelection(1))
-                            }
-                            (keyboard::Key::Named(keyboard::key::Named::ArrowUp), _) => {
-                                Message::CommandPalette(CommandPaletteMsg::MoveSelection(-1))
-                            }
-                            // Toggle: Ctrl+Shift+P while open closes.
-                            (keyboard::Key::Character(c), m)
-                                if c.eq_ignore_ascii_case("p") && m.command() && m.shift() =>
-                            {
-                                Message::CommandPalette(CommandPaletteMsg::Close)
-                            }
-                            _ => Message::Noop,
-                        };
-                    }
-                    // v0.19 keymap migration: per-key tool / command
-                    // shortcuts now come from the active profile (see
-                    // `dispatch::keymap`). Only keys that can't be
-                    // profile-driven stay hardcoded here: the modal-close
-                    // Esc ladder and F1 (they depend on which modal is
-                    // open — subscription state, not the profile), and
-                    // the Ctrl/Alt+1-8 selection-memory chords (they
-                    // carry the digit as data the profile can't express).
-                    // Everything else is forwarded to the keymap resolver
-                    // in `update`.
-                    match (key.as_ref(), m) {
-                        // Esc is forwarded raw (#535). The ladder used to
-                        // be resolved right here, against a snapshot
-                        // baked when this subscription was last built —
-                        // i.e. up to one update stale. It now runs in
-                        // the `Message::EscapePressed` handler
-                        // (`app/dispatch/mod.rs`) against live state,
-                        // which is what the user is actually looking at,
-                        // and which lets a rung carry owned data.
-                        //
-                        // Deliberately NOT routed through
-                        // `resolve_keymap_stroke`: that advances the
-                        // multi-stroke chord buffer and consults the
-                        // active profile, neither of which Esc has ever
-                        // done.
-                        //
-                        // It now carries the window it was typed in
-                        // (#547) — the handler needs it to tell an Esc
-                        // aimed at a detached modal from one aimed at
-                        // the main window's canvas.
-                        (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
-                            Message::EscapePressed {
-                                window: Some(window),
-                            }
-                        }
-                        (keyboard::Key::Named(keyboard::key::Named::F1), _) => {
-                            // F1 toggles: open if closed, close if open.
-                            if kbd_shortcuts_open {
-                                Message::Overlay(OverlayMsg::CloseKeyboardShortcuts)
-                            } else {
-                                Message::Menu(MenuMessage::OpenKeyboardShortcuts)
-                            }
-                        }
-                        // Ctrl+1-8 store selection memory, Alt+1-8 recall
-                        // selection memory. These carry the digit as data
-                        // the profile format can't express, so they stay
-                        // hardcoded. The `is_some` guard is load-bearing
-                        // (#127): without it this arm matched EVERY
-                        // Ctrl/Alt chord and returned Noop, which would
-                        // shadow Ctrl+C/X/V/D before they reach the keymap
-                        // resolver below.
-                        (keyboard::Key::Character(c), m)
-                            if m.command()
-                                && !m.alt()
-                                && super::selection_slot_from_key(c).is_some() =>
-                        {
-                            match super::selection_slot_from_key(c) {
-                                Some(slot) => Message::Selection(
-                                    selection_request::SelectionRequest::StoreSlot { slot },
-                                ),
-                                _ => Message::Noop,
-                            }
-                        }
-                        (keyboard::Key::Character(c), m)
-                            if m.alt()
-                                && !m.command()
-                                && super::selection_slot_from_key(c).is_some() =>
-                        {
-                            match super::selection_slot_from_key(c) {
-                                Some(slot) => Message::Selection(
-                                    selection_request::SelectionRequest::RecallSlot { slot },
-                                ),
-                                _ => Message::Noop,
-                            }
-                        }
-                        // Everything else routes through the active
-                        // keymap: forward the raw stroke, resolved in
-                        // `update` where the multi-stroke chord buffer
-                        // lives in `UiState` (sound across windows). A
-                        // stroke iced can't express as a `KeyStroke`
-                        // (e.g. a bare modifier press) is ignored here.
-                        _ => KeyStroke::from_iced(&key, m)
-                            .map(|stroke| Message::Ui(UiMsg::KeymapStroke(stroke)))
-                            .unwrap_or(Message::Noop),
-                    }
-                }
-                _ => Message::Noop,
-            },
-        );
+        });
 
         // Mouse events for drag-to-resize/floating-drag.
         // Subscribing to cursor move only while dragging avoids per-frame

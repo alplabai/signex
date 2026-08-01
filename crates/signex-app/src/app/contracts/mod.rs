@@ -184,6 +184,20 @@ pub enum Message {
         /// exactly as a main-window Esc does.
         window: Option<iced::window::Id>,
     },
+    /// A keyboard event no widget wanted, with the window it landed in
+    /// (#557 phase 1).
+    ///
+    /// The keyboard subscription is a pure transport: it filters
+    /// `Status::Ignored` keyboard events and forwards them unexamined.
+    /// Which app-level consumer owns the event is decided in
+    /// `app/dispatch/input.rs` against live state — those branches used
+    /// to live in the subscription closure, resolving against a snapshot
+    /// baked one update earlier and blind to which window produced the
+    /// key.
+    KeyInput {
+        window: iced::window::Id,
+        event: iced::keyboard::Event,
+    },
     Noop,
 }
 

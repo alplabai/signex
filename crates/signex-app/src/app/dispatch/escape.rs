@@ -7,7 +7,7 @@
 //!
 //! # Windows are not interchangeable
 //!
-//! [`EscapeSource`] is derived from `WindowKind` by an exhaustive match,
+//! [`InputTarget`] is derived from `WindowKind` by an exhaustive match,
 //! so a new window kind is a compile error here rather than silently
 //! inheriting the main window's Esc — which is how #547 and this issue
 //! both happened.
@@ -24,57 +24,16 @@
 //! * a detached panel and a component-editor window paint neither, so
 //!   the ladder must not run for them at all.
 
+use super::input::InputTarget;
 use super::*;
 
-/// Where an Esc came from, as far as resolving it cares (#554).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum EscapeSource {
-    /// The main window — or a synthesised Esc naming no window at all
-    /// (`cancel_current_tool` from the command palette or a keymap
-    /// binding, `app/command/bridge.rs`), which resolves the same way.
-    Main,
-    /// A modal showing in its own OS window (#547).
-    DetachedModal(crate::app::state::ModalId),
-    /// An undocked document tab. Paints the whole main view, so the Esc
-    /// ladder applies; only the editor/tool reset behind it has to be
-    /// re-aimed.
-    UndockedTab,
-    /// A detached dock panel. No canvas, no tool, no overlay stack.
-    DetachedPanel,
-    /// A detached Component Preview. Its state is addressable through
-    /// `library.editors`, but nothing in it answers Esc today — and
-    /// neither does the inline tab it mirrors.
-    ComponentEditor,
-}
-
 impl Signex {
-    /// Classify the window an Esc was typed in.
-    ///
-    /// The main window is deliberately absent from `ui_state.windows`
-    /// (only `ui_state.main_window_id` names it), so a miss maps to
-    /// [`EscapeSource::Main`] — as does a window already dropped from the
-    /// map on a close frame, which is the answer the pre-#547 code gave.
-    pub(crate) fn escape_source(&self, window: Option<iced::window::Id>) -> EscapeSource {
-        use crate::app::state::WindowKind;
-
-        let Some(window) = window else {
-            return EscapeSource::Main;
-        };
-        match self.ui_state.windows.get(&window) {
-            None => EscapeSource::Main,
-            Some(WindowKind::DetachedModal(modal)) => EscapeSource::DetachedModal(*modal),
-            Some(WindowKind::UndockedTab { .. }) => EscapeSource::UndockedTab,
-            Some(WindowKind::DetachedPanel(_)) => EscapeSource::DetachedPanel,
-            Some(WindowKind::ComponentEditor { .. }) => EscapeSource::ComponentEditor,
-        }
-    }
-
     /// Resolve one Esc against the window it was typed in.
     pub(crate) fn handle_escape_pressed(
         &mut self,
         window: Option<iced::window::Id>,
     ) -> Task<Message> {
-        match self.escape_source(window) {
+        match self.input_target(window) {
             // #547 — an Esc inside a detached modal's own window
             // addresses THAT modal and nothing else. The ladder is not
             // walked: it ranks overlays by where they paint in the main
@@ -87,7 +46,7 @@ impl Signex {
             // net-colour palette, the parameter manager). Its in-window
             // card ignores Esc too, so swallowing the key keeps the two
             // spellings of one gesture agreeing.
-            EscapeSource::DetachedModal(modal) => match self.detached_modal_escape_message(modal) {
+            InputTarget::DetachedModal(modal) => match self.detached_modal_escape_message(modal) {
                 Some(msg) => self.update(msg),
                 None => Task::none(),
             },
@@ -106,7 +65,7 @@ impl Signex {
             // the inline Component Preview tab has no Esc, so giving only
             // the detached form a dismissal is the asymmetry
             // `detached_modal_escape_message` argues against.
-            EscapeSource::DetachedPanel | EscapeSource::ComponentEditor => Task::none(),
+            InputTarget::DetachedPanel | InputTarget::ComponentEditor => Task::none(),
 
             // An undocked tab paints the same overlay stack as the main
             // window, so the ladder is right — but the editor branch
@@ -116,14 +75,14 @@ impl Signex {
             // canvas; consulting the MAIN window's active tab from here
             // could only ever fire `FootprintToolEscape` at an editor
             // living in another window.
-            EscapeSource::UndockedTab => {
+            InputTarget::UndockedTab => {
                 if let Some(overlay_msg) = self.escape_overlay_message() {
                     return self.update(overlay_msg);
                 }
                 self.escape_tool_reset()
             }
 
-            EscapeSource::Main => {
+            InputTarget::Main => {
                 // The modal Esc ladder resolves FIRST, and here rather
                 // than in the keyboard subscription (#535). Two things
                 // follow from resolving it against live state:
@@ -381,18 +340,18 @@ mod tests {
         let mut app = quiet_app();
 
         assert_eq!(
-            app.escape_source(None),
-            EscapeSource::Main,
+            app.input_target(None),
+            InputTarget::Main,
             "a synthesised Esc names no window and resolves as the main one"
         );
         assert_eq!(
-            app.escape_source(app.ui_state.main_window_id),
-            EscapeSource::Main,
+            app.input_target(app.ui_state.main_window_id),
+            InputTarget::Main,
             "the main window is deliberately absent from `ui_state.windows`"
         );
         assert_eq!(
-            app.escape_source(Some(iced::window::Id::unique())),
-            EscapeSource::Main,
+            app.input_target(Some(iced::window::Id::unique())),
+            InputTarget::Main,
             "a window already dropped from the map (close frame) falls back \
              to the main answer, as it did before #547"
         );
@@ -419,15 +378,12 @@ mod tests {
         );
 
         assert_eq!(
-            app.escape_source(Some(modal)),
-            EscapeSource::DetachedModal(ModalId::ErcDialog)
+            app.input_target(Some(modal)),
+            InputTarget::DetachedModal(ModalId::ErcDialog)
         );
-        assert_eq!(app.escape_source(Some(tab)), EscapeSource::UndockedTab);
-        assert_eq!(app.escape_source(Some(panel)), EscapeSource::DetachedPanel);
-        assert_eq!(
-            app.escape_source(Some(editor)),
-            EscapeSource::ComponentEditor
-        );
+        assert_eq!(app.input_target(Some(tab)), InputTarget::UndockedTab);
+        assert_eq!(app.input_target(Some(panel)), InputTarget::DetachedPanel);
+        assert_eq!(app.input_target(Some(editor)), InputTarget::ComponentEditor);
     }
 
     #[test]
