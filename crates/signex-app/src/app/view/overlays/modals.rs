@@ -124,7 +124,10 @@ impl Signex {
     /// Visible to the whole `view` module since #547: `bars.rs` had two
     /// hand-rolled copies of this predicate and a third place —
     /// `has_blocking_modal` — that was missing it entirely.
-    pub(in crate::app::view) fn modal_detached(&self, modal: crate::app::state::ModalId) -> bool {
+    ///
+    /// `pub(crate)` since #555: the input router asks the same question
+    /// to decide which window a detachable modal's keys belong to.
+    pub(crate) fn modal_detached(&self, modal: crate::app::state::ModalId) -> bool {
         self.ui_state.windows.values().any(
             |kind| matches!(kind, crate::app::state::WindowKind::DetachedModal(x) if *x == modal),
         )
