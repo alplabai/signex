@@ -72,3 +72,7 @@ tempfile = "3"
 pdf-writer = { workspace = true }
 tokio = { workspace = true }
 wiremock = "0.6"
+
+# GH #548 — inherit [workspace.lints.rust] (unused_must_use = deny).
+[lints]
+workspace = true

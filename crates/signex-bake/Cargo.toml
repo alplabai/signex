@@ -15,3 +15,7 @@ thiserror = { workspace = true }
 signex-sketch = { workspace = true }
 signex-library = { workspace = true }
 signex-types = { workspace = true }
+
+# GH #548 — inherit [workspace.lints.rust] (unused_must_use = deny).
+[lints]
+workspace = true

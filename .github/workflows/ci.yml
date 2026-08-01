@@ -152,14 +152,20 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # This job fails hard (NOT continue-on-error) on a violation — but a
-      # failing job only blocks a merge if it's listed as a required status
-      # check in the branch-protection ruleset, and as of this writing it
-      # is NOT (neither is `no-god-files`). Until it's added there, a PR
-      # reintroducing `let _ = self.handle_x(...)` goes red here and stays
-      # mergeable. `let _ = self.handle_x(...)` silently drops an
-      # `iced::Task<Message>` and neither the compiler nor clippy's
-      # warn-level gate catches it (see the script header for why).
+      # This job fails hard (NOT continue-on-error) on a violation, and it is
+      # a REQUIRED status check on trunk, so a violation actually blocks the
+      # merge (GH #548 proposal 2; `no god-files` was already required).
+      #
+      # Scope, corrected (#548): `let _ = self.handle_x(...)` silently drops
+      # an `iced::Task<Message>` and rustc does NOT catch it — binding to `_`
+      # counts as "used" under `unused_must_use`. That shape is this gate's
+      # entire reason to exist. The neighbouring `self.handle_x(...)?;` shape
+      # is the COMPILER's job, not this script's: `unused_must_use` is denied
+      # for signex-app in crates/signex-app/Cargo.toml, so it fails the build.
+      # An earlier version of this comment claimed the compiler was blind to
+      # both. It never was blind to the second one — the warning was simply
+      # buried among ~324 unrelated workspace warnings and nobody read it.
+      #
       # Rationale + known blind spots live in
       # scripts/check_discarded_tasks.sh; GH #99 part 1.
       - name: Discarded-Task ratchet gate

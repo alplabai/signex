@@ -4,9 +4,23 @@
 # silently throws away an `iced::Task<Message>`. `Task` is `#[must_use]`
 # (iced_runtime-0.14.0/src/task.rs), but binding the result to `_` counts as
 # "used" under rustc's `unused_must_use` lint (it only fires on a bare
-# expression-statement), so the compiler never catches this — and CI's
-# clippy gate (`-W clippy::all`, warn-level) doesn't carry a lint that would
-# either. A dropped `Task` is a silent no-op today only because every
+# expression-statement), so the compiler never catches THIS shape.
+#
+# It does catch the neighbouring one. `self.handle_x(...)?;` — a bare
+# expression-statement — has always made rustc emit `unused Task that must
+# be used`, and since GH #548 that is DENIED for signex-app
+# (crates/signex-app/Cargo.toml, `[lints.rust]`), so it fails the build
+# rather than adding one more line to a ~324-warning wall. Do not widen this
+# grep to cover `expr?;`: that shape belongs to the type checker, and a bash
+# approximation of it would be strictly worse.
+#
+# COUNTER-GUIDANCE, and the reason this paragraph exists: rustc's own help
+# text for that error reads `use `let _ = ...` to ignore the resulting
+# value`. Following it converts a defect the COMPILER sees into one only
+# this grep can see — and this grep documents its blind spots below. Never
+# silence `unused_must_use` with `let _ =`; handle the Task or return it.
+#
+# A dropped `Task` is a silent no-op today only because every
 # offending callee happens to return `Task::none()` on every path; the
 # moment one of them starts doing real async work (e.g. `.snxlib` mounting
 # going async), the dropped work vanishes with no warning anywhere.

@@ -10,14 +10,6 @@ license.workspace = true
 name = "signex_app"
 path = "src/lib.rs"
 
-[lints.clippy]
-# Warn-level only (GH #99 part 1) — `Task` is `#[must_use]` but `let _ =`
-# defeats that (see scripts/check_discarded_tasks.sh for the full story).
-# This lint also catches discarded `Result`s the same way; 13 pre-existing
-# sites are tracked separately and are NOT fixed by this change, so the
-# lint stays warn rather than deny.
-let_underscore_must_use = "warn"
-
 [[bin]]
 name = "signex"
 path = "src/main.rs"
@@ -121,3 +113,21 @@ windows-sys = { version = "0.61", features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_UI_Input_KeyboardAndMouse",
 ] }
+
+# NOT `[lints] workspace = true` — cargo rejects mixing inheritance with
+# per-lint overrides, and this crate needs the clippy lint below that the
+# workspace deliberately does not carry (see the root manifest). Keep
+# `unused_must_use` in lockstep with `[workspace.lints.rust]` by hand.
+[lints.rust]
+# GH #548 — a bare `self.open_project_file(path)?;` drops the returned
+# `iced::Task`. rustc already fired on that shape, at warn level, and the
+# discard reached a PR anyway (#544). Deny so it cannot.
+unused_must_use = "deny"
+
+[lints.clippy]
+# Warn-level only (GH #99 part 1) — `Task` is `#[must_use]` but `let _ =`
+# defeats that (see scripts/check_discarded_tasks.sh for the full story).
+# This lint also catches discarded `Result`s the same way; 13 pre-existing
+# sites are tracked separately and are NOT fixed by this change, so the
+# lint stays warn rather than deny.
+let_underscore_must_use = "warn"

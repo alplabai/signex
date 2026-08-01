@@ -11,3 +11,7 @@ signex-types.workspace = true
 chumsky.workspace = true
 regex.workspace = true
 thiserror.workspace = true
+
+# GH #548 — inherit [workspace.lints.rust] (unused_must_use = deny).
+[lints]
+workspace = true

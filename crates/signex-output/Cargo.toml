@@ -23,3 +23,7 @@ uuid = { workspace = true }
 [[example]]
 name = "qa_harness"
 path = "examples/qa_harness.rs"
+
+# GH #548 — inherit [workspace.lints.rust] (unused_must_use = deny).
+[lints]
+workspace = true

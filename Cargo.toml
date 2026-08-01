@@ -135,6 +135,26 @@ signex-sketch = { path = "crates/signex-sketch" }
 # Internal — bake pipeline (v0.13 Phase 7)
 signex-bake = { path = "crates/signex-bake" }
 
+# Inherited by every member via `[lints] workspace = true` (GH #548).
+[workspace.lints.rust]
+# `iced::Task` is `#[must_use]` (iced_runtime-0.14.0/src/task.rs), so a bare
+# `self.open_project_file(path)?;` that drops one already made rustc fire —
+# at WARN level, in a build that emits dozens of unrelated warnings. The
+# discard in #544 reached a PR anyway. Signal buried in noise is not a gate.
+#
+# This catches strictly more than scripts/check_discarded_tasks.sh can: any
+# must-use type, any method name, any line wrapping. It does NOT replace
+# that script — rustc counts `let _ = ...` as "used", so the `let _ =`
+# discard shape stays the grep gate's job.
+unused_must_use = "deny"
+
+# Deliberately NOT lifted here: clippy's `let_underscore_must_use`, which
+# `signex-app` carries locally. Workspace-wide it fires 33 times across
+# signex-types / signex-output / signex-library / signex-gfx — none of them
+# `Task` discards, and #548's whole complaint is that signal buried in noise
+# is not a gate. `signex-app` therefore keeps explicit `[lints.*]` tables
+# instead of `workspace = true`; a lint added above will NOT reach it.
+
 [profile.release]
 lto = "thin"
 codegen-units = 1
