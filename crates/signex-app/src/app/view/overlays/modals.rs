@@ -20,14 +20,7 @@ impl Signex {
     pub(in crate::app::view) fn preferences_overlay(&self) -> Option<Element<'_, Message>> {
         let ui = &self.ui_state;
         let document = &self.document_state;
-        let prefs_detached = ui.windows.values().any(|kind| {
-            matches!(
-                kind,
-                crate::app::state::WindowKind::DetachedModal(
-                    crate::app::state::ModalId::Preferences
-                )
-            )
-        });
+        let prefs_detached = self.modal_detached(crate::app::state::ModalId::Preferences);
         if !(ui.preferences_open && !prefs_detached) {
             return None;
         }
@@ -127,7 +120,11 @@ impl Signex {
     /// than as an in-window card. The detachable builders below skip
     /// painting in that case, so the modal never renders in both windows
     /// at once.
-    fn modal_detached(&self, modal: crate::app::state::ModalId) -> bool {
+    ///
+    /// Visible to the whole `view` module since #547: `bars.rs` had two
+    /// hand-rolled copies of this predicate and a third place —
+    /// `has_blocking_modal` — that was missing it entirely.
+    pub(in crate::app::view) fn modal_detached(&self, modal: crate::app::state::ModalId) -> bool {
         self.ui_state.windows.values().any(
             |kind| matches!(kind, crate::app::state::WindowKind::DetachedModal(x) if *x == modal),
         )

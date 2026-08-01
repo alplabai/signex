@@ -177,14 +177,17 @@ pub(crate) const PAINT_ORDER: [OverlayId; 50] = [
 /// state is set. Both the painter and the Esc ladder must agree on that
 /// or Esc dismisses a card the user cannot see — see the module docs.
 ///
-/// Callers pass their own `has_blocking_modal` on purpose. The painter's
-/// (`Signex::has_blocking_modal`, `bars.rs`) and the Esc ladder's
-/// (`OpenOverlays::has_blocking_modal`) are NOT identical today: the
-/// latter filters a print preview that has been detached into its own OS
-/// window, the former does not. That divergence predates this module and
-/// is a real bug on both sides; unifying it here would have silently
-/// changed behaviour inside a refactor whose whole claim is that it does
-/// not. It gets its own issue and its own fix.
+/// Callers pass their own `has_blocking_modal` on purpose — the painter's
+/// (`Signex::has_blocking_modal`, `bars.rs`) reads live state, the Esc
+/// ladder's (`OpenOverlays::has_blocking_modal`) reads a snapshot — but
+/// the two must agree term for term. They did not until #547: the ladder
+/// filtered a print preview detached into its own OS window and the
+/// painter did not, so with the preview detached the painter suppressed
+/// the whole stack while nothing painted in its place, and Esc resolved
+/// against overlays that were not on screen. The divergence predated this
+/// module; #535 part 2 wrote it down here rather than fix it, because
+/// unifying it inside a refactor whose whole claim is behaviour-neutrality
+/// would have smuggled a real behaviour change through that claim.
 pub(crate) fn visible(has_blocking_modal: bool) -> &'static [OverlayId] {
     if has_blocking_modal {
         &PAINT_ORDER[..PRE_BLOCKING]

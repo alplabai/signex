@@ -26,7 +26,9 @@ pub(crate) fn core_to_message(command: &AppCommandId) -> Option<Message> {
         "annotate_schematic_quietly" => {
             Message::Annotate(AnnotateMsg::Run(signex_engine::AnnotateMode::Incremental))
         }
-        "cancel_current_tool" => Message::EscapePressed,
+        // No originating window: this Esc was invoked as a command, not
+        // typed. `None` resolves as a main-window Esc (#547).
+        "cancel_current_tool" => Message::EscapePressed { window: None },
         "center_view_at_cursor"
         | "show_all_design_objects"
         | "zoom_to_all_objects"

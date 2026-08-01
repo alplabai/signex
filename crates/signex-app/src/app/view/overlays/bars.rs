@@ -14,13 +14,39 @@ use iced::widget::{column, container, row};
 
 impl Signex {
     /// True when a modal that must own the entire overlay stack is up —
-    /// export-error, print preview, or the custom net-colour picker.
-    /// Mirrors the inline guard that early-returns from
-    /// `collect_overlays` before any tool/menu overlay is pushed.
+    /// the error notice, the netlist-incomplete prompt, print preview, or
+    /// the custom net-colour picker. Mirrors the inline guard that
+    /// early-returns from `collect_overlays` before any tool/menu overlay
+    /// is pushed.
+    ///
+    /// The print-preview term is detachment-filtered (#547). It was not
+    /// until then, and the omission cost the main window its entire
+    /// overlay stack: once the preview moved into its own OS window
+    /// `print_preview_overlay` stopped painting the in-window card, but
+    /// this predicate still reported the stack blocked, so
+    /// `collect_overlays` took its early return and every one of the five
+    /// pre-blocking builders then returned nothing. Ctrl+G grid
+    /// properties, the quit confirm, Preferences, the library modals —
+    /// all opened their state, none appeared, and nothing on screen
+    /// explained why. Detaching a modal is precisely the gesture that
+    /// stops it covering this window.
+    ///
+    /// Only Print Preview needs the filter: `error_notice` and
+    /// `netlist_incomplete_prompt` have no `ModalId` and so no detached
+    /// form, and the custom net-colour picker
+    /// (`ui_state.net_color_custom`) is a different overlay from the
+    /// detachable F5 palette (`ModalId::NetColorPalette`,
+    /// `ui_state.net_color_palette_open`), which is not one of these four.
+    ///
+    /// `OpenOverlays::has_blocking_modal` (`app/bootstrap/subscription.rs`)
+    /// is the Esc ladder's copy of this predicate, built from a snapshot
+    /// rather than live state. The two must agree term for term or Esc
+    /// resolves against a stack that is not on screen.
     pub(in crate::app::view) fn has_blocking_modal(&self) -> bool {
         self.document_state.error_notice.is_some()
             || self.document_state.netlist_incomplete_prompt.is_some()
-            || self.document_state.preview.is_some()
+            || (self.document_state.preview.is_some()
+                && !self.modal_detached(crate::app::state::ModalId::PrintPreview))
             || self.ui_state.net_color_custom.show
     }
 
@@ -59,14 +85,7 @@ impl Signex {
     /// so it can be dragged outside the app's client area. Only fall
     /// back to the in-window overlay if the OS window failed to open.
     pub(in crate::app::view) fn print_preview_overlay(&self) -> Option<Element<'_, Message>> {
-        let preview_detached = self.ui_state.windows.values().any(|kind| {
-            matches!(
-                kind,
-                crate::app::state::WindowKind::DetachedModal(
-                    crate::app::state::ModalId::PrintPreview
-                )
-            )
-        });
+        let preview_detached = self.modal_detached(crate::app::state::ModalId::PrintPreview);
         if self.document_state.preview.is_some() && !preview_detached {
             Some(self.view_print_preview())
         } else {
@@ -76,14 +95,7 @@ impl Signex {
 
     /// BOM preview overlay — same detach-first pattern as Print Preview.
     pub(in crate::app::view) fn bom_preview_overlay(&self) -> Option<Element<'_, Message>> {
-        let bom_detached = self.ui_state.windows.values().any(|kind| {
-            matches!(
-                kind,
-                crate::app::state::WindowKind::DetachedModal(
-                    crate::app::state::ModalId::BomPreview
-                )
-            )
-        });
+        let bom_detached = self.modal_detached(crate::app::state::ModalId::BomPreview);
         if self.document_state.bom_preview.is_some() && !bom_detached {
             Some(self.view_bom_preview())
         } else {
@@ -721,5 +733,105 @@ impl Signex {
             Self::dismiss_layer(Message::Overlay(OverlayMsg::TogglePanelList)),
             super::super::translate::Translate::new(Element::from(popup), (left, top)).into(),
         ]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::state::{ModalId, PreviewState, WindowKind};
+
+    /// A print preview with no pages — enough to set the state flag the
+    /// blocking predicate reads, which is all these tests care about.
+    fn blank_preview() -> PreviewState {
+        PreviewState {
+            pages: Vec::new(),
+            page_handles: Vec::new(),
+            selected: 0,
+            pdf_options: signex_output::PdfOptions::default(),
+            specific_page_input: "1".to_string(),
+            zoom: 1.0,
+            active_tab: crate::app::state::PdfPreviewTab::Preview,
+            pan: (0.0, 0.0),
+            panning: None,
+            sheet_files: Vec::new(),
+            selected_files: std::collections::HashSet::new(),
+            variants: Vec::new(),
+            quality: crate::app::state::PdfQuality::Draft72,
+        }
+    }
+
+    /// #547 — the painter kept suppressing the whole overlay stack for a
+    /// print preview that had moved into its own OS window, while
+    /// `print_preview_overlay` had already stopped painting the in-window
+    /// card. The main window then painted NOTHING: `collect_overlays`
+    /// early-returns on this predicate, and all five pre-blocking
+    /// builders return empty. Ctrl+G, the quit confirm, Preferences and
+    /// the library modals all opened their state with nothing on screen.
+    #[test]
+    fn a_detached_print_preview_stops_blocking_the_main_windows_overlay_stack() {
+        let (mut app, _boot) = Signex::new();
+        app.document_state.preview = Some(blank_preview());
+        assert!(
+            app.has_blocking_modal(),
+            "an in-window print preview does own the whole stack"
+        );
+
+        app.ui_state.windows.insert(
+            iced::window::Id::unique(),
+            WindowKind::DetachedModal(ModalId::PrintPreview),
+        );
+        assert!(
+            !app.has_blocking_modal(),
+            "a preview in its own OS window covers nothing in this one"
+        );
+    }
+
+    /// The filter is one term, not four. `net_color_custom` is the
+    /// bespoke picker, a different overlay from the detachable F5 palette
+    /// (`ModalId::NetColorPalette`) — detaching that palette must not
+    /// unblock the picker.
+    #[test]
+    fn detaching_the_net_colour_palette_does_not_unblock_the_custom_picker() {
+        let (mut app, _boot) = Signex::new();
+        app.ui_state.net_color_custom.show = true;
+        app.ui_state.windows.insert(
+            iced::window::Id::unique(),
+            WindowKind::DetachedModal(ModalId::NetColorPalette),
+        );
+        assert!(
+            app.has_blocking_modal(),
+            "the custom picker has no detached form and still owns the stack"
+        );
+    }
+
+    /// The Esc ladder builds its own copy of this predicate from a
+    /// snapshot (`OpenOverlays::has_blocking_modal`,
+    /// `app/bootstrap/subscription.rs`). If the two disagree, Esc
+    /// resolves against a stack that is not on screen — which is exactly
+    /// what #547 was. Pin the agreement on the term that diverged.
+    #[test]
+    fn the_painter_and_the_esc_ladder_agree_about_a_detached_preview() {
+        let (mut app, _boot) = Signex::new();
+        // `Signex::new()` opens the first-run tour, which is a rung of its
+        // own and would answer the Esc before the question below is even
+        // asked.
+        app.ui_state.first_run_tour_open = false;
+        app.document_state.preview = Some(blank_preview());
+        app.ui_state.windows.insert(
+            iced::window::Id::unique(),
+            WindowKind::DetachedModal(ModalId::PrintPreview),
+        );
+        // The ladder's answer, reached through its public entry point: a
+        // detached preview claims no Esc, so it is not blocking there
+        // either.
+        assert!(
+            app.escape_overlay_message().is_none(),
+            "the ladder already treats a detached preview as not blocking"
+        );
+        assert!(
+            !app.has_blocking_modal(),
+            "so the painter must too, or Esc and paint disagree"
+        );
     }
 }

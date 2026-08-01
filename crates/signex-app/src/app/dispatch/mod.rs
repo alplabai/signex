@@ -175,7 +175,27 @@ impl Signex {
                 self.document_state.panel_ctx.history = self.document_state.history.clone();
                 Task::none()
             }
-            Message::EscapePressed => {
+            Message::EscapePressed { window } => {
+                // #547 — an Esc typed inside a detached modal's own OS
+                // window addresses THAT modal and nothing else. It never
+                // reaches the ladder and never reaches the tool reset
+                // below: the canvas lives in another window the user is
+                // not typing into, and resetting its tool from here is
+                // the bug. `detached_modal_escape_message` answers with
+                // exactly what Esc over that modal's in-window card would
+                // send, so the two spellings of one gesture agree.
+                //
+                // `None` there means the modal has no Esc at all (the
+                // `every_modal_claims_escape` gap — Move Selection, the
+                // net-colour palette, the parameter manager). Swallowing
+                // the key is what the in-window card does too, and it is
+                // strictly better than the old fall-through.
+                if let Some(modal) = self.detached_modal_window(window) {
+                    return match self.detached_modal_escape_message(modal) {
+                        Some(msg) => self.update(msg),
+                        None => Task::none(),
+                    };
+                }
                 // The modal Esc ladder resolves FIRST, and here rather
                 // than in the keyboard subscription (#535). Two things
                 // follow from resolving it against live state:

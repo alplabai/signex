@@ -144,13 +144,14 @@ impl OpenOverlays {
     /// everything painted after the pre-blocking block is suppressed.
     ///
     /// Mirrors `Signex::has_blocking_modal`
-    /// (`app/view/overlays/bars.rs:20-25`), with one known divergence:
-    /// `print_preview_open` is already false here once Print Preview has
-    /// been detached into its own OS window, while the painter's
-    /// predicate ignores detachment and keeps suppressing. That is a
-    /// pre-existing bug on both sides, not something part 2 introduced,
-    /// and it is left alone here on purpose — see
-    /// `overlay_id::visible`'s docs.
+    /// (`app/view/overlays/bars.rs`). The two agreed on three of their
+    /// four terms until #547: `print_preview_open` was already false here
+    /// once Print Preview had been detached into its own OS window, while
+    /// the painter's predicate ignored detachment and kept suppressing —
+    /// so the main window painted ZERO overlays behind a detached
+    /// preview while Esc still resolved against the ones it wasn't
+    /// painting. The painter now carries the same filter and the terms
+    /// match one for one.
     fn has_blocking_modal(&self) -> bool {
         self.error_notice_open
             || self.netlist_incomplete_prompt_open
@@ -348,6 +349,40 @@ impl OpenOverlays {
     }
 }
 
+/// Which overlay slot a detachable modal occupies in the main window
+/// (#547).
+///
+/// The pairing exists so an Esc typed in a detached window can be
+/// answered from the SAME rung table the in-window card resolves
+/// against, instead of a second list of Close messages that would drift
+/// out of step with it. Exhaustive over `ModalId`, so a new detachable
+/// modal is a compile error here rather than a silent fall-through to
+/// the main window's tool reset.
+///
+/// `None` is not an omission: `MoveSelection`, `NetColorPalette` and
+/// `ParameterManager` have no `OverlayId` and no `OpenOverlays` field —
+/// they are part of the `every_modal_claims_escape` gap, and Esc does
+/// nothing over their in-window cards either.
+fn modal_overlay_id(modal: crate::app::state::ModalId) -> Option<OverlayId> {
+    use crate::app::state::ModalId;
+    match modal {
+        ModalId::AnnotateDialog => Some(OverlayId::AnnotateDialog),
+        ModalId::AnnotateResetConfirm => Some(OverlayId::AnnotateResetConfirm),
+        ModalId::ErcDialog => Some(OverlayId::ErcDialog),
+        ModalId::Preferences => Some(OverlayId::Preferences),
+        ModalId::FindReplace => Some(OverlayId::FindReplace),
+        ModalId::RenameDialog => Some(OverlayId::RenameDialog),
+        ModalId::RemoveDialog => Some(OverlayId::RemoveDialog),
+        ModalId::PrintPreview => Some(OverlayId::PrintPreview),
+        ModalId::BomPreview => Some(OverlayId::BomPreview),
+        ModalId::ProjectOptions => Some(OverlayId::ProjectOptions),
+        ModalId::EnableVersionControl => Some(OverlayId::EnableVersionControl),
+        ModalId::GridProperties => Some(OverlayId::GridProperties),
+        ModalId::SelectionFilterCustom => Some(OverlayId::SelectionFilterCustom),
+        ModalId::MoveSelection | ModalId::NetColorPalette | ModalId::ParameterManager => None,
+    }
+}
+
 impl Signex {
     /// Resolve the Esc ladder against live state, or `None` when no
     /// overlay claims the key.
@@ -356,7 +391,52 @@ impl Signex {
     /// (#535). `OpenOverlays` stays private to this module: the ladder is
     /// one concern in one file, and callers only ever want the answer.
     pub(crate) fn escape_overlay_message(&self) -> Option<Message> {
-        self.open_overlays().escape_message()
+        self.open_overlays(None).escape_message()
+    }
+
+    /// The modal `window` is hosting, when `window` is a detached modal's
+    /// own OS window (#547).
+    ///
+    /// `None` for the main window (which is not tracked in
+    /// `ui_state.windows` at all), for an undocked tab, a detached panel
+    /// or a component-editor window, and for a synthesised Esc that names
+    /// no window.
+    pub(crate) fn detached_modal_window(
+        &self,
+        window: Option<iced::window::Id>,
+    ) -> Option<crate::app::state::ModalId> {
+        match self.ui_state.windows.get(&window?) {
+            Some(crate::app::state::WindowKind::DetachedModal(modal)) => Some(*modal),
+            _ => None,
+        }
+    }
+
+    /// What Esc does inside `modal`'s own detached window: exactly what
+    /// Esc over that modal's in-window card would do, and nothing else
+    /// (#547).
+    ///
+    /// The ladder is deliberately NOT walked here. It ranks overlays by
+    /// where they paint **in the main window**, and none of that stack
+    /// covers a separate OS window — running it would let a dialog in
+    /// another window outrank the one the user is actually typing into.
+    /// So the answer is a single rung, looked up by id.
+    ///
+    /// `modal`'s own detachment is passed to `open_overlays` so its flag
+    /// reads open: the flag is normally forced false *because* the
+    /// in-window card is not painted, which is the right answer for an
+    /// Esc in the main window and the wrong one here.
+    ///
+    /// `None` means that modal has no Esc at all — either no `OverlayId`
+    /// (Move Selection, the net-colour palette, the parameter manager)
+    /// or an `OverlayId` whose rung is `None` by design. Its in-window
+    /// card ignores Esc too, so this stays consistent with it rather than
+    /// inventing a dismissal only the detached form has.
+    pub(crate) fn detached_modal_escape_message(
+        &self,
+        modal: crate::app::state::ModalId,
+    ) -> Option<Message> {
+        let id = modal_overlay_id(modal)?;
+        self.open_overlays(Some(modal)).rung(id)
     }
 
     /// Snapshot the open overlays for Esc resolution, from live state.
@@ -366,7 +446,11 @@ impl Signex {
     /// here rather than inside `Subscription::with` is what lets a rung
     /// carry owned data (see `OpenOverlays::delete_confirm`) and what
     /// removes the one-update staleness the subscription snapshot had.
-    fn open_overlays(&self) -> OpenOverlays {
+    ///
+    /// `esc_from_detached` names the modal whose own detached window the
+    /// Esc came from, if any — see `detached_modal_escape_message`. Every
+    /// other caller passes `None`.
+    fn open_overlays(&self, esc_from_detached: Option<crate::app::state::ModalId>) -> OpenOverlays {
         // True while `modal` is showing in its own detached OS window
         // rather than as an in-window overlay. Several builders skip
         // painting the in-window card in that case (`view/overlays/bars.rs`,
@@ -374,10 +458,14 @@ impl Signex {
         // corresponding rung for the same reason, or Esc would dismiss a
         // dialog the user can't even see, while the real (detached) window
         // stays open untouched.
+        //
+        // Unless the Esc came from that very window, which is the one
+        // case where the user IS looking at the card (#547).
         let modal_detached = |modal: crate::app::state::ModalId| -> bool {
-            self.ui_state.windows.values().any(|kind| {
-                matches!(kind, crate::app::state::WindowKind::DetachedModal(m) if *m == modal)
-            })
+            esc_from_detached != Some(modal)
+                && self.ui_state.windows.values().any(|kind| {
+                    matches!(kind, crate::app::state::WindowKind::DetachedModal(m) if *m == modal)
+                })
         };
 
         OpenOverlays {
@@ -454,157 +542,179 @@ impl Signex {
     pub fn subscription(&self) -> Subscription<Message> {
         use iced::keyboard;
 
-        let kbd = keyboard::listen()
-            .with(KeyContext {
-                palette_open: self.ui_state.command_palette.open,
-                kbd_shortcuts_open: self.ui_state.keyboard_shortcuts_open,
-                keymap_recorder_open: self.ui_state.preferences_keymap_recorder.is_some(),
-            })
-            .map(
-                |(
-                    KeyContext {
-                        palette_open,
-                        kbd_shortcuts_open,
-                        keymap_recorder_open,
-                    },
-                    event,
-                )| match event {
-                    // Chord recorder open (Preferences ▸ Keyboard
-                    // Shortcuts): held modifiers drive the live
-                    // "Ctrl+…" hint before a key lands.
-                    keyboard::Event::ModifiersChanged(modifiers) if keymap_recorder_open => {
-                        Message::Preferences(PreferencesMsg::Inner(
-                            crate::preferences::PrefMsg::KeymapRecorderModifiersChanged(
-                                crate::keymap::Modifiers::from_iced(modifiers),
-                            ),
-                        ))
-                    }
-                    keyboard::Event::KeyPressed {
-                        key, modifiers: m, ..
-                    } => {
-                        // While the recorder is open, every raw stroke
-                        // is captured for the binding under edit — it
-                        // must NOT reach the live keymap resolver, or
-                        // recording a shortcut would also fire it. The
-                        // pending chord buffer is left untouched (it is
-                        // only advanced by the resolver, which we skip).
-                        if keymap_recorder_open {
-                            return KeyStroke::from_iced(&key, m)
-                                .map(|stroke| {
-                                    Message::Preferences(PreferencesMsg::Inner(
-                                        crate::preferences::PrefMsg::KeymapRecorderKeyPressed(
-                                            stroke,
-                                        ),
-                                    ))
-                                })
-                                .unwrap_or(Message::Noop);
-                        }
-                        // Command palette captures most input while open so
-                        // typing into the search field doesn't fire tool
-                        // shortcuts (`p`, `w`, `l`, …). Only navigation
-                        // and dismiss keys leak through.
-                        if palette_open {
-                            return match (key.as_ref(), m) {
-                                (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
-                                    Message::CommandPalette(CommandPaletteMsg::Close)
-                                }
-                                (keyboard::Key::Named(keyboard::key::Named::ArrowDown), _) => {
-                                    Message::CommandPalette(CommandPaletteMsg::MoveSelection(1))
-                                }
-                                (keyboard::Key::Named(keyboard::key::Named::ArrowUp), _) => {
-                                    Message::CommandPalette(CommandPaletteMsg::MoveSelection(-1))
-                                }
-                                // Toggle: Ctrl+Shift+P while open closes.
-                                (keyboard::Key::Character(c), m)
-                                    if c.eq_ignore_ascii_case("p") && m.command() && m.shift() =>
-                                {
-                                    Message::CommandPalette(CommandPaletteMsg::Close)
-                                }
-                                _ => Message::Noop,
-                            };
-                        }
-                        // v0.19 keymap migration: per-key tool / command
-                        // shortcuts now come from the active profile (see
-                        // `dispatch::keymap`). Only keys that can't be
-                        // profile-driven stay hardcoded here: the modal-close
-                        // Esc ladder and F1 (they depend on which modal is
-                        // open — subscription state, not the profile), and
-                        // the Ctrl/Alt+1-8 selection-memory chords (they
-                        // carry the digit as data the profile can't express).
-                        // Everything else is forwarded to the keymap resolver
-                        // in `update`.
-                        match (key.as_ref(), m) {
-                            // Esc is forwarded raw (#535). The ladder used to
-                            // be resolved right here, against a snapshot
-                            // baked when this subscription was last built —
-                            // i.e. up to one update stale. It now runs in
-                            // the `Message::EscapePressed` handler
-                            // (`app/dispatch/mod.rs`) against live state,
-                            // which is what the user is actually looking at,
-                            // and which lets a rung carry owned data.
-                            //
-                            // Deliberately NOT routed through
-                            // `resolve_keymap_stroke`: that advances the
-                            // multi-stroke chord buffer and consults the
-                            // active profile, neither of which Esc has ever
-                            // done.
-                            (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
-                                Message::EscapePressed
-                            }
-                            (keyboard::Key::Named(keyboard::key::Named::F1), _) => {
-                                // F1 toggles: open if closed, close if open.
-                                if kbd_shortcuts_open {
-                                    Message::Overlay(OverlayMsg::CloseKeyboardShortcuts)
-                                } else {
-                                    Message::Menu(MenuMessage::OpenKeyboardShortcuts)
-                                }
-                            }
-                            // Ctrl+1-8 store selection memory, Alt+1-8 recall
-                            // selection memory. These carry the digit as data
-                            // the profile format can't express, so they stay
-                            // hardcoded. The `is_some` guard is load-bearing
-                            // (#127): without it this arm matched EVERY
-                            // Ctrl/Alt chord and returned Noop, which would
-                            // shadow Ctrl+C/X/V/D before they reach the keymap
-                            // resolver below.
-                            (keyboard::Key::Character(c), m)
-                                if m.command()
-                                    && !m.alt()
-                                    && super::selection_slot_from_key(c).is_some() =>
-                            {
-                                match super::selection_slot_from_key(c) {
-                                    Some(slot) => Message::Selection(
-                                        selection_request::SelectionRequest::StoreSlot { slot },
-                                    ),
-                                    _ => Message::Noop,
-                                }
-                            }
-                            (keyboard::Key::Character(c), m)
-                                if m.alt()
-                                    && !m.command()
-                                    && super::selection_slot_from_key(c).is_some() =>
-                            {
-                                match super::selection_slot_from_key(c) {
-                                    Some(slot) => Message::Selection(
-                                        selection_request::SelectionRequest::RecallSlot { slot },
-                                    ),
-                                    _ => Message::Noop,
-                                }
-                            }
-                            // Everything else routes through the active
-                            // keymap: forward the raw stroke, resolved in
-                            // `update` where the multi-stroke chord buffer
-                            // lives in `UiState` (sound across windows). A
-                            // stroke iced can't express as a `KeyStroke`
-                            // (e.g. a bare modifier press) is ignored here.
-                            _ => KeyStroke::from_iced(&key, m)
-                                .map(|stroke| Message::Ui(UiMsg::KeymapStroke(stroke)))
-                                .unwrap_or(Message::Noop),
-                        }
-                    }
-                    _ => Message::Noop,
+        // `keyboard::listen()` would be the obvious source here, and was
+        // until #547 — but it drops the window id. Its filter matches
+        // `subscription::Event::Interaction { .. }` and the `..` swallows
+        // `window` (`iced_futures-0.14.0/src/keyboard.rs`), so an Esc
+        // typed in a detached modal's own window arrived indistinguishable
+        // from one typed in the main window, and reset the main window's
+        // canvas tool. `event::listen_with` hands the id to its filter
+        // (`iced_futures-0.14.0/src/event.rs:26`); the predicate below is
+        // otherwise the same one `keyboard::listen()` applies — keyboard
+        // events, `Status::Ignored` — so no other stroke changes.
+        //
+        // The filter must be a plain `fn` (that is `listen_with`'s
+        // parameter type), which is why the context still rides in via
+        // `.with` rather than being captured here.
+        let kbd = iced::event::listen_with(|event, status, window| match (event, status) {
+            (iced::Event::Keyboard(event), iced::event::Status::Ignored) => Some((window, event)),
+            _ => None,
+        })
+        .with(KeyContext {
+            palette_open: self.ui_state.command_palette.open,
+            kbd_shortcuts_open: self.ui_state.keyboard_shortcuts_open,
+            keymap_recorder_open: self.ui_state.preferences_keymap_recorder.is_some(),
+        })
+        .map(
+            |(
+                KeyContext {
+                    palette_open,
+                    kbd_shortcuts_open,
+                    keymap_recorder_open,
                 },
-            );
+                (window, event),
+            )| match event {
+                // Chord recorder open (Preferences ▸ Keyboard
+                // Shortcuts): held modifiers drive the live
+                // "Ctrl+…" hint before a key lands.
+                keyboard::Event::ModifiersChanged(modifiers) if keymap_recorder_open => {
+                    Message::Preferences(PreferencesMsg::Inner(
+                        crate::preferences::PrefMsg::KeymapRecorderModifiersChanged(
+                            crate::keymap::Modifiers::from_iced(modifiers),
+                        ),
+                    ))
+                }
+                keyboard::Event::KeyPressed {
+                    key, modifiers: m, ..
+                } => {
+                    // While the recorder is open, every raw stroke
+                    // is captured for the binding under edit — it
+                    // must NOT reach the live keymap resolver, or
+                    // recording a shortcut would also fire it. The
+                    // pending chord buffer is left untouched (it is
+                    // only advanced by the resolver, which we skip).
+                    if keymap_recorder_open {
+                        return KeyStroke::from_iced(&key, m)
+                            .map(|stroke| {
+                                Message::Preferences(PreferencesMsg::Inner(
+                                    crate::preferences::PrefMsg::KeymapRecorderKeyPressed(stroke),
+                                ))
+                            })
+                            .unwrap_or(Message::Noop);
+                    }
+                    // Command palette captures most input while open so
+                    // typing into the search field doesn't fire tool
+                    // shortcuts (`p`, `w`, `l`, …). Only navigation
+                    // and dismiss keys leak through.
+                    if palette_open {
+                        return match (key.as_ref(), m) {
+                            (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
+                                Message::CommandPalette(CommandPaletteMsg::Close)
+                            }
+                            (keyboard::Key::Named(keyboard::key::Named::ArrowDown), _) => {
+                                Message::CommandPalette(CommandPaletteMsg::MoveSelection(1))
+                            }
+                            (keyboard::Key::Named(keyboard::key::Named::ArrowUp), _) => {
+                                Message::CommandPalette(CommandPaletteMsg::MoveSelection(-1))
+                            }
+                            // Toggle: Ctrl+Shift+P while open closes.
+                            (keyboard::Key::Character(c), m)
+                                if c.eq_ignore_ascii_case("p") && m.command() && m.shift() =>
+                            {
+                                Message::CommandPalette(CommandPaletteMsg::Close)
+                            }
+                            _ => Message::Noop,
+                        };
+                    }
+                    // v0.19 keymap migration: per-key tool / command
+                    // shortcuts now come from the active profile (see
+                    // `dispatch::keymap`). Only keys that can't be
+                    // profile-driven stay hardcoded here: the modal-close
+                    // Esc ladder and F1 (they depend on which modal is
+                    // open — subscription state, not the profile), and
+                    // the Ctrl/Alt+1-8 selection-memory chords (they
+                    // carry the digit as data the profile can't express).
+                    // Everything else is forwarded to the keymap resolver
+                    // in `update`.
+                    match (key.as_ref(), m) {
+                        // Esc is forwarded raw (#535). The ladder used to
+                        // be resolved right here, against a snapshot
+                        // baked when this subscription was last built —
+                        // i.e. up to one update stale. It now runs in
+                        // the `Message::EscapePressed` handler
+                        // (`app/dispatch/mod.rs`) against live state,
+                        // which is what the user is actually looking at,
+                        // and which lets a rung carry owned data.
+                        //
+                        // Deliberately NOT routed through
+                        // `resolve_keymap_stroke`: that advances the
+                        // multi-stroke chord buffer and consults the
+                        // active profile, neither of which Esc has ever
+                        // done.
+                        //
+                        // It now carries the window it was typed in
+                        // (#547) — the handler needs it to tell an Esc
+                        // aimed at a detached modal from one aimed at
+                        // the main window's canvas.
+                        (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
+                            Message::EscapePressed {
+                                window: Some(window),
+                            }
+                        }
+                        (keyboard::Key::Named(keyboard::key::Named::F1), _) => {
+                            // F1 toggles: open if closed, close if open.
+                            if kbd_shortcuts_open {
+                                Message::Overlay(OverlayMsg::CloseKeyboardShortcuts)
+                            } else {
+                                Message::Menu(MenuMessage::OpenKeyboardShortcuts)
+                            }
+                        }
+                        // Ctrl+1-8 store selection memory, Alt+1-8 recall
+                        // selection memory. These carry the digit as data
+                        // the profile format can't express, so they stay
+                        // hardcoded. The `is_some` guard is load-bearing
+                        // (#127): without it this arm matched EVERY
+                        // Ctrl/Alt chord and returned Noop, which would
+                        // shadow Ctrl+C/X/V/D before they reach the keymap
+                        // resolver below.
+                        (keyboard::Key::Character(c), m)
+                            if m.command()
+                                && !m.alt()
+                                && super::selection_slot_from_key(c).is_some() =>
+                        {
+                            match super::selection_slot_from_key(c) {
+                                Some(slot) => Message::Selection(
+                                    selection_request::SelectionRequest::StoreSlot { slot },
+                                ),
+                                _ => Message::Noop,
+                            }
+                        }
+                        (keyboard::Key::Character(c), m)
+                            if m.alt()
+                                && !m.command()
+                                && super::selection_slot_from_key(c).is_some() =>
+                        {
+                            match super::selection_slot_from_key(c) {
+                                Some(slot) => Message::Selection(
+                                    selection_request::SelectionRequest::RecallSlot { slot },
+                                ),
+                                _ => Message::Noop,
+                            }
+                        }
+                        // Everything else routes through the active
+                        // keymap: forward the raw stroke, resolved in
+                        // `update` where the multi-stroke chord buffer
+                        // lives in `UiState` (sound across windows). A
+                        // stroke iced can't express as a `KeyStroke`
+                        // (e.g. a bare modifier press) is ignored here.
+                        _ => KeyStroke::from_iced(&key, m)
+                            .map(|stroke| Message::Ui(UiMsg::KeymapStroke(stroke)))
+                            .unwrap_or(Message::Noop),
+                    }
+                }
+                _ => Message::Noop,
+            },
+        );
 
         // Mouse events for drag-to-resize/floating-drag.
         // Subscribing to cursor move only while dragging avoids per-frame
@@ -816,6 +926,190 @@ mod tests {
                 net_color_custom_open: true,
                 ..OpenOverlays::default()
             },
+        );
+    }
+
+    // ── #547: which window the Esc came from ────────────────────────
+    //
+    // `keyboard::listen()` dropped the window id, so an Esc typed into a
+    // detached modal's own OS window was indistinguishable from one typed
+    // into the main window. The ladder skips a detached modal's rung on
+    // purpose (its in-window card is not painted), so nothing claimed the
+    // key and it fell through to the main window's tool reset — a canvas
+    // in a window the user was not even looking at.
+
+    /// A freshly built app with nothing claiming Esc.
+    ///
+    /// `Signex::new()` opens the first-run tour, which is a legitimate
+    /// rung and would answer every Esc these tests send. Closing it is
+    /// the whole fixture; the assertion keeps that honest if another
+    /// overlay ever starts life open.
+    fn quiet_app() -> Signex {
+        let (mut app, _boot) = Signex::new();
+        app.ui_state.first_run_tour_open = false;
+        assert!(
+            app.escape_overlay_message().is_none(),
+            "fixture is not quiet — something else opens on construction and \
+             would claim these Escs"
+        );
+        app
+    }
+
+    /// Put `modal` in its own OS window and hand back that window's id.
+    fn detach(app: &mut Signex, modal: crate::app::state::ModalId) -> iced::window::Id {
+        let id = iced::window::Id::unique();
+        app.ui_state
+            .windows
+            .insert(id, crate::app::state::WindowKind::DetachedModal(modal));
+        id
+    }
+
+    #[test]
+    fn esc_in_a_detached_modal_window_addresses_that_modal_and_not_the_canvas() {
+        let mut app = quiet_app();
+        app.ui_state.preferences_open = true;
+        let prefs_window = detach(&mut app, crate::app::state::ModalId::Preferences);
+        app.interaction_state.current_tool = crate::app::Tool::Wire;
+
+        // The bug, stated as the contrast: resolved as a main-window Esc
+        // this state claims nothing, which is what used to reach the tool
+        // reset.
+        assert!(
+            app.escape_overlay_message().is_none(),
+            "a detached Preferences must stay unclaimed by a MAIN-window Esc — \
+             its in-window card is not painted"
+        );
+
+        let _task = app.update(Message::EscapePressed {
+            window: Some(prefs_window),
+        });
+
+        assert!(
+            !app.ui_state.preferences_open,
+            "Esc inside the detached Preferences window must close Preferences"
+        );
+        assert_eq!(
+            app.interaction_state.current_tool,
+            crate::app::Tool::Wire,
+            "Esc in another window must not touch the main window's canvas tool"
+        );
+        assert!(
+            !app.ui_state.windows.contains_key(&prefs_window),
+            "closing the modal must take its OS window with it"
+        );
+    }
+
+    #[test]
+    fn esc_in_the_main_window_still_leaves_a_detached_modal_alone() {
+        let mut app = quiet_app();
+        app.ui_state.preferences_open = true;
+        let _prefs_window = detach(&mut app, crate::app::state::ModalId::Preferences);
+        app.interaction_state.current_tool = crate::app::Tool::Wire;
+
+        // `main_window_id` is never inserted into `ui_state.windows`, so
+        // the main window is exactly the "not a detached modal" case.
+        let main = app.ui_state.main_window_id;
+        let _task = app.update(Message::EscapePressed { window: main });
+
+        assert!(
+            app.ui_state.preferences_open,
+            "an Esc in the main window must not dismiss a dialog living in \
+             another window the user can still see"
+        );
+        assert_eq!(
+            app.interaction_state.current_tool,
+            crate::app::Tool::Select,
+            "with nothing painted to claim it, a main-window Esc still resets \
+             the tool"
+        );
+    }
+
+    #[test]
+    fn a_synthesised_esc_resolves_as_a_main_window_one() {
+        // `cancel_current_tool` from the palette or a keymap binding names
+        // no window (`app/command/bridge.rs`). It must not be mistaken for
+        // a detached-window Esc and swallowed.
+        let mut app = quiet_app();
+        app.interaction_state.current_tool = crate::app::Tool::Wire;
+
+        let _task = app.update(Message::EscapePressed { window: None });
+
+        assert_eq!(
+            app.interaction_state.current_tool,
+            crate::app::Tool::Select,
+            "a windowless Esc must still reach the tool reset"
+        );
+    }
+
+    #[test]
+    fn a_detached_modal_with_no_rung_still_swallows_its_own_esc() {
+        // The parameter manager is one of the three modals with no
+        // `OverlayId` and no `OpenOverlays` field — Esc over its in-window
+        // card does nothing. Its detached window must match that, NOT fall
+        // through to the main window's tool reset.
+        let mut app = quiet_app();
+        app.ui_state.parameter_manager_open = true;
+        let window = detach(&mut app, crate::app::state::ModalId::ParameterManager);
+        app.interaction_state.current_tool = crate::app::Tool::Wire;
+
+        let _task = app.update(Message::EscapePressed {
+            window: Some(window),
+        });
+
+        assert_eq!(
+            app.interaction_state.current_tool,
+            crate::app::Tool::Wire,
+            "an Esc with nothing to claim it in ITS OWN window is swallowed, \
+             not redirected at the main window's canvas"
+        );
+    }
+
+    #[test]
+    fn every_detachment_filtered_modal_can_still_answer_its_own_escape() {
+        // `open_overlays` forces these six rungs closed while the modal is
+        // detached, precisely because the in-window card stops painting.
+        // That is only safe if the detached window can answer the key
+        // itself — otherwise Esc has nowhere left to go and the modal
+        // becomes undismissable by keyboard. Adding a seventh filter
+        // without a `modal_overlay_id` entry fails here.
+        use crate::app::state::ModalId;
+        for modal in [
+            ModalId::Preferences,
+            ModalId::AnnotateDialog,
+            ModalId::ErcDialog,
+            ModalId::AnnotateResetConfirm,
+            ModalId::PrintPreview,
+            ModalId::BomPreview,
+        ] {
+            assert!(
+                modal_overlay_id(modal).is_some(),
+                "{modal:?} is detachment-filtered in `open_overlays` but has no \
+                 overlay slot, so Esc in its own window would do nothing"
+            );
+        }
+    }
+
+    #[test]
+    fn a_detached_modal_answers_escape_with_the_same_message_its_card_would() {
+        // The whole point of routing through `modal_overlay_id` + `rung`
+        // rather than a second table of Close messages: the detached
+        // window and the in-window card cannot drift apart.
+        let mut app = quiet_app();
+        app.ui_state.erc_dialog_open = true;
+
+        let card = only(|o| o.erc_open = true);
+        let detached = {
+            let _window = detach(&mut app, crate::app::state::ModalId::ErcDialog);
+            app.detached_modal_escape_message(crate::app::state::ModalId::ErcDialog)
+        };
+
+        assert!(
+            matches!(card, Some(Message::Erc(ErcMsg::CloseDialog))),
+            "in-window ERC card's Esc changed — update this test's expectation"
+        );
+        assert!(
+            matches!(detached, Some(Message::Erc(ErcMsg::CloseDialog))),
+            "detached ERC window's Esc must send what the in-window card sends"
         );
     }
 

@@ -167,7 +167,23 @@ pub enum Message {
     /// `FootprintToolEscape` (resets PadsTool + SketchTool +
     /// tool_pending); otherwise falls back to the schematic
     /// `Tool::Select` reset.
-    EscapePressed,
+    EscapePressed {
+        /// Which OS window the key was pressed in (#547).
+        ///
+        /// `keyboard::listen()` drops this — `iced_futures-0.14.0`'s
+        /// filter matches `subscription::Event::Interaction { .. }` and
+        /// the `..` swallows the `window` field — so every Esc used to
+        /// look identical no matter which window produced it, and an Esc
+        /// typed into a detached modal's own window reset the MAIN
+        /// window's canvas tool. The subscription now goes through
+        /// `event::listen_with`, which hands the window id to its filter.
+        ///
+        /// `None` means the Esc was synthesised rather than typed — the
+        /// `cancel_current_tool` command id arriving from the palette or
+        /// a keymap binding (`app/command/bridge.rs`). It resolves
+        /// exactly as a main-window Esc does.
+        window: Option<iced::window::Id>,
+    },
     Noop,
 }
 
