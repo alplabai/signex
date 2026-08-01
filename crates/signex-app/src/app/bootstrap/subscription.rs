@@ -394,23 +394,6 @@ impl Signex {
         self.open_overlays(None).escape_message()
     }
 
-    /// The modal `window` is hosting, when `window` is a detached modal's
-    /// own OS window (#547).
-    ///
-    /// `None` for the main window (which is not tracked in
-    /// `ui_state.windows` at all), for an undocked tab, a detached panel
-    /// or a component-editor window, and for a synthesised Esc that names
-    /// no window.
-    pub(crate) fn detached_modal_window(
-        &self,
-        window: Option<iced::window::Id>,
-    ) -> Option<crate::app::state::ModalId> {
-        match self.ui_state.windows.get(&window?) {
-            Some(crate::app::state::WindowKind::DetachedModal(modal)) => Some(*modal),
-            _ => None,
-        }
-    }
-
     /// What Esc does inside `modal`'s own detached window: exactly what
     /// Esc over that modal's in-window card would do, and nothing else
     /// (#547).
@@ -929,140 +912,12 @@ mod tests {
         );
     }
 
-    // ── #547: which window the Esc came from ────────────────────────
+    // ── #547 / #554: which window the Esc came from ─────────────────
     //
-    // `keyboard::listen()` dropped the window id, so an Esc typed into a
-    // detached modal's own OS window was indistinguishable from one typed
-    // into the main window. The ladder skips a detached modal's rung on
-    // purpose (its in-window card is not painted), so nothing claimed the
-    // key and it fell through to the main window's tool reset — a canvas
-    // in a window the user was not even looking at.
-
-    /// A freshly built app with nothing claiming Esc.
-    ///
-    /// `Signex::new()` opens the first-run tour, which is a legitimate
-    /// rung and would answer every Esc these tests send. Closing it is
-    /// the whole fixture; the assertion keeps that honest if another
-    /// overlay ever starts life open.
-    fn quiet_app() -> Signex {
-        let (mut app, _boot) = Signex::new();
-        app.ui_state.first_run_tour_open = false;
-        assert!(
-            app.escape_overlay_message().is_none(),
-            "fixture is not quiet — something else opens on construction and \
-             would claim these Escs"
-        );
-        app
-    }
-
-    /// Put `modal` in its own OS window and hand back that window's id.
-    fn detach(app: &mut Signex, modal: crate::app::state::ModalId) -> iced::window::Id {
-        let id = iced::window::Id::unique();
-        app.ui_state
-            .windows
-            .insert(id, crate::app::state::WindowKind::DetachedModal(modal));
-        id
-    }
-
-    #[test]
-    fn esc_in_a_detached_modal_window_addresses_that_modal_and_not_the_canvas() {
-        let mut app = quiet_app();
-        app.ui_state.preferences_open = true;
-        let prefs_window = detach(&mut app, crate::app::state::ModalId::Preferences);
-        app.interaction_state.current_tool = crate::app::Tool::Wire;
-
-        // The bug, stated as the contrast: resolved as a main-window Esc
-        // this state claims nothing, which is what used to reach the tool
-        // reset.
-        assert!(
-            app.escape_overlay_message().is_none(),
-            "a detached Preferences must stay unclaimed by a MAIN-window Esc — \
-             its in-window card is not painted"
-        );
-
-        let _task = app.update(Message::EscapePressed {
-            window: Some(prefs_window),
-        });
-
-        assert!(
-            !app.ui_state.preferences_open,
-            "Esc inside the detached Preferences window must close Preferences"
-        );
-        assert_eq!(
-            app.interaction_state.current_tool,
-            crate::app::Tool::Wire,
-            "Esc in another window must not touch the main window's canvas tool"
-        );
-        assert!(
-            !app.ui_state.windows.contains_key(&prefs_window),
-            "closing the modal must take its OS window with it"
-        );
-    }
-
-    #[test]
-    fn esc_in_the_main_window_still_leaves_a_detached_modal_alone() {
-        let mut app = quiet_app();
-        app.ui_state.preferences_open = true;
-        let _prefs_window = detach(&mut app, crate::app::state::ModalId::Preferences);
-        app.interaction_state.current_tool = crate::app::Tool::Wire;
-
-        // `main_window_id` is never inserted into `ui_state.windows`, so
-        // the main window is exactly the "not a detached modal" case.
-        let main = app.ui_state.main_window_id;
-        let _task = app.update(Message::EscapePressed { window: main });
-
-        assert!(
-            app.ui_state.preferences_open,
-            "an Esc in the main window must not dismiss a dialog living in \
-             another window the user can still see"
-        );
-        assert_eq!(
-            app.interaction_state.current_tool,
-            crate::app::Tool::Select,
-            "with nothing painted to claim it, a main-window Esc still resets \
-             the tool"
-        );
-    }
-
-    #[test]
-    fn a_synthesised_esc_resolves_as_a_main_window_one() {
-        // `cancel_current_tool` from the palette or a keymap binding names
-        // no window (`app/command/bridge.rs`). It must not be mistaken for
-        // a detached-window Esc and swallowed.
-        let mut app = quiet_app();
-        app.interaction_state.current_tool = crate::app::Tool::Wire;
-
-        let _task = app.update(Message::EscapePressed { window: None });
-
-        assert_eq!(
-            app.interaction_state.current_tool,
-            crate::app::Tool::Select,
-            "a windowless Esc must still reach the tool reset"
-        );
-    }
-
-    #[test]
-    fn a_detached_modal_with_no_rung_still_swallows_its_own_esc() {
-        // The parameter manager is one of the three modals with no
-        // `OverlayId` and no `OpenOverlays` field — Esc over its in-window
-        // card does nothing. Its detached window must match that, NOT fall
-        // through to the main window's tool reset.
-        let mut app = quiet_app();
-        app.ui_state.parameter_manager_open = true;
-        let window = detach(&mut app, crate::app::state::ModalId::ParameterManager);
-        app.interaction_state.current_tool = crate::app::Tool::Wire;
-
-        let _task = app.update(Message::EscapePressed {
-            window: Some(window),
-        });
-
-        assert_eq!(
-            app.interaction_state.current_tool,
-            crate::app::Tool::Wire,
-            "an Esc with nothing to claim it in ITS OWN window is swallowed, \
-             not redirected at the main window's canvas"
-        );
-    }
+    // The two tests below are the ladder's half of that question — the
+    // rung table and the detachment filters. The behavioural half, which
+    // drives `Signex::update` per window kind, lives beside the code it
+    // exercises in `app/dispatch/escape.rs`.
 
     #[test]
     fn every_detachment_filtered_modal_can_still_answer_its_own_escape() {
@@ -1094,12 +949,15 @@ mod tests {
         // The whole point of routing through `modal_overlay_id` + `rung`
         // rather than a second table of Close messages: the detached
         // window and the in-window card cannot drift apart.
-        let mut app = quiet_app();
+        let (mut app, _boot) = Signex::new();
         app.ui_state.erc_dialog_open = true;
 
         let card = only(|o| o.erc_open = true);
         let detached = {
-            let _window = detach(&mut app, crate::app::state::ModalId::ErcDialog);
+            app.ui_state.windows.insert(
+                iced::window::Id::unique(),
+                crate::app::state::WindowKind::DetachedModal(crate::app::state::ModalId::ErcDialog),
+            );
             app.detached_modal_escape_message(crate::app::state::ModalId::ErcDialog)
         };
 

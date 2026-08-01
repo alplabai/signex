@@ -4,6 +4,7 @@ use super::*;
 
 mod command_palette;
 mod document;
+mod escape;
 mod keymap;
 pub(crate) mod library;
 mod overlay;
@@ -175,114 +176,9 @@ impl Signex {
                 self.document_state.panel_ctx.history = self.document_state.history.clone();
                 Task::none()
             }
-            Message::EscapePressed { window } => {
-                // #547 — an Esc typed inside a detached modal's own OS
-                // window addresses THAT modal and nothing else. It never
-                // reaches the ladder and never reaches the tool reset
-                // below: the canvas lives in another window the user is
-                // not typing into, and resetting its tool from here is
-                // the bug. `detached_modal_escape_message` answers with
-                // exactly what Esc over that modal's in-window card would
-                // send, so the two spellings of one gesture agree.
-                //
-                // `None` there means the modal has no Esc at all (the
-                // `every_modal_claims_escape` gap — Move Selection, the
-                // net-colour palette, the parameter manager). Swallowing
-                // the key is what the in-window card does too, and it is
-                // strictly better than the old fall-through.
-                if let Some(modal) = self.detached_modal_window(window) {
-                    return match self.detached_modal_escape_message(modal) {
-                        Some(msg) => self.update(msg),
-                        None => Task::none(),
-                    };
-                }
-                // The modal Esc ladder resolves FIRST, and here rather
-                // than in the keyboard subscription (#535). Two things
-                // follow from resolving it against live state:
-                //
-                // - a rung can carry owned data, which is what finally
-                //   gives the per-browser delete-confirm modal a rung at
-                //   all (its Cancel is addressed to one library path);
-                // - there is no one-update staleness. The subscription
-                //   snapshot was rebuilt only after `update` returned, so
-                //   an Esc arriving in the same frame as a click-Close was
-                //   resolved against the pre-click world.
-                //
-                // A behaviour change falls out of the second point, and it
-                // is deliberate: when a click closes the LAST open modal
-                // and an Esc is queued behind it, that Esc now falls
-                // through to the tool reset below instead of being
-                // swallowed as a Cancel for an already-closed modal. No
-                // modal is open at that point, so the reset is what the
-                // user is looking at.
-                if let Some(overlay_msg) = self.escape_overlay_message() {
-                    return self.update(overlay_msg);
-                }
-                // v0.15 — if active tab is a footprint editor, reset
-                // its tool state via `FootprintToolEscape`; otherwise
-                // fall back to the schematic Tool::Select reset.
-                let footprint_path = self
-                    .document_state
-                    .tabs
-                    .get(self.document_state.active_tab)
-                    .and_then(|t| t.kind.as_footprint_editor())
-                    .cloned();
-                if let Some(path) = footprint_path {
-                    // #370 — when the "Align…" dialog is open, Esc just
-                    // dismisses it (leaving the selection intact) rather
-                    // than falling through to `ToolEscape`, which would
-                    // also clear the selected pad. Any other footprint
-                    // Esc keeps the tool-reset behaviour.
-                    let align_open = self
-                        .document_state
-                        .footprint_editors
-                        .get(&path)
-                        .is_some_and(|ed| ed.state.align_modal.is_some());
-                    let esc_msg = if align_open {
-                        crate::library::messages::FootprintEditorMsg::AlignCancel
-                    } else {
-                        crate::library::messages::FootprintEditorMsg::ToolEscape
-                    };
-                    self.update(Message::Library(
-                        crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
-                            path,
-                            msg: crate::library::messages::PrimitiveEdit::Footprint(esc_msg),
-                        },
-                    ))
-                } else if let Some(path) = self
-                    .document_state
-                    .tabs
-                    .get(self.document_state.active_tab)
-                    .and_then(|t| t.kind.as_symbol_editor())
-                    .cloned()
-                {
-                    // Symbol editor tab: Esc's one job today is
-                    // closing an open right-click context menu (no
-                    // per-tool cancel state to reset yet, unlike the
-                    // footprint editor's `ToolEscape`).
-                    let menu_open = self
-                        .document_state
-                        .symbol_editors
-                        .get(&path)
-                        .is_some_and(|e| e.context_menu.is_some());
-                    if menu_open {
-                        self.update(Message::Library(
-                            crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
-                                path,
-                                msg: crate::library::messages::PrimitiveEdit::Symbol(
-                                    crate::library::messages::SymbolEditorMsg::CloseContextMenu,
-                                ),
-                            },
-                        ))
-                    } else {
-                        Task::none()
-                    }
-                } else {
-                    self.update(Message::Tool(crate::app::ToolMessage::SelectTool(
-                        crate::app::Tool::Select,
-                    )))
-                }
-            }
+            // Esc means different things in different OS windows, so its
+            // whole resolution lives in `dispatch/escape.rs` (#554).
+            Message::EscapePressed { window } => self.handle_escape_pressed(window),
             Message::FootprintModeShortcut(target) => {
                 // v0.14.2 — gate on "active tab is a footprint
                 // editor". When yes, route through the existing

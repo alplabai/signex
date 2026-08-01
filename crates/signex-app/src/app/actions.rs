@@ -195,14 +195,29 @@ impl Signex {
         true
     }
 
+    /// Cancel the in-flight placement session and every armed mode.
+    ///
+    /// There is exactly ONE session app-wide — `current_tool` and all the
+    /// placement buffers below are single fields, and a tool picked from
+    /// an undocked window's toolbar sets those same globals — so the
+    /// session half of this runs once. The canvas half does not: the
+    /// ghosts and previews live on each window's `SchematicCanvas`.
+    ///
+    /// #554 — this used to reach the canvas only through
+    /// `active_canvas_mut()`, which is always the MAIN slot
+    /// (`state/interaction.rs`). The per-window canvases in
+    /// `InteractionState::canvases` were never swept, and the
+    /// wire-preview paint gate is two per-canvas fields
+    /// (`if self.drawing_mode && !self.wire_preview.is_empty()`,
+    /// `canvas/draw/previews.rs`) — so cancelling a wire left an undocked
+    /// window painting a frozen ghost of it. Sweeping every canvas fixes
+    /// that in both directions: Esc in the undocked window, AND Esc in
+    /// the main window while the wire was being drawn in the undocked
+    /// one, which per-window routing alone would not.
     pub(crate) fn clear_transient_schematic_tool_state(&mut self) {
+        // ── The one app-wide session ─────────────────────────────────
         self.interaction_state.pending_power = None;
         self.interaction_state.pending_port = None;
-        self.interaction_state.active_canvas_mut().ghost_label = None;
-        self.interaction_state.active_canvas_mut().ghost_symbol = None;
-        self.interaction_state.active_canvas_mut().ghost_text = None;
-        self.interaction_state.active_canvas_mut().tool_preview = None;
-        self.interaction_state.active_canvas_mut().placement_paused = false;
         // Drop any configured pre-placement defaults so the next tool
         // session starts fresh instead of inheriting the previous one.
         self.document_state.panel_ctx.pre_placement = None;
@@ -211,37 +226,49 @@ impl Signex {
         // z-order reference picker, and any in-flight lasso —
         // Altium-parity "one terminator kills every armed mode".
         self.ui_state.pending_net_color = None;
-        self.interaction_state.active_canvas_mut().pending_net_color = None;
         self.ui_state.reorder_picker = None;
-        self.interaction_state
-            .active_canvas_mut()
-            .reorder_picker_armed = false;
         self.ui_state.lasso_polygon = None;
-        self.sync_lasso_polygon_to_canvas();
-
-        if self.interaction_state.wire_drawing {
-            self.interaction_state.wire_drawing = false;
+        let was_drawing = std::mem::take(&mut self.interaction_state.wire_drawing);
+        if was_drawing {
             self.interaction_state.wire_points.clear();
-            self.interaction_state
-                .active_canvas_mut()
-                .wire_preview
-                .clear();
-            self.interaction_state.active_canvas_mut().drawing_mode = false;
         }
         // Drop any in-flight arc / polyline click buffers.
         self.interaction_state.arc_points.clear();
         self.interaction_state.polyline_points.clear();
-        self.interaction_state
-            .active_canvas_mut()
-            .arc_points
-            .clear();
-        self.interaction_state
-            .active_canvas_mut()
-            .polyline_points
-            .clear();
         // Drop any two-click shape anchor.
         self.interaction_state.shape_anchor = None;
-        self.interaction_state.active_canvas_mut().shape_anchor = None;
+
+        // ── Every window's leftovers ─────────────────────────────────
+        //
+        // The main slot plus `canvases` covers both regimes: during a
+        // `dispatch_canvas_event_in_window` swap the window's canvas IS
+        // the main slot and its `canvases` entry is temporarily absent,
+        // so the two together are always the full set, with nothing
+        // visited twice.
+        let clear_canvas = |canvas: &mut crate::canvas::SchematicCanvas| {
+            canvas.ghost_label = None;
+            canvas.ghost_symbol = None;
+            canvas.ghost_text = None;
+            canvas.tool_preview = None;
+            canvas.placement_paused = false;
+            canvas.pending_net_color = None;
+            canvas.reorder_picker_armed = false;
+            canvas.lasso_polygon = None;
+            if was_drawing {
+                canvas.wire_preview.clear();
+                canvas.drawing_mode = false;
+            }
+            canvas.arc_points.clear();
+            canvas.polyline_points.clear();
+            canvas.shape_anchor = None;
+            // Mirrors `sync_lasso_polygon_to_canvas`, which only ever
+            // reaches the main slot.
+            canvas.clear_overlay_cache();
+        };
+        clear_canvas(&mut self.interaction_state.canvas);
+        for canvas in self.interaction_state.canvases.values_mut() {
+            clear_canvas(canvas);
+        }
     }
 
     pub(crate) fn align_selected(&mut self, action: &crate::active_bar::ActiveBarAction) {
