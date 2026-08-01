@@ -104,7 +104,6 @@ impl InputTarget {
     /// window kind renders only its own body. So this is exactly the
     /// question "would the user see an overlay from here" — which is
     /// what the window-gated consumers need in phase 2 (#555).
-    #[allow(dead_code)] // phase 2 (#555) is its first caller
     pub(crate) fn paints_overlay_stack(self) -> bool {
         matches!(self, Self::Main | Self::UndockedTab)
     }
@@ -248,10 +247,16 @@ impl Signex {
     /// Held modifiers are claimed too: they drive the live "Ctrl+…" hint
     /// before a key lands.
     fn claim_keymap_recorder(&self, target: InputTarget, event: &keyboard::Event) -> Claim {
-        // Phase 1 ports this window-blind, exactly as it was. Phase 2
-        // (#555) gates it on the window that paints Preferences.
-        let _ = target;
         if self.ui_state.preferences_keymap_recorder.is_none() {
+            return Claim::Pass;
+        }
+        // #555 — only in the window the user is recording into. A stroke
+        // typed elsewhere is aimed at that other window, so it routes
+        // normally. The accepted cost, recorded in #557: such a stroke
+        // can fire a live command while a chord is being recorded, which
+        // is what the blanket capture used to prevent — but the user
+        // deliberately moved focus there.
+        if !self.recorder_visible_in(target) {
             return Claim::Pass;
         }
         match event {
@@ -275,14 +280,36 @@ impl Signex {
         }
     }
 
+    /// Whether the chord recorder is on screen in `target`.
+    ///
+    /// The recorder lives inside the Preferences body, which renders
+    /// either as the in-window card (main window and every undocked tab)
+    /// or, once detached, only in its own OS window — `view/chrome.rs`
+    /// passes `preferences_keymap_recorder` to both. So "where the
+    /// recorder is visible" is exactly "where Preferences is painted".
+    fn recorder_visible_in(&self, target: InputTarget) -> bool {
+        use crate::app::state::ModalId;
+
+        if self.modal_detached(ModalId::Preferences) {
+            target == InputTarget::DetachedModal(ModalId::Preferences)
+        } else {
+            target.paints_overlay_stack()
+        }
+    }
+
     /// Command palette. Captures most input while open so typing into
     /// the search field doesn't fire tool shortcuts (`p`, `w`, `l`, …).
     /// Only navigation and dismiss keys leak through.
     fn claim_command_palette(&self, target: InputTarget, event: &keyboard::Event) -> Claim {
-        // Phase 1 ports this window-blind. Phase 2 (#555) gates it on
-        // `target.paints_overlay_stack()`.
-        let _ = target;
         if !self.ui_state.command_palette.open {
+            return Claim::Pass;
+        }
+        // #555 — the palette paints in the main window and in undocked
+        // tabs, nowhere else. It used to swallow keys typed into a
+        // detached modal's own window, where it is not on screen: with
+        // the palette open, an Esc there closed the invisible palette
+        // instead of the modal the user was looking at.
+        if !target.paints_overlay_stack() {
             return Claim::Pass;
         }
         let keyboard::Event::KeyPressed { key, modifiers, .. } = event else {
@@ -332,22 +359,31 @@ impl Signex {
     /// open. Stays hardcoded because it depends on which modal is open —
     /// app state, not the keymap profile.
     fn claim_shortcuts_sheet(&self, target: InputTarget, event: &keyboard::Event) -> Claim {
-        // Phase 1 ports this window-blind. Phase 2 (#555) decides what
-        // F1 does in a window that paints no overlay stack.
-        let _ = target;
         let keyboard::Event::KeyPressed { key, .. } = event else {
             return Claim::Pass;
         };
-        match key.as_ref() {
-            keyboard::Key::Named(keyboard::key::Named::F1) => {
-                Claim::Consume(if self.ui_state.keyboard_shortcuts_open {
-                    Message::Overlay(OverlayMsg::CloseKeyboardShortcuts)
-                } else {
-                    Message::Menu(MenuMessage::OpenKeyboardShortcuts)
-                })
-            }
-            _ => Claim::Pass,
+        if !matches!(key.as_ref(), keyboard::Key::Named(keyboard::key::Named::F1)) {
+            return Claim::Pass;
         }
+        // #555 — a dead key where the sheet cannot appear. Toggling it
+        // over in the main window would change something the user cannot
+        // see from the window they are typing in; the same call #554 made
+        // for Esc in a detached panel.
+        //
+        // `Swallow`, not `Pass`: F1 is expressible as a `KeyStroke`
+        // (`KeyToken::Function(1)`), so passing would hand it to the
+        // keymap profile — which today can never see F1 at all, because
+        // this consumer claims it in every window. Falling through would
+        // make a profile binding for F1 suddenly reachable here, which is
+        // more than the decision asked for.
+        if !target.paints_overlay_stack() {
+            return Claim::Swallow;
+        }
+        Claim::Consume(if self.ui_state.keyboard_shortcuts_open {
+            Message::Overlay(OverlayMsg::CloseKeyboardShortcuts)
+        } else {
+            Message::Menu(MenuMessage::OpenKeyboardShortcuts)
+        })
     }
 
     /// Ctrl+1-8 store selection memory, Alt+1-8 recall it. These carry
@@ -439,6 +475,13 @@ mod tests {
         keyboard::key::Physical::Unidentified(keyboard::key::NativeCode::Unidentified)
     }
 
+    /// Give `kind` its own OS window and hand back that window's id.
+    fn open_window(app: &mut Signex, kind: WindowKind) -> iced::window::Id {
+        let id = iced::window::Id::unique();
+        app.ui_state.windows.insert(id, kind);
+        id
+    }
+
     fn press(key: keyboard::Key, modifiers: keyboard::Modifiers) -> keyboard::Event {
         keyboard::Event::KeyPressed {
             key: key.clone(),
@@ -514,24 +557,19 @@ mod tests {
             "a window already dropped from the map falls back to Main"
         );
 
-        let open = |app: &mut Signex, kind: WindowKind| {
-            let id = iced::window::Id::unique();
-            app.ui_state.windows.insert(id, kind);
-            id
-        };
-        let modal = open(&mut app, WindowKind::DetachedModal(ModalId::ErcDialog));
-        let tab = open(
+        let modal = open_window(&mut app, WindowKind::DetachedModal(ModalId::ErcDialog));
+        let tab = open_window(
             &mut app,
             WindowKind::UndockedTab {
                 path: std::path::PathBuf::from("/tmp/sheet.snxsch"),
                 title: "sheet".to_string(),
             },
         );
-        let panel = open(
+        let panel = open_window(
             &mut app,
             WindowKind::DetachedPanel(crate::panels::PanelKind::Projects),
         );
-        let editor = open(
+        let editor = open_window(
             &mut app,
             WindowKind::ComponentEditor {
                 library_path: std::path::PathBuf::from("/tmp/parts.snxlib"),
@@ -784,6 +822,134 @@ mod tests {
             app.route_key(w, &released(keyboard::Key::Character("w".into())))
                 .is_none(),
             "key releases belong to nobody"
+        );
+    }
+
+    // ── #555: the window gates ──────────────────────────────────────
+
+    /// The headline symptom. With the palette open, an Esc typed inside a
+    /// detached modal's own window used to close the palette — which is
+    /// not painted there — so the modal the user was looking at never saw
+    /// the key.
+    #[test]
+    fn an_open_palette_no_longer_eats_escape_in_a_window_it_does_not_paint_in() {
+        let mut app = quiet_app();
+        app.ui_state.command_palette.open = true;
+        let modal = open_window(&mut app, WindowKind::DetachedModal(ModalId::ErcDialog));
+
+        assert!(
+            matches!(
+                app.route_key(modal, &named(keyboard::key::Named::Escape)),
+                Some(Message::EscapePressed { window: Some(id) }) if id == modal
+            ),
+            "Esc belongs to the modal in this window, not to an invisible palette"
+        );
+    }
+
+    #[test]
+    fn an_open_palette_stops_swallowing_keys_in_windows_it_does_not_paint_in() {
+        let mut app = quiet_app();
+        app.ui_state.command_palette.open = true;
+        let panel = open_window(
+            &mut app,
+            WindowKind::DetachedPanel(crate::panels::PanelKind::Projects),
+        );
+
+        assert!(
+            matches!(
+                app.route_key(panel, &character("w", keyboard::Modifiers::default())),
+                Some(Message::Ui(UiMsg::KeymapStroke(_)))
+            ),
+            "the search field is not on screen here, so the key routes normally"
+        );
+    }
+
+    #[test]
+    fn the_palette_still_owns_its_keys_where_it_does_paint() {
+        let mut app = quiet_app();
+        app.ui_state.command_palette.open = true;
+        let tab = open_window(
+            &mut app,
+            WindowKind::UndockedTab {
+                path: std::path::PathBuf::from("/tmp/sheet.snxsch"),
+                title: "sheet".to_string(),
+            },
+        );
+
+        assert!(
+            app.route_key(tab, &character("w", keyboard::Modifiers::default()))
+                .is_none(),
+            "an undocked tab paints the whole overlay stack, palette included"
+        );
+    }
+
+    #[test]
+    fn f1_is_a_dead_key_where_the_sheet_cannot_appear() {
+        let mut app = quiet_app();
+        let modal = open_window(&mut app, WindowKind::DetachedModal(ModalId::ErcDialog));
+        let panel = open_window(
+            &mut app,
+            WindowKind::DetachedPanel(crate::panels::PanelKind::Projects),
+        );
+
+        for window in [modal, panel] {
+            assert!(
+                app.route_key(window, &named(keyboard::key::Named::F1))
+                    .is_none(),
+                "toggling the sheet in another window would change what the \
+                 user cannot see"
+            );
+        }
+        assert!(
+            !app.ui_state.keyboard_shortcuts_open,
+            "and nothing opened as a side effect"
+        );
+    }
+
+    #[test]
+    fn the_recorder_claims_only_where_preferences_is_painted_inline() {
+        let mut app = quiet_app();
+        app.ui_state.preferences_keymap_recorder = Some(recording());
+        let main = main_window(&app);
+        let elsewhere = open_window(&mut app, WindowKind::DetachedModal(ModalId::ErcDialog));
+
+        assert!(
+            matches!(
+                app.route_key(main, &character("w", keyboard::Modifiers::default())),
+                Some(Message::Preferences(_))
+            ),
+            "Preferences is inline, so the main window is where recording happens"
+        );
+        assert!(
+            matches!(
+                app.route_key(elsewhere, &character("w", keyboard::Modifiers::default())),
+                Some(Message::Ui(UiMsg::KeymapStroke(_)))
+            ),
+            "a stroke aimed at another window routes normally (#557 decision 1)"
+        );
+    }
+
+    #[test]
+    fn a_detached_preferences_moves_the_recorder_with_it() {
+        let mut app = quiet_app();
+        app.ui_state.preferences_keymap_recorder = Some(recording());
+        let prefs = open_window(&mut app, WindowKind::DetachedModal(ModalId::Preferences));
+        let main = main_window(&app);
+
+        assert!(
+            matches!(
+                app.route_key(prefs, &character("w", keyboard::Modifiers::default())),
+                Some(Message::Preferences(_))
+            ),
+            "the detached Preferences body renders the recorder"
+        );
+        assert!(
+            matches!(
+                app.route_key(main, &character("w", keyboard::Modifiers::default())),
+                Some(Message::Ui(UiMsg::KeymapStroke(_)))
+            ),
+            "the in-window card is not painted once detached, so the main \
+             window is no longer where recording happens"
         );
     }
 
