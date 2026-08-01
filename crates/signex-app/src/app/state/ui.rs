@@ -46,6 +46,17 @@ pub struct UiState {
     /// resolver clears it on a match, a definite miss, or via the
     /// single-stroke restart retry.
     pub keymap_pending_sequence: Vec<crate::keymap::KeyStroke>,
+    /// Which window the pending chord began in (#559).
+    ///
+    /// The buffer above is app-wide, so without this a sequence could
+    /// start in one window, finish in another, and resolve against the
+    /// contexts of a third. `resolve_keymap_stroke` drops the prefix
+    /// whenever the next stroke arrives from a different target.
+    ///
+    /// `pub(crate)` unlike its neighbours: `InputTarget` is crate-private,
+    /// and a `pub` field carrying it would leak a private type out of the
+    /// crate's interface. Nothing outside needs to read it.
+    pub(crate) keymap_pending_target: Option<crate::app::dispatch::input::InputTarget>,
     pub canvas_font_name: String,
     pub canvas_font_size: f32,
     pub canvas_font_bold: bool,

@@ -141,7 +141,7 @@ impl Signex {
                 self.document_state.panel_ctx.snap_hotspots = self.ui_state.snap_hotspots;
                 self.finish_update()
             }
-            UiMsg::KeymapStroke(stroke) => self.resolve_keymap_stroke(stroke),
+            UiMsg::KeymapStroke { window, stroke } => self.resolve_keymap_stroke(window, stroke),
         }
     }
 

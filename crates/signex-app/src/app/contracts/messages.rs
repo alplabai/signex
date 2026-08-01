@@ -235,7 +235,17 @@ pub enum UiMsg {
     /// `UiState::keymap_pending_sequence` and resolved here in `update`
     /// (where `&mut self` is available), which keeps the chord buffer
     /// out of a process-global static.
-    KeymapStroke(crate::keymap::KeyStroke),
+    KeymapStroke {
+        /// Which window produced the stroke (#559). Shortcut contexts
+        /// resolve against it rather than against the main window's
+        /// active tab, and a multi-stroke chord is dropped when the
+        /// window changes mid-sequence.
+        ///
+        /// `None` for a synthesised stroke that names no window, which
+        /// resolves as the main window does.
+        window: Option<iced::window::Id>,
+        stroke: crate::keymap::KeyStroke,
+    },
 }
 
 /// Move Selection dialog message family (ADR-0001 D3). Namespaced under

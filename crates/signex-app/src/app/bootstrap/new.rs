@@ -89,6 +89,7 @@ impl Signex {
                 keymap_profiles,
                 active_keymap,
                 keymap_pending_sequence: Vec::new(),
+                keymap_pending_target: None,
                 canvas_font_name: crate::fonts::DEFAULT_CANVAS_FONT.to_string(),
                 canvas_font_size: 11.0,
                 canvas_font_bold: false,

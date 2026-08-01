@@ -5,7 +5,7 @@ use super::*;
 mod command_palette;
 mod document;
 mod escape;
-mod input;
+pub(crate) mod input;
 mod keymap;
 pub(crate) mod library;
 mod overlay;

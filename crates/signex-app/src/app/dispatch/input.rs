@@ -234,7 +234,7 @@ impl Signex {
             InputConsumer::Escape => Self::claim_escape(window, event),
             InputConsumer::ShortcutsSheet => self.claim_shortcuts_sheet(target, event),
             InputConsumer::SelectionSlots => Self::claim_selection_slots(event),
-            InputConsumer::Keymap => Self::claim_keymap(event),
+            InputConsumer::Keymap => Self::claim_keymap(window, event),
         }
     }
 
@@ -425,12 +425,15 @@ impl Signex {
     /// A stroke iced cannot express as a `KeyStroke` (a bare modifier
     /// press) is ignored. Being last, `Pass` and `Swallow` are equivalent
     /// here — `Pass` says the honest thing: nobody wanted it.
-    fn claim_keymap(event: &keyboard::Event) -> Claim {
+    fn claim_keymap(window: iced::window::Id, event: &keyboard::Event) -> Claim {
         let keyboard::Event::KeyPressed { key, modifiers, .. } = event else {
             return Claim::Pass;
         };
         match KeyStroke::from_iced(key, *modifiers) {
-            Some(stroke) => Claim::Consume(Message::Ui(UiMsg::KeymapStroke(stroke))),
+            Some(stroke) => Claim::Consume(Message::Ui(UiMsg::KeymapStroke {
+                window: Some(window),
+                stroke,
+            })),
             None => Claim::Pass,
         }
     }
@@ -773,7 +776,7 @@ mod tests {
         assert!(
             matches!(
                 app.route_key(w, &character("c", keyboard::Modifiers::COMMAND)),
-                Some(Message::Ui(UiMsg::KeymapStroke(_)))
+                Some(Message::Ui(UiMsg::KeymapStroke { .. }))
             ),
             "Cmd/Ctrl+C must reach the keymap resolver, not the slot consumer"
         );
@@ -786,7 +789,7 @@ mod tests {
 
         assert!(matches!(
             app.route_key(w, &character("3", keyboard::Modifiers::default())),
-            Some(Message::Ui(UiMsg::KeymapStroke(_)))
+            Some(Message::Ui(UiMsg::KeymapStroke { .. }))
         ));
     }
 
@@ -799,7 +802,7 @@ mod tests {
 
         assert!(matches!(
             app.route_key(w, &character("w", keyboard::Modifiers::default())),
-            Some(Message::Ui(UiMsg::KeymapStroke(_)))
+            Some(Message::Ui(UiMsg::KeymapStroke { .. }))
         ));
     }
 
@@ -858,7 +861,7 @@ mod tests {
         assert!(
             matches!(
                 app.route_key(panel, &character("w", keyboard::Modifiers::default())),
-                Some(Message::Ui(UiMsg::KeymapStroke(_)))
+                Some(Message::Ui(UiMsg::KeymapStroke { .. }))
             ),
             "the search field is not on screen here, so the key routes normally"
         );
@@ -923,7 +926,7 @@ mod tests {
         assert!(
             matches!(
                 app.route_key(elsewhere, &character("w", keyboard::Modifiers::default())),
-                Some(Message::Ui(UiMsg::KeymapStroke(_)))
+                Some(Message::Ui(UiMsg::KeymapStroke { .. }))
             ),
             "a stroke aimed at another window routes normally (#557 decision 1)"
         );
@@ -946,7 +949,7 @@ mod tests {
         assert!(
             matches!(
                 app.route_key(main, &character("w", keyboard::Modifiers::default())),
-                Some(Message::Ui(UiMsg::KeymapStroke(_)))
+                Some(Message::Ui(UiMsg::KeymapStroke { .. }))
             ),
             "the in-window card is not painted once detached, so the main \
              window is no longer where recording happens"
