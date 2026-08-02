@@ -56,10 +56,14 @@ Hard CI gates (must pass to merge):
 - [ ] `cargo test --workspace` passes (**Test**)
 - [ ] `cargo deny check licenses` clean — no GPL transitive deps (**License audit**)
 - [ ] License-compliance question above is answered (**self-declaration**)
+- [ ] `cargo fmt --all -- --check` clean (**fmt · rustfmt**)
+- [ ] `cargo clippy --workspace --all-targets --all-features` reports no
+      `error:` — deny-by-default lints fail the **Check** job
+- [ ] No new or growing over-cap file (**no god-files**)
+- [ ] No discarded `iced::Task` (**no discarded tasks**)
 
 Advisory (surfaced by CI, not blocking — please still keep them clean):
 
-- [ ] `cargo fmt --all` applied
-- [ ] `cargo clippy --workspace` reviewed
+- [ ] Warn-level clippy output reviewed
 - [ ] New code has tests where appropriate
 - [ ] Milestone is set on this PR

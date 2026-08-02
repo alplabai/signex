@@ -89,12 +89,17 @@ cargo run -p signex-app
 cargo test --workspace        # hard gate — must pass
 cargo check --workspace       # hard gate — must compile
 cargo fmt --all               # hard gate — the tree must be rustfmt-clean
-cargo clippy --workspace      # advisory in CI, but review the warnings
+cargo clippy --workspace --all-targets --all-features   # exactly what CI runs
 ```
 
-`cargo test`, `cargo check`, and `cargo fmt --all -- --check` are the CI hard
-gates; `clippy` is surfaced but doesn't block — see "Merge rules for `trunk`"
-below. Because the toolchain is pinned (`rust-toolchain.toml`, Rust 1.97.0),
+`cargo test`, `cargo check`, `cargo fmt --all -- --check` and `clippy` are all
+CI hard gates — see "Merge rules for `trunk`" below. Clippy runs inside the
+required `check` job, so its **deny-by-default lints (the `correctness` group)
+fail the job and block the merge**; warn-level lints are surfaced as
+annotations and don't. Run it with the same `--all-targets --all-features` CI
+uses, or your local run will silently skip `tests/`, `benches/`, `examples/`,
+inline `#[cfg(test)] mod tests`, and every feature-gated module.
+Because the toolchain is pinned (`rust-toolchain.toml`, Rust 1.97.0),
 your local `cargo fmt` output is identical to CI's — run it before you commit
 (or wire it into a local `pre-commit` hook) so the required `fmt · rustfmt`
 check stays green.
@@ -119,7 +124,8 @@ main     ← stable releases only (protected, requires PR + approval)
 1. Fork the repo
 2. Create a branch from `trunk`: `git checkout -b feature/my-feature trunk`
 3. Make your changes
-4. Ensure `cargo test` and `cargo clippy` pass
+4. Ensure `cargo test --workspace` and
+   `cargo clippy --workspace --all-targets --all-features` pass
 5. Commit with a descriptive message: `feat: add measure tool (Ctrl+M)`
 6. Push and open a PR against `trunk`
 
@@ -190,10 +196,13 @@ the importable ruleset is in [`.github/rulesets/`](.github/rulesets/). In short:
 - **1 Code-Owner approving review** is required; you can't approve your own PR.
   Conversations must be resolved and the branch up to date with `trunk`.
 - CI hard gates must be green before merge: `check · ubuntu-latest`,
-  `test · workspace`, `deny · licenses + deps`, `PR-description self-declaration`,
-  `No GPL-tool-shaped names anywhere in crates/`, and `fmt · rustfmt`. `clippy`
-  and the advisory `cargo-deny` (sources/advisories) steps are informational and
-  don't block.
+  `check · macos-latest`, `check · windows-latest`, `test · workspace`,
+  `deny · licenses + deps`, `PR-description self-declaration`,
+  `No GPL-tool-shaped names anywhere in crates/`, `fmt · rustfmt`,
+  `no god-files`, and `no discarded tasks`. `clippy` runs inside the `check`
+  job — a deny-by-default lint fails that job and therefore blocks; its
+  warn-level output only annotates. The `cargo-deny` sources/advisories steps
+  stay informational and don't block.
 - Merge with a **merge commit** (to preserve a contributor's per-commit history)
   or **squash** (one logical change → one commit).
 

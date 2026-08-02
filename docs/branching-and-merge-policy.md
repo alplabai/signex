@@ -42,9 +42,10 @@ For both `trunk` and `main`:
 Every PR to `trunk` or `main` must pass these (job names as they appear
 as status-check contexts):
 
-- `check · ubuntu-latest` — `cargo check --workspace` (Linux is the gating
-  target; `check · windows-latest` / `check · macos-latest` run too and
-  should stay green, but only Linux is required).
+- `check · ubuntu-latest`, `check · macos-latest`, `check · windows-latest` —
+  `cargo check --workspace` on all three release targets; all three are
+  required. Each also runs `cargo clippy --workspace --all-targets
+  --all-features` as a step, so a clippy *error* fails the job (see below).
 - `test · workspace` — `cargo test --workspace` (headless GPU tests run on
   lavapipe).
 - `deny · licenses + deps` — `cargo deny check licenses` (no GPL transitive
@@ -53,10 +54,22 @@ as status-check contexts):
   and does not admit KiCad-derived source.
 - `No GPL-tool-shaped names anywhere in crates/` — the representative licence
   guard (the full License-Guard suite runs alongside it and shows on every PR).
+- `fmt · rustfmt` — the tree is `cargo fmt --all -- --check` clean.
+- `no god-files` — no new or growing production file over the size cap.
+- `no discarded tasks` — no `let _ = …`-shaped discard of an `iced::Task`.
 
-**Advisory, not blocking** (surfaced as annotations): `fmt · rustfmt`,
-`clippy` (inside `check`), and the `cargo-deny` `sources` / `advisories`
-steps. Keep them clean, but they don't hold the merge button.
+**Clippy is half a gate, by design.** It has no status-check context of its
+own; it is a step inside the three required `check` jobs. Clippy's
+deny-by-default lints — the whole `correctness` group — emit `error:` and
+abort compilation, so they fail the job and hold the merge button. Warn-level
+lints (`style`, `complexity`, `perf`, most of `suspicious`) only annotate and
+do not block. The job previously passed `-W clippy::all`, which demoted the
+`correctness` group to warnings and neutralised even that much; it was removed
+in #567.
+
+**Advisory, not blocking** (surfaced as annotations): warn-level clippy output
+and the `cargo-deny` `sources` / `advisories` steps. Keep them clean, but they
+don't hold the merge button.
 
 ## Merge method
 

@@ -4,6 +4,8 @@
 //! (Numerical Recipes §2.3 worked examples). All "expected" values
 //! were verified by hand or by direct substitution.
 
+use std::f64::consts::PI;
+
 use signex_sketch::solver::linalg::{LinAlgError, QrDecomposition, lu_decompose, lu_solve, solve};
 
 const TOL: f64 = 1e-10;
@@ -127,7 +129,11 @@ fn solve_identity_returns_b() {
         vec![0.0, 0.0, 1.0, 0.0],
         vec![0.0, 0.0, 0.0, 1.0],
     ];
-    let b = vec![1.5, -2.5, 0.0, 3.14159];
+    // Identity solve — the right-hand side is arbitrary and `x` is asserted
+    // against this very vector, so the last element's value carries no
+    // meaning. It was spelled `3.14159`, which `clippy::approx_constant`
+    // (deny-by-default) reads as a hand-rolled PI; use the real constant.
+    let b = vec![1.5, -2.5, 0.0, PI];
 
     let x = solve(&a, &b).expect("identity is non-singular");
     assert_vec_close(&x, &b);
