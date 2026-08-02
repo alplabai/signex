@@ -134,7 +134,10 @@ pub fn router_with_state(state: AppState) -> Router {
             // tower-http 0.6 marks `bearer` as "too basic" but it's the
             // documented escape hatch for env-var-driven static tokens.
             // Once OIDC lands we'll replace it with a custom validator.
-            #[allow(deprecated)]
+            #[expect(
+                deprecated,
+                reason = "tower-http 0.6 marks `bearer` as too basic, but it is the documented escape hatch for env-var-driven static tokens until OIDC lands"
+            )]
             let layer = ValidateRequestHeaderLayer::bearer(&token);
             protected = protected.layer(layer);
         }

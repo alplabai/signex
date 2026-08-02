@@ -221,5 +221,8 @@ pub(crate) fn reconcile_child_sheet_pins(child: &mut ChildSheet, ports: &[SheetP
 }
 
 // Keep the unused import silent — SchematicSheet is referenced via super.
-#[allow(unused_imports)]
+#[expect(
+    unused_imports,
+    reason = "the re-export exists so `SchematicSheet` resolves via `super` in this module's paths"
+)]
 use SchematicSheet as _;

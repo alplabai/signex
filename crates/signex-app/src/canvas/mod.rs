@@ -18,7 +18,6 @@ use iced::{Color, Rectangle, Renderer, Theme};
 pub use camera::Camera;
 pub use grid::GridState;
 
-#[allow(deprecated)]
 use crate::schematic_runtime::SchematicSheetExt as _;
 
 use crate::app::{ContextMenuMsg, Message};

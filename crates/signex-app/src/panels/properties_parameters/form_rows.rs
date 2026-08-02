@@ -292,7 +292,10 @@ pub fn form_grid_size_row(current_mm: f32, label_c: Color) -> Element<'static, P
 /// Altium-style grid row: [Label] [checkbox toggle] [pick_list] [shortcut hint]
 /// Used for both "Visible Grid" (eye/visible toggle) and "Snap Grid" (snap enable toggle).
 /// Labels and values are shown in the current `unit` (mm or mil).
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "a generic form-row builder: label, value, bounds, styling and the message constructor are all independent"
+)]
 pub fn form_grid_row(
     label: &'static str,
     current_mm: f32,

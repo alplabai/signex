@@ -121,7 +121,10 @@ impl<'a> SymbolCanvas<'a> {
     /// Construct the per-frame canvas with the inputs from
     /// `SymbolEditorState` + the active theme + global grid/unit
     /// settings. See module-level docs for the parity rationale.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "15 arguments: the per-frame canvas takes the symbol, theme and global grid/unit settings; see the module docs for the parity rationale"
+    )]
     pub fn new(
         symbol: &'a Symbol,
         selected: Option<SymbolSelection>,

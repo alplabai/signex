@@ -265,7 +265,6 @@ pub struct LoadedProject {
     /// `feedback_no_disk_writes_without_user_save.md`'s "wait for
     /// explicit user save" invariant. Keyed by a temporary handle that
     /// becomes the eventual `library_id` once materialised.
-    #[allow(clippy::implicit_hasher)]
     pub pending_libraries:
         std::collections::HashMap<uuid::Uuid, crate::library::commands::PendingLibrarySpec>,
 }

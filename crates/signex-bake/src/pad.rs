@@ -115,7 +115,10 @@ pub fn bake_pads(
 /// the pad's own `offset_x_expr` / `offset_y_expr`.
 /// `extra_pad_number`, when `Some`, overrides `pad_attr.number`
 /// (LinearArray numbering scheme).
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "10 arguments: the full pad geometry is passed positionally rather than boxed into a struct the callers do not otherwise need"
+)]
 pub(crate) fn bake_one_pad(
     sketch_point_id: SketchEntityId,
     pad_attr: &PadAttr,

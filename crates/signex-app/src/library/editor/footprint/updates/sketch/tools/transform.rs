@@ -586,7 +586,10 @@ fn offset_circle(
 // `source_r ± dist`, with both new endpoints pinned to the source arc's
 // underlying circle via `DistancePtCircle` so the parametric offset
 // tracks a later radius edit.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "a sketch transform takes the full source geometry plus the transform spec"
+)]
 fn offset_arc(
     editor: &mut crate::app::FootprintEditorState,
     ctx: &ToolClickCtx,

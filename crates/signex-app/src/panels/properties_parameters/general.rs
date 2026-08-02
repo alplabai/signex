@@ -710,7 +710,10 @@ pub fn tag_btn(
 }
 
 /// Segmented button (for units toggle etc).
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "a general-properties row builder whose parameters are all independent"
+)]
 pub fn seg_btn<'a>(
     label: &str,
     active: bool,

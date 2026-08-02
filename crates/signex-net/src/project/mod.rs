@@ -528,7 +528,10 @@ fn analyze(sheet: &SchematicSheet) -> Analysis<'_> {
 ///
 /// Every key this walk reaches is inserted into `visited`, so the caller can
 /// tell which of its remaining roots are already covered (#430).
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "9 arguments: the hierarchy DFS threads its accumulators explicitly so the caller can inspect them (#430)"
+)]
 fn visit<'a>(
     graph: &ProjectGraph<'a>,
     key: &SheetKey,

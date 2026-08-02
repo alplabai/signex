@@ -13,7 +13,10 @@ use super::subforms::{
 };
 use super::{fp_is_collapsed, props_kv_row, props_section_header};
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "13 arguments: the selection section reads thirteen independent slices of editor state"
+)]
 pub(super) fn view_selection<'a>(
     mut col: Column<'a, PanelMsg>,
     fp: &'a FootprintEditorPanelContext,

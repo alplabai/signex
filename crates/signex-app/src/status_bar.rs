@@ -50,7 +50,10 @@ fn selection_summary(selected: &[SelectedItem]) -> Option<String> {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "11 arguments: the status bar reads eleven independent slices of app state and owns none of them"
+)]
 pub fn view<'a>(
     x: f64,
     y: f64,

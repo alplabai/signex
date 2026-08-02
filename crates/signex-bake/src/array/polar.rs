@@ -28,7 +28,10 @@ use super::numbering::strip_eq_prefix;
 /// v0.22 Phase B5 — optional `depopulation` works the same as Grid:
 /// `mask_expr` is evaluated per `(i, j=0)` and `false` skips the
 /// instance without breaking the parametric chain.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "11 arguments: polar-array placement takes the whole geometry + numbering spec at once"
+)]
 pub(super) fn bake_polar(
     source: SketchEntityId,
     center: SketchEntityId,

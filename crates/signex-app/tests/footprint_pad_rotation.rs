@@ -13,7 +13,10 @@
 // `let _ = ...` routinely (not a production `Task` getting dropped — see
 // GH #99 part 1). `[lints]` in Cargo.toml is package-scoped, not
 // target-scoped, so each integration-test crate root needs its own allow.
-#![allow(clippy::let_underscore_must_use)]
+#![expect(
+    clippy::let_underscore_must_use,
+    reason = "integration tests discard Results with `let _ = ...` routinely; this is test scaffolding, not a production `iced::Task` being dropped, and `[lints]` in Cargo.toml is package-scoped so each integration-test crate root needs its own"
+)]
 
 use signex_app::app::{EditMsg, Message, Signex};
 use signex_app::library::editor::footprint::state::EditorPad;

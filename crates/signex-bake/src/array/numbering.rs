@@ -82,7 +82,6 @@ pub(super) fn strip_eq_prefix(src: &str) -> &str {
 /// `(i * dx, j * dy)` from the source. Optional `depopulation` is a
 /// boolean expression evaluated per cell — `false` skips the cell
 /// without breaking the parametric chain.
-#[allow(clippy::too_many_arguments)]
 /// 2D companion to `derive_pad_number` — `BgaRowCol` is meaningful
 /// here, falling back to a row-major linear count for `LinearIncrement`
 /// and looking up `names[j*nx + i]` for `Explicit`.

@@ -254,7 +254,6 @@ pub fn materialize_pending_library(
 /// Options" modal that pops up after the Save-As dialog; non-UI
 /// callers (tests, fixtures) pass `false` to stay independent of a
 /// local `git lfs` install.
-#[allow(clippy::too_many_arguments)]
 pub fn create_library_at(
     state: &mut LibraryState,
     project: &mut ProjectData,

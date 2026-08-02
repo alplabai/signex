@@ -157,7 +157,6 @@ impl SchematicTabSession {
 /// an enum so future tab kinds (symbol editor, footprint editor, 3D
 /// viewer) can slot in without reshaping callers.
 #[derive(Debug)]
-#[allow(dead_code, clippy::large_enum_variant)]
 pub enum TabDocument {
     Pcb(PcbBoard),
 }

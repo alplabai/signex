@@ -40,11 +40,9 @@ pub mod updates_dialog;
 // `Signex`. The remaining sub-types are used widely enough across
 // the app crate to warrant a flat re-export, even where the only
 // current consumer is the dispatcher (Phase 2 widens the surface).
-#[allow(unused_imports)]
 pub use messages::{
     BrowserEditMsg, EditorMsg, LibraryMessage, PickerMsg, PrimitivePickerMsg, SettingsMsg,
 };
-#[allow(unused_imports)]
 pub use state::{
     ComponentEditorState, ComponentPreviewState, ComponentsMountSource, ComponentsPanelState,
     DeleteConfirmState, EditRowModalState, LibraryBrowserState, LibraryState, OpenLibrary,

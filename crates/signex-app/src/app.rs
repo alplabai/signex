@@ -49,7 +49,6 @@ pub use state::{
 };
 
 // Re-exported so modal dialogs outside `state` can reference the type.
-#[allow(unused_imports)]
 pub use state::AnnotateOrder;
 
 impl Signex {

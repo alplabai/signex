@@ -234,7 +234,6 @@ pub fn draw_power_port_preview(
     );
 }
 
-#[allow(clippy::too_many_arguments)]
 pub fn render_schematic(
     frame: &mut canvas::Frame,
     snapshot: &SchematicRenderSnapshot,

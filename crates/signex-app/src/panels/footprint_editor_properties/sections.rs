@@ -8,7 +8,10 @@ use super::managers::{render_grid_manager, render_other_section};
 use super::snap_options::render_snapping_mode_row;
 use super::{fp_is_collapsed, props_kv_row, props_section_header};
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "10 arguments: the section builder reads ten independent slices of editor state"
+)]
 pub(super) fn view_sections<'a>(
     mut col: Column<'a, PanelMsg>,
     fp: &'a FootprintEditorPanelContext,

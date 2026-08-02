@@ -231,7 +231,10 @@ const FOOTER_H: f32 = 44.0;
 /// * `draft_font`       — UI font name pending save
 /// * `custom_name`      — name of the loaded custom theme (if any)
 /// * `dirty`            — whether there are unsaved changes
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the preferences form passes each control's state positionally"
+)]
 pub fn view<'a>(
     nav: PrefNav,
     draft_theme: ThemeId,
@@ -317,7 +320,10 @@ pub fn view<'a>(
 /// used by `view_detached_modal` so the dialog fills its own OS window.
 /// In-window callers go through `view()` which wraps this in a tinted
 /// dismiss layer.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "23 arguments: one per preferences control; grouping them needs a settings-struct refactor, not an attribute"
+)]
 pub(crate) fn view_body<'a>(
     nav: PrefNav,
     draft_theme: ThemeId,
@@ -370,7 +376,10 @@ pub(crate) fn view_body<'a>(
     )
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "23 arguments: one per preferences control; grouping them needs a settings-struct refactor, not an attribute"
+)]
 fn build_dialog<'a>(
     nav: PrefNav,
     draft_theme: ThemeId,
@@ -602,7 +611,10 @@ fn nav_item<'a>(item: PrefNav, active: PrefNav) -> Element<'a, PrefMsg> {
 
 // ─── Right content ────────────────────────────────────────────
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the preferences form passes each control's state positionally"
+)]
 fn build_content<'a>(
     nav: PrefNav,
     draft_theme: ThemeId,

@@ -86,7 +86,10 @@ fn count_sketch_pads(fp: &Footprint) -> usize {
 
 /// Helper: author one SMD Point with a `PadAttr`. Anchored at
 /// `(anchor_x, anchor_y)`, with optional per-pad relative offsets.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "13 arguments: an example builder that mirrors the stock-library row schema one field per parameter"
+)]
 fn smd_pad(
     plane: PlaneId,
     anchor_x: f64,

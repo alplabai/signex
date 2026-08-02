@@ -22,7 +22,10 @@ use super::numbering::{derive_pad_number, linear_increment_number, strip_eq_pref
 /// / `dy_expr` once per step (each in its own `EvalContext` with the
 /// instance index), and dispatches per-instance to
 /// [`bake_one_pad`].
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "linear-array placement takes the whole geometry + numbering spec at once"
+)]
 pub(super) fn bake_linear(
     source: SketchEntityId,
     count_expr: &str,
