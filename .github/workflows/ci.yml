@@ -56,8 +56,19 @@ jobs:
       - name: Check
         run: cargo check --workspace
 
+      # No `-W clippy::all`. `clippy::all` is already the default lint set, so
+      # the flag bought nothing — but a *group-level* `-W` sets every lint in
+      # the group to warn, and that group contains the 67 deny-by-default
+      # `correctness` lints. It turned every one of them from a build failure
+      # into an annotation, i.e. it made this step weaker than no flag at all
+      # (#567). `--all-targets` reaches `tests/`, `benches/`, `examples/` and
+      # inline `#[cfg(test)] mod tests` — bare `cargo clippy` compiles the lib
+      # without `cfg(test)`, so those bodies were never even parsed as live
+      # code. `--all-features` reaches signex-library's `local-git`,
+      # `database`, `search-tantivy`, `distributors-community` and `ai-stub`
+      # modules. Warn-level lints still only annotate; correctness now fails.
       - name: Clippy
-        run: cargo clippy --workspace -- -W clippy::all
+        run: cargo clippy --workspace --all-targets --all-features
 
   test:
     name: test · workspace
