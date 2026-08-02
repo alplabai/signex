@@ -122,6 +122,7 @@ impl Signex {
                 preferences_draft_symbol_grid_style: crate::fonts::read_symbol_grid_style_pref(),
                 preferences_draft_symbol_pin_selection:
                     crate::fonts::read_symbol_pin_selection_pref(),
+                preferences_theme_status: String::new(),
                 preferences_keymap_editor: keymap_editor,
                 preferences_keymap_status: String::new(),
                 preferences_keymap_search: String::new(),

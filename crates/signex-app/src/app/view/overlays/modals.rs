@@ -38,6 +38,7 @@ impl Signex {
             draft_symbol_grid_style: ui.preferences_draft_symbol_grid_style,
             draft_symbol_pin_selection: ui.preferences_draft_symbol_pin_selection,
             custom_name: ui.custom_theme.as_ref().map(|c| c.name.as_str()),
+            theme_status: &ui.preferences_theme_status,
             dirty: ui.preferences_dirty,
             erc_overrides: &ui.erc_severity_override,
             distributor_settings: &self.library.settings,

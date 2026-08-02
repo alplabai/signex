@@ -131,6 +131,12 @@ pub enum PrefMsg {
     ImportTheme,
     /// Save the current draft theme as a JSON file.
     ExportTheme,
+    /// Outcome of the theme-export write (#533). `Ok` carries the path
+    /// actually written, `Err` the `std::io::Error` rendered for the
+    /// user. Cancelling the save dialog emits nothing — only a real
+    /// attempt reports. Without this the write result was discarded and
+    /// a failed export looked identical to a successful one.
+    ThemeExportFinished(Result<std::path::PathBuf, String>),
     /// Loaded JSON content from an import pick dialog.
     ThemeFileLoaded(String),
     /// Set the severity override for an ERC rule. Setting the override
@@ -184,6 +190,11 @@ pub enum PrefMsg {
     KeymapProfileLoaded(String),
     /// Save the active profile to a `.toml` file.
     KeymapExportProfile,
+    /// Outcome of the keymap-export write (#533) — same shape and same
+    /// reason as [`Self::ThemeExportFinished`]. Reports through
+    /// `preferences_keymap_status`, where the serialization failure at
+    /// the same call site already reported.
+    KeymapExportFinished(Result<std::path::PathBuf, String>),
     /// Direct text edit of a binding's trigger (kept for API parity;
     /// the recorder is the primary edit path).
     KeymapBindingChanged {
@@ -253,6 +264,8 @@ pub struct PrefsView<'a> {
     pub draft_symbol_grid_style: GridStyle,
     pub draft_symbol_pin_selection: PinSelectionMode,
     pub custom_name: Option<&'a str>,
+    /// Appearance ▸ theme import/export status line. Empty renders nothing.
+    pub theme_status: &'a str,
     pub dirty: bool,
     pub erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
     pub distributor_settings: &'a crate::library::state::DistributorSettings,

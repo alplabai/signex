@@ -26,6 +26,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         draft_symbol_grid_style,
         draft_symbol_pin_selection,
         custom_name,
+        theme_status,
         ..
     } = v;
     let mut col = column![].spacing(0).padding([16, 20]);
@@ -114,6 +115,16 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         ]
         .align_y(iced::Alignment::Center),
     );
+
+    // Export writes a file the user picked in a save dialog; the write
+    // can fail (read-only volume, full disk, a path that vanished
+    // between pick and write). Report it here rather than letting the
+    // user assume the theme was saved (#533). Empty = nothing painted,
+    // so the row keeps its old height until there is something to say.
+    if !theme_status.is_empty() {
+        col = col.push(Space::new().height(6));
+        col = col.push(text(theme_status).size(10).style(text_muted));
+    }
 
     // ── Divider ──
     col = col.push(Space::new().height(16));

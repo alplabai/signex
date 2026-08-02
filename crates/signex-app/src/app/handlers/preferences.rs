@@ -63,6 +63,10 @@ impl Signex {
             crate::keymap::KeymapEditorModel::new(self.ui_state.keymap_profiles.clone());
         self.ui_state.preferences_keymap_status.clear();
         self.ui_state.preferences_keymap_recorder = None;
+        // The Appearance status line is transient feedback about one
+        // export, not a draft — a fresh dialog (or a Discard) must not
+        // reopen showing the last session's result.
+        self.ui_state.preferences_theme_status.clear();
         self.ui_state.preferences_dirty = false;
         self.ui_state.preferences_dirty_sticky = false;
     }
@@ -390,6 +394,9 @@ impl Signex {
                     canvas,
                 };
                 let json = serde_json::to_string_pretty(&export).unwrap_or_default();
+                // Drop any status from a previous attempt so the line the
+                // user sees always describes the export they just started.
+                self.ui_state.preferences_theme_status.clear();
                 return Task::future(async move {
                     let picked = rfd::AsyncFileDialog::new()
                         .set_title("Export Signex Theme")
@@ -397,11 +404,33 @@ impl Signex {
                         .set_file_name("custom-theme.json")
                         .save_file()
                         .await;
-                    if let Some(f) = picked {
-                        let _ = f.write(json.as_bytes()).await;
-                    }
-                    Message::Noop
+                    let Some(f) = picked else {
+                        // Cancelled the save dialog — nothing was
+                        // attempted, so there is nothing to report.
+                        return Message::Noop;
+                    };
+                    let path = f.path().to_path_buf();
+                    // `rfd::FileHandle::write` is a whole-file
+                    // `std::fs::write` on a worker thread and yields
+                    // `io::Result<()>` — no short write to handle, but a
+                    // real failure (read-only volume, full disk, a path
+                    // that vanished between pick and write) used to be
+                    // discarded here, leaving the user believing the
+                    // theme had been exported (#533).
+                    let outcome = match f.write(json.as_bytes()).await {
+                        Ok(()) => Ok(path),
+                        Err(error) => Err(format!("{path}: {error}", path = path.display())),
+                    };
+                    Message::Preferences(PreferencesMsg::Inner(PrefMsg::ThemeExportFinished(
+                        outcome,
+                    )))
                 });
+            }
+            PrefMsg::ThemeExportFinished(result) => {
+                self.ui_state.preferences_theme_status = match result {
+                    Ok(path) => format!("Exported theme to {}.", path.display()),
+                    Err(detail) => format!("Could not export theme: {detail}"),
+                };
             }
             PrefMsg::ThemeFileLoaded(content) => {
                 if let Ok(custom) =
@@ -615,6 +644,9 @@ impl Signex {
                 match crate::keymap::export_custom_profile(&profile) {
                     Ok(source) => {
                         let filename = format!("{}.toml", profile.id);
+                        // Same reset as the theme export: the status line
+                        // must describe this attempt, not the last one.
+                        self.ui_state.preferences_keymap_status.clear();
                         return Task::future(async move {
                             let picked = rfd::AsyncFileDialog::new()
                                 .set_title("Export Signex Keyboard Shortcuts")
@@ -622,10 +654,25 @@ impl Signex {
                                 .set_file_name(&filename)
                                 .save_file()
                                 .await;
-                            if let Some(f) = picked {
-                                let _ = f.write(source.as_bytes()).await;
-                            }
-                            Message::Noop
+                            let Some(f) = picked else {
+                                return Message::Noop;
+                            };
+                            let path = f.path().to_path_buf();
+                            // The serialization failure below already
+                            // reported through `preferences_keymap_status`;
+                            // the write failure was the half that vanished
+                            // (#533). Same `io::Result<()>` shape as the
+                            // theme export — see that arm for why there is
+                            // no short write to handle.
+                            let outcome = match f.write(source.as_bytes()).await {
+                                Ok(()) => Ok(path),
+                                Err(error) => {
+                                    Err(format!("{path}: {error}", path = path.display()))
+                                }
+                            };
+                            Message::Preferences(PreferencesMsg::Inner(
+                                PrefMsg::KeymapExportFinished(outcome),
+                            ))
                         });
                     }
                     Err(error) => {
@@ -633,6 +680,12 @@ impl Signex {
                             format!("Could not export keyboard shortcuts: {error}");
                     }
                 }
+            }
+            PrefMsg::KeymapExportFinished(result) => {
+                self.ui_state.preferences_keymap_status = match result {
+                    Ok(path) => format!("Exported keyboard shortcuts to {}.", path.display()),
+                    Err(detail) => format!("Could not export keyboard shortcuts: {detail}"),
+                };
             }
             PrefMsg::KeymapBindingChanged {
                 command,

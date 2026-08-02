@@ -88,6 +88,13 @@ pub struct UiState {
     pub preferences_nav: crate::preferences::PrefNav,
     pub preferences_draft_theme: ThemeId,
     pub preferences_draft_font: String,
+    /// Status / error line shown under Appearance ▸ Import/Export Theme.
+    /// The export writes a file the user picked in a save dialog, so a
+    /// failed write has to reach the user rather than leaving them
+    /// believing the theme was saved (#533). Sibling of
+    /// [`Self::preferences_keymap_status`]; empty renders nothing. Pure
+    /// feedback — never part of the dirty predicate.
+    pub preferences_theme_status: String,
     pub power_port_style: PowerPortStyle,
     pub preferences_draft_power_port_style: PowerPortStyle,
     pub label_style: LabelStyle,

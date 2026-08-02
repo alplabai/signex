@@ -41,6 +41,9 @@ mod prefs;
 #[path = "regression/preferences_dirty_guard.rs"]
 mod preferences_dirty_guard;
 
+#[path = "regression/preferences_export_status.rs"]
+mod preferences_export_status;
+
 #[path = "regression/library_undo.rs"]
 mod library_undo;
 
