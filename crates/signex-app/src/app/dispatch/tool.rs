@@ -8,7 +8,10 @@ impl Signex {
     /// selection-aware Properties panel (with full per-kind fields) renders.
     /// Returns without committing for kinds that have no in-place properties
     /// (wire / bus / bus entry / no-connect / component fallback).
-    #[allow(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "kept until the selection-aware Properties panel renders full per-kind fields"
+    )]
     fn commit_ghost_for_pre_placement(
         &mut self,
         kind: crate::panels::PrePlacementKind,

@@ -41,7 +41,10 @@ fn fp(path: PathBuf, msg: FootprintEditorMsg) -> LibraryMessage {
 /// row is wired to a real message (Break Track was the last, #372).
 /// Removing the variant is out of #372's scope, so the helper stays for
 /// future not-yet-implemented rows rather than orphaning the variant.
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "kept for future not-yet-implemented dropdown rows rather than orphaning ActiveBarStub"
+)]
 fn stub(label: &'static str, path: PathBuf) -> DropdownItem<LibraryMessage> {
     DropdownItem::new(label, fp(path, FootprintEditorMsg::ActiveBarStub(label)))
 }

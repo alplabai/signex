@@ -84,7 +84,6 @@ impl CancelHandle {
     /// shared flag directly via `Arc<AtomicBool>` in production; this
     /// helper is kept as a convenient handle for tests + future
     /// in-process cancel paths.
-    #[allow(dead_code)]
     pub fn cancel(&self) {
         self.flag.store(true, Ordering::SeqCst);
     }

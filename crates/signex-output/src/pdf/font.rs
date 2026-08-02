@@ -6,10 +6,14 @@
 //!
 //! The Roboto + Iosevka TTF bytes below are bundled at compile time but NOT
 //! yet wired into the PDF pipeline — they're parked for v0.9 when the Type0
-//! composite-font dict + FontFile2 stream emission lands. The `#[allow(dead_code)]`
-//! annotations that follow are deliberate.
+//! composite-font dict + FontFile2 stream emission lands. The module-wide
+//! `#![expect(dead_code)]` below is deliberate, and it expires on its own:
+//! once the pipeline uses these, `unfulfilled_lint_expectations` says so.
 
-#![allow(dead_code)]
+#![expect(
+    dead_code,
+    reason = "Roboto + Iosevka TTF bytes are bundled at compile time but not yet wired into the PDF pipeline; they land with the v0.9 Type0 composite-font dict + FontFile2 stream"
+)]
 
 use pdf_writer::Ref;
 use ttf_parser::Face;
@@ -79,7 +83,6 @@ impl PdfFont {
 
     /// PostScript base name for this font (used in /BaseFont). Matches the
     /// embedded TTF — used once full Type0 emission lands in v0.9.
-    #[allow(dead_code)]
     pub fn base_name(&self) -> &'static str {
         match self {
             PdfFont::RobotoRegular => "Roboto",

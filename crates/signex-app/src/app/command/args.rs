@@ -9,7 +9,7 @@
 
 /// An ordered bag of string arguments for a dispatched command.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct CommandArgs(#[allow(dead_code)] Vec<String>);
+pub(crate) struct CommandArgs(Vec<String>);
 
 impl CommandArgs {
     /// No arguments — what every current catalog command dispatches with.

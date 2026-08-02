@@ -51,7 +51,6 @@ pub enum TabKind {
 }
 
 impl TabKind {
-    #[allow(dead_code)]
     pub fn is_component_editor(&self) -> bool {
         matches!(self, TabKind::ComponentEditor(_))
     }
@@ -164,7 +163,6 @@ pub enum TabDocument {
 }
 
 impl TabDocument {
-    #[allow(dead_code)]
     pub fn as_pcb(&self) -> Option<&PcbBoard> {
         match self {
             Self::Pcb(board) => Some(board),
@@ -648,9 +646,7 @@ pub enum Tool {
     Label,
     Component,
     Text,
-    #[allow(dead_code)]
     NoConnect,
-    #[allow(dead_code)]
     BusEntry,
     Line,
     Rectangle,

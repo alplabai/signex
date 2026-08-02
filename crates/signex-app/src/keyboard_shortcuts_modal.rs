@@ -192,5 +192,4 @@ fn thin_divider<'a, M: 'a>(color: iced::Color) -> Element<'a, M> {
 // `styles::modal_card`. The const re-export keeps the reference
 // available for any future direct use (custom footer, etc.) without
 // forcing a re-import.
-#[allow(dead_code)]
 const _MODAL_CORNER_RADIUS_REEXPORT: f32 = MODAL_CORNER_RADIUS;

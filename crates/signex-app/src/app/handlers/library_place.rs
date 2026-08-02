@@ -113,7 +113,10 @@ fn hex_short(hash: &[u8; 32]) -> String {
 /// dispatch message. Pulled out so the picker handler stays small
 /// and the dispatcher's "what message do I emit?" logic lives next
 /// to the rest of the place-flow code.
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "kept next to the rest of the place-flow code so the picker handler stays small"
+)]
 pub(crate) fn place_message_from_picker(
     library_path: PathBuf,
     table: String,

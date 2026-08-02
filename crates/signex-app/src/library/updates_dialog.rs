@@ -114,7 +114,6 @@ pub fn classify_bump(current: &str, latest: &str) -> BumpKind {
 /// One row in the modal — drift between a placed Symbol's pinned
 /// version and its source row's current version.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct LibraryUpdateEntry {
     /// Schematic-side UUID for the placed `Symbol` — used to look up
     /// the instance back on apply (the engine indexes by Symbol UUID).

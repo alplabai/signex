@@ -215,12 +215,10 @@ impl ComponentPreviewState {
         }
     }
 
-    #[allow(dead_code)]
     pub fn mark_dirty(&mut self) {
         self.dirty = true;
     }
 
-    #[allow(dead_code)]
     pub fn clear_dirty(&mut self) {
         self.dirty = false;
     }
@@ -230,12 +228,10 @@ impl ComponentPreviewState {
 /// `ComponentEditorState` while their own retarget passes land. Once
 /// every consumer (panel / documents / new_component / commands /
 /// dispatch) is on `ComponentPreviewState`, this alias goes away.
-#[allow(dead_code)]
 pub type ComponentEditorState = ComponentPreviewState;
 
 /// Distributor APIs Settings panel state.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct DistributorSettings {
     pub digikey_account_email: Option<String>,
     pub digikey_status: Option<String>,

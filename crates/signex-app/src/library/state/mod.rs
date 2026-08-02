@@ -427,7 +427,6 @@ pub struct LibraryState {
     /// because both the editor and the validator borrow it. The
     /// Component Preview tab + the validator both read through this
     /// registry; this struct owns the field.
-    #[allow(dead_code)]
     pub template_registry: Arc<TemplateRegistry>,
     /// Per-browser-tab state, keyed by `.snxlib` root path. One entry
     /// per `TabKind::LibraryBrowser(path)` tab in the main window's
@@ -462,7 +461,6 @@ pub struct LibraryState {
     /// Set of schematic paths the user explicitly skipped updates on
     /// — drives the persistent "Library Updates" status-bar indicator.
     /// Cleared on apply / re-scan / close-tab.
-    #[allow(dead_code)]
     pub skipped_updates_for: std::collections::HashSet<PathBuf>,
     /// Session-scoped "Installed" libraries — opened via the
     /// Components Panel's "+ Add Library…" button (Stage 9 of

@@ -19,7 +19,10 @@
 //! `write_primitive`'s not-yet-exists branch is exactly
 //! `FootprintFile::from_footprint(..).to_toml_string()` + write.
 
-#![allow(dead_code)]
+#![expect(
+    dead_code,
+    reason = "the integration tests import this support module whole but each uses only part of it"
+)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

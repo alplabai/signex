@@ -190,7 +190,6 @@ fn extract_pinout_is_pure_no_panic_on_empty_input() {
     assert!(guess.confidence < 0.3);
 }
 
-#[allow(dead_code)]
 fn _exhaustive_path_check(_p: &Path) {
     // Compile-only: ensure the `Path` import stays referenced when
     // `ensure_fixtures` body changes.

@@ -273,7 +273,6 @@ impl FootprintEditorState {
 
     /// Empty state — used for brand-new components and as the fallback
     /// when the binding has no footprint primitive yet.
-    #[allow(dead_code)]
     pub fn empty() -> Self {
         let mut s = Self::with_pads(Vec::new());
         s.recompute_courtyard();

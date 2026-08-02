@@ -235,7 +235,6 @@ impl LibraryState {
     /// `refs` — `(row_id, instance_id)` tuples. The index keys by
     /// `RowId` directly; revisions and per-instance version pins are
     /// not part of the DBLib model.
-    #[allow(dead_code)]
     pub fn ingest_sheet(&mut self, project: &Path, sheet: &Path, refs: &[(Uuid, String)]) {
         let trimmed: Vec<(RowId, String)> = refs
             .iter()
@@ -292,7 +291,6 @@ impl LibraryState {
     }
 
     /// Existing editor for `(library_root, table, row_id)`, if any.
-    #[allow(dead_code)]
     pub fn editor_for(
         &self,
         library_root: &Path,

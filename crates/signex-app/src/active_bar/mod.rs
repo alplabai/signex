@@ -129,7 +129,10 @@ const DISABLED_TEXT: Color = Color {
 /// kept on the struct so the dropdown helpers below don't have to
 /// rebuild a separate palette.
 #[derive(Clone, Copy)]
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "palette carried on the struct so the dropdown helpers need not rebuild it"
+)]
 struct AbColors {
     text: Color,
     bar_bg: Color,
@@ -305,7 +308,6 @@ impl SelectionFilter {
 /// id table by value, rather than formatting `Debug` on every dropdown
 /// row render (#271).
 #[derive(Debug, Clone, PartialEq)]
-#[allow(dead_code)]
 pub enum ActiveBarAction {
     // Selection modes
     ToolSelect,

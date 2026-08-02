@@ -22,7 +22,6 @@ pub struct GridState {
     /// Index into GRID_SIZES_MM.
     pub size_index: usize,
     /// Whether snap-to-grid is enabled.
-    #[allow(dead_code)]
     pub snap: bool,
 }
 
@@ -42,13 +41,11 @@ impl GridState {
     }
 
     /// Cycle to next grid size (wraps around).
-    #[allow(dead_code)]
     pub fn cycle_forward(&mut self) {
         self.size_index = (self.size_index + 1) % GRID_SIZES_MM.len();
     }
 
     /// Cycle to previous grid size (wraps around).
-    #[allow(dead_code)]
     pub fn cycle_backward(&mut self) {
         if self.size_index == 0 {
             self.size_index = GRID_SIZES_MM.len() - 1;
@@ -58,7 +55,6 @@ impl GridState {
     }
 
     /// Snap a world-space coordinate to the nearest grid point.
-    #[allow(dead_code)]
     pub fn snap_world(&self, world: Point) -> Point {
         if !self.snap {
             return world;

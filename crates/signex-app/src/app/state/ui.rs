@@ -201,7 +201,6 @@ pub struct UiState {
     /// net-colour flood populates; kept here so a future net-name
     /// palette (maybe the F5 dialog) can cross-reference it without
     /// another round-trip through state plumbing.
-    #[allow(dead_code)]
     pub net_colors: std::collections::HashMap<String, signex_types::theme::Color>,
     /// AutoFocus mode — when true, non-selected items dim on the canvas.
     pub auto_focus: bool,

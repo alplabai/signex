@@ -4,7 +4,6 @@ use super::*;
 
 /// Panel-level message wrapping widget messages.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum PanelMsg {
     Tree(TreeMsg),
     SetUnit(Unit),
@@ -917,7 +916,6 @@ pub enum PanelMsg {
     /// Toggle snap to electrical object hotspots.
     ToggleSnapHotspots,
     /// Change the UI font (saved to prefs; applies on next restart).
-    #[allow(dead_code)]
     SetUiFont(String),
     /// Change the canvas font (applied immediately to schematic/PCB text).
     SetCanvasFont(String),

@@ -400,7 +400,6 @@ pub fn create_library_at(
 /// call sites that don't go through the Save-As dialog working
 /// (currently none — all new code goes through `create_library_at`,
 /// which lets the user pick the location).
-#[allow(dead_code)]
 pub fn create_library(
     state: &mut LibraryState,
     project: &mut ProjectData,

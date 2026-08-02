@@ -389,7 +389,6 @@ fn category_only_query_filters_corpus() {
 // Defensive: keep an unused `BTreeMap` import in scope so cargo doesn't warn
 // when the test file evolves; suppression rather than removal because adapter
 // tests often re-introduce these collections.
-#[allow(dead_code)]
 fn _force_use_btreemap() -> BTreeMap<String, String> {
     BTreeMap::new()
 }

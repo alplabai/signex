@@ -22,7 +22,6 @@ use super::super::state::DistributorSettings;
 ///
 /// Phase 1 ships this panel; Phase 2 wires it into the
 /// `crate::preferences` modal as a dedicated pref pane.
-#[allow(dead_code)]
 pub fn view<'a>(
     settings: &'a DistributorSettings,
     tokens: &'a ThemeTokens,
@@ -224,7 +223,6 @@ pub fn view<'a>(
     .into()
 }
 
-#[allow(dead_code)]
 fn distributor_label(src: DistributorSource) -> &'static str {
     match src {
         DistributorSource::DigiKey => "DigiKey",
@@ -237,7 +235,6 @@ fn distributor_label(src: DistributorSource) -> &'static str {
     }
 }
 
-#[allow(dead_code)]
 fn divider(color: iced::Color) -> Element<'static, LibraryMessage> {
     container(Space::new().height(1).width(Length::Fill))
         .style(move |_: &Theme| iced::widget::container::Style {
@@ -247,7 +244,6 @@ fn divider(color: iced::Color) -> Element<'static, LibraryMessage> {
         .into()
 }
 
-#[allow(dead_code)]
 fn primary_btn<'a>(label: &'a str, message: LibraryMessage) -> Element<'a, LibraryMessage> {
     button(container(text(label.to_string()).size(11).color(iced::Color::WHITE)).padding([4, 12]))
         .on_press(message)
@@ -266,7 +262,6 @@ fn primary_btn<'a>(label: &'a str, message: LibraryMessage) -> Element<'a, Libra
         .into()
 }
 
-#[allow(dead_code)]
 fn secondary_btn<'a>(
     label: &'a str,
     message: LibraryMessage,

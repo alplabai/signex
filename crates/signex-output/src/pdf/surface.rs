@@ -81,7 +81,6 @@ impl PdfSurface {
     }
 
     /// Stroke a line from (x1, y1) to (x2, y2).
-    #[allow(dead_code)]
     pub fn stroke_line(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, width_pt: f32) {
         self.set_stroke_width(width_pt);
         self.write_operator(&format!("{} {} m\n", x1, y1));
@@ -97,7 +96,10 @@ impl PdfSurface {
     }
 
     /// Fill a rectangle (top-left at (x, y), width w, height h) with RGB color.
-    #[allow(dead_code)] // Reserved for v0.9 template backgrounds / fills.
+    #[expect(
+        dead_code,
+        reason = "reserved for the v0.9 template backgrounds / fills"
+    )]
     pub fn fill_rect(&mut self, x: f32, y: f32, w: f32, h: f32, r: f32, g: f32, b: f32) {
         self.write_operator(&format!("{} {} {} rg\n", r, g, b));
         self.write_operator(&format!("{} {} {} {} re\n", x, y, w, h));

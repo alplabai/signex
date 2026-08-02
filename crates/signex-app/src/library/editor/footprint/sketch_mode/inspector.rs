@@ -92,7 +92,10 @@ pub fn view<'a>(
 // v0.14.2: replaced by `crate::library::editor::footprint::sketch_mode
 // ::active_bar` — kept the body below temporarily as a doc-only ref;
 // remove on next visual-pass commit.
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "v0.14.2 replaced this with sketch_mode::active_bar; kept as a doc-only reference"
+)]
 fn view_tool_palette<'a>(
     editor: &'a FootprintEditorState,
     text_c: Color,
@@ -213,7 +216,10 @@ fn view_tool_palette<'a>(
 ///
 /// v0.14.2: superseded by the Active Bar in
 /// `crate::library::editor::footprint::sketch_mode::active_bar`.
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "v0.14.2 replaced this with sketch_mode::active_bar; kept as a doc-only reference"
+)]
 fn view_constraint_submenu<'a>(
     editor: &'a FootprintEditorState,
     text_c: Color,

@@ -82,7 +82,6 @@ fn wordmark_tier(scale: f32) -> u8 {
 // ─── Messages ─────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum MenuMessage {
     /// No-op dispatched by passive menu-bar roots ("File", "Edit", …) and
     /// submenu headers ("Export", "Annotation"). iced's `button` widget
@@ -216,7 +215,6 @@ pub struct MenuContext {
     /// navigator, BOM across project) when those land. Currently no
     /// menu entry reads this but the field stays so callers don't
     /// need to update their struct literal when we wire it up.
-    #[allow(dead_code)]
     pub has_project: bool,
     pub has_selection: bool,
     pub can_undo: bool,

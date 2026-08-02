@@ -257,7 +257,10 @@ fn close_btn<'a>(address: EditorAddress, tokens: &ThemeTokens) -> Element<'a, Li
 /// Helper for placeholder-card layouts — kept around for tabs that
 /// still bottom out in TODO state during the Wave-3 refactor (sim-
 /// without-binding, e.g.).
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "kept for tabs still bottoming out in TODO state during the Wave-3 refactor"
+)]
 pub(crate) fn placeholder_card<'a>(
     title: &'a str,
     todos: &'a [&'a str],

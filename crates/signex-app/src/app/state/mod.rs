@@ -80,7 +80,6 @@ impl KeymapRecorderState {
 /// modals; Phase 3 adds `UndockedTab(tab_index)` so a schematic sheet
 /// can live in its own OS window.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum WindowKind {
     DetachedModal(ModalId),
     /// Undocked document tab. Stores the tab's file path (unique per
@@ -183,7 +182,6 @@ impl ErrorNotice {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[allow(dead_code)]
 pub enum ModalId {
     AnnotateDialog,
     AnnotateResetConfirm,
@@ -473,7 +471,6 @@ pub struct BomPreviewState {
     /// Available variants for the active project. Reserved for the
     /// variant picker dropdown — empty when no variants are defined.
     /// Currently only seeded; the picker UI lands in v0.8.1.
-    #[allow(dead_code)]
     pub variants: Vec<String>,
     /// Active sort spec — `(column index in options.columns, ascending)`.
     /// `None` = render rollup order (the default emit order from

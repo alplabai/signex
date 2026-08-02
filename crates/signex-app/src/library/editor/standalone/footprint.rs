@@ -110,7 +110,10 @@ pub fn view_footprint<'a>(
 /// mode. Hosts the mode segmented control + Save button. Stays the
 /// same height across mode switches so the active bar's vertical
 /// position is constant.
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "standalone footprint chrome superseded by the Active Bar; kept for one migration cycle"
+)]
 fn view_footprint_top_strip<'a>(
     editor: &'a FootprintEditorState,
     tokens: &'a ThemeTokens,
@@ -330,7 +333,10 @@ fn view_footprint_layers_strip<'a>(
     .into()
 }
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "standalone footprint chrome superseded by the Active Bar; kept for one migration cycle"
+)]
 fn view_footprint_sketch_toolbar<'a>(
     editor: &'a FootprintEditorState,
     tokens: &'a ThemeTokens,
@@ -408,7 +414,10 @@ fn view_footprint_sketch_toolbar<'a>(
         .into()
 }
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "standalone footprint chrome superseded by the Active Bar; kept for one migration cycle"
+)]
 fn view_footprint_toolbar<'a>(
     editor: &'a FootprintEditorState,
     tokens: &'a ThemeTokens,

@@ -4,8 +4,6 @@
 //! follow-up can lift the chevron / mouse_area / tooltip details if the
 //! generic widget needs them. Remove when the migration is fully bedded in.
 
-#![allow(dead_code)]
-
 use iced::widget::{Space, button, container, svg, text};
 use iced::{Background, Border, Color, Element, Theme};
 use signex_types::theme::ThemeId;
@@ -21,7 +19,10 @@ use super::{ActiveBarMsg, DISABLED_TEXT, action_enabled};
 /// follow-up patch can lift the chevron / mouse_area details if
 /// the generic widget needs them; remove when the migration is
 /// fully bedded in.
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "legacy bespoke button builder; remove when the generic-widget migration is bedded in"
+)]
 fn ab_icon_btn(
     icon: svg::Handle,
     active: bool,
@@ -138,7 +139,10 @@ fn ab_icon_btn(
 /// Legacy separator builder — superseded by
 /// `ActiveBarItem::Separator`. See `ab_icon_btn` for the rationale
 /// to keep this around for one more cycle.
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "legacy separator builder; remove when the generic-widget migration is bedded in"
+)]
 fn sep(sep_c: Color) -> Element<'static, ActiveBarMsg> {
     container(Space::new())
         .width(1)

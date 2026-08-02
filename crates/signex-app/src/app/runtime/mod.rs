@@ -11,7 +11,10 @@ impl Signex {
     /// `Project.libraries` list — reserved for callers outside the
     /// Components Panel that still need a flat slice (the panel itself
     /// derives the same Vec from `ctx.projects[].libraries[].root`).
-    #[allow(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "reserved for callers outside the Components Panel that need a flat library-path slice"
+    )]
     pub(crate) fn collect_project_library_paths(&self) -> Vec<std::path::PathBuf> {
         let mut out: Vec<std::path::PathBuf> = Vec::new();
         for p in &self.document_state.projects {

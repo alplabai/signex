@@ -17,5 +17,4 @@
 /// the SimModel primitive itself. Kept for backwards-compatible
 /// imports until WS-? deletes the module.
 #[derive(Debug, Default, Clone)]
-#[allow(dead_code)]
 pub struct SimTabState;

@@ -145,7 +145,10 @@ pub(crate) fn close_x_button(
 // `handle_open_annotate_dialog` et al.). Drag-off is no longer needed
 // because there is no in-window overlay to drag.
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "dialogs are separate windows now, so no in-window overlay needs a close button"
+)]
 fn close_button(
     label: &str,
     message: Message,

@@ -25,7 +25,6 @@ pub enum DockMessage {
     /// on. Currently produced by the internal TabClick handler — not
     /// emitted directly by the UI yet (left available for a future
     /// pointer-tracking drop indicator).
-    #[allow(dead_code)]
     ReorderTab {
         pos: PanelPosition,
         from: usize,
@@ -45,7 +44,6 @@ pub enum DockMessage {
     /// hover away and leave the highlight stuck off.
     TabHoverExit(PanelPosition, usize),
     /// Move a floating panel by delta.
-    #[allow(dead_code)]
     MoveFloating(usize, f32, f32),
     /// Start dragging a floating panel.
     StartDragFloating(usize),

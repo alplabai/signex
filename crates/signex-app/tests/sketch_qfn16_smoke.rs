@@ -196,7 +196,6 @@ fn qfn16_solve_warnings_empty_on_clean_sketch() {
 
 // Unused-import linter sanity: tie the chrono pull-in to this stub
 // so an `cargo check` doesn't strip it (Footprint::empty needs Utc::now()).
-#[allow(dead_code)]
 fn _link_chrono() -> chrono::DateTime<Utc> {
     Utc::now()
 }

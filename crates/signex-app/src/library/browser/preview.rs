@@ -10,7 +10,10 @@
 use super::*;
 use iced::widget::column;
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "F15 removed the preview pane; the builders stay until the Properties panel absorbs them"
+)]
 fn view_preview_pane<'a>(
     library_path: &'a std::path::Path,
     table: &str,
@@ -134,7 +137,10 @@ fn view_preview_pane<'a>(
     body
 }
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "F15 removed the preview pane; the builders stay until the Properties panel absorbs them"
+)]
 fn short_row_id(uuid: uuid::Uuid) -> String {
     let s = uuid.simple().to_string();
     if s.len() >= 8 {
@@ -144,7 +150,10 @@ fn short_row_id(uuid: uuid::Uuid) -> String {
     }
 }
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "F15 removed the preview pane; the builders stay until the Properties panel absorbs them"
+)]
 fn preview_panel<'a>(
     label: &'a str,
     summary: String,
@@ -179,7 +188,10 @@ fn preview_panel<'a>(
 /// of the header row. F15 — primitive binding lives next to the row
 /// status so the user has the Pick button visible whenever they see
 /// "unbound" or "unresolved".
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "F15 removed the preview pane; the builders stay until the Properties panel absorbs them"
+)]
 fn preview_panel_with_pick<'a>(
     label: &'a str,
     summary: String,
@@ -234,7 +246,10 @@ fn preview_panel_with_pick<'a>(
         .into()
 }
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "F15 removed the preview pane; the builders stay until the Properties panel absorbs them"
+)]
 fn symbol_summary(sym: Option<&signex_library::Symbol>) -> String {
     match sym {
         None => {
@@ -265,7 +280,10 @@ fn symbol_summary(sym: Option<&signex_library::Symbol>) -> String {
     }
 }
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "F15 removed the preview pane; the builders stay until the Properties panel absorbs them"
+)]
 fn footprint_summary(fp: Option<&signex_library::Footprint>) -> String {
     match fp {
         None => "No footprint bound.".to_string(),

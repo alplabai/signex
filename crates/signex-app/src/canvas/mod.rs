@@ -172,7 +172,6 @@ pub struct ErcMarker {
     pub severity: ErcMarkerSeverity,
     /// Uuid of the primary offending item (label, wire, symbol, …).
     /// Reserved for a future halo/highlight pass; unused today.
-    #[allow(dead_code)]
     pub primary_uuid: Option<uuid::Uuid>,
 }
 
@@ -670,7 +669,6 @@ pub enum CanvasEvent {
         world_y: f64,
     },
     /// Double-click at world coordinates.
-    #[allow(dead_code)]
     DoubleClicked {
         world_x: f64,
         world_y: f64,

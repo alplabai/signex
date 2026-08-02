@@ -193,7 +193,10 @@ where
 }
 
 /// Form row: label | custom widget.
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "form-row builder kept for panels still being migrated to the shared rows"
+)]
 pub fn form_label_row<'a>(
     label: &str,
     control: Row<'a, PanelMsg>,
@@ -243,7 +246,10 @@ pub fn form_check_row<'a>(
 }
 
 /// Form row: label | pick_list for grid size presets (2.54 mm multiples).
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "grid-size preset row kept for panels still being migrated to the shared rows"
+)]
 pub fn form_grid_size_row(current_mm: f32, label_c: Color) -> Element<'static, PanelMsg> {
     use crate::canvas::grid::{GRID_SIZE_LABELS, GRID_SIZES_MM};
     // Find the label that matches the current value (fallback to first).
@@ -536,7 +542,10 @@ pub fn canvas_font_popup<'a>(
 }
 
 /// Form row: label | NumberInput (iced_aw) with step/bounds.
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "NumberInput row kept for panels still being migrated to the shared rows"
+)]
 fn form_number_row<'a, T>(
     label: &str,
     value: T,

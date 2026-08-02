@@ -66,12 +66,10 @@ impl UndoStack {
         true
     }
 
-    #[allow(dead_code)]
     pub fn can_undo(&self) -> bool {
         self.position > 0
     }
 
-    #[allow(dead_code)]
     pub fn can_redo(&self) -> bool {
         self.position < self.history.len()
     }

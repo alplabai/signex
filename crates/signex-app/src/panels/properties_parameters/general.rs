@@ -662,7 +662,10 @@ pub fn preset_chip(
 }
 
 /// Selection filter tag button — Altium pill with active/inactive state.
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "Altium-style selection-filter pill, not yet wired into a panel"
+)]
 pub fn tag_btn(
     label: &str,
     filter: crate::active_bar::SelectionFilter,

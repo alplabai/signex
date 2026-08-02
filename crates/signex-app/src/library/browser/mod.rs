@@ -54,7 +54,10 @@ use sidebar::view_table_sidebar;
 
 const BROWSER_TEXT_SIZE: f32 = 11.0;
 const BROWSER_HEADER_SIZE: f32 = 10.0;
-#[allow(dead_code)] // F15 (final): preview pane removed; constant retained for the moment in case the Properties panel needs the same width hint.
+#[expect(
+    dead_code,
+    reason = "F15 removed the preview pane; the width hint is retained in case the Properties panel needs it"
+)]
 const PREVIEW_PANE_WIDTH: f32 = 380.0;
 const MAX_PARAM_COLUMNS: usize = 4;
 /// Width reserved at the start of every grid row for the per-row

@@ -16,7 +16,10 @@ pub struct VrmlMesh {
 enum Node {
     Transform {
         translation: [f32; 3],
-        #[allow(dead_code)]
+        #[expect(
+            dead_code,
+            reason = "axis-angle rotation is parsed but not applied until E3"
+        )]
         rotation: [f32; 4], // axis-angle: [ax, ay, az, angle] — deferred to E3
         scale: [f32; 3],
         children: Vec<Node>,

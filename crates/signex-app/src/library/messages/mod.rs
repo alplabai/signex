@@ -23,9 +23,7 @@ use super::state::PreviewTab;
 // at `ComponentPreviewState`. The original `ComponentId` was a
 // `uuid::Uuid` newtype; `Version` was a `u32` revision counter. Both
 // fold away once the row tier ships everywhere.
-#[allow(dead_code)]
 pub type ComponentId = Uuid;
-#[allow(dead_code)]
 pub type Version = u32;
 
 mod library_message;
