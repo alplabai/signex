@@ -33,6 +33,9 @@ pub mod find_replace;
 pub mod first_run_tour;
 pub mod fonts;
 pub mod icons;
+// Crate-internal: `IgnoreResult` is an in-tree convention, not part of
+// this crate's API surface, so the module stays private.
+mod ignore;
 pub mod keyboard_shortcuts_modal;
 pub mod keymap;
 pub mod library;

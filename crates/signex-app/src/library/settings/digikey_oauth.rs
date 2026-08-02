@@ -35,6 +35,8 @@ use std::time::Duration;
 
 use signex_library::distributors::digikey::{DigiKeyAuth, DigiKeyAuthError};
 
+use crate::ignore::IgnoreResult;
+
 /// Environment variable that holds the DigiKey OAuth client_id.
 pub const ENV_CLIENT_ID: &str = "SIGNEX_DIGIKEY_CLIENT_ID";
 /// Environment variable that holds the DigiKey OAuth client_secret.
@@ -193,12 +195,19 @@ pub fn run_blocking(
                 // MD-14: only loopback should be hitting this listener.
                 // Reject any non-loopback peer (DNS-rebinding hardening).
                 if !addr.ip().is_loopback() {
-                    let _ = stream.shutdown(std::net::Shutdown::Both);
+                    stream
+                        .shutdown(std::net::Shutdown::Both)
+                        .ignore("rejected peer; the connection is abandoned either way");
                     continue;
                 }
                 let req_line = read_first_line(&mut stream);
                 let response_body = "<html><body><p>Signex: DigiKey connected. You can close this window.</p></body></html>";
-                let _ = std::io::Write::write_all(
+                // Courtesy page only. `req_line` was already read above and
+                // `parse_callback` below works entirely from it, so the OAuth
+                // exchange completes whether or not this reaches the browser
+                // — a browser that closed early costs the user the "you can
+                // close this window" page and nothing else.
+                std::io::Write::write_all(
                     &mut stream,
                     format!(
                         "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
@@ -206,8 +215,11 @@ pub fn run_blocking(
                         response_body
                     )
                     .as_bytes(),
+                )
+                .ignore("confirmation page only; the callback is already captured in `req_line`");
+                stream.shutdown(std::net::Shutdown::Both).ignore(
+                    "connection is finished with; a failed shutdown means the peer closed first",
                 );
-                let _ = stream.shutdown(std::net::Shutdown::Both);
 
                 let (code, returned_state) = match parse_callback(&req_line) {
                     Some(t) => t,

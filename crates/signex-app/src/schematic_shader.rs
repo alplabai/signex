@@ -30,6 +30,7 @@ use signex_gfx::scene::Scene;
 use signex_gfx::wgpu;
 
 use crate::app::Message;
+use crate::ignore::IgnoreResult;
 use crate::schematic_runtime::ScreenTransform;
 
 /// World coordinate (mm) at the render pass origin (top-left).
@@ -115,20 +116,25 @@ impl shader::Primitive for SchematicPrimitive {
         pipeline.arc.upload(device, queue, &self.scene.arcs);
         pipeline.circle.upload(device, queue, &self.scene.circles);
         // Text prep can fail if the glyph atlas is exhausted; a dropped frame
-        // of text is preferable to a panic on the render thread.
-        let _ = pipeline.text.upload(
-            device,
-            queue,
-            &self.scene.texts,
-            scale_px,
-            [vp_px[0] as u32, vp_px[1] as u32],
-            // Screen-space pan offset in physical px. Glyphon text bypasses the
-            // camera ortho (which pans the instanced primitives via `offset_mm`),
-            // so the pan must be applied to text explicitly — mirrors
-            // `scene_shader::ScenePrimitive::prepare`. Without it, schematic GPU
-            // text stays pinned while the geometry pans.
-            [self.offset_px[0] * dpi, self.offset_px[1] * dpi],
-        );
+        // of text is preferable to a panic on the render thread. Deliberately
+        // not logged either: this runs once per frame, so reporting it would
+        // emit at frame rate for as long as the atlas stayed full.
+        pipeline
+            .text
+            .upload(
+                device,
+                queue,
+                &self.scene.texts,
+                scale_px,
+                [vp_px[0] as u32, vp_px[1] as u32],
+                // Screen-space pan offset in physical px. Glyphon text bypasses
+                // the camera ortho (which pans the instanced primitives via
+                // `offset_mm`), so the pan must be applied to text explicitly —
+                // mirrors `scene_shader::ScenePrimitive::prepare`. Without it,
+                // schematic GPU text stays pinned while the geometry pans.
+                [self.offset_px[0] * dpi, self.offset_px[1] * dpi],
+            )
+            .ignore("glyph-atlas exhaustion drops one frame of text; a panic here would take the render thread down");
     }
 
     fn draw(&self, pipeline: &Self::Pipeline, render_pass: &mut wgpu::RenderPass<'_>) -> bool {
@@ -138,7 +144,13 @@ impl shader::Primitive for SchematicPrimitive {
         pipeline.line.draw(render_pass, camera);
         pipeline.arc.draw(render_pass, camera);
         pipeline.circle.draw(render_pass, camera);
-        let _ = pipeline.text.draw(render_pass);
+        // Same frame, same rationale as the `upload` in `prepare`: a failed
+        // text draw costs one frame of text, not the render pass, and this
+        // is per-frame so it must not log.
+        pipeline
+            .text
+            .draw(render_pass)
+            .ignore("a failed text draw loses text for one frame, not the render pass");
         true
     }
 }
