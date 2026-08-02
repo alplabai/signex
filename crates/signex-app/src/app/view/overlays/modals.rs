@@ -284,7 +284,6 @@ impl Signex {
         let document = &self.document_state;
         const EDIT_MODAL_ENABLED: bool = false;
         let mut out: Vec<Element<'_, Message>> = Vec::new();
-        #[allow(clippy::overly_complex_bool_expr)]
         for (lib_path, browser_state) in &self.library.library_browsers {
             if EDIT_MODAL_ENABLED && let Some(edit) = browser_state.edit_modal.as_ref() {
                 // Class registry is per-library — read from the
