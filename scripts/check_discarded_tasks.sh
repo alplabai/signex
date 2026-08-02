@@ -28,12 +28,26 @@
 # LIMITS — read before trusting a clean run. This is a grep, not a type
 # checker, so it can only catch the textual shape it's told to look for:
 #
-#   - It matches `let _ = self.handle_<name>(...)`, on one line OR
-#     rustfmt's line-wrapped `let _ =` / `    self.handle_<name>(...)` two-
-#     line form (see `find_discards` below) — the exact shapes of every one
-#     of the 15 sites fixed in #99 part 1. It does NOT catch:
+#   - It matches `let _ = <receiver>.handle_<name>(...)` (or `::`), on one
+#     line OR rustfmt's line-wrapped `let _ =` / `    <receiver>.handle_
+#     <name>(...)` two-line form (see `find_discards` below) — the exact
+#     shapes of every one of the 15 sites fixed in #99 part 1. The receiver
+#     used to be anchored to `self`, which let `let _ = app.handle_x()`,
+#     `Self::handle_x()` and `state.handle_x()` through; #571 widened it to
+#     any single identifier receiver. It does NOT catch:
 #       * a discard through a differently-named method, e.g.
-#         `let _ = self.some_other_call();` (not prefixed `handle_`)
+#         `let _ = self.some_other_call();` (not prefixed `handle_`).
+#         This one is LIVE in production today:
+#         crates/signex-app/src/app/handlers/canvas/clicked.rs — `let _ =
+#         self.place_selected_component(wx, wy);`. Benign only because that
+#         method returns `bool` (crates/signex-app/src/app/actions.rs);
+#         change it to `Task<Message>` and the #99 bug class returns
+#         invisibly. Closing this needs `clippy::let_underscore_must_use`
+#         at deny, which is blocked on the 13 sites tracked in #533 — no
+#         grep can cover it, because the shape is indistinguishable from a
+#         legitimate discard without the type.
+#       * a receiver that is itself an expression, e.g.
+#         `let _ = self.foo().handle_x();` or `let _ = v[0].handle_x();`
 #       * `drop(self.handle_x(...))` or any other must-use-defeating idiom
 #       * a genuinely unused `let task = self.handle_x(...);` binding
 #         (rustc's own `unused_variables` lint already flags that one,
@@ -57,6 +71,15 @@
 # module counts). Dedicated test files (`tests/` dirs, `tests.rs`,
 # `*_tests.rs`) are excluded from `list_files` entirely, matching
 # check_file_size.sh's scope.
+#
+# That exclusion is by FILENAME, not by `#[cfg(test)]` (#571). A `tests.rs`
+# or `*_tests.rs` sitting inside `src/` is skipped wherever it lives — ten
+# discards currently sit in
+# crates/signex-app/src/app/handlers/menu/export/tests.rs and
+# crates/signex-app/src/app/view/dialogs/annotate_preview/tests.rs. They are
+# test code, so this is not a defect; it is a naming convention doing a
+# `cfg` attribute's job, and a production file that happens to be named
+# `tests.rs` would be invisible to this gate.
 #
 # Usage:
 #   scripts/check_discarded_tasks.sh   # check (CI); exit 1 on a violation
@@ -103,8 +126,8 @@ prod_cutoff() {
 }
 
 # Emits one line number per discard found in the production-only prefix of
-# `$1` (lines 1..cutoff) — both `let _ = self.handle_...(...)` on a single
-# line, and rustfmt's wrapped `let _ =` / `self.handle_...(...)` two-line
+# `$1` (lines 1..cutoff) — both `let _ = <recv>.handle_...(...)` on a single
+# line, and rustfmt's wrapped `let _ =` / `<recv>.handle_...(...)` two-line
 # form, reporting the line the `self.handle_` call itself sits on.
 find_discards() {
   local f="$1" cutoff="$2"
@@ -114,9 +137,9 @@ find_discards() {
       trimmed = $0
       gsub(/^[ \t]+/, "", trimmed)
       gsub(/[ \t]+$/, "", trimmed)
-      if (trimmed ~ /^let _ = self\.handle_/) {
+      if (trimmed ~ /^let _ = ([A-Za-z_][A-Za-z0-9_]*)(\.|::)handle_/) {
         print NR
-      } else if (prev_bare && trimmed ~ /^self\.handle_/) {
+      } else if (prev_bare && trimmed ~ /^([A-Za-z_][A-Za-z0-9_]*)(\.|::)handle_/) {
         print NR
       }
       prev_bare = (trimmed == "let _ =")
@@ -147,7 +170,7 @@ while IFS= read -r f; do
     if is_allowlisted "$entry"; then
       continue
     fi
-    echo "FAIL  $entry — discards a Task via \`let _ = self.handle_...\`."
+    echo "FAIL  $entry — discards a Task via \`let _ = <recv>.handle_...\`."
     echo "      Return the Task to the caller instead (see GH #99 part 1)."
     echo "      If the callee genuinely doesn't return a Task, add"
     echo "      \"$entry\" to ${ALLOWLIST#"$ROOT"/} with a comment saying why."
@@ -160,4 +183,4 @@ if (( fail )); then
   echo "Discarded-Task gate failed. See scripts/check_discarded_tasks.sh header."
   exit 1
 fi
-echo "Discarded-Task gate: OK — no \`let _ = self.handle_...\` discards found."
+echo "Discarded-Task gate: OK — no \`let _ = <recv>.handle_...\` discards found."
