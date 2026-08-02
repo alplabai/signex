@@ -61,6 +61,8 @@ Hard CI gates (must pass to merge):
       `error:` — deny-by-default lints fail the **Check** job
 - [ ] No new or growing over-cap file (**no god-files**)
 - [ ] No discarded `iced::Task` (**no discarded tasks**)
+- [ ] Every `[workspace.lints.*]` entry still reaches the non-inheriting
+      members (**lint lockstep**)
 
 Advisory (surfaced by CI, not blocking — please still keep them clean):
 

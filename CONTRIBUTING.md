@@ -199,7 +199,7 @@ the importable ruleset is in [`.github/rulesets/`](.github/rulesets/). In short:
   `check · macos-latest`, `check · windows-latest`, `test · workspace`,
   `deny · licenses + deps`, `PR-description self-declaration`,
   `No GPL-tool-shaped names anywhere in crates/`, `fmt · rustfmt`,
-  `no god-files`, and `no discarded tasks`. `clippy` runs inside the `check`
+  `no god-files`, `no discarded tasks`, and `lint lockstep`. `clippy` runs inside the `check`
   job — a deny-by-default lint fails that job and therefore blocks; its
   warn-level output only annotates. The `cargo-deny` sources/advisories steps
   stay informational and don't block.

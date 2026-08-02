@@ -116,8 +116,14 @@ windows-sys = { version = "0.61", features = [
 
 # NOT `[lints] workspace = true` — cargo rejects mixing inheritance with
 # per-lint overrides, and this crate needs the clippy lint below that the
-# workspace deliberately does not carry (see the root manifest). Keep
-# `unused_must_use` in lockstep with `[workspace.lints.rust]` by hand.
+# workspace deliberately does not carry (see the root manifest). Every
+# `[workspace.lints.*]` entry must therefore be copied here by hand, at the
+# same level.
+#
+# That copy is no longer trust-based: `scripts/check_lint_lockstep.sh` fails
+# CI when a workspace lint is missing here or sits at a weaker level (#570).
+# Adding one below without adding it to the root manifest is fine — the extra
+# member-local lints are the whole reason this crate opted out.
 [lints.rust]
 # GH #548 — a bare `self.open_project_file(path)?;` drops the returned
 # `iced::Task`. rustc already fired on that shape, at warn level, and the

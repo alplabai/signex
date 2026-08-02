@@ -181,3 +181,23 @@ jobs:
       # scripts/check_discarded_tasks.sh; GH #99 part 1.
       - name: Discarded-Task ratchet gate
         run: bash scripts/check_discarded_tasks.sh
+
+  lint-lockstep:
+    name: lint lockstep
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # `signex-app` cannot say `[lints] workspace = true` — cargo rejects
+      # mixing inheritance with per-lint overrides, and that crate carries its
+      # own `[lints.clippy] let_underscore_must_use` that the workspace
+      # deliberately does not. So it re-declares the workspace lints by hand,
+      # and until now nothing checked that copy: a lint added to
+      # `[workspace.lints.rust]` silently skipped the largest crate in the
+      # repo, with no error and no warning (GH #570).
+      #
+      # This job fails hard (NOT continue-on-error). Make it a required status
+      # check on trunk alongside `no god-files` and `no discarded tasks`,
+      # otherwise it only annotates and the hole stays open.
+      - name: Lint-lockstep gate
+        run: bash scripts/check_lint_lockstep.sh

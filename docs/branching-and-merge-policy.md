@@ -57,6 +57,10 @@ as status-check contexts):
 - `fmt · rustfmt` — the tree is `cargo fmt --all -- --check` clean.
 - `no god-files` — no new or growing production file over the size cap.
 - `no discarded tasks` — no `let _ = …`-shaped discard of an `iced::Task`.
+- `lint lockstep` — every `[workspace.lints.*]` entry is present, at the same
+  level, in each member that does not inherit with `[lints] workspace = true`.
+  Only `signex-app` opts out today, and cargo forbids it from inheriting while
+  it keeps its own per-lint override (#570).
 
 **Clippy is half a gate, by design.** It has no status-check context of its
 own; it is a step inside the three required `check` jobs. Clippy's
