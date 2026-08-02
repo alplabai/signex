@@ -149,11 +149,20 @@ signex-bake = { path = "crates/signex-bake" }
 unused_must_use = "deny"
 
 # Deliberately NOT lifted here: clippy's `let_underscore_must_use`, which
-# `signex-app` carries locally. Workspace-wide it fires 33 times across
-# signex-types / signex-output / signex-library / signex-gfx — none of them
-# `Task` discards, and #548's whole complaint is that signal buried in noise
-# is not a gate. `signex-app` therefore keeps explicit `[lints.*]` tables
-# instead of `workspace = true`; a lint added above will NOT reach it.
+# `signex-app` carries locally. Workspace-wide it fires 27 times outside
+# that crate — signex-output 17 (netlist/mod.rs, svg/document.rs), signex-gfx
+# 7 (debug_pass/), signex-types 3 (atomic_io.rs) — none of them `Task`
+# discards, and #548's whole complaint is that signal buried in noise is not
+# a gate. Measured on d6c5531e with `--force-warn`, production targets only.
+# An earlier version of this comment said 33 and listed signex-library; that
+# count was wrong and signex-library contributes none (#577). The 27 sit in
+# three clusters rather than scattered, so lifting the lint here is more
+# tractable than "33 across four crates" suggested — revisit after #533.
+#
+# `signex-app` therefore keeps explicit `[lints.*]` tables instead of
+# `workspace = true`. A lint added above does NOT reach it automatically —
+# it must be hand-copied into crates/signex-app/Cargo.toml at the same
+# level, which scripts/check_lint_lockstep.sh now fails CI over (#570).
 
 [profile.release]
 lto = "thin"
