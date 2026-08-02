@@ -224,6 +224,49 @@ const FOOTER_H: f32 = 44.0;
 
 // ─── Public view ──────────────────────────────────────────────
 
+// ─── Render inputs ────────────────────────────────────────────
+
+/// Everything the Preferences dialog reads to render one frame.
+///
+/// The dialog is a four-hop chain — `view` / `view_body` -> `build_dialog`
+/// -> `build_content` — and every hop needs very nearly the same inputs.
+/// Passed positionally that was 23 parameters per hop, and several share a
+/// type: `draft_theme`, `saved_theme` and `theme_id` are all `ThemeId`;
+/// `draft_grid_style` and `draft_symbol_grid_style` are both `GridStyle`.
+/// A transposed pair would have compiled silently and shipped the wrong
+/// control state. Naming the fields makes that a compile error instead.
+///
+/// Every field is `Copy`, so the whole struct is passed by value and each
+/// hop costs a move rather than a fresh borrow.
+#[derive(Clone, Copy)]
+pub struct PrefsView<'a> {
+    pub nav: PrefNav,
+    pub draft_theme: ThemeId,
+    pub saved_theme: ThemeId,
+    pub draft_font: &'a str,
+    pub draft_power_port_style: PowerPortStyle,
+    pub draft_label_style: LabelStyle,
+    pub draft_multisheet_style: MultisheetStyle,
+    pub draft_grid_style: GridStyle,
+    pub draft_pcb_gpu_render: bool,
+    pub draft_symbol_grid_size_mm: f32,
+    pub draft_symbol_grid_style: GridStyle,
+    pub draft_symbol_pin_selection: PinSelectionMode,
+    pub custom_name: Option<&'a str>,
+    pub dirty: bool,
+    pub erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+    pub distributor_settings: &'a crate::library::state::DistributorSettings,
+    pub panel_tokens: &'a signex_types::theme::ThemeTokens,
+    pub draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
+    pub keymap_editor: &'a crate::keymap::KeymapEditorModel,
+    pub keymap_status: &'a str,
+    pub keymap_search: &'a str,
+    pub keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
+    pub theme_id: ThemeId,
+}
+
+// ─── Dialog entry points ──────────────────────────────────────
+
 /// Build the full-screen backdrop + centred dialog.
 ///
 /// * `draft_theme`      — theme currently selected in the dialog (not yet saved)
@@ -231,60 +274,8 @@ const FOOTER_H: f32 = 44.0;
 /// * `draft_font`       — UI font name pending save
 /// * `custom_name`      — name of the loaded custom theme (if any)
 /// * `dirty`            — whether there are unsaved changes
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the preferences form passes each control's state positionally"
-)]
-pub fn view<'a>(
-    nav: PrefNav,
-    draft_theme: ThemeId,
-    saved_theme: ThemeId,
-    draft_font: &str,
-    draft_power_port_style: PowerPortStyle,
-    draft_label_style: LabelStyle,
-    draft_multisheet_style: MultisheetStyle,
-    draft_grid_style: GridStyle,
-    draft_pcb_gpu_render: bool,
-    draft_symbol_grid_size_mm: f32,
-    draft_symbol_grid_style: GridStyle,
-    draft_symbol_pin_selection: PinSelectionMode,
-    custom_name: Option<&'a str>,
-    dirty: bool,
-    erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
-    distributor_settings: &'a crate::library::state::DistributorSettings,
-    panel_tokens: &'a signex_types::theme::ThemeTokens,
-    draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
-    keymap_editor: &'a crate::keymap::KeymapEditorModel,
-    keymap_status: &'a str,
-    keymap_search: &'a str,
-    keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
-    theme_id: ThemeId,
-) -> Element<'a, PrefMsg> {
-    let dialog = build_dialog(
-        nav,
-        draft_theme,
-        saved_theme,
-        draft_font,
-        draft_power_port_style,
-        draft_label_style,
-        draft_multisheet_style,
-        draft_grid_style,
-        draft_pcb_gpu_render,
-        draft_symbol_grid_size_mm,
-        draft_symbol_grid_style,
-        draft_symbol_pin_selection,
-        custom_name,
-        dirty,
-        erc_overrides,
-        distributor_settings,
-        panel_tokens,
-        draft_component_classes,
-        keymap_editor,
-        keymap_status,
-        keymap_search,
-        keymap_recorder,
-        theme_id,
-    );
+pub fn view<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
+    let dialog = build_dialog(v);
 
     container(
         column![
@@ -320,91 +311,18 @@ pub fn view<'a>(
 /// used by `view_detached_modal` so the dialog fills its own OS window.
 /// In-window callers go through `view()` which wraps this in a tinted
 /// dismiss layer.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "23 arguments: one per preferences control; grouping them needs a settings-struct refactor, not an attribute"
-)]
-pub(crate) fn view_body<'a>(
-    nav: PrefNav,
-    draft_theme: ThemeId,
-    saved_theme: ThemeId,
-    draft_font: &'a str,
-    draft_power_port_style: PowerPortStyle,
-    draft_label_style: LabelStyle,
-    draft_multisheet_style: MultisheetStyle,
-    draft_grid_style: GridStyle,
-    draft_pcb_gpu_render: bool,
-    draft_symbol_grid_size_mm: f32,
-    draft_symbol_grid_style: GridStyle,
-    draft_symbol_pin_selection: PinSelectionMode,
-    custom_name: Option<&'a str>,
-    dirty: bool,
-    erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
-    distributor_settings: &'a crate::library::state::DistributorSettings,
-    panel_tokens: &'a signex_types::theme::ThemeTokens,
-    draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
-    keymap_editor: &'a crate::keymap::KeymapEditorModel,
-    keymap_status: &'a str,
-    keymap_search: &'a str,
-    keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
-    theme_id: ThemeId,
-) -> Element<'a, PrefMsg> {
-    build_dialog(
-        nav,
-        draft_theme,
-        saved_theme,
-        draft_font,
-        draft_power_port_style,
-        draft_label_style,
-        draft_multisheet_style,
-        draft_grid_style,
-        draft_pcb_gpu_render,
-        draft_symbol_grid_size_mm,
-        draft_symbol_grid_style,
-        draft_symbol_pin_selection,
-        custom_name,
-        dirty,
-        erc_overrides,
-        distributor_settings,
-        panel_tokens,
-        draft_component_classes,
-        keymap_editor,
-        keymap_status,
-        keymap_search,
-        keymap_recorder,
-        theme_id,
-    )
+pub(crate) fn view_body<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
+    build_dialog(v)
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "23 arguments: one per preferences control; grouping them needs a settings-struct refactor, not an attribute"
-)]
-fn build_dialog<'a>(
-    nav: PrefNav,
-    draft_theme: ThemeId,
-    saved_theme: ThemeId,
-    draft_font: &str,
-    draft_power_port_style: PowerPortStyle,
-    draft_label_style: LabelStyle,
-    draft_multisheet_style: MultisheetStyle,
-    draft_grid_style: GridStyle,
-    draft_pcb_gpu_render: bool,
-    draft_symbol_grid_size_mm: f32,
-    draft_symbol_grid_style: GridStyle,
-    draft_symbol_pin_selection: PinSelectionMode,
-    custom_name: Option<&'a str>,
-    dirty: bool,
-    erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
-    distributor_settings: &'a crate::library::state::DistributorSettings,
-    panel_tokens: &'a signex_types::theme::ThemeTokens,
-    draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
-    keymap_editor: &'a crate::keymap::KeymapEditorModel,
-    keymap_status: &'a str,
-    keymap_search: &'a str,
-    keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
-    theme_id: ThemeId,
-) -> Element<'a, PrefMsg> {
+fn build_dialog<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
+    let PrefsView {
+        nav,
+        dirty,
+        theme_id,
+        ..
+    } = v;
+
     // ── Header ── canonical modal chrome (28px, asymmetric padding,
     // SVG close-X with red hover) — same shape every other modal in
     // the app uses so the chrome stays consistent across surfaces.
@@ -448,29 +366,7 @@ fn build_dialog<'a>(
                 )),
                 ..container::Style::default()
             }),
-        build_content(
-            nav,
-            draft_theme,
-            saved_theme,
-            draft_font,
-            draft_power_port_style,
-            draft_label_style,
-            draft_multisheet_style,
-            draft_grid_style,
-            draft_pcb_gpu_render,
-            draft_symbol_grid_size_mm,
-            draft_symbol_grid_style,
-            draft_symbol_pin_selection,
-            custom_name,
-            erc_overrides,
-            distributor_settings,
-            panel_tokens,
-            draft_component_classes,
-            keymap_editor,
-            keymap_status,
-            keymap_search,
-            keymap_recorder,
-        ),
+        build_content(v),
     ]
     .width(Length::Fill)
     .height(Length::Fill);
@@ -611,48 +507,22 @@ fn nav_item<'a>(item: PrefNav, active: PrefNav) -> Element<'a, PrefMsg> {
 
 // ─── Right content ────────────────────────────────────────────
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the preferences form passes each control's state positionally"
-)]
-fn build_content<'a>(
-    nav: PrefNav,
-    draft_theme: ThemeId,
-    saved_theme: ThemeId,
-    draft_font: &str,
-    draft_power_port_style: PowerPortStyle,
-    draft_label_style: LabelStyle,
-    draft_multisheet_style: MultisheetStyle,
-    draft_grid_style: GridStyle,
-    draft_pcb_gpu_render: bool,
-    draft_symbol_grid_size_mm: f32,
-    draft_symbol_grid_style: GridStyle,
-    draft_symbol_pin_selection: PinSelectionMode,
-    custom_name: Option<&'a str>,
-    erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
-    distributor_settings: &'a crate::library::state::DistributorSettings,
-    panel_tokens: &'a signex_types::theme::ThemeTokens,
-    draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
-    keymap_editor: &'a crate::keymap::KeymapEditorModel,
-    keymap_status: &'a str,
-    keymap_search: &'a str,
-    keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
-) -> Element<'a, PrefMsg> {
+fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
+    let PrefsView {
+        nav,
+        erc_overrides,
+        distributor_settings,
+        panel_tokens,
+        draft_component_classes,
+        keymap_editor,
+        keymap_status,
+        keymap_search,
+        keymap_recorder,
+        ..
+    } = v;
+
     let inner = match nav {
-        PrefNav::Appearance => content_appearance(
-            draft_theme,
-            saved_theme,
-            draft_font,
-            draft_power_port_style,
-            draft_label_style,
-            draft_multisheet_style,
-            draft_grid_style,
-            draft_pcb_gpu_render,
-            draft_symbol_grid_size_mm,
-            draft_symbol_grid_style,
-            draft_symbol_pin_selection,
-            custom_name,
-        ),
+        PrefNav::Appearance => content_appearance(v),
         PrefNav::Erc => content_erc(erc_overrides),
         // Library → Distributor APIs — the library subsystem owns
         // the actual form

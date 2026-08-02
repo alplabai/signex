@@ -242,32 +242,33 @@ impl Signex {
         use iced::widget::{Space, Stack, column as col_widget, mouse_area, row};
 
         let ui = &self.ui_state;
-        let dialog: Element<'_, Message> = crate::preferences::view_body(
-            ui.preferences_nav,
-            ui.preferences_draft_theme,
-            ui.theme_id,
-            &ui.preferences_draft_font,
-            ui.preferences_draft_power_port_style,
-            ui.preferences_draft_label_style,
-            ui.preferences_draft_multisheet_style,
-            ui.preferences_draft_grid_style,
-            ui.preferences_draft_pcb_gpu_render,
-            ui.preferences_draft_symbol_grid_size_mm,
-            ui.preferences_draft_symbol_grid_style,
-            ui.preferences_draft_symbol_pin_selection,
-            ui.custom_theme.as_ref().map(|c| c.name.as_str()),
-            ui.preferences_dirty,
-            &ui.erc_severity_override,
-            &self.library.settings,
-            &self.document_state.panel_ctx.tokens,
-            &ui.preferences_draft_component_classes,
-            &ui.preferences_keymap_editor,
-            &ui.preferences_keymap_status,
-            &ui.preferences_keymap_search,
-            ui.preferences_keymap_recorder.as_ref(),
-            ui.theme_id,
-        )
-        .map(|m| Message::Preferences(PreferencesMsg::Inner(m)));
+        let dialog: Element<'_, Message> =
+            crate::preferences::view_body(crate::preferences::PrefsView {
+                nav: ui.preferences_nav,
+                draft_theme: ui.preferences_draft_theme,
+                saved_theme: ui.theme_id,
+                draft_font: &ui.preferences_draft_font,
+                draft_power_port_style: ui.preferences_draft_power_port_style,
+                draft_label_style: ui.preferences_draft_label_style,
+                draft_multisheet_style: ui.preferences_draft_multisheet_style,
+                draft_grid_style: ui.preferences_draft_grid_style,
+                draft_pcb_gpu_render: ui.preferences_draft_pcb_gpu_render,
+                draft_symbol_grid_size_mm: ui.preferences_draft_symbol_grid_size_mm,
+                draft_symbol_grid_style: ui.preferences_draft_symbol_grid_style,
+                draft_symbol_pin_selection: ui.preferences_draft_symbol_pin_selection,
+                custom_name: ui.custom_theme.as_ref().map(|c| c.name.as_str()),
+                dirty: ui.preferences_dirty,
+                erc_overrides: &ui.erc_severity_override,
+                distributor_settings: &self.library.settings,
+                panel_tokens: &self.document_state.panel_ctx.tokens,
+                draft_component_classes: &ui.preferences_draft_component_classes,
+                keymap_editor: &ui.preferences_keymap_editor,
+                keymap_status: &ui.preferences_keymap_status,
+                keymap_search: &ui.preferences_keymap_search,
+                keymap_recorder: ui.preferences_keymap_recorder.as_ref(),
+                theme_id: ui.theme_id,
+            })
+            .map(|m| Message::Preferences(PreferencesMsg::Inner(m)));
 
         // OS-level drag handle covering the header strip, minus the
         // close-X hit zone on the right. Press anywhere on the title

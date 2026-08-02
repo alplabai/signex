@@ -13,20 +13,21 @@ use iced::widget::{Space, button, column, container, row, text};
 use iced::{Background, Border, Element, Length, Theme};
 use signex_types::theme::ThemeId;
 
-pub(super) fn content_appearance<'a>(
-    draft_theme: ThemeId,
-    _saved_theme: ThemeId,
-    draft_font: &str,
-    draft_power_port_style: PowerPortStyle,
-    draft_label_style: LabelStyle,
-    draft_multisheet_style: MultisheetStyle,
-    draft_grid_style: GridStyle,
-    draft_pcb_gpu_render: bool,
-    draft_symbol_grid_size_mm: f32,
-    draft_symbol_grid_style: GridStyle,
-    draft_symbol_pin_selection: PinSelectionMode,
-    custom_name: Option<&'a str>,
-) -> Element<'a, PrefMsg> {
+pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
+    let PrefsView {
+        draft_theme,
+        draft_font,
+        draft_power_port_style,
+        draft_label_style,
+        draft_multisheet_style,
+        draft_grid_style,
+        draft_pcb_gpu_render,
+        draft_symbol_grid_size_mm,
+        draft_symbol_grid_style,
+        draft_symbol_pin_selection,
+        custom_name,
+        ..
+    } = v;
     let mut col = column![].spacing(0).padding([16, 20]);
 
     // ── Section: Theme ──
