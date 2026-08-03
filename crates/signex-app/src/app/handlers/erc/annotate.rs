@@ -64,6 +64,7 @@ impl Signex {
             &project_set,
             active_path.as_deref(),
         );
+        let mut any_active_changed = false;
         let mut any_cached_changed = false;
         let mut disk_touched = 0usize;
         for (path, why) in &project_set.unreadable {
@@ -72,9 +73,22 @@ impl Signex {
         for path in &ordered_paths {
             if active_path.as_deref() == Some(path.as_path()) {
                 // The active engine — run through the raw engine method (not
-                // Command) so it shares the same counter.
-                if let Some(engine) = self.document_state.active_engine_mut() {
-                    let _ = engine.annotate_with_seed_and_locks(mode, &mut next_by_prefix, &locked);
+                // Command) so it shares the same counter. That also means it
+                // cannot go through the mutation gateway, so the dirty flag
+                // is set by hand once the whole pass is done (#585).
+                let outcome = self.document_state.active_engine_mut().map(|engine| {
+                    engine.annotate_with_seed_and_locks(mode, &mut next_by_prefix, &locked)
+                });
+                match outcome {
+                    Some(Ok(true)) => any_active_changed = true,
+                    Some(Err(error)) => {
+                        let error = anyhow::Error::new(error);
+                        crate::diagnostics::log_error(
+                            "Annotate failed on the active sheet",
+                            &error,
+                        );
+                    }
+                    Some(Ok(false)) | None => {}
                 }
                 continue;
             }
@@ -92,6 +106,11 @@ impl Signex {
                     if let Some(tab) = self.document_state.tabs.get_mut(tab_idx) {
                         tab.dirty = true;
                     }
+                    // `tab.dirty` alone is not enough: `dirty_paths` is what
+                    // the quit guard, the tab-close engine parking, the
+                    // title-bar count and Save-All read, and a bare
+                    // `tab.dirty = true` never propagates into it (#585).
+                    self.document_state.dirty_paths.insert(path.clone());
                     any_cached_changed = true;
                 }
                 continue;
@@ -126,6 +145,13 @@ impl Signex {
                 "Annotate: wrote {} unopened sheet file(s) to disk",
                 disk_touched,
             ));
+        }
+        // The active engine was annotated through a non-`Command` method, so
+        // nothing has marked it dirty. Without this the quit guard sees a
+        // clean workspace and the annotation goes out with the process
+        // (#585). Cached tabs already did their own bookkeeping above.
+        if any_active_changed {
+            self.mark_active_document_dirty();
         }
         // Force a render + panel refresh as if a command had fired.
         self.interaction_state
@@ -259,16 +285,21 @@ impl Signex {
         }
 
         let mut resets = 0_usize;
-        let mut any_active_changed = false;
-        // Active engine — goes through ReplaceDocument so undo records
-        // the snapshot.
-        if let Some(engine) = self.document_state.active_engine_mut() {
+        // Active engine — goes through ReplaceDocument so undo records the
+        // snapshot, and through the mutation gateway so the sheet reaches
+        // `dirty_paths` (#585). The clone is taken first and the engine
+        // borrow released, because the gateway needs `&mut self`.
+        let reset_sheet = self.document_state.active_engine().and_then(|engine| {
             let mut sheet = engine.document().clone();
-            if reset_in(&mut sheet, &duplicates) {
-                let _ = engine.execute(signex_engine::Command::ReplaceDocument { document: sheet });
-                any_active_changed = true;
-                resets += 1;
-            }
+            reset_in(&mut sheet, &duplicates).then_some(sheet)
+        });
+        if let Some(document) = reset_sheet {
+            self.apply_engine_command(
+                signex_engine::Command::ReplaceDocument { document },
+                true,
+                false,
+            );
+            resets += 1;
         }
         // Cached tabs — same ReplaceDocument path; each tab's own
         // history records the reset.
@@ -291,12 +322,23 @@ impl Signex {
         for (idx, path) in cached_paths {
             let applied = self.document_state.engines.get_mut(&path).map(|engine| {
                 let mut sheet = engine.document().clone();
-                if reset_in(&mut sheet, &duplicates) {
-                    let _ =
-                        engine.execute(signex_engine::Command::ReplaceDocument { document: sheet });
-                    true
-                } else {
-                    false
+                if !reset_in(&mut sheet, &duplicates) {
+                    return false;
+                }
+                // Not the gateway: this is a cached, non-active engine, so
+                // the dirty bookkeeping is done by hand below. The result is
+                // still read rather than discarded — a failure here means the
+                // sheet was reported as reset when it was not (#585).
+                match engine.execute(signex_engine::Command::ReplaceDocument { document: sheet }) {
+                    Ok(result) => result.changed,
+                    Err(error) => {
+                        let error = anyhow::Error::new(error);
+                        crate::diagnostics::log_error(
+                            &format!("Reset Duplicate Designators failed for {}", path.display()),
+                            &error,
+                        );
+                        false
+                    }
                 }
             });
             if let Some(true) = applied {
@@ -339,13 +381,12 @@ impl Signex {
             }
         }
 
-        if any_active_changed {
-            self.interaction_state
-                .active_canvas_mut()
-                .clear_content_cache();
-            self.sync_canvas_from_visible_schematic(
-                crate::schematic_runtime::RenderInvalidation::FULL,
-            );
+        // The active sheet's repaint is the gateway's job now. This refresh
+        // is for the *cached* tabs, whose dirty dots would otherwise only
+        // appear after the next unrelated event — the old condition was
+        // `any_active_changed`, so a reset that touched no open-and-active
+        // sheet refreshed nothing at all.
+        if resets > 0 {
             self.refresh_panel_ctx();
         }
         crate::diagnostics::log_info(format!(

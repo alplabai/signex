@@ -47,6 +47,9 @@ mod preferences_export_status;
 #[path = "regression/undo_marker_divergence.rs"]
 mod undo_marker_divergence;
 
+#[path = "regression/dirty_paths_gateway.rs"]
+mod dirty_paths_gateway;
+
 #[path = "regression/library_undo.rs"]
 mod library_undo;
 

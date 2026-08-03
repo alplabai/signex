@@ -109,6 +109,24 @@ impl Signex {
         self.finish_schematic_mutation(invalidation, clear_overlay_cache, update_selection_info)
     }
 
+    /// Mark the active document as having unsaved edits, without running a
+    /// render invalidation.
+    ///
+    /// For the one edit path that mutates the engine through a method that
+    /// is not a `Command` — `Engine::annotate_with_seed_and_locks`, which
+    /// records its own history entry — so it cannot go through
+    /// [`Signex::apply_engine_command`] but still has to reach
+    /// `dirty_paths` (#585). Everything else should use the gateway, which
+    /// calls this as part of `finish_schematic_mutation`.
+    ///
+    /// Returns `false` when there is no active schematic session to mark.
+    pub(crate) fn mark_active_document_dirty(&mut self) -> bool {
+        self.with_active_schematic_session_mut(|session| {
+            session.set_dirty(true);
+        })
+        .is_some()
+    }
+
     /// Undo one step of the **active** engine's own history.
     ///
     /// One `Engine::undo` per invocation: a batch recorded through

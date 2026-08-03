@@ -131,9 +131,12 @@ windows-sys = { version = "0.61", features = [
 unused_must_use = "deny"
 
 [lints.clippy]
-# Warn-level only (GH #99 part 1) — `Task` is `#[must_use]` but `let _ =`
-# defeats that (see scripts/check_discarded_tasks.sh for the full story).
-# This lint also catches discarded `Result`s the same way; 13 pre-existing
-# sites are tracked separately and are NOT fixed by this change, so the
-# lint stays warn rather than deny.
-let_underscore_must_use = "warn"
+# Deny (GH #99 part 1, promoted in #585) — `Task` is `#[must_use]` but
+# `let _ =` defeats that (see scripts/check_discarded_tasks.sh for the full
+# story). The lint catches discarded `Result`s the same way. The 13
+# pre-existing sites #533 tracked are all gone: two swallowed export writes
+# now report through a status line (#581), five got the named
+# `IgnoreResult::ignore("reason")` form (#582), and the rest were engine
+# edits dropping their `CommandResult` — the undo half of that is #583/#584,
+# the dirty half is #585. Deny keeps them from coming back.
+let_underscore_must_use = "deny"
