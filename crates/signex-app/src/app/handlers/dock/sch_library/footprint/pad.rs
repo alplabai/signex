@@ -168,27 +168,6 @@ impl Signex {
         self.refresh_panel_ctx();
         true
     }
-    /// v0.20 — Hole shape pick_list. Round / Slot. The picker is a
-    /// shortcut: Round clears slot_length; Slot defaults it to
-    /// 1.5× drill diameter (or 1mm if no drill yet).
-    pub(crate) fn fp_editor_set_next_pad_hole_shape_round(&mut self) {
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            editor.state.next_pad_defaults.drill_slot_length_mm = None;
-        }
-        self.refresh_panel_ctx();
-    }
-    pub(crate) fn fp_editor_set_next_pad_hole_shape_slot(&mut self) {
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            let default_slot = editor
-                .state
-                .next_pad_defaults
-                .drill_diameter_mm
-                .map(|d| d * 1.5)
-                .unwrap_or(1.0);
-            editor.state.next_pad_defaults.drill_slot_length_mm = Some(default_slot);
-        }
-        self.refresh_panel_ctx();
-    }
     pub(crate) fn fp_editor_set_next_pad_corner_radius_pct(&mut self, value: String) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             let parsed = value.trim().parse::<f64>().ok();

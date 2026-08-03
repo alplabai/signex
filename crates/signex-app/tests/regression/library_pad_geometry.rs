@@ -1139,68 +1139,6 @@ fn editing_chamfer_len_propagates_through_solve() {
 
 // ── v0.14 / v0.25 / v0.26 footprint-editor regression tests ──────────────
 
-/// Helpers used by the Phase 6 geometric-assertion tightening of
-/// the v0.24 deferred suite. Centralised to keep the assertion
-/// blocks above readable.
-// Currently unused — the Phase 6 tightening that was going to call these
-// never landed (zero callers as of the #432 split; kept in case it does).
-fn pad_arc_id(
-    editor: &signex_app::app::FootprintEditorState,
-    pad_idx: usize,
-    sidecar_key: &str,
-) -> signex_sketch::id::SketchEntityId {
-    let pad = &editor.state.pads[pad_idx];
-    let slug = pad
-        .shape_params
-        .get(sidecar_key)
-        .unwrap_or_else(|| panic!("pad {pad_idx} sidecar {sidecar_key} missing"));
-    let uuid = uuid::Uuid::parse_str(slug)
-        .unwrap_or_else(|_| panic!("sidecar {sidecar_key} value {slug} not a UUID slug"));
-    signex_sketch::id::SketchEntityId(uuid)
-}
-
-fn arc_endpoint_ids(
-    sketch: &signex_sketch::SketchData,
-    arc_id: signex_sketch::id::SketchEntityId,
-) -> (
-    signex_sketch::id::SketchEntityId,
-    signex_sketch::id::SketchEntityId,
-    signex_sketch::id::SketchEntityId,
-) {
-    use signex_sketch::entity::EntityKind;
-    let arc = sketch
-        .entities
-        .iter()
-        .find(|e| e.id == arc_id)
-        .unwrap_or_else(|| panic!("arc {arc_id:?} not in sketch"));
-    match arc.kind {
-        EntityKind::Arc {
-            center, start, end, ..
-        } => (center, start, end),
-        ref other => panic!("entity {arc_id:?} not an Arc: {other:?}"),
-    }
-}
-
-fn point_pos(
-    sketch: &signex_sketch::SketchData,
-    id: signex_sketch::id::SketchEntityId,
-) -> (f64, f64) {
-    use signex_sketch::entity::EntityKind;
-    let pt = sketch
-        .entities
-        .iter()
-        .find(|e| e.id == id)
-        .unwrap_or_else(|| panic!("point {id:?} not in sketch"));
-    match pt.kind {
-        EntityKind::Point { x, y } => (x, y),
-        ref other => panic!("entity {id:?} not a Point: {other:?}"),
-    }
-}
-
-fn approx_eq_pt(a: (f64, f64), b: (f64, f64)) -> bool {
-    (a.0 - b.0).abs() < 1e-6 && (a.1 - b.1).abs() < 1e-6
-}
-
 // ─────────────────────────────────────────────────────────────────
 // v0.25 polish #3 — Oval reverse-mirror to pad.size_mm
 //

@@ -57,7 +57,6 @@ pub(super) struct PinTextLayout {
     // Pin name label near the symbol body edge.
     pub(super) name_size_mm: f32,
     pub(super) name_offset_x_mm: f32,
-    pub(super) name_offset_y_mm: f32,
 }
 
 pub(super) const PIN_TEXT_LAYOUT: PinTextLayout = PinTextLayout {
@@ -67,7 +66,6 @@ pub(super) const PIN_TEXT_LAYOUT: PinTextLayout = PinTextLayout {
     number_along_ratio: 0.18,
     name_size_mm: 1.27,
     name_offset_x_mm: 0.50,
-    name_offset_y_mm: 0.00,
 };
 
 /// Approximate glyph advance as a fraction of the text size — used to

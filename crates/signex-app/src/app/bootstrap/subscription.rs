@@ -26,7 +26,6 @@ use iced::Subscription;
 #[derive(Clone, Default)]
 struct OpenOverlays {
     find_replace_open: bool,
-    palette_open: bool,
     kbd_shortcuts_open: bool,
     first_run_tour_open: bool,
     prefs_open: bool,
@@ -36,7 +35,6 @@ struct OpenOverlays {
     remove_open: bool,
     enable_vc_open: bool,
     library_create_options_open: bool,
-    keymap_recorder_open: bool,
     passive_calculator_open: bool,
     // #514 — the rest of the Esc ladder. Each closes exactly one gap that
     // used to fall through to the `Tool::Select` reset behind the modal.
@@ -326,8 +324,10 @@ impl OpenOverlays {
             // ── Painted last ────────────────────────────────────────
             // The command palette and the chord recorder swallow keyboard
             // input wholesale before the ladder is reached, so their Esc
-            // lives in the subscription closure. The hover tooltip is not
-            // dismissible at all.
+            // lives in `app/dispatch/input.rs` — `claim_command_palette`
+            // and `claim_keymap_recorder`, which resolve against live
+            // `ui_state` and never reach this table (#557). The hover
+            // tooltip is not dismissible at all.
             OverlayId::CommandPalette | OverlayId::HoverTooltip => None,
             OverlayId::LibraryUpdates => self.library_updates_open.then(|| {
                 Message::Library(crate::library::messages::LibraryMessage::LibraryUpdatesCancel)
@@ -440,7 +440,6 @@ impl Signex {
 
         OpenOverlays {
             find_replace_open: self.ui_state.find_replace.open,
-            palette_open: self.ui_state.command_palette.open,
             kbd_shortcuts_open: self.ui_state.keyboard_shortcuts_open,
             first_run_tour_open: self.ui_state.first_run_tour_open,
             prefs_open: self.ui_state.preferences_open
@@ -453,7 +452,6 @@ impl Signex {
             remove_open: self.ui_state.remove_dialog.is_some(),
             enable_vc_open: self.ui_state.enable_version_control.is_some(),
             library_create_options_open: self.library.create_options.is_some(),
-            keymap_recorder_open: self.ui_state.preferences_keymap_recorder.is_some(),
             passive_calculator_open: self.ui_state.passive_calculator_open,
             annotate_reset_confirm_open: self.ui_state.annotate_reset_confirm
                 && !modal_detached(crate::app::state::ModalId::AnnotateResetConfirm),
@@ -989,16 +987,6 @@ mod tests {
         ));
     }
 
-    /// The palette and the chord recorder are absent from the ladder on
-    /// purpose: both swallow keyboard input wholesale earlier in the
-    /// subscription, so a rung here would be dead code that outranks a real
-    /// modal.
-    #[test]
-    fn palette_and_keymap_recorder_are_not_on_the_ladder() {
-        assert!(only(|o| o.palette_open = true).is_none());
-        assert!(only(|o| o.keymap_recorder_open = true).is_none());
-    }
-
     /// Order is load-bearing — the deepest (topmost-painted) modal wins.
     /// `passive_calculator_overlay` paints at `view/mod.rs:789`,
     /// `find_replace_overlay` at `:787` (earlier, i.e. underneath) and
@@ -1348,11 +1336,19 @@ mod tests {
     ///    macro as every bool field, which is what closed the previous
     ///    hole (a hand-written non-bool tail that carried no rung
     ///    requirement).
-    /// 2. **Every named field is classified as exactly one of "claims
-    ///    Esc" or "documented exclusion", by NAME.** The `assert_eq!`
+    /// 2. **Every named field claims Esc, by NAME.** The `assert_eq!`
     ///    below is a SET-EQUALITY check of NAMES — the macro's field-name
-    ///    list vs. the union of `setters`' (deduplicated) first elements
-    ///    and `EXCLUDED` — not a count. This catches a name that isn't a
+    ///    list vs. `setters`' (deduplicated) first elements — not a
+    ///    count. There is deliberately no opt-out list: an `EXCLUDED`
+    ///    escape hatch existed while `palette_open` and
+    ///    `keymap_recorder_open` sat on this struct, and it let a field
+    ///    skip guarantees 3 and 4 entirely just by being named in it.
+    ///    Those two fields were write-only leftovers of the pre-#557
+    ///    subscription closure — their real Esc handling is
+    ///    `claim_command_palette` / `claim_keymap_recorder` in
+    ///    `app/dispatch/input.rs` — so both they and the hatch are gone,
+    ///    and a new field now has exactly one way to satisfy this test:
+    ///    wire it a rung. This catches a name that isn't a
     ///    real field at all (a typo). It does NOT, by itself, catch a
     ///    correctly-labeled entry whose closure mutates the WRONG field:
     ///    for a genuinely new struct field `new_field_open`, the entry
@@ -1387,7 +1383,6 @@ mod tests {
         }
         let field_names = open_overlays_field_names![
             find_replace_open,
-            palette_open,
             kbd_shortcuts_open,
             first_run_tour_open,
             prefs_open,
@@ -1397,7 +1392,6 @@ mod tests {
             remove_open,
             enable_vc_open,
             library_create_options_open,
-            keymap_recorder_open,
             passive_calculator_open,
             annotate_reset_confirm_open,
             app_quit_confirm_open,
@@ -1418,10 +1412,6 @@ mod tests {
             net_color_custom_open,
             delete_confirm,
         ];
-
-        // Documented, deliberate absences from the ladder — see the doc
-        // comment on `escape_message`.
-        const EXCLUDED: &[&str] = &["palette_open", "keymap_recorder_open"];
 
         type EscapeSetter = fn(&mut OpenOverlays);
         // `recovery_kind` appears three times under the SAME field name —
@@ -1493,23 +1483,16 @@ mod tests {
         ];
 
         let macro_fields: std::collections::BTreeSet<&str> = field_names.into_iter().collect();
-        let mut classified: std::collections::BTreeSet<&str> =
+        let claims_escape: std::collections::BTreeSet<&str> =
             setters.iter().map(|(name, _)| *name).collect();
-        classified.extend(EXCLUDED.iter().copied());
 
         assert_eq!(
-            macro_fields, classified,
-            "OpenOverlays field(s) are not classified as exactly one of \
-             `setters` (claims Esc) or `EXCLUDED` (a documented, \
-             deliberate absence) — the two sides must name the same set \
-             of fields"
+            macro_fields, claims_escape,
+            "every OpenOverlays field must claim Esc — the macro's field \
+             list and `setters` must name the same set of fields. A field \
+             with no `setters` entry has no rung, so Esc falls through and \
+             silently resets the canvas tool behind the open modal"
         );
-        for excluded in EXCLUDED {
-            assert!(
-                !setters.iter().any(|(name, _)| name == excluded),
-                "{excluded} is in both `setters` and `EXCLUDED` — pick one"
-            );
-        }
         for (name, set) in setters {
             assert!(
                 only(*set).is_some(),

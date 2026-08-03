@@ -17,17 +17,6 @@ use pad::{
     render_pad_form_properties,
 };
 
-/// v0.23 — Per-instance checkbox grid safety cap for Grid arrays.
-/// Dense BGAs can declare hundreds of cells per axis; rendering a
-/// 50×50 = 2500-checkbox grid would blow the panel viewport. Above
-/// this cap the user keeps editing via `mask_expr`.
-const MAX_GRID_CHECKBOX_DIM: u32 = 32;
-
-/// v0.23 — Per-instance checkbox row safety cap for Polar arrays.
-/// 64 instances covers 5° increments around a full circle; finer
-/// patterns continue to author through `mask_expr`.
-const MAX_POLAR_CHECKBOX_COUNT: u32 = 64;
-
 // Submodule declarations (split from the original 4570-line file).
 mod managers;
 mod pad;

@@ -230,7 +230,6 @@ pub enum PrefMsg {
 const DLG_W: f32 = 960.0;
 const DLG_H: f32 = 660.0;
 const NAV_W: f32 = 220.0;
-const HDR_H: f32 = 40.0;
 const FOOTER_H: f32 = 44.0;
 
 // ─── Public view ──────────────────────────────────────────────
@@ -672,27 +671,5 @@ fn discard_btn<'a>() -> Element<'a, PrefMsg> {
         .padding([6, 16])
         .on_press(PrefMsg::DiscardAndClose)
         .style(danger_button_style)
-        .into()
-}
-
-fn close_footer_btn<'a>() -> Element<'a, PrefMsg> {
-    button(text("Close").size(12).color(Color::WHITE))
-        .padding([6, 20])
-        .on_press(PrefMsg::Close)
-        .style(|_: &Theme, status: button::Status| {
-            let bg = match status {
-                button::Status::Hovered => Color::from_rgb(0.28, 0.42, 0.65),
-                _ => Color::from_rgb(0.22, 0.36, 0.58),
-            };
-            button::Style {
-                background: Some(Background::Color(bg)),
-                border: Border {
-                    radius: 3.0.into(),
-                    ..Border::default()
-                },
-                text_color: Color::WHITE,
-                ..button::Style::default()
-            }
-        })
         .into()
 }

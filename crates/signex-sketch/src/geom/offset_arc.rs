@@ -42,21 +42,6 @@ pub enum PolyElement {
 }
 
 impl PolyElement {
-    fn start(&self) -> Point2 {
-        match *self {
-            PolyElement::Line { a, .. } => a,
-            PolyElement::Arc {
-                centre,
-                radius,
-                start_rad,
-                ..
-            } => Point2::new(
-                centre.x + radius * start_rad.cos(),
-                centre.y + radius * start_rad.sin(),
-            ),
-        }
-    }
-
     fn end(&self) -> Point2 {
         match *self {
             PolyElement::Line { b, .. } => b,
@@ -80,8 +65,6 @@ impl PolyElement {
         match *self {
             PolyElement::Line { a, b } => unit_perp_outward(a, b, polygon_ccw),
             PolyElement::Arc {
-                centre,
-                radius,
                 start_rad,
                 sweep_ccw,
                 ..
@@ -90,13 +73,11 @@ impl PolyElement {
                 // CW arc on CCW polygon → outward = inward radial.
                 // Same logic for CW polygon flips.
                 let radial = (start_rad.cos(), start_rad.sin());
-                let outward = if sweep_ccw == polygon_ccw {
+                if sweep_ccw == polygon_ccw {
                     radial
                 } else {
                     (-radial.0, -radial.1)
-                };
-                let _ = (centre, radius);
-                outward
+                }
             }
         }
     }
