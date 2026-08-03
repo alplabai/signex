@@ -5,6 +5,7 @@
 //! handlers. Splitting the giant match keeps every file under the
 //! line-count cap while preserving the exact arm-to-body mapping.
 
+mod batch;
 mod edits;
 mod place;
 mod structure;
