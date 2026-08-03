@@ -260,7 +260,7 @@ fn reveal_in_file_manager(path: &std::path::Path) -> anyhow::Result<()> {
             .arg(arg)
             .spawn()
             .map_err(|e| anyhow::anyhow!("explorer.exe failed to spawn: {e}"))?;
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(target_os = "macos")]
