@@ -15,10 +15,10 @@ use super::segment::{Arc2, Circle2};
 ///   - If d > r0 + r1 → disjoint (0 hits).
 ///   - If d < |r0 - r1| → one circle inside the other (0 hits).
 ///   - Else two roots at the perpendicular foot:
-///       a = (r0² - r1² + d²) / (2 d)
-///       h = sqrt(r0² - a²)
-///       midpoint = c0 + a * (c1 - c0) / d
-///       hits = midpoint ± h * perpendicular(c1 - c0) / d
+///     a = (r0² - r1² + d²) / (2 d)
+///     h = sqrt(r0² - a²)
+///     midpoint = c0 + a * (c1 - c0) / d
+///     hits = midpoint ± h * perpendicular(c1 - c0) / d
 ///   - Tangent (d == r0 + r1 or d == |r0 - r1|) collapses to one
 ///     hit at the tangency point.
 pub fn circle_circle_intersections(a: Circle2, b: Circle2) -> Vec<Point2> {

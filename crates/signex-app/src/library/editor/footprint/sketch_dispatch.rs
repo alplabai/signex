@@ -313,7 +313,7 @@ pub fn current_role_of(entity: &signex_sketch::entity::Entity) -> RoleTag {
 fn apply_edit_inner(footprint: &mut Footprint, edit: SketchEdit) {
     let sketch = footprint.sketch.get_or_insert_with(SketchData::default);
     match edit {
-        SketchEdit::AddEntity(e) => sketch.entities.push(e),
+        SketchEdit::AddEntity(e) => sketch.entities.push(*e),
         SketchEdit::DeleteEntity(id) => {
             sketch.entities.retain(|e| e.id != id);
             // Drop dangling constraint refs — coarse rule, drop any

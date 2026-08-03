@@ -178,8 +178,8 @@ pub struct FootprintEditorState {
     /// v0.13.3 — secondary selected sketch entity.
     pub selected_sketch_secondary: Option<signex_sketch::id::SketchEntityId>,
     /// v0.27 — Altium / Fusion-style multi-select for sketch
-    /// entities. Populated by the sketch-mode rubber-band release
-    /// + Ctrl/Shift modifier clicks. Drawn with the same selection
+    /// entities. Populated by the sketch-mode rubber-band release +
+    /// Ctrl/Shift modifier clicks. Drawn with the same selection
     /// highlight as `selected_sketch`. Cleared whenever a single-
     /// click select fires without a modifier.
     pub selected_sketch_extra: Vec<signex_sketch::id::SketchEntityId>,

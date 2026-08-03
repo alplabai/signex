@@ -160,11 +160,11 @@ pub fn point_pos(
         })
 }
 
-/// Apply the priority chain to `raw` and return the snapped position
-/// + the snap kind that fired. `point_hit` is the optional outcome of
-/// a prior call to the canvas's `sketch_snap` (we don't re-implement
-/// the spatial query here so the canvas's existing px-radius logic
-/// stays the source of truth).
+/// Apply the priority chain to `raw` and return the snapped
+/// position + the snap kind that fired. `point_hit` is the optional
+/// outcome of a prior call to the canvas's `sketch_snap` (we don't
+/// re-implement the spatial query here so the canvas's existing
+/// px-radius logic stays the source of truth).
 pub fn snap_cursor(
     raw: (f64, f64),
     sketch: Option<&SketchData>,

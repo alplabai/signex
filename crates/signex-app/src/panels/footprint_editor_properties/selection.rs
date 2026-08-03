@@ -1,7 +1,9 @@
 use iced::widget::{Column, container, pick_list, row, text};
 use iced::{Color, Length};
 
-use super::super::{CollapsedSections, FootprintEditorPanelContext, FootprintModeKind, PanelMsg};
+use super::super::{
+    CollapsedSections, FootprintEditorPanelContext, FootprintModeKind, PanelMsg, PanelPalette,
+};
 use super::managers::grid_manager_btn;
 use super::pad::{
     PadEditTarget, PadFormValues, pad_check_row, pad_input_row, pad_pick_row,
@@ -13,25 +15,25 @@ use super::subforms::{
 };
 use super::{fp_is_collapsed, props_kv_row, props_section_header};
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "13 arguments: the selection section reads thirteen independent slices of editor state"
-)]
 pub(super) fn view_selection<'a>(
     mut col: Column<'a, PanelMsg>,
     fp: &'a FootprintEditorPanelContext,
     mode_label: &str,
-    muted: Color,
-    primary: Color,
-    border_c: Color,
-    input_bg: Color,
-    input_bdr: Color,
+    palette: PanelPalette,
     custom_filter_presets: Vec<crate::active_bar::CustomFilterPreset>,
     active_custom_filter_tab: usize,
     collapsed_sections: &'a CollapsedSections,
-    accent_c: Color,
-    tag_hover: Color,
 ) -> Column<'a, PanelMsg> {
+    let PanelPalette {
+        muted,
+        primary,
+        border: border_c,
+        input_bg,
+        input_bdr,
+        accent: accent_c,
+        tag_hover,
+        ..
+    } = palette;
     match (
         fp.mode_kind,
         fp.selected_pad.as_ref(),
@@ -50,9 +52,7 @@ pub(super) fn view_selection<'a>(
                 &values,
                 target,
                 false,
-                muted,
-                primary,
-                border_c,
+                palette,
                 collapsed_sections,
             );
             // Position is the one read-only field (use drag to move).
@@ -68,21 +68,11 @@ pub(super) fn view_selection<'a>(
                 col,
                 &values,
                 target,
-                muted,
-                primary,
-                border_c,
+                palette,
                 collapsed_sections,
                 &fp.selected_pad_shape_params,
             );
-            col = render_pad_form_pad_features(
-                col,
-                &values,
-                target,
-                muted,
-                primary,
-                border_c,
-                collapsed_sections,
-            );
+            col = render_pad_form_pad_features(col, &values, target, palette, collapsed_sections);
         }
         (FootprintModeKind::Sketch, _, Some(ent)) => {
             col = col.push(props_section_header(
@@ -417,11 +407,7 @@ pub(super) fn view_selection<'a>(
                     custom_filter_presets,
                     active_custom_filter_tab,
                     collapsed_sections,
-                    muted,
-                    primary,
-                    border_c,
-                    accent_c,
-                    tag_hover,
+                    palette,
                 ));
                 col = col.push(props_section_header(
                     "Footprint",

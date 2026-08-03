@@ -250,37 +250,36 @@ fn view_constraint_submenu<'a>(
     let s_kind = secondary.and_then(kind_of);
 
     let mut tags: Vec<(&'static str, SketchConstraintTag)> = Vec::new();
-    let needs_dim_input;
-    match (p_kind, s_kind) {
+    // Each arm fills `tags` and yields whether that selection needs the
+    // inline numeric value field (only DistancePtPt does).
+    let needs_dim_input = match (p_kind, s_kind) {
         (Some("Point"), None) => {
             tags.push(("Fix", SketchConstraintTag::Fixed));
-            needs_dim_input = false;
+            false
         }
         (Some("Line"), None) => {
             tags.push(("Horizontal", SketchConstraintTag::Horizontal));
             tags.push(("Vertical", SketchConstraintTag::Vertical));
-            needs_dim_input = false;
+            false
         }
         (Some("Point"), Some("Point")) => {
             tags.push(("Coincident", SketchConstraintTag::Coincident));
             tags.push(("Distance", SketchConstraintTag::DistancePtPt));
-            needs_dim_input = true;
+            true
         }
         (Some("Line"), Some("Line")) => {
             tags.push(("Parallel", SketchConstraintTag::Parallel));
             tags.push(("Perpendicular", SketchConstraintTag::Perpendicular));
             tags.push(("Equal length", SketchConstraintTag::EqualLength));
-            needs_dim_input = false;
+            false
         }
         (Some("Point"), Some("Line")) | (Some("Line"), Some("Point")) => {
             tags.push(("On line", SketchConstraintTag::PointOnLine));
             tags.push(("Midpoint", SketchConstraintTag::Midpoint));
-            needs_dim_input = false;
+            false
         }
-        _ => {
-            needs_dim_input = false;
-        }
-    }
+        _ => false,
+    };
 
     let header_label = match (p_kind, s_kind) {
         (None, _) => "Selection: (none) — click a sketch entity in Sketch mode",

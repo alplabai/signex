@@ -211,14 +211,16 @@ pub fn justification_grid(
     id: uuid::Uuid,
     rotation_deg: f64,
     h: signex_types::schematic::HAlign,
-    input_bg: Color,
-    input_bdr: Color,
-    primary: Color,
-    muted: Color,
+    palette: PanelPalette,
     theme: signex_types::theme::ThemeId,
 ) -> Element<'static, PanelMsg> {
     use signex_types::schematic::HAlign;
-    let _ = muted;
+    let PanelPalette {
+        input_bg,
+        input_bdr,
+        primary,
+        ..
+    } = palette;
 
     // Cell size mimics Altium's compact 24×24 px anchor picker.
     const CELL_SIZE: f32 = 24.0;

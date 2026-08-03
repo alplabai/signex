@@ -25,6 +25,7 @@ mod context;
 mod footprint_context;
 mod library;
 mod messages;
+mod palette;
 mod paper;
 mod projects;
 mod properties;
@@ -66,6 +67,7 @@ pub use footprint_context::{
 pub use library::{LibraryRowDetail, LibrarySymbolEntry};
 pub(super) use library::{view_footprint_library, view_library_row_properties, view_sch_library};
 pub use messages::PanelMsg;
+pub use palette::PanelPalette;
 pub use paper::{PAPER_SIZES, PageFormatMode, PageOrigin, SheetColor, paper_dimensions};
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
 pub(super) use projects::{view_navigator, view_projects};

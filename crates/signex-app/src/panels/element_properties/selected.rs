@@ -13,8 +13,12 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
     primary: Color,
     border_c: Color,
 ) -> Element<'a, PanelMsg> {
-    let input_bg = crate::styles::ti(ctx.tokens.selection);
-    let input_bdr = crate::styles::ti(ctx.tokens.accent);
+    let palette = PanelPalette::from_tokens(&ctx.tokens);
+    let PanelPalette {
+        input_bg,
+        input_bdr,
+        ..
+    } = palette;
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
     let elem_type = ctx
@@ -675,10 +679,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                                 id,
                                 rotation_deg,
                                 justify_h,
-                                input_bg,
-                                input_bdr,
-                                primary,
-                                muted,
+                                palette,
                                 ctx.theme_id,
                             ))
                             .padding([4, 8]),

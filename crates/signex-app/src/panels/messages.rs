@@ -819,7 +819,7 @@ pub enum PanelMsg {
     },
     /// Properties panel — edit the active symbol's name (Altium
     /// "Design Item ID"). Affects the SCH Library panel row label
-    /// + the on-disk container's `display_name` when the active
+    /// and the on-disk container's `display_name` when the active
     /// symbol is the only one in the file.
     SymEditorSetSymbolName(String),
     /// Properties panel — edit the active symbol's designator

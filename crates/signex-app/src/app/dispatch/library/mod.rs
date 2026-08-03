@@ -182,17 +182,6 @@ impl Signex {
                 self.handle_new_component_confirm_create_table()
             }
             LibraryMessage::NewComponentSubmit => self.handle_new_component_submit(),
-            LibraryMessage::NewComponentSubmit => {
-                // WS-8 will replace `commands::create_component` with the
-                // row-based `create_component_row`. Until that lands, the
-                // dispatcher logs the request and bails.
-                tracing::warn!(
-                    target: "signex::library",
-                    "NewComponentSubmit: row-based create flow ships in WS-8"
-                );
-                self.library.new_component = None;
-                Task::none()
-            }
 
             LibraryMessage::ToggleLibraryTreeNode(idx) => self.handle_toggle_library_tree_node(idx),
             LibraryMessage::OpenComponentRow {

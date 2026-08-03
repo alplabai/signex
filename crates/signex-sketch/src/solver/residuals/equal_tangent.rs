@@ -12,8 +12,8 @@
 //!    arc centre to the line equals the arc radius (in absolute
 //!    value, since the line can sit on either side of the centre).
 //!  - Arc/arc tangency:
-//!      external — `|C2 − C1| = r1 + r2`
-//!      internal — `|C2 − C1| = |r1 − r2|`
+//!    external — `|C2 − C1| = r1 + r2`
+//!    internal — `|C2 − C1| = |r1 − r2|`
 
 use crate::entity::EntityKind;
 use crate::error::SketchError;

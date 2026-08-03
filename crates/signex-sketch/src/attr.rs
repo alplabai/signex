@@ -91,9 +91,10 @@ impl std::fmt::Display for ElectricalType {
 /// Pad Features section exposes this exactly:
 ///   - `None`        — bare copper / no machining.
 ///   - `Counterbore` — flat-bottom recess machined around the hole
-///                     to seat a fastener head flush.
+///     to seat a fastener head flush.
 ///   - `Countersink` — conical recess machined around the hole for
-///                     a flat-head fastener.
+///     a flat-head fastener.
+///
 /// The earlier "Solder Bumps / Glue Dots / Adhesive Beads" variants
 /// were factually wrong — those are mechanical-layer purposes
 /// (Glue Points / Coating / Gold Plating) authored as separate

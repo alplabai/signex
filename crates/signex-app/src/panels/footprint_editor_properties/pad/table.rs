@@ -7,7 +7,7 @@
 use iced::widget::{container, pick_list, text, text_input};
 use iced::{Color, Length, Theme};
 
-use super::super::super::PanelMsg;
+use super::super::super::{PanelMsg, PanelPalette};
 use super::form::{
     PadEditTarget, PadFormValues, pad_shape_msg, pad_size_x_msg, pad_size_y_msg,
     pad_thermal_relief_msg,
@@ -189,11 +189,15 @@ pub(super) fn pad_copper_row<'a>(
     values: &PadFormValues,
     current_shape: PadShapeChoice,
     target: PadEditTarget,
-    muted: Color,
-    primary: Color,
-    border_c: Color,
+    palette: PanelPalette,
     is_authoritative: bool,
 ) -> iced::Element<'a, PanelMsg> {
+    let PanelPalette {
+        muted,
+        primary,
+        border: border_c,
+        ..
+    } = palette;
     // v0.25 polish — render empty when the value is effectively
     // zero so the user can clear the input by deleting all
     // characters. With format!("{:.3}", 0.0) the field rebuilds to

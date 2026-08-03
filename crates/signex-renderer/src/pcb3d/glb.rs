@@ -1,6 +1,7 @@
 //! GLB runtime-model ingest + bridge + binary parsing.
 
 use super::*;
+use std::path::Path;
 
 pub fn ingest_runtime_model_with_bridge(
     request: RuntimeModelBridgeRequest,
@@ -186,7 +187,7 @@ fn load_glb_bytes(model_id: &str, source: &GlbSource) -> Result<Vec<u8>, Runtime
     }
 }
 
-fn is_glb_path(path: &PathBuf) -> bool {
+fn is_glb_path(path: &Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
         .map(|ext| ext.eq_ignore_ascii_case("glb"))

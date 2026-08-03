@@ -53,8 +53,8 @@ fn make_matrix(n: usize) -> (Vec<Vec<f64>>, Vec<f64>) {
     let mut a = vec![vec![0.0; n]; n];
     let mut b = vec![0.0; n];
     for i in 0..n {
-        for j in 0..n {
-            a[i][j] = if i == j {
+        for (j, cell) in a[i].iter_mut().enumerate() {
+            *cell = if i == j {
                 4.0 + (i as f64) * 0.01
             } else {
                 1.0 / (1.0 + ((i as f64) - (j as f64)).abs())

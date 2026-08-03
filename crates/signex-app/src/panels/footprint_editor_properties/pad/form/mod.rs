@@ -17,7 +17,7 @@ use iced::widget::{Column, container, pick_list, row, text, text_input};
 use iced::{Color, Length, Theme};
 
 use super::super::super::{
-    CollapsedSections, FootprintEditorPanelContext, FootprintPadSummary, PanelMsg,
+    CollapsedSections, FootprintEditorPanelContext, FootprintPadSummary, PanelMsg, PanelPalette,
 };
 use super::super::{fp_is_collapsed, props_section_header};
 
@@ -320,11 +320,15 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties
     values: &PadFormValues,
     target: PadEditTarget,
     placement_paused: bool,
-    muted: Color,
-    primary: Color,
-    border_c: Color,
+    palette: PanelPalette,
     collapsed_sections: &'a CollapsedSections,
 ) -> Column<'a, PanelMsg> {
+    let PanelPalette {
+        muted,
+        primary,
+        border: border_c,
+        ..
+    } = palette;
     col = col.push(props_section_header(
         "Properties",
         "fp_pad_properties",
@@ -444,11 +448,15 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_featur
     mut col: Column<'a, PanelMsg>,
     values: &PadFormValues,
     target: PadEditTarget,
-    muted: Color,
-    primary: Color,
-    border_c: Color,
+    palette: PanelPalette,
     collapsed_sections: &'a CollapsedSections,
 ) -> Column<'a, PanelMsg> {
+    let PanelPalette {
+        muted,
+        primary,
+        border: border_c,
+        ..
+    } = palette;
     col = col.push(props_section_header(
         "Pad Features",
         "fp_pad_features",

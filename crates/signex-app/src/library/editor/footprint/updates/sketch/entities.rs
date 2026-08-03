@@ -62,7 +62,7 @@ fn place_point(editor: &mut crate::app::FootprintEditorState, x_mm: f64, y_mm: f
     let mut entity = Entity::new(id, plane_id, EntityKind::Point { x: x_mm, y: y_mm });
     entity.construction = editor.state.construction_mode;
     editor.with_parts(|state, primitive| {
-        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddEntity(entity));
+        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::add_entity(entity));
     });
     editor.canvas_cache.clear();
     editor.dirty = true;

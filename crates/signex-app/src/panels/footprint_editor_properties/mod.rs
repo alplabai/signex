@@ -9,7 +9,9 @@
 use iced::widget::{Column, container, row, scrollable, text};
 use iced::{Color, Element, Length};
 
-use super::{CollapsedSections, FootprintEditorPanelContext, FootprintModeKind, PanelMsg};
+use super::{
+    CollapsedSections, FootprintEditorPanelContext, FootprintModeKind, PanelMsg, PanelPalette,
+};
 use pad::{
     PadEditTarget, PadFormValues, render_pad_form_pad_features, render_pad_form_pad_stack,
     render_pad_form_properties,
@@ -46,19 +48,21 @@ mod subforms;
 ///    and the most recent solve summary when a sketch exists.
 pub(super) fn view_footprint_editor_properties<'a>(
     fp: &'a FootprintEditorPanelContext,
-    muted: Color,
-    primary: Color,
-    border_c: Color,
-    input_bg: Color,
-    input_bdr: Color,
+    palette: PanelPalette,
     custom_filter_presets: Vec<crate::active_bar::CustomFilterPreset>,
     active_custom_filter_tab: usize,
     collapsed_sections: &'a CollapsedSections,
-    accent_c: Color,
-    tag_hover: Color,
     unit: signex_types::coord::Unit,
-    seg_hover: Color,
 ) -> Element<'a, PanelMsg> {
+    let PanelPalette {
+        muted,
+        primary,
+        border: border_c,
+        input_bg,
+        input_bdr,
+        accent: accent_c,
+        ..
+    } = palette;
     let mode_label = match fp.mode_kind {
         FootprintModeKind::Pads => "Pads",
         FootprintModeKind::Sketch => "Sketch",
@@ -115,9 +119,7 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 &values,
                 target,
                 false,
-                muted,
-                primary,
-                border_c,
+                palette,
                 collapsed_sections,
             );
             col = props_kv_row(
@@ -132,21 +134,11 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 col,
                 &values,
                 target,
-                muted,
-                primary,
-                border_c,
+                palette,
                 collapsed_sections,
                 &fp.selected_pad_shape_params,
             );
-            col = render_pad_form_pad_features(
-                col,
-                &values,
-                target,
-                muted,
-                primary,
-                border_c,
-                collapsed_sections,
-            );
+            col = render_pad_form_pad_features(col, &values, target, palette, collapsed_sections);
             // v0.21 — "Edit in Sketch" jump button. Visible only
             // when the pad has a backing sketch entity (auto-
             // minted on first Sketch-mode entry or placed via
@@ -186,30 +178,11 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 &values,
                 target,
                 fp.placement_paused,
-                muted,
-                primary,
-                border_c,
+                palette,
                 collapsed_sections,
             );
-            col = render_pad_form_pad_stack(
-                col,
-                &values,
-                target,
-                muted,
-                primary,
-                border_c,
-                collapsed_sections,
-                &[],
-            );
-            col = render_pad_form_pad_features(
-                col,
-                &values,
-                target,
-                muted,
-                primary,
-                border_c,
-                collapsed_sections,
-            );
+            col = render_pad_form_pad_stack(col, &values, target, palette, collapsed_sections, &[]);
+            col = render_pad_form_pad_features(col, &values, target, palette, collapsed_sections);
             return scrollable(container(col).padding(iced::Padding {
                 top: 0.0,
                 right: 12.0,
@@ -231,29 +204,12 @@ pub(super) fn view_footprint_editor_properties<'a>(
         col,
         fp,
         mode_label,
-        muted,
-        primary,
-        border_c,
-        input_bg,
-        input_bdr,
+        palette,
         custom_filter_presets,
         active_custom_filter_tab,
         collapsed_sections,
-        accent_c,
-        tag_hover,
     );
-    col = sections::view_sections(
-        col,
-        fp,
-        muted,
-        primary,
-        border_c,
-        input_bg,
-        input_bdr,
-        collapsed_sections,
-        unit,
-        seg_hover,
-    );
+    col = sections::view_sections(col, fp, palette, collapsed_sections, unit);
     col = render_fp_settings_and_hint(col, fp, muted, primary, border_c, collapsed_sections);
 
     // v0.25 polish — see early-return scrollable wrappers above for

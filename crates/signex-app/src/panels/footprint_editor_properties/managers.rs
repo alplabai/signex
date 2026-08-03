@@ -4,7 +4,7 @@
 use iced::widget::{Column, Space, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
-use super::super::{FootprintEditorPanelContext, PanelMsg};
+use super::super::{FootprintEditorPanelContext, PanelMsg, PanelPalette};
 
 /// v0.18.21 — Grid Manager table. One row per `GridDef`. The active
 /// row is highlighted; clicking another row activates it (mirrors its
@@ -263,14 +263,17 @@ pub(super) fn render_guide_manager<'a>(
 pub(super) fn render_other_section<'a>(
     mut col: Column<'a, PanelMsg>,
     _fp: &'a FootprintEditorPanelContext,
-    primary: Color,
-    muted: Color,
-    _border_c: Color,
-    input_bg: Color,
-    input_bdr: Color,
+    palette: PanelPalette,
     unit: signex_types::coord::Unit,
-    seg_hover: Color,
 ) -> Column<'a, PanelMsg> {
+    let PanelPalette {
+        muted,
+        primary,
+        input_bg,
+        input_bdr,
+        seg_hover,
+        ..
+    } = palette;
     use signex_types::coord::Unit;
     // Units row — mm/mils segmented selector (Altium parity). Reuses
     // the schematic Properties panel's `seg_btn` widget so the chrome

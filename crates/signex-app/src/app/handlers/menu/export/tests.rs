@@ -22,7 +22,7 @@
 //! 5. the loose page set is sorted, not `HashMap`-ordered.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use signex_types::schematic::{ChildSheet, FillType, Point, SchematicSheet};
 use uuid::Uuid;
@@ -234,13 +234,13 @@ fn workspace(dir: &str, listed: &[&str]) -> DocumentState {
 }
 
 /// Open `path` as a live engine whose sheet references `children`.
-fn open(ds: &mut DocumentState, path: &PathBuf, children: &[&str]) {
+fn open(ds: &mut DocumentState, path: &Path, children: &[&str]) {
     open_with(ds, path, schematic(children));
 }
 
-pub(crate) fn open_with(ds: &mut DocumentState, path: &PathBuf, sheet: SchematicSheet) {
+pub(crate) fn open_with(ds: &mut DocumentState, path: &Path, sheet: SchematicSheet) {
     let engine = signex_engine::Engine::new(sheet).expect("engine");
-    ds.engines.insert(path.clone(), engine);
+    ds.engines.insert(path.to_path_buf(), engine);
 }
 
 fn page_paths(ctx: &signex_output::ExportContext) -> Vec<PathBuf> {

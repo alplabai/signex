@@ -10,6 +10,16 @@
 //! Tracks current stroke colour/width to avoid redundant ops. Coordinates in
 //! PDF points (bottom-left origin).
 
+/// An RGB colour (each channel 0.0-1.0). Groups the three channels that
+/// travel together as a single fill colour — built at the `fill_rect` call
+/// site (currently reserved for the v0.9 template backgrounds/fills) instead
+/// of passed as three bare floats.
+pub struct RgbColor {
+    pub r: f32,
+    pub g: f32,
+    pub b: f32,
+}
+
 /// `PdfSurface` emits PDF content-stream operators into a buffer.
 pub struct PdfSurface {
     bytes: Vec<u8>,
@@ -100,8 +110,8 @@ impl PdfSurface {
         dead_code,
         reason = "reserved for the v0.9 template backgrounds / fills"
     )]
-    pub fn fill_rect(&mut self, x: f32, y: f32, w: f32, h: f32, r: f32, g: f32, b: f32) {
-        self.write_operator(&format!("{} {} {} rg\n", r, g, b));
+    pub fn fill_rect(&mut self, x: f32, y: f32, w: f32, h: f32, color: RgbColor) {
+        self.write_operator(&format!("{} {} {} rg\n", color.r, color.g, color.b));
         self.write_operator(&format!("{} {} {} {} re\n", x, y, w, h));
         self.write_operator("f\n");
     }

@@ -16,6 +16,20 @@ use super::helpers::{
     push_construction_point, push_line, push_point,
 };
 
+/// The recipe for cutting one chamfer off a pad's bbox: which bbox
+/// corner it replaces (index into the `[ne, se, sw, nw]` arrays),
+/// whether the user enabled that corner, the two `shape_params`
+/// sidecar keys its anchor Points get filed under, and those anchors'
+/// pad-frame positions.
+type ChamferCornerSpec = (
+    usize,
+    bool,
+    &'static str,
+    &'static str,
+    (f64, f64),
+    (f64, f64),
+);
+
 /// v0.16 — mint 4 corner Points + 4 Lines outlining a pad's bbox.
 /// Returns the corner IDs in `[ne, se, sw, nw]` order so the caller
 /// can store them on `EditorPad.corner_entity_ids` and reposition
@@ -334,7 +348,7 @@ pub(super) fn mint_chamfered_pad_geometry(
     let bbox_corners = bbox_corner_points(sketch, plane_id, pad);
 
     // ── 2. Per-corner anchor Points (only for ENABLED corners).
-    let corner_specs: [(usize, bool, &str, &str, (f64, f64), (f64, f64)); 4] = [
+    let corner_specs: [ChamferCornerSpec; 4] = [
         (
             0,
             corner_flags.top_right,

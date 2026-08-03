@@ -20,20 +20,38 @@ use crate::pad::bake_one_pad;
 use super::numbering::derive_pad_number_2d;
 use super::numbering::strip_eq_prefix;
 
+/// The grid array's declarative shape: the `(nx, ny)` count expressions
+/// stepped by `(dx, dy)` per axis, its depopulation predicate/list, and
+/// its numbering scheme. Built once per `ArrayKind::Grid` in
+/// `array::bake_arrays` and passed by reference into [`bake_grid`] —
+/// none of these fields are mutated during baking.
+pub(super) struct GridSpec<'a> {
+    pub nx_expr: &'a str,
+    pub ny_expr: &'a str,
+    pub dx_expr: &'a str,
+    pub dy_expr: &'a str,
+    pub depopulation: Option<&'a signex_sketch::array::GridDepopulation>,
+    pub numbering: &'a NumberingScheme,
+}
+
 pub(super) fn bake_grid(
     source: SketchEntityId,
-    nx_expr: &str,
-    ny_expr: &str,
-    dx_expr: &str,
-    dy_expr: &str,
-    depopulation: Option<&signex_sketch::array::GridDepopulation>,
-    numbering: &NumberingScheme,
+    spec: &GridSpec,
     params_ast: &BTreeMap<String, ExprNode>,
     sketch: &SketchData,
     solve: &FullSolveOutput,
     out: &mut Vec<LibPad>,
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
+    let GridSpec {
+        nx_expr,
+        ny_expr,
+        dx_expr,
+        dy_expr,
+        depopulation,
+        numbering,
+    } = *spec;
+
     let source_entity = match sketch.entities.iter().find(|e| e.id == source) {
         Some(e) => e,
         None => {

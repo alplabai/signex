@@ -15,6 +15,16 @@ use signex_sketch::sketch::SketchData;
 use super::super::state::FootprintEditorState;
 use super::helpers::set_point_xy;
 
+/// Where one chamfered corner's two anchor Points have to end up: the
+/// `shape_params` sidecar keys they are filed under, paired with the
+/// pad-frame positions the resolved chamfer length puts them at.
+type ChamferAnchorTargets = (&'static str, &'static str, (f64, f64), (f64, f64));
+
+/// World-mm targets for one round-rect corner Arc's three Point
+/// references, in the order the `EntityKind::Arc` stores them —
+/// `(centre, start, end)`.
+type ArcPointTargets = ((f64, f64), (f64, f64), (f64, f64));
+
 /// v0.24 Phase 3 (Track A4) — RoundRect: re-derive the
 /// `EditorPad.stack.corner_radius_pct` value from the live
 /// `corner_r_<slug>` parameter in `resolved`.
@@ -122,7 +132,7 @@ pub fn mirror_solve_to_chamfer_anchors(
         let (w, h) = pad.size_mm;
         let r = chamfer_len_mm.max(0.0).min(w.min(h) / 2.0);
 
-        let corners: [(&str, &str, (f64, f64), (f64, f64)); 4] = [
+        let corners: [ChamferAnchorTargets; 4] = [
             (
                 "chamfer_ne_anchor1",
                 "chamfer_ne_anchor2",
@@ -160,9 +170,9 @@ pub fn mirror_solve_to_chamfer_anchors(
     }
 }
 
-/// v0.24 Phase 6 — RoundRect: rewrite the per-corner Arc-centre Point
-/// + the two adjacent anchor Points so the rendered geometry matches
-/// the resolved radius.
+/// v0.24 Phase 6 — RoundRect: rewrite the per-corner Arc-centre
+/// Point + the two adjacent anchor Points so the rendered geometry
+/// matches the resolved radius.
 pub fn mirror_solve_to_round_rect_geometry(
     state: &FootprintEditorState,
     sketch: &mut SketchData,
@@ -200,7 +210,7 @@ pub fn mirror_solve_to_round_rect_geometry(
         // Pad-frame positions, taken back out through `rotation_deg` —
         // `mint` places these turned, so re-deriving them axis-aligned
         // here would un-rotate the arcs on the next solve.
-        let positions = |r: f64| -> [((f64, f64), (f64, f64), (f64, f64)); 4] {
+        let positions = |r: f64| -> [ArcPointTargets; 4] {
             let w = |p: (f64, f64)| pad.local_to_world_mm(p.0, p.1);
             [
                 ((xmax - r, ymin + r), (xmax - r, ymin), (xmax, ymin + r)), // NE

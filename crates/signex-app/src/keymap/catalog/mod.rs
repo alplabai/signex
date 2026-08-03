@@ -410,7 +410,7 @@ mod tests {
     ///     just regenerate the golden to make the test pass again.
     ///   - a command was added, or an existing one's `group`/`category`
     ///     changed on purpose. Regenerate with:
-    ///       `UPDATE_GOLDEN=1 cargo test -p signex-app command_id_surface_matches_golden_snapshot`
+    ///     `UPDATE_GOLDEN=1 cargo test -p signex-app command_id_surface_matches_golden_snapshot`
     #[test]
     fn command_id_surface_matches_golden_snapshot() {
         #[derive(serde::Serialize)]

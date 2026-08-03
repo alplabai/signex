@@ -371,7 +371,7 @@ fn make_pad_from_profile(editor: &mut crate::app::FootprintEditorState) {
         ..PadAttr::default()
     });
     editor.with_parts(|state, primitive| {
-        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddEntity(centre));
+        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::add_entity(centre));
     });
     // v0.27 — pivot the selection onto the new pad's centre
     // Point. Without this, the Role dropdown still reads

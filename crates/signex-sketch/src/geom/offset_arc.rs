@@ -27,8 +27,8 @@ use super::Point2;
 pub enum PolyElement {
     /// Straight segment from `a` to `b`.
     Line { a: Point2, b: Point2 },
-    /// Circular arc — `centre` + `radius` + `start_rad`/`end_rad`
-    /// + `sweep_ccw`. The arc's start point is at
+    /// Circular arc — `centre` + `radius` + `start_rad`/`end_rad` +
+    /// `sweep_ccw`. The arc's start point is at
     /// `(centre.x + radius·cos(start_rad), centre.y + radius·sin(start_rad))`
     /// and similar for the end. Adjacent elements must connect at
     /// these endpoints.

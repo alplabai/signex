@@ -59,11 +59,10 @@ impl ColourMap {
     )]
     pub fn map_fill_bw(&self, r: f32, g: f32, b: f32) -> (f32, f32, f32) {
         if matches!(self.mode, ColourMode::BlackAndWhite) {
-            if is_approximately_white(r, g, b) {
-                (1.0, 1.0, 1.0)
-            } else {
-                (1.0, 1.0, 1.0) // Non-white fills also become white in B&W
-            }
+            // Fills always render white in B&W mode — both the
+            // already-white case and the non-white case (e.g. a coloured
+            // copper pour) map to the same output colour.
+            (1.0, 1.0, 1.0)
         } else {
             self.map_rgb(r, g, b)
         }

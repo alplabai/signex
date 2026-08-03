@@ -72,11 +72,10 @@ pub fn solve(a: &[Vec<f64>], b: &[f64]) -> Result<Vec<f64>, LinAlgError> {
 ///      `|a[r][k]|`. If `|a[r][k]| < PIVOT_EPS`, return
 ///      [`LinAlgError::Singular`]. Swap rows `k` and `r` and
 ///      record `perm[k] = r`.
-///    - **Eliminate:** for every row `i > k`,
-///        `a[i][k] /= a[k][k]`            // store L's i-th
-///                                        // multiplier in place
-///        `a[i][j] -= a[i][k] * a[k][j]`  // for each j > k:
-///                                        // update U's submatrix
+///    - **Eliminate:** for every row `i > k`, store L's i-th
+///      multiplier in place with `a[i][k] /= a[k][k]`, then for
+///      every `j > k` update U's submatrix with
+///      `a[i][j] -= a[i][k] * a[k][j]`.
 pub fn lu_decompose(a: &mut [Vec<f64>]) -> Result<Vec<usize>, LinAlgError> {
     let n = a.len();
     for row in a.iter() {
@@ -92,8 +91,8 @@ pub fn lu_decompose(a: &mut [Vec<f64>]) -> Result<Vec<usize>, LinAlgError> {
         // the largest absolute value.
         let mut pivot_row = k;
         let mut pivot_mag = a[k][k].abs();
-        for r in (k + 1)..n {
-            let m = a[r][k].abs();
+        for (r, row) in a.iter().enumerate().skip(k + 1) {
+            let m = row[k].abs();
             if m > pivot_mag {
                 pivot_mag = m;
                 pivot_row = r;
@@ -114,9 +113,11 @@ pub fn lu_decompose(a: &mut [Vec<f64>]) -> Result<Vec<usize>, LinAlgError> {
         for i in (k + 1)..n {
             let factor = a[i][k] / pivot;
             a[i][k] = factor;
-            for j in (k + 1)..n {
-                let akj = a[k][j];
-                a[i][j] -= factor * akj;
+            let (top, bottom) = a.split_at_mut(i);
+            let row_k = &top[k];
+            let row_i = &mut bottom[0];
+            for (a_ij, &a_kj) in row_i.iter_mut().zip(row_k.iter()).skip(k + 1) {
+                *a_ij -= factor * a_kj;
             }
         }
     }
@@ -175,8 +176,7 @@ pub fn lu_solve(lu: &[Vec<f64>], perm: &[usize], b: &[f64]) -> Result<Vec<f64>, 
 
     // Apply the pivot trail to b in the same order as decomposition.
     let mut x = b.to_vec();
-    for k in 0..n {
-        let r = perm[k];
+    for (k, &r) in perm.iter().enumerate() {
         if r != k {
             x.swap(k, r);
         }
@@ -293,8 +293,8 @@ impl QrDecomposition {
         for k in 0..steps {
             // 1. Compute |x| for the sub-vector x = r[k..m][k].
             let mut norm_sq: f64 = 0.0;
-            for i in k..m {
-                norm_sq += r[i][k] * r[i][k];
+            for row in r.iter().skip(k) {
+                norm_sq += row[k] * row[k];
             }
             let norm = norm_sq.sqrt();
 
@@ -318,8 +318,8 @@ impl QrDecomposition {
 
             // 4. Compute v · v (used for β denominator).
             let mut vtv: f64 = 0.0;
-            for i in k..m {
-                vtv += r[i][k] * r[i][k];
+            for row in r.iter().skip(k) {
+                vtv += row[k] * row[k];
             }
             if vtv < QR_ZERO_EPS {
                 // Defensive: x was non-zero but v collapsed (only
@@ -335,12 +335,12 @@ impl QrDecomposition {
             //    by construction: r[k][k] = α, r[k+1..m][k] = 0.
             for j in (k + 1)..n {
                 let mut beta: f64 = 0.0;
-                for i in k..m {
-                    beta += r[i][k] * r[i][j];
+                for row in r.iter().skip(k) {
+                    beta += row[k] * row[j];
                 }
                 let factor = 2.0 * beta / vtv;
-                for i in k..m {
-                    r[i][j] -= factor * r[i][k];
+                for row in r.iter_mut().skip(k) {
+                    row[j] -= factor * row[k];
                 }
             }
 
@@ -349,8 +349,8 @@ impl QrDecomposition {
             //    achieves analytically; we do it explicitly so
             //    rank-counting reads the clean triangular factor.
             r[k][k] = alpha;
-            for i in (k + 1)..m {
-                r[i][k] = 0.0;
+            for row in r.iter_mut().skip(k + 1) {
+                row[k] = 0.0;
             }
         }
 

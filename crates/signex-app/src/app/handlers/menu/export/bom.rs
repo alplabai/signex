@@ -158,8 +158,19 @@ impl Signex {
                 && dest < preview.options.columns.len()
             {
                 let col = preview.options.columns.remove(src);
-                let insert_at = if src < dest { dest } else { dest };
-                let insert_at = insert_at.min(preview.options.columns.len());
+                // `dest` is an index in the *pre-removal* column list, and
+                // both drag directions deliberately reuse it unchanged
+                // after the `remove(src)` shift:
+                //   - dragging right (src < dest): dest's own index slid
+                //     down to `dest - 1`, so inserting at `dest` drops the
+                //     column immediately *after* the header it was
+                //     released on.
+                //   - dragging left (src > dest): dest kept its index, so
+                //     inserting at `dest` drops the column immediately
+                //     *before* that header.
+                // i.e. the insertion point always sits on the edge the
+                // drag approached from.
+                let insert_at = dest.min(preview.options.columns.len());
                 preview.options.columns.insert(insert_at, col);
                 // Sort spec follows the moved column. If the
                 // sort was on a different column, indices may

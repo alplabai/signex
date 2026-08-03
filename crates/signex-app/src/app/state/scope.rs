@@ -101,9 +101,7 @@ pub(crate) fn project_owning_sheet<'a>(
     let mut seen: HashSet<String> = HashSet::new();
     let mut current = path.to_path_buf();
     while seen.insert(path_key(&current)) {
-        let Some(parent) = parents.get(&path_key(&current)) else {
-            return None;
-        };
+        let parent = parents.get(&path_key(&current))?;
         if let Some(project) = project_listing_sheet(projects, parent) {
             return Some(project);
         }

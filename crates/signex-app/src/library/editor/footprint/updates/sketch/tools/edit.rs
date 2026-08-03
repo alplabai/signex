@@ -335,7 +335,7 @@ fn fillet_second_click(
     ];
     for ent in entities {
         editor.with_parts(|state, primitive| {
-            apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddEntity(ent));
+            apply_sketch_edit_with_warnings(state, primitive, SketchEdit::add_entity(ent));
         });
     }
     // Rewrite the two source Lines so the corner
@@ -522,7 +522,7 @@ fn trim(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
                 apply_sketch_edit_with_warnings(
                     state,
                     primitive,
-                    SketchEdit::AddEntity(ctx.flag(Entity::new(
+                    SketchEdit::add_entity(ctx.flag(Entity::new(
                         new_pid,
                         ctx.plane_id,
                         EntityKind::Point {
@@ -550,7 +550,7 @@ fn trim(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
                 apply_sketch_edit_with_warnings(
                     state,
                     primitive,
-                    SketchEdit::AddEntity(ctx.flag(Entity::new(
+                    SketchEdit::add_entity(ctx.flag(Entity::new(
                         new_pid,
                         ctx.plane_id,
                         EntityKind::Point {
@@ -624,7 +624,7 @@ fn trim(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
                 )),
             ] {
                 editor.with_parts(|state, primitive| {
-                    apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddEntity(ent));
+                    apply_sketch_edit_with_warnings(state, primitive, SketchEdit::add_entity(ent));
                 });
             }
             if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {

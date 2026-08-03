@@ -145,7 +145,6 @@ impl Signex {
                     SelectionMode::Inside => SelectionMode::Touching,
                     SelectionMode::Touching => SelectionMode::Inside,
                     SelectionMode::Single => SelectionMode::Inside,
-                    _ => SelectionMode::Inside,
                 };
                 crate::diagnostics::log_info(format!(
                     "Selection mode: {:?}",
@@ -170,10 +169,7 @@ impl Signex {
                 }
                 self.document_state.history.loading = false;
                 self.document_state.history.mode = crate::panels::history::HistoryRenderMode::Ready;
-                self.document_state.history.entries = match result {
-                    Ok(entries) => entries,
-                    Err(_) => Vec::new(),
-                };
+                self.document_state.history.entries = result.unwrap_or_default();
                 self.document_state.panel_ctx.history = self.document_state.history.clone();
                 Task::none()
             }

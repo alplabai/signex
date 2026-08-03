@@ -12,6 +12,12 @@ use crate::library::editor::footprint::state::{PlacementInputKind, SketchTool, T
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 
+/// What the Tangent Arc's second click resolves out of the sketch:
+/// the stashed first endpoint's world-mm position, the clicked end
+/// position, and — when one exists — the Line the arc has to leave
+/// tangentially, as that Line's id paired with its far endpoint.
+type TangentArcPick = ((f64, f64), (f64, f64), Option<(SketchEntityId, (f64, f64))>);
+
 pub(super) fn apply(
     editor: &mut crate::app::FootprintEditorState,
     ctx: &ToolClickCtx,
@@ -53,7 +59,7 @@ fn line(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
                 },
             ));
             editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddEntity(line));
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::add_entity(line));
             });
 
             // v0.22 Phase A2 — Auto-Horizontal/Vertical
@@ -169,7 +175,7 @@ fn circle(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
                 EntityKind::Circle { center, radius: r },
             ));
             editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddEntity(circle));
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::add_entity(circle));
             });
             editor.state.tool_pending = ToolPending::Idle;
         }
@@ -266,7 +272,7 @@ fn rounded_rectangle(editor: &mut crate::app::FootprintEditorState, ctx: &ToolCl
                         apply_sketch_edit_with_warnings(
                             state,
                             primitive,
-                            SketchEdit::AddEntity(ctx.flag(Entity::new(
+                            SketchEdit::add_entity(ctx.flag(Entity::new(
                                 id,
                                 ctx.plane_id,
                                 EntityKind::Point { x, y },
@@ -286,7 +292,7 @@ fn rounded_rectangle(editor: &mut crate::app::FootprintEditorState, ctx: &ToolCl
                         apply_sketch_edit_with_warnings(
                             state,
                             primitive,
-                            SketchEdit::AddEntity(ctx.flag(Entity::new(
+                            SketchEdit::add_entity(ctx.flag(Entity::new(
                                 line_id,
                                 ctx.plane_id,
                                 EntityKind::Line { start: s, end: e },
@@ -307,7 +313,7 @@ fn rounded_rectangle(editor: &mut crate::app::FootprintEditorState, ctx: &ToolCl
                         apply_sketch_edit_with_warnings(
                             state,
                             primitive,
-                            SketchEdit::AddEntity(ctx.flag(Entity::new(
+                            SketchEdit::add_entity(ctx.flag(Entity::new(
                                 arc_id,
                                 ctx.plane_id,
                                 EntityKind::Arc {
@@ -379,10 +385,18 @@ fn rectangle(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) 
                     EntityKind::Point { x: x0, y: y1 },
                 ));
                 editor.with_parts(|state, primitive| {
-                    apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddEntity(mid_a));
+                    apply_sketch_edit_with_warnings(
+                        state,
+                        primitive,
+                        SketchEdit::add_entity(mid_a),
+                    );
                 });
                 editor.with_parts(|state, primitive| {
-                    apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddEntity(mid_b));
+                    apply_sketch_edit_with_warnings(
+                        state,
+                        primitive,
+                        SketchEdit::add_entity(mid_b),
+                    );
                 });
                 // Now the 4 lines: first → mid_a →
                 // opposite → mid_b → first.
@@ -402,7 +416,7 @@ fn rectangle(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) 
                         apply_sketch_edit_with_warnings(
                             state,
                             primitive,
-                            SketchEdit::AddEntity(line),
+                            SketchEdit::add_entity(line),
                         );
                     });
                 }
@@ -443,7 +457,7 @@ fn arc(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
                 },
             ));
             editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddEntity(arc));
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::add_entity(arc));
             });
             editor.state.tool_pending = ToolPending::Idle;
         }
@@ -520,7 +534,7 @@ fn edge_arc(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
                         apply_sketch_edit_with_warnings(
                             state,
                             primitive,
-                            SketchEdit::AddEntity(center),
+                            SketchEdit::add_entity(center),
                         );
                     });
                     let arc_id = SketchEntityId::new();
@@ -538,7 +552,7 @@ fn edge_arc(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
                         apply_sketch_edit_with_warnings(
                             state,
                             primitive,
-                            SketchEdit::AddEntity(arc),
+                            SketchEdit::add_entity(arc),
                         );
                     });
                 }
@@ -585,11 +599,7 @@ fn tangent_arc(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx
         ToolPending::TangentArcFirst { first } => {
             // Look up the first endpoint position +
             // any Line ending at `first`.
-            let (first_pos, end_pos, incident_line): (
-                (f64, f64),
-                (f64, f64),
-                Option<(SketchEntityId, (f64, f64))>,
-            ) = {
+            let (first_pos, end_pos, incident_line): TangentArcPick = {
                 let sketch_ref = match editor.primitive().sketch.as_ref() {
                     Some(s) => s,
                     None => {
@@ -733,7 +743,7 @@ fn tangent_arc(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx
                 EntityKind::Point { x: cx, y: cy },
             ));
             editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddEntity(centre));
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::add_entity(centre));
             });
 
             // Mint the Arc entity. Sweep direction
@@ -768,7 +778,7 @@ fn tangent_arc(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx
                 },
             ));
             editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddEntity(arc));
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::add_entity(arc));
             });
 
             // Add the TangentLineArc constraint when

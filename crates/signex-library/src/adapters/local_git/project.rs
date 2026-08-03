@@ -243,12 +243,10 @@ impl LocalGitProjectAdapter {
         // pathological hangs; if more matches exist they'll surface
         // on a subsequent call with a higher `limit`.
         let max_visited = limit.saturating_mul(10).max(limit);
-        let mut visited = 0usize;
-        for oid_res in walk {
+        for (visited, oid_res) in walk.enumerate() {
             if entries.len() >= limit || visited >= max_visited {
                 break;
             }
-            visited += 1;
             let oid =
                 oid_res.map_err(|e| LibraryError::Backend(format!("git revwalk oid: {e}")))?;
             let commit = repo

@@ -97,11 +97,15 @@ pub const PROPERTY_CONTROL_PORTION: u16 = 5;
 pub const PROPERTY_ROW_PAD_X: u16 = 6;
 
 pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
-    let muted = theme_ext::text_secondary(&ctx.tokens);
-    let primary = theme_ext::text_primary(&ctx.tokens);
-    let border_c = theme_ext::border_color(&ctx.tokens);
-    let input_bg = crate::styles::ti(ctx.tokens.selection);
-    let input_bdr = crate::styles::ti(ctx.tokens.accent);
+    let palette = PanelPalette::from_tokens(&ctx.tokens);
+    let PanelPalette {
+        muted,
+        primary,
+        border: border_c,
+        input_bg,
+        input_bdr,
+        ..
+    } = palette;
 
     // Library Browser tab — Properties panel surfaces the selected
     // row's metadata + Pick Symbol / Pick Footprint. F15 (2026-05-03
@@ -127,31 +131,13 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     // properties; Sketch-mode entity selected → sketch entity
     // properties; nothing selected → footprint summary + solve stats.
     if let Some(fp) = ctx.footprint_editor.as_ref() {
-        let accent_c = crate::styles::ti(ctx.tokens.accent);
-        let tag_hover = {
-            let c = crate::styles::ti(ctx.tokens.accent);
-            Color {
-                r: (c.r * 1.3).min(1.0),
-                g: (c.g * 1.3).min(1.0),
-                b: (c.b * 1.3).min(1.0),
-                ..c
-            }
-        };
-        let seg_hover = crate::styles::ti(ctx.tokens.hover);
         return view_footprint_editor_properties(
             fp,
-            muted,
-            primary,
-            border_c,
-            input_bg,
-            input_bdr,
+            palette,
             ctx.custom_filter_presets.clone(),
             ctx.active_custom_filter_tab,
             &ctx.collapsed_sections,
-            accent_c,
-            tag_hover,
             ctx.unit,
-            seg_hover,
         );
     }
 
@@ -294,9 +280,6 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     scrollable(col).width(Length::Fill).into()
 }
-
-/// Altium-style context-aware properties for a single selected element.
-/// Shows EDITABLE fields for symbols, labels, and text notes.
 
 /// Pre-placement properties — shown when TAB pressed during a placement tool.
 fn view_pre_placement<'a>(

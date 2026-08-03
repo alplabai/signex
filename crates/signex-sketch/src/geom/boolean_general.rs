@@ -197,7 +197,7 @@ fn first_corner(verts: &[Vertex], start: usize) -> Option<usize> {
 /// `inside` before the flip, so an intersection is an "entry"
 /// when the walker is OUTSIDE the other polygon and is about to
 /// step inside.
-fn classify_entries(verts: &mut Vec<Vertex>, start: usize, mut inside: bool) {
+fn classify_entries(verts: &mut [Vertex], start: usize, mut inside: bool) {
     let mut cur = start;
     let total = verts.len();
     for _ in 0..total {
@@ -237,8 +237,8 @@ fn is_walk_start(verts: &[Vertex], idx: usize, op: BoolOp) -> bool {
 /// output order. Marks every intersection visited along the way
 /// (in BOTH rings).
 fn walk_one_ring(
-    subject: &mut Vec<Vertex>,
-    clip: &mut Vec<Vertex>,
+    subject: &mut [Vertex],
+    clip: &mut [Vertex],
     start: usize,
     op: BoolOp,
 ) -> Vec<Point2> {

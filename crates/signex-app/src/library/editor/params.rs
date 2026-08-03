@@ -666,7 +666,7 @@ mod tests {
             }
         }
         // Parse failed → no commit, parameter stays absent.
-        assert!(params.get("tcr").is_none());
+        assert!(!params.contains_key("tcr"));
         // Buffer still carries the typed text so the user can fix it.
         assert_eq!(buffer.get("tcr").map(String::as_str), Some("12.5e"));
     }

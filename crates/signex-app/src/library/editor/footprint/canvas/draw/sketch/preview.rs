@@ -21,6 +21,7 @@ use crate::library::editor::footprint::state::FootprintEditorState;
 ///   (cursor will become the start endpoint).
 /// - **Arc tool, after click 2** → ghost arc from start through the
 ///   cursor angle, around the centre.
+///
 /// v0.27 — Fusion-style dimension pill chrome. Centred at
 /// `centre` (screen coords), draws a soft grey rounded-look
 /// rectangle behind a centred white label. Used by the live

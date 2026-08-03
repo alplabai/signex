@@ -365,7 +365,12 @@ mod tests {
             "{measured} vs {expected}"
         );
         // And the Custom slot is contributing its declared width, not a
-        // button's — the bug that shifted every panel ~13 px right.
-        assert!(DIM_INPUT_W > BTN_SIZE);
+        // button's — the bug that shifted every panel ~13 px right. Both
+        // sides are constants, so this is a compile-time guard: were the
+        // two widths ever made equal the assertion above would still pass
+        // while measuring a button, and the test would stop proving
+        // anything. Checked in a `const` block so that regression breaks
+        // the build rather than waiting for a test run.
+        const { assert!(DIM_INPUT_W > BTN_SIZE) };
     }
 }

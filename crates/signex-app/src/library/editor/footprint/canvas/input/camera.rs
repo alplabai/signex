@@ -80,9 +80,7 @@ impl FootprintCanvas<'_> {
             mouse::ScrollDelta::Lines { y, .. } => *y,
             mouse::ScrollDelta::Pixels { y, .. } => *y / 50.0,
         };
-        let Some(cursor_pos) = cursor.position_in(bounds) else {
-            return None;
-        };
+        let cursor_pos = cursor.position_in(bounds)?;
         if scroll_y == 0.0 {
             return None;
         }

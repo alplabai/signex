@@ -29,13 +29,18 @@ use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 
+/// One stock footprint to emit: the `.snxfpt` file name it is written
+/// to under `assets/stock-library/footprints/`, paired with the builder
+/// that authors it.
+type StockFootprint = (&'static str, fn() -> Footprint);
+
 fn main() -> Result<(), Box<dyn Error>> {
     let dir = Path::new("assets/stock-library/footprints");
     std::fs::create_dir_all(dir)?;
 
     let mut summary: Vec<String> = Vec::new();
 
-    let cases: [(&str, fn() -> Footprint); 5] = [
+    let cases: [StockFootprint; 5] = [
         ("SOIC-8.snxfpt", build_soic8),
         ("QFN-16.snxfpt", build_qfn16),
         ("R0805.snxfpt", build_r0805),

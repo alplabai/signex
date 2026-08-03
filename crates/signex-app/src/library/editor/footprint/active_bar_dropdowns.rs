@@ -21,7 +21,7 @@ use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 
 use crate::icons as ic;
 use crate::library::editor::footprint::state::{
-    FpActiveBarMenu, PadsTool, SelectionFilterKind, SketchTool, SnapSubTab, SnappingMode,
+    FpActiveBarMenu, PadsTool, SelectionFilterKind, SketchTool, SnappingMode,
 };
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::panels::SnapOptionFlag;
@@ -324,7 +324,6 @@ fn filter_entries(
 }
 
 fn snap_entries(state: &FootprintEditorState, path: PathBuf) -> Vec<DropdownEntry<LibraryMessage>> {
-    let _ = SnapSubTab::Grids; // silence unused-import lint when nothing references it
     let opts = state.snap_options;
     let mk_mode = |label: &'static str, mode: SnappingMode| -> DropdownItem<LibraryMessage> {
         DropdownItem::new(

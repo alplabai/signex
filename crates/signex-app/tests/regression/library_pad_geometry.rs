@@ -575,11 +575,11 @@ fn reverse_mirror_updates_pad_stack_corner_radius_pct() {
 ///     straight edges)
 ///   - 2 Arc-centre Points (offset inward from the short-axis edges
 ///     by half the short axis)
-///   = 11 Points
+///     = 11 Points
 ///   + 2 long-axis Lines + 2 short-axis Arcs = 15 entities
-/// `pad.shape_params` records `"width" -> width_<slug>` and
-/// `"height" -> height_<slug>` so the Properties panel can surface
-/// both as editable rows.
+///     `pad.shape_params` records `"width" -> width_<slug>` and
+///     `"height" -> height_<slug>` so the Properties panel can surface
+///     both as editable rows.
 #[test]
 fn mirror_add_oval_pad_mints_2_arcs_2_lines_with_w_and_h_params() {
     use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;

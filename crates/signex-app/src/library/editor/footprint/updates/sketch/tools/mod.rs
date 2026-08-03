@@ -447,7 +447,7 @@ fn resolve_click_point(
                 },
             ));
             editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddEntity(entity));
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::add_entity(entity));
             });
             let constraint = Constraint {
                 id: ConstraintId::new(),
@@ -477,7 +477,7 @@ fn resolve_click_point(
                 },
             ));
             editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddEntity(entity));
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::add_entity(entity));
             });
             id
         }

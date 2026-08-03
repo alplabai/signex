@@ -168,8 +168,10 @@ mod tests {
 
     #[test]
     fn bake_keepout_single_kind_routing_maps_to_tracks() {
-        let mut kinds = KeepoutKinds::default();
-        kinds.no_routing = true;
+        let kinds = KeepoutKinds {
+            no_routing: true,
+            ..KeepoutKinds::default()
+        };
         let attr = KeepoutAttr {
             layer: SignexLayer::TopCopper,
             kinds,
@@ -187,9 +189,11 @@ mod tests {
 
     #[test]
     fn bake_keepout_multiple_kinds_maps_to_all() {
-        let mut kinds = KeepoutKinds::default();
-        kinds.no_routing = true;
-        kinds.no_vias = true;
+        let kinds = KeepoutKinds {
+            no_routing: true,
+            no_vias: true,
+            ..KeepoutKinds::default()
+        };
         let attr = KeepoutAttr {
             layer: SignexLayer::BottomCopper,
             kinds,
@@ -218,8 +222,10 @@ mod tests {
 
     #[test]
     fn bake_keepout_pours_maps_to_copper() {
-        let mut kinds = KeepoutKinds::default();
-        kinds.no_pours = true;
+        let kinds = KeepoutKinds {
+            no_pours: true,
+            ..KeepoutKinds::default()
+        };
         let attr = KeepoutAttr {
             layer: SignexLayer::TopCopper,
             kinds,

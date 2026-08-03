@@ -2,28 +2,28 @@ use iced::widget::{Column, button, container, row, text, text_input};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
 use super::super::{
-    CollapsedSections, FootprintEditorPanelContext, FootprintModeKind, PanelMsg, SnapOptionFlag,
+    CollapsedSections, FootprintEditorPanelContext, FootprintModeKind, PanelMsg, PanelPalette,
+    SnapOptionFlag,
 };
 use super::managers::{render_grid_manager, render_other_section};
 use super::snap_options::render_snapping_mode_row;
 use super::{fp_is_collapsed, props_kv_row, props_section_header};
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "10 arguments: the section builder reads ten independent slices of editor state"
-)]
 pub(super) fn view_sections<'a>(
     mut col: Column<'a, PanelMsg>,
     fp: &'a FootprintEditorPanelContext,
-    muted: Color,
-    primary: Color,
-    border_c: Color,
-    input_bg: Color,
-    input_bdr: Color,
+    palette: PanelPalette,
     collapsed_sections: &'a CollapsedSections,
     unit: signex_types::coord::Unit,
-    seg_hover: Color,
 ) -> Column<'a, PanelMsg> {
+    let PanelPalette {
+        muted,
+        primary,
+        border: border_c,
+        input_bg,
+        input_bdr,
+        ..
+    } = palette;
     // Track no-selection state so the v0.18.13 Library Options
     // sections (Grid Manager / Guide Manager / Other) only render
     // in the empty-canvas Properties body.
@@ -279,9 +279,7 @@ pub(super) fn view_sections<'a>(
             border_c,
         ));
         if !fp_is_collapsed("fp_other", collapsed_sections) {
-            col = render_other_section(
-                col, fp, primary, muted, border_c, input_bg, input_bdr, unit, seg_hover,
-            );
+            col = render_other_section(col, fp, palette, unit);
         }
     }
 

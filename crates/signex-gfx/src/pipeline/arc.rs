@@ -128,10 +128,12 @@ impl ArcPipeline {
             &mut self.instance_buffer,
             &mut self.instance_capacity,
             arcs.len(),
-            std::mem::size_of::<Arc>(),
-            "signex_gfx_arc_instances",
-            wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            device.limits().max_buffer_size,
+            &super::growth::GrowthParams {
+                elem_size: std::mem::size_of::<Arc>(),
+                label: "signex_gfx_arc_instances",
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                max_buffer_size: device.limits().max_buffer_size,
+            },
         );
         self.instance_count = writable as u32;
 

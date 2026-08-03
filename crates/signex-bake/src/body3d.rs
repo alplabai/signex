@@ -254,8 +254,10 @@ mod tests {
         // bakes, offset_z stays at the prior value.
         let data = sketch_with_body_top_rectangle("(((bad");
         let solved = solve(&data);
-        let mut body = Body3D::default();
-        body.offset_z_mm = 7.5; // sentinel
+        let mut body = Body3D {
+            offset_z_mm: 7.5, // sentinel
+            ..Body3D::default()
+        };
         let mut warnings = Vec::new();
         bake_body3d(&data, &solved, &HashMap::new(), &mut body, &mut warnings).unwrap();
         assert!(body.outline.is_some(), "outline should still bake");

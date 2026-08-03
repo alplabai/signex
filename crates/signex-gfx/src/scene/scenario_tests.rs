@@ -114,58 +114,57 @@ fn outline_only_rule_area() -> GpuPolygon {
 /// an active selection/highlight and ERC markers hands to both the CPU
 /// canvas renderer and the GPU scene shader.
 fn build_full_board_scene() -> Scene {
-    let mut scene = Scene::default();
-
-    scene.lines = vec![
-        solid_line(0.0, 0.0, 10.0, 0.0),
-        solid_line(0.0, 5.0, 10.0, 5.0),
-        dashed_line(0.0, 10.0, 10.0, 10.0),
-    ];
-    scene.circles = vec![filled_circle(0.0, 0.0, 1.0), outline_circle(5.0, 5.0, 1.0)];
-    scene.arcs = vec![Arc {
-        center: [0.0, 0.0],
-        radius: 3.0,
-        start_angle: 0.0,
-        end_angle: std::f32::consts::FRAC_PI_2,
-        width: 0.2,
-        color: [0.5, 0.5, 0.5, 1.0],
-        _pad: [0.0; 3],
-    }];
-    scene.polygons = vec![
-        convex_filled_pad(),
-        concave_zone(),
-        filled_and_stroked_polygon(),
-        outline_only_rule_area(),
-    ];
-    scene.texts = vec![TextItem {
-        content: "R1".to_string(),
-        position: [1.0, 1.0],
-        size_mm: 1.0,
-        color: [1.0, 1.0, 1.0, 1.0],
-        bold: false,
-        italic: false,
-        rotation: 0.0,
-        h_align: TextHAlign::Center,
-        v_align: TextVAlign::Center,
-    }];
-    scene.overlay_lines = vec![solid_line(0.0, -1.0, 10.0, -1.0)];
-    scene.overlay_circles = vec![filled_circle(-5.0, -5.0, 0.5)];
-    scene.overlay_polygons = vec![GpuPolygon {
-        vertices: vec![[40.0, 0.0], [42.0, 0.0], [42.0, 2.0], [40.0, 2.0]],
-        fill_color: [0.6, 0.6, 1.0, 0.4],
-        stroke_color: None,
-        stroke_width: 0.0,
-    }];
-    scene.erc_marker_lines = vec![solid_line(-1.0, -1.0, -2.0, -2.0)];
-    scene.erc_marker_circles = vec![outline_circle(-3.0, -3.0, 0.3)];
-    scene.erc_marker_polygons = vec![GpuPolygon {
-        vertices: vec![[50.0, 0.0], [52.0, 0.0], [51.0, 2.0]],
-        fill_color: [1.0, 0.0, 0.0, 1.0],
-        stroke_color: None,
-        stroke_width: 0.0,
-    }];
-
-    scene
+    Scene {
+        lines: vec![
+            solid_line(0.0, 0.0, 10.0, 0.0),
+            solid_line(0.0, 5.0, 10.0, 5.0),
+            dashed_line(0.0, 10.0, 10.0, 10.0),
+        ],
+        circles: vec![filled_circle(0.0, 0.0, 1.0), outline_circle(5.0, 5.0, 1.0)],
+        arcs: vec![Arc {
+            center: [0.0, 0.0],
+            radius: 3.0,
+            start_angle: 0.0,
+            end_angle: std::f32::consts::FRAC_PI_2,
+            width: 0.2,
+            color: [0.5, 0.5, 0.5, 1.0],
+            _pad: [0.0; 3],
+        }],
+        polygons: vec![
+            convex_filled_pad(),
+            concave_zone(),
+            filled_and_stroked_polygon(),
+            outline_only_rule_area(),
+        ],
+        texts: vec![TextItem {
+            content: "R1".to_string(),
+            position: [1.0, 1.0],
+            size_mm: 1.0,
+            color: [1.0, 1.0, 1.0, 1.0],
+            bold: false,
+            italic: false,
+            rotation: 0.0,
+            h_align: TextHAlign::Center,
+            v_align: TextVAlign::Center,
+        }],
+        overlay_lines: vec![solid_line(0.0, -1.0, 10.0, -1.0)],
+        overlay_circles: vec![filled_circle(-5.0, -5.0, 0.5)],
+        overlay_polygons: vec![GpuPolygon {
+            vertices: vec![[40.0, 0.0], [42.0, 0.0], [42.0, 2.0], [40.0, 2.0]],
+            fill_color: [0.6, 0.6, 1.0, 0.4],
+            stroke_color: None,
+            stroke_width: 0.0,
+        }],
+        erc_marker_lines: vec![solid_line(-1.0, -1.0, -2.0, -2.0)],
+        erc_marker_circles: vec![outline_circle(-3.0, -3.0, 0.3)],
+        erc_marker_polygons: vec![GpuPolygon {
+            vertices: vec![[50.0, 0.0], [52.0, 0.0], [51.0, 2.0]],
+            fill_color: [1.0, 0.0, 0.0, 1.0],
+            stroke_color: None,
+            stroke_width: 0.0,
+        }],
+        ..Scene::default()
+    }
 }
 
 #[test]

@@ -30,7 +30,7 @@ pub fn view_symbol<'a>(
     panel_ctx: &'a PanelContext,
     display: LibraryDisplaySettings,
     theme_id: signex_types::theme::ThemeId,
-    path: &'a std::path::PathBuf,
+    path: &'a std::path::Path,
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
     let toolbar = view_symbol_toolbar(editor, panel_ctx);
@@ -70,7 +70,7 @@ fn view_symbol_status<'a>(
     editor: &'a SymbolEditorState,
     panel_ctx: &'a PanelContext,
     display: LibraryDisplaySettings,
-    path: &'a std::path::PathBuf,
+    path: &'a std::path::Path,
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
     let muted = theme_ext::text_secondary(tokens);
@@ -97,7 +97,7 @@ fn view_symbol_status<'a>(
     let grid_toggle = button(text(grid_vis_label).size(11).color(text_c))
         .padding([2, 6])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
-            path: path.clone(),
+            path: path.to_path_buf(),
             msg: PrimitiveEdit::Symbol(SymbolEditorMsg::ToggleGrid),
         })
         .style(symbol_tool_button_style(false, border));
@@ -107,7 +107,7 @@ fn view_symbol_status<'a>(
     let grid_cycle = button(text(grid_size_label).size(11).color(muted))
         .padding([2, 6])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
-            path: path.clone(),
+            path: path.to_path_buf(),
             msg: PrimitiveEdit::Symbol(SymbolEditorMsg::CycleGridSize),
         })
         .style(symbol_tool_button_style(false, border));

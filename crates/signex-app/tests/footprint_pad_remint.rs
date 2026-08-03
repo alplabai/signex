@@ -28,11 +28,11 @@ use signex_app::app::{EditMsg, Message, Signex};
 use signex_app::library::editor::footprint::state::EditorPad;
 use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use signex_sketch::sketch::SketchData;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-fn dispatch(app: &mut Signex, path: &PathBuf, msg: FootprintEditorMsg) {
+fn dispatch(app: &mut Signex, path: &Path, msg: FootprintEditorMsg) {
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
-        path: path.clone(),
+        path: path.to_path_buf(),
         msg: PrimitiveEdit::Footprint(msg),
     }));
 }

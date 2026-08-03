@@ -22,7 +22,7 @@ use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 use crate::app::SymbolEditorState;
 use crate::icons as ic;
 use crate::library::editor::symbol::canvas::SymbolTool;
-use crate::library::editor::symbol::state::{SymActiveBarMenu, SymbolSelectionFilter};
+use crate::library::editor::symbol::state::SymActiveBarMenu;
 use crate::library::messages::{LibraryMessage, PrimitiveEdit, SymbolEditorMsg, SymbolToolMsg};
 
 mod dropdowns;
@@ -124,7 +124,6 @@ fn dropdown_trigger_items(
 ) -> Vec<ActiveBarItem<LibraryMessage>> {
     let path = editor.path.clone();
     let active = editor.active_bar_menu;
-    let _ = SymbolSelectionFilter::default; // silences unused-import lint
 
     let dual = |label: &str,
                 icon: ActiveBarIcon,

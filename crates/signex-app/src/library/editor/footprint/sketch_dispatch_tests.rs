@@ -58,7 +58,7 @@ mod tests {
         let mut state = FootprintEditorState::from_footprint(&fp);
 
         let (entity, _id) = point_with_pad(plane, 0.0, 0.0, "1");
-        apply_sketch_edit(&mut state, &mut fp, SketchEdit::AddEntity(entity)).unwrap();
+        apply_sketch_edit(&mut state, &mut fp, SketchEdit::add_entity(entity)).unwrap();
 
         assert_eq!(fp.pads.len(), 1);
         assert_eq!(fp.pads[0].number, "1");
@@ -193,7 +193,7 @@ mod tests {
         // on LineFirst.
         let p1 = SketchEntityId::new();
         let pt = Entity::new(p1, plane, EntityKind::Point { x: 0.0, y: 0.0 });
-        apply_sketch_edit(&mut state, &mut fp, SketchEdit::AddEntity(pt)).unwrap();
+        apply_sketch_edit(&mut state, &mut fp, SketchEdit::add_entity(pt)).unwrap();
         state.tool_pending = ToolPending::LineFirst { first: p1 };
 
         // Second click — adds endpoint + Line entity. We do this
@@ -201,10 +201,10 @@ mod tests {
         // glue; this test verifies the SketchEdit-level behaviour.
         let p2 = SketchEntityId::new();
         let pt2 = Entity::new(p2, plane, EntityKind::Point { x: 5.0, y: 0.0 });
-        apply_sketch_edit(&mut state, &mut fp, SketchEdit::AddEntity(pt2)).unwrap();
+        apply_sketch_edit(&mut state, &mut fp, SketchEdit::add_entity(pt2)).unwrap();
         let line_id = SketchEntityId::new();
         let line = Entity::new(line_id, plane, EntityKind::Line { start: p1, end: p2 });
-        apply_sketch_edit(&mut state, &mut fp, SketchEdit::AddEntity(line)).unwrap();
+        apply_sketch_edit(&mut state, &mut fp, SketchEdit::add_entity(line)).unwrap();
 
         let sketch = fp.sketch.as_ref().unwrap();
         assert_eq!(sketch.entities.len(), 3);

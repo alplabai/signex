@@ -161,7 +161,7 @@ fn mirror(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
             EntityKind::Point { x: rx, y: ry },
         ));
         editor.with_parts(|state, primitive| {
-            apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddEntity(new_entity));
+            apply_sketch_edit_with_warnings(state, primitive, SketchEdit::add_entity(new_entity));
         });
         let constraint = Constraint {
             id: ConstraintId::new(),
@@ -206,7 +206,7 @@ fn mirror(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
                 },
             ));
             editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddEntity(new_line));
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::add_entity(new_line));
             });
         }
         EntityKind::Arc {
@@ -245,7 +245,7 @@ fn mirror(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
                 },
             ));
             editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddEntity(new_arc));
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::add_entity(new_arc));
             });
         }
         EntityKind::Circle { center, radius } => {
@@ -267,7 +267,7 @@ fn mirror(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
                 apply_sketch_edit_with_warnings(
                     state,
                     primitive,
-                    SketchEdit::AddEntity(new_circle),
+                    SketchEdit::add_entity(new_circle),
                 );
             });
         }
@@ -448,9 +448,9 @@ fn offset_line(
         },
     ));
     editor.with_parts(|state, primitive| {
-        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddEntity(a_entity));
-        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddEntity(b_entity));
-        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddEntity(new_line));
+        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::add_entity(a_entity));
+        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::add_entity(b_entity));
+        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::add_entity(new_line));
     });
     // Parallel + DistancePtLine on the start
     // endpoint pins the offset distance
@@ -571,8 +571,8 @@ fn offset_circle(
         },
     };
     editor.with_parts(|state, primitive| {
-        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddEntity(anchor));
-        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddEntity(new_circle));
+        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::add_entity(anchor));
+        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::add_entity(new_circle));
         apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddConstraint(on_new_circle));
         apply_sketch_edit_with_warnings(
             state,
@@ -682,9 +682,9 @@ fn offset_arc(
         },
     };
     editor.with_parts(|state, primitive| {
-        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddEntity(s_entity));
-        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddEntity(e_entity));
-        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddEntity(new_arc));
+        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::add_entity(s_entity));
+        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::add_entity(e_entity));
+        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::add_entity(new_arc));
         apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddConstraint(dist_start));
         apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddConstraint(dist_end));
     });
@@ -736,7 +736,7 @@ fn circular_pattern(editor: &mut crate::app::FootprintEditorState, ctx: &ToolCli
         },
     ));
     editor.with_parts(|state, primitive| {
-        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddEntity(centre));
+        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::add_entity(centre));
     });
     let array = Array {
         id: ArrayId::new(),

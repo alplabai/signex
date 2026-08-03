@@ -256,11 +256,11 @@ fn production_temp_fallback_path() -> PathBuf {
             // `prefs_path()` caches the returned path for the whole
             // process lifetime and writes to it repeatedly across the
             // session, so the directory has to outlive any handle we
-            // could hold instead. `into_path()` is `tempfile`'s
+            // could hold instead. `keep()` is `tempfile`'s
             // documented opt-out of the drop-time cleanup; the OS's
             // own temp-dir sweep remains the intended eventual
             // cleanup, matching the "will NOT persist" contract below.
-            dir.into_path()
+            dir.keep()
         }
         Err(e) => {
             tracing::error!(

@@ -206,17 +206,9 @@ pub fn items<'a>(
     // Create / Modify dropdown panels. Reordering them without updating
     // that function puts the panels under the wrong button;
     // `sketch_group_triggers_sit_where_the_offsets_say` pins it.
-    let mut items: Vec<ActiveBarItem<LibraryMessage>> = Vec::new();
-
-    // Section 1: Select
-    items.push(mk_tool(
-        "Select",
-        SketchTool::Select,
-        ActiveBarIcon::Svg(icons::icon_select(theme_id)),
-    ));
-    items.push(ActiveBarItem::Separator);
-
-    // Section 2 + 3: the Create / Modify group triggers.
+    //
+    // Sections 1-3 are unconditional, so they seed the vector directly:
+    // Select, a separator, then the Create / Modify group triggers.
     // v0.14 — Place Point is absent from Create by design. Intersections
     // snap automatically (Line×Line / Line×Arc / Arc×Arc, see snap.rs
     // SnapKind::Intersection) and the Line/Rect/Circle/Arc tools
@@ -224,16 +216,24 @@ pub fn items<'a>(
     // was clutter in the footprint context. The SketchTool::Point
     // variant + dispatch stay (constraints + pad auto-mint reference
     // Points internally).
-    items.push(mk_group(
-        FpActiveBarMenu::SketchCreate,
-        "Create — Line / Rectangle / Rounded Rectangle / Circle / Arc / Tangent Arc",
-        icons::icon_sk_create(theme_id),
-    ));
-    items.push(mk_group(
-        FpActiveBarMenu::SketchModify,
-        "Modify — Fillet / Trim / Mirror / Offset / Patterns / Make Pad from Profile",
-        icons::icon_sk_modify(theme_id),
-    ));
+    let mut items: Vec<ActiveBarItem<LibraryMessage>> = vec![
+        mk_tool(
+            "Select",
+            SketchTool::Select,
+            ActiveBarIcon::Svg(icons::icon_select(theme_id)),
+        ),
+        ActiveBarItem::Separator,
+        mk_group(
+            FpActiveBarMenu::SketchCreate,
+            "Create — Line / Rectangle / Rounded Rectangle / Circle / Arc / Tangent Arc",
+            icons::icon_sk_create(theme_id),
+        ),
+        mk_group(
+            FpActiveBarMenu::SketchModify,
+            "Modify — Fillet / Trim / Mirror / Offset / Patterns / Make Pad from Profile",
+            icons::icon_sk_modify(theme_id),
+        ),
+    ];
 
     // Section 4: Constrain — only the buttons whose precondition is
     // met by the current selection are rendered (mk_constraint
