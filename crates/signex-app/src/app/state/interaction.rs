@@ -25,7 +25,6 @@ pub struct InteractionState {
     pub drag_start_pos: Option<f32>,
     pub drag_start_size: f32,
     pub tab_drag_origin: Option<(f32, f32)>,
-    pub undo_stack: crate::undo::UndoStack,
     pub wire_points: Vec<signex_types::schematic::Point>,
     pub wire_drawing: bool,
     /// 3-click arc placement buffer. Holds the first two clicks

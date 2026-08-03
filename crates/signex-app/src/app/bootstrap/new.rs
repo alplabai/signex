@@ -285,7 +285,6 @@ impl Signex {
                 drag_start_pos: None,
                 drag_start_size: 0.0,
                 tab_drag_origin: None,
-                undo_stack: crate::undo::UndoStack::new(100),
                 wire_points: Vec::new(),
                 wire_drawing: false,
                 arc_points: Vec::new(),

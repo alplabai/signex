@@ -65,34 +65,18 @@ impl Signex {
             return false;
         };
 
-        let invalidation = {
-            let mut changed_steps = 0usize;
-            let mut invalidation = crate::schematic_runtime::RenderInvalidation::NONE;
-
-            for command in commands {
-                match engine.execute(command) {
-                    Ok(result) => {
-                        if let Some(patch_pair) = result.patch_pair {
-                            changed_steps += 1;
-                            invalidation |=
-                                Self::render_invalidation_for_patch(patch_pair.document);
-                        }
-                    }
-                    Err(error) => {
-                        let error = anyhow::Error::new(error);
-                        crate::diagnostics::log_error("Engine command execution failed", &error);
-                        return false;
-                    }
-                }
-            }
-
-            if changed_steps > 0 {
-                self.interaction_state
-                    .undo_stack
-                    .record_engine_marker(changed_steps);
-                invalidation
-            } else {
-                crate::schematic_runtime::RenderInvalidation::NONE
+        // One engine history entry for the whole batch, with the patches
+        // OR-ed together — the grouping the app's marker stack used to
+        // encode, now owned by the engine that holds the history.
+        let invalidation = match engine.execute_batch(commands) {
+            Ok(result) => result
+                .patch_pair
+                .map(|patch_pair| Self::render_invalidation_for_patch(patch_pair.document))
+                .unwrap_or(crate::schematic_runtime::RenderInvalidation::NONE),
+            Err(error) => {
+                let error = anyhow::Error::new(error);
+                crate::diagnostics::log_error("Engine command execution failed", &error);
+                return false;
             }
         };
 
@@ -110,14 +94,10 @@ impl Signex {
         };
 
         let invalidation = match engine.execute(command) {
-            Ok(result) if result.changed => {
-                let invalidation = result
-                    .patch_pair
-                    .map(|patch_pair| Self::render_invalidation_for_patch(patch_pair.document))
-                    .unwrap_or(crate::schematic_runtime::RenderInvalidation::NONE);
-                self.interaction_state.undo_stack.record_engine_marker(1);
-                invalidation
-            }
+            Ok(result) if result.changed => result
+                .patch_pair
+                .map(|patch_pair| Self::render_invalidation_for_patch(patch_pair.document))
+                .unwrap_or(crate::schematic_runtime::RenderInvalidation::NONE),
             Ok(_) => crate::schematic_runtime::RenderInvalidation::NONE,
             Err(error) => {
                 let error = anyhow::Error::new(error);
@@ -129,33 +109,28 @@ impl Signex {
         self.finish_schematic_mutation(invalidation, clear_overlay_cache, update_selection_info)
     }
 
+    /// Undo one step of the **active** engine's own history.
+    ///
+    /// One `Engine::undo` per invocation: a batch recorded through
+    /// `apply_engine_commands` is already a single entry, so grouping needs
+    /// no second stack to count it. This used to be driven by an app-side
+    /// marker stack, which was one global stack shared by every open
+    /// document's engine and was never cleared on tab switch — so its
+    /// counts drifted out of step with the history they were counting and
+    /// an edit could be reverted with no invalidation and no dirty flag
+    /// (#533). Reading the history straight off the engine that owns it
+    /// also makes the `Engine::can_undo` the Edit menu reads
+    /// (`app/view/mod.rs`) agree with what Undo will actually do.
     pub(crate) fn apply_engine_undo(&mut self, update_selection_info: bool) -> bool {
         let invalidation = if let Some(engine) = self.document_state.active_engine_mut() {
-            let Some(steps) = self.interaction_state.undo_stack.peek_undo_engine_steps() else {
-                return false;
-            };
-
-            let mut undone_steps = 0usize;
-            let mut invalidation = crate::schematic_runtime::RenderInvalidation::NONE;
-            for _ in 0..steps {
-                match engine.undo() {
-                    Ok(Some(patch_pair)) => {
-                        undone_steps += 1;
-                        invalidation |= Self::render_invalidation_for_patch(patch_pair.document);
-                    }
-                    Ok(None) => break,
-                    Err(error) => {
-                        let error = anyhow::Error::new(error);
-                        crate::diagnostics::log_error("Engine undo failed", &error);
-                        return false;
-                    }
+            match engine.undo() {
+                Ok(Some(patch_pair)) => Self::render_invalidation_for_patch(patch_pair.document),
+                Ok(None) => return false,
+                Err(error) => {
+                    let error = anyhow::Error::new(error);
+                    crate::diagnostics::log_error("Engine undo failed", &error);
+                    return false;
                 }
-            }
-
-            if undone_steps == steps && self.interaction_state.undo_stack.step_back() {
-                invalidation
-            } else {
-                crate::schematic_runtime::RenderInvalidation::NONE
             }
         } else {
             crate::schematic_runtime::RenderInvalidation::NONE
@@ -164,33 +139,18 @@ impl Signex {
         self.finish_schematic_mutation(invalidation, true, update_selection_info)
     }
 
+    /// Redo one step of the **active** engine's own history. Mirror of
+    /// [`Signex::apply_engine_undo`].
     pub(crate) fn apply_engine_redo(&mut self, update_selection_info: bool) -> bool {
         let invalidation = if let Some(engine) = self.document_state.active_engine_mut() {
-            let Some(steps) = self.interaction_state.undo_stack.peek_redo_engine_steps() else {
-                return false;
-            };
-
-            let mut redone_steps = 0usize;
-            let mut invalidation = crate::schematic_runtime::RenderInvalidation::NONE;
-            for _ in 0..steps {
-                match engine.redo() {
-                    Ok(Some(patch_pair)) => {
-                        redone_steps += 1;
-                        invalidation |= Self::render_invalidation_for_patch(patch_pair.document);
-                    }
-                    Ok(None) => break,
-                    Err(error) => {
-                        let error = anyhow::Error::new(error);
-                        crate::diagnostics::log_error("Engine redo failed", &error);
-                        return false;
-                    }
+            match engine.redo() {
+                Ok(Some(patch_pair)) => Self::render_invalidation_for_patch(patch_pair.document),
+                Ok(None) => return false,
+                Err(error) => {
+                    let error = anyhow::Error::new(error);
+                    crate::diagnostics::log_error("Engine redo failed", &error);
+                    return false;
                 }
-            }
-
-            if redone_steps == steps && self.interaction_state.undo_stack.step_forward() {
-                invalidation
-            } else {
-                crate::schematic_runtime::RenderInvalidation::NONE
             }
         } else {
             crate::schematic_runtime::RenderInvalidation::NONE
