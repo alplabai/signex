@@ -66,9 +66,26 @@ jobs:
       # without `cfg(test)`, so those bodies were never even parsed as live
       # code. `--all-features` reaches signex-library's `local-git`,
       # `database`, `search-tantivy`, `distributors-community` and `ai-stub`
-      # modules. Warn-level lints still only annotate; correctness now fails.
+      # modules.
+      #
+      # `-- -D warnings` (#539) is what keeps the count at zero. Getting there
+      # took #587 (217 machine-applicable), #588 (111 that needed a decision)
+      # and #589 (16 `dead_code`) off a backlog of 344; without a gate the
+      # next 344 accumulate the same way, one "just a warning" at a time.
+      # It denies warn-level lints in workspace code only — dependencies are
+      # built with `--cap-lints allow`, and cargo's own future-incompat notice
+      # for `block v0.1.6` is not a rustc lint, so neither fails the step.
+      #
+      # The cost: a toolchain bump that introduces a new lint turns this red
+      # on whichever PR happens to bump it. That is deliberate and contained —
+      # `rust-toolchain.toml` pins 1.97.0, so new lints only ever arrive in a
+      # PR that changes that pin, never in an unrelated one.
+      #
+      # Silencing a lint to get green defeats the point. Fix the code; if a
+      # lint genuinely cannot be satisfied, `#[expect(lint, reason = "…")]`
+      # with a real reason is the escape hatch, and it has to survive review.
       - name: Clippy
-        run: cargo clippy --workspace --all-targets --all-features
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
   test:
     name: test · workspace
