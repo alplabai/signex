@@ -66,6 +66,12 @@ pub struct PcbCanvas {
     pub visible_grid_mm: f64,
 }
 
+impl Default for PcbCanvas {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PcbCanvas {
     pub fn new() -> Self {
         let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);

@@ -23,8 +23,7 @@ use signex_library::manufacturer::ManufacturerPart;
 use signex_library::param::ParamMap;
 use signex_library::primitive::{
     Body3D, BodyShape, Footprint, FootprintFile, LayerId, Pad, PadKind, PadShape, PinDirection,
-    PinOrientation, Polygon, PrimitiveKind, PrimitiveRef, SimFile, SimKind, SimModel, Symbol,
-    SymbolPin,
+    Polygon, PrimitiveKind, PrimitiveRef, SimFile, SimKind, SimModel, Symbol, SymbolPin,
 };
 use uuid::Uuid;
 

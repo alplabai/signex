@@ -1,9 +1,7 @@
 //! Grid Manager + Guide Manager + Other section + grid_manager_btn —
 //! the per-editor library Options surfaces below the Pad form.
 
-use iced::widget::{
-    Column, Space, button, column, container, pick_list, row, scrollable, text, text_input,
-};
+use iced::widget::{Column, Space, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
 use super::super::{FootprintEditorPanelContext, PanelMsg};

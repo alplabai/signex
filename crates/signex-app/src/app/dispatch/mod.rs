@@ -486,10 +486,10 @@ impl Signex {
                 // path silently no-ops on borderless windows after
                 // the first attempt.
                 let id = self.ui_state.windows.iter().find_map(|(id, kind)| {
-                    if let super::state::WindowKind::DetachedModal(m) = kind {
-                        if *m == modal {
-                            return Some(*id);
-                        }
+                    if let super::state::WindowKind::DetachedModal(m) = kind
+                        && *m == modal
+                    {
+                        return Some(*id);
                     }
                     None
                 });

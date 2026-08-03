@@ -20,7 +20,7 @@
 use std::path::PathBuf;
 
 use iced::widget::{Space, button, container, row, text};
-use iced::{Border, Color, Element, Length, Theme};
+use iced::{Border, Color, Length, Theme};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 use signex_widgets::theme_ext;
@@ -254,7 +254,7 @@ pub fn items(
     let path: PathBuf = editor.path.clone();
     let auto_fit_on = editor.state.auto_fit_courtyard;
 
-    let stub = |label: &str, glyph: &'static str| -> ActiveBarItem<LibraryMessage> {
+    let _stub = |label: &str, glyph: &'static str| -> ActiveBarItem<LibraryMessage> {
         ActiveBarItem::Button(ActiveBarButton {
             icon: ActiveBarIcon::Glyph(glyph),
             tooltip: format!("{label} (coming soon)"),
@@ -265,7 +265,7 @@ pub fn items(
         })
     };
 
-    let stub_svg = |label: &str, icon: ActiveBarIcon| -> ActiveBarItem<LibraryMessage> {
+    let _stub_svg = |label: &str, icon: ActiveBarIcon| -> ActiveBarItem<LibraryMessage> {
         ActiveBarItem::Button(ActiveBarButton {
             icon,
             tooltip: format!("{label} (coming soon)"),

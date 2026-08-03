@@ -32,7 +32,7 @@ fn request(model_id: &str, json: &str) -> RuntimeGlbIngestRequest {
 
 fn make_glb_bytes(json: &str) -> Vec<u8> {
     let mut json_chunk = json.as_bytes().to_vec();
-    while json_chunk.len() % 4 != 0 {
+    while !json_chunk.len().is_multiple_of(4) {
         json_chunk.push(b' ');
     }
     let total_len = 12 + 8 + json_chunk.len();

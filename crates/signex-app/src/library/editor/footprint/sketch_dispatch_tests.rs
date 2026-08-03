@@ -5,7 +5,7 @@
 
 #[cfg(test)]
 mod tests {
-    use chrono::Utc;
+
     use signex_library::primitive::footprint::Footprint;
     use signex_sketch::SketchData;
     use signex_sketch::attr::{PadAttr, PadKind, PadShape, PadSide, PasteAperturePattern};

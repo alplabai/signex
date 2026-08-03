@@ -385,7 +385,9 @@ pub enum CustomPadShape {
 /// Solder-paste aperture layout for a pad.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "PascalCase")]
+#[derive(Default)]
 pub enum PasteAperturePattern {
+    #[default]
     Single,
     Grid {
         nx_expr: String,
@@ -395,12 +397,6 @@ pub enum PasteAperturePattern {
     Custom {
         source: Vec<SketchEntityId>,
     },
-}
-
-impl Default for PasteAperturePattern {
-    fn default() -> Self {
-        Self::Single
-    }
 }
 
 /// Closed sketch profile bakes as a silkscreen line/arc set.

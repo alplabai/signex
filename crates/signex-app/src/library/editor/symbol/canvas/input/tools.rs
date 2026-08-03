@@ -64,7 +64,7 @@ impl SymbolCanvas<'_> {
                     let in_group = self
                         .selected
                         .as_ref()
-                        .map_or(false, |s| item_in_selection(s, &sel));
+                        .is_some_and(|s| item_in_selection(s, &sel));
                     if in_group {
                         state.dragging = true;
                         state.last_drag_world_pos = Some((wx, wy));

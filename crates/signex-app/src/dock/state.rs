@@ -3,6 +3,12 @@
 use super::types::*;
 use crate::panels::{self, PanelKind};
 
+impl Default for DockArea {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DockArea {
     pub fn new() -> Self {
         Self {

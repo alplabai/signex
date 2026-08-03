@@ -250,7 +250,7 @@ pub(crate) fn build_bookmarks(
                     // anchor as the destination. Coarse but matches
                     // Altium's "find this pin" behaviour well enough.
                     for sym in &sheet.schematic.symbols {
-                        for (pin_number, _uuid) in &sym.pin_uuids {
+                        for pin_number in sym.pin_uuids.keys() {
                             let item_idx = items.len();
                             items.push(PendingBookmark {
                                 title: format!("pin {}.{}", sym.reference, pin_number),
@@ -383,12 +383,11 @@ fn build_sheet_title(sheet: &crate::SheetSnapshot, opts: &PdfOptions) -> String 
     } else {
         sheet.sheet_name.clone()
     };
-    if opts.use_physical_structure {
-        if let Some(variant) = opts.variant.as_deref() {
-            if !variant.is_empty() {
-                title.push_str(&format!(" [{variant}]"));
-            }
-        }
+    if opts.use_physical_structure
+        && let Some(variant) = opts.variant.as_deref()
+        && !variant.is_empty()
+    {
+        title.push_str(&format!(" [{variant}]"));
     }
     title
 }

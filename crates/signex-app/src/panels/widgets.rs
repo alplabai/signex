@@ -249,7 +249,7 @@ pub fn form_edit_row_f64<'a>(
     muted: Color,
     on_submit: impl Fn(f64) -> PanelMsg + 'a + Clone,
 ) -> Element<'a, PanelMsg> {
-    use iced::widget::{row, text, text_input};
+    use iced::widget::{row, text_input};
     let buf = format!("{value:.3}");
     let on_submit_cb = on_submit.clone();
     row![

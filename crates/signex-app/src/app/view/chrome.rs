@@ -25,7 +25,7 @@ impl Signex {
         menu_row: Element<'a, Message>,
         tokens: &signex_types::theme::ThemeTokens,
     ) -> Element<'a, Message> {
-        use iced::widget::{Space, button, container, mouse_area, row, svg, text};
+        use iced::widget::{Space, button, container, mouse_area, row, svg};
         use iced::{Alignment, Background, Border, Color, Length};
 
         // Window-control SVG icons resolved through `crate::icons` so the

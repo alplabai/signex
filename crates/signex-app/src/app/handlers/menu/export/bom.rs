@@ -152,30 +152,29 @@ impl Signex {
     pub(crate) fn handle_bom_preview_column_drag_drop(&mut self, dest: usize) {
         if let Some(preview) = self.document_state.bom_preview.as_mut() {
             preview.column_drag_press_x = None;
-            if let Some(src) = preview.column_drag.take() {
-                if src != dest
-                    && src < preview.options.columns.len()
-                    && dest < preview.options.columns.len()
-                {
-                    let col = preview.options.columns.remove(src);
-                    let insert_at = if src < dest { dest } else { dest };
-                    let insert_at = insert_at.min(preview.options.columns.len());
-                    preview.options.columns.insert(insert_at, col);
-                    // Sort spec follows the moved column. If the
-                    // sort was on a different column, indices may
-                    // have shifted under it.
-                    if let Some((sort_idx, asc)) = preview.sort {
-                        let new_idx = if sort_idx == src {
-                            insert_at
-                        } else if src < sort_idx && insert_at >= sort_idx {
-                            sort_idx - 1
-                        } else if src > sort_idx && insert_at <= sort_idx {
-                            sort_idx + 1
-                        } else {
-                            sort_idx
-                        };
-                        preview.sort = Some((new_idx, asc));
-                    }
+            if let Some(src) = preview.column_drag.take()
+                && src != dest
+                && src < preview.options.columns.len()
+                && dest < preview.options.columns.len()
+            {
+                let col = preview.options.columns.remove(src);
+                let insert_at = if src < dest { dest } else { dest };
+                let insert_at = insert_at.min(preview.options.columns.len());
+                preview.options.columns.insert(insert_at, col);
+                // Sort spec follows the moved column. If the
+                // sort was on a different column, indices may
+                // have shifted under it.
+                if let Some((sort_idx, asc)) = preview.sort {
+                    let new_idx = if sort_idx == src {
+                        insert_at
+                    } else if src < sort_idx && insert_at >= sort_idx {
+                        sort_idx - 1
+                    } else if src > sort_idx && insert_at <= sort_idx {
+                        sort_idx + 1
+                    } else {
+                        sort_idx
+                    };
+                    preview.sort = Some((new_idx, asc));
                 }
             }
         }

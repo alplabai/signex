@@ -222,7 +222,7 @@ pub fn mirror_solve_to_round_rect_geometry(
             };
             let r = r.max(0.0).min(half_min);
 
-            let Some(arc_id) = sidecar_to_id(pad, *arc_key) else {
+            let Some(arc_id) = sidecar_to_id(pad, arc_key) else {
                 continue;
             };
 

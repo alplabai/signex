@@ -181,6 +181,12 @@ pub enum ErcMarkerSeverity {
     Info,
 }
 
+impl Default for SchematicCanvas {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SchematicCanvas {
     pub fn active_render_cache(&self) -> Option<&crate::schematic_runtime::SchematicRenderCache> {
         self.render_cache.as_ref()

@@ -81,10 +81,11 @@ impl EditorAddress {
 /// are hidden by default. Stage 18 surfaces these as a single dropdown
 /// pill in the browser header so users can pivot the visible row set
 /// without touching every row's lifecycle field.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum LifecycleFilter {
     /// Default — show `Released` / `InReview` / `Draft` and tint
     /// `Deprecated`. Hides `Obsolete`.
+    #[default]
     ActiveAndPreferred,
     /// Show only `Released` (the "preferred for new designs" subset
     /// once admins promote rows out of `Draft`).
@@ -137,12 +138,6 @@ impl LifecycleFilter {
             (_, L::Obsolete) => false,
             _ => false,
         }
-    }
-}
-
-impl Default for LifecycleFilter {
-    fn default() -> Self {
-        Self::ActiveAndPreferred
     }
 }
 

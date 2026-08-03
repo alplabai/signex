@@ -142,20 +142,20 @@ fn move_point(
         let mut max_y = f64::NEG_INFINITY;
         if let Some(sketch) = editor.primitive().sketch.as_ref() {
             for cid in corners {
-                if let Some(e) = sketch.entities.iter().find(|e| e.id == cid) {
-                    if let EntityKind::Point { x, y } = e.kind {
-                        if x < min_x {
-                            min_x = x;
-                        }
-                        if y < min_y {
-                            min_y = y;
-                        }
-                        if x > max_x {
-                            max_x = x;
-                        }
-                        if y > max_y {
-                            max_y = y;
-                        }
+                if let Some(e) = sketch.entities.iter().find(|e| e.id == cid)
+                    && let EntityKind::Point { x, y } = e.kind
+                {
+                    if x < min_x {
+                        min_x = x;
+                    }
+                    if y < min_y {
+                        min_y = y;
+                    }
+                    if x > max_x {
+                        max_x = x;
+                    }
+                    if y > max_y {
+                        max_y = y;
                     }
                 }
             }
@@ -549,16 +549,16 @@ fn resize_round_pad(
         use signex_sketch::entity::EntityKind;
         if let Some(cid) = centre_id {
             for entity in sketch.entities.iter_mut() {
-                if let EntityKind::Circle { center, radius } = &mut entity.kind {
-                    if *center == cid {
-                        *radius = d / 2.0;
-                    }
+                if let EntityKind::Circle { center, radius } = &mut entity.kind
+                    && *center == cid
+                {
+                    *radius = d / 2.0;
                 }
-                if entity.id == cid {
-                    if let Some(attr) = entity.pad.as_mut() {
-                        attr.size_x_expr = format!("{:.4}mm", d);
-                        attr.size_y_expr = format!("{:.4}mm", d);
-                    }
+                if entity.id == cid
+                    && let Some(attr) = entity.pad.as_mut()
+                {
+                    attr.size_x_expr = format!("{:.4}mm", d);
+                    attr.size_y_expr = format!("{:.4}mm", d);
                 }
             }
         }

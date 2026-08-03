@@ -132,7 +132,7 @@ pub fn iced_font_for_family(name: &str) -> iced::Font {
     // hold this lock.
     let mut map = map_lock.lock().unwrap_or_else(|e| e.into_inner());
     let static_name: &'static str = match map.get(name) {
-        Some(s) => *s,
+        Some(s) => s,
         None => {
             let leaked: &'static str = Box::leak(name.to_string().into_boxed_str());
             map.insert(name.to_string(), leaked);
@@ -313,10 +313,12 @@ pub fn migrate_legacy_prefs(canonical: &Path, legacy: &Path) {
     // than `std::fs::copy`: a kill mid-copy with a bare copy can leave a
     // truncated `canonical` file, which then blocks re-migration forever
     // because `canonical.exists()` is already true on the next launch.
-    if !canonical.exists() && legacy != canonical && legacy.exists() {
-        if let Ok(bytes) = std::fs::read(legacy) {
-            write_pref_atomic(canonical, &bytes, "migrate_legacy_prefs_copy");
-        }
+    if !canonical.exists()
+        && legacy != canonical
+        && legacy.exists()
+        && let Ok(bytes) = std::fs::read(legacy)
+    {
+        write_pref_atomic(canonical, &bytes, "migrate_legacy_prefs_copy");
     }
 
     // F3: rewrite any non-canonical label_style discriminant → "standard".

@@ -261,26 +261,26 @@ impl CompiledKeymap {
             .filter(|binding| matches!(binding.action, ShortcutBindingAction::Command(_)))
         {
             let key = (binding.context, binding.sequence.clone());
-            if let Some(existing) = seen.insert(key, binding) {
-                if existing.action != binding.action {
-                    let Some(first_command) = existing.action.command().cloned() else {
-                        continue;
-                    };
-                    let Some(second_command) = binding.action.command().cloned() else {
-                        continue;
-                    };
-                    conflicts.push(BindingConflict {
-                        context: binding.context,
-                        trigger: binding
-                            .sequence
-                            .iter()
-                            .map(ToString::to_string)
-                            .collect::<Vec<_>>()
-                            .join(" "),
-                        first_command,
-                        second_command,
-                    });
-                }
+            if let Some(existing) = seen.insert(key, binding)
+                && existing.action != binding.action
+            {
+                let Some(first_command) = existing.action.command().cloned() else {
+                    continue;
+                };
+                let Some(second_command) = binding.action.command().cloned() else {
+                    continue;
+                };
+                conflicts.push(BindingConflict {
+                    context: binding.context,
+                    trigger: binding
+                        .sequence
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                    first_command,
+                    second_command,
+                });
             }
         }
         conflicts

@@ -373,8 +373,8 @@ mod tests {
 
         let font_data = cat.font_data();
         assert_eq!(font_data.len(), 2);
-        assert!(font_data[0].1.len() > 0);
-        assert!(font_data[1].1.len() > 0);
+        assert!(!font_data[0].1.is_empty());
+        assert!(!font_data[1].1.is_empty());
     }
 
     #[test]
@@ -386,7 +386,9 @@ mod tests {
             PdfFont::IosevkaRegular,
             PdfFont::IosevkaBold,
         ] {
-            let face = font.face().expect(&format!("Font {:?} should parse", font));
+            let face = font
+                .face()
+                .unwrap_or_else(|| panic!("Font {:?} should parse", font));
             assert!(face.units_per_em() > 0, "Font {:?} should have UPM", font);
             assert!(
                 face.ascender() > face.descender(),

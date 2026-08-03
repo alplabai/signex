@@ -110,10 +110,10 @@ fn set_role(
             editor.state.pads.remove(idx);
             if editor.state.selected_pad == Some(idx) {
                 editor.state.selected_pad = None;
-            } else if let Some(sel) = editor.state.selected_pad {
-                if sel > idx {
-                    editor.state.selected_pad = Some(sel - 1);
-                }
+            } else if let Some(sel) = editor.state.selected_pad
+                && sel > idx
+            {
+                editor.state.selected_pad = Some(sel - 1);
             }
         }
         _ => {}
@@ -177,7 +177,7 @@ fn make_pad_from_profile(editor: &mut crate::app::FootprintEditorState) {
             .state
             .selected_sketch
             .into_iter()
-            .chain(editor.state.selected_sketch_secondary.into_iter())
+            .chain(editor.state.selected_sketch_secondary)
             .chain(editor.state.selected_sketch_extra.iter().copied())
             .collect();
 

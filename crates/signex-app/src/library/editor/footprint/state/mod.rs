@@ -49,7 +49,6 @@ pub use tool::{PadsTool, SketchTool, ToolPending};
 use signex_library::{Footprint, LayerId};
 
 use super::layers::LayerVisibility;
-use pad::NEW_PAD_SIZE_MM;
 
 /// Slack on each side of the pad bounding box when auto-fitting the
 /// courtyard polygon.
@@ -665,10 +664,10 @@ impl FootprintEditorState {
         // ambiguous — is relinked from the sketch.
         pad::relink_pads_to_sketch(&mut new_pads, fp);
         self.pads = new_pads;
-        if let Some(idx) = self.selected_pad {
-            if idx >= self.pads.len() {
-                self.selected_pad = None;
-            }
+        if let Some(idx) = self.selected_pad
+            && idx >= self.pads.len()
+        {
+            self.selected_pad = None;
         }
     }
 

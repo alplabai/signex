@@ -4,13 +4,11 @@
 
 use std::collections::BTreeMap;
 
-use signex_sketch::SketchError;
 use signex_sketch::array::NumberingScheme;
 use signex_sketch::expr::ast::ExprNode;
 use signex_sketch::expr::eval::{EvalContext, eval};
 use signex_sketch::expr::parse::parse;
 use signex_sketch::id::SketchEntityId;
-use signex_sketch::solver::FullSolveOutput;
 
 /// Resolve the pad number for the i-th instance of a linear array.
 pub(super) fn derive_pad_number(

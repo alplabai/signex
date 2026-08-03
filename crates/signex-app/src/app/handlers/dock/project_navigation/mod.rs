@@ -274,7 +274,7 @@ fn reveal_in_file_manager(path: &std::path::Path) -> anyhow::Result<()> {
         cmd.arg(path)
             .spawn()
             .map_err(|e| anyhow::anyhow!("open failed to spawn: {e}"))?;
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]

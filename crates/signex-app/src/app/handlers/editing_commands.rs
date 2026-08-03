@@ -21,17 +21,17 @@ impl Signex {
         if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
             && let Some(path) = active_tab.kind.as_symbol_editor().cloned()
         {
-            if let Some(editor) = self.document_state.symbol_editors.get_mut(&path) {
-                if let Some(snapshot) = editor.undo_snapshots.pop() {
-                    let current = editor.primitive().clone();
-                    editor.redo_snapshots.push(current);
-                    *editor.primitive_mut() = snapshot;
-                    editor.mid_drag = false;
-                    editor.selected = None;
-                    editor.dirty = true;
-                    editor.canvas_cache.clear();
-                    self.refresh_panel_ctx();
-                }
+            if let Some(editor) = self.document_state.symbol_editors.get_mut(&path)
+                && let Some(snapshot) = editor.undo_snapshots.pop()
+            {
+                let current = editor.primitive().clone();
+                editor.redo_snapshots.push(current);
+                *editor.primitive_mut() = snapshot;
+                editor.mid_drag = false;
+                editor.selected = None;
+                editor.dirty = true;
+                editor.canvas_cache.clear();
+                self.refresh_panel_ctx();
             }
             return;
         }
@@ -41,13 +41,13 @@ impl Signex {
         // editor's per-instance history stack instead of the
         // schematic engine. Schematic + PCB tabs continue to use
         // the engine path below.
-        if let Some(path) = self.active_footprint_editor_path() {
-            if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
-                if editor.undo() {
-                    self.refresh_panel_ctx();
-                }
-                return;
+        if let Some(path) = self.active_footprint_editor_path()
+            && let Some(editor) = self.document_state.footprint_editors.get_mut(&path)
+        {
+            if editor.undo() {
+                self.refresh_panel_ctx();
             }
+            return;
         }
 
         // Net-colour floods aren't persisted to the Standard document so
@@ -76,29 +76,29 @@ impl Signex {
         if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
             && let Some(path) = active_tab.kind.as_symbol_editor().cloned()
         {
-            if let Some(editor) = self.document_state.symbol_editors.get_mut(&path) {
-                if let Some(snapshot) = editor.redo_snapshots.pop() {
-                    let current = editor.primitive().clone();
-                    editor.undo_snapshots.push(current);
-                    *editor.primitive_mut() = snapshot;
-                    editor.mid_drag = false;
-                    editor.selected = None;
-                    editor.dirty = true;
-                    editor.canvas_cache.clear();
-                    self.refresh_panel_ctx();
-                }
+            if let Some(editor) = self.document_state.symbol_editors.get_mut(&path)
+                && let Some(snapshot) = editor.redo_snapshots.pop()
+            {
+                let current = editor.primitive().clone();
+                editor.undo_snapshots.push(current);
+                *editor.primitive_mut() = snapshot;
+                editor.mid_drag = false;
+                editor.selected = None;
+                editor.dirty = true;
+                editor.canvas_cache.clear();
+                self.refresh_panel_ctx();
             }
             return;
         }
 
         // v0.24 Phase 1 (Track B) — same fork as undo.
-        if let Some(path) = self.active_footprint_editor_path() {
-            if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
-                if editor.redo() {
-                    self.refresh_panel_ctx();
-                }
-                return;
+        if let Some(path) = self.active_footprint_editor_path()
+            && let Some(editor) = self.document_state.footprint_editors.get_mut(&path)
+        {
+            if editor.redo() {
+                self.refresh_panel_ctx();
             }
+            return;
         }
         let redone = self.apply_engine_redo(true);
 

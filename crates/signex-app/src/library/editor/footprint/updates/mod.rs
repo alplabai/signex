@@ -172,120 +172,6 @@ fn scale_axis(centres: &mut [(f64, f64)], axis: SpacingAxis, pivot: f64, step: f
     }
 }
 
-#[cfg(test)]
-mod align_geometry_tests {
-    use super::apply_align;
-    use crate::library::editor::footprint::state::AlignOp;
-
-    /// Compare two centre lists with an absolute tolerance.
-    fn approx_eq(a: &[(f64, f64)], b: &[(f64, f64)]) {
-        assert_eq!(a.len(), b.len(), "length mismatch");
-        for (i, (p, q)) in a.iter().zip(b.iter()).enumerate() {
-            assert!(
-                (p.0 - q.0).abs() < 1e-9 && (p.1 - q.1).abs() < 1e-9,
-                "centre {i} mismatch: got {p:?}, want {q:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn align_left_moves_all_x_to_min() {
-        let pads = vec![(2.0, 0.0), (5.0, 1.0), (-1.0, 3.0)];
-        let out = apply_align(&pads, AlignOp::Left, 1.0);
-        // Every centre X → min (-1.0); Y untouched.
-        approx_eq(&out, &[(-1.0, 0.0), (-1.0, 1.0), (-1.0, 3.0)]);
-    }
-
-    #[test]
-    fn align_right_moves_all_x_to_max() {
-        let pads = vec![(2.0, 0.0), (5.0, 1.0), (-1.0, 3.0)];
-        let out = apply_align(&pads, AlignOp::Right, 1.0);
-        approx_eq(&out, &[(5.0, 0.0), (5.0, 1.0), (5.0, 3.0)]);
-    }
-
-    #[test]
-    fn align_top_bottom_move_y_only() {
-        let pads = vec![(0.0, 2.0), (1.0, 8.0), (2.0, -4.0)];
-        let top = apply_align(&pads, AlignOp::Top, 1.0);
-        approx_eq(&top, &[(0.0, -4.0), (1.0, -4.0), (2.0, -4.0)]);
-        let bottom = apply_align(&pads, AlignOp::Bottom, 1.0);
-        approx_eq(&bottom, &[(0.0, 8.0), (1.0, 8.0), (2.0, 8.0)]);
-    }
-
-    #[test]
-    fn center_h_v_align_to_mean() {
-        let pads = vec![(0.0, 0.0), (4.0, 10.0)];
-        let ch = apply_align(&pads, AlignOp::CenterH, 1.0);
-        // mean X = 2.0
-        approx_eq(&ch, &[(2.0, 0.0), (2.0, 10.0)]);
-        let cv = apply_align(&pads, AlignOp::CenterV, 1.0);
-        // mean Y = 5.0
-        approx_eq(&cv, &[(0.0, 5.0), (4.0, 5.0)]);
-    }
-
-    #[test]
-    fn distribute_h_equalises_gaps_and_keeps_extremes() {
-        // Unevenly spaced: 0, 1, 9 → after distribute: 0, 4.5, 9.
-        let pads = vec![(0.0, 0.0), (1.0, 0.0), (9.0, 0.0)];
-        let out = apply_align(&pads, AlignOp::DistributeH, 1.0);
-        approx_eq(&out, &[(0.0, 0.0), (4.5, 0.0), (9.0, 0.0)]);
-        // Gaps are now equal.
-        let g1 = out[1].0 - out[0].0;
-        let g2 = out[2].0 - out[1].0;
-        assert!((g1 - g2).abs() < 1e-9);
-    }
-
-    #[test]
-    fn distribute_h_preserves_input_order_when_unsorted() {
-        // Input not sorted by X; extremes (0 and 8) stay, middle (idx 0,
-        // X=6) gets re-placed at the equal-gap slot for its rank.
-        let pads = vec![(6.0, 0.0), (0.0, 0.0), (8.0, 0.0)];
-        let out = apply_align(&pads, AlignOp::DistributeH, 1.0);
-        // Ranks by X: idx1(0) → 0, idx0(6) → 4, idx2(8) → 8.
-        approx_eq(&out, &[(4.0, 0.0), (0.0, 0.0), (8.0, 0.0)]);
-    }
-
-    #[test]
-    fn distribute_v_equalises_gaps() {
-        let pads = vec![(0.0, 0.0), (0.0, 2.0), (0.0, 10.0)];
-        let out = apply_align(&pads, AlignOp::DistributeV, 1.0);
-        approx_eq(&out, &[(0.0, 0.0), (0.0, 5.0), (0.0, 10.0)]);
-    }
-
-    #[test]
-    fn increase_h_spacing_grows_span_by_step_times_gaps() {
-        // 3 pads at x = 0, 5, 10; mean = 5; step = 1 → each of 2 gaps
-        // grows by 1 → new span 12, centred on 5 → x = -1, 5, 11.
-        let pads = vec![(0.0, 0.0), (5.0, 0.0), (10.0, 0.0)];
-        let out = apply_align(&pads, AlignOp::IncreaseHSpacing, 1.0);
-        approx_eq(&out, &[(-1.0, 0.0), (5.0, 0.0), (11.0, 0.0)]);
-    }
-
-    #[test]
-    fn decrease_h_spacing_shrinks_span() {
-        // Inverse of the increase case: span 10 → 8, centred on 5.
-        let pads = vec![(0.0, 0.0), (5.0, 0.0), (10.0, 0.0)];
-        let out = apply_align(&pads, AlignOp::DecreaseHSpacing, 1.0);
-        approx_eq(&out, &[(1.0, 0.0), (5.0, 0.0), (9.0, 0.0)]);
-    }
-
-    #[test]
-    fn decrease_spacing_clamps_at_zero_span() {
-        // Over-contracting must not invert the order or go negative.
-        let pads = vec![(0.0, 0.0), (1.0, 0.0)];
-        // One gap, step huge → new span clamped to 0 → both at mean 0.5.
-        let out = apply_align(&pads, AlignOp::DecreaseHSpacing, 100.0);
-        approx_eq(&out, &[(0.5, 0.0), (0.5, 0.0)]);
-    }
-
-    #[test]
-    fn increase_v_spacing_grows_vertical_span() {
-        let pads = vec![(0.0, 0.0), (0.0, 5.0), (0.0, 10.0)];
-        let out = apply_align(&pads, AlignOp::IncreaseVSpacing, 1.0);
-        approx_eq(&out, &[(0.0, -1.0), (0.0, 5.0), (0.0, 11.0)]);
-    }
-}
-
 /// v0.26-E — apply Cut / Copy / Paste against the document-level
 /// `pad_clipboard`. Split-borrowed at the call site so both the
 /// editor and the clipboard slot are mutable.
@@ -716,5 +602,119 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         // mutate pad attributes, or rebuild the sketch — they all
         // need a history snapshot.
         _ => true,
+    }
+}
+
+#[cfg(test)]
+mod align_geometry_tests {
+    use super::apply_align;
+    use crate::library::editor::footprint::state::AlignOp;
+
+    /// Compare two centre lists with an absolute tolerance.
+    fn approx_eq(a: &[(f64, f64)], b: &[(f64, f64)]) {
+        assert_eq!(a.len(), b.len(), "length mismatch");
+        for (i, (p, q)) in a.iter().zip(b.iter()).enumerate() {
+            assert!(
+                (p.0 - q.0).abs() < 1e-9 && (p.1 - q.1).abs() < 1e-9,
+                "centre {i} mismatch: got {p:?}, want {q:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn align_left_moves_all_x_to_min() {
+        let pads = vec![(2.0, 0.0), (5.0, 1.0), (-1.0, 3.0)];
+        let out = apply_align(&pads, AlignOp::Left, 1.0);
+        // Every centre X → min (-1.0); Y untouched.
+        approx_eq(&out, &[(-1.0, 0.0), (-1.0, 1.0), (-1.0, 3.0)]);
+    }
+
+    #[test]
+    fn align_right_moves_all_x_to_max() {
+        let pads = vec![(2.0, 0.0), (5.0, 1.0), (-1.0, 3.0)];
+        let out = apply_align(&pads, AlignOp::Right, 1.0);
+        approx_eq(&out, &[(5.0, 0.0), (5.0, 1.0), (5.0, 3.0)]);
+    }
+
+    #[test]
+    fn align_top_bottom_move_y_only() {
+        let pads = vec![(0.0, 2.0), (1.0, 8.0), (2.0, -4.0)];
+        let top = apply_align(&pads, AlignOp::Top, 1.0);
+        approx_eq(&top, &[(0.0, -4.0), (1.0, -4.0), (2.0, -4.0)]);
+        let bottom = apply_align(&pads, AlignOp::Bottom, 1.0);
+        approx_eq(&bottom, &[(0.0, 8.0), (1.0, 8.0), (2.0, 8.0)]);
+    }
+
+    #[test]
+    fn center_h_v_align_to_mean() {
+        let pads = vec![(0.0, 0.0), (4.0, 10.0)];
+        let ch = apply_align(&pads, AlignOp::CenterH, 1.0);
+        // mean X = 2.0
+        approx_eq(&ch, &[(2.0, 0.0), (2.0, 10.0)]);
+        let cv = apply_align(&pads, AlignOp::CenterV, 1.0);
+        // mean Y = 5.0
+        approx_eq(&cv, &[(0.0, 5.0), (4.0, 5.0)]);
+    }
+
+    #[test]
+    fn distribute_h_equalises_gaps_and_keeps_extremes() {
+        // Unevenly spaced: 0, 1, 9 → after distribute: 0, 4.5, 9.
+        let pads = vec![(0.0, 0.0), (1.0, 0.0), (9.0, 0.0)];
+        let out = apply_align(&pads, AlignOp::DistributeH, 1.0);
+        approx_eq(&out, &[(0.0, 0.0), (4.5, 0.0), (9.0, 0.0)]);
+        // Gaps are now equal.
+        let g1 = out[1].0 - out[0].0;
+        let g2 = out[2].0 - out[1].0;
+        assert!((g1 - g2).abs() < 1e-9);
+    }
+
+    #[test]
+    fn distribute_h_preserves_input_order_when_unsorted() {
+        // Input not sorted by X; extremes (0 and 8) stay, middle (idx 0,
+        // X=6) gets re-placed at the equal-gap slot for its rank.
+        let pads = vec![(6.0, 0.0), (0.0, 0.0), (8.0, 0.0)];
+        let out = apply_align(&pads, AlignOp::DistributeH, 1.0);
+        // Ranks by X: idx1(0) → 0, idx0(6) → 4, idx2(8) → 8.
+        approx_eq(&out, &[(4.0, 0.0), (0.0, 0.0), (8.0, 0.0)]);
+    }
+
+    #[test]
+    fn distribute_v_equalises_gaps() {
+        let pads = vec![(0.0, 0.0), (0.0, 2.0), (0.0, 10.0)];
+        let out = apply_align(&pads, AlignOp::DistributeV, 1.0);
+        approx_eq(&out, &[(0.0, 0.0), (0.0, 5.0), (0.0, 10.0)]);
+    }
+
+    #[test]
+    fn increase_h_spacing_grows_span_by_step_times_gaps() {
+        // 3 pads at x = 0, 5, 10; mean = 5; step = 1 → each of 2 gaps
+        // grows by 1 → new span 12, centred on 5 → x = -1, 5, 11.
+        let pads = vec![(0.0, 0.0), (5.0, 0.0), (10.0, 0.0)];
+        let out = apply_align(&pads, AlignOp::IncreaseHSpacing, 1.0);
+        approx_eq(&out, &[(-1.0, 0.0), (5.0, 0.0), (11.0, 0.0)]);
+    }
+
+    #[test]
+    fn decrease_h_spacing_shrinks_span() {
+        // Inverse of the increase case: span 10 → 8, centred on 5.
+        let pads = vec![(0.0, 0.0), (5.0, 0.0), (10.0, 0.0)];
+        let out = apply_align(&pads, AlignOp::DecreaseHSpacing, 1.0);
+        approx_eq(&out, &[(1.0, 0.0), (5.0, 0.0), (9.0, 0.0)]);
+    }
+
+    #[test]
+    fn decrease_spacing_clamps_at_zero_span() {
+        // Over-contracting must not invert the order or go negative.
+        let pads = vec![(0.0, 0.0), (1.0, 0.0)];
+        // One gap, step huge → new span clamped to 0 → both at mean 0.5.
+        let out = apply_align(&pads, AlignOp::DecreaseHSpacing, 100.0);
+        approx_eq(&out, &[(0.5, 0.0), (0.5, 0.0)]);
+    }
+
+    #[test]
+    fn increase_v_spacing_grows_vertical_span() {
+        let pads = vec![(0.0, 0.0), (0.0, 5.0), (0.0, 10.0)];
+        let out = apply_align(&pads, AlignOp::IncreaseVSpacing, 1.0);
+        approx_eq(&out, &[(0.0, -1.0), (0.0, 5.0), (0.0, 11.0)]);
     }
 }

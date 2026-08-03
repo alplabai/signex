@@ -105,78 +105,78 @@ pub(super) fn view_footprint_editor_properties<'a>(
     //   - Otherwise → fall through to the existing empty-canvas chrome.
     if fp.mode_kind == FootprintModeKind::Pads {
         let in_placement = fp.placement_active || fp.placement_paused;
-        if let Some(pad) = fp.selected_pad.as_ref() {
-            if !in_placement {
-                let values = PadFormValues::from_selected_pad(pad, fp);
-                let target = PadEditTarget::Selected(pad.idx);
-                col = render_pad_form_properties(
-                    col,
-                    &values,
-                    target,
-                    false,
-                    muted,
-                    primary,
-                    border_c,
-                    collapsed_sections,
-                );
-                col = props_kv_row(
-                    col,
-                    muted,
-                    input_bg,
-                    input_bdr,
-                    "Position",
-                    format!("({:.3}, {:.3}) mm", pad.position_mm[0], pad.position_mm[1]),
-                );
-                col = render_pad_form_pad_stack(
-                    col,
-                    &values,
-                    target,
-                    muted,
-                    primary,
-                    border_c,
-                    collapsed_sections,
-                    &fp.selected_pad_shape_params,
-                );
-                col = render_pad_form_pad_features(
-                    col,
-                    &values,
-                    target,
-                    muted,
-                    primary,
-                    border_c,
-                    collapsed_sections,
-                );
-                // v0.21 — "Edit in Sketch" jump button. Visible only
-                // when the pad has a backing sketch entity (auto-
-                // minted on first Sketch-mode entry or placed via
-                // sketch). The handler switches editor.state.mode to
-                // Sketch + selects entity_id; if the pad has no
-                // sketch entity yet, this is a no-op.
-                let pad_idx = pad.idx;
-                col = col.push(
-                    container(
-                        iced::widget::button(text("Edit in Sketch ▸").size(10).color(primary))
-                            .padding([4, 10])
-                            .on_press(PanelMsg::FpEditorEditPadInSketch { pad_idx })
-                            .style(iced::widget::button::primary),
-                    )
-                    .padding([6, 8])
-                    .width(Length::Fill),
-                );
-                // v0.25 polish — reserve 12 px on the right so the
-                // scrollbar doesn't overlap input fields. Without
-                // this, picklists and text_inputs that extend to
-                // Length::Fill end exactly under the scrollbar's
-                // track and the user can't reach the right edge.
-                return scrollable(container(col).padding(iced::Padding {
-                    top: 0.0,
-                    right: 12.0,
-                    bottom: 0.0,
-                    left: 0.0,
-                }))
-                .width(Length::Fill)
-                .into();
-            }
+        if let Some(pad) = fp.selected_pad.as_ref()
+            && !in_placement
+        {
+            let values = PadFormValues::from_selected_pad(pad, fp);
+            let target = PadEditTarget::Selected(pad.idx);
+            col = render_pad_form_properties(
+                col,
+                &values,
+                target,
+                false,
+                muted,
+                primary,
+                border_c,
+                collapsed_sections,
+            );
+            col = props_kv_row(
+                col,
+                muted,
+                input_bg,
+                input_bdr,
+                "Position",
+                format!("({:.3}, {:.3}) mm", pad.position_mm[0], pad.position_mm[1]),
+            );
+            col = render_pad_form_pad_stack(
+                col,
+                &values,
+                target,
+                muted,
+                primary,
+                border_c,
+                collapsed_sections,
+                &fp.selected_pad_shape_params,
+            );
+            col = render_pad_form_pad_features(
+                col,
+                &values,
+                target,
+                muted,
+                primary,
+                border_c,
+                collapsed_sections,
+            );
+            // v0.21 — "Edit in Sketch" jump button. Visible only
+            // when the pad has a backing sketch entity (auto-
+            // minted on first Sketch-mode entry or placed via
+            // sketch). The handler switches editor.state.mode to
+            // Sketch + selects entity_id; if the pad has no
+            // sketch entity yet, this is a no-op.
+            let pad_idx = pad.idx;
+            col = col.push(
+                container(
+                    iced::widget::button(text("Edit in Sketch ▸").size(10).color(primary))
+                        .padding([4, 10])
+                        .on_press(PanelMsg::FpEditorEditPadInSketch { pad_idx })
+                        .style(iced::widget::button::primary),
+                )
+                .padding([6, 8])
+                .width(Length::Fill),
+            );
+            // v0.25 polish — reserve 12 px on the right so the
+            // scrollbar doesn't overlap input fields. Without
+            // this, picklists and text_inputs that extend to
+            // Length::Fill end exactly under the scrollbar's
+            // track and the user can't reach the right edge.
+            return scrollable(container(col).padding(iced::Padding {
+                top: 0.0,
+                right: 12.0,
+                bottom: 0.0,
+                left: 0.0,
+            }))
+            .width(Length::Fill)
+            .into();
         }
         if in_placement {
             let values = PadFormValues::from_next_pad(fp);

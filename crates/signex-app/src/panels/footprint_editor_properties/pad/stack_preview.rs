@@ -2,10 +2,8 @@
 //! enums (PadShapeChoice / HoleShapeChoice / ExpansionMode) used by
 //! the pick_list rows in `pad_form`.
 
-use iced::widget::{
-    Column, Space, button, column, container, pick_list, row, scrollable, text, text_input,
-};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::widget::{container, row, text};
+use iced::{Color, Length, Theme};
 
 use super::super::super::PanelMsg;
 use super::form::PadFormValues;

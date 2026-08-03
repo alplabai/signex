@@ -322,7 +322,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                 );
                 let mut grid_row = iced::widget::Row::new().spacing(2).padding([0, 8]);
                 for i in 0..count {
-                    let suppressed = suppressed_instances.iter().any(|si| *si == i);
+                    let suppressed = suppressed_instances.contains(&i);
                     let on = !suppressed;
                     let cb =
                         iced::widget::checkbox(on)

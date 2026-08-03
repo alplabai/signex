@@ -51,7 +51,7 @@ pub fn solve(a: &[Vec<f64>], b: &[f64]) -> Result<Vec<f64>, LinAlgError> {
         }
     }
 
-    let mut lu: Vec<Vec<f64>> = a.iter().map(|row| row.clone()).collect();
+    let mut lu: Vec<Vec<f64>> = a.to_vec();
     let perm = lu_decompose(&mut lu)?;
     lu_solve(&lu, &perm, b)
 }
@@ -142,7 +142,7 @@ impl LuDecomposition {
     /// Factor a square matrix into its packed LU form. The input is
     /// borrowed and cloned internally so callers can reuse `a`.
     pub fn new(a: &[Vec<f64>]) -> Result<Self, LinAlgError> {
-        let mut lu: Vec<Vec<f64>> = a.iter().map(|row| row.clone()).collect();
+        let mut lu: Vec<Vec<f64>> = a.to_vec();
         let perm = lu_decompose(&mut lu)?;
         Ok(Self { lu, perm })
     }
@@ -287,7 +287,7 @@ impl QrDecomposition {
         }
 
         // Working buffer (clone so the caller's input is untouched).
-        let mut r: Vec<Vec<f64>> = a.iter().map(|row| row.clone()).collect();
+        let mut r: Vec<Vec<f64>> = a.to_vec();
 
         let steps = m.min(n);
         for k in 0..steps {

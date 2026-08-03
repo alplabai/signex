@@ -34,8 +34,6 @@
 //! canvas (Stack overlay layer) so it doesn't steal vertical space
 //! from the drawing area.
 
-use std::path::PathBuf;
-
 use iced::widget::{Space, container, text, text_input};
 use iced::{Border, Color, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;

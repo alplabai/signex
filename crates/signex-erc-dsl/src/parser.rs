@@ -215,9 +215,8 @@ fn primary_parser<'src>(
     let ident_str = ascii::ident().padded().map(str::to_string);
 
     let method_or_field_cmp = ident_str
-        .clone()
         .then_ignore(just('.').padded())
-        .then(ident_str.clone()) // field or method name
+        .then(ident_str) // field or method name
         .then(
             // Optional method args
             just('(')

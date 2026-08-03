@@ -502,12 +502,11 @@ fn try_consume_repick_polar_center(
     let ToolPending::RepickPolarCenter { array_id } = editor.state.tool_pending else {
         return false;
     };
-    if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
-        if let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id) {
-            if let signex_sketch::array::ArrayKind::Polar { center, .. } = &mut array.kind {
-                *center = resolved_id;
-            }
-        }
+    if let Some(sketch) = editor.primitive_mut().sketch.as_mut()
+        && let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id)
+        && let signex_sketch::array::ArrayKind::Polar { center, .. } = &mut array.kind
+    {
+        *center = resolved_id;
     }
     editor.with_parts(|state, primitive| {
         apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);

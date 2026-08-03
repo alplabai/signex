@@ -350,7 +350,7 @@ fn view_constraint_submenu<'a>(
         pill_row = pill_row.push(input);
     }
 
-    if let Some(_) = primary {
+    if primary.is_some() {
         let clear_path = editor.path.clone();
         pill_row = pill_row.push(Space::new().width(Length::Fixed(8.0)));
         let clear = button(text("Deselect").size(10).color(muted))

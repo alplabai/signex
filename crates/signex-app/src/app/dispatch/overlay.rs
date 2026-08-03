@@ -263,18 +263,18 @@ impl Signex {
                 Task::none()
             }
             ContextMenuMsg::SubmenuTickHover => {
-                if let Some((kind, started)) = self.interaction_state.pending_submenu {
-                    if started.elapsed() >= std::time::Duration::from_millis(200) {
-                        self.interaction_state.context_submenu = Some(kind);
-                        self.interaction_state.pending_submenu = None;
-                        self.interaction_state.submenu_unhovered_since = None;
-                    }
+                if let Some((kind, started)) = self.interaction_state.pending_submenu
+                    && started.elapsed() >= std::time::Duration::from_millis(200)
+                {
+                    self.interaction_state.context_submenu = Some(kind);
+                    self.interaction_state.pending_submenu = None;
+                    self.interaction_state.submenu_unhovered_since = None;
                 }
-                if let Some(since) = self.interaction_state.submenu_unhovered_since {
-                    if since.elapsed() >= std::time::Duration::from_millis(150) {
-                        self.interaction_state.context_submenu = None;
-                        self.interaction_state.submenu_unhovered_since = None;
-                    }
+                if let Some(since) = self.interaction_state.submenu_unhovered_since
+                    && since.elapsed() >= std::time::Duration::from_millis(150)
+                {
+                    self.interaction_state.context_submenu = None;
+                    self.interaction_state.submenu_unhovered_since = None;
                 }
                 Task::none()
             }
@@ -456,10 +456,10 @@ impl Signex {
                 Task::none()
             }
             EnableVersionControlMsg::ToggleItem(idx) => {
-                if let Some(s) = self.ui_state.enable_version_control.as_mut() {
-                    if let Some(item) = s.items.get_mut(idx) {
-                        item.tracked = !item.tracked;
-                    }
+                if let Some(s) = self.ui_state.enable_version_control.as_mut()
+                    && let Some(item) = s.items.get_mut(idx)
+                {
+                    item.tracked = !item.tracked;
                 }
                 Task::none()
             }

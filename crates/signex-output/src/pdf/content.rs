@@ -184,57 +184,56 @@ pub(super) fn build_page_content(
     }
 
     // Template frame and title block (if enabled).
-    if opts.include_title_block {
-        if let Some(template_id) = &opts.sheet_template {
-            if let Some(template) = crate::template::load_builtin(template_id) {
-                let frame_margin_pt = (template.frame.border_margin_mm * MM_TO_PT) as f32;
-                surface.stroke_rect(
-                    frame_margin_pt,
-                    frame_margin_pt,
-                    page_w_pt - 2.0 * frame_margin_pt,
-                    page_h_pt - 2.0 * frame_margin_pt,
-                    (0.15 * MM_TO_PT) as f32,
-                );
+    if opts.include_title_block
+        && let Some(template_id) = &opts.sheet_template
+        && let Some(template) = crate::template::load_builtin(template_id)
+    {
+        let frame_margin_pt = (template.frame.border_margin_mm * MM_TO_PT) as f32;
+        surface.stroke_rect(
+            frame_margin_pt,
+            frame_margin_pt,
+            page_w_pt - 2.0 * frame_margin_pt,
+            page_h_pt - 2.0 * frame_margin_pt,
+            (0.15 * MM_TO_PT) as f32,
+        );
 
-                let sub_ctx = SubstitutionContext {
-                    metadata: &ctx.metadata,
-                    filename: sheet
-                        .path
-                        .file_name()
-                        .unwrap_or_default()
-                        .to_string_lossy()
-                        .to_string(),
-                    sheet_name: sheet.sheet_name.clone(),
-                    sheet_number: sheet.sheet_number,
-                    sheet_count: sheet.sheet_count,
-                    signex_version: env!("CARGO_PKG_VERSION"),
-                    variant: opts.variant.clone(),
-                    physical_structure: opts.use_physical_structure,
-                    physical_sheet_number: opts.physical_sheet_number,
-                    physical_document_number: opts.physical_document_number,
-                };
+        let sub_ctx = SubstitutionContext {
+            metadata: &ctx.metadata,
+            filename: sheet
+                .path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string(),
+            sheet_name: sheet.sheet_name.clone(),
+            sheet_number: sheet.sheet_number,
+            sheet_count: sheet.sheet_count,
+            signex_version: env!("CARGO_PKG_VERSION"),
+            variant: opts.variant.clone(),
+            physical_structure: opts.use_physical_structure,
+            physical_sheet_number: opts.physical_sheet_number,
+            physical_document_number: opts.physical_document_number,
+        };
 
-                let tb_width_pt = (template.title_block.width_mm * MM_TO_PT) as f32;
-                let tb_height_pt = (template.title_block.height_mm * MM_TO_PT) as f32;
-                let tb_x = page_w_pt - tb_width_pt;
-                let tb_y = page_h_pt - tb_height_pt;
-                surface.stroke_rect(
-                    tb_x,
-                    tb_y,
-                    tb_width_pt,
-                    tb_height_pt,
-                    (0.2 * MM_TO_PT) as f32,
-                );
+        let tb_width_pt = (template.title_block.width_mm * MM_TO_PT) as f32;
+        let tb_height_pt = (template.title_block.height_mm * MM_TO_PT) as f32;
+        let tb_x = page_w_pt - tb_width_pt;
+        let tb_y = page_h_pt - tb_height_pt;
+        surface.stroke_rect(
+            tb_x,
+            tb_y,
+            tb_width_pt,
+            tb_height_pt,
+            (0.2 * MM_TO_PT) as f32,
+        );
 
-                for field in &template.title_block.fields {
-                    let resolved = crate::resolve(&field.default_text, &sub_ctx);
-                    let fx = tb_x + (field.x_mm * MM_TO_PT) as f32;
-                    let fy = tb_y + (field.y_mm * MM_TO_PT) as f32;
-                    let font = PdfFont::for_style(field.font_style);
-                    let size = (field.font_size_mm * MM_TO_PT) as f32;
-                    surface.text_at(fx, fy, font.alias(), size, &resolved);
-                }
-            }
+        for field in &template.title_block.fields {
+            let resolved = crate::resolve(&field.default_text, &sub_ctx);
+            let fx = tb_x + (field.x_mm * MM_TO_PT) as f32;
+            let fy = tb_y + (field.y_mm * MM_TO_PT) as f32;
+            let font = PdfFont::for_style(field.font_style);
+            let size = (field.font_size_mm * MM_TO_PT) as f32;
+            surface.text_at(fx, fy, font.alias(), size, &resolved);
         }
     }
 

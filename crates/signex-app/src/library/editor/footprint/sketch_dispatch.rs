@@ -328,11 +328,11 @@ fn apply_edit_inner(footprint: &mut Footprint, edit: SketchEdit) {
         }
         SketchEdit::MovePoint { id, dx, dy } => {
             for ent in sketch.entities.iter_mut() {
-                if ent.id == id {
-                    if let signex_sketch::entity::EntityKind::Point { x, y } = &mut ent.kind {
-                        *x += dx;
-                        *y += dy;
-                    }
+                if ent.id == id
+                    && let signex_sketch::entity::EntityKind::Point { x, y } = &mut ent.kind
+                {
+                    *x += dx;
+                    *y += dy;
                 }
             }
         }

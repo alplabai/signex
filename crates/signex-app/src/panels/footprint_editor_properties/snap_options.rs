@@ -2,9 +2,7 @@
 //! (All Layers / Current Layer / Off) and the sub-tab pill row
 //! (Grids / Guides / Axes).
 
-use iced::widget::{
-    Column, Space, button, column, container, pick_list, row, scrollable, text, text_input,
-};
+use iced::widget::{Column, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
 use super::super::{FootprintEditorPanelContext, PanelMsg};

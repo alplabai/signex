@@ -10,8 +10,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
 ) -> Option<crate::panels::FootprintEditorPanelContext> {
     use crate::library::editor::footprint::state::EditorMode;
     use crate::panels::{
-        FootprintEditorPanelContext, FootprintModeKind, FootprintPadSummary,
-        FootprintSketchEntitySummary, FootprintSolveSummary, OverConstraintSummary,
+        FootprintEditorPanelContext, FootprintModeKind, FootprintPadSummary, FootprintSolveSummary,
     };
 
     let active = app.document_state.tabs.get(app.document_state.active_tab)?;
@@ -216,36 +215,36 @@ pub(super) fn build_footprint_editor_panel_ctx(
             .and_then(|s| s.to_str())
             .map(|s| s.to_string());
         let footprints_dir = snxlib_path.parent().map(|d| d.join("footprints"));
-        if let Some(dir) = footprints_dir {
-            if let Ok(entries) = std::fs::read_dir(&dir) {
-                let mut paths: Vec<std::path::PathBuf> = entries
-                    .filter_map(|e| e.ok())
-                    .map(|e| e.path())
-                    .filter(|p| {
-                        p.extension()
-                            .and_then(|e| e.to_str())
-                            .map(|e| e.eq_ignore_ascii_case("snxfpt"))
-                            .unwrap_or(false)
-                    })
-                    .collect();
-                paths.sort();
-                for p in paths {
-                    let display_name = p
-                        .file_stem()
-                        .and_then(|s| s.to_str())
-                        .map(|s| s.to_string())
-                        .unwrap_or_else(|| {
-                            p.file_name()
-                                .map(|f| f.to_string_lossy().into_owned())
-                                .unwrap_or_default()
-                        });
-                    let is_active = p == path;
-                    library_siblings.push(crate::panels::FootprintLibSibling {
-                        path: p,
-                        display_name,
-                        is_active,
+        if let Some(dir) = footprints_dir
+            && let Ok(entries) = std::fs::read_dir(&dir)
+        {
+            let mut paths: Vec<std::path::PathBuf> = entries
+                .filter_map(|e| e.ok())
+                .map(|e| e.path())
+                .filter(|p| {
+                    p.extension()
+                        .and_then(|e| e.to_str())
+                        .map(|e| e.eq_ignore_ascii_case("snxfpt"))
+                        .unwrap_or(false)
+                })
+                .collect();
+            paths.sort();
+            for p in paths {
+                let display_name = p
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| {
+                        p.file_name()
+                            .map(|f| f.to_string_lossy().into_owned())
+                            .unwrap_or_default()
                     });
-                }
+                let is_active = p == path;
+                library_siblings.push(crate::panels::FootprintLibSibling {
+                    path: p,
+                    display_name,
+                    is_active,
+                });
             }
         }
     } else {

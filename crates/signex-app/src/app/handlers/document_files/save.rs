@@ -395,18 +395,17 @@ impl Signex {
         // Mount through `state.open_library` (idempotent — re-opening a
         // mounted library is a no-op). Bail on failure: an invalid
         // library directory shouldn't poison the project's library list.
-        if self.library.library_at(lib_dir).is_none() {
-            if let Err(e) =
+        if self.library.library_at(lib_dir).is_none()
+            && let Err(e) =
                 crate::library::commands::open_library(&mut self.library, lib_dir.to_path_buf())
-            {
-                tracing::warn!(
-                    target: "signex::library",
-                    path = %lib_dir.display(),
-                    error = %e,
-                    "save-as: open_library failed — leaving project untouched"
-                );
-                return;
-            }
+        {
+            tracing::warn!(
+                target: "signex::library",
+                path = %lib_dir.display(),
+                error = %e,
+                "save-as: open_library failed — leaving project untouched"
+            );
+            return;
         }
         let library_id = self.library.library_at(lib_dir).map(|l| l.library_id);
 

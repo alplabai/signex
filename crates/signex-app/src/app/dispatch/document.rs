@@ -223,10 +223,10 @@ impl Signex {
                 self.finish_update()
             }
             BomPreviewMsg::ColumnHoverExit(idx) => {
-                if let Some(p) = self.document_state.bom_preview.as_mut() {
-                    if p.column_hover == Some(idx) {
-                        p.column_hover = None;
-                    }
+                if let Some(p) = self.document_state.bom_preview.as_mut()
+                    && p.column_hover == Some(idx)
+                {
+                    p.column_hover = None;
                 }
                 self.finish_update()
             }

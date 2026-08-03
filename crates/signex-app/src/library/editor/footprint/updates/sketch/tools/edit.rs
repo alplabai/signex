@@ -345,22 +345,22 @@ fn fillet_second_click(
     // directly and trigger a force-rebuild.
     if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
         for e in sketch.entities.iter_mut() {
-            if e.id == first_line {
-                if let EntityKind::Line { start, end } = &mut e.kind {
-                    if *start == corner_id {
-                        *start = ta_id;
-                    } else if *end == corner_id {
-                        *end = ta_id;
-                    }
+            if e.id == first_line
+                && let EntityKind::Line { start, end } = &mut e.kind
+            {
+                if *start == corner_id {
+                    *start = ta_id;
+                } else if *end == corner_id {
+                    *end = ta_id;
                 }
             }
-            if e.id == second_line {
-                if let EntityKind::Line { start, end } = &mut e.kind {
-                    if *start == corner_id {
-                        *start = tb_id;
-                    } else if *end == corner_id {
-                        *end = tb_id;
-                    }
+            if e.id == second_line
+                && let EntityKind::Line { start, end } = &mut e.kind
+            {
+                if *start == corner_id {
+                    *start = tb_id;
+                } else if *end == corner_id {
+                    *end = tb_id;
                 }
             }
         }

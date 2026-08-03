@@ -176,21 +176,19 @@ pub(super) fn view_selection<'a>(
             // right-click "Unlink radius" action; clicking it mints
             // a per-corner override for that one Arc and leaves the
             // other 3 corners on the shared corner_r parameter.
-            if ent.kind_label == "Arc" {
-                if let Some(id) = fp.selected_sketch_entity_id {
-                    col = col.push(
-                        container(
-                            iced::widget::button(
-                                text("Unlink corner radius").size(10).color(primary),
-                            )
+            if ent.kind_label == "Arc"
+                && let Some(id) = fp.selected_sketch_entity_id
+            {
+                col = col.push(
+                    container(
+                        iced::widget::button(text("Unlink corner radius").size(10).color(primary))
                             .padding([4, 10])
                             .on_press(PanelMsg::FpEditorUnlinkCornerRadius { arc_entity_id: id })
                             .style(iced::widget::button::secondary),
-                        )
-                        .padding([6, 8])
-                        .width(Length::Fill),
-                    );
-                }
+                    )
+                    .padding([6, 8])
+                    .width(Length::Fill),
+                );
             }
 
             // v0.16.2 — Role pick_list. Visible when an entity is
@@ -203,49 +201,42 @@ pub(super) fn view_selection<'a>(
                 primary,
                 border_c,
             ));
-            if !fp_is_collapsed("fp_role", collapsed_sections) {
-                if let Some(id) = fp.selected_sketch_entity_id {
-                    use crate::library::messages::RoleTag;
-                    let current = fp.selected_sketch_role;
-                    let dropdown = pick_list(RoleTag::ALL, Some(current), move |new_role| {
-                        PanelMsg::FpEditorSetRole { id, role: new_role }
-                    })
-                    .text_size(11)
-                    .padding([3, 8])
-                    .width(Length::Fill);
-                    col = col.push(container(dropdown).padding([4, 8]).width(Length::Fill));
-                    if !fp.selected_sketch_is_point {
-                        col = col.push(
-                            container(text("Pad role applies to Points only").size(9).color(muted))
-                                .padding([0, 8])
-                                .width(Length::Fill),
-                        );
-                    }
-
-                    // v0.16.4 — role sub-forms. Render when the
-                    // matching `*Attr` is set on the selected entity.
-                    col = render_pour_subform(col, fp, id, muted, primary, border_c);
-                    col = render_keepout_subform(col, fp, id, muted, primary, border_c);
-                    col = render_cutout_subform(col, fp, id, muted, primary, border_c);
-                    col = render_sketch_pad_subform(
-                        col,
-                        fp,
-                        muted,
-                        primary,
-                        border_c,
-                        collapsed_sections,
-                    );
-                    // v0.23 — Pattern sub-form. Renders when the
-                    // selected entity is the source of an Array.
-                    col = render_pattern_subform(
-                        col,
-                        fp,
-                        muted,
-                        primary,
-                        border_c,
-                        collapsed_sections,
+            if !fp_is_collapsed("fp_role", collapsed_sections)
+                && let Some(id) = fp.selected_sketch_entity_id
+            {
+                use crate::library::messages::RoleTag;
+                let current = fp.selected_sketch_role;
+                let dropdown = pick_list(RoleTag::ALL, Some(current), move |new_role| {
+                    PanelMsg::FpEditorSetRole { id, role: new_role }
+                })
+                .text_size(11)
+                .padding([3, 8])
+                .width(Length::Fill);
+                col = col.push(container(dropdown).padding([4, 8]).width(Length::Fill));
+                if !fp.selected_sketch_is_point {
+                    col = col.push(
+                        container(text("Pad role applies to Points only").size(9).color(muted))
+                            .padding([0, 8])
+                            .width(Length::Fill),
                     );
                 }
+
+                // v0.16.4 — role sub-forms. Render when the
+                // matching `*Attr` is set on the selected entity.
+                col = render_pour_subform(col, fp, id, muted, primary, border_c);
+                col = render_keepout_subform(col, fp, id, muted, primary, border_c);
+                col = render_cutout_subform(col, fp, id, muted, primary, border_c);
+                col = render_sketch_pad_subform(
+                    col,
+                    fp,
+                    muted,
+                    primary,
+                    border_c,
+                    collapsed_sections,
+                );
+                // v0.23 — Pattern sub-form. Renders when the
+                // selected entity is the source of an Array.
+                col = render_pattern_subform(col, fp, muted, primary, border_c, collapsed_sections);
             }
         }
         _ => {

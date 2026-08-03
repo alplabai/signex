@@ -315,31 +315,29 @@ fn walk_one_ring(
             };
             (v.intersect, v.neighbor, v.pos)
         };
-        if next_intersect {
-            if let Some(nb) = next_neighbor {
-                if on_subject {
-                    subject[next_idx].visited = true;
-                    clip[nb].visited = true;
-                } else {
-                    clip[next_idx].visited = true;
-                    subject[nb].visited = true;
-                }
-                out.push(next_pos);
-                on_subject = !on_subject;
-                cur = nb;
-                // Termination check — we've looped back to the
-                // start vertex's position via the neighbor link.
-                let start_pos = subject_start_pos_or_default(subject, start);
-                let last = out
-                    .last()
-                    .copied()
-                    .unwrap_or(Point2::new(f64::INFINITY, f64::INFINITY));
-                if (last.x - start_pos.x).abs() < 1e-12 && (last.y - start_pos.y).abs() < 1e-12 {
-                    out.pop();
-                    break;
-                }
-                continue;
+        if next_intersect && let Some(nb) = next_neighbor {
+            if on_subject {
+                subject[next_idx].visited = true;
+                clip[nb].visited = true;
+            } else {
+                clip[next_idx].visited = true;
+                subject[nb].visited = true;
             }
+            out.push(next_pos);
+            on_subject = !on_subject;
+            cur = nb;
+            // Termination check — we've looped back to the
+            // start vertex's position via the neighbor link.
+            let start_pos = subject_start_pos_or_default(subject, start);
+            let last = out
+                .last()
+                .copied()
+                .unwrap_or(Point2::new(f64::INFINITY, f64::INFINITY));
+            if (last.x - start_pos.x).abs() < 1e-12 && (last.y - start_pos.y).abs() < 1e-12 {
+                out.pop();
+                break;
+            }
+            continue;
         }
         cur = next_idx;
         // Termination: returned to start (subject side).

@@ -70,42 +70,6 @@ pub(crate) fn chrome_search_bar_geometry(window_w: f32) -> (f32, f32) {
     (x, width)
 }
 
-#[cfg(test)]
-mod chrome_geometry_tests {
-    use super::*;
-
-    /// The bar is centred on the window, shrinks monotonically as the
-    /// window narrows, and never runs off the right edge or under the
-    /// menu items.
-    #[test]
-    fn search_bar_stays_centred_and_clamped() {
-        let menu_end = crate::menu_bar::approx_menu_bar_width() + CHROME_SEARCH_LEFT_GAP;
-        for window_w in [1000.0_f32, 1280.0, 1440.0, 1920.0, 3840.0] {
-            let (x, w) = chrome_search_bar_geometry(window_w);
-            assert!(
-                (CHROME_SEARCH_BAR_MIN_WIDTH..=CHROME_SEARCH_BAR_WIDTH).contains(&w),
-                "bar width {w} out of range at {window_w}"
-            );
-            assert!(
-                x >= menu_end,
-                "bar slid under the menu at {window_w}: x={x}"
-            );
-            assert!(x + w <= window_w, "bar overflows the window at {window_w}");
-            // Centred whenever the window is wide enough for it.
-            if window_w - 2.0 * menu_end >= CHROME_SEARCH_BAR_MIN_WIDTH {
-                assert!(
-                    (x + w / 2.0 - window_w / 2.0).abs() < 0.01,
-                    "bar off window centre at {window_w}: x={x} w={w}"
-                );
-            }
-        }
-        // Narrowing the window never widens the bar.
-        let (_, wide) = chrome_search_bar_geometry(1920.0);
-        let (_, narrow) = chrome_search_bar_geometry(1100.0);
-        assert!(narrow <= wide, "bar grew as the window shrank");
-    }
-}
-
 impl Signex {
     pub fn view(&self, window_id: iced::window::Id) -> Element<'_, Message> {
         // Secondary windows (detached modals, future undocked tabs) render
@@ -530,7 +494,7 @@ impl Signex {
                 .push(Self::resize_edges_overlay())
                 .into()
         } else {
-            main.into()
+            main
         }
     }
 
@@ -780,5 +744,41 @@ impl Signex {
             }
         }
         layers
+    }
+}
+
+#[cfg(test)]
+mod chrome_geometry_tests {
+    use super::*;
+
+    /// The bar is centred on the window, shrinks monotonically as the
+    /// window narrows, and never runs off the right edge or under the
+    /// menu items.
+    #[test]
+    fn search_bar_stays_centred_and_clamped() {
+        let menu_end = crate::menu_bar::approx_menu_bar_width() + CHROME_SEARCH_LEFT_GAP;
+        for window_w in [1000.0_f32, 1280.0, 1440.0, 1920.0, 3840.0] {
+            let (x, w) = chrome_search_bar_geometry(window_w);
+            assert!(
+                (CHROME_SEARCH_BAR_MIN_WIDTH..=CHROME_SEARCH_BAR_WIDTH).contains(&w),
+                "bar width {w} out of range at {window_w}"
+            );
+            assert!(
+                x >= menu_end,
+                "bar slid under the menu at {window_w}: x={x}"
+            );
+            assert!(x + w <= window_w, "bar overflows the window at {window_w}");
+            // Centred whenever the window is wide enough for it.
+            if window_w - 2.0 * menu_end >= CHROME_SEARCH_BAR_MIN_WIDTH {
+                assert!(
+                    (x + w / 2.0 - window_w / 2.0).abs() < 0.01,
+                    "bar off window centre at {window_w}: x={x} w={w}"
+                );
+            }
+        }
+        // Narrowing the window never widens the bar.
+        let (_, wide) = chrome_search_bar_geometry(1920.0);
+        let (_, narrow) = chrome_search_bar_geometry(1100.0);
+        assert!(narrow <= wide, "bar grew as the window shrank");
     }
 }

@@ -60,10 +60,10 @@ fn add_pad(editor: &mut crate::app::FootprintEditorState, x_mm: f64, y_mm: f64) 
     // halves originate from disjoint editor fields.
     editor.with_parts(|state, primitive| {
         let idx = state.add_pad_at(x_mm, y_mm);
-        if let Some(pad) = state.pads.get_mut(idx) {
-            if footprint_sketch_is_active(primitive) {
-                pad_to_sketch::mirror_add_pad_to_sketch(pad, primitive);
-            }
+        if let Some(pad) = state.pads.get_mut(idx)
+            && footprint_sketch_is_active(primitive)
+        {
+            pad_to_sketch::mirror_add_pad_to_sketch(pad, primitive);
         }
         CanvasState::sync_pads_to_primitive(state, primitive);
     });
@@ -98,10 +98,10 @@ fn add_via(editor: &mut crate::app::FootprintEditorState, x_mm: f64, y_mm: f64) 
         state.pads.push(pad);
         let idx = state.pads.len() - 1;
         state.selected_pad = Some(idx);
-        if let Some(p) = state.pads.get_mut(idx) {
-            if footprint_sketch_is_active(primitive) {
-                pad_to_sketch::mirror_add_pad_to_sketch(p, primitive);
-            }
+        if let Some(p) = state.pads.get_mut(idx)
+            && footprint_sketch_is_active(primitive)
+        {
+            pad_to_sketch::mirror_add_pad_to_sketch(p, primitive);
         }
         CanvasState::sync_pads_to_primitive(state, primitive);
     });
@@ -285,10 +285,10 @@ fn add_text_frame(
 fn add_hole(editor: &mut crate::app::FootprintEditorState, x_mm: f64, y_mm: f64) {
     editor.with_parts(|state, primitive| {
         let idx = state.add_hole_at(x_mm, y_mm);
-        if let Some(pad) = state.pads.get_mut(idx) {
-            if footprint_sketch_is_active(primitive) {
-                pad_to_sketch::mirror_add_pad_to_sketch(pad, primitive);
-            }
+        if let Some(pad) = state.pads.get_mut(idx)
+            && footprint_sketch_is_active(primitive)
+        {
+            pad_to_sketch::mirror_add_pad_to_sketch(pad, primitive);
         }
         CanvasState::sync_pads_to_primitive(state, primitive);
     });

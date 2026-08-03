@@ -20,13 +20,6 @@ use super::super::super::{
     CollapsedSections, FootprintEditorPanelContext, FootprintPadSummary, PanelMsg,
 };
 use super::super::{fp_is_collapsed, props_section_header};
-use super::stack_preview::{
-    ExpansionMode, HoleShapeChoice, PadShapeChoice, pad_stack_preview, pad_stack_tab_strip,
-};
-use super::table::{
-    pad_copper_row, pad_table_check_cell, pad_table_disabled_cell, pad_table_header,
-    pad_table_input_cell, pad_table_picklist_cell, pad_table_row, pad_table_static_cell,
-};
 
 #[derive(Debug, Clone, Copy)]
 pub(in crate::panels::footprint_editor_properties) enum PadEditTarget {

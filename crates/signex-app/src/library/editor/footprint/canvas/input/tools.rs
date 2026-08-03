@@ -433,55 +433,56 @@ impl FootprintCanvas<'_> {
         cursor_pos: Point,
         world: (f64, f64),
     ) -> Option<canvas::Action<LibraryMessage>> {
-        if matches!(self.state.mode, EditorMode::Normal) && self.state.selection_filter.pads {
-            if let Some(pad_idx) = self.state.pad_at(world.0, world.1) {
-                let pad = &self.state.pads[pad_idx];
-                // v0.27 — defensively clear any stale rubber-band
-                // anchor from a prior gesture so the pad drag doesn't
-                // render alongside a phantom selection box.
-                cstate.box_select_anchor_screen = None;
-                cstate.box_select_current_screen = None;
-                cstate.drag = Some(DragState {
-                    pad_idx,
-                    sketch_point: None,
-                    sketch_line: None,
-                    grab_offset_mm: (world.0 - pad.position_mm.0, world.1 - pad.position_mm.1),
-                    last_world: world,
-                    press_screen: cursor_pos,
-                    moved: false,
-                });
-                // v0.27 — Altium-parity modifier handling on the
-                // pad-hit branch. Ctrl/Cmd toggles the pad in/out of
-                // the multi-select set; Shift extends without removal;
-                // bare click replaces the selection.
-                let cmd = cstate.current_modifiers.command();
-                let shift = cstate.current_modifiers.shift();
-                let select_msg = if cmd || shift {
-                    let mut current: Vec<usize> = self.state.selected_pad.into_iter().collect();
-                    current.extend(self.state.selected_pads_extra.iter().copied());
-                    if cmd {
-                        if let Some(pos) = current.iter().position(|&i| i == pad_idx) {
-                            current.remove(pos);
-                        } else {
-                            current.push(pad_idx);
-                        }
-                    } else if !current.contains(&pad_idx) {
+        if matches!(self.state.mode, EditorMode::Normal)
+            && self.state.selection_filter.pads
+            && let Some(pad_idx) = self.state.pad_at(world.0, world.1)
+        {
+            let pad = &self.state.pads[pad_idx];
+            // v0.27 — defensively clear any stale rubber-band
+            // anchor from a prior gesture so the pad drag doesn't
+            // render alongside a phantom selection box.
+            cstate.box_select_anchor_screen = None;
+            cstate.box_select_current_screen = None;
+            cstate.drag = Some(DragState {
+                pad_idx,
+                sketch_point: None,
+                sketch_line: None,
+                grab_offset_mm: (world.0 - pad.position_mm.0, world.1 - pad.position_mm.1),
+                last_world: world,
+                press_screen: cursor_pos,
+                moved: false,
+            });
+            // v0.27 — Altium-parity modifier handling on the
+            // pad-hit branch. Ctrl/Cmd toggles the pad in/out of
+            // the multi-select set; Shift extends without removal;
+            // bare click replaces the selection.
+            let cmd = cstate.current_modifiers.command();
+            let shift = cstate.current_modifiers.shift();
+            let select_msg = if cmd || shift {
+                let mut current: Vec<usize> = self.state.selected_pad.into_iter().collect();
+                current.extend(self.state.selected_pads_extra.iter().copied());
+                if cmd {
+                    if let Some(pos) = current.iter().position(|&i| i == pad_idx) {
+                        current.remove(pos);
+                    } else {
                         current.push(pad_idx);
                     }
-                    EditorMsg::Footprint(FootprintEditorMsg::SelectPads(current))
-                } else {
-                    EditorMsg::Footprint(FootprintEditorMsg::SelectPad(Some(pad_idx)))
-                };
-                return Some(
-                    canvas::Action::publish(LibraryMessage::EditorEvent {
-                        library_path: self.address.library_path.clone(),
-                        table: self.address.table.clone(),
-                        row_id: self.address.row_id,
-                        msg: select_msg,
-                    })
-                    .and_capture(),
-                );
-            }
+                } else if !current.contains(&pad_idx) {
+                    current.push(pad_idx);
+                }
+                EditorMsg::Footprint(FootprintEditorMsg::SelectPads(current))
+            } else {
+                EditorMsg::Footprint(FootprintEditorMsg::SelectPad(Some(pad_idx)))
+            };
+            return Some(
+                canvas::Action::publish(LibraryMessage::EditorEvent {
+                    library_path: self.address.library_path.clone(),
+                    table: self.address.table.clone(),
+                    row_id: self.address.row_id,
+                    msg: select_msg,
+                })
+                .and_capture(),
+            );
         }
         None
     }

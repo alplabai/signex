@@ -100,16 +100,17 @@ impl Signex {
             }
             UiMsg::GridPickerSelect(step_mm) => {
                 self.interaction_state.grid_picker = None;
-                if let Some(editor) = self.active_footprint_editor_mut() {
-                    if step_mm > 0.0 && step_mm.is_finite() {
-                        editor.state.snap_options.grid_step_mm = step_mm;
-                        // v0.18.21 — mirror onto active grid row.
-                        let idx = editor.state.active_grid_idx;
-                        if let Some(row) = editor.state.grids.get_mut(idx) {
-                            row.step_mm = step_mm;
-                        }
-                        editor.canvas_cache.clear();
+                if let Some(editor) = self.active_footprint_editor_mut()
+                    && step_mm > 0.0
+                    && step_mm.is_finite()
+                {
+                    editor.state.snap_options.grid_step_mm = step_mm;
+                    // v0.18.21 — mirror onto active grid row.
+                    let idx = editor.state.active_grid_idx;
+                    if let Some(row) = editor.state.grids.get_mut(idx) {
+                        row.step_mm = step_mm;
                     }
+                    editor.canvas_cache.clear();
                 }
                 self.refresh_panel_ctx();
                 self.finish_update()
@@ -315,10 +316,11 @@ impl Signex {
                     .and_then(|s| s.step_x_mm.trim().parse::<f64>().ok());
                 if let (Some(d), Some(editor)) = (draft, self.active_footprint_editor_mut()) {
                     let opts = &mut editor.state.snap_options;
-                    if let Some(step) = parsed_x {
-                        if step > 0.0 && step.is_finite() {
-                            opts.grid_step_mm = step;
-                        }
+                    if let Some(step) = parsed_x
+                        && step > 0.0
+                        && step.is_finite()
+                    {
+                        opts.grid_step_mm = step;
                     }
                     opts.fine_grid_display = d.fine_display;
                     opts.coarse_grid_display = d.coarse_display;

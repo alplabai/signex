@@ -22,12 +22,11 @@ impl Signex {
             Some(value)
         };
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
-                if let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id) {
-                    if let Some(p) = e.pour.as_mut() {
-                        p.net = net;
-                    }
-                }
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut()
+                && let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id)
+                && let Some(p) = e.pour.as_mut()
+            {
+                p.net = net;
             }
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
@@ -47,12 +46,11 @@ impl Signex {
         value: signex_sketch::attr::PourFillType,
     ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
-                if let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id) {
-                    if let Some(p) = e.pour.as_mut() {
-                        p.fill_type = value;
-                    }
-                }
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut()
+                && let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id)
+                && let Some(p) = e.pour.as_mut()
+            {
+                p.fill_type = value;
             }
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
@@ -73,14 +71,12 @@ impl Signex {
     ) -> bool {
         let parsed = value.trim().parse::<u32>().ok();
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
-                if let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id) {
-                    if let Some(p) = e.pour.as_mut() {
-                        if let Some(n) = parsed {
-                            p.priority = n;
-                        }
-                    }
-                }
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut()
+                && let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id)
+                && let Some(p) = e.pour.as_mut()
+                && let Some(n) = parsed
+            {
+                p.priority = n;
             }
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
@@ -102,18 +98,17 @@ impl Signex {
     ) -> bool {
         use crate::panels::KeepoutKindFlag;
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
-                if let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id) {
-                    if let Some(k) = e.keepout.as_mut() {
-                        match kind {
-                            KeepoutKindFlag::NoRouting => k.kinds.no_routing = value,
-                            KeepoutKindFlag::NoComponents => k.kinds.no_components = value,
-                            KeepoutKindFlag::NoCopper => k.kinds.no_copper = value,
-                            KeepoutKindFlag::NoVias => k.kinds.no_vias = value,
-                            KeepoutKindFlag::NoDrilling => k.kinds.no_drilling = value,
-                            KeepoutKindFlag::NoPours => k.kinds.no_pours = value,
-                        }
-                    }
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut()
+                && let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id)
+                && let Some(k) = e.keepout.as_mut()
+            {
+                match kind {
+                    KeepoutKindFlag::NoRouting => k.kinds.no_routing = value,
+                    KeepoutKindFlag::NoComponents => k.kinds.no_components = value,
+                    KeepoutKindFlag::NoCopper => k.kinds.no_copper = value,
+                    KeepoutKindFlag::NoVias => k.kinds.no_vias = value,
+                    KeepoutKindFlag::NoDrilling => k.kinds.no_drilling = value,
+                    KeepoutKindFlag::NoPours => k.kinds.no_pours = value,
                 }
             }
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
@@ -139,12 +134,11 @@ impl Signex {
             Some(value)
         };
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
-                if let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id) {
-                    if let Some(c) = e.board_cutout.as_mut() {
-                        c.edge_radius_expr = edge_radius;
-                    }
-                }
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut()
+                && let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id)
+                && let Some(c) = e.board_cutout.as_mut()
+            {
+                c.edge_radius_expr = edge_radius;
             }
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
@@ -202,11 +196,11 @@ impl Signex {
 
     /// v0.13 — Altium "Snap Distance" setter.
     pub(crate) fn handle_fp_set_snap_distance(&mut self, raw: String) -> bool {
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Ok(v) = raw.trim().parse::<f64>() {
-                editor.state.snap_options.snap_distance_mm = v.clamp(0.001, 100.0);
-                editor.canvas_cache.clear();
-            }
+        if let Some(editor) = self.active_footprint_editor_mut()
+            && let Ok(v) = raw.trim().parse::<f64>()
+        {
+            editor.state.snap_options.snap_distance_mm = v.clamp(0.001, 100.0);
+            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -214,11 +208,11 @@ impl Signex {
 
     /// v0.13 — Altium "Axis Snap Range" setter.
     pub(crate) fn handle_fp_set_axis_snap_range(&mut self, raw: String) -> bool {
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Ok(v) = raw.trim().parse::<f64>() {
-                editor.state.snap_options.axis_snap_range_mm = v.clamp(0.001, 100.0);
-                editor.canvas_cache.clear();
-            }
+        if let Some(editor) = self.active_footprint_editor_mut()
+            && let Ok(v) = raw.trim().parse::<f64>()
+        {
+            editor.state.snap_options.axis_snap_range_mm = v.clamp(0.001, 100.0);
+            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -258,12 +252,11 @@ impl Signex {
         value: bool,
     ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
-                if let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id) {
-                    if let Some(c) = e.board_cutout.as_mut() {
-                        c.through = value;
-                    }
-                }
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut()
+                && let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id)
+                && let Some(c) = e.board_cutout.as_mut()
+            {
+                c.through = value;
             }
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
@@ -292,71 +285,68 @@ impl Signex {
         use crate::panels::ArrayParamField;
         use signex_sketch::array::{ArrayKind, GridDepopulation};
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
-                if let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id) {
-                    let trimmed = value.trim();
-                    match (&mut array.kind, field) {
-                        (
-                            ArrayKind::Linear { count_expr, .. },
-                            ArrayParamField::LinearCountExpr,
-                        ) => {
-                            *count_expr = value;
-                        }
-                        (ArrayKind::Linear { dx_expr, .. }, ArrayParamField::LinearDxExpr) => {
-                            *dx_expr = value;
-                        }
-                        (ArrayKind::Linear { dy_expr, .. }, ArrayParamField::LinearDyExpr) => {
-                            *dy_expr = value;
-                        }
-                        (ArrayKind::Grid { nx_expr, .. }, ArrayParamField::GridNxExpr) => {
-                            *nx_expr = value;
-                        }
-                        (ArrayKind::Grid { ny_expr, .. }, ArrayParamField::GridNyExpr) => {
-                            *ny_expr = value;
-                        }
-                        (ArrayKind::Grid { dx_expr, .. }, ArrayParamField::GridDxExpr) => {
-                            *dx_expr = value;
-                        }
-                        (ArrayKind::Grid { dy_expr, .. }, ArrayParamField::GridDyExpr) => {
-                            *dy_expr = value;
-                        }
-                        (ArrayKind::Polar { count_expr, .. }, ArrayParamField::PolarCountExpr) => {
-                            *count_expr = value;
-                        }
-                        (
-                            ArrayKind::Polar {
-                                sweep_angle_expr, ..
-                            },
-                            ArrayParamField::PolarSweepAngleExpr,
-                        ) => {
-                            *sweep_angle_expr = value;
-                        }
-                        (
-                            ArrayKind::Grid { depopulation, .. }
-                            | ArrayKind::Polar { depopulation, .. },
-                            ArrayParamField::MaskExpr,
-                        ) => {
-                            // Preserve any existing per-instance
-                            // suppression list when editing the mask
-                            // expression — the user might be tweaking
-                            // both at once via the Properties panel.
-                            let prior = depopulation
-                                .as_ref()
-                                .map(|d| d.suppressed_instances.clone())
-                                .unwrap_or_default();
-                            if trimmed.is_empty() && prior.is_empty() {
-                                *depopulation = None;
-                            } else {
-                                *depopulation = Some(GridDepopulation {
-                                    mask_expr: value,
-                                    suppressed_instances: prior,
-                                });
-                            }
-                        }
-                        // Mismatched (kind, field) pairs no-op so a
-                        // stale panel can't corrupt the array.
-                        _ => {}
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut()
+                && let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id)
+            {
+                let trimmed = value.trim();
+                match (&mut array.kind, field) {
+                    (ArrayKind::Linear { count_expr, .. }, ArrayParamField::LinearCountExpr) => {
+                        *count_expr = value;
                     }
+                    (ArrayKind::Linear { dx_expr, .. }, ArrayParamField::LinearDxExpr) => {
+                        *dx_expr = value;
+                    }
+                    (ArrayKind::Linear { dy_expr, .. }, ArrayParamField::LinearDyExpr) => {
+                        *dy_expr = value;
+                    }
+                    (ArrayKind::Grid { nx_expr, .. }, ArrayParamField::GridNxExpr) => {
+                        *nx_expr = value;
+                    }
+                    (ArrayKind::Grid { ny_expr, .. }, ArrayParamField::GridNyExpr) => {
+                        *ny_expr = value;
+                    }
+                    (ArrayKind::Grid { dx_expr, .. }, ArrayParamField::GridDxExpr) => {
+                        *dx_expr = value;
+                    }
+                    (ArrayKind::Grid { dy_expr, .. }, ArrayParamField::GridDyExpr) => {
+                        *dy_expr = value;
+                    }
+                    (ArrayKind::Polar { count_expr, .. }, ArrayParamField::PolarCountExpr) => {
+                        *count_expr = value;
+                    }
+                    (
+                        ArrayKind::Polar {
+                            sweep_angle_expr, ..
+                        },
+                        ArrayParamField::PolarSweepAngleExpr,
+                    ) => {
+                        *sweep_angle_expr = value;
+                    }
+                    (
+                        ArrayKind::Grid { depopulation, .. }
+                        | ArrayKind::Polar { depopulation, .. },
+                        ArrayParamField::MaskExpr,
+                    ) => {
+                        // Preserve any existing per-instance
+                        // suppression list when editing the mask
+                        // expression — the user might be tweaking
+                        // both at once via the Properties panel.
+                        let prior = depopulation
+                            .as_ref()
+                            .map(|d| d.suppressed_instances.clone())
+                            .unwrap_or_default();
+                        if trimmed.is_empty() && prior.is_empty() {
+                            *depopulation = None;
+                        } else {
+                            *depopulation = Some(GridDepopulation {
+                                mask_expr: value,
+                                suppressed_instances: prior,
+                            });
+                        }
+                    }
+                    // Mismatched (kind, field) pairs no-op so a
+                    // stale panel can't corrupt the array.
+                    _ => {}
                 }
             }
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
@@ -384,25 +374,23 @@ impl Signex {
         use crate::panels::NumberingSchemeKindUi;
         use signex_sketch::array::NumberingScheme;
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
-                if let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id) {
-                    array.numbering = match scheme {
-                        NumberingSchemeKindUi::LinearIncrement => {
-                            NumberingScheme::LinearIncrement {
-                                start_expr: "1".into(),
-                                step_expr: "1".into(),
-                            }
-                        }
-                        NumberingSchemeKindUi::BgaRowCol => NumberingScheme::BgaRowCol {
-                            skip_letters: true,
-                            start_row: 'A',
-                            start_col: 1,
-                        },
-                        NumberingSchemeKindUi::Explicit => {
-                            NumberingScheme::Explicit { names: Vec::new() }
-                        }
-                    };
-                }
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut()
+                && let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id)
+            {
+                array.numbering = match scheme {
+                    NumberingSchemeKindUi::LinearIncrement => NumberingScheme::LinearIncrement {
+                        start_expr: "1".into(),
+                        step_expr: "1".into(),
+                    },
+                    NumberingSchemeKindUi::BgaRowCol => NumberingScheme::BgaRowCol {
+                        skip_letters: true,
+                        start_row: 'A',
+                        start_col: 1,
+                    },
+                    NumberingSchemeKindUi::Explicit => {
+                        NumberingScheme::Explicit { names: Vec::new() }
+                    }
+                };
             }
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
@@ -423,15 +411,13 @@ impl Signex {
     ) -> bool {
         use signex_sketch::array::NumberingScheme;
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
-                if let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id) {
-                    if let NumberingScheme::BgaRowCol {
-                        skip_letters: s, ..
-                    } = &mut array.numbering
-                    {
-                        *s = skip_letters;
-                    }
-                }
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut()
+                && let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id)
+                && let NumberingScheme::BgaRowCol {
+                    skip_letters: s, ..
+                } = &mut array.numbering
+            {
+                *s = skip_letters;
             }
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
@@ -464,12 +450,11 @@ impl Signex {
         }
         let upper = first_char.to_ascii_uppercase();
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
-                if let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id) {
-                    if let NumberingScheme::BgaRowCol { start_row, .. } = &mut array.numbering {
-                        *start_row = upper;
-                    }
-                }
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut()
+                && let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id)
+                && let NumberingScheme::BgaRowCol { start_row, .. } = &mut array.numbering
+            {
+                *start_row = upper;
             }
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
@@ -497,12 +482,11 @@ impl Signex {
             return true;
         };
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
-                if let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id) {
-                    if let NumberingScheme::BgaRowCol { start_col, .. } = &mut array.numbering {
-                        *start_col = parsed;
-                    }
-                }
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut()
+                && let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id)
+                && let NumberingScheme::BgaRowCol { start_col, .. } = &mut array.numbering
+            {
+                *start_col = parsed;
             }
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
@@ -576,35 +560,35 @@ impl Signex {
     ) -> bool {
         use signex_sketch::array::{ArrayKind, GridDepopulation};
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
-                if let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id) {
-                    let depop_slot: &mut Option<GridDepopulation> = match &mut array.kind {
-                        ArrayKind::Grid { depopulation, .. } => depopulation,
-                        ArrayKind::Polar { depopulation, .. } => depopulation,
-                        ArrayKind::Linear { .. } => return true,
-                    };
-                    if value {
-                        // Re-enable the instance — drop matching entries.
-                        if let Some(d) = depop_slot.as_mut() {
-                            d.suppressed_instances
-                                .retain(|(si, sj)| !(*si == i && *sj == j));
-                            if d.mask_expr.trim().is_empty() && d.suppressed_instances.is_empty() {
-                                *depop_slot = None;
-                            }
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut()
+                && let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id)
+            {
+                let depop_slot: &mut Option<GridDepopulation> = match &mut array.kind {
+                    ArrayKind::Grid { depopulation, .. } => depopulation,
+                    ArrayKind::Polar { depopulation, .. } => depopulation,
+                    ArrayKind::Linear { .. } => return true,
+                };
+                if value {
+                    // Re-enable the instance — drop matching entries.
+                    if let Some(d) = depop_slot.as_mut() {
+                        d.suppressed_instances
+                            .retain(|(si, sj)| !(*si == i && *sj == j));
+                        if d.mask_expr.trim().is_empty() && d.suppressed_instances.is_empty() {
+                            *depop_slot = None;
                         }
-                    } else {
-                        // Suppress the instance — append if absent.
-                        let d = depop_slot.get_or_insert_with(|| GridDepopulation {
-                            mask_expr: String::new(),
-                            suppressed_instances: Vec::new(),
-                        });
-                        if !d
-                            .suppressed_instances
-                            .iter()
-                            .any(|(si, sj)| *si == i && *sj == j)
-                        {
-                            d.suppressed_instances.push((i, j));
-                        }
+                    }
+                } else {
+                    // Suppress the instance — append if absent.
+                    let d = depop_slot.get_or_insert_with(|| GridDepopulation {
+                        mask_expr: String::new(),
+                        suppressed_instances: Vec::new(),
+                    });
+                    if !d
+                        .suppressed_instances
+                        .iter()
+                        .any(|(si, sj)| *si == i && *sj == j)
+                    {
+                        d.suppressed_instances.push((i, j));
                     }
                 }
             }

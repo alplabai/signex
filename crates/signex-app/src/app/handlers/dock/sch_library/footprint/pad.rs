@@ -53,24 +53,22 @@ impl Signex {
     }
 
     pub(crate) fn fp_editor_set_next_pad_size_x(&mut self, value: String) -> bool {
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Ok(parsed) = value.trim().parse::<f64>() {
-                if parsed > 0.0 {
-                    editor.state.next_pad_defaults.size_x_mm = parsed;
-                }
-            }
+        if let Some(editor) = self.active_footprint_editor_mut()
+            && let Ok(parsed) = value.trim().parse::<f64>()
+            && parsed > 0.0
+        {
+            editor.state.next_pad_defaults.size_x_mm = parsed;
         }
         self.refresh_panel_ctx();
         true
     }
 
     pub(crate) fn fp_editor_set_next_pad_size_y(&mut self, value: String) -> bool {
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Ok(parsed) = value.trim().parse::<f64>() {
-                if parsed > 0.0 {
-                    editor.state.next_pad_defaults.size_y_mm = parsed;
-                }
-            }
+        if let Some(editor) = self.active_footprint_editor_mut()
+            && let Ok(parsed) = value.trim().parse::<f64>()
+            && parsed > 0.0
+        {
+            editor.state.next_pad_defaults.size_y_mm = parsed;
         }
         self.refresh_panel_ctx();
         true
@@ -88,10 +86,10 @@ impl Signex {
     }
 
     pub(crate) fn fp_editor_set_next_pad_rotation(&mut self, value: String) -> bool {
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Ok(parsed) = value.trim().parse::<f64>() {
-                editor.state.next_pad_defaults.rotation_deg = parsed;
-            }
+        if let Some(editor) = self.active_footprint_editor_mut()
+            && let Ok(parsed) = value.trim().parse::<f64>()
+        {
+            editor.state.next_pad_defaults.rotation_deg = parsed;
         }
         self.refresh_panel_ctx();
         true
@@ -102,10 +100,11 @@ impl Signex {
         idx: usize,
         value: String,
     ) -> bool {
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Ok(parsed) = value.trim().parse::<f64>() {
-                if editor.state.pads.get(idx).is_some() {
-                    editor.with_parts(|state, primitive| {
+        if let Some(editor) = self.active_footprint_editor_mut()
+            && let Ok(parsed) = value.trim().parse::<f64>()
+            && editor.state.pads.get(idx).is_some()
+        {
+            editor.with_parts(|state, primitive| {
                         use crate::library::editor::footprint::pad_to_sketch;
                         let Some(pad) = state.pads.get_mut(idx) else {
                             return;
@@ -125,10 +124,8 @@ impl Signex {
                         }
                         crate::library::editor::footprint::state::FootprintEditorState::sync_pads_to_primitive(state, primitive);
                     });
-                    editor.dirty = true;
-                    editor.canvas_cache.clear();
-                }
-            }
+            editor.dirty = true;
+            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -340,9 +337,10 @@ impl Signex {
     where
         F: FnOnce(&mut crate::library::editor::footprint::state::EditorPad),
     {
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            if editor.state.pads.get(idx).is_some() {
-                editor.with_parts(|state, primitive| {
+        if let Some(editor) = self.active_footprint_editor_mut()
+            && editor.state.pads.get(idx).is_some()
+        {
+            editor.with_parts(|state, primitive| {
                     use crate::library::editor::footprint::pad_to_sketch;
                     let Some(pad) = state.pads.get_mut(idx) else {
                         return;
@@ -376,9 +374,8 @@ impl Signex {
                     }
                     crate::library::editor::footprint::state::FootprintEditorState::sync_pads_to_primitive(state, primitive);
                 });
-                editor.dirty = true;
-                editor.canvas_cache.clear();
-            }
+            editor.dirty = true;
+            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -399,14 +396,13 @@ impl Signex {
     {
         if let Some(editor) = self.active_footprint_editor_mut() {
             let sketch = editor.primitive_mut().sketch.as_mut();
-            if let Some(sketch) = sketch {
-                if let Some(entity) = sketch.entities.iter_mut().find(|e| e.id == id) {
-                    if let Some(attr) = entity.pad.as_mut() {
-                        f(attr);
-                        editor.dirty = true;
-                        editor.canvas_cache.clear();
-                    }
-                }
+            if let Some(sketch) = sketch
+                && let Some(entity) = sketch.entities.iter_mut().find(|e| e.id == id)
+                && let Some(attr) = entity.pad.as_mut()
+            {
+                f(attr);
+                editor.dirty = true;
+                editor.canvas_cache.clear();
             }
         }
         self.refresh_panel_ctx();
@@ -464,18 +460,18 @@ impl Signex {
         true
     }
     pub(crate) fn fp_editor_set_selected_pad_size_x(&mut self, idx: usize, value: String) -> bool {
-        if let Ok(parsed) = value.trim().parse::<f64>() {
-            if parsed > 0.0 {
-                self.with_selected_pad(idx, |pad| pad.size_mm.0 = parsed);
-            }
+        if let Ok(parsed) = value.trim().parse::<f64>()
+            && parsed > 0.0
+        {
+            self.with_selected_pad(idx, |pad| pad.size_mm.0 = parsed);
         }
         true
     }
     pub(crate) fn fp_editor_set_selected_pad_size_y(&mut self, idx: usize, value: String) -> bool {
-        if let Ok(parsed) = value.trim().parse::<f64>() {
-            if parsed > 0.0 {
-                self.with_selected_pad(idx, |pad| pad.size_mm.1 = parsed);
-            }
+        if let Ok(parsed) = value.trim().parse::<f64>()
+            && parsed > 0.0
+        {
+            self.with_selected_pad(idx, |pad| pad.size_mm.1 = parsed);
         }
         true
     }

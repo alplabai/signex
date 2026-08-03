@@ -25,7 +25,7 @@ use crate::library::messages::{EditorMsg, FootprintEditorMsg, LibraryMessage, Pr
 pub fn view_footprint<'a>(
     editor: &'a FootprintEditorState,
     tokens: &'a ThemeTokens,
-    theme_id: signex_types::theme::ThemeId,
+    _theme_id: signex_types::theme::ThemeId,
     custom_filter_presets: &'a [crate::active_bar::CustomFilterPreset],
 ) -> Element<'a, LibraryMessage> {
     use crate::library::editor::footprint::state::EditorMode;
