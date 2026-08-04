@@ -415,8 +415,16 @@ pub(super) fn view_sections<'a>(
                             .width(Length::Fill),
                     );
                     for oc in s.over_constraints.iter().take(8) {
-                        let label =
-                            format!("{} — residual {:.3e}", oc.kind_label, oc.residual_magnitude);
+                        // GH #599 — an unevaluable residual says so.
+                        // It used to render as "residual 0.000e0",
+                        // identical to a satisfied constraint.
+                        let label = match oc.residual_magnitude {
+                            Some(mag) => format!("{} — residual {:.3e}", oc.kind_label, mag),
+                            None => format!(
+                                "{} — residual unavailable (target expression did not evaluate)",
+                                oc.kind_label
+                            ),
+                        };
                         let inner: Element<'_, _> = if let Some(focus_id) = oc.focus_entity_id {
                             button(
                                 text(label)

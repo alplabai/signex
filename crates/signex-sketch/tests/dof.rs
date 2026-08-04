@@ -49,7 +49,7 @@ fn dof_under_constrained_marks_blue() {
     let j = numerical_jacobian(&s.data, &result.state, &packed.index, &empty_params())
         .expect("Jacobian builds even on empty constraint set");
 
-    let colours = entity_colours(&s.data, &result, &j, &result.index);
+    let colours = entity_colours(&s.data, &result, &j, &result.index, &empty_params());
     assert_eq!(
         colours.get(&p),
         Some(&DofColor::Under),
@@ -92,7 +92,7 @@ fn dof_fully_constrained_marks_black() {
     let j = numerical_jacobian(&s.data, &result.state, &packed.index, &empty_params())
         .expect("Jacobian builds at solved state");
 
-    let colours = entity_colours(&s.data, &result, &j, &result.index);
+    let colours = entity_colours(&s.data, &result, &j, &result.index, &empty_params());
 
     // P1 is Fixed → always Full (or Over if a constraint over-touches
     // it; here the residuals are zero so no Over).
@@ -192,10 +192,98 @@ fn dof_over_constrained_marks_red() {
          constraints; got {over_ids:?} (expected {cid_5mm} and/or {cid_10mm})"
     );
 
-    let colours = entity_colours(&s.data, &result, &j, &result.index);
+    let colours = entity_colours(&s.data, &result, &j, &result.index, &empty_params());
     assert_eq!(
         colours.get(&p2),
         Some(&DofColor::Over),
         "P2 — touched by an over-constrained Distance — should be Over"
+    );
+}
+
+/// GH #599 — the parametric twin of `dof_over_constrained_marks_red`.
+///
+/// Same conflict, but both targets are `DimTarget::Expr` referencing
+/// sketch parameters. `entity_colours` used to build its own empty
+/// `ResolvedParams`, so every parametric target evaluated to
+/// `ExprError::Unknown`, got dropped by the `Err(_) => continue`
+/// filter in `over_constraint_ids`, and the conflict was never
+/// attributed to a point — a false negative, not the false positive
+/// the old in-code comment claimed. The overlay painted an
+/// over-constrained sketch Full/Under.
+#[test]
+fn dof_parametric_over_constraint_marks_red() {
+    let mut s = Sketch::new();
+    let p1 = s.add_point(0.0, 0.0);
+    let p2 = s.add_point(1.0, 0.0);
+
+    s.data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::Fixed { point: p1 },
+    });
+    let cid_short = ConstraintId::new();
+    s.data.constraints.push(Constraint {
+        id: cid_short,
+        kind: ConstraintKind::DistancePtPt {
+            p1,
+            p2,
+            target: DimTarget::Expr("= d_short".to_string()),
+        },
+    });
+    let cid_long = ConstraintId::new();
+    s.data.constraints.push(Constraint {
+        id: cid_long,
+        kind: ConstraintKind::DistancePtPt {
+            p1,
+            p2,
+            target: DimTarget::Expr("= d_long".to_string()),
+        },
+    });
+
+    let mut params = ResolvedParams::new();
+    params.insert("d_short".to_string(), 5.0);
+    params.insert("d_long".to_string(), 10.0);
+
+    // Conflicting constraints legitimately fail LM's strict
+    // convergence test; fall back to the initial state exactly as
+    // `dof_over_constrained_marks_red` does.
+    let packed = pack(&s.data);
+    let result: SolveResult = match solve_lm(&s.data, &params, 5_000, TOL, MAX_ITERS) {
+        Ok(r) => r,
+        Err(SolveError::DidNotConverge { .. }) => {
+            let state = packed.vector.clone();
+            let r = total_residual(&s.data, &state, &packed.index, &params)
+                .expect("parametric residual evaluates at initial state");
+            SolveResult {
+                state,
+                index: packed.index.clone(),
+                iterations: MAX_ITERS,
+                final_residual_norm: norm_vec(&r),
+                elapsed_ms: 0,
+            }
+        }
+        Err(other) => panic!("unexpected solve error on conflicting constraints: {other:?}"),
+    };
+
+    let j = numerical_jacobian(&s.data, &result.state, &result.index, &params)
+        .expect("Jacobian builds at solved state");
+
+    let over_ids = over_constraint_ids(&s.data, &result, &j, &params);
+    assert!(
+        over_ids.contains(&cid_short) || over_ids.contains(&cid_long),
+        "over_constraint_ids with the real params must flag a parametric conflict; \
+         got {over_ids:?} (expected {cid_short} and/or {cid_long})"
+    );
+
+    let colours = entity_colours(&s.data, &result, &j, &result.index, &params);
+    assert_eq!(
+        colours.get(&p2),
+        Some(&DofColor::Over),
+        "P2 — touched by an over-constrained PARAMETRIC Distance — should be Over, \
+         not Under; entity_colours must evaluate the target against the solve's params"
+    );
+    assert_eq!(
+        colours.get(&p1),
+        Some(&DofColor::Over),
+        "Fixed P1 is touched by the same conflict and should be Over too"
     );
 }
