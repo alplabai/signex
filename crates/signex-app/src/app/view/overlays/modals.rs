@@ -242,38 +242,16 @@ impl Signex {
     }
 
     /// New Component modal was removed (v0.13); "Add Component" now
-    /// appends a draft row directly to the Library Browser table. This
-    /// branch keeps the per-library class computation compiled/exercised
-    /// until the append-row-direct dispatcher migration lands and the
-    /// `library.new_component` state + messages can be pruned. It
-    /// deliberately contributes no overlay.
+    /// appends a draft row directly to the Library Browser table, so this
+    /// overlay deliberately contributes no layers.
+    ///
+    /// It used to compute the per-library class list here purely to keep
+    /// that code exercised; the same computation lives in
+    /// `library/browser/sidebar.rs` and `dispatch/library/browser/classes.rs`,
+    /// which are the real consumers, so the copy was dropped. Prune this
+    /// function together with the `library.new_component` state + messages
+    /// once the append-row-direct dispatcher migration lands.
     pub(in crate::app::view) fn new_component_overlay(&self) -> Vec<Element<'_, Message>> {
-        if let Some(nc) = self.library.new_component.as_ref() {
-            // Class registry is per-library: use the picked library's
-            // manifest classes. Falls back to the user's prefs default
-            // when no library is selected yet.
-            let library_classes: Vec<crate::fonts::ComponentClassEntry> = nc
-                .library_idx
-                .and_then(|i| self.library.open_libraries.get(i))
-                .and_then(|lib| self.library.set.get(lib.library_id))
-                .map(|adapter| {
-                    adapter
-                        .library_classes()
-                        .into_iter()
-                        .map(|c| crate::fonts::ComponentClassEntry {
-                            key: c.key,
-                            label: c.label,
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-            let classes_to_show = if library_classes.is_empty() {
-                self.ui_state.component_classes.clone()
-            } else {
-                library_classes
-            };
-            let _ = (nc, classes_to_show);
-        }
         Vec::new()
     }
 

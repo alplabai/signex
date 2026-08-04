@@ -249,10 +249,8 @@ pub fn footprint_tabs_overlay<'a>(
 pub fn items(
     editor: &FootprintEditorState,
     theme_id: signex_types::theme::ThemeId,
-    tokens: &ThemeTokens,
 ) -> Vec<ActiveBarItem<LibraryMessage>> {
     let path: PathBuf = editor.path.clone();
-    let auto_fit_on = editor.state.auto_fit_courtyard;
 
     let _stub = |label: &str, glyph: &'static str| -> ActiveBarItem<LibraryMessage> {
         ActiveBarItem::Button(ActiveBarButton {
@@ -310,37 +308,10 @@ pub fn items(
     // v0.14.2: Auto-fit Courtyard moved to the Properties panel
     // default body (Settings section). The active bar stays focused
     // on placement/edit tools.
-    let _ = auto_fit_on;
-
-    // Delete selected pad — emits the existing message; greyed when
-    // no pad is selected.
-    let delete_path = path.clone();
-    let has_selection = editor.state.selected_pad.is_some();
-    let delete = ActiveBarItem::Button(ActiveBarButton {
-        icon: ActiveBarIcon::Glyph("\u{2421}"), // ␡ DELETE symbol
-        tooltip: if has_selection {
-            "Delete selected pad".into()
-        } else {
-            "Delete (select a pad first)".into()
-        },
-        enabled: has_selection,
-        selected: false,
-        on_press: if has_selection {
-            Some(LibraryMessage::PrimitiveEditorEvent {
-                path: delete_path,
-                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::DeleteSelected),
-            })
-        } else {
-            None
-        },
-        ..ActiveBarButton::default()
-    });
 
     // v0.14.2: dedicated "Edit Sketch" button removed — mode
     // segments at the left of the bar drive mode switching.
 
-    let _ = tokens;
-    let _ = delete; // Delete key handles selection deletion — no bar button.
     // v0.13 — Pads-mode active bar simplified. Pure graphics
     // (Line / Arc / Polygon / Region) live in Sketch mode only;
     // PlaceHole is folded into PlacePad (the user picks `kind` via
@@ -388,5 +359,5 @@ pub fn view<'a>(
     theme_id: signex_types::theme::ThemeId,
     tokens: &'a ThemeTokens,
 ) -> iced::Element<'a, LibraryMessage> {
-    signex_widgets::active_bar::view(items(editor, theme_id, tokens), tokens)
+    signex_widgets::active_bar::view(items(editor, theme_id), tokens)
 }

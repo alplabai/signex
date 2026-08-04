@@ -557,9 +557,8 @@ impl Signex {
                     .containing_library(path)
                     .map(|lib| lib.display)
                     .unwrap_or_default();
-                let theme_id = self.ui_state.theme_id;
                 return crate::library::editor::standalone::view_symbol(
-                    editor, panel_ctx, display, theme_id, path,
+                    editor, panel_ctx, display, path,
                 )
                 .map(Message::Library);
             }
@@ -568,12 +567,8 @@ impl Signex {
             {
                 let tokens = &self.document_state.panel_ctx.tokens;
                 let theme_id = self.ui_state.theme_id;
-                let custom_presets = &self.interaction_state.custom_filter_presets;
                 return crate::library::editor::standalone::view_footprint(
-                    editor,
-                    tokens,
-                    theme_id,
-                    custom_presets,
+                    editor, tokens, theme_id,
                 )
                 .map(Message::Library);
             }

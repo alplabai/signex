@@ -72,12 +72,6 @@ impl DockArea {
             } else {
                 styles::ti(ctx.tokens.text_secondary)
             };
-            let line_c = if is_active {
-                styles::ti(ctx.tokens.accent)
-            } else {
-                iced::Color::TRANSPARENT
-            };
-
             // Visual feedback while dragging: give the source tab a
             // brighter border + tinted background so the user sees
             // which tab they grabbed.
@@ -92,8 +86,8 @@ impl DockArea {
             // Shared `signex_widgets::TabPill` custom widget — same
             // rounded-top + 3-sided border + accent underline that the
             // document tab bar uses. Panel tabs and document tabs stay
-            // visually in lockstep.
-            let _ = line_c; // accent line lives inside TabPill now
+            // visually in lockstep — the accent line is drawn by
+            // `TabPill` itself from `accent` + `is_active` below.
             let tab_active = styles::ti(ctx.tokens.hover);
             let accent = styles::ti(ctx.tokens.accent);
             let fill = if is_dragging_this {

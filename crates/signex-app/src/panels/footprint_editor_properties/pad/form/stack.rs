@@ -226,7 +226,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
                 ),
             ],
             &[2, 2, 3, 1],
-            muted,
             primary,
             border_c,
         ));
@@ -351,7 +350,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
                 }),
             ],
             &[2, 2, 3, 1],
-            muted,
             primary,
             border_c,
         ));
@@ -392,7 +390,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
                 }),
             ],
             &[2, 2, 3, 1],
-            muted,
             primary,
             border_c,
         ));
@@ -442,7 +439,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
                 }),
             ],
             &[2, 3, 1],
-            muted,
             primary,
             border_c,
         ));
@@ -482,7 +478,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
                 }),
             ],
             &[2, 3, 1],
-            muted,
             primary,
             border_c,
         ));

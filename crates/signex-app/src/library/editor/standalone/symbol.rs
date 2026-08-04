@@ -29,7 +29,6 @@ pub fn view_symbol<'a>(
     editor: &'a SymbolEditorState,
     panel_ctx: &'a PanelContext,
     display: LibraryDisplaySettings,
-    theme_id: signex_types::theme::ThemeId,
     path: &'a std::path::Path,
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
@@ -37,8 +36,8 @@ pub fn view_symbol<'a>(
     // Active bar moved to the app-view layer (view_main_for) so it
     // shares the schematic's window-absolute coordinate system — see
     // symbol::active_bar::{bar_items, dropdown_overlay}. The body here
-    // renders just toolbar + canvas; the bar is layered on top there.
-    let _ = theme_id;
+    // renders just toolbar + canvas; the bar is layered on top there,
+    // which is also where the theme id for its icons is resolved.
     let canvas_widget = view_symbol_canvas(editor, panel_ctx, display);
 
     let body = column![toolbar, canvas_widget]

@@ -193,8 +193,6 @@ pub fn items<'a>(
     // ~6 digits + "mm" hint inside the bar's vertical rhythm.
     let dim_input = build_dimension_input(editor, tokens);
 
-    let _ = tokens;
-
     // Bar shape: Select | Create ▾ Modify ▾ | <constraints the current
     // selection permits> | DimInput | Linetype. The two group triggers
     // replace what used to be twelve always-visible tool buttons; the

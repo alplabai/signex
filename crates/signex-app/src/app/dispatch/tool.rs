@@ -364,7 +364,6 @@ impl Signex {
                         .as_ref()
                         .map(|pp| pp.shape_fill)
                         .unwrap_or(signex_types::schematic::FillType::None);
-                    let label_text_for_commit = label_text.clone();
                     self.document_state.panel_ctx.pre_placement =
                         Some(crate::panels::PrePlacementData {
                             tool_name,
@@ -393,7 +392,6 @@ impl Signex {
                     // the next click. Placement resumes when the user hits
                     // Resume or Enter.
                     self.interaction_state.active_canvas_mut().placement_paused = true;
-                    let _ = label_text_for_commit;
                 }
                 self.finish_update()
             }

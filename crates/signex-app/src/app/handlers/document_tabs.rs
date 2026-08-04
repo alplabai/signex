@@ -76,18 +76,18 @@ impl Signex {
                 }
                 Task::done(Message::ContextMenu(ContextMenuMsg::ShowTab(idx)))
             }
-            TabMessage::StartDrag(idx, x, y) => {
+            TabMessage::StartDrag(idx) => {
                 // Drag-to-reorder / drag-out-to-detach originates only
                 // from the main tab bar. The single-tab bar inside an
                 // undocked window has nothing to drag into.
                 if !is_main {
                     return Task::none();
                 }
-                // Seed last_mouse_pos as (x, y) = (0, 0) wasn't real;
-                // pull the live cursor from interaction_state so the
-                // next DragMove delivers a correct position check.
+                // Seed the drag anchor from the live cursor: the press
+                // message carries no position, so `last_mouse_pos` is the
+                // only real coordinate available for the next DragMove's
+                // threshold check.
                 let (mx, my) = self.interaction_state.last_mouse_pos;
-                let _ = (x, y);
                 self.ui_state.tab_dragging = Some((idx, mx, my));
                 Task::none()
             }

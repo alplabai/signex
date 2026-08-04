@@ -188,9 +188,9 @@ pub fn view<'a>(
     // and Pick Symbol / Pick Footprint live in the right-edge
     // Properties panel now (`view_library_row_properties`), so the
     // Library Browser tab body keeps the full width for the grid.
-    // `library_state` and `view_preview_pane` retained but unused
-    // here; remove in a follow-up cleanup pass once the Properties-
-    // panel approach is locked.
+    // `view_preview_pane` is retained but no longer mounted here;
+    // remove it in a follow-up cleanup pass once the Properties-panel
+    // approach is locked.
     //
     // The Row needs explicit `Length::Fill` width — the
     // `feedback_iced_layout.md` anti-pattern: a Fill child inside a
@@ -199,7 +199,6 @@ pub fn view<'a>(
     // (visible regression: "double-clicking the .snxlib opens
     // nothing"). The original three-child Row hid this because two
     // of the children were fixed-width.
-    let _ = library_state;
     let body = row![left].width(Length::Fill).height(Length::Fill);
 
     let right = column![

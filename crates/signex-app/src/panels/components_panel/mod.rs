@@ -69,7 +69,6 @@ pub fn view<'a>(
     ctx: &'a crate::panels::PanelContext,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
     let border_c = theme_ext::border_color(tokens);
 
@@ -125,8 +124,6 @@ pub fn view<'a>(
         );
     }
 
-    let _ = text_c; // currently unused; reserved for future row colouring
-
     container(scrollable(col).width(Length::Fill).height(Length::Fill))
         .width(Length::Fill)
         .height(Length::Fill)
@@ -153,7 +150,6 @@ fn view_section<'a>(
         ComponentsMountSource::Global => state.components_panel.collapsed_global,
     };
 
-    let _ = state; // kept for future per-state colouring
     let count = libs_for_source.len();
 
     // ── Section header ───────────────────────────────────────────

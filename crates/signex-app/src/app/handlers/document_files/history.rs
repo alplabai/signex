@@ -132,7 +132,7 @@ impl Signex {
                 // Replace the engine's schematic without resetting
                 // the camera (don't fit-to-paper — the user's pan/zoom
                 // is preserved across a restore).
-                self.apply_loaded_schematic(Some(parsed), true, false, false, false);
+                self.apply_loaded_schematic(Some(parsed), true, false, false);
             }
             crate::app::TabKind::Pcb => {
                 let text = match std::fs::read_to_string(&path) {

@@ -517,7 +517,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_featur
         muted,
         primary,
     ));
-    let _ = border_c;
     col
 }
 

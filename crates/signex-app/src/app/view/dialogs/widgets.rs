@@ -82,21 +82,21 @@ pub(crate) fn detached_header<'a>(
 /// Compact X close button for borderless modal headers. Matches the
 /// main-window chrome close (`view/mod.rs::view_main_window_chrome`):
 /// no border, fully transparent at rest, Windows-native red bg + white
-/// icon on hover. The `_border` argument is kept for API compatibility
-/// with existing call sites — it is intentionally ignored.
+/// icon on hover. The `_text_color` argument is kept for API
+/// compatibility with existing call sites — it is intentionally
+/// ignored, hence the leading underscore.
 pub(crate) fn close_x_button(
     message: Message,
     theme_id: signex_types::theme::ThemeId,
-    text_color: Color,
+    _text_color: Color,
 ) -> Element<'static, Message> {
     // Use the same SVG and footprint as the main-window chrome close
     // (`view::view_main_window_chrome::chrome_btn`) so the modal X is
     // visually identical to the OS-window X, including stroke weight,
     // hit-box dimensions, and red-on-hover behaviour. Glyph is
-    // ALWAYS white per design — `text_color` is ignored for the
+    // ALWAYS white per design — `_text_color` is ignored for the
     // icon. Some themes' text colour was washing the X out against
     // the toolbar bg.
-    let _ = text_color;
     use iced::widget::svg;
     let handle = crate::icons::icon_chrome_window_close(theme_id);
     button(

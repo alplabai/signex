@@ -227,8 +227,6 @@ pub(super) fn view_grid<'a>(
 
             let library_for_msg = lib_pb.clone();
             let table_for_msg = table.to_string();
-            let library_for_open = library_for_msg.clone();
-            let table_for_open = table_for_msg.clone();
             let library_for_refresh = library_for_msg.clone();
             let table_for_refresh = table_for_msg.clone();
             let row_container = container(data_row)
@@ -263,8 +261,6 @@ pub(super) fn view_grid<'a>(
             // shows the row-edit ergonomics still need a richer
             // surface; the on_press wiring here is the only user-
             // facing trigger and removing it removes the feature.
-            let _ = library_for_open;
-            let _ = table_for_open;
             let row_widget = mouse_area(row_container)
                 .on_press(LibraryMessage::BrowserSelectRow {
                     library_path: library_for_msg,

@@ -222,7 +222,7 @@ impl Signex {
         });
         self.document_state.active_tab = self.document_state.tabs.len() - 1;
 
-        self.apply_loaded_schematic(Some(sheet), true, true, true, true);
+        self.apply_loaded_schematic(Some(sheet), true, true, true);
 
         // Stage 16 §3.5 — Library Updates Available scan.
         // Walks placed Symbols whose `library_id` is set and
@@ -265,7 +265,7 @@ impl Signex {
         // path and just refreshes the canvas / panel against the
         // existing engine.
         self.document_state.active_path = Some(path);
-        self.apply_loaded_schematic(None, true, true, true, true);
+        self.apply_loaded_schematic(None, true, true, true);
     }
 
     pub(crate) fn open_pcb_tab(&mut self, path: PathBuf, title: String, board: PcbBoard) {
@@ -299,7 +299,7 @@ impl Signex {
 
         if is_schematic {
             if self.activate_active_schematic_session() {
-                self.apply_loaded_schematic(None, true, false, false, false);
+                self.apply_loaded_schematic(None, true, false, false);
             }
         } else if is_pcb {
             self.apply_loaded_pcb_document(false, false);
@@ -371,12 +371,21 @@ impl Signex {
         }
     }
 
+    /// Refresh the canvas and panel context against the active schematic
+    /// engine, optionally installing `schematic` as that engine's document
+    /// first.
+    ///
+    /// There is no "commit to the active tab" step: since the parked-session
+    /// refactor, schematic tabs keep their document in
+    /// `document_state.engines` (keyed by path) and carry
+    /// `cached_document: None`. `TabDocument` has no `Schematic` variant to
+    /// write back to, and dirty tracking runs through
+    /// `with_active_schematic_session_mut` in the mutation gateway.
     pub(crate) fn apply_loaded_schematic(
         &mut self,
         schematic: Option<SchematicSheet>,
         clear_bg_cache: bool,
         fit_to_paper: bool,
-        commit_to_active_tab: bool,
         refresh_panel_ctx: bool,
     ) {
         if let Some(schematic) = schematic {
@@ -396,8 +405,6 @@ impl Signex {
         self.interaction_state
             .active_canvas_mut()
             .clear_content_cache();
-
-        let _ = commit_to_active_tab;
 
         if refresh_panel_ctx {
             self.refresh_panel_ctx();

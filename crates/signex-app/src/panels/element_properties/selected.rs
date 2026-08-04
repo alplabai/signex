@@ -291,7 +291,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             border_c,
             move || {
                 let mut c = Column::new().spacing(0).width(Length::Fill);
-                c = c.push(net_params_tabs(primary, muted, input_bg, input_bdr));
+                c = c.push(net_params_tabs(primary, input_bg, input_bdr));
                 c = c.push(net_params_header(muted, border_c));
                 c = c.push(empty_section_row("No Parameters", muted, border_c));
                 c = c.push(empty_section_row("No Rules", muted, border_c));

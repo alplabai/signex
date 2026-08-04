@@ -60,11 +60,9 @@ pub(super) fn pad_table_row<'a>(
     label: &'a str,
     cells: Vec<iced::Element<'a, PanelMsg>>,
     portions: &[u16],
-    muted: Color,
     primary: Color,
     _border_c: Color,
 ) -> iced::Element<'a, PanelMsg> {
-    let _ = muted;
     let label_portion = 3_u16;
     let mut row = iced::widget::Row::new()
         .spacing(4)
@@ -250,5 +248,5 @@ pub(super) fn pad_copper_row<'a>(
             pad_table_disabled_cell("", muted, border_c),
         ]
     };
-    pad_table_row(label, cells, &[2, 2, 3, 1], muted, primary, border_c)
+    pad_table_row(label, cells, &[2, 2, 3, 1], primary, border_c)
 }

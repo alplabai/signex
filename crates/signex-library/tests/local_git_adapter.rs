@@ -333,7 +333,6 @@ fn history_returns_per_primitive_commits() {
     let dir = tempfile::tempdir().unwrap();
     let (file, adapter) = init_adapter(&dir, "Hist", false);
     let mut sym = fixture_symbol("OPAMP-DUAL-8");
-    let uuid = sym.uuid;
     adapter
         .save_symbol(sym.clone(), "add OPAMP-DUAL-8")
         .unwrap();
@@ -379,7 +378,6 @@ fn history_returns_per_primitive_commits() {
     let rel = std::path::PathBuf::from("symbols").join("opamp-dual-8.snxsym");
     let entries_rel = adapter.history(&rel).unwrap();
     assert_eq!(entries_rel.len(), entries.len());
-    let _ = uuid; // uuid retained for clarity; not asserted on.
 }
 
 /// `list_symbols` / `list_footprints` / `list_sims` walk the per-kind dir,

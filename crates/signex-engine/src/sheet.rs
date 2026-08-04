@@ -111,8 +111,8 @@ pub(crate) fn lock_sheet_pin_to_child_edge(
         best = dist_top;
         edge = 2;
     }
+    // Last candidate — `best` is never read again, so only `edge` moves.
     if dist_bottom < best {
-        let _ = best;
         edge = 3;
     }
 

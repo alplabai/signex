@@ -37,7 +37,7 @@ pub fn bar_items(
             editor, theme_id, tokens,
         ),
         EditorMode::Normal => {
-            crate::library::editor::footprint::pads_active_bar::items(editor, theme_id, tokens)
+            crate::library::editor::footprint::pads_active_bar::items(editor, theme_id)
         }
         EditorMode::View3d => Vec::new(),
     };

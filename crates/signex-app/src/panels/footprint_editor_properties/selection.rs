@@ -30,8 +30,6 @@ pub(super) fn view_selection<'a>(
         border: border_c,
         input_bg,
         input_bdr,
-        accent: accent_c,
-        tag_hover,
         ..
     } = palette;
     match (
@@ -402,7 +400,6 @@ pub(super) fn view_selection<'a>(
                 // (redundant with Custom Selection Filters below + the
                 // active bar's Filter dropdown). The Custom presets
                 // section is the single Properties-panel surface.
-                let _ = (fp, accent_c, tag_hover); // keep imports satisfied
                 col = col.push(super::super::view_custom_selection_filters_section(
                     custom_filter_presets,
                     active_custom_filter_tab,
@@ -427,7 +424,6 @@ pub(super) fn view_selection<'a>(
                         muted,
                         PanelMsg::FpEditorSetFootprintName,
                     ));
-                    let _ = (input_bg, input_bdr); // form_edit_row uses iced default text_input chrome
 
                     // v0.21 — Altium-parity Component fields. Editable
                     // Description / Default Designator / Component

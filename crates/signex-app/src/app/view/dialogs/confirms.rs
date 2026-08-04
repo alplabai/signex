@@ -51,7 +51,6 @@ impl Signex {
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
         .into();
-        let _ = border_c;
         let header = draggable_header(
             header_content,
             super::super::super::state::ModalId::RemoveDialog,
@@ -188,7 +187,6 @@ impl Signex {
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
         .into();
-        let _ = border_c;
         let header = draggable_header(
             header_content,
             super::super::super::state::ModalId::RenameDialog,

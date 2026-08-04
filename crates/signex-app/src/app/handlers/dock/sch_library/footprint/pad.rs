@@ -463,14 +463,18 @@ impl Signex {
         self.with_selected_pad(idx, |pad| pad.drill_diameter_mm = parsed);
         true
     }
+    /// v0.20 placeholder — slot length is not yet stored per selected pad,
+    /// only on `NextPadDefaults`, so there is nothing for `_idx` to address
+    /// and nothing to parse out of `_value`. Both regain their names when
+    /// `EditorPad` gains its own `drill_slot_length_mm` (the selected-pad
+    /// follow-up the pad form notes for v0.21). Kept at the sibling
+    /// `(idx, value)` shape so the dispatch arm in `sch_library/mod.rs`
+    /// stays uniform with every other selected-pad setter.
     pub(crate) fn fp_editor_set_selected_pad_drill_slot_length(
         &mut self,
-        idx: usize,
+        _idx: usize,
         _value: String,
     ) -> bool {
-        // v0.20 placeholder — slot length not yet on EditorPad. Wired
-        // when `EditorPad` gains a separate `drill_slot_length_mm`.
-        let _ = idx;
         self.refresh_panel_ctx();
         true
     }

@@ -62,10 +62,17 @@ impl Signex {
                     true,
                 );
             }
-            crate::panels::PanelMsg::ToggleSymbolLocked(uuid)
-            | crate::panels::PanelMsg::ToggleSymbolDnp(uuid) => {
-                let _ = uuid;
-            }
+            // KNOWN GAP — both toggles are inert. `signex_engine::Command`
+            // has no variant that writes `Symbol::locked` / `Symbol::dnp`
+            // (only `selection.rs` reads them, for the info table), so the
+            // symbol id these messages carry has nothing to apply to.
+            // The Properties panel still renders both check rows next to
+            // the working Mirror X / Mirror Y ones, so a user can click
+            // them and see nothing happen. Wiring them up needs a new
+            // engine command plus its undo + serde round-trip; until then
+            // the arm stays deliberately empty rather than half-applying.
+            crate::panels::PanelMsg::ToggleSymbolLocked(_)
+            | crate::panels::PanelMsg::ToggleSymbolDnp(_) => {}
             crate::panels::PanelMsg::EditSymbolRotation(uuid, deg) => {
                 self.apply_engine_command(
                     signex_engine::Command::SetSymbolRotation {

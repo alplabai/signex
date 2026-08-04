@@ -96,13 +96,6 @@ pub(super) fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a,
             let mask_dark = iced::Color::from_rgba8(0x1F, 0x49, 0x97, 1.0);
             let copper_color = iced::Color::from_rgba8(0xD9, 0x3D, 0x3D, 1.0);
             let copper_dark = iced::Color::from_rgba8(0x99, 0x2A, 0x2A, 1.0);
-            let hole_color = iced::Color::from_rgba8(0x70, 0x70, 0x70, 1.0);
-            let hole_dark = iced::Color::from_rgba8(0x40, 0x40, 0x40, 1.0);
-
-            let is_round = matches!(
-                self.shape,
-                signex_library::PadShape::Round | signex_library::PadShape::Oval
-            );
 
             // v0.20 — generate the pad / mask outline in world-space
             // CCW order, then project each at the requested Z. The
@@ -165,7 +158,6 @@ pub(super) fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a,
                             let t = PI + (i as f32 / arc_n as f32) * FRAC_PI_2;
                             pts.push((-inner_w + r * t.cos(), -inner_h + r * t.sin()));
                         }
-                        let _ = segments;
                         pts
                     }
                     PS::Chamfered {
@@ -205,18 +197,10 @@ pub(super) fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a,
                         } else {
                             pts.push((-hw, -hh));
                         }
-                        let _ = segments;
                         pts
                     }
                     _ => vec![(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)],
                 }
-            };
-
-            let perimeter_pts = |hw: f32, hh: f32, z: f32, segments: usize| -> Vec<iced::Point> {
-                perimeter_world(hw, hh, segments)
-                    .into_iter()
-                    .map(|(x, y)| project(x, y, z))
-                    .collect()
             };
 
             let segments = 40;
@@ -430,11 +414,7 @@ pub(super) fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a,
                     wall_poly.push(project(hr * t.cos(), hr * t.sin(), mask_z_bot));
                 }
                 fill_poly(&mut frame, &wall_poly, wall_silver);
-
-                let _ = hole_color;
-                let _ = hole_dark;
             }
-            let _ = (is_round, perimeter_pts); // tidied below; suppress unused warnings
 
             vec![frame.into_geometry()]
         }

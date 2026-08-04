@@ -158,11 +158,6 @@ impl Signex {
                 ..container::Style::default()
             },
         ));
-        // Index of the last data column — the one that uses
-        // Length::Fill so the table eats any leftover horizontal
-        // space when the modal is wider than the sum of fixed
-        // column widths.
-        let last_data_col_idx = preview.options.columns.len().saturating_sub(1);
         // Only treat the press as a "real" drag once the cursor
         // has moved past 6 px from where it pressed — same
         // threshold the tab drag-ghost uses. A press-and-release
@@ -174,7 +169,6 @@ impl Signex {
             (Some(idx), Some(ox)) if (cursor_x - ox).abs() > COL_DRAG_THRESHOLD_PX => Some(idx),
             _ => None,
         };
-        let _ = preview.column_hover;
         for (idx, c) in preview.options.columns.iter().enumerate() {
             // Header bg is neutral by default. The only time a
             // column lights up is while the user is actively
@@ -206,7 +200,6 @@ impl Signex {
             // experiment killed horizontal scrolling because
             // Both-direction collapses Fill children to zero.
             let header_cell_width = Length::Fixed(column_width(idx, c));
-            let _ = last_data_col_idx;
             let cell = container(cell_content)
                 .width(header_cell_width)
                 .height(HEADER_ROW_H)
