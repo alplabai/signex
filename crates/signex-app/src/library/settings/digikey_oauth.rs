@@ -221,13 +221,9 @@ pub fn run_blocking(
                     "connection is finished with; a failed shutdown means the peer closed first",
                 );
 
-                let (code, returned_state) = match parse_callback(&req_line) {
-                    Some(t) => t,
-                    None => {
-                        return Outcome::Failed {
-                            reason: "redirect missing code/state".into(),
-                        };
-                    }
+                let (code, returned_state) = match callback_params(req_line) {
+                    Ok(t) => t,
+                    Err(outcome) => return outcome,
                 };
 
                 return match auth.exchange_code(&code, verifier, &returned_state, &csrf_token) {
@@ -266,14 +262,81 @@ fn failure_from(e: DigiKeyAuthError) -> Outcome {
 /// blend with the polling/cancel pattern. (We still link to it via
 /// `Cargo.toml` for symmetry with the WS specs in case the flow
 /// grows; the polled-listener version above is what runs.)
-fn read_first_line<R: std::io::Read>(stream: &mut R) -> String {
+///
+/// The read error is returned rather than folded into an empty string:
+/// an empty line parses as "the redirect carried no code/state", which
+/// is a completely different diagnosis from "the socket could not be
+/// read at all" and sends the user to inspect the wrong thing.
+fn read_first_line<R: std::io::Read>(stream: &mut R) -> Result<String, std::io::Error> {
     let mut buf = [0u8; 4096];
-    let n = match stream.read(&mut buf) {
-        Ok(n) => n,
-        Err(_) => return String::new(),
-    };
+    let n = stream.read(&mut buf)?;
     let s = String::from_utf8_lossy(&buf[..n]);
-    s.lines().next().unwrap_or("").to_string()
+    Ok(s.lines().next().unwrap_or("").to_string())
+}
+
+/// Turn what came off the callback socket into the `(code, state)` pair,
+/// or into the [`Outcome::Failed`] that names which of the two very
+/// different failures happened: the socket could not be read, or a
+/// redirect did arrive and carries no `code`/`state`.
+///
+/// Both arms report to the Messages panel at `error!` — the connect
+/// attempt ended with no account connected either way, and the status
+/// line in the settings panel is overwritten by the next attempt.
+fn callback_params(req_line: Result<String, std::io::Error>) -> Result<(String, String), Outcome> {
+    let line = match req_line {
+        Ok(line) => line,
+        Err(error) => {
+            tracing::error!(
+                target = "signex::distributor",
+                distributor = "digikey",
+                error = %error,
+                error_kind = ?error.kind(),
+                "the DigiKey OAuth callback connection could not be read, so the account was \
+                 not connected; the redirect itself was never seen — this is a socket failure \
+                 on the loopback listener, not a problem with the redirect URI registered on \
+                 the DigiKey app"
+            );
+            return Err(Outcome::Failed {
+                reason: format!(
+                    "could not read the browser's redirect from the callback socket: {error}"
+                ),
+            });
+        }
+    };
+    match parse_callback(&line) {
+        Some(pair) => Ok(pair),
+        None => {
+            tracing::error!(
+                target = "signex::distributor",
+                distributor = "digikey",
+                query_keys = %callback_query_keys(&line),
+                "the browser's redirect reached Signex but carries no code/state pair, so the \
+                 DigiKey account was not connected; check the redirect URI registered on the \
+                 DigiKey app"
+            );
+            Err(Outcome::Failed {
+                reason: "redirect missing code/state".into(),
+            })
+        }
+    }
+}
+
+/// Names of the query parameters on a callback request line, joined for
+/// the log record. Values are deliberately left out — one of them is the
+/// authorization code, and the Messages panel is read out loud in bug
+/// reports.
+fn callback_query_keys(req_line: &str) -> String {
+    let Some(target) = req_line.split_whitespace().nth(1) else {
+        return "<no request target>".to_string();
+    };
+    let Some((_, query)) = target.split_once('?') else {
+        return "<no query string>".to_string();
+    };
+    let keys: Vec<&str> = query
+        .split('&')
+        .map(|pair| pair.split_once('=').map_or(pair, |(k, _)| k))
+        .collect();
+    keys.join(",")
 }
 
 /// Extract `code` and `state` query params from the first request
@@ -366,6 +429,104 @@ mod tests {
     #[test]
     fn parse_callback_returns_none_on_missing_query() {
         assert!(parse_callback("GET /callback HTTP/1.1").is_none());
+    }
+
+    /// A socket that refuses every read, standing in for a connection
+    /// reset, a timeout, or a port scanner that opens and drops.
+    struct FailingReader(std::io::ErrorKind);
+
+    impl std::io::Read for FailingReader {
+        fn read(&mut self, _buf: &mut [u8]) -> std::io::Result<usize> {
+            Err(std::io::Error::new(self.0, "connection reset by peer"))
+        }
+    }
+
+    fn failed_reason(outcome: Outcome) -> String {
+        match outcome {
+            Outcome::Failed { reason } => reason,
+            other => panic!("expected Failed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn read_first_line_returns_the_request_line() {
+        let mut stream = "GET /callback?code=abc&state=xyz HTTP/1.1\r\nHost: x\r\n\r\n".as_bytes();
+        let got = read_first_line(&mut stream).expect("reads");
+        assert_eq!(got, "GET /callback?code=abc&state=xyz HTTP/1.1");
+    }
+
+    #[test]
+    fn read_first_line_propagates_a_socket_read_error() {
+        let mut stream = FailingReader(std::io::ErrorKind::ConnectionReset);
+        let error = read_first_line(&mut stream).expect_err("read fails");
+        assert_eq!(error.kind(), std::io::ErrorKind::ConnectionReset);
+    }
+
+    #[test]
+    fn callback_params_returns_code_and_state_on_a_good_redirect() {
+        let got = callback_params(Ok("GET /callback?code=abc&state=xyz HTTP/1.1".to_string()))
+            .expect("parses");
+        assert_eq!(got, ("abc".to_string(), "xyz".to_string()));
+    }
+
+    /// The row this test pins: a socket that could not be read and a
+    /// redirect that genuinely carries no `code`/`state` are two
+    /// different diagnoses and must not share one reason string. Before
+    /// the fix both produced "redirect missing code/state", sending a
+    /// user whose loopback connection was reset off to inspect the
+    /// redirect URI registered on their DigiKey app.
+    #[test]
+    fn socket_read_error_and_malformed_redirect_report_different_reasons() {
+        let socket = failed_reason(
+            callback_params(Err(std::io::Error::new(
+                std::io::ErrorKind::ConnectionReset,
+                "connection reset by peer",
+            )))
+            .expect_err("socket failure"),
+        );
+        let malformed = failed_reason(
+            callback_params(Ok("GET /callback HTTP/1.1".to_string())).expect_err("no code/state"),
+        );
+
+        assert_ne!(socket, malformed);
+        assert_eq!(malformed, "redirect missing code/state");
+        assert!(
+            socket.contains("could not read"),
+            "socket failure must say the redirect was never read, got {socket:?}"
+        );
+        assert!(
+            socket.contains("connection reset by peer"),
+            "socket failure must carry the underlying I/O error, got {socket:?}"
+        );
+        assert!(
+            !socket.contains("redirect missing code/state"),
+            "socket failure must not be reported as a malformed redirect, got {socket:?}"
+        );
+    }
+
+    /// An empty first line is what a failed read used to look like. It
+    /// still means "malformed redirect" when it really is one — a peer
+    /// that connected and sent nothing — so the two paths stay apart
+    /// only because the error is carried, not inferred from emptiness.
+    #[test]
+    fn an_empty_request_line_is_still_a_malformed_redirect() {
+        let reason = failed_reason(callback_params(Ok(String::new())).expect_err("no code/state"));
+        assert_eq!(reason, "redirect missing code/state");
+    }
+
+    #[test]
+    fn callback_query_keys_logs_names_without_values() {
+        let keys = callback_query_keys("GET /callback?code=s3cret&state=xyz HTTP/1.1");
+        assert_eq!(keys, "code,state");
+        assert!(
+            !keys.contains("s3cret"),
+            "the authorization code must not be logged"
+        );
+        assert_eq!(
+            callback_query_keys("GET /callback HTTP/1.1"),
+            "<no query string>"
+        );
+        assert_eq!(callback_query_keys(""), "<no request target>");
     }
 
     #[test]
