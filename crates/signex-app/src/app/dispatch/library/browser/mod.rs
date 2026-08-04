@@ -11,6 +11,7 @@
 
 mod classes;
 mod grid;
+mod param_commit;
 mod tables;
 
 use super::*;
@@ -650,33 +651,43 @@ impl Signex {
             }
             other if other.starts_with("parameters.") => {
                 let key = &other["parameters.".len()..];
-                // Preserve unit on commit by reading the existing value.
-                let new_value = match row.parameters.get(key) {
-                    Some(signex_library::ParamValue::Measurement { unit, .. }) => {
-                        match buf.parse::<f64>() {
-                            Ok(n) => signex_library::ParamValue::Measurement {
-                                value: n,
-                                unit: unit.clone(),
-                            },
-                            Err(_) => signex_library::ParamValue::Text(buf.clone()),
-                        }
+                // Preserve unit AND type on commit by reading the
+                // existing value. A typed cell that cannot read the
+                // buffer refuses the commit rather than retyping the
+                // parameter to text and dropping its unit (#599).
+                match param_commit::param_value_for_commit(row.parameters.get(key), &buf) {
+                    Ok(new_value) => {
+                        row.parameters.insert(key.to_string(), new_value);
                     }
-                    Some(signex_library::ParamValue::Number(_)) => match buf.parse::<f64>() {
-                        Ok(n) => signex_library::ParamValue::Number(n),
-                        Err(_) => signex_library::ParamValue::Text(buf.clone()),
-                    },
-                    Some(signex_library::ParamValue::Bool(_)) => {
-                        if buf.eq_ignore_ascii_case("true") {
-                            signex_library::ParamValue::Bool(true)
-                        } else if buf.eq_ignore_ascii_case("false") {
-                            signex_library::ParamValue::Bool(false)
-                        } else {
-                            signex_library::ParamValue::Text(buf.clone())
+                    Err(refusal) => {
+                        // Field order is load-bearing: the Messages
+                        // panel compacts a record to 160 characters
+                        // (`diagnostics::compact_message`), so the
+                        // diagnosis goes first and the long, low-value
+                        // fields (table, row, path) go last where a
+                        // truncation costs least.
+                        tracing::warn!(
+                            target: "signex::library",
+                            parameter = %key,
+                            typed = %buf,
+                            kept = %refusal.kept,
+                            expected = %refusal.expected,
+                            table = %table,
+                            row = %row_id,
+                            path = %library_path.display(),
+                            "browser cell commit refused; the stored value is kept"
+                        );
+                        if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+                            state.cell_edit.insert((row_id, column), buf);
                         }
+                        // This handler does not run `finish_update`, so
+                        // republish here or the refusal sits in the ring
+                        // buffer until some unrelated later message
+                        // happens to flush it.
+                        self.sync_diagnostics_panel_ctx();
+                        return Task::none();
                     }
-                    _ => signex_library::ParamValue::Text(buf.clone()),
-                };
-                row.parameters.insert(key.to_string(), new_value);
+                }
             }
             _ => {
                 tracing::warn!(

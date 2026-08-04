@@ -157,7 +157,7 @@ impl Signex {
             Message::CommandPalette(msg) => self.dispatch_command_palette_message(msg),
             Message::HistoryLoaded {
                 generation,
-                path: _,
+                path,
                 result,
             } => {
                 // Drop stale results from a previous tab — the
@@ -168,8 +168,39 @@ impl Signex {
                     return Task::none();
                 }
                 self.document_state.history.loading = false;
-                self.document_state.history.mode = crate::panels::history::HistoryRenderMode::Ready;
-                self.document_state.history.entries = result.unwrap_or_default();
+                match result {
+                    Ok(entries) => {
+                        self.document_state.history.mode =
+                            crate::panels::history::HistoryRenderMode::Ready;
+                        self.document_state.history.entries = entries;
+                    }
+                    // A failed revwalk used to be `unwrap_or_default()`d
+                    // into an empty `Ready`, which the panel renders as
+                    // the "No history yet." card — a corrupt object or an
+                    // unreadable `.git/` presented as "this file has no
+                    // commits" (#599).
+                    Err(error) => {
+                        // `error` before `path`: the Messages panel
+                        // compacts a record to 160 characters
+                        // (`diagnostics::compact_message`), and the
+                        // diagnosis is worth more there than the path,
+                        // which the panel itself is already showing.
+                        tracing::error!(
+                            target: "signex::history",
+                            error = %error,
+                            path = %path.display(),
+                            "git history could not be read; Restore is unavailable"
+                        );
+                        self.document_state.history.mode =
+                            crate::panels::history::HistoryRenderMode::Error(error);
+                        self.document_state.history.entries = Vec::new();
+                        // This arm does not run `finish_update`, so
+                        // republish here or the failure sits in the ring
+                        // buffer until some unrelated later message
+                        // happens to flush it.
+                        self.sync_diagnostics_panel_ctx();
+                    }
+                }
                 self.document_state.panel_ctx.history = self.document_state.history.clone();
                 Task::none()
             }

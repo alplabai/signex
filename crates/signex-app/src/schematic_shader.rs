@@ -10,12 +10,15 @@
 //! `signex_gfx::scene::Scene` (built by `SchematicRenderer::build_scene`), so
 //! they are comparable by construction.
 //!
-//! This is the render layer only, gated behind
-//! [`crate::feature_flags::SCHEMATIC_GPU_RENDER`] and default-off. Pointer
-//! interaction and presentation overlays (selection, ghost preview, ERC
-//! marks) still live on the CPU `canvas` program; wiring those onto the GPU
-//! surface is a follow-up. See [`crate::schematic_runtime::ScreenTransform`]
-//! for the world→screen mapping this camera mirrors.
+//! This is the render layer only, and nothing mounts it yet: no view
+//! constructs a [`SchematicShaderProgram`], and the `SCHEMATIC_GPU_RENDER`
+//! flag this doc used to link to was never added to [`crate::feature_flags`]
+//! (which carries `FOOTPRINT_EDITOR_ENABLED` and `PCB_GPU_RENDER` only).
+//! Pointer interaction and presentation overlays (selection, ghost preview,
+//! ERC marks) still live on the CPU `canvas` program; wiring those onto the
+//! GPU surface is a follow-up. See
+//! [`crate::schematic_runtime::ScreenTransform`] for the world→screen
+//! mapping this camera mirrors.
 
 use iced::widget::shader::{self, Viewport};
 use iced::{Rectangle, mouse};
@@ -74,6 +77,19 @@ impl shader::Pipeline for SchematicPipeline {
             camera,
         }
     }
+
+    fn trim(&mut self) {
+        // iced calls this at the end of every frame; the trait's default body
+        // is a no-op. Release glyph-atlas pages that fell out of use, so the
+        // atlas cannot fill permanently — without this, the one
+        // `PrepareError` variant (`AtlasFull`) that `prepare` can hit below
+        // never clears and schematic text stays gone for the rest of the
+        // session. Mirrors `scene_shader::ScenePipeline::trim`, which is
+        // there for exactly this reason. The instance/vertex buffers are
+        // intentionally left resident — they only ever grow to the scene's
+        // high-water mark.
+        self.text.trim_atlas();
+    }
 }
 
 /// One frame's worth of schematic geometry handed to the GPU. Cheap to build
@@ -115,10 +131,13 @@ impl shader::Primitive for SchematicPrimitive {
         pipeline.line.upload(device, queue, &self.scene.lines);
         pipeline.arc.upload(device, queue, &self.scene.arcs);
         pipeline.circle.upload(device, queue, &self.scene.circles);
-        // Text prep can fail if the glyph atlas is exhausted; a dropped frame
-        // of text is preferable to a panic on the render thread. Deliberately
-        // not logged either: this runs once per frame, so reporting it would
-        // emit at frame rate for as long as the atlas stayed full.
+        // Text prep fails with `PrepareError::AtlasFull` when the glyph atlas
+        // has no room for this frame's glyphs. That costs this frame's text
+        // and nothing else *because* `SchematicPipeline::trim` above releases
+        // unused atlas pages after every frame — delete that override and the
+        // failure becomes permanent for the session instead. Deliberately not
+        // logged: this runs once per frame, so reporting it would emit at
+        // frame rate for as long as the atlas stayed full.
         pipeline
             .text
             .upload(
@@ -134,7 +153,11 @@ impl shader::Primitive for SchematicPrimitive {
                 // schematic GPU text stays pinned while the geometry pans.
                 [self.offset_px[0] * dpi, self.offset_px[1] * dpi],
             )
-            .ignore("glyph-atlas exhaustion drops one frame of text; a panic here would take the render thread down");
+            .ignore(
+                "a full glyph atlas drops this frame's text; `trim` frees pages every \
+                 frame so the next frame retries, and a panic here would take the \
+                 render thread down",
+            );
     }
 
     fn draw(&self, pipeline: &Self::Pipeline, render_pass: &mut wgpu::RenderPass<'_>) -> bool {
@@ -199,6 +222,48 @@ mod tests {
     use super::*;
     use iced::widget::shader::Program;
     use signex_gfx::primitive::line::LineSegment;
+
+    /// This module's own source, embedded at compile time. Building a
+    /// [`SchematicPipeline`] needs a live `wgpu::Device`, so the `trim`
+    /// override below cannot be exercised at runtime here — this scans
+    /// for it instead. It pins that the override exists, not that it
+    /// works; the behaviour it guards is glyphon's, and
+    /// `scene_shader::ScenePipeline` runs the identical call on the GPU
+    /// path that is actually mounted.
+    const SRC: &str = include_str!("schematic_shader.rs");
+
+    /// The `impl shader::Pipeline for SchematicPipeline` block alone.
+    /// The impl's own closing brace is the first `}` at column 0 after
+    /// the opener; every method inside it closes at an indent.
+    fn pipeline_impl_block() -> &'static str {
+        let start = SRC
+            .find("impl shader::Pipeline for SchematicPipeline {")
+            .expect("the shader::Pipeline impl moved — update this guard");
+        let rest = &SRC[start..];
+        let end = rest
+            .find("\n}\n")
+            .expect("the shader::Pipeline impl has no column-0 closing brace");
+        &rest[..end]
+    }
+
+    /// `PrepareError::AtlasFull` is the only thing `upload` can fail
+    /// with, and `prepare` discards it. That is a one-frame loss only
+    /// while something releases atlas pages between frames — the
+    /// trait's own `trim` is a no-op, so without this override the
+    /// atlas never drains and every schematic label stays gone for the
+    /// rest of the session (#599).
+    #[test]
+    fn the_pipeline_overrides_trim_so_a_full_glyph_atlas_can_recover() {
+        let block = pipeline_impl_block();
+        assert!(
+            block.contains("fn trim(&mut self)"),
+            "SchematicPipeline must override shader::Pipeline::trim"
+        );
+        assert!(
+            block.contains("self.text.trim_atlas();"),
+            "the trim override must release glyph-atlas pages, as scene_shader does"
+        );
+    }
 
     fn transform(offset_x: f32, offset_y: f32, scale: f32) -> ScreenTransform {
         ScreenTransform {
