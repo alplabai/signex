@@ -1,8 +1,8 @@
 use super::{
-    AppCommandId, CompiledKeymap, KeyStroke, KeyToken, Modifiers, ShortcutBinding,
-    ShortcutBindingAction, ShortcutContext, ShortcutProfile, ShortcutProfileKind,
-    ShortcutProfileSet, ShortcutTrigger, config_path_for_dir, export_custom_profile,
-    import_custom_profile, load_profile_set_at, save_profile_set_at,
+    AppCommandId, CompiledKeymap, KeyStroke, KeyToken, Modifiers, ProfileLoadError,
+    ShortcutBinding, ShortcutBindingAction, ShortcutContext, ShortcutProfile, ShortcutProfileKind,
+    ShortcutProfileSet, ShortcutTrigger, back_up_profile_file_at, config_path_for_dir,
+    export_custom_profile, import_custom_profile, load_profile_set_at, save_profile_set_at,
 };
 use std::str::FromStr;
 
@@ -213,4 +213,230 @@ profile_kind = "custom"
 
     let err = load_profile_set_at(&path).unwrap_err().to_string();
     assert!(err.contains("built-in profile `altium` cannot be modified"));
+}
+
+// ─── #595 — a refused load must stay visible, and must never be
+// ─── silently overwritten by the built-in fallback on the next save.
+
+/// Write a shortcuts file at `path` holding one custom profile, and
+/// return the exact bytes that landed on disk. Shared by the backup
+/// tests so each one starts from a real, schema-valid saved document
+/// rather than a hand-written blob that rots against the format.
+fn seed_saved_profiles(path: &std::path::Path, profile_id: &str) -> Vec<u8> {
+    let mut set = ShortcutProfileSet::built_ins().unwrap();
+    let custom = set
+        .active_profile()
+        .copy_as_custom(profile_id, "Seeded")
+        .unwrap();
+    set.insert_custom_profile(custom).unwrap();
+    set.set_active_profile(profile_id).unwrap();
+    save_profile_set_at(path, &set).unwrap();
+    std::fs::read(path).unwrap()
+}
+
+/// A shortcuts file that exists but cannot be parsed must surface as
+/// `Err`, not as a silent fall back to the built-ins — that `Err` is what
+/// raises the Preferences banner and arms the backup-before-save guard.
+#[test]
+fn load_reports_error_when_the_file_cannot_be_parsed() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = config_path_for_dir(tmp.path());
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, "this is not = valid = toml [[[").unwrap();
+
+    let error = load_profile_set_at(&path).unwrap_err();
+    assert!(
+        matches!(error, ProfileLoadError::Toml(_)),
+        "expected a TOML parse failure, got {error:?}"
+    );
+}
+
+/// A well-formed file whose `active_profile` no longer resolves fails in
+/// `apply_to` -> `set_active_profile`. The user's custom profiles are all
+/// still in that file, so this must not be mistaken for "no shortcuts".
+#[test]
+fn load_reports_error_when_the_active_profile_id_does_not_resolve() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = config_path_for_dir(tmp.path());
+    seed_saved_profiles(&path, "my-altium");
+
+    // Round-trip a real saved document and edit only the active id, so
+    // the fixture stays valid against the current schema.
+    let saved = std::fs::read_to_string(&path).unwrap();
+    let rotted = saved.replace(
+        "active_profile = \"my-altium\"",
+        "active_profile = \"renamed-elsewhere\"",
+    );
+    assert_ne!(
+        saved, rotted,
+        "fixture did not rewrite the active profile id — the saved key name changed"
+    );
+    std::fs::write(&path, &rotted).unwrap();
+
+    let error = load_profile_set_at(&path).unwrap_err();
+    assert!(
+        matches!(&error, ProfileLoadError::UnknownActiveProfile(id) if id == "renamed-elsewhere"),
+        "expected an unresolved active profile, got {error:?}"
+    );
+}
+
+/// The non-error path must stay non-error: a missing file is a fresh
+/// install, not a failure, and must never raise the banner.
+#[test]
+fn load_succeeds_when_the_file_is_absent() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = config_path_for_dir(tmp.path());
+    assert!(!path.exists());
+
+    let set = load_profile_set_at(&path).unwrap();
+    assert_eq!(set.active_profile().id, "altium");
+    assert!(!path.exists(), "loading must not create the file");
+}
+
+/// The copy aside must be byte-identical, so the custom profiles this
+/// process could not parse survive the save that follows.
+#[test]
+fn back_up_preserves_the_original_profiles() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = config_path_for_dir(tmp.path());
+    let original = seed_saved_profiles(&path, "keeper");
+
+    let bak = back_up_profile_file_at(&path).unwrap().unwrap();
+
+    assert!(bak.exists(), "backup was not created at {}", bak.display());
+    assert_eq!(std::fs::read(&bak).unwrap(), original);
+    assert_eq!(
+        std::fs::read(&path).unwrap(),
+        original,
+        "the original must be copied, not moved"
+    );
+}
+
+/// The double-Apply hazard: the second Apply would copy the already
+/// overwritten file over the backup and destroy the only surviving copy
+/// of the user's profiles. An existing `.bak` is the original — never
+/// clobber it.
+#[test]
+fn back_up_refuses_to_overwrite_an_existing_backup() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = config_path_for_dir(tmp.path());
+    let bak = back_up_profile_file_at(&path).unwrap();
+    assert!(bak.is_none(), "nothing to back up yet");
+
+    let mut bak_name = path.file_name().unwrap().to_os_string();
+    bak_name.push(".bak");
+    let bak_path = path.with_file_name(bak_name);
+
+    // The `.bak` holds the user's real profiles; the live file has
+    // already been replaced by the built-in-only fallback.
+    seed_saved_profiles(&path, "the-only-copy");
+    let rescued = std::fs::read(&path).unwrap();
+    std::fs::rename(&path, &bak_path).unwrap();
+    seed_saved_profiles(&path, "built-in-fallback");
+    let clobberer = std::fs::read(&path).unwrap();
+    assert_ne!(rescued, clobberer, "fixture must differ from the backup");
+
+    let result = back_up_profile_file_at(&path).unwrap();
+
+    assert!(
+        result.is_none(),
+        "an existing backup must be reported as nothing-to-do, got {result:?}"
+    );
+    assert_eq!(
+        std::fs::read(&bak_path).unwrap(),
+        rescued,
+        "the existing backup was clobbered — the user's only surviving copy is gone"
+    );
+}
+
+/// No file, nothing to preserve — and no stray `.bak` left behind.
+#[test]
+fn back_up_is_a_no_op_when_no_file_exists() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = config_path_for_dir(tmp.path());
+    assert!(!path.exists());
+
+    assert!(back_up_profile_file_at(&path).unwrap().is_none());
+
+    let mut bak_name = path.file_name().unwrap().to_os_string();
+    bak_name.push(".bak");
+    assert!(!path.with_file_name(bak_name).exists());
+}
+
+/// Guards the `OsString` handling: the backup appends to the whole file
+/// name, so the stem AND the `.toml` extension survive. `set_extension`
+/// would silently produce `keyboard_shortcuts.bak` instead.
+#[test]
+fn back_up_appends_bak_to_the_whole_file_name() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = config_path_for_dir(tmp.path());
+    assert_eq!(path.file_name().unwrap(), "keyboard_shortcuts.toml");
+    seed_saved_profiles(&path, "named");
+
+    let bak = back_up_profile_file_at(&path).unwrap().unwrap();
+
+    assert_eq!(bak.file_name().unwrap(), "keyboard_shortcuts.toml.bak");
+    assert_eq!(bak.parent(), path.parent());
+}
+
+/// The whole of #595 end to end, in the order the user hits it: a
+/// recoverable file rots, the load fails, the app boots on the built-ins,
+/// and the user opens Preferences and presses Apply to rebuild what
+/// vanished. That Apply serialises only `Custom` profiles and the fallback
+/// has none, so the write itself is unavoidably profile-free — the
+/// property that has to hold is that their profiles are still recoverable
+/// afterwards, and that pressing Apply a second time does not take that
+/// away too.
+#[test]
+fn the_users_profiles_survive_an_apply_after_a_failed_load() {
+    // Arrange — a real saved file with a custom profile, then one rotted
+    // `active_profile` id. Every profile body in it is still intact.
+    let tmp = tempfile::tempdir().unwrap();
+    let path = config_path_for_dir(tmp.path());
+    seed_saved_profiles(&path, "keeper");
+    let rotted = std::fs::read_to_string(&path)
+        .unwrap()
+        .replace("active_profile = \"keeper\"", "active_profile = \"gone\"");
+    std::fs::write(&path, &rotted).unwrap();
+    assert!(
+        rotted.contains("keeper"),
+        "the rotted fixture must still carry the custom profile"
+    );
+    assert!(load_profile_set_at(&path).is_err(), "the load must fail");
+
+    // Act — what the Apply handler does while `keymap_load_error` is set:
+    // copy aside first, then save the built-in fallback it is holding.
+    let fallback = ShortcutProfileSet::built_ins().unwrap();
+    let bak = back_up_profile_file_at(&path).unwrap().unwrap();
+    save_profile_set_at(&path, &fallback).unwrap();
+
+    // Assert — the live file lost the profile, as it must; the backup did
+    // not, which is the difference between a recoverable mistake and data
+    // loss.
+    let live = std::fs::read_to_string(&path).unwrap();
+    assert!(
+        !live.contains("keeper"),
+        "saving a custom-profile-free set necessarily drops it from the live file"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&bak).unwrap(),
+        rotted,
+        "the backup must be the user's original file, byte for byte"
+    );
+
+    // Act again — the second Apply, which is what used to be survivable
+    // only by accident.
+    assert_eq!(
+        back_up_profile_file_at(&path).unwrap(),
+        None,
+        "a second Apply must find the backup already taken"
+    );
+    save_profile_set_at(&path, &fallback).unwrap();
+
+    // Assert — the backup still holds the originals.
+    assert_eq!(
+        std::fs::read_to_string(&bak).unwrap(),
+        rotted,
+        "the second Apply must not copy the overwritten file over the backup"
+    );
 }

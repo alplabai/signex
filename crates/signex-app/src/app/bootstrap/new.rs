@@ -57,10 +57,38 @@ impl Signex {
         // the OS config dir, else fall back to the bundled Altium /
         // Classic built-ins (which must always parse). The active
         // profile is compiled once here into a fast lookup table.
-        let keymap_profiles = crate::keymap::load_profile_set().unwrap_or_else(|_| {
-            crate::keymap::ShortcutProfileSet::built_ins()
-                .expect("bundled keyboard shortcut profiles must parse")
-        });
+        //
+        // An `Err` here never means "no shortcuts file" — `load_profile_set`
+        // returns `Ok` when the path does not exist. It always means a file
+        // IS there and could not be honoured, so the fallback set is missing
+        // custom profiles the user still has on disk. Booting with working
+        // keys is right, but the reason has to survive: it raises the
+        // Preferences banner and arms the backup-before-save guard that stops
+        // the next Apply from writing the fallback over their file (#595).
+        let (keymap_profiles, keymap_load_error) = match crate::keymap::load_profile_set() {
+            Ok(set) => (set, None),
+            Err(error) => (
+                crate::keymap::ShortcutProfileSet::built_ins()
+                    .expect("bundled keyboard shortcut profiles must parse"),
+                Some(error.to_string()),
+            ),
+        };
+        // Reported at `Error` level, once: the default filter is
+        // `LevelFilter::Info` (`crate::diagnostics`), so `warn!` / `debug!`
+        // would never reach the user's Messages panel — and this is one step
+        // away from losing every shortcut they have customised.
+        if let Some(error) = keymap_load_error.as_deref() {
+            tracing::error!(
+                target = "signex::keymap",
+                path = %crate::keymap::config_path()
+                    .map(|path| path.display().to_string())
+                    .unwrap_or_else(|| "<no config directory>".to_string()),
+                error = error,
+                "saved keyboard shortcuts could not be loaded; the bundled built-in \
+                 profiles are in use for this session and the file on disk was left \
+                 untouched — repair or delete it to load your own profiles again"
+            );
+        }
         let active_keymap = keymap_profiles.compile_active();
         // Working copy for the Preferences ▸ Keyboard Shortcuts pane.
         // Re-seeded from `keymap_profiles` every time the window opens,
@@ -125,6 +153,7 @@ impl Signex {
                 preferences_theme_status: String::new(),
                 preferences_keymap_editor: keymap_editor,
                 preferences_keymap_status: String::new(),
+                keymap_load_error,
                 preferences_keymap_search: String::new(),
                 preferences_keymap_recorder: None,
                 preferences_dirty: false,

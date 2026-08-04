@@ -235,6 +235,32 @@ impl Signex {
                     .preferences_keymap_editor
                     .clone()
                     .into_profiles();
+                // The running set is the built-in fallback whenever the
+                // saved file could not be honoured at boot, and only
+                // custom profiles are serialised — so saving now would
+                // land a custom-profile-free document over profiles the
+                // user still has on disk. Copy the file aside first, and
+                // refuse to save at all if that copy cannot be made:
+                // overwriting after a failed backup is the bug (#595).
+                let mut backup_note = String::new();
+                if self.ui_state.keymap_load_error.is_some() {
+                    match crate::keymap::back_up_profile_file() {
+                        Ok(Some(bak)) => {
+                            backup_note =
+                                format!(" The previous file was kept as {}.", bak.display());
+                        }
+                        Ok(None) => {}
+                        Err(error) => {
+                            self.ui_state.preferences_keymap_status = format!(
+                                "Could not save keyboard shortcuts: the existing file could \
+                                 not be backed up first, so it was left untouched rather than \
+                                 overwritten ({error})."
+                            );
+                            self.recompute_preferences_dirty();
+                            return Task::none();
+                        }
+                    }
+                }
                 match crate::keymap::save_profile_set(&keymap_profiles) {
                     Ok(()) => {
                         self.ui_state.keymap_profiles = keymap_profiles;
@@ -242,7 +268,12 @@ impl Signex {
                             self.ui_state.keymap_profiles.compile_active();
                         self.ui_state.preferences_keymap_recorder = None;
                         self.ui_state.preferences_keymap_status =
-                            "Keyboard shortcuts saved.".to_string();
+                            format!("Keyboard shortcuts saved.{backup_note}");
+                        // The file on disk is now valid and written by this
+                        // process, so the boot-time failure no longer holds:
+                        // drop the banner and let the next Apply be an
+                        // ordinary save.
+                        self.ui_state.keymap_load_error = None;
                     }
                     Err(error) => {
                         self.ui_state.preferences_keymap_status =
