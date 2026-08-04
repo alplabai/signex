@@ -50,7 +50,16 @@ impl Signex {
         Task::batch([history, commits])
     }
 
-    fn sync_diagnostics_panel_ctx(&mut self) {
+    /// Republish the diagnostics ring buffer into the Messages panel.
+    ///
+    /// `finish_update` calls this, but not every dispatcher calls
+    /// `finish_update` — `dispatch_preferences_message` deliberately does
+    /// not, because reloading the History panel and draining git commits
+    /// on every keystroke in a modal is not what that dispatcher is for.
+    /// Those dispatchers call this directly instead, so a record they
+    /// emit is on screen in the same frame rather than whenever some
+    /// unrelated later message happens to run `finish_update`.
+    pub(in crate::app) fn sync_diagnostics_panel_ctx(&mut self) {
         self.document_state.panel_ctx.diagnostics_level =
             crate::diagnostics::configured_level_label().to_string();
         self.document_state.panel_ctx.diagnostics = crate::diagnostics::recent_entries();

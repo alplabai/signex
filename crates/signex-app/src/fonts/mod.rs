@@ -31,19 +31,28 @@ use signex_types::theme::ThemeId;
 pub const DEFAULT_UI_FONT: &str = "Roboto";
 
 /// MD-32: persist `bytes` to `path` atomically (tmp + rename via
-/// `signex_types::atomic_io`) and `tracing::debug!` on failure
-/// instead of the `let _ = std::fs::write(...)` pattern that swallows
-/// disk-full / permission errors silently. Used by every preferences
-/// write in this module so a single source of failures shows up in
-/// `RUST_LOG=signex_app::fonts=debug` instead of nowhere.
+/// `signex_types::atomic_io`) and report on failure, instead of the
+/// `let _ = std::fs::write(...)` pattern that swallows disk-full /
+/// permission errors silently. Every preferences write in this module
+/// tree funnels through here, so this is the single place a failed write
+/// can be seen from.
+///
+/// Reported at `Error` and not `debug!`: the default filter is
+/// `LevelFilter::Info` (`crate::diagnostics`), so a `debug!` here never
+/// reaches the user's Messages panel and the failure is invisible in
+/// every shipped build — which is the whole class of bug #594 and #602
+/// were about. The setting the user just changed did not persist and
+/// will be gone at the next launch; that is not a `debug!`.
 fn write_pref_atomic(path: &Path, bytes: &[u8], context: &str) {
     if let Err(e) = signex_types::atomic_io::atomic_write(path, bytes) {
-        tracing::debug!(
+        tracing::error!(
             target = "signex::prefs",
             path = %path.display(),
             context = context,
             error = %e,
-            "preference write failed (best-effort, will retry on next change)"
+            "a preference was not saved: writing the preferences file failed, so this \
+             change will be gone at the next launch — the setting itself is still \
+             applied for this session"
         );
     }
 }

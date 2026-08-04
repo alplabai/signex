@@ -546,9 +546,20 @@ impl Signex {
                 // repaired it by hand between this banner being painted
                 // and the click, and renaming a good prefs.json away
                 // would be #594 again, by hand.
+                // Every outcome below is reported to the Messages panel as
+                // well as to the dialog. The status string dies with the
+                // dialog and is invisible to anyone reading a bug report;
+                // a recovery action that touches the user's config files
+                // has to leave a trace that outlives the window.
                 match crate::fonts::check_prefs_file() {
                     Ok(()) => {
                         self.ui_state.prefs_load_error = None;
+                        tracing::info!(
+                            target = "signex::prefs",
+                            path = %crate::fonts::prefs_file_path().display(),
+                            "preferences reset was requested but the file now loads cleanly, \
+                             so nothing was moved"
+                        );
                         self.ui_state.preferences_prefs_status =
                             "Your preferences file is readable again — nothing was moved."
                                 .to_string();
@@ -556,6 +567,14 @@ impl Signex {
                     Err(_) => match crate::fonts::move_prefs_file_aside() {
                         Ok(Some(aside)) => {
                             self.ui_state.prefs_load_error = None;
+                            tracing::info!(
+                                target = "signex::prefs",
+                                path = %crate::fonts::prefs_file_path().display(),
+                                kept_as = %aside.display(),
+                                "the unreadable preferences file was moved aside on the user's \
+                                 request and a fresh empty one put in its place; preferences \
+                                 save again from now on"
+                            );
                             // This arm deliberately writes no drafts, so
                             // the fresh file is empty and anything the
                             // user "saved" while writes were being refused
@@ -572,6 +591,16 @@ impl Signex {
                         }
                         Ok(None) => {
                             self.ui_state.prefs_load_error = None;
+                            // `warn!`, not `info!`: the probe a moment ago
+                            // said this file was unloadable and the rename
+                            // then found nothing there, so something
+                            // outside this process removed it mid-action.
+                            tracing::warn!(
+                                target = "signex::prefs",
+                                path = %crate::fonts::prefs_file_path().display(),
+                                "the unreadable preferences file was gone before it could be \
+                                 moved aside; something outside this process removed it"
+                            );
                             self.ui_state.preferences_prefs_status =
                                 "There was no preferences file to move aside.".to_string();
                         }
@@ -579,6 +608,14 @@ impl Signex {
                             // The flag deliberately stays set: nothing
                             // changed on disk, so the banner must stay up
                             // and keep offering the action.
+                            tracing::error!(
+                                target = "signex::prefs",
+                                path = %crate::fonts::prefs_file_path().display(),
+                                error = %error,
+                                "the unreadable preferences file could not be moved aside, so \
+                                 it was left exactly as it is and preferences still cannot be \
+                                 saved"
+                            );
                             self.ui_state.preferences_prefs_status = format!(
                                 "Could not start a fresh preferences file: the unreadable one \
                                  could not be moved aside, so it was left untouched ({error})."
