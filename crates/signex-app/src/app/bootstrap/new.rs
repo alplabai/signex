@@ -89,6 +89,36 @@ impl Signex {
                  untouched — repair or delete it to load your own profiles again"
             );
         }
+        // The prefs file's own health (#602). Every `read_*_pref` above
+        // has just swallowed this same failure with `.ok()` and handed
+        // back its default, so by this line the whole UI is already
+        // showing factory settings — and `update_prefs_json` will refuse
+        // every write for the rest of the session to keep the bytes
+        // repairable. Neither half is visible without asking, so ask
+        // once and carry the answer to the Preferences banner.
+        //
+        // `main.rs` installs the logger and takes the first prefs read
+        // (which is what runs `migrate_legacy_prefs`) before `Signex::new`
+        // is called, so this probe sees the post-migration file and its
+        // log line is not emitted into a missing subscriber.
+        let prefs_load_error = crate::fonts::check_prefs_file()
+            .err()
+            .map(|error| error.to_string());
+        // `Error` level for the same reason as the keymap report above:
+        // the default filter is `LevelFilter::Info` (`crate::diagnostics`),
+        // so `warn!` / `debug!` would never reach the user's Messages
+        // panel — and this is every preference they have, not saving.
+        if let Some(error) = prefs_load_error.as_deref() {
+            tracing::error!(
+                target = "signex::prefs",
+                path = %crate::fonts::prefs_file_path().display(),
+                error = error,
+                "the preferences file could not be loaded; every preference is showing \
+                 its default and no change will be saved while it stays that way — the \
+                 file itself was left untouched, so repair it by hand or use \
+                 Preferences to start a fresh one beside it"
+            );
+        }
         let active_keymap = keymap_profiles.compile_active();
         // Working copy for the Preferences ▸ Keyboard Shortcuts pane.
         // Re-seeded from `keymap_profiles` every time the window opens,
@@ -154,6 +184,8 @@ impl Signex {
                 preferences_keymap_editor: keymap_editor,
                 preferences_keymap_status: String::new(),
                 keymap_load_error,
+                prefs_load_error,
+                preferences_prefs_status: String::new(),
                 preferences_keymap_search: String::new(),
                 preferences_keymap_recorder: None,
                 preferences_dirty: false,

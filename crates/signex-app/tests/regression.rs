@@ -44,6 +44,9 @@ mod preferences_dirty_guard;
 #[path = "regression/preferences_export_status.rs"]
 mod preferences_export_status;
 
+#[path = "regression/preferences_prefs_recovery.rs"]
+mod preferences_prefs_recovery;
+
 #[path = "regression/undo_marker_divergence.rs"]
 mod undo_marker_divergence;
 

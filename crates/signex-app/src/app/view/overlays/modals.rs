@@ -47,6 +47,8 @@ impl Signex {
             keymap_editor: &ui.preferences_keymap_editor,
             keymap_status: &ui.preferences_keymap_status,
             keymap_load_error: ui.keymap_load_error.as_deref(),
+            prefs_load_error: ui.prefs_load_error.as_deref(),
+            prefs_status: &ui.preferences_prefs_status,
             keymap_search: &ui.preferences_keymap_search,
             keymap_recorder: ui.preferences_keymap_recorder.as_ref(),
             theme_id: ui.theme_id,

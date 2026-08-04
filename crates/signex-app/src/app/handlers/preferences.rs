@@ -67,8 +67,35 @@ impl Signex {
         // export, not a draft — a fresh dialog (or a Discard) must not
         // reopen showing the last session's result.
         self.ui_state.preferences_theme_status.clear();
+        // Same rule for the prefs-file recovery result — one action's
+        // outcome, not a draft.
+        self.ui_state.preferences_prefs_status.clear();
+        // Re-probe the prefs file itself (#602). `keymap_load_error` is
+        // deliberately NOT cleared here (see `UiState`): it can only be
+        // trusted again once this process has written that file. This one
+        // can, because the check is a single file read with no state
+        // behind it — so a user who repairs `prefs.json` in an editor and
+        // reopens Preferences sees the banner gone instead of being told
+        // to restart, and one who breaks it mid-session sees it appear.
+        self.refresh_prefs_load_error();
         self.ui_state.preferences_dirty = false;
         self.ui_state.preferences_dirty_sticky = false;
+    }
+
+    /// Re-read `prefs.json`'s health into the banner flag (#602).
+    ///
+    /// One cheap file read, so it can run on every Preferences open and
+    /// after every burst of preference writes rather than being trusted
+    /// from boot. That second call site is what catches a file broken
+    /// *while* the dialog is open: `handle_preferences_open_requested`
+    /// early-returns when the dialog is already up, so without a probe on
+    /// the Save path a user who hand-edits the file beside the running app
+    /// — the very workflow the banner's "repair it by hand" advice invites
+    /// — gets every write refused with the dialog still reporting success.
+    fn refresh_prefs_load_error(&mut self) {
+        self.ui_state.prefs_load_error = crate::fonts::check_prefs_file()
+            .err()
+            .map(|error| error.to_string());
     }
 
     /// Recompute the cached dirty flag from the full unsaved-state
@@ -256,6 +283,11 @@ impl Signex {
                                  not be backed up first, so it was left untouched rather than \
                                  overwritten ({error})."
                             );
+                            // The prefs writes above already ran, so this
+                            // early return is still a path that has to
+                            // report a file that broke since the dialog
+                            // opened (#602).
+                            self.refresh_prefs_load_error();
                             self.recompute_preferences_dirty();
                             return Task::none();
                         }
@@ -278,10 +310,22 @@ impl Signex {
                     Err(error) => {
                         self.ui_state.preferences_keymap_status =
                             format!("Could not save keyboard shortcuts: {error}");
+                        // Same reason as the backup-failure return above:
+                        // the prefs writes already ran (#602).
+                        self.refresh_prefs_load_error();
                         self.recompute_preferences_dirty();
                         return Task::none();
                     }
                 }
+                // Every prefs write in this arm has now been attempted, so
+                // ask the file whether they landed (#602). This is the
+                // only probe on the path a user takes when they break
+                // `prefs.json` beside the running app with Preferences
+                // already open — the open handler early-returns in that
+                // case, so nothing else would ever raise the banner and
+                // the dialog would keep reporting a save that was refused.
+                // One extra file read per Save.
+                self.refresh_prefs_load_error();
                 self.ui_state.preferences_dirty = false;
                 self.ui_state.preferences_dirty_sticky = false;
             }
@@ -496,6 +540,54 @@ impl Signex {
             PrefMsg::ResetErcSeverities => {
                 self.ui_state.erc_severity_override.clear();
                 crate::fonts::write_erc_severity_overrides(&self.ui_state.erc_severity_override);
+            }
+            PrefMsg::ResetPrefsFile => {
+                // Never move a healthy file aside. The user may have
+                // repaired it by hand between this banner being painted
+                // and the click, and renaming a good prefs.json away
+                // would be #594 again, by hand.
+                match crate::fonts::check_prefs_file() {
+                    Ok(()) => {
+                        self.ui_state.prefs_load_error = None;
+                        self.ui_state.preferences_prefs_status =
+                            "Your preferences file is readable again — nothing was moved."
+                                .to_string();
+                    }
+                    Err(_) => match crate::fonts::move_prefs_file_aside() {
+                        Ok(Some(aside)) => {
+                            self.ui_state.prefs_load_error = None;
+                            // This arm deliberately writes no drafts, so
+                            // the fresh file is empty and anything the
+                            // user "saved" while writes were being refused
+                            // is still only in memory. Saying "Preferences
+                            // reset." alone would let them quit believing
+                            // it persisted. Re-persisting live state from
+                            // here is a different feature and a different
+                            // decision; telling the truth is not.
+                            self.ui_state.preferences_prefs_status = format!(
+                                "Preferences reset. The unreadable file was kept as {}. \
+                                 Change and save a setting to write a new one.",
+                                aside.display()
+                            );
+                        }
+                        Ok(None) => {
+                            self.ui_state.prefs_load_error = None;
+                            self.ui_state.preferences_prefs_status =
+                                "There was no preferences file to move aside.".to_string();
+                        }
+                        Err(error) => {
+                            // The flag deliberately stays set: nothing
+                            // changed on disk, so the banner must stay up
+                            // and keep offering the action.
+                            self.ui_state.preferences_prefs_status = format!(
+                                "Could not start a fresh preferences file: the unreadable one \
+                                 could not be moved aside, so it was left untouched ({error})."
+                            );
+                        }
+                    },
+                }
+                // No draft was touched, so the dirty flag is not
+                // recomputed — same as `ResetErcSeverities` above.
             }
             PrefMsg::LibrarySettings(settings_msg) => {
                 // Route the Distributor APIs panel's SettingsMsg back

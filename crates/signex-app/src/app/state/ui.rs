@@ -147,6 +147,41 @@ pub struct UiState {
     /// transient feedback. Only a successful save clears it, because only
     /// then is the file on disk one this process wrote.
     pub keymap_load_error: Option<String>,
+    /// The last known health of `prefs.json` (#602) — NOT a boot-time
+    /// snapshot, unlike [`Self::keymap_load_error`] right above. It is
+    /// set at boot and refreshed on every Preferences open and at the end
+    /// of every Preferences Save, so the boot value only ever reaches a
+    /// user through the boot `tracing::error!`:
+    /// `seed_preferences_drafts_from_live` re-probes and overwrites it
+    /// before the dialog first renders. The boot assignment still has to
+    /// be right, because the field must not lie in the window before that
+    /// first open.
+    ///
+    /// `Some` means the file EXISTS and could not be loaded — unreadable,
+    /// unparseable, or with a non-object root — so every preference
+    /// reader is silently handing back its default and
+    /// [`crate::fonts::check_prefs_file`]'s sibling `update_prefs_json`
+    /// is refusing every write to keep the bytes repairable. The UI looks
+    /// factory-reset and nothing the user changes sticks, which is
+    /// exactly the pair that has to be said out loud rather than left in
+    /// the Messages panel.
+    ///
+    /// As with [`Self::keymap_load_error`], absence is NOT a failure:
+    /// a missing (or all-whitespace) file is a fresh install, which the
+    /// writer starts from happily, so this stays `None` there.
+    ///
+    /// Re-probing is what [`Self::keymap_load_error`] cannot do: that
+    /// flag can only be cleared by a successful save, because only then
+    /// is the file on disk one this process wrote. Here the check is a
+    /// single file read with no state behind it, so a user who repairs
+    /// `prefs.json` by hand sees the banner go on the next open, and one
+    /// who breaks it mid-session sees it appear on the next Save.
+    pub prefs_load_error: Option<String>,
+    /// Result line for the Preferences prefs-file recovery action (#602).
+    /// Transient per-action feedback — never part of the dirty
+    /// predicate — and cleared on every dialog open, exactly like
+    /// [`Self::preferences_theme_status`]. Empty renders nothing.
+    pub preferences_prefs_status: String,
     /// Live search query for the Keyboard Shortcuts pane. Filters the
     /// grouped shortcut table case-insensitively by label / command id /
     /// trigger. Reset to empty each time Preferences opens.
