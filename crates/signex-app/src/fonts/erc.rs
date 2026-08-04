@@ -37,24 +37,16 @@ pub fn read_erc_severity_overrides()
 pub fn write_erc_severity_overrides(
     overrides: &std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
 ) {
-    let path = prefs_path();
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-
-    let mut obj = serde_json::Map::new();
-    for (rule, sev) in overrides {
-        obj.insert(
-            erc_rule_kind_key(*rule).to_string(),
-            serde_json::Value::String(erc_severity_key(*sev).to_string()),
-        );
-    }
-    json["erc_severity"] = serde_json::Value::Object(obj);
-
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        write_pref_atomic(&path, serialized.as_bytes(), "erc_severity_overrides");
-    }
+    update_prefs_json(&prefs_path(), "erc_severity", |prefs| {
+        let mut obj = serde_json::Map::new();
+        for (rule, sev) in overrides {
+            obj.insert(
+                erc_rule_kind_key(*rule).to_string(),
+                serde_json::Value::String(erc_severity_key(*sev).to_string()),
+            );
+        }
+        prefs.insert("erc_severity".to_string(), serde_json::Value::Object(obj));
+    })
 }
 
 fn erc_rule_kind_key(rule: signex_erc::RuleKind) -> &'static str {
@@ -149,20 +141,14 @@ pub fn read_pin_matrix_overrides() -> std::collections::HashMap<(u8, u8), signex
 pub fn write_pin_matrix_overrides(
     overrides: &std::collections::HashMap<(u8, u8), signex_erc::Severity>,
 ) {
-    let path = prefs_path();
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-    let mut obj = serde_json::Map::new();
-    for ((r, c), sev) in overrides {
-        obj.insert(
-            format!("{r},{c}"),
-            serde_json::Value::String(erc_severity_key(*sev).to_string()),
-        );
-    }
-    json["pin_matrix"] = serde_json::Value::Object(obj);
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        write_pref_atomic(&path, serialized.as_bytes(), "fonts_pref");
-    }
+    update_prefs_json(&prefs_path(), "pin_matrix", |prefs| {
+        let mut obj = serde_json::Map::new();
+        for ((r, c), sev) in overrides {
+            obj.insert(
+                format!("{r},{c}"),
+                serde_json::Value::String(erc_severity_key(*sev).to_string()),
+            );
+        }
+        prefs.insert("pin_matrix".to_string(), serde_json::Value::Object(obj));
+    })
 }
