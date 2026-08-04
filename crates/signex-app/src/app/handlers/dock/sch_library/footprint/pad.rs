@@ -168,11 +168,21 @@ impl Signex {
         self.refresh_panel_ctx();
         true
     }
+    /// #599 — the three outcomes stay apart: empty clears, out of range
+    /// clamps to the nearest bound, unreadable text leaves the stored
+    /// default alone. Collapsing them into one `None` used to erase the
+    /// value and drop the key from the saved `.snxfpt`.
     pub(crate) fn fp_editor_set_next_pad_corner_radius_pct(&mut self, value: String) -> bool {
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            let parsed = value.trim().parse::<f64>().ok();
-            editor.state.next_pad_defaults.stack.corner_radius_pct =
-                parsed.filter(|v| (0.0..=50.0).contains(v));
+        let edit = fp_parse_optional_number_in(
+            &value,
+            numeric_input::CORNER_RADIUS_PCT_MIN,
+            numeric_input::CORNER_RADIUS_PCT_MAX,
+        );
+        if let Some(stored) =
+            fp_resolve_optional_number("Corner radius %, new pad default", &value, edit)
+            && let Some(editor) = self.active_footprint_editor_mut()
+        {
+            editor.state.next_pad_defaults.stack.corner_radius_pct = stored;
         }
         self.refresh_panel_ctx();
         true
@@ -478,17 +488,24 @@ impl Signex {
         self.refresh_panel_ctx();
         true
     }
+    /// #599 — sibling of [`Self::fp_editor_set_next_pad_corner_radius_pct`];
+    /// an unreadable buffer is refused rather than written as `None`.
     pub(crate) fn fp_editor_set_selected_pad_corner_radius_pct(
         &mut self,
         idx: usize,
         value: String,
     ) -> bool {
-        let parsed = value
-            .trim()
-            .parse::<f64>()
-            .ok()
-            .filter(|v| (0.0..=50.0).contains(v));
-        self.with_selected_pad(idx, |pad| pad.stack.corner_radius_pct = parsed);
+        let edit = fp_parse_optional_number_in(
+            &value,
+            numeric_input::CORNER_RADIUS_PCT_MIN,
+            numeric_input::CORNER_RADIUS_PCT_MAX,
+        );
+        match fp_resolve_optional_number("Corner radius %, selected pad", &value, edit) {
+            Some(stored) => {
+                self.with_selected_pad(idx, |pad| pad.stack.corner_radius_pct = stored);
+            }
+            None => self.refresh_panel_ctx(),
+        }
         true
     }
     pub(crate) fn fp_editor_set_selected_pad_template(
@@ -703,12 +720,18 @@ impl Signex {
         true
     }
 
+    /// #599 — an unreadable rotation leaves the stored default alone
+    /// instead of clearing it.
     pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_next_pad_hole_rotation(
         &mut self,
         v: &str,
     ) -> bool {
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            editor.state.next_pad_defaults.hole_rotation_deg = v.trim().parse::<f64>().ok();
+        let edit = fp_parse_optional_number(v);
+        if let Some(stored) =
+            fp_resolve_optional_number("Hole rotation (°), new pad default", v, edit)
+            && let Some(editor) = self.active_footprint_editor_mut()
+        {
+            editor.state.next_pad_defaults.hole_rotation_deg = stored;
         }
         self.refresh_panel_ctx();
         true

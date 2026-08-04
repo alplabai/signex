@@ -86,26 +86,22 @@ fn pick_line_at(sketch: &signex_sketch::SketchData, x: f64, y: f64) -> Option<Sk
 //     points.
 //
 // Radius source — `state.placement_input` (kind FilletRadius) when the
-// user typed one; else `state.dimension_input`; else 0.5 mm.
+// user typed one; else `state.dimension_input`; else
+// DEFAULT_TOOL_DIMENSION_MM, and only when both buffers are empty.
+//
+// GH #599 — a typed-but-unreadable radius aborts the gesture with a
+// report instead of quietly filleting at the default. A fillet radius
+// the user did not ask for is manufactured geometry that reaches fab.
 fn fillet(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
     let click_xy = (ctx.x_mm, ctx.y_mm);
-    let radius_mm = editor
-        .state
-        .placement_input
-        .as_ref()
-        .filter(|p| p.kind == PlacementInputKind::FilletRadius)
-        .and_then(|p| p.buffer.parse::<f64>().ok())
-        .filter(|r| r.is_finite() && *r > 1e-9)
-        .unwrap_or_else(|| {
-            editor
-                .state
-                .dimension_input
-                .trim()
-                .parse::<f64>()
-                .ok()
-                .filter(|r| r.is_finite() && *r > 1e-9)
-                .unwrap_or(0.5)
-        });
+    let radius_mm = match super::resolve_tool_dimension_mm(editor, PlacementInputKind::FilletRadius)
+    {
+        super::ToolDimension::Accepted { mm, .. } => mm,
+        super::ToolDimension::Rejected { buffer } => {
+            super::reject_tool_dimension(editor, "Fillet", "fillet radius", &buffer);
+            return;
+        }
+    };
 
     match editor.state.tool_pending {
         ToolPending::FilletFirst { line: first_line } => {

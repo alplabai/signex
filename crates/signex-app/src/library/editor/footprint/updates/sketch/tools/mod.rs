@@ -40,6 +40,119 @@ impl ToolClickCtx {
     }
 }
 
+/// The millimetre dimension the Offset / Fillet tools use when the user
+/// has typed nothing at all — neither into the cursor overlay nor into
+/// the Properties-panel `dimension_input` field.
+///
+/// This is a fallback for an *empty* buffer only. It is never a
+/// substitute for a buffer that failed to parse: see
+/// [`resolve_tool_dimension_mm`].
+pub(super) const DEFAULT_TOOL_DIMENSION_MM: f64 = 0.5;
+
+/// The outcome of reading a tool's millimetre dimension out of the two
+/// input buffers that can carry one.
+pub(super) enum ToolDimension {
+    /// A finite, positive length in mm. `from_placement` marks a value
+    /// that came from the cursor overlay, whose buffer the caller clears
+    /// so the next click cannot silently reuse it.
+    Accepted { mm: f64, from_placement: bool },
+    /// The user typed something that is not a positive length. Carries
+    /// the exact text so the report can name it back to them.
+    Rejected { buffer: String },
+}
+
+/// Read a tool's millimetre dimension: the cursor-overlay
+/// `placement_input` of `kind` first, then the Properties-panel
+/// `dimension_input`, then [`DEFAULT_TOOL_DIMENSION_MM`].
+///
+/// GH #599 — a buffer the user actually typed into is never replaced by
+/// the default. Doing so does not merely lose the operation, it
+/// *succeeds* at a size nobody asked for: a `1,5` typed on a
+/// comma-decimal keyboard used to mint a 0.5 mm fillet, and a wrong
+/// fillet radius goes to fabrication. Only an absent or empty buffer
+/// falls through to the default.
+pub(super) fn resolve_tool_dimension_mm(
+    editor: &crate::app::FootprintEditorState,
+    kind: crate::library::editor::footprint::state::PlacementInputKind,
+) -> ToolDimension {
+    let overlay = editor
+        .state
+        .placement_input
+        .as_ref()
+        .filter(|p| p.kind == kind)
+        .map(|p| p.buffer.trim())
+        .filter(|buffer| !buffer.is_empty());
+    if let Some(buffer) = overlay {
+        return match parse_positive_mm(buffer) {
+            Some(mm) => ToolDimension::Accepted {
+                mm,
+                from_placement: true,
+            },
+            None => ToolDimension::Rejected {
+                buffer: buffer.to_string(),
+            },
+        };
+    }
+
+    let typed = editor.state.dimension_input.trim();
+    if typed.is_empty() {
+        return ToolDimension::Accepted {
+            mm: DEFAULT_TOOL_DIMENSION_MM,
+            from_placement: false,
+        };
+    }
+    match parse_positive_mm(typed) {
+        Some(mm) => ToolDimension::Accepted {
+            mm,
+            from_placement: false,
+        },
+        None => ToolDimension::Rejected {
+            buffer: typed.to_string(),
+        },
+    }
+}
+
+/// A dimension buffer is usable only when it reads as a finite, strictly
+/// positive length. Zero, a negative, an infinity and a NaN are all
+/// rejected alongside outright parse failures — each of them would have
+/// produced degenerate geometry.
+fn parse_positive_mm(buffer: &str) -> Option<f64> {
+    buffer
+        .parse::<f64>()
+        .ok()
+        .filter(|mm| mm.is_finite() && *mm > 1e-9)
+}
+
+/// Report a dimension buffer that cannot be read as a positive length,
+/// and abort the gesture.
+///
+/// GH #599 — the tool creates nothing here. `tool` names the gesture
+/// ("Offset", "Fillet") and `field` the dimension ("offset distance",
+/// "fillet radius") so both the Messages panel entry and the sketch
+/// inspector's warning list say which input was refused and why.
+pub(super) fn reject_tool_dimension(
+    editor: &mut crate::app::FootprintEditorState,
+    tool: &'static str,
+    field: &'static str,
+    buffer: &str,
+) {
+    use crate::library::editor::footprint::state::ToolPending;
+
+    tracing::error!(
+        target: "signex::sketch_tools",
+        tool = tool,
+        field = field,
+        buffer = buffer,
+        "sketch tool refused an unreadable dimension; no geometry was created"
+    );
+    editor.state.solve_warnings.push(format!(
+        "{tool}: \"{buffer}\" is not a valid {field} in mm — nothing was created. \
+         Enter a positive number using \".\" as the decimal separator."
+    ));
+    editor.state.tool_pending = ToolPending::Idle;
+    editor.canvas_cache.clear();
+}
+
 pub(in crate::library::editor::footprint::updates) fn apply(
     editor: &mut crate::app::FootprintEditorState,
     msg: FootprintEditorMsg,

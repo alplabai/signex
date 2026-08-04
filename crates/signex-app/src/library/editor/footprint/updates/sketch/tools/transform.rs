@@ -278,7 +278,9 @@ fn mirror(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
 // v0.22 Phase B2 — Offset tool. Pre-condition: a Line / Arc / Circle is
 // in `selected_sketch`. The click position determines which side of the
 // source curve the offset lands on. Offset distance comes from
-// `state.dimension_input`, default 0.5 mm.
+// `state.placement_input` (kind OffsetDistance) when the user typed
+// one; else `state.dimension_input`; else DEFAULT_TOOL_DIMENSION_MM —
+// and only when both buffers are empty (#599).
 fn offset(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
     let source_id = match editor.state.selected_sketch {
         Some(id) => id,
@@ -298,28 +300,24 @@ fn offset(editor: &mut crate::app::FootprintEditorState, ctx: &ToolClickCtx) {
     // discoverable path; `dimension_input` stays as
     // the Properties-panel fallback for users who
     // already have a value there.
-    let dist_from_placement = editor
-        .state
-        .placement_input
-        .as_ref()
-        .filter(|p| p.kind == PlacementInputKind::OffsetDistance)
-        .and_then(|p| p.buffer.parse::<f64>().ok())
-        .filter(|d| d.is_finite() && *d > 1e-9);
-    let dist = dist_from_placement.unwrap_or_else(|| {
-        editor
-            .state
-            .dimension_input
-            .trim()
-            .parse::<f64>()
-            .ok()
-            .filter(|d| d.is_finite() && *d > 1e-9)
-            .unwrap_or(0.5)
-    });
-    // Clear the buffer so the next Offset click
-    // doesn''t accidentally reuse the old value.
-    if dist_from_placement.is_some() {
-        editor.state.placement_input = None;
-    }
+    //
+    // GH #599 — a typed-but-unreadable buffer aborts the
+    // gesture with a report instead of quietly offsetting
+    // at DEFAULT_TOOL_DIMENSION_MM.
+    let dist = match super::resolve_tool_dimension_mm(editor, PlacementInputKind::OffsetDistance) {
+        super::ToolDimension::Accepted { mm, from_placement } => {
+            // Clear the buffer so the next Offset click
+            // doesn't accidentally reuse the old value.
+            if from_placement {
+                editor.state.placement_input = None;
+            }
+            mm
+        }
+        super::ToolDimension::Rejected { buffer } => {
+            super::reject_tool_dimension(editor, "Offset", "offset distance", &buffer);
+            return;
+        }
+    };
 
     let sketch_ref = match editor.primitive().sketch.as_ref() {
         Some(s) => s,
