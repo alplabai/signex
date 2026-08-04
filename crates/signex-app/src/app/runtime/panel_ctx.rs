@@ -179,28 +179,35 @@ impl Signex {
                             // chain — the regression from F34 where
                             // freshly-created `.snxsym` files never
                             // appeared in the project tree.
+                            //
+                            // That chain is now `list_dir_or_report`,
+                            // which keeps the same empty result but
+                            // reports anything other than "the
+                            // directory is not there" to the Messages
+                            // panel, so the next wrong path or
+                            // unreadable dir says so instead of
+                            // rendering as a library with no symbols.
                             let lib_root = resolved
                                 .parent()
                                 .map(std::path::Path::to_path_buf)
                                 .unwrap_or_else(|| resolved.clone());
                             let read_dir_names = |sub: &str, ext: &str| -> Vec<String> {
                                 let dir = lib_root.join(sub);
-                                let mut names: Vec<String> = std::fs::read_dir(&dir)
-                                    .ok()
-                                    .into_iter()
-                                    .flatten()
-                                    .filter_map(|entry| entry.ok())
-                                    .filter_map(|entry| {
-                                        let path = entry.path();
-                                        if path.extension().and_then(|e| e.to_str()) == Some(ext) {
-                                            path.file_stem()
-                                                .and_then(|s| s.to_str())
-                                                .map(|s| s.to_string())
-                                        } else {
-                                            None
-                                        }
-                                    })
-                                    .collect();
+                                let mut names: Vec<String> =
+                                    crate::app::dir_listing::list_dir_or_report(&dir, sub)
+                                        .into_iter()
+                                        .filter_map(|path| {
+                                            if path.extension().and_then(|e| e.to_str())
+                                                == Some(ext)
+                                            {
+                                                path.file_stem()
+                                                    .and_then(|s| s.to_str())
+                                                    .map(|s| s.to_string())
+                                            } else {
+                                                None
+                                            }
+                                        })
+                                        .collect();
                                 names.sort();
                                 names
                             };
