@@ -130,6 +130,23 @@ pub struct UiState {
     /// error is swallowed silently. Empty renders the default conflict
     /// summary instead.
     pub preferences_keymap_status: String,
+    /// Boot-time keyboard-shortcut load failure, carried for the life of
+    /// the session (#595). `Some` means a shortcuts file EXISTS on disk
+    /// and could not be honoured — unreadable, unparseable, or naming an
+    /// `active_profile` that no longer resolves — so the running set is
+    /// the bundled built-in fallback rather than the user's own profiles.
+    ///
+    /// That is emphatically NOT the same as the user having no custom
+    /// profiles: [`crate::keymap::load_profile_set_at`] returns `Ok` for a
+    /// missing file, so a fresh install leaves this `None`. Treating the
+    /// two alike is what let a Preferences Apply serialise the
+    /// custom-profile-free fallback over the user's real file.
+    ///
+    /// Unlike [`Self::preferences_keymap_status`] this is NOT cleared when
+    /// the Preferences dialog opens — it is a persistent banner, not
+    /// transient feedback. Only a successful save clears it, because only
+    /// then is the file on disk one this process wrote.
+    pub keymap_load_error: Option<String>,
     /// Live search query for the Keyboard Shortcuts pane. Filters the
     /// grouped shortcut table case-insensitively by label / command id /
     /// trigger. Reset to empty each time Preferences opens.

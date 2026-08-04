@@ -395,6 +395,56 @@ pub fn save_profile_set_at(path: &Path, set: &ShortcutProfileSet) -> Result<(), 
     signex_types::atomic_io::atomic_write(path, source.as_bytes()).map_err(ProfileLoadError::Io)
 }
 
+/// Sibling `.bak` path — appended to the WHOLE file name, so
+/// `keyboard_shortcuts.toml` backs up to `keyboard_shortcuts.toml.bak`
+/// rather than the `keyboard_shortcuts.bak` that `set_extension` would
+/// produce. Built through [`std::ffi::OsString`] so a non-UTF-8 config
+/// directory name survives instead of being mangled by a lossy
+/// round-trip. `None` only when `path` has no file name at all.
+fn backup_path_for(path: &Path) -> Option<PathBuf> {
+    let mut name = path.file_name()?.to_os_string();
+    name.push(".bak");
+    Some(path.with_file_name(name))
+}
+
+/// Copy the existing shortcuts file aside before a save that would
+/// otherwise overwrite profiles this process failed to load (#595).
+///
+/// Three outcomes, all load-bearing:
+///
+/// * `path` does not exist — `Ok(None)`, there is nothing to preserve.
+/// * the `.bak` sibling already exists — `Ok(None)` **without copying**.
+///   That existing backup is the original. A second Apply would
+///   otherwise copy the already-overwritten file over it and destroy the
+///   only surviving copy of the user's profiles.
+/// * otherwise — copy `path` aside and return `Ok(Some(bak_path))`.
+///
+/// An `Err` means the copy could not be made, and the caller must then
+/// refuse to save: overwriting after a failed backup is the data loss
+/// this function exists to prevent, not a fallback.
+pub fn back_up_profile_file_at(path: &Path) -> Result<Option<PathBuf>, ProfileLoadError> {
+    if !path.exists() {
+        return Ok(None);
+    }
+    let Some(bak) = backup_path_for(path) else {
+        return Ok(None);
+    };
+    if bak.exists() {
+        return Ok(None);
+    }
+    std::fs::copy(path, &bak).map_err(ProfileLoadError::Io)?;
+    Ok(Some(bak))
+}
+
+/// [`back_up_profile_file_at`] against the resolved user config path,
+/// mirroring the [`save_profile_set`] / [`save_profile_set_at`] pair.
+pub fn back_up_profile_file() -> Result<Option<PathBuf>, ProfileLoadError> {
+    let Some(path) = config_path() else {
+        return Err(ProfileLoadError::NoConfigDir);
+    };
+    back_up_profile_file_at(&path)
+}
+
 pub fn import_custom_profile(source: &str) -> Result<ShortcutProfile, ProfileLoadError> {
     let profile = TomlShortcutProfile::parse(source)?.into_profile()?;
     if profile.kind != ShortcutProfileKind::Custom {

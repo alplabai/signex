@@ -272,6 +272,11 @@ pub struct PrefsView<'a> {
     pub draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
     pub keymap_editor: &'a crate::keymap::KeymapEditorModel,
     pub keymap_status: &'a str,
+    /// Boot-time shortcut-file load failure (#595). `Some` renders a
+    /// persistent banner under the pane header naming the file and the
+    /// error; `None` renders nothing. Distinct from `keymap_status`,
+    /// which is transient per-action feedback cleared on every open.
+    pub keymap_load_error: Option<&'a str>,
     pub keymap_search: &'a str,
     pub keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
     pub theme_id: ThemeId,
@@ -528,6 +533,7 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         draft_component_classes,
         keymap_editor,
         keymap_status,
+        keymap_load_error,
         keymap_search,
         keymap_recorder,
         ..
@@ -548,9 +554,13 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         PrefNav::LibraryDistributors => {
             content_library_distributors(distributor_settings, panel_tokens)
         }
-        PrefNav::Keyboard => {
-            content_keyboard_shortcuts(keymap_editor, keymap_status, keymap_search, keymap_recorder)
-        }
+        PrefNav::Keyboard => content_keyboard_shortcuts(
+            keymap_editor,
+            keymap_status,
+            keymap_load_error,
+            keymap_search,
+            keymap_recorder,
+        ),
         PrefNav::ComponentClasses => content_component_classes(draft_component_classes),
     };
 
