@@ -599,32 +599,99 @@ fn library_set_resolves_across_two_local_libs() {
     // Cross-library resolution: refs disambiguated by library_id.
     let from_a = set
         .resolve_symbol(&PrimitiveRef::new(lib_a, shared_uuid))
+        .expect("lib A lookup succeeds")
         .expect("symbol from lib A resolves");
     assert_eq!(from_a.name, "OPAMP-IN-A");
     let from_b = set
         .resolve_symbol(&PrimitiveRef::new(lib_b, shared_uuid))
+        .expect("lib B lookup succeeds")
         .expect("symbol from lib B resolves");
     assert_eq!(from_b.name, "OPAMP-IN-B");
 
     // Footprint only resolves through lib B's id; lib A returns None.
     assert!(
         set.resolve_footprint(&PrimitiveRef::new(lib_b, fp_b_uuid))
+            .expect("lib B lookup succeeds")
             .is_some()
     );
     assert!(
         set.resolve_footprint(&PrimitiveRef::new(lib_a, fp_b_uuid))
+            .expect("lib A lookup succeeds")
             .is_none()
     );
 
-    // unresolved_refs filters down to misses across both libs.
+    // unresolved_refs filters down to misses across both libs. Nothing
+    // is unreadable here, so `undetermined` must stay empty — an entry
+    // there would mean a good binding was about to be reported wrong.
     let bogus_lib = PrimitiveRef::new(Uuid::now_v7(), Uuid::now_v7());
     let bogus_uuid = PrimitiveRef::new(lib_a, Uuid::now_v7());
     let resolves = PrimitiveRef::new(lib_a, shared_uuid);
     let unresolved = set.unresolved_refs([&bogus_lib, &bogus_uuid, &resolves]);
-    assert_eq!(unresolved.len(), 2);
-    assert!(unresolved.contains(&bogus_lib));
-    assert!(unresolved.contains(&bogus_uuid));
-    assert!(!unresolved.contains(&resolves));
+    assert_eq!(unresolved.missing.len(), 2);
+    assert!(unresolved.missing.contains(&bogus_lib));
+    assert!(unresolved.missing.contains(&bogus_uuid));
+    assert!(!unresolved.missing.contains(&resolves));
+    assert!(
+        unresolved.undetermined.is_empty(),
+        "unexpected read failures: {:?}",
+        unresolved.undetermined
+    );
+}
+
+/// A corrupt `.snxsym` on disk must not read as "this row's symbol_ref
+/// points at a UUID that isn't in the library". The resolver hands the
+/// caller the parse error so the UI can say what actually happened.
+#[test]
+fn corrupt_symbol_file_resolves_to_an_error_not_a_missing_uuid() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = snxlib_path(dir.path(), "corrupt");
+    let manifest = empty_snx_manifest("corrupt", false);
+    let lib_id = manifest.library_id;
+    let adapter = LocalGitAdapter::init(
+        &file,
+        manifest,
+        LibraryInitOptions {
+            enable_git: false,
+            use_lfs: false,
+        },
+    )
+    .unwrap();
+
+    let sym = fixture_symbol("U1");
+    let sym_uuid = sym.uuid;
+    adapter.save_symbol(sym, "add U1").unwrap();
+
+    // Truncate the on-disk container mid-record — exactly what a half
+    // written file or a bad merge leaves behind.
+    let symbols_dir = file.parent().expect("library dir").join("symbols");
+    let written = std::fs::read_dir(&symbols_dir)
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .find(|p| p.extension().and_then(|s| s.to_str()) == Some("snxsym"))
+        .expect("symbol file written");
+    std::fs::write(&written, b"format = \"snxsym/").unwrap();
+
+    let mut set = LibrarySet::new();
+    set.mount(Box::new(adapter)).unwrap();
+
+    let r = PrimitiveRef::new(lib_id, sym_uuid);
+    let err = set
+        .resolve_symbol(&r)
+        .expect_err("a corrupt symbol container must not read as an absent UUID");
+    assert!(
+        !matches!(err, signex_library::LibraryError::NotFound(_)),
+        "corrupt file reported as NotFound: {err}"
+    );
+
+    let sweep = set.unresolved_refs([&r]);
+    assert!(
+        sweep.missing.is_empty(),
+        "corrupt file filed as a wrong binding: {:?}",
+        sweep.missing
+    );
+    assert_eq!(sweep.undetermined.len(), 1);
+    assert_eq!(sweep.undetermined[0].0, r);
 }
 
 // ── Row CRUD ──────────────────────────────────────────────────────────────

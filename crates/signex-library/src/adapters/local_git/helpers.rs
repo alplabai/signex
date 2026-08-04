@@ -222,6 +222,39 @@ pub(super) fn primitive_kind_str(kind: PrimitiveKind) -> &'static str {
     }
 }
 
+/// Snapshot the component-class registry out of `lock`.
+///
+/// A poisoned lock used to return `Vec::new()`, which is byte-identical
+/// to a fresh library's empty registry — so the browser sidebar
+/// rendered no class rows and a lookup by key found nothing, with no
+/// signal anywhere that the registry had simply not been read. Poison
+/// is now reported and the registry read through, because the data
+/// behind the flag is still there: a panicking writer is what the
+/// poison flag exists to announce, not to censor.
+///
+/// The sibling `list_tables` maps poison onto
+/// [`LibraryError::Backend`] instead; it can, because its signature
+/// returns a `Result`. `library_classes()` returns a bare `Vec`, so
+/// the log record is the only place the failure can surface.
+pub(super) fn classes_or_report(
+    lock: &RwLock<LibraryFile>,
+    file_path: &Path,
+) -> Vec<crate::library_file::ClassEntry> {
+    match lock.read() {
+        Ok(guard) => guard.manifest.classes.clone(),
+        Err(poisoned) => {
+            let recovered = poisoned.into_inner();
+            tracing::error!(
+                target: "signex::library",
+                path = %file_path.display(),
+                classes = recovered.manifest.classes.len(),
+                "component-class registry lock is poisoned — a writer panicked mid-update; the registry was read through, but this library's in-memory state should be considered suspect until it is reopened"
+            );
+            recovered.manifest.classes.clone()
+        }
+    }
+}
+
 pub(super) fn identity_for_repo(repo: &git2::Repository) -> (String, String) {
     let cfg = repo.config().ok();
     let name = cfg
@@ -233,4 +266,71 @@ pub(super) fn identity_for_repo(repo: &git2::Repository) -> (String, String) {
         .and_then(|c| c.get_string("user.email").ok())
         .unwrap_or_else(|| "library@signex.local".to_string());
     (name, email)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::library_file::ClassEntry;
+
+    fn library_file_with_classes(keys: &[&str]) -> LibraryFile {
+        let mut lf = LibraryFile {
+            manifest: crate::library_file::SnxlibManifest {
+                format: crate::library_file::FORMAT_TOKEN.into(),
+                library_id: Uuid::now_v7(),
+                library: crate::library_file::LibrarySection {
+                    name: "poison-probe".into(),
+                    description: None,
+                },
+                mode: crate::manifest::LibraryMode::default(),
+                workflow: crate::manifest::WorkflowConfig::default(),
+                users: crate::manifest::UsersConfig::default(),
+                classes: Vec::new(),
+            },
+            tables: std::collections::BTreeMap::new(),
+        };
+        lf.manifest.classes = keys
+            .iter()
+            .map(|k| ClassEntry {
+                key: (*k).to_string(),
+                label: (*k).to_uppercase(),
+            })
+            .collect();
+        lf
+    }
+
+    fn poison(lock: &RwLock<LibraryFile>) {
+        let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = lock.write().expect("lock is clean before the probe");
+            panic!("probe: writer panics holding the library lock");
+        }));
+        assert!(caught.is_err(), "the probe must actually panic");
+        assert!(lock.read().is_err(), "the lock must now be poisoned");
+    }
+
+    /// A poisoned lock used to read as an empty registry, which is what
+    /// a brand-new library looks like — so nothing anywhere in the UI
+    /// could tell the two apart.
+    #[test]
+    fn a_poisoned_lock_does_not_read_as_an_empty_class_registry() {
+        let lock = RwLock::new(library_file_with_classes(&["resistor", "capacitor"]));
+        poison(&lock);
+
+        let classes = classes_or_report(&lock, Path::new("/tmp/probe/probe.snxlib"));
+        let keys: Vec<&str> = classes.iter().map(|c| c.key.as_str()).collect();
+        assert_eq!(
+            keys,
+            ["resistor", "capacitor"],
+            "a poisoned lock was reported as a library with no classes"
+        );
+    }
+
+    #[test]
+    fn a_clean_lock_reads_the_registry_unchanged() {
+        let lock = RwLock::new(library_file_with_classes(&["ic"]));
+        let classes = classes_or_report(&lock, Path::new("/tmp/probe/probe.snxlib"));
+        assert_eq!(classes.len(), 1);
+        assert_eq!(classes[0].key, "ic");
+        assert_eq!(classes[0].label, "IC");
+    }
 }

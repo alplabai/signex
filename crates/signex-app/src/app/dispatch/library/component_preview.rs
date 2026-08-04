@@ -6,6 +6,7 @@
 //! pure code motion, zero behaviour change.
 
 use super::*;
+use crate::library::resolve::{ResolvedKind, report_read_failure};
 
 impl Signex {
     /// Trace-only signal: a Component Preview tab was opened for the
@@ -131,7 +132,12 @@ impl Signex {
             PreviewTab::Preview => {
                 if state.symbol.is_none() {
                     let symbol_ref = state.row.symbol_ref;
-                    let resolved = self.library.set.resolve_symbol(&symbol_ref);
+                    let resolved = report_read_failure(
+                        self.library.set.resolve_symbol(&symbol_ref),
+                        ResolvedKind::Symbol,
+                        &symbol_ref,
+                        "component preview tab",
+                    );
                     if let Some(state) = self.library.editors.get_mut(address) {
                         state.symbol = resolved;
                     }
@@ -139,11 +145,14 @@ impl Signex {
                 if let Some(state) = self.library.editors.get_mut(address)
                     && state.footprint.is_none()
                 {
-                    let resolved = state
-                        .row
-                        .footprint_ref
-                        .as_ref()
-                        .and_then(|r| self.library.set.resolve_footprint(r));
+                    let resolved = state.row.footprint_ref.as_ref().and_then(|r| {
+                        report_read_failure(
+                            self.library.set.resolve_footprint(r),
+                            ResolvedKind::Footprint,
+                            r,
+                            "component preview tab",
+                        )
+                    });
                     if let Some(state) = self.library.editors.get_mut(address) {
                         state.footprint = resolved;
                     }
@@ -154,7 +163,12 @@ impl Signex {
                     && let Some(sim_ref) = state.row.sim_ref.as_ref()
                 {
                     let sim_ref = *sim_ref;
-                    let resolved = self.library.set.resolve_sim(&sim_ref);
+                    let resolved = report_read_failure(
+                        self.library.set.resolve_sim(&sim_ref),
+                        ResolvedKind::Sim,
+                        &sim_ref,
+                        "component preview simulation tab",
+                    );
                     if let Some(state) = self.library.editors.get_mut(address) {
                         if let Some(sim) = resolved.as_ref() {
                             state.sim_body = Some(iced::widget::text_editor::Content::with_text(

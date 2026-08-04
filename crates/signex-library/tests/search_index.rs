@@ -386,6 +386,74 @@ fn category_only_query_filters_corpus() {
     }
 }
 
+/// Tantivy reads `( ) + - : " [ ] ^ *` as operators, and real part
+/// numbers are full of them. A query that fails to parse used to be
+/// replaced with `AllQuery`, handing back the entire library dressed
+/// up as matches. The fallback now matches the same text literally.
+#[test]
+fn unparseable_query_text_matches_literally_instead_of_returning_the_library() {
+    let _guard = serial_guard();
+    let dir = tempfile::tempdir().unwrap();
+    let idx = TantivySearchIndex::open(dir.path()).expect("open index");
+
+    let corpus = fixture_corpus();
+    for c in &corpus {
+        idx.add_or_update(c).expect("add row");
+    }
+    idx.commit().expect("commit");
+
+    // Unbalanced parenthesis — the shape a user produces the moment
+    // they type a tolerance or a package suffix into the search bar.
+    let q = SearchQuery {
+        text: Some("Murata GRM21BR71E106KE12L(".into()),
+        category: None,
+        facets: vec![],
+        limit: 200,
+    };
+    let hits = idx.query(&q);
+
+    assert!(
+        hits.len() < corpus.len(),
+        "the whole library came back as matches ({} of {})",
+        hits.len(),
+        corpus.len()
+    );
+    assert_eq!(
+        hits.len(),
+        1,
+        "expected the one Murata part, got {:?}",
+        hits.iter()
+            .map(|h| h.internal_pn.as_str())
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(hits[0].internal_pn.as_str(), "C0805_10uF_25V_X7R");
+}
+
+/// A query whose text survives quoting but matches nothing must come
+/// back empty, not widened into the whole library.
+#[test]
+fn unparseable_query_text_with_no_match_returns_nothing() {
+    let _guard = serial_guard();
+    let dir = tempfile::tempdir().unwrap();
+    let idx = TantivySearchIndex::open(dir.path()).expect("open index");
+
+    for c in &fixture_corpus() {
+        idx.add_or_update(c).expect("add row");
+    }
+    idx.commit().expect("commit");
+
+    let q = SearchQuery {
+        text: Some("NOTAPARTNUMBER(".into()),
+        category: None,
+        facets: vec![],
+        limit: 200,
+    };
+    assert!(
+        idx.query(&q).is_empty(),
+        "a miss must read as a miss, not as the whole library"
+    );
+}
+
 // Defensive: keep an unused `BTreeMap` import in scope so cargo doesn't warn
 // when the test file evolves; suppression rather than removal because adapter
 // tests often re-introduce these collections.

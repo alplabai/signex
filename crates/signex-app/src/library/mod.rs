@@ -30,6 +30,7 @@ pub mod panel;
 pub mod picker;
 pub mod primitive_picker;
 pub mod recovery;
+pub mod resolve;
 pub mod settings;
 pub mod state;
 #[cfg(test)]

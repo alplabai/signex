@@ -398,7 +398,22 @@ impl TantivySearchIndex {
                 );
                 match parser.parse_query(trimmed) {
                     Ok(parsed) => clauses.push((Occur::Must, parsed)),
-                    Err(_) => clauses.push((Occur::Must, Box::new(AllQuery))),
+                    Err(e) => {
+                        // Real part numbers are full of Tantivy
+                        // operators — `LM358+`, `74HC00/SO(1%)`,
+                        // `R-0603-10k`, a half-typed quote. Falling
+                        // back to `AllQuery` handed the user the whole
+                        // library dressed up as matches; falling back
+                        // to the same text as a literal phrase keeps
+                        // the search a search.
+                        tracing::warn!(
+                            target: "signex::search",
+                            error = %e,
+                            query = %trimmed,
+                            "search text is not valid query syntax; matching it as a literal phrase instead"
+                        );
+                        clauses.push((Occur::Must, literal_phrase_query(&parser, trimmed)?));
+                    }
                 }
             }
         }
@@ -645,16 +660,86 @@ impl SearchIndex for TantivySearchIndex {
             }
         };
 
-        top.into_iter()
-            .filter_map(|(_score, addr)| {
-                let doc: TantivyDocument = searcher.doc(addr).ok()?;
-                self.doc_to_summary(&doc)
-            })
-            .collect()
+        // A per-document read failure used to vanish inside a
+        // `filter_map`, so a stale or partly corrupt index returned
+        // fewer rows than it matched with no signal at all: specific
+        // parts disappear from results while their neighbours come
+        // back normally, and the user concludes the part is not in the
+        // library and re-creates it.
+        let matched = top.len();
+        let (docs, unreadable) =
+            split_readable_docs(top.into_iter().map(|(_score, addr)| searcher.doc(addr)));
+        if let Some(first_error) = &unreadable.first_error {
+            tracing::warn!(
+                target: "signex::search",
+                unreadable = unreadable.count,
+                matched,
+                error = %first_error,
+                "some matching documents could not be read back; results are incomplete and the index may need rebuilding"
+            );
+        }
+
+        docs.iter().filter_map(|d| self.doc_to_summary(d)).collect()
     }
 }
 
+/// Tally of search hits whose stored document could not be read back
+/// out of the index.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct UnreadableHits {
+    /// How many hits were dropped.
+    count: usize,
+    /// The first failure's rendered error — enough to diagnose, without
+    /// one log line per dropped row.
+    first_error: Option<String>,
+}
+
+/// Split a batch of stored-document reads into the documents that came
+/// back and a tally of the ones that failed.
+fn split_readable_docs<I>(reads: I) -> (Vec<TantivyDocument>, UnreadableHits)
+where
+    I: IntoIterator<Item = Result<TantivyDocument, TantivyError>>,
+{
+    let mut docs = Vec::new();
+    let mut unreadable = UnreadableHits::default();
+    for read in reads {
+        match read {
+            Ok(doc) => docs.push(doc),
+            Err(e) => {
+                unreadable.count += 1;
+                if unreadable.first_error.is_none() {
+                    unreadable.first_error = Some(e.to_string());
+                }
+            }
+        }
+    }
+    (docs, unreadable)
+}
+
 // ── helpers ────────────────────────────────────────────────────────────
+
+/// Re-parse `text` as a quoted phrase over the same default fields, so
+/// query-syntax characters inside a part number are matched as text
+/// rather than interpreted as operators.
+///
+/// Quoting is the escape: `"` and `\` are the only characters Tantivy
+/// still reads specially inside a phrase, and blanking them leaves the
+/// surrounding tokens intact. When even the quoted form will not parse
+/// — text that tokenises to nothing, for instance — this errors rather
+/// than widening the query, because `query()` turns an error into an
+/// honest empty result and a widened query into a false one.
+fn literal_phrase_query(
+    parser: &QueryParser,
+    text: &str,
+) -> Result<Box<dyn Query>, TantivyIndexError> {
+    let escaped: String = text
+        .chars()
+        .map(|c| if c == '"' || c == '\\' { ' ' } else { c })
+        .collect();
+    parser
+        .parse_query(&format!("\"{escaped}\""))
+        .map_err(|e| TantivyIndexError::InvalidQuery(format!("{text:?} could not be matched: {e}")))
+}
 
 fn parse_f64(facet: &Facet) -> Result<f64, TantivyIndexError> {
     facet
@@ -696,4 +781,46 @@ fn read_text(doc: &TantivyDocument, field: Field) -> Option<String> {
 
 fn read_u64(doc: &TantivyDocument, field: Field) -> Option<u64> {
     doc.get_first(field).and_then(|v| v.as_u64())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn read_error(what: &str) -> TantivyError {
+        TantivyError::InvalidArgument(what.to_string())
+    }
+
+    #[test]
+    fn a_clean_batch_keeps_every_document_and_tallies_nothing() {
+        let reads = vec![
+            Ok(TantivyDocument::default()),
+            Ok(TantivyDocument::default()),
+        ];
+        let (docs, unreadable) = split_readable_docs(reads);
+        assert_eq!(docs.len(), 2);
+        assert_eq!(unreadable, UnreadableHits::default());
+        assert_eq!(unreadable.first_error, None, "nothing to report");
+    }
+
+    /// The dropped rows are the whole finding: without a tally the
+    /// caller cannot tell "1 part matched" from "3 matched and 2 could
+    /// not be read", and the user concludes the missing parts are not
+    /// in the library and re-creates them.
+    #[test]
+    fn unreadable_documents_are_counted_and_the_first_error_survives() {
+        let reads = vec![
+            Ok(TantivyDocument::default()),
+            Err(read_error("store read on segment 3")),
+            Err(read_error("store read on segment 4")),
+        ];
+        let (docs, unreadable) = split_readable_docs(reads);
+        assert_eq!(docs.len(), 1, "readable hits still come back");
+        assert_eq!(unreadable.count, 2);
+        let reported = unreadable.first_error.expect("a report to log");
+        assert!(
+            reported.contains("store read on segment 3"),
+            "the tally lost the diagnosis: {reported}"
+        );
+    }
 }

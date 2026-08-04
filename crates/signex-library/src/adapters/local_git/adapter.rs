@@ -114,11 +114,7 @@ impl LibraryAdapter for LocalGitAdapter {
     }
 
     fn library_classes(&self) -> Vec<crate::library_file::ClassEntry> {
-        let guard = match self.library_file.read() {
-            Ok(g) => g,
-            Err(_) => return Vec::new(),
-        };
-        guard.manifest.classes.clone()
+        classes_or_report(&self.library_file, &self.file_path)
     }
 
     fn update_library_classes(
