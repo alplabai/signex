@@ -30,9 +30,14 @@ use super::super::super::*;
 use crate::panels::PanelMsg;
 
 mod footprint;
+mod numeric_input;
 mod symbol;
 
 use footprint::{SilkLineEndpoint, SilkTextField};
+use numeric_input::{
+    CORNER_RADIUS_PCT_MAX, CORNER_RADIUS_PCT_MIN, fp_parse_optional_number,
+    fp_parse_optional_number_in, fp_resolve_optional_number,
+};
 
 impl Signex {
     /// v0.18.8 — convenience: resolve the active tab's `.snxfpt`
@@ -334,10 +339,23 @@ impl Signex {
                 .with_selected_pad(*idx, |pad| {
                     pad.hole_tolerance_minus_mm = fp_parse_optional_mm(value)
                 }),
-            PanelMsg::FpEditorSetSelectedPadHoleRotation { idx, value } => self
-                .with_selected_pad(*idx, |pad| {
-                    pad.hole_rotation_deg = value.trim().parse::<f64>().ok()
-                }),
+            // #599 — an unreadable rotation must not overwrite the
+            // stored one; `Some(stored)` is the only path that writes.
+            PanelMsg::FpEditorSetSelectedPadHoleRotation { idx, value } => {
+                match fp_resolve_optional_number(
+                    "Hole rotation (°), selected pad",
+                    value,
+                    fp_parse_optional_number(value),
+                ) {
+                    Some(stored) => {
+                        self.with_selected_pad(*idx, |pad| pad.hole_rotation_deg = stored)
+                    }
+                    None => {
+                        self.refresh_panel_ctx();
+                        true
+                    }
+                }
+            }
             PanelMsg::FpEditorSetSelectedPadCopperOffsetX { idx, value } => self
                 .with_selected_pad(*idx, |pad| {
                     pad.copper_offset_x_mm = fp_parse_optional_mm(value)
@@ -415,10 +433,22 @@ impl Signex {
                 .with_selected_sketch_pad(*id, |attr| {
                     attr.hole_tolerance_minus_mm = fp_parse_optional_mm(value)
                 }),
-            PanelMsg::FpEditorSetSketchPadHoleRotation { id, value } => self
-                .with_selected_sketch_pad(*id, |attr| {
-                    attr.hole_rotation_deg = value.trim().parse::<f64>().ok()
-                }),
+            // #599 — same refusal for the sketch-mode pad attribute.
+            PanelMsg::FpEditorSetSketchPadHoleRotation { id, value } => {
+                match fp_resolve_optional_number(
+                    "Hole rotation (°), sketch pad",
+                    value,
+                    fp_parse_optional_number(value),
+                ) {
+                    Some(stored) => {
+                        self.with_selected_sketch_pad(*id, |attr| attr.hole_rotation_deg = stored)
+                    }
+                    None => {
+                        self.refresh_panel_ctx();
+                        true
+                    }
+                }
+            }
             PanelMsg::FpEditorSetSketchPadCopperOffsetX { id, value } => self
                 .with_selected_sketch_pad(*id, |attr| {
                     attr.copper_offset_x_mm = fp_parse_optional_mm(value)
@@ -427,14 +457,27 @@ impl Signex {
                 .with_selected_sketch_pad(*id, |attr| {
                     attr.copper_offset_y_mm = fp_parse_optional_mm(value)
                 }),
-            PanelMsg::FpEditorSetSketchPadCornerRadiusPct { id, value } => self
-                .with_selected_sketch_pad(*id, |attr| {
-                    attr.stack.corner_radius_pct = value
-                        .trim()
-                        .parse::<f64>()
-                        .ok()
-                        .filter(|v| (0.0..=50.0).contains(v))
-                }),
+            // #599 — out of range clamps to the nearest bound, an
+            // unreadable buffer is refused; neither clears the value.
+            PanelMsg::FpEditorSetSketchPadCornerRadiusPct { id, value } => {
+                match fp_resolve_optional_number(
+                    "Corner radius %, sketch pad",
+                    value,
+                    fp_parse_optional_number_in(
+                        value,
+                        CORNER_RADIUS_PCT_MIN,
+                        CORNER_RADIUS_PCT_MAX,
+                    ),
+                ) {
+                    Some(stored) => self.with_selected_sketch_pad(*id, |attr| {
+                        attr.stack.corner_radius_pct = stored
+                    }),
+                    None => {
+                        self.refresh_panel_ctx();
+                        true
+                    }
+                }
+            }
             PanelMsg::FpEditorEditPadInSketch { pad_idx } => {
                 self.handle_fp_editor_edit_pad_in_sketch(pad_idx)
             }
