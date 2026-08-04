@@ -28,17 +28,11 @@ pub fn read_custom_filter_presets() -> Vec<crate::active_bar::CustomFilterPreset
 /// Persist the list of custom selection-filter presets without
 /// clobbering other preference keys.
 pub fn write_custom_filter_presets(presets: &[crate::active_bar::CustomFilterPreset]) {
-    let path = prefs_path();
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-    if let Ok(array) = serde_json::to_value(presets) {
-        json["custom_filter_presets"] = array;
-    }
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        write_pref_atomic(&path, serialized.as_bytes(), "fonts_pref");
-    }
+    update_prefs_json(&prefs_path(), "custom_filter_presets", |prefs| {
+        if let Ok(array) = serde_json::to_value(presets) {
+            prefs.insert("custom_filter_presets".to_string(), array);
+        }
+    })
 }
 
 /// Read the user-defined footprint-editor filter presets. Returns an
@@ -72,15 +66,9 @@ pub fn read_footprint_filter_presets() -> Vec<crate::active_bar::FootprintFilter
 /// Persist the list of footprint-editor filter presets without
 /// clobbering other preference keys.
 pub fn write_footprint_filter_presets(presets: &[crate::active_bar::FootprintFilterPreset]) {
-    let path = prefs_path();
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-    if let Ok(array) = serde_json::to_value(presets) {
-        json["footprint_filter_presets"] = array;
-    }
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        write_pref_atomic(&path, serialized.as_bytes(), "fonts_pref");
-    }
+    update_prefs_json(&prefs_path(), "footprint_filter_presets", |prefs| {
+        if let Ok(array) = serde_json::to_value(presets) {
+            prefs.insert("footprint_filter_presets".to_string(), array);
+        }
+    })
 }

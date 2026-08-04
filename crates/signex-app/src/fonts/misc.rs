@@ -23,15 +23,12 @@ pub fn read_first_run_tour_dismissed() -> bool {
 
 /// Persist the dismissal flag without clobbering other keys.
 pub fn write_first_run_tour_dismissed(dismissed: bool) {
-    let path = prefs_path();
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-    json["first_run_tour_dismissed"] = serde_json::Value::Bool(dismissed);
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        write_pref_atomic(&path, serialized.as_bytes(), "fonts_pref");
-    }
+    update_prefs_json(&prefs_path(), "first_run_tour_dismissed", |prefs| {
+        prefs.insert(
+            "first_run_tour_dismissed".to_string(),
+            serde_json::Value::Bool(dismissed),
+        );
+    })
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -54,15 +51,12 @@ pub fn read_component_filter() -> String {
 
 /// Persist the Components-panel filter without clobbering other keys.
 pub fn write_component_filter(query: &str) {
-    let path = prefs_path();
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-    json["component_filter"] = serde_json::Value::String(query.to_string());
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        write_pref_atomic(&path, serialized.as_bytes(), "fonts_pref");
-    }
+    update_prefs_json(&prefs_path(), "component_filter", |prefs| {
+        prefs.insert(
+            "component_filter".to_string(),
+            serde_json::Value::String(query.to_string()),
+        );
+    })
 }
 
 /// Read the persisted per-`.snxlib` Library Browser search queries.
@@ -99,26 +93,17 @@ pub fn read_library_browser_searches() -> std::collections::HashMap<PathBuf, Str
 /// stomp each other (same-process only — cross-process serialisation
 /// is out of scope for prefs).
 pub fn write_library_browser_search(library_path: &std::path::Path, query: &str) {
-    let path = prefs_path();
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
     let key = library_path.display().to_string();
-    let map = json
-        .as_object_mut()
-        .expect("prefs root is always an object");
-    let entry = map
-        .entry("library_browser_searches".to_string())
-        .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
-    if let Some(obj) = entry.as_object_mut() {
-        if query.is_empty() {
-            obj.remove(&key);
-        } else {
-            obj.insert(key, serde_json::Value::String(query.to_string()));
+    update_prefs_json(&prefs_path(), "library_browser_searches", |prefs| {
+        let entry = prefs
+            .entry("library_browser_searches".to_string())
+            .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+        if let Some(obj) = entry.as_object_mut() {
+            if query.is_empty() {
+                obj.remove(&key);
+            } else {
+                obj.insert(key, serde_json::Value::String(query.to_string()));
+            }
         }
-    }
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        write_pref_atomic(&path, serialized.as_bytes(), "fonts_pref");
-    }
+    })
 }

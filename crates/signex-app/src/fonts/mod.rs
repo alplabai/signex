@@ -385,8 +385,11 @@ pub fn write_ui_font_pref(font_name: &str) {
 }
 
 pub fn write_ui_font_pref_at(path: &Path, font_name: &str) {
-    update_prefs_json(path, |json| {
-        json["ui_font"] = serde_json::Value::String(font_name.to_string());
+    update_prefs_json(path, "ui_font", |prefs| {
+        prefs.insert(
+            "ui_font".to_string(),
+            serde_json::Value::String(font_name.to_string()),
+        );
     })
 }
 
@@ -418,17 +421,11 @@ pub fn read_component_classes_pref() -> Vec<ComponentClassEntry> {
 /// without clobbering other preference keys. Silent on I/O failure
 /// — preferences are best-effort.
 pub fn write_component_classes_pref(classes: &[ComponentClassEntry]) {
-    let path = prefs_path();
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-    if let Ok(value) = serde_json::to_value(classes) {
-        json["component_classes"] = value;
-    }
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        write_pref_atomic(&path, serialized.as_bytes(), "component_classes");
-    }
+    update_prefs_json(&prefs_path(), "component_classes", |prefs| {
+        if let Ok(value) = serde_json::to_value(classes) {
+            prefs.insert("component_classes".to_string(), value);
+        }
+    })
 }
 
 /// Read `power_port_style` from preferences file.
@@ -458,8 +455,11 @@ pub fn write_power_port_style_pref_at(path: &Path, style: PowerPortStyle) {
         PowerPortStyle::Standard => "standard",
         PowerPortStyle::Altium => "altium",
     };
-    update_prefs_json(path, |json| {
-        json["power_port_style"] = serde_json::Value::String(token.to_string());
+    update_prefs_json(path, "power_port_style", |prefs| {
+        prefs.insert(
+            "power_port_style".to_string(),
+            serde_json::Value::String(token.to_string()),
+        );
     })
 }
 
@@ -490,8 +490,11 @@ pub fn write_label_style_pref_at(path: &Path, style: LabelStyle) {
         LabelStyle::Standard => "standard",
         LabelStyle::Altium => "altium",
     };
-    update_prefs_json(path, |json| {
-        json["label_style"] = serde_json::Value::String(token.to_string());
+    update_prefs_json(path, "label_style", |prefs| {
+        prefs.insert(
+            "label_style".to_string(),
+            serde_json::Value::String(token.to_string()),
+        );
     })
 }
 
@@ -522,8 +525,11 @@ pub fn write_multisheet_style_pref_at(path: &Path, style: MultisheetStyle) {
         MultisheetStyle::Standard => "standard",
         MultisheetStyle::Altium => "altium",
     };
-    update_prefs_json(path, |json| {
-        json["multisheet_style"] = serde_json::Value::String(token.to_string());
+    update_prefs_json(path, "multisheet_style", |prefs| {
+        prefs.insert(
+            "multisheet_style".to_string(),
+            serde_json::Value::String(token.to_string()),
+        );
     })
 }
 
@@ -560,8 +566,11 @@ pub fn write_grid_style_pref_at(path: &Path, style: GridStyle) {
         GridStyle::Lines => "lines",
         GridStyle::SmallCrosses => "crosses",
     };
-    update_prefs_json(path, |json| {
-        json["grid_style"] = serde_json::Value::String(token.to_string());
+    update_prefs_json(path, "grid_style", |prefs| {
+        prefs.insert(
+            "grid_style".to_string(),
+            serde_json::Value::String(token.to_string()),
+        );
     })
 }
 
@@ -584,21 +593,6 @@ pub fn write_grid_style_pref_at(path: &Path, style: GridStyle) {
 fn read_prefs_json(path: &Path) -> Option<serde_json::Value> {
     let bytes = std::fs::read(path).ok()?;
     serde_json::from_slice::<serde_json::Value>(&bytes).ok()
-}
-
-/// Update one key of `prefs.json` at `path` without clobbering other
-/// keys. Creates the parent dir if missing. I/O failures are
-/// best-effort but logged at `debug` (MD-32) — set
-/// `RUST_LOG=signex_app::fonts=debug` to see them.
-fn update_prefs_json(path: &Path, mut mutator: impl FnMut(&mut serde_json::Value)) {
-    let mut json: serde_json::Value = std::fs::read(path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-    mutator(&mut json);
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        write_pref_atomic(path, serialized.as_bytes(), "update_prefs_json");
-    }
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -626,9 +620,9 @@ pub fn write_theme_pref(theme: ThemeId) {
 
 /// Same as [`write_theme_pref`] but writes to `path` — exposed for tests.
 pub fn write_theme_pref_at(path: &Path, theme: ThemeId) {
-    update_prefs_json(path, |json| {
+    update_prefs_json(path, "theme", |prefs| {
         if let Ok(value) = serde_json::to_value(theme) {
-            json["theme"] = value;
+            prefs.insert("theme".to_string(), value);
         }
     })
 }
@@ -655,9 +649,9 @@ pub fn write_unit_pref(unit: Unit) {
 }
 
 pub fn write_unit_pref_at(path: &Path, unit: Unit) {
-    update_prefs_json(path, |json| {
+    update_prefs_json(path, "unit", |prefs| {
         if let Ok(value) = serde_json::to_value(unit) {
-            json["unit"] = value;
+            prefs.insert("unit".to_string(), value);
         }
     })
 }
@@ -682,8 +676,8 @@ pub fn write_grid_visible_pref(visible: bool) {
 }
 
 pub fn write_grid_visible_pref_at(path: &Path, visible: bool) {
-    update_prefs_json(path, |json| {
-        json["grid_visible"] = serde_json::Value::Bool(visible);
+    update_prefs_json(path, "grid_visible", |prefs| {
+        prefs.insert("grid_visible".to_string(), serde_json::Value::Bool(visible));
     })
 }
 
@@ -709,8 +703,11 @@ pub fn write_pcb_gpu_render_pref(enabled: bool) {
 }
 
 pub fn write_pcb_gpu_render_pref_at(path: &Path, enabled: bool) {
-    update_prefs_json(path, |json| {
-        json["pcb_gpu_render"] = serde_json::Value::Bool(enabled);
+    update_prefs_json(path, "pcb_gpu_render", |prefs| {
+        prefs.insert(
+            "pcb_gpu_render".to_string(),
+            serde_json::Value::Bool(enabled),
+        );
     })
 }
 
@@ -734,8 +731,8 @@ pub fn write_snap_enabled_pref(enabled: bool) {
 }
 
 pub fn write_snap_enabled_pref_at(path: &Path, enabled: bool) {
-    update_prefs_json(path, |json| {
-        json["snap_enabled"] = serde_json::Value::Bool(enabled);
+    update_prefs_json(path, "snap_enabled", |prefs| {
+        prefs.insert("snap_enabled".to_string(), serde_json::Value::Bool(enabled));
     })
 }
 
@@ -758,8 +755,8 @@ pub fn write_grid_size_mm_pref(grid_size_mm: f32) {
 }
 
 pub fn write_grid_size_mm_pref_at(path: &Path, grid_size_mm: f32) {
-    update_prefs_json(path, |json| {
-        json["grid_size_mm"] = serde_json::json!(grid_size_mm);
+    update_prefs_json(path, "grid_size_mm", |prefs| {
+        prefs.insert("grid_size_mm".to_string(), serde_json::json!(grid_size_mm));
     })
 }
 
@@ -771,8 +768,11 @@ pub fn read_symbol_grid_size_mm_pref() -> f32 {
 }
 
 pub fn write_symbol_grid_size_mm_pref(grid_size_mm: f32) {
-    update_prefs_json(&prefs_path(), |json| {
-        json["symbol_grid_size_mm"] = serde_json::json!(grid_size_mm);
+    update_prefs_json(&prefs_path(), "symbol_grid_size_mm", |prefs| {
+        prefs.insert(
+            "symbol_grid_size_mm".to_string(),
+            serde_json::json!(grid_size_mm),
+        );
     })
 }
 
@@ -799,8 +799,11 @@ pub fn write_symbol_grid_style_pref(style: GridStyle) {
         GridStyle::Lines => "lines",
         GridStyle::SmallCrosses => "crosses",
     };
-    update_prefs_json(&prefs_path(), |json| {
-        json["symbol_grid_style"] = serde_json::Value::String(token.to_string());
+    update_prefs_json(&prefs_path(), "symbol_grid_style", |prefs| {
+        prefs.insert(
+            "symbol_grid_style".to_string(),
+            serde_json::Value::String(token.to_string()),
+        );
     })
 }
 
@@ -813,15 +816,24 @@ pub fn read_symbol_pin_selection_pref() -> PinSelectionMode {
 }
 
 pub fn write_symbol_pin_selection_pref(mode: PinSelectionMode) {
-    update_prefs_json(&prefs_path(), |json| {
-        json["symbol_pin_selection"] = serde_json::Value::String(mode.pref_token().to_string());
+    update_prefs_json(&prefs_path(), "symbol_pin_selection", |prefs| {
+        prefs.insert(
+            "symbol_pin_selection".to_string(),
+            serde_json::Value::String(mode.pref_token().to_string()),
+        );
     })
 }
 
 mod dock_layout;
 mod erc;
 mod misc;
+mod prefs_file;
 mod presets;
+
+/// The one read-modify-write every preference writer in this module
+/// tree goes through (#594). Imported here rather than re-exported —
+/// the sibling modules pick it up through their own `use super::*;`.
+use prefs_file::update_prefs_json;
 
 pub use dock_layout::*;
 pub use erc::*;
