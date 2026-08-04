@@ -198,9 +198,12 @@ pub(super) fn build_footprint_editor_panel_ctx(
     // v0.14.2 — discover every `.snxfpt` sibling inside the
     // containing `.snxlib`'s `footprints/` directory. Walks the
     // active footprint's path ancestors looking for a `.snxlib`
-    // file, then reads the sibling `footprints/` dir. Best-effort:
-    // failures (no library, missing dir, read error) just yield an
-    // empty siblings vec — the panel handles that gracefully.
+    // file, then reads the sibling `footprints/` dir. No library or
+    // no `footprints/` dir yields an empty siblings vec — the panel
+    // handles that gracefully. A directory that exists but cannot be
+    // read is not the same thing, and `list_dir_or_report` says so in
+    // the Messages panel instead of showing the library as having one
+    // footprint in it.
     let mut library_siblings: Vec<crate::panels::FootprintLibSibling> = Vec::new();
     let mut library_stem: Option<String> = None;
     let snxlib_ancestor = path.ancestors().find(|p| {
@@ -215,19 +218,17 @@ pub(super) fn build_footprint_editor_panel_ctx(
             .and_then(|s| s.to_str())
             .map(|s| s.to_string());
         let footprints_dir = snxlib_path.parent().map(|d| d.join("footprints"));
-        if let Some(dir) = footprints_dir
-            && let Ok(entries) = std::fs::read_dir(&dir)
-        {
-            let mut paths: Vec<std::path::PathBuf> = entries
-                .filter_map(|e| e.ok())
-                .map(|e| e.path())
-                .filter(|p| {
-                    p.extension()
-                        .and_then(|e| e.to_str())
-                        .map(|e| e.eq_ignore_ascii_case("snxfpt"))
-                        .unwrap_or(false)
-                })
-                .collect();
+        if let Some(dir) = footprints_dir {
+            let mut paths: Vec<std::path::PathBuf> =
+                crate::app::dir_listing::list_dir_or_report(&dir, "footprints")
+                    .into_iter()
+                    .filter(|p| {
+                        p.extension()
+                            .and_then(|e| e.to_str())
+                            .map(|e| e.eq_ignore_ascii_case("snxfpt"))
+                            .unwrap_or(false)
+                    })
+                    .collect();
             paths.sort();
             for p in paths {
                 let display_name = p

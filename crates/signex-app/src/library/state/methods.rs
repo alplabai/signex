@@ -2,6 +2,37 @@
 
 use super::*;
 
+/// Move one primitive listing onto its cache, keeping the previous
+/// contents when the adapter failed.
+///
+/// A listing failure is transient — a lock held by another process, a
+/// library server 500, an unreadable `symbols/` directory — but the
+/// cache it feeds is the *only* thing the picker renders. Substituting
+/// an empty vec turns "the listing failed" into "this library has no
+/// symbols", so the user re-creates a primitive that is already on
+/// disk. The stale cache is the better answer: it is what the picker
+/// showed a moment ago, and the next successful refresh replaces it.
+///
+/// The failure itself reaches the Messages panel at `warn` — the same
+/// treatment `refresh_components` gives a failed `read_table`.
+fn apply_primitive_listing(
+    cache: &mut Vec<PrimitiveSummary>,
+    listing: Result<Vec<PrimitiveSummary>, LibraryError>,
+    library: &str,
+    kind: &str,
+) {
+    match listing {
+        Ok(entries) => *cache = entries,
+        Err(error) => tracing::warn!(
+            target: "signex::library",
+            library = %library,
+            listing = kind,
+            error = %error,
+            "primitive listing failed; previous cache kept"
+        ),
+    }
+}
+
 impl Default for LibraryState {
     fn default() -> Self {
         let mut settings = DistributorSettings::default();
@@ -206,15 +237,28 @@ impl LibraryState {
         // Snapshot primitive listings before the second mut borrow so
         // we don't have to call adapter methods while `library_at_mut`
         // holds &mut self.
-        let symbols = adapter.list_symbols().unwrap_or_default();
-        let footprints = adapter.list_footprints().unwrap_or_default();
-        let sims = adapter.list_sims().unwrap_or_default();
+        let symbols = adapter.list_symbols();
+        let footprints = adapter.list_footprints();
+        let sims = adapter.list_sims();
         if let Some(lib) = self.library_at_mut(root) {
             lib.tables = tables;
             lib.cached_components = summaries;
-            lib.cached_symbols = symbols;
-            lib.cached_footprints = footprints;
-            lib.cached_sims = sims;
+            // A failed listing keeps the previous cache and warns —
+            // blanking it here would render a mounted library as
+            // empty. See `apply_primitive_listing`.
+            apply_primitive_listing(
+                &mut lib.cached_symbols,
+                symbols,
+                &lib.display_name,
+                "symbols",
+            );
+            apply_primitive_listing(
+                &mut lib.cached_footprints,
+                footprints,
+                &lib.display_name,
+                "footprints",
+            );
+            apply_primitive_listing(&mut lib.cached_sims, sims, &lib.display_name, "sims");
         }
         Ok(())
     }
@@ -456,45 +500,28 @@ impl OpenLibrary {
     /// the picker modal sees the new primitive without re-scanning
     /// the filesystem on every view tick.
     ///
-    /// Adapter errors degrade to empty lists with a tracing warn —
-    /// the picker just shows fewer entries until the next refresh.
+    /// An adapter error keeps the previous cache and emits a tracing
+    /// warn — the picker keeps showing the entries it showed a moment
+    /// ago until the next successful refresh. Assigning an empty vec
+    /// here (what this did before) reported a transient listing
+    /// failure as an empty library.
     pub fn reload_primitives(&mut self, adapter: &dyn LibraryAdapter) {
-        match adapter.list_symbols() {
-            Ok(v) => self.cached_symbols = v,
-            Err(e) => {
-                tracing::warn!(
-                    target: "signex::library",
-                    library = %self.display_name,
-                    error = %e,
-                    "list_symbols failed; cache left empty"
-                );
-                self.cached_symbols = Vec::new();
-            }
-        }
-        match adapter.list_footprints() {
-            Ok(v) => self.cached_footprints = v,
-            Err(e) => {
-                tracing::warn!(
-                    target: "signex::library",
-                    library = %self.display_name,
-                    error = %e,
-                    "list_footprints failed; cache left empty"
-                );
-                self.cached_footprints = Vec::new();
-            }
-        }
-        match adapter.list_sims() {
-            Ok(v) => self.cached_sims = v,
-            Err(e) => {
-                tracing::warn!(
-                    target: "signex::library",
-                    library = %self.display_name,
-                    error = %e,
-                    "list_sims failed; cache left empty"
-                );
-                self.cached_sims = Vec::new();
-            }
-        }
+        let symbols = adapter.list_symbols();
+        let footprints = adapter.list_footprints();
+        let sims = adapter.list_sims();
+        apply_primitive_listing(
+            &mut self.cached_symbols,
+            symbols,
+            &self.display_name,
+            "symbols",
+        );
+        apply_primitive_listing(
+            &mut self.cached_footprints,
+            footprints,
+            &self.display_name,
+            "footprints",
+        );
+        apply_primitive_listing(&mut self.cached_sims, sims, &self.display_name, "sims");
     }
 
     /// Total number of rows across every cached table.

@@ -32,6 +32,8 @@ pub mod primitive_picker;
 pub mod recovery;
 pub mod settings;
 pub mod state;
+#[cfg(test)]
+pub(crate) mod test_adapters;
 pub mod updates_dialog;
 
 // Re-export the heavily-used types so callers don't have to know

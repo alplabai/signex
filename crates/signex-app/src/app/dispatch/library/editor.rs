@@ -7,6 +7,9 @@
 
 use super::*;
 
+#[cfg(test)]
+mod cache_refresh_tests;
+
 impl Signex {
     /// Open a standalone primitive editor tab for the file at `path`.
     /// Fired by the Component Preview tab's right-click context menu on
@@ -550,6 +553,14 @@ impl Signex {
     /// picker modal sees the just-saved primitive without waiting
     /// for the next full `refresh_components` round-trip. No-op when
     /// `path` lives outside any mounted library.
+    ///
+    /// A failing listing must not blank the caches. This runs right
+    /// after a primitive save, so the three caches it touches are
+    /// known-good; overwriting them with empty vecs made every symbol,
+    /// footprint and sim vanish from the library's picker and read as
+    /// "my save didn't work" while the file was fine on disk.
+    /// [`OpenLibrary::reload_primitives`] keeps each previous cache on
+    /// error and reports the failure to the Messages panel at `warn`.
     fn refresh_primitive_cache_for(&mut self, path: &std::path::Path) {
         // Same `root_dir()` ancestor walk as
         // `commit_external_change_for` — `lib.root` is the `.snxlib`
@@ -563,15 +574,10 @@ impl Signex {
             Some(lib) => lib.library_id,
             None => return,
         };
-        // Two-step borrow dance: snapshot the listings through the
-        // mounted adapter, then move them onto the OpenLibrary entry.
-        let (symbols, footprints, sims) = match self.library.set.get(library_id) {
-            Some(adapter) => (
-                adapter.list_symbols().unwrap_or_default(),
-                adapter.list_footprints().unwrap_or_default(),
-                adapter.list_sims().unwrap_or_default(),
-            ),
-            None => return,
+        // `set` and `open_libraries` are disjoint fields, so the
+        // adapter borrow and the entry's `&mut` coexist.
+        let Some(adapter) = self.library.set.get(library_id) else {
+            return;
         };
         if let Some(lib) = self
             .library
@@ -579,9 +585,7 @@ impl Signex {
             .iter_mut()
             .find(|lib| lib.library_id == library_id)
         {
-            lib.cached_symbols = symbols;
-            lib.cached_footprints = footprints;
-            lib.cached_sims = sims;
+            lib.reload_primitives(adapter);
         }
     }
 
