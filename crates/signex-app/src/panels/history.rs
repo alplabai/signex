@@ -39,7 +39,8 @@ pub struct HistoryPanelState {
     /// path has no history yet.
     pub entries: Vec<signex_widgets::HistoryEntry>,
     /// Render mode for the active load. Distinguishes "not in a git
-    /// repo" (NoRepo) from "no commits yet" (entries.is_empty()).
+    /// repo" (NoRepo) and "the walk failed" (Error) from "no commits
+    /// yet" (Ready with `entries.is_empty()`).
     pub mode: HistoryRenderMode,
     /// True when the active path has uncommitted edits in the
     /// working tree (the engine reports it via `dirty_paths`).
@@ -50,7 +51,7 @@ pub struct HistoryPanelState {
 /// What the panel should render when `entries` is non-empty
 /// doesn't unambiguously cover the case (e.g. the file isn't even
 /// version-controlled).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum HistoryRenderMode {
     /// No active file at all (no tabs, ComponentEditor tab, etc.).
     #[default]
@@ -63,6 +64,16 @@ pub enum HistoryRenderMode {
     /// Load resolved successfully — render `entries` (possibly
     /// empty for fresh repos) plus the optional working-tree card.
     Ready,
+    /// The git walk itself failed (corrupt object, unreadable
+    /// `.git/`, a `spawn_blocking` join failure). Carries the
+    /// stringified error.
+    ///
+    /// Separate from `Ready` with no entries for the same reason
+    /// `NoRepo` is: "the history could not be read" and "this file
+    /// has no commits yet" call for different actions from the user,
+    /// and rendering the first as the second also makes "Restore
+    /// this version" disappear without saying why (#599).
+    Error(String),
 }
 
 /// Render the History panel. Delegates row rendering to
@@ -77,7 +88,7 @@ pub fn view_history<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     let state = &ctx.history;
 
-    let inner: Element<'a, PanelMsg> = match state.mode {
+    let inner: Element<'a, PanelMsg> = match &state.mode {
         HistoryRenderMode::NoActiveFile => message_card(
             "Open a schematic, PCB, library, or primitive to see its history.",
             muted,
@@ -92,6 +103,12 @@ pub fn view_history<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             panel_bg,
         ),
         HistoryRenderMode::Loading => message_card("Loading history…", muted, border, panel_bg),
+        HistoryRenderMode::Error(error) => message_card(
+            format!("History could not be read: {error}"),
+            muted,
+            border,
+            panel_bg,
+        ),
         HistoryRenderMode::Ready => {
             let mut col: Column<'a, PanelMsg> = column![].spacing(6);
 
@@ -129,14 +146,17 @@ pub fn view_history<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .into()
 }
 
-/// Single muted card used by the empty/no-repo/loading states.
+/// Single muted card used by the empty/no-repo/loading/error states.
+///
+/// Takes an owned message rather than `&'a str` so the error state can
+/// pass a formatted string; the static callers are unchanged.
 fn message_card<'a, M: 'a>(
-    msg: &'a str,
+    msg: impl Into<String>,
     muted: iced::Color,
     border_c: iced::Color,
     bg: Option<iced::Background>,
 ) -> Element<'a, M> {
-    container(text(msg).size(12).color(muted))
+    container(text(msg.into()).size(12).color(muted))
         .padding([6, 8])
         .width(Length::Fill)
         .style(move |_theme: &iced::Theme| container::Style {

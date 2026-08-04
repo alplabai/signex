@@ -79,3 +79,9 @@ mod sketch_state;
 
 #[path = "regression/file_open_async.rs"]
 mod file_open_async;
+
+#[path = "regression/history_load_failure.rs"]
+mod history_load_failure;
+
+#[path = "regression/library_browser_cell_commit.rs"]
+mod library_browser_cell_commit;
