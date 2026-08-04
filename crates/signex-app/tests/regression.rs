@@ -41,6 +41,9 @@ mod prefs;
 #[path = "regression/preferences_dirty_guard.rs"]
 mod preferences_dirty_guard;
 
+#[path = "regression/diagnostics_routing.rs"]
+mod diagnostics_routing;
+
 #[path = "regression/preferences_export_status.rs"]
 mod preferences_export_status;
 

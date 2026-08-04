@@ -55,11 +55,15 @@ pub(super) fn apply_symbol_parts(editor: &mut SymEditor, msg: SymbolEditorMsg) {
         SymbolEditorMsg::RemovePart => {
             let max = crate::library::editor::symbol::state::max_part_number(editor.primitive());
             if max <= 1 || editor.active_part <= 1 {
-                tracing::debug!(
+                // `warn!`, not `debug!`: the user pressed Remove Part and
+                // it was refused. `debug!` is below the default
+                // `LevelFilter::Info`, so in a shipped build the refusal
+                // and its reason reached no one.
+                tracing::warn!(
                     target: "signex::library",
                     active = editor.active_part,
                     max,
-                    "SymbolRemovePart: refusing to remove the only part"
+                    "Remove Part was refused: a symbol must keep at least one part"
                 );
                 return;
             }

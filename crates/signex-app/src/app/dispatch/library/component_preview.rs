@@ -69,9 +69,14 @@ impl Signex {
             | EditorMsg::SubmitForReviewCancel
             | EditorMsg::SubmitForReviewConfirm
             | EditorMsg::SubmitForReviewResult(_) => {
-                tracing::debug!(
+                // `warn!`, not `debug!`: the user pressed a control and it
+                // did nothing. `debug!` is below the default
+                // `LevelFilter::Info`, so in a shipped build that refusal
+                // reached no one — the click looked like a hang.
+                tracing::warn!(
                     target: "signex::library",
-                    "submit-for-review is not wired in the Component Preview surface"
+                    "submit for review did nothing: it is not wired up in the Component \
+                     Preview surface"
                 );
                 return Task::none();
             }
