@@ -835,6 +835,17 @@ mod presets;
 /// the sibling modules pick it up through their own `use super::*;`.
 use prefs_file::update_prefs_json;
 
+/// The prefs file's health probe and its one in-app recovery (#602).
+/// Re-exported because the app shell owns the reporting: `Signex::new`
+/// probes at boot, the Preferences handler re-probes on open and runs the
+/// recovery, and the dialog names [`prefs_file_path`] in its banner.
+/// `prefs_path()` itself stays private — callers get the resolved path
+/// through the accessor rather than a second resolver of their own.
+pub use prefs_file::{
+    PrefsLoadError, check_prefs_file, check_prefs_file_at, move_prefs_file_aside,
+    move_prefs_file_aside_at, prefs_file_path,
+};
+
 pub use dock_layout::*;
 pub use erc::*;
 pub use misc::*;

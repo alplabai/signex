@@ -144,6 +144,11 @@ pub enum PrefMsg {
     DraftErcSeverity(signex_erc::RuleKind, signex_erc::Severity),
     /// Clear every ERC severity override — reset to defaults.
     ResetErcSeverities,
+    /// Move an unloadable `prefs.json` aside so writes can resume from a
+    /// fresh file, keeping the original on disk beside it (#602). Offered
+    /// only from the banner, and the handler re-checks the file before
+    /// acting: a healthy file is never moved.
+    ResetPrefsFile,
     /// Library → Distributor APIs pane forwarded a settings message.
     /// Folded into `PrefMsg` so the Preferences modal can mount the
     /// live panel as a first-class pane without breaking the
@@ -277,6 +282,18 @@ pub struct PrefsView<'a> {
     /// error; `None` renders nothing. Distinct from `keymap_status`,
     /// which is transient per-action feedback cleared on every open.
     pub keymap_load_error: Option<&'a str>,
+    /// `prefs.json` health failure (#602). `Some` renders a dialog-wide
+    /// banner naming the file and the error; `None` renders nothing.
+    ///
+    /// Dialog-wide and not pane-local, unlike [`Self::keymap_load_error`]:
+    /// `keyboard_shortcuts.toml` backs one pane, but `prefs.json` backs
+    /// every pane in this dialog — theme, dock, ERC severities, filter
+    /// presets, component classes — so a banner tucked inside one pane is
+    /// invisible to a user sitting in another.
+    pub prefs_load_error: Option<&'a str>,
+    /// Result of the prefs-file recovery action. Transient per-action
+    /// feedback shown in the same banner; empty renders nothing.
+    pub prefs_status: &'a str,
     pub keymap_search: &'a str,
     pub keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
     pub theme_id: ThemeId,
@@ -337,6 +354,8 @@ fn build_dialog<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         nav,
         dirty,
         theme_id,
+        prefs_load_error,
+        prefs_status,
         ..
     } = v;
 
@@ -405,7 +424,15 @@ fn build_dialog<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             .into()
     };
 
-    let mut col_items: Vec<Element<'a, PrefMsg>> = vec![header.into(), h_divider(), body.into()];
+    // The prefs-file banner sits above the nav / content split, so it is
+    // outside every `scrollable` and shows in whichever pane the user is
+    // on. `view()` and `view_body()` both funnel through here, so this one
+    // insertion covers the in-app overlay and the detached OS window.
+    let mut col_items: Vec<Element<'a, PrefMsg>> = vec![header.into(), h_divider()];
+    if let Some(banner) = build_prefs_file_banner(prefs_load_error, prefs_status) {
+        col_items.push(banner);
+    }
+    col_items.push(body.into());
     if let Some(footer) = footer_opt {
         col_items.push(h_divider());
         col_items.push(footer);
@@ -660,6 +687,107 @@ fn build_footer<'a>(dirty: bool) -> Option<Element<'a, PrefMsg>> {
                         radius: iced::border::Radius::default()
                             .bottom_left(MODAL_CORNER_RADIUS)
                             .bottom_right(MODAL_CORNER_RADIUS),
+                    },
+                    ..container::Style::default()
+                }
+            })
+            .into(),
+    )
+}
+
+/// Dialog-wide alert strip for a `prefs.json` that could not be loaded,
+/// carrying the result of the recovery action once it has run (#602).
+///
+/// `None` — and therefore a dialog byte-for-byte what it is today — is
+/// the healthy case: nothing to report and nothing to offer. That is the
+/// acceptance criterion "with a healthy `prefs.json`, nothing about the
+/// current behaviour changes".
+///
+/// Same alert-strip shape as [`build_footer`]: a `background.weak` fill
+/// with a `background.strong` hairline, every colour resolved from the
+/// theme rather than hardcoded, so it reads on light and dark palettes.
+/// The button is [`secondary_button_style`] and not `danger_button_style`
+/// on purpose — the action is neutral. Nothing is deleted; the file the
+/// user may still want is renamed, not removed.
+fn build_prefs_file_banner<'a>(
+    load_error: Option<&'a str>,
+    status: &'a str,
+) -> Option<Element<'a, PrefMsg>> {
+    if load_error.is_none() && status.is_empty() {
+        return None;
+    }
+
+    // `Length::Fill`, and no `Space` spacer beside it. `iced`'s flex pass
+    // lays non-`Fill` children out in source order, subtracting each
+    // measured width from what is left, and only serves `Fill` children
+    // from the remainder afterwards. A `Shrink` text column therefore
+    // measures against the dialog's whole inner width first and leaves
+    // the button a ~37px sliver on the 900px detached Preferences window,
+    // with its label wrapped to five lines and the spacer given 0px.
+    // Making the text the fluid child inverts that: the button is the
+    // only `Shrink` child in the first pass, takes its natural width, and
+    // the text wraps into what remains.
+    let mut lines = column![].spacing(4).width(Length::Fill);
+    if let Some(error) = load_error {
+        // Name the real file, resolved through the same accessor the
+        // probe and the recovery use, so the path the user is told to
+        // repair is the path the app actually reads and writes.
+        let path = crate::fonts::prefs_file_path().display().to_string();
+        lines = lines.push(
+            text(format!("Your preferences file at {path} {error}."))
+                .size(11)
+                .style(text_warning),
+        );
+        // Scoped to what `prefs.json` actually backs. The banner spans
+        // the whole dialog, and two of the panes it covers persist
+        // elsewhere: Keyboard Shortcuts through `keyboard_shortcuts.toml`
+        // and Library Distributors through `distributors.toml`. Claiming
+        // "nothing you change is being saved" there is false, and on the
+        // Distributors pane it invites a user to re-enter API keys that
+        // did save.
+        lines = lines.push(
+            text(
+                "Appearance, ERC severities, component classes and panel layout are showing \
+                 their defaults, and changes to them are not being saved. The file itself \
+                 has not been altered — repair it by hand, or start a fresh one and keep \
+                 the old file beside it.",
+            )
+            .size(10)
+            .style(text_muted),
+        );
+    }
+    if !status.is_empty() {
+        lines = lines.push(text(status).size(10).style(text_muted));
+    }
+
+    let mut strip = row![lines].spacing(12).align_y(iced::Alignment::Center);
+    // Offered only while the file is actually broken: once it loads, the
+    // banner is a result line and there is nothing left to reset.
+    if load_error.is_some() {
+        strip = strip.push(
+            button(text("Start a fresh preferences file").size(11))
+                .padding([6, 12])
+                .on_press(PrefMsg::ResetPrefsFile)
+                .style(secondary_button_style),
+        );
+    }
+
+    Some(
+        container(strip)
+            .width(Length::Fill)
+            // Vertical padding, unlike `build_footer`'s `[0, 16]`: that
+            // strip is one line inside a fixed `FOOTER_H`, this one grows
+            // with its text and would otherwise sit flush against the
+            // divider above and the nav column below.
+            .padding([8, 16])
+            .style(move |theme: &Theme| {
+                let palette = theme.extended_palette();
+                container::Style {
+                    background: Some(Background::Color(palette.background.weak.color)),
+                    border: Border {
+                        width: 1.0,
+                        color: palette.background.strong.color,
+                        ..Border::default()
                     },
                     ..container::Style::default()
                 }
