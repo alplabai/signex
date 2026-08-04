@@ -46,15 +46,23 @@ impl Default for Solver {
 
 /// Bundled output of a full [`Solver::solve`] call: the LM result,
 /// DOF colour per Point entity, the list of constraint IDs flagged
-/// over-constrained, and the Jacobian at the solved state (carried
+/// over-constrained, the Jacobian at the solved state (carried
 /// for downstream UI/debugging — DOF rendering reuses it without
-/// recomputing).
+/// recomputing), and the resolved parameter map the solve ran with.
 #[derive(Debug, Clone)]
 pub struct FullSolveOutput {
     pub result: SolveResult,
     pub colours: HashMap<SketchEntityId, DofColor>,
     pub over_constraints: Vec<ConstraintId>,
     pub jacobian: Vec<Vec<f64>>,
+    /// GH #599 — the resolved parameters this solve ran with.
+    /// Consumers that re-evaluate residuals against the output (the
+    /// over-constraint diagnostics panel) need the same map: an
+    /// empty one makes every parameter-driven constraint fail to
+    /// evaluate, which reads as a zero residual and hides the
+    /// conflict. Carrying it here makes the two impossible to
+    /// desynchronise.
+    pub params: ResolvedParams,
 }
 
 impl Solver {
@@ -81,9 +89,9 @@ impl Solver {
         let jacobian = numerical_jacobian(sketch, &result.state, &result.index, params)
             .map_err(|e| SolveError::Internal(format!("post-solve jacobian: {e}")))?;
 
-        let colours = entity_colours(sketch, &result, &jacobian, &result.index);
-        // HI-14: thread the solved params through so parametric
-        // constraints don't false-flag as over-constrained.
+        // HI-14: thread the solved params through both analyses so
+        // parametric constraints are evaluated rather than dropped.
+        let colours = entity_colours(sketch, &result, &jacobian, &result.index, params);
         let over_constraints = over_constraint_ids(sketch, &result, &jacobian, params);
 
         Ok(FullSolveOutput {
@@ -91,6 +99,7 @@ impl Solver {
             colours,
             over_constraints,
             jacobian,
+            params: params.clone(),
         })
     }
 }

@@ -22,8 +22,18 @@ pub(super) fn derive_pad_number(
         NumberingScheme::LinearIncrement {
             start_expr,
             step_expr,
-        } => linear_increment_number(start_expr, step_expr, i, params_ast)
-            .unwrap_or_else(|| format!("{}", i)),
+        } => match linear_increment_number(start_expr, step_expr, i, params_ast) {
+            Ok(number) => number,
+            Err(why) => {
+                record_numbering_warning(
+                    warnings,
+                    format!(
+                        "linear array source {source}: {why}; members are numbered 0, 1, 2, … instead of the authored scheme",
+                    ),
+                );
+                format!("{}", i)
+            }
+        },
         NumberingScheme::BgaRowCol { .. } => {
             warnings.push(format!(
                 "linear array source {source}: BgaRowCol numbering not meaningful on a 1D Linear array — falling back to LinearIncrement defaults",
@@ -45,27 +55,60 @@ pub(super) fn derive_pad_number(
 }
 
 /// `LinearIncrement` — `start + i * step`, both rounded to integer
-/// after canonical evaluation. Returns `None` on any expression error
-/// so the caller can fall back to a default scheme without aborting
-/// the whole array bake.
+/// after canonical evaluation.
+///
+/// GH #599 — on an expression error this returns the offending
+/// expression and the reason instead of `None`. The caller still
+/// falls back to a default number rather than aborting the whole
+/// array bake, but it can now say which expression it gave up on:
+/// pad and instance numbers are what the netlist binds to, so a
+/// typo'd designator expression that silently renumbers the array
+/// `0, 1, 2, …` is not a cosmetic failure.
 pub(super) fn linear_increment_number(
     start_expr: &str,
     step_expr: &str,
     i: usize,
     params_ast: &BTreeMap<String, ExprNode>,
-) -> Option<String> {
+) -> Result<String, String> {
     let ctx = EvalContext {
         params: params_ast.clone(),
         array_index: Some((i, 0)),
     };
-    let start = eval(&parse(strip_eq_prefix(start_expr)).ok()?, &ctx)
-        .ok()?
-        .value;
-    let step = eval(&parse(strip_eq_prefix(step_expr)).ok()?, &ctx)
-        .ok()?
-        .value;
+    let start = eval_numbering_expr("start", start_expr, &ctx)?;
+    let step = eval_numbering_expr("step", step_expr, &ctx)?;
     let n = (start + i as f64 * step).round() as i64;
-    Some(format!("{}", n))
+    Ok(format!("{}", n))
+}
+
+/// Parse + evaluate one numbering expression, naming both the field
+/// (`start` / `step`) and the authored source text in the error.
+fn eval_numbering_expr(field: &str, src: &str, ctx: &EvalContext) -> Result<f64, String> {
+    let ast = parse(strip_eq_prefix(src))
+        .map_err(|e| format!("{field} expression \"{src}\" did not parse: {e}"))?;
+    let value = eval(&ast, ctx)
+        .map_err(|e| format!("{field} expression \"{src}\" did not evaluate: {e}"))?
+        .value;
+    Ok(value)
+}
+
+/// Push a numbering warning and mirror it to the log, skipping
+/// duplicates.
+///
+/// The start / step expressions belong to the array, not to the
+/// individual member, so an unparseable one fails identically for
+/// every member. Deduplicating against the warnings already recorded
+/// for this bake turns what would be one record per array member
+/// into one record per array.
+fn record_numbering_warning(warnings: &mut Vec<String>, message: String) {
+    if warnings.contains(&message) {
+        return;
+    }
+    tracing::warn!(
+        target: "signex::bake",
+        warning = %message,
+        "array numbering expression failed; members were renumbered",
+    );
+    warnings.push(message);
 }
 
 /// Strip the optional Altium-style leading `=` and surrounding
@@ -100,8 +143,18 @@ pub(super) fn derive_pad_number_2d(
         } => {
             // Row-major: (j, i) → idx = j*nx + i.
             let idx = j * nx + i;
-            linear_increment_number(start_expr, step_expr, idx, params_ast)
-                .unwrap_or_else(|| format!("{}", idx + 1))
+            match linear_increment_number(start_expr, step_expr, idx, params_ast) {
+                Ok(number) => number,
+                Err(why) => {
+                    record_numbering_warning(
+                        warnings,
+                        format!(
+                            "grid array source {source}: {why}; members are numbered 1, 2, 3, … row-major instead of the authored scheme",
+                        ),
+                    );
+                    format!("{}", idx + 1)
+                }
+            }
         }
         NumberingScheme::BgaRowCol {
             skip_letters,
@@ -123,5 +176,100 @@ pub(super) fn derive_pad_number_2d(
                 format!("{}", idx)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn broken_scheme() -> NumberingScheme {
+        // `1 +` is a syntactically invalid expression — the realistic
+        // trigger is a typo in the authored designator scheme.
+        NumberingScheme::LinearIncrement {
+            start_expr: "1 +".to_string(),
+            step_expr: "1".to_string(),
+        }
+    }
+
+    #[test]
+    fn linear_increment_expression_error_is_reported_not_swallowed() {
+        // GH #599 — an unparseable start expression used to renumber
+        // the array 0, 1, 2, … with `warnings` left empty, so an
+        // array whose pad numbers the netlist binds to came out wrong
+        // and the bake reported success.
+        let mut warnings = Vec::new();
+        let source = SketchEntityId::new();
+        let params = BTreeMap::new();
+
+        let number = derive_pad_number(&broken_scheme(), 0, &params, &mut warnings, source);
+
+        assert_eq!(number, "0", "fallback numbering is unchanged");
+        assert_eq!(warnings.len(), 1, "expected one warning, got {warnings:?}");
+        assert!(
+            warnings[0].contains("1 +"),
+            "the warning must name the offending expression, got {warnings:?}"
+        );
+        assert!(
+            warnings[0].contains("start"),
+            "the warning must name which expression failed, got {warnings:?}"
+        );
+    }
+
+    #[test]
+    fn linear_increment_expression_error_is_reported_once_per_array() {
+        // The start / step expressions belong to the array, so every
+        // member fails identically. One record per array, not one per
+        // member.
+        let mut warnings = Vec::new();
+        let source = SketchEntityId::new();
+        let params = BTreeMap::new();
+        let scheme = broken_scheme();
+
+        for i in 0..5 {
+            let number = derive_pad_number(&scheme, i, &params, &mut warnings, source);
+            assert_eq!(number, format!("{i}"));
+        }
+
+        assert_eq!(
+            warnings.len(),
+            1,
+            "five members must not produce five identical warnings, got {warnings:?}"
+        );
+    }
+
+    #[test]
+    fn grid_linear_increment_expression_error_is_reported() {
+        // The 2D companion swallowed the same error, with a 1-based
+        // row-major fallback.
+        let mut warnings = Vec::new();
+        let source = SketchEntityId::new();
+        let params = BTreeMap::new();
+
+        let number =
+            derive_pad_number_2d(&broken_scheme(), 1, 0, 2, &params, &mut warnings, source);
+
+        assert_eq!(number, "2", "row-major fallback numbering is unchanged");
+        assert_eq!(warnings.len(), 1, "expected one warning, got {warnings:?}");
+        assert!(
+            warnings[0].contains("1 +"),
+            "the warning must name the offending expression, got {warnings:?}"
+        );
+    }
+
+    #[test]
+    fn linear_increment_valid_expression_stays_silent() {
+        let mut warnings = Vec::new();
+        let source = SketchEntityId::new();
+        let params = BTreeMap::new();
+        let scheme = NumberingScheme::LinearIncrement {
+            start_expr: "= 10".to_string(),
+            step_expr: "2".to_string(),
+        };
+
+        let number = derive_pad_number(&scheme, 3, &params, &mut warnings, source);
+
+        assert_eq!(number, "16", "start 10 + i(3) * step 2");
+        assert!(warnings.is_empty(), "no warning expected, got {warnings:?}");
     }
 }

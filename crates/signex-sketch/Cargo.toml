@@ -13,6 +13,11 @@ toml = { workspace = true }
 uuid = { workspace = true }
 thiserror = { workspace = true }
 signex-types = { workspace = true }
+# GH #599 — the solver reports the diagnostics it cannot compute
+# (constraints whose residual will not evaluate) instead of dropping
+# them. signex-app installs a `log` sink and enables tracing's `log`
+# feature, so these records reach the Messages panel.
+tracing = { workspace = true }
 
 [dev-dependencies]
 approx = "0.5"

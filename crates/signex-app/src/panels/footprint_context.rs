@@ -469,8 +469,9 @@ pub struct FootprintSolveSummary {
     /// v0.22 Phase E3+E4 — per-over-constraint summary so the
     /// Properties panel can list the conflicts and the user can
     /// click each to focus the canvas on the offending geometry.
-    /// Sorted descending by `residual_magnitude` so the worst
-    /// offender is first. Empty when `over_constraint_count == 0`.
+    /// Rows whose residual could not be evaluated come first, then
+    /// descending by `residual_magnitude` so the worst offender
+    /// leads. Empty when `over_constraint_count == 0`.
     pub over_constraints: Vec<OverConstraintSummary>,
 }
 
@@ -488,7 +489,14 @@ pub struct OverConstraintSummary {
     /// below `Solver::tolerance` for satisfiable constraints; values
     /// above `RANK_TOL` indicate the constraint couldn't be met
     /// alongside the others.
-    pub residual_magnitude: f64,
+    ///
+    /// GH #599 — `None` when the residual could not be evaluated at
+    /// all (a target expression that no longer resolves against the
+    /// solve's parameters). It is deliberately not `0.0`: zero is
+    /// what a perfectly satisfied constraint reports, so the panel
+    /// would present the conflict as the thing least worth looking
+    /// at. Unevaluable rows sort first.
+    pub residual_magnitude: Option<f64>,
     /// First Point entity the constraint touches. Click → select
     /// this Point so the canvas pans and the constraint icon
     /// rendered in red sits in view. `None` for constraints with
