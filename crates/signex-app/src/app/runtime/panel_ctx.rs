@@ -27,20 +27,47 @@ impl Signex {
             .iter()
             .find(|r| signex_library::RowId::from_uuid(r.row_id) == row_id)?;
 
+        // A read failure and an absent UUID are different diagnoses.
+        // Reporting "UUID not in mounted libraries" for a corrupt
+        // `.snxsym` or a library server returning 500 sends the user
+        // off to re-bind a perfectly good UUID, so the error arm gets
+        // its own wording and a Messages-panel record.
         let symbol_summary = match self.library.set.resolve_symbol(&row.symbol_ref) {
-            Some(s) => format!(
+            Ok(Some(s)) => format!(
                 "Symbol bound — {} pin{}",
                 s.pins.len(),
                 if s.pins.len() == 1 { "" } else { "s" }
             ),
-            None if row.symbol_ref.uuid == uuid::Uuid::nil() => "Symbol unbound".to_string(),
-            None => "Symbol unresolved (UUID not in mounted libraries)".to_string(),
+            Ok(None) if row.symbol_ref.uuid == uuid::Uuid::nil() => "Symbol unbound".to_string(),
+            Ok(None) => "Symbol unresolved (UUID not in mounted libraries)".to_string(),
+            Err(e) => {
+                tracing::error!(
+                    target: "signex::library",
+                    error = %e,
+                    library_id = %row.symbol_ref.library_id,
+                    symbol_uuid = %row.symbol_ref.uuid,
+                    internal_pn = %row.internal_pn,
+                    "symbol could not be read from its library — the binding is not known to be wrong"
+                );
+                format!("Symbol could not be read from its library — {e}")
+            }
         };
         let footprint_summary = match &row.footprint_ref {
             Some(fp) if fp.uuid == uuid::Uuid::nil() => "Footprint unbound".to_string(),
             Some(fp) => match self.library.set.resolve_footprint(fp) {
-                Some(_) => "Footprint bound".to_string(),
-                None => "Footprint unresolved (UUID not in mounted libraries)".to_string(),
+                Ok(Some(_)) => "Footprint bound".to_string(),
+                Ok(None) => "Footprint unresolved (UUID not in mounted libraries)".to_string(),
+                Err(e) => {
+                    tracing::error!(
+                        target: "signex::library",
+                        error = %e,
+                        library_id = %fp.library_id,
+                        footprint_uuid = %fp.uuid,
+                        internal_pn = %row.internal_pn,
+                        "footprint could not be read from its library — the binding is not known to be wrong"
+                    );
+                    format!("Footprint could not be read from its library — {e}")
+                }
             },
             None => "Footprint unbound".to_string(),
         };

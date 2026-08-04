@@ -13,15 +13,30 @@
 //!
 //! ## Resolution semantics
 //!
-//! - A reference whose `library_id` isn't mounted resolves to `None` —
-//!   the editor surfaces this as "unresolved primitive — open dependent
-//!   library?".
-//! - A reference whose `library_id` IS mounted but whose primitive UUID
-//!   isn't in any of the matching adapters ALSO resolves to `None`.
+//! The resolvers return `Result<Option<T>, LibraryError>` because
+//! "the primitive is not there" and "the lookup could not be
+//! performed" are different answers and the user needs a different
+//! message for each:
+//!
+//! - `Ok(None)` — the reference genuinely does not resolve. Either the
+//!   `library_id` isn't mounted (the editor surfaces this as
+//!   "unresolved primitive — open dependent library?") or the
+//!   `library_id` IS mounted but the primitive UUID isn't in any of
+//!   the matching adapters.
+//! - `Err(_)` — the adapter could not tell: I/O on `symbols/`, a
+//!   corrupt `.snxsym` / `.snxfpt` on disk, or an HTTP failure from
+//!   `DatabaseAdapter` talking to a remote library server. Collapsing
+//!   these into `Ok(None)` reports a perfectly good binding as a wrong
+//!   one, and sends the user off to re-bind a valid UUID or to hunt a
+//!   phantom mount problem.
+//!
+//! Only [`LibraryError::NotFound`] is evidence of absence; every other
+//! variant is a failure to look.
+//!
 //! - When two adapters share a `library_id` (the "user copy-pasted a
-//!   library" case), [`Self::resolve_symbol`] / `_footprint` / `_sim`
-//!   pick the first match. UI dedup at the Components Panel level is
-//!   the right place to warn the user about the collision.
+//!   library" case), [`LibrarySet::resolve_symbol`] / `_footprint` /
+//!   `_sim` pick the first match. UI dedup at the Components Panel
+//!   level is the right place to warn the user about the collision.
 //! - Adapters without an on-disk path (e.g. `DatabaseAdapter`) fall
 //!   back to keying by `library_id`; the duplicate-id error still
 //!   guards those.
@@ -168,42 +183,57 @@ impl LibrarySet {
         })
     }
 
-    /// Resolve a `PrimitiveRef` to the underlying [`Symbol`], if both the
-    /// library and the primitive UUID exist.
-    pub fn resolve_symbol(&self, r: &PrimitiveRef) -> Option<Symbol> {
-        let lib = self.find_adapter_for_id(r.library_id)?;
-        lib.get_symbol(r.uuid).ok()
+    /// Resolve a `PrimitiveRef` to the underlying [`Symbol`].
+    ///
+    /// `Ok(None)` means the library isn't mounted or the UUID isn't in
+    /// it. `Err` means the lookup itself failed and the binding is
+    /// **not** known to be wrong — see the module docs.
+    pub fn resolve_symbol(&self, r: &PrimitiveRef) -> Result<Option<Symbol>, LibraryError> {
+        let Some(lib) = self.find_adapter_for_id(r.library_id) else {
+            return Ok(None);
+        };
+        absence_is_none(lib.get_symbol(r.uuid))
     }
 
-    /// Resolve a `PrimitiveRef` to the underlying [`Footprint`].
-    pub fn resolve_footprint(&self, r: &PrimitiveRef) -> Option<Footprint> {
-        let lib = self.find_adapter_for_id(r.library_id)?;
-        lib.get_footprint(r.uuid).ok()
+    /// Resolve a `PrimitiveRef` to the underlying [`Footprint`]. Same
+    /// `Ok(None)` / `Err` split as [`Self::resolve_symbol`].
+    pub fn resolve_footprint(&self, r: &PrimitiveRef) -> Result<Option<Footprint>, LibraryError> {
+        let Some(lib) = self.find_adapter_for_id(r.library_id) else {
+            return Ok(None);
+        };
+        absence_is_none(lib.get_footprint(r.uuid))
     }
 
-    /// Resolve a `PrimitiveRef` to the underlying [`SimModel`].
-    pub fn resolve_sim(&self, r: &PrimitiveRef) -> Option<SimModel> {
-        let lib = self.find_adapter_for_id(r.library_id)?;
-        lib.get_sim(r.uuid).ok()
+    /// Resolve a `PrimitiveRef` to the underlying [`SimModel`]. Same
+    /// `Ok(None)` / `Err` split as [`Self::resolve_symbol`].
+    pub fn resolve_sim(&self, r: &PrimitiveRef) -> Result<Option<SimModel>, LibraryError> {
+        let Some(lib) = self.find_adapter_for_id(r.library_id) else {
+            return Ok(None);
+        };
+        absence_is_none(lib.get_sim(r.uuid))
     }
 
-    /// Filter a stream of references down to those that don't currently
-    /// resolve, regardless of primitive kind.
-    pub fn unresolved_refs<'a, I>(&self, refs: I) -> Vec<PrimitiveRef>
+    /// Sweep a stream of references, splitting the ones that genuinely
+    /// don't resolve from the ones whose lookup failed. See
+    /// [`UnresolvedRefs`] — the two lists carry different meanings and
+    /// must not be shown to the user with the same wording.
+    pub fn unresolved_refs<'a, I>(&self, refs: I) -> UnresolvedRefs
     where
         I: IntoIterator<Item = &'a PrimitiveRef>,
     {
-        refs.into_iter()
-            .filter(|r| {
-                let Some(lib) = self.find_adapter_for_id(r.library_id) else {
-                    return true;
-                };
-                lib.get_symbol(r.uuid).is_err()
-                    && lib.get_footprint(r.uuid).is_err()
-                    && lib.get_sim(r.uuid).is_err()
-            })
-            .copied()
-            .collect()
+        let mut out = UnresolvedRefs::default();
+        for r in refs {
+            let Some(lib) = self.find_adapter_for_id(r.library_id) else {
+                out.missing.push(*r);
+                continue;
+            };
+            match probe_every_kind(lib, r) {
+                Probe::Resolved => {}
+                Probe::Missing => out.missing.push(*r),
+                Probe::Undetermined(e) => out.undetermined.push((*r, e.to_string())),
+            }
+        }
+        out
     }
 
     fn find_adapter_for_id(&self, library_id: Uuid) -> Option<&dyn LibraryAdapter> {
@@ -218,6 +248,85 @@ impl LibrarySet {
             .iter()
             .find(|(_, lib)| lib.library_id() == library_id)
             .map(|(k, _)| k.clone())
+    }
+}
+
+/// Outcome of a [`LibrarySet::unresolved_refs`] sweep.
+///
+/// The split exists because the two lists need different wording in
+/// the UI: `missing` is a binding the user should fix, `undetermined`
+/// is a library the app failed to read and says nothing about whether
+/// the binding is right.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct UnresolvedRefs {
+    /// References that genuinely do not resolve — the library isn't
+    /// mounted, or no primitive of any kind carries the UUID.
+    pub missing: Vec<PrimitiveRef>,
+    /// References whose resolution could not be decided, paired with
+    /// the rendered error. Every kind failed and at least one failed
+    /// for a reason other than absence.
+    pub undetermined: Vec<(PrimitiveRef, String)>,
+}
+
+impl UnresolvedRefs {
+    /// True when the sweep found neither a missing nor an undecidable
+    /// reference.
+    pub fn is_empty(&self) -> bool {
+        self.missing.is_empty() && self.undetermined.is_empty()
+    }
+}
+
+/// What a single reference turned out to be after trying every
+/// primitive kind.
+enum Probe {
+    /// Some kind returned the primitive.
+    Resolved,
+    /// Every kind reported the UUID absent.
+    Missing,
+    /// No kind returned the primitive and at least one failed for a
+    /// reason other than absence, so absence was never established.
+    Undetermined(LibraryError),
+}
+
+/// Every primitive-kind lookup, in the order the resolver tries them.
+/// Function pointers rather than an array of results so a hit on the
+/// first kind doesn't pay for reading the other two off disk.
+type KindProbe = fn(&dyn LibraryAdapter, Uuid) -> Result<(), LibraryError>;
+const KIND_PROBES: [KindProbe; 3] = [
+    |lib, uuid| lib.get_symbol(uuid).map(|_| ()),
+    |lib, uuid| lib.get_footprint(uuid).map(|_| ()),
+    |lib, uuid| lib.get_sim(uuid).map(|_| ()),
+];
+
+/// Try `r` as a symbol, then a footprint, then a sim model, stopping at
+/// the first hit. Only an all-`NotFound` sweep proves the reference is
+/// missing.
+fn probe_every_kind(lib: &dyn LibraryAdapter, r: &PrimitiveRef) -> Probe {
+    let mut blocking: Option<LibraryError> = None;
+    for probe in KIND_PROBES {
+        match probe(lib, r.uuid) {
+            Ok(()) => return Probe::Resolved,
+            Err(LibraryError::NotFound(_)) => {}
+            Err(e) => {
+                if blocking.is_none() {
+                    blocking = Some(e);
+                }
+            }
+        }
+    }
+    match blocking {
+        Some(e) => Probe::Undetermined(e),
+        None => Probe::Missing,
+    }
+}
+
+/// Fold an adapter lookup into the resolver's `Ok(None)` = "not there"
+/// / `Err` = "could not tell" split.
+fn absence_is_none<T>(got: Result<T, LibraryError>) -> Result<Option<T>, LibraryError> {
+    match got {
+        Ok(v) => Ok(Some(v)),
+        Err(LibraryError::NotFound(_)) => Ok(None),
+        Err(e) => Err(e),
     }
 }
 
@@ -244,6 +353,10 @@ mod tests {
         manifest: Manifest,
         symbols: HashMap<Uuid, Symbol>,
         path: Option<PathBuf>,
+        /// When set, every primitive lookup fails with this error
+        /// instead of reporting the UUID absent. Models a corrupt
+        /// `.snxsym` on disk or a library server returning 500.
+        read_failure: Option<String>,
     }
 
     impl FakeAdapter {
@@ -262,6 +375,7 @@ mod tests {
                 },
                 symbols: HashMap::new(),
                 path: None,
+                read_failure: None,
             }
         }
 
@@ -273,6 +387,17 @@ mod tests {
         fn with_path(mut self, path: impl Into<PathBuf>) -> Self {
             self.path = Some(path.into());
             self
+        }
+
+        fn with_read_failure(mut self, reason: &str) -> Self {
+            self.read_failure = Some(reason.to_string());
+            self
+        }
+
+        fn failure(&self) -> Option<LibraryError> {
+            self.read_failure
+                .as_ref()
+                .map(|r| LibraryError::Backend(r.clone()))
         }
     }
 
@@ -286,10 +411,31 @@ mod tests {
         }
 
         fn get_symbol(&self, uuid: Uuid) -> Result<Symbol, LibraryError> {
+            if let Some(e) = self.failure() {
+                return Err(e);
+            }
             self.symbols
                 .get(&uuid)
                 .cloned()
                 .ok_or_else(|| LibraryError::NotFound(format!("symbol {uuid}")))
+        }
+
+        // The trait defaults report `Backend("not implemented")`, which
+        // the resolver correctly reads as "could not tell". Real
+        // adapters implement all three, so model that here rather than
+        // making every test ref look undecidable.
+        fn get_footprint(&self, uuid: Uuid) -> Result<Footprint, LibraryError> {
+            match self.failure() {
+                Some(e) => Err(e),
+                None => Err(LibraryError::NotFound(format!("footprint {uuid}"))),
+            }
+        }
+
+        fn get_sim(&self, uuid: Uuid) -> Result<SimModel, LibraryError> {
+            match self.failure() {
+                Some(e) => Err(e),
+                None => Err(LibraryError::NotFound(format!("sim {uuid}"))),
+            }
         }
     }
 
@@ -301,9 +447,21 @@ mod tests {
     fn empty_set_resolves_nothing() {
         let set = LibrarySet::new();
         let r = PrimitiveRef::new(Uuid::now_v7(), Uuid::now_v7());
-        assert!(set.resolve_symbol(&r).is_none());
-        assert!(set.resolve_footprint(&r).is_none());
-        assert!(set.resolve_sim(&r).is_none());
+        assert!(
+            set.resolve_symbol(&r)
+                .expect("no mount is not a failure")
+                .is_none()
+        );
+        assert!(
+            set.resolve_footprint(&r)
+                .expect("no mount is not a failure")
+                .is_none()
+        );
+        assert!(
+            set.resolve_sim(&r)
+                .expect("no mount is not a failure")
+                .is_none()
+        );
         assert!(set.is_empty());
     }
 
@@ -317,7 +475,10 @@ mod tests {
         set.mount(Box::new(adapter)).unwrap();
 
         let r = PrimitiveRef::new(lib_id, sym_uuid);
-        let got = set.resolve_symbol(&r).expect("symbol resolves");
+        let got = set
+            .resolve_symbol(&r)
+            .expect("lookup succeeds")
+            .expect("symbol resolves");
         assert_eq!(got.uuid, sym_uuid);
         assert_eq!(got.name, "OPAMP-DUAL-8");
     }
@@ -326,7 +487,7 @@ mod tests {
     fn unresolved_when_library_missing() {
         let set = LibrarySet::new();
         let r = PrimitiveRef::new(Uuid::now_v7(), Uuid::now_v7());
-        assert!(set.resolve_symbol(&r).is_none());
+        assert!(set.resolve_symbol(&r).expect("lookup succeeds").is_none());
     }
 
     #[test]
@@ -335,7 +496,33 @@ mod tests {
         let mut set = LibrarySet::new();
         set.mount(Box::new(FakeAdapter::new(lib_id))).unwrap();
         let r = PrimitiveRef::new(lib_id, Uuid::now_v7());
-        assert!(set.resolve_symbol(&r).is_none());
+        assert!(set.resolve_symbol(&r).expect("lookup succeeds").is_none());
+    }
+
+    /// A read failure is not evidence that the binding is wrong. The
+    /// resolvers must hand the caller the error instead of the same
+    /// `None` a genuinely absent UUID produces.
+    #[test]
+    fn read_failure_is_reported_not_reported_as_a_missing_uuid() {
+        let lib_id = Uuid::now_v7();
+        let sym = fixture_symbol("U1");
+        let sym_uuid = sym.uuid;
+        let adapter = FakeAdapter::new(lib_id)
+            .with_symbol(sym)
+            .with_read_failure("read symbol file U1.snxsym: unexpected end of input");
+        let mut set = LibrarySet::new();
+        set.mount(Box::new(adapter)).unwrap();
+
+        let r = PrimitiveRef::new(lib_id, sym_uuid);
+        let err = set
+            .resolve_symbol(&r)
+            .expect_err("a corrupt on-disk symbol must not read as an unbound UUID");
+        assert!(
+            err.to_string().contains("unexpected end of input"),
+            "error lost its detail: {err}"
+        );
+        assert!(set.resolve_footprint(&r).is_err());
+        assert!(set.resolve_sim(&r).is_err());
     }
 
     #[test]
@@ -352,10 +539,51 @@ mod tests {
         let stale_uuid = PrimitiveRef::new(lib_id, Uuid::now_v7());
 
         let unresolved = set.unresolved_refs([&resolves, &stale_lib, &stale_uuid]);
-        assert_eq!(unresolved.len(), 2);
-        assert!(unresolved.contains(&stale_lib));
-        assert!(unresolved.contains(&stale_uuid));
-        assert!(!unresolved.contains(&resolves));
+        assert_eq!(unresolved.missing.len(), 2);
+        assert!(unresolved.missing.contains(&stale_lib));
+        assert!(unresolved.missing.contains(&stale_uuid));
+        assert!(!unresolved.missing.contains(&resolves));
+        assert!(
+            unresolved.undetermined.is_empty(),
+            "nothing failed to read: {:?}",
+            unresolved.undetermined
+        );
+    }
+
+    /// The sweep must not file an unreadable library under "missing" —
+    /// that is the register's wrong-binding report all over again, just
+    /// in bulk.
+    #[test]
+    fn unresolved_refs_separates_unreadable_from_missing() {
+        let broken_id = Uuid::now_v7();
+        let good_id = Uuid::now_v7();
+        let mut set = LibrarySet::new();
+        set.mount(Box::new(
+            FakeAdapter::new(broken_id)
+                .with_path("/tmp/broken/lib.snxlib")
+                .with_read_failure("library server returned 500"),
+        ))
+        .unwrap();
+        set.mount(Box::new(
+            FakeAdapter::new(good_id).with_path("/tmp/good/lib.snxlib"),
+        ))
+        .unwrap();
+
+        let unreadable = PrimitiveRef::new(broken_id, Uuid::now_v7());
+        let genuinely_missing = PrimitiveRef::new(good_id, Uuid::now_v7());
+
+        let out = set.unresolved_refs([&unreadable, &genuinely_missing]);
+        assert_eq!(out.missing, vec![genuinely_missing]);
+        assert_eq!(out.undetermined.len(), 1);
+        assert_eq!(out.undetermined[0].0, unreadable);
+        assert!(
+            out.undetermined[0]
+                .1
+                .contains("library server returned 500"),
+            "error lost its detail: {}",
+            out.undetermined[0].1
+        );
+        assert!(!out.is_empty());
     }
 
     #[test]
@@ -373,7 +601,7 @@ mod tests {
         assert!(!set.contains(lib_id));
 
         let r = PrimitiveRef::new(lib_id, sym_uuid);
-        assert!(set.resolve_symbol(&r).is_none());
+        assert!(set.resolve_symbol(&r).expect("lookup succeeds").is_none());
     }
 
     #[test]
@@ -496,10 +724,12 @@ mod tests {
         // First UUID no longer resolves; second does.
         assert!(
             set.resolve_symbol(&PrimitiveRef::new(lib_id, first_uuid))
+                .expect("lookup succeeds")
                 .is_none()
         );
         assert!(
             set.resolve_symbol(&PrimitiveRef::new(lib_id, second_uuid))
+                .expect("lookup succeeds")
                 .is_some()
         );
         // Still only one mount because the key was the same.
