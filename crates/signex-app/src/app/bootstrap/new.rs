@@ -79,7 +79,7 @@ impl Signex {
         // away from losing every shortcut they have customised.
         if let Some(error) = keymap_load_error.as_deref() {
             tracing::error!(
-                target = "signex::keymap",
+                target: "signex::keymap",
                 path = %crate::keymap::config_path()
                     .map(|path| path.display().to_string())
                     .unwrap_or_else(|| "<no config directory>".to_string()),
@@ -110,7 +110,7 @@ impl Signex {
         // panel — and this is every preference they have, not saving.
         if let Some(error) = prefs_load_error.as_deref() {
             tracing::error!(
-                target = "signex::prefs",
+                target: "signex::prefs",
                 path = %crate::fonts::prefs_file_path().display(),
                 error = error,
                 "the preferences file could not be loaded; every preference is showing \
