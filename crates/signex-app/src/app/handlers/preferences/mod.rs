@@ -570,7 +570,7 @@ impl Signex {
                     Ok(()) => {
                         self.ui_state.prefs_load_error = None;
                         tracing::info!(
-                            target = "signex::prefs",
+                            target: "signex::prefs",
                             path = %crate::fonts::prefs_file_path().display(),
                             "preferences reset was requested but the file now loads cleanly, \
                              so nothing was moved"
@@ -583,7 +583,7 @@ impl Signex {
                         Ok(Some(aside)) => {
                             self.ui_state.prefs_load_error = None;
                             tracing::info!(
-                                target = "signex::prefs",
+                                target: "signex::prefs",
                                 path = %crate::fonts::prefs_file_path().display(),
                                 kept_as = %aside.display(),
                                 "the unreadable preferences file was moved aside on the user's \
@@ -611,7 +611,7 @@ impl Signex {
                             // then found nothing there, so something
                             // outside this process removed it mid-action.
                             tracing::warn!(
-                                target = "signex::prefs",
+                                target: "signex::prefs",
                                 path = %crate::fonts::prefs_file_path().display(),
                                 "the unreadable preferences file was gone before it could be \
                                  moved aside; something outside this process removed it"
@@ -624,7 +624,7 @@ impl Signex {
                             // changed on disk, so the banner must stay up
                             // and keep offering the action.
                             tracing::error!(
-                                target = "signex::prefs",
+                                target: "signex::prefs",
                                 path = %crate::fonts::prefs_file_path().display(),
                                 error = %error,
                                 "the unreadable preferences file could not be moved aside, so \

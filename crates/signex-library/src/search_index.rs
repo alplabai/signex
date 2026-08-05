@@ -640,7 +640,7 @@ impl SearchIndex for TantivySearchIndex {
                 // index-error → empty-result outcome is distinguishable
                 // from a legitimate "no matches" outcome.
                 tracing::warn!(
-                    target = "signex::search",
+                    target: "signex::search",
                     error = %e,
                     "search build_query failed; returning empty result set"
                 );
@@ -652,7 +652,7 @@ impl SearchIndex for TantivySearchIndex {
             Ok(t) => t,
             Err(e) => {
                 tracing::warn!(
-                    target = "signex::search",
+                    target: "signex::search",
                     error = %e,
                     "tantivy search failed; returning empty result set"
                 );

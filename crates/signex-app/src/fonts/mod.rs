@@ -46,7 +46,7 @@ pub const DEFAULT_UI_FONT: &str = "Roboto";
 fn write_pref_atomic(path: &Path, bytes: &[u8], context: &str) {
     if let Err(e) = signex_types::atomic_io::atomic_write(path, bytes) {
         tracing::error!(
-            target = "signex::prefs",
+            target: "signex::prefs",
             path = %path.display(),
             context = context,
             error = %e,
@@ -273,7 +273,7 @@ fn production_temp_fallback_path() -> PathBuf {
         }
         Err(e) => {
             tracing::error!(
-                target = "signex::prefs",
+                target: "signex::prefs",
                 error = %e,
                 "no OS config directory (dirs::config_dir() returned None) and \
                  creating a random per-process temp directory also failed; \
@@ -285,7 +285,7 @@ fn production_temp_fallback_path() -> PathBuf {
         }
     };
     tracing::error!(
-        target = "signex::prefs",
+        target: "signex::prefs",
         path = %dir.display(),
         "no OS config directory found (dirs::config_dir() returned None); \
          falling back to a random-named per-process temp directory — \

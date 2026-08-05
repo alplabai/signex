@@ -143,7 +143,7 @@ fn report_refusal(path: &Path, context: &str, error: &PrefsLoadError) {
         return;
     }
     tracing::error!(
-        target = "signex::prefs",
+        target: "signex::prefs",
         path = %path.display(),
         context = context,
         error = %error,
@@ -183,7 +183,7 @@ pub(super) fn update_prefs_json(
     match serde_json::to_string_pretty(&serde_json::Value::Object(prefs)) {
         Ok(serialized) => write_pref_atomic(path, serialized.as_bytes(), context),
         Err(error) => tracing::error!(
-            target = "signex::prefs",
+            target: "signex::prefs",
             path = %path.display(),
             context = context,
             error = %error,
@@ -366,7 +366,7 @@ pub fn move_prefs_file_aside_at(path: &Path) -> Result<Option<PathBuf>, std::io:
         // reports at `debug!`, which the default `LevelFilter::Info`
         // swallows before it can reach the Messages panel.
         tracing::error!(
-            target = "signex::prefs",
+            target: "signex::prefs",
             path = %path.display(),
             error = %error,
             "the unreadable preferences file was moved aside, but a fresh empty one could \

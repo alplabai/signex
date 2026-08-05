@@ -287,7 +287,7 @@ fn callback_params(req_line: Result<String, std::io::Error>) -> Result<(String, 
         Ok(line) => line,
         Err(error) => {
             tracing::error!(
-                target = "signex::distributor",
+                target: "signex::distributor",
                 distributor = "digikey",
                 error = %error,
                 error_kind = ?error.kind(),
@@ -307,7 +307,7 @@ fn callback_params(req_line: Result<String, std::io::Error>) -> Result<(String, 
         Some(pair) => Ok(pair),
         None => {
             tracing::error!(
-                target = "signex::distributor",
+                target: "signex::distributor",
                 distributor = "digikey",
                 query_keys = %callback_query_keys(&line),
                 "the browser's redirect reached Signex but carries no code/state pair, so the \
