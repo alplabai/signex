@@ -560,7 +560,30 @@ fn solve_and_bake(
 
             state.last_solve = Some(out);
         }
-        Err(e) => return Err(SketchError::SolveFailed(e)),
+        Err(e) => {
+            // #613 — drop the previous solve rather than leaving it to
+            // be painted. Everything downstream reads `last_solve`
+            // through `as_ref()` / `is_none()` and already has an
+            // unsolved rendering (`updates/sketch/pad_bridge.rs`
+            // documents `None` as "no solve has run yet"), so clearing
+            // shows the sketch as unsolved instead of showing the last
+            // good answer as though it were current.
+            //
+            // This is the case #610 could not reach: a conflict
+            // touching a free point makes the solver return
+            // `DidNotConverge`, so `entity_colours` never runs at all
+            // and the stale DoF colours were what the user actually
+            // saw — an over-constrained sketch still painted
+            // Full/Under, from a solve that no longer describes it.
+            state.last_solve = None;
+            tracing::warn!(
+                target: "signex::sketch",
+                error = %e,
+                "the sketch solve failed; the previous solve's constraint colours and \
+                 dimensions were cleared rather than left on screen"
+            );
+            return Err(SketchError::SolveFailed(e));
+        }
     }
     Ok(())
 }
