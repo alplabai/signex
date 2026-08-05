@@ -2,7 +2,8 @@ use super::{
     AppCommandId, CompiledKeymap, KeyStroke, KeyToken, Modifiers, ProfileLoadError,
     ShortcutBinding, ShortcutBindingAction, ShortcutContext, ShortcutProfile, ShortcutProfileKind,
     ShortcutProfileSet, ShortcutTrigger, back_up_profile_file_at, config_path_for_dir,
-    export_custom_profile, import_custom_profile, load_profile_set_at, save_profile_set_at,
+    discard_profile_backup_at, export_custom_profile, import_custom_profile, load_profile_set_at,
+    read_backup_profiles_at, restore_profiles_at, save_profile_set_at,
 };
 use std::str::FromStr;
 
@@ -438,5 +439,137 @@ fn the_users_profiles_survive_an_apply_after_a_failed_load() {
         std::fs::read_to_string(&bak).unwrap(),
         rotted,
         "the second Apply must not copy the overwritten file over the backup"
+    );
+}
+
+// ─── #603 — the backup has to be recoverable from inside the app, and
+// ─── nothing but an explicit user action may remove it.
+
+/// The most likely reason the file failed to load is a dangling
+/// `active_profile`, and it is fully recoverable: the profiles are all
+/// there, only the pointer is stale. Refusing the whole restore over it
+/// would strand the user's work in a file the app can read perfectly.
+#[test]
+fn a_backup_whose_active_profile_is_gone_still_restores_its_profiles() {
+    // Arrange — a real saved document, rotted the same way #595's
+    // end-to-end test rots it.
+    let tmp = tempfile::tempdir().unwrap();
+    let path = config_path_for_dir(tmp.path());
+    let saved = seed_saved_profiles(&path, "keeper");
+    let rotted = String::from_utf8(saved)
+        .unwrap()
+        .replace("active_profile = \"keeper\"", "active_profile = \"gone\"");
+    let bak = path.with_file_name("keyboard_shortcuts.toml.bak");
+    std::fs::write(&bak, &rotted).unwrap();
+    assert!(
+        load_profile_set_at(&bak).is_err(),
+        "precondition: this backup is one the normal loader refuses"
+    );
+
+    // Act
+    let restored = read_backup_profiles_at(&bak).expect("the profiles are readable");
+
+    // Assert
+    assert_eq!(
+        restored.active_profile_reset.as_deref(),
+        Some("gone"),
+        "the unresolvable pointer must be reported, not hidden"
+    );
+    assert!(
+        restored.set.profiles().any(|p| p.id == "keeper"),
+        "the custom profile the user cares about must come back"
+    );
+}
+
+/// An unparseable backup is not recoverable, and the restore has to say
+/// so rather than half-importing or silently producing built-ins.
+#[test]
+fn an_unparseable_backup_fails_the_restore_and_changes_nothing() {
+    // Arrange
+    let tmp = tempfile::tempdir().unwrap();
+    let path = config_path_for_dir(tmp.path());
+    let live = seed_saved_profiles(&path, "keeper");
+    let bak = path.with_file_name("keyboard_shortcuts.toml.bak");
+    std::fs::write(&bak, b"this is not = valid = toml [[[").unwrap();
+
+    // Act
+    let outcome = read_backup_profiles_at(&bak);
+
+    // Assert
+    assert!(outcome.is_err(), "an unparseable backup must not restore");
+    assert_eq!(
+        std::fs::read(&path).unwrap(),
+        live,
+        "the live shortcuts file must be untouched by a failed restore"
+    );
+    assert_eq!(
+        std::fs::read(&bak).unwrap(),
+        b"this is not = valid = toml [[[",
+        "the backup must be untouched by a failed restore"
+    );
+}
+
+/// The `.bak` is never cleaned up, so it outlives the failure that made
+/// it: months later the user may have a whole new set of profiles. A
+/// restore that wrote straight over them would be the `prefs.json`
+/// clobber of #594 with extra steps.
+#[test]
+fn restoring_moves_the_current_shortcuts_file_aside_instead_of_overwriting_it() {
+    // Arrange — a live file with newer work, and an older backup.
+    let tmp = tempfile::tempdir().unwrap();
+    let path = config_path_for_dir(tmp.path());
+    let newer = seed_saved_profiles(&path, "newer-work");
+    let bak = path.with_file_name("keyboard_shortcuts.toml.bak");
+    let older_path = tmp.path().join("older.toml");
+    seed_saved_profiles(&older_path, "older-work");
+    std::fs::copy(&older_path, &bak).unwrap();
+
+    // Act
+    let restored = read_backup_profiles_at(&bak).expect("the backup is readable");
+    let aside = restore_profiles_at(&path, &restored.set).expect("the restore lands");
+
+    // Assert
+    let aside = aside.expect("the live file existed, so it must have been kept");
+    assert_eq!(
+        aside.file_name().and_then(|n| n.to_str()),
+        Some("keyboard_shortcuts.toml.bak.2"),
+        "the existing .bak is the original and must not be clobbered"
+    );
+    assert_eq!(
+        std::fs::read(&aside).unwrap(),
+        newer,
+        "the newer work must survive the restore byte for byte"
+    );
+    assert!(
+        load_profile_set_at(&path)
+            .unwrap()
+            .profiles()
+            .any(|p| p.id == "older-work"),
+        "the restored profiles must be the live ones now"
+    );
+}
+
+/// Deleting is an explicit action and nothing else may do it — a
+/// successful save removing the backup would throw the profiles away at
+/// exactly the moment the user is most likely to want them back.
+#[test]
+fn discarding_removes_the_backup_and_is_a_no_op_when_there_is_none() {
+    // Arrange
+    let tmp = tempfile::tempdir().unwrap();
+    let path = config_path_for_dir(tmp.path());
+    seed_saved_profiles(&path, "keeper");
+    let bak = path.with_file_name("keyboard_shortcuts.toml.bak");
+    std::fs::copy(&path, &bak).unwrap();
+
+    // Act / Assert
+    assert!(discard_profile_backup_at(&bak).unwrap(), "it was there");
+    assert!(!bak.exists(), "and it is gone");
+    assert!(
+        !discard_profile_backup_at(&bak).unwrap(),
+        "a second discard reports nothing to do rather than failing"
+    );
+    assert!(
+        path.exists(),
+        "discarding the backup must never touch the live file"
     );
 }
