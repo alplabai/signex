@@ -104,7 +104,11 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
         // re-export: #367 (PR #504) narrows that re-export to private, and
         // the two changes merge cleanly but would not compile together.
         // The module path holds either way.
-        if crate::app::command::bridge::core_to_message(&command).is_none() {
+        // `is_dispatchable`, not `core_to_message` (#619): this asks
+        // whether the row would do anything. Resolving through the
+        // dispatch entry point made building the palette report every
+        // unmapped id to the user, once per rebuild.
+        if !crate::app::command::bridge::is_dispatchable(&command) {
             continue;
         }
         let Some(metadata) = metadata_for(&command) else {
@@ -359,8 +363,7 @@ mod tests {
                 // stops compiling the moment #504 lands ahead of this
                 // branch in the merge order.
                 CommandAction::Command(command) => {
-                    crate::app::command::bridge::core_to_message(&command)
-                        .is_none()
+                    (!crate::app::command::bridge::is_dispatchable(&command))
                         .then(|| command.as_str().to_string())
                 }
                 _ => None,
