@@ -775,15 +775,23 @@ fn build_prefs_file_banner<'a>(
         lines = lines.push(text(status).size(10).style(text_muted));
     }
 
-    let mut strip = row![lines].spacing(12).align_y(iced::Alignment::Center);
+    let mut strip = row![lines].spacing(16).align_y(iced::Alignment::Center);
     // Offered only while the file is actually broken: once it loads, the
     // banner is a result line and there is nothing left to reset.
     if load_error.is_some() {
         strip = strip.push(
             button(text("Start a fresh preferences file").size(11))
-                .padding([6, 12])
+                .padding([7, 14])
                 .on_press(PrefMsg::ResetPrefsFile)
-                .style(secondary_button_style),
+                // NOT `secondary_button_style` — that fills with
+                // `background.weak`, which is exactly this strip's own
+                // fill, so the button was the same colour as the surface
+                // under it and read as a bare outline. Its hover tone,
+                // `background.strong`, is this strip's border colour, so
+                // hovering merged it with its own frame. `primary` is the
+                // one tone that contrasts on `background.weak` — and this
+                // is the single action the whole strip exists to offer.
+                .style(primary_button_style),
         );
     }
 
@@ -792,9 +800,9 @@ fn build_prefs_file_banner<'a>(
             .width(Length::Fill)
             // Vertical padding, unlike `build_footer`'s `[0, 16]`: that
             // strip is one line inside a fixed `FOOTER_H`, this one grows
-            // with its text and would otherwise sit flush against the
-            // divider above and the nav column below.
-            .padding([8, 16])
+            // to two or three wrapped lines and would otherwise sit flush
+            // against the divider above and the nav column below.
+            .padding([12, 16])
             .style(move |theme: &Theme| {
                 let palette = theme.extended_palette();
                 container::Style {
