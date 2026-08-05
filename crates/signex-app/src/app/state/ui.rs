@@ -147,6 +147,21 @@ pub struct UiState {
     /// transient feedback. Only a successful save clears it, because only
     /// then is the file on disk one this process wrote.
     pub keymap_load_error: Option<String>,
+    /// Path of `keyboard_shortcuts.toml.bak` when that file is on disk
+    /// (#603).
+    ///
+    /// Distinct from [`Self::keymap_load_error`] on purpose: the backup
+    /// outlives the failure that produced it. Once a successful save
+    /// clears the load error the banner goes away, and before this field
+    /// existed that was the last time the app ever mentioned the backup
+    /// — the user's profiles sat in a file nothing could see or act on.
+    /// `Some` here means the Keyboard pane offers Restore and Discard,
+    /// error or no error.
+    ///
+    /// Refreshed on every Preferences open and after either action, the
+    /// same way `prefs_load_error` is re-probed (#602). It is a cached
+    /// answer to "does that file exist", not a claim about its contents.
+    pub keymap_backup: Option<String>,
     /// The last known health of `prefs.json` (#602) — NOT a boot-time
     /// snapshot, unlike [`Self::keymap_load_error`] right above. It is
     /// set at boot and refreshed on every Preferences open and at the end

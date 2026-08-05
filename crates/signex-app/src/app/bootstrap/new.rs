@@ -184,6 +184,12 @@ impl Signex {
                 preferences_keymap_editor: keymap_editor,
                 preferences_keymap_status: String::new(),
                 keymap_load_error,
+                // #603 — probed independently of `keymap_load_error`,
+                // because the backup outlives the failure that produced
+                // it and must stay reachable after a successful save
+                // clears the banner.
+                keymap_backup: crate::keymap::existing_backup_profiles_path()
+                    .map(|bak| bak.display().to_string()),
                 prefs_load_error,
                 preferences_prefs_status: String::new(),
                 preferences_keymap_search: String::new(),

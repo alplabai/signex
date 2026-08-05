@@ -11,6 +11,7 @@ pub(super) fn content_keyboard_shortcuts<'a>(
     editor: &'a crate::keymap::KeymapEditorModel,
     status: &'a str,
     load_error: Option<&'a str>,
+    backup: Option<&'a str>,
     search: &'a str,
     recorder: Option<&'a crate::app::KeymapRecorderState>,
 ) -> Element<'a, PrefMsg> {
@@ -67,6 +68,37 @@ pub(super) fn content_keyboard_shortcuts<'a>(
         ))
         .size(10)
         .style(text_warning)
+        .into()
+    });
+
+    // #603 — the backup outlives the failure that produced it, so this
+    // row is gated on the file existing rather than on `load_error`.
+    // Before it, a successful save cleared the banner and with it the
+    // only mention the app ever made of the backup: the user's profiles
+    // sat in a file nothing could see, restore or remove.
+    //
+    // Restore reads the backup through the normal loader rather than
+    // copying the file back — the backup IS the file that failed to
+    // load, so a copy back would just reproduce the failure. Discard is
+    // the only thing in the app that deletes it; no save path does.
+    let backup_row: Option<Element<'a, PrefMsg>> = backup.map(|bak| {
+        column![
+            text(format!(
+                "A backup of your previous keyboard shortcuts is kept at {bak}."
+            ))
+            .size(10)
+            .style(text_muted),
+            row![
+                button(container(text("Restore from backup").size(11)).padding([5, 12]))
+                    .on_press(PrefMsg::KeymapRestoreFromBackup)
+                    .style(secondary_button_style),
+                button(container(text("Delete the backup").size(11)).padding([5, 12]))
+                    .on_press(PrefMsg::KeymapDiscardBackup)
+                    .style(danger_button_style),
+            ]
+            .spacing(8),
+        ]
+        .spacing(6)
         .into()
     });
 
@@ -135,6 +167,7 @@ pub(super) fn content_keyboard_shortcuts<'a>(
 
     let mut content = column![header].spacing(10).padding(20);
     content = content.extend(load_error_banner);
+    content = content.extend(backup_row);
     content = content.push(profile_row);
     content = content.push(text(status_line).size(10).style(text_muted));
 

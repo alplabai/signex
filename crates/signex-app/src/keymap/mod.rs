@@ -18,11 +18,13 @@ pub use catalog::{CommandGroup, CommandMetadata, all_command_ids, fallback_label
 pub use command::AppCommandId;
 pub use editor::{KeymapEditorModel, KeymapEditorProfile, KeymapEditorRow, KeymapEditorSource};
 pub use profile::{
-    BindingConflict, BuiltInProfile, CompiledKeymap, KeyLookup, ProfileLoadError, ShortcutProfile,
-    ShortcutProfileKind, ShortcutProfileSet, TomlShortcutProfile, back_up_profile_file,
-    back_up_profile_file_at, config_path, config_path_for_dir, export_custom_profile,
-    export_custom_profiles, import_custom_profile, load_profile_set, load_profile_set_at,
-    save_profile_set, save_profile_set_at,
+    BindingConflict, BuiltInProfile, CompiledKeymap, KeyLookup, ProfileLoadError, RestoredProfiles,
+    ShortcutProfile, ShortcutProfileKind, ShortcutProfileSet, TomlShortcutProfile,
+    back_up_profile_file, back_up_profile_file_at, backup_profiles_path, config_path,
+    config_path_for_dir, discard_profile_backup_at, existing_backup_profiles_path,
+    export_custom_profile, export_custom_profiles, import_custom_profile, load_profile_set,
+    load_profile_set_at, read_backup_profiles_at, restore_profiles_at, save_profile_set,
+    save_profile_set_at,
 };
 
 #[cfg(test)]

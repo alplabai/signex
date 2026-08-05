@@ -445,6 +445,142 @@ pub fn back_up_profile_file() -> Result<Option<PathBuf>, ProfileLoadError> {
     back_up_profile_file_at(&path)
 }
 
+/// The `.bak` sibling of the resolved shortcuts file, whether or not it
+/// exists. `None` only when there is no config directory at all.
+///
+/// Exposed so the Preferences pane can say the backup is there after the
+/// load-error banner has gone (#603) — before this, the only mention of
+/// the file was a transient status line at the moment it was written.
+pub fn backup_profiles_path() -> Option<PathBuf> {
+    config_path().and_then(|path| backup_path_for(&path))
+}
+
+/// [`backup_profiles_path`] filtered to a backup that is actually on
+/// disk — what the UI asks before offering Restore and Discard.
+///
+/// `Path::exists()` is the right predicate here and only here: it
+/// decides whether to *show* two controls, so treating an un-stat-able
+/// file as absent costs a hidden row, not a lost file. The destructive
+/// paths ([`free_aside_path`], [`discard_profile_backup_at`]) go through
+/// `symlink_metadata` and never through this.
+pub fn existing_backup_profiles_path() -> Option<PathBuf> {
+    backup_profiles_path().filter(|bak| bak.exists())
+}
+
+/// How many aside slots to try before giving up, matching
+/// `fonts::prefs_file`'s ladder. A user who has restored a hundred times
+/// has a problem no rename will fix.
+const MAX_ASIDE_SLOTS: u32 = 100;
+
+/// First free sibling name to move the live shortcuts file aside to
+/// before a restore overwrites it.
+///
+/// Slot 1 is the plain `.bak`; the ladder numbers from `.bak.2`, so this
+/// covers exactly [`MAX_ASIDE_SLOTS`] names and the exhaustion message
+/// below stays true. A slot counts as free only when
+/// `symlink_metadata` answers `NotFound`; any other error aborts
+/// carrying that errno rather than laddering past it, because
+/// `Path::exists()` answers `false` for a name it merely cannot stat and
+/// `std::fs::rename` silently replaces its destination — the file that
+/// vanished would be the user's earlier backup.
+fn free_aside_path(path: &Path) -> Result<PathBuf, std::io::Error> {
+    let Some(file_name) = path.file_name() else {
+        return Err(std::io::Error::other(format!(
+            "no name to move {} aside to: the path has no file name",
+            path.display()
+        )));
+    };
+    let mut base = file_name.to_os_string();
+    base.push(".bak");
+    for slot in 1..=MAX_ASIDE_SLOTS {
+        let mut name = base.clone();
+        if slot > 1 {
+            name.push(format!(".{slot}"));
+        }
+        let candidate = path.with_file_name(name);
+        match std::fs::symlink_metadata(&candidate) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(candidate),
+            Err(error) => return Err(error),
+            Ok(_) => {}
+        }
+    }
+    Err(std::io::Error::other(format!(
+        "no free name to move {} aside to: all {MAX_ASIDE_SLOTS} .bak slots \
+         beside it are already taken",
+        path.display()
+    )))
+}
+
+/// What a restore recovered out of a backup, and what it could not.
+pub struct RestoredProfiles {
+    /// The profile set the backup describes, built-ins included.
+    pub set: ShortcutProfileSet,
+    /// `Some(id)` when the backup's `active_profile` named a profile
+    /// that is not in it. The custom profiles are all present and this
+    /// is the one thing that could not be honoured, so the set comes
+    /// back with the built-in default active rather than failing the
+    /// whole restore over a dangling pointer. That is the single most
+    /// likely reason the file failed to load in the first place.
+    pub active_profile_reset: Option<String>,
+}
+
+/// Read the profiles out of a backup file, through the normal loader.
+///
+/// Deliberately NOT "copy the `.bak` back over the live file". The
+/// backup holds the file that failed to load; putting it back would
+/// reproduce the same failure on the next launch. Parsing it instead
+/// means an unrepairable backup fails here, cleanly, with both files
+/// untouched — and a backup whose only fault was a dangling
+/// `active_profile` is recovered in full.
+pub fn read_backup_profiles_at(bak: &Path) -> Result<RestoredProfiles, ProfileLoadError> {
+    let source = std::fs::read_to_string(bak).map_err(ProfileLoadError::Io)?;
+    let mut set = ShortcutProfileSet::built_ins()?;
+    let active_profile_reset = TomlShortcutConfig::parse(&source)?.apply_to_recovering(&mut set)?;
+    Ok(RestoredProfiles {
+        set,
+        active_profile_reset,
+    })
+}
+
+/// Move the live shortcuts file aside to a free slot, then write `set`
+/// in its place. Returns where the previous file went, or `Ok(None)`
+/// when there was no live file to preserve.
+///
+/// The move is what makes a restore safe to offer at any time. The
+/// `.bak` is never cleaned up, so it outlives the failure that produced
+/// it: months later the user may have built a whole new set of profiles
+/// and still have that ancient backup sitting there. Writing straight
+/// over the live file would throw the new work away — the same shape as
+/// the `prefs.json` clobber in #594.
+pub fn restore_profiles_at(
+    path: &Path,
+    set: &ShortcutProfileSet,
+) -> Result<Option<PathBuf>, ProfileLoadError> {
+    let aside = match std::fs::symlink_metadata(path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => return Err(ProfileLoadError::Io(error)),
+        Ok(_) => {
+            let target = free_aside_path(path).map_err(ProfileLoadError::Io)?;
+            std::fs::rename(path, &target).map_err(ProfileLoadError::Io)?;
+            Some(target)
+        }
+    };
+    save_profile_set_at(path, set)?;
+    Ok(aside)
+}
+
+/// Delete a profile backup. Only ever called from an explicit user
+/// action — a successful save must never remove it, because that is
+/// exactly the moment the user is most likely to want the old profiles
+/// back. `Ok(false)` when there was nothing to delete.
+pub fn discard_profile_backup_at(bak: &Path) -> Result<bool, ProfileLoadError> {
+    match std::fs::remove_file(bak) {
+        Ok(()) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(ProfileLoadError::Io(error)),
+    }
+}
+
 pub fn import_custom_profile(source: &str) -> Result<ShortcutProfile, ProfileLoadError> {
     let profile = TomlShortcutProfile::parse(source)?.into_profile()?;
     if profile.kind != ShortcutProfileKind::Custom {
@@ -517,11 +653,42 @@ impl TomlShortcutConfig {
     }
 
     fn apply_to(self, set: &mut ShortcutProfileSet) -> Result<(), ProfileLoadError> {
+        // Delegates so the loading and the recovering path cannot drift:
+        // a dangling `active_profile` is a hard error here, and the only
+        // difference in `apply_to_recovering` is that it hands the id
+        // back instead.
+        match self.apply_to_recovering(set)? {
+            Some(id) => Err(ProfileLoadError::UnknownActiveProfile(id)),
+            None => Ok(()),
+        }
+    }
+
+    /// Apply the config, treating an unresolvable `active_profile` as
+    /// recoverable rather than fatal (#603).
+    ///
+    /// Order is load-bearing and already was: every custom profile is
+    /// inserted before `set_active_profile` runs, so by the time the
+    /// active pointer can fail the profiles are all in `set`. That is
+    /// what makes recovery possible at all — the one thing that failed
+    /// is the pointer, and the built-in default is a fine substitute
+    /// for it.
+    ///
+    /// Returns the id that could not be honoured, or `None` when the
+    /// config applied in full.
+    fn apply_to_recovering(
+        self,
+        set: &mut ShortcutProfileSet,
+    ) -> Result<Option<String>, ProfileLoadError> {
         self.signex_settings.validate()?;
         for profile in self.keyboard_shortcuts.profiles {
             set.insert_custom_profile(profile.into_profile()?)?;
         }
-        set.set_active_profile(self.keyboard_shortcuts.active_profile)
+        let wanted = self.keyboard_shortcuts.active_profile;
+        match set.set_active_profile(wanted.clone()) {
+            Ok(()) => Ok(None),
+            Err(ProfileLoadError::UnknownActiveProfile(_)) => Ok(Some(wanted)),
+            Err(other) => Err(other),
+        }
     }
 }
 

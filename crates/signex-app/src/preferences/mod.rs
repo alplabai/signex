@@ -189,6 +189,14 @@ pub enum PrefMsg {
     KeymapCreateCustomProfile,
     /// Delete the active custom profile draft (built-ins are protected).
     KeymapDeleteActiveProfile,
+    /// Recover the profiles held in `keyboard_shortcuts.toml.bak` (#603).
+    /// Reads the backup through the normal loader — it is not a
+    /// file-level copy back, because the backup is by definition the file
+    /// that failed to load.
+    KeymapRestoreFromBackup,
+    /// Delete `keyboard_shortcuts.toml.bak` (#603). Only ever from this
+    /// explicit action; no save path removes it.
+    KeymapDiscardBackup,
     /// Open a file picker to import a custom profile (`.toml`).
     KeymapImportProfile,
     /// Loaded profile source from the import pick dialog.
@@ -282,6 +290,11 @@ pub struct PrefsView<'a> {
     /// error; `None` renders nothing. Distinct from `keymap_status`,
     /// which is transient per-action feedback cleared on every open.
     pub keymap_load_error: Option<&'a str>,
+    /// Path of `keyboard_shortcuts.toml.bak` when it exists (#603).
+    /// `Some` renders the recover row with its Restore and Discard
+    /// actions. Independent of `keymap_load_error` — the backup outlives
+    /// the failure that produced it.
+    pub keymap_backup: Option<&'a str>,
     /// `prefs.json` health failure (#602). `Some` renders a dialog-wide
     /// banner naming the file and the error; `None` renders nothing.
     ///
@@ -561,6 +574,7 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         keymap_editor,
         keymap_status,
         keymap_load_error,
+        keymap_backup,
         keymap_search,
         keymap_recorder,
         ..
@@ -585,6 +599,7 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             keymap_editor,
             keymap_status,
             keymap_load_error,
+            keymap_backup,
             keymap_search,
             keymap_recorder,
         ),

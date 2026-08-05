@@ -1,5 +1,7 @@
 use iced::Task;
 
+mod keymap;
+
 use super::super::*;
 
 impl Signex {
@@ -78,8 +80,21 @@ impl Signex {
         // reopens Preferences sees the banner gone instead of being told
         // to restart, and one who breaks it mid-session sees it appear.
         self.refresh_prefs_load_error();
+        // #603 — and the shortcuts backup, for the same reason: the file
+        // can appear or be removed between two openings of this dialog.
+        self.refresh_keymap_backup();
         self.ui_state.preferences_dirty = false;
         self.ui_state.preferences_dirty_sticky = false;
+    }
+
+    /// Re-check whether `keyboard_shortcuts.toml.bak` is on disk (#603).
+    ///
+    /// Deliberately not derived from `keymap_load_error`: the backup
+    /// outlives the failure that produced it, so the Restore and Discard
+    /// controls have to stay reachable long after the banner is gone.
+    fn refresh_keymap_backup(&mut self) {
+        self.ui_state.keymap_backup =
+            crate::keymap::existing_backup_profiles_path().map(|bak| bak.display().to_string());
     }
 
     /// Re-read `prefs.json`'s health into the banner flag (#602).
@@ -679,275 +694,31 @@ impl Signex {
                     crate::fonts::default_component_classes();
                 self.recompute_preferences_dirty();
             }
-            PrefMsg::KeymapSearchChanged(query) => {
-                // Pure view filter — does not touch the editor model or the
-                // dirty flag, so opening/searching never marks unsaved work.
-                self.ui_state.preferences_keymap_search = query;
-            }
-            PrefMsg::KeymapProfileSelected(id) => {
-                match self
-                    .ui_state
-                    .preferences_keymap_editor
-                    .set_active_profile(id)
-                {
-                    Ok(()) => {
-                        self.ui_state.preferences_keymap_status.clear();
-                        self.recompute_preferences_dirty();
-                    }
-                    Err(error) => {
-                        self.ui_state.preferences_keymap_status =
-                            format!("Could not switch profile: {error}");
-                    }
-                }
-            }
-            PrefMsg::KeymapCreateCustomProfile => {
-                // Pick the first free `custom-N` id so repeated forks
-                // don't collide with an existing draft.
-                let profiles = self.ui_state.preferences_keymap_editor.profiles();
-                let next_index = profiles
-                    .iter()
-                    .filter(|profile| profile.kind == crate::keymap::ShortcutProfileKind::Custom)
-                    .count()
-                    + 1;
-                let mut candidate = next_index;
-                loop {
-                    let id = format!("custom-{candidate}");
-                    if profiles.iter().all(|profile| profile.id != id) {
-                        let name = format!("Custom {candidate}");
-                        match self
-                            .ui_state
-                            .preferences_keymap_editor
-                            .create_custom_from_active(id, name)
-                        {
-                            Ok(()) => {
-                                self.ui_state.preferences_keymap_status =
-                                    "Created a custom profile draft.".to_string();
-                                self.recompute_preferences_dirty();
-                            }
-                            Err(error) => {
-                                self.ui_state.preferences_keymap_status =
-                                    format!("Could not create profile: {error}");
-                            }
-                        }
-                        break;
-                    }
-                    candidate += 1;
-                }
-            }
-            PrefMsg::KeymapDeleteActiveProfile => {
-                let active_id = self
-                    .ui_state
-                    .preferences_keymap_editor
-                    .profiles()
-                    .into_iter()
-                    .find(|profile| profile.active)
-                    .map(|profile| profile.id);
-                if let Some(id) = active_id {
-                    match self
-                        .ui_state
-                        .preferences_keymap_editor
-                        .delete_custom_profile(&id)
-                    {
-                        Ok(()) => {
-                            self.ui_state.preferences_keymap_status =
-                                "Deleted the custom profile draft.".to_string();
-                            self.recompute_preferences_dirty();
-                        }
-                        Err(error) => {
-                            self.ui_state.preferences_keymap_status =
-                                format!("Could not delete profile: {error}");
-                        }
-                    }
-                }
-            }
-            PrefMsg::KeymapImportProfile => {
-                return Task::future(async {
-                    let picked = rfd::AsyncFileDialog::new()
-                        .set_title("Import Signex Keyboard Shortcuts")
-                        .add_filter("Signex Keyboard Shortcuts", &["toml"])
-                        .pick_file()
-                        .await;
-                    if let Some(f) = picked {
-                        let bytes = f.read().await;
-                        let source = String::from_utf8_lossy(&bytes).to_string();
-                        Message::Preferences(PreferencesMsg::Inner(PrefMsg::KeymapProfileLoaded(
-                            source,
-                        )))
-                    } else {
-                        Message::Noop
-                    }
-                });
-            }
-            PrefMsg::KeymapProfileLoaded(source) => {
-                match crate::keymap::import_custom_profile(&source).and_then(|profile| {
-                    self.ui_state
-                        .preferences_keymap_editor
-                        .insert_custom_profile(profile)
-                }) {
-                    Ok(()) => {
-                        self.ui_state.preferences_keymap_status =
-                            "Imported a custom keyboard shortcut profile.".to_string();
-                        self.recompute_preferences_dirty();
-                    }
-                    Err(error) => {
-                        self.ui_state.preferences_keymap_status =
-                            format!("Could not import keyboard shortcuts: {error}");
-                    }
-                }
-            }
-            PrefMsg::KeymapExportProfile => {
-                let profile = self
-                    .ui_state
-                    .preferences_keymap_editor
-                    .active_profile()
-                    .clone();
-                match crate::keymap::export_custom_profile(&profile) {
-                    Ok(source) => {
-                        let filename = format!("{}.toml", profile.id);
-                        // Same reset as the theme export: the status line
-                        // must describe this attempt, not the last one.
-                        self.ui_state.preferences_keymap_status.clear();
-                        return Task::future(async move {
-                            let picked = rfd::AsyncFileDialog::new()
-                                .set_title("Export Signex Keyboard Shortcuts")
-                                .add_filter("Signex Keyboard Shortcuts", &["toml"])
-                                .set_file_name(&filename)
-                                .save_file()
-                                .await;
-                            let Some(f) = picked else {
-                                return Message::Noop;
-                            };
-                            let path = f.path().to_path_buf();
-                            // The serialization failure below already
-                            // reported through `preferences_keymap_status`;
-                            // the write failure was the half that vanished
-                            // (#533). Same `io::Result<()>` shape as the
-                            // theme export — see that arm for why there is
-                            // no short write to handle.
-                            let outcome = match f.write(source.as_bytes()).await {
-                                Ok(()) => Ok(path),
-                                Err(error) => {
-                                    Err(format!("{path}: {error}", path = path.display()))
-                                }
-                            };
-                            Message::Preferences(PreferencesMsg::Inner(
-                                PrefMsg::KeymapExportFinished(outcome),
-                            ))
-                        });
-                    }
-                    Err(error) => {
-                        self.ui_state.preferences_keymap_status =
-                            format!("Could not export keyboard shortcuts: {error}");
-                    }
-                }
-            }
-            PrefMsg::KeymapExportFinished(result) => {
-                self.ui_state.preferences_keymap_status = match result {
-                    Ok(path) => format!("Exported keyboard shortcuts to {}.", path.display()),
-                    Err(detail) => format!("Could not export keyboard shortcuts: {detail}"),
-                };
-            }
-            PrefMsg::KeymapBindingChanged {
-                command,
-                context,
-                trigger,
-            } => {
-                match self
-                    .ui_state
-                    .preferences_keymap_editor
-                    .edit_active_trigger(command, context, trigger)
-                {
-                    Ok(()) => {
-                        self.ui_state.preferences_keymap_status.clear();
-                        self.recompute_preferences_dirty();
-                    }
-                    Err(error) => {
-                        self.ui_state.preferences_keymap_status =
-                            format!("Invalid shortcut: {error}");
-                        self.recompute_preferences_dirty();
-                    }
-                }
-            }
-            PrefMsg::KeymapRecorderOpen {
-                command,
-                label,
-                context,
-                trigger,
-            } => {
-                self.ui_state.preferences_keymap_recorder = Some(
-                    crate::app::KeymapRecorderState::new(command, label, context, trigger),
-                );
-                self.ui_state.preferences_keymap_status.clear();
-            }
-            PrefMsg::KeymapRecorderCancel => {
-                self.ui_state.preferences_keymap_recorder = None;
-            }
-            PrefMsg::KeymapRecorderStart => {
-                if let Some(recorder) = &mut self.ui_state.preferences_keymap_recorder {
-                    recorder.recording = true;
-                    recorder.strokes.clear();
-                    recorder.modifiers = crate::keymap::Modifiers::default();
-                }
-            }
-            PrefMsg::KeymapRecorderStop => {
-                if let Some(recorder) = &mut self.ui_state.preferences_keymap_recorder {
-                    recorder.recording = false;
-                    recorder.modifiers = crate::keymap::Modifiers::default();
-                }
-            }
-            PrefMsg::KeymapRecorderClear => {
-                if let Some(recorder) = &mut self.ui_state.preferences_keymap_recorder {
-                    recorder.strokes.clear();
-                    recorder.modifiers = crate::keymap::Modifiers::default();
-                    recorder.recording = true;
-                }
-            }
-            PrefMsg::KeymapRecorderModifiersChanged(modifiers) => {
-                if let Some(recorder) = &mut self.ui_state.preferences_keymap_recorder
-                    && recorder.recording
-                {
-                    recorder.modifiers = modifiers;
-                }
-            }
-            PrefMsg::KeymapRecorderKeyPressed(stroke) => {
-                if let Some(recorder) = &mut self.ui_state.preferences_keymap_recorder
-                    && recorder.recording
-                {
-                    // Wrap back to a single stroke once the chord is
-                    // full so a fourth press starts a fresh capture.
-                    if recorder.strokes.len() >= crate::app::KeymapRecorderState::MAX_STROKES {
-                        recorder.strokes.clear();
-                    }
-                    recorder.strokes.push(stroke);
-                    recorder.modifiers = crate::keymap::Modifiers::default();
-                }
-            }
-            PrefMsg::KeymapRecorderApply => {
-                let Some(recorder) = self.ui_state.preferences_keymap_recorder.clone() else {
-                    return Task::none();
-                };
-                if recorder.strokes.is_empty() {
-                    self.ui_state.preferences_keymap_status =
-                        "Record at least one keystroke before applying.".to_string();
-                    return Task::none();
-                }
-                let trigger = recorder.trigger_text();
-                match self.ui_state.preferences_keymap_editor.edit_active_trigger(
-                    recorder.command,
-                    recorder.context,
-                    trigger,
-                ) {
-                    Ok(()) => {
-                        self.ui_state.preferences_keymap_status.clear();
-                        self.recompute_preferences_dirty();
-                        self.ui_state.preferences_keymap_recorder = None;
-                    }
-                    Err(error) => {
-                        self.ui_state.preferences_keymap_status =
-                            format!("Invalid shortcut: {error}");
-                        self.recompute_preferences_dirty();
-                    }
-                }
+            // Keyboard Shortcuts pane — the arms live in the sibling
+            // `keymap` module. Listed one by one rather than caught by a
+            // `_ =>` so this match stays exhaustive over `PrefMsg`: a new
+            // non-keymap variant is a compile error here, not a message
+            // silently routed to a handler that does not own it.
+            msg @ (PrefMsg::KeymapSearchChanged(..)
+            | PrefMsg::KeymapProfileSelected(..)
+            | PrefMsg::KeymapCreateCustomProfile
+            | PrefMsg::KeymapDeleteActiveProfile
+            | PrefMsg::KeymapRestoreFromBackup
+            | PrefMsg::KeymapDiscardBackup
+            | PrefMsg::KeymapImportProfile
+            | PrefMsg::KeymapProfileLoaded(..)
+            | PrefMsg::KeymapExportProfile
+            | PrefMsg::KeymapExportFinished(..)
+            | PrefMsg::KeymapBindingChanged { .. }
+            | PrefMsg::KeymapRecorderOpen { .. }
+            | PrefMsg::KeymapRecorderCancel
+            | PrefMsg::KeymapRecorderStart
+            | PrefMsg::KeymapRecorderStop
+            | PrefMsg::KeymapRecorderClear
+            | PrefMsg::KeymapRecorderModifiersChanged(..)
+            | PrefMsg::KeymapRecorderKeyPressed(..)
+            | PrefMsg::KeymapRecorderApply) => {
+                return self.handle_keymap_pref_message(msg);
             }
         }
 
