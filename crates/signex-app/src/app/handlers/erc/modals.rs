@@ -243,6 +243,27 @@ impl Signex {
             // No OS chrome — the modal body supplies its own header with
             // an X close button and a click-to-drag region.
             decorations: false,
+            // A detached modal must not fall behind the window it was
+            // detached from. It carries no OS title bar, so once the main
+            // window covers it there is nothing to grab and no entry in a
+            // window menu to bring it back — the user is left with a
+            // dialog that is open, blocking, and invisible.
+            //
+            // `iced` 0.14 exposes no owner/parent relationship
+            // (`window::Settings` has no `parent_window`), so
+            // `AlwaysOnTop` is the only mechanism available. It is
+            // system-wide rather than app-scoped: the modal also floats
+            // above other applications while it is open. That is the
+            // cost of the guarantee. The alternative — raising it on
+            // every focus event — would fight the user for focus on the
+            // non-blocking members of this set (Print Preview, BOM
+            // Preview, Parameter Manager).
+            //
+            // Deliberately NOT applied to the two sibling `window::open`
+            // calls above: an undocked tab and a detached panel are
+            // ordinary document windows the user is meant to be able to
+            // put behind something.
+            level: iced::window::Level::AlwaysOnTop,
             ..Default::default()
         });
         // Stash the mapping right away — view(id) for the new window

@@ -681,7 +681,7 @@ fn build_footer<'a>(dirty: bool) -> Option<Element<'a, PrefMsg>> {
         text("● Unsaved changes").size(11).style(text_warning),
         Space::new().width(Length::Fill),
         discard_btn(),
-        Space::new().width(8),
+        Space::new().width(12),
         save_btn(),
     ]
     .align_y(iced::Alignment::Center)
@@ -691,7 +691,22 @@ fn build_footer<'a>(dirty: bool) -> Option<Element<'a, PrefMsg>> {
         container(footer_row)
             .width(Length::Fill)
             .height(FOOTER_H)
-            .padding([0, 16])
+            // Centre the row in the strip. `container` aligns its content
+            // to the top by default, and the row's own `align_y(Center)`
+            // only centres its children against each other inside the
+            // row's own height — neither moves the row down inside a
+            // fixed-height parent, so without this the buttons sit flush
+            // against the divider above them.
+            //
+            // `align_y` and NOT `center_y`: the latter is
+            // `self.height(height).align_y(Center)`, so it would replace
+            // the fixed `FOOTER_H` above and let the strip swallow every
+            // spare pixel of the dialog.
+            .align_y(iced::alignment::Vertical::Center)
+            // 20 rather than 16 on the sides: at 16 the Save button sat
+            // almost against the card's right border, and the strip reads
+            // as cramped even though the footer's own height is fixed.
+            .padding([0, 20])
             .style(move |theme: &Theme| {
                 let palette = theme.extended_palette();
                 container::Style {
@@ -821,7 +836,7 @@ fn build_prefs_file_banner<'a>(
 
 fn save_btn<'a>() -> Element<'a, PrefMsg> {
     button(text("Save").size(12))
-        .padding([6, 20])
+        .padding([8, 20])
         .on_press(PrefMsg::Save)
         .style(success_button_style)
         .into()
@@ -829,7 +844,7 @@ fn save_btn<'a>() -> Element<'a, PrefMsg> {
 
 fn discard_btn<'a>() -> Element<'a, PrefMsg> {
     button(text("Discard & Close").size(12))
-        .padding([6, 16])
+        .padding([8, 16])
         .on_press(PrefMsg::DiscardAndClose)
         .style(danger_button_style)
         .into()
