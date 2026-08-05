@@ -13,6 +13,11 @@
 //! An unparseable buffer is now a refusal: the stored value is left
 //! alone and the caller reports it and keeps the buffer in the cell so
 //! the user can correct it.
+//!
+//! #612 extended that to the boolean arm, which the register had not
+//! recorded and which was retyping the same way — a buffer that is
+//! neither `true` nor `false` used to become `Text` and take the
+//! boolean type with it.
 
 use signex_library::ParamValue;
 
@@ -47,18 +52,26 @@ pub(super) fn param_value_for_commit(
             .parse::<f64>()
             .map(ParamValue::Number)
             .map_err(|_| refusal("a number", existing)),
-        // Unchanged by #599, which recorded the two numeric arms only:
-        // a buffer that is neither "true" nor "false" still becomes
-        // text. Refusing here instead would need a call on what a
-        // boolean cell accepts ("1", "0", "yes", "no"), which the
-        // register does not make.
+        // #612. The #599 register recorded the two numeric arms only, so
+        // this one kept retyping to text — the same defect one arm up,
+        // with the same consequence for anything keying on the boolean
+        // type.
+        //
+        // The accepted set is deliberately unchanged: `true` / `false`,
+        // case-insensitive, and nothing else. Widening it to `1`, `0`,
+        // `yes`, `no` is a product decision about what a boolean cell
+        // takes, and making it here would smuggle a behaviour change in
+        // behind a bug fix. Refusing the rest breaks no input that
+        // worked before — it only closes the path that destroyed the
+        // type. The numeric arms above draw the line in the same place:
+        // exactly what `parse::<f64>()` accepts.
         Some(ParamValue::Bool(_)) => {
             if buf.eq_ignore_ascii_case("true") {
                 Ok(ParamValue::Bool(true))
             } else if buf.eq_ignore_ascii_case("false") {
                 Ok(ParamValue::Bool(false))
             } else {
-                Ok(ParamValue::Text(buf.to_string()))
+                Err(refusal("true or false", existing))
             }
         }
         // An untyped cell (text today, or a key the row does not carry
@@ -153,5 +166,58 @@ mod tests {
         // Assert
         assert_eq!(fresh.ok(), Some(ParamValue::Text("4k7".to_string())));
         assert_eq!(text.ok(), Some(ParamValue::Text("4k7".to_string())));
+    }
+
+    /// #612 — the defect itself. An unreadable buffer used to become
+    /// `Text`, taking the boolean type with it and committing that to
+    /// the library, so anything keying on the type lost the row.
+    #[test]
+    fn a_bool_cell_refuses_a_buffer_it_cannot_read_rather_than_retyping() {
+        // Arrange
+        let existing = ParamValue::Bool(true);
+
+        // Act
+        let committed = param_value_for_commit(Some(&existing), "maybe");
+
+        // Assert
+        let refusal = committed.expect_err("an unreadable boolean buffer must be refused");
+        assert_eq!(refusal.expected, "true or false");
+        assert_eq!(refusal.kept, ParamValue::Bool(true).display());
+    }
+
+    /// The accepted set is exactly what it was before #612 — the fix
+    /// closes the retyping path without narrowing or widening what a
+    /// boolean cell takes.
+    #[test]
+    fn a_bool_cell_still_takes_true_and_false_in_any_case() {
+        // Arrange
+        let existing = ParamValue::Bool(false);
+
+        // Act / Assert
+        for (buf, expected) in [
+            ("true", true),
+            ("TRUE", true),
+            ("True", true),
+            ("false", false),
+            ("FALSE", false),
+            ("False", false),
+        ] {
+            assert_eq!(
+                param_value_for_commit(Some(&existing), buf).ok(),
+                Some(ParamValue::Bool(expected)),
+                "{buf} must still commit as a boolean"
+            );
+        }
+    }
+
+    /// A cell that is not typed boolean is unaffected: `"maybe"` is a
+    /// perfectly good text value and must still commit.
+    #[test]
+    fn refusing_a_boolean_buffer_does_not_touch_untyped_cells() {
+        // Arrange / Act
+        let committed = param_value_for_commit(None, "maybe");
+
+        // Assert
+        assert_eq!(committed.ok(), Some(ParamValue::Text("maybe".to_string())));
     }
 }
