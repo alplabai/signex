@@ -691,6 +691,18 @@ fn build_footer<'a>(dirty: bool) -> Option<Element<'a, PrefMsg>> {
         container(footer_row)
             .width(Length::Fill)
             .height(FOOTER_H)
+            // Centre the row in the strip. `container` aligns its content
+            // to the top by default, and the row's own `align_y(Center)`
+            // only centres its children against each other inside the
+            // row's own height — neither moves the row down inside a
+            // fixed-height parent, so without this the buttons sit flush
+            // against the divider above them.
+            //
+            // `align_y` and NOT `center_y`: the latter is
+            // `self.height(height).align_y(Center)`, so it would replace
+            // the fixed `FOOTER_H` above and let the strip swallow every
+            // spare pixel of the dialog.
+            .align_y(iced::alignment::Vertical::Center)
             // 20 rather than 16 on the sides: at 16 the Save button sat
             // almost against the card's right border, and the strip reads
             // as cramped even though the footer's own height is fixed.
