@@ -40,6 +40,13 @@ impl Signex {
         // `ui_state.pcb_gpu_render` saved mirror and its Preferences draft.
         let pcb_gpu_render = crate::fonts::read_pcb_gpu_render_pref();
         pcb_canvas.gpu_render = pcb_gpu_render;
+        // #629 — same shape for the three Symbol Editor settings: one read
+        // each, feeding both the committed field and its Preferences draft.
+        // Reading twice would be harmless today but invites the two to be
+        // seeded from different parses of a file edited mid-launch.
+        let symbol_grid_size_mm = crate::fonts::read_symbol_grid_size_mm_pref();
+        let symbol_grid_style = crate::fonts::read_symbol_grid_style_pref();
+        let symbol_pin_selection = crate::fonts::read_symbol_pin_selection_pref();
         // Default to the 50-mil Altium grid; user-set value overrides
         // through the prefs file (UX §1.5 — last-used grid persists).
         let grid_size_mm =
@@ -175,11 +182,12 @@ impl Signex {
                 preferences_draft_grid_style: crate::fonts::read_grid_style_pref(),
                 pcb_gpu_render,
                 preferences_draft_pcb_gpu_render: pcb_gpu_render,
-                preferences_draft_symbol_grid_size_mm: crate::fonts::read_symbol_grid_size_mm_pref(
-                ),
-                preferences_draft_symbol_grid_style: crate::fonts::read_symbol_grid_style_pref(),
-                preferences_draft_symbol_pin_selection:
-                    crate::fonts::read_symbol_pin_selection_pref(),
+                symbol_grid_size_mm,
+                preferences_draft_symbol_grid_size_mm: symbol_grid_size_mm,
+                symbol_grid_style,
+                preferences_draft_symbol_grid_style: symbol_grid_style,
+                symbol_pin_selection,
+                preferences_draft_symbol_pin_selection: symbol_pin_selection,
                 preferences_theme_status: String::new(),
                 preferences_keymap_editor: keymap_editor,
                 preferences_keymap_status: String::new(),
@@ -410,9 +418,7 @@ impl Signex {
         crate::render_config::set_label_style(app.ui_state.label_style);
         crate::render_config::set_multisheet_style(app.ui_state.multisheet_style);
         crate::render_config::set_grid_style(app.ui_state.grid_style);
-        crate::render_config::set_symbol_grid_style(
-            app.ui_state.preferences_draft_symbol_grid_style,
-        );
+        crate::render_config::set_symbol_grid_style(app.ui_state.symbol_grid_style);
 
         // Multi-window (Phase 1): open the main OS window here. Phase 2
         // will open additional windows on demand when the user drags a

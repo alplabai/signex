@@ -59,6 +59,12 @@ impl Signex {
         self.ui_state.preferences_draft_component_classes = self.ui_state.component_classes.clone();
         self.ui_state.preferences_draft_grid_style = self.ui_state.grid_style;
         self.ui_state.preferences_draft_pcb_gpu_render = self.ui_state.pcb_gpu_render;
+        // #629 — the three Symbol Editor settings. Before they had
+        // committed fields there was nothing to seed them from, so a
+        // Discard left them showing (and rendering) the abandoned value.
+        self.ui_state.preferences_draft_symbol_grid_size_mm = self.ui_state.symbol_grid_size_mm;
+        self.ui_state.preferences_draft_symbol_grid_style = self.ui_state.symbol_grid_style;
+        self.ui_state.preferences_draft_symbol_pin_selection = self.ui_state.symbol_pin_selection;
         // Fresh working copy of the live profile set for the Keyboard
         // Shortcuts pane; drop any stale recorder / status with it.
         self.ui_state.preferences_keymap_editor =
@@ -159,6 +165,12 @@ impl Signex {
         crate::render_config::set_label_style(self.ui_state.label_style);
         crate::render_config::set_multisheet_style(self.ui_state.multisheet_style);
         crate::render_config::set_grid_style(self.ui_state.grid_style);
+        // #629 — the symbol grid style is the only one of the three
+        // Symbol Editor settings with a live preview, so it is the only
+        // one with a global to push back. Grid size and pin selection
+        // reach the editor through `LibraryDisplaySettings` when a library
+        // is opened, so restoring their draft fields above is enough.
+        crate::render_config::set_symbol_grid_style(self.ui_state.symbol_grid_style);
         // `update_canvas_theme` re-derives the canvas colours from the saved
         // theme and clears BOTH content caches (schematic + PCB) — don't
         // clear them again here. Only the bg caches (grid style / dot layer)
@@ -210,6 +222,14 @@ impl Signex {
                 self.ui_state.multisheet_style = self.ui_state.preferences_draft_multisheet_style;
                 self.ui_state.grid_style = self.ui_state.preferences_draft_grid_style;
                 self.ui_state.pcb_gpu_render = self.ui_state.preferences_draft_pcb_gpu_render;
+                // #629 — the three Symbol Editor settings commit here like
+                // every other appearance draft, instead of writing
+                // themselves to disk the moment the picker moved.
+                self.ui_state.symbol_grid_size_mm =
+                    self.ui_state.preferences_draft_symbol_grid_size_mm;
+                self.ui_state.symbol_grid_style = self.ui_state.preferences_draft_symbol_grid_style;
+                self.ui_state.symbol_pin_selection =
+                    self.ui_state.preferences_draft_symbol_pin_selection;
                 // The live-preview already pushed the draft into the widget;
                 // re-assert it so the saved and effective flags can't diverge.
                 self.interaction_state.pcb_canvas.gpu_render = self.ui_state.pcb_gpu_render;
@@ -236,6 +256,15 @@ impl Signex {
                 crate::fonts::write_grid_style_pref(self.ui_state.grid_style);
                 crate::fonts::write_pcb_gpu_render_pref(self.ui_state.pcb_gpu_render);
                 crate::fonts::write_theme_pref(self.ui_state.theme_id);
+                // #629 — moved here from the three `PrefMsg::DraftSymbol*`
+                // arms, which wrote on every picker move. Re-asserting the
+                // render global from the committed value keeps the saved
+                // and effective styles from diverging, the same way the
+                // PCB GPU flag is re-asserted above.
+                crate::render_config::set_symbol_grid_style(self.ui_state.symbol_grid_style);
+                crate::fonts::write_symbol_grid_size_mm_pref(self.ui_state.symbol_grid_size_mm);
+                crate::fonts::write_symbol_grid_style_pref(self.ui_state.symbol_grid_style);
+                crate::fonts::write_symbol_pin_selection_pref(self.ui_state.symbol_pin_selection);
                 // Component classes — keep entries with non-empty keys
                 // and labels, dedupe by key (last write wins) so the
                 // dropdown never shows blanks or duplicates.
@@ -420,18 +449,24 @@ impl Signex {
                 self.interaction_state.pcb_canvas.clear_bg_cache();
                 self.recompute_preferences_dirty();
             }
+            // #629 — these three used to call `write_*_pref` right here,
+            // making the change permanent before the user reached the
+            // footer. They now behave like every other draft in this pane:
+            // update the draft, preview it, and let Save persist it.
             PrefMsg::DraftSymbolGridSize(size) => {
                 self.ui_state.preferences_draft_symbol_grid_size_mm = size;
-                crate::fonts::write_symbol_grid_size_mm_pref(size);
+                self.recompute_preferences_dirty();
             }
             PrefMsg::DraftSymbolGridStyle(style) => {
                 self.ui_state.preferences_draft_symbol_grid_style = style;
+                // Live preview only — `revert_preferences_drafts` pushes
+                // the committed style back if the user discards.
                 crate::render_config::set_symbol_grid_style(style);
-                crate::fonts::write_symbol_grid_style_pref(style);
+                self.recompute_preferences_dirty();
             }
             PrefMsg::DraftSymbolPinSelection(mode) => {
                 self.ui_state.preferences_draft_symbol_pin_selection = mode;
-                crate::fonts::write_symbol_pin_selection_pref(mode);
+                self.recompute_preferences_dirty();
             }
             PrefMsg::ImportTheme => {
                 return Task::future(async {
