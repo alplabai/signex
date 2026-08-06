@@ -100,6 +100,11 @@ pub struct SymbolCanvas<'a> {
     /// `panel_ctx.grid_visible` (View ▸ Toggle Grid / status-bar
     /// click).
     pub grid_visible: bool,
+    /// Glyph the visible grid draws. Sourced from
+    /// `panel_ctx.symbol_grid_style`, which carries the Preferences
+    /// live-preview draft while that dialog is open — #630 replaced the
+    /// process global this `draw` path used to read directly.
+    pub grid_style: crate::render_config::GridStyle,
     /// When on, pins can be grabbed by their name/number label and a
     /// selected pin's labels glow with it. Sourced from
     /// `LibraryDisplaySettings.pin_selection` via
@@ -123,7 +128,7 @@ impl<'a> SymbolCanvas<'a> {
     /// settings. See module-level docs for the parity rationale.
     #[expect(
         clippy::too_many_arguments,
-        reason = "15 arguments: the per-frame canvas takes the symbol, theme and global grid/unit settings; see the module docs for the parity rationale"
+        reason = "16 arguments: the per-frame canvas takes the symbol, theme and global grid/unit settings; see the module docs for the parity rationale"
     )]
     pub fn new(
         symbol: &'a Symbol,
@@ -135,6 +140,7 @@ impl<'a> SymbolCanvas<'a> {
         camera: &'a crate::canvas::Camera,
         grid_size_mm: f64,
         grid_visible: bool,
+        grid_style: crate::render_config::GridStyle,
         pin_label_grab: bool,
         sheet_color: Color,
         accent_color: Color,
@@ -159,6 +165,7 @@ impl<'a> SymbolCanvas<'a> {
             camera,
             grid_size_mm,
             grid_visible,
+            grid_style,
             pin_label_grab,
             bg_color: sheet_color,
             grid_color: palette.grid,

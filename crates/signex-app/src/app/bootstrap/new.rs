@@ -279,6 +279,9 @@ impl Signex {
                     snap_enabled: true,
                     grid_size_mm: 1.27,
                     visible_grid_mm: 1.27,
+                    // Overwritten from `ui_state.symbol_grid_style` once
+                    // the app value is assembled, below.
+                    symbol_grid_style: crate::render_config::GridStyle::Dots,
                     snap_hotspots: true,
                     ui_font_name: crate::fonts::read_ui_font_pref(),
                     component_classes: crate::fonts::read_component_classes_pref(),
@@ -408,17 +411,14 @@ impl Signex {
         // section is populated from the get-go.
         app.library.global_libraries =
             crate::panels::components_panel::global_prefs::load_and_mount_all(&mut app.library);
-        crate::render_config::set_canvas_font_name(&app.ui_state.canvas_font_name);
-        crate::render_config::set_canvas_font_size(app.ui_state.canvas_font_size);
-        crate::render_config::set_canvas_font_style(
-            app.ui_state.canvas_font_bold,
-            app.ui_state.canvas_font_italic,
-        );
-        crate::render_config::set_power_port_style(app.ui_state.power_port_style);
-        crate::render_config::set_label_style(app.ui_state.label_style);
-        crate::render_config::set_multisheet_style(app.ui_state.multisheet_style);
-        crate::render_config::set_grid_style(app.ui_state.grid_style);
-        crate::render_config::set_symbol_grid_style(app.ui_state.symbol_grid_style);
+        // #630 — seed the two render surfaces that consume a grid style
+        // from the saved preferences. Everything else the old
+        // `render_config` global carried (canvas font/size/style, power
+        // port / label / multisheet style) had no reader in any draw
+        // path, so there is nothing left to seed.
+        app.interaction_state
+            .set_grid_style(app.ui_state.grid_style);
+        app.document_state.panel_ctx.symbol_grid_style = app.ui_state.symbol_grid_style;
 
         // Multi-window (Phase 1): open the main OS window here. Phase 2
         // will open additional windows on demand when the user drags a

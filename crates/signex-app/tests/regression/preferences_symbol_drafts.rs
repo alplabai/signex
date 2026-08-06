@@ -118,10 +118,9 @@ fn discarding_puts_all_three_symbol_drafts_back() {
         "nothing is pending once the drafts are back"
     );
     assert_eq!(
-        signex_app::render_config::symbol_grid_style(),
-        committed_style,
-        "Cancel must also put the live-preview global back, or the editor \
-         keeps rendering the discarded style"
+        app.document_state.panel_ctx.symbol_grid_style, committed_style,
+        "Cancel must also put the live-preview render input back, or the \
+         editor keeps rendering the discarded style"
     );
 }
 

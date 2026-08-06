@@ -88,3 +88,6 @@ mod history_load_failure;
 
 #[path = "regression/library_browser_cell_commit.rs"]
 mod library_browser_cell_commit;
+
+#[path = "regression/render_config_grid_style.rs"]
+mod render_config_grid_style;

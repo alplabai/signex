@@ -448,6 +448,12 @@ impl Signex {
             snap_enabled: self.ui_state.snap_enabled,
             grid_size_mm: self.ui_state.grid_size_mm,
             visible_grid_mm: self.ui_state.visible_grid_mm,
+            // Preserve the effective (possibly live-preview) style — a
+            // panel_ctx rebuild mid-Preferences must not snap the Symbol
+            // Editor grid back to the committed value. Seeded from
+            // `ui_state.symbol_grid_style` at boot; every later write
+            // goes through the Preferences handler.
+            symbol_grid_style: self.document_state.panel_ctx.symbol_grid_style,
             snap_hotspots: self.ui_state.snap_hotspots,
             ui_font_name: self.ui_state.ui_font_name.clone(),
             component_classes: self.ui_state.component_classes.clone(),

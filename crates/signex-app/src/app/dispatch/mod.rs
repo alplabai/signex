@@ -460,6 +460,7 @@ impl Signex {
                 per_window.snap_enabled = self.interaction_state.canvas.snap_enabled;
                 per_window.snap_grid_mm = self.interaction_state.canvas.snap_grid_mm;
                 per_window.visible_grid_mm = self.interaction_state.canvas.visible_grid_mm;
+                per_window.grid_style = self.interaction_state.canvas.grid_style;
                 per_window.grid_visible = self.interaction_state.canvas.grid_visible;
                 per_window.paper_width_mm = self.interaction_state.canvas.paper_width_mm;
                 per_window.paper_height_mm = self.interaction_state.canvas.paper_height_mm;

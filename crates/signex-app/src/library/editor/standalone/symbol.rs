@@ -252,6 +252,7 @@ fn view_symbol_canvas<'a>(
         &editor.camera,
         display.grid_size_mm as f64,
         display.grid_visible,
+        panel_ctx.symbol_grid_style,
         display.pin_selection.allows_label_grab(),
         display.sheet_color.to_color(),
         crate::styles::ti(tokens.accent),

@@ -50,6 +50,7 @@ impl SchematicCanvas {
                     self.theme_grid,
                     self.paper_width_mm,
                     self.paper_height_mm,
+                    self.grid_style,
                 );
             }
         })
