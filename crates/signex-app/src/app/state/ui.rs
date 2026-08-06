@@ -113,10 +113,26 @@ pub struct UiState {
     pub preferences_draft_pcb_gpu_render: bool,
     /// Default symbol-editor grid size (mm) — used when a library is
     /// first opened. Changed from Preferences ▸ Appearance ▸ Symbol Editor.
+    ///
+    /// #629 — these three had no committed field at all until this one and
+    /// its two siblings were added: the `preferences_draft_*` mirror WAS
+    /// the saved value, seeded from disk at boot and written back on every
+    /// picker move. That left `revert_preferences_drafts` nothing to
+    /// restore from, so Cancel silently kept the change while the four
+    /// settings above it reverted.
+    pub symbol_grid_size_mm: f32,
+    /// Draft mirror of [`Self::symbol_grid_size_mm`].
     pub preferences_draft_symbol_grid_size_mm: f32,
     /// Symbol-editor grid display style (Dots / Crosses / Lines).
+    pub symbol_grid_style: crate::render_config::GridStyle,
+    /// Draft mirror of [`Self::symbol_grid_style`]. The only one of the
+    /// three with a live preview: the draft is pushed into
+    /// `render_config::set_symbol_grid_style` on change, so Cancel has to
+    /// push the committed value back as well as restoring this field.
     pub preferences_draft_symbol_grid_style: crate::render_config::GridStyle,
     /// Symbol-editor pin-selection mode (pin body only / body + labels).
+    pub symbol_pin_selection: crate::render_config::PinSelectionMode,
+    /// Draft mirror of [`Self::symbol_pin_selection`].
     pub preferences_draft_symbol_pin_selection: crate::render_config::PinSelectionMode,
     /// Keyboard Shortcuts pane — editable working copy of the shortcut
     /// profile set. Seeded from [`keymap_profiles`] each time the
@@ -373,9 +389,14 @@ impl UiState {
     /// Single source of truth so every live-preview `PrefMsg::Draft*` handler
     /// stays consistent as new drafts are added (the old per-handler inline
     /// chains had drifted to different term sets). Covers ALL draft state —
-    /// the 7 appearance drafts, the component-class table and the keymap
+    /// the 10 appearance drafts, the component-class table and the keymap
     /// working copy — so an appearance recompute can't report "clean" while
     /// a pending rebind or class edit would be lost on close.
+    ///
+    /// The three Symbol Editor terms joined in #629. Until then the claim
+    /// above was false: they wrote themselves to `prefs.json` on change and
+    /// were deliberately left out, so the predicate was consistent with
+    /// their behaviour but not with the footer the user was looking at.
     pub fn preferences_draft_differs(&self) -> bool {
         self.preferences_draft_theme != self.theme_id
             || self.preferences_draft_font != self.ui_font_name
@@ -384,6 +405,13 @@ impl UiState {
             || self.preferences_draft_multisheet_style != self.multisheet_style
             || self.preferences_draft_grid_style != self.grid_style
             || self.preferences_draft_pcb_gpu_render != self.pcb_gpu_render
+            || self.preferences_draft_symbol_grid_style != self.symbol_grid_style
+            // Exact `!=` on the f32 is deliberate: the picker assigns from
+            // `canvas::grid::GRID_SIZES_MM`, so draft and committed are the
+            // same constant unless the user actually moved it. A tolerance
+            // here would let a real change read as clean.
+            || self.preferences_draft_symbol_grid_size_mm != self.symbol_grid_size_mm
+            || self.preferences_draft_symbol_pin_selection != self.symbol_pin_selection
             || self.preferences_draft_component_classes != self.component_classes
             || self
                 .preferences_keymap_editor
