@@ -10,15 +10,15 @@ use crate::keymap::AppCommandId;
 
 use super::super::*;
 
-/// Map a stable command id onto the app's namespaced [`Message`] tree.
+/// Resolve a command for DISPATCH, reporting when it cannot be resolved.
 ///
+/// Maps a stable command id onto the app's namespaced [`Message`] tree.
 /// Commands without a live dispatch arm return `None`, and
 /// [`log_unmapped`] says so — naming the id and which of the two
 /// failure modes it hit — so an invocation can no longer vanish without
 /// a trace. 64 catalog ids are in that state, every one of them bound to
 /// a trigger in a shipped profile; the set is pinned by
 /// `tests::UNMAPPED_CATALOG_IDS` and may only shrink.
-/// Resolve a command for DISPATCH, reporting when it cannot be resolved.
 ///
 /// Use [`is_dispatchable`] instead when you are merely *asking* whether a
 /// command resolves. #619: the palette filtered its rows through this
@@ -463,6 +463,36 @@ mod tests {
         );
     }
 
+    /// The diagnostics ring is one process-wide `Mutex<VecDeque<_>>`
+    /// (`diagnostics.rs`), and cargo runs the `signex-app --lib` tests in
+    /// parallel threads. The two reporting tests below both read it around
+    /// an action, so they have to take turns — otherwise one sees the
+    /// other's record land between its `before` and its assert.
+    ///
+    /// Poison is recovered rather than propagated: a panic in one of these
+    /// two is a real failure to report, not a reason to fail the other one
+    /// for an unrelated reason.
+    fn serial() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// Records currently in the ring that name this command id.
+    ///
+    /// Counting *total* entries instead would make these tests depend on
+    /// whatever else the binary happened to log in a neighbouring thread —
+    /// which is exactly how the first version of
+    /// `asking_whether_a_command_resolves_reports_nothing` failed in CI
+    /// (`left: 2, right: 1`). The claim under test is about records naming
+    /// this id, so count those.
+    fn records_naming(id: &str) -> usize {
+        let needle = format!("command '{id}'");
+        crate::diagnostics::recent_entries()
+            .iter()
+            .filter(|entry| entry.message.contains(&needle))
+            .count()
+    }
+
     /// #619 — a query must not narrate. The palette filters its rows by
     /// asking whether each catalog id resolves; routing that through the
     /// dispatch entry point put one warning per unmapped id into the
@@ -473,12 +503,13 @@ mod tests {
     fn asking_whether_a_command_resolves_reports_nothing() {
         // Arrange — an id the catalog carries with no dispatch arm, i.e.
         // exactly what the palette filters out.
+        let _guard = serial();
         let _ = crate::diagnostics::init_logging();
-        let id = UNMAPPED_CATALOG_IDS
+        let id: &str = UNMAPPED_CATALOG_IDS
             .first()
             .expect("the pinned list is non-empty while any id is unmapped");
-        let command = AppCommandId::new(*id).expect("a pinned id is a valid command id");
-        let before = crate::diagnostics::recent_entries().len();
+        let command = AppCommandId::new(id).expect("a pinned id is a valid command id");
+        let before = records_naming(id);
 
         // Act — the query, run as often as a few palette rebuilds would.
         for _ in 0..25 {
@@ -490,7 +521,7 @@ mod tests {
 
         // Assert
         assert_eq!(
-            crate::diagnostics::recent_entries().len(),
+            records_naming(id),
             before,
             "asking whether `{id}` resolves must leave the Messages panel untouched"
         );
@@ -501,19 +532,22 @@ mod tests {
     #[test]
     fn dispatching_an_unmapped_command_still_reports_it() {
         // Arrange
+        let _guard = serial();
         let _ = crate::diagnostics::init_logging();
-        let id = UNMAPPED_CATALOG_IDS
+        let id: &str = UNMAPPED_CATALOG_IDS
             .first()
             .expect("the pinned list is non-empty while any id is unmapped");
-        let command = AppCommandId::new(*id).expect("a pinned id is a valid command id");
-        let before = crate::diagnostics::recent_entries().len();
+        let command = AppCommandId::new(id).expect("a pinned id is a valid command id");
+        let before = records_naming(id);
 
         // Act
         assert!(core_to_message(&command).is_none());
 
-        // Assert
-        assert!(
-            crate::diagnostics::recent_entries().len() > before,
+        // Assert — exactly one new record, so a future change that reports
+        // the same failure twice is caught too.
+        assert_eq!(
+            records_naming(id),
+            before + 1,
             "dispatching `{id}` must still say it did nothing"
         );
     }
