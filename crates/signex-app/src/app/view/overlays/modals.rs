@@ -76,11 +76,15 @@ impl Signex {
         if !ui.keyboard_shortcuts_open {
             return None;
         }
-        Some(crate::keyboard_shortcuts_modal::view(
+        // #618 experiment — `opaque` captures mouse presses inside the
+        // layer so they cannot pass through to the layers below it in the
+        // `Stack`. Testing whether event leakage is what makes this modal
+        // inert.
+        Some(iced::widget::opaque(crate::keyboard_shortcuts_modal::view(
             &self.document_state.panel_ctx.tokens,
             ui.theme_id,
             &ui.keymap_profiles,
-        ))
+        )))
     }
 
     /// Tools > Passive Network Calculator modal.
