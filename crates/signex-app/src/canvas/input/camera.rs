@@ -4,17 +4,14 @@ impl SchematicCanvas {
     /// Consume a pending fit-to-content target and apply it to the camera.
     pub(in crate::canvas) fn update_pending_fit(
         &self,
-        state: &mut CanvasState,
         bounds: Rectangle,
     ) -> Option<canvas::Action<Message>> {
-        // Transfer pending fit from SchematicCanvas to CanvasState (consumes it)
+        // #632 — one hop, not two. This used to move the target from
+        // `self.pending_fit` into `state.pending_fit` and apply it from
+        // there on the same call; with the camera owned here, the
+        // `Program::State` copy had no reader left and was removed.
         if let Some(target) = self.pending_fit.take() {
-            state.pending_fit = Some(target);
-        }
-
-        // Apply pending fit-to-content
-        if let Some(target) = state.pending_fit.take() {
-            state.camera.fit_rect(target, bounds);
+            self.camera_mut().fit_rect(target, bounds);
             return Some(canvas::Action::publish(Message::CanvasEvent(
                 CanvasEvent::CursorMoved,
             )));
@@ -25,7 +22,6 @@ impl SchematicCanvas {
     /// Mouse-wheel zoom about the cursor.
     pub(in crate::canvas) fn update_wheel_scrolled(
         &self,
-        state: &mut CanvasState,
         delta: &mouse::ScrollDelta,
         bounds: Rectangle,
         cursor: mouse::Cursor,
@@ -36,7 +32,7 @@ impl SchematicCanvas {
         };
 
         if let Some(cursor_pos) = cursor.position_in(bounds) {
-            let changed = state.camera.zoom_at(cursor_pos, scroll_y, bounds);
+            let changed = self.camera_mut().zoom_at(cursor_pos, scroll_y, bounds);
             if !changed {
                 return None;
             }

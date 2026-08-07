@@ -27,7 +27,6 @@ use crate::toolbar::ToolMessage;
 
 #[derive(Debug, Default)]
 pub struct CanvasState {
-    pub camera: Camera,
     pub _grid: GridState,
     /// Is the user currently panning (right-click or middle-click drag)?
     panning: bool,
@@ -35,8 +34,6 @@ pub struct CanvasState {
     pan_moved: bool,
     /// Last cursor position during a pan (in screen pixels).
     last_pan_pos: Option<iced::Point>,
-    /// Pending fit target — consumed on next update.
-    pub pending_fit: Option<Rectangle>,
     /// Whether Ctrl is currently held (for multi-select toggle).
     pub ctrl_held: bool,
     /// Whether Shift is currently held (for multi-select add).
@@ -71,10 +68,20 @@ pub struct SchematicCanvas {
     pub overlay_cache: canvas::Cache,
     /// Camera state when content_cache was last built — used to compute offset delta.
     pub content_cache_camera: std::cell::Cell<(f32, f32, f32)>, // (offset_x, offset_y, scale)
-    /// Camera state as of the most recent draw, updated every frame including
-    /// mid-pan. Overlays positioned relative to world coordinates (inline text
-    /// editor, measurements) read this so they track pan/zoom in real time.
-    pub live_camera: std::cell::Cell<(f32, f32, f32)>,
+    /// The **sole** home of the schematic pan/zoom camera (ADR-0001 §A1: no
+    /// shadow copies of widget state). `RefCell` gives interior mutability so
+    /// `canvas::Program::update` — which only borrows `&self` — can mutate it,
+    /// while `draw` and `view()` read it through the same cell.
+    ///
+    /// #632 — this replaces a pair: `CanvasState::camera` (the `Program::State`
+    /// copy that `update` and `draw` worked on) plus a
+    /// `live_camera: Cell<(f32, f32, f32)>` republished from `draw` every
+    /// frame so `view` could place world-anchored overlays. `view(&self)`
+    /// cannot reach a `Program::State`, so the camera round-tripped through
+    /// that `Cell` and the two could disagree for a frame. One home, read by
+    /// the background, the content, the overlays and `view`, cannot drift.
+    /// Mirrors [`crate::pcb_canvas::PcbCanvas::camera`], which already had it.
+    camera: std::cell::RefCell<Camera>,
     pub grid_visible: bool,
     pub theme_bg: Color,
     pub theme_grid: Color,
@@ -211,7 +218,7 @@ impl SchematicCanvas {
             content_cache: canvas::Cache::default(),
             overlay_cache: canvas::Cache::default(),
             content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
-            live_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
+            camera: std::cell::RefCell::new(Camera::default()),
             grid_visible: true,
             theme_bg: {
                 let c = &default_colors.background;
@@ -282,6 +289,27 @@ impl SchematicCanvas {
         self.content_cache.clear();
     }
 
+    /// Current pan/zoom as `(offset_x_px, offset_y_px, scale_px_per_mm)`,
+    /// read in `view()` from the single [`Self::camera`] home to place
+    /// world-anchored overlays (the inline text editor, measurements).
+    /// Same shape as [`crate::pcb_canvas::PcbCanvas::live_camera`].
+    pub fn live_camera(&self) -> (f32, f32, f32) {
+        let camera = self.camera.borrow();
+        (camera.offset.x, camera.offset.y, camera.scale)
+    }
+
+    /// Read-only borrow of the camera for the `draw` path. Held for the
+    /// duration of one draw call; never overlapped with [`Self::camera_mut`],
+    /// since `draw` and `update` never run at the same time.
+    pub(in crate::canvas) fn camera(&self) -> std::cell::Ref<'_, Camera> {
+        self.camera.borrow()
+    }
+
+    /// Mutable borrow for the `update` path — pan, zoom and fit write here.
+    pub(in crate::canvas) fn camera_mut(&self) -> std::cell::RefMut<'_, Camera> {
+        self.camera.borrow_mut()
+    }
+
     pub fn set_render_cache(
         &mut self,
         render_cache: Option<crate::schematic_runtime::SchematicRenderCache>,
@@ -320,14 +348,14 @@ impl canvas::Program<Message> for SchematicCanvas {
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
         // Consume any pending fit-to-content before dispatching the event.
-        if let Some(action) = self.update_pending_fit(state, bounds) {
+        if let Some(action) = self.update_pending_fit(bounds) {
             return Some(action);
         }
 
         // Dispatch each input event to its handler, in the original order.
         match event {
             Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
-                self.update_wheel_scrolled(state, delta, bounds, cursor)
+                self.update_wheel_scrolled(delta, bounds, cursor)
             }
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 self.update_left_pressed(state, bounds, cursor)
@@ -372,7 +400,7 @@ impl canvas::Program<Message> for SchematicCanvas {
         let mut layers = Vec::with_capacity(4);
 
         // Layer 1: background (grid + paper)
-        layers.push(self.draw_background(state, renderer, bounds));
+        layers.push(self.draw_background(renderer, bounds));
 
         // Shared drag/selection snapshot prep — the shifted snapshot is owned
         // here so the content, auto-focus dim, and selection layers can all
@@ -407,13 +435,13 @@ impl canvas::Program<Message> for SchematicCanvas {
         layers.push(self.draw_content(state, renderer, bounds, effective_snapshot, drag_offset));
 
         // Layer 2.5: AutoFocus dim
-        if let Some(dim) = self.draw_autofocus_dim(state, renderer, bounds, effective_snapshot) {
+        if let Some(dim) = self.draw_autofocus_dim(renderer, bounds, effective_snapshot) {
             layers.push(dim);
         }
 
         // Layer 3: selection overlay
         if let Some(selection) =
-            self.draw_selection(state, renderer, bounds, effective_snapshot, drag_offset)
+            self.draw_selection(renderer, bounds, effective_snapshot, drag_offset)
         {
             layers.push(selection);
         }
@@ -700,4 +728,98 @@ pub enum CanvasEvent {
         dx: f64,
         dy: f64,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// #632 regression. The camera used to live in `CanvasState` (the
+    /// `Program::State`) and be republished into a
+    /// `live_camera: Cell<(f32, f32, f32)>` from `draw`, because `view(&self)`
+    /// cannot reach a `Program::State`. Two homes, one of them refreshed only
+    /// when a frame was drawn. Mutating the camera the way `Program::update`
+    /// does must now be visible through `live_camera()` immediately — there is
+    /// no second copy that could lag. Mirrors the same guard on `PcbCanvas`.
+    #[test]
+    fn live_camera_reflects_the_single_source_after_a_mutation() {
+        // Arrange
+        let canvas = SchematicCanvas::new();
+        let (x0, y0, s0) = canvas.live_camera();
+
+        // Act — what `update_cursor_moved` does on a pan drag.
+        canvas.camera_mut().pan(12.0, -7.0);
+
+        // Assert
+        let (x1, y1, s1) = canvas.live_camera();
+        assert_eq!(x1, x0 + 12.0);
+        assert_eq!(y1, y0 - 7.0);
+        assert_eq!(s1, s0, "pan must not change scale");
+    }
+
+    /// #632 — a fit request used to travel `SchematicCanvas::pending_fit` →
+    /// `CanvasState::pending_fit` → camera, two `take()`s deep, because the
+    /// camera lived in the state the first hop was reaching. With one camera
+    /// home the middle hop has no reader, so the request must be consumed and
+    /// applied in a single `update_pending_fit` call.
+    #[test]
+    fn a_pending_fit_reaches_the_camera_in_one_hop() {
+        // Arrange
+        let canvas = SchematicCanvas::new();
+        let before = canvas.live_camera();
+        canvas.pending_fit.set(Some(Rectangle::new(
+            iced::Point::new(0.0, 0.0),
+            iced::Size::new(100.0, 50.0),
+        )));
+
+        // Act
+        let action = canvas.update_pending_fit(Rectangle::new(
+            iced::Point::new(0.0, 0.0),
+            iced::Size::new(800.0, 600.0),
+        ));
+
+        // Assert
+        assert!(
+            action.is_some(),
+            "consuming a fit must publish a redraw, or the new camera never reaches the screen"
+        );
+        assert!(
+            canvas.pending_fit.get().is_none(),
+            "the request must be consumed, not left to re-fire on the next event"
+        );
+        assert_ne!(
+            canvas.live_camera(),
+            before,
+            "the fit must land on the camera `view` and `draw` read"
+        );
+    }
+
+    /// A second consecutive call has nothing to consume. Before #632 the
+    /// second `take()` (from `CanvasState`) made this ambiguous; now the
+    /// absence of a pending request must simply be a no-op, so a fit does not
+    /// keep re-applying and fighting the user's pan on every later event.
+    #[test]
+    fn a_consumed_fit_does_not_re_apply() {
+        // Arrange
+        let canvas = SchematicCanvas::new();
+        let bounds = Rectangle::new(iced::Point::new(0.0, 0.0), iced::Size::new(800.0, 600.0));
+        canvas.pending_fit.set(Some(Rectangle::new(
+            iced::Point::new(0.0, 0.0),
+            iced::Size::new(100.0, 50.0),
+        )));
+        let _ = canvas.update_pending_fit(bounds);
+        let after_fit = canvas.live_camera();
+
+        // Act — the user pans, then another event arrives.
+        canvas.camera_mut().pan(5.0, 5.0);
+        let action = canvas.update_pending_fit(bounds);
+
+        // Assert
+        assert!(action.is_none(), "no pending request, no action");
+        assert_eq!(
+            canvas.live_camera(),
+            (after_fit.0 + 5.0, after_fit.1 + 5.0, after_fit.2),
+            "the pan must survive — a stale fit must not snap the camera back"
+        );
+    }
 }
