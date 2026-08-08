@@ -40,7 +40,7 @@ pub enum Message {
     Ui(UiMsg),
     CanvasEvent(CanvasEvent),
     /// Canvas event stamped with the window that produced it. The
-    /// dispatch layer swaps the window's `SchematicCanvas` into the
+    /// dispatch layer swaps the window's `CanvasSlot` into the
     /// main canvas slot for the duration of the handler so the
     /// hundreds of `active_canvas_mut()` call sites read and write the
     /// right canvas transparently. Keyboard-generated canvas events

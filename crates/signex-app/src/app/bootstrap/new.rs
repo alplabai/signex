@@ -3,7 +3,7 @@
 
 use super::super::*;
 
-use crate::canvas::SchematicCanvas;
+use crate::canvas::CanvasSlot;
 use crate::dock::{DockArea, PanelPosition};
 use crate::panels::PanelKind;
 
@@ -31,7 +31,7 @@ impl Signex {
         // Silence unused-mut when read_dock_layout returns Some.
         let _ = &mut dock;
 
-        let sch_canvas = SchematicCanvas::new();
+        let sch_canvas = CanvasSlot::new();
         let mut pcb_canvas = crate::pcb_canvas::PcbCanvas::new();
         // Read the persisted GPU-render preference ONCE — each read is a full
         // `prefs.json` parse and three consumers need the same value: the
@@ -170,7 +170,13 @@ impl Signex {
                 first_run_tour_open: !crate::fonts::read_first_run_tour_dismissed(),
                 find_replace: crate::find_replace::FindReplaceState::default(),
                 preferences_nav: crate::preferences::PrefNav::Appearance,
-                preferences_draft_theme: ThemeId::Signex,
+                // #631 — seeded from the saved theme, not hardcoded. This
+                // was harmless while nothing read the draft before the
+                // dialog first opened (`seed_preferences_drafts_from_live`
+                // fixed it there); the canvas now renders from it, so a
+                // user whose saved theme is not Signex would have opened
+                // to the wrong canvas colours.
+                preferences_draft_theme: crate::fonts::read_theme_pref(),
                 preferences_draft_font: String::new(),
                 power_port_style: crate::fonts::read_power_port_style_pref(),
                 preferences_draft_power_port_style: crate::fonts::read_power_port_style_pref(),
@@ -416,8 +422,6 @@ impl Signex {
         // `render_config` global carried (canvas font/size/style, power
         // port / label / multisheet style) had no reader in any draw
         // path, so there is nothing left to seed.
-        app.interaction_state
-            .set_grid_style(app.ui_state.grid_style);
         app.document_state.panel_ctx.symbol_grid_style = app.ui_state.symbol_grid_style;
 
         // Multi-window (Phase 1): open the main OS window here. Phase 2

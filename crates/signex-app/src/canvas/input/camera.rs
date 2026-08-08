@@ -1,6 +1,6 @@
 use super::super::*;
 
-impl SchematicCanvas {
+impl SchematicCanvas<'_> {
     /// Consume a pending fit-to-content target and apply it to the camera.
     pub(in crate::canvas) fn update_pending_fit(
         &self,

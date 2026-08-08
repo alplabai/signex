@@ -58,9 +58,6 @@ impl Signex {
             self.ui_state.wire_color_overrides = prev.clone();
             self.interaction_state
                 .active_canvas_mut()
-                .wire_color_overrides = prev;
-            self.interaction_state
-                .active_canvas_mut()
                 .clear_content_cache();
             return;
         }

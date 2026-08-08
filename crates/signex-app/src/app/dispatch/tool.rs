@@ -425,8 +425,6 @@ impl Signex {
             }
             ToolMessage::CycleDrawMode => {
                 self.interaction_state.draw_mode = self.interaction_state.draw_mode.next();
-                self.interaction_state.active_canvas_mut().draw_mode =
-                    self.interaction_state.draw_mode;
                 self.finish_update()
             }
             ToolMessage::CancelDrawing => {

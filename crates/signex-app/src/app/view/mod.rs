@@ -614,11 +614,15 @@ impl Signex {
             // per-window canvas receives the mutation. Keyboard
             // shortcuts that synthesize `Message::CanvasEvent` keep
             // targeting the main canvas unchanged.
-            let base: Element<'_, Message> =
-                canvas(self.interaction_state.canvas_for_window(window_id))
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .into();
+            // #631 — the canvas Program is built here, per frame, from a
+            // borrow of the window's `CanvasSlot` plus settings read
+            // straight off `UiState`. It no longer owns copies of them.
+            let slot = self.interaction_state.canvas_for_window(window_id);
+            let program = crate::canvas::SchematicCanvas::new(slot, self.canvas_view_prefs());
+            let base: Element<'_, Message> = canvas(program)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into();
             if is_main {
                 base
             } else {

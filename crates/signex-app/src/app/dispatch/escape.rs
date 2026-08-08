@@ -556,7 +556,7 @@ mod tests {
 
     #[test]
     fn cancelling_a_placement_session_clears_the_ghost_in_every_window() {
-        // The preview paint gate is two per-`SchematicCanvas` fields
+        // The preview paint gate is two per-`CanvasSlot` fields
         // (`drawing_mode` + a non-empty `wire_preview`), and the cancel
         // used to reach only the main slot — so the undocked window kept
         // painting a frozen ghost wire after the session was cancelled.
@@ -568,7 +568,7 @@ mod tests {
         app.interaction_state.canvas.drawing_mode = true;
         app.interaction_state.canvas.wire_preview = vec![point];
 
-        let mut per_window = crate::canvas::SchematicCanvas::new();
+        let mut per_window = crate::canvas::CanvasSlot::new();
         per_window.drawing_mode = true;
         per_window.wire_preview = vec![point];
         app.interaction_state

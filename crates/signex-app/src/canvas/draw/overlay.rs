@@ -1,6 +1,6 @@
 use super::super::*;
 
-impl SchematicCanvas {
+impl SchematicCanvas<'_> {
     /// Layer 4 — every-frame overlay: cursor HUD, in-progress previews,
     /// placement ghosts, and drag guides, composed in the original order.
     pub(in crate::canvas) fn draw_overlay(
@@ -16,9 +16,9 @@ impl SchematicCanvas {
         if let Some(cursor_pos) = cursor.position_in(bounds) {
             // Snap cursor visuals to the grid so they match where the click
             // will commit.
-            let cursor_pos = if self.snap_enabled && self.snap_grid_mm > 0.0 {
+            let cursor_pos = if self.prefs.snap_enabled && self.prefs.snap_grid_mm > 0.0 {
                 let w = cam.screen_to_world(cursor_pos, bounds);
-                let g = self.snap_grid_mm as f32;
+                let g = self.prefs.snap_grid_mm as f32;
                 let snapped_w = iced::Point::new((w.x / g).round() * g, (w.y / g).round() * g);
                 cam.world_to_screen(snapped_w, bounds)
             } else {
@@ -156,9 +156,9 @@ impl SchematicCanvas {
         if let Some(ref label) = self.tool_preview
             && !has_ghost
         {
-            let snapped_screen = if self.snap_enabled && self.snap_grid_mm > 0.0 {
+            let snapped_screen = if self.prefs.snap_enabled && self.prefs.snap_grid_mm > 0.0 {
                 let world = cam.screen_to_world(cursor_pos, bounds);
-                let g = self.snap_grid_mm as f32;
+                let g = self.prefs.snap_grid_mm as f32;
                 let sx = (world.x / g).round() * g;
                 let sy = (world.y / g).round() * g;
                 cam.world_to_screen(iced::Point::new(sx, sy), bounds)

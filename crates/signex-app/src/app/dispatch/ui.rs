@@ -17,9 +17,6 @@ impl Signex {
             }
             UiMsg::GridToggle | UiMsg::StatusBar(StatusBarRequest::ToggleGrid) => {
                 self.ui_state.grid_visible = !self.ui_state.grid_visible;
-                self.interaction_state.active_canvas_mut().grid_visible =
-                    self.ui_state.grid_visible;
-                self.interaction_state.pcb_canvas.grid_visible = self.ui_state.grid_visible;
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
                 crate::fonts::write_grid_visible_pref(self.ui_state.grid_visible);
@@ -117,8 +114,6 @@ impl Signex {
             }
             UiMsg::StatusBar(StatusBarRequest::ToggleSnap) => {
                 self.ui_state.snap_enabled = !self.ui_state.snap_enabled;
-                self.interaction_state.active_canvas_mut().snap_enabled =
-                    self.ui_state.snap_enabled;
                 crate::fonts::write_snap_enabled_pref(self.ui_state.snap_enabled);
                 // v0.18.25.1 — mirror the global toggle into every open
                 // footprint editor so the .snxfpt snap chain (guides /
