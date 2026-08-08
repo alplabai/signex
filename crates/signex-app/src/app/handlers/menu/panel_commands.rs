@@ -5,56 +5,29 @@ use super::super::super::*;
 impl Signex {
     pub(super) fn handle_menu_panel_command(&mut self, msg: &MenuMessage) -> Option<Task<Message>> {
         match msg {
+            // Each of these used to name its own dock region, and the
+            // regions disagreed with both the boot layout and the
+            // status-bar panel list — which is how one kind ended up
+            // docked twice. `show_panel` owns the placement now (#641).
             MenuMessage::OpenProjectsPanel => {
-                self.document_state.dock.add_panel(
-                    crate::dock::PanelPosition::Left,
-                    crate::panels::PanelKind::Projects,
-                );
-                Some(Task::none())
+                Some(self.show_panel(crate::panels::PanelKind::Projects))
             }
             MenuMessage::OpenComponentsPanel => {
-                self.document_state.dock.add_panel(
-                    crate::dock::PanelPosition::Left,
-                    crate::panels::PanelKind::Components,
-                );
-                Some(Task::none())
+                Some(self.show_panel(crate::panels::PanelKind::Components))
             }
             MenuMessage::OpenNavigatorPanel => {
-                self.document_state.dock.add_panel(
-                    crate::dock::PanelPosition::Right,
-                    crate::panels::PanelKind::Navigator,
-                );
-                Some(Task::none())
+                Some(self.show_panel(crate::panels::PanelKind::Navigator))
             }
             MenuMessage::OpenPropertiesPanel => {
-                self.document_state.dock.add_panel(
-                    crate::dock::PanelPosition::Right,
-                    crate::panels::PanelKind::Properties,
-                );
+                let task = self.show_panel(crate::panels::PanelKind::Properties);
                 self.interaction_state.context_menu = None;
-                Some(Task::none())
+                Some(task)
             }
-            MenuMessage::OpenErcPanel => {
-                self.document_state.dock.add_panel(
-                    crate::dock::PanelPosition::Bottom,
-                    crate::panels::PanelKind::Erc,
-                );
-                Some(Task::none())
-            }
+            MenuMessage::OpenErcPanel => Some(self.show_panel(crate::panels::PanelKind::Erc)),
             MenuMessage::OpenMessagesPanel => {
-                self.document_state.dock.add_panel(
-                    crate::dock::PanelPosition::Bottom,
-                    crate::panels::PanelKind::Messages,
-                );
-                Some(Task::none())
+                Some(self.show_panel(crate::panels::PanelKind::Messages))
             }
-            MenuMessage::OpenSignalPanel => {
-                self.document_state.dock.add_panel(
-                    crate::dock::PanelPosition::Bottom,
-                    crate::panels::PanelKind::Signal,
-                );
-                Some(Task::none())
-            }
+            MenuMessage::OpenSignalPanel => Some(self.show_panel(crate::panels::PanelKind::Signal)),
             MenuMessage::OpenPreferences => {
                 Some(self.update(Message::Preferences(PreferencesMsg::Open)))
             }

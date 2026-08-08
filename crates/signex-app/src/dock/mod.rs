@@ -3,8 +3,9 @@
 //! Signex has 3 dock regions (left, right, bottom) plus a center canvas.
 //! Each region can hold multiple panels as tabs.
 
+mod placement;
 mod state;
 mod types;
 mod view;
 
-pub use types::{DockArea, DockMessage, FloatingPanel, PanelPosition};
+pub use types::{DockArea, DockMessage, FloatingPanel, PanelPosition, PanelSite};

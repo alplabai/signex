@@ -60,6 +60,19 @@ pub enum DockMessage {
     Library(crate::library::LibraryMessage),
 }
 
+/// Where a panel kind currently lives inside the dock.
+///
+/// A kind is expected to occupy at most one of these — see
+/// `DockArea::locate`. Detached OS windows are a fourth home the dock
+/// cannot see; `Signex::show_panel` checks `ui_state.windows` for those.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PanelSite {
+    /// Docked as a tab: which region, and its index within it.
+    Docked(PanelPosition, usize),
+    /// Floating over the main window, by index into `DockArea::floating`.
+    Floating(usize),
+}
+
 /// A panel floating as an overlay window.
 #[derive(Debug, Clone)]
 pub struct FloatingPanel {
