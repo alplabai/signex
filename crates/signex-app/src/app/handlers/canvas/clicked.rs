@@ -11,14 +11,13 @@ impl Signex {
         // click closes the polygon and commits. Escape /
         // right-click cancels.
         if self.ui_state.lasso_polygon.is_some() {
-            let (vx, vy) = if self.interaction_state.active_canvas_mut().snap_enabled
-                && self.interaction_state.active_canvas_mut().snap_grid_mm > 0.0
-            {
-                let g = self.interaction_state.active_canvas_mut().snap_grid_mm;
-                ((world_x / g).round() * g, (world_y / g).round() * g)
-            } else {
-                (world_x, world_y)
-            };
+            let (vx, vy) =
+                if self.ui_state.snap_enabled && (self.ui_state.grid_size_mm as f64) > 0.0 {
+                    let g = self.ui_state.grid_size_mm as f64;
+                    ((world_x / g).round() * g, (world_y / g).round() * g)
+                } else {
+                    (world_x, world_y)
+                };
             let has_start = self
                 .ui_state
                 .lasso_polygon
@@ -72,14 +71,13 @@ impl Signex {
             // coords can land a full grid cell off the nearest
             // wire — the visible pen snaps, but the hit target
             // was being missed.
-            let (hit_x, hit_y) = if self.interaction_state.active_canvas_mut().snap_enabled
-                && self.interaction_state.active_canvas_mut().snap_grid_mm > 0.0
-            {
-                let g = self.interaction_state.active_canvas_mut().snap_grid_mm;
-                ((world_x / g).round() * g, (world_y / g).round() * g)
-            } else {
-                (world_x, world_y)
-            };
+            let (hit_x, hit_y) =
+                if self.ui_state.snap_enabled && (self.ui_state.grid_size_mm as f64) > 0.0 {
+                    let g = self.ui_state.grid_size_mm as f64;
+                    ((world_x / g).round() * g, (world_y / g).round() * g)
+                } else {
+                    (world_x, world_y)
+                };
             // Compute the net's wire uuids while only holding an
             // immutable snapshot borrow, then release it before
             // mutating ui_state.
@@ -182,9 +180,6 @@ impl Signex {
                     }
                     self.interaction_state
                         .active_canvas_mut()
-                        .wire_color_overrides = self.ui_state.wire_color_overrides.clone();
-                    self.interaction_state
-                        .active_canvas_mut()
                         .clear_content_cache();
                 }
             }
@@ -285,8 +280,6 @@ impl Signex {
                     self.interaction_state.active_canvas_mut().wire_preview =
                         self.interaction_state.wire_points.clone();
                     self.interaction_state.active_canvas_mut().drawing_mode = true;
-                    self.interaction_state.active_canvas_mut().draw_mode =
-                        self.interaction_state.draw_mode;
                     self.interaction_state.active_canvas_mut().tool_preview = None;
                 } else if let Some(&start) = self.interaction_state.wire_points.last() {
                     let segments = constrain_segments(start, pt, self.interaction_state.draw_mode);
@@ -317,8 +310,6 @@ impl Signex {
                     self.interaction_state.active_canvas_mut().wire_preview =
                         self.interaction_state.wire_points.clone();
                     self.interaction_state.active_canvas_mut().drawing_mode = true;
-                    self.interaction_state.active_canvas_mut().draw_mode =
-                        self.interaction_state.draw_mode;
                     self.interaction_state.active_canvas_mut().tool_preview = None;
                 } else if let Some(&start) = self.interaction_state.wire_points.last() {
                     let segments = constrain_segments(start, pt, self.interaction_state.draw_mode);

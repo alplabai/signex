@@ -1,6 +1,6 @@
 use super::super::*;
 
-impl SchematicCanvas {
+impl SchematicCanvas<'_> {
     /// Two-click shape rubber-band (line / rect / circle).
     pub(in crate::canvas) fn draw_shape_preview(
         &self,
@@ -15,8 +15,8 @@ impl SchematicCanvas {
         // in CanvasEvent::Clicked.
         if let Some((anchor, kind)) = self.shape_anchor {
             let cursor_world = cam.screen_to_world(cursor_pos, bounds);
-            let (snap_x, snap_y) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
-                let g = self.snap_grid_mm;
+            let (snap_x, snap_y) = if self.prefs.snap_enabled && self.prefs.snap_grid_mm > 0.0 {
+                let g = self.prefs.snap_grid_mm;
                 (
                     (cursor_world.x as f64 / g).round() * g,
                     (cursor_world.y as f64 / g).round() * g,
@@ -81,8 +81,8 @@ impl SchematicCanvas {
             }
             if let Some(last) = self.polyline_points.last() {
                 let cursor_world = cam.screen_to_world(cursor_pos, bounds);
-                let (snap_x, snap_y) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
-                    let g = self.snap_grid_mm;
+                let (snap_x, snap_y) = if self.prefs.snap_enabled && self.prefs.snap_grid_mm > 0.0 {
+                    let g = self.prefs.snap_grid_mm;
                     (
                         (cursor_world.x as f64 / g).round() * g,
                         (cursor_world.y as f64 / g).round() * g,
@@ -117,8 +117,8 @@ impl SchematicCanvas {
         if !self.arc_points.is_empty() {
             let accent = Color::from_rgb(0.94, 0.74, 0.28);
             let cursor_world = cam.screen_to_world(cursor_pos, bounds);
-            let (snap_x, snap_y) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
-                let g = self.snap_grid_mm;
+            let (snap_x, snap_y) = if self.prefs.snap_enabled && self.prefs.snap_grid_mm > 0.0 {
+                let g = self.prefs.snap_grid_mm;
                 (
                     (cursor_world.x as f64 / g).round() * g,
                     (cursor_world.y as f64 / g).round() * g,
@@ -181,8 +181,8 @@ impl SchematicCanvas {
             // Rubber-band from last vertex → cursor (snapped).
             if let Some(last) = lasso.last() {
                 let cursor_world = cam.screen_to_world(cursor_pos, bounds);
-                let (snap_x, snap_y) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
-                    let g = self.snap_grid_mm;
+                let (snap_x, snap_y) = if self.prefs.snap_enabled && self.prefs.snap_grid_mm > 0.0 {
+                    let g = self.prefs.snap_grid_mm;
                     (
                         (cursor_world.x as f64 / g).round() * g,
                         (cursor_world.y as f64 / g).round() * g,
@@ -224,7 +224,7 @@ impl SchematicCanvas {
         let cam = self.camera();
         // Wire-in-progress rubber-band preview
         if self.drawing_mode && !self.wire_preview.is_empty() {
-            let wire_color = self.canvas_colors.wire;
+            let wire_color = self.prefs.canvas_colors.wire;
             let wire_color_iced = crate::render_config::to_iced(&wire_color);
             // Match the placed-wire stroke width (0.15 mm in world),
             // scaled by cam. Previously fixed 1.5 px which looked
@@ -248,8 +248,8 @@ impl SchematicCanvas {
             if let Some(last) = self.wire_preview.last() {
                 let cursor_world = cam.screen_to_world(cursor_pos, bounds);
                 // Snap cursor to grid so the rubber-band preview matches what will be placed
-                let (snap_x, snap_y) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
-                    let g = self.snap_grid_mm;
+                let (snap_x, snap_y) = if self.prefs.snap_enabled && self.prefs.snap_grid_mm > 0.0 {
+                    let g = self.prefs.snap_grid_mm;
                     (
                         (cursor_world.x as f64 / g).round() * g,
                         (cursor_world.y as f64 / g).round() * g,
@@ -267,7 +267,7 @@ impl SchematicCanvas {
                     .with_width(placed_width);
 
                 // Compute constrained segments based on draw mode
-                let segments = match self.draw_mode {
+                let segments = match self.prefs.draw_mode {
                     crate::app::DrawMode::FreeAngle => {
                         vec![(start, end)]
                     }

@@ -1,6 +1,6 @@
 use super::super::*;
 
-impl SchematicCanvas {
+impl SchematicCanvas<'_> {
     /// Drag-to-move guide line + connection-point X markers.
     pub(in crate::canvas) fn draw_move_guides(
         &self,

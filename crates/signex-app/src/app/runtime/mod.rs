@@ -188,6 +188,60 @@ impl Signex {
         }
     }
 
+    /// The active canvas colour set, derived from the saved theme.
+    ///
+    /// One derivation for both readers — `update_canvas_theme` (which
+    /// still pushes them into the PCB canvas) and
+    /// [`Self::canvas_view_prefs`] (which hands them to the schematic
+    /// `Program` each frame). Two copies of this `if` was how the two
+    /// could disagree.
+    /// Canvas colours for a given theme id. `Custom` reads the loaded
+    /// custom theme and falls back to Signex when none is loaded.
+    pub(crate) fn canvas_colors_for(&self, id: ThemeId) -> signex_types::theme::CanvasColors {
+        if id == ThemeId::Custom {
+            self.ui_state
+                .custom_theme
+                .as_ref()
+                .map(|custom_theme| custom_theme.canvas)
+                .unwrap_or_else(|| signex_types::theme::canvas_colors(ThemeId::Signex))
+        } else {
+            signex_types::theme::canvas_colors(id)
+        }
+    }
+
+    /// Settings the schematic canvas renders with, read fresh from app
+    /// state on every frame (#631).
+    ///
+    /// Every field here used to be a copy on the canvas struct, pushed by
+    /// hand from whichever handler changed it. Most of those sites wrote
+    /// the *active* canvas only, so an undocked window kept rendering the
+    /// value it was created with — the staleness the issue predicted.
+    /// Reading them here means every window draws from one source.
+    ///
+    /// `grid_style` comes from the draft field on purpose: that is the
+    /// effective value, carrying the Preferences live preview while the
+    /// dialog is open and equal to the committed one otherwise (#630).
+    pub(crate) fn canvas_view_prefs(&self) -> crate::canvas::CanvasViewPrefs<'_> {
+        // The DRAFT theme, not the committed one: picking a theme in
+        // Preferences previews it on the canvas immediately, which is
+        // what the `PrefMsg::DraftTheme` arm used to push by hand.
+        let colors = self.canvas_colors_for(self.ui_state.preferences_draft_theme);
+        crate::canvas::CanvasViewPrefs {
+            grid_visible: self.ui_state.grid_visible,
+            theme_bg: crate::render_config::to_iced(&colors.background),
+            theme_grid: crate::render_config::to_iced(&colors.grid),
+            theme_paper: crate::render_config::to_iced(&colors.paper),
+            canvas_colors: colors,
+            snap_enabled: self.ui_state.snap_enabled,
+            snap_grid_mm: self.ui_state.grid_size_mm as f64,
+            visible_grid_mm: self.ui_state.visible_grid_mm as f64,
+            grid_style: self.ui_state.preferences_draft_grid_style,
+            auto_focus: self.ui_state.auto_focus,
+            draw_mode: self.interaction_state.draw_mode,
+            wire_color_overrides: &self.ui_state.wire_color_overrides,
+        }
+    }
+
     pub(crate) fn update_canvas_theme(&mut self) {
         let colors = if self.ui_state.theme_id == ThemeId::Custom {
             self.ui_state
@@ -198,20 +252,145 @@ impl Signex {
         } else {
             signex_types::theme::canvas_colors(self.ui_state.theme_id)
         };
-        self.interaction_state.active_canvas_mut().set_theme_colors(
-            crate::render_config::to_iced(&colors.background),
-            crate::render_config::to_iced(&colors.grid),
-            crate::render_config::to_iced(&colors.paper),
-        );
         self.interaction_state.pcb_canvas.set_theme_colors(
             crate::render_config::to_iced(&colors.background),
             crate::render_config::to_iced(&colors.grid),
         );
-        self.interaction_state.active_canvas_mut().canvas_colors = colors;
         self.interaction_state.pcb_canvas.canvas_colors = colors;
         self.interaction_state
             .active_canvas_mut()
             .clear_content_cache();
         self.interaction_state.pcb_canvas.clear_content_cache();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// #631 — the canvas used to own copies of these settings, written by
+    /// whichever handler changed them. Most of those sites wrote
+    /// `active_canvas_mut()` only, so an undocked window kept rendering
+    /// the value it was created with. `canvas_view_prefs` is now the only
+    /// path from `UiState` to the renderer, so a change has to show up
+    /// there with nothing else called in between.
+    #[test]
+    fn grid_settings_reach_the_renderer_with_no_sync_step() {
+        // Arrange
+        let (mut app, _t) = Signex::new();
+        // Copy the scalars out so the prefs borrow of `app` ends here —
+        // it borrows `wire_color_overrides`, so holding it would block the
+        // mutations below.
+        let (visible_before, grid_visible_before, snap_before) = {
+            let before = app.canvas_view_prefs();
+            (
+                before.visible_grid_mm,
+                before.grid_visible,
+                before.snap_enabled,
+            )
+        };
+        let wanted_visible = visible_before + 1.0;
+
+        // Act — mutate app state directly, exactly as a handler would,
+        // and call nothing else.
+        app.ui_state.visible_grid_mm = wanted_visible as f32;
+        app.ui_state.grid_visible = !grid_visible_before;
+        app.ui_state.snap_enabled = !snap_before;
+
+        // Assert
+        let after = app.canvas_view_prefs();
+        assert_eq!(after.visible_grid_mm, wanted_visible);
+        assert_eq!(after.grid_visible, !grid_visible_before);
+        assert_eq!(after.snap_enabled, !snap_before);
+    }
+
+    /// Picking a theme in Preferences previews it on the canvas before
+    /// Save. That preview used to be a hand-written push of the computed
+    /// colours onto the canvas from the `DraftTheme` arm; it is now the
+    /// draft field itself feeding `canvas_view_prefs`. If this reverted to
+    /// reading the committed `theme_id`, the picker would look dead.
+    #[test]
+    fn the_canvas_previews_the_draft_theme_not_the_committed_one() {
+        // Arrange
+        let (mut app, _t) = Signex::new();
+        let committed = app.ui_state.theme_id;
+        let other = if committed == ThemeId::Nord {
+            ThemeId::SolarizedLight
+        } else {
+            ThemeId::Nord
+        };
+
+        // Act
+        app.ui_state.preferences_draft_theme = other;
+
+        // Assert
+        assert_eq!(
+            app.canvas_view_prefs().canvas_colors,
+            signex_types::theme::canvas_colors(other),
+            "the canvas must render the previewed theme"
+        );
+        assert_eq!(
+            app.ui_state.theme_id, committed,
+            "a preview must not commit the theme"
+        );
+    }
+
+    /// #631 — `preferences_draft_theme` was hardcoded to `Signex` at boot
+    /// rather than seeded from the saved preference. That was invisible
+    /// while nothing read it before the Preferences dialog first opened
+    /// (`seed_preferences_drafts_from_live` repaired it there). The canvas
+    /// reads it now, so a user whose saved theme is not Signex would have
+    /// opened to the wrong canvas colours.
+    #[test]
+    fn boot_seeds_the_draft_theme_from_the_saved_theme() {
+        // Arrange / Act
+        let (app, _t) = Signex::new();
+
+        // Assert
+        assert_eq!(
+            app.ui_state.preferences_draft_theme, app.ui_state.theme_id,
+            "the previewed theme must start equal to the saved one"
+        );
+        assert_eq!(
+            app.canvas_view_prefs().canvas_colors,
+            app.canvas_colors_for(app.ui_state.theme_id),
+            "so the first frame renders the saved theme's canvas colours"
+        );
+    }
+
+    /// The wire-colour overrides are borrowed, not cloned onto the canvas.
+    /// The old copy was cleared in parallel with `ui_state`'s at each
+    /// mutation site — one missed site and the canvas kept painting a
+    /// colour the user had cleared.
+    #[test]
+    fn wire_colour_overrides_are_read_from_ui_state() {
+        // Arrange
+        let (mut app, _t) = Signex::new();
+        let uuid = uuid::Uuid::new_v4();
+        let color = signex_types::theme::Color {
+            r: 1,
+            g: 2,
+            b: 3,
+            a: 255,
+        };
+
+        // Act
+        app.ui_state.wire_color_overrides.insert(uuid, color);
+
+        // Assert
+        assert_eq!(
+            app.canvas_view_prefs().wire_color_overrides.get(&uuid),
+            Some(&color),
+            "the renderer must see the override without a copy step"
+        );
+
+        // Act — and clearing `ui_state` is the whole operation.
+        app.ui_state.wire_color_overrides.clear();
+
+        // Assert
+        assert!(
+            app.canvas_view_prefs().wire_color_overrides.is_empty(),
+            "a cleared override must not survive on a canvas copy"
+        );
     }
 }

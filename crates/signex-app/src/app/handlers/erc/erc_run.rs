@@ -439,7 +439,6 @@ impl Signex {
         self.ui_state.auto_focus = !self.ui_state.auto_focus;
         // Mirror the flag onto the canvas so the renderer can compute
         // the focus uuid set locally without reaching into app state.
-        self.interaction_state.active_canvas_mut().auto_focus = self.ui_state.auto_focus;
         self.interaction_state
             .active_canvas_mut()
             .clear_content_cache();

@@ -6,7 +6,7 @@
 //! write reached every window for free, which is exactly what made the
 //! duplication invisible: nothing here could have failed, because there
 //! was nothing per-canvas to get out of step. Now the value is a field on
-//! each `SchematicCanvas` plus `PanelContext::symbol_grid_style`, so the
+//! each `CanvasSlot` plus `PanelContext::symbol_grid_style`, so the
 //! sweep is code that can be wrong — these tests are what stops a second
 //! window (or a Discard) from silently rendering a stale glyph.
 //!
@@ -33,18 +33,22 @@ fn other_grid_style(current: GridStyle) -> GridStyle {
     }
 }
 
-/// Boot has to seed the canvas from the saved preference. With the global
-/// gone, a canvas that is never written stays on `GridStyle::Dots`
-/// forever — a user whose `prefs.json` says `lines` would open to dots.
+/// Boot has to leave the render input equal to the saved preference. A
+/// draft that is never seeded stays on `GridStyle::Dots` forever — a user
+/// whose `prefs.json` says `lines` would open to dots.
+///
+/// #631 — the canvas no longer holds a copy; `preferences_draft_grid_style`
+/// IS the value `view` hands to the `Program` each frame, so that is what
+/// has to be right at boot.
 #[test]
-fn boot_seeds_the_canvas_grid_style_from_ui_state() {
+fn boot_seeds_the_grid_style_render_input_from_the_saved_pref() {
     // Arrange / Act
     let (app, _t) = Signex::new();
 
     // Assert
     assert_eq!(
-        app.interaction_state.canvas.grid_style, app.ui_state.grid_style,
-        "the canvas must start on the saved schematic grid style"
+        app.ui_state.preferences_draft_grid_style, app.ui_state.grid_style,
+        "the render input must start on the saved schematic grid style"
     );
     assert_eq!(
         app.document_state.panel_ctx.symbol_grid_style, app.ui_state.symbol_grid_style,
@@ -67,8 +71,8 @@ fn drafting_the_grid_style_previews_on_the_canvas_without_committing() {
 
     // Assert
     assert_eq!(
-        app.interaction_state.canvas.grid_style, wanted,
-        "the preview must reach the canvas, or the picker looks dead"
+        app.ui_state.preferences_draft_grid_style, wanted,
+        "the preview must reach the render input, or the picker looks dead"
     );
     assert_eq!(
         app.ui_state.grid_style, committed,
@@ -97,8 +101,8 @@ fn discarding_puts_the_canvas_grid_style_back() {
 
     // Assert
     assert_eq!(
-        app.interaction_state.canvas.grid_style, committed,
-        "Cancel must put the rendered grid style back, not just the draft"
+        app.ui_state.preferences_draft_grid_style, committed,
+        "Cancel must put the rendered grid style back"
     );
     assert_eq!(
         app.ui_state.preferences_draft_grid_style, committed,
@@ -106,30 +110,30 @@ fn discarding_puts_the_canvas_grid_style_back() {
     );
 }
 
-/// An undocked tab renders from its own `SchematicCanvas` in
-/// `InteractionState::canvases`. The global reached it for free; a field
-/// only does if the write sweeps the whole map. Reaching into `canvases`
-/// directly is what `WindowMsg::UndockTab` does after
-/// `SchematicCanvas::new()`, minus the iced window that a headless test
-/// cannot open.
+/// #631 — an undocked window used to render from its own `CanvasSlot`
+/// copy of the grid style, so a preview only reached it if the write swept
+/// the whole `canvases` map. There is no copy any more: every window's
+/// `Program` is built in `view` from the one `UiState` value, so a second
+/// window cannot disagree with the first by construction. This test pins
+/// that no per-window grid-style copy comes back.
 #[test]
-fn drafting_the_grid_style_reaches_every_windows_canvas() {
+fn no_per_window_copy_of_the_grid_style_exists() {
     // Arrange
     let (mut app, _t) = Signex::new();
     let undocked_id = iced::window::Id::unique();
     app.interaction_state
         .canvases
-        .insert(undocked_id, signex_app::canvas::SchematicCanvas::new());
+        .insert(undocked_id, signex_app::canvas::CanvasSlot::new());
     let _ = app.update(Message::Preferences(PreferencesMsg::Open));
     let wanted = other_grid_style(app.ui_state.grid_style);
 
     // Act
     let _ = app.update(inner(PrefMsg::DraftGridStyle(wanted)));
 
-    // Assert
+    // Assert — one value, read by every window.
     assert_eq!(
-        app.interaction_state.canvases[&undocked_id].grid_style, wanted,
-        "an undocked window must preview the same glyph as the main one"
+        app.ui_state.preferences_draft_grid_style, wanted,
+        "the single render input must carry the preview"
     );
 
     // Act — and back again on Discard.
@@ -137,8 +141,8 @@ fn drafting_the_grid_style_reaches_every_windows_canvas() {
 
     // Assert
     assert_eq!(
-        app.interaction_state.canvases[&undocked_id].grid_style, app.ui_state.grid_style,
-        "Cancel must reach the undocked window's canvas too"
+        app.ui_state.preferences_draft_grid_style, app.ui_state.grid_style,
+        "Cancel must restore the one value every window reads"
     );
 }
 

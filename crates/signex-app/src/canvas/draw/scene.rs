@@ -1,6 +1,6 @@
 use super::super::*;
 
-impl SchematicCanvas {
+impl SchematicCanvas<'_> {
     /// Layer 2 — the schematic content (cached unless panning/dragging).
     pub(in crate::canvas) fn draw_content(
         &self,
@@ -19,7 +19,7 @@ impl SchematicCanvas {
         // #632 — this used to republish the camera into a
         // `live_camera: Cell<(f32, f32, f32)>` on every frame so `view` could
         // place world-anchored overlays. `view` now reads
-        // `SchematicCanvas::live_camera()` off the same cell `draw` reads,
+        // `CanvasSlot::live_camera()` off the same cell `draw` reads,
         // so there is nothing to publish and nothing that can lag a frame.
         let (cached_offset_x, cached_offset_y, cached_scale) = self.content_cache_camera.get();
         let camera_matches_cache = (cached_offset_x - cam.offset.x).abs() < 0.01
@@ -34,10 +34,10 @@ impl SchematicCanvas {
                     &mut frame,
                     snapshot,
                     &live_transform,
-                    &self.canvas_colors,
+                    &self.prefs.canvas_colors,
                     bounds,
                     focus_ref,
-                    Some(&self.wire_color_overrides),
+                    Some(self.prefs.wire_color_overrides),
                 );
             }
             frame.into_geometry()
@@ -53,10 +53,10 @@ impl SchematicCanvas {
                         frame,
                         snapshot,
                         &live_transform,
-                        &self.canvas_colors,
+                        &self.prefs.canvas_colors,
                         bounds,
                         focus_ref,
-                        Some(&self.wire_color_overrides),
+                        Some(self.prefs.wire_color_overrides),
                     );
                 }
             })
@@ -76,7 +76,7 @@ impl SchematicCanvas {
         // with a translucent dark overlay. Uses four rects forming a
         // frame around the bbox, so 2D paths can express the hole
         // without compositing modes.
-        if self.auto_focus
+        if self.prefs.auto_focus
             && !self.selected.is_empty()
             && let Some(snapshot) = effective_snapshot
         {

@@ -6,7 +6,7 @@
 //! fields, was kept in sync by hand across 26 call sites, and leaked a
 //! fresh `Box::leak`ed font name on every font change. It is gone: the
 //! values live in `UiState` alone and reach the canvases as ordinary
-//! fields (`SchematicCanvas::grid_style`, `SymbolCanvas::grid_style` via
+//! fields (`CanvasSlot::grid_style`, `SymbolCanvas::grid_style` via
 //! `PanelContext::symbol_grid_style`). Nothing here holds state — do not
 //! reintroduce a global; a `draw` path that reads one is not a function
 //! of the app state.

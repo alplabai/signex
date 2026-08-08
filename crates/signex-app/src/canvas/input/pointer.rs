@@ -1,6 +1,6 @@
 use super::super::*;
 
-impl SchematicCanvas {
+impl SchematicCanvas<'_> {
     /// Left-press: select, tool action, start box-select, or start drag-move.
     pub(in crate::canvas) fn update_left_pressed(
         &self,
@@ -335,9 +335,9 @@ impl SchematicCanvas {
                     // multiple so object_start + offset stays on grid).
                     let (mx, my) = if let (Some(origin), true) = (
                         state.move_origin,
-                        self.snap_enabled && self.snap_grid_mm > 0.0,
+                        self.prefs.snap_enabled && self.prefs.snap_grid_mm > 0.0,
                     ) {
-                        let g = self.snap_grid_mm;
+                        let g = self.prefs.snap_grid_mm;
                         let dx = ((wx - origin.0) / g).round() * g;
                         let dy = ((wy - origin.1) / g).round() * g;
                         (origin.0 + dx, origin.1 + dy)

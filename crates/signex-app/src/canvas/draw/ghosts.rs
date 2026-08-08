@@ -1,6 +1,6 @@
 use super::super::*;
 
-impl SchematicCanvas {
+impl SchematicCanvas<'_> {
     /// Ghost power-port / symbol preview following the cursor.
     pub(in crate::canvas) fn draw_ghost_symbol(
         &self,
@@ -17,8 +17,8 @@ impl SchematicCanvas {
             && !self.placement_paused
         {
             let cursor_world = cam.screen_to_world(cursor_pos, bounds);
-            let (sx, sy) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
-                let g = self.snap_grid_mm;
+            let (sx, sy) = if self.prefs.snap_enabled && self.prefs.snap_grid_mm > 0.0 {
+                let g = self.prefs.snap_grid_mm;
                 (
                     (cursor_world.x as f64 / g).round() * g,
                     (cursor_world.y as f64 / g).round() * g,
@@ -56,8 +56,8 @@ impl SchematicCanvas {
             && !self.placement_paused
         {
             let cursor_world = cam.screen_to_world(cursor_pos, bounds);
-            let (sx, sy) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
-                let g = self.snap_grid_mm;
+            let (sx, sy) = if self.prefs.snap_enabled && self.prefs.snap_grid_mm > 0.0 {
+                let g = self.prefs.snap_grid_mm;
                 (
                     (cursor_world.x as f64 / g).round() * g,
                     (cursor_world.y as f64 / g).round() * g,
@@ -95,8 +95,8 @@ impl SchematicCanvas {
             && !self.placement_paused
         {
             let cursor_world = cam.screen_to_world(cursor_pos, bounds);
-            let snap_world = if self.snap_enabled && self.snap_grid_mm > 0.0 {
-                let g = self.snap_grid_mm;
+            let snap_world = if self.prefs.snap_enabled && self.prefs.snap_grid_mm > 0.0 {
+                let g = self.prefs.snap_grid_mm;
                 (
                     (cursor_world.x as f64 / g).round() * g,
                     (cursor_world.y as f64 / g).round() * g,

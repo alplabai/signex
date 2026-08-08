@@ -165,8 +165,6 @@ impl Signex {
         // committed value back to every window's canvas. Power port /
         // label / multisheet style have no draw-path reader at all, so
         // restoring their draft fields above is the whole revert.
-        self.interaction_state
-            .set_grid_style(self.ui_state.grid_style);
         // #629 — the symbol grid style is the only one of the three
         // Symbol Editor settings with a live preview, so it is the only
         // one to push back. Grid size and pin selection reach the editor
@@ -250,8 +248,6 @@ impl Signex {
                 // canvases; re-assert from the committed value so the
                 // saved and rendered styles can't diverge (same rule as
                 // the PCB GPU flag above).
-                self.interaction_state
-                    .set_grid_style(self.ui_state.grid_style);
                 crate::fonts::write_ui_font_pref(&self.ui_state.ui_font_name);
                 crate::fonts::write_power_port_style_pref(self.ui_state.power_port_style);
                 crate::fonts::write_label_style_pref(self.ui_state.label_style);
@@ -388,21 +384,11 @@ impl Signex {
                     signex_types::theme::theme_tokens(id)
                 };
                 self.document_state.panel_ctx.tokens = tokens;
-                let canvas_colors = if id == ThemeId::Custom {
-                    self.ui_state
-                        .custom_theme
-                        .as_ref()
-                        .map(|c| c.canvas)
-                        .unwrap_or_else(|| signex_types::theme::canvas_colors(ThemeId::Signex))
-                } else {
-                    signex_types::theme::canvas_colors(id)
-                };
-                self.interaction_state.active_canvas_mut().set_theme_colors(
-                    crate::render_config::to_iced(&canvas_colors.background),
-                    crate::render_config::to_iced(&canvas_colors.grid),
-                    crate::render_config::to_iced(&canvas_colors.paper),
-                );
-                self.interaction_state.active_canvas_mut().canvas_colors = canvas_colors;
+                // #631 — the canvas colours used to be computed here and
+                // pushed onto the canvas for the live preview. `view` now
+                // derives them from `preferences_draft_theme` every frame,
+                // so setting the draft above IS the preview; only the
+                // content cache still has to be dropped to repaint.
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
@@ -442,7 +428,6 @@ impl Signex {
                 self.ui_state.preferences_draft_grid_style = style;
                 // Live preview — `set_grid_style` also drops the bg cache
                 // on every window's canvas.
-                self.interaction_state.set_grid_style(style);
                 self.recompute_preferences_dirty();
             }
             PrefMsg::DraftPcbGpuRender(enabled) => {
