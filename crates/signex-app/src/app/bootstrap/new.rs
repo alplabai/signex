@@ -17,14 +17,22 @@ impl Signex {
         let mut dock = match crate::fonts::read_dock_layout() {
             Some(saved) => saved,
             None => {
+                // Which panels open, in tab order. *Where* each one
+                // goes is `PanelPosition::default_for`, so the boot
+                // layout and every later "open panel X" agree on one
+                // home per kind (#641).
                 let mut d = DockArea::new();
-                d.add_panel(PanelPosition::Left, PanelKind::Projects);
-                d.add_panel(PanelPosition::Left, PanelKind::Components);
-                d.add_panel(PanelPosition::Left, PanelKind::Library);
-                d.add_panel(PanelPosition::Left, PanelKind::Signal);
-                d.add_panel(PanelPosition::Right, PanelKind::Properties);
-                d.add_panel(PanelPosition::Right, PanelKind::Messages);
-                d.add_panel(PanelPosition::Bottom, PanelKind::Erc);
+                for kind in [
+                    PanelKind::Projects,
+                    PanelKind::Components,
+                    PanelKind::Library,
+                    PanelKind::Signal,
+                    PanelKind::Properties,
+                    PanelKind::Messages,
+                    PanelKind::Erc,
+                ] {
+                    d.add_panel(PanelPosition::default_for(kind), kind);
+                }
                 d
             }
         };

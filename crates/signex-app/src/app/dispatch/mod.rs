@@ -360,13 +360,17 @@ impl Signex {
                         WindowKind::UndockedTab { .. } => {
                             self.interaction_state.canvases.remove(&id);
                         }
-                        // Closing a detached panel reattaches it as a
-                        // docked panel in the right column so the user
-                        // doesn't lose access to the panel kind.
+                        // Closing a detached panel reattaches it to the
+                        // dock so the user doesn't lose access to the
+                        // panel kind. It goes back to its home region
+                        // rather than always to the right column, and
+                        // `show_panel` makes it the active tab there.
+                        // The `windows.remove` above already dropped
+                        // this window, so the dock call is the whole
+                        // job — no detached copy is left to focus.
                         WindowKind::DetachedPanel(kind) => {
-                            self.document_state
-                                .dock
-                                .add_panel(crate::dock::PanelPosition::Right, kind);
+                            self.document_state.dock.show_panel(kind);
+                            crate::fonts::write_dock_layout(&self.document_state.dock);
                         }
                         // The Component Preview lives as a tab in the
                         // main window; its state outlasts the

@@ -154,11 +154,10 @@ impl Signex {
         self.refresh_active_erc_from_cache(active_path.as_ref());
 
         // Surface the ERC panel so the user can see the results.
-        self.document_state.dock.add_panel(
-            crate::dock::PanelPosition::Bottom,
-            crate::panels::PanelKind::Erc,
-        );
-        Task::none()
+        // `add_panel` could not do that: with ERC already docked it
+        // returned early, leaving the results behind whatever tab was
+        // active. `show_panel` makes it the active tab (#641).
+        self.show_panel(crate::panels::PanelKind::Erc)
     }
 
     fn load_project_dsl_eval_fns(&self) -> Option<Vec<signex_erc::engine::EvalFn>> {

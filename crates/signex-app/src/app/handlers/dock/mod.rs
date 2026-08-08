@@ -7,6 +7,7 @@ use super::super::*;
 mod floating_layout;
 mod library_browser;
 mod panel_controls;
+mod panel_open;
 mod project_navigation;
 mod property_editor;
 mod sch_library;
