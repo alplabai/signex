@@ -112,6 +112,13 @@ pub struct SchematicCanvas {
     pub snap_grid_mm: f64,
     /// Visible grid dot spacing in mm (independent of snap grid).
     pub visible_grid_mm: f64,
+    /// Glyph the visible grid draws — dots, lines or small crosses.
+    /// Effective value, not the saved one: while Preferences is open
+    /// this carries the live-preview draft, and Discard pushes the
+    /// committed `ui_state.grid_style` back. Written only by
+    /// `InteractionState::set_grid_style`, which sweeps every window's
+    /// canvas (see the #554 note in `clear_transient_schematic_tool_state`).
+    pub grid_style: crate::render_config::GridStyle,
     /// Active paper width in mm (world units).
     pub paper_width_mm: f32,
     /// Active paper height in mm (world units).
@@ -234,6 +241,7 @@ impl SchematicCanvas {
             // Altium default is 1.27 mm (50 mil); also matches Standard's default schematic grid step.
             snap_grid_mm: 1.27,
             visible_grid_mm: 1.27,
+            grid_style: crate::render_config::GridStyle::Dots,
             paper_width_mm: 297.0,
             paper_height_mm: 210.0,
             auto_focus: false,

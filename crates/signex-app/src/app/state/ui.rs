@@ -127,8 +127,8 @@ pub struct UiState {
     pub symbol_grid_style: crate::render_config::GridStyle,
     /// Draft mirror of [`Self::symbol_grid_style`]. The only one of the
     /// three with a live preview: the draft is pushed into
-    /// `render_config::set_symbol_grid_style` on change, so Cancel has to
-    /// push the committed value back as well as restoring this field.
+    /// `PanelContext::symbol_grid_style` on change, so Cancel has to push
+    /// the committed value back there as well as restoring this field.
     pub preferences_draft_symbol_grid_style: crate::render_config::GridStyle,
     /// Symbol-editor pin-selection mode (pin body only / body + labels).
     pub symbol_pin_selection: crate::render_config::PinSelectionMode,

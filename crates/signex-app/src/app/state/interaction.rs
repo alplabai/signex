@@ -159,4 +159,26 @@ impl InteractionState {
             None => &mut self.canvas,
         }
     }
+
+    /// Publish the effective visible-grid glyph to every window's canvas
+    /// and drop the background layer each one has cached with the old one.
+    ///
+    /// #630 — this replaces a process-global that the `draw` path read
+    /// directly, which is why one call reached every window for free. A
+    /// per-canvas field does not, so this sweeps the main slot plus
+    /// `canvases`: during a `dispatch_canvas_event_in_window` swap the
+    /// undocked window's canvas IS the main slot and its `canvases` entry
+    /// is temporarily absent, so the two together are always the full set
+    /// with nothing visited twice (same argument as
+    /// `clear_transient_schematic_tool_state`, #554).
+    pub fn set_grid_style(&mut self, style: crate::render_config::GridStyle) {
+        let apply = |canvas: &mut SchematicCanvas| {
+            canvas.grid_style = style;
+            canvas.clear_bg_cache();
+        };
+        apply(&mut self.canvas);
+        for canvas in self.canvases.values_mut() {
+            apply(canvas);
+        }
+    }
 }
