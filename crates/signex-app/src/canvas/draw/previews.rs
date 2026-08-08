@@ -5,16 +5,16 @@ impl SchematicCanvas {
     pub(in crate::canvas) fn draw_shape_preview(
         &self,
         frame: &mut canvas::Frame,
-        state: &CanvasState,
         bounds: Rectangle,
         cursor_pos: iced::Point,
     ) {
+        let cam = self.camera();
         // Two-click shape rubber-band — line from anchor to
         // cursor, or rect / circle sized by the cursor offset.
         // Commits on the second click via the tool's branch
         // in CanvasEvent::Clicked.
         if let Some((anchor, kind)) = self.shape_anchor {
-            let cursor_world = state.camera.screen_to_world(cursor_pos, bounds);
+            let cursor_world = cam.screen_to_world(cursor_pos, bounds);
             let (snap_x, snap_y) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
                 let g = self.snap_grid_mm;
                 (
@@ -24,12 +24,9 @@ impl SchematicCanvas {
             } else {
                 (cursor_world.x as f64, cursor_world.y as f64)
             };
-            let p_a = state
-                .camera
-                .world_to_screen(iced::Point::new(anchor.x as f32, anchor.y as f32), bounds);
-            let p_b = state
-                .camera
-                .world_to_screen(iced::Point::new(snap_x as f32, snap_y as f32), bounds);
+            let p_a =
+                cam.world_to_screen(iced::Point::new(anchor.x as f32, anchor.y as f32), bounds);
+            let p_b = cam.world_to_screen(iced::Point::new(snap_x as f32, snap_y as f32), bounds);
             let accent = Color::from_rgb(0.94, 0.74, 0.28);
             let stroke = canvas::Stroke::default().with_color(accent).with_width(1.5);
             match kind {
@@ -65,10 +62,10 @@ impl SchematicCanvas {
     pub(in crate::canvas) fn draw_polyline_preview(
         &self,
         frame: &mut canvas::Frame,
-        state: &CanvasState,
         bounds: Rectangle,
         cursor_pos: iced::Point,
     ) {
+        let cam = self.camera();
         // Polyline-in-progress preview — solid segments between
         // committed vertices plus a dashed rubber-band to the
         // snapped cursor. Commits on Enter or double-click.
@@ -76,16 +73,14 @@ impl SchematicCanvas {
             let accent = Color::from_rgb(0.94, 0.74, 0.28);
             let stroke = canvas::Stroke::default().with_color(accent).with_width(1.5);
             for pair in self.polyline_points.windows(2) {
-                let p1 = state
-                    .camera
+                let p1 = cam
                     .world_to_screen(iced::Point::new(pair[0].x as f32, pair[0].y as f32), bounds);
-                let p2 = state
-                    .camera
+                let p2 = cam
                     .world_to_screen(iced::Point::new(pair[1].x as f32, pair[1].y as f32), bounds);
                 frame.stroke(&canvas::Path::line(p1, p2), stroke);
             }
             if let Some(last) = self.polyline_points.last() {
-                let cursor_world = state.camera.screen_to_world(cursor_pos, bounds);
+                let cursor_world = cam.screen_to_world(cursor_pos, bounds);
                 let (snap_x, snap_y) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
                     let g = self.snap_grid_mm;
                     (
@@ -95,12 +90,10 @@ impl SchematicCanvas {
                 } else {
                     (cursor_world.x as f64, cursor_world.y as f64)
                 };
-                let p1 = state
-                    .camera
-                    .world_to_screen(iced::Point::new(last.x as f32, last.y as f32), bounds);
-                let p2 = state
-                    .camera
-                    .world_to_screen(iced::Point::new(snap_x as f32, snap_y as f32), bounds);
+                let p1 =
+                    cam.world_to_screen(iced::Point::new(last.x as f32, last.y as f32), bounds);
+                let p2 =
+                    cam.world_to_screen(iced::Point::new(snap_x as f32, snap_y as f32), bounds);
                 let dashed = canvas::Stroke::default()
                     .with_color(Color { a: 0.6, ..accent })
                     .with_width(1.0);
@@ -113,17 +106,17 @@ impl SchematicCanvas {
     pub(in crate::canvas) fn draw_arc_preview(
         &self,
         frame: &mut canvas::Frame,
-        state: &CanvasState,
         bounds: Rectangle,
         cursor_pos: iced::Point,
     ) {
+        let cam = self.camera();
         // Arc-in-progress preview — draw committed spans
         // between consecutive clicks. With 0 clicks: nothing.
         // 1 click: a dashed line to the cursor (start → current).
         // 2 clicks: a dashed 3-point curve (start → mid → cursor).
         if !self.arc_points.is_empty() {
             let accent = Color::from_rgb(0.94, 0.74, 0.28);
-            let cursor_world = state.camera.screen_to_world(cursor_pos, bounds);
+            let cursor_world = cam.screen_to_world(cursor_pos, bounds);
             let (snap_x, snap_y) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
                 let g = self.snap_grid_mm;
                 (
@@ -138,9 +131,7 @@ impl SchematicCanvas {
                 .with_width(1.0);
             // Draw committed anchors.
             for p in &self.arc_points {
-                let sp = state
-                    .camera
-                    .world_to_screen(iced::Point::new(p.x as f32, p.y as f32), bounds);
+                let sp = cam.world_to_screen(iced::Point::new(p.x as f32, p.y as f32), bounds);
                 let ring = canvas::Path::circle(sp, 4.0);
                 frame.stroke(
                     &ring,
@@ -149,12 +140,10 @@ impl SchematicCanvas {
             }
             // Rubber-band from last anchor to cursor.
             if let Some(last) = self.arc_points.last() {
-                let p1 = state
-                    .camera
-                    .world_to_screen(iced::Point::new(last.x as f32, last.y as f32), bounds);
-                let p2 = state
-                    .camera
-                    .world_to_screen(iced::Point::new(snap_x as f32, snap_y as f32), bounds);
+                let p1 =
+                    cam.world_to_screen(iced::Point::new(last.x as f32, last.y as f32), bounds);
+                let p2 =
+                    cam.world_to_screen(iced::Point::new(snap_x as f32, snap_y as f32), bounds);
                 frame.stroke(&canvas::Path::line(p1, p2), dashed);
             }
         }
@@ -164,10 +153,10 @@ impl SchematicCanvas {
     pub(in crate::canvas) fn draw_lasso_preview(
         &self,
         frame: &mut canvas::Frame,
-        state: &CanvasState,
         bounds: Rectangle,
         cursor_pos: iced::Point,
     ) {
+        let cam = self.camera();
         // Lasso-in-progress preview — solid segments between
         // vertices plus a rubber-band dashed line from the
         // last vertex to the cursor. Same colour as the
@@ -183,17 +172,15 @@ impl SchematicCanvas {
             let stroke = canvas::Stroke::default().with_color(accent).with_width(1.5);
             // Segments between committed vertices.
             for pair in lasso.windows(2) {
-                let p1 = state
-                    .camera
+                let p1 = cam
                     .world_to_screen(iced::Point::new(pair[0].x as f32, pair[0].y as f32), bounds);
-                let p2 = state
-                    .camera
+                let p2 = cam
                     .world_to_screen(iced::Point::new(pair[1].x as f32, pair[1].y as f32), bounds);
                 frame.stroke(&canvas::Path::line(p1, p2), stroke);
             }
             // Rubber-band from last vertex → cursor (snapped).
             if let Some(last) = lasso.last() {
-                let cursor_world = state.camera.screen_to_world(cursor_pos, bounds);
+                let cursor_world = cam.screen_to_world(cursor_pos, bounds);
                 let (snap_x, snap_y) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
                     let g = self.snap_grid_mm;
                     (
@@ -203,12 +190,10 @@ impl SchematicCanvas {
                 } else {
                     (cursor_world.x as f64, cursor_world.y as f64)
                 };
-                let p1 = state
-                    .camera
-                    .world_to_screen(iced::Point::new(last.x as f32, last.y as f32), bounds);
-                let p2 = state
-                    .camera
-                    .world_to_screen(iced::Point::new(snap_x as f32, snap_y as f32), bounds);
+                let p1 =
+                    cam.world_to_screen(iced::Point::new(last.x as f32, last.y as f32), bounds);
+                let p2 =
+                    cam.world_to_screen(iced::Point::new(snap_x as f32, snap_y as f32), bounds);
                 let dashed = canvas::Stroke::default()
                     .with_color(Color { a: 0.6, ..accent })
                     .with_width(1.0);
@@ -218,9 +203,8 @@ impl SchematicCanvas {
             // "click here to close the polygon".
             if lasso.len() >= 3 {
                 let first = lasso[0];
-                let p = state
-                    .camera
-                    .world_to_screen(iced::Point::new(first.x as f32, first.y as f32), bounds);
+                let p =
+                    cam.world_to_screen(iced::Point::new(first.x as f32, first.y as f32), bounds);
                 let ring = canvas::Path::circle(p, 5.0);
                 frame.stroke(
                     &ring,
@@ -234,29 +218,27 @@ impl SchematicCanvas {
     pub(in crate::canvas) fn draw_wire_preview(
         &self,
         frame: &mut canvas::Frame,
-        state: &CanvasState,
         bounds: Rectangle,
         cursor_pos: iced::Point,
     ) {
+        let cam = self.camera();
         // Wire-in-progress rubber-band preview
         if self.drawing_mode && !self.wire_preview.is_empty() {
             let wire_color = self.canvas_colors.wire;
             let wire_color_iced = crate::render_config::to_iced(&wire_color);
             // Match the placed-wire stroke width (0.15 mm in world),
-            // scaled by camera. Previously fixed 1.5 px which looked
+            // scaled by cam. Previously fixed 1.5 px which looked
             // thin at higher zooms.
-            let placed_width = (state.camera.scale * 0.15).max(1.0);
+            let placed_width = (cam.scale * 0.15).max(1.0);
             let preview_stroke = canvas::Stroke::default()
                 .with_color(wire_color_iced)
                 .with_width(placed_width);
 
             // Draw placed segments
             for pair in self.wire_preview.windows(2) {
-                let p1 = state
-                    .camera
+                let p1 = cam
                     .world_to_screen(iced::Point::new(pair[0].x as f32, pair[0].y as f32), bounds);
-                let p2 = state
-                    .camera
+                let p2 = cam
                     .world_to_screen(iced::Point::new(pair[1].x as f32, pair[1].y as f32), bounds);
                 let seg = canvas::Path::line(p1, p2);
                 frame.stroke(&seg, preview_stroke);
@@ -264,7 +246,7 @@ impl SchematicCanvas {
 
             // Rubber-band from last point to cursor (constrained by draw mode)
             if let Some(last) = self.wire_preview.last() {
-                let cursor_world = state.camera.screen_to_world(cursor_pos, bounds);
+                let cursor_world = cam.screen_to_world(cursor_pos, bounds);
                 // Snap cursor to grid so the rubber-band preview matches what will be placed
                 let (snap_x, snap_y) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
                     let g = self.snap_grid_mm;
@@ -339,12 +321,10 @@ impl SchematicCanvas {
                 };
 
                 for (p1, p2) in &segments {
-                    let s1 = state
-                        .camera
-                        .world_to_screen(iced::Point::new(p1.x as f32, p1.y as f32), bounds);
-                    let s2 = state
-                        .camera
-                        .world_to_screen(iced::Point::new(p2.x as f32, p2.y as f32), bounds);
+                    let s1 =
+                        cam.world_to_screen(iced::Point::new(p1.x as f32, p1.y as f32), bounds);
+                    let s2 =
+                        cam.world_to_screen(iced::Point::new(p2.x as f32, p2.y as f32), bounds);
                     frame.stroke(&canvas::Path::line(s1, s2), rubber_stroke);
                 }
             }

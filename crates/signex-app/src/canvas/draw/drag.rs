@@ -8,6 +8,7 @@ impl SchematicCanvas {
         state: &CanvasState,
         bounds: Rectangle,
     ) {
+        let cam = self.camera();
         // Drag-to-move: the content layer already renders selected items
         // at the dragged offset (via shifted_snapshot). Here we just handle
         // the symbol-field anchor→moved guide line, which the content
@@ -40,11 +41,11 @@ impl SchematicCanvas {
                         if let (Some((anchor_x, anchor_y)), Some((field_x, field_y))) =
                             (anchor_pos, moved_pos)
                         {
-                            let anchor = state.camera.world_to_screen(
+                            let anchor = cam.world_to_screen(
                                 iced::Point::new(anchor_x as f32, anchor_y as f32),
                                 bounds,
                             );
-                            let moved = state.camera.world_to_screen(
+                            let moved = cam.world_to_screen(
                                 iced::Point::new(field_x as f32 + dx, field_y as f32 + dy),
                                 bounds,
                             );
@@ -97,7 +98,7 @@ impl SchematicCanvas {
                         SelectedKind::Wire => {
                             if let Some(w) = snap.wires.iter().find(|w| w.uuid == sel.uuid) {
                                 for p in [w.start, w.end] {
-                                    let s = state.camera.world_to_screen(
+                                    let s = cam.world_to_screen(
                                         iced::Point::new((p.x + dxf) as f32, (p.y + dyf) as f32),
                                         bounds,
                                     );
@@ -108,7 +109,7 @@ impl SchematicCanvas {
                         SelectedKind::Bus => {
                             if let Some(b) = snap.buses.iter().find(|b| b.uuid == sel.uuid) {
                                 for p in [b.start, b.end] {
-                                    let s = state.camera.world_to_screen(
+                                    let s = cam.world_to_screen(
                                         iced::Point::new((p.x + dxf) as f32, (p.y + dyf) as f32),
                                         bounds,
                                     );
@@ -118,7 +119,7 @@ impl SchematicCanvas {
                         }
                         SelectedKind::Junction => {
                             if let Some(j) = snap.junctions.iter().find(|j| j.uuid == sel.uuid) {
-                                let s = state.camera.world_to_screen(
+                                let s = cam.world_to_screen(
                                     iced::Point::new(
                                         (j.position.x + dxf) as f32,
                                         (j.position.y + dyf) as f32,
@@ -130,7 +131,7 @@ impl SchematicCanvas {
                         }
                         SelectedKind::Label => {
                             if let Some(l) = snap.labels.iter().find(|l| l.uuid == sel.uuid) {
-                                let s = state.camera.world_to_screen(
+                                let s = cam.world_to_screen(
                                     iced::Point::new(
                                         (l.position.x + dxf) as f32,
                                         (l.position.y + dyf) as f32,
@@ -142,7 +143,7 @@ impl SchematicCanvas {
                         }
                         SelectedKind::NoConnect => {
                             if let Some(nc) = snap.no_connects.iter().find(|n| n.uuid == sel.uuid) {
-                                let s = state.camera.world_to_screen(
+                                let s = cam.world_to_screen(
                                     iced::Point::new(
                                         (nc.position.x + dxf) as f32,
                                         (nc.position.y + dyf) as f32,
@@ -158,7 +159,7 @@ impl SchematicCanvas {
                                 .iter()
                                 .find_map(|cs| cs.pins.iter().find(|pin| pin.uuid == sel.uuid))
                             {
-                                let s = state.camera.world_to_screen(
+                                let s = cam.world_to_screen(
                                     iced::Point::new(
                                         (pin.position.x + dxf) as f32,
                                         (pin.position.y + dyf) as f32,
@@ -186,7 +187,7 @@ impl SchematicCanvas {
                                         &shifted,
                                         &p.position,
                                     );
-                                    let s = state.camera.world_to_screen(
+                                    let s = cam.world_to_screen(
                                         iced::Point::new(wx as f32, wy as f32),
                                         bounds,
                                     );
@@ -208,14 +209,11 @@ impl SchematicCanvas {
         state: &CanvasState,
         bounds: Rectangle,
     ) {
+        let cam = self.camera();
         // Drag-to-select rectangle
         if let (Some(start), Some(end)) = (state.select_drag_start, state.select_drag_end) {
-            let s1 = state
-                .camera
-                .world_to_screen(iced::Point::new(start.0 as f32, start.1 as f32), bounds);
-            let s2 = state
-                .camera
-                .world_to_screen(iced::Point::new(end.0 as f32, end.1 as f32), bounds);
+            let s1 = cam.world_to_screen(iced::Point::new(start.0 as f32, start.1 as f32), bounds);
+            let s2 = cam.world_to_screen(iced::Point::new(end.0 as f32, end.1 as f32), bounds);
             let x = s1.x.min(s2.x);
             let y = s1.y.min(s2.y);
             let w = (s2.x - s1.x).abs();
