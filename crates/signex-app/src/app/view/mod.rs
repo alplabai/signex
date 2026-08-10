@@ -651,11 +651,13 @@ impl Signex {
                 // unchanged geometry on pan/zoom.
                 let generation = pcb_canvas.scene_generation();
                 let (offset_x, offset_y, scale) = pcb_canvas.live_camera();
-                let content_shader = shader(crate::scene_shader::SceneShaderProgram::new(
-                    scene,
-                    Some(generation),
-                    [offset_x, offset_y],
-                    scale,
+                // `PcbSurface` selects this surface's pipeline slot — iced keys
+                // a stored pipeline by the primitive's TypeId, process-wide, so
+                // every surface needs its own marker (see `scene_shader`).
+                let content_shader = shader(crate::scene_shader::SceneShaderProgram::<
+                    crate::scene_shader::PcbSurface,
+                >::new(
+                    scene, Some(generation), [offset_x, offset_y], scale
                 ))
                 .width(Length::Fill)
                 .height(Length::Fill);
