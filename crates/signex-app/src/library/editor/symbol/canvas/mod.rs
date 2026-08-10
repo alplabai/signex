@@ -308,7 +308,13 @@ impl<'a> SymbolCanvas<'a> {
 /// exact same grid the canvas already places/drags things onto (#426).
 pub(crate) const SNAP_GRID_MM: f64 = 1.27;
 const ORIGIN_MARKER_MM: f32 = 1.27;
-const MM_PER_EM: f32 = 0.72;
+/// This surface's readability limits. Wider than the schematic's `[6.0, 64.0]`
+/// on purpose — a symbol is edited close up, so pin text may render smaller
+/// and grow larger here. The mm→em ratio is *not* a per-surface choice and
+/// lives once in `signex_gfx::primitive::text::MM_PER_EM`; a local copy of it
+/// is what let this canvas and its own hit-test disagree.
+const SYMBOL_TEXT_SIZE: signex_gfx::primitive::text::TextSizePolicy =
+    signex_gfx::primitive::text::TextSizePolicy::new(2.0, 96.0);
 const SYMBOL_AXIS_STROKE_PX_AT_100: f32 = 1.0;
 const SYMBOL_GRAPHIC_STROKE_PX_AT_100: f32 = 1.5;
 const SYMBOL_GRAPHIC_SELECTED_STROKE_PX_AT_100: f32 = 2.5;
@@ -502,9 +508,8 @@ impl<'a> SymbolCanvas<'a> {
             crate::renderer_scene_canvas::SceneDrawOptions {
                 scale_px_per_mm: scale,
                 min_stroke_px: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX,
-                text_mm_per_em: MM_PER_EM,
-                text_min_px: 2.0,
-                text_max_px: 96.0,
+                text_min_px: SYMBOL_TEXT_SIZE.min_px,
+                text_max_px: SYMBOL_TEXT_SIZE.max_px,
             },
         );
     }

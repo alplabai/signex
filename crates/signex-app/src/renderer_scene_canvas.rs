@@ -13,7 +13,11 @@ use signex_gfx::scene::Scene;
 pub struct SceneDrawOptions {
     pub scale_px_per_mm: f32,
     pub min_stroke_px: f32,
-    pub text_mm_per_em: f32,
+    /// Readability limits in logical pixels — a per-surface view decision, so
+    /// each replay supplies its own. The mm→em ratio is *not* here: it is one
+    /// constant (`signex_gfx::primitive::text::MM_PER_EM`) because it encodes
+    /// the model's millimetre contract, not a view preference, and a second
+    /// copy is how the replays drifted apart.
     pub text_min_px: f32,
     pub text_max_px: f32,
 }
@@ -28,8 +32,11 @@ impl SceneDrawOptions {
     }
 
     fn text_px(self, size_mm: f32) -> f32 {
-        let em_mm = size_mm.max(0.1) / self.text_mm_per_em.max(0.01);
-        (em_mm * self.scale_px_per_mm).clamp(self.text_min_px, self.text_max_px)
+        signex_gfx::primitive::text::text_px(
+            size_mm,
+            self.scale_px_per_mm,
+            signex_gfx::primitive::text::TextSizePolicy::new(self.text_min_px, self.text_max_px),
+        )
     }
 }
 

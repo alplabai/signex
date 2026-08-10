@@ -37,6 +37,7 @@ use signex_gfx::pipeline::circle::CirclePipeline;
 use signex_gfx::pipeline::line::LinePipeline;
 use signex_gfx::pipeline::polygon::PolygonPipeline;
 use signex_gfx::pipeline::text::GlyphonTextPipeline;
+use signex_gfx::primitive::text::TextSizePolicy;
 use signex_gfx::scene::{GPU_SCENE_DRAW_ORDER, Scene, SceneBucket};
 use signex_gfx::wgpu;
 
@@ -86,6 +87,12 @@ use crate::app::Message;
 pub trait SceneSurface: 'static + Send + Sync + std::fmt::Debug {
     /// Name used in this surface's one-shot text-failure warnings.
     const LABEL: &'static str;
+
+    /// Readability limits on rendered text, in logical pixels. A view
+    /// decision, which is why it hangs off the surface rather than off the
+    /// `Scene` — the schematic and the Symbol Editor already disagree about
+    /// it while sharing the same scene shape.
+    const TEXT_SIZE: TextSizePolicy;
 }
 
 /// The PCB editor's scene surface.
@@ -94,6 +101,11 @@ pub struct PcbSurface;
 
 impl SceneSurface for PcbSurface {
     const LABEL: &'static str = "PCB";
+    /// PCB scenes carry no text today — `PcbCanvas::build_scene` never sets
+    /// `DirtyFlags::TEXT`. These bounds are the schematic's, so the day
+    /// footprint text does reach a `Scene` it starts out consistent with the
+    /// rest of the app rather than unclamped.
+    const TEXT_SIZE: TextSizePolicy = TextSizePolicy::new(6.0, 64.0);
 }
 
 /// World coordinate (mm) at the render pass origin (top-left).
@@ -285,11 +297,32 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
         // releases unused atlas pages after every frame — delete that override
         // and this swallow makes text loss permanent for the session instead.
         // A panic here would take the render thread down.
+        //
+        // The font system is iced's own, not one of ours: shaping against a
+        // private `FontSystem` meant this pipeline never saw the faces the app
+        // loaded, so canvas text came out in a system fallback instead of the
+        // app's monospace face. Safe to take the write lock here — iced's own
+        // text prepare is a *sibling* of custom-primitive prepare in the layer
+        // loop, not a parent, so it holds no font-system lock while this runs.
+        //
+        // The policy's bounds are logical pixels, and `scale_px` is physical,
+        // so the bounds are scaled to match. Clamping physical sizes against
+        // logical bounds would shrink both thresholds by the DPI factor and
+        // silently disagree with the CPU replay on a HiDPI display.
+        // `(em * scale * dpi).clamp(min * dpi, max * dpi)` is exactly
+        // `(em * scale).clamp(min, max) * dpi`.
+        let text_size = TextSizePolicy::new(S::TEXT_SIZE.min_px * dpi, S::TEXT_SIZE.max_px * dpi);
+        let mut font_system = iced::advanced::graphics::text::font_system()
+            .write()
+            .expect("iced font system poisoned");
         if let Err(error) = pipeline.text.upload(
             device,
             queue,
+            font_system.raw(),
             &self.scene.texts,
             scale_px,
+            text_size,
+            crate::render_config::CANVAS_FONT_FAMILY,
             [vp_px[0] as u32, vp_px[1] as u32],
             [self.offset_px[0] * dpi, self.offset_px[1] * dpi],
         ) {
@@ -532,6 +565,7 @@ mod tests {
         struct OtherSurface;
         impl SceneSurface for OtherSurface {
             const LABEL: &'static str = "other";
+            const TEXT_SIZE: TextSizePolicy = TextSizePolicy::new(1.0, 128.0);
         }
 
         assert_ne!(
