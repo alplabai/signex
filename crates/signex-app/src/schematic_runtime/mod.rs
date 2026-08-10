@@ -359,7 +359,6 @@ fn draw_renderer_snapshot(
         crate::renderer_scene_canvas::SceneDrawOptions {
             scale_px_per_mm: transform.scale,
             min_stroke_px: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX,
-            text_mm_per_em: 0.72,
             text_min_px: 6.0,
             text_max_px: 64.0,
         },

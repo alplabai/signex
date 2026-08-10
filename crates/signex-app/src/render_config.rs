@@ -11,7 +11,14 @@
 //! reintroduce a global; a `draw` path that reads one is not a function
 //! of the app state.
 
-pub const IOSEVKA: iced::Font = iced::Font::with_name("Iosevka");
+/// Family name of the canvas font, as registered with iced by `main.rs`.
+///
+/// One string, shared by the CPU replay's [`IOSEVKA`] and the GPU text
+/// pipeline — the two shaping against different families is what made
+/// schematic text render in the wrong typeface on the GPU path.
+pub const CANVAS_FONT_FAMILY: &str = "Iosevka";
+
+pub const IOSEVKA: iced::Font = iced::Font::with_name(CANVAS_FONT_FAMILY);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PowerPortStyle {

@@ -15,7 +15,17 @@ use crate::primitive::arc::Arc;
 use crate::primitive::circle::Circle;
 use crate::primitive::line::LineSegment;
 use crate::primitive::polygon::GpuPolygon;
-use crate::primitive::text::{TextHAlign, TextItem, TextVAlign};
+use crate::primitive::text::{TextHAlign, TextItem, TextSizePolicy, TextVAlign};
+
+/// Text sizing for the headless smoke passes. Wide on purpose: these verify
+/// rasterization, not typography, so a readability clamp would hide the very
+/// size the pass is exercising.
+pub(crate) const DEBUG_TEXT_POLICY: TextSizePolicy = TextSizePolicy::new(1.0, 512.0);
+
+/// Family the smoke passes ask for. The harness loads no faces, so this
+/// resolves through the system fallback — fine, because these passes assert
+/// that glyphs rasterize at all, not which ones.
+pub(crate) const DEBUG_TEXT_FAMILY: &str = "Iosevka";
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SmokePassReport {
@@ -626,12 +636,20 @@ async fn run_text_smoke_pass_with(scale_px_per_mm: f32, texts: &[TextItem]) -> R
     let target_format = wgpu::TextureFormat::Bgra8Unorm;
     let mut text_pipeline = GlyphonTextPipeline::new(&device, &queue, target_format);
 
+    // Headless harness: there is no app font system to borrow, so it owns
+    // one. The policy is deliberately wide — these passes verify
+    // rasterization, not typography, and a clamp would hide the size under
+    // test.
+    let mut font_system = cryoglyph::FontSystem::new();
     text_pipeline
         .upload(
             &device,
             &queue,
+            &mut font_system,
             texts,
             scale_px_per_mm,
+            DEBUG_TEXT_POLICY,
+            DEBUG_TEXT_FAMILY,
             [128, 128],
             [0.0, 0.0],
         )
