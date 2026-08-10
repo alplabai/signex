@@ -694,9 +694,10 @@ pub fn write_grid_visible_pref_at(path: &Path, visible: bool) {
 // PCB GPU render (experimental)
 // ──────────────────────────────────────────────────────────────────────
 
-/// Read the PCB GPU-render toggle. Defaults to the compile-time
-/// [`crate::feature_flags::PCB_GPU_RENDER`] when the key is absent, so the
-/// const acts as the factory default and old prefs files stay compatible.
+/// Read the PCB GPU-render toggle. A saved value always wins; the
+/// compile-time [`crate::feature_flags::PCB_GPU_RENDER_DEFAULT`] applies only
+/// when the key is absent, so it is a factory default rather than a gate and
+/// old prefs files stay compatible.
 pub fn read_pcb_gpu_render_pref() -> bool {
     read_pcb_gpu_render_pref_at(&prefs_path())
 }
@@ -704,7 +705,7 @@ pub fn read_pcb_gpu_render_pref() -> bool {
 pub fn read_pcb_gpu_render_pref_at(path: &Path) -> bool {
     read_prefs_json(path)
         .and_then(|json| json["pcb_gpu_render"].as_bool())
-        .unwrap_or(crate::feature_flags::PCB_GPU_RENDER)
+        .unwrap_or(crate::feature_flags::PCB_GPU_RENDER_DEFAULT)
 }
 
 pub fn write_pcb_gpu_render_pref(enabled: bool) {
@@ -876,6 +877,55 @@ mod tests {
             prefs_path().starts_with(&root),
             "fonts::prefs_path() must live under config_root(), got {}",
             prefs_path().display()
+        );
+    }
+
+    fn temp_prefs(contents: &str) -> (tempfile::TempDir, std::path::PathBuf) {
+        let dir = tempfile::Builder::new()
+            .prefix("signex-flags-")
+            .tempdir()
+            .expect("temp dir");
+        let path = dir.path().join("prefs.json");
+        std::fs::write(&path, contents).expect("write prefs");
+        (dir, path)
+    }
+
+    /// `PCB_GPU_RENDER_DEFAULT` is a factory default, not a gate: a saved
+    /// value wins over it in both directions. The module doc in
+    /// `feature_flags` used to claim the opposite, which would make someone
+    /// reach for that const to disable the feature for everyone and ship a
+    /// release where it was still on.
+    #[test]
+    fn a_saved_pcb_gpu_render_value_overrides_the_compile_time_default() {
+        let (_dir, on) = temp_prefs(r#"{"pcb_gpu_render": true}"#);
+        assert!(
+            read_pcb_gpu_render_pref_at(&on),
+            "a saved `true` must win even though the default is {}",
+            crate::feature_flags::PCB_GPU_RENDER_DEFAULT
+        );
+
+        let (_dir, off) = temp_prefs(r#"{"pcb_gpu_render": false}"#);
+        assert!(
+            !read_pcb_gpu_render_pref_at(&off),
+            "a saved `false` must win too"
+        );
+    }
+
+    /// The other half of the contract: with no saved key, the const is what
+    /// a fresh profile gets.
+    #[test]
+    fn an_absent_pcb_gpu_render_key_falls_back_to_the_compile_time_default() {
+        let (_dir, empty) = temp_prefs("{}");
+        assert_eq!(
+            read_pcb_gpu_render_pref_at(&empty),
+            crate::feature_flags::PCB_GPU_RENDER_DEFAULT
+        );
+
+        let (_dir, missing) = temp_prefs(r#"{"theme": "nord"}"#);
+        assert_eq!(
+            read_pcb_gpu_render_pref_at(&missing),
+            crate::feature_flags::PCB_GPU_RENDER_DEFAULT,
+            "an unrelated prefs file must not disturb the default"
         );
     }
 }
