@@ -203,10 +203,21 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
                 text("Draw the PCB canvas on the GPU (shader) instead of the CPU. Applies immediately.")
                     .size(10)
                     .style(text_muted),
-                // The dashed-line, concave-fill, and overlay-z-order gaps this
+                text(
+                    "Not yet visually matched to the CPU renderer: zone fills and traces \
+                     stack in a different order, and thin traces can fade out when zoomed \
+                     far out."
+                )
+                .size(10)
+                .style(text_muted),
+                // The dashed-line, concave-fill and overlay-z-order gaps this
                 // note used to warn about are fixed (see the `scene::order`
-                // parity tests); the toggle stays default-off pending
-                // hardware visual-parity sign-off, not a known-bug list.
+                // parity tests). What is left is real and user-visible, so it
+                // is named above rather than left behind the word
+                // "experimental": the base-bucket draw order deliberately
+                // diverges (`scene::order` — a visual-authority call), and the
+                // GPU has no screen-space minimum stroke width where the CPU
+                // replay clamps to 0.6 px. Both tracked in #645.
             ]
             .spacing(3)
             .width(200),
