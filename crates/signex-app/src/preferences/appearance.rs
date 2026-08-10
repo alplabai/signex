@@ -204,9 +204,8 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
                     .size(10)
                     .style(text_muted),
                 text(
-                    "Not yet visually matched to the CPU renderer: zone fills and traces \
-                     stack in a different order, and thin traces can fade out when zoomed \
-                     far out."
+                    "Zone fills and traces stack differently than on the CPU, \
+                     and thin traces can fade when zoomed out."
                 )
                 .size(10)
                 .style(text_muted),
