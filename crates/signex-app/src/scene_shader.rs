@@ -93,6 +93,19 @@ pub trait SceneSurface: 'static + Send + Sync + std::fmt::Debug {
     /// `Scene` — the schematic and the Symbol Editor already disagree about
     /// it while sharing the same scene shape.
     const TEXT_SIZE: TextSizePolicy;
+
+    /// Thinnest a stroke may render, in logical pixels — the same floor this
+    /// surface's CPU replay applies, so zooming out thins geometry to the same
+    /// minimum on both paths instead of letting the GPU fade it away. Per
+    /// surface because the two disagree: the schematic clamps to 0.6 px
+    /// (`SCHEMATIC_RENDER_MIN_STROKE_PX`), the PCB to 0.5 px.
+    const MIN_STROKE_PX: f32;
+
+    /// Smallest a circle may render, in logical pixels. Both CPU replays use
+    /// 0.5 px today; it lives per surface anyway, because a value that is "the
+    /// same everywhere" written down in only one place is how the last
+    /// divergence started.
+    const MIN_RADIUS_PX: f32;
 }
 
 /// The PCB editor's scene surface.
@@ -106,6 +119,10 @@ impl SceneSurface for PcbSurface {
     /// footprint text does reach a `Scene` it starts out consistent with the
     /// rest of the app rather than unclamped.
     const TEXT_SIZE: TextSizePolicy = TextSizePolicy::new(6.0, 64.0);
+    /// Mirrors the PCB CPU replay's own clamps — `pcb_canvas::draw_lines` and
+    /// `draw_circles` both `.max(0.5)`.
+    const MIN_STROKE_PX: f32 = 0.5;
+    const MIN_RADIUS_PX: f32 = 0.5;
 }
 
 /// World coordinate (mm) at the render pass origin (top-left).
@@ -250,9 +267,17 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
         let offset_mm = world_origin_mm(self.offset_px, self.scale_px_per_mm);
 
         // The camera changes on every pan/zoom frame, so always refresh it.
-        pipeline
-            .camera
-            .update(queue, CameraUniform::ortho(vp_px, offset_mm, scale_px));
+        //
+        // The feature floors ride along so the shaders can keep thin geometry
+        // legible the way this surface's CPU replay does. They are declared in
+        // logical pixels and `scale_px` is physical, so they scale by DPI for
+        // the same reason `TEXT_SIZE` does — an unscaled floor would be half
+        // as thick on a HiDPI display as on a standard one.
+        pipeline.camera.update(
+            queue,
+            CameraUniform::ortho(vp_px, offset_mm, scale_px)
+                .with_min_feature_px(S::MIN_STROKE_PX * dpi, S::MIN_RADIUS_PX * dpi),
+        );
 
         // Skip re-uploading identical geometry. The line/circle/arc/polygon
         // instances live in *world* space and the camera ortho above applies
@@ -566,6 +591,8 @@ mod tests {
         impl SceneSurface for OtherSurface {
             const LABEL: &'static str = "other";
             const TEXT_SIZE: TextSizePolicy = TextSizePolicy::new(1.0, 128.0);
+            const MIN_STROKE_PX: f32 = 0.5;
+            const MIN_RADIUS_PX: f32 = 0.5;
         }
 
         assert_ne!(

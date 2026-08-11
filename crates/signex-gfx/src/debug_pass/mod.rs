@@ -199,7 +199,11 @@ pub async fn run_line_circle_smoke_pass(scale_px_per_mm: f32) -> Result<SmokePas
 /// for `tests/regression_golden.rs` to call as a separate crate): this one
 /// has no caller outside `debug_pass::tests`.
 #[cfg(test)]
-async fn run_line_dash_readback_smoke_pass(sample_x_px: &[u32]) -> Result<Vec<u8>, String> {
+async fn run_line_readback_smoke_pass(
+    line: LineSegment,
+    min_stroke_px: f32,
+    sample_x_px: &[u32],
+) -> Result<Vec<u8>, String> {
     let instance = wgpu::Instance::default();
 
     let adapter = instance
@@ -227,23 +231,14 @@ async fn run_line_dash_readback_smoke_pass(sample_x_px: &[u32]) -> Result<Vec<u8
     const WIDTH: u32 = 128;
     const HEIGHT: u32 = 8;
     let scale_px_per_mm = 4.0f32;
-    let camera = CameraUniform::ortho([WIDTH as f32, HEIGHT as f32], [0.0, 0.0], scale_px_per_mm);
+    let camera = CameraUniform::ortho([WIDTH as f32, HEIGHT as f32], [0.0, 0.0], scale_px_per_mm)
+        .with_min_feature_px(min_stroke_px, 0.0);
     let camera_gpu = CameraGpu::new(&device, camera);
 
     let mut line_pipeline =
         LinePipeline::new(&device, target_format, camera_gpu.bind_group_layout());
 
-    // Centre row (world y = 1mm = HEIGHT/2 px), spanning almost the full
-    // viewport width so several dash/gap periods land inside it.
-    let lines = [LineSegment {
-        p0: [0.0, 1.0],
-        p1: [30.0, 1.0],
-        width: 1.0,
-        color: [1.0, 1.0, 1.0, 1.0],
-        style: LineSegment::STYLE_DASHED,
-        _pad: 0,
-    }];
-    line_pipeline.upload(&device, &queue, &lines);
+    line_pipeline.upload(&device, &queue, &[line]);
 
     let target = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("signex_gfx_dash_readback_target"),
