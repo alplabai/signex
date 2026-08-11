@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="https://github.com/alplabai/signex/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License"></a>
-  <a href="https://github.com/alplabai/signex/releases/tag/v0.14.0"><img src="https://img.shields.io/badge/version-v0.14.0-green.svg" alt="Version"></a>
+  <a href="https://github.com/alplabai/signex/releases/latest"><img src="https://img.shields.io/github/v/release/alplabai/signex?label=version" alt="Latest release"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.88%2B-orange.svg" alt="Rust"></a>
   <a href="https://github.com/alplabai/signex/wiki"><img src="https://img.shields.io/badge/wiki-user%20guide-blueviolet.svg" alt="Wiki"></a>
   <a href="https://github.com/alplabai/signex/discussions"><img src="https://img.shields.io/badge/discussions-join-brightgreen.svg" alt="Discussions"></a>
@@ -18,6 +18,7 @@
 <p align="center">
   <a href="#features">Features</a> &middot;
   <a href="#screenshots">Screenshots</a> &middot;
+  <a href="#download">Download</a> &middot;
   <a href="#building">Building</a> &middot;
   <a href="#roadmap">Roadmap</a> &middot;
   <a href="https://github.com/alplabai/signex/wiki">Wiki</a> &middot;
@@ -187,6 +188,68 @@ signex/
 - **Multi-window by default.** Built on `iced::daemon`; every undocked tab gets its own engine + canvas keyed by window id, so two schematics can be edited in parallel without cross-talk.
 - **Nanometer coordinates.** `i64` nanometers internally; exact in both metric and imperial — no float `EPS` comparisons for "same point".
 - **Canvas for schematic, Shader for PCB.** CPU tessellation for schematics, GPU instanced rendering (`signex-gfx`, wgpu 27) for large PCB scenes.
+
+## Download
+
+Before downloading, check the [hardware requirements](#hardware-requirements).
+The [latest release](https://github.com/alplabai/signex/releases/latest)
+provides these packages:
+
+| Platform | Package | Architecture | Use |
+|---|---|---|---|
+| Windows | `signex-setup-<arch>-<version>.exe` | x86_64, ARM64 (`aarch64`) | Run for a guided installation |
+| Windows | `signex-windows-<arch>-<version>.zip` | x86_64, ARM64 (`aarch64`) | Extract and run without installing |
+| macOS | `signex-macos-aarch64-<version>.dmg` | Apple silicon (ARM64) | Open and drag Signex to Applications |
+| Linux | `signex_<version>_amd64.deb` | x86_64 | Debian or Ubuntu: `sudo apt install ./signex_<version>_amd64.deb` |
+| Linux | `Signex-<version>-x86_64.AppImage` | x86_64 | Most distributions: make executable with `chmod +x`, then run |
+| Linux | `signex-linux-x86_64-<version>.tar.gz` | x86_64 | Extract and run without installing |
+
+There is currently no Intel macOS or ARM64 Linux build.
+
+### First launch
+
+The current packages do not yet carry a trusted publisher or developer
+signature:
+
+- **Windows:** Microsoft Defender SmartScreen may appear. Select **More info**,
+  then **Run anyway**.
+- **macOS:** after opening the DMG and moving Signex to Applications,
+  right-click Signex and select **Open** on the first launch to bypass
+  Gatekeeper's unidentified-developer warning.
+
+These workarounds can be removed when
+[Windows signing](https://github.com/alplabai/signex/issues/318) and
+[macOS signing and notarization](https://github.com/alplabai/signex/issues/319)
+land.
+
+### Verify a download
+
+Every release includes
+[`SHA256SUMS.txt`](https://github.com/alplabai/signex/releases/latest/download/SHA256SUMS.txt).
+Download it next to the package you chose. The checksum file lists every
+release artifact, so the commands below select the one file you downloaded.
+
+Linux (set `file` to the exact filename you downloaded):
+
+```bash
+file='Signex-<version>-x86_64.AppImage'
+grep -F "  $file" SHA256SUMS.txt | sha256sum -c -
+```
+
+macOS (set `file` to the exact filename you downloaded):
+
+```bash
+file='signex-macos-aarch64-<version>.dmg'
+grep -F "  $file" SHA256SUMS.txt | shasum -a 256 -c -
+```
+
+Windows PowerShell (set `$file` to the exact filename you downloaded):
+
+```powershell
+$file = "<downloaded-package-filename>"
+$expected = ((Select-String -Path .\SHA256SUMS.txt -SimpleMatch "  $file").Line -split '\s+')[0]
+(Get-FileHash -Algorithm SHA256 -Path $file).Hash.ToLowerInvariant() -eq $expected
+```
 
 ## Hardware Requirements
 
