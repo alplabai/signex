@@ -1,0 +1,146 @@
+# Default Gerber viewer settings.
+# These settings are independent of the GUI theme. Layer colors are configured separately.
+
+version = 1
+
+[grid_display]
+# Supported values: "dots", "lines", "small_crosses".
+style = "dots"
+thickness_pixels = 1.0
+minimum_spacing_pixels = 10.0
+# Supported values: "always", "when_grid_is_shown", "never".
+snap_to_grid = "always"
+
+[cursor]
+# Supported values: "small_crosshairs", "full_window_crosshairs",
+# and "forty_five_degree_crosshairs".
+style = "small_crosshairs"
+always_show_crosshairs = true
+
+[annotations]
+show_d_codes = false
+show_page_limits = false
+
+[drawing_mode]
+sketch_flashed_items = false
+sketch_lines = false
+sketch_polygons = false
+forced_opacity = 0.60
+inactive_layer_opacity = 0.28
+
+[page_size]
+# Supported values: "full_size", "a4", "a3", "a2", "a", "b", "c".
+size = "full_size"
+
+# Grid names are optional. When present, add `name = "..."` to the entry.
+# A grid's unit applies to both X and Y. Supported values: "mil", "mm".
+
+[[grid_sizes]]
+x = 100.0
+y = 100.0
+unit = "mil"
+
+[[grid_sizes]]
+x = 50.0
+y = 50.0
+unit = "mil"
+
+[[grid_sizes]]
+x = 25.0
+y = 25.0
+unit = "mil"
+
+[[grid_sizes]]
+x = 20.0
+y = 20.0
+unit = "mil"
+
+[[grid_sizes]]
+x = 10.0
+y = 10.0
+unit = "mil"
+
+[[grid_sizes]]
+x = 5.0
+y = 5.0
+unit = "mil"
+
+[[grid_sizes]]
+x = 2.5
+y = 2.5
+unit = "mil"
+
+[[grid_sizes]]
+x = 2.0
+y = 2.0
+unit = "mil"
+
+[[grid_sizes]]
+x = 1.0
+y = 1.0
+unit = "mil"
+
+[[grid_sizes]]
+x = 0.5
+y = 0.5
+unit = "mil"
+
+[[grid_sizes]]
+x = 0.2
+y = 0.2
+unit = "mil"
+
+[[grid_sizes]]
+x = 0.1
+y = 0.1
+unit = "mil"
+
+[[grid_sizes]]
+x = 5.0
+y = 5.0
+unit = "mm"
+
+[[grid_sizes]]
+x = 1.5
+y = 2.5
+unit = "mm"
+
+[[grid_sizes]]
+x = 1.0
+y = 1.0
+unit = "mm"
+
+[[grid_sizes]]
+x = 0.5
+y = 0.5
+unit = "mm"
+
+[[grid_sizes]]
+x = 0.25
+y = 0.25
+unit = "mm"
+
+[[grid_sizes]]
+x = 0.2
+y = 0.2
+unit = "mm"
+
+[[grid_sizes]]
+x = 0.1
+y = 0.1
+unit = "mm"
+
+[[grid_sizes]]
+x = 0.05
+y = 0.0
+unit = "mm"
+
+[[grid_sizes]]
+x = 0.025
+y = 0.0
+unit = "mm"
+
+[[grid_sizes]]
+x = 0.01
+y = 0.0
+unit = "mm"

@@ -315,6 +315,7 @@ pub(in crate::panels::footprint_editor_properties) fn pad_check_row<'a>(
 /// edits write to `next_pad_defaults` (placement form) or to a
 /// specific selected pad. The pause/resume hint banner only shows
 /// for the placement form (`PadEditTarget::Next`).
+#[allow(clippy::too_many_arguments)]
 pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties<'a>(
     mut col: Column<'a, PanelMsg>,
     values: &PadFormValues,

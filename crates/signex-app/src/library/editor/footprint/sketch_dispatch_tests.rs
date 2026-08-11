@@ -1,4 +1,4 @@
-//! Phase 5.4 + 7.3 dispatcher tests.
+﻿//! Phase 5.4 + 7.3 dispatcher tests.
 //!
 //! These run as inline tests under `#[cfg(test)]` so they exercise
 //! the dispatcher without spinning up the iced runtime.

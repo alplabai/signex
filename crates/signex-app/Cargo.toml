@@ -16,6 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 signex-types = { workspace = true }
+signex-gerber = { workspace = true }
 signex-engine = { workspace = true }
 signex-renderer = { workspace = true }
 signex-gfx = { workspace = true }
@@ -65,6 +66,7 @@ webbrowser = "1"
 tiny_http = "0.12"
 dirs = "5"
 toml = { workspace = true }
+pdf-writer = { workspace = true }
 tokio = { workspace = true }
 # `fonts::production_temp_fallback_path()`'s no-config-dir fallback
 # needs a real (non-dev) random-named tempdir at runtime, not just in
@@ -103,6 +105,7 @@ winres = "0.1"
 # so there's no extra copy in the dep graph.
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
+    "Win32_Globalization",
     "Win32_Graphics_Dwm",
     # ReleaseCapture + SendMessageW + WM_SYSCOMMAND constants for the
     # SC_MOVE / SC_SIZE drag fallback in `src/chrome.rs`. winit's own

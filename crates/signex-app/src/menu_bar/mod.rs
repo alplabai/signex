@@ -183,6 +183,9 @@ pub enum MenuMessage {
     /// is already open is a no-op, and the entered state survives a
     /// close/reopen. Routed to `OverlayMsg::OpenPassiveCalculator`.
     OpenPassiveCalculator,
+    /// Tools ▸ Gerber Viewer — opens or focuses the dedicated fabrication
+    /// viewer window.
+    OpenGerberViewer,
     /// Open the Keyboard Shortcuts reference modal — a single page
     /// listing every binding from `shortcuts.rs`, callable from
     /// Help ▸ Keyboard Shortcuts and from F1.

@@ -153,6 +153,11 @@ impl Signex {
             InputTarget::DetachedModal(_)
             | InputTarget::DetachedPanel
             | InputTarget::ComponentEditor => {}
+
+            // The Gerber canvas captures mapped shortcuts first. This
+            // fallback keeps the same contexts active when focus is on a
+            // Gerber tool-window control outside the canvas.
+            InputTarget::GerberToolWindow => contexts.push(ShortcutContext::Gerber),
         }
         contexts
     }
@@ -241,6 +246,21 @@ mod tests {
                 vec![ShortcutContext::Global],
                 "a document-scoped command here would act on a canvas in \
                  another window"
+            );
+        }
+    }
+
+    #[test]
+    fn gerber_tool_windows_get_global_and_gerber_contexts() {
+        let mut app = app_with_footprint_tab();
+        let viewer = open_window(&mut app, WindowKind::GerberViewer);
+        let document_id = app.ui_state.gerber_workspace.active_document_id();
+        let grid_editor = open_window(&mut app, WindowKind::GerberGridEditor { document_id });
+
+        for window in [viewer, grid_editor] {
+            assert_eq!(
+                app.shortcut_contexts(Some(window)),
+                vec![ShortcutContext::Global, ShortcutContext::Gerber]
             );
         }
     }

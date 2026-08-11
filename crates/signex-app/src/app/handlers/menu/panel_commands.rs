@@ -34,6 +34,7 @@ impl Signex {
             MenuMessage::OpenPassiveCalculator => {
                 Some(self.update(Message::Overlay(OverlayMsg::OpenPassiveCalculator)))
             }
+            MenuMessage::OpenGerberViewer => Some(self.update(Message::OpenGerberViewer)),
             MenuMessage::OpenKeyboardShortcuts => {
                 // Single-flag toggle — opening the modal is enough; the
                 // close path goes through

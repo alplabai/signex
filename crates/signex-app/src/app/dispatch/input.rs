@@ -94,6 +94,9 @@ pub(crate) enum InputTarget {
     /// A detached Component Preview. Addressable through
     /// `library.editors`, but nothing in it answers a bare key today.
     ComponentEditor,
+    /// A dedicated Gerber tool window. The Gerber canvas captures its
+    /// own shortcuts before app-level input routing sees them.
+    GerberToolWindow,
 }
 
 impl InputTarget {
@@ -184,6 +187,8 @@ impl Signex {
             Some(WindowKind::UndockedTab { .. }) => InputTarget::UndockedTab,
             Some(WindowKind::DetachedPanel(_)) => InputTarget::DetachedPanel,
             Some(WindowKind::ComponentEditor { .. }) => InputTarget::ComponentEditor,
+            Some(WindowKind::GerberViewer) => InputTarget::GerberToolWindow,
+            Some(WindowKind::GerberGridEditor { .. }) => InputTarget::GerberToolWindow,
         }
     }
 
@@ -580,6 +585,10 @@ mod tests {
                 row_id: signex_library::RowId::new(),
             },
         );
+        let gerber_viewer = open_window(&mut app, WindowKind::GerberViewer);
+        let document_id = app.ui_state.gerber_workspace.active_document_id();
+        let gerber_grid_editor =
+            open_window(&mut app, WindowKind::GerberGridEditor { document_id });
 
         assert_eq!(
             app.input_target(Some(modal)),
@@ -588,6 +597,14 @@ mod tests {
         assert_eq!(app.input_target(Some(tab)), InputTarget::UndockedTab);
         assert_eq!(app.input_target(Some(panel)), InputTarget::DetachedPanel);
         assert_eq!(app.input_target(Some(editor)), InputTarget::ComponentEditor);
+        assert_eq!(
+            app.input_target(Some(gerber_viewer)),
+            InputTarget::GerberToolWindow
+        );
+        assert_eq!(
+            app.input_target(Some(gerber_grid_editor)),
+            InputTarget::GerberToolWindow
+        );
     }
 
     #[test]
@@ -597,6 +614,7 @@ mod tests {
         assert!(!InputTarget::DetachedModal(ModalId::Preferences).paints_overlay_stack());
         assert!(!InputTarget::DetachedPanel.paints_overlay_stack());
         assert!(!InputTarget::ComponentEditor.paints_overlay_stack());
+        assert!(!InputTarget::GerberToolWindow.paints_overlay_stack());
     }
 
     // ── Consumer 1: the chord recorder ──────────────────────────────

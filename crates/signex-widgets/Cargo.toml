@@ -8,9 +8,22 @@ license.workspace = true
 
 [dependencies]
 signex-types = { workspace = true }
+signex-gerber = { workspace = true }
 iced = { workspace = true }
 iced_aw = { workspace = true }
+iced_dock = { workspace = true }
 chrono = { workspace = true }
+serde = { workspace = true }
+toml = { workspace = true }
+pdf-writer = { workspace = true }
+uuid = { workspace = true }
+dirs = "5"
+
+[dev-dependencies]
+tempfile = "3"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Globalization"] }
 
 # GH #548 — inherit [workspace.lints.rust] (unused_must_use = deny).
 [lints]

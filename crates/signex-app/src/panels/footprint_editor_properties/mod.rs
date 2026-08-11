@@ -35,6 +35,7 @@ mod subforms;
 /// 3. **Default** (any mode, no selection) — footprint summary
 ///    (name + version), counts (pads, sketch entities, constraints),
 ///    and the most recent solve summary when a sketch exists.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn view_footprint_editor_properties<'a>(
     fp: &'a FootprintEditorPanelContext,
     palette: PanelPalette,

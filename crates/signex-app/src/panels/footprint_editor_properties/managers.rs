@@ -154,6 +154,7 @@ pub(super) fn render_grid_manager<'a>(
 
 /// v0.18.13 — Other section. Today carries only a Units toggle;
 /// future home for additional document-level options.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn render_other_section<'a>(
     mut col: Column<'a, PanelMsg>,
     _fp: &'a FootprintEditorPanelContext,

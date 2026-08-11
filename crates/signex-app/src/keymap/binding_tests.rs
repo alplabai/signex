@@ -65,3 +65,43 @@ fn preserves_pointer_gestures_as_non_keyboard_triggers() {
         ShortcutTrigger::PointerGesture(_)
     ));
 }
+
+#[test]
+fn parses_bare_plus_key() {
+    let stroke = KeyStroke::from_str("+").expect("bare plus key");
+
+    assert_eq!(stroke.key, KeyToken::Character("+".to_owned()));
+    assert!(stroke.modifiers.is_empty());
+    assert_eq!(stroke.to_string(), "+");
+}
+
+#[test]
+fn normalizes_shifted_plus_character() {
+    let stroke = KeyStroke::from_iced(
+        &iced::keyboard::Key::Character("+".into()),
+        iced::keyboard::Modifiers::SHIFT,
+    )
+    .expect("plus character");
+
+    assert_eq!(stroke.key, KeyToken::Character("+".to_owned()));
+    assert!(stroke.modifiers.is_empty());
+}
+
+#[test]
+fn keeps_control_and_command_modifiers_distinct() {
+    let control = KeyStroke::from_iced(
+        &iced::keyboard::Key::Character("p".into()),
+        iced::keyboard::Modifiers::CTRL,
+    )
+    .expect("Ctrl+P");
+    let command = KeyStroke::from_iced(
+        &iced::keyboard::Key::Character("p".into()),
+        iced::keyboard::Modifiers::LOGO,
+    )
+    .expect("Cmd+P");
+
+    assert!(control.modifiers.ctrl);
+    assert!(!control.modifiers.command);
+    assert!(!command.modifiers.ctrl);
+    assert!(command.modifiers.command);
+}

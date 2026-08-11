@@ -553,6 +553,7 @@ fn context_label(context: crate::keymap::ShortcutContext) -> &'static str {
         crate::keymap::ShortcutContext::Schematic => "Schematic",
         crate::keymap::ShortcutContext::Footprint => "Footprint",
         crate::keymap::ShortcutContext::Pcb => "PCB",
+        crate::keymap::ShortcutContext::Gerber => "Gerber Viewer",
         crate::keymap::ShortcutContext::Library => "Library",
         crate::keymap::ShortcutContext::Modal => "Modal",
         crate::keymap::ShortcutContext::TextInput => "Text Input",

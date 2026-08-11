@@ -4,9 +4,10 @@
 //! directory: `prefs.json` ([`crate::fonts`]), `keyboard_shortcuts.toml`
 //! (`crate::keymap::profile`), `distributors.toml`
 //! (`crate::library::settings::persistence`), and `global_libraries.toml`
-//! (`crate::panels::components_panel::global_prefs`). Each of those
-//! modules used to compute `dirs::config_dir().join("signex")` itself;
-//! this module hoists that one shared computation — and its test
+//! (`crate::panels::components_panel::global_prefs`). Gerber viewer settings
+//! are owned by `signex-widgets`. The original four
+//! modules computed `dirs::config_dir().join("signex")` independently;
+//! this module hoists that shared computation — and its test
 //! redirect — so there is a single place that decides *where* signex's
 //! config directory is. Each file keeps its own name, its own `None`
 //! fallback, and its own error handling (issue #440).
