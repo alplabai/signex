@@ -138,13 +138,67 @@ impl SchematicCanvas<'_> {
                     canvas::Stroke::default().with_color(accent).with_width(1.5),
                 );
             }
-            // Rubber-band from last anchor to cursor.
-            if let Some(last) = self.arc_points.last() {
-                let p1 =
-                    cam.world_to_screen(iced::Point::new(last.x as f32, last.y as f32), bounds);
-                let p2 =
-                    cam.world_to_screen(iced::Point::new(snap_x as f32, snap_y as f32), bounds);
-                frame.stroke(&canvas::Path::line(p1, p2), dashed);
+            // With both anchors down the cursor is the third point, so the arc
+            // is fully determined — preview the curve, not a chord. It is
+            // derived through the same three helpers the commit path uses
+            // (`circumcircle`, `arc_sweeps_through_mid`, `arc_screen_span_for`)
+            // so the preview cannot bulge the opposite way to the arc it is
+            // about to create.
+            let to_screen = |p: [f32; 2]| cam.world_to_screen(iced::Point::new(p[0], p[1]), bounds);
+            let previewed_curve = if let [start, mid] = self.arc_points[..] {
+                let cursor = signex_types::schematic::Point::new(snap_x, snap_y);
+                signex_types::schematic::circumcircle(start, mid, cursor).and_then(
+                    |(cx, cy, radius)| {
+                        let angle_of =
+                            |p: signex_types::schematic::Point| (p.y - cy).atan2(p.x - cx);
+                        let (a0, am, a1) = (angle_of(start), angle_of(mid), angle_of(cursor));
+                        // Same endpoint ordering as the commit path: keep the
+                        // span that actually contains the middle click.
+                        let (world_start, world_end) =
+                            if crate::schematic_runtime::arc_sweeps_through_mid(a0, am, a1) {
+                                (a0, a1)
+                            } else {
+                                (a1, a0)
+                            };
+
+                        match crate::renderer_scene_canvas::arc_screen_span_for(
+                            world_start as f32,
+                            world_end as f32,
+                            to_screen,
+                        ) {
+                            crate::renderer_scene_canvas::ArcScreenSpan::Span { start, end } => {
+                                let center = to_screen([cx as f32, cy as f32]);
+                                Some(canvas::Path::new(|builder| {
+                                    builder.arc(canvas::path::Arc {
+                                        center,
+                                        radius: radius as f32 * cam.scale,
+                                        start_angle: iced::Radians(start),
+                                        end_angle: iced::Radians(end),
+                                    });
+                                }))
+                            }
+                            // Three distinct points cannot describe a whole
+                            // turn; nothing sensible to preview.
+                            crate::renderer_scene_canvas::ArcScreenSpan::FullTurn => None,
+                        }
+                    },
+                )
+            } else {
+                None
+            };
+
+            match previewed_curve {
+                Some(path) => frame.stroke(&path, dashed),
+                // One anchor down, or three collinear points. The latter is
+                // exactly what the commit path turns into two straight
+                // segments, so a chord is an honest preview of it.
+                None => {
+                    if let Some(last) = self.arc_points.last() {
+                        let p1 = to_screen([last.x as f32, last.y as f32]);
+                        let p2 = to_screen([snap_x as f32, snap_y as f32]);
+                        frame.stroke(&canvas::Path::line(p1, p2), dashed);
+                    }
+                }
             }
         }
     }
