@@ -744,7 +744,14 @@ fn fill_color_for(
     }
 }
 
-fn arc_sweeps_through_mid(a0: f64, am: f64, a1: f64) -> bool {
+/// Does the CCW span from `a0` to `a1` contain `am`?
+///
+/// The rule that decides which of the two arcs through three clicked points
+/// is the one the user meant. `pub` so the in-progress preview can ask the
+/// same question the commit path asks — a preview that orders its endpoints
+/// by a second copy of this rule can show the complementary arc to the one it
+/// is about to create.
+pub fn arc_sweeps_through_mid(a0: f64, am: f64, a1: f64) -> bool {
     let two_pi = 2.0 * std::f64::consts::PI;
     let normalize = |a: f64| (a - a0).rem_euclid(two_pi);
     normalize(am) < normalize(a1)
