@@ -7,7 +7,7 @@ use signex_gfx::primitive::circle::Circle;
 use signex_gfx::primitive::line::LineSegment;
 use signex_gfx::primitive::polygon::GpuPolygon;
 use signex_gfx::primitive::text::{TextHAlign, TextItem, TextVAlign};
-use signex_gfx::scene::Scene;
+use signex_gfx::scene::{CPU_SCHEMATIC_DRAW_ORDER, Scene, SceneBucket};
 
 #[derive(Debug, Clone, Copy)]
 pub struct SceneDrawOptions {
@@ -321,17 +321,40 @@ pub fn draw_scene_with_world_to_screen<F>(
 ) where
     F: Fn([f32; 2]) -> Point + Copy,
 {
-    draw_line_bucket(frame, &scene.lines, world_to_screen, options);
-    draw_circle_bucket(frame, &scene.circles, world_to_screen, options);
-    draw_arc_bucket(frame, &scene.arcs, world_to_screen, options);
-    draw_polygon_bucket(frame, &scene.polygons, world_to_screen, options);
-    draw_text_bucket(frame, &scene.texts, world_to_screen, options);
-
-    draw_line_bucket(frame, &scene.overlay_lines, world_to_screen, options);
-    draw_circle_bucket(frame, &scene.overlay_circles, world_to_screen, options);
-    draw_polygon_bucket(frame, &scene.overlay_polygons, world_to_screen, options);
-
-    draw_line_bucket(frame, &scene.erc_marker_lines, world_to_screen, options);
-    draw_circle_bucket(frame, &scene.erc_marker_circles, world_to_screen, options);
-    draw_polygon_bucket(frame, &scene.erc_marker_polygons, world_to_screen, options);
+    // Walk the shared `CPU_SCHEMATIC_DRAW_ORDER` so this replay and the GPU
+    // `scene_shader` cannot silently drift apart — the `scene::order` parity
+    // tests diff the orders. This sequence used to be hardcoded here, which is
+    // why `scene::order`'s promise held for the PCB and quietly did not cover
+    // the surface #199 is about to move onto the GPU (#645).
+    for &bucket in CPU_SCHEMATIC_DRAW_ORDER {
+        match bucket {
+            SceneBucket::Lines => draw_line_bucket(frame, &scene.lines, world_to_screen, options),
+            SceneBucket::Circles => {
+                draw_circle_bucket(frame, &scene.circles, world_to_screen, options);
+            }
+            SceneBucket::Arcs => draw_arc_bucket(frame, &scene.arcs, world_to_screen, options),
+            SceneBucket::Polygons => {
+                draw_polygon_bucket(frame, &scene.polygons, world_to_screen, options);
+            }
+            SceneBucket::Texts => draw_text_bucket(frame, &scene.texts, world_to_screen, options),
+            SceneBucket::OverlayLines => {
+                draw_line_bucket(frame, &scene.overlay_lines, world_to_screen, options);
+            }
+            SceneBucket::OverlayCircles => {
+                draw_circle_bucket(frame, &scene.overlay_circles, world_to_screen, options);
+            }
+            SceneBucket::OverlayPolygons => {
+                draw_polygon_bucket(frame, &scene.overlay_polygons, world_to_screen, options);
+            }
+            SceneBucket::ErcMarkerLines => {
+                draw_line_bucket(frame, &scene.erc_marker_lines, world_to_screen, options);
+            }
+            SceneBucket::ErcMarkerCircles => {
+                draw_circle_bucket(frame, &scene.erc_marker_circles, world_to_screen, options);
+            }
+            SceneBucket::ErcMarkerPolygons => {
+                draw_polygon_bucket(frame, &scene.erc_marker_polygons, world_to_screen, options);
+            }
+        }
+    }
 }
