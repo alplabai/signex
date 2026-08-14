@@ -30,6 +30,13 @@ pub struct PanelContext {
     pub snap_enabled: bool,
     pub grid_size_mm: f32,
     pub visible_grid_mm: f32,
+    /// Glyph the Symbol Editor's visible grid draws. Effective value,
+    /// not the saved one: while Preferences is open this carries the
+    /// live-preview draft, and Discard pushes the committed
+    /// `ui_state.symbol_grid_style` back. `SymbolCanvas` borrows it at
+    /// construction — #630 replaced a process global the symbol `draw`
+    /// path used to read directly.
+    pub symbol_grid_style: crate::render_config::GridStyle,
     pub snap_hotspots: bool,
     /// UI font family name (shown in settings; applies on restart).
     pub ui_font_name: String,

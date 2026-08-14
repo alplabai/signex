@@ -59,6 +59,12 @@ impl Signex {
         self.ui_state.preferences_draft_component_classes = self.ui_state.component_classes.clone();
         self.ui_state.preferences_draft_grid_style = self.ui_state.grid_style;
         self.ui_state.preferences_draft_pcb_gpu_render = self.ui_state.pcb_gpu_render;
+        // #629 — the three Symbol Editor settings. Before they had
+        // committed fields there was nothing to seed them from, so a
+        // Discard left them showing (and rendering) the abandoned value.
+        self.ui_state.preferences_draft_symbol_grid_size_mm = self.ui_state.symbol_grid_size_mm;
+        self.ui_state.preferences_draft_symbol_grid_style = self.ui_state.symbol_grid_style;
+        self.ui_state.preferences_draft_symbol_pin_selection = self.ui_state.symbol_pin_selection;
         // Fresh working copy of the live profile set for the Keyboard
         // Shortcuts pane; drop any stale recorder / status with it.
         self.ui_state.preferences_keymap_editor =
@@ -144,7 +150,7 @@ impl Signex {
         // cache clear below repaints the PCB canvas so a discarded toggle
         // takes no effect.
         self.interaction_state.pcb_canvas.gpu_render = self.ui_state.pcb_gpu_render;
-        // Revert the render_config globals used for schematic live preview.
+        // Revert the render inputs used for schematic live preview.
         let tokens = if self.ui_state.theme_id == ThemeId::Custom {
             self.ui_state
                 .custom_theme
@@ -155,17 +161,22 @@ impl Signex {
             signex_types::theme::theme_tokens(self.ui_state.theme_id)
         };
         self.document_state.panel_ctx.tokens = tokens;
-        crate::render_config::set_power_port_style(self.ui_state.power_port_style);
-        crate::render_config::set_label_style(self.ui_state.label_style);
-        crate::render_config::set_multisheet_style(self.ui_state.multisheet_style);
-        crate::render_config::set_grid_style(self.ui_state.grid_style);
+        // #630 — the schematic grid style previewed live, so push the
+        // committed value back to every window's canvas. Power port /
+        // label / multisheet style have no draw-path reader at all, so
+        // restoring their draft fields above is the whole revert.
+        // #629 — the symbol grid style is the only one of the three
+        // Symbol Editor settings with a live preview, so it is the only
+        // one to push back. Grid size and pin selection reach the editor
+        // through `LibraryDisplaySettings` when a library is opened, so
+        // restoring their draft fields above is enough.
+        self.document_state.panel_ctx.symbol_grid_style = self.ui_state.symbol_grid_style;
         // `update_canvas_theme` re-derives the canvas colours from the saved
         // theme and clears BOTH content caches (schematic + PCB) — don't
-        // clear them again here. Only the bg caches (grid style / dot layer)
-        // are ours to invalidate.
+        // clear them again here. `set_grid_style` already dropped every
+        // schematic bg cache, so only the PCB one is left to invalidate.
         self.update_canvas_theme();
         self.interaction_state.pcb_canvas.clear_bg_cache();
-        self.interaction_state.active_canvas_mut().clear_bg_cache();
     }
 
     pub(crate) fn handle_preferences_message(
@@ -210,6 +221,14 @@ impl Signex {
                 self.ui_state.multisheet_style = self.ui_state.preferences_draft_multisheet_style;
                 self.ui_state.grid_style = self.ui_state.preferences_draft_grid_style;
                 self.ui_state.pcb_gpu_render = self.ui_state.preferences_draft_pcb_gpu_render;
+                // #629 — the three Symbol Editor settings commit here like
+                // every other appearance draft, instead of writing
+                // themselves to disk the moment the picker moved.
+                self.ui_state.symbol_grid_size_mm =
+                    self.ui_state.preferences_draft_symbol_grid_size_mm;
+                self.ui_state.symbol_grid_style = self.ui_state.preferences_draft_symbol_grid_style;
+                self.ui_state.symbol_pin_selection =
+                    self.ui_state.preferences_draft_symbol_pin_selection;
                 // The live-preview already pushed the draft into the widget;
                 // re-assert it so the saved and effective flags can't diverge.
                 self.interaction_state.pcb_canvas.gpu_render = self.ui_state.pcb_gpu_render;
@@ -225,10 +244,10 @@ impl Signex {
                 };
                 self.document_state.panel_ctx.tokens = tokens;
                 self.document_state.panel_ctx.ui_font_name = self.ui_state.ui_font_name.clone();
-                crate::render_config::set_power_port_style(self.ui_state.power_port_style);
-                crate::render_config::set_label_style(self.ui_state.label_style);
-                crate::render_config::set_multisheet_style(self.ui_state.multisheet_style);
-                crate::render_config::set_grid_style(self.ui_state.grid_style);
+                // The live preview already pushed the draft onto the
+                // canvases; re-assert from the committed value so the
+                // saved and rendered styles can't diverge (same rule as
+                // the PCB GPU flag above).
                 crate::fonts::write_ui_font_pref(&self.ui_state.ui_font_name);
                 crate::fonts::write_power_port_style_pref(self.ui_state.power_port_style);
                 crate::fonts::write_label_style_pref(self.ui_state.label_style);
@@ -236,6 +255,15 @@ impl Signex {
                 crate::fonts::write_grid_style_pref(self.ui_state.grid_style);
                 crate::fonts::write_pcb_gpu_render_pref(self.ui_state.pcb_gpu_render);
                 crate::fonts::write_theme_pref(self.ui_state.theme_id);
+                // #629 — moved here from the three `PrefMsg::DraftSymbol*`
+                // arms, which wrote on every picker move. Re-asserting the
+                // render input from the committed value keeps the saved
+                // and effective styles from diverging, the same way the
+                // PCB GPU flag is re-asserted above.
+                self.document_state.panel_ctx.symbol_grid_style = self.ui_state.symbol_grid_style;
+                crate::fonts::write_symbol_grid_size_mm_pref(self.ui_state.symbol_grid_size_mm);
+                crate::fonts::write_symbol_grid_style_pref(self.ui_state.symbol_grid_style);
+                crate::fonts::write_symbol_pin_selection_pref(self.ui_state.symbol_pin_selection);
                 // Component classes — keep entries with non-empty keys
                 // and labels, dedupe by key (last write wins) so the
                 // dropdown never shows blanks or duplicates.
@@ -356,21 +384,11 @@ impl Signex {
                     signex_types::theme::theme_tokens(id)
                 };
                 self.document_state.panel_ctx.tokens = tokens;
-                let canvas_colors = if id == ThemeId::Custom {
-                    self.ui_state
-                        .custom_theme
-                        .as_ref()
-                        .map(|c| c.canvas)
-                        .unwrap_or_else(|| signex_types::theme::canvas_colors(ThemeId::Signex))
-                } else {
-                    signex_types::theme::canvas_colors(id)
-                };
-                self.interaction_state.active_canvas_mut().set_theme_colors(
-                    crate::render_config::to_iced(&canvas_colors.background),
-                    crate::render_config::to_iced(&canvas_colors.grid),
-                    crate::render_config::to_iced(&canvas_colors.paper),
-                );
-                self.interaction_state.active_canvas_mut().canvas_colors = canvas_colors;
+                // #631 — the canvas colours used to be computed here and
+                // pushed onto the canvas for the live preview. `view` now
+                // derives them from `preferences_draft_theme` every frame,
+                // so setting the draft above IS the preview; only the
+                // content cache still has to be dropped to repaint.
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
@@ -380,9 +398,13 @@ impl Signex {
                 self.ui_state.preferences_draft_font = name;
                 self.recompute_preferences_dirty();
             }
+            // #630 — these three settings persist and round-trip, but no
+            // draw path consults them: the old `render_config` setters
+            // wrote to a struct nothing read. The content-cache clear is
+            // kept so the preview repaints if a renderer ever starts
+            // honouring them.
             PrefMsg::DraftPowerPortStyle(style) => {
                 self.ui_state.preferences_draft_power_port_style = style;
-                crate::render_config::set_power_port_style(style);
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
@@ -390,7 +412,6 @@ impl Signex {
             }
             PrefMsg::DraftLabelStyle(style) => {
                 self.ui_state.preferences_draft_label_style = style;
-                crate::render_config::set_label_style(style);
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
@@ -398,7 +419,6 @@ impl Signex {
             }
             PrefMsg::DraftMultisheetStyle(style) => {
                 self.ui_state.preferences_draft_multisheet_style = style;
-                crate::render_config::set_multisheet_style(style);
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
@@ -406,8 +426,8 @@ impl Signex {
             }
             PrefMsg::DraftGridStyle(style) => {
                 self.ui_state.preferences_draft_grid_style = style;
-                crate::render_config::set_grid_style(style);
-                self.interaction_state.active_canvas_mut().clear_bg_cache();
+                // Live preview — `set_grid_style` also drops the bg cache
+                // on every window's canvas.
                 self.recompute_preferences_dirty();
             }
             PrefMsg::DraftPcbGpuRender(enabled) => {
@@ -420,18 +440,24 @@ impl Signex {
                 self.interaction_state.pcb_canvas.clear_bg_cache();
                 self.recompute_preferences_dirty();
             }
+            // #629 — these three used to call `write_*_pref` right here,
+            // making the change permanent before the user reached the
+            // footer. They now behave like every other draft in this pane:
+            // update the draft, preview it, and let Save persist it.
             PrefMsg::DraftSymbolGridSize(size) => {
                 self.ui_state.preferences_draft_symbol_grid_size_mm = size;
-                crate::fonts::write_symbol_grid_size_mm_pref(size);
+                self.recompute_preferences_dirty();
             }
             PrefMsg::DraftSymbolGridStyle(style) => {
                 self.ui_state.preferences_draft_symbol_grid_style = style;
-                crate::render_config::set_symbol_grid_style(style);
-                crate::fonts::write_symbol_grid_style_pref(style);
+                // Live preview only — `revert_preferences_drafts` pushes
+                // the committed style back if the user discards.
+                self.document_state.panel_ctx.symbol_grid_style = style;
+                self.recompute_preferences_dirty();
             }
             PrefMsg::DraftSymbolPinSelection(mode) => {
                 self.ui_state.preferences_draft_symbol_pin_selection = mode;
-                crate::fonts::write_symbol_pin_selection_pref(mode);
+                self.recompute_preferences_dirty();
             }
             PrefMsg::ImportTheme => {
                 return Task::future(async {

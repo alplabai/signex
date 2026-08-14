@@ -4,6 +4,7 @@ use iced::widget::canvas;
 use iced::{Color, Point};
 
 use super::camera::Camera;
+use crate::render_config::GridStyle;
 
 /// Schematic grid sizes in mm — exact multiples/fractions of 2.54 mm (100 mil).
 /// Range: 0.635 mm (¼ grid) → 5.08 mm (2× grid). Default: 1.27 mm (Altium default, 50 mil).
@@ -73,6 +74,13 @@ impl GridState {
 /// (no more "very prominent at one zoom, invisible at the next") and the
 /// minor → major transitions cross-fade smoothly via alpha rather than
 /// snapping on/off.
+///
+/// `style` is the caller's effective glyph choice — #630 moved it off a
+/// process global that this function used to read from inside `draw`.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "8 arguments: camera + grid metrics + page bounds + colour + glyph style, all per-frame draw inputs"
+)]
 pub fn draw_grid(
     frame: &mut canvas::Frame,
     camera: &Camera,
@@ -81,6 +89,7 @@ pub fn draw_grid(
     color: Color,
     page_w: f32,
     page_h: f32,
+    style: GridStyle,
 ) {
     if grid_mm <= 0.0 || camera.scale <= 0.0 {
         return;
@@ -134,7 +143,6 @@ pub fn draw_grid(
     // --- 3. Minor dots. Radius scales with screen step, slightly. ---
     let dot_radius = (minor_screen * 0.06).clamp(0.5, 1.6);
 
-    let style = crate::render_config::grid_style();
     // Small-cross arm length in screen pixels (Standard-style "+").
     let cross_arm = (minor_screen * 0.18).clamp(1.5, 4.0);
     let minor_stroke = canvas::Stroke::default()
@@ -143,7 +151,7 @@ pub fn draw_grid(
 
     // For Lines style we draw full minor grid lines instead of per-cell
     // glyphs and skip the per-point loop below entirely.
-    if matches!(style, crate::render_config::GridStyle::Lines) {
+    if matches!(style, GridStyle::Lines) {
         let page_top = camera.world_to_screen(Point::new(0.0, 0.0), bounds).y;
         let page_bot = camera.world_to_screen(Point::new(0.0, page_h), bounds).y;
         let page_left = camera.world_to_screen(Point::new(0.0, 0.0), bounds).x;
@@ -192,11 +200,11 @@ pub fn draw_grid(
                             && screen.y <= bounds.height + dot_radius
                         {
                             match style {
-                                crate::render_config::GridStyle::Dots => {
+                                GridStyle::Dots => {
                                     let dot = canvas::Path::circle(screen, dot_radius);
                                     frame.fill(&dot, dot_color);
                                 }
-                                crate::render_config::GridStyle::SmallCrosses => {
+                                GridStyle::SmallCrosses => {
                                     let h = canvas::Path::line(
                                         Point::new(screen.x - cross_arm, screen.y),
                                         Point::new(screen.x + cross_arm, screen.y),
@@ -212,7 +220,7 @@ pub fn draw_grid(
                                 // early return at the top of this function (≈ line 150); this match
                                 // arm is structurally unreachable. If a new `GridStyle` variant ever
                                 // lands, it must be handled at BOTH sites.
-                                crate::render_config::GridStyle::Lines => unreachable!(),
+                                GridStyle::Lines => unreachable!(),
                             }
                         }
                     }

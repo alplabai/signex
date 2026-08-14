@@ -100,6 +100,11 @@ pub struct SymbolCanvas<'a> {
     /// `panel_ctx.grid_visible` (View ▸ Toggle Grid / status-bar
     /// click).
     pub grid_visible: bool,
+    /// Glyph the visible grid draws. Sourced from
+    /// `panel_ctx.symbol_grid_style`, which carries the Preferences
+    /// live-preview draft while that dialog is open — #630 replaced the
+    /// process global this `draw` path used to read directly.
+    pub grid_style: crate::render_config::GridStyle,
     /// When on, pins can be grabbed by their name/number label and a
     /// selected pin's labels glow with it. Sourced from
     /// `LibraryDisplaySettings.pin_selection` via
@@ -123,7 +128,7 @@ impl<'a> SymbolCanvas<'a> {
     /// settings. See module-level docs for the parity rationale.
     #[expect(
         clippy::too_many_arguments,
-        reason = "15 arguments: the per-frame canvas takes the symbol, theme and global grid/unit settings; see the module docs for the parity rationale"
+        reason = "16 arguments: the per-frame canvas takes the symbol, theme and global grid/unit settings; see the module docs for the parity rationale"
     )]
     pub fn new(
         symbol: &'a Symbol,
@@ -135,6 +140,7 @@ impl<'a> SymbolCanvas<'a> {
         camera: &'a crate::canvas::Camera,
         grid_size_mm: f64,
         grid_visible: bool,
+        grid_style: crate::render_config::GridStyle,
         pin_label_grab: bool,
         sheet_color: Color,
         accent_color: Color,
@@ -159,6 +165,7 @@ impl<'a> SymbolCanvas<'a> {
             camera,
             grid_size_mm,
             grid_visible,
+            grid_style,
             pin_label_grab,
             bg_color: sheet_color,
             grid_color: palette.grid,
@@ -301,7 +308,13 @@ impl<'a> SymbolCanvas<'a> {
 /// exact same grid the canvas already places/drags things onto (#426).
 pub(crate) const SNAP_GRID_MM: f64 = 1.27;
 const ORIGIN_MARKER_MM: f32 = 1.27;
-const MM_PER_EM: f32 = 0.72;
+/// This surface's readability limits. Wider than the schematic's `[6.0, 64.0]`
+/// on purpose — a symbol is edited close up, so pin text may render smaller
+/// and grow larger here. The mm→em ratio is *not* a per-surface choice and
+/// lives once in `signex_gfx::primitive::text::MM_PER_EM`; a local copy of it
+/// is what let this canvas and its own hit-test disagree.
+const SYMBOL_TEXT_SIZE: signex_gfx::primitive::text::TextSizePolicy =
+    signex_gfx::primitive::text::TextSizePolicy::new(2.0, 96.0);
 const SYMBOL_AXIS_STROKE_PX_AT_100: f32 = 1.0;
 const SYMBOL_GRAPHIC_STROKE_PX_AT_100: f32 = 1.5;
 const SYMBOL_GRAPHIC_SELECTED_STROKE_PX_AT_100: f32 = 2.5;
@@ -495,9 +508,8 @@ impl<'a> SymbolCanvas<'a> {
             crate::renderer_scene_canvas::SceneDrawOptions {
                 scale_px_per_mm: scale,
                 min_stroke_px: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX,
-                text_mm_per_em: MM_PER_EM,
-                text_min_px: 2.0,
-                text_max_px: 96.0,
+                text_min_px: SYMBOL_TEXT_SIZE.min_px,
+                text_max_px: SYMBOL_TEXT_SIZE.max_px,
             },
         );
     }

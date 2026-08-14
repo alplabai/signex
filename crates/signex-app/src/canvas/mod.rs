@@ -27,7 +27,6 @@ use crate::toolbar::ToolMessage;
 
 #[derive(Debug, Default)]
 pub struct CanvasState {
-    pub camera: Camera,
     pub _grid: GridState,
     /// Is the user currently panning (right-click or middle-click drag)?
     panning: bool,
@@ -35,8 +34,6 @@ pub struct CanvasState {
     pan_moved: bool,
     /// Last cursor position during a pan (in screen pixels).
     last_pan_pos: Option<iced::Point>,
-    /// Pending fit target — consumed on next update.
-    pub pending_fit: Option<Rectangle>,
     /// Whether Ctrl is currently held (for multi-select toggle).
     pub ctrl_held: bool,
     /// Whether Shift is currently held (for multi-select add).
@@ -61,25 +58,30 @@ pub struct CanvasState {
     last_click_world: Option<(f64, f64)>,
 }
 
-// ─── SchematicCanvas (the Program) ────────────────────────────
+// ─── CanvasSlot (the Program) ────────────────────────────
 
 /// The canvas program that handles input and rendering.
 /// Holds references to app state needed for drawing (theme colors, etc).
-pub struct SchematicCanvas {
+pub struct CanvasSlot {
     pub bg_cache: canvas::Cache,
     pub content_cache: canvas::Cache,
     pub overlay_cache: canvas::Cache,
     /// Camera state when content_cache was last built — used to compute offset delta.
     pub content_cache_camera: std::cell::Cell<(f32, f32, f32)>, // (offset_x, offset_y, scale)
-    /// Camera state as of the most recent draw, updated every frame including
-    /// mid-pan. Overlays positioned relative to world coordinates (inline text
-    /// editor, measurements) read this so they track pan/zoom in real time.
-    pub live_camera: std::cell::Cell<(f32, f32, f32)>,
-    pub grid_visible: bool,
-    pub theme_bg: Color,
-    pub theme_grid: Color,
-    pub theme_paper: Color,
-    pub canvas_colors: signex_types::theme::CanvasColors,
+    /// The **sole** home of the schematic pan/zoom camera (ADR-0001 §A1: no
+    /// shadow copies of widget state). `RefCell` gives interior mutability so
+    /// `canvas::Program::update` — which only borrows `&self` — can mutate it,
+    /// while `draw` and `view()` read it through the same cell.
+    ///
+    /// #632 — this replaces a pair: `CanvasState::camera` (the `Program::State`
+    /// copy that `update` and `draw` worked on) plus a
+    /// `live_camera: Cell<(f32, f32, f32)>` republished from `draw` every
+    /// frame so `view` could place world-anchored overlays. `view(&self)`
+    /// cannot reach a `Program::State`, so the camera round-tripped through
+    /// that `Cell` and the two could disagree for a frame. One home, read by
+    /// the background, the content, the overlays and `view`, cannot drift.
+    /// Mirrors [`crate::pcb_canvas::PcbCanvas::camera`], which already had it.
+    camera: std::cell::RefCell<Camera>,
     /// Render-facing cache of the currently visible schematic.
     /// The app updates this from the active engine or active tab cache.
     pub render_cache: Option<crate::schematic_runtime::SchematicRenderCache>,
@@ -104,22 +106,10 @@ pub struct SchematicCanvas {
     /// open). The ghost freezes and canvas clicks don't place — the user
     /// interacts with the Properties panel until they confirm with OK.
     pub placement_paused: bool,
-    /// Current draw mode for wire preview constraint (90°, 45°, free).
-    pub draw_mode: crate::app::DrawMode,
-    /// Whether snap-to-grid is enabled (for rubber-band cursor snapping).
-    pub snap_enabled: bool,
-    /// Grid size in mm for rubber-band cursor snapping AND visible grid rendering.
-    pub snap_grid_mm: f64,
-    /// Visible grid dot spacing in mm (independent of snap grid).
-    pub visible_grid_mm: f64,
     /// Active paper width in mm (world units).
     pub paper_width_mm: f32,
     /// Active paper height in mm (world units).
     pub paper_height_mm: f32,
-    /// When true, non-selected items dim on the canvas (F9). Synced
-    /// from `ui_state.auto_focus` so the renderer can compute a focus
-    /// uuid set without reaching back into app state.
-    pub auto_focus: bool,
     /// ERC violations to highlight on the canvas — Altium-style marker
     /// dots + primary-item halos. Synced from `ui_state.erc_violations`
     /// after each ERC run so the overlay renders without the canvas
@@ -130,9 +120,6 @@ pub struct SchematicCanvas {
     /// onto the whole connected net; alpha 0 signals "clear one".
     /// Drives the pen cursor drawn over the canvas.
     pub pending_net_color: Option<signex_types::theme::Color>,
-    /// Per-wire colour overrides consulted when drawing wires. Synced
-    /// from `ui_state.wire_color_overrides` on every canvas rebuild.
-    pub wire_color_overrides: std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
     /// In-flight lasso polygon in world space. Synced from
     /// `ui_state.lasso_polygon` so the overlay draw can render the
     /// committed vertices + rubber-band to the cursor without
@@ -181,13 +168,13 @@ pub enum ErcMarkerSeverity {
     Info,
 }
 
-impl Default for SchematicCanvas {
+impl Default for CanvasSlot {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl SchematicCanvas {
+impl CanvasSlot {
     pub fn active_render_cache(&self) -> Option<&crate::schematic_runtime::SchematicRenderCache> {
         self.render_cache.as_ref()
     }
@@ -197,28 +184,12 @@ impl SchematicCanvas {
     }
 
     pub fn new() -> Self {
-        let default_colors =
-            signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
         Self {
             bg_cache: canvas::Cache::default(),
             content_cache: canvas::Cache::default(),
             overlay_cache: canvas::Cache::default(),
             content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
-            live_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
-            grid_visible: true,
-            theme_bg: {
-                let c = &default_colors.background;
-                Color::from_rgb8(c.r, c.g, c.b)
-            },
-            theme_grid: {
-                let c = &default_colors.grid;
-                Color::from_rgb8(c.r, c.g, c.b)
-            },
-            theme_paper: {
-                let c = &default_colors.paper;
-                Color::from_rgb8(c.r, c.g, c.b)
-            },
-            canvas_colors: default_colors,
+            camera: std::cell::RefCell::new(Camera::default()),
             render_cache: None,
             selected: Vec::new(),
             pending_fit: std::cell::Cell::new(None),
@@ -229,37 +200,17 @@ impl SchematicCanvas {
             ghost_symbol: None,
             ghost_text: None,
             placement_paused: false,
-            draw_mode: crate::app::DrawMode::Ortho90,
-            snap_enabled: true,
             // Altium default is 1.27 mm (50 mil); also matches Standard's default schematic grid step.
-            snap_grid_mm: 1.27,
-            visible_grid_mm: 1.27,
             paper_width_mm: 297.0,
             paper_height_mm: 210.0,
-            auto_focus: false,
             erc_markers: Vec::new(),
             pending_net_color: None,
-            wire_color_overrides: std::collections::HashMap::new(),
             lasso_polygon: None,
             arc_points: Vec::new(),
             polyline_points: Vec::new(),
             reorder_picker_armed: false,
             shape_anchor: None,
         }
-    }
-
-    /// Compute the "focus" uuid set when auto_focus is on — members of
-    /// the current selection. Returns None when auto_focus is off; the
-    /// renderer then draws every item at full alpha.
-    fn auto_focus_set(&self) -> Option<std::collections::HashSet<uuid::Uuid>> {
-        if !self.auto_focus {
-            return None;
-        }
-        let mut set = std::collections::HashSet::new();
-        for item in &self.selected {
-            set.insert(item.uuid);
-        }
-        Some(set)
     }
 
     pub fn clear_overlay_cache(&mut self) {
@@ -272,6 +223,27 @@ impl SchematicCanvas {
 
     pub fn clear_content_cache(&mut self) {
         self.content_cache.clear();
+    }
+
+    /// Current pan/zoom as `(offset_x_px, offset_y_px, scale_px_per_mm)`,
+    /// read in `view()` from the single [`Self::camera`] home to place
+    /// world-anchored overlays (the inline text editor, measurements).
+    /// Same shape as [`crate::pcb_canvas::PcbCanvas::live_camera`].
+    pub fn live_camera(&self) -> (f32, f32, f32) {
+        let camera = self.camera.borrow();
+        (camera.offset.x, camera.offset.y, camera.scale)
+    }
+
+    /// Read-only borrow of the camera for the `draw` path. Held for the
+    /// duration of one draw call; never overlapped with [`Self::camera_mut`],
+    /// since `draw` and `update` never run at the same time.
+    pub(in crate::canvas) fn camera(&self) -> std::cell::Ref<'_, Camera> {
+        self.camera.borrow()
+    }
+
+    /// Mutable borrow for the `update` path — pan, zoom and fit write here.
+    pub(in crate::canvas) fn camera_mut(&self) -> std::cell::RefMut<'_, Camera> {
+        self.camera.borrow_mut()
     }
 
     pub fn set_render_cache(
@@ -292,16 +264,98 @@ impl SchematicCanvas {
             )));
         }
     }
+}
 
-    pub fn set_theme_colors(&mut self, bg: Color, grid: Color, paper: Color) {
-        self.theme_bg = bg;
-        self.theme_grid = grid;
-        self.theme_paper = paper;
-        self.bg_cache.clear();
+/// Everything the schematic `draw` path needs that is **not** per-window
+/// canvas state — settings, theme colours and app-state collections that
+/// already have an owner in `UiState` / `DocumentState`.
+///
+/// #631 — these used to be fields on the canvas, written by scattered
+/// `active_canvas_mut().x = …` assignments and kept equal to their real
+/// owner by hand. They are now read straight from app state in `view`,
+/// once per frame, so there is no second copy to drift. Scalars are
+/// copied (they are `Copy` and cheaper to copy than to chase);
+/// `wire_color_overrides` is borrowed, because cloning a `HashMap` every
+/// frame is not a cost worth paying to avoid a lifetime.
+///
+/// Only settings with a single `UiState` owner that every window should
+/// agree on live here. Per-window facts stay on [`CanvasSlot`] — the
+/// window's paper size and render cache belong to *its* document, and
+/// `erc_markers` / `lasso_polygon` / `pending_net_color` /
+/// `reorder_picker_armed` are written to the active canvas alone today.
+/// Promoting those would change what an undocked window renders, which
+/// is not this change's job.
+#[derive(Clone, Copy)]
+pub struct CanvasViewPrefs<'a> {
+    pub grid_visible: bool,
+    pub theme_bg: Color,
+    pub theme_grid: Color,
+    pub theme_paper: Color,
+    pub canvas_colors: signex_types::theme::CanvasColors,
+    pub snap_enabled: bool,
+    pub snap_grid_mm: f64,
+    pub visible_grid_mm: f64,
+    pub grid_style: crate::render_config::GridStyle,
+    pub auto_focus: bool,
+    pub draw_mode: crate::app::DrawMode,
+    pub wire_color_overrides: &'a std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+}
+
+/// The schematic `canvas::Program` — a per-frame *view* of the app state,
+/// not an owner of it.
+///
+/// #631 — this used to be one long-lived struct in `InteractionState` with
+/// 35 fields, about a dozen of them copies of `UiState` / `DocumentState`
+/// data kept in sync across ~93 assignment sites with nothing enforcing
+/// agreement. It is now constructed in `view` from two borrows: the
+/// per-window [`CanvasSlot`] (the caches, camera and genuinely per-window
+/// interaction state, which have no other home) and [`CanvasViewPrefs`]
+/// (read from app state each frame). The library editors already had this
+/// shape — `FootprintCanvas<'a>` and `SymbolCanvas<'a>` — so this is the
+/// schematic canvas catching up, not a new pattern.
+///
+/// `Deref` to the slot is deliberate: it keeps every `self.selected`,
+/// `self.ghost_symbol`, `self.camera()` in the draw and input modules
+/// reading exactly as before, so the diff is the state that actually
+/// moved rather than a mechanical prefix sweep over 200 field accesses.
+pub struct SchematicCanvas<'a> {
+    slot: &'a CanvasSlot,
+    prefs: CanvasViewPrefs<'a>,
+}
+
+impl<'a> SchematicCanvas<'a> {
+    pub fn new(slot: &'a CanvasSlot, prefs: CanvasViewPrefs<'a>) -> Self {
+        Self { slot, prefs }
+    }
+
+    /// Compute the "focus" uuid set when auto_focus is on — members of
+    /// the current selection. Returns None when auto_focus is off; the
+    /// renderer then draws every item at full alpha.
+    ///
+    /// #631 — lives on the borrowing view, not the slot: `auto_focus` is
+    /// a `UiState` setting read through `prefs`, while `selected` is the
+    /// window's own state reached through `Deref`.
+    fn auto_focus_set(&self) -> Option<std::collections::HashSet<uuid::Uuid>> {
+        if !self.prefs.auto_focus {
+            return None;
+        }
+        let mut set = std::collections::HashSet::new();
+        for item in &self.selected {
+            set.insert(item.uuid);
+        }
+        Some(set)
     }
 }
 
-impl canvas::Program<Message> for SchematicCanvas {
+impl std::ops::Deref for SchematicCanvas<'_> {
+    type Target = CanvasSlot;
+
+    fn deref(&self) -> &Self::Target {
+        self.slot
+    }
+}
+
+impl canvas::Program<Message> for SchematicCanvas<'_> {
     type State = CanvasState;
 
     fn update(
@@ -312,14 +366,14 @@ impl canvas::Program<Message> for SchematicCanvas {
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
         // Consume any pending fit-to-content before dispatching the event.
-        if let Some(action) = self.update_pending_fit(state, bounds) {
+        if let Some(action) = self.update_pending_fit(bounds) {
             return Some(action);
         }
 
         // Dispatch each input event to its handler, in the original order.
         match event {
             Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
-                self.update_wheel_scrolled(state, delta, bounds, cursor)
+                self.update_wheel_scrolled(delta, bounds, cursor)
             }
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 self.update_left_pressed(state, bounds, cursor)
@@ -364,7 +418,7 @@ impl canvas::Program<Message> for SchematicCanvas {
         let mut layers = Vec::with_capacity(4);
 
         // Layer 1: background (grid + paper)
-        layers.push(self.draw_background(state, renderer, bounds));
+        layers.push(self.draw_background(renderer, bounds));
 
         // Shared drag/selection snapshot prep — the shifted snapshot is owned
         // here so the content, auto-focus dim, and selection layers can all
@@ -399,13 +453,13 @@ impl canvas::Program<Message> for SchematicCanvas {
         layers.push(self.draw_content(state, renderer, bounds, effective_snapshot, drag_offset));
 
         // Layer 2.5: AutoFocus dim
-        if let Some(dim) = self.draw_autofocus_dim(state, renderer, bounds, effective_snapshot) {
+        if let Some(dim) = self.draw_autofocus_dim(renderer, bounds, effective_snapshot) {
             layers.push(dim);
         }
 
         // Layer 3: selection overlay
         if let Some(selection) =
-            self.draw_selection(state, renderer, bounds, effective_snapshot, drag_offset)
+            self.draw_selection(renderer, bounds, effective_snapshot, drag_offset)
         {
             layers.push(selection);
         }
@@ -692,4 +746,126 @@ pub enum CanvasEvent {
         dx: f64,
         dy: f64,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Minimal render settings for the tests below. `update_pending_fit`
+    /// only touches the camera, so the values here just have to exist —
+    /// #631 moved the method onto the borrowing view, which needs both
+    /// halves to be constructed.
+    fn test_prefs(
+        overrides: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    ) -> CanvasViewPrefs<'_> {
+        let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+        CanvasViewPrefs {
+            grid_visible: true,
+            theme_bg: crate::render_config::to_iced(&colors.background),
+            theme_grid: crate::render_config::to_iced(&colors.grid),
+            theme_paper: crate::render_config::to_iced(&colors.paper),
+            canvas_colors: colors,
+            snap_enabled: true,
+            snap_grid_mm: 1.27,
+            visible_grid_mm: 1.27,
+            grid_style: crate::render_config::GridStyle::Dots,
+            auto_focus: false,
+            draw_mode: crate::app::DrawMode::Ortho90,
+            wire_color_overrides: overrides,
+        }
+    }
+
+    /// #632 regression. The camera used to live in `CanvasState` (the
+    /// `Program::State`) and be republished into a
+    /// `live_camera: Cell<(f32, f32, f32)>` from `draw`, because `view(&self)`
+    /// cannot reach a `Program::State`. Two homes, one of them refreshed only
+    /// when a frame was drawn. Mutating the camera the way `Program::update`
+    /// does must now be visible through `live_camera()` immediately — there is
+    /// no second copy that could lag. Mirrors the same guard on `PcbCanvas`.
+    #[test]
+    fn live_camera_reflects_the_single_source_after_a_mutation() {
+        // Arrange
+        let canvas = CanvasSlot::new();
+        let (x0, y0, s0) = canvas.live_camera();
+
+        // Act — what `update_cursor_moved` does on a pan drag.
+        canvas.camera_mut().pan(12.0, -7.0);
+
+        // Assert
+        let (x1, y1, s1) = canvas.live_camera();
+        assert_eq!(x1, x0 + 12.0);
+        assert_eq!(y1, y0 - 7.0);
+        assert_eq!(s1, s0, "pan must not change scale");
+    }
+
+    /// #632 — a fit request used to travel `CanvasSlot::pending_fit` →
+    /// `CanvasState::pending_fit` → camera, two `take()`s deep, because the
+    /// camera lived in the state the first hop was reaching. With one camera
+    /// home the middle hop has no reader, so the request must be consumed and
+    /// applied in a single `update_pending_fit` call.
+    #[test]
+    fn a_pending_fit_reaches_the_camera_in_one_hop() {
+        // Arrange
+        let canvas = CanvasSlot::new();
+        let before = canvas.live_camera();
+        canvas.pending_fit.set(Some(Rectangle::new(
+            iced::Point::new(0.0, 0.0),
+            iced::Size::new(100.0, 50.0),
+        )));
+
+        // Act
+        let overrides = std::collections::HashMap::new();
+        let view = SchematicCanvas::new(&canvas, test_prefs(&overrides));
+        let action = view.update_pending_fit(Rectangle::new(
+            iced::Point::new(0.0, 0.0),
+            iced::Size::new(800.0, 600.0),
+        ));
+
+        // Assert
+        assert!(
+            action.is_some(),
+            "consuming a fit must publish a redraw, or the new camera never reaches the screen"
+        );
+        assert!(
+            canvas.pending_fit.get().is_none(),
+            "the request must be consumed, not left to re-fire on the next event"
+        );
+        assert_ne!(
+            canvas.live_camera(),
+            before,
+            "the fit must land on the camera `view` and `draw` read"
+        );
+    }
+
+    /// A second consecutive call has nothing to consume. Before #632 the
+    /// second `take()` (from `CanvasState`) made this ambiguous; now the
+    /// absence of a pending request must simply be a no-op, so a fit does not
+    /// keep re-applying and fighting the user's pan on every later event.
+    #[test]
+    fn a_consumed_fit_does_not_re_apply() {
+        // Arrange
+        let canvas = CanvasSlot::new();
+        let bounds = Rectangle::new(iced::Point::new(0.0, 0.0), iced::Size::new(800.0, 600.0));
+        canvas.pending_fit.set(Some(Rectangle::new(
+            iced::Point::new(0.0, 0.0),
+            iced::Size::new(100.0, 50.0),
+        )));
+        let overrides = std::collections::HashMap::new();
+        let view = SchematicCanvas::new(&canvas, test_prefs(&overrides));
+        let _ = view.update_pending_fit(bounds);
+        let after_fit = canvas.live_camera();
+
+        // Act — the user pans, then another event arrives.
+        canvas.camera_mut().pan(5.0, 5.0);
+        let action = view.update_pending_fit(bounds);
+
+        // Assert
+        assert!(action.is_none(), "no pending request, no action");
+        assert_eq!(
+            canvas.live_camera(),
+            (after_fit.0 + 5.0, after_fit.1 + 5.0, after_fit.2),
+            "the pan must survive — a stale fit must not snap the camera back"
+        );
+    }
 }

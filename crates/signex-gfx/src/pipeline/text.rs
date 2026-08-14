@@ -4,10 +4,17 @@
 //! This module was written without reference to GPL-licensed software.
 //! Sources: IPC-2612-1, IEEE 315, IEC 60617, wgpu/WGSL public docs.
 
-use crate::primitive::text::{TextHAlign, TextItem, TextVAlign};
+use crate::primitive::text::{TextHAlign, TextItem, TextSizePolicy, TextVAlign, text_px};
 
-fn text_size_px(item: &TextItem, scale_px_per_mm: f32) -> f32 {
-    (item.size_mm.max(0.01) * scale_px_per_mm.max(0.01)).max(1.0)
+/// Rendered em size in logical pixels, from the one shared sizing rule.
+///
+/// This used to compute `(size_mm * scale).max(1.0)` — treating `size_mm` as
+/// the em size and ignoring the caller's readability limits. `size_mm` is the
+/// glyph height the sheet asks for, so that rendered every label about 28%
+/// short of the CPU replay and broke the millimetre contract the model
+/// guarantees (a 10 pt import stopped measuring 50 mils).
+fn text_size_px(item: &TextItem, scale_px_per_mm: f32, policy: TextSizePolicy) -> f32 {
+    text_px(item.size_mm, scale_px_per_mm, policy)
 }
 
 fn text_position_px(item: &TextItem, scale_px_per_mm: f32, offset_px: [f32; 2]) -> [f32; 2] {
@@ -157,8 +164,13 @@ fn measure_text_bounds_px(buffer: &cryoglyph::Buffer) -> [f32; 2] {
     }
 }
 
-fn attrs_for_item(item: &TextItem) -> cryoglyph::Attrs<'static> {
-    let mut attrs = cryoglyph::Attrs::new().family(cryoglyph::Family::SansSerif);
+/// `family` is the caller's canvas font family name. It used to be a
+/// hardcoded `Family::SansSerif`, which rendered schematic text in whatever
+/// the system served instead of the app's monospace canvas face — different
+/// typeface *and* different advance widths, so anything sized from a glyph
+/// estimate came out wrong too.
+fn attrs_for_item(item: &TextItem, family: &'static str) -> cryoglyph::Attrs<'static> {
+    let mut attrs = cryoglyph::Attrs::new().family(cryoglyph::Family::Name(family));
 
     if item.bold {
         attrs = attrs.weight(cryoglyph::Weight::BOLD);
@@ -192,8 +204,12 @@ struct GlyphonPreparedText {
 }
 
 /// Production text path using glyphon atlas, shaping, and cached glyph rendering.
+/// The `FontSystem` is **not** owned here — [`Self::upload`] borrows the
+/// caller's. Owning one meant this pipeline shaped text against a font system
+/// that had never been given the app's faces, so it could only ever fall back
+/// to something else, and its fallback chain for non-Latin content could
+/// diverge from the CPU path's silently.
 pub struct GlyphonTextPipeline {
-    font_system: cryoglyph::FontSystem,
     swash_cache: cryoglyph::SwashCache,
     viewport: cryoglyph::Viewport,
     atlas: cryoglyph::TextAtlas,
@@ -210,7 +226,6 @@ impl GlyphonTextPipeline {
         queue: &wgpu::Queue,
         target_format: wgpu::TextureFormat,
     ) -> Self {
-        let font_system = cryoglyph::FontSystem::new();
         let swash_cache = cryoglyph::SwashCache::new();
         let cache = cryoglyph::Cache::new(device);
         let viewport = cryoglyph::Viewport::new(device, &cache);
@@ -223,7 +238,6 @@ impl GlyphonTextPipeline {
         );
 
         Self {
-            font_system,
             swash_cache,
             viewport,
             atlas,
@@ -235,12 +249,28 @@ impl GlyphonTextPipeline {
         }
     }
 
+    /// Shape and stage every item for the next [`Self::draw`].
+    ///
+    /// `font_system` is the caller's — pass the same one the CPU text path
+    /// shapes against, so both measure with the same faces and the same
+    /// fallback chain. `family` names the canvas font; `size_policy` carries
+    /// the surface's readability limits, applied in **logical** pixels, so
+    /// `scale_px_per_mm` must be the logical scale with the DPI factor already
+    /// folded in by the caller only where it belongs.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "every argument is one axis of a text frame: what to draw, \
+                  how big, where, in which faces, and inside what viewport"
+    )]
     pub fn upload(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
+        font_system: &mut cryoglyph::FontSystem,
         texts: &[TextItem],
         scale_px_per_mm: f32,
+        size_policy: TextSizePolicy,
+        family: &'static str,
         viewport_size_px: [u32; 2],
         offset_px: [f32; 2],
     ) -> Result<(), cryoglyph::PrepareError> {
@@ -266,24 +296,20 @@ impl GlyphonTextPipeline {
         let viewport_height = viewport_size_px[1] as f32;
 
         for text in texts {
-            let font_px = text_size_px(text, scale_px_per_mm);
+            let font_px = text_size_px(text, scale_px_per_mm, size_policy);
             let metrics = cryoglyph::Metrics::new(font_px, (font_px * 1.35).max(1.0));
-            let attrs = attrs_for_item(text);
-            let mut buffer = cryoglyph::Buffer::new(&mut self.font_system, metrics);
+            let attrs = attrs_for_item(text, family);
+            let mut buffer = cryoglyph::Buffer::new(font_system, metrics);
 
-            buffer.set_size(
-                &mut self.font_system,
-                Some(viewport_width),
-                Some(viewport_height),
-            );
+            buffer.set_size(font_system, Some(viewport_width), Some(viewport_height));
             buffer.set_text(
-                &mut self.font_system,
+                font_system,
                 &text.content,
                 &attrs,
                 cryoglyph::Shaping::Advanced,
                 None,
             );
-            buffer.shape_until_scroll(&mut self.font_system, false);
+            buffer.shape_until_scroll(font_system, false);
 
             let anchor_px = text_position_px(text, scale_px_per_mm, offset_px);
             let text_bounds_px = measure_text_bounds_px(&buffer);
@@ -332,7 +358,7 @@ impl GlyphonTextPipeline {
             device,
             queue,
             &mut encoder,
-            &mut self.font_system,
+            font_system,
             &mut self.atlas,
             &self.viewport,
             text_areas,
@@ -369,6 +395,7 @@ impl GlyphonTextPipeline {
 
 #[cfg(test)]
 mod tests {
+    use super::TextSizePolicy;
     use super::{
         alignment_offset_px, anchored_top_left_px, attrs_for_item, normalize_rotation_radians,
         overlap_ratio_by_smaller_area, rect_from_top_left_size, rect_intersects_viewport,
@@ -390,12 +417,20 @@ mod tests {
             v_align: TextVAlign::Top,
         };
 
-        let size_px = text_size_px(&item, 32.0);
+        // Wide bounds so this pins the conversion, not a clamp.
+        let policy = TextSizePolicy::new(1.0, 512.0);
+        let size_px = text_size_px(&item, 32.0, policy);
         let position_px = text_position_px(&item, 32.0, [0.0, 0.0]);
         let panned_px = text_position_px(&item, 32.0, [15.0, -7.0]);
         let bounds = viewport_bounds([128, 96]);
 
-        assert_eq!(size_px, 32.0);
+        // 1.0 mm of glyph height is 1.0 / MM_PER_EM em, then scaled. This
+        // used to assert 32.0 — `size_mm` taken as the em size directly,
+        // which rendered every label short of the CPU replay.
+        assert!(
+            (size_px - 44.444_443).abs() < 1e-3,
+            "expected ~44.444 px, got {size_px}"
+        );
         assert_eq!(position_px, [80.0, 128.0]);
         // Pan translates the anchor by the screen-space offset.
         assert_eq!(panned_px, [95.0, 121.0]);
@@ -419,7 +454,10 @@ mod tests {
             v_align: TextVAlign::Top,
         };
 
-        let size_px = text_size_px(&item, 0.0);
+        // A degenerate scale collapses to zero, and the policy's floor is what
+        // keeps it drawable — the floor is now the caller's, not a hardcoded
+        // 1.0 buried in the pipeline.
+        let size_px = text_size_px(&item, 0.0, TextSizePolicy::new(1.0, 512.0));
         assert_eq!(size_px, 1.0);
     }
 
@@ -437,8 +475,15 @@ mod tests {
             v_align: TextVAlign::Top,
         };
 
-        let attrs = attrs_for_item(&item);
+        let attrs = attrs_for_item(&item, "Iosevka");
         let color = to_glyphon_color(item.color);
+
+        assert_eq!(
+            attrs.family,
+            cryoglyph::Family::Name("Iosevka"),
+            "the caller's canvas family must reach the shaper — a hardcoded \
+             SansSerif here is what put schematic text in the wrong typeface"
+        );
 
         assert_eq!(attrs.weight, cryoglyph::Weight::BOLD);
         assert_eq!(attrs.style, cryoglyph::Style::Italic);

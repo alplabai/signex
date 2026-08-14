@@ -1,6 +1,6 @@
 use super::super::*;
 
-impl SchematicCanvas {
+impl SchematicCanvas<'_> {
     /// Left-press: select, tool action, start box-select, or start drag-move.
     pub(in crate::canvas) fn update_left_pressed(
         &self,
@@ -9,7 +9,7 @@ impl SchematicCanvas {
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
         if let Some(cursor_pos) = cursor.position_in(bounds) {
-            let world = state.camera.screen_to_world(cursor_pos, bounds);
+            let world = self.camera().screen_to_world(cursor_pos, bounds);
             let wx = world.x as f64;
             let wy = world.y as f64;
 
@@ -294,7 +294,7 @@ impl SchematicCanvas {
                         state.pan_moved = true;
                         pan_just_started = true;
                     }
-                    state.camera.pan(dx, dy);
+                    self.camera_mut().pan(dx, dy);
                 }
                 state.last_pan_pos = Some(cursor_pos);
                 // On the very first frame where the pan actually
@@ -318,7 +318,7 @@ impl SchematicCanvas {
 
             // Track drag-to-move (selected items)
             if state.click_on_selected {
-                let world = state.camera.screen_to_world(cursor_pos, bounds);
+                let world = self.camera().screen_to_world(cursor_pos, bounds);
                 let wx = world.x as f64;
                 let wy = world.y as f64;
                 if let Some(origin) = state.move_origin {
@@ -335,9 +335,9 @@ impl SchematicCanvas {
                     // multiple so object_start + offset stays on grid).
                     let (mx, my) = if let (Some(origin), true) = (
                         state.move_origin,
-                        self.snap_enabled && self.snap_grid_mm > 0.0,
+                        self.prefs.snap_enabled && self.prefs.snap_grid_mm > 0.0,
                     ) {
-                        let g = self.snap_grid_mm;
+                        let g = self.prefs.snap_grid_mm;
                         let dx = ((wx - origin.0) / g).round() * g;
                         let dy = ((wy - origin.1) / g).round() * g;
                         (origin.0 + dx, origin.1 + dy)
@@ -350,13 +350,13 @@ impl SchematicCanvas {
 
             // Track drag-to-select
             if state.select_drag_start.is_some() && !state.click_on_selected {
-                let world = state.camera.screen_to_world(cursor_pos, bounds);
+                let world = self.camera().screen_to_world(cursor_pos, bounds);
                 state.select_drag_end = Some((world.x as f64, world.y as f64));
             }
 
             // Regular hover — update cursor position for status bar
-            let world = state.camera.screen_to_world(cursor_pos, bounds);
-            let zoom_pct = state.camera.zoom_percent();
+            let world = self.camera().screen_to_world(cursor_pos, bounds);
+            let zoom_pct = self.camera().zoom_percent();
             return Some(canvas::Action::publish(Message::CanvasEvent(
                 CanvasEvent::CursorAt {
                     x: world.x,

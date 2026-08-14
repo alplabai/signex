@@ -577,7 +577,7 @@ impl Signex {
         // Convert object world position → window-absolute screen position.
         // The canvas Program publishes its latest camera into this Cell each
         // frame — that's the only way to read it from outside the Program.
-        let (cam_off_x, cam_off_y, cam_scale) = interaction.canvas.live_camera.get();
+        let (cam_off_x, cam_off_y, cam_scale) = interaction.canvas.live_camera();
         let canvas_local_x = edit_state.world_x as f32 * cam_scale + cam_off_x;
         let canvas_local_y = edit_state.world_y as f32 * cam_scale + cam_off_y;
         // Canvas top-left within the window: menu bar + tab bar above,

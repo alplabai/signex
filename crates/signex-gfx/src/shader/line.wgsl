@@ -6,7 +6,16 @@ struct Camera {
     view_proj: mat4x4<f32>,
     viewport: vec2<f32>,
     mm_per_px: f32,
-    _pad: f32,
+    // Screen-space legibility floors, in pixels; 0.0 disables. Mirrors
+    // `CameraUniform` — the two layouts must agree byte for byte.
+    min_stroke_px: f32,
+    min_radius_px: f32,
+    // Three scalars, not a vec3: a `vec3<f32>` carries 16-byte alignment in
+    // WGSL, which would push the struct to 112 bytes and mismatch the
+    // 96-byte `CameraUniform`. wgpu rejects the bind group outright.
+    _pad0: f32,
+    _pad1: f32,
+    _pad2: f32,
 }
 
 @group(0) @binding(0)
@@ -48,7 +57,13 @@ fn vs_main(@builtin(vertex_index) vi: u32, inst: LineInstance) -> VertexOut {
     let dir_len = max(length(dir_raw), 0.000001);
     let dir = dir_raw / dir_len;
     let normal = vec2<f32>(-dir.y, dir.x);
-    let hw = inst.width * 0.5;
+    // Legibility floor, matching what the CPU replays apply in screen space: a
+    // stroke never renders thinner than `min_stroke_px` pixels, so hairlines
+    // stay visible zoomed out instead of fading to sub-pixel coverage.
+    // `mm_per_px` converts that pixel floor into the world units this instance
+    // is expressed in. `0.0` leaves the width untouched.
+    let min_width = camera.min_stroke_px * camera.mm_per_px;
+    let hw = max(inst.width, min_width) * 0.5;
     let ext = dir * hw;
 
     let c0 = inst.p0 - ext + normal * hw;

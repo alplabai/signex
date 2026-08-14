@@ -201,7 +201,7 @@ impl Signex {
     /// placement buffers below are single fields, and a tool picked from
     /// an undocked window's toolbar sets those same globals — so the
     /// session half of this runs once. The canvas half does not: the
-    /// ghosts and previews live on each window's `SchematicCanvas`.
+    /// ghosts and previews live on each window's `CanvasSlot`.
     ///
     /// #554 — this used to reach the canvas only through
     /// `active_canvas_mut()`, which is always the MAIN slot
@@ -245,7 +245,7 @@ impl Signex {
         // the main slot and its `canvases` entry is temporarily absent,
         // so the two together are always the full set, with nothing
         // visited twice.
-        let clear_canvas = |canvas: &mut crate::canvas::SchematicCanvas| {
+        let clear_canvas = |canvas: &mut crate::canvas::CanvasSlot| {
             canvas.ghost_label = None;
             canvas.ghost_symbol = None;
             canvas.ghost_text = None;

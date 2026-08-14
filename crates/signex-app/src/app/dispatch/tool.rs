@@ -383,15 +383,19 @@ impl Signex {
                             shape_width_mm: prev_shape_width,
                             shape_fill: prev_shape_fill,
                         });
-                    self.document_state
-                        .dock
-                        .add_panel(PanelPosition::Right, crate::panels::PanelKind::Properties);
+                    // TAB opens the pre-placement form in Properties, so
+                    // the panel has to end up in front. `add_panel`
+                    // returned early whenever Properties was already
+                    // docked behind another tab, and the form the user
+                    // just asked for stayed hidden (#641).
+                    let show_properties = self.show_panel(crate::panels::PanelKind::Properties);
                     // Freeze ghost + suppress canvas clicks until OK. TAB
                     // does NOT place the object — it pauses placement and
                     // the pre-placement form edits the properties used by
                     // the next click. Placement resumes when the user hits
                     // Resume or Enter.
                     self.interaction_state.active_canvas_mut().placement_paused = true;
+                    return Task::batch([show_properties, self.finish_update()]);
                 }
                 self.finish_update()
             }
@@ -425,8 +429,6 @@ impl Signex {
             }
             ToolMessage::CycleDrawMode => {
                 self.interaction_state.draw_mode = self.interaction_state.draw_mode.next();
-                self.interaction_state.active_canvas_mut().draw_mode =
-                    self.interaction_state.draw_mode;
                 self.finish_update()
             }
             ToolMessage::CancelDrawing => {

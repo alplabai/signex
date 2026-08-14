@@ -3,8 +3,6 @@
 //! 12 icon buttons, each with an optional dropdown menu.
 //! Matches Altium Designer's schematic editor Active Bar exactly.
 
-use std::cell::Cell;
-
 use iced::widget::{button, svg, text};
 use iced::{Background, Border, Color, Element, Theme};
 use signex_types::theme::{ThemeId, ThemeTokens};
@@ -12,54 +10,10 @@ use signex_types::theme::{ThemeId, ThemeTokens};
 use crate::styles;
 
 mod dropdown;
-mod legacy;
 
 // Re-exported so `crate::active_bar::view_dropdown` / `dropdown_x_offset`
 // paths (overlays/mod.rs) resolve unchanged after the folder split.
 pub use dropdown::{dropdown_x_offset, view_dropdown};
-
-thread_local! {
-    /// True when the active schematic has at least one selected item.
-    /// `view_bar` installs a `HasSelectionGuard` for the duration of one
-    /// render so `ab_icon_btn` can grey out selection-dependent actions
-    /// (transform, align, distribute) on the bar's group-default buttons
-    /// without threading the flag through every call site. The dropdown
-    /// no longer needs this: it folds the enable state into each
-    /// `DropdownItem` at build time via `dd_action_enabled`.
-    static HAS_SELECTION_FOR_VIEW: Cell<bool> = const { Cell::new(true) };
-    /// True when the active schematic has at least one net with a
-    /// custom colour applied. Same purpose as `HAS_SELECTION_FOR_VIEW`
-    /// but for the NetColor "clear" actions.
-    static HAS_NET_COLORS_FOR_VIEW: Cell<bool> = const { Cell::new(true) };
-}
-
-/// RAII guard that publishes both `has_selection` and `has_net_colors`
-/// to helpers for the duration of one render. Resets to `true` (the
-/// "no gating, everything enabled" default) on drop so any caller that
-/// reaches `ab_icon_btn` outside a `view_bar` invocation still
-/// sees a fully-enabled UI.
-struct HasSelectionGuard;
-impl HasSelectionGuard {
-    fn enter(has_selection: bool, has_net_colors: bool) -> Self {
-        HAS_SELECTION_FOR_VIEW.with(|c| c.set(has_selection));
-        HAS_NET_COLORS_FOR_VIEW.with(|c| c.set(has_net_colors));
-        Self
-    }
-}
-impl Drop for HasSelectionGuard {
-    fn drop(&mut self) {
-        HAS_SELECTION_FOR_VIEW.with(|c| c.set(true));
-        HAS_NET_COLORS_FOR_VIEW.with(|c| c.set(true));
-    }
-}
-
-fn current_has_selection() -> bool {
-    HAS_SELECTION_FOR_VIEW.with(|c| c.get())
-}
-
-fn current_has_net_colors() -> bool {
-    HAS_NET_COLORS_FOR_VIEW.with(|c| c.get())
-}
 
 /// Whether `action` needs at least one selected item to make sense.
 /// Transform / align / distribute family — Altium greys these out when
@@ -102,25 +56,28 @@ pub fn requires_net_color(action: &ActiveBarAction) -> bool {
     matches!(action, ClearNetColor | ClearAllNetColors)
 }
 
-fn action_enabled(action: &ActiveBarAction) -> bool {
-    if requires_selection(action) && !current_has_selection() {
+/// Whether `action` is clickable given the current selection and
+/// net-colour state.
+///
+/// #633 — these two facts used to reach here through a pair of
+/// thread-locals that `view_bar` set for the duration of one render.
+/// Their reset value was `true`, so any path reaching a bar helper
+/// outside `view_bar` rendered a fully-enabled bar regardless of what
+/// was selected — a fallback that silently produced the wrong UI
+/// instead of failing. They are arguments now, so the compiler asks.
+pub(super) fn action_enabled(
+    action: &ActiveBarAction,
+    has_selection: bool,
+    has_net_colors: bool,
+) -> bool {
+    if requires_selection(action) && !has_selection {
         return false;
     }
-    if requires_net_color(action) && !current_has_net_colors() {
+    if requires_net_color(action) && !has_net_colors {
         return false;
     }
     true
 }
-
-/// Muted text colour used for disabled dropdown items / bar cells.
-/// Chosen to match the inactive label colour used by the chip + tab
-/// styles elsewhere in the active bar.
-const DISABLED_TEXT: Color = Color {
-    r: 0x66 as f32 / 255.0,
-    g: 0x6A as f32 / 255.0,
-    b: 0x7E as f32 / 255.0,
-    a: 1.0,
-};
 
 /// Theme-derived colors for Active Bar chrome (all Copy+ʼstatic).
 /// `bar_bg` / `bar_border` were used by the bespoke bar container;
@@ -529,10 +486,6 @@ pub fn view_bar<'a>(
 ) -> Element<'a, ActiveBarMsg> {
     use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 
-    // Publish gating context so cells like Move grey their left-press
-    // when nothing is selected. Right-clicks still open dropdowns.
-    let _selection_guard = HasSelectionGuard::enter(has_selection, has_net_colors);
-
     // Helper: get last-used action for a group, or use default.
     let last = |group: &str, default: ActiveBarAction| -> ActiveBarMsg {
         ActiveBarMsg::Action(last_tool.get(group).cloned().unwrap_or(default))
@@ -558,7 +511,7 @@ pub fn view_bar<'a>(
                tooltip: &str|
      -> ActiveBarItem<ActiveBarMsg> {
         let enabled = match &left {
-            ActiveBarMsg::Action(a) => action_enabled(a),
+            ActiveBarMsg::Action(a) => action_enabled(a, has_selection, has_net_colors),
             _ => true,
         };
         let dropdown_indicator = if right.is_some() {

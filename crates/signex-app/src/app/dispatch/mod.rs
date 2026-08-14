@@ -360,13 +360,17 @@ impl Signex {
                         WindowKind::UndockedTab { .. } => {
                             self.interaction_state.canvases.remove(&id);
                         }
-                        // Closing a detached panel reattaches it as a
-                        // docked panel in the right column so the user
-                        // doesn't lose access to the panel kind.
+                        // Closing a detached panel reattaches it to the
+                        // dock so the user doesn't lose access to the
+                        // panel kind. It goes back to its home region
+                        // rather than always to the right column, and
+                        // `show_panel` makes it the active tab there.
+                        // The `windows.remove` above already dropped
+                        // this window, so the dock call is the whole
+                        // job — no detached copy is left to focus.
                         WindowKind::DetachedPanel(kind) => {
-                            self.document_state
-                                .dock
-                                .add_panel(crate::dock::PanelPosition::Right, kind);
+                            self.document_state.dock.show_panel(kind);
+                            crate::fonts::write_dock_layout(&self.document_state.dock);
                         }
                         // The Component Preview lives as a tab in the
                         // main window; its state outlasts the
@@ -440,9 +444,9 @@ impl Signex {
                 // Spin up a fresh canvas for this window, seeded from
                 // the engine that the tab points at so the new window
                 // renders the correct schematic from its first frame.
-                // Pan/zoom/selection start at SchematicCanvas::new
+                // Pan/zoom/selection start at CanvasSlot::new
                 // defaults — independent of the main canvas.
-                let mut per_window = crate::canvas::SchematicCanvas::new();
+                let mut per_window = crate::canvas::CanvasSlot::new();
                 if let Some(engine) = self.document_state.engines.get(&path) {
                     per_window.set_render_cache(Some(
                         crate::schematic_runtime::SchematicRenderCache::from_sheet(
@@ -450,17 +454,12 @@ impl Signex {
                         ),
                     ));
                 }
-                // Mirror the main canvas's theme / snap / grid / paper
-                // settings so the new window doesn't flash with the
-                // defaults before any sync happens.
-                per_window.theme_bg = self.interaction_state.canvas.theme_bg;
-                per_window.theme_grid = self.interaction_state.canvas.theme_grid;
-                per_window.theme_paper = self.interaction_state.canvas.theme_paper;
-                per_window.canvas_colors = self.interaction_state.canvas.canvas_colors;
-                per_window.snap_enabled = self.interaction_state.canvas.snap_enabled;
-                per_window.snap_grid_mm = self.interaction_state.canvas.snap_grid_mm;
-                per_window.visible_grid_mm = self.interaction_state.canvas.visible_grid_mm;
-                per_window.grid_visible = self.interaction_state.canvas.grid_visible;
+                // #631 — theme, snap, grid size/style and grid visibility
+                // used to be mirrored here so the new window would not
+                // flash the defaults. They are read from `UiState` in
+                // `view` now, so a fresh window is correct on its first
+                // frame with nothing copied. Paper size stays: it belongs
+                // to *this* window's document, not to the app.
                 per_window.paper_width_mm = self.interaction_state.canvas.paper_width_mm;
                 per_window.paper_height_mm = self.interaction_state.canvas.paper_height_mm;
                 per_window.fit_to_paper();

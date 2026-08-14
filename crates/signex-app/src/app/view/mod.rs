@@ -614,11 +614,15 @@ impl Signex {
             // per-window canvas receives the mutation. Keyboard
             // shortcuts that synthesize `Message::CanvasEvent` keep
             // targeting the main canvas unchanged.
-            let base: Element<'_, Message> =
-                canvas(self.interaction_state.canvas_for_window(window_id))
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .into();
+            // #631 — the canvas Program is built here, per frame, from a
+            // borrow of the window's `CanvasSlot` plus settings read
+            // straight off `UiState`. It no longer owns copies of them.
+            let slot = self.interaction_state.canvas_for_window(window_id);
+            let program = crate::canvas::SchematicCanvas::new(slot, self.canvas_view_prefs());
+            let base: Element<'_, Message> = canvas(program)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into();
             if is_main {
                 base
             } else {
@@ -647,11 +651,13 @@ impl Signex {
                 // unchanged geometry on pan/zoom.
                 let generation = pcb_canvas.scene_generation();
                 let (offset_x, offset_y, scale) = pcb_canvas.live_camera();
-                let content_shader = shader(crate::scene_shader::SceneShaderProgram::new(
-                    scene,
-                    Some(generation),
-                    [offset_x, offset_y],
-                    scale,
+                // `PcbSurface` selects this surface's pipeline slot — iced keys
+                // a stored pipeline by the primitive's TypeId, process-wide, so
+                // every surface needs its own marker (see `scene_shader`).
+                let content_shader = shader(crate::scene_shader::SceneShaderProgram::<
+                    crate::scene_shader::PcbSurface,
+                >::new(
+                    scene, Some(generation), [offset_x, offset_y], scale
                 ))
                 .width(Length::Fill)
                 .height(Length::Fill);

@@ -1,7 +1,7 @@
 //! Canvas interaction state — active tool, per-window canvases, drag /
 //! context-menu / text-edit sub-state. Split from `app/state.rs`.
 
-use crate::canvas::SchematicCanvas;
+use crate::canvas::CanvasSlot;
 use crate::pcb_canvas::PcbCanvas;
 
 use super::super::{ContextMenuState, DragTarget, DrawMode, TextEditState, Tool};
@@ -9,17 +9,17 @@ use super::super::{ContextMenuState, DragTarget, DrawMode, TextEditState, Tool};
 pub struct InteractionState {
     pub current_tool: Tool,
     /// The main-window schematic canvas. Every non-main window carries
-    /// its own `SchematicCanvas` inside `canvases`, keyed by that
+    /// its own `CanvasSlot` inside `canvases`, keyed by that
     /// window's `iced::window::Id`. The event-dispatch layer swaps a
     /// per-window canvas into this slot while handling an event so the
     /// hundreds of `active_canvas_mut()` call sites don't need to know
     /// about per-window routing.
-    pub canvas: SchematicCanvas,
+    pub canvas: CanvasSlot,
     /// Extra schematic canvases owned by non-main windows (undocked
     /// tabs). Populated on `Message::Window(WindowMsg::UndockedTabOpened)`; drained on
     /// `Message::Window(WindowMsg::SecondaryWindowClosed)`. Reads go through
     /// `canvas_for_window`; writes happen via the dispatch swap trick.
-    pub canvases: std::collections::HashMap<iced::window::Id, SchematicCanvas>,
+    pub canvases: std::collections::HashMap<iced::window::Id, CanvasSlot>,
     pub pcb_canvas: PcbCanvas,
     pub dragging: Option<DragTarget>,
     pub drag_start_pos: Option<f32>,
@@ -133,24 +133,24 @@ pub struct InteractionState {
 }
 
 impl InteractionState {
-    pub fn active_canvas(&self) -> &SchematicCanvas {
+    pub fn active_canvas(&self) -> &CanvasSlot {
         &self.canvas
     }
 
-    pub fn active_canvas_mut(&mut self) -> &mut SchematicCanvas {
+    pub fn active_canvas_mut(&mut self) -> &mut CanvasSlot {
         &mut self.canvas
     }
 
-    /// Per-window canvas lookup. Returns the per-window `SchematicCanvas`
+    /// Per-window canvas lookup. Returns the per-window `CanvasSlot`
     /// if one is registered (undocked windows), otherwise the main
     /// window's shared canvas. Writes from canvas events still go
     /// through the main-canvas slot; see the dispatch swap trick in
     /// `dispatch::ui::handle_canvas_event_in_window`.
-    pub fn canvas_for_window(&self, window_id: iced::window::Id) -> &SchematicCanvas {
+    pub fn canvas_for_window(&self, window_id: iced::window::Id) -> &CanvasSlot {
         self.canvases.get(&window_id).unwrap_or(&self.canvas)
     }
 
-    pub fn canvas_for_window_mut(&mut self, window_id: iced::window::Id) -> &mut SchematicCanvas {
+    pub fn canvas_for_window_mut(&mut self, window_id: iced::window::Id) -> &mut CanvasSlot {
         // `get_mut` returns `Option<&mut V>`. Match rather than
         // `contains_key` + `get_mut().unwrap()` to avoid the double
         // lookup and the unwrap.

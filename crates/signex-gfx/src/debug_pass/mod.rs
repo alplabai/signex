@@ -15,7 +15,17 @@ use crate::primitive::arc::Arc;
 use crate::primitive::circle::Circle;
 use crate::primitive::line::LineSegment;
 use crate::primitive::polygon::GpuPolygon;
-use crate::primitive::text::{TextHAlign, TextItem, TextVAlign};
+use crate::primitive::text::{TextHAlign, TextItem, TextSizePolicy, TextVAlign};
+
+/// Text sizing for the headless smoke passes. Wide on purpose: these verify
+/// rasterization, not typography, so a readability clamp would hide the very
+/// size the pass is exercising.
+pub(crate) const DEBUG_TEXT_POLICY: TextSizePolicy = TextSizePolicy::new(1.0, 512.0);
+
+/// Family the smoke passes ask for. The harness loads no faces, so this
+/// resolves through the system fallback — fine, because these passes assert
+/// that glyphs rasterize at all, not which ones.
+pub(crate) const DEBUG_TEXT_FAMILY: &str = "Iosevka";
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SmokePassReport {
@@ -189,7 +199,11 @@ pub async fn run_line_circle_smoke_pass(scale_px_per_mm: f32) -> Result<SmokePas
 /// for `tests/regression_golden.rs` to call as a separate crate): this one
 /// has no caller outside `debug_pass::tests`.
 #[cfg(test)]
-async fn run_line_dash_readback_smoke_pass(sample_x_px: &[u32]) -> Result<Vec<u8>, String> {
+async fn run_line_readback_smoke_pass(
+    line: LineSegment,
+    min_stroke_px: f32,
+    sample_x_px: &[u32],
+) -> Result<Vec<u8>, String> {
     let instance = wgpu::Instance::default();
 
     let adapter = instance
@@ -217,23 +231,14 @@ async fn run_line_dash_readback_smoke_pass(sample_x_px: &[u32]) -> Result<Vec<u8
     const WIDTH: u32 = 128;
     const HEIGHT: u32 = 8;
     let scale_px_per_mm = 4.0f32;
-    let camera = CameraUniform::ortho([WIDTH as f32, HEIGHT as f32], [0.0, 0.0], scale_px_per_mm);
+    let camera = CameraUniform::ortho([WIDTH as f32, HEIGHT as f32], [0.0, 0.0], scale_px_per_mm)
+        .with_min_feature_px(min_stroke_px, 0.0);
     let camera_gpu = CameraGpu::new(&device, camera);
 
     let mut line_pipeline =
         LinePipeline::new(&device, target_format, camera_gpu.bind_group_layout());
 
-    // Centre row (world y = 1mm = HEIGHT/2 px), spanning almost the full
-    // viewport width so several dash/gap periods land inside it.
-    let lines = [LineSegment {
-        p0: [0.0, 1.0],
-        p1: [30.0, 1.0],
-        width: 1.0,
-        color: [1.0, 1.0, 1.0, 1.0],
-        style: LineSegment::STYLE_DASHED,
-        _pad: 0,
-    }];
-    line_pipeline.upload(&device, &queue, &lines);
+    line_pipeline.upload(&device, &queue, &[line]);
 
     let target = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("signex_gfx_dash_readback_target"),
@@ -626,12 +631,20 @@ async fn run_text_smoke_pass_with(scale_px_per_mm: f32, texts: &[TextItem]) -> R
     let target_format = wgpu::TextureFormat::Bgra8Unorm;
     let mut text_pipeline = GlyphonTextPipeline::new(&device, &queue, target_format);
 
+    // Headless harness: there is no app font system to borrow, so it owns
+    // one. The policy is deliberately wide — these passes verify
+    // rasterization, not typography, and a clamp would hide the size under
+    // test.
+    let mut font_system = cryoglyph::FontSystem::new();
     text_pipeline
         .upload(
             &device,
             &queue,
+            &mut font_system,
             texts,
             scale_px_per_mm,
+            DEBUG_TEXT_POLICY,
+            DEBUG_TEXT_FAMILY,
             [128, 128],
             [0.0, 0.0],
         )

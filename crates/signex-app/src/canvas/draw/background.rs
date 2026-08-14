@@ -1,22 +1,20 @@
 use super::super::*;
 
-impl SchematicCanvas {
+impl SchematicCanvas<'_> {
     /// Layer 1 — background fill, paper rectangle + border, and grid dots.
     pub(in crate::canvas) fn draw_background(
         &self,
-        state: &CanvasState,
         renderer: &Renderer,
         bounds: Rectangle,
     ) -> canvas::Geometry {
+        let cam = self.camera();
         self.bg_cache.draw(renderer, bounds.size(), |frame| {
             // Fill background
-            frame.fill_rectangle(iced::Point::ORIGIN, bounds.size(), self.theme_bg);
+            frame.fill_rectangle(iced::Point::ORIGIN, bounds.size(), self.prefs.theme_bg);
 
             // Draw paper rectangle using active paper size.
-            let paper_tl = state
-                .camera
-                .world_to_screen(iced::Point::new(0.0, 0.0), bounds);
-            let paper_br = state.camera.world_to_screen(
+            let paper_tl = cam.world_to_screen(iced::Point::new(0.0, 0.0), bounds);
+            let paper_br = cam.world_to_screen(
                 iced::Point::new(self.paper_width_mm, self.paper_height_mm),
                 bounds,
             );
@@ -27,7 +25,7 @@ impl SchematicCanvas {
                 frame.fill_rectangle(
                     paper_tl,
                     iced::Size::new(paper_w, paper_h),
-                    self.theme_paper,
+                    self.prefs.theme_paper,
                 );
 
                 // Paper border
@@ -35,21 +33,22 @@ impl SchematicCanvas {
                 frame.stroke(
                     &border,
                     canvas::Stroke::default()
-                        .with_color(self.theme_grid)
+                        .with_color(self.prefs.theme_grid)
                         .with_width(1.0),
                 );
             }
 
             // Draw grid — use visible_grid_mm so snap and visual grid are independent
-            if self.grid_visible {
+            if self.prefs.grid_visible {
                 grid::draw_grid(
                     frame,
-                    &state.camera,
-                    self.visible_grid_mm as f32,
+                    &cam,
+                    self.prefs.visible_grid_mm as f32,
                     bounds,
-                    self.theme_grid,
+                    self.prefs.theme_grid,
                     self.paper_width_mm,
                     self.paper_height_mm,
+                    self.prefs.grid_style,
                 );
             }
         })

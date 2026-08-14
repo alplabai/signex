@@ -10,12 +10,12 @@ impl Signex {
                 Task::none()
             }
             OverlayMsg::OpenPanel(kind) => {
+                // The generic panel-list entry point. It used to send
+                // *every* kind to the right column, so picking a panel
+                // whose home is elsewhere — Projects, Signal, ERC —
+                // grew a second copy on the right (#641).
                 self.ui_state.panel_list_open = false;
-                self.document_state
-                    .dock
-                    .add_panel(crate::dock::PanelPosition::Right, kind);
-                crate::fonts::write_dock_layout(&self.document_state.dock);
-                Task::none()
+                self.show_panel(kind)
             }
             OverlayMsg::OpenFind => self.handle_find_replace_open_requested(false),
             OverlayMsg::OpenReplace => self.handle_find_replace_open_requested(true),

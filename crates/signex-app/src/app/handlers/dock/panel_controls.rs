@@ -62,16 +62,11 @@ impl Signex {
             }
             crate::panels::PanelMsg::ToggleGrid => {
                 self.ui_state.grid_visible = !self.ui_state.grid_visible;
-                self.interaction_state.active_canvas_mut().grid_visible =
-                    self.ui_state.grid_visible;
-                self.interaction_state.pcb_canvas.grid_visible = self.ui_state.grid_visible;
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
             }
             crate::panels::PanelMsg::ToggleSnap => {
                 self.ui_state.snap_enabled = !self.ui_state.snap_enabled;
-                self.interaction_state.active_canvas_mut().snap_enabled =
-                    self.ui_state.snap_enabled;
             }
             crate::panels::PanelMsg::PropertiesTab(index) => {
                 self.document_state.panel_ctx.properties_tab = *index;
@@ -259,7 +254,6 @@ impl Signex {
             crate::panels::PanelMsg::SetGridSize(size) => {
                 self.ui_state.grid_size_mm = *size;
                 self.document_state.panel_ctx.grid_size_mm = *size;
-                self.interaction_state.active_canvas_mut().snap_grid_mm = *size as f64;
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
                 crate::fonts::write_grid_size_mm_pref(*size);
@@ -267,8 +261,6 @@ impl Signex {
             crate::panels::PanelMsg::SetVisibleGridSize(size) => {
                 self.ui_state.visible_grid_mm = *size;
                 self.document_state.panel_ctx.visible_grid_mm = *size;
-                self.interaction_state.active_canvas_mut().visible_grid_mm = *size as f64;
-                self.interaction_state.pcb_canvas.visible_grid_mm = *size as f64;
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
             }
@@ -284,11 +276,6 @@ impl Signex {
             crate::panels::PanelMsg::SetCanvasFont(name) => {
                 self.ui_state.canvas_font_name = name.clone();
                 self.document_state.panel_ctx.canvas_font_name = name.clone();
-                crate::render_config::set_canvas_font_name(name);
-                crate::render_config::set_canvas_font_style(
-                    self.ui_state.canvas_font_bold,
-                    self.ui_state.canvas_font_italic,
-                );
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
@@ -299,7 +286,6 @@ impl Signex {
             crate::panels::PanelMsg::SetCanvasFontSize(size) => {
                 self.ui_state.canvas_font_size = *size;
                 self.document_state.panel_ctx.canvas_font_size = *size;
-                crate::render_config::set_canvas_font_size(*size);
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
@@ -310,10 +296,6 @@ impl Signex {
             crate::panels::PanelMsg::SetCanvasFontBold(is_bold) => {
                 self.ui_state.canvas_font_bold = *is_bold;
                 self.document_state.panel_ctx.canvas_font_bold = *is_bold;
-                crate::render_config::set_canvas_font_style(
-                    self.ui_state.canvas_font_bold,
-                    self.ui_state.canvas_font_italic,
-                );
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
@@ -324,10 +306,6 @@ impl Signex {
             crate::panels::PanelMsg::SetCanvasFontItalic(is_italic) => {
                 self.ui_state.canvas_font_italic = *is_italic;
                 self.document_state.panel_ctx.canvas_font_italic = *is_italic;
-                crate::render_config::set_canvas_font_style(
-                    self.ui_state.canvas_font_bold,
-                    self.ui_state.canvas_font_italic,
-                );
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
@@ -377,7 +355,6 @@ impl Signex {
             }
             crate::panels::PanelMsg::SetSheetColor(color) => {
                 self.document_state.panel_ctx.sheet_color = *color;
-                self.interaction_state.active_canvas_mut().theme_paper = color.to_color();
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
             }
             crate::panels::PanelMsg::DragComponentsSplit => {

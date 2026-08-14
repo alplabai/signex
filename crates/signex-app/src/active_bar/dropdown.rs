@@ -16,7 +16,7 @@ use crate::styles;
 
 use super::{
     AbColors, ActiveBarAction, ActiveBarMenu, ActiveBarMsg, CustomFilterPreset, SelectionFilter,
-    requires_net_color, requires_selection,
+    action_enabled,
 };
 
 // ─── View: Dropdown menus ────────────────────────────────────
@@ -36,8 +36,8 @@ pub fn view_dropdown<'a>(
     // the schematic, footprint, and future PCB active bars share ONE
     // dropdown widget (see ADR-0003 — active_bar / menus data-driven
     // redesign). Enable/disable is folded into each `DropdownItem` here
-    // from the passed booleans, so the old render-time `HasSelectionGuard`
-    // thread-local is no longer needed for the dropdown.
+    // from the passed booleans — #633 removed the render-time
+    // thread-locals the bar buttons used to share.
     let entries = dropdown_entries(
         menu,
         tokens,
@@ -50,21 +50,6 @@ pub fn view_dropdown<'a>(
     signex_widgets::active_bar_dropdown::view(entries, tokens, dropdown_min_width(menu))
 }
 
-/// Whether `action`'s dropdown row is clickable given the current
-/// selection / net-colour context. Pure replacement for the render-time
-/// `HasSelectionGuard` thread-local: the enable state is computed at
-/// build time and baked into the `DropdownItem` rather than read from a
-/// global during draw.
-fn dd_action_enabled(action: &ActiveBarAction, has_selection: bool, has_net_colors: bool) -> bool {
-    if requires_selection(action) && !has_selection {
-        return false;
-    }
-    if requires_net_color(action) && !has_net_colors {
-        return false;
-    }
-    true
-}
-
 /// One icon + label dropdown row. Disabled rows drop their `on_press`
 /// (the widget greys the row and ignores clicks — Altium parity).
 fn dd_item(
@@ -74,7 +59,7 @@ fn dd_item(
     has_selection: bool,
     has_net_colors: bool,
 ) -> DropdownEntry<ActiveBarMsg> {
-    let enabled = dd_action_enabled(&action, has_selection, has_net_colors);
+    let enabled = action_enabled(&action, has_selection, has_net_colors);
     // #271 — the visible text comes from the command catalog when the
     // action has an id, so the Active Bar stops being the only surface
     // keeping its own copy of a command's wording. `label` is the
@@ -975,29 +960,21 @@ mod tests {
     #[test]
     fn action_enable_predicate() {
         // selection-gated action
-        assert!(!dd_action_enabled(
+        assert!(!action_enabled(
             &ActiveBarAction::MoveSelection,
             false,
             true
         ));
-        assert!(dd_action_enabled(
-            &ActiveBarAction::MoveSelection,
-            true,
-            false
-        ));
+        assert!(action_enabled(&ActiveBarAction::MoveSelection, true, false));
         // net-colour-gated action
-        assert!(!dd_action_enabled(
+        assert!(!action_enabled(
             &ActiveBarAction::ClearNetColor,
             true,
             false
         ));
-        assert!(dd_action_enabled(
-            &ActiveBarAction::ClearNetColor,
-            true,
-            true
-        ));
+        assert!(action_enabled(&ActiveBarAction::ClearNetColor, true, true));
         // ungated action is always on
-        assert!(dd_action_enabled(&ActiveBarAction::DrawWire, false, false));
+        assert!(action_enabled(&ActiveBarAction::DrawWire, false, false));
     }
 
     #[test]
