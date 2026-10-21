@@ -1,0 +1,218 @@
+//! Type0 font embedding: Unicode text must survive export, stay extractable
+//! through `/ToUnicode`, and the embedded faces must be real subsets.
+
+use signex_types::schematic::{HAlign, Point, TextNote, VAlign};
+use ttf_parser::{Face, GlyphId};
+
+use super::font::PdfFont;
+use super::subset::subset_truetype;
+use super::tests::{empty_sheet, sample_ctx};
+use super::*;
+
+const SAMPLE: &str = "10µF 100°C ±5% Ğüşİıç Ω";
+
+fn note(text: &str, y: f64) -> TextNote {
+    TextNote {
+        uuid: uuid::Uuid::nil(),
+        text: text.to_string(),
+        position: Point::new(20.0, y),
+        rotation: 0.0,
+        font_size: 1.27,
+        justify_h: HAlign::Left,
+        justify_v: VAlign::Bottom,
+    }
+}
+
+fn export_notes(texts: &[&str]) -> Vec<u8> {
+    let mut sheet = empty_sheet();
+    for (i, text) in texts.iter().enumerate() {
+        sheet.text_notes.push(note(text, 20.0 + 10.0 * i as f64));
+    }
+    let mut ctx = sample_ctx(1);
+    ctx.sheets[0].schematic = sheet;
+    let opts = PdfOptions {
+        include_title_block: false,
+        ..Default::default()
+    };
+    PdfExporter.export(&ctx, &opts).expect("export").bytes
+}
+
+/// PDF bytes as a 1:1 char-per-byte string so offsets survive binary streams.
+fn latin1(bytes: &[u8]) -> String {
+    bytes.iter().map(|&b| b as char).collect()
+}
+
+fn leading_number(s: &str) -> Option<u32> {
+    let digits: String = s.chars().take_while(char::is_ascii_digit).collect();
+    digits.parse().ok()
+}
+
+/// Object number a `/key N 0 R` entry points at.
+fn ref_after(text: &str, key: &str) -> Option<u32> {
+    text.match_indices(key).find_map(|(at, _)| {
+        let rest = &text[at + key.len()..];
+        let n = leading_number(rest)?;
+        rest[n.to_string().len()..].starts_with(" 0 R").then_some(n)
+    })
+}
+
+fn object_body(text: &str, n: u32) -> &str {
+    let start = text
+        .find(&format!("\n{n} 0 obj"))
+        .unwrap_or_else(|| panic!("object {n} missing"));
+    let end = text[start..].find("endobj").expect("endobj") + start;
+    &text[start..end]
+}
+
+/// CID -> char table parsed from a `/ToUnicode` CMap body.
+fn parse_cmap(body: &str) -> std::collections::HashMap<u16, char> {
+    let mut map = std::collections::HashMap::new();
+    let mut in_bfchar = false;
+    for line in body.lines() {
+        match line.trim() {
+            "endbfchar" => in_bfchar = false,
+            l if l.ends_with("beginbfchar") => in_bfchar = true,
+            _ if !in_bfchar => continue,
+            _ => {}
+        }
+        let mut parts = line.split(['<', '>']).filter(|p| !p.trim().is_empty());
+        if let (Some(cid), Some(uni), None) = (parts.next(), parts.next(), parts.next())
+            && let (Ok(cid), Ok(uni)) = (u16::from_str_radix(cid, 16), u32::from_str_radix(uni, 16))
+            && let Some(ch) = char::from_u32(uni)
+        {
+            map.insert(cid, ch);
+        }
+    }
+    map
+}
+
+/// Every `Tj` string in the PDF, decoded through its font's `/ToUnicode`.
+/// CID 0 (`.notdef`) decodes to nothing, as a reader would extract it.
+fn extract_text(bytes: &[u8]) -> Vec<String> {
+    let text = latin1(bytes);
+    let mut shown = Vec::new();
+    let mut alias = String::new();
+    for line in text.lines() {
+        if let Some(rest) = line.strip_prefix('/')
+            && rest.ends_with(" Tf")
+        {
+            alias = format!("/{}", rest.split(' ').next().unwrap_or_default());
+        }
+        let Some(hex) = line.strip_suffix("> Tj").and_then(|l| l.strip_prefix('<')) else {
+            continue;
+        };
+        let type0 = ref_after(&text, &format!("{alias} ")).expect("font in resources");
+        let cmap_ref = ref_after(object_body(&text, type0), "/ToUnicode ").expect("ToUnicode");
+        let cmap = parse_cmap(object_body(&text, cmap_ref));
+        let decoded: String = (0..hex.len() / 4)
+            .filter_map(|i| u16::from_str_radix(&hex[i * 4..i * 4 + 4], 16).ok())
+            .filter_map(|cid| cmap.get(&cid).copied())
+            .collect();
+        shown.push(decoded);
+    }
+    shown
+}
+
+#[test]
+fn fonts_are_embedded_as_type0_with_font_file2_and_to_unicode() {
+    let text = latin1(&export_notes(&[SAMPLE]));
+    for needle in [
+        "/Type0",
+        "/CIDFontType2",
+        "/Identity-H",
+        "/FontFile2",
+        "/ToUnicode",
+        "/FontDescriptor",
+        "/W [",
+    ] {
+        assert!(text.contains(needle), "PDF lacks {needle}");
+    }
+    assert!(!text.contains("Helvetica") && !text.contains("Courier"));
+    assert!(text.contains("+Roboto"), "Roboto must be the base font");
+}
+
+#[test]
+fn non_ascii_text_round_trips_through_to_unicode() {
+    let shown = extract_text(&export_notes(&[SAMPLE, "Ω µ ü"]));
+    assert!(shown.iter().any(|s| s == SAMPLE), "got {shown:?}");
+    assert!(shown.iter().any(|s| s == "Ω µ ü"), "got {shown:?}");
+}
+
+#[test]
+fn glyphs_present_in_the_font_never_resolve_to_notdef() {
+    let bytes = export_notes(&[SAMPLE]);
+    let text = latin1(&bytes);
+    let tj = text
+        .lines()
+        .find_map(|l| l.strip_suffix("> Tj").and_then(|l| l.strip_prefix('<')))
+        .expect("a Tj line");
+    assert_eq!(tj.len() / 4, SAMPLE.chars().count());
+    assert!(
+        (0..tj.len() / 4).all(|i| &tj[i * 4..i * 4 + 4] != "0000"),
+        "a glyph resolved to .notdef: {tj}"
+    );
+}
+
+#[test]
+fn glyph_the_font_lacks_exports_without_panicking() {
+    let shown = extract_text(&export_notes(&["Ω µ ü 中"]));
+    assert!(shown.iter().any(|s| s == "Ω µ ü "), "got {shown:?}");
+}
+
+#[test]
+fn single_glyph_document_embeds_a_subset_not_the_whole_face() {
+    let bytes = export_notes(&["A"]);
+    let full = PdfFont::RobotoRegular.font_bytes().len();
+    assert!(
+        bytes.len() < full / 20,
+        "PDF is {} bytes, face is {full}",
+        bytes.len()
+    );
+    let text = latin1(&bytes);
+    assert!(
+        !text.contains("+Iosevka"),
+        "unused faces must not be embedded"
+    );
+}
+
+#[test]
+fn subset_keeps_outlines_for_simple_and_composite_glyphs() {
+    let data = PdfFont::RobotoRegular.font_bytes();
+    let face = Face::parse(data, 0).expect("roboto");
+    let originals: Vec<u16> = "Aü°µΩ"
+        .chars()
+        .map(|c| face.glyph_index(c).expect("glyph").0)
+        .collect();
+    let mut keep = vec![0];
+    keep.extend(&originals);
+    let requested = keep.len();
+
+    let subset = subset_truetype(data, &mut keep).expect("subset");
+    assert!(subset.len() < data.len() / 20);
+    let sub = Face::parse(&subset, 0).expect("subset parses");
+    assert_eq!(usize::from(sub.number_of_glyphs()), keep.len());
+    assert!(keep.len() >= requested);
+    for (new, &orig) in keep.iter().enumerate() {
+        assert_eq!(
+            sub.glyph_bounding_box(GlyphId(new as u16)),
+            face.glyph_bounding_box(GlyphId(orig)),
+            "outline of new glyph {new} (orig {orig}) differs"
+        );
+        assert_eq!(
+            sub.glyph_hor_advance(GlyphId(new as u16)),
+            face.glyph_hor_advance(GlyphId(orig))
+        );
+    }
+}
+
+#[test]
+fn every_bundled_face_subsets() {
+    for font in PdfFont::ALL {
+        let face = font.face().expect("parses");
+        let gid = face.glyph_index('A').expect("A").0;
+        let mut keep = vec![0, gid];
+        let subset = subset_truetype(font.font_bytes(), &mut keep)
+            .unwrap_or_else(|e| panic!("{}: {e}", font.base_name()));
+        assert!(Face::parse(&subset, 0).is_ok(), "{}", font.base_name());
+    }
+}
