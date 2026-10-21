@@ -12,6 +12,27 @@ use crate::shader;
 pub(crate) struct PolygonVertex {
     pub(crate) position: [f32; 2],
     pub(crate) color: [f32; 4],
+    /// Unit direction the shader pushes this vertex along, by the stroke's
+    /// half-width — the edge normal, signed for the side of the edge it sits
+    /// on. Zero for fill vertices, which therefore never move.
+    pub(crate) extrude: [f32; 2],
+    /// Half the stroke width in world mm. The shader raises it to the
+    /// camera's screen-space floor, so a stroke cannot fade to sub-pixel
+    /// zoomed out, and a zero-width stroke draws as a hairline — the CPU
+    /// replay's `stroke_px` rule. Doing it in the shader keeps the vertices
+    /// zoom-independent; flooring here would re-tessellate on every zoom.
+    pub(crate) half_width: f32,
+}
+
+impl PolygonVertex {
+    fn fill(position: [f32; 2], color: [f32; 4]) -> Self {
+        Self {
+            position,
+            color,
+            extrude: [0.0, 0.0],
+            half_width: 0.0,
+        }
+    }
 }
 
 /// Build the triangle-list vertices for a batch of polygons: an ear-clip fill
@@ -72,10 +93,7 @@ fn append_fill(vertices: &mut Vec<PolygonVertex>, polygon: &GpuPolygon) {
 
     for [a, b, c] in triangles {
         for idx in [a, b, c] {
-            vertices.push(PolygonVertex {
-                position: points[idx],
-                color: polygon.fill_color,
-            });
+            vertices.push(PolygonVertex::fill(points[idx], polygon.fill_color));
         }
     }
 }
@@ -86,18 +104,9 @@ fn append_fill(vertices: &mut Vec<PolygonVertex>, polygon: &GpuPolygon) {
 fn append_fan_fill(vertices: &mut Vec<PolygonVertex>, points: &[[f32; 2]], fill_color: [f32; 4]) {
     let origin = points[0];
     for idx in 1..(points.len() - 1) {
-        vertices.push(PolygonVertex {
-            position: origin,
-            color: fill_color,
-        });
-        vertices.push(PolygonVertex {
-            position: points[idx],
-            color: fill_color,
-        });
-        vertices.push(PolygonVertex {
-            position: points[idx + 1],
-            color: fill_color,
-        });
+        vertices.push(PolygonVertex::fill(origin, fill_color));
+        vertices.push(PolygonVertex::fill(points[idx], fill_color));
+        vertices.push(PolygonVertex::fill(points[idx + 1], fill_color));
     }
 }
 
@@ -105,14 +114,13 @@ fn append_fan_fill(vertices: &mut Vec<PolygonVertex>, points: &[[f32; 2]], fill_
 /// (including the closing edge, `last -> first`), so fill-only-invisible areas
 /// such as rule/keepout zones still read as an outline. World-space width in
 /// mm — the shader's ortho projection scales it with zoom, mirroring the CPU's
-/// `stroke_width * camera.scale`. No miter joins (thin strokes only) and no
-/// screen-space minimum width; both are shared with the CPU path within
-/// tolerance for the sub-0.1 mm widths the renderer emits. No-op when the
-/// polygon has no stroke colour or a non-positive width.
+/// `stroke_width * camera.scale` — raised in the shader to the camera's
+/// screen-space floor, as the CPU replay's `stroke_px` does. No miter joins
+/// (thin strokes only). No-op when the polygon has no stroke colour.
 fn append_stroke(vertices: &mut Vec<PolygonVertex>, polygon: &GpuPolygon) {
     // `is_stroked()` is the shared definition of "this contour carries an
-    // outline": a stroke colour AND a positive width. Keeping the guard here in
-    // terms of that predicate is what the CPU↔GPU parity test locks against.
+    // outline". Keeping the guard here in terms of that predicate is what the
+    // CPU↔GPU parity test locks against.
     if !polygon.is_stroked() {
         return;
     }
@@ -121,7 +129,7 @@ fn append_stroke(vertices: &mut Vec<PolygonVertex>, polygon: &GpuPolygon) {
         .expect("is_stroked() guarantees a stroke colour");
 
     let points = &polygon.vertices;
-    let half = polygon.stroke_width * 0.5;
+    let half = polygon.stroke_width.max(0.0) * 0.5;
     for i in 0..points.len() {
         let a = points[i];
         let b = points[(i + 1) % points.len()];
@@ -130,7 +138,9 @@ fn append_stroke(vertices: &mut Vec<PolygonVertex>, polygon: &GpuPolygon) {
 }
 
 /// Emit two triangles for the rectangle centred on edge `a -> b`, `half` units
-/// to either side along the edge normal.
+/// to either side along the edge normal. The corners are emitted ON the edge,
+/// each carrying the signed normal; the shader moves them out by the floored
+/// half-width.
 fn append_edge_quad(
     vertices: &mut Vec<PolygonVertex>,
     a: [f32; 2],
@@ -145,16 +155,25 @@ fn append_edge_quad(
         return;
     }
 
-    // Unit edge normal scaled to half the stroke width.
-    let nx = -dy / len * half;
-    let ny = dx / len * half;
-    let a0 = [a[0] + nx, a[1] + ny];
-    let a1 = [a[0] - nx, a[1] - ny];
-    let b0 = [b[0] + nx, b[1] + ny];
-    let b1 = [b[0] - nx, b[1] - ny];
+    let normal = [-dy / len, dx / len];
+    let outward = normal;
+    let inward = [-normal[0], -normal[1]];
+    let corner = |position, extrude| PolygonVertex {
+        position,
+        color,
+        extrude,
+        half_width: half,
+    };
 
-    for position in [a0, a1, b0, b0, a1, b1] {
-        vertices.push(PolygonVertex { position, color });
+    for vertex in [
+        corner(a, outward),
+        corner(a, inward),
+        corner(b, outward),
+        corner(b, outward),
+        corner(a, inward),
+        corner(b, inward),
+    ] {
+        vertices.push(vertex);
     }
 }
 
@@ -209,6 +228,16 @@ impl PolygonPipeline {
                             offset: 8,
                             shader_location: 1,
                             format: wgpu::VertexFormat::Float32x4,
+                        },
+                        wgpu::VertexAttribute {
+                            offset: 24,
+                            shader_location: 2,
+                            format: wgpu::VertexFormat::Float32x2,
+                        },
+                        wgpu::VertexAttribute {
+                            offset: 32,
+                            shader_location: 3,
+                            format: wgpu::VertexFormat::Float32,
                         },
                     ],
                 }],
@@ -515,8 +544,11 @@ mod tests {
         assert_eq!(triangulate_polygons(&polygons).len(), 6);
     }
 
+    /// A coloured zero-width outline is a hairline: its quads are emitted
+    /// with a zero half-width and the shader raises them to the camera's
+    /// `min_stroke_px`. It used to emit nothing, while the CPU replay drew it.
     #[test]
-    fn no_stroke_when_width_is_non_positive() {
+    fn zero_width_stroke_emits_hairline_quads() {
         let polygons = vec![GpuPolygon {
             vertices: vec![[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]],
             fill_color: [0.3, 0.4, 0.5, 1.0],
@@ -524,8 +556,34 @@ mod tests {
             stroke_width: 0.0,
         }];
 
-        // Zero width contributes no stroke geometry — fill only.
-        assert_eq!(triangulate_polygons(&polygons).len(), 6);
+        let vertices = triangulate_polygons(&polygons);
+        assert_eq!(vertices.len(), 6 + 4 * 6);
+        assert!(vertices[6..].iter().all(|v| v.half_width == 0.0));
+    }
+
+    /// Stroke corners sit on the edge and carry a unit normal; fill vertices
+    /// carry none, so the shader's extrusion can only ever move a stroke.
+    #[test]
+    fn stroke_corners_carry_the_edge_normal_and_fills_do_not() {
+        let polygons = vec![GpuPolygon {
+            vertices: vec![[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]],
+            fill_color: [0.3, 0.4, 0.5, 1.0],
+            stroke_color: Some([1.0, 1.0, 1.0, 1.0]),
+            stroke_width: 0.2,
+        }];
+
+        let vertices = triangulate_polygons(&polygons);
+        let (fill, stroke) = vertices.split_at(6);
+        assert!(fill.iter().all(|v| v.extrude == [0.0, 0.0]));
+
+        // First edge runs (0,0) -> (2,0): its corners stay on y = 0 and
+        // extrude along ±Y by half of 0.2 mm.
+        for v in &stroke[..6] {
+            assert_eq!(v.position[1], 0.0);
+            assert_eq!(v.extrude[0], 0.0);
+            assert_eq!(v.extrude[1].abs(), 1.0);
+            assert!((v.half_width - 0.1).abs() < 1e-6);
+        }
     }
 
     #[test]

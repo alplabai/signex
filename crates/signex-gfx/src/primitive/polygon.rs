@@ -14,16 +14,15 @@ pub struct GpuPolygon {
 }
 
 impl GpuPolygon {
-    /// Whether this contour carries a stroked outline on top of its fill: it
-    /// needs both a stroke colour and a positive width. Shared CPU↔GPU
-    /// predicate — the GPU tessellator (`append_stroke`) and the parity test
-    /// both use it.
+    /// Whether this contour carries a stroked outline on top of its fill: a
+    /// stroke colour is enough. A zero width is a hairline, raised to the
+    /// surface's screen-space floor on both paths — the CPU replay's
+    /// `stroke_px`, the GPU's `polygon.wgsl`.
     ///
-    /// NOTE: the CPU `renderer_scene_canvas`/`pcb_canvas` polygon paths stroke
-    /// whenever `stroke_color` is `Some`, even at zero width (clamped to a
-    /// minimum). That laxer rule is a known CPU↔GPU divergence the parity test
-    /// documents; this predicate is the GPU-side truth.
+    /// Until #645 this also required a positive width, so a coloured
+    /// zero-width outline drew on the CPU and vanished on the GPU. The CPU
+    /// rule won: a colour with no outline would be a contradiction.
     pub fn is_stroked(&self) -> bool {
-        self.stroke_color.is_some() && self.stroke_width > 0.0
+        self.stroke_color.is_some()
     }
 }

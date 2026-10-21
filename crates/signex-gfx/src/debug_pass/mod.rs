@@ -204,6 +204,38 @@ async fn run_line_readback_smoke_pass(
     min_stroke_px: f32,
     sample_x_px: &[u32],
 ) -> Result<Vec<u8>, String> {
+    run_row_readback_smoke_pass(ReadbackGeometry::Line(line), min_stroke_px, sample_x_px).await
+}
+
+/// The same single-row readback as [`run_line_readback_smoke_pass`], through
+/// the polygon pipeline — so `polygon.wgsl`'s stroke floor is proven by pixels
+/// too, not only by the vertex data it is fed.
+#[cfg(test)]
+async fn run_polygon_readback_smoke_pass(
+    polygon: GpuPolygon,
+    min_stroke_px: f32,
+    sample_x_px: &[u32],
+) -> Result<Vec<u8>, String> {
+    run_row_readback_smoke_pass(
+        ReadbackGeometry::Polygon(polygon),
+        min_stroke_px,
+        sample_x_px,
+    )
+    .await
+}
+
+#[cfg(test)]
+enum ReadbackGeometry {
+    Line(LineSegment),
+    Polygon(GpuPolygon),
+}
+
+#[cfg(test)]
+async fn run_row_readback_smoke_pass(
+    geometry: ReadbackGeometry,
+    min_stroke_px: f32,
+    sample_x_px: &[u32],
+) -> Result<Vec<u8>, String> {
     let instance = wgpu::Instance::default();
 
     let adapter = instance
@@ -237,8 +269,15 @@ async fn run_line_readback_smoke_pass(
 
     let mut line_pipeline =
         LinePipeline::new(&device, target_format, camera_gpu.bind_group_layout());
+    let mut polygon_pipeline =
+        PolygonPipeline::new(&device, target_format, camera_gpu.bind_group_layout());
 
-    line_pipeline.upload(&device, &queue, &[line]);
+    match geometry {
+        ReadbackGeometry::Line(line) => line_pipeline.upload(&device, &queue, &[line]),
+        ReadbackGeometry::Polygon(polygon) => {
+            polygon_pipeline.upload(&device, &queue, &[polygon]);
+        }
+    }
 
     let target = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("signex_gfx_dash_readback_target"),
@@ -275,7 +314,9 @@ async fn run_line_readback_smoke_pass(
             timestamp_writes: None,
             occlusion_query_set: None,
         });
+        // Only the uploaded pipeline has anything to draw; the other is empty.
         line_pipeline.draw(&mut pass, camera_gpu.bind_group());
+        polygon_pipeline.draw(&mut pass, camera_gpu.bind_group());
     }
 
     // Bgra8Unorm is 4 bytes/pixel; WIDTH * 4 = 512 is already a multiple of

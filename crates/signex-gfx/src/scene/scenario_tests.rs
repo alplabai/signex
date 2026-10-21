@@ -224,7 +224,7 @@ fn circle_and_polygon_predicates_split_correctly_across_the_scenario() {
     assert!(filled_stroked.is_stroked());
     assert!(
         outline_only.is_stroked(),
-        "transparent fill does not stop the stroke predicate: colour+width is all that matters"
+        "transparent fill does not stop the stroke predicate: the stroke colour is all that matters"
     );
 }
 

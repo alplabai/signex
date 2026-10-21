@@ -391,24 +391,23 @@ mod tests {
     }
 
     #[test]
-    fn polygon_stroke_predicate_needs_colour_and_width() {
+    fn polygon_stroke_predicate_needs_only_a_colour() {
         let base = GpuPolygon {
             vertices: vec![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]],
             fill_color: [0.2, 0.2, 0.8, 1.0],
             stroke_color: None,
-            stroke_width: 0.0,
+            stroke_width: 0.5,
         };
-        assert!(!base.is_stroked(), "no colour, no width");
+        assert!(!base.is_stroked(), "a width with no colour draws nothing");
 
         let coloured_zero_width = GpuPolygon {
             stroke_color: Some([1.0; 4]),
             stroke_width: 0.0,
             ..base.clone()
         };
-        // GPU rule: a colour alone is not enough, a positive width is required.
-        // The CPU path strokes this anyway (clamped min width) — documented
-        // divergence.
-        assert!(!coloured_zero_width.is_stroked());
+        // A hairline on both paths since #645 — the CPU replay always stroked
+        // it at its floor; the GPU used to drop it.
+        assert!(coloured_zero_width.is_stroked());
 
         let stroked = GpuPolygon {
             stroke_color: Some([1.0; 4]),
