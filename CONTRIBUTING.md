@@ -227,6 +227,15 @@ Examples of good first contributions:
 - Use `?` for error propagation, not `unwrap()` / `expect()` in production code
 - Altium Designer UX is the reference for all user-facing interactions
 - If you're unsure about a design choice, open a draft PR and ask
+- **Keep comments short; put long explanations in `docs/`.** A comment in code
+  says what the next reader needs at that spot: the non-obvious *why*, a
+  constraint, a trap. Background, history ("this used to…, until #N…"),
+  alternatives that were rejected and multi-paragraph design rationale go in a
+  Markdown document under `docs/` (for example `docs/architecture/` or
+  `docs/RENDERING_RULES.md`). The code then points to that section in one line,
+  e.g. `// Flag geometry: see docs/RENDERING_RULES.md, "sch-labels".` As a rule
+  of thumb, a comment block longer than about ten lines belongs in a document.
+  The history of a change belongs in its commit message and PR, not in the code.
 
 ## Contributor License Agreement
 
