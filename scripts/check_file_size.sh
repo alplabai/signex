@@ -3,16 +3,10 @@
 # God-file ratchet gate — keep production Rust source out of the technical-debt
 # swamp (ADR-0001: vertical slices, "promote a file to a folder on size").
 #
-# A file's *production code* line count is what matters: the code lines before
-# a trailing inline `#[cfg(test)] mod … {` block. Inline test modules and
-# dedicated test files do not count — a large, well-tested module is not a
-# god-file; a large tangle of production code is.
-#
-# Only code counts. Blank lines, `//` / `///` / `//!` comment lines and
-# `/* … */` block-comment lines are excluded, so a well-documented file is not
-# pushed into a split it does not need: the cap measures how much logic a file
-# holds, not how thoroughly it explains itself. A line holding code and a
-# trailing comment is a code line.
+# A file's *production* line count is what matters: everything up to the first
+# `#[cfg(test)]` marker. Inline test modules and dedicated test files do not
+# count — a large, well-tested module is not a god-file; a large tangle of
+# production code is.
 #
 # The gate is a RATCHET, not a hard cap: files already over the cap are
 # grandfathered in `scripts/godfile-baseline.txt` with their current size. CI
@@ -28,7 +22,12 @@
 #
 set -euo pipefail
 
-CAP=1000
+# Physical lines, comments included. Long comments therefore spend the budget,
+# which is the point: rationale and history belong in docs/*.md, with a
+# one-line pointer in the code (CONTRIBUTING.md, "Code Style"). 1200 leaves a
+# normally commented file about as much code room as the old 1000 did. It is
+# meant as the last raise (800 -> 1000 -> 1200).
+CAP=1200
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BASELINE="$ROOT/scripts/godfile-baseline.txt"
 
@@ -50,55 +49,12 @@ list_files() {
 #
 # An external declaration (`#[cfg(test)] mod tests;`, pointing at a dedicated
 # test file) must NOT truncate the count — it's a one-line pointer, not a
-# block of test code, and real production code lines commonly follow it (#464).
+# block of test code, and real production lines commonly follow it (#464).
 # Neither does a lone `#[cfg(test)] fn helper() { … }` test-only helper mid-file.
 # Only an attribute immediately followed by a `mod <name> {` block opener
 # counts as the start of the trailing test module; take the LAST such
 # occurrence in the file so earlier external declarations are ignored.
 prod_lines() {
-  local f="$1" limit
-  limit=$(test_module_start "$f")
-  count_code_lines "$f" "$limit"
-}
-
-# Code lines among the first `limit` lines of a file (empty = the whole file):
-# blank and comment-only lines skipped, block comments tracked across lines.
-#
-# A line scanner, not a Rust lexer — deliberately. Two shapes it miscounts,
-# both rare in production code and both in the lenient direction: a line inside
-# a multi-line string literal that starts with `//` is taken for a comment, and
-# a nested `/* /* */ */` ends at the first `*/`. Neither can hide a god-file:
-# a file has to be almost entirely such lines to slip under the cap.
-count_code_lines() {
-  awk -v limit="$2" '
-    limit != "" && NR > limit + 0 { exit }
-    {
-      line = $0
-      if (in_block) {
-        end = index(line, "*/")
-        if (end == 0) next
-        in_block = 0
-        line = substr(line, end + 2)
-      }
-      sub(/^[[:space:]]+/, "", line)
-      while (substr(line, 1, 2) == "/*") {
-        rest = substr(line, 3)
-        end = index(rest, "*/")
-        if (end == 0) { in_block = 1; next }
-        line = substr(rest, end + 2)
-        sub(/^[[:space:]]+/, "", line)
-      }
-      if (line == "" || substr(line, 1, 2) == "//") next
-      code++
-    }
-    END { print code + 0 }
-  ' "$1"
-}
-
-# Line number where the trailing INLINE test module's attribute starts, minus
-# one — i.e. the last line that can hold production code. Empty when the file
-# has no trailing inline test module.
-test_module_start() {
   local f="$1" n
   n=$(awk '
     /^#\[cfg\(test\)\][[:space:]]*$/ { pending = NR; next }
@@ -112,13 +68,15 @@ test_module_start() {
   ' "$f")
   if [[ -n "$n" ]]; then
     echo $((n - 1))
+  else
+    wc -l < "$f" | tr -d ' '
   fi
 }
 
 if [[ "${1:-}" == "--generate" ]]; then
   {
-    echo "# God-file baseline — production src/ .rs files currently over the ${CAP}-code-line cap."
-    echo "# Format: <production_code_lines> <path>. Managed by scripts/check_file_size.sh."
+    echo "# God-file baseline — production src/ .rs files currently over the ${CAP}-line cap."
+    echo "# Format: <production_lines> <path>. Managed by scripts/check_file_size.sh."
     echo "# The list only ever gets SHORTER: shrink a file under the cap, then drop its row."
     while IFS= read -r f; do
       n=$(prod_lines "$f")
@@ -144,13 +102,13 @@ while IFS= read -r f; do
   b=$(baseline_size "$f")
   if [[ -n "$b" ]]; then
     if (( n > b )); then
-      echo "FAIL  $f — grew to $n production code lines (baseline $b, cap $CAP)."
+      echo "FAIL  $f — grew to $n production lines (baseline $b, cap $CAP)."
       echo "      A grandfathered god-file must shrink, never grow. Split it into"
       echo "      vertical slices (ADR-0001) or move code into a domain crate."
       fail=1
     fi
   else
-    echo "FAIL  $f — $n production code lines (> $CAP cap) and not grandfathered."
+    echo "FAIL  $f — $n production lines (> $CAP cap) and not grandfathered."
     echo "      Do not add a new god-file. Promote it to a folder of vertical"
     echo "      slices (ADR-0001) — messages / state / updates / views per concern."
     fail=1
