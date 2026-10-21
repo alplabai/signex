@@ -48,7 +48,8 @@
 #         legitimate discard without the type.
 #       * a receiver that is itself an expression, e.g.
 #         `let _ = self.foo().handle_x();` or `let _ = v[0].handle_x();`
-#       * `drop(self.handle_x(...))` or any other must-use-defeating idiom
+#       * any must-use-defeating idiom other than `drop(...)` (see the
+#         drop() paragraph below), e.g. `std::mem::forget(...)`
 #       * a genuinely unused `let task = self.handle_x(...);` binding
 #         (rustc's own `unused_variables` lint already flags that one,
 #         just not the `let _ =` form this gate exists for)
@@ -62,7 +63,24 @@
 #     for a case that turns out to need it, not a place to grandfather new
 #     `let _ = self.handle_` sites; the list should stay empty.
 #
-# Test exemption: production line count is what matters here, same
+# `drop(<task>)` (GH #627) — `drop(expr)` is not `let _ = expr`, so neither
+# rustc's `unused_must_use` nor the grep above sees it. `drop` has
+# legitimate uses (lock guards, adapters), so the gate does not ban it; it
+# flags only a `drop(...)` whose argument is provably Task-shaped:
+#   * `drop(<recv>.handle_x(...))` / `drop(Self::handle_x(...))`, or
+#   * `drop(name)` where `name` was bound earlier IN THE SAME FILE by a
+#     single-line `let [mut] name: <type containing Task> = ...` or
+#     `let [mut] name = <recv>.handle_x(...)`.
+# Blind spots: a binding the awk cannot see (multi-line `let`, a `Task`
+# returned from a non-`handle_` method with no annotation, a function
+# parameter), and name shadowing (a later non-Task `name` re-binds and
+# clears the flag, but a shadow in another scope can still confuse it).
+# Unlike the `let _ =` check this one also scans inline test modules,
+# because the site that prompted it was in one; dedicated test files stay
+# excluded by `list_files`. To consume a Task in a test, assert on it
+# (`task.units()`), don't drop it. Same `path:line` allowlist applies.
+#
+# Test exemption (for the `let _ =` check only): production line count is what matters here, same
 # convention as scripts/check_file_size.sh — everything up to a trailing
 # INLINE `#[cfg(test)] mod tests { … }` block (running to EOF) is skipped,
 # via the identical `prod_cutoff` truncation `check_file_size.sh` uses (its
@@ -147,6 +165,32 @@ find_discards() {
   ' "$f"
 }
 
+# Emits one line number per `drop(<task>)` in ALL of `$1` (tests included;
+# see the header) — see the drop() paragraph for what counts as Task-shaped.
+find_task_drops() {
+  local f="$1"
+  awk '
+    {
+      line = $0
+      if (match(line, /^[ \t]*let (mut )?[A-Za-z_][A-Za-z0-9_]*/)) {
+        decl = substr(line, RSTART, RLENGTH)
+        sub(/^[ \t]*let (mut )?/, "", decl)
+        if (line ~ /:[^=]*Task[^=]*=/ || line ~ /= *([A-Za-z_][A-Za-z0-9_]*)(\.|::)handle_/) {
+          tasks[decl] = 1
+        } else {
+          delete tasks[decl]
+        }
+      }
+      if (match(line, /(^|[^A-Za-z0-9_.:])drop\([^)]*/)) {
+        arg = substr(line, RSTART, RLENGTH)
+        sub(/^.*drop\(/, "", arg)
+        gsub(/[ \t]/, "", arg)
+        if (arg ~ /^([A-Za-z_][A-Za-z0-9_]*)(\.|::)handle_/ || (arg in tasks)) print NR
+      }
+    }
+  ' "$f"
+}
+
 # `path:line` exact-match allowlist, one entry per line, blank lines and
 # `#`-comments ignored. Looked up line-by-line (not an associative array)
 # so this runs on the bash 3.2 that ships with macOS as well as bash 5 on
@@ -176,6 +220,18 @@ while IFS= read -r f; do
     echo "      \"$entry\" to ${ALLOWLIST#"$ROOT"/} with a comment saying why."
     fail=1
   done < <(find_discards "$f" "$cutoff")
+  while IFS= read -r lineno; do
+    [[ -z "${lineno:-}" ]] && continue
+    entry="$f:$lineno"
+    if is_allowlisted "$entry"; then
+      continue
+    fi
+    echo "FAIL  $entry — drops a Task via \`drop(<task>)\`."
+    echo "      Return the Task, or in a test assert on it (\`task.units()\`) (see GH #627)."
+    echo "      If the argument genuinely isn't a Task, add"
+    echo "      \"$entry\" to ${ALLOWLIST#"$ROOT"/} with a comment saying why."
+    fail=1
+  done < <(find_task_drops "$f")
 done < <(list_files)
 
 if (( fail )); then
@@ -183,4 +239,4 @@ if (( fail )); then
   echo "Discarded-Task gate failed. See scripts/check_discarded_tasks.sh header."
   exit 1
 fi
-echo "Discarded-Task gate: OK — no \`let _ = <recv>.handle_...\` discards found."
+echo "Discarded-Task gate: OK — no \`let _ = <recv>.handle_...\` or \`drop(<task>)\` discards found."

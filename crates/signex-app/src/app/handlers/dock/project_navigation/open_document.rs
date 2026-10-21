@@ -252,7 +252,15 @@ mod tests {
         std::fs::write(dir.path().join("Comp.snxsym"), b"").unwrap();
 
         let opened: iced::Task<Message> = app.handle_document_file_opened(Some(project_path));
-        drop(opened);
+        // Inspect the Task rather than discard it: opening a project file
+        // must not queue follow-up work in this fixture. `units()` reads
+        // the Task by reference, so no explicit `drop` (which would walk
+        // past the #577 / #627 gate) is needed.
+        assert_eq!(
+            opened.units(),
+            0,
+            "opening a project file queues no Task work"
+        );
         assert_eq!(
             app.document_state.projects.len(),
             1,
