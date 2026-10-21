@@ -21,10 +21,19 @@
 //! now honours the dash style bit and `scene_shader::ScenePrimitive::draw`
 //! composites overlays in a dedicated pass after every base bucket, matching
 //! the CPU's overlay pass; `overlays_composite_above_base_buckets` below pins
-//! that parity. The remaining, deliberately-unreconciled divergence is the
-//! BASE bucket order: GPU draws Polygons before Lines/Circles, CPU draws them
-//! after — a visual-authority call reserved for Caner/Hakan, out of scope for
-//! this fix.
+//! that parity.
+//!
+//! The schematic's BASE bucket order used to be the one deliberate
+//! divergence: the GPU drew Polygons before Lines/Circles, the schematic CPU
+//! replay drew them after, so a symbol body fill covered the wire beneath it
+//! on one path and sat under it on the other. That was a visual-authority
+//! call, and it was made in #645 for the GPU order — fills at the back,
+//! strokes over them, text on top — so the schematic replay now draws its
+//! base buckets in exactly [`GPU_SCENE_DRAW_ORDER`].
+//!
+//! [`CPU_PCB_DRAW_ORDER`] still draws Polygons after Lines/Circles. That is a
+//! separate PCB divergence the #645 decision did not cover; it is pinned
+//! below rather than silently fixed.
 
 /// A drawable bucket of a [`Scene`](crate::scene::Scene). Every variant maps
 /// 1:1 to a `Vec` field on the scene; the order of a slice of these is a draw
@@ -65,6 +74,12 @@ pub const GPU_SCENE_DRAW_ORDER: &[SceneBucket] = &[
 /// The only order here that names every [`SceneBucket`] — this replay is the
 /// one path that draws all eleven.
 ///
+/// Its five base buckets are [`GPU_SCENE_DRAW_ORDER`], in that order: fills
+/// first, so a symbol body fill or a label-marker flag sits *under* the wires
+/// and pins that run into it. Until #645 this replay drew Polygons fourth —
+/// after Lines, Circles and Arcs — and a body fill hid the wire beneath it,
+/// the opposite of what the GPU would show once #199 mounts the schematic.
+///
 /// Added by #645. Before that this sequence was hardcoded in the replay with
 /// no const and no test, so the module doc above held only for the PCB: the
 /// surface about to be migrated to the GPU was invisible to the very
@@ -78,10 +93,10 @@ pub const GPU_SCENE_DRAW_ORDER: &[SceneBucket] = &[
 /// walk them, and a future producer would otherwise land them at the wrong
 /// depth.
 pub const CPU_SCHEMATIC_DRAW_ORDER: &[SceneBucket] = &[
-    SceneBucket::Lines,
-    SceneBucket::Circles,
-    SceneBucket::Arcs,
     SceneBucket::Polygons,
+    SceneBucket::Lines,
+    SceneBucket::Arcs,
+    SceneBucket::Circles,
     SceneBucket::Texts,
     SceneBucket::OverlayLines,
     SceneBucket::OverlayCircles,
@@ -191,10 +206,10 @@ mod tests {
     #[test]
     fn cpu_schematic_draw_order_is_base_then_overlays_then_erc() {
         let expected: &[SceneBucket] = &[
-            SceneBucket::Lines,
-            SceneBucket::Circles,
-            SceneBucket::Arcs,
             SceneBucket::Polygons,
+            SceneBucket::Lines,
+            SceneBucket::Arcs,
+            SceneBucket::Circles,
             SceneBucket::Texts,
             SceneBucket::OverlayLines,
             SceneBucket::OverlayCircles,
@@ -273,26 +288,34 @@ mod tests {
         );
     }
 
-    /// The divergence this whole module exists to make visible, now stated for
-    /// the schematic too: the GPU composites fills first, the schematic CPU
-    /// replay composites them fourth. Symbol body fills are polygons and wires
-    /// are lines, so the two paths stack them opposite ways.
-    ///
-    /// Deliberately asserts the divergence rather than parity — reconciling it
-    /// is a visual-authority call (see the module docs). When that call lands,
-    /// this test is the one that must be rewritten, which is the point: the
-    /// difference cannot be closed on one side only.
+    /// The schematic replay's base pass IS the GPU order — the parity #199's
+    /// mount depends on. Symbol body fills are polygons and wires are lines;
+    /// until #645 the two paths stacked them opposite ways, and this test
+    /// asserted that divergence. The visual call went to the GPU order, so it
+    /// now asserts the opposite: change either side alone and it fails.
     #[test]
-    fn gpu_and_schematic_cpu_disagree_on_where_fills_go() {
+    fn schematic_cpu_base_pass_matches_the_gpu_order() {
+        assert_eq!(
+            &CPU_SCHEMATIC_DRAW_ORDER[..GPU_SCENE_DRAW_ORDER.len()],
+            GPU_SCENE_DRAW_ORDER
+        );
+    }
+
+    /// The PCB CPU canvas still composites fills after strokes, the GPU
+    /// before. Out of the #645 decision, which was made for the schematic;
+    /// pinned so the remaining divergence stays visible instead of being
+    /// read as parity.
+    #[test]
+    fn gpu_and_pcb_cpu_still_disagree_on_where_fills_go() {
         let gpu_polygons = index_of(GPU_SCENE_DRAW_ORDER, SceneBucket::Polygons).unwrap();
         let gpu_lines = index_of(GPU_SCENE_DRAW_ORDER, SceneBucket::Lines).unwrap();
         assert!(gpu_polygons < gpu_lines, "GPU draws fills before strokes");
 
-        let cpu_polygons = index_of(CPU_SCHEMATIC_DRAW_ORDER, SceneBucket::Polygons).unwrap();
-        let cpu_lines = index_of(CPU_SCHEMATIC_DRAW_ORDER, SceneBucket::Lines).unwrap();
+        let cpu_polygons = index_of(CPU_PCB_DRAW_ORDER, SceneBucket::Polygons).unwrap();
+        let cpu_lines = index_of(CPU_PCB_DRAW_ORDER, SceneBucket::Lines).unwrap();
         assert!(
             cpu_polygons > cpu_lines,
-            "the schematic CPU replay draws fills after strokes"
+            "the PCB CPU canvas draws fills after strokes"
         );
     }
 
