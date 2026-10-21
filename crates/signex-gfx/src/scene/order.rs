@@ -35,7 +35,14 @@
 //! over the traces running into them — and #653 settled it the same way, so
 //! [`CPU_PCB_DRAW_ORDER`]'s base pass is now the GPU order too, minus the arc
 //! and text buckets the PCB never emits. Every base pass on every path now
-//! puts fills at the back.
+//! puts fills at the back, with one deliberate exception: pads.
+//!
+//! Pads are the exception because the maintainer's call for the PCB is that a
+//! pad renders ABOVE the traces and vias that land on it, while zone pours and
+//! rule areas stay beneath them. So pads go to their own
+//! [`SceneBucket::TopPolygons`] bucket, drawn after Circles and before Texts on
+//! every path; the PCB base z-order is zones/rule areas, traces, vias, pads,
+//! then overlays.
 
 /// A drawable bucket of a [`Scene`](crate::scene::Scene). Every variant maps
 /// 1:1 to a `Vec` field on the scene; the order of a slice of these is a draw
@@ -46,6 +53,9 @@ pub enum SceneBucket {
     Circles,
     Arcs,
     Polygons,
+    /// Polygons composited above the stroke buckets; PCB pads are its
+    /// producer. Maps to `Scene::top_polygons`.
+    TopPolygons,
     Texts,
     OverlayLines,
     OverlayCircles,
@@ -56,7 +66,7 @@ pub enum SceneBucket {
 }
 
 /// Draw order of the GPU scene shader (`scene_shader::ScenePrimitive::draw`):
-/// fills, then strokes, then text on top. Overlay and ERC buckets never
+/// fills, then strokes, then the top polygons (PCB pads), then text on top. Overlay and ERC buckets never
 /// appear here — `ScenePrimitive::draw` composites overlay geometry in its
 /// own dedicated pass strictly AFTER this order (so it always renders on
 /// top, matching the CPU's separate overlay pass below), and ERC markers are
@@ -66,6 +76,7 @@ pub const GPU_SCENE_DRAW_ORDER: &[SceneBucket] = &[
     SceneBucket::Lines,
     SceneBucket::Arcs,
     SceneBucket::Circles,
+    SceneBucket::TopPolygons,
     SceneBucket::Texts,
 ];
 
@@ -74,13 +85,15 @@ pub const GPU_SCENE_DRAW_ORDER: &[SceneBucket] = &[
 /// then overlays, then ERC markers last and therefore topmost.
 ///
 /// The only order here that names every [`SceneBucket`] — this replay is the
-/// one path that draws all eleven.
+/// one path that draws all twelve.
 ///
-/// Its five base buckets are [`GPU_SCENE_DRAW_ORDER`], in that order: fills
+/// Its six base buckets are [`GPU_SCENE_DRAW_ORDER`], in that order: fills
 /// first, so a symbol body fill or a label-marker flag sits *under* the wires
 /// and pins that run into it. Until #645 this replay drew Polygons fourth —
 /// after Lines, Circles and Arcs — and a body fill hid the wire beneath it,
 /// the opposite of what the GPU would show once #199 mounts the schematic.
+/// [`SceneBucket::TopPolygons`] holds its place in that order but is always
+/// empty here — only the PCB emits it.
 ///
 /// Added by #645. Before that this sequence was hardcoded in the replay with
 /// no const and no test, so the module doc above held only for the PCB: the
@@ -99,6 +112,7 @@ pub const CPU_SCHEMATIC_DRAW_ORDER: &[SceneBucket] = &[
     SceneBucket::Lines,
     SceneBucket::Arcs,
     SceneBucket::Circles,
+    SceneBucket::TopPolygons,
     SceneBucket::Texts,
     SceneBucket::OverlayLines,
     SceneBucket::OverlayCircles,
@@ -112,13 +126,16 @@ pub const CPU_SCHEMATIC_DRAW_ORDER: &[SceneBucket] = &[
 /// geometry, then a second overlay pass. No arc or text buckets — the PCB scene
 /// never emits them on the CPU path.
 ///
-/// Fills first, as on the GPU: a zone pour or pad sits under the traces that
-/// run into it. Until #653 this drew Polygons last, so the same board stacked
-/// the other way round depending on the GPU-render preference.
+/// Back to front: zone pours and rule areas (Polygons), traces (Lines), vias
+/// (Circles), then pads (TopPolygons), as on the GPU. A zone sits under the
+/// traces that run into it; a pad sits on top of them. Until #653 this drew
+/// Polygons last, so the same board stacked the other way round depending on
+/// the GPU-render preference.
 pub const CPU_PCB_DRAW_ORDER: &[SceneBucket] = &[
     SceneBucket::Polygons,
     SceneBucket::Lines,
     SceneBucket::Circles,
+    SceneBucket::TopPolygons,
     SceneBucket::OverlayLines,
     SceneBucket::OverlayCircles,
     SceneBucket::OverlayPolygons,
@@ -142,6 +159,7 @@ mod tests {
             SceneBucket::Lines,
             SceneBucket::Arcs,
             SceneBucket::Circles,
+            SceneBucket::TopPolygons,
             SceneBucket::Texts,
         ];
         assert_eq!(GPU_SCENE_DRAW_ORDER, expected);
@@ -153,6 +171,7 @@ mod tests {
             SceneBucket::Polygons,
             SceneBucket::Lines,
             SceneBucket::Circles,
+            SceneBucket::TopPolygons,
             SceneBucket::OverlayLines,
             SceneBucket::OverlayCircles,
             SceneBucket::OverlayPolygons,
@@ -178,6 +197,7 @@ mod tests {
             SceneBucket::Lines,
             SceneBucket::Circles,
             SceneBucket::Polygons,
+            SceneBucket::TopPolygons,
         ];
         let overlay_buckets = [
             SceneBucket::OverlayLines,
@@ -216,6 +236,7 @@ mod tests {
             SceneBucket::Lines,
             SceneBucket::Arcs,
             SceneBucket::Circles,
+            SceneBucket::TopPolygons,
             SceneBucket::Texts,
             SceneBucket::OverlayLines,
             SceneBucket::OverlayCircles,
@@ -237,6 +258,7 @@ mod tests {
             SceneBucket::Circles,
             SceneBucket::Arcs,
             SceneBucket::Polygons,
+            SceneBucket::TopPolygons,
             SceneBucket::Texts,
             SceneBucket::OverlayLines,
             SceneBucket::OverlayCircles,
@@ -266,6 +288,7 @@ mod tests {
             SceneBucket::Circles,
             SceneBucket::Arcs,
             SceneBucket::Polygons,
+            SceneBucket::TopPolygons,
             SceneBucket::Texts,
         ];
         let above = [
@@ -331,6 +354,33 @@ mod tests {
             })
             .collect();
         assert_eq!(cpu_base, gpu_without_unemitted);
+    }
+
+    /// Pads are the one polygon bucket that draws above the strokes: after
+    /// Circles (so over traces and vias) and before Texts, on every path, with
+    /// the zone/rule-area `Polygons` bucket still at the very back.
+    #[test]
+    fn top_polygons_draw_above_strokes_and_polygons_below() {
+        for order in [
+            GPU_SCENE_DRAW_ORDER,
+            CPU_PCB_DRAW_ORDER,
+            CPU_SCHEMATIC_DRAW_ORDER,
+        ] {
+            let top = index_of(order, SceneBucket::TopPolygons).unwrap();
+            for under in [
+                SceneBucket::Polygons,
+                SceneBucket::Lines,
+                SceneBucket::Circles,
+            ] {
+                assert!(
+                    index_of(order, under).unwrap() < top,
+                    "{under:?} must draw under pads"
+                );
+            }
+            if let Some(text) = index_of(order, SceneBucket::Texts) {
+                assert!(top < text, "text stays above pads");
+            }
+        }
     }
 
     /// The GPU path composites arc and text buckets the PCB CPU path never

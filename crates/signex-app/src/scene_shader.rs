@@ -295,6 +295,9 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
             pipeline.line.upload(device, queue, &self.scene.lines);
             pipeline.arc.upload(device, queue, &self.scene.arcs);
             pipeline.circle.upload(device, queue, &self.scene.circles);
+            pipeline
+                .polygon
+                .upload_top(device, queue, &self.scene.top_polygons);
             // Overlay geometry uploads into each pipeline's dedicated overlay
             // buffer (never folded into the base buckets above — see
             // `pcb_canvas::gpu_scene`), so `Self::draw`'s later overlay pass
@@ -364,7 +367,7 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
     fn draw(&self, pipeline: &Self::Pipeline, render_pass: &mut wgpu::RenderPass<'_>) -> bool {
         let camera = pipeline.camera.bind_group();
         // Composite in the shared `GPU_SCENE_DRAW_ORDER` (fills, then strokes,
-        // then text on top). The order lives in one const so it can be diffed
+        // then pads, then text on top). The order lives in one const so it can be diffed
         // against the CPU replays: both `pcb_canvas::draw_scene` and the
         // schematic replay now draw their base buckets in this order (#645,
         // #653), pinned by the `scene::order` parity tests. GPU parity stays
@@ -375,6 +378,7 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
                 SceneBucket::Lines => pipeline.line.draw(render_pass, camera),
                 SceneBucket::Arcs => pipeline.arc.draw(render_pass, camera),
                 SceneBucket::Circles => pipeline.circle.draw(render_pass, camera),
+                SceneBucket::TopPolygons => pipeline.polygon.draw_top(render_pass, camera),
                 SceneBucket::Texts => {
                     // Same rationale as the `upload` in `prepare`: a failed
                     // text draw loses text for one frame, not the render pass.

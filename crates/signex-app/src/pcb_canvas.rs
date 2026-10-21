@@ -409,6 +409,7 @@ fn draw_scene(frame: &mut canvas::Frame, scene: &Scene, camera: &Camera, bounds:
             SceneBucket::Lines => draw_lines(frame, &scene.lines, camera, bounds),
             SceneBucket::Circles => draw_circles(frame, &scene.circles, camera, bounds),
             SceneBucket::Polygons => draw_polygons(frame, &scene.polygons, camera, bounds),
+            SceneBucket::TopPolygons => draw_polygons(frame, &scene.top_polygons, camera, bounds),
             SceneBucket::OverlayLines => draw_lines(frame, &scene.overlay_lines, camera, bounds),
             SceneBucket::OverlayCircles => {
                 draw_circles(frame, &scene.overlay_circles, camera, bounds)

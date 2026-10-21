@@ -183,6 +183,11 @@ pub struct PolygonPipeline {
     vertex_buffer: wgpu::Buffer,
     vertex_capacity: usize,
     vertex_count: u32,
+    /// Buffer for the polygons that draw above the stroke buckets (PCB pads);
+    /// separate so the GPU can interleave it after circles, before text.
+    top_vertex_buffer: wgpu::Buffer,
+    top_vertex_capacity: usize,
+    top_vertex_count: u32,
     /// Second, independent vertex buffer for overlay geometry — see
     /// `LinePipeline`'s equivalent field doc for why this is a separate
     /// buffer rather than a shared one with a base/overlay split index.
@@ -274,6 +279,12 @@ impl PolygonPipeline {
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+        let top_vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("signex_gfx_polygon_top_vertices"),
+            size: std::mem::size_of::<PolygonVertex>() as wgpu::BufferAddress,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
         let overlay_vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("signex_gfx_polygon_overlay_vertices"),
             size: std::mem::size_of::<PolygonVertex>() as wgpu::BufferAddress,
@@ -286,6 +297,9 @@ impl PolygonPipeline {
             vertex_buffer,
             vertex_capacity,
             vertex_count: 0,
+            top_vertex_buffer,
+            top_vertex_capacity: vertex_capacity,
+            top_vertex_count: 0,
             overlay_vertex_buffer,
             overlay_vertex_capacity: vertex_capacity,
             overlay_vertex_count: 0,
@@ -302,6 +316,26 @@ impl PolygonPipeline {
             &mut self.vertex_capacity,
             &mut self.vertex_count,
             "signex_gfx_polygon_vertices",
+        );
+    }
+
+    /// Upload the polygons that composite above the stroke buckets into
+    /// their own buffer, drawn by [`Self::draw_top`] after circles.
+    pub fn upload_top(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        polygons: &[GpuPolygon],
+    ) {
+        let vertices = triangulate_polygons(polygons);
+        Self::upload_into(
+            device,
+            queue,
+            &vertices,
+            &mut self.top_vertex_buffer,
+            &mut self.top_vertex_capacity,
+            &mut self.top_vertex_count,
+            "signex_gfx_polygon_top_vertices",
         );
     }
 
@@ -367,6 +401,23 @@ impl PolygonPipeline {
             &self.render_pipeline,
             &self.vertex_buffer,
             self.vertex_count,
+        );
+    }
+
+    /// Draw the polygons uploaded by [`Self::upload_top`]. Callers place this
+    /// after the stroke buckets and before text — see
+    /// `crate::scene::GPU_SCENE_DRAW_ORDER`.
+    pub fn draw_top(
+        &self,
+        render_pass: &mut wgpu::RenderPass<'_>,
+        camera_bind_group: &wgpu::BindGroup,
+    ) {
+        Self::draw_from(
+            render_pass,
+            camera_bind_group,
+            &self.render_pipeline,
+            &self.top_vertex_buffer,
+            self.top_vertex_count,
         );
     }
 

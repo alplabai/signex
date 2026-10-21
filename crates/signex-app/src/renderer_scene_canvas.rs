@@ -421,6 +421,9 @@ pub fn draw_scene_with_world_to_screen<F>(
             SceneBucket::Polygons => {
                 draw_polygon_bucket(frame, &scene.polygons, world_to_screen, options);
             }
+            SceneBucket::TopPolygons => {
+                draw_polygon_bucket(frame, &scene.top_polygons, world_to_screen, options);
+            }
             SceneBucket::Texts => draw_text_bucket(frame, &scene.texts, world_to_screen, options),
             SceneBucket::OverlayLines => {
                 draw_line_bucket(frame, &scene.overlay_lines, world_to_screen, options);

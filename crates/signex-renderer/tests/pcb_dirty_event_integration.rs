@@ -49,7 +49,7 @@ fn pcb_event_flow_updates_only_expected_scene_families() {
 
     assert_eq!(scene.lines.len(), 2);
     assert_eq!(scene.circles.len(), 0);
-    assert_eq!(scene.polygons.len(), 4);
+    assert_eq!(scene.polygons.len() + scene.top_polygons.len(), 4);
     assert_eq!(scene.overlay_lines.len(), 2);
     assert_eq!(scene.overlay_circles.len(), 1);
     assert_eq!(scene.overlay_polygons.len(), 1);

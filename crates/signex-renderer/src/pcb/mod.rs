@@ -431,8 +431,32 @@ mod tests {
         PcbRenderer::build_scene(&snapshot, &theme, DirtyFlags::POLYGONS, &mut scene);
         assert_eq!(scene.lines.len(), 1);
         assert_eq!(scene.circles.len(), 1);
-        assert_eq!(scene.polygons.len(), 4);
+        assert_eq!(scene.polygons.len() + scene.top_polygons.len(), 4);
         assert_eq!(scene.lines[0].style, 1);
+    }
+
+    /// Pads composite above traces, zones and rule areas below them, so they
+    /// must land in different buckets.
+    #[test]
+    fn pads_land_in_the_top_polygon_bucket_and_zones_do_not() {
+        let board = sample_board();
+        let snapshot = PcbSnapshot::from_board(&board);
+        let theme = ResolvedTheme::builtin_default();
+        let mut scene = Scene::default();
+
+        PcbRenderer::build_scene(&snapshot, &theme, DirtyFlags::POLYGONS, &mut scene);
+
+        assert!(!snapshot.pads.is_empty() && !snapshot.zones.is_empty());
+        assert_eq!(scene.top_polygons.len(), snapshot.pads.len());
+        assert_eq!(
+            scene.polygons.len(),
+            snapshot.zones.len() + snapshot.rule_areas.len(),
+            "zones and rule areas stay under the traces"
+        );
+
+        // A second pass replaces both buckets rather than appending.
+        PcbRenderer::build_scene(&snapshot, &theme, DirtyFlags::POLYGONS, &mut scene);
+        assert_eq!(scene.top_polygons.len(), snapshot.pads.len());
     }
 
     #[test]
