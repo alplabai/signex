@@ -372,11 +372,9 @@ fn nonempty_bucket_sequence(scene: &Scene, order: &[SceneBucket]) -> Vec<SceneBu
 /// dedicated overlay pass runs strictly after every base bucket regardless of
 /// scene content — and on CPU, every populated overlay bucket's position in
 /// `CPU_PCB_DRAW_ORDER` is after every populated base bucket's. (The base
-/// `Polygons`-vs-`Lines` order — pad/pour geometry, not overlays — remains a
-/// separate, deliberately open question pinned exactly by `scene::order`'s
-/// own `gpu_scene_draw_order_is_fills_then_strokes_then_text` /
-/// `cpu_pcb_draw_order_is_main_geometry_then_overlays`, unaffected by this
-/// fix.)
+/// `Polygons`-vs-`Lines` order — pad/pour geometry, not overlays — was
+/// settled separately in #653, fills first on both paths, and is pinned by
+/// `scene::order`'s `pcb_cpu_base_pass_matches_the_gpu_order`.)
 #[test]
 fn overlays_composite_above_base_content_in_a_fully_populated_scene() {
     let scene = build_full_board_scene();

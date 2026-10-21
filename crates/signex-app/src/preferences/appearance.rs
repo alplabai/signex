@@ -203,17 +203,12 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
                 text("Draw the PCB canvas on the GPU (shader) instead of the CPU. Applies immediately.")
                     .size(10)
                     .style(text_muted),
-                text("Zone fills and traces stack differently than on the CPU.")
-                    .size(10)
-                    .style(text_muted),
-                // The dashed-line, concave-fill and overlay-z-order gaps this
-                // note used to warn about are fixed (see the `scene::order`
-                // parity tests), and so is the faded-hairline one: lines and
-                // polygon outlines now get the same screen-space stroke floor
-                // as the CPU (#645). What is left is real and user-visible, so
-                // it is named above rather than left behind the word
-                // "experimental": the PCB CPU canvas still draws fills after
-                // traces where the GPU draws them before (`scene::order`).
+                // This used to carry a second line naming the known GPU gaps.
+                // The last of them is closed: dashed lines, concave fills and
+                // overlay z-order earlier, the faded hairline (#645), and the
+                // fill-over-trace stacking (#653) — see the `scene::order`
+                // parity tests. "experimental" stays because GPU parity is
+                // still unconfirmed on hardware.
             ]
             .spacing(3)
             .width(200),

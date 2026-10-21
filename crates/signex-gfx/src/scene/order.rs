@@ -31,9 +31,11 @@
 //! strokes over them, text on top — so the schematic replay now draws its
 //! base buckets in exactly [`GPU_SCENE_DRAW_ORDER`].
 //!
-//! [`CPU_PCB_DRAW_ORDER`] still draws Polygons after Lines/Circles. That is a
-//! separate PCB divergence the #645 decision did not cover; it is pinned
-//! below rather than silently fixed.
+//! The PCB had the same divergence — its CPU canvas drew zone fills and pads
+//! over the traces running into them — and #653 settled it the same way, so
+//! [`CPU_PCB_DRAW_ORDER`]'s base pass is now the GPU order too, minus the arc
+//! and text buckets the PCB never emits. Every base pass on every path now
+//! puts fills at the back.
 
 /// A drawable bucket of a [`Scene`](crate::scene::Scene). Every variant maps
 /// 1:1 to a `Vec` field on the scene; the order of a slice of these is a draw
@@ -109,10 +111,14 @@ pub const CPU_SCHEMATIC_DRAW_ORDER: &[SceneBucket] = &[
 /// Draw order of the PCB CPU canvas renderer (`pcb_canvas::draw_scene`): main
 /// geometry, then a second overlay pass. No arc or text buckets — the PCB scene
 /// never emits them on the CPU path.
+///
+/// Fills first, as on the GPU: a zone pour or pad sits under the traces that
+/// run into it. Until #653 this drew Polygons last, so the same board stacked
+/// the other way round depending on the GPU-render preference.
 pub const CPU_PCB_DRAW_ORDER: &[SceneBucket] = &[
+    SceneBucket::Polygons,
     SceneBucket::Lines,
     SceneBucket::Circles,
-    SceneBucket::Polygons,
     SceneBucket::OverlayLines,
     SceneBucket::OverlayCircles,
     SceneBucket::OverlayPolygons,
@@ -144,9 +150,9 @@ mod tests {
     #[test]
     fn cpu_pcb_draw_order_is_main_geometry_then_overlays() {
         let expected: &[SceneBucket] = &[
+            SceneBucket::Polygons,
             SceneBucket::Lines,
             SceneBucket::Circles,
-            SceneBucket::Polygons,
             SceneBucket::OverlayLines,
             SceneBucket::OverlayCircles,
             SceneBucket::OverlayPolygons,
@@ -301,22 +307,30 @@ mod tests {
         );
     }
 
-    /// The PCB CPU canvas still composites fills after strokes, the GPU
-    /// before. Out of the #645 decision, which was made for the schematic;
-    /// pinned so the remaining divergence stays visible instead of being
-    /// read as parity.
+    /// The PCB CPU canvas's base pass is the GPU order with the buckets the
+    /// PCB never emits (arcs, text) left out. Until #653 it drew fills after
+    /// strokes and this test pinned that divergence; now it pins parity, so
+    /// reordering either side alone fails.
     #[test]
-    fn gpu_and_pcb_cpu_still_disagree_on_where_fills_go() {
-        let gpu_polygons = index_of(GPU_SCENE_DRAW_ORDER, SceneBucket::Polygons).unwrap();
-        let gpu_lines = index_of(GPU_SCENE_DRAW_ORDER, SceneBucket::Lines).unwrap();
-        assert!(gpu_polygons < gpu_lines, "GPU draws fills before strokes");
-
-        let cpu_polygons = index_of(CPU_PCB_DRAW_ORDER, SceneBucket::Polygons).unwrap();
-        let cpu_lines = index_of(CPU_PCB_DRAW_ORDER, SceneBucket::Lines).unwrap();
-        assert!(
-            cpu_polygons > cpu_lines,
-            "the PCB CPU canvas draws fills after strokes"
-        );
+    fn pcb_cpu_base_pass_matches_the_gpu_order() {
+        let gpu_without_unemitted: Vec<SceneBucket> = GPU_SCENE_DRAW_ORDER
+            .iter()
+            .copied()
+            .filter(|bucket| !matches!(bucket, SceneBucket::Arcs | SceneBucket::Texts))
+            .collect();
+        let cpu_base: Vec<SceneBucket> = CPU_PCB_DRAW_ORDER
+            .iter()
+            .copied()
+            .take_while(|bucket| {
+                !matches!(
+                    bucket,
+                    SceneBucket::OverlayLines
+                        | SceneBucket::OverlayCircles
+                        | SceneBucket::OverlayPolygons
+                )
+            })
+            .collect();
+        assert_eq!(cpu_base, gpu_without_unemitted);
     }
 
     /// The GPU path composites arc and text buckets the PCB CPU path never

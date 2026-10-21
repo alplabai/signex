@@ -365,10 +365,9 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
         let camera = pipeline.camera.bind_group();
         // Composite in the shared `GPU_SCENE_DRAW_ORDER` (fills, then strokes,
         // then text on top). The order lives in one const so it can be diffed
-        // against the CPU `pcb_canvas::draw_scene` order: polygons draw *first*
-        // here but *last* on the CPU — a known base-bucket z-order divergence
-        // the `scene::order` parity test pins until visual authority
-        // reconciles it (reserved for Caner/Hakan). GPU parity stays
+        // against the CPU replays: both `pcb_canvas::draw_scene` and the
+        // schematic replay now draw their base buckets in this order (#645,
+        // #653), pinned by the `scene::order` parity tests. GPU parity stays
         // unconfirmed on hardware.
         for &bucket in GPU_SCENE_DRAW_ORDER {
             match bucket {
