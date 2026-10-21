@@ -647,6 +647,10 @@ mod tests {
             "the DRC marker's overlay polygon must not land in the base bucket"
         );
         assert!(
+            scene.top_polygons.is_empty(),
+            "the DRC marker's overlay polygon must not land in the top-polygon bucket"
+        );
+        assert!(
             scene.circles.is_empty(),
             "the DRC marker's overlay circle must not land in the base bucket"
         );
@@ -775,7 +779,7 @@ mod tests {
             "a DRC marker must emit exactly one overlay polygon"
         );
         assert!(
-            cpu_scene.polygons.is_empty(),
+            cpu_scene.polygons.is_empty() && cpu_scene.top_polygons.is_empty(),
             "an empty board contributes no main-bucket polygons"
         );
         let overlay_fill_color = cpu_scene.overlay_polygons[0].fill_color;
@@ -789,6 +793,10 @@ mod tests {
         assert!(
             gpu_scene.polygons.is_empty(),
             "the overlay polygon must not be folded into the main polygons bucket"
+        );
+        assert!(
+            gpu_scene.top_polygons.is_empty(),
+            "the overlay polygon must not be folded into the top-polygon bucket"
         );
         assert_eq!(
             gpu_scene.overlay_polygons.len(),

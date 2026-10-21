@@ -130,8 +130,8 @@ fn build_full_board_scene() -> Scene {
             color: [0.5, 0.5, 0.5, 1.0],
             _pad: [0.0; 3],
         }],
+        top_polygons: vec![convex_filled_pad()],
         polygons: vec![
-            convex_filled_pad(),
             concave_zone(),
             filled_and_stroked_polygon(),
             outline_only_rule_area(),
@@ -175,9 +175,10 @@ fn full_board_scenario_populates_every_bucket() {
     assert_eq!(scene.arcs.len(), 1);
     assert_eq!(
         scene.polygons.len(),
-        4,
-        "convex pad, concave zone, filled+stroked, outline-only"
+        3,
+        "concave zone, filled+stroked, outline-only"
     );
+    assert_eq!(scene.top_polygons.len(), 1, "convex pad");
     assert_eq!(scene.texts.len(), 1);
     assert_eq!(scene.overlay_lines.len(), 1);
     assert_eq!(scene.overlay_circles.len(), 1);
@@ -214,10 +215,10 @@ fn circle_and_polygon_predicates_split_correctly_across_the_scenario() {
         "stroke_width > 0.0 => outline"
     );
 
-    let pad = &scene.polygons[0];
-    let zone = &scene.polygons[1];
-    let filled_stroked = &scene.polygons[2];
-    let outline_only = &scene.polygons[3];
+    let pad = &scene.top_polygons[0];
+    let zone = &scene.polygons[0];
+    let filled_stroked = &scene.polygons[1];
+    let outline_only = &scene.polygons[2];
 
     assert!(!pad.is_stroked(), "plain pad: fill only, no outline");
     assert!(!zone.is_stroked(), "zone in this scenario: fill only");
@@ -321,9 +322,11 @@ fn triangulate_the_full_scenario_polygon_batch_matches_the_per_polygon_sum() {
     let per_polygon_total: usize = scene
         .polygons
         .iter()
+        .chain(&scene.top_polygons)
         .map(|polygon| triangulate_polygons(std::slice::from_ref(polygon)).len())
         .sum();
-    let batch_total = triangulate_polygons(&scene.polygons).len();
+    let batch_total = triangulate_polygons(&scene.polygons).len()
+        + triangulate_polygons(&scene.top_polygons).len();
     assert_eq!(
         batch_total, per_polygon_total,
         "batching polygons must not change per-polygon vertex counts"
@@ -383,6 +386,7 @@ fn overlays_composite_above_base_content_in_a_fully_populated_scene() {
         SceneBucket::Lines,
         SceneBucket::Circles,
         SceneBucket::Polygons,
+        SceneBucket::TopPolygons,
     ];
     let overlay_buckets = [
         SceneBucket::OverlayLines,

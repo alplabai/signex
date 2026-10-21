@@ -123,8 +123,8 @@ impl SceneUploadTarget for MockUploadTarget {
         self.calls.polygon_uploads += 1;
     }
 
-    fn upload_top_polygons(&mut self, _polygons: &[GpuPolygon]) {
-        self.uploaded_top_polygons = _polygons.len();
+    fn upload_top_polygons(&mut self, polygons: &[GpuPolygon]) {
+        self.uploaded_top_polygons = polygons.len();
     }
 
     fn upload_texts(
