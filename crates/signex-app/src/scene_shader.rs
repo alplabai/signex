@@ -336,6 +336,12 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
         // silently disagree with the CPU replay on a HiDPI display.
         // `(em * scale * dpi).clamp(min * dpi, max * dpi)` is exactly
         // `(em * scale).clamp(min, max) * dpi`.
+        //
+        // `upload` stages axis-aligned items only — a glyph atlas cannot
+        // rotate (`TextItem::is_axis_aligned`). Harmless while the PCB is the
+        // only surface here (its scene carries no text), but a surface whose
+        // scene does carry rotated text — the schematic, when #199 mounts it —
+        // owes those items a CPU canvas pass, or they vanish.
         let text_size = TextSizePolicy::new(S::TEXT_SIZE.min_px * dpi, S::TEXT_SIZE.max_px * dpi);
         let mut font_system = iced::advanced::graphics::text::font_system()
             .write()
