@@ -28,18 +28,35 @@ impl SymbolCanvas<'_> {
         let (ux, uy) = world_unsnapped(self, pos.x, pos.y, bounds);
         match self.tool {
             SymbolTool::Select => {
-                // Resize handles win over everything else.
-                // Use a screen-pixel-based tolerance so handles are
-                // equally easy to hit at any zoom level.
-                let tol_mm = (8.0_f32 / self.camera.scale.max(0.01)).clamp(0.5, 4.0) as f64;
-                if let Some((idx, handle)) = state::hit_test_graphic_handle(
+                // Screen-pixel tolerance so grab zones are equally easy
+                // to hit at any zoom level.
+                let tol_mm = self.pick_tolerance_mm();
+                // Pins win over everything: nearest pin along its whole
+                // tip-to-base segment, else by its name/number label.
+                let pin_hit = state::hit_test_pin(
                     self.symbol,
                     ux,
                     uy,
                     tol_mm,
                     self.active_part,
-                    &self.selected,
-                ) {
+                    &self.selection_filter,
+                )
+                .or_else(|| self.pin_hit_by_label(ux, uy));
+                // Next the resize handles of the SELECTED graphics (the
+                // only ones drawn); then any graphic body.
+                let handle_hit = if pin_hit.is_some() {
+                    None
+                } else {
+                    state::hit_test_graphic_handle(
+                        self.symbol,
+                        ux,
+                        uy,
+                        tol_mm,
+                        self.active_part,
+                        &self.selected,
+                    )
+                };
+                if let Some((idx, handle)) = handle_hit {
                     state.dragging_handle = Some((idx, handle));
                     state.dragging = false;
                     state.drag_anchor_offset = None;
@@ -48,12 +65,15 @@ impl SymbolCanvas<'_> {
                     state.box_select_current = None;
                     return Some(canvas::Action::capture());
                 }
-                // Pin tip + graphic hit-test wins; a click on a pin's
-                // name/number label is a fallback so the pin is grabbable
-                // by its text, not only its ~1.5 mm tip.
-                let sel = state::hit_test(self.symbol, ux, uy, self.active_part).or_else(|| {
-                    self.pin_hit_by_label(ux, uy)
-                        .map(state::SymbolSelection::Pin)
+                let sel = pin_hit.map(state::SymbolSelection::Pin).or_else(|| {
+                    state::hit_test_graphic(
+                        self.symbol,
+                        ux,
+                        uy,
+                        self.active_part,
+                        &self.selection_filter,
+                    )
+                    .map(state::SymbolSelection::Graphic)
                 });
                 if let Some(sel) = sel {
                     state.box_select_origin = None;
@@ -96,7 +116,11 @@ impl SymbolCanvas<'_> {
                 }
             }
             SymbolTool::AddPin => {
-                Some(canvas::Action::publish(CanvasAction::AddPin { x: wx, y: wy }).and_capture())
+                // Arm only: the pin lands where the button is released
+                // (`on_left_release`), so press-drag-release positions it.
+                state.pin_armed = true;
+                state.pin_cursor = Some((wx, wy));
+                Some(canvas::Action::capture())
             }
             SymbolTool::PlaceRectangle => {
                 if let Some((from_x, from_y)) = state.rect_from.take() {

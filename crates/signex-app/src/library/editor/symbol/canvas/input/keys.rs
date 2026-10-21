@@ -59,6 +59,14 @@ impl SymbolCanvas<'_> {
                 if cancelled {
                     return Some(canvas::Action::capture());
                 }
+                // Nothing in flight: Esc leaves the placement tool.
+                if self.tool != SymbolTool::Select {
+                    state.pin_armed = false;
+                    state.pin_cursor = None;
+                    return Some(
+                        canvas::Action::publish(CanvasAction::ToolCancelled).and_capture(),
+                    );
+                }
                 None
             }
             // Enter commits the in-flight Polygon stash. The

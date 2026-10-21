@@ -110,6 +110,13 @@ pub struct SymbolCanvas<'a> {
     /// `LibraryDisplaySettings.pin_selection` via
     /// `PinSelectionMode::allows_label_grab` (Document Options picker).
     pub pin_label_grab: bool,
+    /// Per-kind selectable flags (the Active Bar filter pills); gates
+    /// every Select-tool hit-test and the rubber-band selection.
+    pub selection_filter: state::SymbolSelectionFilter,
+    /// The editor is waiting for a real viewport size to apply a
+    /// queued Fit / centre-origin camera request: the canvas reports
+    /// its measured bounds once via [`CanvasAction::ViewportMeasured`].
+    pub view_pending: bool,
     pub bg_color: Color,
     pub grid_color: Color,
     pub body_color: Color,
@@ -167,6 +174,8 @@ impl<'a> SymbolCanvas<'a> {
             grid_visible,
             grid_style,
             pin_label_grab,
+            selection_filter: state::SymbolSelectionFilter::default(),
+            view_pending: false,
             bg_color: sheet_color,
             grid_color: palette.grid,
             body_color: palette.body,
@@ -175,6 +184,26 @@ impl<'a> SymbolCanvas<'a> {
             text_color: palette.text,
             axis_color: palette.axis,
         }
+    }
+
+    /// Apply the editor's selection filter pills to this canvas.
+    pub fn with_selection_filter(mut self, filter: state::SymbolSelectionFilter) -> Self {
+        self.selection_filter = filter;
+        self
+    }
+
+    /// Mark a queued Fit / centre-origin request so the canvas reports
+    /// its real bounds on the next event.
+    pub fn with_view_pending(mut self, pending: bool) -> Self {
+        self.view_pending = pending;
+        self
+    }
+
+    /// Screen-space pick radius (8 px) converted to world mm, so grab
+    /// zones feel the same at every zoom. Shared by the pin, handle and
+    /// hover hit-tests.
+    fn pick_tolerance_mm(&self) -> f64 {
+        (8.0_f32 / self.camera.scale.max(0.01)).clamp(0.5, 4.0) as f64
     }
 
     /// True when `pin` should render on the currently-active part.
@@ -189,7 +218,7 @@ impl<'a> SymbolCanvas<'a> {
     /// pin by its text, not just its tip. Iterates in reverse so the
     /// last-drawn pin wins on overlap.
     fn pin_hit_by_label(&self, x: f64, y: f64) -> Option<usize> {
-        if !self.pin_label_grab {
+        if !self.pin_label_grab || !self.selection_filter.pins {
             return None;
         }
         for (i, pin) in self.symbol.pins.iter().enumerate().rev() {
@@ -363,6 +392,15 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<CanvasAction>> {
+        // A queued Fit / centre-origin request needs the real canvas
+        // size, which only the widget knows - report it once and let
+        // the dispatcher apply it (footprint-editor parity).
+        if self.view_pending && bounds.width > 0.0 && bounds.height > 0.0 {
+            return Some(canvas::Action::publish(CanvasAction::ViewportMeasured {
+                width: bounds.width,
+                height: bounds.height,
+            }));
+        }
         // Thin dispatcher — each event kind routes to its extracted
         // `impl SymbolCanvas` method in `input::{tools, pointer,
         // camera, keys}`. Arm order + patterns are identical to the
@@ -418,7 +456,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
             && let Some(pos) = cursor.position_in(bounds)
         {
             let (wx, wy) = world_unsnapped(self, pos.x, pos.y, bounds);
-            let tol_mm = (8.0_f32 / self.camera.scale.max(0.01)).clamp(0.5, 4.0) as f64;
+            let tol_mm = self.pick_tolerance_mm();
             if let Some((_, handle)) = state::hit_test_graphic_handle(
                 self.symbol,
                 wx,
@@ -457,6 +495,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         self.draw_symbol_with_renderer(&mut frame, &self.selected, self.camera.scale);
         self.draw_resize_handles(&mut frame);
         self.draw_box_select_overlay(&mut frame, state);
+        self.draw_pin_preview(&mut frame, state);
         self.draw_rect_preview(&mut frame, state);
         self.draw_line_preview(&mut frame, state);
         self.draw_circle_preview(&mut frame, state);
@@ -767,3 +806,6 @@ impl<'a> SymbolCanvas<'a> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -432,6 +432,7 @@ pub(crate) fn apply_symbol_primitive_edit(
         SymbolEditorMsg::Pan { .. }
         | SymbolEditorMsg::Zoom { .. }
         | SymbolEditorMsg::Fit
+        | SymbolEditorMsg::ViewportMeasured { .. }
         | SymbolEditorMsg::CursorAt { .. } => apply_symbol_camera(editor, msg),
 
         // ── Display settings intercepted upstream; no-op here ────

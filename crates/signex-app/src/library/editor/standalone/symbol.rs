@@ -11,7 +11,7 @@ use crate::library::editor::symbol::canvas::{self as sym_canvas, SymbolCanvas};
 use crate::library::editor::symbol::state as sym_state;
 use crate::library::messages::{
     GraphicHandleMsg, LibraryMessage, PrimitiveEdit, SymbolEditorMsg, SymbolRotatePivotMsg,
-    SymbolSelectionMsg,
+    SymbolSelectionMsg, SymbolToolMsg,
 };
 use crate::library::state::LibraryDisplaySettings;
 use crate::panels::PanelContext;
@@ -262,7 +262,9 @@ fn view_symbol_canvas<'a>(
             a: 0.18,
             ..crate::styles::ti(tokens.text_secondary)
         },
-    );
+    )
+    .with_selection_filter(editor.selection_filter)
+    .with_view_pending(editor.pending_view.is_some());
     let widget: Element<'a, sym_canvas::CanvasAction> = iced::widget::Canvas::new(program)
         .width(Length::Fill)
         .height(Length::Fill)
@@ -274,7 +276,7 @@ fn view_symbol_canvas<'a>(
     })
 }
 
-fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> SymbolEditorMsg {
+pub(crate) fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> SymbolEditorMsg {
     use sym_canvas::CanvasAction;
     match action {
         CanvasAction::AddPin { x, y } => SymbolEditorMsg::AddPin { x, y },
@@ -342,6 +344,10 @@ fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> SymbolEdi
         CanvasAction::Pan { dx, dy } => SymbolEditorMsg::Pan { dx, dy },
         CanvasAction::Zoom { sx, sy, delta } => SymbolEditorMsg::Zoom { sx, sy, delta },
         CanvasAction::Fit => SymbolEditorMsg::Fit,
+        CanvasAction::ToolCancelled => SymbolEditorMsg::SetTool(SymbolToolMsg::Select),
+        CanvasAction::ViewportMeasured { width, height } => {
+            SymbolEditorMsg::ViewportMeasured { width, height }
+        }
         CanvasAction::CursorAt { x_mm, y_mm } => SymbolEditorMsg::CursorAt { x_mm, y_mm },
         CanvasAction::DragCommit => SymbolEditorMsg::DragCommit,
         CanvasAction::Undo => SymbolEditorMsg::Undo,
