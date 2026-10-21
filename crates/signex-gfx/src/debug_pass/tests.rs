@@ -226,9 +226,14 @@ fn grid_smoke_pass_lod_changes_with_zoom() {
 #[test]
 fn text_smoke_pass_runs() {
     let text_count = pollster::block_on(run_text_smoke_pass()).expect("text pass");
-    assert_eq!(text_count, 2);
+    // Two items, one rotated 0.2 rad: only the unrotated one reaches the
+    // atlas. A cryoglyph `TextArea` cannot rotate, so staging the other drew
+    // it axis-aligned; it is the CPU layer's (`TextItem::is_axis_aligned`).
+    assert_eq!(text_count, 1);
 }
 
+/// Scale and empty content still stage; rotation never does — whatever the
+/// angle's sign or how many turns it wraps.
 #[test]
 fn text_smoke_pass_handles_scale_rotation_and_empty_content() {
     let texts = [
@@ -272,8 +277,8 @@ fn text_smoke_pass_handles_scale_rotation_and_empty_content() {
     let high_zoom_count =
         pollster::block_on(run_text_smoke_pass_with(64.0, &texts)).expect("text pass high");
 
-    assert_eq!(low_zoom_count, 3);
-    assert_eq!(high_zoom_count, 3);
+    assert_eq!(low_zoom_count, 1);
+    assert_eq!(high_zoom_count, 1);
 }
 
 #[test]

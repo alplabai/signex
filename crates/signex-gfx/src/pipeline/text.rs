@@ -4,7 +4,9 @@
 //! This module was written without reference to GPL-licensed software.
 //! Sources: IPC-2612-1, IEEE 315, IEC 60617, wgpu/WGSL public docs.
 
-use crate::primitive::text::{TextHAlign, TextItem, TextSizePolicy, TextVAlign, text_px};
+use crate::primitive::text::{
+    LINE_HEIGHT_EM, TextHAlign, TextItem, TextSizePolicy, TextVAlign, text_px,
+};
 
 /// Rendered em size in logical pixels, from the one shared sizing rule.
 ///
@@ -169,18 +171,21 @@ fn measure_text_bounds_px(buffer: &cryoglyph::Buffer) -> [f32; 2] {
 /// the system served instead of the app's monospace canvas face — different
 /// typeface *and* different advance widths, so anything sized from a glyph
 /// estimate came out wrong too.
+///
+/// `italic` is deliberately not mapped. The canvas family ships no italic
+/// face, and cosmic-text 0.15's `Attrs::matches` requires an exact style
+/// match, so asking for one skips the canvas family entirely and lands on
+/// some system italic — a different typeface, and different from the CPU
+/// replay, which draws the same item upright. Map it once an italic face is
+/// bundled, on both sides together.
 fn attrs_for_item(item: &TextItem, family: &'static str) -> cryoglyph::Attrs<'static> {
-    let mut attrs = cryoglyph::Attrs::new().family(cryoglyph::Family::Name(family));
+    let attrs = cryoglyph::Attrs::new().family(cryoglyph::Family::Name(family));
 
     if item.bold {
-        attrs = attrs.weight(cryoglyph::Weight::BOLD);
+        attrs.weight(cryoglyph::Weight::BOLD)
+    } else {
+        attrs
     }
-
-    if item.italic {
-        attrs = attrs.style(cryoglyph::Style::Italic);
-    }
-
-    attrs
 }
 
 fn to_glyphon_color(color: [f32; 4]) -> cryoglyph::Color {
@@ -295,9 +300,11 @@ impl GlyphonTextPipeline {
         let viewport_width = viewport_size_px[0] as f32;
         let viewport_height = viewport_size_px[1] as f32;
 
-        for text in texts {
+        // Rotated items are the CPU canvas layer's to draw — see
+        // `TextItem::is_axis_aligned`. Staging them here drew them unrotated.
+        for text in texts.iter().filter(|text| text.is_axis_aligned()) {
             let font_px = text_size_px(text, scale_px_per_mm, size_policy);
-            let metrics = cryoglyph::Metrics::new(font_px, (font_px * 1.35).max(1.0));
+            let metrics = cryoglyph::Metrics::new(font_px, (font_px * LINE_HEIGHT_EM).max(1.0));
             let attrs = attrs_for_item(text, family);
             let mut buffer = cryoglyph::Buffer::new(font_system, metrics);
 
@@ -486,7 +493,9 @@ mod tests {
         );
 
         assert_eq!(attrs.weight, cryoglyph::Weight::BOLD);
-        assert_eq!(attrs.style, cryoglyph::Style::Italic);
+        // Upright on purpose: no italic canvas face is bundled, and an exact
+        // style match would otherwise leave the canvas family (#645).
+        assert_eq!(attrs.style, cryoglyph::Style::Normal);
         assert_eq!(color.r(), 64);
         assert_eq!(color.g(), 128);
         assert_eq!(color.b(), 191);

@@ -123,7 +123,29 @@ mod size_tests {
         );
         assert!((physical - text_px(1.27, 3.0, SCHEMATIC) * dpi).abs() < 1e-4);
     }
+
+    /// The atlas/CPU split: anything rotated, even a quarter turn written as
+    /// a negative angle, is the CPU layer's.
+    #[test]
+    fn only_unrotated_items_are_axis_aligned() {
+        let at = |rotation| super::TextItem {
+            rotation,
+            ..Default::default()
+        };
+        assert!(at(0.0).is_axis_aligned());
+        assert!(at(-0.0).is_axis_aligned());
+        assert!(!at(std::f32::consts::FRAC_PI_2).is_axis_aligned());
+        assert!(!at(-std::f32::consts::FRAC_PI_2).is_axis_aligned());
+    }
 }
+
+/// Line height as a multiple of the em size, for every text replay.
+///
+/// 1.2 is `canvas::Text`'s own default (`iced_graphics` 0.14,
+/// `geometry/text.rs`), which the CPU replay used implicitly — not iced's
+/// widget-level `LineHeight` default of 1.3. The GPU pipeline hardcoded 1.35,
+/// so multiline notes spread 12.5% taller there. Both now read this.
+pub const LINE_HEIGHT_EM: f32 = 1.2;
 
 #[derive(Clone, Debug, Default)]
 pub struct TextItem {
@@ -136,4 +158,20 @@ pub struct TextItem {
     pub rotation: f32,
     pub h_align: TextHAlign,
     pub v_align: TextVAlign,
+}
+
+impl TextItem {
+    /// Whether this item can go through a glyph atlas at all.
+    ///
+    /// A cryoglyph `TextArea` is `{left, top, scale}` — it cannot rotate, so
+    /// the GPU pipeline used to rotate only the alignment offset and draw the
+    /// glyph run axis-aligned. Rotated items belong on the CPU canvas layer
+    /// instead, and that costs no parity: `iced_wgpu` 0.14 sends any text
+    /// under a non scale-translation transform through outline tessellation,
+    /// never its atlas, so a rotated label was always vector fill (#645).
+    ///
+    /// The one predicate both replays use to decide which side draws an item.
+    pub fn is_axis_aligned(&self) -> bool {
+        self.rotation.abs() < f32::EPSILON
+    }
 }
