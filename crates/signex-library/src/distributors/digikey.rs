@@ -250,11 +250,7 @@ impl DigiKeyAuth {
 }
 
 fn build_http_client() -> reqwest::blocking::Client {
-    reqwest::blocking::Client::builder()
-        .user_agent("signex-library/0.9 (+https://signex.dev)")
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .expect("reqwest::blocking::Client::build is infallible with default opts")
+    super::http::finish(super::http::client_builder().redirect(reqwest::redirect::Policy::none()))
 }
 
 // ---------------------------------------------------------------------------
