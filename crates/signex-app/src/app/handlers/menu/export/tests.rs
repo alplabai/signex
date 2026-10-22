@@ -845,6 +845,37 @@ fn a_flat_projects_second_page_no_longer_vanishes_from_the_netlist() {
 }
 
 #[test]
+fn netlist_export_writes_the_protel_format_the_dialog_promises() {
+    // #354: the save dialog offers "Protel Netlist" / `.NET`, so the bytes the
+    // handler writes must be the Protel component + net blocks with CRLF line
+    // endings — not the `# Signex netlist` debug listing.
+    let mut app = app_flat_project();
+    let out = std::env::temp_dir().join(format!("signex-protel-{}.NET", Uuid::new_v4()));
+
+    let _ = app.handle_export_netlist_finished(Ok(out.clone()));
+
+    let bytes = std::fs::read_to_string(&out).expect("read exported netlist");
+    assert!(
+        bytes.starts_with("[\r\n"),
+        "a complete export opens with a component block: {bytes:?}"
+    );
+    assert!(
+        bytes.contains("[\r\nR_A\r\n"),
+        "R_A component block: {bytes:?}"
+    );
+    assert!(
+        bytes.contains("[\r\nR_B\r\n"),
+        "R_B component block: {bytes:?}"
+    );
+    assert!(bytes.contains("(\r\n"), "at least one net block: {bytes:?}");
+    assert!(
+        !bytes.contains("# Signex netlist"),
+        "the debug listing must not be what ships: {bytes:?}"
+    );
+    std::fs::remove_file(&out).ok();
+}
+
+#[test]
 fn a_page_the_root_does_reach_is_not_reported_as_a_shortfall() {
     // The other side of the same rule — the coverage check must not refuse a
     // perfectly good hierarchical export.

@@ -120,12 +120,13 @@ impl Signex {
             return Some(Task::none());
         }
 
+        let format = NetlistOptions::default().format;
         Some(Task::perform(
-            async {
+            async move {
                 rfd::AsyncFileDialog::new()
                     .set_title("Export Netlist")
-                    .add_filter("Standard Netlist", &["net"])
-                    .set_file_name("schematic.net")
+                    .add_filter(format.label(), &[format.extension()])
+                    .set_file_name(format.default_file_name())
                     .save_file()
                     .await
                     .map(|file| file.path().to_path_buf())
