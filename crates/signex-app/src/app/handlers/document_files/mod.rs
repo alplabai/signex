@@ -143,7 +143,8 @@ mod tests {
         assert!(matches!(
             msg,
             Message::File(FileMsg::SavePrimitiveAs { from_path, to_path })
-                if from_path == PathBuf::from("a.snxsym") && to_path == PathBuf::from("b.snxsym")
+                if from_path.as_path() == std::path::Path::new("a.snxsym")
+                    && to_path.as_path() == std::path::Path::new("b.snxsym")
         ));
     }
 
