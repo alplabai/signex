@@ -10,9 +10,10 @@ use super::super::layers::FpLayer;
 pub(super) const NEW_PAD_SIZE_MM: f64 = 1.0;
 
 /// One pad in the editor canvas. A subset of [`signex_library::Pad`] —
-/// we only carry the fields the canvas renders or hit-tests. Extra
-/// fields on `Pad` (drill, mask/paste margins, etc.) round-trip via
-/// [`super::FootprintEditorState::sync_pads_to_primitive`] without a UI yet.
+/// we only carry the fields the canvas renders or hit-tests. Persisted
+/// fields the canvas does not draw ride along in [`PadPassthrough`], so
+/// [`super::FootprintEditorState::sync_pads_to_primitive`] writes back
+/// exactly what the file carried.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EditorPad {
     pub number: String,
@@ -60,6 +61,23 @@ pub struct EditorPad {
     pub copper_offset_y_mm: Option<f64>,
     /// v0.24 Phase 1 (Track A stub) — Per-pad parametric handles.
     pub shape_params: ShapeParamMap,
+    /// Persisted `Pad` fields with no editor UI (see [`PadPassthrough`]).
+    pub passthrough: PadPassthrough,
+}
+
+/// Persisted `Pad` fields the canvas does not draw. They live on
+/// [`EditorPad`] so `from_pad` -> `to_pad` is lossless: a field with no
+/// home here is erased from the saved file on the first edit. A new
+/// un-modelled `Pad` field belongs in this struct. The Properties panel
+/// edits the slot length; the two margins have no editor UI.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct PadPassthrough {
+    /// Oval-slot length (mm) of the drill; `None` = round drill.
+    pub drill_slot_length_mm: Option<f64>,
+    /// Global solder-mask margin fallback (mm).
+    pub solder_mask_margin_mm: Option<f64>,
+    /// Global paste margin fallback (mm).
+    pub paste_margin_mm: Option<f64>,
 }
 
 /// v0.24 Phase 1 — per-pad parametric handle map. Type alias keeps
@@ -134,6 +152,7 @@ impl EditorPad {
             copper_offset_x_mm: None,
             copper_offset_y_mm: None,
             shape_params: ShapeParamMap::new(),
+            passthrough: PadPassthrough::default(),
         }
     }
 
@@ -167,6 +186,7 @@ impl EditorPad {
             copper_offset_x_mm: None,
             copper_offset_y_mm: None,
             shape_params: ShapeParamMap::new(),
+            passthrough: PadPassthrough::default(),
         }
     }
 
@@ -346,13 +366,18 @@ impl EditorPad {
             copper_offset_x_mm: p.copper_offset_x_mm,
             copper_offset_y_mm: p.copper_offset_y_mm,
             shape_params: ShapeParamMap::new(),
+            passthrough: PadPassthrough {
+                drill_slot_length_mm: p.drill.as_ref().and_then(|d| d.slot_length),
+                solder_mask_margin_mm: p.solder_mask_margin,
+                paste_margin_mm: p.paste_margin,
+            },
         }
     }
 
     pub(super) fn to_pad(&self) -> Pad {
         let drill = self.drill_diameter_mm.map(|d| signex_library::Drill {
             diameter: d,
-            slot_length: None,
+            slot_length: self.passthrough.drill_slot_length_mm,
         });
         Pad {
             number: self.number.clone(),
@@ -363,8 +388,8 @@ impl EditorPad {
             rotation: self.rotation_deg,
             layers: self.layers.clone(),
             drill,
-            solder_mask_margin: None,
-            paste_margin: None,
+            solder_mask_margin: self.passthrough.solder_mask_margin_mm,
+            paste_margin: self.passthrough.paste_margin_mm,
             template: self.template.clone(),
             template_library: self.template_library.clone(),
             paste_margin_top: self.stack.paste_margin_top,

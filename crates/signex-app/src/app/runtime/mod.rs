@@ -4,6 +4,7 @@ mod footprint_ctx;
 mod footprint_summaries;
 mod history;
 mod panel_ctx;
+mod primitive_dirty;
 mod symbol_ctx;
 
 impl Signex {
