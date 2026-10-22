@@ -1115,3 +1115,62 @@ fn cascade_footprint_personal_mode_auto_bumps_bound_row() {
     // primitive kind that was saved.
     assert_eq!(after.symbol_version, row.symbol_version);
 }
+
+fn commit_count(file: &Path) -> usize {
+    let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
+    let mut walk = repo.revwalk().unwrap();
+    walk.push_head().unwrap();
+    walk.count()
+}
+
+fn add_class(adapter: &LocalGitAdapter, key: &str, label: &str) {
+    use signex_library::library_file::ClassEntry;
+    adapter
+        .add_library_class(
+            ClassEntry {
+                key: key.into(),
+                label: label.into(),
+            },
+            &format!("add {key}"),
+        )
+        .unwrap();
+}
+
+/// Removing an absent class is an idempotent no-op: `Ok`, the `.snxlib`
+/// stays byte-identical, and no commit lands.
+#[test]
+fn remove_absent_library_class_adds_no_commit() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "Cls", false);
+    add_class(&adapter, "res", "Resistors");
+    let bytes_before = std::fs::read(&file).unwrap();
+    let commits_before = commit_count(&file);
+
+    adapter
+        .remove_library_class("missing", "delete class missing")
+        .unwrap();
+
+    assert_eq!(std::fs::read(&file).unwrap(), bytes_before);
+    assert_eq!(commit_count(&file), commits_before);
+}
+
+/// Removing a present class still removes it and still commits; a
+/// repeated remove (double-click on `×`) then adds nothing.
+#[test]
+fn remove_present_library_class_commits_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "Cls2", false);
+    add_class(&adapter, "res", "Resistors");
+    let commits_before = commit_count(&file);
+
+    adapter
+        .remove_library_class("res", "delete class res")
+        .unwrap();
+    assert!(adapter.library_classes().iter().all(|c| c.key != "res"));
+    assert_eq!(commit_count(&file), commits_before + 1);
+
+    adapter
+        .remove_library_class("res", "delete class res")
+        .unwrap();
+    assert_eq!(commit_count(&file), commits_before + 1);
+}

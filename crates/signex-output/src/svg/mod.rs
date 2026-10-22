@@ -156,6 +156,7 @@ mod tests {
         SheetSnapshot {
             path: PathBuf::from("test.standard_sch"),
             schematic: SchematicSheet {
+                unknown: Default::default(),
                 uuid: Uuid::nil(),
                 version: 0,
                 generator: String::new(),
