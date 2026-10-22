@@ -19,6 +19,7 @@ pub struct CompiledHelper {
     name: String,
     args: Vec<LiteralAst>,
     regex_arg: Option<Regex>,
+    pin_kind_arg: Option<PinDirection>,
 }
 
 /// Expression after compilation/preprocessing.
@@ -32,6 +33,11 @@ pub enum CompiledExpr {
         field: FieldExprAst,
         op: CmpOp,
         value: LiteralAst,
+    },
+    /// `pin.kind == / != <kind>`, with the kind resolved at compile time.
+    PinKindCmp {
+        op: CmpOp,
+        kind: PinDirection,
     },
     FieldMatches {
         field: FieldExprAst,
@@ -147,11 +153,22 @@ fn compile_expr(rule_id: &str, expr: &ExprAst) -> Result<CompiledExpr, DslError>
             } else {
                 None
             };
+            let pin_kind_arg = match (name.as_str(), args.first()) {
+                ("has_pin_kind", Some(kind)) => Some(resolve_pin_kind(rule_id, kind)?),
+                _ => None,
+            };
             Ok(CompiledExpr::HelperCall(CompiledHelper {
                 name: name.clone(),
                 args: args.clone(),
                 regex_arg,
+                pin_kind_arg,
             }))
+        }
+        ExprAst::FieldCmp { field, op, value } if is_pin_kind_field(field) => {
+            Ok(CompiledExpr::PinKindCmp {
+                op: *op,
+                kind: resolve_pin_kind(rule_id, value)?,
+            })
         }
         ExprAst::FieldCmp { field, op, value } => Ok(CompiledExpr::FieldCmp {
             field: field.clone(),
@@ -266,6 +283,13 @@ fn eval_expr(expr: &CompiledExpr, subject: Subject<'_>) -> bool {
         CompiledExpr::Not(e) => !eval_expr(e, subject),
         CompiledExpr::HelperCall(helper) => eval_helper(helper, subject),
         CompiledExpr::FieldCmp { field, op, value } => eval_field_cmp(field, *op, value, subject),
+        CompiledExpr::PinKindCmp { op, kind } => match subject {
+            Subject::Pin(pin) => match op {
+                CmpOp::Eq => pin.electrical_type == *kind,
+                CmpOp::Ne => pin.electrical_type != *kind,
+            },
+            _ => false,
+        },
         CompiledExpr::FieldMatches { field, regex, .. } => {
             eval_field_matches(field, regex, subject)
         }
@@ -286,11 +310,8 @@ fn eval_helper(helper: &CompiledHelper, subject: Subject<'_>) -> bool {
         ("has_driver", Subject::Net(net)) => net.has_driver,
         ("has_pullup", Subject::Net(net)) => net.has_pullup,
         ("has_pin_kind", Subject::Net(net)) => helper
-            .args
-            .first()
-            .and_then(|a| parse_pin_type(a.as_str_value()))
-            .map(|t| net.pin_types.contains(&t))
-            .unwrap_or(false),
+            .pin_kind_arg
+            .is_some_and(|kind| net.pin_types.contains(&kind)),
         ("name_matches", Subject::Net(net)) => {
             if let Some(regex) = &helper.regex_arg {
                 regex.is_match(&net.name)
@@ -458,6 +479,22 @@ fn is_driving_pin(t: PinDirection) -> bool {
     )
 }
 
+/// Whether `field` is `pin.kind`, whose literals name a pin kind.
+pub(crate) fn is_pin_kind_field(field: &FieldExprAst) -> bool {
+    matches!(field, FieldExprAst::Access { object, field } if object == "pin" && field == "kind")
+}
+
+/// The pin kind `literal` names, accepting every spelling `parse_pin_type` does.
+pub(crate) fn resolve_pin_kind(
+    rule_id: &str,
+    literal: &LiteralAst,
+) -> Result<PinDirection, DslError> {
+    parse_pin_type(literal.as_str_value()).ok_or_else(|| DslError::UnknownPinKind {
+        rule: rule_id.to_string(),
+        value: literal.as_str_value().to_string(),
+    })
+}
+
 fn parse_pin_type(s: &str) -> Option<PinDirection> {
     match normalize(s).as_str() {
         "input" => Some(PinDirection::Input),
@@ -502,4 +539,36 @@ fn normalize(s: &str) -> String {
         .filter(|c| *c != '_' && *c != '-' && !c.is_whitespace())
         .flat_map(char::to_lowercase)
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_pin_type, pin_type_name};
+    use signex_types::schematic::PinDirection;
+
+    /// Every name `pin.kind` compared against before #676 must still parse
+    /// back to its own kind, so no existing rule changes meaning. The list is
+    /// every `PinDirection`: a new variant breaks `pin_type_name`'s exhaustive
+    /// match first, and must be added here too.
+    #[test]
+    fn every_pin_kind_name_parses_back_to_itself() {
+        for kind in [
+            PinDirection::Input,
+            PinDirection::Output,
+            PinDirection::Bidirectional,
+            PinDirection::ThreeStatable,
+            PinDirection::Passive,
+            PinDirection::PowerInput,
+            PinDirection::PowerOutput,
+            PinDirection::GroundReference,
+            PinDirection::OpenDrainLow,
+            PinDirection::OpenDrainHigh,
+            PinDirection::Differential,
+            PinDirection::Clock,
+            PinDirection::DoNotConnect,
+            PinDirection::Unclassified,
+        ] {
+            assert_eq!(parse_pin_type(pin_type_name(kind)), Some(kind));
+        }
+    }
 }
