@@ -124,6 +124,7 @@ impl Engine {
             | Command::PlaceBus { .. }
             | Command::PlaceLabel { .. }
             | Command::PlaceSymbol { .. }
+            | Command::PlaceChildSheet { .. }
             | Command::PlaceWireSegment { .. }
             | Command::PlaceJunction { .. }
             | Command::PlaceNoConnect { .. }
@@ -1040,5 +1041,89 @@ mod tests {
             engine.document().child_sheets[0].pins[0].position,
             Point::new(15.0, 25.0)
         );
+    }
+
+    fn new_child_sheet(filename: &str, name: &str) -> ChildSheet {
+        ChildSheet {
+            uuid: uuid::Uuid::new_v4(),
+            name: name.to_string(),
+            filename: filename.to_string(),
+            position: Point::new(10.0, 20.0),
+            size: (30.0, 20.0),
+            stroke_width: 0.12,
+            fill: FillType::None,
+            stroke_color: None,
+            fill_color: None,
+            fields_autoplaced: false,
+            pins: vec![SheetPin {
+                uuid: uuid::Uuid::new_v4(),
+                name: "SDA".to_string(),
+                direction: "input".to_string(),
+                position: Point::new(10.0, 25.0),
+                rotation: 0.0,
+                auto_generated: false,
+                user_moved: false,
+            }],
+            instances: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn place_child_sheet_appends_marks_child_sheets_and_round_trips_undo_redo() {
+        let mut engine = Engine::new(test_sheet()).unwrap();
+        let sheet = new_child_sheet("child.snxsch", "Child");
+        let uuid = sheet.uuid;
+
+        let result = engine
+            .execute(Command::PlaceChildSheet { child_sheet: sheet })
+            .unwrap();
+
+        assert!(result.changed);
+        assert!(
+            result
+                .patch_pair
+                .expect("patch")
+                .document
+                .contains(DocumentPatch::CHILD_SHEETS)
+        );
+        let placed = &engine.document().child_sheets;
+        assert_eq!(placed.len(), 1);
+        assert_eq!(placed[0].uuid, uuid);
+        assert_eq!(placed[0].filename, "child.snxsch");
+        assert_eq!(placed[0].pins.len(), 1);
+        assert_eq!(placed[0].pins[0].name, "SDA");
+
+        engine.undo().unwrap();
+        assert!(engine.document().child_sheets.is_empty());
+        engine.redo().unwrap();
+        assert_eq!(engine.document().child_sheets.len(), 1);
+        assert_eq!(engine.document().child_sheets[0].uuid, uuid);
+    }
+
+    #[test]
+    fn place_child_sheet_rejects_blank_filename_without_mutating() {
+        let mut engine = Engine::new(test_sheet()).unwrap();
+        for filename in ["", "   "] {
+            let err = engine
+                .execute(Command::PlaceChildSheet {
+                    child_sheet: new_child_sheet(filename, "Child"),
+                })
+                .unwrap_err();
+            assert!(matches!(err, EngineError::EmptyChildSheetFilename));
+        }
+        assert!(engine.document().child_sheets.is_empty());
+        // Nothing was recorded, so there is nothing to undo.
+        assert!(engine.undo().unwrap().is_none());
+    }
+
+    #[test]
+    fn place_child_sheet_allows_an_empty_name() {
+        let mut engine = Engine::new(test_sheet()).unwrap();
+        engine
+            .execute(Command::PlaceChildSheet {
+                child_sheet: new_child_sheet("child.snxsch", ""),
+            })
+            .unwrap();
+        assert_eq!(engine.document().child_sheets.len(), 1);
     }
 }

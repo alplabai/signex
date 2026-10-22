@@ -94,6 +94,40 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
         ]),
     );
 
+    // File ▸ Open Recent — filename as the label, newest first. A project
+    // that has vanished since is still listed; choosing it drops it with a
+    // notice (`handle_open_recent_project`).
+    let mut recent_items: Vec<_> = ctx
+        .recent_projects
+        .iter()
+        .map(|path| {
+            let label = path
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_else(|| path.display().to_string());
+            leaf(
+                &label,
+                None,
+                MenuMessage::OpenRecentProject(path.clone()),
+                mc,
+            )
+        })
+        .collect();
+    if recent_items.is_empty() {
+        recent_items.push(leaf_stub("No recent projects", None, mc));
+    }
+    recent_items.push(separator(mc));
+    recent_items.push(leaf_if(
+        "Clear Recent",
+        None,
+        MenuMessage::ClearRecentProjects,
+        !ctx.recent_projects.is_empty(),
+    ));
+    let recent_menu = Item::with_menu(
+        submenu_item_btn("Open Recent", mc),
+        menu_template(recent_items),
+    );
+
     let file_menu = Item::with_menu(
         root_btn("File", mc),
         menu_template(vec![
@@ -109,6 +143,7 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
                 MenuMessage::OpenProject,
                 mc,
             ),
+            recent_menu,
             separator(mc),
             // v0.14.2: Save / Save As also enabled for any standalone
             // primitive editor tab (`.snxsym` / `.snxfpt`). The
@@ -421,7 +456,9 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
     let help_menu = Item::with_menu(
         root_btn("Help", mc),
         menu_template(vec![
-            leaf_stub("About Signex", None, mc),
+            leaf("About Signex", None, MenuMessage::OpenAbout, mc),
+            leaf("Documentation", None, MenuMessage::OpenDocumentation, mc),
+            leaf("Report an Issue", None, MenuMessage::ReportIssue, mc),
             separator(mc),
             leaf(
                 &cmd_label("show_current_command_hotkeys", "Keyboard Shortcuts"),

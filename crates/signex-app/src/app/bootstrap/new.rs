@@ -194,6 +194,10 @@ impl Signex {
                 panel_list_open: false,
                 preferences_open: false,
                 keyboard_shortcuts_open: false,
+                about_open: false,
+                recent_projects: crate::recent_projects::RecentProjects::from_paths(
+                    crate::fonts::read_recent_projects(),
+                ),
                 first_run_tour_open: !crate::fonts::read_first_run_tour_dismissed(),
                 find_replace: crate::find_replace::FindReplaceState::default(),
                 preferences_nav: crate::preferences::PrefNav::Appearance,

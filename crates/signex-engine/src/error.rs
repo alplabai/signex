@@ -6,6 +6,8 @@ pub enum EngineError {
     MissingPath,
     #[error("command {0:?} is not implemented yet")]
     UnsupportedCommand(CommandKind),
+    #[error("cannot place a child sheet with no target filename")]
+    EmptyChildSheetFilename,
     #[error("failed to open schematic: {0}")]
     OpenFailed(#[source] anyhow::Error),
     #[error("failed to save schematic: {0}")]
