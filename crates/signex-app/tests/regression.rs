@@ -35,6 +35,9 @@
 #[path = "regression/project.rs"]
 mod project;
 
+#[path = "regression/bom_validation.rs"]
+mod bom_validation;
+
 #[path = "regression/prefs.rs"]
 mod prefs;
 
@@ -86,6 +89,9 @@ mod sketch_state;
 #[path = "regression/file_open_async.rs"]
 mod file_open_async;
 
+#[path = "regression/startup_open.rs"]
+mod startup_open;
+
 #[path = "regression/history_load_failure.rs"]
 mod history_load_failure;
 
@@ -103,3 +109,9 @@ mod rename_save_as_rekey;
 
 #[path = "regression/deleted_sheet_not_resaved.rs"]
 mod deleted_sheet_not_resaved;
+#[path = "regression/library_components_panel_actions.rs"]
+mod library_components_panel_actions;
+#[path = "regression/library_git_recovery.rs"]
+mod library_git_recovery;
+#[path = "regression/start_screen.rs"]
+mod start_screen;

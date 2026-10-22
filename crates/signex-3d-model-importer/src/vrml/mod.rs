@@ -22,6 +22,11 @@ pub fn load(path: &PathBuf) -> Result<Vec<VrmlMesh>, ModelImportError> {
             reason: "unexpected end of file".to_owned(),
         },
         parser::ParseError::UnresolvedUse { name } => ModelImportError::VrmlUnresolvedUse { name },
+        parser::ParseError::NestingTooDeep { line, limit } => ModelImportError::VrmlParseFailed {
+            path: path.clone(),
+            line,
+            reason: format!("node nesting deeper than {limit}"),
+        },
         parser::ParseError::MalformedNumber { line, value } => ModelImportError::VrmlParseFailed {
             path: path.clone(),
             line,

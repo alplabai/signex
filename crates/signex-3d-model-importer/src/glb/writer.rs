@@ -21,27 +21,38 @@ pub fn write_glb(json_bytes: &[u8], bin_bytes: &[u8]) -> Result<Vec<u8>, ModelIm
         8 + bin_padded.len()
     };
     let total_len = 12 + json_chunk_len + bin_chunk_len;
+    // GLB lengths are u32 on the wire; refuse rather than silently truncate (#112).
+    let total_len_u32 = checked_u32(total_len, "container")?;
+    let json_len_u32 = checked_u32(json_padded.len(), "JSON chunk")?;
+    let bin_len_u32 = checked_u32(bin_padded.len(), "BIN chunk")?;
 
     let mut out = Vec::with_capacity(total_len);
 
     // Header
     out.extend_from_slice(&GLB_MAGIC.to_le_bytes());
     out.extend_from_slice(&GLB_VERSION.to_le_bytes());
-    out.extend_from_slice(&(total_len as u32).to_le_bytes());
+    out.extend_from_slice(&total_len_u32.to_le_bytes());
 
     // JSON chunk
-    out.extend_from_slice(&(json_padded.len() as u32).to_le_bytes());
+    out.extend_from_slice(&json_len_u32.to_le_bytes());
     out.extend_from_slice(&CHUNK_JSON.to_le_bytes());
     out.extend_from_slice(&json_padded);
 
     // BIN chunk (only if non-empty)
     if !bin_bytes.is_empty() {
-        out.extend_from_slice(&(bin_padded.len() as u32).to_le_bytes());
+        out.extend_from_slice(&bin_len_u32.to_le_bytes());
         out.extend_from_slice(&CHUNK_BIN.to_le_bytes());
         out.extend_from_slice(&bin_padded);
     }
 
     Ok(out)
+}
+
+/// Narrow a length to the u32 the GLB format stores, or fail loudly.
+fn checked_u32(len: usize, what: &str) -> Result<u32, ModelImportError> {
+    u32::try_from(len).map_err(|_| ModelImportError::GlbWriteFailed {
+        reason: format!("{what} ({len} bytes) exceeds the GLB 4 GiB (u32) limit"),
+    })
 }
 
 /// Pad a byte slice to the next 4-byte boundary using `fill`.
@@ -57,6 +68,14 @@ fn pad4<T: Copy + Into<u8>>(data: &[u8], fill: T) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_pointer_width = "64")]
+    #[test]
+    fn oversize_length_is_an_error_not_a_truncation() {
+        assert_eq!(checked_u32(u32::MAX as usize, "x").unwrap(), u32::MAX);
+        let err = checked_u32(u32::MAX as usize + 1, "BIN chunk").unwrap_err();
+        assert!(matches!(err, ModelImportError::GlbWriteFailed { .. }));
+    }
 
     #[test]
     fn glb_header_magic_and_version() {

@@ -459,6 +459,11 @@ fn map_severity(severity: SeverityKind) -> Severity {
     }
 }
 
+/// Placeholder `RuleKind` for `Diagnostic::rule_kind`, which is not optional.
+/// It is NOT the rule's identity — `Diagnostic::rule_id` (`user::<name>`) is,
+/// and it reaches `Violation::rule_id`. Nothing reads the kind of a DSL
+/// diagnostic: labels, overrides and quick fixes all resolve through
+/// `RuleId::builtin_kind`, which is `None` for these.
 fn fallback_kind(target: TargetKind) -> RuleKind {
     match target {
         TargetKind::Net => RuleKind::NetLabelConflict,

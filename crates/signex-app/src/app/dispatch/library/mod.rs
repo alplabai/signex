@@ -325,14 +325,6 @@ impl Signex {
             LibraryMessage::BrowserClassFilterClicked { library_path, key } => {
                 self.handle_browser_class_filter_clicked(library_path, key)
             }
-            LibraryMessage::BrowserRefreshPricing {
-                library_path,
-                table,
-                row_id,
-            } => self.handle_browser_refresh_pricing(library_path, table, row_id),
-            LibraryMessage::LibraryRefreshAllPricing(library_path) => {
-                self.handle_library_refresh_all_pricing(library_path)
-            }
             // ── Document Options modal (Tools ▸ Document Options) ──
             LibraryMessage::OpenDocumentOptions { library_path } => {
                 self.handle_open_document_options(library_path)
@@ -393,12 +385,6 @@ impl Signex {
             }
             LibraryMessage::ComponentsPanelPromoteToGlobal(path) => {
                 self.handle_components_panel_promote_to_global(path)
-            }
-            LibraryMessage::ComponentsPanelManageGlobal => {
-                self.handle_components_panel_manage_global()
-            }
-            LibraryMessage::ComponentsPanelAddToProject { library_path } => {
-                self.handle_components_panel_add_to_project(library_path)
             }
             LibraryMessage::ComponentsPanelPlace {
                 library_path,

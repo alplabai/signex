@@ -58,17 +58,31 @@ multiple-versions = "warn"
 deny = [{ name = "glyphon" }]
 
 [advisories]
-# Surface RUSTSEC advisories at "warn" — security advisories are
-# informational in CI (the workflow's `check advisories` step is
-# continue-on-error: true). Critical advisories should still be
-# addressed by a human. Currently carried, all transitive GUI-stack
-# deps with no clean lockfile remedy (pinned by iced/winit):
-#   RUSTSEC-2026-0194 / -0195  quick-xml 0.39 (DoS) — needs >=0.41,
-#     but wayland-scanner pins 0.39; revisit on an iced/winit bump.
-#   RUSTSEC-2026-0192          ttf-parser 0.25 unmaintained — no
-#     safe upgrade; comes via cosmic-text / fontdb.
+# Fixable advisories are fixed by upgrading (quick-xml, anyhow, h2, rustls,
+# zip, git2, lopdf, ...). What remains below are "unmaintained" notices with
+# no patched release to move to; each is a transitive dep (GUI/font/image/PDF
+# stacks, tantivy search) or a direct font dep, and none is a reachable
+# vulnerability. Every entry has a review date; re-run `cargo deny check`
+# then and drop each entry whose upstream has moved on.
 yanked = "warn"
-ignore = []
+ignore = [
+    # core2 0.4.0 (yanked, unmaintained) <- bitstream-io <- rav1e <- image (AVIF).
+    { id = "RUSTSEC-2026-0105", reason = "unmaintained, no upgrade; via image/rav1e/bitstream-io. Review 2027-01-22" },
+    # instant 0.1.13 <- measure_time <- tantivy 0.22 (signex-library search).
+    { id = "RUSTSEC-2024-0384", reason = "unmaintained, no upgrade; via tantivy/measure_time. Review 2027-01-22" },
+    # paste 1.0.15 <- metal <- wgpu-hal (iced renderer).
+    { id = "RUSTSEC-2024-0436", reason = "unmaintained proc-macro, build-time only; via wgpu/metal. Review 2027-01-22" },
+    # rustybuzz 0.20.1 <- usvg <- resvg <- iced_tiny_skia.
+    { id = "RUSTSEC-2026-0206", reason = "unmaintained, no upgrade; via resvg/usvg. Review 2027-01-22" },
+    # ttf-parser 0.25.1: direct dep of signex-output (workspace ttf-parser = "0.25"),
+    # plus transitively via fontdb (cosmic-text/cryoglyph, usvg, signex-app),
+    # rustybuzz and lopdf <- pdf-extract <- signex-library.
+    { id = "RUSTSEC-2026-0192", reason = "unmaintained, no upgrade; via signex-output (direct), fontdb, rustybuzz, lopdf. Review 2027-01-22" },
+    # zbus_names / zvariant / zvariant_derive <- zbus <- mundy <- iced_winit.
+    { id = "RUSTSEC-2026-0371", reason = "unmaintained, no upgrade; via zbus/mundy/iced_winit. Review 2027-01-22" },
+    { id = "RUSTSEC-2026-0370", reason = "unmaintained, no upgrade; via zbus/mundy/iced_winit. Review 2027-01-22" },
+    { id = "RUSTSEC-2026-0372", reason = "unmaintained, no upgrade; via zbus/mundy/iced_winit. Review 2027-01-22" },
+]
 
 [sources]
 # Only crates.io and the official rust-lang git registry are allowed.
