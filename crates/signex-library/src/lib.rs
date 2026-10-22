@@ -107,6 +107,10 @@ pub fn enable_project_version_control(
 ) -> Result<(), adapter::LibraryError> {
     use adapter::LibraryError;
 
+    // First statement, before anything touches disk: a refusal must leave a
+    // user's existing .gitignore / .gitattributes exactly as they were.
+    let (sig_name, sig_email) = git_identity::identity_for_default_config()?;
+
     if project_dir.join(".git").exists() {
         return Err(LibraryError::Conflict(format!(
             "{} already has a .git directory",
@@ -161,10 +165,6 @@ pub fn enable_project_version_control(
         LibraryError::Backend(format!("git init: {e}"))
     })?;
 
-    let (sig_name, sig_email) = git_identity::identity_for_repo(&repo).inspect_err(|_| {
-        cleanup(project_dir, wrote_lfs_attributes, wrote_gitignore);
-        let _ = std::fs::remove_dir_all(project_dir.join(".git"));
-    })?;
     let sig = git2::Signature::now(&sig_name, &sig_email)
         .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
 

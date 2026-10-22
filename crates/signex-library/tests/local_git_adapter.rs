@@ -28,6 +28,7 @@ use signex_library::primitive::{
 use uuid::Uuid;
 
 fn empty_snx_manifest(name: &str, review_required: bool) -> SnxlibManifest {
+    signex_library::git_identity::test_identity::install();
     SnxlibManifest {
         format: FORMAT_TOKEN.into(),
         library_id: Uuid::now_v7(),

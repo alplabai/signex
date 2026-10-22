@@ -5,6 +5,19 @@ use super::*;
 use crate::git_identity::identity_for_repo;
 
 impl LocalGitAdapter {
+    /// Refuse before a write when the commit that must follow cannot be made.
+    /// A library without `.git/` never commits, so it never needs an identity.
+    /// Called first in every write-then-commit path so a refusal changes
+    /// nothing on disk or in memory.
+    fn ensure_commit_identity(&self) -> Result<(), LibraryError> {
+        if !self.root_dir.join(".git").exists() {
+            return Ok(());
+        }
+        let repo = git2::Repository::open(&self.root_dir)
+            .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
+        identity_for_repo(&repo).map(|_| ())
+    }
+
     fn primitive_dir(&self, kind: PrimitiveKind) -> PathBuf {
         self.root_dir.join(primitive_subdir(kind))
     }
@@ -91,6 +104,7 @@ impl LocalGitAdapter {
         value: &T,
         message: &str,
     ) -> Result<(), LibraryError> {
+        self.ensure_commit_identity()?;
         let dir = self.primitive_dir(kind);
         fs::create_dir_all(&dir)?;
         let rel_path = format!("{}/{uuid}.{}", primitive_subdir(kind), primitive_ext(kind));
@@ -288,6 +302,7 @@ impl LocalGitAdapter {
     where
         F: FnOnce(&mut LibraryFile) -> Result<bool, LibraryError>,
     {
+        self.ensure_commit_identity()?;
         let mut guard = self
             .library_file
             .write()
@@ -367,6 +382,7 @@ impl LocalGitAdapter {
         sym: Symbol,
         message: &str,
     ) -> Result<(), LibraryError> {
+        self.ensure_commit_identity()?;
         let dir = self.primitive_dir(PrimitiveKind::Symbol);
         fs::create_dir_all(&dir)?;
 

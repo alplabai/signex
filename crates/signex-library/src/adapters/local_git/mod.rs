@@ -259,7 +259,13 @@ impl LocalGitAdapter {
         // Refuse before `git init` touches disk: an unresolvable user
         // identity must not leave a fresh, unborn `.git/` behind (that
         // would hide the GitMissing recovery on the next open).
-        crate::git_identity::identity_for_default_config()?;
+        // When a repo already exists (re-init of a repo whose `.git` was not
+        // deleted) its own config counts, as it does for every later commit.
+        let preflight = match git2::Repository::open(&root_dir) {
+            Ok(existing) => identity_for_repo(&existing),
+            Err(_) => crate::git_identity::identity_for_default_config(),
+        };
+        preflight?;
 
         // `git2::Repository::init` is idempotent on an already-init'd
         // working tree, so this also handles the "git was *not*
@@ -390,6 +396,7 @@ mod tests {
 
     #[test]
     fn init_creates_snxlib_file_and_repo() {
+        crate::git_identity::test_identity::install();
         let dir = tempfile::tempdir().unwrap();
         let path = fixture_snxlib_path(&dir, "Test");
         // Default `LibraryInitOptions` flips `enable_git` off; this
@@ -431,6 +438,7 @@ mod tests {
 
     #[test]
     fn lfs_opt_in_writes_gitattributes() {
+        crate::git_identity::test_identity::install();
         let dir = tempfile::tempdir().unwrap();
         let path = fixture_snxlib_path(&dir, "Lfs");
         let adapter = LocalGitAdapter::init(

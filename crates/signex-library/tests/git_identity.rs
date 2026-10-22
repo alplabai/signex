@@ -6,7 +6,7 @@
 
 #![cfg(feature = "local-git")]
 
-use signex_library::adapter::LibraryError;
+use signex_library::adapter::{LibraryAdapter, LibraryError};
 use signex_library::adapters::local_git::{LibraryInitOptions, LocalGitAdapter};
 use signex_library::enable_project_version_control;
 use signex_library::library_file::{FORMAT_TOKEN, LibrarySection, SnxlibManifest};
@@ -65,6 +65,54 @@ fn commits_use_the_user_identity_and_refuse_without_one() {
         }
     }
 
+    // OS-user / host hints must never stand in for an identity.
+    unsafe {
+        std::env::set_var("USER", "osuser");
+        std::env::set_var("USERNAME", "osuser");
+        std::env::set_var("EMAIL", "osuser@example.org");
+        std::env::set_var("HOSTNAME", "somehost");
+        std::env::set_var("COMPUTERNAME", "somehost");
+    }
+
+    // --- Existing user files survive a refused Enable Version Control. ---
+    let precious = tempfile::tempdir().unwrap();
+    std::fs::write(precious.path().join("a.snxprj"), "x").unwrap();
+    std::fs::write(
+        precious.path().join(".gitignore"),
+        "my-precious-rules
+",
+    )
+    .unwrap();
+    std::fs::write(
+        precious.path().join(".gitattributes"),
+        "*.x text
+",
+    )
+    .unwrap();
+    let err = enable_project_version_control(
+        precious.path(),
+        true,
+        Some(
+            "*.tmp
+",
+        ),
+    )
+    .unwrap_err();
+    assert!(matches!(&err, LibraryError::Backend(m) if m.contains("identity not configured")));
+    assert_eq!(
+        std::fs::read_to_string(precious.path().join(".gitignore")).unwrap(),
+        "my-precious-rules
+",
+        "a refusal must not touch the user's .gitignore"
+    );
+    assert_eq!(
+        std::fs::read_to_string(precious.path().join(".gitattributes")).unwrap(),
+        "*.x text
+",
+        "a refusal must not touch the user's .gitattributes"
+    );
+    assert!(!precious.path().join(".git").exists());
+
     // --- No identity: project VC refuses, leaves nothing behind. ---
     let proj = tempfile::tempdir().unwrap();
     std::fs::write(proj.path().join("a.snxprj"), "x").unwrap();
@@ -114,7 +162,7 @@ fn commits_use_the_user_identity_and_refuse_without_one() {
         ("Ada Lovelace".into(), "ada@example.org".into())
     );
 
-    LocalGitAdapter::init(
+    let adapter = LocalGitAdapter::init(
         &file,
         manifest(),
         LibraryInitOptions {
@@ -126,5 +174,51 @@ fn commits_use_the_user_identity_and_refuse_without_one() {
     assert_eq!(
         head_author(file.parent().unwrap()),
         ("Ada Lovelace".into(), "ada@example.org".into())
+    );
+
+    // --- Identity lost later: a write-then-commit path changes nothing. ---
+    unsafe {
+        std::env::remove_var("GIT_AUTHOR_NAME");
+        std::env::remove_var("GIT_AUTHOR_EMAIL");
+    }
+    let before = std::fs::read(&file).unwrap();
+    let head_before = git2::Repository::open(file.parent().unwrap())
+        .unwrap()
+        .head()
+        .unwrap()
+        .target()
+        .unwrap();
+    let err = adapter
+        .create_empty_table("fresh_table", "")
+        .expect_err("no identity must refuse");
+    assert!(err.to_string().contains("identity not configured"), "{err}");
+    assert_eq!(std::fs::read(&file).unwrap(), before, "file untouched");
+    assert_eq!(
+        git2::Repository::open(file.parent().unwrap())
+            .unwrap()
+            .head()
+            .unwrap()
+            .target()
+            .unwrap(),
+        head_before,
+        "no commit made"
+    );
+    assert!(
+        !adapter
+            .list_tables()
+            .map(|t| t.iter().any(|n| n == "fresh_table"))
+            .unwrap_or(false),
+        "in-memory library must not carry the refused edit"
+    );
+
+    // --- A repo-local identity is honoured by re-init of an existing repo. ---
+    let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
+    let mut cfg = repo.config().unwrap();
+    cfg.set_str("user.name", "Local User").unwrap();
+    cfg.set_str("user.email", "local@example.org").unwrap();
+    LocalGitAdapter::recover_init(&file).expect("repo-local identity is enough");
+    assert_eq!(
+        head_author(file.parent().unwrap()),
+        ("Local User".into(), "local@example.org".into())
     );
 }
