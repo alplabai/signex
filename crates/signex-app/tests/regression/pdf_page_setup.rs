@@ -112,7 +112,7 @@ fn custom_size_takes_typed_millimetres_and_keeps_the_old_value_on_garbage() {
     );
     assert!((first_page_aspect(&app) - 4.0).abs() < 0.05);
 
-    for bad in ["", "abc", "-5", "0"] {
+    for bad in ["", "abc", "-5", "0", "9.9"] {
         send(&mut app, PrintPreviewMsg::SetCustomWidth(bad.into()));
         assert_eq!(
             preview(&app).pdf_options.page_size,
@@ -122,7 +122,7 @@ fn custom_size_takes_typed_millimetres_and_keeps_the_old_value_on_garbage() {
             },
             "{bad:?}"
         );
-        assert!(preview(&app).page_setup.notice.is_some(), "{bad:?}");
+        assert!(preview(&app).page_setup.notice().is_some(), "{bad:?}");
     }
 }
 
@@ -154,7 +154,7 @@ fn margins_apply_clamp_and_reject_without_losing_the_last_good_value() {
             PrintPreviewMsg::SetMargin(MarginEdge::Left, bad.into()),
         );
         assert_eq!(preview(&app).pdf_options.margins.left_mm, 25.0, "{bad:?}");
-        assert!(preview(&app).page_setup.notice.is_some(), "{bad:?}");
+        assert!(preview(&app).page_setup.notice().is_some(), "{bad:?}");
     }
 
     // A4 landscape is 297 mm wide: a 900 mm margin is limited to fit.
@@ -164,7 +164,7 @@ fn margins_apply_clamp_and_reject_without_losing_the_last_good_value() {
     );
     let m = preview(&app).pdf_options.margins;
     assert!(m.left_mm + m.right_mm < 297.0, "{m:?}");
-    assert!(preview(&app).page_setup.notice.is_some());
+    assert!(preview(&app).page_setup.notice().is_some());
 }
 
 #[test]
@@ -185,11 +185,124 @@ fn percent_scale_reaches_pdf_scale_and_rejects_garbage() {
             PdfScale::Percent(50.0),
             "{bad:?}"
         );
-        assert!(preview(&app).page_setup.notice.is_some(), "{bad:?}");
+        assert!(preview(&app).page_setup.notice().is_some(), "{bad:?}");
     }
     send(
         &mut app,
         PrintPreviewMsg::SetScaleMode(PdfScaleMode::OneToOne),
     );
     assert_eq!(preview(&app).pdf_options.scale, PdfScale::OneToOne);
+}
+
+#[test]
+fn shrinking_the_page_refits_margins_and_says_so() {
+    let mut app = app_with_sheet("A4");
+    send(&mut app, PrintPreviewMsg::SetPageSize(PageSize::IsoA0));
+    for edge in [MarginEdge::Left, MarginEdge::Right] {
+        send(&mut app, PrintPreviewMsg::SetMargin(edge, "200".into()));
+    }
+    assert!(preview(&app).page_setup.notice().is_none());
+
+    send(&mut app, PrintPreviewMsg::SetPageSize(PageSize::IsoA5));
+
+    let m = preview(&app).pdf_options.margins;
+    let (w, _) = PageSize::IsoA5.dimensions_mm(preview(&app).pdf_options.orientation);
+    assert!(m.left_mm + m.right_mm < w, "{m:?}");
+    let notice = preview(&app).page_setup.notice().expect("refit notice");
+    assert!(notice.contains("reduced"), "{notice}");
+    // The text boxes show the refitted values, not the old 200.
+    assert_ne!(
+        preview(&app).page_setup.margin_text(MarginEdge::Left),
+        "200"
+    );
+}
+
+#[test]
+fn a_valid_edit_does_not_clear_another_fields_rejection() {
+    let mut app = app_with_sheet("A4");
+    send(
+        &mut app,
+        PrintPreviewMsg::SetMargin(MarginEdge::Left, "abc".into()),
+    );
+    send(
+        &mut app,
+        PrintPreviewMsg::SetMargin(MarginEdge::Right, "12".into()),
+    );
+    assert_eq!(preview(&app).pdf_options.margins.right_mm, 12.0);
+    let notice = preview(&app).page_setup.notice().expect("still rejected");
+    assert!(notice.contains("Left margin"), "{notice}");
+
+    send(
+        &mut app,
+        PrintPreviewMsg::SetMargin(MarginEdge::Left, "15".into()),
+    );
+    assert!(preview(&app).page_setup.notice().is_none());
+}
+
+#[test]
+fn custom_orientation_follows_the_page_shape() {
+    let mut app = app_with_sheet("A4");
+    send(
+        &mut app,
+        PrintPreviewMsg::SetPageSize(
+            PageSizeKind::Custom.select(PageSize::IsoA4, Orientation::Landscape),
+        ),
+    );
+    send(&mut app, PrintPreviewMsg::SetCustomWidth("100".into()));
+    send(&mut app, PrintPreviewMsg::SetCustomHeight("200".into()));
+    assert_eq!(preview(&app).pdf_options.orientation, Orientation::Portrait);
+
+    // The picker is not offered for Custom; a stray message changes nothing.
+    send(
+        &mut app,
+        PrintPreviewMsg::SetOrientation(Orientation::Landscape),
+    );
+    assert_eq!(preview(&app).pdf_options.orientation, Orientation::Portrait);
+    assert_eq!(
+        preview(&app).pdf_options.page_size,
+        PageSize::Custom {
+            width_mm: 100.0,
+            height_mm: 200.0
+        }
+    );
+
+    send(&mut app, PrintPreviewMsg::SetCustomWidth("300".into()));
+    assert_eq!(
+        preview(&app).pdf_options.orientation,
+        Orientation::Landscape
+    );
+}
+
+#[test]
+fn custom_page_edges_have_a_lower_bound_so_margins_cannot_collapse() {
+    let mut app = app_with_sheet("A4");
+    send(
+        &mut app,
+        PrintPreviewMsg::SetPageSize(
+            PageSizeKind::Custom.select(PageSize::IsoA4, Orientation::Landscape),
+        ),
+    );
+    let before = preview(&app).pdf_options.page_size;
+    for tiny in ["9", "1", "0.5"] {
+        send(&mut app, PrintPreviewMsg::SetCustomWidth(tiny.into()));
+        send(&mut app, PrintPreviewMsg::SetCustomHeight(tiny.into()));
+        assert_eq!(preview(&app).pdf_options.page_size, before, "{tiny}");
+    }
+    assert!(preview(&app).page_setup.notice().is_some());
+
+    send(&mut app, PrintPreviewMsg::SetCustomWidth("10".into()));
+    send(&mut app, PrintPreviewMsg::SetCustomHeight("10".into()));
+    let opts = &preview(&app).pdf_options;
+    assert_eq!(
+        opts.page_size,
+        PageSize::Custom {
+            width_mm: 10.0,
+            height_mm: 10.0
+        }
+    );
+    let m = opts.margins;
+    assert!(
+        m.left_mm + m.right_mm < 10.0 && m.top_mm + m.bottom_mm < 10.0,
+        "{m:?}"
+    );
 }

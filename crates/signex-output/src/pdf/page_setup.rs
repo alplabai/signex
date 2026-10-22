@@ -13,6 +13,9 @@ use super::{Margins, Orientation, PageSize, PdfScale};
 
 /// Largest page edge a PDF viewer accepts (14 400 pt).
 pub const MAX_PAGE_EDGE_MM: f64 = 5080.0;
+/// Smallest Custom page edge. Below this the default margins would consume the
+/// whole page, so a Custom page is never allowed to get that small.
+pub const MIN_CUSTOM_EDGE_MM: f64 = 10.0;
 /// Largest accepted scale percentage.
 pub const MAX_SCALE_PERCENT: f64 = 10_000.0;
 /// Printable area every axis must keep after margins (matches the layout floor).
@@ -29,6 +32,8 @@ pub enum PageSetupError {
     NotPositive,
     #[error("must be at most {0}")]
     TooLarge(f64),
+    #[error("must be at least {0} mm")]
+    TooSmall(f64),
     #[error("no room left on the page for this margin")]
     NoRoom,
 }
@@ -56,6 +61,16 @@ fn parse_finite_positive(text: &str, max: f64) -> Result<f64, PageSetupError> {
 /// Parse a millimetre length (page edge or margin): finite, > 0, within a PDF page.
 pub fn parse_mm(text: &str) -> Result<f64, PageSetupError> {
     parse_finite_positive(text, MAX_PAGE_EDGE_MM)
+}
+
+/// Parse a Custom page edge in millimetres: like [`parse_mm`] but at least
+/// [`MIN_CUSTOM_EDGE_MM`], so the margins can never swallow the page.
+pub fn parse_custom_edge_mm(text: &str) -> Result<f64, PageSetupError> {
+    let value = parse_mm(text)?;
+    if value < MIN_CUSTOM_EDGE_MM {
+        return Err(PageSetupError::TooSmall(MIN_CUSTOM_EDGE_MM));
+    }
+    Ok(value)
 }
 
 /// Parse a scale percentage: finite, > 0, at most [`MAX_SCALE_PERCENT`].
@@ -395,6 +410,20 @@ mod tests {
             bottom_mm: m,
             left_mm: m,
         }
+    }
+
+    #[test]
+    fn custom_edge_has_a_lower_bound() {
+        for small in ["9.99", "5", "0.5"] {
+            assert_eq!(
+                parse_custom_edge_mm(small),
+                Err(PageSetupError::TooSmall(MIN_CUSTOM_EDGE_MM)),
+                "{small}"
+            );
+        }
+        assert_eq!(parse_custom_edge_mm("10"), Ok(10.0));
+        assert!(parse_custom_edge_mm("0").is_err());
+        assert!(parse_custom_edge_mm("abc").is_err());
     }
 
     #[test]

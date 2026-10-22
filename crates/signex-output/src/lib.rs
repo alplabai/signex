@@ -31,9 +31,10 @@ pub use erc::{
 };
 pub use netlist::{NetlistExporter, NetlistOptions, NetlistOutput};
 pub use pdf::{
-    ColourMode, MAX_PAGE_EDGE_MM, MAX_SCALE_PERCENT, MIN_PRINTABLE_MM, MarginEdge, MarginUpdate,
-    Margins, Orientation, PageRange, PageSetupError, PageSize, PageSizeKind, PdfExporter,
-    PdfOptions, PdfOutput, PdfScale, PdfScaleMode, SchematicPalette, parse_mm, parse_percent,
+    ColourMode, MAX_PAGE_EDGE_MM, MAX_SCALE_PERCENT, MIN_CUSTOM_EDGE_MM, MIN_PRINTABLE_MM,
+    MarginEdge, MarginUpdate, Margins, Orientation, PageRange, PageSetupError, PageSize,
+    PageSizeKind, PdfExporter, PdfOptions, PdfOutput, PdfScale, PdfScaleMode, SchematicPalette,
+    parse_custom_edge_mm, parse_mm, parse_percent,
 };
 pub use preview::{PreviewOptions, PreviewPage, PreviewRasterizer};
 pub use substitution::{SubstitutionContext, resolve};

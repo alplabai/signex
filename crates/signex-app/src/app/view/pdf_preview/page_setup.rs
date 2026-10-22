@@ -48,20 +48,31 @@ impl Signex {
             },
         )
         .text_size(FIELD_TEXT);
-        let orientation_picker = pick_list(
-            vec![
-                signex_output::Orientation::Portrait,
-                signex_output::Orientation::Landscape,
-            ],
-            Some(orientation),
-            |o| Message::PrintPreview(PrintPreviewMsg::SetOrientation(o)),
-        )
-        .text_size(FIELD_TEXT);
+        // A Custom page is exactly the width and height entered, so its
+        // orientation is derived from them and shown, not picked.
+        let orientation_control: Element<'static, Message> =
+            if matches!(current_size, PageSize::Custom { .. }) {
+                text(orientation.to_string())
+                    .size(FIELD_TEXT)
+                    .color(text_muted)
+                    .into()
+            } else {
+                pick_list(
+                    vec![
+                        signex_output::Orientation::Portrait,
+                        signex_output::Orientation::Landscape,
+                    ],
+                    Some(orientation),
+                    |o| Message::PrintPreview(PrintPreviewMsg::SetOrientation(o)),
+                )
+                .text_size(FIELD_TEXT)
+                .into()
+            };
 
         let mut controls = row![
             text("Page").size(FIELD_TEXT).color(text_muted),
             size_picker,
-            orientation_picker,
+            orientation_control,
         ]
         .spacing(8)
         .align_y(iced::Alignment::Center);
@@ -100,10 +111,10 @@ impl Signex {
         &self,
         preview: &crate::app::state::PreviewState,
     ) -> Element<'static, Message> {
-        match &preview.page_setup.notice {
+        match preview.page_setup.notice() {
             Some(message) => {
                 let error_c = crate::styles::ti(self.document_state.panel_ctx.tokens.error);
-                iced::widget::text(message.clone())
+                iced::widget::text(message.to_string())
                     .size(FIELD_TEXT)
                     .color(error_c)
                     .into()

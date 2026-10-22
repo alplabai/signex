@@ -568,3 +568,97 @@ fn media_box_matches_every_selectable_page_size_and_custom() {
         "{w}x{h}"
     );
 }
+
+/// The `x y m` move-to points of the exported content streams, in order.
+fn move_to_points(bytes: &[u8]) -> Vec<(f64, f64)> {
+    String::from_utf8_lossy(bytes)
+        .lines()
+        .filter_map(|line| {
+            let mut parts = line.split_whitespace();
+            let (x, y, op) = (parts.next()?, parts.next()?, parts.next()?);
+            (op == "m" && parts.next().is_none()).then_some(())?;
+            Some((x.parse().ok()?, y.parse().ok()?))
+        })
+        .collect()
+}
+
+fn wire_ctx() -> ExportContext {
+    use signex_types::schematic::{Point, Wire};
+
+    let mut sheet = empty_sheet();
+    sheet.wires.push(Wire {
+        uuid: uuid::Uuid::nil(),
+        start: Point::new(0.0, 0.0),
+        end: Point::new(50.0, 20.0),
+        stroke_width: 0.15,
+    });
+    let mut ctx = sample_ctx(1);
+    ctx.sheets[0].schematic = sheet;
+    ctx
+}
+
+fn one_to_one_with(margins: Margins) -> PdfOptions {
+    PdfOptions {
+        page_size: PageSize::IsoA4,
+        orientation: Orientation::Landscape,
+        scale: PdfScale::OneToOne,
+        margins,
+        ..Default::default()
+    }
+}
+
+#[test]
+fn margins_move_the_content_in_the_exported_pdf() {
+    let pt = |mm: f64| mm * 72.0 / 25.4;
+    let ctx = wire_ctx();
+    let even = |mm: f64| Margins {
+        top_mm: mm,
+        right_mm: mm,
+        bottom_mm: mm,
+        left_mm: mm,
+    };
+    let base = PdfExporter
+        .export(&ctx, &one_to_one_with(even(10.0)))
+        .expect("export");
+    let base_points = move_to_points(&base.bytes);
+    assert!(!base_points.is_empty(), "content stream has move-to ops");
+
+    // Widening only the left margin by 20 mm shifts the drawing right by 20 mm.
+    let left = PdfExporter
+        .export(
+            &ctx,
+            &one_to_one_with(Margins {
+                left_mm: 30.0,
+                ..even(10.0)
+            }),
+        )
+        .expect("export");
+    let left_points = move_to_points(&left.bytes);
+    assert_eq!(left_points.len(), base_points.len());
+    assert!(
+        base_points
+            .iter()
+            .zip(&left_points)
+            .any(|(a, b)| (b.0 - a.0 - pt(20.0)).abs() < 0.05 && (b.1 - a.1).abs() < 0.05),
+        "no move-to point shifted right by 20 mm"
+    );
+
+    // Widening only the top margin by 20 mm shifts it down (PDF y points up).
+    let top = PdfExporter
+        .export(
+            &ctx,
+            &one_to_one_with(Margins {
+                top_mm: 30.0,
+                ..even(10.0)
+            }),
+        )
+        .expect("export");
+    let top_points = move_to_points(&top.bytes);
+    assert!(
+        base_points
+            .iter()
+            .zip(&top_points)
+            .any(|(a, b)| (a.1 - b.1 - pt(20.0)).abs() < 0.05 && (b.0 - a.0).abs() < 0.05),
+        "no move-to point shifted down by 20 mm"
+    );
+}
