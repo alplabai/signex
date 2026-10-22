@@ -1,11 +1,12 @@
 //! Tests for GPU smoke passes.
 use super::composite::run_grid_overlay_text_composite_smoke_pass_with;
 use super::{
-    CompositeStage, run_arc_smoke_pass, run_arc_smoke_pass_with,
-    run_grid_overlay_text_composite_smoke_pass, run_grid_smoke_pass, run_grid_smoke_pass_with,
-    run_line_circle_smoke_pass, run_line_readback_smoke_pass, run_polygon_readback_smoke_pass,
-    run_polygon_smoke_pass, run_polygon_smoke_pass_with, run_text_geometry_composite_smoke_pass,
-    run_text_smoke_pass, run_text_smoke_pass_with,
+    ARC_READBACK_PX, ARC_READBACK_SCALE, CompositeStage, run_arc_readback_smoke_pass,
+    run_arc_smoke_pass, run_arc_smoke_pass_with, run_grid_overlay_text_composite_smoke_pass,
+    run_grid_smoke_pass, run_grid_smoke_pass_with, run_line_circle_smoke_pass,
+    run_line_readback_smoke_pass, run_polygon_readback_smoke_pass, run_polygon_smoke_pass,
+    run_polygon_smoke_pass_with, run_text_geometry_composite_smoke_pass, run_text_smoke_pass,
+    run_text_smoke_pass_with,
 };
 use crate::primitive::arc::Arc;
 use crate::primitive::line::LineSegment;
@@ -488,5 +489,87 @@ fn grid_overlay_toggles_do_not_change_geometry_draw_work() {
             CompositeStage::Overlay,
             CompositeStage::Text,
         ]
+    );
+}
+
+// Pixel proofs for `arc.wgsl`. The arc is centred at world (8, 8) mm with
+// radius 5 mm on a 64 px square at 4 px/mm, so the ring sits 20 px from pixel
+// (32, 32). Angles are world radians from +X, increasing and wrapping; world
+// +Y runs down the rows, so +90 degrees lands BELOW the centre and an
+// increasing angle turns clockwise on screen.
+const ARC_CENTER_MM: f32 = 8.0;
+const ARC_RADIUS_MM: f32 = 5.0;
+
+fn ring_arc(start_deg: f32, end_deg: f32) -> Arc {
+    Arc {
+        center: [ARC_CENTER_MM, ARC_CENTER_MM],
+        radius: ARC_RADIUS_MM,
+        start_angle: start_deg.to_radians(),
+        end_angle: end_deg.to_radians(),
+        width: 1.0,
+        color: [1.0, 1.0, 1.0, 1.0],
+        _pad: [0.0; 3],
+    }
+}
+
+/// Pixel on the ring at `deg` (world angle, increasing from +X with Y down), the CPU convention.
+fn ring_px(deg: f32) -> (u32, u32) {
+    let (sin, cos) = deg.to_radians().sin_cos();
+    let to_px = |mm: f32| (mm * ARC_READBACK_SCALE).round() as u32;
+    (
+        to_px(ARC_CENTER_MM + ARC_RADIUS_MM * cos),
+        to_px(ARC_CENTER_MM + ARC_RADIUS_MM * sin),
+    )
+}
+
+/// Reads the red channel at each ring angle, in order.
+fn arc_reds(arc: Arc, angles_deg: &[f32]) -> Vec<u8> {
+    let samples: Vec<(u32, u32)> = angles_deg.iter().map(|&a| ring_px(a)).collect();
+    pollster::block_on(run_arc_readback_smoke_pass(arc, &samples)).expect("arc readback pass")
+}
+
+fn assert_lit(arc: Arc, angles_deg: &[f32]) {
+    for (deg, red) in angles_deg.iter().zip(arc_reds(arc, angles_deg)) {
+        assert!(red > 200, "ring at {deg} deg should be lit, red={red}");
+    }
+}
+
+fn assert_dark(arc: Arc, angles_deg: &[f32]) {
+    for (deg, red) in angles_deg.iter().zip(arc_reds(arc, angles_deg)) {
+        assert!(red < 60, "ring at {deg} deg should be dark, red={red}");
+    }
+}
+
+/// A 0..90 degree arc is lit through its sweep and dark everywhere a mirrored
+/// (-90..0) or wrong-way (the 270 degree complement) shader would light.
+#[test]
+fn a_quarter_arc_is_lit_in_its_sweep_and_dark_outside_it() {
+    let arc = ring_arc(0.0, 90.0);
+    assert_lit(arc, &[20.0, 45.0, 70.0]);
+    // Mirror image across the X axis, then the complement's far side.
+    assert_dark(arc, &[-20.0, -45.0, -70.0, 135.0, 180.0, 225.0, 270.0]);
+}
+
+/// `330 -> 30` sweeps 60 degrees of increasing angle through the 0/360 seam, not the 300
+/// degree complement.
+#[test]
+fn a_wrapped_arc_lights_the_side_through_the_seam() {
+    let arc = ring_arc(330.0, 30.0);
+    assert_lit(arc, &[340.0, 0.0, 20.0]);
+    assert_dark(arc, &[90.0, 180.0, 270.0, 60.0, 300.0]);
+}
+
+/// A whole turn is a circle, not the zero-length sweep it wraps to.
+#[test]
+fn a_full_turn_arc_lights_all_four_quadrants() {
+    let arc = ring_arc(0.0, 360.0);
+    assert_lit(arc, &[45.0, 135.0, 225.0, 315.0]);
+    // The ring only: the centre stays dark.
+    let centre = (ARC_READBACK_PX / 2, ARC_READBACK_PX / 2);
+    let reds = pollster::block_on(run_arc_readback_smoke_pass(arc, &[centre])).expect("centre");
+    assert!(
+        reds[0] < 60,
+        "circle interior should be dark, red={}",
+        reds[0]
     );
 }
