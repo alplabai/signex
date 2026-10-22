@@ -115,3 +115,8 @@ mod library_components_panel_actions;
 mod library_git_recovery;
 #[path = "regression/start_screen.rs"]
 mod start_screen;
+
+#[path = "regression/save_as_by_document_kind.rs"]
+mod save_as_by_document_kind;
+#[path = "regression/stable_addressing.rs"]
+mod stable_addressing;

@@ -564,16 +564,20 @@ impl Signex {
         }
         editor.file.symbols.remove(idx);
         editor.file.updated = chrono::Utc::now();
-        // Clamp active_idx into the new range — if the user deleted
-        // the active symbol or one before it, the next-best is the
-        // symbol that took its slot (or the last one if we removed
-        // the tail).
-        if editor.active_idx >= editor.file.symbols.len() {
+        // A sibling before the active one shifted it down a slot: follow
+        // it. Deleting the active symbol lands on the one that took its
+        // slot (or the last, when the tail went).
+        let active_moved = idx <= editor.active_idx;
+        if idx < editor.active_idx {
+            editor.active_idx -= 1;
+        } else if editor.active_idx >= editor.file.symbols.len() {
             editor.active_idx = editor.file.symbols.len() - 1;
         }
-        editor.active_part = 1;
-        editor.selected = None;
-        Self::reset_symbol_viewport(editor);
+        if active_moved {
+            editor.active_part = 1;
+            editor.selected = None;
+            Self::reset_symbol_viewport(editor);
+        }
         editor.dirty = true;
         let path = editor.path.clone();
         self.document_state.dirty_paths.insert(path.clone());

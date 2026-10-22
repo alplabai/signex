@@ -44,6 +44,7 @@ fn wire(a: Point, b: Point) -> Wire {
         start: a,
         end: b,
         stroke_width: 0.0,
+        unknown_columns: Default::default(),
     }
 }
 
