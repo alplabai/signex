@@ -121,6 +121,21 @@ impl Rig {
         )
     }
 
+    fn home(&mut self) -> bool {
+        self.send(
+            Event::Keyboard(keyboard::Event::KeyPressed {
+                key: keyboard::Key::Named(keyboard::key::Named::Home),
+                modified_key: keyboard::Key::Named(keyboard::key::Named::Home),
+                physical_key: keyboard::key::Physical::Code(keyboard::key::Code::Home),
+                location: keyboard::Location::Standard,
+                modifiers: keyboard::Modifiers::default(),
+                text: None,
+                repeat: false,
+            }),
+            Some((0.0, 0.0)),
+        )
+    }
+
     /// A press-drag-release of the Select tool from `from` to `to`.
     fn drag(&mut self, from: (f64, f64), to: (f64, f64)) {
         self.press(from);
@@ -347,7 +362,12 @@ fn fit_uses_the_real_canvas_size_not_a_hardcoded_viewport() {
     s.graphics.push(rectangle([-5.08, -2.54], [5.08, 2.54]));
     let mut rig = Rig::new(s);
 
-    rig.editor.pending_view = Some(crate::app::SymbolViewRequest::Fit);
+    // The real path: the Home key publishes `Fit`, which only queues.
+    rig.home();
+    assert!(
+        rig.editor.pending_view.is_some(),
+        "Home must queue a fit, not apply a guessed viewport"
+    );
     // Any event tick lets the canvas report its measured size.
     rig.send(
         Event::Window(iced::window::Event::RedrawRequested(
@@ -363,5 +383,28 @@ fn fit_uses_the_real_canvas_size_not_a_hardcoded_viewport() {
         "symbol centre {centre:?} should sit at the middle of the {}x{} canvas",
         BOUNDS.width,
         BOUNDS.height
+    );
+}
+
+#[test]
+fn a_pending_fit_does_not_swallow_the_event_that_triggers_the_measurement() {
+    let mut s = Symbol::empty("T");
+    s.pins.push(pin("1", 0.0, 0.0, PinOrientation::Right));
+    let mut rig = Rig::new(s);
+
+    rig.press((0.0, 0.0));
+    rig.moved((0.0, 2.54));
+    assert!(rig.editor.mid_drag, "the drag is under way");
+    rig.home();
+    assert!(rig.editor.pending_view.is_some());
+
+    // The release arrives while the fit is still queued: it must both
+    // measure/apply the view and end the drag.
+    rig.release((0.0, 2.54));
+
+    assert_eq!(rig.editor.pending_view, None, "the view was applied");
+    assert!(
+        !rig.editor.mid_drag,
+        "the release still committed the drag gesture"
     );
 }

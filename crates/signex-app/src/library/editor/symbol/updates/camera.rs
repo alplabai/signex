@@ -30,7 +30,7 @@ pub(super) fn apply_symbol_camera(editor: &mut SymEditor, msg: SymbolEditorMsg) 
             editor.pending_view = Some(SymbolViewRequest::Fit);
             editor.canvas_cache.clear();
         }
-        SymbolEditorMsg::ViewportMeasured { width, height } => {
+        SymbolEditorMsg::ViewportMeasured { width, height, .. } => {
             apply_pending_view(editor, width, height);
         }
         SymbolEditorMsg::CursorAt { x_mm, y_mm } => {

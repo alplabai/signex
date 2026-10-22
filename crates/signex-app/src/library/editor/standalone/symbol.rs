@@ -344,9 +344,15 @@ pub(crate) fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -
         CanvasAction::Pan { dx, dy } => SymbolEditorMsg::Pan { dx, dy },
         CanvasAction::Zoom { sx, sy, delta } => SymbolEditorMsg::Zoom { sx, sy, delta },
         CanvasAction::Fit => SymbolEditorMsg::Fit,
-        CanvasAction::ViewportMeasured { width, height } => {
-            SymbolEditorMsg::ViewportMeasured { width, height }
-        }
+        CanvasAction::ViewportMeasured {
+            width,
+            height,
+            then,
+        } => SymbolEditorMsg::ViewportMeasured {
+            width,
+            height,
+            then: then.map(|action| Box::new(symbol_action_to_primitive_msg(*action))),
+        },
         CanvasAction::CursorAt { x_mm, y_mm } => SymbolEditorMsg::CursorAt { x_mm, y_mm },
         CanvasAction::DragCommit => SymbolEditorMsg::DragCommit,
         CanvasAction::Undo => SymbolEditorMsg::Undo,

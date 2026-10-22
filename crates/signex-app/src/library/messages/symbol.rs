@@ -147,7 +147,13 @@ pub enum SymbolEditorMsg {
 
     /// The canvas measured its real size while a Fit / centre-origin
     /// camera request was queued; applies that request against it.
-    ViewportMeasured { width: f32, height: f32 },
+    ViewportMeasured {
+        width: f32,
+        height: f32,
+        /// The event that triggered the measurement, applied right
+        /// after the view so it is never dropped.
+        then: Option<Box<SymbolEditorMsg>>,
+    },
 
     /// Cursor world position in mm — drives the status footer X/Y
     /// readout. `None` clears the readout when the cursor leaves.

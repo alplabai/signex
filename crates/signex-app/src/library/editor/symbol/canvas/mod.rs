@@ -392,20 +392,11 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<CanvasAction>> {
-        // A queued Fit / centre-origin request needs the real canvas
-        // size, which only the widget knows - report it once and let
-        // the dispatcher apply it (footprint-editor parity).
-        if self.view_pending && bounds.width > 0.0 && bounds.height > 0.0 {
-            return Some(canvas::Action::publish(CanvasAction::ViewportMeasured {
-                width: bounds.width,
-                height: bounds.height,
-            }));
-        }
         // Thin dispatcher — each event kind routes to its extracted
         // `impl SymbolCanvas` method in `input::{tools, pointer,
         // camera, keys}`. Arm order + patterns are identical to the
         // pre-split god-function; behaviour is byte-identical.
-        match event {
+        let routed = match event {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 self.on_left_press(state, bounds, cursor)
             }
@@ -429,7 +420,29 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 self.on_key_pressed(state, key, modifiers)
             }
             _ => None,
+        };
+        // A queued Fit / centre-origin request needs the real canvas
+        // size, which only the widget knows. Report it, and carry the
+        // event's own action along so the dispatcher applies the view
+        // AND still processes the event (a mid-drag release must not
+        // be swallowed by the measurement).
+        if self.view_pending && bounds.width > 0.0 && bounds.height > 0.0 {
+            let (then, status) = routed.map_or((None, iced::event::Status::Ignored), |action| {
+                let (message, _, status) = action.into_inner();
+                (message, status)
+            });
+            let measured = canvas::Action::publish(CanvasAction::ViewportMeasured {
+                width: bounds.width,
+                height: bounds.height,
+                then: then.map(Box::new),
+            });
+            return Some(if status == iced::event::Status::Captured {
+                measured.and_capture()
+            } else {
+                measured
+            });
         }
+        routed
     }
 
     fn mouse_interaction(

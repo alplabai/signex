@@ -126,6 +126,8 @@ pub enum CanvasAction {
     ViewportMeasured {
         width: f32,
         height: f32,
+        /// The event's own action, so measuring never swallows it.
+        then: Option<Box<CanvasAction>>,
     },
     /// Cursor world position update — drives the status footer.
     /// `None` clears the readout when the cursor leaves bounds.
