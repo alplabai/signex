@@ -27,7 +27,8 @@ does something that Signex doesn't yet, that's a valid feature request.
 1. Check the [open issues](https://github.com/alplabai/signex/issues) or
    [milestones](https://github.com/alplabai/signex/milestones) for things to
    work on
-2. Comment on the issue to let us know you're working on it
+2. Claim the issue before you write any code — see
+   [Claiming an issue](#claiming-an-issue)
 3. Fork, branch, code, PR (details below)
 
 ### Improve the KiCad Migration Path
@@ -104,6 +105,56 @@ your local `cargo fmt` output is identical to CI's — run it before you commit
 (or wire it into a local `pre-commit` hook) so the required `fmt · rustfmt`
 check stays green.
 
+## Claiming an issue
+
+Everyone — maintainers, contributors and AI agents — claims an issue on the
+issue itself before starting work, so the issue list always shows who is
+working on what. Two PRs for one issue waste a review cycle and leave one
+author's work closed unmerged.
+
+**See who is working on what:**
+
+```sh
+gh issue list --state open --assignee '*' --json number,title,assignees \
+  -q '.[] | "#\(.number) \([.assignees[].login] | join(",")) — \(.title)"'
+gh pr list --state open --json number,author,title \
+  -q '.[] | "PR #\(.number) \(.author.login) — \(.title)"'
+```
+
+**1. Check it is free.** An issue is taken if any of these is true:
+
+- it has an assignee;
+- a comment says someone is taking it ("taking this", "working on it");
+- an open PR names it (`Closes #N`, `Refs #N`, or the number in its title).
+
+```sh
+gh issue view N --json assignees,comments
+gh pr list --state open --search "N"
+```
+
+If it is taken, do not start. Ask on the issue whether the holder still
+wants it, or pick another one.
+
+**2. Claim it.** Comment on the issue — "Taking this", plus one line on the
+approach or the branch name. Maintainers also assign themselves
+(`gh issue edit N --add-assignee @me`); contributors without triage rights
+just comment and a maintainer assigns them. The assignee is what the issue
+list shows; the comment is what notifies watchers.
+
+**3. Check again before opening the PR.** Work takes hours; someone may have
+claimed or fixed the same issue meanwhile. Re-run the step 1 commands right
+before `gh pr create`. If another open PR already covers the issue, talk to
+its author before opening yours.
+
+**4. Release it if you stop.** Remove the assignee and leave a comment saying
+what you found and where you left it. A stale claim blocks an issue just as
+much as a live one. A claim with no visible activity (no branch, no PR, no
+comment) for 7 days may be taken over after asking on the issue.
+
+**Batch work counts too.** A script or an AI agent that works through several
+issues must run steps 1–2 for each issue before it starts on that issue —
+not once for the whole batch.
+
 ## Git Workflow
 
 ### Branches
@@ -127,7 +178,9 @@ main     ← stable releases only (protected, requires PR + approval)
 4. Ensure `cargo test --workspace` and
    `cargo clippy --workspace --all-targets --all-features` pass
 5. Commit with a descriptive message: `feat: add measure tool (Ctrl+M)`
-6. Push and open a PR against `trunk`
+6. Re-check that no one else has claimed the issue or opened a PR for it
+   ([Claiming an issue](#claiming-an-issue), step 3)
+7. Push and open a PR against `trunk`, with `Closes #N` in the body
 
 ### Commit Messages
 
