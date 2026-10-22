@@ -199,6 +199,9 @@ jobs:
       - name: Discarded-Task ratchet gate
         run: bash scripts/check_discarded_tasks.sh
 
+      - name: Discarded-Task gate controls
+        run: bash scripts/test_check_discarded_tasks.sh
+
   lint-lockstep:
     name: lint lockstep
     runs-on: ubuntu-latest

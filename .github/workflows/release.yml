@@ -18,8 +18,19 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  verify-version:
+    name: Verify tag, Cargo.toml and CHANGELOG agree
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+      - name: Check release version consistency
+        run: bash scripts/check_release_version.sh "$GITHUB_REF"
+
   build:
     name: Build (${{ matrix.target }})
+    needs: verify-version
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
