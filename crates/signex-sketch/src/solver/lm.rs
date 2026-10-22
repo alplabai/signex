@@ -87,19 +87,75 @@ pub fn solve_lm(
     tolerance: f64,
     max_iters: usize,
 ) -> Result<SolveResult, SolveError> {
+    solve_lm_keeping_state(sketch, params, timeout_ms, tolerance, max_iters)
+        .map_err(|failure| failure.error)
+}
+
+/// A failed solve together with the state LM stopped at, so the caller
+/// can inspect the residuals the iteration could not remove.
+#[derive(Debug)]
+pub struct LmFailure {
+    pub error: SolveError,
+    pub state: Vec<f64>,
+    pub index: EntityIndex,
+}
+
+/// [`solve_lm`], but a failure carries the last accepted state.
+pub fn solve_lm_keeping_state(
+    sketch: &SketchData,
+    params: &ResolvedParams,
+    timeout_ms: u64,
+    tolerance: f64,
+    max_iters: usize,
+) -> Result<SolveResult, Box<LmFailure>> {
     let started = Instant::now();
     let packed = pack(sketch);
-    let mut state = packed.vector;
-
-    // Edge case: sketch with no free state vars — nothing to solve.
-    if state.is_empty() {
-        return Ok(SolveResult {
+    let mut state = packed.vector.clone();
+    let outcome = iterate_lm(
+        sketch,
+        params,
+        &packed.index,
+        &mut state,
+        started,
+        timeout_ms,
+        tolerance,
+        max_iters,
+    );
+    match outcome {
+        Ok((iterations, final_residual_norm)) => Ok(SolveResult {
             state,
             index: packed.index,
-            iterations: 0,
-            final_residual_norm: 0.0,
+            iterations,
+            final_residual_norm,
             elapsed_ms: started.elapsed().as_millis() as u64,
-        });
+        }),
+        Err(error) => Err(Box::new(LmFailure {
+            error,
+            state,
+            index: packed.index,
+        })),
+    }
+}
+
+/// The LM loop. Advances `state` in place and returns
+/// `(iterations, |r|)` on convergence.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "internal loop; the arguments are the solve's own knobs plus the in-out state"
+)]
+fn iterate_lm(
+    sketch: &SketchData,
+    params: &ResolvedParams,
+    index: &EntityIndex,
+    state: &mut Vec<f64>,
+    started: Instant,
+    timeout_ms: u64,
+    tolerance: f64,
+    max_iters: usize,
+) -> Result<(usize, f64), SolveError> {
+    // Edge case: sketch with no free state vars — nothing to solve.
+    if state.is_empty() {
+        return Ok((0, 0.0));
     }
 
     // Internally the LM step compares the squared residual norm
@@ -109,7 +165,7 @@ pub fn solve_lm(
     let mut lambda = LAMBDA_INIT;
     let mut iterations = 0usize;
 
-    let mut r = total_residual(sketch, &state, &packed.index, params)
+    let mut r = total_residual(sketch, state, index, params)
         .map_err(|e| SolveError::Internal(format!("initial residual: {e}")))?;
     let mut residual_norm_sq = norm_sq(&r);
 
@@ -135,7 +191,7 @@ pub fn solve_lm(
             });
         }
 
-        let j = numerical_jacobian(sketch, &state, &packed.index, params)
+        let j = numerical_jacobian(sketch, state, index, params)
             .map_err(|e| SolveError::Internal(format!("jacobian: {e}")))?;
 
         // Edge case: no constraints (m=0). Nothing to drive; converged.
@@ -159,12 +215,9 @@ pub fn solve_lm(
             Err(LinAlgError::Singular) => {
                 // λ already damps the diagonal; if even with damping
                 // we hit a zero pivot, the geometry is genuinely
-                // over-constrained. We don't have a single constraint
-                // id to attribute this to, so callers should match on
-                // OverConstrained without relying on the inner id.
-                return Err(SolveError::OverConstrained(crate::id::ConstraintId(
-                    uuid::Uuid::nil(),
-                )));
+                // over-constrained. No constraint can be named here;
+                // `Solver::solve` attributes stalls it can see.
+                return Err(SolveError::OverConstrained(Vec::new()));
             }
             Err(LinAlgError::DimensionMismatch) => {
                 // LO-12: code bug, not a user error.
@@ -185,7 +238,7 @@ pub fn solve_lm(
         let mut trial = state.clone();
         axpy(1.0, &delta, &mut trial);
 
-        let trial_r = match total_residual(sketch, &trial, &packed.index, params) {
+        let trial_r = match total_residual(sketch, &trial, index, params) {
             Ok(rr) => rr,
             Err(_) => {
                 lambda *= 10.0;
@@ -207,7 +260,7 @@ pub fn solve_lm(
         }
 
         if trial_norm_sq < residual_norm_sq {
-            state = trial;
+            *state = trial;
             r = trial_r;
             residual_norm_sq = trial_norm_sq;
             lambda /= 10.0;
@@ -232,11 +285,5 @@ pub fn solve_lm(
         });
     }
 
-    Ok(SolveResult {
-        state,
-        index: packed.index,
-        iterations,
-        final_residual_norm: norm_vec(&r),
-        elapsed_ms: started.elapsed().as_millis() as u64,
-    })
+    Ok((iterations, norm_vec(&r)))
 }
