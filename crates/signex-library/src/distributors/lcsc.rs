@@ -53,10 +53,7 @@ impl LcscAdapter {
             base_url: LCSC_DEFAULT_BASE.into(),
             cache,
             throttle: Mutex::new(None),
-            http: reqwest::blocking::Client::builder()
-                .user_agent("signex-library/0.9 (+https://signex.dev)")
-                .build()
-                .expect("reqwest::blocking::Client::build is infallible with default opts"),
+            http: super::http::build_client(),
         }
     }
 
@@ -66,10 +63,7 @@ impl LcscAdapter {
             base_url: base_url.into(),
             cache,
             throttle: Mutex::new(None),
-            http: reqwest::blocking::Client::builder()
-                .user_agent("signex-library/0.9 (+https://signex.dev)")
-                .build()
-                .expect("reqwest::blocking::Client::build is infallible with default opts"),
+            http: super::http::build_client(),
         }
     }
 

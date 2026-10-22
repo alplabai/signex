@@ -88,7 +88,10 @@ impl Signex {
             }
         }
 
-        match PdfExporter.export(&ctx, &options) {
+        match PdfExporter
+            .export(&ctx, &options)
+            .inspect(|output| super::log_uncovered_chars(&output.uncovered_chars))
+        {
             Ok(output) => match std::fs::write(&save_path, &output.bytes) {
                 Ok(()) => log::info!(
                     "Wrote {} ({} page(s), {} bytes)",

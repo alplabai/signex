@@ -55,33 +55,87 @@ pub fn delete_selected(
 }
 
 /// Hit-test cursor world coordinates against pins, then graphic
-/// bodies. Pins win (small hit target, often inside graphics);
+/// bodies. Pins win inside their grab zone (see [`hit_test_pin`]);
 /// graphics scan in reverse so the most-recently-placed graphic
-/// wins overlap.
-pub fn hit_test(sym: &Symbol, x: f64, y: f64, active_part: u8) -> Option<SymbolSelection> {
-    const PIN_HIT_R_SQ: f64 = 1.5 * 1.5;
+/// wins overlap. Both honour the selection `filter`.
+///
+/// `pin_tol_mm` is the world-space pin grab radius; derive it from
+/// screen pixels so the zone is the same size at every zoom.
+pub fn hit_test(
+    sym: &Symbol,
+    x: f64,
+    y: f64,
+    pin_tol_mm: f64,
+    active_part: u8,
+    filter: &SymbolSelectionFilter,
+) -> Option<SymbolSelection> {
+    hit_test_pin(sym, x, y, pin_tol_mm, active_part, filter)
+        .map(SymbolSelection::Pin)
+        .or_else(|| hit_test_graphic(sym, x, y, active_part, filter).map(SymbolSelection::Graphic))
+}
+
+/// Half-width (mm) of the grab zone along a pin's tip-to-base line. Kept
+/// well below the 1.27 mm snap pitch and the 2.54 mm pin length so a pin
+/// does not swallow a graphic that touches its base (a clock wedge, a
+/// negation bubble) or a press in the body next to a pinned edge. The
+/// larger screen-space radius applies at the tip only.
+pub const PIN_LINE_GRAB_MM: f64 = 0.4;
+
+/// Nearest pin to `(x, y)`. A pin is grabbed within `tol_mm` of its
+/// tip (the generous, screen-space zone) or within the much narrower
+/// `min(tol_mm, PIN_LINE_GRAB_MM)` of its tip-to-base line, so the
+/// pin's body line is grabbable without outranking nearby graphics.
+/// Picking the nearest - not the first in vector order - keeps adjacent
+/// pins at the 1.27 mm snap pitch from stealing each other's drag. A
+/// distance tie goes to the later pin (the one drawn on top). Honours
+/// `filter.pins`.
+pub fn hit_test_pin(
+    sym: &Symbol,
+    x: f64,
+    y: f64,
+    tol_mm: f64,
+    active_part: u8,
+    filter: &SymbolSelectionFilter,
+) -> Option<usize> {
+    if !filter.pins {
+        return None;
+    }
+    let mut best: Option<(usize, f64)> = None;
     for (i, pin) in sym.pins.iter().enumerate() {
         if !super::pin_on_part(pin, active_part) {
             continue;
         }
-        let dx = pin.position[0] - x;
-        let dy = pin.position[1] - y;
-        if dx * dx + dy * dy <= PIN_HIT_R_SQ {
-            return Some(SymbolSelection::Pin(i));
+        let (bdx, bdy) = super::rotation::pin_body_delta(pin);
+        let tip = pin.position;
+        let base = [tip[0] + bdx, tip[1] + bdy];
+        let d_sq = point_to_segment_dist_sq([x, y], tip, base);
+        let tip_sq = (x - tip[0]).powi(2) + (y - tip[1]).powi(2);
+        let line_tol = tol_mm.min(PIN_LINE_GRAB_MM);
+        let grabbed = tip_sq <= tol_mm * tol_mm || d_sq <= line_tol * line_tol;
+        if grabbed && best.is_none_or(|(_, b)| d_sq <= b) {
+            best = Some((i, d_sq));
         }
     }
-    for idx in (0..sym.graphics.len()).rev() {
-        let Some(g) = sym.graphics.get(idx) else {
-            continue;
-        };
-        if !super::graphic_on_part(g, active_part) {
-            continue;
-        }
-        if hit_test_graphic_body(sym, idx, x, y) {
-            return Some(SymbolSelection::Graphic(idx));
-        }
-    }
-    None
+    best.map(|(i, _)| i)
+}
+
+/// Topmost graphic whose body contains `(x, y)`, honouring the
+/// selection `filter`. Scans in reverse so the most recently placed
+/// graphic wins an overlap.
+pub fn hit_test_graphic(
+    sym: &Symbol,
+    x: f64,
+    y: f64,
+    active_part: u8,
+    filter: &SymbolSelectionFilter,
+) -> Option<usize> {
+    (0..sym.graphics.len()).rev().find(|&idx| {
+        sym.graphics.get(idx).is_some_and(|g| {
+            super::graphic_on_part(g, active_part)
+                && filter.allows_graphic(&g.kind)
+                && hit_test_graphic_body(sym, idx, x, y)
+        })
+    })
 }
 
 /// Tolerance band around line / arc / circle outlines (mm).
@@ -342,20 +396,11 @@ pub fn graphic_handles(sym: &Symbol, idx: usize) -> Vec<(GraphicHandle, [f64; 2]
 /// let tol_mm = (8.0_f32 / camera.scale.max(0.01)).clamp(0.5, 4.0) as f64;
 /// ```
 ///
-/// `selected` scopes `PolygonVertex` handles to whichever graphic is
-/// currently selected (via [`super::graphic_is_selected`]) — every
-/// OTHER handle kind (rect corner/edge, line endpoint, circle radius,
-/// arc start/end, text anchor) still hit-tests on every graphic on
-/// the part regardless of selection, matching their existing,
-/// unscoped behaviour (and the draw path, which already only ever
-/// *renders* a selected graphic's handles — see
-/// `draw_resize_handles`). A Polygon can carry far more vertices than
-/// any other kind has handles (a Join-into-Polygon result routinely
-/// tessellates an arc side into ~16 points), so scanning them
-/// unconditionally made an unselected polygon effectively
-/// unclickable-as-a-body: a click almost anywhere near it grabbed an
-/// invisible vertex handle instead of falling through to
-/// `hit_test`'s body selection.
+/// Only handles of SELECTED graphics (via
+/// [`super::graphic_is_selected`]) are hit-testable. The draw path
+/// renders handles for selected graphics only, so scanning the rest
+/// grabbed invisible handles: pressing a pin that sits on a body
+/// rectangle's edge resized the rectangle instead of dragging the pin.
 pub fn hit_test_graphic_handle(
     sym: &Symbol,
     x: f64,
@@ -363,21 +408,20 @@ pub fn hit_test_graphic_handle(
     tol_mm: f64,
     active_part: u8,
     selected: &Option<SymbolSelection>,
+    filter: &SymbolSelectionFilter,
 ) -> Option<(usize, GraphicHandle)> {
     let r_sq = tol_mm * tol_mm;
     for idx in (0..sym.graphics.len()).rev() {
         let Some(g) = sym.graphics.get(idx) else {
             continue;
         };
-        if !super::graphic_on_part(g, active_part) {
+        if !super::graphic_on_part(g, active_part) || !filter.allows_graphic(&g.kind) {
+            continue;
+        }
+        if !super::graphic_is_selected(selected, idx) {
             continue;
         }
         for (handle, pos) in graphic_handles(sym, idx) {
-            if matches!(handle, GraphicHandle::PolygonVertex(_))
-                && !super::graphic_is_selected(selected, idx)
-            {
-                continue;
-            }
             let dx = pos[0] - x;
             let dy = pos[1] - y;
             if dx * dx + dy * dy <= r_sq {

@@ -201,7 +201,9 @@ pub(super) fn emit_traces(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene: 
             p1: trace.p1,
             width: trace.width_mm,
             color: trace_color,
-            style: trace.net,
+            // Bit 0 of `style` is the dash flag. A trace's net, if it is ever
+            // encoded here, goes above bit 8 like the ratsnest's.
+            style: 0,
             _pad: 0,
         });
     }
@@ -214,13 +216,15 @@ pub(super) fn emit_vias(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene: &m
     let via_color = theme.color(ColorSlot::Junction);
 
     for via in &snapshot.vias {
-        let radius = (via.diameter_mm * 0.5).max(0.01);
-        let annulus = ((via.diameter_mm - via.drill_mm) * 0.5).max(0.0);
+        let outer = (via.diameter_mm * 0.5).max(0.01);
+        let hole = (via.drill_mm * 0.5).clamp(0.0, outer);
 
+        // Both renderers centre a ring's stroke on its radius, so stroke the
+        // annulus at the midpoint between the hole edge and the outer edge.
         scene.circles.push(Circle {
             center: via.center,
-            radius,
-            stroke_width: annulus,
+            radius: (outer + hole) * 0.5,
+            stroke_width: outer - hole,
             color: via_color,
         });
     }

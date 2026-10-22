@@ -107,6 +107,45 @@ impl SymbolCanvas<'_> {
         }
     }
 
+    /// Ghost pin under the cursor while the `AddPin` tool is active, so
+    /// the user sees where the pin will land on release.
+    pub(in crate::library::editor::symbol::canvas) fn draw_pin_preview(
+        &self,
+        frame: &mut canvas::Frame,
+        state: &CanvasState,
+    ) {
+        let (SymbolTool::AddPin, Some((x, y))) = (self.tool, state.pin_cursor) else {
+            return;
+        };
+        let mut ghost = SymbolPin::new("", "");
+        ghost.position = [x, y];
+        ghost.length = state::DEFAULT_PIN_LENGTH_MM;
+        let geom = PinRenderGeometry::compute(&ghost);
+        let cam = self.camera;
+        let w2s = |p: signex_types::rotation2d::Vec2d| -> iced::Point {
+            iced::Point::new(
+                cam.offset.x + (p.x as f32) * cam.scale,
+                cam.offset.y - (p.y as f32) * cam.scale,
+            )
+        };
+        let tip = w2s(geom.tip);
+        let preview_color = Color {
+            a: 0.55,
+            ..self.selected_color
+        };
+        frame.fill(&canvas::Path::circle(tip, 3.0), preview_color);
+        frame.stroke(
+            &canvas::Path::line(tip, w2s(geom.body_end)),
+            canvas::Stroke::default()
+                .with_color(preview_color)
+                .with_width(stroke_px_at_zoom(
+                    SYMBOL_GRAPHIC_STROKE_PX_AT_100,
+                    cam.scale,
+                ))
+                .with_line_cap(canvas::LineCap::Round),
+        );
+    }
+
     /// Two-click line placement preview.
     pub(in crate::library::editor::symbol::canvas) fn draw_line_preview(
         &self,
