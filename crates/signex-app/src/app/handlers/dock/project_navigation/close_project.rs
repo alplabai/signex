@@ -5,7 +5,6 @@
 //! behaviour change.
 
 use super::*;
-use crate::app::state::scope::claimed_by_other_project;
 
 impl Signex {
     /// Close every tab backed by the project whose root is at
@@ -48,7 +47,7 @@ impl Signex {
                 .iter()
                 .filter(|p| {
                     p.starts_with(dir)
-                        && !claimed_by_other_project(&self.document_state.projects, project_idx, p)
+                        && !self.document_state.claimed_by_other_project(project_idx, p)
                 })
                 .cloned()
                 .collect();
@@ -118,10 +117,19 @@ impl Signex {
             && let Some(dir) = project.path.parent()
         {
             let dir = dir.to_path_buf();
-            let projects = &self.document_state.projects;
-            self.document_state.engines.retain(|p, _| {
-                p.parent() != Some(&dir) || claimed_by_other_project(projects, project_idx, p)
-            });
+            let sweep: Vec<std::path::PathBuf> = self
+                .document_state
+                .engines
+                .keys()
+                .filter(|p| {
+                    p.parent() == Some(&dir)
+                        && !self.document_state.claimed_by_other_project(project_idx, p)
+                })
+                .cloned()
+                .collect();
+            for path in sweep {
+                self.document_state.engines.remove(&path);
+            }
         }
 
         // Drop the project from the workspace, then pick a new active

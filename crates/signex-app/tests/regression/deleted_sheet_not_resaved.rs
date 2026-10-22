@@ -109,13 +109,22 @@ fn deleting_a_dirty_sheet_is_not_resurrected_by_save_all_on_quit() {
     )));
     assert!(!sheet.exists(), "Delete File must remove the file");
 
+    // A second dirty sheet keeps the quit prompt alive so Save All really runs.
+    let other = tmp.path().join("Y.snxsch");
+    open_dirty_sheet(&mut app, &other, id);
     let _ = app.update(Message::Window(WindowMsg::CloseMainWindow));
-    if app.ui_state.app_quit_confirm.is_some() {
-        let _ = app.update(Message::Project(ProjectMsg::AppQuitConfirm(
-            ProjectCloseChoice::SaveAll,
-        )));
-    }
+    let modal = app
+        .ui_state
+        .app_quit_confirm
+        .as_ref()
+        .expect("the other dirty sheet must raise the quit prompt");
+    assert!(modal.dirty_paths.contains(&other));
+    assert!(!modal.dirty_paths.contains(&sheet));
+    let _ = app.update(Message::Project(ProjectMsg::AppQuitConfirm(
+        ProjectCloseChoice::SaveAll,
+    )));
 
+    assert!(other.exists(), "Save All must still save the live sheet");
     assert!(!sheet.exists(), "Save All on quit must not recreate it");
     assert!(!app.document_state.dirty_paths.contains(&sheet));
     assert!(!app.document_state.engines.contains_key(&sheet));
@@ -185,4 +194,153 @@ fn closing_a_clean_project_keeps_a_sibling_projects_clean_engine() {
     close_first_project(&mut app);
 
     assert!(app.document_state.engines.contains_key(&b_sheet));
+}
+
+fn delete_file(app: &mut Signex, target: &Path) {
+    app.ui_state.remove_dialog = Some(RemoveDialogState {
+        target_path: target.to_path_buf(),
+        tree_path: vec![0, 0],
+        display_name: target.file_name().unwrap().to_string_lossy().into_owned(),
+    });
+    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
+        RemoveChoice::DeleteFile,
+    )));
+}
+
+#[test]
+fn deleting_a_dirty_sheet_logs_the_discarded_edits_to_the_messages_panel() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().expect("tempdir");
+    let sheet = tmp.path().join("Logged.snxsch");
+    std::fs::write(&sheet, b"x").expect("write sheet");
+    let (mut app, _task) = Signex::new();
+    let id = add_project(&mut app, &tmp.path().join("P.snxprj"), "Logged.snxsch");
+    open_dirty_sheet(&mut app, &sheet, id);
+
+    delete_file(&mut app, &sheet);
+
+    assert!(
+        app.document_state
+            .panel_ctx
+            .diagnostics
+            .iter()
+            .any(|e| e.message.contains("Logged.snxsch") && e.message.contains("discarded")),
+        "the discard must reach the Messages panel",
+    );
+}
+
+#[test]
+fn deleting_a_missing_file_still_drops_its_parked_dirty_engine() {
+    let tmp = TempDir::new().expect("tempdir");
+    let sheet = tmp.path().join("Gone.snxsch");
+    let (mut app, _task) = Signex::new();
+    let id = add_project(&mut app, &tmp.path().join("P.snxprj"), "Gone.snxsch");
+    open_dirty_sheet(&mut app, &sheet, id);
+
+    delete_file(&mut app, &sheet);
+
+    assert!(!app.document_state.dirty_paths.contains(&sheet));
+    assert!(!app.document_state.engines.contains_key(&sheet));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_failed_delete_keeps_the_dirty_sheet_and_its_state() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = TempDir::new().expect("tempdir");
+    let locked = tmp.path().join("locked");
+    std::fs::create_dir(&locked).expect("mkdir");
+    let sheet = locked.join("X.snxsch");
+    std::fs::write(&sheet, b"x").expect("write sheet");
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).expect("chmod");
+    let restore = || std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755));
+    if std::fs::write(locked.join("probe"), b"").is_ok() {
+        restore().expect("restore");
+        return; // permissions are not enforced (running as root)
+    }
+    let (mut app, _task) = Signex::new();
+    let id = add_project(&mut app, &tmp.path().join("P.snxprj"), "locked/X.snxsch");
+    open_dirty_sheet(&mut app, &sheet, id);
+
+    delete_file(&mut app, &sheet);
+    restore().expect("restore");
+
+    assert!(sheet.exists(), "the delete must have failed");
+    assert!(app.document_state.dirty_paths.contains(&sheet));
+    assert!(app.document_state.engines.contains_key(&sheet));
+}
+
+#[test]
+fn deleting_a_library_directory_drops_the_editors_and_tabs_inside_it() {
+    let tmp = TempDir::new().expect("tempdir");
+    let lib = tmp.path().join("Lib.snxlib");
+    let fp = lib.join("footprints").join("g.snxfpt");
+    std::fs::create_dir_all(fp.parent().unwrap()).expect("mkdir");
+    std::fs::write(&fp, b"x").expect("write footprint");
+    let (mut app, _task) = Signex::new();
+    add_project(&mut app, &tmp.path().join("P.snxprj"), "a.snxsch");
+    let file =
+        signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("fp"));
+    app.document_state.footprint_editors.insert(
+        fp.clone(),
+        signex_app::app::FootprintEditorState::new(fp.clone(), file),
+    );
+    app.document_state.tabs.push(TabInfo {
+        title: "fp".into(),
+        path: fp.clone(),
+        cached_document: None,
+        dirty: true,
+        project_id: None,
+        kind: TabKind::FootprintEditor(fp.clone()),
+    });
+    app.document_state.dirty_paths.insert(fp.clone());
+
+    delete_file(&mut app, &lib);
+
+    assert!(!lib.exists());
+    assert!(app.document_state.footprint_editors.is_empty());
+    assert!(app.document_state.dirty_paths.is_empty());
+    assert!(
+        app.document_state.tabs.is_empty(),
+        "no tab may outlive its file"
+    );
+}
+
+#[test]
+fn closing_a_project_keeps_a_same_directory_projects_dirty_child_sheet() {
+    let tmp = TempDir::new().expect("tempdir");
+    let (mut app, _task) = Signex::new();
+    add_project(&mut app, &tmp.path().join("A.snxprj"), "a.snxsch");
+    let b = add_project(&mut app, &tmp.path().join("B.snxprj"), "b.snxsch");
+    let b_root = tmp.path().join("b.snxsch");
+    let child = tmp.path().join("b_child.snxsch");
+    let mut root_sheet = empty_sheet();
+    root_sheet
+        .child_sheets
+        .push(signex_types::schematic::ChildSheet {
+            uuid: uuid::Uuid::nil(),
+            name: String::new(),
+            filename: "b_child.snxsch".to_string(),
+            position: signex_types::schematic::Point::new(0.0, 0.0),
+            size: (0.0, 0.0),
+            stroke_width: 0.0,
+            fill: signex_types::schematic::FillType::None,
+            stroke_color: None,
+            fill_color: None,
+            fields_autoplaced: false,
+            pins: Vec::new(),
+            instances: Vec::new(),
+        });
+    let root = signex_engine::Engine::new(root_sheet).expect("engine");
+    app.document_state.engines.insert(b_root, root);
+    open_dirty_sheet(&mut app, &child, b);
+
+    close_first_project(&mut app);
+
+    assert!(
+        app.ui_state.project_close_confirm.is_none(),
+        "B's child sheet is not A's, so closing A must not prompt",
+    );
+    assert!(app.document_state.dirty_paths.contains(&child));
+    assert!(app.document_state.engines.contains_key(&child));
 }
