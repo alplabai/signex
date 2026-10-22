@@ -2,10 +2,10 @@
 //! formats (#334).
 //!
 //! The files under `tests/corpus/` are checked-in goldens. Per file the
-//! harness asserts that it (1) parses, (2) re-serialises to the exact
-//! on-disk bytes (the no-edit-save gate), and (3) survives a second
-//! parse -> write -> parse hop structurally unchanged. Every failing
-//! fixture is reported in one run.
+//! harness asserts that it (1) parses and (2) re-serialises to the exact
+//! on-disk bytes (the no-edit-save gate). Byte equality already implies a
+//! second parse -> write hop is identical, so none is asserted. Every
+//! failing fixture is reported in one run.
 //!
 //! Set `SIGNEX_BLESS_CORPUS=1` to rewrite each fixture from its parsed
 //! form instead of asserting; see `tests/corpus/README.md`.
@@ -13,7 +13,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use serde_json::Value;
 use signex_types::format::{SnxPcb, SnxSchematic};
 
 /// Lower bound on the number of discovered fixtures. Raise it when the
@@ -60,28 +59,17 @@ fn discover(root: &Path) -> std::io::Result<Vec<PathBuf>> {
     Ok(found)
 }
 
-/// Parse `text` and write it back out; also returns the parsed value as
-/// JSON so two hops can be compared structurally.
-fn parse_and_write(kind: Kind, text: &str) -> Result<(String, Value), String> {
+/// Parse `text` and write it back out.
+fn parse_and_write(kind: Kind, text: &str) -> Result<String, String> {
     match kind {
-        Kind::Schematic => {
-            let parsed = SnxSchematic::parse(text).map_err(|e| format!("parse failed: {e}"))?;
-            let out = parsed
-                .write_string()
-                .map_err(|e| format!("write failed: {e}"))?;
-            let tree = serde_json::to_value(&parsed.sheet)
-                .map_err(|e| format!("cannot snapshot parsed value: {e}"))?;
-            Ok((out, tree))
-        }
-        Kind::Pcb => {
-            let parsed = SnxPcb::parse(text).map_err(|e| format!("parse failed: {e}"))?;
-            let out = parsed
-                .write_string()
-                .map_err(|e| format!("write failed: {e}"))?;
-            let tree = serde_json::to_value(&parsed.board)
-                .map_err(|e| format!("cannot snapshot parsed value: {e}"))?;
-            Ok((out, tree))
-        }
+        Kind::Schematic => SnxSchematic::parse(text)
+            .map_err(|e| format!("parse failed: {e}"))?
+            .write_string()
+            .map_err(|e| format!("write failed: {e}")),
+        Kind::Pcb => SnxPcb::parse(text)
+            .map_err(|e| format!("parse failed: {e}"))?
+            .write_string()
+            .map_err(|e| format!("write failed: {e}")),
     }
 }
 
@@ -105,22 +93,15 @@ fn first_difference(expected: &str, actual: &str) -> String {
     }
 }
 
-/// Run the three assertions against one fixture's bytes.
+/// Run the assertions against one fixture's bytes.
 fn check_bytes(kind: Kind, bytes: &[u8]) -> Result<(), String> {
     let text = std::str::from_utf8(bytes).map_err(|e| format!("not valid UTF-8: {e}"))?;
-    let (rewritten, first_tree) = parse_and_write(kind, text)?;
+    let rewritten = parse_and_write(kind, text)?;
     if rewritten != text {
         return Err(format!(
             "not byte-stable: a no-edit save changes the file; {}",
             first_difference(text, &rewritten)
         ));
-    }
-    let (_, second_tree) = parse_and_write(kind, &rewritten)
-        .map_err(|e| format!("second hop (parse -> write -> parse) failed: {e}"))?;
-    if first_tree != second_tree {
-        return Err(
-            "not stable under a second hop: parse -> write -> parse changed the value".to_string(),
-        );
     }
     Ok(())
 }
@@ -135,11 +116,22 @@ fn bless_file(path: &Path) -> Result<(), String> {
     let kind = kind_of(path).ok_or("unsupported extension")?;
     let bytes = fs::read(path).map_err(|e| format!("cannot read: {e}"))?;
     let text = std::str::from_utf8(&bytes).map_err(|e| format!("not valid UTF-8: {e}"))?;
-    let (rewritten, _) = parse_and_write(kind, text)?;
+    let rewritten = parse_and_write(kind, text)?;
     if rewritten.as_bytes() != bytes.as_slice() {
         fs::write(path, rewritten).map_err(|e| format!("cannot write: {e}"))?;
     }
     Ok(())
+}
+
+/// Fail when fewer than `MIN_CORPUS_FILES` fixtures were discovered.
+fn check_count(found: usize, root: &Path) -> Result<(), String> {
+    if found >= MIN_CORPUS_FILES {
+        return Ok(());
+    }
+    Err(format!(
+        "corpus shrank: found {found} fixtures under {}, MIN_CORPUS_FILES is {MIN_CORPUS_FILES}",
+        root.display()
+    ))
 }
 
 fn relative(path: &Path) -> String {
@@ -154,12 +146,9 @@ fn corpus_round_trips_byte_for_byte() {
     let root = corpus_root();
     let fixtures = discover(&root).expect("corpus directory must be readable");
 
-    assert!(
-        fixtures.len() >= MIN_CORPUS_FILES,
-        "corpus shrank: found {} fixtures under {}, MIN_CORPUS_FILES is {MIN_CORPUS_FILES}",
-        fixtures.len(),
-        root.display()
-    );
+    if let Err(why) = check_count(fixtures.len(), &root) {
+        panic!("{why}");
+    }
 
     let blessing = std::env::var_os(BLESS_ENV).is_some_and(|v| v == "1");
     let failures: Vec<String> = fixtures
@@ -262,4 +251,12 @@ fn bless_is_a_no_op_on_a_canonical_tree() {
         bless_file(&copy).unwrap();
         assert_eq!(before, fs::read(&copy).unwrap(), "{rel}");
     }
+}
+
+#[test]
+fn deleting_a_fixture_trips_the_count_guard() {
+    let found = discover(&corpus_root()).unwrap().len();
+    assert!(check_count(found, &corpus_root()).is_ok());
+    let err = check_count(found - 1, &corpus_root()).expect_err("one fewer fixture must fail");
+    assert!(err.contains("corpus shrank"), "{err}");
 }

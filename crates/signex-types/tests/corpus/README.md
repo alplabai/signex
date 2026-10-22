@@ -11,9 +11,7 @@ For every fixture, found recursively:
 
 1. it **parses** (`SnxSchematic::parse` / `SnxPcb::parse`);
 2. it is **byte-stable** — re-serialising the parsed value reproduces the
-   on-disk bytes exactly (the no-edit-save gate);
-3. it is **stable under a second hop** — parse -> write -> parse yields
-   a structurally equal value.
+   on-disk bytes exactly (the no-edit-save gate).
 
 All failing fixtures are listed in one run, each with its path and, for a
 byte mismatch, the first differing line.
