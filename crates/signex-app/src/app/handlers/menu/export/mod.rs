@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use signex_output::{ExportContext, ProjectMetadata, SheetSnapshot};
 
 mod bom;
+mod erc_report;
 mod pdf_netlist;
 mod print_preview;
 #[cfg(test)]

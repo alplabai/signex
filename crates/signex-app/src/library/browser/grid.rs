@@ -227,8 +227,6 @@ pub(super) fn view_grid<'a>(
 
             let library_for_msg = lib_pb.clone();
             let table_for_msg = table.to_string();
-            let library_for_refresh = library_for_msg.clone();
-            let table_for_refresh = table_for_msg.clone();
             let row_container = container(data_row)
                 .padding([0, 0])
                 .width(Length::Fill)
@@ -248,10 +246,6 @@ pub(super) fn view_grid<'a>(
             // on_press/on_double_click only fires on the gaps between
             // cells — that's fine for selection because the user is
             // clicking on a row, not a specific cell.
-            //
-            // Right-press fires the Stage 18 distributor refresh stub
-            // — tonight's wiring just emits a tracing log; the real
-            // adapter call lands when the row-binding loop is built.
             // F25 (2026-05-03) — double-click no longer opens an Edit
             // Component modal. Single-click selects the row and the
             // Properties panel surfaces the row detail; per-component
@@ -261,17 +255,11 @@ pub(super) fn view_grid<'a>(
             // shows the row-edit ergonomics still need a richer
             // surface; the on_press wiring here is the only user-
             // facing trigger and removing it removes the feature.
-            let row_widget = mouse_area(row_container)
-                .on_press(LibraryMessage::BrowserSelectRow {
-                    library_path: library_for_msg,
-                    table: table_for_msg,
-                    row_id,
-                })
-                .on_right_press(LibraryMessage::BrowserRefreshPricing {
-                    library_path: library_for_refresh,
-                    table: table_for_refresh,
-                    row_id,
-                });
+            let row_widget = mouse_area(row_container).on_press(LibraryMessage::BrowserSelectRow {
+                library_path: library_for_msg,
+                table: table_for_msg,
+                row_id,
+            });
 
             col = col.push(row_widget);
         }

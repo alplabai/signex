@@ -888,7 +888,7 @@ fn local_git_commits_with_message() {
 
     let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
     let head = repo.head().unwrap().peel_to_commit().unwrap();
-    assert_eq!(head.summary(), Some("msg-XYZ"));
+    assert_eq!(head.summary().unwrap(), Some("msg-XYZ"));
 }
 
 // ── Cascade engine (Stage 15) ────────────────────────────────────────────
