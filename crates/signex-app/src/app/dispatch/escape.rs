@@ -65,7 +65,9 @@ impl Signex {
             // the inline Component Preview tab has no Esc, so giving only
             // the detached form a dismissal is the asymmetry
             // `detached_modal_escape_message` argues against.
-            InputTarget::DetachedPanel | InputTarget::ComponentEditor => Task::none(),
+            InputTarget::DetachedPanel
+            | InputTarget::ComponentEditor
+            | InputTarget::GerberToolWindow => Task::none(),
 
             // An undocked tab paints the same overlay stack as the main
             // window, so the ladder is right — but the editor branch

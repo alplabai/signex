@@ -81,6 +81,10 @@ impl KeymapRecorderState {
 /// can live in its own OS window.
 #[derive(Debug, Clone)]
 pub enum WindowKind {
+    GerberViewer,
+    GerberGridEditor {
+        document_id: signex_widgets::gerber_viewer::GerberDocumentId,
+    },
     DetachedModal(ModalId),
     /// Undocked document tab. Stores the tab's file path (unique per
     /// open tab in Signex) so the mapping survives tab reordering or

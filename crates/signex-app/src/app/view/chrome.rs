@@ -8,6 +8,81 @@
 
 use super::*;
 
+fn window_control_buttons(
+    theme_id: signex_types::theme::ThemeId,
+    tokens: &signex_types::theme::ThemeTokens,
+    minimize: Message,
+    maximize: Message,
+    close: Message,
+) -> Element<'static, Message> {
+    use iced::widget::{button, container, row, svg};
+    use iced::{Background, Border, Color, Length};
+
+    let text_color = crate::styles::ti(tokens.text);
+    let hover_color = crate::styles::ti(tokens.hover);
+    let close_hover = Color::from_rgba(0.78, 0.22, 0.22, 1.0);
+    let button_height = crate::menu_bar::MENU_BAR_HEIGHT;
+    let chrome_button = |handle: svg::Handle,
+                         message: Message,
+                         hover_background: Color,
+                         hover_icon: Color|
+     -> Element<'static, Message> {
+        let icon = svg(handle)
+            .width(14)
+            .height(14)
+            .style(move |_: &iced::Theme, _| svg::Style {
+                color: Some(text_color),
+            });
+        button(
+            container(icon)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .align_x(iced::alignment::Horizontal::Center)
+                .align_y(iced::alignment::Vertical::Center),
+        )
+        .width(46)
+        .height(button_height)
+        .padding(0)
+        .on_press(message)
+        .style(move |_: &iced::Theme, status: button::Status| {
+            let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
+            button::Style {
+                background: if hovered {
+                    Some(Background::Color(hover_background))
+                } else {
+                    None
+                },
+                text_color: if hovered { hover_icon } else { text_color },
+                border: Border::default(),
+                ..Default::default()
+            }
+        })
+        .into()
+    };
+
+    row![
+        chrome_button(
+            crate::icons::icon_chrome_window_min(theme_id),
+            minimize,
+            hover_color,
+            text_color,
+        ),
+        chrome_button(
+            crate::icons::icon_chrome_window_max(theme_id),
+            maximize,
+            hover_color,
+            text_color,
+        ),
+        chrome_button(
+            crate::icons::icon_chrome_window_close(theme_id),
+            close,
+            close_hover,
+            Color::WHITE,
+        ),
+    ]
+    .into()
+}
+
 impl Signex {
     /// Custom chrome for the borderless main window. Replaces the OS
     /// title bar with a 36 px strip:
@@ -25,89 +100,27 @@ impl Signex {
         menu_row: Element<'a, Message>,
         tokens: &signex_types::theme::ThemeTokens,
     ) -> Element<'a, Message> {
-        use iced::widget::{Space, button, container, mouse_area, row, svg};
+        use iced::widget::{Space, container, mouse_area, row, svg};
         use iced::{Alignment, Background, Border, Color, Length};
 
         // Window-control SVG icons resolved through `crate::icons` so the
         // accent sentinel in each SVG tints to the active theme at
         // fetch time.
         let theme_id = self.ui_state.theme_id;
-        let h_min = crate::icons::icon_chrome_window_min(theme_id);
-        let h_max = crate::icons::icon_chrome_window_max(theme_id);
-        let h_close = crate::icons::icon_chrome_window_close(theme_id);
         let h_search = crate::icons::icon_chrome_search(theme_id);
 
         let text_c = crate::styles::ti(tokens.text);
         let muted_c = crate::styles::ti(tokens.text_secondary);
-        let hover_c = crate::styles::ti(tokens.hover);
         let search_bg = crate::styles::ti(tokens.panel_bg);
         let search_border = crate::styles::ti(tokens.border);
-        // Windows-native destructive red for the close hover — overrides
-        // the theme hover so close reads as destructive at a glance.
-        let close_hover = Color::from_rgba(0.78, 0.22, 0.22, 1.0);
         let btn_h = crate::menu_bar::MENU_BAR_HEIGHT;
-
-        let chrome_btn = |handle: svg::Handle,
-                          msg: Message,
-                          hover_bg: Color,
-                          hover_icon: Color|
-         -> Element<'static, Message> {
-            // 14×14 brings the X / – / □ glyphs up to native-Windows
-            // chrome scale; the prior 10×10 left them visibly smaller
-            // than the surrounding menu-bar text.
-            let icon = svg(handle)
-                .width(14)
-                .height(14)
-                .style(move |_: &iced::Theme, _| svg::Style {
-                    color: Some(text_c),
-                });
-            button(
-                container(icon)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .align_x(iced::alignment::Horizontal::Center)
-                    .align_y(iced::alignment::Vertical::Center),
-            )
-            .width(46)
-            .height(btn_h)
-            .padding(0)
-            .on_press(msg)
-            .style(move |_: &iced::Theme, status: button::Status| {
-                let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
-                button::Style {
-                    background: if hovered {
-                        Some(Background::Color(hover_bg))
-                    } else {
-                        None
-                    },
-                    text_color: if hovered { hover_icon } else { text_c },
-                    border: Border::default(),
-                    ..Default::default()
-                }
-            })
-            .into()
-        };
-
-        let controls = row![
-            chrome_btn(
-                h_min.clone(),
-                Message::Window(WindowMsg::MinimizeMainWindow),
-                hover_c,
-                text_c
-            ),
-            chrome_btn(
-                h_max.clone(),
-                Message::Window(WindowMsg::ToggleMaximizeMainWindow),
-                hover_c,
-                text_c,
-            ),
-            chrome_btn(
-                h_close.clone(),
-                Message::Window(WindowMsg::CloseMainWindow),
-                close_hover,
-                Color::WHITE,
-            ),
-        ];
+        let controls = window_control_buttons(
+            theme_id,
+            tokens,
+            Message::Window(WindowMsg::MinimizeMainWindow),
+            Message::Window(WindowMsg::ToggleMaximizeMainWindow),
+            Message::Window(WindowMsg::CloseMainWindow),
+        );
 
         // Left-pad the menu row so the wordmark doesn't sit flush against
         // the window edge; controls stay flush-right so their hover boxes
@@ -235,6 +248,126 @@ impl Signex {
             .height(btn_h)
             .style(crate::styles::toolbar_strip(tokens))
             .into()
+    }
+
+    pub(super) fn view_secondary_window_frame<'a>(
+        &self,
+        window_id: iced::window::Id,
+        title: &'static str,
+        body: Element<'a, Message>,
+        tokens: &signex_types::theme::ThemeTokens,
+    ) -> Element<'a, Message> {
+        use iced::widget::{Space, column, container, mouse_area, row, text};
+        use iced::{Alignment, Length};
+
+        let controls = window_control_buttons(
+            self.ui_state.theme_id,
+            tokens,
+            Message::Window(WindowMsg::MinimizeWindow(window_id)),
+            Message::Window(WindowMsg::ToggleMaximizeWindow(window_id)),
+            Message::Window(WindowMsg::CloseWindow(window_id)),
+        );
+        let drag_zone = mouse_area(
+            row![
+                text(title).size(12).color(crate::styles::ti(tokens.text)),
+                Space::new().width(Length::Fill),
+            ]
+            .padding(iced::Padding {
+                top: 0.0,
+                right: 8.0,
+                bottom: 0.0,
+                left: 12.0,
+            })
+            .height(Length::Fill)
+            .align_y(Alignment::Center),
+        )
+        .on_press(Message::Window(WindowMsg::StartWindowDrag(window_id)))
+        .on_double_click(Message::Window(WindowMsg::ToggleMaximizeWindow(window_id)))
+        .interaction(iced::mouse::Interaction::Grab);
+        let chrome = container(row![drag_zone, controls].width(Length::Fill))
+            .width(Length::Fill)
+            .height(crate::menu_bar::MENU_BAR_HEIGHT)
+            .style(crate::styles::toolbar_strip(tokens));
+        let separator = container(Space::new())
+            .width(Length::Fill)
+            .height(1)
+            .style(crate::styles::chrome_separator(tokens));
+        let content = column![chrome, separator, body]
+            .width(Length::Fill)
+            .height(Length::Fill);
+
+        iced::widget::Stack::new()
+            .push(content)
+            .push(Self::secondary_resize_edges_overlay(window_id))
+            .into()
+    }
+
+    fn secondary_resize_edges_overlay<'a>(window_id: iced::window::Id) -> Element<'a, Message> {
+        use iced::mouse::Interaction;
+        use iced::widget::{Space, column, mouse_area, row};
+        use iced::window::Direction;
+
+        const EDGE: f32 = 6.0;
+
+        let resize_message = move |direction| {
+            Message::Window(WindowMsg::StartWindowResize {
+                id: window_id,
+                direction,
+            })
+        };
+        let straight = move |direction: Direction,
+                             cursor: Interaction,
+                             horizontal: bool|
+              -> Element<'a, Message> {
+            let (width, height) = if horizontal {
+                (Length::Fill, Length::Fixed(EDGE))
+            } else {
+                (Length::Fixed(EDGE), Length::Fill)
+            };
+            mouse_area(Space::new().width(width).height(height))
+                .on_press(resize_message(direction))
+                .interaction(cursor)
+                .into()
+        };
+        let corner = move |direction: Direction, cursor: Interaction| -> Element<'a, Message> {
+            mouse_area(
+                Space::new()
+                    .width(Length::Fixed(EDGE))
+                    .height(Length::Fixed(EDGE)),
+            )
+            .on_press(resize_message(direction))
+            .interaction(cursor)
+            .into()
+        };
+
+        let top = straight(Direction::North, Interaction::ResizingVertically, true);
+        let bottom = straight(Direction::South, Interaction::ResizingVertically, true);
+        let left = straight(Direction::West, Interaction::ResizingHorizontally, false);
+        let right = straight(Direction::East, Interaction::ResizingHorizontally, false);
+        let north_west = corner(Direction::NorthWest, Interaction::ResizingDiagonallyDown);
+        let north_east = corner(Direction::NorthEast, Interaction::ResizingDiagonallyUp);
+        let south_west = corner(Direction::SouthWest, Interaction::ResizingDiagonallyUp);
+        let south_east = corner(Direction::SouthEast, Interaction::ResizingDiagonallyDown);
+        let middle = row![
+            left,
+            Space::new().width(Length::Fill).height(Length::Fill),
+            right,
+        ]
+        .width(Length::Fill)
+        .height(Length::Fill);
+
+        column![
+            row![north_west, top, north_east]
+                .width(Length::Fill)
+                .height(Length::Fixed(EDGE)),
+            middle,
+            row![south_west, bottom, south_east]
+                .width(Length::Fill)
+                .height(Length::Fixed(EDGE)),
+        ]
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
     }
 
     fn view_preferences_body(&self) -> Element<'_, Message> {

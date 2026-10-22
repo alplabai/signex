@@ -13,6 +13,7 @@ pub enum ShortcutContext {
     Schematic,
     Footprint,
     Pcb,
+    Gerber,
     Library,
     Modal,
     TextInput,
@@ -58,7 +59,7 @@ impl Modifiers {
             ctrl: modifiers.control(),
             alt: modifiers.alt(),
             shift: modifiers.shift(),
-            command: modifiers.command(),
+            command: modifiers.logo(),
         }
     }
 
@@ -116,10 +117,12 @@ impl KeyStroke {
             _ => return None,
         };
 
-        Some(Self {
-            modifiers: Modifiers::from_iced(modifiers),
-            key,
-        })
+        let mut modifiers = Modifiers::from_iced(modifiers);
+        if matches!(&key, KeyToken::Character(value) if value == "+") {
+            modifiers.shift = false;
+        }
+
+        Some(Self { modifiers, key })
     }
 }
 
@@ -209,6 +212,12 @@ impl FromStr for KeyStroke {
         let source = source.trim();
         if source.is_empty() {
             return Err(KeyParseError::Empty);
+        }
+        if source == "+" {
+            return Ok(Self {
+                modifiers: Modifiers::default(),
+                key: KeyToken::Character("+".to_owned()),
+            });
         }
 
         let mut modifiers = Modifiers::default();

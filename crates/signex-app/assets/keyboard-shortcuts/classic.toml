@@ -110,3 +110,18 @@ context = "footprint"
 "1" = "footprint_mode_sketch"
 "2" = "footprint_mode_pads"
 "3" = "footprint_mode_view_3d"
+
+[[keyboard_shortcuts.sections]]
+context = "gerber"
+
+[keyboard_shortcuts.sections.bindings]
+"PageUp" = "gerber_previous_layer"
+"PageDown" = "gerber_next_layer"
+"+" = "gerber_move_layer_up"
+"-" = "gerber_move_layer_down"
+"F" = "gerber_sketch_flashes"
+"L" = "gerber_sketch_lines"
+"P" = "gerber_sketch_polygons"
+"D" = "gerber_show_d_codes"
+"Ctrl+P" = "gerber_print"
+"Ctrl+Q" = "gerber_quit"

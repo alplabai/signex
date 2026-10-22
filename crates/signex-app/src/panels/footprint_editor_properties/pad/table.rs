@@ -182,6 +182,7 @@ pub(super) fn pad_table_static_cell<'a>(
 /// v0.20 — single COPPER table row. Built inline because all four
 /// data cells (X-Size, Y-Size, Shape, Relief) reference different
 /// fields on PadFormValues + different message constructors.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn pad_copper_row<'a>(
     label: &'a str,
     values: &PadFormValues,

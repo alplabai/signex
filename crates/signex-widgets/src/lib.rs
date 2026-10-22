@@ -4,6 +4,8 @@
 //! No Iced fork — composition only.
 
 pub mod active_bar;
+pub mod gerber_viewer;
+pub mod grid_editor;
 pub mod history_pane;
 pub mod icon_button;
 pub mod passive_calculator;

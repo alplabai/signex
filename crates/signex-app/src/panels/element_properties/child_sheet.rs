@@ -126,6 +126,7 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
 /// Both the palette pick and the advanced-picker submit reuse the
 /// same `EditChildSheet*Color` message so engine command + undo/redo
 /// round-trip is identical for both paths.
+#[allow(clippy::too_many_arguments)]
 fn child_sheet_color_row<'a>(
     label: &'a str,
     sheet_id: uuid::Uuid,

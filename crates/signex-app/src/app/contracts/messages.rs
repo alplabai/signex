@@ -91,6 +91,18 @@ pub enum WindowMsg {
         modal: crate::app::state::ModalId,
         direction: iced::window::Direction,
     },
+    /// Start moving a borderless secondary window from its Signex title bar.
+    StartWindowDrag(iced::window::Id),
+    /// Start resizing a borderless secondary window from one of its edge
+    /// handles.
+    StartWindowResize {
+        id: iced::window::Id,
+        direction: iced::window::Direction,
+    },
+    /// Custom Signex title-bar controls for a secondary window.
+    MinimizeWindow(iced::window::Id),
+    ToggleMaximizeWindow(iced::window::Id),
+    CloseWindow(iced::window::Id),
     /// Custom min/max/close buttons in the borderless main-window chrome.
     MinimizeMainWindow,
     ToggleMaximizeMainWindow,

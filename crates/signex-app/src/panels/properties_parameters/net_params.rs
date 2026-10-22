@@ -205,6 +205,7 @@ pub fn net_params_add_bar<'a>(
 /// Altium-style 3x3 justification picker with proper SVG arrow icons.
 /// Only horizontal is wired to state for now; vertical slots toggle visually
 /// but don't mutate the label.
+#[allow(clippy::too_many_arguments)]
 pub fn justification_grid(
     id: uuid::Uuid,
     rotation_deg: f64,

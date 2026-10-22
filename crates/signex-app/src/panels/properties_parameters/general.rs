@@ -12,6 +12,7 @@ use iced::widget::column;
 /// `CUSTOM_FILTER_PRESET_LIMIT` named presets. Pulled out of
 /// `view_properties_general` so the schematic Properties panel and the
 /// Footprint editor's Properties panel render the EXACT same widget.
+#[allow(clippy::too_many_arguments)]
 pub fn view_custom_selection_filters_section<'a>(
     presets: Vec<crate::active_bar::CustomFilterPreset>,
     active_custom_filter_tab: usize,

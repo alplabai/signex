@@ -2,6 +2,7 @@ use crate::keymap::{AppCommandId, Modifiers};
 
 mod active_bar;
 mod general;
+mod gerber;
 mod pcb;
 mod schematic;
 mod threed;
@@ -20,6 +21,8 @@ pub enum CommandGroup {
     Schematic,
     /// PCB routing / layer / via / DRC commands.
     Pcb,
+    /// Gerber fabrication-file viewer commands.
+    Gerber,
     /// Footprint-editor and 3D-view commands.
     ThreeD,
 }
@@ -30,6 +33,7 @@ impl CommandGroup {
         CommandGroup::General,
         CommandGroup::Schematic,
         CommandGroup::Pcb,
+        CommandGroup::Gerber,
         CommandGroup::ThreeD,
     ];
 
@@ -39,6 +43,7 @@ impl CommandGroup {
             CommandGroup::General => "General",
             CommandGroup::Schematic => "Schematic",
             CommandGroup::Pcb => "PCB",
+            CommandGroup::Gerber => "Gerber Viewer",
             CommandGroup::ThreeD => "3D",
         }
     }
@@ -212,6 +217,7 @@ const TABLES: &[&[CommandMetadata]] = &[
     schematic::SCHEMATIC,
     active_bar::ACTIVE_BAR,
     pcb::PCB,
+    gerber::GERBER,
     threed::THREE_D,
 ];
 
@@ -289,6 +295,7 @@ mod tests {
             CommandGroup::Schematic
         );
         assert_eq!(group_of("next_sheet"), CommandGroup::Schematic);
+        assert_eq!(group_of("gerber_next_layer"), CommandGroup::Gerber);
         assert_eq!(
             group_of("highlight_net_under_cursor"),
             CommandGroup::Schematic

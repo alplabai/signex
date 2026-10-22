@@ -31,6 +31,7 @@ use super::*;
 /// without entering Sketch mode. Empty for pads with no parametric
 /// handles (Rect / Oval) and during pad placement (no minted
 /// entities yet).
+#[allow(clippy::too_many_arguments)]
 pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<'a>(
     mut col: Column<'a, PanelMsg>,
     values: &PadFormValues,

@@ -4,7 +4,7 @@ use super::*;
 /// [`iced::window::Icon`]. When `has_bundled_icon` isn't set (i.e. the PNG
 /// hasn't been generated yet) this returns `None` and the window opens with
 /// the platform default icon.
-fn bundled_window_icon() -> Option<iced::window::Icon> {
+pub(crate) fn bundled_window_icon() -> Option<iced::window::Icon> {
     #[cfg(has_bundled_icon)]
     {
         let bytes: &[u8] = include_bytes!("../../../assets/brand/generated/signex-256.png");
@@ -33,7 +33,21 @@ impl Signex {
     pub(super) const PDF_MODAL_W: f32 = 1180.0;
     pub(super) const PDF_MODAL_H: f32 = 760.0;
 
-    pub fn title(&self, _id: iced::window::Id) -> String {
+    pub fn title(&self, id: iced::window::Id) -> String {
+        if matches!(
+            self.ui_state.windows.get(&id),
+            Some(super::state::WindowKind::GerberViewer)
+        ) {
+            return "Signex — Gerber Viewer".to_string();
+        }
+
+        if matches!(
+            self.ui_state.windows.get(&id),
+            Some(super::state::WindowKind::GerberGridEditor { .. })
+        ) {
+            return "Signex — Grid Editor".to_string();
+        }
+
         let version = env!("CARGO_PKG_VERSION");
         let dirty_count = self.document_state.dirty_paths.len();
         if dirty_count == 0 {
