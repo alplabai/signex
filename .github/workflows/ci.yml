@@ -12,6 +12,7 @@ on:
     branches: [main, trunk]
   pull_request:
     branches: [main, trunk]
+  merge_group:
   workflow_dispatch:
 
 concurrency:
@@ -198,6 +199,9 @@ jobs:
       # scripts/check_discarded_tasks.sh; GH #99 part 1.
       - name: Discarded-Task ratchet gate
         run: bash scripts/check_discarded_tasks.sh
+
+      - name: Discarded-Task gate controls
+        run: bash scripts/test_check_discarded_tasks.sh
 
   lint-lockstep:
     name: lint lockstep

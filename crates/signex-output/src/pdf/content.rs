@@ -10,8 +10,9 @@ pub(super) fn build_page_content(
     page_w_pt: f32,
     page_h_pt: f32,
     expr_tables: &ExpressionTables,
+    fonts: &mut FontUsage,
 ) -> Result<Vec<u8>, PdfError> {
-    let mut surface = PdfSurface::new();
+    let mut surface = PdfSurface::new(fonts);
     let colour_map = ColourMap::new(opts.colour_mode);
 
     let (page_w_mm, page_h_mm) = opts.page_size.dimensions_mm(opts.orientation);
@@ -99,12 +100,12 @@ pub(super) fn build_page_content(
 
                 let runs = pdf_markup_runs(text);
                 let plain_text: String = runs.iter().map(|r| r.text.as_str()).collect();
-                let preferred_text = sanitize_pdf_text(&plain_text);
+                let preferred_text = normalize_pdf_text(&plain_text);
                 let chosen_alias = best_alias_for_text(font_alias, &preferred_text);
                 let text_w: f32 = runs
                     .iter()
                     .map(|run| {
-                        let t = sanitize_pdf_text(&run.text);
+                        let t = normalize_pdf_text(&run.text);
                         text_advance_pt(chosen_alias, &t, *size_pt * run.scale)
                     })
                     .sum();
@@ -127,7 +128,7 @@ pub(super) fn build_page_content(
                         continue;
                     }
                     let run_size = *size_pt * run.scale;
-                    let run_text = sanitize_pdf_text(&run.text);
+                    let run_text = normalize_pdf_text(&run.text);
                     let run_y = draw_y + *size_pt * run.baseline_offset;
                     let run_advance = text_advance_pt(chosen_alias, &run_text, run_size);
 
@@ -233,7 +234,7 @@ pub(super) fn build_page_content(
             let fy = tb_y + (field.y_mm * MM_TO_PT) as f32;
             let font = PdfFont::for_style(field.font_style);
             let size = (field.font_size_mm * MM_TO_PT) as f32;
-            surface.text_at(fx, fy, font.alias(), size, &resolved);
+            surface.text_at(fx, fy, font.alias(), size, &normalize_pdf_text(&resolved));
         }
     }
 

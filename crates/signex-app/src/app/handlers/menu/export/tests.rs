@@ -50,6 +50,7 @@ fn child_ref(filename: &str) -> ChildSheet {
 
 fn schematic(children: &[&str]) -> SchematicSheet {
     SchematicSheet {
+        unknown: Default::default(),
         uuid: Uuid::new_v4(),
         version: 0,
         generator: String::new(),
@@ -140,6 +141,7 @@ pub(crate) fn sheet_with_net(reference: &str, net_name: &str, children: &[&str])
         },
     );
     sheet.symbols.push(Symbol {
+        unknown: Default::default(),
         uuid: Uuid::new_v4(),
         lib_id: "Device:R".to_string(),
         reference: reference.to_string(),
@@ -905,3 +907,19 @@ fn a_child_that_exists_but_will_not_parse_is_not_called_missing() {
 }
 
 mod diagnosis;
+
+#[test]
+fn uncovered_pdf_characters_reach_the_messages_panel() {
+    let marker = Uuid::new_v4().simple().to_string()[..8].to_string();
+    let chars: Vec<char> = format!("\u{4E2D}\u{6587}{marker}").chars().collect();
+    let before = diagnostic_count(&marker);
+    super::log_uncovered_chars(&chars);
+    assert_eq!(diagnostic_count(&marker) - before, 1);
+    let before_all = diagnostic_count("have no glyph");
+    super::log_uncovered_chars(&[]);
+    assert_eq!(
+        diagnostic_count("have no glyph"),
+        before_all,
+        "nothing to say"
+    );
+}
