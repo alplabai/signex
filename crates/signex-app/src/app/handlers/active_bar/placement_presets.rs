@@ -50,6 +50,7 @@ impl Signex {
                 ));
                 self.interaction_state.active_canvas_mut().ghost_label =
                     Some(signex_types::schematic::Label {
+                        unknown_columns: Default::default(),
                         uuid: uuid::Uuid::new_v4(),
                         text: "PORT".to_string(),
                         position: signex_types::schematic::Point::new(0.0, 0.0),
@@ -69,6 +70,7 @@ impl Signex {
                 ));
                 self.interaction_state.active_canvas_mut().ghost_label =
                     Some(signex_types::schematic::Label {
+                        unknown_columns: Default::default(),
                         uuid: uuid::Uuid::new_v4(),
                         text: "SHEET".to_string(),
                         position: signex_types::schematic::Point::new(0.0, 0.0),
@@ -136,6 +138,7 @@ impl Signex {
                 self.interaction_state.pending_port = None;
                 self.interaction_state.active_canvas_mut().ghost_label =
                     Some(signex_types::schematic::Label {
+                        unknown_columns: Default::default(),
                         uuid: uuid::Uuid::new_v4(),
                         text: "PARAM=VALUE".to_string(),
                         position: signex_types::schematic::Point::new(0.0, 0.0),
@@ -269,6 +272,7 @@ impl Signex {
         // before committing to a click.
         self.interaction_state.active_canvas_mut().ghost_symbol =
             Some(signex_types::schematic::Symbol {
+                unknown_columns: Default::default(),
                 unknown: Default::default(),
                 uuid: uuid::Uuid::new_v4(),
                 lib_id: lib_id.to_string(),

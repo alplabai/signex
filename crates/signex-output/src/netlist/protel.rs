@@ -290,6 +290,7 @@ mod tests {
             row_id: None,
             library_version: String::new(),
             unknown: Default::default(),
+            unknown_columns: Default::default(),
         }
     }
 

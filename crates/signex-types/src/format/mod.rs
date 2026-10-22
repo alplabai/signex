@@ -33,9 +33,12 @@ mod sch_rows;
 mod tsv;
 mod units;
 mod unknown;
+mod unknown_columns;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod unknown_columns_tests;
 #[cfg(test)]
 mod unknown_tests;
 
@@ -45,6 +48,7 @@ pub use pcb_rows::{PcbFootprintRow, PcbPadRow, PcbTrackRow, PcbViaRow};
 pub use sch_rows::{SchComponentRow, SchJunctionRow, SchLabelRow, SchWireRow};
 pub use tsv::{parse_tsv_block, write_tsv_block};
 pub use unknown::{BoardUnknown, SheetUnknown, UnknownFields};
+pub use unknown_columns::{MAX_FOREIGN_COLUMN_NAME_BYTES, MAX_FOREIGN_COLUMNS, UnknownColumns};
 
 // Subtree-internal helpers used by the container types below.
 use extras::{
@@ -94,11 +98,42 @@ pub enum FormatError {
         expected: usize,
         columns: Vec<String>,
     },
-    #[error("TSV block {block:?}: header columns {got:?} do not match expected {expected:?}")]
+    #[error("TSV block {block:?}: header columns {got:?} lack a known column of {expected:?}")]
     TsvHeaderMismatch {
         block: String,
         got: Vec<String>,
         expected: Vec<String>,
+    },
+    #[error("TSV block {block:?}: header repeats column {column:?}")]
+    TsvDuplicateColumn { block: String, column: String },
+    #[error(
+        "TSV block {block:?}: {count} foreign columns exceeds the limit of {max}; \
+         the first column over the limit is {first_over:?}... \
+         (refusing rather than drop columns)"
+    )]
+    TsvTooManyForeignColumns {
+        block: String,
+        count: usize,
+        max: usize,
+        /// First characters of the first foreign column past the cap, so
+        /// the user can tell which rows to remove.
+        first_over: String,
+    },
+    #[error(
+        "TSV block {block:?}: foreign column {column:?} has the name of a known column \
+         (refusing to write a header the loader would reject)"
+    )]
+    TsvForeignColumnShadowsKnown { block: String, column: String },
+    #[error(
+        "TSV block {block:?}: foreign column name {prefix:?}... is {len} bytes, \
+         over the limit of {max} (refusing to load rather than truncate it)"
+    )]
+    TsvForeignColumnNameTooLong {
+        block: String,
+        /// First characters of the name, for identification only.
+        prefix: String,
+        len: usize,
+        max: usize,
     },
     #[error("TSV block {block:?}: row {row} field {field:?} parse error: {message}")]
     TsvFieldParse {
@@ -129,9 +164,15 @@ pub trait SnxTable: Sized {
     /// [`SnxTable::columns`]. Empty cells use `""`.
     fn to_row(&self) -> Vec<String>;
 
-    /// Parse a row of cell strings (length matches [`SnxTable::columns`]).
+    /// Parse a row of the known cells, already ordered as [`SnxTable::columns`].
     /// Implementations report parse failures via [`FormatError::TsvFieldParse`].
     fn from_row(values: &[&str], block: &str, row: usize) -> Result<Self, FormatError>;
+
+    /// Foreign cells this row carried (see [`UnknownColumns`]).
+    fn unknown_columns(&self) -> &UnknownColumns;
+
+    /// Attach the foreign cells captured by `parse_tsv_block`.
+    fn with_unknown_columns(self, columns: UnknownColumns) -> Self;
 }
 
 // ---------------------------------------------------------------------------
@@ -192,10 +233,10 @@ impl SnxSchematic {
             self.sheet.junctions.iter().map(junction_to_row).collect();
         let label_rows: Vec<SchLabelRow> = self.sheet.labels.iter().map(label_to_row).collect();
 
-        write_tsv_section(&mut out, "sheets.components", &component_rows);
-        write_tsv_section(&mut out, "sheets.wires", &wire_rows);
-        write_tsv_section(&mut out, "sheets.junctions", &junction_rows);
-        write_tsv_section(&mut out, "sheets.labels", &label_rows);
+        write_tsv_section(&mut out, "sheets.components", &component_rows)?;
+        write_tsv_section(&mut out, "sheets.wires", &wire_rows)?;
+        write_tsv_section(&mut out, "sheets.junctions", &junction_rows)?;
+        write_tsv_section(&mut out, "sheets.labels", &label_rows)?;
 
         // Extras: auxiliary TOML tables for fields the bulk row
         // doesn't carry. Wrap the whole extras tree in a single
@@ -499,10 +540,10 @@ impl SnxPcb {
         let track_rows: Vec<PcbTrackRow> = self.board.segments.iter().map(track_to_row).collect();
         let via_rows: Vec<PcbViaRow> = self.board.vias.iter().map(via_to_row).collect();
 
-        write_tsv_section(&mut out, "footprints", &footprint_rows);
-        write_tsv_section(&mut out, "pads", &pad_rows);
-        write_tsv_section(&mut out, "tracks", &track_rows);
-        write_tsv_section(&mut out, "vias", &via_rows);
+        write_tsv_section(&mut out, "footprints", &footprint_rows)?;
+        write_tsv_section(&mut out, "pads", &pad_rows)?;
+        write_tsv_section(&mut out, "tracks", &track_rows)?;
+        write_tsv_section(&mut out, "vias", &via_rows)?;
 
         // Zones — full struct array (each zone serialises naturally
         // under `[[zones]]` with its own uuid scalar).
@@ -637,6 +678,7 @@ impl SnxPcb {
                     // carries no foreign keys and must not inherit the
                     // orphan pad's.
                     unknown: UnknownFields::default(),
+                    unknown_columns: UnknownColumns::default(),
                 });
             }
         }
