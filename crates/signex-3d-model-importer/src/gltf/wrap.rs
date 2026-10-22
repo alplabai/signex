@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use base64::Engine;
 use serde_json::{Value, json};
@@ -31,10 +31,7 @@ pub fn wrap_gltf(
 
     validate_asset_version(&root, source_path)?;
 
-    let base_dir = source_path
-        .parent()
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| PathBuf::from("."));
+    let base_dir = model_base_dir(source_path);
 
     let mut warnings = Vec::new();
 
@@ -56,7 +53,7 @@ pub fn wrap_gltf(
     }
 
     rewrite_buffer_views(&mut root, &buffer_offsets, source_path)?;
-    embed_image_uris(&mut root, &base_dir, &mut warnings);
+    embed_image_uris(&mut root, &base_dir, source_path, &mut warnings)?;
     rewrite_asset_extras(&mut root, source_path, converter_version);
 
     root["buffers"] = json!([{ "byteLength": merged_bin.len() }]);
@@ -140,7 +137,12 @@ fn read_buffer_payload(
         });
     }
 
-    let buffer_path = base_dir.join(uri);
+    let buffer_path = resolve_external_uri(base_dir, uri).map_err(|reason| {
+        ModelImportError::GltfParseFailed {
+            path: source_path.to_path_buf(),
+            reason: format!("buffers[{index}] {reason}"),
+        }
+    })?;
     std::fs::read(&buffer_path).map_err(|err| ModelImportError::GltfParseFailed {
         path: source_path.to_path_buf(),
         reason: format!(
@@ -189,12 +191,17 @@ fn rewrite_buffer_views(
     Ok(())
 }
 
-fn embed_image_uris(root: &mut Value, base_dir: &Path, warnings: &mut Vec<ImportWarning>) {
+fn embed_image_uris(
+    root: &mut Value,
+    base_dir: &Path,
+    source_path: &Path,
+    warnings: &mut Vec<ImportWarning>,
+) -> Result<(), ModelImportError> {
     let Some(images) = root.get_mut("images").and_then(Value::as_array_mut) else {
-        return;
+        return Ok(());
     };
 
-    for image in images {
+    for (index, image) in images.iter_mut().enumerate() {
         let Some(uri) = image
             .get("uri")
             .and_then(Value::as_str)
@@ -207,7 +214,12 @@ fn embed_image_uris(root: &mut Value, base_dir: &Path, warnings: &mut Vec<Import
             continue;
         }
 
-        let image_path = base_dir.join(&uri);
+        let image_path = resolve_external_uri(base_dir, &uri).map_err(|reason| {
+            ModelImportError::GltfParseFailed {
+                path: source_path.to_path_buf(),
+                reason: format!("images[{index}] {reason}"),
+            }
+        })?;
         match std::fs::read(&image_path) {
             Ok(bytes) => {
                 let mime = guess_mime_type(&image_path);
@@ -216,6 +228,63 @@ fn embed_image_uris(root: &mut Value, base_dir: &Path, warnings: &mut Vec<Import
             }
             Err(_) => warnings.push(ImportWarning::TextureMissing { uri }),
         }
+    }
+    Ok(())
+}
+
+/// Resolve a glTF external resource `uri` against `base_dir`, refusing
+/// anything that could read outside it (#112).
+///
+/// Rejects a scheme or drive prefix (`file:`, `C:`), absolute paths (leading
+/// `/` or `\`), any `..` component, and any path that, once symlinks are
+/// resolved, lands outside the canonical `base_dir`. A resource that does not
+/// exist is returned as-is so the caller reports it as missing, not as an
+/// escape.
+fn resolve_external_uri(base_dir: &Path, uri: &str) -> Result<PathBuf, String> {
+    let reject = |why: &str| Err(format!("uri {uri:?} rejected: {why}"));
+
+    if uri.contains('\0') {
+        return reject("contains a NUL byte");
+    }
+    if uri.contains(':') {
+        return reject("has a scheme or drive prefix");
+    }
+    if uri.starts_with('/') || uri.starts_with('\\') {
+        return reject("is an absolute path");
+    }
+    let rel = Path::new(uri);
+    for component in rel.components() {
+        match component {
+            Component::Normal(_) | Component::CurDir => {}
+            Component::ParentDir => return reject("contains '..'"),
+            Component::RootDir | Component::Prefix(_) => return reject("is an absolute path"),
+        }
+    }
+    if uri.split(['/', '\\']).any(|part| part == "..") {
+        return reject("contains '..'");
+    }
+
+    let joined = base_dir.join(rel);
+    let Ok(canonical) = joined.canonicalize() else {
+        // Not on disk: nothing to leak. Let the read fail as "missing".
+        return Ok(joined);
+    };
+    let canonical_base = base_dir
+        .canonicalize()
+        .map_err(|e| format!("base directory unreadable: {e}"))?;
+    if !canonical.starts_with(&canonical_base) {
+        return reject("resolves outside the model directory");
+    }
+    Ok(canonical)
+}
+
+/// Directory external resources resolve against. A bare relative path such as
+/// `m.gltf` has an empty parent, which cannot be canonicalized, so it means the
+/// current directory.
+fn model_base_dir(source_path: &Path) -> PathBuf {
+    match source_path.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => parent.to_path_buf(),
+        _ => PathBuf::from("."),
     }
 }
 
@@ -289,5 +358,18 @@ mod tests {
     fn decode_data_uri_non_base64_is_none() {
         let uri = "data:text/plain,abc";
         assert!(decode_data_uri(uri).is_none());
+    }
+
+    #[test]
+    fn bare_relative_source_path_uses_current_dir_as_base() {
+        let base = model_base_dir(Path::new("m.gltf"));
+        assert_eq!(base, PathBuf::from("."));
+        // The base must be canonicalizable and resolve a sibling resource.
+        assert!(base.canonicalize().is_ok());
+        assert!(resolve_external_uri(&base, "m.bin").is_ok());
+        assert_eq!(
+            model_base_dir(Path::new("dir/m.gltf")),
+            PathBuf::from("dir")
+        );
     }
 }
