@@ -340,6 +340,21 @@ fn to_text_v_align(align: TextVAlign) -> alignment::Vertical {
     }
 }
 
+/// The canvas face for one item. `bold` used to be ignored here while the GPU
+/// pipeline honoured it, so the same item rendered at two weights (#645).
+/// `italic` stays upright on both sides — see `signex_gfx`'s `attrs_for_item`
+/// for why mapping it without a bundled italic face changes the typeface.
+fn canvas_font(text: &TextItem) -> iced::Font {
+    if text.bold {
+        iced::Font {
+            weight: iced::font::Weight::Bold,
+            ..crate::render_config::IOSEVKA
+        }
+    } else {
+        crate::render_config::IOSEVKA
+    }
+}
+
 fn draw_text_bucket<F>(
     frame: &mut canvas::Frame,
     texts: &[TextItem],
@@ -359,13 +374,16 @@ fn draw_text_bucket<F>(
             position: Point::ORIGIN,
             color: color_from_rgba(text.color),
             size: iced::Pixels(options.text_px(text.size_mm)),
-            font: crate::render_config::IOSEVKA,
+            line_height: iced::widget::text::LineHeight::Relative(
+                signex_gfx::primitive::text::LINE_HEIGHT_EM,
+            ),
+            font: canvas_font(text),
             align_x: to_text_h_align(text.h_align),
             align_y: to_text_v_align(text.v_align),
             ..canvas::Text::default()
         };
 
-        if text.rotation.abs() < f32::EPSILON {
+        if text.is_axis_aligned() {
             let mut placed = draw_text;
             placed.position = position;
             frame.fill_text(placed);
@@ -402,6 +420,9 @@ pub fn draw_scene_with_world_to_screen<F>(
             SceneBucket::Arcs => draw_arc_bucket(frame, &scene.arcs, world_to_screen, options),
             SceneBucket::Polygons => {
                 draw_polygon_bucket(frame, &scene.polygons, world_to_screen, options);
+            }
+            SceneBucket::TopPolygons => {
+                draw_polygon_bucket(frame, &scene.top_polygons, world_to_screen, options);
             }
             SceneBucket::Texts => draw_text_bucket(frame, &scene.texts, world_to_screen, options),
             SceneBucket::OverlayLines => {

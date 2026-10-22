@@ -60,6 +60,18 @@ fn sdf_arc(
 
     var a = normalize_angle(atan2(local.y, local.x) - start_angle);
     var sweep = normalize_angle(end_angle - start_angle);
+
+    // A span of a whole number of turns is a circle, not the zero-length
+    // point its collapsed wraparound sweep describes: `normalize_angle(TAU)`
+    // is 0, so `a <= sweep` would admit only the start ray and the arc would
+    // render as nothing at all. Mirrors `arc_is_full_turn_rad`, the shared
+    // authority the CPU replay and the symbol hit-test both consult, epsilon
+    // included.
+    let raw_span = end_angle - start_angle;
+    if (abs(raw_span) > 1e-4 && sweep < 1e-4) {
+        return radial;
+    }
+
     let in_sweep = a <= sweep;
 
     if (!in_sweep) {

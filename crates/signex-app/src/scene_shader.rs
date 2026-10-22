@@ -295,6 +295,9 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
             pipeline.line.upload(device, queue, &self.scene.lines);
             pipeline.arc.upload(device, queue, &self.scene.arcs);
             pipeline.circle.upload(device, queue, &self.scene.circles);
+            pipeline
+                .polygon
+                .upload_top(device, queue, &self.scene.top_polygons);
             // Overlay geometry uploads into each pipeline's dedicated overlay
             // buffer (never folded into the base buckets above — see
             // `pcb_canvas::gpu_scene`), so `Self::draw`'s later overlay pass
@@ -336,6 +339,12 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
         // silently disagree with the CPU replay on a HiDPI display.
         // `(em * scale * dpi).clamp(min * dpi, max * dpi)` is exactly
         // `(em * scale).clamp(min, max) * dpi`.
+        //
+        // `upload` stages axis-aligned items only — a glyph atlas cannot
+        // rotate (`TextItem::is_axis_aligned`). Harmless while the PCB is the
+        // only surface here (its scene carries no text), but a surface whose
+        // scene does carry rotated text — the schematic, when #199 mounts it —
+        // owes those items a CPU canvas pass, or they vanish.
         let text_size = TextSizePolicy::new(S::TEXT_SIZE.min_px * dpi, S::TEXT_SIZE.max_px * dpi);
         let mut font_system = iced::advanced::graphics::text::font_system()
             .write()
@@ -358,11 +367,10 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
     fn draw(&self, pipeline: &Self::Pipeline, render_pass: &mut wgpu::RenderPass<'_>) -> bool {
         let camera = pipeline.camera.bind_group();
         // Composite in the shared `GPU_SCENE_DRAW_ORDER` (fills, then strokes,
-        // then text on top). The order lives in one const so it can be diffed
-        // against the CPU `pcb_canvas::draw_scene` order: polygons draw *first*
-        // here but *last* on the CPU — a known base-bucket z-order divergence
-        // the `scene::order` parity test pins until visual authority
-        // reconciles it (reserved for Caner/Hakan). GPU parity stays
+        // then pads, then text on top). The order lives in one const so it can be diffed
+        // against the CPU replays: both `pcb_canvas::draw_scene` and the
+        // schematic replay now draw their base buckets in this order (#645,
+        // #653), pinned by the `scene::order` parity tests. GPU parity stays
         // unconfirmed on hardware.
         for &bucket in GPU_SCENE_DRAW_ORDER {
             match bucket {
@@ -370,6 +378,7 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
                 SceneBucket::Lines => pipeline.line.draw(render_pass, camera),
                 SceneBucket::Arcs => pipeline.arc.draw(render_pass, camera),
                 SceneBucket::Circles => pipeline.circle.draw(render_pass, camera),
+                SceneBucket::TopPolygons => pipeline.polygon.draw_top(render_pass, camera),
                 SceneBucket::Texts => {
                     // Same rationale as the `upload` in `prepare`: a failed
                     // text draw loses text for one frame, not the render pass.

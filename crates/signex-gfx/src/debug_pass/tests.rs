@@ -3,9 +3,9 @@ use super::composite::run_grid_overlay_text_composite_smoke_pass_with;
 use super::{
     CompositeStage, run_arc_smoke_pass, run_arc_smoke_pass_with,
     run_grid_overlay_text_composite_smoke_pass, run_grid_smoke_pass, run_grid_smoke_pass_with,
-    run_line_circle_smoke_pass, run_line_readback_smoke_pass, run_polygon_smoke_pass,
-    run_polygon_smoke_pass_with, run_text_geometry_composite_smoke_pass, run_text_smoke_pass,
-    run_text_smoke_pass_with,
+    run_line_circle_smoke_pass, run_line_readback_smoke_pass, run_polygon_readback_smoke_pass,
+    run_polygon_smoke_pass, run_polygon_smoke_pass_with, run_text_geometry_composite_smoke_pass,
+    run_text_smoke_pass, run_text_smoke_pass_with,
 };
 use crate::primitive::arc::Arc;
 use crate::primitive::line::LineSegment;
@@ -118,6 +118,47 @@ fn a_stroke_floor_keeps_a_hairline_visible_when_the_cpu_would_clamp_it() {
     }
 }
 
+/// The polygon half of the floor: a coloured zero-width outline used to emit
+/// no geometry on the GPU while the CPU replay drew it as a hairline. Now its
+/// quads are emitted at zero half-width and `polygon.wgsl` widens them to
+/// `min_stroke_px`. Same two-run shape as the line test above — with no floor
+/// the edge has zero area and reads black, so the floor is what lights it.
+#[test]
+fn a_stroke_floor_draws_a_zero_width_polygon_outline() {
+    // Transparent fill, so only the outline can light a pixel. Its bottom
+    // edge runs along y = 1.0 mm, the sampled row's pixel boundary.
+    let outline = GpuPolygon {
+        vertices: vec![[0.0, 1.0], [30.0, 1.0], [30.0, 10.0], [0.0, 10.0]],
+        fill_color: [0.0, 0.0, 0.0, 0.0],
+        stroke_color: Some([1.0, 1.0, 1.0, 1.0]),
+        stroke_width: 0.0,
+    };
+    // Mid-edge, clear of the vertical edges at x = 0 and x = 120 px.
+    let samples = [60u32, 64, 68];
+
+    let without_floor = pollster::block_on(run_polygon_readback_smoke_pass(
+        outline.clone(),
+        0.0,
+        &samples,
+    ))
+    .expect("outline readback pass, no floor");
+    assert!(
+        without_floor.iter().all(|red| *red < 60),
+        "a zero-width outline with no floor has no area, read {without_floor:?}"
+    );
+
+    let with_floor = pollster::block_on(run_polygon_readback_smoke_pass(outline, 2.0, &samples))
+        .expect("outline readback pass, with floor");
+    for (x, red) in samples.iter().zip(&with_floor) {
+        assert!(
+            *red > 200,
+            "the stroke floor should have drawn the zero-width outline 2 px \
+             wide, but x={x} read red={red} — polygon.wgsl is ignoring \
+             camera.min_stroke_px"
+        );
+    }
+}
+
 #[test]
 fn arc_smoke_pass_runs() {
     let count = pollster::block_on(run_arc_smoke_pass()).expect("arc pass");
@@ -226,9 +267,14 @@ fn grid_smoke_pass_lod_changes_with_zoom() {
 #[test]
 fn text_smoke_pass_runs() {
     let text_count = pollster::block_on(run_text_smoke_pass()).expect("text pass");
-    assert_eq!(text_count, 2);
+    // Two items, one rotated 0.2 rad: only the unrotated one reaches the
+    // atlas. A cryoglyph `TextArea` cannot rotate, so staging the other drew
+    // it axis-aligned; it is the CPU layer's (`TextItem::is_axis_aligned`).
+    assert_eq!(text_count, 1);
 }
 
+/// Scale and empty content still stage; rotation never does — whatever the
+/// angle's sign or how many turns it wraps.
 #[test]
 fn text_smoke_pass_handles_scale_rotation_and_empty_content() {
     let texts = [
@@ -272,8 +318,8 @@ fn text_smoke_pass_handles_scale_rotation_and_empty_content() {
     let high_zoom_count =
         pollster::block_on(run_text_smoke_pass_with(64.0, &texts)).expect("text pass high");
 
-    assert_eq!(low_zoom_count, 3);
-    assert_eq!(high_zoom_count, 3);
+    assert_eq!(low_zoom_count, 1);
+    assert_eq!(high_zoom_count, 1);
 }
 
 #[test]

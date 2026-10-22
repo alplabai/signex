@@ -268,6 +268,9 @@ pub trait SceneUploadTarget {
     fn upload_circles(&mut self, circles: &[Circle]);
     fn upload_arcs(&mut self, arcs: &[Arc]);
     fn upload_polygons(&mut self, polygons: &[GpuPolygon]);
+    /// Polygons drawn above the stroke buckets; dirty-gated by
+    /// `DirtyFlags::POLYGONS` together with [`Self::upload_polygons`].
+    fn upload_top_polygons(&mut self, polygons: &[GpuPolygon]);
     fn upload_texts(
         &mut self,
         texts: &[TextItem],
@@ -329,6 +332,11 @@ pub fn apply_dirty_uploads_with_culling<T: SceneUploadTarget>(
         let polygons = cull_items(&scene.polygons, viewport, polygon_envelope);
         target.upload_polygons(polygons.as_ref());
         counters.polygon_uploads += 1;
+
+        // Same dirty category and the same counter: the two polygon buckets
+        // are one upload decision, not two.
+        let top_polygons = cull_items(&scene.top_polygons, viewport, polygon_envelope);
+        target.upload_top_polygons(top_polygons.as_ref());
     }
 
     if dirty.contains(DirtyFlags::TEXT) {

@@ -34,6 +34,7 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ### Changed
 
+- **The god-file cap is now 1200 lines**, up from 1000. It still counts physical lines, comments included. Long explanations belong in `docs/` with a one-line pointer in the code (CONTRIBUTING.md, "Code Style"), so a documented file is not forced into a split it does not need.
 - **GPU glyph atlas now trims each frame**, and GPU text prep/draw failures log once instead of being swallowed silently.
 - **Removed the dead `SCHEMATIC_GPU_RENDER` flag** — it gated no live path (the schematic GPU adapter is compiled and tested but not yet mounted).
 - **One GPU scene renderer, not two** — `schematic_shader` was a second, unmounted copy of `scene_shader`'s five pipelines that had drifted apart from it on upload skipping, overlay compositing, draw order and error reporting; mounting it as written would have deep-copied the whole `Scene` every frame and dropped every overlay. It is gone, and `scene_shader` is now parameterised by a `SceneSurface` marker so each editor surface gets its own pipeline slot — iced keys a stored pipeline by the primitive's `TypeId` in one process-wide map, so two surfaces sharing a type would overwrite each other's instance buffers and camera. The deleted copy held the only test in the tree pinning the glyph-atlas `trim` override; that guard now watches the pipeline that actually renders.

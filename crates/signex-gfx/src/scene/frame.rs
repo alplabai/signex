@@ -19,6 +19,12 @@ pub struct Scene {
     pub circles: Vec<Circle>,
     pub arcs: Vec<Arc>,
     pub polygons: Vec<GpuPolygon>,
+    /// Polygons that composite ABOVE the stroke buckets (lines, arcs,
+    /// circles) but below text and every overlay. Covered by
+    /// [`DirtyFlags::POLYGONS`] and culled/uploaded with [`Self::polygons`].
+    /// The PCB emitter puts pads here so a pad lands on top of the traces
+    /// and vias that run into it; zone pours stay in `polygons`, under them.
+    pub top_polygons: Vec<GpuPolygon>,
     pub texts: Vec<TextItem>,
     pub overlay_lines: Vec<LineSegment>,
     pub overlay_circles: Vec<Circle>,
@@ -35,6 +41,7 @@ impl Scene {
         self.circles.clear();
         self.arcs.clear();
         self.polygons.clear();
+        self.top_polygons.clear();
         self.texts.clear();
         self.overlay_lines.clear();
         self.overlay_circles.clear();
@@ -50,6 +57,7 @@ impl Scene {
             && self.circles.is_empty()
             && self.arcs.is_empty()
             && self.polygons.is_empty()
+            && self.top_polygons.is_empty()
             && self.texts.is_empty()
             && self.overlay_lines.is_empty()
             && self.overlay_circles.is_empty()

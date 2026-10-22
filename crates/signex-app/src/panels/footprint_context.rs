@@ -523,6 +523,8 @@ pub struct FootprintPadSummary {
     pub shape: signex_library::PadShape,
     pub kind: signex_library::PadKind,
     pub drill_diameter_mm: Option<f64>,
+    /// Oval-slot length of the drill; `None` = round hole.
+    pub drill_slot_length_mm: Option<f64>,
     pub stack: crate::library::editor::footprint::state::PadStackUi,
     pub feature_top: signex_sketch::attr::PadFeature,
     pub feature_bottom: signex_sketch::attr::PadFeature,
