@@ -104,6 +104,7 @@ fn set_role(
                 copper_offset_x_mm: None,
                 copper_offset_y_mm: None,
                 shape_params: crate::library::editor::footprint::state::ShapeParamMap::new(),
+                passthrough: crate::library::editor::footprint::state::PadPassthrough::default(),
             });
         }
         (false, Some(idx)) => {
