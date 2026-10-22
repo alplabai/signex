@@ -98,5 +98,11 @@ mod library_browser_cell_commit;
 #[path = "regression/render_config_grid_style.rs"]
 mod render_config_grid_style;
 
+#[path = "regression/rename_preserves_references.rs"]
+mod rename_preserves_references;
+
 #[path = "regression/rename_save_as_rekey.rs"]
 mod rename_save_as_rekey;
+
+#[path = "regression/deleted_sheet_not_resaved.rs"]
+mod deleted_sheet_not_resaved;

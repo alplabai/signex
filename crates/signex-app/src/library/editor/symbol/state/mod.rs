@@ -159,7 +159,7 @@ pub fn handle_interaction(handle: GraphicHandle) -> mouse::Interaction {
 }
 
 /// Default new-pin layout: place new pins to the right of the body.
-const DEFAULT_PIN_LENGTH_MM: f64 = 2.54;
+pub(crate) const DEFAULT_PIN_LENGTH_MM: f64 = 2.54;
 
 /// v0.13 — SchLib editor active-bar dropdown menu identifier. One
 /// per chevron-bearing button on the unified active bar. Mirrors the
@@ -243,6 +243,20 @@ impl SymbolFilterKind {
 }
 
 impl SymbolSelectionFilter {
+    /// Whether a graphic of this kind is selectable: text graphics
+    /// follow the Texts pill, every other shape the Drawings pill.
+    pub fn allows_graphic(&self, kind: &SymbolGraphicKind) -> bool {
+        match kind {
+            SymbolGraphicKind::Text { .. } => self.texts,
+            _ => self.drawings,
+        }
+    }
+
+    /// True when pins, drawings and texts are all selectable.
+    pub fn is_unrestricted(&self) -> bool {
+        self.pins && self.drawings && self.texts
+    }
+
     pub fn get(&self, kind: SymbolFilterKind) -> bool {
         match kind {
             SymbolFilterKind::Pins => self.pins,
