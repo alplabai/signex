@@ -261,6 +261,17 @@ impl Signex {
     }
 
     pub(crate) fn save_active_document_as(&mut self, path: PathBuf) -> Result<()> {
+        // Refuse a target another open tab hosts: re-keying onto it would
+        // replace that tab's engine and discard its unsaved edits.
+        let is_other_open_document = self.document_state.active_path.as_ref() != Some(&path)
+            && (self.document_state.engines.contains_key(&path)
+                || self.document_state.tabs.iter().any(|tab| tab.path == path));
+        if is_other_open_document {
+            anyhow::bail!(
+                "save as {}: that file is open in another tab or holds unsaved edits from a closed tab",
+                path.display()
+            );
+        }
         if let Some(result) =
             self.with_active_schematic_session_mut(|session| session.save_as(path.clone()))
         {

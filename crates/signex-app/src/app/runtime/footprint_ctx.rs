@@ -76,6 +76,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
                     shape: pad.shape.clone(),
                     kind: pad.kind,
                     drill_diameter_mm: pad.drill_diameter_mm,
+                    drill_slot_length_mm: pad.passthrough.drill_slot_length_mm,
                     stack: pad.stack.clone(),
                     feature_top: pad.feature_top,
                     feature_bottom: pad.feature_bottom,

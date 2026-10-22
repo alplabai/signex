@@ -88,16 +88,7 @@ impl MouserAdapter {
     }
 
     fn polite_wait(&self) {
-        let mut guard = self.throttle.lock().expect("throttle mutex poisoned");
-        if let Some(prev) = *guard {
-            let elapsed = prev.elapsed();
-            if elapsed < THROTTLE_INTERVAL {
-                drop(guard);
-                std::thread::sleep(THROTTLE_INTERVAL - elapsed);
-                guard = self.throttle.lock().expect("throttle mutex poisoned");
-            }
-        }
-        *guard = Some(Instant::now());
+        super::throttle::polite_wait(&self.throttle, THROTTLE_INTERVAL);
     }
 
     fn resolve_api_key(&self) -> Result<String, DistributorError> {
