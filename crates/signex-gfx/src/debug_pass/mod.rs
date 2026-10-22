@@ -204,7 +204,8 @@ async fn run_line_readback_smoke_pass(
     min_stroke_px: f32,
     sample_x_px: &[u32],
 ) -> Result<Vec<u8>, String> {
-    run_row_readback_smoke_pass(ReadbackGeometry::Line(line), min_stroke_px, sample_x_px).await
+    let samples = row_samples(sample_x_px);
+    run_readback_smoke_pass(ReadbackGeometry::Line(line), min_stroke_px, &samples).await
 }
 
 /// The same single-row readback as [`run_line_readback_smoke_pass`], through
@@ -216,25 +217,59 @@ async fn run_polygon_readback_smoke_pass(
     min_stroke_px: f32,
     sample_x_px: &[u32],
 ) -> Result<Vec<u8>, String> {
-    run_row_readback_smoke_pass(
-        ReadbackGeometry::Polygon(polygon),
-        min_stroke_px,
-        sample_x_px,
-    )
-    .await
+    let samples = row_samples(sample_x_px);
+    run_readback_smoke_pass(ReadbackGeometry::Polygon(polygon), min_stroke_px, &samples).await
+}
+
+/// Square target for [`ReadbackGeometry::Arc`], at [`ARC_READBACK_SCALE`]
+/// px/mm. `ARC_READBACK_PX * 4` bytes is a multiple of
+/// `wgpu::COPY_BYTES_PER_ROW_ALIGNMENT`, so rows need no padding.
+#[cfg(test)]
+pub(super) const ARC_READBACK_PX: u32 = 64;
+#[cfg(test)]
+pub(super) const ARC_READBACK_SCALE: f32 = 4.0;
+
+/// Row sampled by the line and polygon wrappers in their 128x8 target.
+#[cfg(test)]
+const LINE_ROW: u32 = 4;
+
+#[cfg(test)]
+fn row_samples(sample_x_px: &[u32]) -> Vec<(u32, u32)> {
+    sample_x_px.iter().map(|&x| (x, LINE_ROW)).collect()
+}
+
+/// The arc readback: the red channel at arbitrary `(x, y)` pixels of a
+/// [`ARC_READBACK_PX`] square target. The camera origin is world (0, 0) at the
+/// top-left pixel, so pixel `(x, y)` is world `(x, y) / ARC_READBACK_SCALE` mm
+/// and world +Y runs down the rows.
+#[cfg(test)]
+async fn run_arc_readback_smoke_pass(arc: Arc, samples: &[(u32, u32)]) -> Result<Vec<u8>, String> {
+    run_readback_smoke_pass(ReadbackGeometry::Arc(arc), 0.0, samples).await
 }
 
 #[cfg(test)]
 enum ReadbackGeometry {
     Line(LineSegment),
     Polygon(GpuPolygon),
+    Arc(Arc),
 }
 
 #[cfg(test)]
-async fn run_row_readback_smoke_pass(
+impl ReadbackGeometry {
+    /// Target `(width, height, px_per_mm)`; width * 4 must be a multiple of 256.
+    fn target(&self) -> (u32, u32, f32) {
+        match self {
+            Self::Line(_) | Self::Polygon(_) => (128, 8, 4.0),
+            Self::Arc(_) => (ARC_READBACK_PX, ARC_READBACK_PX, ARC_READBACK_SCALE),
+        }
+    }
+}
+
+#[cfg(test)]
+async fn run_readback_smoke_pass(
     geometry: ReadbackGeometry,
     min_stroke_px: f32,
-    sample_x_px: &[u32],
+    samples: &[(u32, u32)],
 ) -> Result<Vec<u8>, String> {
     let instance = wgpu::Instance::default();
 
@@ -260,10 +295,8 @@ async fn run_row_readback_smoke_pass(
         .map_err(|err| format!("failed to acquire device: {err}"))?;
 
     let target_format = wgpu::TextureFormat::Bgra8Unorm;
-    const WIDTH: u32 = 128;
-    const HEIGHT: u32 = 8;
-    let scale_px_per_mm = 4.0f32;
-    let camera = CameraUniform::ortho([WIDTH as f32, HEIGHT as f32], [0.0, 0.0], scale_px_per_mm)
+    let (width, height, scale_px_per_mm) = geometry.target();
+    let camera = CameraUniform::ortho([width as f32, height as f32], [0.0, 0.0], scale_px_per_mm)
         .with_min_feature_px(min_stroke_px, 0.0);
     let camera_gpu = CameraGpu::new(&device, camera);
 
@@ -271,19 +304,21 @@ async fn run_row_readback_smoke_pass(
         LinePipeline::new(&device, target_format, camera_gpu.bind_group_layout());
     let mut polygon_pipeline =
         PolygonPipeline::new(&device, target_format, camera_gpu.bind_group_layout());
+    let mut arc_pipeline = ArcPipeline::new(&device, target_format, camera_gpu.bind_group_layout());
 
     match geometry {
         ReadbackGeometry::Line(line) => line_pipeline.upload(&device, &queue, &[line]),
         ReadbackGeometry::Polygon(polygon) => {
             polygon_pipeline.upload(&device, &queue, &[polygon]);
         }
+        ReadbackGeometry::Arc(arc) => arc_pipeline.upload(&device, &queue, &[arc]),
     }
 
     let target = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("signex_gfx_dash_readback_target"),
         size: wgpu::Extent3d {
-            width: WIDTH,
-            height: HEIGHT,
+            width,
+            height,
             depth_or_array_layers: 1,
         },
         mip_level_count: 1,
@@ -317,12 +352,14 @@ async fn run_row_readback_smoke_pass(
         // Only the uploaded pipeline has anything to draw; the other is empty.
         line_pipeline.draw(&mut pass, camera_gpu.bind_group());
         polygon_pipeline.draw(&mut pass, camera_gpu.bind_group());
+        arc_pipeline.draw(&mut pass, camera_gpu.bind_group());
     }
 
-    // Bgra8Unorm is 4 bytes/pixel; WIDTH * 4 = 512 is already a multiple of
-    // wgpu::COPY_BYTES_PER_ROW_ALIGNMENT (256), so no row padding is needed.
-    let bytes_per_row = WIDTH * 4;
-    let buffer_size = (bytes_per_row * HEIGHT) as wgpu::BufferAddress;
+    // Bgra8Unorm is 4 bytes/pixel; every target width keeps `width * 4` a
+    // multiple of wgpu::COPY_BYTES_PER_ROW_ALIGNMENT (256), so no row padding.
+    let bytes_per_row = width * 4;
+    assert_eq!(bytes_per_row % wgpu::COPY_BYTES_PER_ROW_ALIGNMENT, 0);
+    let buffer_size = (bytes_per_row * height) as wgpu::BufferAddress;
     let readback = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("signex_gfx_dash_readback_buffer"),
         size: buffer_size,
@@ -341,12 +378,12 @@ async fn run_row_readback_smoke_pass(
             layout: wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(bytes_per_row),
-                rows_per_image: Some(HEIGHT),
+                rows_per_image: Some(height),
             },
         },
         wgpu::Extent3d {
-            width: WIDTH,
-            height: HEIGHT,
+            width,
+            height,
             depth_or_array_layers: 1,
         },
     );
@@ -359,13 +396,13 @@ async fn run_row_readback_smoke_pass(
     });
     let _ = device.poll(wgpu::PollType::wait_indefinitely());
 
-    let row = HEIGHT / 2;
     let samples = {
         let data = slice.get_mapped_range();
-        sample_x_px
+        samples
             .iter()
-            .map(|&x| {
-                let offset = (row * bytes_per_row + x * 4) as usize;
+            .map(|&(x, y)| {
+                assert!(x < width && y < height, "sample ({x}, {y}) outside target");
+                let offset = (y * bytes_per_row + x * 4) as usize;
                 // Bgra8Unorm byte order is [B, G, R, A]; red is byte index 2.
                 data[offset + 2]
             })

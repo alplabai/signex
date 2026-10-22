@@ -265,11 +265,35 @@ impl LocalGitAdapter {
     where
         F: FnOnce(&mut LibraryFile) -> Result<(), LibraryError>,
     {
+        self.mutate_library_file_if_changed(
+            |lf| {
+                f(lf)?;
+                Ok(true)
+            },
+            message,
+            fallback,
+        )
+    }
+
+    /// Like [`Self::mutate_library_file`], but the closure reports whether it
+    /// changed anything. `Ok(false)` skips both the write and the commit so a
+    /// no-op never lands an empty commit in the library's history.
+    pub(super) fn mutate_library_file_if_changed<F>(
+        &self,
+        f: F,
+        message: &str,
+        fallback: &str,
+    ) -> Result<(), LibraryError>
+    where
+        F: FnOnce(&mut LibraryFile) -> Result<bool, LibraryError>,
+    {
         let mut guard = self
             .library_file
             .write()
             .map_err(|_| LibraryError::Backend("library_file write lock poisoned".into()))?;
-        f(&mut guard)?;
+        if !f(&mut guard)? {
+            return Ok(());
+        }
         self.persist_library_file(&guard)?;
         let rel = self.snxlib_rel_path()?;
         self.commit_path(&rel, message, fallback)

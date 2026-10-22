@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::format::UnknownFields;
 use crate::property::SchematicProperty;
 
 // ---------------------------------------------------------------------------
@@ -711,6 +712,11 @@ pub struct Symbol {
     /// current `ComponentRow.version` on schematic open.
     #[serde(default)]
     pub library_version: String,
+    /// Keys in this symbol's `[extras.symbols.<uuid>]` table that this
+    /// build does not recognise, kept so a save re-emits them. Empty for
+    /// every file written by this build.
+    #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]
+    pub unknown: UnknownFields,
 }
 
 fn default_unit() -> u32 {
