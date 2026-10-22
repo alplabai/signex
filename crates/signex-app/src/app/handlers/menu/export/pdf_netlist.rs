@@ -162,6 +162,13 @@ impl Signex {
         };
         super::log_stitch_issues(&self.document_state, &ctx, &issues);
 
+        // Not a hole the user can accept: the file would be wrong, not partial.
+        if let Some(refusal) = issues.shared_reference_refusal() {
+            self.document_state.error_notice =
+                Some(crate::app::state::ErrorNotice::export(refusal));
+            return Task::none();
+        }
+
         // Machine-consumed deliverable: this file is imported into a PCB, and
         // a hole in it becomes missing components on the board plus nets that
         // stayed split where they should have merged through the missing

@@ -936,3 +936,4 @@ fn a_child_that_exists_but_will_not_parse_is_not_called_missing() {
 }
 
 mod diagnosis;
+mod protel_hierarchy;

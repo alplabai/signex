@@ -84,6 +84,7 @@ fn ctx_with_one_sheet() -> ExportContext {
         }],
         metadata: ProjectMetadata::default(),
         netlist: None,
+        netlist_sheets: Vec::new(),
     }
 }
 
@@ -280,6 +281,7 @@ fn pin_bookmarks_skipped_when_subtoggle_off() {
         }],
         metadata: ProjectMetadata::default(),
         netlist: None,
+        netlist_sheets: Vec::new(),
     };
 
     let opts = PdfOptions {
@@ -354,6 +356,7 @@ fn multi_sheet_bookmarks_have_independent_groups() {
             sheets,
             metadata: ProjectMetadata::default(),
             netlist: None,
+            netlist_sheets: Vec::new(),
         }
     };
     let opts = PdfOptions {

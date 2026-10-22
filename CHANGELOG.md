@@ -25,7 +25,7 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ### Added — netlist export
 
-- **Protel `.NET` netlist** (#354) — File ▸ Export ▸ Netlist now writes a Protel-format netlist (`[ ... ]` component blocks, `( ... )` net blocks, CRLF) that downstream PCB tools read, instead of the `# Signex netlist` text dump. The dump stays available as `NetlistFormat::Listing`; the menu label and save dialog now name the Protel format, and the dead "Generate Netlist" menu stub is gone.
+- **Protel `.NET` netlist** (#354) — File ▸ Export ▸ Netlist now writes a Protel-format netlist (`[ ... ]` component blocks, `( ... )` net blocks, CRLF) that downstream PCB tools read, instead of the `# Signex netlist` text dump. The dump stays available as `NetlistFormat::Listing`; the menu label and save dialog now name the Protel format, and the dead "Generate Netlist" menu stub is gone. Hierarchical projects export every child-sheet part; a child sheet placed more than once with shared designators is refused rather than merged.
 
 ### Fixed
 

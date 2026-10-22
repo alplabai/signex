@@ -196,6 +196,7 @@ mod tests {
             sheets: Vec::new(),
             metadata: Default::default(),
             netlist,
+            netlist_sheets: Vec::new(),
         }
     }
 

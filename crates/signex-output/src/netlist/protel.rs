@@ -22,7 +22,10 @@
 //!
 //! Connectivity is never re-derived here: nets and terminals are read straight
 //! off the authoritative [`Netlist`] (ADR-0002 D7), in its stable id/terminal
-//! order. Only the designator → footprint/value join walks the sheet symbols.
+//! order. Only the designator → footprint/value join walks the sheet symbols,
+//! and it walks `ExportContext::netlist_sheets` — every sheet the netlist was
+//! derived from, hierarchical children included — not the printed pages, so a
+//! terminal in a net block always has its component block.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 
@@ -47,7 +50,7 @@ struct Component {
 }
 
 /// Emit the Protel netlist for `netlist`, joining footprint/value from the
-/// symbols in `ctx.sheets`. When `incomplete_note` is `Some`, a `# `-marked
+/// symbols in `ctx.netlist_sheets`. When `incomplete_note` is `Some`, a `# `-marked
 /// header naming the omitted pages is written ahead of the first block (#431).
 pub(super) fn emit(
     ctx: &ExportContext,
@@ -97,7 +100,7 @@ fn check_designators(ctx: &ExportContext) -> Result<(), NetlistError> {
     let mut duplicates = BTreeSet::new();
     let mut units: HashSet<(String, i64)> = HashSet::new();
     let mut lib_ids: HashMap<String, &str> = HashMap::new();
-    for sym in ctx.sheets.iter().flat_map(|s| &s.schematic.symbols) {
+    for sym in ctx.netlist_sheets.iter().flat_map(|s| &s.symbols) {
         if is_skipped_symbol(sym) {
             continue;
         }
@@ -132,8 +135,8 @@ fn join(set: &BTreeSet<String>) -> String {
 fn collect_components(ctx: &ExportContext) -> Vec<Component> {
     let mut seen = HashSet::new();
     let mut components = Vec::new();
-    for sheet in &ctx.sheets {
-        for sym in &sheet.schematic.symbols {
+    for sheet in &ctx.netlist_sheets {
+        for sym in &sheet.symbols {
             if is_skipped_symbol(sym) {
                 continue;
             }
@@ -161,9 +164,9 @@ fn is_skipped_symbol(sym: &Symbol) -> bool {
 /// terminals (a GND port is a pin on the GND net), but naming one in a net
 /// block would point at a component the file never declares.
 fn unplaced_references(ctx: &ExportContext) -> HashSet<String> {
-    ctx.sheets
+    ctx.netlist_sheets
         .iter()
-        .flat_map(|s| &s.schematic.symbols)
+        .flat_map(|s| &s.symbols)
         .filter(|sym| is_skipped_symbol(sym))
         .map(|sym| field(&sym.reference))
         .collect()
@@ -296,11 +299,54 @@ mod tests {
     }
 
     fn ctx(symbols: Vec<Symbol>, nets: Vec<Net>) -> ExportContext {
+        let snapshot = sheet(symbols);
         ExportContext {
-            sheets: vec![sheet(symbols)],
+            netlist_sheets: vec![snapshot.schematic.clone()],
+            sheets: vec![snapshot],
             metadata: Default::default(),
             netlist: Some(Netlist { nets }),
         }
+    }
+
+    fn add_sheet(c: &mut ExportContext, symbols: Vec<Symbol>) {
+        let snapshot = sheet(symbols);
+        c.netlist_sheets.push(snapshot.schematic.clone());
+        c.sheets.push(snapshot);
+    }
+
+    #[test]
+    fn a_child_only_in_netlist_sheets_still_gets_its_component_block() {
+        let mut c = ctx(vec![symbol("R1", "10k", "", false)], vec![]);
+        c.netlist_sheets
+            .push(sheet(vec![symbol("R_CHILD", "1k", "R_0402", false)]).schematic);
+        c.netlist = Some(Netlist {
+            nets: vec![net(1, "N", &[("R1", "1"), ("R_CHILD", "1")])],
+        });
+        let text = protel(&c, None);
+        assert!(text.contains("[\r\nR_CHILD\r\nR_0402\r\n1k\r\n"), "{text}");
+    }
+
+    #[test]
+    fn a_duplicate_inside_a_child_sheet_is_refused() {
+        let mut c = ctx(vec![symbol("R1", "10k", "", false)], vec![]);
+        c.netlist_sheets
+            .push(sheet(vec![symbol("R1", "10k", "", false)]).schematic);
+        assert!(matches!(
+            export_err(&c),
+            NetlistError::DuplicateDesignators(_)
+        ));
+    }
+
+    #[test]
+    fn a_power_symbol_in_a_child_sheet_stays_out_of_net_blocks() {
+        let mut c = ctx(vec![symbol("R1", "10k", "", false)], vec![]);
+        c.netlist_sheets
+            .push(sheet(vec![symbol("GND1", "GND", "", true)]).schematic);
+        c.netlist = Some(Netlist {
+            nets: vec![net(1, "GND", &[("GND1", "1"), ("R1", "1")])],
+        });
+        let text = protel(&c, None);
+        assert!(!text.contains("GND1"), "{text}");
     }
 
     fn protel(ctx: &ExportContext, note: Option<Vec<String>>) -> String {
@@ -423,7 +469,7 @@ mod tests {
     #[test]
     fn a_designator_repeated_across_sheets_is_refused() {
         let mut c = ctx(vec![symbol("R1", "10k", "", false)], vec![]);
-        c.sheets.push(sheet(vec![symbol("R1", "10k", "", false)]));
+        add_sheet(&mut c, vec![symbol("R1", "10k", "", false)]);
         assert!(matches!(
             export_err(&c),
             NetlistError::DuplicateDesignators(_)
@@ -473,11 +519,14 @@ mod tests {
                 net(2, "SIG", &[("R1", "1"), ("U1", "1")]),
             ],
         );
-        c.sheets.push(sheet(vec![
-            symbol("C1", "100n", "C_0402", false),
-            symbol("U1", "MCU", "QFN-32", false),
-            symbol("#PWR02", "GND", "", true),
-        ]));
+        add_sheet(
+            &mut c,
+            vec![
+                symbol("C1", "100n", "C_0402", false),
+                symbol("U1", "MCU", "QFN-32", false),
+                symbol("#PWR02", "GND", "", true),
+            ],
+        );
         let text = protel(&c, None);
         let lines: Vec<&str> = text.split("\r\n").collect();
         let count = |l: &str| lines.iter().filter(|x| **x == l).count();

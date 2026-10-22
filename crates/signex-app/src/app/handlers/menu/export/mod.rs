@@ -77,6 +77,36 @@ impl ExportIssues {
             })
     }
 
+    /// The refusal text when one child file is placed more than once and its
+    /// parts keep one shared designator. The Protel file keys every terminal
+    /// on the designator alone, so the two physical parts would collapse into
+    /// a single `[ ... ]` block with that part's pin listed in two nets.
+    pub(crate) fn shared_reference_refusal(&self) -> Option<String> {
+        let shared: std::collections::BTreeSet<String> = self
+            .stitch
+            .iter()
+            .filter_map(|issue| match issue {
+                signex_net::StitchIssue::SharedReferenceAcrossInstances {
+                    filename,
+                    reference,
+                } => Some(format!("{reference} (in {filename})")),
+                _ => None,
+            })
+            .collect();
+        if shared.is_empty() {
+            return None;
+        }
+        Some(format!(
+            concat!(
+                "Netlist export refused: a sheet file is placed more than once and its ",
+                "designator(s) {} are shared by every placement, so two parts would merge ",
+                "into one in the Protel file. Give each placement its own designators ",
+                "(or use a separate sheet file per instance) and export again.",
+            ),
+            shared.into_iter().collect::<Vec<_>>().join(", ")
+        ))
+    }
+
     /// One user-facing line per problem, in a stable order.
     pub(crate) fn messages(&self) -> Vec<String> {
         let mut out: Vec<String> = self
@@ -276,6 +306,7 @@ fn build_export_scope(
     // (ADR-0002 D8, #466), not by the bare `ChildSheet.filename` string.
     let mut issues = ExportIssues::default();
     let set = sheet_set;
+    let mut netlist_sheets: Vec<signex_types::schematic::SchematicSheet> = Vec::new();
     let netlist = set.root.clone().and_then(|root_path| {
         // A declared page that exists and was read but that nothing
         // hierarchically references is stitched in below as its own
@@ -333,6 +364,12 @@ fn build_export_scope(
             resolved: &graph.resolved,
             roots: &roots,
         });
+        // Hand the exporters the very sheets the netlist was derived from, in
+        // key order so the output is deterministic: hierarchical children are
+        // not printed pages, yet their parts sit in the netlist's terminals.
+        let mut keyed: Vec<_> = graph.sheets.iter().collect();
+        keyed.sort_by(|a, b| a.0.cmp(b.0));
+        netlist_sheets = keyed.into_iter().map(|(_, sheet)| sheet.clone()).collect();
         let mut stitch = result.issues;
         stitch.extend(graph.issues);
         issues.stitch = stitch;
@@ -344,6 +381,7 @@ fn build_export_scope(
             sheets,
             metadata,
             netlist,
+            netlist_sheets,
         },
         issues,
     ))
