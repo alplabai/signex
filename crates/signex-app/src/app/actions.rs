@@ -132,6 +132,7 @@ impl Signex {
             .unwrap_or(0.0);
 
         let symbol = signex_types::schematic::Symbol {
+            unknown: Default::default(),
             uuid: uuid::Uuid::new_v4(),
             lib_id: lib_id.clone(),
             reference: reference.clone(),
