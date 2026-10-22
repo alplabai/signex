@@ -114,10 +114,7 @@ impl Signex {
                 self.document_state.pending_opens.remove(&path);
                 match result {
                     Ok(sheet) => self.open_schematic_tab(path, title, *sheet),
-                    Err(message) => crate::diagnostics::log_error(
-                        "Failed to open document path",
-                        &anyhow::anyhow!(message),
-                    ),
+                    Err(message) => self.report_open_failure(message),
                 }
                 self.finish_update()
             }
@@ -130,10 +127,7 @@ impl Signex {
                 self.document_state.pending_opens.remove(&path);
                 match result {
                     Ok(board) => self.open_pcb_tab(path, title, *board),
-                    Err(message) => crate::diagnostics::log_error(
-                        "Failed to open document path",
-                        &anyhow::anyhow!(message),
-                    ),
+                    Err(message) => self.report_open_failure(message),
                 }
                 self.finish_update()
             }

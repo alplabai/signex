@@ -21,7 +21,7 @@ pub(super) enum ColumnKind {
     /// Stage 14 — combined version + released indicator. Renders as
     /// `🔒 1.2.3` for released rows, `1.2.3` for unreleased. Sorts
     /// against the row's `version` cell so semver patterns sort
-    /// numerically (1.0.2 vs 1.0.10 — `compare_cells` handles the
+    /// numerically (1.0.2 vs 1.0.10 — `CellSortKey` handles the
     /// pure-number case; mixed `1.0.2` strings fall back to lexical
     /// which still works for short major.minor.patch strings).
     Rev,
@@ -99,20 +99,6 @@ impl ColumnKind {
             },
         }
     }
-}
-
-/// Comparator for two cell strings with auto-detected numeric
-/// fallback. If both values parse as `f64`, sort numerically;
-/// otherwise sort case-insensitively. This is Stage 8's answer to
-/// the Altium "lexical sort on numeric columns" pain — we don't
-/// need a typed schema lookup at compare time, and untyped legacy
-/// columns get the right behaviour automatically when their cells
-/// happen to be numeric.
-pub(super) fn compare_cells(a: &str, b: &str) -> std::cmp::Ordering {
-    if let (Ok(na), Ok(nb)) = (a.trim().parse::<f64>(), b.trim().parse::<f64>()) {
-        return na.partial_cmp(&nb).unwrap_or(std::cmp::Ordering::Equal);
-    }
-    a.to_lowercase().cmp(&b.to_lowercase())
 }
 
 /// Resolve the column list. Always: Internal PN / Manufacturer / MPN /

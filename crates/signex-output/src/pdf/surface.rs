@@ -5,6 +5,7 @@
 //! - `stroke_rect(x, y, w, h, width_pt)` — `re` + `S`
 //! - `fill_rect(x, y, w, h, rgb)` — `re` + `f`
 //! - `text_at(x, y, font_name, size_pt, text)` — `BT` + `Tf` + `Td` + `Tj` + `ET`
+//!   (text is shown as 2-byte glyph ids for the Identity-H Type0 fonts)
 //! - `set_stroke_color(r, g, b)` — `RG`
 //!
 //! Tracks current stroke colour/width to avoid redundant ops. Coordinates in
@@ -20,9 +21,13 @@ pub struct RgbColor {
     pub b: f32,
 }
 
+use super::embed::FontUsage;
+use super::font::font_for_alias;
+
 /// `PdfSurface` emits PDF content-stream operators into a buffer.
-pub struct PdfSurface {
+pub struct PdfSurface<'a> {
     bytes: Vec<u8>,
+    fonts: &'a mut FontUsage,
     current_stroke_r: f32,
     current_stroke_g: f32,
     current_stroke_b: f32,
@@ -32,10 +37,12 @@ pub struct PdfSurface {
     current_stroke_width: f32,
 }
 
-impl PdfSurface {
-    pub fn new() -> Self {
+impl<'a> PdfSurface<'a> {
+    /// New surface that registers every shown glyph in `fonts`.
+    pub fn new(fonts: &'a mut FontUsage) -> Self {
         Self {
             bytes: Vec::new(),
+            fonts,
             current_stroke_r: 0.0,
             current_stroke_g: 0.0,
             current_stroke_b: 0.0,
@@ -119,11 +126,11 @@ impl PdfSurface {
     /// Emit text at (x, y) with given font, size (pt), and string.
     /// Font name should match the resource dictionary (e.g. "F1" for the first registered font).
     pub fn text_at(&mut self, x: f32, y: f32, font_name: &str, size_pt: f32, text: &str) {
-        let escaped = escape_pdf_string(text);
+        let shown = self.fonts.encode(font_for_alias(font_name), text);
         self.write_operator("BT\n");
         self.write_operator(&format!("/{} {} Tf\n", font_name, size_pt));
         self.write_operator(&format!("{} {} Td\n", x, y));
-        self.write_operator(&format!("({}) Tj\n", escaped));
+        self.write_operator(&format!("{} Tj\n", shown));
         self.write_operator("ET\n");
     }
 
@@ -137,7 +144,7 @@ impl PdfSurface {
         text: &str,
         rotation_deg: f32,
     ) {
-        let escaped = escape_pdf_string(text);
+        let shown = self.fonts.encode(font_for_alias(font_name), text);
         let rad = rotation_deg.to_radians();
         let cos = rad.cos();
         let sin = rad.sin();
@@ -148,7 +155,7 @@ impl PdfSurface {
             "{} {} {} {} {} {} Tm\n",
             cos, sin, -sin, cos, x, y
         ));
-        self.write_operator(&format!("({}) Tj\n", escaped));
+        self.write_operator(&format!("{} Tj\n", shown));
         self.write_operator("ET\n");
     }
 
@@ -158,55 +165,23 @@ impl PdfSurface {
     }
 }
 
-impl Default for PdfSurface {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Escape a string for use in PDF string literals (minimal escaping).
-///
-/// MD-28: PDF string literals are PDFDocEncoding / Latin-1; multi-byte
-/// UTF-8 sequences emitted raw would be misinterpreted by readers as
-/// pairs of Latin-1 characters. Callers must run `sanitize_pdf_text`
-/// first so the input is ASCII-only by the time it reaches us; this
-/// `debug_assert!` enforces that contract in dev builds.
-fn escape_pdf_string(s: &str) -> String {
-    debug_assert!(
-        s.is_ascii(),
-        "escape_pdf_string received non-ASCII input ({:?}); call sanitize_pdf_text first",
-        s
-    );
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            '\\' => out.push_str("\\\\"),
-            '(' => out.push_str("\\("),
-            ')' => out.push_str("\\)"),
-            // Drop any non-ASCII byte in release rather than emitting
-            // bytes a PDF reader would mis-decode.
-            _ if !c.is_ascii() => out.push('?'),
-            _ => out.push(c),
-        }
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn escape_pdf_string_handles_special_chars() {
-        assert_eq!(escape_pdf_string("hello"), "hello");
-        assert_eq!(escape_pdf_string("(world)"), "\\(world\\)");
-        assert_eq!(escape_pdf_string("back\\slash"), "back\\\\slash");
-        assert_eq!(escape_pdf_string("(back\\slash)"), "\\(back\\\\slash\\)");
+    fn text_is_shown_as_two_byte_glyph_ids() {
+        let mut fonts = FontUsage::new();
+        let mut surf = PdfSurface::new(&mut fonts);
+        surf.text_at(0.0, 0.0, "F1", 9.0, "a(b)");
+        let ops = String::from_utf8(surf.finish()).unwrap();
+        assert!(ops.contains("<0001000200030004> Tj"), "{ops}");
     }
 
     #[test]
     fn surface_tracks_stroke_color() {
-        let mut surf = PdfSurface::new();
+        let mut fonts = FontUsage::new();
+        let mut surf = PdfSurface::new(&mut fonts);
         surf.set_stroke_color(1.0, 0.0, 0.0);
         // Verify internal state is updated.
         assert!((surf.current_stroke_r - 1.0).abs() < 1e-5);

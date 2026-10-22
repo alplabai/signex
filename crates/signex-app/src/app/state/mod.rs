@@ -171,6 +171,14 @@ impl ErrorNotice {
         }
     }
 
+    /// A rename moved the file but could not finish updating what refers to it.
+    pub fn rename(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Rename Incomplete".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
     /// A file could not be opened — unreadable, unparseable, or empty
     /// where it must not be (#532).
     pub fn open(detail: impl Into<String>) -> Self {
@@ -699,10 +707,22 @@ impl DocumentState {
         paths
     }
 
+    /// Whether `path` belongs to an open project other than
+    /// `projects[closing]` (see [`scope::claimed_by_other_project`]).
+    pub(crate) fn claimed_by_other_project(&self, closing: usize, path: &std::path::Path) -> bool {
+        scope::claimed_by_other_project(
+            &self.projects,
+            &self.child_sheet_refs(),
+            closing,
+            path,
+            scope::CaseFold::host_default(),
+        )
+    }
+
     /// `sheet path → the `filename` strings it references as child sheets`,
     /// over every loaded engine. Input to the hierarchy walk in
     /// [`active_document_project`](Self::active_document_project).
-    fn child_sheet_refs(&self) -> std::collections::HashMap<PathBuf, Vec<String>> {
+    pub(crate) fn child_sheet_refs(&self) -> std::collections::HashMap<PathBuf, Vec<String>> {
         self.engines
             .iter()
             .map(|(path, engine)| {

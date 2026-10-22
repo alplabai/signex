@@ -5,6 +5,7 @@
 //! behaviour change.
 
 use super::*;
+use crate::app::state::scope::{CaseFold, path_is_under, path_key_with};
 
 impl Signex {
     pub(super) fn open_remove_dialog(&mut self, tree_path: Vec<usize>) {
@@ -23,6 +24,53 @@ impl Signex {
         });
     }
 
+    /// Close the tabs of the file being removed. A delete also closes tabs
+    /// of anything under it (a `.snxlib` directory's editors); an exclude
+    /// only closes the file's own tabs.
+    fn close_tabs_of_removed(
+        &mut self,
+        target: &std::path::Path,
+        include_descendants: bool,
+        fold: CaseFold,
+    ) -> Vec<iced::Task<Message>> {
+        let matches_target = |p: &std::path::Path| {
+            if include_descendants {
+                path_is_under(p, target, fold)
+            } else {
+                path_key_with(p, fold) == path_key_with(target, fold)
+            }
+        };
+        let mut tasks = Vec::new();
+        while let Some(idx) = self
+            .document_state
+            .tabs
+            .iter()
+            .position(|t| matches_target(&t.path))
+        {
+            tasks.push(self.close_tab_now(idx));
+        }
+        tasks
+    }
+
+    /// Forget the in-memory documents of a file (or `.snxlib` directory)
+    /// the user just deleted. A parked dirty engine or draft would
+    /// otherwise survive in `dirty_paths` and be written back by Save All.
+    fn drop_deleted_documents(&mut self, deleted: &std::path::Path, fold: CaseFold) {
+        let doc = &mut self.document_state;
+        let gone = |p: &std::path::PathBuf| path_is_under(p, deleted, fold);
+        doc.engines.retain(|p, _| !gone(p));
+        doc.symbol_editors.retain(|p, _| !gone(p));
+        doc.footprint_editors.retain(|p, _| !gone(p));
+        let discarded = doc.dirty_paths.iter().filter(|p| gone(p)).count();
+        doc.dirty_paths.retain(|p| !gone(p));
+        if discarded > 0 {
+            crate::diagnostics::log_warning(format!(
+                "Deleted {}: discarded {discarded} unsaved document(s)",
+                deleted.display()
+            ));
+        }
+    }
+
     pub(crate) fn handle_remove_confirm(
         &mut self,
         choice: crate::app::RemoveChoice,
@@ -36,15 +84,9 @@ impl Signex {
         // Close any tab backed by this file before we touch disk or
         // drop it from the project's in-memory list — otherwise the
         // tab would keep referring to a file that no longer exists.
-        let mut close_tasks: Vec<iced::Task<Message>> = Vec::new();
-        while let Some(idx) = self
-            .document_state
-            .tabs
-            .iter()
-            .position(|t| t.path == state.target_path)
-        {
-            close_tasks.push(self.close_tab_now(idx));
-        }
+        let is_delete = matches!(choice, RemoveChoice::DeleteFile);
+        let close_tasks =
+            self.close_tabs_of_removed(&state.target_path, is_delete, CaseFold::host_default());
 
         if matches!(choice, RemoveChoice::DeleteFile) {
             // F23 — handle three cases:
@@ -54,18 +96,26 @@ impl Signex {
             //      Exclude semantic falls through naturally so the
             //      LibraryEntry / SheetEntry is still pruned below.
             let target = &state.target_path;
-            if target.exists() {
-                let result = if target.is_dir() {
-                    std::fs::remove_dir_all(target)
-                } else {
-                    std::fs::remove_file(target)
-                };
-                if let Err(e) = result {
-                    crate::diagnostics::log_error(
-                        "Failed to delete project file",
-                        &anyhow::anyhow!("{e}"),
-                    );
+            match target.try_exists() {
+                Ok(true) => {
+                    let result = if target.is_dir() {
+                        std::fs::remove_dir_all(target)
+                    } else {
+                        std::fs::remove_file(target)
+                    };
+                    match result {
+                        Ok(()) => self.drop_deleted_documents(target, CaseFold::host_default()),
+                        Err(e) => crate::diagnostics::log_error(
+                            "Failed to delete project file",
+                            &anyhow::anyhow!("{}: {e}", target.display()),
+                        ),
+                    }
                 }
+                Ok(false) => self.drop_deleted_documents(target, CaseFold::host_default()),
+                Err(e) => crate::diagnostics::log_error(
+                    "Could not check whether the project file exists",
+                    &anyhow::anyhow!("{}: {e}", target.display()),
+                ),
             }
             // Orphan target: silently fall through. The user's intent
             // ("get this row out of the project") is satisfied by the
@@ -156,5 +206,109 @@ impl Signex {
         } else {
             iced::Task::batch(close_tasks)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::path::{Path, PathBuf};
+
+    use crate::app::state::scope::CaseFold;
+    use crate::app::{FootprintEditorState, Signex, TabInfo, TabKind};
+
+    fn sheet() -> signex_types::schematic::SchematicSheet {
+        signex_types::schematic::SchematicSheet {
+            uuid: uuid::Uuid::new_v4(),
+            version: 0,
+            generator: String::new(),
+            generator_version: String::new(),
+            paper_size: "A4".to_string(),
+            root_sheet_page: "1".to_string(),
+            symbols: Vec::new(),
+            wires: Vec::new(),
+            junctions: Vec::new(),
+            labels: Vec::new(),
+            child_sheets: Vec::new(),
+            no_connects: Vec::new(),
+            text_notes: Vec::new(),
+            buses: Vec::new(),
+            bus_entries: Vec::new(),
+            drawings: Vec::new(),
+            no_erc_directives: Vec::new(),
+            title_block: HashMap::new(),
+            lib_symbols: HashMap::new(),
+            unknown: Default::default(),
+        }
+    }
+
+    fn dirty_engine(app: &mut Signex, path: &Path) {
+        let engine = signex_engine::Engine::new(sheet()).expect("engine");
+        app.document_state
+            .engines
+            .insert(path.to_path_buf(), engine);
+        app.document_state.dirty_paths.insert(path.to_path_buf());
+    }
+
+    #[test]
+    fn delete_drops_an_engine_keyed_with_different_case_on_a_folding_host() {
+        let (mut app, _task) = Signex::new();
+        let keyed = PathBuf::from("/w/top.snxsch");
+        dirty_engine(&mut app, &keyed);
+
+        app.drop_deleted_documents(Path::new("/w/Top.snxsch"), CaseFold::Fold);
+
+        assert!(!app.document_state.engines.contains_key(&keyed));
+        assert!(!app.document_state.dirty_paths.contains(&keyed));
+    }
+
+    #[test]
+    fn delete_keeps_an_engine_whose_case_differs_on_a_preserving_host() {
+        let (mut app, _task) = Signex::new();
+        let keyed = PathBuf::from("/w/top.snxsch");
+        dirty_engine(&mut app, &keyed);
+
+        app.drop_deleted_documents(Path::new("/w/Top.snxsch"), CaseFold::Preserve);
+
+        assert!(app.document_state.engines.contains_key(&keyed));
+    }
+
+    fn footprint_tab(app: &mut Signex, path: &Path) {
+        let file =
+            signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("fp"));
+        app.document_state.footprint_editors.insert(
+            path.to_path_buf(),
+            FootprintEditorState::new(path.to_path_buf(), file),
+        );
+        app.document_state.tabs.push(TabInfo {
+            title: "fp".into(),
+            path: path.to_path_buf(),
+            cached_document: None,
+            dirty: false,
+            project_id: None,
+            kind: TabKind::FootprintEditor(path.to_path_buf()),
+        });
+    }
+
+    #[test]
+    fn delete_closes_tabs_of_everything_under_the_deleted_directory() {
+        let (mut app, _task) = Signex::new();
+        footprint_tab(&mut app, Path::new("/w/lib.snxlib/footprints/g.snxfpt"));
+        footprint_tab(&mut app, Path::new("/w/other.snxlib/footprints/h.snxfpt"));
+
+        let _ = app.close_tabs_of_removed(Path::new("/w/Lib.snxlib"), true, CaseFold::Fold);
+
+        let left: Vec<_> = app.document_state.tabs.iter().map(|t| &t.path).collect();
+        assert_eq!(left, [Path::new("/w/other.snxlib/footprints/h.snxfpt")]);
+    }
+
+    #[test]
+    fn exclude_closes_only_the_files_own_tabs() {
+        let (mut app, _task) = Signex::new();
+        footprint_tab(&mut app, Path::new("/w/lib.snxlib/footprints/g.snxfpt"));
+
+        let _ = app.close_tabs_of_removed(Path::new("/w/lib.snxlib"), false, CaseFold::Fold);
+
+        assert_eq!(app.document_state.tabs.len(), 1);
     }
 }
