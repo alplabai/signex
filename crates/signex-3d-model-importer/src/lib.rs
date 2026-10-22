@@ -69,9 +69,14 @@ pub fn import_model(request: ModelImportRequest) -> Result<ModelImportResult, Mo
 
     let format = detect_format(source_path)?;
 
-    let source_mtime = source_path
+    let source_meta = source_path
         .metadata()
-        .and_then(|m| m.modified())
+        .map_err(|e| ModelImportError::IoFailed {
+            path: source_path.clone(),
+            message: e.to_string(),
+        })?;
+    let source_mtime = source_meta
+        .modified()
         .map_err(|e| ModelImportError::IoFailed {
             path: source_path.clone(),
             message: e.to_string(),
@@ -81,6 +86,7 @@ pub fn import_model(request: ModelImportRequest) -> Result<ModelImportResult, Mo
         &request.cache_dir,
         source_path,
         source_mtime,
+        source_meta.len(),
         request.converter_version,
     )?;
 
@@ -156,11 +162,12 @@ pub fn import_model(request: ModelImportRequest) -> Result<ModelImportResult, Mo
     };
 
     // Write to cache
-    std::fs::create_dir_all(&request.cache_dir).map_err(|e| ModelImportError::CacheFailed {
-        reason: e.to_string(),
-    })?;
-    std::fs::write(&glb_path, &glb_bytes).map_err(|e| ModelImportError::CacheFailed {
-        reason: e.to_string(),
+    // Temp + fsync + rename (also creates `cache_dir`): a crash can never
+    // leave a partial GLB at `glb_path` for the next import to trust (#147).
+    signex_types::atomic_io::atomic_write(&glb_path, &glb_bytes).map_err(|e| {
+        ModelImportError::CacheFailed {
+            reason: format!("writing {}: {e}", glb_path.display()),
+        }
     })?;
 
     let byte_len = glb_bytes.len();

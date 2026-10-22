@@ -183,6 +183,10 @@ fn snap_value_to_grid(v: f64, step: f64) -> f64 {
 /// The selection kind (`Window` / `Crossing`) is determined by the
 /// caller from the drag direction before calling this function.
 /// Returns `None` when nothing falls inside the box.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "box corners, selection kind, active part and filter are all independent inputs; bundling them would only move the argument list into a one-use struct"
+)]
 pub fn select_in_box(
     sym: &Symbol,
     x0: f64,
@@ -191,6 +195,7 @@ pub fn select_in_box(
     y1: f64,
     kind: BoxSelectKind,
     active_part: u8,
+    filter: &SymbolSelectionFilter,
 ) -> Option<SymbolSelection> {
     let xmin = x0.min(x1);
     let xmax = x0.max(x1);
@@ -199,7 +204,7 @@ pub fn select_in_box(
 
     let mut pin_indices = Vec::new();
     for (i, pin) in sym.pins.iter().enumerate() {
-        if !super::pin_on_part(pin, active_part) {
+        if !filter.pins || !super::pin_on_part(pin, active_part) {
             continue;
         }
         let hit = match kind {
@@ -229,7 +234,7 @@ pub fn select_in_box(
 
     let mut graphic_indices = Vec::new();
     for (i, g) in sym.graphics.iter().enumerate() {
-        if !super::graphic_on_part(g, active_part) {
+        if !super::graphic_on_part(g, active_part) || !filter.allows_graphic(&g.kind) {
             continue;
         }
         let hit = match kind {
@@ -259,7 +264,13 @@ pub fn select_in_box(
         .iter()
         .filter(|g| super::graphic_on_part(g, active_part))
         .count();
-    if pin_indices.len() == visible_pins && graphic_indices.len() == visible_graphics {
+    // `All` means "every item", so a box taken under a restricted
+    // filter must stay `Multiple` - `All` would move/delete the
+    // filtered-out kinds too.
+    if filter.is_unrestricted()
+        && pin_indices.len() == visible_pins
+        && graphic_indices.len() == visible_graphics
+    {
         return Some(SymbolSelection::All);
     }
     Some(SymbolSelection::Multiple {

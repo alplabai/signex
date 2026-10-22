@@ -48,6 +48,9 @@ pub enum DslError {
         got: usize,
     },
 
+    #[error("rule '{rule}': unknown pin kind '{value}'")]
+    UnknownPinKind { rule: String, value: String },
+
     // ── Compiler errors ────────────────────────────────────────────────────
     #[error("rule '{rule}': invalid regex pattern '{pattern}': {source}")]
     InvalidRegex {

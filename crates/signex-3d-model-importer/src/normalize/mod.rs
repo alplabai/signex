@@ -164,13 +164,14 @@ pub fn meshes_to_gltf(
 fn compute_min_max(positions: &[f32]) -> ([f32; 3], [f32; 3]) {
     let mut min = [f32::MAX; 3];
     let mut max = [f32::MIN; 3];
-    for chunk in positions.chunks(3) {
+    // `chunks_exact` drops a trailing partial vertex instead of panicking (#112).
+    for chunk in positions.chunks_exact(3) {
         for i in 0..3 {
             min[i] = min[i].min(chunk[i]);
             max[i] = max[i].max(chunk[i]);
         }
     }
-    if positions.is_empty() {
+    if positions.len() < 3 {
         min = [0.0; 3];
         max = [0.0; 3];
     }
@@ -181,6 +182,14 @@ fn compute_min_max(positions: &[f32]) -> ([f32; 3], [f32; 3]) {
 mod tests {
     use super::*;
     use crate::vrml::parser::VrmlMesh;
+
+    #[test]
+    fn min_max_ignores_trailing_partial_vertex() {
+        let (min, max) = compute_min_max(&[1.0, 2.0, 3.0, 9.0]);
+        assert_eq!(min, [1.0, 2.0, 3.0]);
+        assert_eq!(max, [1.0, 2.0, 3.0]);
+        assert_eq!(compute_min_max(&[1.0, 2.0]), ([0.0; 3], [0.0; 3]));
+    }
 
     #[test]
     fn empty_mesh_list_produces_valid_json() {

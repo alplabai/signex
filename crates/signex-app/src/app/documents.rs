@@ -227,6 +227,16 @@ pub struct LocalColorPicker {
     pub advanced: bool,
 }
 
+/// A camera placement the symbol editor cannot compute until the canvas
+/// reports its real size (see `SymbolEditorMsg::ViewportMeasured`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SymbolViewRequest {
+    /// Fit the symbol's bounding box into the viewport.
+    Fit,
+    /// Park world origin in the middle of the viewport (fresh tab).
+    CenterOrigin,
+}
+
 #[derive(Debug)]
 pub struct SymbolEditorState {
     pub path: PathBuf,
@@ -260,6 +270,11 @@ pub struct SymbolEditorState {
     /// outside the canvas. Per-tab — tracking the cursor is
     /// inherently a single-canvas concept.
     pub cursor_mm: Option<(f64, f64)>,
+    /// Camera request waiting for the canvas to report its real size.
+    /// Set by `Fit` and by a fresh tab / symbol switch; cleared when
+    /// `ViewportMeasured` applies it. Mirrors the footprint editor's
+    /// `fit_pending`, but carries which placement to apply.
+    pub pending_view: Option<SymbolViewRequest>,
     /// v0.13 — SchLib selection filter. Per-kind selectable flags
     /// gate which entities the canvas hit-tester considers. Mirrors
     /// the footprint editor's `selection_filter`.
@@ -340,6 +355,7 @@ impl SymbolEditorState {
             dirty: false,
             camera: crate::canvas::Camera::default(),
             cursor_mm: None,
+            pending_view: None,
             selection_filter: Default::default(),
             active_bar_menu: None,
             placement_paused: false,
@@ -364,6 +380,9 @@ impl SymbolEditorState {
             Self::DEFAULT_SYMBOL_VIEWPORT_WIDTH * 0.5,
             Self::DEFAULT_SYMBOL_VIEWPORT_HEIGHT * 0.5,
         );
+        // The default size above is only a placeholder until the
+        // canvas reports its real one.
+        self.pending_view = Some(SymbolViewRequest::CenterOrigin);
     }
 
     /// Borrow the symbol currently being edited. Falls back to the
