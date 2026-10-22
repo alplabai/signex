@@ -84,6 +84,7 @@ mod tests {
             labels: vec![],
             junctions: vec![],
             no_connects: vec![],
+            no_erc_directives: vec![],
             bus_entries: vec![],
             child_sheets: vec![],
             nets: vec![ErcNet {

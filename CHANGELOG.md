@@ -18,6 +18,10 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
+### Added — ERC
+
+- **No-ERC directives are honoured (#349)** — the sheet's `no_erc_directives` are projected into `ErcContext`, and `run_all` / `run_all_with_dsl` drop any diagnostic located on a directive (1 µm point bucket, positional only, built-in and DSL alike). Placing and rendering a directive is tracked separately (#350).
+
 ### Added — PCB GPU shader render (experimental, default-off)
 
 - **GPU scene render path** — the PCB editor canvas can render traces, pads, vias, and zones through the `signex_gfx` wgpu pipelines via iced's `shader` widget instead of CPU `canvas::Frame` tessellation. Gated behind `feature_flags::PCB_GPU_RENDER` (default `false`) plus a Preferences toggle; the CPU path stays the default until GPU visual parity is confirmed on hardware.
