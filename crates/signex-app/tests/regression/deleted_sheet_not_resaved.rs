@@ -715,6 +715,16 @@ fn an_unreadable_sheet_above_the_closing_project_does_not_swallow_its_own_files(
     std::fs::write(tmp.path().join("b.snxsch"), b"not a schematic").expect("write corrupt sheet");
     let (mut app, _task) = Signex::new();
     let a = add_project(&mut app, &a_dir.join("A.snxprj"), "a.snxsch");
+    // A's library mount is positive evidence that the draft under it is A's;
+    // sitting in A's folder alone would not be.
+    app.document_state.projects[0]
+        .data
+        .libraries
+        .push(signex_types::project::LibraryEntry {
+            path: PathBuf::from("lib.snxlib"),
+            kind: signex_types::project::LibraryEntryKind::ProjectLocal,
+            library_id: None,
+        });
     add_project(&mut app, &b_dir.join("B.snxprj"), "../b.snxsch");
     let a_sheet = a_dir.join("a.snxsch");
     let stray = a_dir.join("stray.snxsch");
@@ -734,6 +744,42 @@ fn an_unreadable_sheet_above_the_closing_project_does_not_swallow_its_own_files(
     expected.sort();
     assert_eq!(modal.dirty_paths, expected);
     assert!(modal.kept_paths.is_empty(), "{:?}", modal.kept_paths);
+}
+
+#[test]
+fn an_unreadable_sheet_above_the_closing_project_keeps_a_file_that_is_only_in_its_folder() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().expect("tempdir");
+    let (a_dir, b_dir) = two_project_dirs(&tmp);
+    // B lists `../b.snxsch`: above A's directory and corrupt on disk. Its real
+    // child is `A/s.snxsch`, which references `g`; `g` is dirty but no tab of
+    // A backs it, and nothing A reaches or mounts leads to it.
+    std::fs::write(tmp.path().join("b.snxsch"), b"not a schematic").expect("write corrupt sheet");
+    let (mut app, _task) = Signex::new();
+    let a = add_project(&mut app, &a_dir.join("A.snxprj"), "a.snxsch");
+    add_project(&mut app, &b_dir.join("B.snxprj"), "../b.snxsch");
+    let a_sheet = a_dir.join("a.snxsch");
+    let g = a_dir.join("g.snxsch");
+    open_dirty_sheet(&mut app, &a_sheet, a);
+    app.document_state.dirty_paths.insert(g.clone());
+
+    close_first_project(&mut app);
+
+    let modal = app
+        .ui_state
+        .project_close_confirm
+        .as_ref()
+        .expect("A is dirty, so close must prompt");
+    assert_eq!(modal.dirty_paths, vec![a_sheet.clone()]);
+    assert_eq!(modal.kept_paths, vec![g.clone()]);
+    let _ = app.update(Message::Project(ProjectMsg::CloseConfirm(
+        ProjectCloseChoice::DiscardAll,
+    )));
+    assert!(
+        app.document_state.dirty_paths.contains(&g),
+        "Discard All must not drop a file the unreadable sibling sheet may own",
+    );
+    assert!(!app.document_state.dirty_paths.contains(&a_sheet));
 }
 
 #[test]

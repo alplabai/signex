@@ -223,11 +223,23 @@ impl DocumentState {
             .iter()
             .map(|u| u.path.clone())
             .collect();
+        let tabs: Vec<PathBuf> = self
+            .projects
+            .get(closing)
+            .map(|p| {
+                self.tabs
+                    .iter()
+                    .filter(|t| t.project_id == Some(p.id))
+                    .map(|t| t.path.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
         scope::claimed_by_other_project(
             &self.projects,
             &sheet_refs.refs,
             &unreadable,
             closing,
+            &tabs,
             path,
             CaseFold::host_default(),
         )

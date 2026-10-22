@@ -239,8 +239,10 @@ pub(crate) fn owned_by_project(
 /// their children are unknown. Fail closed: when another project reaches such
 /// a sheet, everything under its directory that the closing project does not
 /// itself own counts as claimed, so a Discard All never touches it. The
-/// closing project owns its reachable set, its `.snxprj` and, when the
-/// unreadable sheet sits strictly above it, its whole directory.
+/// closing project owns only what it can prove: its reachable set, its
+/// `.snxprj`, the files backing its tabs (`tabs`) and anything under one of
+/// its own libraries. Sitting somewhere in its directory is NOT proof: a
+/// corrupt sibling sheet above it may well own a child down there.
 ///
 /// A sheet the closing project owns is never claimed by directory nesting,
 /// but a sheet reached by several projects counts as claimed by the others so
@@ -250,6 +252,7 @@ pub(crate) fn claimed_by_other_project(
     loaded: &HashMap<PathBuf, Vec<String>>,
     unreadable: &[PathBuf],
     closing: usize,
+    tabs: &[PathBuf],
     path: &Path,
     fold: CaseFold,
 ) -> bool {
@@ -271,14 +274,20 @@ pub(crate) fn claimed_by_other_project(
     if others().any(|r| r.contains(&key)) {
         return true;
     }
-    let owned_by_closing = reach[closing].contains(&key) || path_key_with(&mine.path, fold) == key;
+    let owned_by_closing = reach[closing].contains(&key)
+        || path_key_with(&mine.path, fold) == key
+        || tabs.iter().any(|t| path_key_with(t, fold) == key)
+        || mine
+            .data
+            .libraries
+            .iter()
+            .any(|l| path_is_under(path, &normalize_clamped(&mine.dir().join(&l.path)), fold));
     let under_unreadable_sibling_sheet = !owned_by_closing
         && unreadable.iter().any(|sheet| {
             others().any(|r| r.contains(&path_key_with(sheet, fold)))
-                && sheet.parent().is_some_and(|dir| {
-                    path_is_under(path, dir, fold)
-                        && !closing_dir_is_below(mine.dir(), dir, path, fold)
-                })
+                && sheet
+                    .parent()
+                    .is_some_and(|dir| path_is_under(path, dir, fold))
         });
     if under_unreadable_sibling_sheet {
         return true;
@@ -294,17 +303,6 @@ pub(crate) fn claimed_by_other_project(
                 && path_is_under(other_dir, mine.dir(), fold)
                 && path_is_under(path, other_dir, fold))
     })
-}
-
-/// True when `path` sits in the closing project's own directory and that
-/// directory lies strictly below `sheet_dir`, the directory of an unreadable
-/// sheet. A sibling's unreadable sheet high up the tree (`$HOME`) says nothing
-/// about the closing project's own folder, so fail-closed must not swallow it;
-/// an unreadable sheet in the SAME directory still does.
-fn closing_dir_is_below(closing_dir: &Path, sheet_dir: &Path, path: &Path, fold: CaseFold) -> bool {
-    path_is_under(path, closing_dir, fold)
-        && path_is_under(closing_dir, sheet_dir, fold)
-        && path_key_with(closing_dir, fold) != path_key_with(sheet_dir, fold)
 }
 
 #[cfg(test)]
@@ -575,7 +573,15 @@ mod tests {
         path: &str,
         fold: CaseFold,
     ) -> bool {
-        claimed_by_other_project(projects, open, &[], 0, &PathBuf::from(native(path)), fold)
+        claimed_by_other_project(
+            projects,
+            open,
+            &[],
+            0,
+            &[],
+            &PathBuf::from(native(path)),
+            fold,
+        )
     }
 
     #[test]
@@ -648,6 +654,7 @@ mod tests {
                 &open,
                 &unreadable,
                 0,
+                &[],
                 &PathBuf::from(native(path)),
                 CaseFold::Preserve,
             )
@@ -718,27 +725,42 @@ mod tests {
     }
 
     #[test]
-    fn an_unreadable_sheet_above_the_closing_project_does_not_claim_its_own_folder() {
-        // B lists `../b.snxsch`, unreadable, in /w -- above A's /w/A. A's
-        // unlisted sheets and library drafts are still A's.
-        let projects = vec![
-            project_at(1, "/w/A/A.snxprj", &["a.snxsch"]),
-            project_at(2, "/w/B/B.snxprj", &["../b.snxsch"]),
-        ];
+    fn an_unreadable_sheet_above_the_closing_project_keeps_only_proven_files_of_the_closing_one() {
+        // B lists `../b.snxsch`, unreadable, in /w -- above A's /w/A. Only
+        // what is provably A's (reach, tab, own library) is exempt; a file
+        // merely sitting in A's folder may be the unreadable sheet's child.
+        let mut a = project_at(1, "/w/A/A.snxprj", &["a.snxsch"]);
+        a.data.libraries.push(signex_types::project::LibraryEntry {
+            path: PathBuf::from("lib.snxlib"),
+            kind: signex_types::project::LibraryEntryKind::ProjectLocal,
+            library_id: None,
+        });
+        let projects = vec![a, project_at(2, "/w/B/B.snxprj", &["../b.snxsch"])];
         let unreadable = [PathBuf::from(native("/w/b.snxsch"))];
         let open = HashMap::new();
+        let tabs = [PathBuf::from(native("/w/A/stray.snxsch"))];
         let is_claimed = |path: &str| {
             claimed_by_other_project(
                 &projects,
                 &open,
                 &unreadable,
                 0,
+                &tabs,
                 &PathBuf::from(native(path)),
                 CaseFold::Preserve,
             )
         };
-        assert!(!is_claimed("/w/A/stray.snxsch"));
-        assert!(!is_claimed("/w/A/lib.snxlib/symbols/d.snxsym"));
+        assert!(!is_claimed("/w/A/a.snxsch"), "A's reachable sheet");
+        assert!(!is_claimed("/w/A/A.snxprj"), "A's project file");
+        assert!(!is_claimed("/w/A/stray.snxsch"), "backs one of A's tabs");
+        assert!(
+            !is_claimed("/w/A/lib.snxlib/symbols/d.snxsym"),
+            "A's library"
+        );
+        assert!(
+            is_claimed("/w/A/g.snxsch"),
+            "no evidence it is A's: fail closed"
+        );
         assert!(is_claimed("/w/elsewhere.snxsch"), "outside A stays claimed");
     }
 

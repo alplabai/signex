@@ -387,6 +387,10 @@ impl Signex {
         // children nobody resolved; read again and re-prompt rather than act
         // on stale ownership.
         if !state.sheet_refs.is_current_for(&self.open_project_ids()) {
+            crate::diagnostics::log_warning(format!(
+                "Close Project '{}': the open projects changed, so the sheet references were re-read; confirm again",
+                state.project_name
+            ));
             return self.spawn_close_refs_resolve(state.project_id);
         }
         match choice {
