@@ -31,6 +31,7 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
   It never runs ERC; before a run it shows a message instead of writing a file.
   `signex_output::ErcReportExporter` also offers a minimum-severity filter and
   group-by-sheet. CSV fields are escaped by the BOM's shared helper (#351).
+- **No-ERC directives are honoured (#349)** — the sheet's `no_erc_directives` are projected into `ErcContext`, and `run_all` / `run_all_with_dsl` drop any diagnostic located on a directive (1 µm point bucket, positional only, built-in and DSL alike). Placing and rendering a directive is tracked separately (#350).
 ### Added — native-format test corpus
 
 - **Fixture-corpus round-trip harness** — `signex-types/tests/round_trip_corpus.rs` walks the checked-in `.snxsch` / `.snxpcb` goldens under `tests/corpus/` and asserts each parses, and re-saves byte-identically (which also implies a second parse -> write -> parse hop is stable); every failing fixture is listed with its path and first differing line. `SIGNEX_BLESS_CORPUS=1` rewrites fixtures for an intentional format change, and a `MIN_CORPUS_FILES` guard stops the corpus shrinking silently (#334).
