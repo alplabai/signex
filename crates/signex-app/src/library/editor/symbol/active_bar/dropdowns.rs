@@ -132,7 +132,6 @@ fn filter_entries(f: SymbolSelectionFilter, path: PathBuf) -> Vec<DropdownEntry<
 }
 
 fn snap_entries(path: PathBuf) -> Vec<DropdownEntry<LibraryMessage>> {
-    let _ = path;
     // SchLib snap surface is simpler than footprint — pin tips, line
     // endpoints, arc centres, text origins. All stubs until the
     // SchLib snap subsystem ships.
@@ -141,28 +140,28 @@ fn snap_entries(path: PathBuf) -> Vec<DropdownEntry<LibraryMessage>> {
         DropdownEntry::Item(DropdownItem::new(
             "Pin Tips",
             LibraryMessage::PrimitiveEditorEvent {
-                path: PathBuf::new(),
+                path: path.clone(),
                 msg: PrimitiveEdit::Symbol(SymbolEditorMsg::ActiveBarStub("Snap → Pin Tips")),
             },
         )),
         DropdownEntry::Item(DropdownItem::new(
             "Line Endpoints",
             LibraryMessage::PrimitiveEditorEvent {
-                path: PathBuf::new(),
+                path: path.clone(),
                 msg: PrimitiveEdit::Symbol(SymbolEditorMsg::ActiveBarStub("Snap → Line Endpoints")),
             },
         )),
         DropdownEntry::Item(DropdownItem::new(
             "Arc Centres",
             LibraryMessage::PrimitiveEditorEvent {
-                path: PathBuf::new(),
+                path: path.clone(),
                 msg: PrimitiveEdit::Symbol(SymbolEditorMsg::ActiveBarStub("Snap → Arc Centres")),
             },
         )),
         DropdownEntry::Item(DropdownItem::new(
             "Text Origins",
             LibraryMessage::PrimitiveEditorEvent {
-                path: PathBuf::new(),
+                path,
                 msg: PrimitiveEdit::Symbol(SymbolEditorMsg::ActiveBarStub("Snap → Text Origins")),
             },
         )),
@@ -462,5 +461,44 @@ mod tests {
             item_msg(&entries, "Align To Grid"),
             SymbolEditorMsg::AlignSelectedToGrid
         ));
+    }
+
+    /// #596 — Snap rows used to hardcode an empty path, so the
+    /// dispatcher never found the tab and the stubs stayed inert.
+    /// Contract: header + four stub rows, fixed order/labels/payloads,
+    /// each row routes the real tab path.
+    #[test]
+    fn snap_entries_route_tab_path_and_preserve_stub_contract() {
+        let tab = PathBuf::from("t.snxsym");
+        let entries = snap_entries(tab.clone());
+        assert_eq!(entries.len(), 5, "header + four snap rows");
+
+        match &entries[0] {
+            DropdownEntry::Header(h) => assert_eq!(h, "Snap targets"),
+            _ => panic!("expected Header at index 0"),
+        }
+
+        let expected = [
+            ("Pin Tips", "Snap → Pin Tips"),
+            ("Line Endpoints", "Snap → Line Endpoints"),
+            ("Arc Centres", "Snap → Arc Centres"),
+            ("Text Origins", "Snap → Text Origins"),
+        ];
+        for (i, (label, stub)) in expected.iter().enumerate() {
+            let DropdownEntry::Item(item) = &entries[i + 1] else {
+                panic!("expected Item at index {}", i + 1);
+            };
+            assert_eq!(item.label, *label);
+            match item.on_press.as_ref() {
+                Some(LibraryMessage::PrimitiveEditorEvent {
+                    path,
+                    msg: PrimitiveEdit::Symbol(SymbolEditorMsg::ActiveBarStub(payload)),
+                }) => {
+                    assert_eq!(path, &tab, "row {label:?} must route the tab path");
+                    assert_eq!(payload, stub);
+                }
+                other => panic!("row {label:?}: expected routed ActiveBarStub, got {other:?}"),
+            }
+        }
     }
 }
