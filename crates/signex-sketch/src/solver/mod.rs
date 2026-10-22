@@ -15,10 +15,16 @@ use crate::sketch::SketchData;
 
 use self::dof::{DofColor, entity_colours, over_constraint_ids};
 use self::jacobian::numerical_jacobian;
-use self::lm::{LmFailure, SolveResult, solve_lm_keeping_state, solve_lm_perturbed};
+use self::lm::{
+    LmFailure, SolveResult, solve_lm_keeping_state, solve_lm_perturbed,
+    undo_offset_on_unconstrained,
+};
 use self::residual::ResolvedParams;
 
 type LmOutcome = Result<SolveResult, Box<LmFailure>>;
+
+/// Longest named conflict that is narrowed one constraint at a time.
+const SHRINK_LIMIT: usize = 8;
 
 /// Top-level solver façade. Configure timeouts / iteration cap /
 /// tolerance, then call [`Solver::solve`] to run an LM iteration
@@ -98,7 +104,7 @@ impl Solver {
             return Err(failure.error);
         }
         let retry = match self.run(sketch, params, true) {
-            Ok(result) => return Ok(result),
+            Ok(result) => return Ok(undo_offset_on_unconstrained(sketch, params, result)),
             Err(retry) if retry.stalled => *retry,
             Err(retry) => return Err(retry.error),
         };
@@ -124,15 +130,48 @@ impl Solver {
         if conflicting.is_empty() {
             return Err(did_not_converge);
         }
-        let mut without = sketch.clone();
-        without.constraints.retain(|c| !conflicting.contains(&c.id));
-        let resolves =
-            self.run(&without, params, false).is_ok() || self.run(&without, params, true).is_ok();
-        if resolves {
-            Err(SolveError::OverConstrained(conflicting))
-        } else {
-            Err(did_not_converge)
+        if !self.converges_without(sketch, params, &conflicting) {
+            return Err(did_not_converge);
         }
+        Err(SolveError::OverConstrained(self.shrink_conflict(
+            sketch,
+            params,
+            conflicting,
+        )))
+    }
+
+    /// Whether the sketch converges with `removed` constraints taken out
+    /// (a plain run, then a perturbed one).
+    fn converges_without(
+        &self,
+        sketch: &SketchData,
+        params: &ResolvedParams,
+        removed: &[ConstraintId],
+    ) -> bool {
+        let mut without = sketch.clone();
+        without.constraints.retain(|c| !removed.contains(&c.id));
+        self.run(&without, params, false).is_ok() || self.run(&without, params, true).is_ok()
+    }
+
+    /// Keep only the named constraints whose removal alone resolves the
+    /// conflict; fall back to the full set when none does, or when it is
+    /// longer than [`SHRINK_LIMIT`]. Cost: at most `2 × SHRINK_LIMIT` extra
+    /// LM runs, each bounded by `timeout_ms`.
+    fn shrink_conflict(
+        &self,
+        sketch: &SketchData,
+        params: &ResolvedParams,
+        named: Vec<ConstraintId>,
+    ) -> Vec<ConstraintId> {
+        if named.len() < 2 || named.len() > SHRINK_LIMIT {
+            return named;
+        }
+        let culprits: Vec<ConstraintId> = named
+            .iter()
+            .copied()
+            .filter(|id| self.converges_without(sketch, params, &[*id]))
+            .collect();
+        if culprits.is_empty() { named } else { culprits }
     }
 
     /// Run LM to convergence, then compute DOF analysis on the

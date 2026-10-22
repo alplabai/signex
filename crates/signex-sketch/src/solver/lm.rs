@@ -146,6 +146,34 @@ pub fn solve_lm_perturbed(
     run_lm(sketch, params, timeout_ms, tolerance, max_iters, true)
 }
 
+/// A Jacobian entry below this counts as zero: no residual depends on the
+/// variable. Real constraint derivatives are O(1); finite-difference noise
+/// is orders of magnitude smaller.
+const COLUMN_ZERO_TOL: f64 = 1e-6;
+
+/// Undo the retry's start offset on variables nothing constrains. A
+/// perturbed retry moves every variable by ~[`START_OFFSET_REL`] of the
+/// sketch extent; the ones no residual depends on would otherwise keep that
+/// offset and drift free geometry. Variables with a non-zero Jacobian column
+/// keep the retry's values, so the result still satisfies every residual.
+pub fn undo_offset_on_unconstrained(
+    sketch: &SketchData,
+    params: &ResolvedParams,
+    mut result: SolveResult,
+) -> SolveResult {
+    let Ok(j) = numerical_jacobian(sketch, &result.state, &result.index, params) else {
+        return result;
+    };
+    let original = pack(sketch).vector;
+    for (k, value) in result.state.iter_mut().enumerate() {
+        let depends = j.iter().any(|row| row[k].abs() > COLUMN_ZERO_TOL);
+        if !depends {
+            *value = original[k];
+        }
+    }
+    result
+}
+
 fn run_lm(
     sketch: &SketchData,
     params: &ResolvedParams,
