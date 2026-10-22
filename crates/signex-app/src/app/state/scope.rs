@@ -83,14 +83,15 @@ pub(crate) fn path_key_with(path: &Path, fold: CaseFold) -> String {
 fn project_listing_sheet<'a>(
     projects: &'a [LoadedProject],
     path: &Path,
+    fold: CaseFold,
 ) -> Option<&'a LoadedProject> {
-    let key = path_key(path);
+    let key = path_key_with(path, fold);
     projects.iter().find(|p| {
         let dir = p.dir();
         p.data
             .sheets
             .iter()
-            .any(|s| path_key(&dir.join(&s.filename)) == key)
+            .any(|s| path_key_with(&dir.join(&s.filename), fold) == key)
     })
 }
 
@@ -103,7 +104,7 @@ fn project_listing_sheet<'a>(
 /// resolved child key, the first-wins tie-break (lexicographically-smallest
 /// parent path) is the same every run, matching the identical hazard fixed in
 /// `project_sheets::project_graph`.
-fn parent_of(loaded: &HashMap<PathBuf, Vec<String>>) -> HashMap<String, PathBuf> {
+fn parent_of(loaded: &HashMap<PathBuf, Vec<String>>, fold: CaseFold) -> HashMap<String, PathBuf> {
     let mut entries: Vec<(&PathBuf, &Vec<String>)> = loaded.iter().collect();
     entries.sort_by(|a, b| a.0.cmp(b.0));
 
@@ -112,7 +113,7 @@ fn parent_of(loaded: &HashMap<PathBuf, Vec<String>>) -> HashMap<String, PathBuf>
         let dir = parent_path.parent().unwrap_or_else(|| Path::new(""));
         for filename in child_refs {
             parents
-                .entry(path_key(&dir.join(filename)))
+                .entry(path_key_with(&dir.join(filename), fold))
                 .or_insert_with(|| parent_path.clone());
         }
     }
@@ -130,15 +131,25 @@ pub(crate) fn project_owning_sheet<'a>(
     loaded: &HashMap<PathBuf, Vec<String>>,
     path: &Path,
 ) -> Option<&'a LoadedProject> {
-    if let Some(project) = project_listing_sheet(projects, path) {
+    project_owning_sheet_with(projects, loaded, path, CaseFold::host_default())
+}
+
+/// [`project_owning_sheet`] with an explicit case policy.
+pub(crate) fn project_owning_sheet_with<'a>(
+    projects: &'a [LoadedProject],
+    loaded: &HashMap<PathBuf, Vec<String>>,
+    path: &Path,
+    fold: CaseFold,
+) -> Option<&'a LoadedProject> {
+    if let Some(project) = project_listing_sheet(projects, path, fold) {
         return Some(project);
     }
-    let parents = parent_of(loaded);
+    let parents = parent_of(loaded, fold);
     let mut seen: HashSet<String> = HashSet::new();
     let mut current = path.to_path_buf();
-    while seen.insert(path_key(&current)) {
-        let parent = parents.get(&path_key(&current))?;
-        if let Some(project) = project_listing_sheet(projects, parent) {
+    while seen.insert(path_key_with(&current, fold)) {
+        let parent = parents.get(&path_key_with(&current, fold))?;
+        if let Some(project) = project_listing_sheet(projects, parent, fold) {
             return Some(project);
         }
         current = parent.clone();
@@ -356,19 +367,38 @@ mod tests {
     }
 
     #[test]
-    fn path_case_and_separator_do_not_change_ownership_on_windows() {
-        // A `.snxprj` records `Top.snxsch`; the tab was opened through a file
-        // dialog that handed back `top.snxsch`. Same file on Windows.
+    fn fold_policy_matches_sheet_ownership_across_case() {
+        // A `.snxprj` records `Top.snxsch`; the tab was opened as `top.snxsch`.
         let projects = vec![project(1, "/w/a", &["Top.snxsch"])];
-        let found = project_owning_sheet(
+        let found = project_owning_sheet_with(
             &projects,
             &HashMap::new(),
             &PathBuf::from("/w/a/top.snxsch"),
+            CaseFold::Fold,
         );
-        if cfg!(windows) {
-            assert_eq!(found.map(|p| p.id), Some(ProjectId(1)));
-        } else {
-            assert!(found.is_none(), "unix paths are case-sensitive");
-        }
+        assert_eq!(found.map(|p| p.id), Some(ProjectId(1)));
+    }
+
+    #[test]
+    fn preserve_policy_keeps_sheet_ownership_case_sensitive() {
+        let projects = vec![project(1, "/w/a", &["Top.snxsch"])];
+        let found = project_owning_sheet_with(
+            &projects,
+            &HashMap::new(),
+            &PathBuf::from("/w/a/top.snxsch"),
+            CaseFold::Preserve,
+        );
+        assert!(found.is_none(), "preserve policy is case-sensitive");
+    }
+
+    #[test]
+    fn fold_policy_resolves_hierarchical_child_across_case() {
+        let projects = vec![project(1, "/w/a", &["Top.snxsch"])];
+        let open = loaded(&[("/w/a/Top.snxsch", &["Child.snxsch"])]);
+        let child = PathBuf::from("/w/a/child.snxsch");
+        let fold = project_owning_sheet_with(&projects, &open, &child, CaseFold::Fold);
+        let keep = project_owning_sheet_with(&projects, &open, &child, CaseFold::Preserve);
+        assert_eq!(fold.map(|p| p.id), Some(ProjectId(1)));
+        assert!(keep.is_none());
     }
 }
