@@ -66,3 +66,32 @@ fn a_satisfiable_sketch_is_not_reported_as_over_constrained() {
         .expect("one distance is satisfiable");
     assert!(out.over_constraints.is_empty());
 }
+
+/// A and B fixed 8 mm apart, P on the segment's midpoint, 5 mm to each:
+/// P = (4, ±3) satisfies both, but the start is a saddle (zero gradient
+/// in y), so a plain LM run stalls. It must not be called a conflict.
+#[test]
+fn a_saddle_start_still_converges_to_the_solution() {
+    let mut s = Sketch::new();
+    let a = s.add_point(0.0, 0.0);
+    let b = s.add_point(8.0, 0.0);
+    let p = s.add_point(4.0, 0.0);
+    for point in [a, b] {
+        s.data.constraints.push(Constraint {
+            id: ConstraintId::new(),
+            kind: ConstraintKind::Fixed { point },
+        });
+    }
+    s.data.constraints.push(distance(a, p, 5.0));
+    s.data.constraints.push(distance(b, p, 5.0));
+
+    let out = Solver::default()
+        .solve(&s.data, &ResolvedParams::new())
+        .expect("two 5 mm distances to P are satisfiable");
+
+    let (x, y) =
+        signex_sketch::solver::state::point_xy(p, &out.result.state, &out.result.index, &s.data)
+            .expect("P is a free point");
+    assert!((x - 4.0).abs() < 1e-6, "x = {x}");
+    assert!((y.abs() - 3.0).abs() < 1e-6, "y = {y}");
+}

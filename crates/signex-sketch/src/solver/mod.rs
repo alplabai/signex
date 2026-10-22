@@ -15,8 +15,10 @@ use crate::sketch::SketchData;
 
 use self::dof::{DofColor, entity_colours, over_constraint_ids};
 use self::jacobian::numerical_jacobian;
-use self::lm::{LmFailure, SolveResult, solve_lm_keeping_state};
+use self::lm::{LmFailure, SolveResult, solve_lm_keeping_state, solve_lm_perturbed};
 use self::residual::ResolvedParams;
+
+type LmOutcome = Result<SolveResult, Box<LmFailure>>;
 
 /// Top-level solver façade. Configure timeouts / iteration cap /
 /// tolerance, then call [`Solver::solve`] to run an LM iteration
@@ -66,44 +68,70 @@ pub struct FullSolveOutput {
 }
 
 impl Solver {
-    /// Turn a failed solve into [`SolveError::OverConstrained`] when LM
-    /// *stalled* — gave up before `max_iters` because no step reduced
-    /// `|r|` — and constraints are still violated there. A stalled LM sits
-    /// at a least-squares minimum with `|r| > 0`, which is exactly what a
-    /// conflicting set produces; a run that merely ran out of iterations
-    /// or time keeps its own error.
-    fn attribute_conflict(
+    fn run(&self, sketch: &SketchData, params: &ResolvedParams, perturbed: bool) -> LmOutcome {
+        let solve = if perturbed {
+            solve_lm_perturbed
+        } else {
+            solve_lm_keeping_state
+        };
+        solve(
+            sketch,
+            params,
+            self.timeout_ms,
+            self.tolerance,
+            self.max_iters,
+        )
+    }
+
+    /// A stalled first run is retried from a slightly moved start (a
+    /// saddle start stalls on a solvable sketch). The sketch is reported
+    /// over-constrained only if the retry stalls too, constraints are
+    /// still violated there, and the sketch converges once exactly those
+    /// constraints are removed. Anything else stays `DidNotConverge`.
+    fn recover(
         &self,
         sketch: &SketchData,
         params: &ResolvedParams,
         failure: LmFailure,
-    ) -> SolveError {
+    ) -> Result<SolveResult, SolveError> {
+        if !failure.stalled {
+            return Err(failure.error);
+        }
+        let retry = match self.run(sketch, params, true) {
+            Ok(result) => return Ok(result),
+            Err(retry) if retry.stalled => *retry,
+            Err(retry) => return Err(retry.error),
+        };
         let SolveError::DidNotConverge {
             iters,
             final_residual_norm,
-        } = failure.error
+        } = retry.error
         else {
-            return failure.error;
+            return Err(retry.error);
         };
         let stalled = SolveResult {
-            state: failure.state,
-            index: failure.index,
+            state: retry.state,
+            index: retry.index,
             iterations: iters,
             final_residual_norm,
             elapsed_ms: 0,
         };
-        let conflicting = if iters < self.max_iters {
-            over_constraint_ids(sketch, &stalled, &[], params)
-        } else {
-            Vec::new()
+        let conflicting = over_constraint_ids(sketch, &stalled, &[], params);
+        let did_not_converge = SolveError::DidNotConverge {
+            iters,
+            final_residual_norm,
         };
         if conflicting.is_empty() {
-            SolveError::DidNotConverge {
-                iters,
-                final_residual_norm,
-            }
+            return Err(did_not_converge);
+        }
+        let mut without = sketch.clone();
+        without.constraints.retain(|c| !conflicting.contains(&c.id));
+        let resolves =
+            self.run(&without, params, false).is_ok() || self.run(&without, params, true).is_ok();
+        if resolves {
+            Err(SolveError::OverConstrained(conflicting))
         } else {
-            SolveError::OverConstrained(conflicting)
+            Err(did_not_converge)
         }
     }
 
@@ -115,14 +143,10 @@ impl Solver {
         sketch: &SketchData,
         params: &ResolvedParams,
     ) -> Result<FullSolveOutput, SolveError> {
-        let result = solve_lm_keeping_state(
-            sketch,
-            params,
-            self.timeout_ms,
-            self.tolerance,
-            self.max_iters,
-        )
-        .map_err(|failure| self.attribute_conflict(sketch, params, *failure))?;
+        let result = match self.run(sketch, params, false) {
+            Ok(result) => result,
+            Err(failure) => self.recover(sketch, params, *failure)?,
+        };
 
         // Compute the Jacobian once at the solved state and reuse
         // for DOF colour + over-constraint detection. A constraint-

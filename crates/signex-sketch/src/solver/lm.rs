@@ -32,9 +32,12 @@
 //! - `Timeout` — wall-clock budget exceeded.
 //! - `OverConstrained` — singular normal-equation matrix at any λ
 //!   (LM theory says this should be impossible for finite λ, but
-//!   underflow can still hit the LU pivot threshold; we surface it
-//!   so the caller can show a useful error rather than retrying
-//!   forever).
+//!   underflow can still hit the LU pivot threshold). The list is
+//!   empty here: no constraint can be named at this layer.
+//!
+//! A `λ` stall is also reported as `DidNotConverge`; the failure's
+//! `stalled` flag lets [`crate::solver::Solver`] retry it and decide
+//! whether a named conflict is the cause.
 
 use std::time::Instant;
 
@@ -98,7 +101,25 @@ pub struct LmFailure {
     pub error: SolveError,
     pub state: Vec<f64>,
     pub index: EntityIndex,
+    /// `true` only when damping saturated: no step reduced `|r|` any
+    /// more. NaN traps, timeouts and iteration-cap exits are `false`.
+    pub stalled: bool,
 }
+
+/// Why the LM loop stopped without converging.
+enum LmExit {
+    Stalled { iters: usize, norm: f64 },
+    Failed(SolveError),
+}
+
+impl From<SolveError> for LmExit {
+    fn from(e: SolveError) -> Self {
+        Self::Failed(e)
+    }
+}
+
+/// Size of the deterministic start offset, relative to the sketch extent.
+const START_OFFSET_REL: f64 = 1e-3;
 
 /// [`solve_lm`], but a failure carries the last accepted state.
 pub fn solve_lm_keeping_state(
@@ -108,9 +129,41 @@ pub fn solve_lm_keeping_state(
     tolerance: f64,
     max_iters: usize,
 ) -> Result<SolveResult, Box<LmFailure>> {
+    run_lm(sketch, params, timeout_ms, tolerance, max_iters, false)
+}
+
+/// [`solve_lm_keeping_state`] from a slightly moved start. A start on a
+/// symmetric saddle has a zero gradient and stalls although the sketch is
+/// solvable; every free variable is offset by a small fixed vector (no
+/// RNG) so the retry is reproducible.
+pub fn solve_lm_perturbed(
+    sketch: &SketchData,
+    params: &ResolvedParams,
+    timeout_ms: u64,
+    tolerance: f64,
+    max_iters: usize,
+) -> Result<SolveResult, Box<LmFailure>> {
+    run_lm(sketch, params, timeout_ms, tolerance, max_iters, true)
+}
+
+fn run_lm(
+    sketch: &SketchData,
+    params: &ResolvedParams,
+    timeout_ms: u64,
+    tolerance: f64,
+    max_iters: usize,
+    perturb: bool,
+) -> Result<SolveResult, Box<LmFailure>> {
     let started = Instant::now();
     let packed = pack(sketch);
     let mut state = packed.vector.clone();
+    if perturb {
+        let extent = state.iter().fold(1.0_f64, |m, v| m.max(v.abs()));
+        for (i, v) in state.iter_mut().enumerate() {
+            // Distinct, non-zero offsets per variable: 0.5 .. 1.5.
+            *v += START_OFFSET_REL * extent * (0.5 + (i % 7) as f64 / 6.0);
+        }
+    }
     let outcome = iterate_lm(
         sketch,
         params,
@@ -129,11 +182,24 @@ pub fn solve_lm_keeping_state(
             final_residual_norm,
             elapsed_ms: started.elapsed().as_millis() as u64,
         }),
-        Err(error) => Err(Box::new(LmFailure {
-            error,
-            state,
-            index: packed.index,
-        })),
+        Err(exit) => {
+            let (error, stalled) = match exit {
+                LmExit::Stalled { iters, norm } => (
+                    SolveError::DidNotConverge {
+                        iters,
+                        final_residual_norm: norm,
+                    },
+                    true,
+                ),
+                LmExit::Failed(error) => (error, false),
+            };
+            Err(Box::new(LmFailure {
+                error,
+                state,
+                index: packed.index,
+                stalled,
+            }))
+        }
     }
 }
 
@@ -152,7 +218,7 @@ fn iterate_lm(
     timeout_ms: u64,
     tolerance: f64,
     max_iters: usize,
-) -> Result<(usize, f64), SolveError> {
+) -> Result<(usize, f64), LmExit> {
     // Edge case: sketch with no free state vars — nothing to solve.
     if state.is_empty() {
         return Ok((0, 0.0));
@@ -177,9 +243,9 @@ fn iterate_lm(
         // CRIT-6: divergence guard. Once `lambda` saturates we cannot
         // make progress without overflowing `(JᵀJ + λI)`.
         if lambda > LAMBDA_MAX {
-            return Err(SolveError::DidNotConverge {
+            return Err(LmExit::Stalled {
                 iters: iterations,
-                final_residual_norm: norm_vec(&r),
+                norm: norm_vec(&r),
             });
         }
 
@@ -188,7 +254,8 @@ fn iterate_lm(
             return Err(SolveError::Timeout {
                 elapsed_ms,
                 budget_ms: timeout_ms,
-            });
+            }
+            .into());
         }
 
         let j = numerical_jacobian(sketch, state, index, params)
@@ -217,20 +284,20 @@ fn iterate_lm(
                 // we hit a zero pivot, the geometry is genuinely
                 // over-constrained. No constraint can be named here;
                 // `Solver::solve` attributes stalls it can see.
-                return Err(SolveError::OverConstrained(Vec::new()));
+                return Err(SolveError::OverConstrained(Vec::new()).into());
             }
             Err(LinAlgError::DimensionMismatch) => {
                 // LO-12: code bug, not a user error.
-                return Err(SolveError::Internal(
-                    "LU dimension mismatch — please report".into(),
-                ));
+                return Err(
+                    SolveError::Internal("LU dimension mismatch — please report".into()).into(),
+                );
             }
         };
 
         let delta = match lu.solve(&neg_jt_r) {
             Ok(d) => d,
             Err(e) => {
-                return Err(SolveError::Internal(format!("LU back-substitution: {e:?}")));
+                return Err(SolveError::Internal(format!("LU back-substitution: {e:?}")).into());
             }
         };
 
@@ -256,7 +323,8 @@ fn iterate_lm(
             return Err(SolveError::DidNotConverge {
                 iters: iterations,
                 final_residual_norm: norm_vec(&r),
-            });
+            }
+            .into());
         }
 
         if trial_norm_sq < residual_norm_sq {
@@ -274,7 +342,8 @@ fn iterate_lm(
         return Err(SolveError::DidNotConverge {
             iters: iterations,
             final_residual_norm: norm_vec(&r),
-        });
+        }
+        .into());
     }
 
     // CRIT-6: defence-in-depth — never return a NaN-poisoned result.
@@ -282,7 +351,8 @@ fn iterate_lm(
         return Err(SolveError::DidNotConverge {
             iters: iterations,
             final_residual_norm: norm_vec(&r),
-        });
+        }
+        .into());
     }
 
     Ok((iterations, norm_vec(&r)))
