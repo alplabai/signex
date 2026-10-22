@@ -26,7 +26,7 @@ impl Signex {
                 | super::super::super::TabKind::FootprintEditor(path) => {
                     let path = path.clone();
                     if !path.exists() {
-                        return Ok(super::spawn_save_as_for_new_primitive(path));
+                        return Ok(super::spawn_save_as_for_primitive(path));
                     }
                     match self.save_primitive_tab_at(&path) {
                         Ok(()) => {
@@ -271,14 +271,11 @@ impl Signex {
     ) -> Result<()> {
         match self.document_state.tabs.get(self.document_state.active_tab) {
             Some(tab) if matches!(tab.kind, TabKind::Schematic) && tab.path == from_path => {}
-            Some(tab) if matches!(tab.kind, TabKind::Schematic) => anyhow::bail!(
-                "save as {}: the active tab is no longer {} — nothing was written",
+            _ => anyhow::bail!(
+                "save as {}: the active tab is no longer the schematic {} (it was \
+                 switched or closed while the dialog was open) — nothing was written",
                 path.display(),
                 from_path.display()
-            ),
-            _ => anyhow::bail!(
-                "save as {}: Save As is not supported for the active tab",
-                path.display()
             ),
         }
         // Refuse a target another open tab hosts: re-keying onto it would
@@ -312,8 +309,31 @@ impl Signex {
     pub(crate) fn handle_save_primitive_as(
         &mut self,
         from_path: &std::path::Path,
-        to_path: &std::path::Path,
+        picked_path: &std::path::Path,
     ) -> Result<()> {
+        // The OS dialog only confirmed overwriting the name the user
+        // typed. When we append the extension the target is a different
+        // file the user was never asked about, so refuse if it exists.
+        let resolved = super::with_primitive_extension(
+            picked_path.to_path_buf(),
+            super::primitive_extension(from_path),
+        );
+        let to_path = resolved.as_path();
+        if to_path != picked_path {
+            if to_path.exists() {
+                crate::diagnostics::log_warning(format!(
+                    "[save-as] {} already exists and was not overwritten; \
+                     pick the full file name including the extension to replace it",
+                    to_path.display()
+                ));
+                return Ok(());
+            }
+            crate::diagnostics::log_info(format!(
+                "[save-as] No file extension given; saving as {}",
+                to_path.display()
+            ));
+        }
+
         // Reject re-keying onto a path that already hosts a different
         // open editor or tab — would clobber the other editor's state.
         if from_path != to_path

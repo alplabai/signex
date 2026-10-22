@@ -244,7 +244,7 @@ impl Signex {
                 )
             }
             Some(TabKind::SymbolEditor(path)) | Some(TabKind::FootprintEditor(path)) => {
-                super::super::document_files::spawn_save_as_for_active_primitive(path)
+                super::super::document_files::spawn_save_as_for_primitive(path)
             }
             _ => {
                 crate::diagnostics::log_warning(

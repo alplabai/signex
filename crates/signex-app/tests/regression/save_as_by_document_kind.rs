@@ -227,7 +227,7 @@ fn symbol_save_as_onto_another_open_tab_is_refused() {
 }
 
 #[test]
-fn save_as_on_an_unsupported_tab_writes_nothing() {
+fn save_as_after_the_source_tab_changed_kind_writes_nothing() {
     let tmp = TempDir::new().unwrap();
     let target = tmp.path().join("x.snxsch");
     let pcb = tmp.path().join("b.snxpcb");
@@ -238,7 +238,7 @@ fn save_as_on_an_unsupported_tab_writes_nothing() {
 
     assert!(!target.exists());
     assert!(
-        logged(&tmp, "not supported for the active tab"),
+        logged(&tmp, "no longer the schematic"),
         "the refusal must reach the Messages panel"
     );
 }
@@ -259,5 +259,34 @@ fn saving_outside_any_snxlib_logs_to_the_messages_panel() {
     assert!(
         logged(&tmp, "outside any `.snxlib/`"),
         "the unattached save must reach the Messages panel"
+    );
+}
+
+#[test]
+fn extensionless_pick_never_overwrites_an_existing_file_with_the_appended_extension() {
+    // The OS dialog confirmed overwriting "foo", not "foo.snxsym". An
+    // existing foo.snxsym that no tab hosts must survive untouched.
+    let tmp = TempDir::new().unwrap();
+    let old = tmp.path().join("old.snxsym");
+    let existing = tmp.path().join("foo.snxsym");
+    let picked = tmp.path().join("foo");
+    std::fs::write(&existing, b"precious").unwrap();
+    let (mut app, _t) = Signex::new();
+    open_symbol_tab(&mut app, &old);
+    app.document_state.tabs[0].title = "keep me".into();
+
+    let _ = app.update(primitive_save_as(&old, &picked));
+
+    assert_eq!(std::fs::read(&existing).unwrap(), b"precious");
+    assert!(!picked.exists(), "the bare name must not be written either");
+    let ds = &app.document_state;
+    assert!(ds.symbol_editors.contains_key(&old), "no re-key on refusal");
+    assert!(!ds.symbol_editors.contains_key(&existing));
+    assert_eq!(ds.tabs[0].path, old);
+    assert_eq!(ds.tabs[0].title, "keep me");
+    assert!(ds.dirty_paths.contains(&old), "still dirty: nothing saved");
+    assert!(
+        logged(&tmp, "already exists and was not overwritten"),
+        "the refusal must reach the Messages panel"
     );
 }
