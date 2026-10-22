@@ -11,13 +11,15 @@ use signex_app::app::{
 use signex_types::project::{LibraryEntry, LibraryEntryKind, ProjectData};
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
 /// Row paths in the Libraries branch: the project has no sheets, so the
 /// branch is the project's only child.
 const LOCAL_ROW: [usize; 3] = [0, 0, 0];
 const SHARED_ROW: [usize; 3] = [0, 0, 1];
+/// Second row of a two-library project (the Shared row in the mixed fixture).
+const SECOND_ROW: [usize; 3] = SHARED_ROW;
 
 struct Fixture {
     app: Signex,
@@ -25,6 +27,37 @@ struct Fixture {
     _shared_tmp: TempDir,
     local_lib: PathBuf,
     shared_lib: PathBuf,
+}
+
+/// An app holding one project whose library list is `libraries`, with the
+/// project tree built.
+fn app_with_libraries(
+    project_path: &Path,
+    project_dir: &Path,
+    libraries: Vec<LibraryEntry>,
+) -> Signex {
+    let (mut app, _boot) = Signex::new();
+    let id = app.document_state.mint_project_id();
+    app.document_state.projects.push(LoadedProject {
+        id,
+        path: project_path.to_path_buf(),
+        data: ProjectData {
+            name: "Board".into(),
+            dir: project_dir.to_string_lossy().into_owned(),
+            schematic_root: None,
+            pcb_file: None,
+            sheets: Vec::new(),
+            variant_definitions: Vec::new(),
+            active_variant: None,
+            libraries,
+            enable_git: false,
+        },
+        pending_libraries: HashMap::new(),
+    });
+    app.document_state.active_project = Some(id);
+    // Any message that republishes the panel context builds the tree.
+    let _ = app.update(Message::Ui(UiMsg::GridPickerSelect(1.0)));
+    app
 }
 
 /// A project listing a ProjectLocal and a Shared library that are both named
@@ -39,38 +72,22 @@ fn two_libraries_one_name() -> Fixture {
     let project_path = project_tmp.path().join("Board.snxprj");
     fs::write(&project_path, b"{}").expect("write .snxprj");
 
-    let (mut app, _boot) = Signex::new();
-    let id = app.document_state.mint_project_id();
-    app.document_state.projects.push(LoadedProject {
-        id,
-        path: project_path,
-        data: ProjectData {
-            name: "Board".into(),
-            dir: project_tmp.path().to_string_lossy().into_owned(),
-            schematic_root: None,
-            pcb_file: None,
-            sheets: Vec::new(),
-            variant_definitions: Vec::new(),
-            active_variant: None,
-            libraries: vec![
-                LibraryEntry {
-                    path: PathBuf::from("Power.snxlib"),
-                    kind: LibraryEntryKind::ProjectLocal,
-                    library_id: None,
-                },
-                LibraryEntry {
-                    path: shared_lib.clone(),
-                    kind: LibraryEntryKind::Shared,
-                    library_id: None,
-                },
-            ],
-            enable_git: false,
-        },
-        pending_libraries: HashMap::new(),
-    });
-    app.document_state.active_project = Some(id);
-    // Any message that republishes the panel context builds the tree.
-    let _ = app.update(Message::Ui(UiMsg::GridPickerSelect(1.0)));
+    let app = app_with_libraries(
+        &project_path,
+        project_tmp.path(),
+        vec![
+            LibraryEntry {
+                path: PathBuf::from("Power.snxlib"),
+                kind: LibraryEntryKind::ProjectLocal,
+                library_id: None,
+            },
+            LibraryEntry {
+                path: shared_lib.clone(),
+                kind: LibraryEntryKind::Shared,
+                library_id: None,
+            },
+        ],
+    );
 
     Fixture {
         app,
@@ -125,22 +142,40 @@ fn rename_dialog_targets_the_clicked_library_row() {
 
 #[test]
 fn delete_on_second_library_row_leaves_the_first_untouched() {
-    let mut f = two_libraries_one_name();
+    // Two ProjectLocal libraries with the same file name in different folders.
+    let project_tmp = TempDir::new().expect("project tempdir");
+    let first_lib = project_tmp.path().join("Power.snxlib");
+    let second_lib = project_tmp.path().join("sub").join("Power.snxlib");
+    fs::create_dir(project_tmp.path().join("sub")).expect("create sub dir");
+    fs::write(&first_lib, b"first-library").expect("write first library");
+    fs::write(&second_lib, b"second-library").expect("write second library");
+    let project_path = project_tmp.path().join("Board.snxprj");
+    fs::write(&project_path, b"{}").expect("write .snxprj");
+    let local = |rel: &str| LibraryEntry {
+        path: PathBuf::from(rel),
+        kind: LibraryEntryKind::ProjectLocal,
+        library_id: None,
+    };
+    let mut app = app_with_libraries(
+        &project_path,
+        project_tmp.path(),
+        vec![local("Power.snxlib"), local("sub/Power.snxlib")],
+    );
 
     tree_action(
-        &mut f.app,
-        ProjectTreeAction::OpenRemoveDialog(SHARED_ROW.to_vec()),
+        &mut app,
+        ProjectTreeAction::OpenRemoveDialog(SECOND_ROW.to_vec()),
     );
-    let _ = f.app.update(Message::Remove(RemoveMsg::Confirm(
+    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
         RemoveChoice::DeleteFile,
     )));
 
     assert_eq!(
-        fs::read(&f.local_lib).expect("project-local library must survive"),
-        b"local-library"
+        fs::read(&first_lib).expect("the first library must survive"),
+        b"first-library"
     );
-    assert!(!f.shared_lib.exists(), "the clicked library is deleted");
-    assert_eq!(library_paths(&f.app), vec![f.local_lib.clone()]);
+    assert!(!second_lib.exists(), "the clicked library is deleted");
+    assert_eq!(library_paths(&app), vec![first_lib]);
 }
 
 #[test]
