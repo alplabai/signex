@@ -19,9 +19,12 @@
 //! SOIC-8 / QFN-16 / IPC-7351 R0805) only. No third-party EDA-tool
 //! source / file-format docs / wikis consulted.
 
+pub mod ids;
+
 use std::error::Error;
 use std::path::Path;
 
+use chrono::{DateTime, TimeZone, Utc};
 use signex_library::primitive::footprint::{Footprint, FootprintFile};
 use signex_sketch::SketchData;
 use signex_sketch::attr::{DrillSpec, PadAttr, PadKind, PadShape, PadSide, PasteAperturePattern};
@@ -29,48 +32,89 @@ use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 
-/// One stock footprint to emit: the `.snxfpt` file name it is written
-/// to under `assets/stock-library/footprints/`, paired with the builder
-/// that authors it.
-type StockFootprint = (&'static str, fn() -> Footprint);
+use ids::{STOCK_IDS, StockIds, StockKind};
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let dir = Path::new("assets/stock-library/footprints");
-    std::fs::create_dir_all(dir)?;
+/// Fixed `created` / `updated` stamp for every stock footprint, so a
+/// regeneration never rewrites the files just because the clock moved.
+fn stock_timestamp() -> DateTime<Utc> {
+    Utc.with_ymd_and_hms(2026, 5, 4, 19, 1, 13)
+        .single()
+        .expect("constant stock timestamp is a valid UTC instant")
+}
 
-    let mut summary: Vec<String> = Vec::new();
+/// Next pinned sketch-entity id from the footprint's id table. The
+/// table is sized to the builder; running out is a programming error
+/// caught by the determinism test.
+fn next_id(ids: &mut impl Iterator<Item = SketchEntityId>) -> SketchEntityId {
+    ids.next()
+        .expect("stock id table lists one entity id per sketch entity")
+}
 
-    let cases: [StockFootprint; 5] = [
-        ("SOIC-8.snxfpt", build_soic8),
-        ("QFN-16.snxfpt", build_qfn16),
-        ("R0805.snxfpt", build_r0805),
-        ("MountingHole-3.2mm.snxfpt", build_mounting_hole_3p2),
-        ("Fiducial-1mm.snxfpt", build_fiducial_1mm),
-    ];
+/// Author the footprint named by one id-table row.
+fn build(ids: &StockIds) -> Footprint {
+    match ids.kind {
+        StockKind::Soic8 => build_soic8(ids),
+        StockKind::Qfn16 => build_qfn16(ids),
+        StockKind::R0805 => build_r0805(ids),
+        StockKind::MountingHole3p2 => build_mounting_hole_3p2(ids),
+        StockKind::Fiducial1mm => build_fiducial_1mm(ids),
+    }
+}
 
-    for (filename, builder) in cases {
-        let fp = builder();
-        let path = dir.join(filename);
+/// One rendered stock file: its name, serialised text and pad count.
+pub struct RenderedStockFile {
+    pub file_name: &'static str,
+    pub footprint_name: String,
+    pub pad_count: usize,
+    pub text: String,
+}
+
+/// Render every stock footprint to its `.snxfpt` text. Pure and
+/// deterministic: identity comes from [`ids::STOCK_IDS`] and
+/// [`stock_timestamp`], never from the clock or a fresh UUID.
+pub fn render_all() -> Result<Vec<RenderedStockFile>, Box<dyn Error>> {
+    let mut out = Vec::with_capacity(STOCK_IDS.len());
+    for row in STOCK_IDS {
+        let fp = build(row);
         let pad_count = count_sketch_pads(&fp);
         // v0.18.4 — emit TOML+TSV envelope (`snxfpt/1`). Pads land
         // in the per-footprint `pads_tsv = '''…'''` literal multi-
         // line block; the legacy JSON path was dropped.
-        let file = FootprintFile::from_footprint(fp.clone());
-        let text = file.to_toml_string()?;
-        std::fs::write(&path, text.as_bytes())?;
-        let line = format!(
+        let footprint_name = fp.name.clone();
+        let file = FootprintFile::with_identity(fp, row.file_uuid(), stock_timestamp());
+        out.push(RenderedStockFile {
+            file_name: row.file_name,
+            footprint_name,
+            pad_count,
+            text: file.to_toml_string()?,
+        });
+    }
+    Ok(out)
+}
+
+#[allow(
+    dead_code,
+    reason = "the determinism test includes this file and never runs main"
+)]
+fn main() -> Result<(), Box<dyn Error>> {
+    let dir = Path::new("assets/stock-library/footprints");
+    std::fs::create_dir_all(dir)?;
+
+    let rendered = render_all()?;
+    for file in &rendered {
+        let path = dir.join(file.file_name);
+        std::fs::write(&path, file.text.as_bytes())?;
+        println!(
             "wrote {:<32} name={:<22} pads={}",
             path.display(),
-            fp.name,
-            pad_count
+            file.footprint_name,
+            file.pad_count
         );
-        println!("{line}");
-        summary.push(line);
     }
 
     println!(
         "\n{} footprint(s) written to {}",
-        summary.len(),
+        rendered.len(),
         dir.display()
     );
     Ok(())
@@ -93,9 +137,10 @@ fn count_sketch_pads(fp: &Footprint) -> usize {
 /// `(anchor_x, anchor_y)`, with optional per-pad relative offsets.
 #[expect(
     clippy::too_many_arguments,
-    reason = "13 arguments: an example builder that mirrors the stock-library row schema one field per parameter"
+    reason = "14 arguments: an example builder that mirrors the stock-library row schema one field per parameter"
 )]
 fn smd_pad(
+    id: SketchEntityId,
     plane: PlaneId,
     anchor_x: f64,
     anchor_y: f64,
@@ -111,7 +156,7 @@ fn smd_pad(
     paste_margin_expr: Option<&str>,
 ) -> Entity {
     let mut e = Entity::new(
-        SketchEntityId::new(),
+        id,
         plane,
         EntityKind::Point {
             x: anchor_x,
@@ -142,9 +187,10 @@ fn smd_pad(
 /// JEDEC SOIC-8: 1.27 mm pitch, body ≈ 3.9 × 4.9 mm, two rows of 4
 /// pads with 5.4 mm row-to-row centre spacing (IPC-7351 nominal).
 /// Pad copper 0.6 × 1.55 mm, mask margin 0.05 mm.
-fn build_soic8() -> Footprint {
-    let mut fp = Footprint::empty("SOIC-8");
-    let plane = PlaneId::new();
+fn build_soic8(ids: &StockIds) -> Footprint {
+    let mut fp = Footprint::with_identity("SOIC-8", ids.footprint_uuid(), stock_timestamp());
+    let plane = ids.plane_id();
+    let mut eids = ids.entity_ids();
     let mut sketch = SketchData {
         planes: vec![Plane {
             id: plane,
@@ -170,6 +216,7 @@ fn build_soic8() -> Footprint {
 
     for (idx, label) in left {
         let e = smd_pad(
+            next_id(&mut eids),
             plane,
             0.0,
             0.0,
@@ -188,6 +235,7 @@ fn build_soic8() -> Footprint {
     }
     for (idx, label) in right {
         let e = smd_pad(
+            next_id(&mut eids),
             plane,
             0.0,
             0.0,
@@ -215,9 +263,10 @@ fn build_soic8() -> Footprint {
 /// Side rows are at ±row_offset from origin; pad copper 0.3 × 0.6 mm
 /// (long axis radial). Pin 1 is the top-left of the west side
 /// (CCW numbering): W4..W1, S4..S1, E1..E4, N1..N4 → labelled 1..16.
-fn build_qfn16() -> Footprint {
-    let mut fp = Footprint::empty("QFN-16");
-    let plane = PlaneId::new();
+fn build_qfn16(ids: &StockIds) -> Footprint {
+    let mut fp = Footprint::with_identity("QFN-16", ids.footprint_uuid(), stock_timestamp());
+    let plane = ids.plane_id();
+    let mut eids = ids.entity_ids();
     let mut sketch = SketchData {
         planes: vec![Plane {
             id: plane,
@@ -242,6 +291,7 @@ fn build_qfn16() -> Footprint {
     let west = [(1.5_f64, "1"), (0.5, "2"), (-0.5, "3"), (-1.5, "4")];
     for (idx, label) in west {
         let e = smd_pad(
+            next_id(&mut eids),
             plane,
             0.0,
             0.0,
@@ -261,6 +311,7 @@ fn build_qfn16() -> Footprint {
     let south = [(-1.5_f64, "5"), (-0.5, "6"), (0.5, "7"), (1.5, "8")];
     for (idx, label) in south {
         let e = smd_pad(
+            next_id(&mut eids),
             plane,
             0.0,
             0.0,
@@ -280,6 +331,7 @@ fn build_qfn16() -> Footprint {
     let east = [(-1.5_f64, "9"), (-0.5, "10"), (0.5, "11"), (1.5, "12")];
     for (idx, label) in east {
         let e = smd_pad(
+            next_id(&mut eids),
             plane,
             0.0,
             0.0,
@@ -299,6 +351,7 @@ fn build_qfn16() -> Footprint {
     let north = [(1.5_f64, "13"), (0.5, "14"), (-0.5, "15"), (-1.5, "16")];
     for (idx, label) in north {
         let e = smd_pad(
+            next_id(&mut eids),
             plane,
             0.0,
             0.0,
@@ -324,9 +377,10 @@ fn build_qfn16() -> Footprint {
 
 /// IPC-7351 R0805 chip resistor: 2 SMD pads, centre-to-centre 2.0 mm,
 /// pad copper 1.0 × 1.25 mm. Body sits between the pads (~2.0 × 1.25 mm).
-fn build_r0805() -> Footprint {
-    let mut fp = Footprint::empty("R0805");
-    let plane = PlaneId::new();
+fn build_r0805(ids: &StockIds) -> Footprint {
+    let mut fp = Footprint::with_identity("R0805", ids.footprint_uuid(), stock_timestamp());
+    let plane = ids.plane_id();
+    let mut eids = ids.entity_ids();
     let mut sketch = SketchData {
         planes: vec![Plane {
             id: plane,
@@ -343,6 +397,7 @@ fn build_r0805() -> Footprint {
 
     for (sign, label) in [(-0.5_f64, "1"), (0.5, "2")] {
         let e = smd_pad(
+            next_id(&mut eids),
             plane,
             0.0,
             0.0,
@@ -371,9 +426,14 @@ fn build_r0805() -> Footprint {
 /// using a copper-free annular zone equal to the pad size: we set the
 /// pad outer to 6.0 mm round but the kind=NptHole means the bake
 /// emits an unplated hole. Side=All (drill cuts both copper sides).
-fn build_mounting_hole_3p2() -> Footprint {
-    let mut fp = Footprint::empty("MountingHole-3.2mm");
-    let plane = PlaneId::new();
+fn build_mounting_hole_3p2(ids: &StockIds) -> Footprint {
+    let mut fp = Footprint::with_identity(
+        "MountingHole-3.2mm",
+        ids.footprint_uuid(),
+        stock_timestamp(),
+    );
+    let plane = ids.plane_id();
+    let mut eids = ids.entity_ids();
     let mut sketch = SketchData {
         planes: vec![Plane {
             id: plane,
@@ -386,7 +446,7 @@ fn build_mounting_hole_3p2() -> Footprint {
     sketch.parameters.insert("clearance_dia", "6.0mm");
 
     let mut e = Entity::new(
-        SketchEntityId::new(),
+        next_id(&mut eids),
         plane,
         EntityKind::Point { x: 0.0, y: 0.0 },
     );
@@ -422,9 +482,10 @@ fn build_mounting_hole_3p2() -> Footprint {
 /// 1 mm round copper, 2 mm mask opening (ring of bare substrate
 /// around the copper dot — required for camera contrast). No paste,
 /// no drill.
-fn build_fiducial_1mm() -> Footprint {
-    let mut fp = Footprint::empty("Fiducial-1mm");
-    let plane = PlaneId::new();
+fn build_fiducial_1mm(ids: &StockIds) -> Footprint {
+    let mut fp = Footprint::with_identity("Fiducial-1mm", ids.footprint_uuid(), stock_timestamp());
+    let plane = ids.plane_id();
+    let mut eids = ids.entity_ids();
     let mut sketch = SketchData {
         planes: vec![Plane {
             id: plane,
@@ -438,7 +499,7 @@ fn build_fiducial_1mm() -> Footprint {
 
     // Mask margin = (mask_dia − copper_dia) / 2 = 0.5 mm.
     let mut e = Entity::new(
-        SketchEntityId::new(),
+        next_id(&mut eids),
         plane,
         EntityKind::Point { x: 0.0, y: 0.0 },
     );
