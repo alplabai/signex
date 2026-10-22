@@ -159,11 +159,16 @@ impl Signex {
         // Standalone primitive editor tabs — drop the per-tab editor
         // state on close. Same shape as Component Preview cleanup
         // (no dirty-park yet, so closing discards the in-flight draft).
+        // The draft goes with the editor, so its dirty marker must go
+        // too: a stale `dirty_paths` entry with no editor behind it
+        // would make quit's Save All fail on a file nobody can save.
         if let crate::app::TabKind::SymbolEditor(ref p) = closing_kind {
             self.document_state.symbol_editors.remove(p);
+            self.document_state.dirty_paths.remove(p);
         }
         if let crate::app::TabKind::FootprintEditor(ref p) = closing_kind {
             self.document_state.footprint_editors.remove(p);
+            self.document_state.dirty_paths.remove(p);
         }
         // Library Browser tabs — drop the per-browser state on close.
         // The library itself stays mounted; only the tab-scoped UI

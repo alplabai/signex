@@ -56,6 +56,9 @@ mod preferences_symbol_drafts;
 #[path = "regression/undo_marker_divergence.rs"]
 mod undo_marker_divergence;
 
+#[path = "regression/primitive_dirty_quit.rs"]
+mod primitive_dirty_quit;
+
 #[path = "regression/dirty_paths_gateway.rs"]
 mod dirty_paths_gateway;
 
@@ -91,3 +94,6 @@ mod library_browser_cell_commit;
 
 #[path = "regression/render_config_grid_style.rs"]
 mod render_config_grid_style;
+
+#[path = "regression/rename_save_as_rekey.rs"]
+mod rename_save_as_rekey;
