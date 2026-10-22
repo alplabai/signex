@@ -1,6 +1,8 @@
 //! PCB scene emitters + snapshot geometry helpers.
 
 use super::*;
+use signex_types::pad_outline::PadOutline;
+use signex_types::rotation2d::{Pose2d, Vec2d};
 
 pub(super) fn trace_from_segment(segment: &Segment) -> TraceInput {
     TraceInput {
@@ -38,6 +40,7 @@ pub(super) fn pad_from_footprint(footprint: &Footprint, pad: &Pad) -> PadInput {
             mm_with_floor(pad.size.x, PCB_DEFAULT_PAD_SIZE_MM, 0.05),
             mm_with_floor(pad.size.y, PCB_DEFAULT_PAD_SIZE_MM, 0.05),
         ],
+        rotation_deg: footprint.rotation as f32,
         shape: pad.shape,
         pad_type: pad.pad_type,
     }
@@ -128,18 +131,6 @@ pub(super) fn rotate_local(point: [f32; 2], rotation_deg: f32) -> [f32; 2] {
     ]
 }
 
-pub(super) fn rectangle_vertices(center: [f32; 2], size_mm: [f32; 2]) -> Vec<[f32; 2]> {
-    let half_w = (size_mm[0] * 0.5).max(0.01);
-    let half_h = (size_mm[1] * 0.5).max(0.01);
-
-    vec![
-        [center[0] - half_w, center[1] - half_h],
-        [center[0] + half_w, center[1] - half_h],
-        [center[0] + half_w, center[1] + half_h],
-        [center[0] - half_w, center[1] + half_h],
-    ]
-}
-
 pub(super) fn ellipse_vertices(
     center: [f32; 2],
     radius_xy: [f32; 2],
@@ -160,20 +151,20 @@ pub(super) fn ellipse_vertices(
 }
 
 pub(super) fn pad_vertices(pad: &PadInput) -> Vec<[f32; 2]> {
-    let half_w = (pad.size_mm[0] * 0.5).max(0.01);
-    let half_h = (pad.size_mm[1] * 0.5).max(0.01);
-
-    match pad.shape {
-        PadShape::Circle => ellipse_vertices(
-            pad.center,
-            [half_w.min(half_h), half_w.min(half_h)],
-            PAD_ELLIPSE_SEGMENTS,
+    let outline = PadOutline::new(
+        pad.shape,
+        Vec2d::new(f64::from(pad.size_mm[0]), f64::from(pad.size_mm[1])),
+        Pose2d::new(
+            Vec2d::new(f64::from(pad.center[0]), f64::from(pad.center[1])),
+            f64::from(pad.rotation_deg).to_radians(),
         ),
-        PadShape::Oval => ellipse_vertices(pad.center, [half_w, half_h], PAD_ELLIPSE_SEGMENTS),
-        PadShape::Rect | PadShape::RoundRect | PadShape::Trapezoid | PadShape::Custom => {
-            rectangle_vertices(pad.center, pad.size_mm)
-        }
-    }
+    );
+
+    outline
+        .vertices(PAD_ELLIPSE_SEGMENTS)
+        .into_iter()
+        .map(|v| [v.x as f32, v.y as f32])
+        .collect()
 }
 
 pub(super) fn pad_alpha_mul(pad_type: PadType) -> f32 {

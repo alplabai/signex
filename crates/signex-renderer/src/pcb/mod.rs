@@ -44,6 +44,8 @@ pub struct ViaInput {
 pub struct PadInput {
     pub center: [f32; 2],
     pub size_mm: [f32; 2],
+    /// Counter-clockwise turn of the pad's own axes (the footprint's rotation).
+    pub rotation_deg: f32,
     pub shape: PadShape,
     pub pad_type: PadType,
 }
