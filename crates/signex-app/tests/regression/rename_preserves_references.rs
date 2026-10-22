@@ -49,6 +49,7 @@ fn sheet(children: &[&str]) -> SchematicSheet {
         no_erc_directives: Vec::new(),
         title_block: HashMap::new(),
         lib_symbols: HashMap::new(),
+        unknown: Default::default(),
     }
 }
 
