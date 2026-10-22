@@ -19,6 +19,9 @@ impl Signex {
     /// (`handle_project_close_confirm`) calls back into this method
     /// once the user picks Save All or Discard All.
     pub(super) fn close_project_at_tree_path(&mut self, tree_path: &[usize]) -> Task<Message> {
+        // The gate reads `dirty_paths`; do not rely on every edit site
+        // having refreshed the panel context since its last footprint edit.
+        self.sync_footprint_dirty_paths();
         let Some(&project_idx) = tree_path.first() else {
             return Task::none();
         };
@@ -51,11 +54,20 @@ impl Signex {
             Vec::new()
         };
 
-        if !dirty.is_empty() {
+        // Component Preview rows are keyed by row, not file, so they are
+        // not in `dirty_paths`; ask the library for the ones whose
+        // library sits inside this project (#666).
+        let dirty_rows = project_dir
+            .as_deref()
+            .map(|dir| self.library.dirty_editors_under(dir))
+            .unwrap_or_default();
+
+        if !dirty.is_empty() || !dirty_rows.is_empty() {
             self.ui_state.project_close_confirm = Some(crate::app::ProjectCloseConfirmState {
                 tree_path: tree_path.to_vec(),
                 project_name: project.data.name.clone(),
                 dirty_paths: dirty,
+                dirty_rows,
             });
             return Task::none();
         }
@@ -193,18 +205,46 @@ impl Signex {
     /// Format the per-file failure lines (`name — reason`) for a
     /// Save-All error modal so the user sees *why* each file couldn't
     /// be saved, not just its name.
-    fn save_all_failure_listing(failed: &[(std::path::PathBuf, String)]) -> String {
+    fn save_all_failure_listing(failed: &[(String, String)]) -> String {
         failed
             .iter()
-            .map(|(p, reason)| {
-                let name = p
-                    .file_name()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("(unnamed file)");
-                format!("{name} — {reason}")
-            })
+            .map(|(name, reason)| format!("{name} — {reason}"))
             .collect::<Vec<_>>()
             .join("\n  ")
+    }
+
+    /// Run the Save-All pass over dirty files and Component Preview
+    /// rows, logging each failure to the Messages panel. Returns the
+    /// `(label, reason)` of everything that could not be saved.
+    fn save_all_dirty(
+        &mut self,
+        context: &str,
+        paths: &[std::path::PathBuf],
+        rows: &[crate::library::state::EditorAddress],
+    ) -> Vec<(String, String)> {
+        let mut failed: Vec<(String, String)> = Vec::new();
+        for path in paths {
+            if let Err(err) = self.try_save_dirty_path(path) {
+                crate::diagnostics::log_error(
+                    &format!("{context}: could not save {}", path.display()),
+                    &err,
+                );
+                let name = path
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("(unnamed file)")
+                    .to_string();
+                failed.push((name, format!("{err:#}")));
+            }
+        }
+        for address in rows {
+            let label = self.library.editor_label(address);
+            if let Err(err) = self.try_save_row(address) {
+                crate::diagnostics::log_error(&format!("{context}: could not save {label}"), &err);
+                failed.push((label, format!("{err:#}")));
+            }
+        }
+        failed
     }
 
     /// Resolve the user's Save All / Discard All / Cancel choice on
@@ -227,16 +267,7 @@ impl Signex {
                 // save fails the project stays open and the user gets an
                 // error modal naming the file AND the reason it couldn't
                 // be saved.
-                let mut failed: Vec<(std::path::PathBuf, String)> = Vec::new();
-                for path in &state.dirty_paths {
-                    if let Err(err) = self.try_save_dirty_path(path) {
-                        crate::diagnostics::log_error(
-                            &format!("Save All: could not save {}", path.display()),
-                            &err,
-                        );
-                        failed.push((path.clone(), format!("{err:#}")));
-                    }
-                }
+                let failed = self.save_all_dirty("Save All", &state.dirty_paths, &state.dirty_rows);
                 // Drop dirty dots for the paths that DID save (the engine
                 // leg clears markers but doesn't refresh; the full-success
                 // close path refreshes via `execute_close_project_at_tree_path`,
@@ -246,7 +277,7 @@ impl Signex {
                 if !failed.is_empty() {
                     self.document_state.error_notice =
                         Some(crate::app::state::ErrorNotice::save(format!(
-                            "Could not save {} file(s) — project not closed:\n  {}",
+                            "Could not save {} item(s) — project not closed:\n  {}",
                             failed.len(),
                             Self::save_all_failure_listing(&failed)
                         )));
@@ -261,6 +292,7 @@ impl Signex {
                 // but doing it here too keeps the flow symmetric
                 // with SaveAll (after this match the project's
                 // dirty_paths entries are gone either way).
+                let mut tasks: Vec<Task<Message>> = Vec::new();
                 for path in &state.dirty_paths {
                     self.document_state.engines.remove(path);
                     self.document_state.dirty_paths.remove(path);
@@ -272,32 +304,67 @@ impl Signex {
                     {
                         tab.dirty = false;
                     }
+                    tasks.push(self.discard_primitive_editor(path));
                 }
-                self.execute_close_project_at_tree_path(&state.tree_path)
+                // Component Preview rows outlive the project's tabs, so
+                // discard their drafts explicitly.
+                for address in &state.dirty_rows {
+                    tasks.push(self.close_component_preview(address));
+                }
+                tasks.push(self.execute_close_project_at_tree_path(&state.tree_path));
+                Task::batch(tasks)
             }
+        }
+    }
+
+    /// Drop the symbol/footprint editor behind `path`, and its tab, so a
+    /// discarded draft cannot linger as a clean-looking editor that a
+    /// later edit would re-dirty and Ctrl+S would write. Such a tab can
+    /// have `project_id: None` (a library nested under the project), so
+    /// the project-close sweep by `project_id` would never reach it.
+    fn discard_primitive_editor(&mut self, path: &std::path::Path) -> Task<Message> {
+        self.document_state.symbol_editors.remove(path);
+        self.document_state.footprint_editors.remove(path);
+        let tab_idx = self.document_state.tabs.iter().position(|t| {
+            t.path == path
+                && matches!(
+                    t.kind,
+                    crate::app::TabKind::SymbolEditor(_) | crate::app::TabKind::FootprintEditor(_)
+                )
+        });
+        match tab_idx {
+            Some(idx) => self.close_tab_now(idx),
+            None => Task::none(),
         }
     }
 
     /// Entry point for every app-exit request — chrome ✕, File ▸ Exit,
     /// and OS close (Alt+F4) all funnel here. If any document in the
-    /// workspace has unsaved edits (`dirty_paths` non-empty), opens the
+    /// workspace has unsaved edits (`dirty_paths` non-empty, or a dirty
+    /// Component Preview row), opens the
     /// app-quit confirmation modal instead of exiting; otherwise closes
     /// the main window, which the daemon turns into process exit via
     /// `SecondaryWindowClosed`.
     pub(crate) fn handle_app_quit_requested(&mut self) -> Task<Message> {
+        // Same hardening as `close_project_at_tree_path`: the quit gate
+        // must see footprint edits even if no panel refresh ran after them.
+        self.sync_footprint_dirty_paths();
         // Guard against a second close request stacking a duplicate
         // modal while the first is still up.
         if self.ui_state.app_quit_confirm.is_some() {
             return Task::none();
         }
-        if self.document_state.dirty_paths.is_empty() {
+        let dirty_rows = self.library.dirty_editors();
+        if self.document_state.dirty_paths.is_empty() && dirty_rows.is_empty() {
             return self.close_main_window_now();
         }
         let mut dirty: Vec<std::path::PathBuf> =
             self.document_state.dirty_paths.iter().cloned().collect();
         dirty.sort();
-        self.ui_state.app_quit_confirm =
-            Some(crate::app::AppQuitConfirmState { dirty_paths: dirty });
+        self.ui_state.app_quit_confirm = Some(crate::app::AppQuitConfirmState {
+            dirty_paths: dirty,
+            dirty_rows,
+        });
         Task::none()
     }
 
@@ -334,16 +401,8 @@ impl Signex {
                 // Failed" (#104); they are now saved like any other.
                 // Anything still un-saveable keeps Signex open with a
                 // reason so nothing is lost.
-                let mut failed: Vec<(std::path::PathBuf, String)> = Vec::new();
-                for path in &state.dirty_paths {
-                    if let Err(err) = self.try_save_dirty_path(path) {
-                        crate::diagnostics::log_error(
-                            &format!("Save All (exit): could not save {}", path.display()),
-                            &err,
-                        );
-                        failed.push((path.clone(), format!("{err:#}")));
-                    }
-                }
+                let failed =
+                    self.save_all_dirty("Save All (exit)", &state.dirty_paths, &state.dirty_rows);
                 // Refresh so already-saved sheets drop their dirty dots on
                 // the partial-failure path (the engine leg clears markers
                 // but doesn't refresh); a no-op on the clean-exit path.
@@ -353,7 +412,7 @@ impl Signex {
                 } else {
                     self.document_state.error_notice =
                         Some(crate::app::state::ErrorNotice::save(format!(
-                            "Could not save {} file(s) — Signex stayed open so nothing is lost. \
+                            "Could not save {} item(s) — Signex stayed open so nothing is lost. \
                          Save them manually, or choose Discard All to exit anyway:\n  {}",
                             failed.len(),
                             Self::save_all_failure_listing(&failed)
@@ -422,5 +481,68 @@ mod tests {
             format!("{err:#}").contains("can't be saved automatically"),
             "unexpected error: {err:#}",
         );
+    }
+
+    /// An app with one loaded project at `dir` and a footprint editor
+    /// flagged dirty WITHOUT any `refresh_panel_ctx` since — the state an
+    /// edit site that forgot the refresh leaves behind.
+    fn app_with_unsynced_dirty_footprint(dir: &std::path::Path) -> (Signex, PathBuf) {
+        let (mut app, _task) = Signex::new();
+        let id = app.document_state.mint_project_id();
+        app.document_state.projects.push(crate::app::LoadedProject {
+            id,
+            path: dir.join("p.snxprj"),
+            data: signex_types::project::ProjectData {
+                name: "p".into(),
+                dir: dir.to_string_lossy().into_owned(),
+                schematic_root: None,
+                pcb_file: None,
+                sheets: Vec::new(),
+                variant_definitions: Vec::new(),
+                active_variant: None,
+                libraries: Vec::new(),
+                enable_git: false,
+            },
+            pending_libraries: std::collections::HashMap::new(),
+        });
+        let path = dir.join("lib.snxlib").join("footprints").join("g.snxfpt");
+        let file =
+            signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("fp"));
+        let mut editor = crate::app::FootprintEditorState::new(path.clone(), file);
+        editor.dirty = true;
+        app.document_state
+            .footprint_editors
+            .insert(path.clone(), editor);
+        (app, path)
+    }
+
+    #[test]
+    fn quit_gate_sees_a_dirty_footprint_without_a_panel_refresh() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut app, path) = app_with_unsynced_dirty_footprint(dir.path());
+
+        let _ = app.handle_app_quit_requested();
+
+        let modal = app
+            .ui_state
+            .app_quit_confirm
+            .as_ref()
+            .expect("quit must prompt");
+        assert!(modal.dirty_paths.contains(&path));
+    }
+
+    #[test]
+    fn project_close_gate_sees_a_dirty_footprint_without_a_panel_refresh() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut app, path) = app_with_unsynced_dirty_footprint(dir.path());
+
+        let _ = app.close_project_at_tree_path(&[0]);
+
+        let modal = app
+            .ui_state
+            .project_close_confirm
+            .as_ref()
+            .expect("project close must prompt");
+        assert!(modal.dirty_paths.contains(&path));
     }
 }

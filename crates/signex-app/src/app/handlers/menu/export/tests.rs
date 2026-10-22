@@ -50,6 +50,7 @@ fn child_ref(filename: &str) -> ChildSheet {
 
 fn schematic(children: &[&str]) -> SchematicSheet {
     SchematicSheet {
+        unknown: Default::default(),
         uuid: Uuid::new_v4(),
         version: 0,
         generator: String::new(),
@@ -140,6 +141,7 @@ pub(crate) fn sheet_with_net(reference: &str, net_name: &str, children: &[&str])
         },
     );
     sheet.symbols.push(Symbol {
+        unknown: Default::default(),
         uuid: Uuid::new_v4(),
         lib_id: "Device:R".to_string(),
         reference: reference.to_string(),
