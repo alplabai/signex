@@ -45,7 +45,10 @@ impl Signex {
                 .document_state
                 .dirty_paths
                 .iter()
-                .filter(|p| p.starts_with(dir))
+                .filter(|p| {
+                    p.starts_with(dir)
+                        && !self.document_state.claimed_by_other_project(project_idx, p)
+                })
                 .cloned()
                 .collect();
             v.sort();
@@ -114,9 +117,19 @@ impl Signex {
             && let Some(dir) = project.path.parent()
         {
             let dir = dir.to_path_buf();
-            self.document_state
+            let sweep: Vec<std::path::PathBuf> = self
+                .document_state
                 .engines
-                .retain(|p, _| p.parent() != Some(&dir));
+                .keys()
+                .filter(|p| {
+                    p.parent() == Some(&dir)
+                        && !self.document_state.claimed_by_other_project(project_idx, p)
+                })
+                .cloned()
+                .collect();
+            for path in sweep {
+                self.document_state.engines.remove(&path);
+            }
         }
 
         // Drop the project from the workspace, then pick a new active

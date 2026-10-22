@@ -32,15 +32,19 @@ mod pcb_rows;
 mod sch_rows;
 mod tsv;
 mod units;
+mod unknown;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod unknown_tests;
 
 // Public API re-exports — preserve the `format::…` import paths that
 // signex-app / signex-engine / signex-output rely on.
 pub use pcb_rows::{PcbFootprintRow, PcbPadRow, PcbTrackRow, PcbViaRow};
 pub use sch_rows::{SchComponentRow, SchJunctionRow, SchLabelRow, SchWireRow};
 pub use tsv::{parse_tsv_block, write_tsv_block};
+pub use unknown::{BoardUnknown, SheetUnknown, UnknownFields};
 
 // Subtree-internal helpers used by the container types below.
 use extras::{
@@ -174,6 +178,7 @@ impl SnxSchematic {
             generator_version: self.sheet.generator_version.clone(),
             paper_size: self.sheet.paper_size.clone(),
             root_sheet_page: self.sheet.root_sheet_page.clone(),
+            unknown: self.sheet.unknown.manifest.clone(),
         };
         out.push_str(&toml::to_string_pretty(&manifest)?);
         out.push('\n');
@@ -325,6 +330,10 @@ impl SnxSchematic {
             no_erc_directives: sheet_extras.no_erc_directives,
             title_block: sheet_extras.title_block.into_iter().collect(),
             lib_symbols: sheet_extras.lib_symbols.into_iter().collect(),
+            unknown: SheetUnknown {
+                manifest: raw.unknown,
+                extras: sheet_extras.unknown,
+            },
         };
 
         Ok(SnxSchematic {
@@ -348,6 +357,9 @@ struct SchManifest {
     paper_size: String,
     #[serde(default)]
     root_sheet_page: String,
+    /// Foreign manifest keys, re-emitted verbatim (see [`UnknownFields`]).
+    #[serde(flatten)]
+    unknown: UnknownFields,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -385,6 +397,10 @@ struct SchRaw {
     sheets: SchSheetsRaw,
     #[serde(default)]
     extras: Option<SchExtrasRaw>,
+    /// Foreign manifest keys; carried onto the sheet so they survive
+    /// the codec wrapper being discarded.
+    #[serde(flatten)]
+    unknown: UnknownFields,
 }
 
 // ---------------------------------------------------------------------------
@@ -423,6 +439,7 @@ impl SnxPcb {
             version: self.board.version,
             generator: self.board.generator.clone(),
             thickness: self.board.thickness,
+            unknown: self.board.unknown.manifest.clone(),
         };
         out.push_str(&toml::to_string_pretty(&manifest)?);
         out.push('\n');
@@ -431,7 +448,11 @@ impl SnxPcb {
         // toml's serializer produces the correct `[stackup]`/`[nets]`
         // headers and any inner sub-tables (PcbSetup) attach to the
         // right parent path.
-        if !self.board.layers.is_empty() || !self.board.nets.is_empty() {
+        // A section holding only foreign keys is still emitted, with its
+        // known members empty, so those keys are not lost.
+        let keep_stackup = !self.board.layers.is_empty() || !self.board.unknown.stackup.is_empty();
+        let keep_nets = !self.board.nets.is_empty() || !self.board.unknown.nets.is_empty();
+        if keep_stackup || keep_nets {
             #[derive(Serialize)]
             struct StackupWrapper<'a> {
                 #[serde(skip_serializing_if = "Option::is_none")]
@@ -444,26 +465,24 @@ impl SnxPcb {
                 layers: Vec<String>,
                 #[serde(skip_serializing_if = "Option::is_none")]
                 setup: Option<&'a crate::pcb::PcbSetup>,
+                #[serde(flatten)]
+                unknown: &'a UnknownFields,
             }
             #[derive(Serialize)]
             struct NetsBlock<'a> {
                 entries: &'a [crate::pcb::NetDef],
+                #[serde(flatten)]
+                unknown: &'a UnknownFields,
             }
-            let stackup = if self.board.layers.is_empty() {
-                None
-            } else {
-                Some(StackBlock {
-                    layers: self.board.layers.iter().map(|l| l.name.clone()).collect(),
-                    setup: self.board.setup.as_ref(),
-                })
-            };
-            let nets = if self.board.nets.is_empty() {
-                None
-            } else {
-                Some(NetsBlock {
-                    entries: &self.board.nets,
-                })
-            };
+            let stackup = keep_stackup.then(|| StackBlock {
+                layers: self.board.layers.iter().map(|l| l.name.clone()).collect(),
+                setup: self.board.setup.as_ref(),
+                unknown: &self.board.unknown.stackup,
+            });
+            let nets = keep_nets.then(|| NetsBlock {
+                entries: &self.board.nets,
+                unknown: &self.board.unknown.nets,
+            });
             out.push('\n');
             out.push_str(&toml::to_string_pretty(&StackupWrapper { stackup, nets })?);
         }
@@ -504,16 +523,20 @@ impl SnxPcb {
         let extras = PcbExtras::from_board(&self.board);
         let footprints = extras.footprints;
         let pads = extras.pads;
-        let board_extras =
-            if extras.outline.is_empty() && extras.graphics.is_empty() && extras.texts.is_empty() {
-                None
-            } else {
-                Some(BoardExtras {
-                    outline: extras.outline,
-                    graphics: extras.graphics,
-                    texts: extras.texts,
-                })
-            };
+        let board_extras = if extras.outline.is_empty()
+            && extras.graphics.is_empty()
+            && extras.texts.is_empty()
+            && self.board.unknown.extras.is_empty()
+        {
+            None
+        } else {
+            Some(BoardExtras {
+                outline: extras.outline,
+                graphics: extras.graphics,
+                texts: extras.texts,
+                unknown: self.board.unknown.extras.clone(),
+            })
+        };
         if !footprints.is_empty() || !pads.is_empty() || board_extras.is_some() {
             #[derive(Serialize)]
             struct ExtrasWrapper {
@@ -610,6 +633,10 @@ impl SnxPcb {
                     pads: vec![pad],
                     graphics: Vec::new(),
                     properties: Vec::new(),
+                    // The synthetic footprint is not in the file: it
+                    // carries no foreign keys and must not inherit the
+                    // orphan pad's.
+                    unknown: UnknownFields::default(),
                 });
             }
         }
@@ -621,7 +648,7 @@ impl SnxPcb {
         let zones = raw.zones.unwrap_or_default();
 
         // Stackup → layers list (rebuild LayerDef with synthetic ids).
-        let (layers, setup) = match raw.stackup {
+        let (layers, setup, stackup_unknown) = match raw.stackup {
             Some(s) => {
                 let layers: Vec<crate::pcb::LayerDef> = s
                     .layers
@@ -633,9 +660,14 @@ impl SnxPcb {
                         layer_type: String::new(),
                     })
                     .collect();
-                (layers, s.setup)
+                (layers, s.setup, s.unknown)
             }
-            None => (Vec::new(), None),
+            None => (Vec::new(), None, UnknownFields::default()),
+        };
+
+        let (nets, nets_unknown) = match raw.nets {
+            Some(n) => (n.entries, n.unknown),
+            None => (Vec::new(), UnknownFields::default()),
         };
 
         let board = PcbBoard {
@@ -646,13 +678,19 @@ impl SnxPcb {
             outline: board_extras.outline,
             layers,
             setup,
-            nets: raw.nets.map(|n| n.entries).unwrap_or_default(),
+            nets,
             footprints,
             segments,
             vias,
             zones,
             graphics: board_extras.graphics,
             texts: board_extras.texts,
+            unknown: BoardUnknown {
+                manifest: raw.unknown,
+                stackup: stackup_unknown,
+                nets: nets_unknown,
+                extras: board_extras.unknown,
+            },
         };
 
         Ok(SnxPcb {
@@ -672,6 +710,9 @@ struct PcbManifest {
     generator: String,
     #[serde(default)]
     thickness: f64,
+    /// Foreign manifest keys, re-emitted verbatim (see [`UnknownFields`]).
+    #[serde(flatten)]
+    unknown: UnknownFields,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -700,6 +741,10 @@ struct PcbRaw {
     zones: Option<Vec<Zone>>,
     #[serde(default)]
     extras: Option<PcbExtrasRaw>,
+    /// Foreign manifest keys; carried onto the board so they survive
+    /// the codec wrapper being discarded.
+    #[serde(flatten)]
+    unknown: UnknownFields,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -708,10 +753,16 @@ struct StackRaw {
     layers: Vec<String>,
     #[serde(default)]
     setup: Option<crate::pcb::PcbSetup>,
+    /// Foreign keys inside `[stackup]`.
+    #[serde(flatten)]
+    unknown: UnknownFields,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
 struct NetsRaw {
     #[serde(default)]
     entries: Vec<crate::pcb::NetDef>,
+    /// Foreign keys inside `[nets]`.
+    #[serde(flatten)]
+    unknown: UnknownFields,
 }

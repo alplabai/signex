@@ -762,8 +762,11 @@ mod tests {
     /// "there was no preferences file to move aside", clears the banner,
     /// and leaves every write refused for the session. A path that cannot
     /// be reached is a failure, never an absence. A regular file standing
-    /// in for a directory component is the portable way to force that:
-    /// the syscalls come back `ENOTDIR`, not `ENOENT`.
+    /// in for a directory component forces that on POSIX, where the
+    /// syscalls come back `ENOTDIR`, not `ENOENT`. Windows reports the same
+    /// layout as `ERROR_PATH_NOT_FOUND` (`NotFound`), so it is covered by
+    /// the Windows-specific test below instead.
+    #[cfg(unix)]
     #[test]
     fn moving_aside_reports_a_failure_it_cannot_tell_apart_from_absence() {
         // Arrange
@@ -795,6 +798,44 @@ mod tests {
         assert!(
             !message.contains("slots"),
             "the real errno must reach the user, not an exhausted-slot story: {message}"
+        );
+    }
+
+    /// Windows has no `ENOTDIR`: a path through a regular file is
+    /// `ERROR_PATH_NOT_FOUND`, which is `NotFound` — the very answer for a
+    /// genuinely absent file. Treating it as absence is correct and loses
+    /// nothing: there is no prefs file at that path to protect, and
+    /// `load_for_update` reads the same state as healthy-and-empty, so the
+    /// probe and the repair agree. The failures that matter on Windows
+    /// (access denied, sharing violation) are not `NotFound` and still
+    /// surface as `Err`. This pins that agreement and that nothing on disk
+    /// is touched.
+    #[cfg(windows)]
+    #[test]
+    fn moving_aside_treats_a_path_through_a_file_as_absence_on_windows() {
+        // Arrange
+        let (dir, _unused) = temp_prefs();
+        let blocking_file = dir.path().join("signex");
+        std::fs::write(&blocking_file, b"not a directory").expect("seed a blocking regular file");
+        let path = blocking_file.join("prefs.json");
+
+        // Act
+        let moved = move_prefs_file_aside_at(&path);
+        let checked = check_prefs_file_at(&path);
+
+        // Assert
+        assert!(
+            matches!(moved, Ok(None)),
+            "no file exists at the path, so there is nothing to move, got {moved:?}"
+        );
+        assert!(
+            checked.is_ok(),
+            "the probe must agree with the repair that the path is merely absent"
+        );
+        assert_eq!(
+            std::fs::read(&blocking_file).expect("the blocking file is untouched"),
+            b"not a directory",
+            "a no-op move must change nothing on disk"
         );
     }
 

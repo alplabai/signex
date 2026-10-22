@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::unknown::UnknownFields;
 use crate::pcb::{Footprint, Pad, PcbBoard, Point as PcbPoint};
 use crate::schematic::{Junction, SchematicSheet, Symbol};
 
@@ -91,6 +92,9 @@ pub(in crate::format) struct SymbolExtras {
     pub(in crate::format) ref_text: Option<crate::schematic::TextProp>,
     #[serde(default)]
     pub(in crate::format) val_text: Option<crate::schematic::TextProp>,
+    /// Keys this build does not recognise (`[extras.symbols.<uuid>]`).
+    #[serde(flatten)]
+    pub(in crate::format) unknown: UnknownFields,
 }
 
 impl SymbolExtras {
@@ -114,6 +118,7 @@ impl SymbolExtras {
             && self.instances.is_empty()
             && self.ref_text.is_none()
             && self.val_text.is_none()
+            && self.unknown.is_empty()
     }
 
     pub(in crate::format) fn from_symbol(s: &Symbol) -> Self {
@@ -145,6 +150,7 @@ impl SymbolExtras {
             instances: s.instances.clone(),
             ref_text: s.ref_text.clone(),
             val_text: s.val_text.clone(),
+            unknown: s.unknown.clone(),
         }
     }
 }
@@ -174,6 +180,9 @@ pub(in crate::format) struct SheetExtras {
     pub(in crate::format) title_block: BTreeMap<String, String>,
     #[serde(default)]
     pub(in crate::format) lib_symbols: BTreeMap<String, crate::schematic::LibSymbol>,
+    /// Keys this build does not recognise (`[extras.sheet]`).
+    #[serde(flatten)]
+    pub(in crate::format) unknown: UnknownFields,
 }
 
 impl SheetExtras {
@@ -187,6 +196,7 @@ impl SheetExtras {
             && self.no_erc_directives.is_empty()
             && self.title_block.is_empty()
             && self.lib_symbols.is_empty()
+            && self.unknown.is_empty()
     }
 
     pub(in crate::format) fn from_sheet(s: &SchematicSheet) -> Self {
@@ -208,6 +218,7 @@ impl SheetExtras {
                 .iter()
                 .map(|(key, value)| (key.clone(), value.clone()))
                 .collect(),
+            unknown: s.unknown.extras.clone(),
         }
     }
 }
@@ -274,6 +285,9 @@ pub(in crate::format) struct FootprintExtras {
     pub(in crate::format) graphics: Vec<crate::pcb::FpGraphic>,
     #[serde(default)]
     pub(in crate::format) properties: Vec<crate::property::PcbProperty>,
+    /// Keys this build does not recognise (`[extras.footprints.<uuid>]`).
+    #[serde(flatten)]
+    pub(in crate::format) unknown: UnknownFields,
 }
 
 impl FootprintExtras {
@@ -282,6 +296,7 @@ impl FootprintExtras {
             && !self.locked
             && self.graphics.is_empty()
             && self.properties.is_empty()
+            && self.unknown.is_empty()
     }
 
     pub(in crate::format) fn from_footprint(fp: &Footprint) -> Self {
@@ -290,6 +305,7 @@ impl FootprintExtras {
             locked: fp.locked,
             graphics: fp.graphics.clone(),
             properties: fp.properties.clone(),
+            unknown: fp.unknown.clone(),
         }
     }
 }
@@ -298,11 +314,14 @@ impl FootprintExtras {
 pub(in crate::format) struct PadExtras {
     #[serde(default)]
     pub(in crate::format) drill_shape: String,
+    /// Keys this build does not recognise (`[extras.pads.<uuid>]`).
+    #[serde(flatten)]
+    pub(in crate::format) unknown: UnknownFields,
 }
 
 impl PadExtras {
     pub(in crate::format) fn is_default(&self) -> bool {
-        self.drill_shape.is_empty()
+        self.drill_shape.is_empty() && self.unknown.is_empty()
     }
 
     pub(in crate::format) fn from_pad(pad: &Pad) -> Self {
@@ -312,6 +331,7 @@ impl PadExtras {
                 .as_ref()
                 .map(|d| d.shape.clone())
                 .unwrap_or_default(),
+            unknown: pad.unknown.clone(),
         }
     }
 }
@@ -324,4 +344,7 @@ pub(in crate::format) struct BoardExtras {
     pub(in crate::format) graphics: Vec<crate::pcb::BoardGraphic>,
     #[serde(default)]
     pub(in crate::format) texts: Vec<crate::pcb::BoardText>,
+    /// Keys this build does not recognise (`[extras.board]`).
+    #[serde(flatten)]
+    pub(in crate::format) unknown: UnknownFields,
 }
