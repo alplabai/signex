@@ -102,6 +102,20 @@ impl ExportIssues {
     }
 }
 
+/// Tell the user which characters none of the bundled PDF fonts cover; the
+/// page shows an empty box for each.
+fn log_uncovered_chars(chars: &[char]) {
+    if chars.is_empty() {
+        return;
+    }
+    let listed: String = chars.iter().take(20).collect();
+    let more = if chars.len() > 20 { "..." } else { "" };
+    crate::diagnostics::log_warning(format!(
+        "PDF export: {} character(s) have no glyph in the bundled fonts and were drawn as empty boxes: {listed}{more}",
+        chars.len()
+    ));
+}
+
 /// Put the stitch issues in front of the user — called once per *user action*
 /// (print-preview open, PDF written, netlist written), never from the shared
 /// context builder.
@@ -261,6 +275,10 @@ fn build_export_scope(
     // happened to be looking at — same intent, two different .net files, no
     // way to tell them apart. Active-path rooting stays on the loose-document
     // path, where the active document *is* the whole scope.
+    if let Some(warning) = crate::app::project_sheets::netlist_root_fallback_warning(document_state)
+    {
+        crate::diagnostics::log_warning(warning);
+    }
     let (pages, sheet_set) =
         crate::app::project_sheets::assemble_active_project_sheets(document_state);
 

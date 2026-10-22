@@ -16,6 +16,7 @@ use super::widgets::{
 };
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 
+mod rules;
 mod sidebar;
 mod table;
 
@@ -188,6 +189,21 @@ impl Signex {
         // Dropping the separate status / button rows removes the
         // empty band between them and tightens the modal's
         // bottom chrome.
+        let issue_badge: Element<'_, Message> =
+            match rules::issue_count_label(&preview.validation_report) {
+                Some(label) => {
+                    let severity = if preview.validation_report.has_errors() {
+                        signex_output::BomIssueSeverity::Error
+                    } else {
+                        signex_output::BomIssueSeverity::Warning
+                    };
+                    text(label)
+                        .size(10)
+                        .color(rules::severity_color(severity, text_muted))
+                        .into()
+                }
+                None => text("No BOM issues").size(10).color(text_muted).into(),
+            };
         let footer = container(
             row![
                 text(status_label).size(10).color(text_muted),
@@ -196,6 +212,8 @@ impl Signex {
                 Space::new().width(12),
                 text(variant_label).size(10).color(text_muted),
                 Space::new().width(Length::Fill),
+                issue_badge,
+                Space::new().width(12),
                 primary_button_themed(
                     "Export\u{2026}",
                     Some(Message::BomPreview(BomPreviewMsg::Export)),

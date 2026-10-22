@@ -255,19 +255,6 @@ pub(super) fn classes_or_report(
     }
 }
 
-pub(super) fn identity_for_repo(repo: &git2::Repository) -> (String, String) {
-    let cfg = repo.config().ok();
-    let name = cfg
-        .as_ref()
-        .and_then(|c| c.get_string("user.name").ok())
-        .unwrap_or_else(|| "Signex Library".to_string());
-    let email = cfg
-        .as_ref()
-        .and_then(|c| c.get_string("user.email").ok())
-        .unwrap_or_else(|| "library@signex.local".to_string());
-    (name, email)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

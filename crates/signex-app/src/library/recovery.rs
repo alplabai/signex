@@ -67,6 +67,9 @@ pub enum RecoveryDialog {
         /// 13+ wires it through. The "Restore from remote" button
         /// stays disabled while this is `None`.
         remote: Option<String>,
+        /// Why the last *Re-init* attempt was refused (e.g. no git
+        /// identity configured); shown in the dialog, which stays open.
+        error: Option<String>,
     },
     /// A row's `symbol_uuid` / `footprint_uuid` binds to a primitive
     /// UUID that has no matching on-disk file.
@@ -111,9 +114,11 @@ pub fn view<'a>(
 ) -> Element<'a, LibraryMessage> {
     match dialog {
         RecoveryDialog::LibraryMissing { path } => library_missing_view(path, tokens),
-        RecoveryDialog::GitMissing { path, remote } => {
-            git_missing_view(path, remote.as_deref(), tokens)
-        }
+        RecoveryDialog::GitMissing {
+            path,
+            remote,
+            error,
+        } => git_missing_view(path, remote.as_deref(), error.as_deref(), tokens),
         RecoveryDialog::BrokenPrimitiveBinding {
             library_path,
             table,
@@ -198,6 +203,7 @@ fn library_missing_view<'a>(
 fn git_missing_view<'a>(
     path: &'a std::path::Path,
     remote: Option<&'a str>,
+    error: Option<&'a str>,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
@@ -236,6 +242,15 @@ fn git_missing_view<'a>(
     if let Some(url) = remote {
         summary_lines = summary_lines.push(Space::new().height(4));
         summary_lines = summary_lines.push(text(format!("Remote: {}", url)).size(11).color(muted));
+    }
+
+    if let Some(reason) = error {
+        summary_lines = summary_lines.push(Space::new().height(8));
+        summary_lines = summary_lines.push(
+            text(format!("Re-init failed: {reason}"))
+                .size(11)
+                .color(iced::Color::from_rgb(0.86, 0.40, 0.36)),
+        );
     }
 
     summary_lines = summary_lines.push(Space::new().height(10));
@@ -529,6 +544,7 @@ mod tests {
         let d = RecoveryDialog::GitMissing {
             path: PathBuf::from("/tmp/foo.snxlib"),
             remote: None,
+            error: None,
         };
         match d {
             RecoveryDialog::GitMissing { remote, .. } => assert!(remote.is_none()),

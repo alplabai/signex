@@ -7,6 +7,17 @@ use anyhow::{Context, Result};
 use super::super::super::*;
 
 impl Signex {
+    /// An async read+parse of a document came back failed: log it and
+    /// raise the Open Failed notice (a log line alone is invisible to
+    /// someone who double-clicked a file).
+    pub(crate) fn report_open_failure(&mut self, message: String) {
+        crate::diagnostics::log_error(
+            "Failed to open document path",
+            &anyhow::anyhow!(message.clone()),
+        );
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(message));
+    }
+
     pub(crate) fn handle_document_file_opened(
         &mut self,
         path: Option<PathBuf>,
@@ -22,6 +33,8 @@ impl Signex {
             Ok(task) => task,
             Err(error) => {
                 crate::diagnostics::log_error("Failed to open document path", &error);
+                self.document_state.error_notice =
+                    Some(crate::app::state::ErrorNotice::open(format!("{error:#}")));
                 iced::Task::none()
             }
         }

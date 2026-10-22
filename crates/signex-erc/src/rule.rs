@@ -26,6 +26,14 @@ impl RuleId {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// The built-in rule this id names, or `None` for a `user::` id (or any
+    /// id no built-in produces).
+    pub fn builtin_kind(&self) -> Option<RuleKind> {
+        RuleKind::ALL
+            .into_iter()
+            .find(|kind| RuleId::builtin(*kind) == *self)
+    }
 }
 
 impl std::fmt::Display for RuleId {

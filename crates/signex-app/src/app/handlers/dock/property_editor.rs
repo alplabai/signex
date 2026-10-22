@@ -1,6 +1,16 @@
 use super::super::super::*;
 
 impl Signex {
+    /// The symbol `uuid` in the active schematic, if any.
+    fn active_symbol(&self, uuid: uuid::Uuid) -> Option<&signex_types::schematic::Symbol> {
+        self.document_state
+            .active_engine()?
+            .document()
+            .symbols
+            .iter()
+            .find(|s| s.uuid == uuid)
+    }
+
     pub(super) fn handle_dock_property_editor_message(
         &mut self,
         panel_msg: &crate::panels::PanelMsg,
@@ -62,17 +72,30 @@ impl Signex {
                     true,
                 );
             }
-            // KNOWN GAP — both toggles are inert. `signex_engine::Command`
-            // has no variant that writes `Symbol::locked` / `Symbol::dnp`
-            // (only `selection.rs` reads them, for the info table), so the
-            // symbol id these messages carry has nothing to apply to.
-            // The Properties panel still renders both check rows next to
-            // the working Mirror X / Mirror Y ones, so a user can click
-            // them and see nothing happen. Wiring them up needs a new
-            // engine command plus its undo + serde round-trip; until then
-            // the arm stays deliberately empty rather than half-applying.
-            crate::panels::PanelMsg::ToggleSymbolLocked(_)
-            | crate::panels::PanelMsg::ToggleSymbolDnp(_) => {}
+            crate::panels::PanelMsg::ToggleSymbolLocked(uuid) => {
+                if let Some(locked) = self.active_symbol(*uuid).map(|s| s.locked) {
+                    self.apply_engine_command(
+                        signex_engine::Command::SetSymbolLocked {
+                            symbol_id: *uuid,
+                            locked: !locked,
+                        },
+                        true,
+                        true,
+                    );
+                }
+            }
+            crate::panels::PanelMsg::ToggleSymbolDnp(uuid) => {
+                if let Some(dnp) = self.active_symbol(*uuid).map(|s| s.dnp) {
+                    self.apply_engine_command(
+                        signex_engine::Command::SetSymbolDnp {
+                            symbol_id: *uuid,
+                            dnp: !dnp,
+                        },
+                        true,
+                        true,
+                    );
+                }
+            }
             crate::panels::PanelMsg::EditSymbolRotation(uuid, deg) => {
                 self.apply_engine_command(
                     signex_engine::Command::SetSymbolRotation {
