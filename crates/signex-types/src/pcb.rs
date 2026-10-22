@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::format::{BoardUnknown, UnknownFields};
 use crate::property::PcbProperty;
 
 pub use crate::schematic::Point;
@@ -177,6 +178,10 @@ pub struct Pad {
     pub net: Option<PadNet>,
     #[serde(default)]
     pub roundrect_ratio: f64,
+    /// Keys in this pad's `[extras.pads.<uuid>]` table that this build
+    /// does not recognise, kept so a save re-emits them.
+    #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]
+    pub unknown: UnknownFields,
 }
 
 // ---------------------------------------------------------------------------
@@ -236,6 +241,10 @@ pub struct Footprint {
     pub graphics: Vec<FpGraphic>,
     #[serde(default)]
     pub properties: Vec<PcbProperty>,
+    /// Keys in this footprint's `[extras.footprints.<uuid>]` table that
+    /// this build does not recognise, kept so a save re-emits them.
+    #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]
+    pub unknown: UnknownFields,
 }
 
 // ---------------------------------------------------------------------------
@@ -373,4 +382,10 @@ pub struct PcbBoard {
     pub graphics: Vec<BoardGraphic>,
     #[serde(default)]
     pub texts: Vec<BoardText>,
+    /// Keys in the `.snxpcb` manifest, `[stackup]`, `[nets]` and
+    /// `[extras.board]` that this build does not recognise, kept per
+    /// section so a save re-emits each where it was found. Empty for
+    /// every file written by this build.
+    #[serde(default, skip_serializing_if = "BoardUnknown::is_empty")]
+    pub unknown: BoardUnknown,
 }
