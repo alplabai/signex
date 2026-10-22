@@ -86,6 +86,9 @@ mod sketch_state;
 #[path = "regression/file_open_async.rs"]
 mod file_open_async;
 
+#[path = "regression/startup_open.rs"]
+mod startup_open;
+
 #[path = "regression/history_load_failure.rs"]
 mod history_load_failure;
 
