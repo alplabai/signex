@@ -34,7 +34,7 @@ impl UnreadableSheet {
         );
         let dir = self.path.parent().unwrap_or_else(|| Path::new(""));
         format!(
-            "Close Project: {name} {}; keeping its folder open ({})",
+            "Close Project: keeping the folder of {name} open, the sheet {} ({})",
             self.reason,
             dir.display(),
         )

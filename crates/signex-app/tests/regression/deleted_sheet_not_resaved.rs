@@ -567,7 +567,7 @@ fn an_unreadable_sibling_sheet_fails_closed_for_everything_under_its_directory()
     assert!(app.document_state.engines.contains_key(&unknown));
     assert!(
         app.document_state.panel_ctx.diagnostics.iter().any(|e| {
-            e.message.contains("failclosed_b.snxsch") && e.message.contains("folder open")
+            e.message.contains("failclosed_b.snxsch") && e.message.contains("keeping the folder")
         }),
         "the fail-closed decision must be explained in the Messages panel",
     );
@@ -577,26 +577,21 @@ fn an_unreadable_sibling_sheet_fails_closed_for_everything_under_its_directory()
 fn a_dotdot_reference_cycle_terminates_without_a_warning() {
     let _ = signex_app::diagnostics::init_logging();
     let tmp = TempDir::new().expect("tempdir");
-    let dir = tmp.path().join("loopdir");
+    let dir = tmp.path().join("dotdot_loop_dir");
     std::fs::create_dir_all(&dir).expect("mkdir");
-    // `../loopdir/dotdot_cycle.snxsch` from inside `loopdir` is the sheet itself.
+    // `../dotdot_loop_dir/dotdot_cycle.snxsch` from inside `dotdot_loop_dir` is the sheet itself.
     write_sheet_with_child(
         &dir.join("dotdot_cycle.snxsch"),
-        "../loopdir/dotdot_cycle.snxsch",
+        "../dotdot_loop_dir/dotdot_cycle.snxsch",
     );
     let (mut app, _task) = Signex::new();
-    let a = add_project(&mut app, &dir.join("A.snxprj"), "dotdot_cycle.snxsch");
+    // The root stays unloaded, so the cycle is walked from disk.
+    add_project(&mut app, &dir.join("A.snxprj"), "dotdot_cycle.snxsch");
     add_project(&mut app, &tmp.path().join("B.snxprj"), "b.snxsch");
-    open_dirty_sheet(&mut app, &dir.join("dotdot_cycle.snxsch"), a);
 
     let started = std::time::Instant::now();
-    let result = app.resolve_sheet_refs_blocking();
+    close_first_project(&mut app);
     let elapsed = started.elapsed();
-    let _ = app.update(Message::Project(ProjectMsg::CloseRefsResolved {
-        project_id: a,
-        result,
-    }));
-
     assert!(
         elapsed.as_secs() < 2,
         "the cycle must fold, took {elapsed:?}"
@@ -606,7 +601,7 @@ fn a_dotdot_reference_cycle_terminates_without_a_warning() {
             .panel_ctx
             .diagnostics
             .iter()
-            .any(|e| e.message.contains("dotdot_cycle")),
+            .any(|e| e.message.contains("dotdot_loop_dir")),
         "a loop is not an unreadable sheet and must not warn",
     );
 }
