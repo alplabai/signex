@@ -176,19 +176,24 @@ fn split_row(line: &str) -> Vec<String> {
 
 /// Write a TSV block: header row + one row per item, columns aligned
 /// to the longest cell per column for legibility (matches the
-/// `.snxlib` writer's whitespace-flexible style).
+/// `.snxlib` writer's whitespace-flexible style). Foreign columns
+/// follow the known ones — see [`UnknownColumns`] for the union rule.
 pub fn write_tsv_block<R: SnxTable>(rows: &[R]) -> String {
     let columns = R::columns();
     if columns.is_empty() {
         return String::new();
     }
 
+    let foreign = foreign_column_names(rows);
+
     // Pre-compute every row's encoded cell so we can pad to the
     // widest column.
     let mut all_rows: Vec<Vec<String>> = Vec::with_capacity(rows.len() + 1);
-    all_rows.push(columns.iter().map(|c| (*c).to_string()).collect());
+    let mut header: Vec<String> = columns.iter().map(|c| (*c).to_string()).collect();
+    header.extend(foreign.iter().map(|name| encode_cell(name)));
+    all_rows.push(header);
     for row in rows {
-        let cells = row.to_row();
+        let mut cells = row.to_row();
         debug_assert_eq!(
             cells.len(),
             columns.len(),
@@ -196,11 +201,17 @@ pub fn write_tsv_block<R: SnxTable>(rows: &[R]) -> String {
             cells.len(),
             columns.len()
         );
+        let unknown = row.unknown_columns();
+        cells.extend(
+            foreign
+                .iter()
+                .map(|name| unknown.get(name).unwrap_or_default().to_string()),
+        );
         all_rows.push(cells.into_iter().map(|c| encode_cell(&c)).collect());
     }
 
     // Compute per-column widths. Two-space separator between columns.
-    let mut widths = vec![0usize; columns.len()];
+    let mut widths = vec![0usize; columns.len() + foreign.len()];
     for row in &all_rows {
         for (idx, cell) in row.iter().enumerate() {
             if idx < widths.len() && cell.chars().count() > widths[idx] {
@@ -231,8 +242,22 @@ pub fn write_tsv_block<R: SnxTable>(rows: &[R]) -> String {
     out
 }
 
-/// Parse a TSV block: validate the header against `R::columns()`,
-/// then parse each data row through `R::from_row`.
+/// Union of the rows' foreign column names, first-seen order.
+fn foreign_column_names<R: SnxTable>(rows: &[R]) -> Vec<String> {
+    let mut names: Vec<String> = Vec::new();
+    for row in rows {
+        for (name, _) in row.unknown_columns().iter() {
+            if !names.iter().any(|n| n == name) {
+                names.push(name.to_string());
+            }
+        }
+    }
+    names
+}
+
+/// Parse a TSV block. Columns resolve by header name: every column in
+/// `R::columns()` must be present (any order); extra columns are
+/// captured per row as [`UnknownColumns`] instead of refusing the file.
 pub fn parse_tsv_block<R: SnxTable>(block: &str, content: &str) -> Result<Vec<R>, FormatError> {
     // Strip the leading/trailing newlines TOML's literal multi-line
     // string padding adds, but preserve interior newlines.
@@ -247,33 +272,75 @@ pub fn parse_tsv_block<R: SnxTable>(block: &str, content: &str) -> Result<Vec<R>
     let header_line = lines.next().ok_or_else(|| FormatError::TsvEmpty {
         block: block.to_string(),
     })?;
-    let header_cells = split_row(header_line);
-    let expected: Vec<String> = R::columns().iter().map(|c| (*c).to_string()).collect();
-    if header_cells != expected {
-        return Err(FormatError::TsvHeaderMismatch {
-            block: block.to_string(),
-            got: header_cells,
-            expected,
-        });
-    }
+    let header: Vec<String> = split_row(header_line)
+        .iter()
+        .map(|c| decode_cell(c))
+        .collect();
+    let layout = HeaderLayout::resolve::<R>(block, header)?;
 
     let mut rows = Vec::new();
     for (idx, line) in lines.enumerate() {
         let cells = split_row(line);
-        if cells.len() != expected.len() {
+        if cells.len() != layout.header.len() {
             return Err(FormatError::TsvCellCountMismatch {
                 block: block.to_string(),
                 row: idx,
                 got: cells.len(),
-                expected: expected.len(),
-                columns: expected,
+                expected: layout.header.len(),
+                columns: layout.header,
             });
         }
         let decoded: Vec<String> = cells.iter().map(|c| decode_cell(c)).collect();
-        let refs: Vec<&str> = decoded.iter().map(String::as_str).collect();
-        rows.push(R::from_row(&refs, block, idx)?);
+        let known: Vec<&str> = layout.known.iter().map(|&i| decoded[i].as_str()).collect();
+        let foreign = layout
+            .foreign
+            .iter()
+            .map(|&i| (layout.header[i].clone(), decoded[i].clone()))
+            .collect();
+        let parsed = R::from_row(&known, block, idx)?;
+        rows.push(parsed.with_unknown_columns(UnknownColumns::from_pairs(foreign)));
     }
     Ok(rows)
+}
+
+/// Where each known column sits in a block's actual header, and which
+/// header positions are foreign.
+struct HeaderLayout {
+    header: Vec<String>,
+    /// Header index of each `R::columns()` entry, in that order.
+    known: Vec<usize>,
+    /// Header indices of the foreign columns, in file order.
+    foreign: Vec<usize>,
+}
+
+impl HeaderLayout {
+    fn resolve<R: SnxTable>(block: &str, header: Vec<String>) -> Result<Self, FormatError> {
+        for (i, name) in header.iter().enumerate() {
+            if header[..i].contains(name) {
+                return Err(FormatError::TsvDuplicateColumn {
+                    block: block.to_string(),
+                    column: name.clone(),
+                });
+            }
+        }
+        let known: Option<Vec<usize>> = R::columns()
+            .iter()
+            .map(|c| header.iter().position(|h| h == c))
+            .collect();
+        let Some(known) = known else {
+            return Err(FormatError::TsvHeaderMismatch {
+                block: block.to_string(),
+                got: header,
+                expected: R::columns().iter().map(|c| (*c).to_string()).collect(),
+            });
+        };
+        let foreign = (0..header.len()).filter(|i| !known.contains(i)).collect();
+        Ok(Self {
+            header,
+            known,
+            foreign,
+        })
+    }
 }
 
 // ---------------------------------------------------------------------------

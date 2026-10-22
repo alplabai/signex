@@ -39,6 +39,7 @@ fn empty_sheet() -> SchematicSheet {
 
 fn wire(a: Point, b: Point) -> Wire {
     Wire {
+        unknown_columns: Default::default(),
         uuid: Uuid::nil(),
         start: a,
         end: b,
@@ -48,6 +49,7 @@ fn wire(a: Point, b: Point) -> Wire {
 
 fn junction(pos: Point) -> Junction {
     Junction {
+        unknown_columns: Default::default(),
         uuid: Uuid::nil(),
         position: pos,
         diameter: 0.0,
@@ -57,6 +59,7 @@ fn junction(pos: Point) -> Junction {
 
 fn label(text: &str, pos: Point, ty: LabelType) -> Label {
     Label {
+        unknown_columns: Default::default(),
         uuid: Uuid::nil(),
         text: text.to_string(),
         position: pos,
@@ -120,6 +123,7 @@ fn add_lib(sheet: &mut SchematicSheet, lib_id: &str, pins: Vec<LibPin>) {
 /// `(origin.x + lx, origin.y - ly)`.
 fn place(sheet: &mut SchematicSheet, reference: &str, lib_id: &str, origin: Point) {
     sheet.symbols.push(Symbol {
+        unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::nil(),
         lib_id: lib_id.to_string(),
@@ -408,6 +412,7 @@ fn net_records_its_wire_and_junction_membership() {
     sheet.wires.push(wire_id(pt(0.0, 0.0), pt(10.0, 0.0), w1));
     sheet.wires.push(wire_id(pt(5.0, 0.0), pt(5.0, 5.0), w2));
     sheet.junctions.push(Junction {
+        unknown_columns: Default::default(),
         uuid: jn,
         position: pt(5.0, 0.0),
         diameter: 0.0,
@@ -614,6 +619,7 @@ fn label_anchors_to_a_wire_interior_not_just_endpoints() {
 
 fn wire_id(a: Point, b: Point, id: Uuid) -> Wire {
     Wire {
+        unknown_columns: Default::default(),
         uuid: id,
         start: a,
         end: b,
@@ -649,6 +655,7 @@ fn flood_follows_a_t_junction_and_paints_the_dot() {
     sheet.wires.push(wire_id(pt(0.0, 0.0), pt(10.0, 0.0), h));
     sheet.wires.push(wire_id(pt(5.0, 0.0), pt(5.0, 5.0), v));
     sheet.junctions.push(Junction {
+        unknown_columns: Default::default(),
         uuid: j,
         position: pt(5.0, 0.0),
         diameter: 0.0,

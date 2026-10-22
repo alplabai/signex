@@ -12,6 +12,7 @@
 use super::extras::{FootprintExtras, PadExtras};
 use super::tsv::{format_f64, parse_f64, parse_i64, parse_uuid};
 use super::units::{mm_to_nm, nm_to_mm};
+use super::unknown_columns::impl_unknown_columns_accessors;
 use super::*;
 use crate::pcb::{
     DrillDef, Footprint, Pad, PadNet, PadShape, PadType, Point as PcbPoint, Segment, Via, ViaType,
@@ -29,6 +30,7 @@ pub struct PcbFootprintRow {
     pub rotation: f64,
     pub layer: String,
     pub value: String,
+    pub unknown_columns: UnknownColumns,
 }
 
 impl SnxTable for PcbFootprintRow {
@@ -51,6 +53,8 @@ impl SnxTable for PcbFootprintRow {
         ]
     }
 
+    impl_unknown_columns_accessors!();
+
     fn from_row(values: &[&str], block: &str, row: usize) -> Result<Self, FormatError> {
         Ok(PcbFootprintRow {
             uuid: parse_uuid(values[0], block, row, "uuid")?,
@@ -61,6 +65,7 @@ impl SnxTable for PcbFootprintRow {
             rotation: parse_f64(values[5], block, row, "rotation")?,
             layer: values[6].to_string(),
             value: values[7].to_string(),
+            unknown_columns: UnknownColumns::default(),
         })
     }
 }
@@ -84,6 +89,7 @@ pub struct PcbPadRow {
     pub net_number: u32,
     pub net_name: String,
     pub roundrect_ratio: f64,
+    pub unknown_columns: UnknownColumns,
 }
 
 impl SnxTable for PcbPadRow {
@@ -125,6 +131,8 @@ impl SnxTable for PcbPadRow {
         ]
     }
 
+    impl_unknown_columns_accessors!();
+
     fn from_row(values: &[&str], block: &str, row: usize) -> Result<Self, FormatError> {
         Ok(PcbPadRow {
             uuid: parse_uuid(values[0], block, row, "uuid")?,
@@ -148,6 +156,7 @@ impl SnxTable for PcbPadRow {
             })?,
             net_name: values[12].to_string(),
             roundrect_ratio: parse_f64(values[13], block, row, "roundrect_ratio")?,
+            unknown_columns: UnknownColumns::default(),
         })
     }
 }
@@ -163,6 +172,7 @@ pub struct PcbTrackRow {
     pub start_y: i64,
     pub end_x: i64,
     pub end_y: i64,
+    pub unknown_columns: UnknownColumns,
 }
 
 impl SnxTable for PcbTrackRow {
@@ -185,6 +195,8 @@ impl SnxTable for PcbTrackRow {
         ]
     }
 
+    impl_unknown_columns_accessors!();
+
     fn from_row(values: &[&str], block: &str, row: usize) -> Result<Self, FormatError> {
         Ok(PcbTrackRow {
             uuid: parse_uuid(values[0], block, row, "uuid")?,
@@ -202,6 +214,7 @@ impl SnxTable for PcbTrackRow {
             start_y: parse_i64(values[5], block, row, "start_y")?,
             end_x: parse_i64(values[6], block, row, "end_x")?,
             end_y: parse_i64(values[7], block, row, "end_y")?,
+            unknown_columns: UnknownColumns::default(),
         })
     }
 }
@@ -217,6 +230,7 @@ pub struct PcbViaRow {
     pub diameter: i64,
     pub layers: String,
     pub via_type: String,
+    pub unknown_columns: UnknownColumns,
 }
 
 impl SnxTable for PcbViaRow {
@@ -239,6 +253,8 @@ impl SnxTable for PcbViaRow {
         ]
     }
 
+    impl_unknown_columns_accessors!();
+
     fn from_row(values: &[&str], block: &str, row: usize) -> Result<Self, FormatError> {
         Ok(PcbViaRow {
             uuid: parse_uuid(values[0], block, row, "uuid")?,
@@ -256,6 +272,7 @@ impl SnxTable for PcbViaRow {
             diameter: parse_i64(values[5], block, row, "diameter")?,
             layers: values[6].to_string(),
             via_type: values[7].to_string(),
+            unknown_columns: UnknownColumns::default(),
         })
     }
 }
@@ -348,6 +365,7 @@ pub(in crate::format) fn footprint_to_row(fp: &Footprint) -> PcbFootprintRow {
         rotation: fp.rotation,
         layer: fp.layer.clone(),
         value: fp.value.clone(),
+        unknown_columns: fp.unknown_columns.clone(),
     }
 }
 
@@ -375,6 +393,7 @@ pub(in crate::format) fn row_to_footprint(
         graphics: extras.graphics,
         properties: extras.properties,
         unknown: extras.unknown,
+        unknown_columns: row.unknown_columns,
     }
 }
 
@@ -404,6 +423,7 @@ pub(in crate::format) fn pad_to_row(pad: &Pad, footprint_ref: &str) -> PcbPadRow
         net_number,
         net_name,
         roundrect_ratio: pad.roundrect_ratio,
+        unknown_columns: pad.unknown_columns.clone(),
     }
 }
 
@@ -442,6 +462,7 @@ pub(in crate::format) fn row_to_pad(row: PcbPadRow, extras: PadExtras) -> Pad {
         net,
         roundrect_ratio: row.roundrect_ratio,
         unknown: extras.unknown,
+        unknown_columns: row.unknown_columns,
     }
 }
 
@@ -455,6 +476,7 @@ pub(in crate::format) fn track_to_row(s: &Segment) -> PcbTrackRow {
         start_y: mm_to_nm(s.start.y),
         end_x: mm_to_nm(s.end.x),
         end_y: mm_to_nm(s.end.y),
+        unknown_columns: s.unknown_columns.clone(),
     }
 }
 
@@ -472,6 +494,7 @@ pub(in crate::format) fn row_to_track(row: PcbTrackRow) -> Segment {
         width: nm_to_mm(row.width),
         layer: row.layer,
         net: row.net,
+        unknown_columns: row.unknown_columns,
     }
 }
 
@@ -485,6 +508,7 @@ pub(in crate::format) fn via_to_row(v: &Via) -> PcbViaRow {
         diameter: mm_to_nm(v.diameter),
         layers: join_layers(&v.layers),
         via_type: via_type_str(v.via_type).to_string(),
+        unknown_columns: v.unknown_columns.clone(),
     }
 }
 
@@ -500,5 +524,6 @@ pub(in crate::format) fn row_to_via(row: PcbViaRow) -> Via {
         layers: split_layers(&row.layers),
         net: row.net,
         via_type: parse_via_type(&row.via_type),
+        unknown_columns: row.unknown_columns,
     }
 }

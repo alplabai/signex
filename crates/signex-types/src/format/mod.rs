@@ -33,9 +33,12 @@ mod sch_rows;
 mod tsv;
 mod units;
 mod unknown;
+mod unknown_columns;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod unknown_columns_tests;
 #[cfg(test)]
 mod unknown_tests;
 
@@ -45,6 +48,7 @@ pub use pcb_rows::{PcbFootprintRow, PcbPadRow, PcbTrackRow, PcbViaRow};
 pub use sch_rows::{SchComponentRow, SchJunctionRow, SchLabelRow, SchWireRow};
 pub use tsv::{parse_tsv_block, write_tsv_block};
 pub use unknown::{BoardUnknown, SheetUnknown, UnknownFields};
+pub use unknown_columns::UnknownColumns;
 
 // Subtree-internal helpers used by the container types below.
 use extras::{
@@ -94,12 +98,14 @@ pub enum FormatError {
         expected: usize,
         columns: Vec<String>,
     },
-    #[error("TSV block {block:?}: header columns {got:?} do not match expected {expected:?}")]
+    #[error("TSV block {block:?}: header columns {got:?} lack a known column of {expected:?}")]
     TsvHeaderMismatch {
         block: String,
         got: Vec<String>,
         expected: Vec<String>,
     },
+    #[error("TSV block {block:?}: header repeats column {column:?}")]
+    TsvDuplicateColumn { block: String, column: String },
     #[error("TSV block {block:?}: row {row} field {field:?} parse error: {message}")]
     TsvFieldParse {
         block: String,
@@ -129,9 +135,15 @@ pub trait SnxTable: Sized {
     /// [`SnxTable::columns`]. Empty cells use `""`.
     fn to_row(&self) -> Vec<String>;
 
-    /// Parse a row of cell strings (length matches [`SnxTable::columns`]).
+    /// Parse a row of the known cells, already ordered as [`SnxTable::columns`].
     /// Implementations report parse failures via [`FormatError::TsvFieldParse`].
     fn from_row(values: &[&str], block: &str, row: usize) -> Result<Self, FormatError>;
+
+    /// Foreign cells this row carried (see [`UnknownColumns`]).
+    fn unknown_columns(&self) -> &UnknownColumns;
+
+    /// Attach the foreign cells captured by `parse_tsv_block`.
+    fn with_unknown_columns(self, columns: UnknownColumns) -> Self;
 }
 
 // ---------------------------------------------------------------------------
@@ -637,6 +649,7 @@ impl SnxPcb {
                     // carries no foreign keys and must not inherit the
                     // orphan pad's.
                     unknown: UnknownFields::default(),
+                    unknown_columns: UnknownColumns::default(),
                 });
             }
         }

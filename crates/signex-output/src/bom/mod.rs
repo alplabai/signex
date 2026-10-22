@@ -535,6 +535,7 @@ mod tests {
 
     fn test_symbol() -> Symbol {
         Symbol {
+            unknown_columns: Default::default(),
             unknown: Default::default(),
             uuid: Uuid::new_v4(),
             lib_id: "Device:R".to_string(),

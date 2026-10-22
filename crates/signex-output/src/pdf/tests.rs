@@ -72,6 +72,7 @@ fn markup_ctx(note: &str, label: &str) -> ExportContext {
         justify_v: VAlign::Bottom,
     });
     ctx.sheets[0].schematic.labels.push(Label {
+        unknown_columns: Default::default(),
         uuid: uuid::Uuid::nil(),
         text: label.into(),
         position: Point::new(20.0, 30.0),
@@ -214,6 +215,7 @@ fn exports_schematic_content() {
 
     // Add one wire.
     sheet.wires.push(Wire {
+        unknown_columns: Default::default(),
         uuid: Uuid::nil(),
         start: Point::new(0.0, 0.0),
         end: Point::new(10.0, 10.0),
@@ -222,6 +224,7 @@ fn exports_schematic_content() {
 
     // Add one symbol.
     sheet.symbols.push(Symbol {
+        unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::nil(),
         lib_id: "Device:R".to_string(),
@@ -255,6 +258,7 @@ fn exports_schematic_content() {
 
     // Add one label.
     sheet.labels.push(Label {
+        unknown_columns: Default::default(),
         uuid: Uuid::nil(),
         text: "VCC".to_string(),
         position: Point::new(20.0, 20.0),
@@ -324,6 +328,7 @@ fn fit_to_page_scales_large_content_down() {
     let mut sheet = empty_sheet();
     // Add a very large wire (0, 0) to (500, 500) mm — much larger than A4.
     sheet.wires.push(Wire {
+        unknown_columns: Default::default(),
         uuid: Uuid::nil(),
         start: Point::new(0.0, 0.0),
         end: Point::new(500.0, 500.0),
@@ -360,6 +365,7 @@ fn fit_to_page_does_not_upscale_small_content() {
     let mut sheet = empty_sheet();
     // Add a small wire (10, 10) to (20, 20) mm — much smaller than A4.
     sheet.wires.push(Wire {
+        unknown_columns: Default::default(),
         uuid: Uuid::nil(),
         start: Point::new(10.0, 10.0),
         end: Point::new(20.0, 20.0),
@@ -468,6 +474,7 @@ fn outlines_emitted_when_components_toggle_is_on() {
 
     let mut sheet = empty_sheet();
     sheet.symbols.push(Symbol {
+        unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::nil(),
         lib_id: "Device:R".to_string(),
