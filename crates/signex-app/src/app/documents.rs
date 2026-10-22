@@ -431,7 +431,22 @@ pub struct FootprintEditorState {
     /// mutation that calls `push_history` so the redo lineage stays
     /// consistent with single-history-tree semantics.
     pub redo: Vec<FootprintHistorySnapshot>,
+    /// The field the last [`Self::record_edit`] changed, tagged with the
+    /// footprint it belonged to: a field key names a pad index or a
+    /// sketch id, which only identify something within one footprint of
+    /// a multi-footprint file. A text input
+    /// fires one message per keystroke; while the same field keeps
+    /// being edited, those edits share the one snapshot taken before
+    /// the first of them, so typing a description is one undo step and
+    /// does not push earlier edits out of the depth-capped history.
+    /// Cleared by every other history push, undo and redo.
+    last_edit_key: Option<(FieldEditKey, usize)>,
 }
+
+/// Identifies one field of one target (a pad index, a sketch entity or
+/// array id as `u128`) for [`FootprintEditorState::record_edit`]
+/// coalescing.
+pub type FieldEditKey = (&'static str, u128);
 
 /// v0.24 Phase 1 (Track B) — coarse-grained undo snapshot. Captures
 /// the canonical state needed to roll back any footprint edit:
@@ -476,6 +491,7 @@ impl FootprintEditorState {
             dirty: false,
             history: Vec::new(),
             redo: Vec::new(),
+            last_edit_key: None,
         }
     }
 
@@ -502,6 +518,35 @@ impl FootprintEditorState {
             self.history.remove(0);
         }
         self.redo.clear();
+        self.last_edit_key = None;
+    }
+
+    /// Run a Properties-panel edit as one undo step. `edit` returns
+    /// whether it changed anything; the snapshot is only recorded then,
+    /// so a rejected input (unparsable, missing target) leaves the
+    /// history and the redo stack untouched. With a `key`, repeated
+    /// edits of the same field coalesce into the first one's snapshot
+    /// (see [`Self::last_edit_key`]).
+    pub fn record_edit(
+        &mut self,
+        key: Option<FieldEditKey>,
+        edit: impl FnOnce(&mut Self) -> bool,
+    ) -> bool {
+        let key = key.map(|field| (field, self.active_idx));
+        let coalesce = key.is_some() && self.last_edit_key == key;
+        let snap = (!coalesce).then(|| self.snapshot());
+        if !edit(self) {
+            return false;
+        }
+        if let Some(snap) = snap {
+            self.history.push(snap);
+            if self.history.len() > Self::HISTORY_DEPTH {
+                self.history.remove(0);
+            }
+            self.redo.clear();
+        }
+        self.last_edit_key = key;
+        true
     }
 
     /// v0.24 Phase 1 — undo the most recent edit. Returns `true` if
@@ -512,6 +557,7 @@ impl FootprintEditorState {
         let Some(snap) = self.history.pop() else {
             return false;
         };
+        self.last_edit_key = None;
         let current = self.snapshot();
         self.redo.push(current);
         if self.redo.len() > Self::HISTORY_DEPTH {
@@ -528,6 +574,7 @@ impl FootprintEditorState {
         let Some(snap) = self.redo.pop() else {
             return false;
         };
+        self.last_edit_key = None;
         let current = self.snapshot();
         self.history.push(current);
         if self.history.len() > Self::HISTORY_DEPTH {
