@@ -11,7 +11,7 @@ use thiserror::Error;
 
 use crate::{ExportContext, Exporter};
 
-mod csv;
+pub(crate) mod csv;
 mod html;
 mod xlsx;
 

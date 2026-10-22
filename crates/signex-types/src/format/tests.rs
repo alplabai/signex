@@ -612,11 +612,13 @@ fn extras_preserve_symbol_fields() {
         .insert("MPN".to_string(), "LM2596S-5.0".to_string());
     sym.fields.insert("Tolerance".to_string(), "1%".to_string());
     sym.dnp = true;
+    sym.locked = true;
     sheet.symbols.push(sym);
 
     let s = SnxSchematic::new(sheet).write_string().unwrap();
     let back = SnxSchematic::parse(&s).unwrap();
     let recovered = &back.sheet.symbols[0];
+    assert!(recovered.locked);
     // MPN flows through TSV column.
     assert_eq!(recovered.fields.get("MPN").unwrap(), "LM2596S-5.0");
     // Tolerance survived through extras.

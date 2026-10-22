@@ -40,6 +40,8 @@ pub enum CommandKind {
     UpdateText,
     UpdateLabelProps,
     SetSymbolRotation,
+    SetSymbolLocked,
+    SetSymbolDnp,
     UpdateSymbolTextSize,
     UpdateSymbolLibId,
     UpdateSymbolFootprint,
@@ -100,6 +102,17 @@ pub enum Command {
     SetSymbolRotation {
         symbol_id: Uuid,
         rotation_degrees: f64,
+    },
+    /// Set a symbol's `locked` flag (Properties panel "Locked" checkbox).
+    SetSymbolLocked {
+        symbol_id: Uuid,
+        locked: bool,
+    },
+    /// Set a symbol's `dnp` (Do Not Populate) flag (Properties panel "DNP"
+    /// checkbox). The BOM exporters read this flag.
+    SetSymbolDnp {
+        symbol_id: Uuid,
+        dnp: bool,
     },
     /// Set the font size of a symbol's value/reference text property.
     /// `field` is "value" or "reference".
@@ -260,6 +273,8 @@ impl Command {
             Command::UpdateText { .. } => CommandKind::UpdateText,
             Command::UpdateLabelProps { .. } => CommandKind::UpdateLabelProps,
             Command::SetSymbolRotation { .. } => CommandKind::SetSymbolRotation,
+            Command::SetSymbolLocked { .. } => CommandKind::SetSymbolLocked,
+            Command::SetSymbolDnp { .. } => CommandKind::SetSymbolDnp,
             Command::UpdateSymbolTextSize { .. } => CommandKind::UpdateSymbolTextSize,
             Command::UpdateSymbolLibId { .. } => CommandKind::UpdateSymbolLibId,
             Command::UpdateSymbolFootprint { .. } => CommandKind::UpdateSymbolFootprint,
