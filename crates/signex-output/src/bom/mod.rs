@@ -842,6 +842,7 @@ mod tests {
             no_erc_directives: Vec::new(),
             title_block: std::collections::HashMap::new(),
             lib_symbols: std::collections::HashMap::new(),
+            unknown: Default::default(),
         };
         ExportContext {
             sheets: vec![SheetSnapshot {

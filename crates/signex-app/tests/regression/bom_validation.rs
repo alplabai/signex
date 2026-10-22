@@ -40,6 +40,7 @@ fn symbol(reference: &str, footprint: &str) -> Symbol {
         library_id: None,
         row_id: None,
         library_version: String::new(),
+        unknown: Default::default(),
     }
 }
 
@@ -66,6 +67,7 @@ fn app_with_faulty_bom() -> Signex {
         no_erc_directives: Vec::new(),
         title_block: HashMap::new(),
         lib_symbols: HashMap::new(),
+        unknown: Default::default(),
     };
     let path = PathBuf::from("bom-validation.snxsch");
     let engine = signex_engine::Engine::new(sheet).expect("engine");
