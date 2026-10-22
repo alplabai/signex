@@ -260,18 +260,22 @@ impl Signex {
         Ok(())
     }
 
-    pub(crate) fn save_active_document_as(&mut self, path: PathBuf) -> Result<()> {
-        // Route by the active tab's document kind (#671).
-        match self
-            .document_state
-            .tabs
-            .get(self.document_state.active_tab)
-            .map(|tab| tab.kind.clone())
-        {
-            Some(TabKind::SymbolEditor(from)) | Some(TabKind::FootprintEditor(from)) => {
-                return self.handle_save_primitive_as(&from, &path);
-            }
-            Some(TabKind::Schematic) => {}
+    /// Schematic Save As. `from_path` is the tab the dialog was opened
+    /// for; the dialog is not modal, so refuse when the active tab is no
+    /// longer that schematic instead of writing another document to
+    /// `path`. Symbol / footprint tabs go through `handle_save_primitive_as`.
+    pub(crate) fn save_active_document_as(
+        &mut self,
+        from_path: &std::path::Path,
+        path: PathBuf,
+    ) -> Result<()> {
+        match self.document_state.tabs.get(self.document_state.active_tab) {
+            Some(tab) if matches!(tab.kind, TabKind::Schematic) && tab.path == from_path => {}
+            Some(tab) if matches!(tab.kind, TabKind::Schematic) => anyhow::bail!(
+                "save as {}: the active tab is no longer {} — nothing was written",
+                path.display(),
+                from_path.display()
+            ),
             _ => anyhow::bail!(
                 "save as {}: Save As is not supported for the active tab",
                 path.display()
@@ -327,66 +331,20 @@ impl Signex {
             );
         }
 
-        // Move the SymbolEditorState (or FootprintEditorState) to the
-        // new key. The editor's internal `path` field is updated to
-        // match so commit-through-adapter / refresh-cache callers see
-        // the right path.
-        if let Some(mut editor) = self.document_state.symbol_editors.remove(from_path) {
-            editor.path = to_path.to_path_buf();
-            self.document_state
-                .symbol_editors
-                .insert(to_path.to_path_buf(), editor);
-        } else if let Some(mut editor) = self.document_state.footprint_editors.remove(from_path) {
-            editor.path = to_path.to_path_buf();
-            self.document_state
-                .footprint_editors
-                .insert(to_path.to_path_buf(), editor);
-        } else {
-            anyhow::bail!(
-                "save as {}: no editor at {} — was the tab closed?",
+        // Re-key first so `save_primitive_tab_at` (keyed by the editor's
+        // path) writes the new file, then undo the re-key if the write
+        // fails: a tab must never point at a file that does not exist.
+        let previous_title = self.retarget_primitive(from_path, to_path, None)?;
+        if let Err(error) = self.save_primitive_tab_at(to_path) {
+            self.retarget_primitive(to_path, from_path, previous_title.clone())
+                .context("roll back Save As re-key")?;
+            return Err(error.context(format!(
+                "save as {}: write failed, document left at {}",
                 to_path.display(),
                 from_path.display()
-            );
+            )));
         }
-
-        // Update the tab(s) — title, path, kind variant.
-        let new_title = to_path
-            .file_stem()
-            .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or_else(|| to_path.display().to_string());
-        for tab in self.document_state.tabs.iter_mut() {
-            if tab.path == from_path {
-                tab.path = to_path.to_path_buf();
-                tab.title = new_title.clone();
-                tab.kind = match tab.kind {
-                    super::super::super::TabKind::SymbolEditor(_) => {
-                        super::super::super::TabKind::SymbolEditor(to_path.to_path_buf())
-                    }
-                    super::super::super::TabKind::FootprintEditor(_) => {
-                        super::super::super::TabKind::FootprintEditor(to_path.to_path_buf())
-                    }
-                    _ => tab.kind.clone(),
-                };
-            }
-        }
-
-        // Migrate the dirty marker too — `dirty_paths` is keyed on
-        // path so it has to follow the rename.
-        if self.document_state.dirty_paths.remove(from_path) {
-            self.document_state
-                .dirty_paths
-                .insert(to_path.to_path_buf());
-        }
-
-        // Now write the file at the new path. `atomic_write` inside
-        // `save_primitive_tab_at` handles `create_dir_all(parent)` so
-        // saving into a fresh `<lib>/symbols/` directory just works.
-        match self.save_primitive_tab_at(to_path) {
-            Ok(()) => {
-                crate::diagnostics::log_info(format!("[save-as] Wrote {}", to_path.display()))
-            }
-            Err(e) => crate::diagnostics::log_error("Save As failed", &e),
-        }
+        crate::diagnostics::log_info(format!("[save-as] Wrote {}", to_path.display()));
 
         // Library-tracking step. If the user saved into a `.snxlib`
         // directory that isn't mounted yet, mount it so the project
@@ -399,6 +357,59 @@ impl Signex {
         // will surface the unsaved library binding.
         self.attach_library_for_path(to_path);
         Ok(())
+    }
+
+    /// Move the symbol / footprint editor, its tab(s) and the dirty
+    /// marker from `from` to `to`. `title` overrides the tab title (used
+    /// by the rollback); `None` derives it from `to`'s file stem.
+    /// Returns the title the first moved tab had before the move.
+    fn retarget_primitive(
+        &mut self,
+        from: &std::path::Path,
+        to: &std::path::Path,
+        title: Option<String>,
+    ) -> Result<Option<String>> {
+        if let Some(mut editor) = self.document_state.symbol_editors.remove(from) {
+            editor.path = to.to_path_buf();
+            self.document_state
+                .symbol_editors
+                .insert(to.to_path_buf(), editor);
+        } else if let Some(mut editor) = self.document_state.footprint_editors.remove(from) {
+            editor.path = to.to_path_buf();
+            self.document_state
+                .footprint_editors
+                .insert(to.to_path_buf(), editor);
+        } else {
+            anyhow::bail!(
+                "save as {}: no editor at {} — was the tab closed?",
+                to.display(),
+                from.display()
+            );
+        }
+
+        let new_title = title.unwrap_or_else(|| {
+            to.file_stem()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_else(|| to.display().to_string())
+        });
+        let mut previous_title = None;
+        for tab in self.document_state.tabs.iter_mut() {
+            if tab.path == from {
+                previous_title.get_or_insert_with(|| tab.title.clone());
+                tab.path = to.to_path_buf();
+                tab.title = new_title.clone();
+                tab.kind = match tab.kind {
+                    TabKind::SymbolEditor(_) => TabKind::SymbolEditor(to.to_path_buf()),
+                    TabKind::FootprintEditor(_) => TabKind::FootprintEditor(to.to_path_buf()),
+                    _ => tab.kind.clone(),
+                };
+            }
+        }
+        // `dirty_paths` is keyed on path, so it follows the move.
+        if self.document_state.dirty_paths.remove(from) {
+            self.document_state.dirty_paths.insert(to.to_path_buf());
+        }
+        Ok(previous_title)
     }
 
     /// Walk `path`'s ancestors looking for a `.snxlib` directory and,
@@ -415,11 +426,10 @@ impl Signex {
                 .unwrap_or(false)
         });
         let Some(lib_dir) = lib_dir else {
-            tracing::warn!(
-                target: "signex::library",
-                path = %path.display(),
-                "save-as: file is outside any `.snxlib/` — not attached to a library"
-            );
+            crate::diagnostics::log_warning(format!(
+                "[save-as] {} is outside any `.snxlib/` — not attached to a library",
+                path.display()
+            ));
             return;
         };
 
@@ -430,12 +440,10 @@ impl Signex {
             && let Err(e) =
                 crate::library::commands::open_library(&mut self.library, lib_dir.to_path_buf())
         {
-            tracing::warn!(
-                target: "signex::library",
-                path = %lib_dir.display(),
-                error = %e,
-                "save-as: open_library failed — leaving project untouched"
-            );
+            crate::diagnostics::log_warning(format!(
+                "[save-as] could not open library {} ({e}) — project left untouched",
+                lib_dir.display()
+            ));
             return;
         }
         let library_id = self.library.library_at(lib_dir).map(|l| l.library_id);
@@ -455,11 +463,10 @@ impl Signex {
             None => None,
         };
         let Some(project_idx) = project_idx else {
-            tracing::warn!(
-                target: "signex::library",
-                path = %lib_dir.display(),
-                "save-as: no active project to attach the library to"
-            );
+            crate::diagnostics::log_warning(format!(
+                "[save-as] no active project to attach library {} to",
+                lib_dir.display()
+            ));
             return;
         };
 
@@ -512,12 +519,15 @@ impl Signex {
         let project_path = loaded.path.clone();
         self.document_state.dirty_paths.insert(project_path);
 
-        tracing::info!(
-            target: "signex::library",
-            project = %loaded.path.display(),
-            library = %lib_dir.display(),
-            "save-as: attached library to active project"
-        );
+        let scope = match kind {
+            signex_types::project::LibraryEntryKind::Shared => "Shared",
+            _ => "project-local",
+        };
+        crate::diagnostics::log_info(format!(
+            "[save-as] Attached library {} to project {} as {scope}",
+            lib_dir.display(),
+            loaded.path.display()
+        ));
 
         self.refresh_panel_ctx();
     }

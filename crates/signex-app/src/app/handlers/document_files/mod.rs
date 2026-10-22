@@ -16,17 +16,34 @@ mod save;
 /// a global library directory outside the project if they want a
 /// shared symbol. Cancel = no save (editor stays dirty).
 pub(crate) fn spawn_save_as_for_new_primitive(suggested: PathBuf) -> iced::Task<Message> {
-    spawn_primitive_save_dialog(suggested, |from_path, to_path| {
-        Message::File(FileMsg::SavePrimitiveAs { from_path, to_path })
-    })
+    spawn_primitive_save_dialog(suggested, primitive_save_as_message)
 }
 
-/// File > Save As on a symbol / footprint tab (#671): same dialog,
-/// resolved through `FileMsg::SaveAs` so the active tab re-keys.
+/// The dialog result always carries the source path (`from_path`), so
+/// the handler never depends on which tab is active when it returns.
+fn primitive_save_as_message(from_path: PathBuf, to_path: PathBuf) -> Message {
+    Message::File(FileMsg::SavePrimitiveAs { from_path, to_path })
+}
+
+/// File > Save As on a symbol / footprint tab (#671): same dialog and
+/// the same `SavePrimitiveAs` message, which carries the source path so
+/// switching tabs while the (non-modal) dialog is open cannot redirect
+/// the write to another document.
 pub(crate) fn spawn_save_as_for_active_primitive(current: PathBuf) -> iced::Task<Message> {
-    spawn_primitive_save_dialog(current, |_from, to_path| {
-        Message::File(FileMsg::SaveAs(to_path))
-    })
+    spawn_save_as_for_new_primitive(current)
+}
+
+/// Append the kind's extension to a picked path that has none (an
+/// extensionless "foo" would be written but rejected by reopen). A path
+/// that already carries an extension is left alone.
+pub(crate) fn with_primitive_extension(to_path: PathBuf, ext: &str) -> PathBuf {
+    if to_path.extension().is_some() {
+        return to_path;
+    }
+    let mut name = to_path.into_os_string();
+    name.push(".");
+    name.push(ext);
+    PathBuf::from(name)
 }
 
 fn spawn_primitive_save_dialog(
@@ -68,7 +85,16 @@ fn spawn_primitive_save_dialog(
                 .map(|file| file.path().to_path_buf())
         },
         move |picked| match picked {
-            Some(to_path) => on_picked(from.clone(), to_path),
+            Some(to_path) => {
+                let resolved = with_primitive_extension(to_path.clone(), filter_ext);
+                if resolved != to_path {
+                    crate::diagnostics::log_info(format!(
+                        "[save-as] No file extension given; saving as {}",
+                        resolved.display()
+                    ));
+                }
+                on_picked(from.clone(), resolved)
+            }
             None => Message::Noop,
         },
     )
@@ -104,5 +130,36 @@ fn blank_schematic_sheet() -> signex_types::schematic::SchematicSheet {
         no_erc_directives: Vec::new(),
         title_block: Default::default(),
         lib_symbols: Default::default(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dialog_result_carries_the_source_path() {
+        let msg = primitive_save_as_message("a.snxsym".into(), "b.snxsym".into());
+        assert!(matches!(
+            msg,
+            Message::File(FileMsg::SavePrimitiveAs { from_path, to_path })
+                if from_path == PathBuf::from("a.snxsym") && to_path == PathBuf::from("b.snxsym")
+        ));
+    }
+
+    #[test]
+    fn extensionless_pick_gets_the_kind_extension() {
+        assert_eq!(
+            with_primitive_extension(PathBuf::from("/x/foo"), "snxsym"),
+            PathBuf::from("/x/foo.snxsym")
+        );
+    }
+
+    #[test]
+    fn picked_extension_is_left_alone() {
+        assert_eq!(
+            with_primitive_extension(PathBuf::from("/x/foo.snxfpt"), "snxfpt"),
+            PathBuf::from("/x/foo.snxfpt")
+        );
     }
 }

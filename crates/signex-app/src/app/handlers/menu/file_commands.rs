@@ -221,20 +221,28 @@ impl Signex {
             .get(self.document_state.active_tab)
             .map(|tab| tab.kind.clone());
         match kind {
-            Some(TabKind::Schematic) => Task::perform(
-                async {
-                    rfd::AsyncFileDialog::new()
-                        .set_title("Save Schematic As")
-                        .add_filter("Signex Schematic", &["snxsch"])
-                        .save_file()
-                        .await
-                        .map(|file| file.path().to_path_buf())
-                },
-                |path| {
-                    path.map(|p| Message::File(FileMsg::SaveAs(p)))
+            Some(TabKind::Schematic) => {
+                let from_path = self.active_tab_path().unwrap_or_default();
+                Task::perform(
+                    async {
+                        rfd::AsyncFileDialog::new()
+                            .set_title("Save Schematic As")
+                            .add_filter("Signex Schematic", &["snxsch"])
+                            .save_file()
+                            .await
+                            .map(|file| file.path().to_path_buf())
+                    },
+                    move |path| {
+                        path.map(|to_path| {
+                            Message::File(FileMsg::SaveAs {
+                                from_path: from_path.clone(),
+                                to_path,
+                            })
+                        })
                         .unwrap_or(Message::Noop)
-                },
-            ),
+                    },
+                )
+            }
             Some(TabKind::SymbolEditor(path)) | Some(TabKind::FootprintEditor(path)) => {
                 super::super::document_files::spawn_save_as_for_active_primitive(path)
             }
