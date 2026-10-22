@@ -24,10 +24,12 @@
 //! off the authoritative [`Netlist`] (ADR-0002 D7), in its stable id/terminal
 //! order. Only the designator → footprint/value join walks the sheet symbols.
 
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use signex_types::net::Netlist;
+use signex_types::schematic::Symbol;
 
+use super::NetlistError;
 use crate::ExportContext;
 
 /// Line terminator the format expects.
@@ -51,7 +53,8 @@ pub(super) fn emit(
     ctx: &ExportContext,
     netlist: &Netlist,
     incomplete_note: Option<&[String]>,
-) -> Vec<u8> {
+) -> Result<Vec<u8>, NetlistError> {
+    check_designators(ctx)?;
     let mut out = String::new();
     if let Some(note) = incomplete_note {
         out.push_str(&super::incomplete_header(note).replace('\n', EOL));
@@ -59,6 +62,7 @@ pub(super) fn emit(
     for component in collect_components(ctx) {
         push_component(&mut out, &component);
     }
+    let unplaced = unplaced_references(ctx);
     for net in &netlist.nets {
         push_line(&mut out, "(");
         let name = field(&net.name);
@@ -67,7 +71,11 @@ pub(super) fn emit(
         } else {
             push_line(&mut out, &name);
         }
-        for t in &net.terminals {
+        for t in net
+            .terminals
+            .iter()
+            .filter(|t| !is_unplaced(&unplaced, &t.reference))
+        {
             push_line(
                 &mut out,
                 &format!("{}-{}", field(&t.reference), field(&t.pin)),
@@ -75,7 +83,47 @@ pub(super) fn emit(
         }
         push_line(&mut out, ")");
     }
-    out.into_bytes()
+    Ok(out.into_bytes())
+}
+
+/// Refuse a project whose designators cannot name one part each. The block
+/// structure keys terminals on the designator alone, so an unannotated `R?` or
+/// two parts sharing `R1` would silently merge into one component and wire
+/// pins of different parts together. These are the conditions the annotate and
+/// Reset Duplicate Designators commands act on; a multi-unit part (one
+/// designator, distinct units, one library symbol) is not a duplicate.
+fn check_designators(ctx: &ExportContext) -> Result<(), NetlistError> {
+    let mut unannotated = BTreeSet::new();
+    let mut duplicates = BTreeSet::new();
+    let mut units: HashSet<(String, i64)> = HashSet::new();
+    let mut lib_ids: HashMap<String, &str> = HashMap::new();
+    for sym in ctx.sheets.iter().flat_map(|s| &s.schematic.symbols) {
+        if is_skipped_symbol(sym) {
+            continue;
+        }
+        let designator = field(&sym.reference);
+        if designator.ends_with('?') {
+            unannotated.insert(designator);
+            continue;
+        }
+        if !units.insert((designator.clone(), i64::from(sym.unit))) {
+            duplicates.insert(designator.clone());
+        }
+        if *lib_ids.entry(designator.clone()).or_insert(&sym.lib_id) != sym.lib_id {
+            duplicates.insert(designator);
+        }
+    }
+    if !unannotated.is_empty() {
+        return Err(NetlistError::UnannotatedDesignators(join(&unannotated)));
+    }
+    if !duplicates.is_empty() {
+        return Err(NetlistError::DuplicateDesignators(join(&duplicates)));
+    }
+    Ok(())
+}
+
+fn join(set: &BTreeSet<String>) -> String {
+    set.iter().cloned().collect::<Vec<_>>().join(", ")
 }
 
 /// Components in sheet order then symbol order, one per designator (a
@@ -86,11 +134,11 @@ fn collect_components(ctx: &ExportContext) -> Vec<Component> {
     let mut components = Vec::new();
     for sheet in &ctx.sheets {
         for sym in &sheet.schematic.symbols {
-            if sym.reference.starts_with("#PWR") || sym.is_power {
+            if is_skipped_symbol(sym) {
                 continue;
             }
             let designator = field(&sym.reference);
-            if designator.is_empty() || !seen.insert(designator.clone()) {
+            if !seen.insert(designator.clone()) {
                 continue;
             }
             components.push(Component {
@@ -101,6 +149,29 @@ fn collect_components(ctx: &ExportContext) -> Vec<Component> {
         }
     }
     components
+}
+
+/// True for a symbol that gets no component block: a power symbol (same
+/// predicate as the BOM) or one with no designator.
+fn is_skipped_symbol(sym: &Symbol) -> bool {
+    sym.reference.starts_with("#PWR") || sym.is_power || field(&sym.reference).is_empty()
+}
+
+/// Designators of the skipped symbols. The netlist still carries their
+/// terminals (a GND port is a pin on the GND net), but naming one in a net
+/// block would point at a component the file never declares.
+fn unplaced_references(ctx: &ExportContext) -> HashSet<String> {
+    ctx.sheets
+        .iter()
+        .flat_map(|s| &s.schematic.symbols)
+        .filter(|sym| is_skipped_symbol(sym))
+        .map(|sym| field(&sym.reference))
+        .collect()
+}
+
+fn is_unplaced(unplaced: &HashSet<String>, reference: &str) -> bool {
+    let reference = field(reference);
+    reference.is_empty() || reference.starts_with("#PWR") || unplaced.contains(&reference)
 }
 
 fn push_component(out: &mut String, c: &Component) {
@@ -121,12 +192,18 @@ fn push_line(out: &mut String, line: &str) {
 
 /// A field is one line: line breaks and other control characters would split
 /// it and corrupt the block structure, so they become spaces; ends are trimmed.
+/// A field that is nothing but a block delimiter (`[`, `]`, `(`, `)`) would
+/// open or close a block early, so it gets a `_` prefix.
 fn field(raw: &str) -> String {
     let cleaned: String = raw
         .chars()
         .map(|c| if c.is_control() { ' ' } else { c })
         .collect();
-    cleaned.trim().to_string()
+    let trimmed = cleaned.trim();
+    if matches!(trimmed, "[" | "]" | "(" | ")") {
+        return format!("_{trimmed}");
+    }
+    trimmed.to_string()
 }
 
 #[cfg(test)]
@@ -266,6 +343,21 @@ mod tests {
     }
 
     #[test]
+    fn power_port_and_unreferenced_terminals_never_dangle() {
+        let c = ctx(
+            vec![
+                symbol("R1", "10k", "R_0603", false),
+                symbol("#PWR01", "GND", "", true),
+                symbol("", "X", "", false),
+            ],
+            vec![net(1, "GND", &[("#PWR01", "1"), ("R1", "1"), ("", "4")])],
+        );
+        let text = protel(&c, None);
+        assert!(text.ends_with("(\r\nGND\r\nR1-1\r\n)\r\n"), "{text}");
+        assert!(!text.contains("#PWR01") && !text.contains("-4"), "{text}");
+    }
+
+    #[test]
     fn a_net_with_no_terminals_is_still_a_block() {
         let c = ctx(vec![], vec![net(7, "FLOATING", &[])]);
         assert_eq!(protel(&c, None), "(\r\nFLOATING\r\n)\r\n");
@@ -295,11 +387,109 @@ mod tests {
         let c = ctx(
             vec![
                 symbol("U1", "OPAMP", "SOIC-8", false),
-                symbol("U1", "OPAMP", "SOIC-8", false),
+                Symbol {
+                    unit: 2,
+                    ..symbol("U1", "OPAMP", "SOIC-8", false)
+                },
             ],
             vec![],
         );
         assert_eq!(protel(&c, None).matches("[\r\n").count(), 1);
+    }
+
+    fn export_err(c: &ExportContext) -> NetlistError {
+        let opts = NetlistOptions {
+            format: NetlistFormat::Protel,
+            incomplete_note: None,
+        };
+        NetlistExporter.export(c, &opts).expect_err("must refuse")
+    }
+
+    #[test]
+    fn two_parts_sharing_a_designator_are_refused() {
+        let c = ctx(
+            vec![
+                symbol("R1", "10k", "R_0603", false),
+                symbol("R1", "22k", "R_0603", false),
+            ],
+            vec![net(1, "A", &[("R1", "1")])],
+        );
+        assert!(matches!(
+            export_err(&c),
+            NetlistError::DuplicateDesignators(ref d) if d == "R1"
+        ));
+    }
+
+    #[test]
+    fn a_designator_repeated_across_sheets_is_refused() {
+        let mut c = ctx(vec![symbol("R1", "10k", "", false)], vec![]);
+        c.sheets.push(sheet(vec![symbol("R1", "10k", "", false)]));
+        assert!(matches!(
+            export_err(&c),
+            NetlistError::DuplicateDesignators(_)
+        ));
+    }
+
+    #[test]
+    fn an_unannotated_designator_is_refused() {
+        let c = ctx(
+            vec![
+                symbol("R?", "10k", "", false),
+                symbol("R?", "1k", "", false),
+            ],
+            vec![],
+        );
+        assert!(matches!(
+            export_err(&c),
+            NetlistError::UnannotatedDesignators(ref d) if d == "R?"
+        ));
+    }
+
+    #[test]
+    fn a_value_that_is_only_a_delimiter_cannot_close_a_block() {
+        let c = ctx(
+            vec![symbol("R1", "]", ")", false)],
+            vec![net(1, ")", &[("R1", "1")])],
+        );
+        assert_eq!(
+            protel(&c, None),
+            "[\r\nR1\r\n_)\r\n_]\r\n\r\n\r\n\r\n]\r\n(\r\n_)\r\nR1-1\r\n)\r\n"
+        );
+    }
+
+    #[test]
+    fn a_multi_sheet_project_lists_every_net_and_terminal_once() {
+        let mut c = ctx(
+            vec![
+                symbol("R1", "10k", "R_0603", false),
+                symbol("#PWR01", "GND", "", true),
+            ],
+            vec![
+                net(
+                    1,
+                    "GND",
+                    &[("#PWR01", "1"), ("R1", "2"), ("C1", "2"), ("U1", "3")],
+                ),
+                net(2, "SIG", &[("R1", "1"), ("U1", "1")]),
+            ],
+        );
+        c.sheets.push(sheet(vec![
+            symbol("C1", "100n", "C_0402", false),
+            symbol("U1", "MCU", "QFN-32", false),
+            symbol("#PWR02", "GND", "", true),
+        ]));
+        let text = protel(&c, None);
+        let lines: Vec<&str> = text.split("\r\n").collect();
+        let count = |l: &str| lines.iter().filter(|x| **x == l).count();
+        for name in ["GND", "SIG"] {
+            assert_eq!(count(name), 1, "{text}");
+        }
+        for terminal in ["R1-2", "C1-2", "U1-3", "R1-1", "U1-1"] {
+            assert_eq!(count(terminal), 1, "{terminal}\n{text}");
+        }
+        assert_eq!(text.matches("[\r\n").count(), 3, "{text}");
+        assert_eq!(text.matches("(\r\n").count(), 2, "{text}");
+        assert!(!text.contains("#PWR"), "{text}");
     }
 
     #[test]

@@ -74,6 +74,14 @@ pub enum NetlistError {
         "no netlist was derived for this export — the app must attach `ExportContext.netlist` (via signex_net::build_project_netlist) before exporting"
     )]
     NoNetlist,
+    #[error(
+        "the Protel netlist cannot be written: designator(s) {0} are held by more than one part — run Reset Duplicate Designators and export again"
+    )]
+    DuplicateDesignators(String),
+    #[error(
+        "the Protel netlist cannot be written: designator(s) {0} are unannotated — run Annotate and export again"
+    )]
+    UnannotatedDesignators(String),
 }
 
 impl Exporter for NetlistExporter {
@@ -90,7 +98,7 @@ impl Exporter for NetlistExporter {
         let note = opts.incomplete_note.as_deref();
         let bytes = match opts.format {
             NetlistFormat::Listing => render_listing(netlist, note),
-            NetlistFormat::Protel => protel::emit(ctx, netlist, note),
+            NetlistFormat::Protel => protel::emit(ctx, netlist, note)?,
         };
         Ok(NetlistOutput { bytes })
     }
