@@ -44,13 +44,15 @@ mod grid;
 mod header;
 mod preview;
 mod sidebar;
+mod sort;
 
 use action_row::view_action_row;
-use columns::{compare_cells, derive_columns, row_matches_filter};
+use columns::{derive_columns, row_matches_filter};
 use empty_state::view_empty_state;
 use grid::view_grid;
 use header::view_header;
 use sidebar::view_table_sidebar;
+use sort::sort_by_cell_key;
 
 const BROWSER_TEXT_SIZE: f32 = 11.0;
 const BROWSER_HEADER_SIZE: f32 = 10.0;
@@ -156,12 +158,11 @@ pub fn view<'a>(
     if let Some(sort) = browser.sort_by.as_ref()
         && let Some(column) = columns.iter().find(|c| c.kind.sort_key() == sort.key)
     {
-        visible.sort_by(|a, b| {
-            let ca = column.kind.cell_value(a);
-            let cb = column.kind.cell_value(b);
-            let ord = compare_cells(&ca, &cb);
-            if sort.descending { ord.reverse() } else { ord }
-        });
+        sort_by_cell_key(
+            &mut visible,
+            |row| column.kind.cell_value(row),
+            sort.descending,
+        );
     }
 
     let grid = view_grid(

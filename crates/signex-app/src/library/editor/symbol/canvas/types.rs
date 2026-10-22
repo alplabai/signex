@@ -121,6 +121,14 @@ pub enum CanvasAction {
     },
     /// Fit the symbol bbox into the viewport (Home key).
     Fit,
+    /// The canvas measured its real size while a Fit / centre-origin
+    /// camera request was queued.
+    ViewportMeasured {
+        width: f32,
+        height: f32,
+        /// The event's own action, so measuring never swallows it.
+        then: Option<Box<CanvasAction>>,
+    },
     /// Cursor world position update — drives the status footer.
     /// `None` clears the readout when the cursor leaves bounds.
     CursorAt {
@@ -290,4 +298,11 @@ pub struct CanvasState {
     /// fine snap grid can't misread two adjacent-but-distinct clicks
     /// as a double-click.
     pub polygon_last_click_pos: Option<(f64, f64)>,
+    /// Grid-snapped cursor position while the `AddPin` tool is active:
+    /// the ghost-pin preview anchor, and where the pin lands when the
+    /// button is released.
+    pub pin_cursor: Option<(f64, f64)>,
+    /// `AddPin` press seen, release pending: the pin is placed where
+    /// the button is released, so press-drag-release positions it.
+    pub pin_armed: bool,
 }

@@ -1,8 +1,8 @@
 format = "snxfpt/1"
 file_uuid = "019df45d-af65-71a1-b568-29e703608649"
 display_name = "MountingHole-3.2mm"
-created = "2026-05-04T19:01:13.701775100Z"
-updated = "2026-05-04T19:01:13.701775100Z"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
 
 [[footprints]]
 uuid = "019df45d-af65-71a1-b568-29d0a5242184"
@@ -20,8 +20,8 @@ fab_f = []
 fab_b = []
 version = "0.0.1"
 released = false
-created = "2026-05-04T19:01:13.701732500Z"
-updated = "2026-05-04T19:01:13.701732500Z"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
 schema_version = 3
 
 [footprints.courtyard]
@@ -58,6 +58,7 @@ kind = "BoardTop"
 id = "a2de0bf0-adc5-448c-adf8-3b190a702392"
 plane = "6287d9cd-d2d8-4190-bd2e-46de49a389ac"
 construction = false
+centerline = false
 kind = "Point"
 x = 0.0
 y = 0.0
@@ -79,6 +80,13 @@ plated = false
 
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
+
+[footprints.sketch.entities.pad.stack]
+paste_top_enabled = false
+paste_bottom_enabled = false
+mask_top_tented = false
+mask_bottom_tented = false
+thermal_relief = false
 
 [footprints.sketch.parameters]
 clearance_dia = "6.0mm"
