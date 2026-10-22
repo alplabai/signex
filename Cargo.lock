@@ -5313,6 +5313,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "signex-types",
  "tempfile",
  "thiserror 2.0.18",
 ]
@@ -5325,6 +5326,7 @@ dependencies = [
  "chrono",
  "dirs",
  "fontdb",
+ "git2",
  "iced",
  "iced_aw",
  "image",
@@ -5449,6 +5451,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "signex-library",
  "signex-sketch",
  "signex-types",
  "tantivy",

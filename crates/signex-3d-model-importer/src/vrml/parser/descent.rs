@@ -3,10 +3,14 @@
 use super::*;
 use crate::vrml::lexer::Token;
 
+/// Deepest node nesting accepted; bounds parser and `collect_meshes` recursion (#112).
+pub(super) const MAX_NODE_DEPTH: usize = 256;
+
 pub(super) struct Parser<'a> {
     tokens: &'a [Token],
     lines: &'a [usize],
     pos: usize,
+    depth: usize,
 }
 
 impl<'a> Parser<'a> {
@@ -15,6 +19,7 @@ impl<'a> Parser<'a> {
             tokens,
             lines,
             pos: 0,
+            depth: 0,
         }
     }
 
@@ -68,6 +73,19 @@ impl<'a> Parser<'a> {
 
     /// Parse a single VRML node, returning `None` for ignored node types.
     fn parse_node(&mut self) -> Result<Option<Node>, ParseError> {
+        if self.depth >= MAX_NODE_DEPTH {
+            return Err(ParseError::NestingTooDeep {
+                line: self.current_line(),
+                limit: MAX_NODE_DEPTH,
+            });
+        }
+        self.depth += 1;
+        let result = self.parse_node_inner();
+        self.depth -= 1;
+        result
+    }
+
+    fn parse_node_inner(&mut self) -> Result<Option<Node>, ParseError> {
         let keyword = match self.next() {
             Some(Token::Word(w)) => w.clone(),
             Some(Token::RBrace | Token::RBracket | Token::Comma) => return Ok(None),
