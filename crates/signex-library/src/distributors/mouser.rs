@@ -10,6 +10,8 @@
 //! - 24h disk cache, polite throttle, same error-mapping as LCSC.
 
 use std::collections::BTreeMap;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use chrono::Utc;
 use serde::Deserialize;
@@ -20,12 +22,12 @@ use crate::distributor::{
 };
 use crate::distributors::cache::{DEFAULT_TTL, DistributorCache};
 use crate::distributors::keyring::{KeyringError, KeyringStore};
-use crate::distributors::throttle::Throttle;
 use crate::param::ParamMap;
 
 const MOUSER_PROVIDER_KEY: &str = "mouser";
 const MOUSER_NAME: &str = "Mouser";
 const MOUSER_DEFAULT_BASE: &str = "https://api.mouser.com/api/v1/search/keyword";
+const THROTTLE_INTERVAL: Duration = Duration::from_secs(1);
 
 /// How the Mouser adapter retrieves its API key.
 enum AuthSource {
@@ -38,7 +40,7 @@ enum AuthSource {
 pub struct MouserAdapter {
     base_url: String,
     cache: Option<DistributorCache>,
-    throttle: Throttle,
+    throttle: Mutex<Option<Instant>>,
     http: reqwest::blocking::Client,
     auth: AuthSource,
 }
@@ -58,7 +60,7 @@ impl MouserAdapter {
         Ok(Self {
             base_url: MOUSER_DEFAULT_BASE.into(),
             cache,
-            throttle: Throttle::default(),
+            throttle: Mutex::new(None),
             http: super::http::build_client(),
             auth: AuthSource::Keyring(KeyringStore::for_provider("mouser", "default")?),
         })
@@ -73,10 +75,14 @@ impl MouserAdapter {
         Self {
             base_url: base_url.into(),
             cache,
-            throttle: Throttle::default(),
+            throttle: Mutex::new(None),
             http: super::http::build_client(),
             auth: AuthSource::Inline(api_key.into()),
         }
+    }
+
+    fn polite_wait(&self) {
+        super::throttle::polite_wait(&self.throttle, THROTTLE_INTERVAL);
     }
 
     fn resolve_api_key(&self) -> Result<String, DistributorError> {
@@ -106,7 +112,7 @@ impl MouserAdapter {
                 "startingRecord": 0,
             }
         });
-        self.throttle.wait();
+        self.polite_wait();
         let resp = self
             .http
             .post(&url)
@@ -314,7 +320,7 @@ mod tests {
         let adapter = MouserAdapter {
             base_url: "http://unused.invalid".into(),
             cache: None,
-            throttle: Throttle::default(),
+            throttle: Mutex::new(None),
             http: super::super::http::build_client(),
             auth: AuthSource::Keyring(store),
         };

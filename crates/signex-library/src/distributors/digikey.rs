@@ -21,6 +21,8 @@
 //!   access token in `Authorization: Bearer …`.
 
 use std::collections::BTreeMap;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use chrono::Utc;
 use oauth2::basic::BasicClient;
@@ -36,7 +38,6 @@ use crate::distributor::{
 };
 use crate::distributors::cache::{DEFAULT_TTL, DistributorCache};
 use crate::distributors::keyring::{KeyringError, KeyringStore};
-use crate::distributors::throttle::Throttle;
 use crate::param::ParamMap;
 
 /// DigiKey production endpoints. Tests override these via `with_endpoints`.
@@ -45,6 +46,7 @@ pub const DIGIKEY_TOKEN_URL: &str = "https://api.digikey.com/v1/oauth2/token";
 pub const DIGIKEY_API_BASE: &str = "https://api.digikey.com";
 const DIGIKEY_PROVIDER_KEY: &str = "digikey";
 const DIGIKEY_NAME: &str = "DigiKey";
+const THROTTLE_INTERVAL: Duration = Duration::from_secs(1);
 
 type ConfiguredClient =
     BasicClient<EndpointSet, EndpointNotSet, EndpointNotSet, EndpointNotSet, EndpointSet>;
@@ -258,7 +260,7 @@ fn build_http_client() -> reqwest::blocking::Client {
 pub struct DigiKeyAdapter {
     api_base: String,
     cache: Option<DistributorCache>,
-    throttle: Throttle,
+    throttle: Mutex<Option<Instant>>,
     http: reqwest::blocking::Client,
     auth: AuthSource,
 }
@@ -278,7 +280,7 @@ impl DigiKeyAdapter {
         Self {
             api_base: DIGIKEY_API_BASE.into(),
             cache,
-            throttle: Throttle::default(),
+            throttle: Mutex::new(None),
             http: build_http_client(),
             auth: AuthSource::Oauth(Box::new(auth)),
         }
@@ -295,7 +297,7 @@ impl DigiKeyAdapter {
         Self {
             api_base: api_base.into(),
             cache,
-            throttle: Throttle::default(),
+            throttle: Mutex::new(None),
             http: build_http_client(),
             auth: AuthSource::InlineAccessToken(access_token.into()),
         }
@@ -312,10 +314,14 @@ impl DigiKeyAdapter {
         Self {
             api_base: api_base.into(),
             cache,
-            throttle: Throttle::default(),
+            throttle: Mutex::new(None),
             http: build_http_client(),
             auth: AuthSource::Oauth(Box::new(auth)),
         }
+    }
+
+    fn polite_wait(&self) {
+        super::throttle::polite_wait(&self.throttle, THROTTLE_INTERVAL);
     }
 
     fn resolve_access_token(&self) -> Result<String, DistributorError> {
@@ -333,7 +339,7 @@ impl DigiKeyAdapter {
             "Limit": 25,
             "Offset": 0,
         });
-        self.throttle.wait();
+        self.polite_wait();
         let resp = self
             .http
             .post(&url)

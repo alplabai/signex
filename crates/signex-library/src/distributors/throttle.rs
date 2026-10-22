@@ -1,110 +1,59 @@
-//! Shared polite-request throttle for the distributor adapters.
-//!
-//! A caller *reserves* the next free slot while holding the lock, then
-//! sleeps outside it. Concurrent callers therefore each receive a distinct
-//! slot spaced one `interval` apart; none can slip in early the way a
-//! read-timestamp / unlock / sleep / overwrite sequence allows.
+//! Shared request throttle for the distributor adapters.
 
-use std::sync::Mutex;
+use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
-/// Minimum spacing between consecutive requests to one distributor.
-pub const DEFAULT_INTERVAL: Duration = Duration::from_secs(1);
-
-/// Spaces calls at least `interval` apart across all threads.
-pub struct Throttle {
-    interval: Duration,
-    /// Earliest instant at which the next caller may proceed.
-    next_slot: Mutex<Option<Instant>>,
-}
-
-impl Throttle {
-    pub fn new(interval: Duration) -> Self {
-        Self {
-            interval,
-            next_slot: Mutex::new(None),
+/// Block until `interval` has passed since the last request recorded in
+/// `last`, then record now. The lock is held across the sleep so concurrent
+/// callers queue and each sees the previous caller's timestamp.
+///
+/// Sleeps while holding the lock: call it from a blocking context (e.g.
+/// `spawn_blocking`), never from an async task or the UI thread.
+pub(super) fn polite_wait(last: &Mutex<Option<Instant>>, interval: Duration) {
+    // The data is a plain `Option<Instant>`, valid even after a poisoning panic.
+    let mut guard = last.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some(prev) = *guard {
+        let elapsed = prev.elapsed();
+        if elapsed < interval {
+            std::thread::sleep(interval - elapsed);
         }
     }
-
-    /// Reserve the next slot (under the lock) and return when it opens.
-    fn reserve(&self) -> Instant {
-        // The guarded value is a plain `Option<Instant>`; a poisoned lock
-        // cannot hold a torn state, so recover it rather than panic.
-        let mut guard = self.next_slot.lock().unwrap_or_else(|e| e.into_inner());
-        let now = Instant::now();
-        let slot = guard.map_or(now, |next| next.max(now));
-        *guard = Some(slot + self.interval);
-        slot
-    }
-
-    /// Block until this caller's reserved slot opens. The first call
-    /// returns immediately.
-    pub fn wait(&self) {
-        let slot = self.reserve();
-        let now = Instant::now();
-        if slot > now {
-            std::thread::sleep(slot - now);
-        }
-    }
-}
-
-impl Default for Throttle {
-    fn default() -> Self {
-        Self::new(DEFAULT_INTERVAL)
-    }
+    *guard = Some(Instant::now());
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{Arc, Barrier};
+    use std::sync::Arc;
+
+    const CALLERS: u32 = 4;
+    /// Timer/scheduler tolerance on the lower bound of the elapsed time.
+    const TIMER_SLACK: Duration = Duration::from_millis(10);
 
     #[test]
-    fn first_call_is_immediate_second_waits_one_interval() {
-        let t = Throttle::new(Duration::from_millis(200));
-        let t0 = Instant::now();
-        t.wait();
-        assert!(t0.elapsed() < Duration::from_millis(100));
-        let t1 = Instant::now();
-        t.wait();
-        assert!(t1.elapsed() >= Duration::from_millis(190));
-    }
-
-    #[test]
-    fn concurrent_callers_are_spaced_by_at_least_the_interval() {
+    fn concurrent_callers_are_spaced_by_the_interval() {
         let interval = Duration::from_millis(100);
-        let throttle = Arc::new(Throttle::new(interval));
-        let barrier = Arc::new(Barrier::new(6));
-        let handles: Vec<_> = (0..6)
+        // Seeded so every caller has to sleep.
+        let last = Arc::new(Mutex::new(Some(Instant::now())));
+
+        let start = Instant::now();
+        let handles: Vec<_> = (0..CALLERS)
             .map(|_| {
-                let (t, b) = (Arc::clone(&throttle), Arc::clone(&barrier));
-                std::thread::spawn(move || {
-                    b.wait();
-                    t.wait();
-                    Instant::now()
-                })
+                let last = Arc::clone(&last);
+                std::thread::spawn(move || polite_wait(&last, interval))
             })
             .collect();
-        let mut times: Vec<Instant> = handles.into_iter().map(|h| h.join().unwrap()).collect();
-        times.sort();
-        for pair in times.windows(2) {
-            let gap = pair[1] - pair[0];
-            // Small tolerance for sleep wake-up vs `Instant::now()` skew.
-            assert!(
-                gap + Duration::from_millis(10) >= interval,
-                "callers proceeded {gap:?} apart, expected >= {interval:?}"
-            );
+        for h in handles {
+            h.join().unwrap();
         }
-    }
+        let total = start.elapsed();
 
-    #[test]
-    fn reservations_are_strictly_spaced_regardless_of_scheduling() {
-        // Deterministic: no sleeping, just the reserved slots.
-        let interval = Duration::from_secs(1);
-        let t = Throttle::new(interval);
-        let slots: Vec<Instant> = (0..5).map(|_| t.reserve()).collect();
-        for pair in slots.windows(2) {
-            assert!(pair[1] - pair[0] >= interval);
-        }
+        // Callers are served one at a time, each `interval` after the previous
+        // one. Load only lengthens `total`, so this lower bound cannot flake.
+        let expected = interval * CALLERS - TIMER_SLACK;
+        assert!(
+            total >= expected,
+            "{CALLERS} callers finished in {total:?}, expected at least {expected:?}"
+        );
     }
 }

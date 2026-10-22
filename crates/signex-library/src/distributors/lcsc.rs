@@ -1,11 +1,11 @@
 //! LCSC distributor adapter — anonymous, polite-throttled (1 req/s).
 //!
 //! - No auth (anonymous public catalogue endpoint).
-//! - **1 req/s** polite throttle via the shared
-//!   [`Throttle`](super::throttle::Throttle), which reserves request slots
-//!   under a lock so concurrent callers stay spaced. (`DistributorAdapter`
-//!   is a sync trait, so the throttle sleeps the calling thread rather
-//!   than spinning up an async runtime per adapter.)
+//! - **1 req/s** polite throttle. Implemented as a `Mutex<Option<Instant>>`
+//!   that delays the next request until at least 1 s after the last one
+//!   completed. (Spec mentions `tokio::time::interval`; that fits async,
+//!   but `DistributorAdapter` is a sync trait — `std::thread::sleep` is the
+//!   sync equivalent and avoids spinning up a runtime per adapter.)
 //! - Disk cache via `DistributorCache` with 24h TTL (per `DEFAULT_TTL`).
 //! - Live API tests are `#[ignore]`d; offline tests use `wiremock` to
 //!   verify URL shape, headers, and parsing.
@@ -15,6 +15,8 @@
 //! endpoint to obtain the canonical part record.
 
 use std::collections::BTreeMap;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use chrono::Utc;
 use serde::Deserialize;
@@ -24,13 +26,13 @@ use crate::distributor::{
     DistributorAdapter, DistributorError, DistributorPart, DistributorSource,
 };
 use crate::distributors::cache::{DEFAULT_TTL, DistributorCache};
-use crate::distributors::throttle::Throttle;
 use crate::param::ParamMap;
 
 const LCSC_PROVIDER_KEY: &str = "lcsc";
 const LCSC_NAME: &str = "LCSC";
 /// Default search base. Tests inject a wiremock URL via `with_base_url`.
 const LCSC_DEFAULT_BASE: &str = "https://wmsc.lcsc.com/wmsc/product/list";
+const THROTTLE_INTERVAL: Duration = Duration::from_secs(1);
 
 /// LCSC adapter.
 ///
@@ -40,7 +42,7 @@ const LCSC_DEFAULT_BASE: &str = "https://wmsc.lcsc.com/wmsc/product/list";
 pub struct LcscAdapter {
     base_url: String,
     cache: Option<DistributorCache>,
-    throttle: Throttle,
+    throttle: Mutex<Option<Instant>>,
     http: reqwest::blocking::Client,
 }
 
@@ -50,7 +52,7 @@ impl LcscAdapter {
         Self {
             base_url: LCSC_DEFAULT_BASE.into(),
             cache,
-            throttle: Throttle::default(),
+            throttle: Mutex::new(None),
             http: super::http::build_client(),
         }
     }
@@ -60,16 +62,33 @@ impl LcscAdapter {
         Self {
             base_url: base_url.into(),
             cache,
-            throttle: Throttle::default(),
+            throttle: Mutex::new(None),
             http: super::http::build_client(),
         }
+    }
+
+    /// Wait until at least `THROTTLE_INTERVAL` has elapsed since the last
+    /// call. Records the current instant on exit so subsequent calls are
+    /// rate-limited consistently across threads.
+    fn polite_wait(&self) {
+        super::throttle::polite_wait(&self.throttle, THROTTLE_INTERVAL);
+    }
+
+    /// Helper exposed for tests: how many ms since the last recorded request,
+    /// or None if no request has been made.
+    #[doc(hidden)]
+    pub fn last_call_age(&self) -> Option<Duration> {
+        self.throttle
+            .lock()
+            .ok()
+            .and_then(|g| g.map(|i| i.elapsed()))
     }
 
     fn http_get_json<T: for<'de> serde::Deserialize<'de>>(
         &self,
         url: &str,
     ) -> Result<T, DistributorError> {
-        self.throttle.wait();
+        self.polite_wait();
         let resp = self
             .http
             .get(url)
@@ -261,6 +280,23 @@ impl LcscSearchResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn polite_wait_blocks_until_one_second_passed() {
+        let adapter = LcscAdapter::with_base_url("http://unused.invalid", None);
+        let t0 = Instant::now();
+        adapter.polite_wait();
+        // First call should be instant (no prior call).
+        assert!(t0.elapsed() < Duration::from_millis(500));
+        // Second call must wait ~1 s.
+        let t1 = Instant::now();
+        adapter.polite_wait();
+        assert!(
+            t1.elapsed() >= Duration::from_millis(900),
+            "polite_wait should sleep ~1s; elapsed = {:?}",
+            t1.elapsed()
+        );
+    }
 
     #[test]
     fn lookup_by_url_extracts_lcsc_token() {

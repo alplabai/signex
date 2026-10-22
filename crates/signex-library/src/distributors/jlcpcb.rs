@@ -5,6 +5,8 @@
 //! response (the JLCPCB parts catalogue is a curated subset of LCSC).
 
 use std::collections::BTreeMap;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use chrono::Utc;
 use serde::Deserialize;
@@ -14,18 +16,18 @@ use crate::distributor::{
     DistributorAdapter, DistributorError, DistributorPart, DistributorSource,
 };
 use crate::distributors::cache::{DEFAULT_TTL, DistributorCache};
-use crate::distributors::throttle::Throttle;
 use crate::param::ParamMap;
 
 const JLCPCB_PROVIDER_KEY: &str = "jlcpcb";
 const JLCPCB_NAME: &str = "JLCPCB";
 const JLCPCB_DEFAULT_BASE: &str =
     "https://jlcpcb.com/api/overseas-pcb-order/v1/shoppingCart/smtGood/list";
+const THROTTLE_INTERVAL: Duration = Duration::from_secs(1);
 
 pub struct JlcpcbAdapter {
     base_url: String,
     cache: Option<DistributorCache>,
-    throttle: Throttle,
+    throttle: Mutex<Option<Instant>>,
     http: reqwest::blocking::Client,
 }
 
@@ -34,7 +36,7 @@ impl JlcpcbAdapter {
         Self {
             base_url: JLCPCB_DEFAULT_BASE.into(),
             cache,
-            throttle: Throttle::default(),
+            throttle: Mutex::new(None),
             http: super::http::build_client(),
         }
     }
@@ -43,9 +45,13 @@ impl JlcpcbAdapter {
         Self {
             base_url: base_url.into(),
             cache,
-            throttle: Throttle::default(),
+            throttle: Mutex::new(None),
             http: super::http::build_client(),
         }
+    }
+
+    fn polite_wait(&self) {
+        super::throttle::polite_wait(&self.throttle, THROTTLE_INTERVAL);
     }
 
     fn http_post_json<B: serde::Serialize, T: for<'de> Deserialize<'de>>(
@@ -53,7 +59,7 @@ impl JlcpcbAdapter {
         url: &str,
         body: &B,
     ) -> Result<T, DistributorError> {
-        self.throttle.wait();
+        self.polite_wait();
         let resp = self
             .http
             .post(url)
