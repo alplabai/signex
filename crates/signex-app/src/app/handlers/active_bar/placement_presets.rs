@@ -269,6 +269,7 @@ impl Signex {
         // before committing to a click.
         self.interaction_state.active_canvas_mut().ghost_symbol =
             Some(signex_types::schematic::Symbol {
+                unknown: Default::default(),
                 uuid: uuid::Uuid::new_v4(),
                 lib_id: lib_id.to_string(),
                 reference: String::new(),
