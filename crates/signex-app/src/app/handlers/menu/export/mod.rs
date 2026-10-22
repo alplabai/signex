@@ -25,7 +25,7 @@ pub(crate) mod tests;
 fn build_export_context(
     document_state: &crate::app::state::DocumentState,
 ) -> Option<ExportContext> {
-    build_export_scope(document_state).map(|(ctx, _issues)| ctx)
+    build_page_scope(document_state).map(|(ctx, _issues)| ctx)
 }
 
 /// Everything that went wrong while deriving the export's netlist.
@@ -76,6 +76,49 @@ impl ExportIssues {
                         | signex_net::StitchIssue::SheetKeyCollision { .. }
                 )
             })
+    }
+
+    /// The refusal text when one child file is placed more than once and its
+    /// parts keep one shared designator. The Protel file keys every terminal
+    /// on the designator alone, so the two physical parts would collapse into
+    /// a single `[ ... ]` block with that part's pin listed in two nets.
+    ///
+    /// Power references (`#PWR*`, `is_power`) are neither refused nor listed:
+    /// they get no component block and stay out of the net blocks, so two
+    /// placements sharing one cannot merge anything. `ctx` is the scope the
+    /// issues came from; its `netlist_sheets` say which references are power.
+    pub(crate) fn shared_reference_refusal(&self, ctx: &ExportContext) -> Option<String> {
+        let is_power = |reference: &str| {
+            reference.starts_with("#PWR")
+                || ctx
+                    .netlist_sheets
+                    .iter()
+                    .flat_map(|sheet| &sheet.symbols)
+                    .any(|sym| sym.is_power && sym.reference == reference)
+        };
+        let shared: std::collections::BTreeSet<String> = self
+            .stitch
+            .iter()
+            .filter_map(|issue| match issue {
+                signex_net::StitchIssue::SharedReferenceAcrossInstances {
+                    filename,
+                    reference,
+                } if !is_power(reference) => Some(format!("{reference} (in {filename})")),
+                _ => None,
+            })
+            .collect();
+        if shared.is_empty() {
+            return None;
+        }
+        Some(format!(
+            concat!(
+                "Netlist export refused: a sheet file is placed more than once and its ",
+                "designator(s) {} are shared by every placement, so two parts would merge ",
+                "into one in the Protel file. Give each placement its own designators ",
+                "(or use a separate sheet file per instance) and export again.",
+            ),
+            shared.into_iter().collect::<Vec<_>>().join(", ")
+        ))
     }
 
     /// One user-facing line per problem, in a stable order.
@@ -256,6 +299,22 @@ fn export_metadata(
 fn build_export_scope(
     document_state: &crate::app::state::DocumentState,
 ) -> Option<(ExportContext, ExportIssues)> {
+    build_scope(document_state, true)
+}
+
+/// [`build_export_scope`] without `ExportContext::netlist_sheets`, for the
+/// paths that never read it (PDF, BOM, print preview). Skips the per-sheet
+/// copy that only the Protel netlist needs.
+fn build_page_scope(
+    document_state: &crate::app::state::DocumentState,
+) -> Option<(ExportContext, ExportIssues)> {
+    build_scope(document_state, false)
+}
+
+fn build_scope(
+    document_state: &crate::app::state::DocumentState,
+    with_netlist_sheets: bool,
+) -> Option<(ExportContext, ExportIssues)> {
     let active_path = document_state.active_path.as_ref()?;
     let active_engine = document_state.engines.get(active_path)?;
 
@@ -295,6 +354,7 @@ fn build_export_scope(
     // (ADR-0002 D8, #466), not by the bare `ChildSheet.filename` string.
     let mut issues = ExportIssues::default();
     let set = sheet_set;
+    let mut netlist_sheets: Vec<signex_types::schematic::SchematicSheet> = Vec::new();
     let netlist = set.root.clone().and_then(|root_path| {
         // A declared page that exists and was read but that nothing
         // hierarchically references is stitched in below as its own
@@ -352,6 +412,14 @@ fn build_export_scope(
             resolved: &graph.resolved,
             roots: &roots,
         });
+        // Hand the exporters the very sheets the netlist was derived from, in
+        // key order so the output is deterministic: hierarchical children are
+        // not printed pages, yet their parts sit in the netlist's terminals.
+        if with_netlist_sheets {
+            let mut keyed: Vec<_> = graph.sheets.into_iter().collect();
+            keyed.sort_by(|a, b| a.0.cmp(&b.0));
+            netlist_sheets = keyed.into_iter().map(|(_, sheet)| sheet).collect();
+        }
         let mut stitch = result.issues;
         stitch.extend(graph.issues);
         issues.stitch = stitch;
@@ -363,6 +431,7 @@ fn build_export_scope(
             sheets,
             metadata,
             netlist,
+            netlist_sheets,
         },
         issues,
     ))

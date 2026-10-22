@@ -103,6 +103,7 @@ fn main() {
         sheets: snapshots,
         metadata,
         netlist: None,
+        netlist_sheets: Vec::new(),
     };
 
     println!();

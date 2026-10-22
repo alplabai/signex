@@ -265,12 +265,23 @@ mod tests {
         }
     }
 
+    /// Spell a `/`-written fixture path with the host's separator.
+    ///
+    /// `Path::join` inserts the host separator, so a `/`-spelled directory
+    /// joined to a filename is `/w\b.snxsch` on Windows. Under
+    /// [`CaseFold::Preserve`] (verbatim key, no separator folding) that never
+    /// equals the `/`-spelled lookup path; spelling every fixture path
+    /// natively keeps both sides identical on any host.
+    fn native(path: &str) -> String {
+        path.replace('/', std::path::MAIN_SEPARATOR_STR)
+    }
+
     fn loaded(entries: &[(&str, &[&str])]) -> HashMap<PathBuf, Vec<String>> {
         entries
             .iter()
             .map(|(p, kids)| {
                 (
-                    PathBuf::from(p),
+                    PathBuf::from(native(p)),
                     kids.iter().map(|k| (*k).to_string()).collect(),
                 )
             })
@@ -478,7 +489,7 @@ mod tests {
 
     fn project_at(id: u32, prj: &str, filenames: &[&str]) -> LoadedProject {
         let mut p = project(id, "", filenames);
-        p.path = PathBuf::from(prj);
+        p.path = PathBuf::from(native(prj));
         p
     }
 
@@ -488,7 +499,7 @@ mod tests {
         path: &str,
         fold: CaseFold,
     ) -> bool {
-        claimed_by_other_project(projects, open, 0, &PathBuf::from(path), fold)
+        claimed_by_other_project(projects, open, 0, &PathBuf::from(native(path)), fold)
     }
 
     #[test]
@@ -530,8 +541,9 @@ mod tests {
 
     #[test]
     fn a_nested_project_does_not_override_the_closing_projects_own_listing() {
+        let listed = native("sub/x.snxsch");
         let projects = vec![
-            project_at(1, "/w/A.snxprj", &["sub/x.snxsch"]),
+            project_at(1, "/w/A.snxprj", &[listed.as_str()]),
             project_at(2, "/w/sub/B.snxprj", &["b.snxsch"]),
         ];
         let open = HashMap::new();

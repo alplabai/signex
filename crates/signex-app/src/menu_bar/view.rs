@@ -55,7 +55,7 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
                 ctx.has_schematic,
             ),
             leaf_if(
-                "Netlist (Standard .net)...",
+                "Netlist (Protel .NET)...",
                 None,
                 MenuMessage::ExportNetlist,
                 ctx.has_schematic,
@@ -398,7 +398,6 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
             ),
             separator(mc),
             leaf_stub("Generate BOM", None, mc),
-            leaf_stub("Generate Netlist", None, mc),
         ]),
     );
 
