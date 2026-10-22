@@ -114,6 +114,36 @@ impl BomRuleOptions {
             BomRule::EmptyOrZeroQty => self.empty_or_zero_qty,
         }
     }
+
+    /// Turn one rule on or off.
+    pub fn set_enabled(&mut self, rule: BomRule, enabled: bool) {
+        match rule {
+            BomRule::MissingFootprint => self.missing_footprint = enabled,
+            BomRule::MissingMpn => self.missing_mpn = enabled,
+            BomRule::DuplicateDesignator => self.duplicate_designator = enabled,
+            BomRule::EmptyOrZeroQty => self.empty_or_zero_qty = enabled,
+        }
+    }
+}
+
+impl BomRule {
+    /// Every rule, in the order the UI lists them.
+    pub const ALL: [BomRule; 4] = [
+        BomRule::MissingFootprint,
+        BomRule::MissingMpn,
+        BomRule::DuplicateDesignator,
+        BomRule::EmptyOrZeroQty,
+    ];
+
+    /// Short user-facing rule name.
+    pub fn label(self) -> &'static str {
+        match self {
+            BomRule::MissingFootprint => "Missing footprint",
+            BomRule::MissingMpn => "Missing MPN",
+            BomRule::DuplicateDesignator => "Duplicate designator",
+            BomRule::EmptyOrZeroQty => "Empty or zero quantity",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -155,6 +185,31 @@ impl BomValidationReport {
 
     pub fn has_errors(&self) -> bool {
         self.error_count() > 0
+    }
+
+    /// Compact one-line summary, e.g. `2 errors, 5 warnings`; `None` when
+    /// the report has no issues.
+    pub fn summary(&self) -> Option<String> {
+        if self.issues.is_empty() {
+            return None;
+        }
+        let plural = |n: usize, word: &str| format!("{n} {word}{}", if n == 1 { "" } else { "s" });
+        let infos = self
+            .issues
+            .iter()
+            .filter(|i| i.severity == BomIssueSeverity::Info)
+            .count();
+        let mut parts = Vec::new();
+        if self.error_count() > 0 {
+            parts.push(plural(self.error_count(), "error"));
+        }
+        if self.warning_count() > 0 {
+            parts.push(plural(self.warning_count(), "warning"));
+        }
+        if infos > 0 {
+            parts.push(plural(infos, "note"));
+        }
+        Some(parts.join(", "))
     }
 }
 
@@ -597,5 +652,34 @@ mod tests {
                 .iter()
                 .any(|issue| issue.rule == BomRule::MissingFootprint)
         );
+    }
+
+    #[test]
+    fn set_enabled_round_trips_every_rule() {
+        let mut opts = BomRuleOptions::default();
+        for rule in BomRule::ALL {
+            assert!(opts.is_enabled(rule));
+            opts.set_enabled(rule, false);
+            assert!(!opts.is_enabled(rule));
+        }
+    }
+
+    #[test]
+    fn summary_counts_by_severity() {
+        let issue = |severity| BomValidationIssue {
+            rule: BomRule::MissingMpn,
+            severity,
+            message: String::new(),
+            references: Vec::new(),
+        };
+        assert_eq!(BomValidationReport::default().summary(), None);
+        let report = BomValidationReport {
+            issues: vec![
+                issue(BomIssueSeverity::Error),
+                issue(BomIssueSeverity::Error),
+                issue(BomIssueSeverity::Warning),
+            ],
+        };
+        assert_eq!(report.summary().as_deref(), Some("2 errors, 1 warning"));
     }
 }

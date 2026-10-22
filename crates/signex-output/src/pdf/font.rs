@@ -1,21 +1,8 @@
-//! Font embedding + subsetting for PDFs.
+//! Bundled Roboto + Iosevka faces for PDF export: style mapping, the
+//! `/F1`-`/F4` content-stream aliases, and TTF-metric text measurement.
 //!
-//! v0.8 references PDF standard-14 Type1 fonts (Helvetica variants + Courier
-//! variants) via short aliases `F1`–`F4`. The alias-to-`/BaseFont` mapping is
-//! emitted once per PDF; every page points at the same four font objects.
-//!
-//! The Roboto + Iosevka TTF bytes below are bundled at compile time but NOT
-//! yet wired into the PDF pipeline — they're parked for v0.9 when the Type0
-//! composite-font dict + FontFile2 stream emission lands. The module-wide
-//! `#![expect(dead_code)]` below is deliberate, and it expires on its own:
-//! once the pipeline uses these, `unfulfilled_lint_expectations` says so.
+//! The faces are embedded in the PDF as Type0 fonts by `embed.rs`.
 
-#![expect(
-    dead_code,
-    reason = "Roboto + Iosevka TTF bytes are bundled at compile time but not yet wired into the PDF pipeline; they land with the v0.9 Type0 composite-font dict + FontFile2 stream"
-)]
-
-use pdf_writer::Ref;
 use ttf_parser::Face;
 
 use crate::template::FontStyle;
@@ -68,21 +55,8 @@ impl PdfFont {
         }
     }
 
-    /// PDF standard-14 Type1 font name we fall back to while full Type0
-    /// composite-font emission is deferred to v0.9. Roboto → Helvetica,
-    /// Iosevka → Courier (monospace). Every PDF reader ships these by
-    /// spec, so text always renders even without a /FontFile2 stream.
-    pub fn standard_ps_name(&self) -> &'static str {
-        match self {
-            PdfFont::RobotoRegular => "Helvetica",
-            PdfFont::RobotoBold => "Helvetica-Bold",
-            PdfFont::IosevkaRegular => "Courier",
-            PdfFont::IosevkaBold => "Courier-Bold",
-        }
-    }
-
     /// PostScript base name for this font (used in /BaseFont). Matches the
-    /// embedded TTF — used once full Type0 emission lands in v0.9.
+    /// embedded TTF.
     pub fn base_name(&self) -> &'static str {
         match self {
             PdfFont::RobotoRegular => "Roboto",
@@ -140,37 +114,18 @@ pub fn best_alias_for_text(preferred_alias: &str, text: &str) -> &'static str {
     best.alias()
 }
 
-/// Convert text to a PDF-safe Latin-1-ish representation so standard-14
-/// font fallback does not drop characters.
-pub fn sanitize_pdf_text(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    for ch in text.chars() {
-        let mapped = match ch {
-            'Ğ' => 'G',
-            'ğ' => 'g',
-            'İ' => 'I',
-            'ı' => 'i',
-            'Ş' => 'S',
-            'ş' => 's',
-            'Ç' => 'C',
-            'ç' => 'c',
-            'Ö' => 'O',
-            'ö' => 'o',
-            'Ü' => 'U',
-            'ü' => 'u',
-            _ => ch,
-        };
-
-        let code = mapped as u32;
-        if (0x20..=0x7E).contains(&code) || (0xA0..=0xFF).contains(&code) {
-            out.push(mapped);
-        } else if mapped == '\n' || mapped == '\r' || mapped == '\t' {
-            out.push(' ');
-        } else {
-            out.push('?');
-        }
-    }
-    out
+/// Replace control whitespace (newline, CR, tab) with a space. Everything else
+/// is kept: the embedded Type0 fonts carry real Unicode glyphs.
+pub fn normalize_pdf_text(text: &str) -> String {
+    text.chars()
+        .map(|ch| {
+            if matches!(ch, '\n' | '\r' | '\t') {
+                ' '
+            } else {
+                ch
+            }
+        })
+        .collect()
 }
 
 /// Approximate text advance using embedded TTF metrics at the given size.
@@ -188,14 +143,13 @@ pub fn text_advance_pt(alias: &str, text: &str, size_pt: f32) -> f32 {
     let scale = size_pt.max(1.0) / upm;
     let mut advance = 0.0_f32;
     for ch in text.chars() {
-        if let Some(gid) = face.glyph_index(ch) {
-            advance += face
-                .glyph_hor_advance(gid)
-                .map(|v| v as f32 * scale)
-                .unwrap_or(upm * scale * 0.5);
-        } else {
-            advance += upm * scale * 0.5;
-        }
+        // A character the face lacks is drawn as `.notdef` (glyph 0), so
+        // measure that glyph's real advance, matching the PDF's /W array.
+        let gid = face.glyph_index(ch).unwrap_or(ttf_parser::GlyphId(0));
+        advance += face
+            .glyph_hor_advance(gid)
+            .map(|v| v as f32 * scale)
+            .unwrap_or(upm * scale * 0.5);
     }
     advance
 }
@@ -221,52 +175,6 @@ fn glyph_coverage(font: PdfFont, text: &str) -> f32 {
         1.0
     } else {
         ok as f32 / total as f32
-    }
-}
-
-/// A catalog of fonts used in the PDF, mapped to their pdf-writer Refs.
-#[derive(Debug, Default)]
-pub struct FontCatalog {
-    fonts: Vec<(PdfFont, Ref)>,
-}
-
-impl FontCatalog {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Register a font, returning its Ref. Same font registered twice returns
-    /// the same Ref.
-    ///
-    /// MD-35: `base_ref` is the first Ref id this catalog is allowed to
-    /// hand out — callers reserve a contiguous range starting there.
-    /// The previous hard-coded base of `100` collided with the page-tree
-    /// allocator once the sheet count exceeded ~97.
-    pub fn register(&mut self, font: PdfFont, base_ref: i32) -> Ref {
-        if let Some((_, ref_id)) = self.fonts.iter().find(|(f, _)| f == &font) {
-            return *ref_id;
-        }
-        let ref_id = Ref::new(base_ref + self.fonts.len() as i32);
-        self.fonts.push((font, ref_id));
-        ref_id
-    }
-
-    /// Get the Ref for a registered font, or None.
-    pub fn get(&self, font: PdfFont) -> Option<Ref> {
-        self.fonts.iter().find(|(f, _)| f == &font).map(|(_, r)| *r)
-    }
-
-    /// Iterate over all registered fonts.
-    pub fn iter(&self) -> impl Iterator<Item = (PdfFont, Ref)> + '_ {
-        self.fonts.iter().copied()
-    }
-
-    /// Get all embedded font bytes for later embedding. Maps font to its TTF bytes.
-    pub fn font_data(&self) -> Vec<(PdfFont, &'static [u8])> {
-        self.fonts
-            .iter()
-            .map(|(font, _)| (*font, font.font_bytes()))
-            .collect()
     }
 }
 
@@ -300,13 +208,17 @@ mod tests {
     }
 
     #[test]
-    fn aliases_and_standard_fallbacks() {
+    fn aliases_round_trip() {
+        for font in PdfFont::ALL {
+            assert_eq!(font_for_alias(font.alias()), font);
+        }
         assert_eq!(PdfFont::RobotoRegular.alias(), "F1");
         assert_eq!(PdfFont::IosevkaBold.alias(), "F4");
-        assert_eq!(PdfFont::RobotoRegular.standard_ps_name(), "Helvetica");
-        assert_eq!(PdfFont::RobotoBold.standard_ps_name(), "Helvetica-Bold");
-        assert_eq!(PdfFont::IosevkaRegular.standard_ps_name(), "Courier");
-        assert_eq!(PdfFont::IosevkaBold.standard_ps_name(), "Courier-Bold");
+    }
+
+    #[test]
+    fn normalize_keeps_unicode_and_flattens_whitespace() {
+        assert_eq!(normalize_pdf_text("10µF\n±5%\tÖ"), "10µF ±5% Ö");
     }
 
     #[test]
@@ -318,63 +230,11 @@ mod tests {
     }
 
     #[test]
-    fn font_catalog_registers_unique() {
-        let mut cat = FontCatalog::new();
-        let r1 = cat.register(PdfFont::RobotoRegular, 100);
-        let r2 = cat.register(PdfFont::RobotoRegular, 100);
-        assert_eq!(r1, r2);
-        let r3 = cat.register(PdfFont::RobotoBold, 100);
-        assert_ne!(r1, r3);
-    }
-
-    #[test]
-    fn font_catalog_get_retrieves() {
-        let mut cat = FontCatalog::new();
-        cat.register(PdfFont::RobotoRegular, 100);
-        assert!(cat.get(PdfFont::RobotoRegular).is_some());
-        assert!(cat.get(PdfFont::RobotoBold).is_none());
-    }
-
-    #[test]
     fn fonts_parse_successfully() {
         assert!(PdfFont::RobotoRegular.face().is_some());
         assert!(PdfFont::RobotoBold.face().is_some());
         assert!(PdfFont::IosevkaRegular.face().is_some());
         assert!(PdfFont::IosevkaBold.face().is_some());
-    }
-
-    #[test]
-    fn embeds_roboto_font() {
-        // Test that the font catalog can register and reference a font
-        let mut cat = FontCatalog::new();
-        let roboto_ref = cat.register(PdfFont::RobotoRegular, 100);
-
-        // Verify the font is registered
-        assert!(cat.get(PdfFont::RobotoRegular).is_some());
-        assert_eq!(cat.get(PdfFont::RobotoRegular), Some(roboto_ref));
-
-        // Verify font metadata is accessible
-        let face = PdfFont::RobotoRegular.face().expect("Roboto should parse");
-        assert!(face.ascender() != 0, "Font should have ascender");
-    }
-
-    #[test]
-    fn font_bytes_are_valid_ttf() {
-        // Verify all embedded fonts parse as valid TTF
-        assert!(PdfFont::RobotoRegular.face().is_some());
-        assert!(PdfFont::RobotoBold.face().is_some());
-        assert!(PdfFont::IosevkaRegular.face().is_some());
-        assert!(PdfFont::IosevkaBold.face().is_some());
-
-        // Verify font data method returns all registered fonts
-        let mut cat = FontCatalog::new();
-        cat.register(PdfFont::RobotoRegular, 100);
-        cat.register(PdfFont::IosevkaRegular, 100);
-
-        let font_data = cat.font_data();
-        assert_eq!(font_data.len(), 2);
-        assert!(!font_data[0].1.is_empty());
-        assert!(!font_data[1].1.is_empty());
     }
 
     #[test]

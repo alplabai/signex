@@ -242,15 +242,22 @@ impl Signex {
     }
 
     /// Re-derive the cached project netlist off the shared sheet view (rooted at
-    /// the active sheet) and surface any stitch issues in the Messages panel.
+    /// the project's root sheet) and surface any stitch issues in the Messages panel.
     /// A cheap no-op while the cache is still valid.
     pub(crate) fn refresh_project_netlist(&mut self) {
         if self.ui_state.project_netlist.is_some() {
             return;
         }
-        let Some(active_path) = self.document_state.active_path.clone() else {
+        let Some(root_path) =
+            crate::app::project_sheets::resolve_netlist_root(&self.document_state)
+        else {
             return;
         };
+        if let Some(warning) =
+            crate::app::project_sheets::netlist_root_fallback_warning(&self.document_state)
+        {
+            crate::diagnostics::log_warning(warning);
+        }
         // The same assembler the export uses, so the canvas/ERC netlist and
         // the exported one cannot disagree about what the project consists of.
         // This path used to take "every open engine + the declared pages",
@@ -259,14 +266,14 @@ impl Signex {
         // "could not be found" warning here while the export stitched it in
         // without complaint (#406).
         //
-        // Rooted at the active sheet, not the project root — this netlist
-        // backs NET_NAME() on the canvas you are looking at. The declared page
-        // set is deliberately not seeded: pages the active sheet does not
-        // reach are not part of *its* netlist.
+        // Rooted at the project's declared root sheet, not the focused tab
+        // (#338): a child sheet in focus must not shrink the netlist to its
+        // own subtree. A loose document (or a project with no declared root)
+        // roots at the active sheet — see `resolve_netlist_root`.
         let set = crate::app::project_sheets::assemble_project_sheets(
             &self.document_state,
             &[],
-            &active_path,
+            &root_path,
         );
         let project_dir = self
             .document_state
@@ -274,15 +281,15 @@ impl Signex {
             .map(|p| p.dir().to_path_buf());
         let base_dir = project_dir
             .clone()
-            .or_else(|| active_path.parent().map(std::path::PathBuf::from));
+            .or_else(|| root_path.parent().map(std::path::PathBuf::from));
         let graph = crate::app::project_sheets::project_graph(
             &set.sheets,
             base_dir.as_deref(),
-            Some(&active_path),
+            Some(&root_path),
         );
-        let root_key = crate::app::project_sheets::sheet_key(&active_path, base_dir.as_deref());
+        let root_key = crate::app::project_sheets::sheet_key(&root_path, base_dir.as_deref());
         if !graph.sheets.contains_key(&root_key) {
-            // The active sheet is exempt from losing a SheetKey collision
+            // The root sheet is exempt from losing a SheetKey collision
             // (#536), so reaching here means it was never assembled at
             // all. Report what the assembler did find, and say why the
             // netlist is not being refreshed: the success path below logs
@@ -295,9 +302,9 @@ impl Signex {
                 ));
             }
             crate::diagnostics::log_warning(format!(
-                "Netlist: active sheet '{}' is not part of the assembled project, so the \
+                "Netlist: root sheet '{}' is not part of the assembled project, so the \
                  project netlist was not refreshed",
-                active_path.display()
+                root_path.display()
             ));
             return;
         }
@@ -485,6 +492,99 @@ mod tests {
         assert!(
             written.contains("R?"),
             "the on-disk child's duplicate R1 must have been reset: {written}"
+        );
+    }
+
+    /// Project `top` -> `child`, both open, `child` focused.
+    fn app_with_the_child_tab_focused() -> Signex {
+        use crate::app::handlers::menu::export::tests as fx;
+        let dir = std::path::PathBuf::from("/w/rooted");
+        let mut app = fx::app_workspace(&dir.to_string_lossy(), &["top.snxsch"]);
+        let top = dir.join("top.snxsch");
+        let child = dir.join("child.snxsch");
+        fx::open_with(
+            &mut app.document_state,
+            &top,
+            fx::sheet_with_net("R_TOP", "TOP_NET", &["child.snxsch"]),
+        );
+        fx::open_with(
+            &mut app.document_state,
+            &child,
+            fx::sheet_with_net("R_CHILD", "CHILD_NET", &[]),
+        );
+        app.document_state.active_path = Some(child);
+        app
+    }
+
+    fn cached_net_names(app: &Signex) -> Vec<String> {
+        app.ui_state
+            .project_netlist
+            .as_ref()
+            .expect("the netlist must be cached")
+            .netlist
+            .nets
+            .iter()
+            .map(|n| n.name.clone())
+            .collect()
+    }
+
+    #[test]
+    fn the_cached_netlist_is_rooted_at_the_project_not_the_focused_child() {
+        // #338: with the child tab focused, the netlist used to be rooted at
+        // the child and silently lost every net that only the parent carries.
+        let mut app = app_with_the_child_tab_focused();
+
+        app.refresh_project_netlist();
+
+        let names = cached_net_names(&app);
+        assert!(names.contains(&"TOP_NET".to_string()), "{names:?}");
+        assert!(names.contains(&"CHILD_NET".to_string()), "{names:?}");
+    }
+
+    #[test]
+    fn a_loose_document_roots_the_netlist_at_itself() {
+        // The explicit fallback: no owning project -> the active sheet.
+        use crate::app::handlers::menu::export::tests as fx;
+        let (mut app, _task) = Signex::new();
+        let loose = std::path::PathBuf::from("/w/loose/scratch.snxsch");
+        fx::open_with(
+            &mut app.document_state,
+            &loose,
+            fx::sheet_with_net("R_L", "LOOSE_NET", &[]),
+        );
+        app.document_state.active_path = Some(loose.clone());
+
+        assert_eq!(
+            crate::app::project_sheets::resolve_netlist_root(&app.document_state),
+            Some(loose)
+        );
+        app.refresh_project_netlist();
+        assert!(cached_net_names(&app).contains(&"LOOSE_NET".to_string()));
+    }
+
+    #[test]
+    fn a_project_without_a_declared_root_falls_back_to_the_active_sheet() {
+        let mut app = app_with_the_child_tab_focused();
+        app.document_state.projects[0].data.schematic_root = None;
+        let child = std::path::PathBuf::from("/w/rooted/child.snxsch");
+
+        assert_eq!(
+            crate::app::project_sheets::resolve_netlist_root(&app.document_state),
+            Some(child)
+        );
+        let warning =
+            crate::app::project_sheets::netlist_root_fallback_warning(&app.document_state)
+                .expect("a rootless project warns");
+        assert!(warning.contains("declares no root sheet"), "{warning}");
+        assert!(warning.contains("child.snxsch"), "{warning}");
+    }
+
+    #[test]
+    fn a_declared_root_or_a_loose_document_raises_no_fallback_warning() {
+        let app = app_with_the_child_tab_focused();
+        assert_eq!(
+            crate::app::project_sheets::netlist_root_fallback_warning(&app.document_state),
+            None
         );
     }
 }

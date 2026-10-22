@@ -382,6 +382,27 @@ impl Engine {
                 self.record_history(before, patch_pair);
                 Ok(CommandResult::changed(patch_pair))
             }
+            Command::RenameChildSheetFile { from, to } => {
+                let mut changed = false;
+                for child in self
+                    .document
+                    .child_sheets
+                    .iter_mut()
+                    .filter(|child| child.filename == from)
+                {
+                    child.filename = to.clone();
+                    changed = true;
+                }
+                if !changed {
+                    return Ok(CommandResult::unchanged());
+                }
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::SheetFileRenamed,
+                    document: DocumentPatch::CHILD_SHEETS,
+                };
+                self.record_history(before, patch_pair);
+                Ok(CommandResult::changed(patch_pair))
+            }
             Command::SetPaperSize { paper_size } => {
                 if self.document.paper_size == paper_size {
                     return Ok(CommandResult::unchanged());
