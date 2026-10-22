@@ -216,9 +216,8 @@ impl LibraryAdapter for LocalGitAdapter {
             return Err(LibraryError::Backend("table name cannot be empty".into()));
         }
         // Reject the same characters we reject elsewhere for filenames /
-        // identifiers — keeps round-trips through the TOML key safe and
-        // avoids surprising the user with a name they can't see in
-        // their file browser.
+        // identifiers — avoids surprising the user with a name they can't
+        // see in their file browser.
         if trimmed.chars().any(|c| {
             matches!(
                 c,
