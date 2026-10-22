@@ -155,7 +155,7 @@ jobs:
 
       # Advisories are informational, not a merge gate: they fire on newly
       # published RUSTSEC entries against the shared Cargo.lock (mostly
-      # transitive GUI-stack crates like quick-xml / ttf-parser pinned deep
+      # transitive GUI-stack crates like ttf-parser / rustybuzz pinned deep
       # in iced/winit) with no code change on our side. Surface them as an
       # annotation; criticals are addressed by a human, not by blocking CI.
       # (deny.toml documents this same intent; `licenses` above stays hard.)

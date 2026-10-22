@@ -58,6 +58,9 @@ default = []
 ai-stub = ["dep:pdf-extract", "dep:regex"]
 search-tantivy = ["dep:tantivy"]
 local-git = ["dep:git2", "dep:walkdir"]
+# Hermetic commit identity for tests that make real git commits; see
+# `git_identity::test_identity`. Enabled only through dev-dependencies.
+test-identity = ["local-git"]
 database = ["dep:reqwest"]
 distributors-community = [
     "dep:keyring",
@@ -68,6 +71,7 @@ distributors-community = [
 ]
 
 [dev-dependencies]
+signex-library = { path = ".", features = ["test-identity"] }
 tempfile = "3"
 pdf-writer = { workspace = true }
 tokio = { workspace = true }

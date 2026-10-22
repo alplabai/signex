@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use signex_output::{ExportContext, ProjectMetadata, SheetSnapshot};
 
 mod bom;
+mod erc_report;
 mod pdf_netlist;
 mod print_preview;
 #[cfg(test)]
@@ -275,6 +276,10 @@ fn build_export_scope(
     // happened to be looking at — same intent, two different .net files, no
     // way to tell them apart. Active-path rooting stays on the loose-document
     // path, where the active document *is* the whole scope.
+    if let Some(warning) = crate::app::project_sheets::netlist_root_fallback_warning(document_state)
+    {
+        crate::diagnostics::log_warning(warning);
+    }
     let (pages, sheet_set) =
         crate::app::project_sheets::assemble_active_project_sheets(document_state);
 

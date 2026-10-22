@@ -64,7 +64,7 @@ impl Signex {
             )
         };
 
-        // Per-rule severity grid. 11 rules × 4 severities.
+        // Per-rule severity grid: one row per built-in rule × 4 severities.
         let mut rule_rows = column![
             row![
                 text("Rule")
@@ -79,7 +79,7 @@ impl Signex {
             .padding([4, 8]),
         ]
         .spacing(0);
-        for rule in ALL_RULES {
+        for rule in &signex_erc::RuleKind::ALL {
             let current = self
                 .ui_state
                 .erc_severity_override
@@ -228,21 +228,6 @@ fn severity_segmented(
     .spacing(2)
     .into()
 }
-
-const ALL_RULES: &[signex_erc::RuleKind] = &[
-    signex_erc::RuleKind::UnusedPin,
-    signex_erc::RuleKind::DuplicateRefDesignator,
-    signex_erc::RuleKind::HierPortDisconnected,
-    signex_erc::RuleKind::DanglingWire,
-    signex_erc::RuleKind::NetLabelConflict,
-    signex_erc::RuleKind::OrphanLabel,
-    signex_erc::RuleKind::BusBitWidthMismatch,
-    signex_erc::RuleKind::BadHierSheetPin,
-    signex_erc::RuleKind::MissingPowerFlag,
-    signex_erc::RuleKind::PowerPortShort,
-    signex_erc::RuleKind::SymbolOutsideSheet,
-    signex_erc::RuleKind::AmbiguousLabelAnchor,
-];
 
 /// Pin-connection matrix. Click a cell to cycle Error → Warning →
 /// Info → Off → baseline. Overrides persist via

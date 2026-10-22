@@ -18,6 +18,7 @@ use signex_library::adapters::local_git_project::LocalGitProjectAdapter;
 use tempfile::TempDir;
 
 fn write_file(root: &Path, rel: &str, content: &str) {
+    signex_library::git_identity::test_identity::install();
     let abs = root.join(rel);
     if let Some(parent) = abs.parent() {
         fs::create_dir_all(parent).unwrap();
