@@ -11,6 +11,7 @@ use signex_types::schematic::SchematicSheet;
 use thiserror::Error;
 
 pub mod bom;
+pub mod erc;
 mod expression;
 pub mod netlist;
 pub mod pdf;
@@ -23,6 +24,10 @@ pub use bom::{
     BomColumn, BomError, BomExporter, BomFormat, BomGrouping, BomIssueSeverity, BomMetadata,
     BomOptions, BomOutput, BomRow, BomRule, BomRuleOptions, BomTable, BomValidationIssue,
     BomValidationReport, rollup,
+};
+pub use erc::{
+    ErcReportError, ErcReportExporter, ErcReportFormat, ErcReportOptions, ErcReportOutput,
+    ErcReportRow, ErcReportSeverity,
 };
 pub use netlist::{NetlistExporter, NetlistOptions, NetlistOutput};
 pub use pdf::{
@@ -93,6 +98,9 @@ pub enum ExportError {
 
     #[error("netlist: {0}")]
     Netlist(#[from] netlist::NetlistError),
+
+    #[error("erc report: {0}")]
+    Erc(#[from] erc::ErcReportError),
 
     #[error("template: {0}")]
     Template(#[from] template::TemplateError),

@@ -101,6 +101,7 @@ pub enum MenuMessage {
     ExportPdf,
     ExportNetlist,
     ExportBom,
+    ExportErcReport,
     /// File ▸ Exit — closes the main window via the same path as the
     /// chrome ✕ button (`Message::Window(WindowMsg::CloseMainWindow)`). Wired through
     /// `handle_menu_file_command`.
@@ -342,6 +343,15 @@ fn cmd_label(command_id: &str, fallback: &str) -> String {
         .and_then(|command| crate::keymap::metadata_for(&command))
         .map(|meta| meta.menu_label().to_string())
         .unwrap_or_else(|| fallback.to_string())
+}
+
+/// Menu path of the Run ERC command, built from the same command label and
+/// menu the Design menu uses so a message naming it cannot drift.
+pub(crate) fn run_erc_menu_path() -> String {
+    format!(
+        "Design ▸ {}",
+        cmd_label("run_erc", "Electrical Rules Check")
+    )
 }
 
 fn shortcut_for(ctx: &MenuContext, command_id: &str, fallback: &str) -> Option<String> {
