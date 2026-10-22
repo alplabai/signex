@@ -20,7 +20,7 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ### Added — schematic
 
-- **Sync Sheet Pins (#359)** — right-clicking a selected sheet symbol now offers "Sync Sheet Pins", which reconciles its pins with the child schematic's Hierarchical and Global labels (live tab if open, else the file on disk) through `Command::ReconcileChildSheetPins`, so it is one undo step and refreshes the netlist. New pins take their label's shape as direction (bidirectional if none); existing pins keep their direction, and moved or hand-added pins are preserved. A missing or unparseable child, or one with no port labels, is reported in the Messages panel.
+- **Sync Sheet Pins (#359)** — right-clicking a selected sheet symbol now offers "Sync Sheet Pins", which reconciles its pins with the child schematic's Hierarchical and Global labels (live tab if open, else the file on disk) through `Command::ReconcileChildSheetPins`, so it is one undo step and refreshes the netlist. New pins take their label's shape as direction (bidirectional if none); existing pins keep their direction, and moved or hand-added pins are preserved. A child with no port labels still reconciles (dropping the auto-generated pins its deleted labels left behind) and is reported in the Messages panel, as is a missing or unparseable child. Port names are trimmed the same way by the sync, the project netlist stitcher and the ERC hierarchy rule.
 
 
 ### Added — start screen

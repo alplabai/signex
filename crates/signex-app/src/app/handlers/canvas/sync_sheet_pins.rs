@@ -39,16 +39,13 @@ impl crate::app::Signex {
             }
         };
         let Some(parent) = self.document_state.active_engine().map(|e| e.document()) else {
+            crate::diagnostics::log_warning("Sync Sheet Pins: no active schematic to sync");
             return;
         };
         let ports = signex_engine::ports_for_pin_sync(&child, parent, &filename);
-        if ports.is_empty() {
-            crate::diagnostics::log_warning(format!(
-                "Sync Sheet Pins: '{filename}' has no hierarchical or global labels, \
-                 so no sheet pins were changed"
-            ));
-            return;
-        }
+        // A child with no ports must still be reconciled: that is what drops
+        // the auto-generated pins its deleted labels left behind.
+        let exposes_no_ports = ports.is_empty();
         let changed = self.apply_engine_command(
             signex_engine::Command::ReconcileChildSheetPins {
                 child_filename: filename.clone(),
@@ -57,7 +54,17 @@ impl crate::app::Signex {
             true,
             true,
         );
-        if changed {
+        if exposes_no_ports {
+            crate::diagnostics::log_warning(format!(
+                "Sync Sheet Pins: '{filename}' has no hierarchical or global labels, \
+                 so it exposes no ports{}",
+                if changed {
+                    "; its auto-generated sheet pins were removed"
+                } else {
+                    ""
+                }
+            ));
+        } else if changed {
             crate::diagnostics::log_info(format!("Sync Sheet Pins: updated pins for '{filename}'"));
         } else {
             crate::diagnostics::log_info(format!(

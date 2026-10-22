@@ -305,17 +305,72 @@ fn unparseable_child_file_reports_a_message_and_changes_nothing() {
 }
 
 #[test]
-fn child_without_port_labels_reports_a_message_and_changes_nothing() {
+fn child_without_port_labels_drops_auto_pins_keeps_manual_and_reports() {
     setup_logger();
     let mut child = empty_sheet();
     child.labels = vec![label("LOCAL_ONLY", LabelType::Net, "")];
     let mut f = fixture(Some(child));
-    let before = pins_of(&f).len();
 
     sync(&mut f.app);
 
-    assert_eq!(pins_of(&f).len(), before);
-    assert!(panel_has(&f.app, "has no hierarchical or global labels"));
+    let pins = pins_of(&f);
+    assert_eq!(
+        sorted_names(&pins),
+        vec!["MANUAL".to_string()],
+        "auto-generated OLD_AUTO and MOVED go, the hand-added pin stays"
+    );
+    assert!(panel_has(&f.app, "exposes no ports"));
+}
+
+#[test]
+fn deleting_the_last_child_label_drops_its_stale_auto_pin_and_the_erc_finding() {
+    setup_logger();
+    let mut child = empty_sheet();
+    child.labels = vec![label("SDA", LabelType::Hierarchical, "")];
+    let mut f = fixture(Some(child));
+    sync(&mut f.app);
+    assert!(named(&pins_of(&f), "SDA").is_some(), "SDA pin created");
+
+    // The user deletes the only label in the child and saves it.
+    write_sheet(&f.child_path, empty_sheet());
+    sync(&mut f.app);
+    let _ = f.app.update(Message::Erc(ErcMsg::Run));
+
+    assert!(
+        named(&pins_of(&f), "SDA").is_none(),
+        "stale auto pin SDA dropped"
+    );
+    let after = hier_pin_messages(&f.app);
+    assert!(
+        !after.iter().any(|m| m.contains("'SDA'")),
+        "ERC no longer reports SDA, got {after:?}"
+    );
+}
+
+#[test]
+fn padded_label_is_cleared_by_erc_and_synced_under_the_trimmed_name() {
+    setup_logger();
+    let mut child = empty_sheet();
+    child.labels = vec![label(" CLK ", LabelType::Hierarchical, "")];
+    let mut f = fixture(Some(child));
+
+    sync(&mut f.app);
+    let _ = f.app.update(Message::Erc(ErcMsg::Run));
+
+    let pins = pins_of(&f);
+    assert!(
+        named(&pins, "CLK").is_some(),
+        "synced under the trimmed name"
+    );
+    assert!(named(&pins, " CLK ").is_none());
+    let after = hier_pin_messages(&f.app);
+    assert!(
+        !after.iter().any(|m| m.contains("'CLK'")),
+        "ERC treats the padded label as bound, got {after:?}"
+    );
+    // A second sync is a no-op: the pin the first one made already matches.
+    sync(&mut f.app);
+    assert_eq!(pins_of(&f).len(), pins.len());
 }
 
 fn hier_pin_messages(app: &Signex) -> Vec<String> {

@@ -39,7 +39,7 @@ use std::collections::{HashMap, HashSet};
 
 use signex_types::designator::compare_references;
 use signex_types::net::{Net, NetId, Netlist, Terminal};
-use signex_types::schematic::{Label, LabelType, Point, SchematicSheet};
+use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, normalize_port_name};
 use uuid::Uuid;
 
 use crate::build::{
@@ -305,9 +305,6 @@ pub fn build_project_netlist(graph: &ProjectGraph) -> ProjectNetlist {
         let parent_a = &analyses[parent_occ];
         let child_a = &analyses[child_occ];
         for (pin_name, pin_root) in &parent_a.pin_roots[cs_index] {
-            if pin_name.is_empty() {
-                continue;
-            }
             if let Some(child_roots) = child_a.port_labels.get(pin_name) {
                 for &cr in child_roots {
                     uf_union(&mut l2, (parent_occ, *pin_root), (child_occ, cr));
@@ -496,7 +493,10 @@ fn analyze(sheet: &SchematicSheet) -> Analysis<'_> {
         .map(|cs| {
             cs.pins
                 .iter()
-                .map(|sp| (sp.name.clone(), uf_find(&mut parent, pt_key(&sp.position))))
+                .filter_map(|sp| {
+                    let name = normalize_port_name(&sp.name)?;
+                    Some((name.to_string(), uf_find(&mut parent, pt_key(&sp.position))))
+                })
                 .collect()
         })
         .collect();
@@ -504,12 +504,10 @@ fn analyze(sheet: &SchematicSheet) -> Analysis<'_> {
     let mut port_labels: HashMap<String, Vec<Key>> = HashMap::new();
     for (root, labels) in &net_labels {
         for l in labels {
-            if l.text.is_empty()
-                || !matches!(l.label_type, LabelType::Hierarchical | LabelType::Global)
-            {
+            let Some(name) = l.port_name() else {
                 continue;
-            }
-            port_labels.entry(l.text.clone()).or_default().push(*root);
+            };
+            port_labels.entry(name.to_string()).or_default().push(*root);
         }
     }
 

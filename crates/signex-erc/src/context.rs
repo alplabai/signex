@@ -111,6 +111,14 @@ pub struct ErcLabel {
     pub label_type: LabelType,
 }
 
+impl ErcLabel {
+    /// The sheet-port name this label exposes, via the shared
+    /// `signex_types` predicate + normaliser (see `Label::port_name`).
+    pub fn port_name(&self) -> Option<&str> {
+        signex_types::schematic::sheet_port_name(self.label_type, &self.text)
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct ErcJunction {
     pub position: Point,

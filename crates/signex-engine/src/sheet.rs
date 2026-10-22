@@ -1,4 +1,6 @@
-use signex_types::schematic::{ChildSheet, GRID_MM, LabelType, SchematicSheet, SheetPin};
+use signex_types::schematic::{
+    ChildSheet, GRID_MM, LabelType, SchematicSheet, SheetPin, normalize_port_name,
+};
 
 use crate::command::SheetPort;
 
@@ -21,14 +23,10 @@ pub fn exposed_sheet_ports(child: &SchematicSheet) -> Vec<SheetPort> {
         std::collections::BTreeMap::new();
 
     for label in &child.labels {
-        let Some(priority) = port_label_priority(label.label_type) else {
+        let Some(name) = label.port_name() else {
             continue;
         };
-
-        let name = label.text.trim();
-        if name.is_empty() {
-            continue;
-        }
+        let priority = port_label_priority(label.label_type);
 
         let direction = normalize_sheet_pin_direction(&label.shape).to_string();
 
@@ -66,7 +64,7 @@ pub fn ports_for_pin_sync(
             .iter()
             .filter(|symbol| symbol.filename == child_filename)
             .flat_map(|symbol| symbol.pins.iter())
-            .find(|pin| pin.name == port.name);
+            .find(|pin| normalize_port_name(&pin.name) == Some(port.name.as_str()));
         if let Some(pin) = existing {
             port.direction = pin.direction.clone();
         }
@@ -78,11 +76,11 @@ pub fn ports_for_pin_sync(
 // Sheet-pin helpers (used by sheet.rs and transform.rs)
 // ---------------------------------------------------------------------------
 
-fn port_label_priority(label_type: LabelType) -> Option<u8> {
+/// Lower wins. Only called for labels `Label::port_name` accepted.
+fn port_label_priority(label_type: LabelType) -> u8 {
     match label_type {
-        LabelType::Hierarchical => Some(0),
-        LabelType::Global => Some(1),
-        _ => None,
+        LabelType::Hierarchical => 0,
+        _ => 1,
     }
 }
 
@@ -262,3 +260,6 @@ pub(crate) fn reconcile_child_sheet_pins(child: &mut ChildSheet, ports: &[SheetP
     reason = "the re-export exists so `SchematicSheet` resolves via `super` in this module's paths"
 )]
 use SchematicSheet as _;
+
+#[cfg(test)]
+mod tests;
