@@ -43,7 +43,8 @@ pub use contracts::{
 };
 pub use documents::{
     ComponentEditorTab, DrawMode, FootprintEditorState, GraphicFillPicker, LocalColorPicker,
-    LocalColorSlot, SchematicTabSession, SymbolEditorState, TabDocument, TabInfo, TabKind, Tool,
+    LocalColorSlot, SchematicTabSession, SymbolEditorState, SymbolViewRequest, TabDocument,
+    TabInfo, TabKind, Tool,
 };
 pub use state::{
     DocumentState, InteractionState, KeymapRecorderState, LoadedProject, ProjectId, Signex, UiState,
