@@ -75,7 +75,7 @@ pub enum ExprAst {
     Or(Box<ExprAst>, Box<ExprAst>),
     Not(Box<ExprAst>),
     /// `name(arg, …)` — built-in predicate helper.
-    /// Examples: `has_driver()`, `has_pin_kind(OpenDrain)`.
+    /// Examples: `has_driver()`, `has_pin_kind(OpenCollector)`.
     HelperCall {
         name: String,
         args: Vec<LiteralAst>,

@@ -250,11 +250,7 @@ impl DigiKeyAuth {
 }
 
 fn build_http_client() -> reqwest::blocking::Client {
-    reqwest::blocking::Client::builder()
-        .user_agent("signex-library/0.9 (+https://signex.dev)")
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .expect("reqwest::blocking::Client::build is infallible with default opts")
+    super::http::finish(super::http::client_builder().redirect(reqwest::redirect::Policy::none()))
 }
 
 // ---------------------------------------------------------------------------
@@ -325,16 +321,7 @@ impl DigiKeyAdapter {
     }
 
     fn polite_wait(&self) {
-        let mut guard = self.throttle.lock().expect("throttle mutex poisoned");
-        if let Some(prev) = *guard {
-            let elapsed = prev.elapsed();
-            if elapsed < THROTTLE_INTERVAL {
-                drop(guard);
-                std::thread::sleep(THROTTLE_INTERVAL - elapsed);
-                guard = self.throttle.lock().expect("throttle mutex poisoned");
-            }
-        }
-        *guard = Some(Instant::now());
+        super::throttle::polite_wait(&self.throttle, THROTTLE_INTERVAL);
     }
 
     fn resolve_access_token(&self) -> Result<String, DistributorError> {

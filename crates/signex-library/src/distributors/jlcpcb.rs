@@ -37,10 +37,7 @@ impl JlcpcbAdapter {
             base_url: JLCPCB_DEFAULT_BASE.into(),
             cache,
             throttle: Mutex::new(None),
-            http: reqwest::blocking::Client::builder()
-                .user_agent("signex-library/0.9 (+https://signex.dev)")
-                .build()
-                .expect("reqwest::blocking::Client::build is infallible with default opts"),
+            http: super::http::build_client(),
         }
     }
 
@@ -49,24 +46,12 @@ impl JlcpcbAdapter {
             base_url: base_url.into(),
             cache,
             throttle: Mutex::new(None),
-            http: reqwest::blocking::Client::builder()
-                .user_agent("signex-library/0.9 (+https://signex.dev)")
-                .build()
-                .expect("reqwest::blocking::Client::build is infallible with default opts"),
+            http: super::http::build_client(),
         }
     }
 
     fn polite_wait(&self) {
-        let mut guard = self.throttle.lock().expect("throttle mutex poisoned");
-        if let Some(prev) = *guard {
-            let elapsed = prev.elapsed();
-            if elapsed < THROTTLE_INTERVAL {
-                drop(guard);
-                std::thread::sleep(THROTTLE_INTERVAL - elapsed);
-                guard = self.throttle.lock().expect("throttle mutex poisoned");
-            }
-        }
-        *guard = Some(Instant::now());
+        super::throttle::polite_wait(&self.throttle, THROTTLE_INTERVAL);
     }
 
     fn http_post_json<B: serde::Serialize, T: for<'de> Deserialize<'de>>(

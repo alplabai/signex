@@ -136,4 +136,105 @@ mod tests {
             "expected InvalidRegex error"
         );
     }
+
+    fn pin_context(kinds: &[PinDirection]) -> ErcContext {
+        let mut ctx = sample_context();
+        ctx.symbols[0].pins = kinds
+            .iter()
+            .map(|&electrical_type| ErcPin {
+                world_pos: Point::new(10.0, 10.0),
+                electrical_type,
+                required: true,
+                connected: false,
+            })
+            .collect();
+        ctx
+    }
+
+    fn hits(src: &str, ctx: &ErcContext) -> usize {
+        let eval_fns =
+            parse_validate_compile_to_eval_fns(src).unwrap_or_else(|e| panic!("{src}: {e:?}"));
+        eval_fns[0](ctx).len()
+    }
+
+    /// #676: `pin.kind` accepts every spelling `has_pin_kind` accepts.
+    #[test]
+    fn pin_kind_comparison_accepts_the_has_pin_kind_aliases() {
+        let ctx = pin_context(&[
+            PinDirection::PowerInput,
+            PinDirection::ThreeStatable,
+            PinDirection::OpenDrainLow,
+        ]);
+        for (literal, matching) in [
+            (r#""power_in""#, 1),
+            ("tristate", 1),
+            (r#""open_collector""#, 1),
+            ("PowerInput", 1),
+            (r#""ThreeStatable""#, 1),
+            ("clock", 0),
+        ] {
+            for (op, expected) in [("==", matching), ("!=", 3 - matching)] {
+                let src = format!(r#"rule r on pin when pin.kind {op} {literal} then error "x""#);
+                assert_eq!(hits(&src, &ctx), expected, "{src}");
+            }
+        }
+    }
+
+    #[test]
+    fn pin_kind_matches_tests_the_canonical_name() {
+        let ctx = pin_context(&[PinDirection::PowerInput, PinDirection::Input]);
+        let src = r#"rule r on pin when pin.kind matches "^Power" then error "x""#;
+        assert_eq!(hits(src, &ctx), 1);
+    }
+
+    /// #676: a pin kind no rule could ever match is a validation error, not a
+    /// rule that silently never fires.
+    #[test]
+    fn unknown_pin_kind_literal_is_rejected() {
+        for (target, when) in [
+            ("net", r#"has_pin_kind("pwr_in")"#),
+            ("pin", r#"pin.kind == "pwr_in""#),
+            ("pin", r#"pin.kind != "pwr_in""#),
+        ] {
+            let src = format!(r#"rule r on {target} when {when} then error "x""#);
+            let Err(errors) = parse_validate_compile(&src) else {
+                panic!("{src} should not compile");
+            };
+            assert!(
+                errors
+                    .iter()
+                    .any(|e| e.to_string().contains("unknown pin kind 'pwr_in'")),
+                "{src}: {errors:?}"
+            );
+        }
+
+        let src = r#"rule r on net when has_pin_kind("output") then error "x""#;
+        assert_eq!(
+            hits(src, &sample_context()),
+            1,
+            "a known kind still compiles"
+        );
+    }
+
+    /// The compiler resolves pin kinds itself, so an unknown one fails even
+    /// through `compile()`, which does not run the validator.
+    #[test]
+    fn compile_rejects_unknown_pin_kind_without_validation() {
+        for (target, when) in [
+            ("net", r#"has_pin_kind("pwr_in")"#),
+            ("pin", r#"pin.kind != "pwr_in""#),
+        ] {
+            let src = format!(r#"rule r on {target} when {when} then error "x""#);
+            let rules = parse(&src).expect("parses");
+            let Err(errors) = compile(&rules) else {
+                panic!("{src} should not compile");
+            };
+            assert!(
+                errors
+                    .iter()
+                    .any(|e| e.to_string().contains("unknown pin kind 'pwr_in'")),
+                "{src}: {errors:?}"
+            );
+        }
+    }
 }

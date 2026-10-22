@@ -15,7 +15,7 @@
 //! tree.
 
 mod footprint;
-mod symbol;
+pub(crate) mod symbol;
 
 pub use footprint::view_footprint;
 pub use symbol::view_symbol;

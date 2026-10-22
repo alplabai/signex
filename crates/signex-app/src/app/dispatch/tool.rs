@@ -102,6 +102,7 @@ impl Signex {
                 };
                 let uuid = uuid::Uuid::new_v4();
                 let symbol = sch::Symbol {
+                    unknown: Default::default(),
                     uuid,
                     lib_id,
                     reference: String::new(),
