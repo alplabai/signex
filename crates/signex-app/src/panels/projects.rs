@@ -129,6 +129,9 @@ pub struct LibraryNodeInfo {
 /// before (one root). `PanelContext::projects` is the source of truth;
 /// the legacy `project_name` / `sheets` singletons are ignored here so
 /// we never emit a duplicate root for the active project.
+/// Label of the project-tree branch that holds one row per library.
+pub const LIBRARIES_BRANCH_LABEL: &str = "Libraries";
+
 pub fn build_project_tree(ctx: &PanelContext) -> Vec<TreeNode> {
     if ctx.projects.is_empty() {
         return vec![];
@@ -264,7 +267,7 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
     }
     if !lib_children.is_empty() {
         children.push(TreeNode::branch(
-            "Libraries".to_string(),
+            LIBRARIES_BRANCH_LABEL.to_string(),
             TreeIcon::Library,
             lib_children,
         ));
