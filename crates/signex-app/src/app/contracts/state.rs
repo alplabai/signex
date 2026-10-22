@@ -139,6 +139,10 @@ pub struct ProjectCloseConfirmState {
     /// inside the project's directory. They are keyed by row address,
     /// not by file, so `dirty_paths` cannot carry them.
     pub dirty_rows: Vec<crate::library::state::EditorAddress>,
+    /// The child-sheet references the dirty list was attributed with. The
+    /// Save All / Discard All paths reuse them for the engine sweep instead
+    /// of reading the disk again.
+    pub sheet_refs: crate::app::state::sheet_refs::SheetRefs,
 }
 
 /// State for the "Exit Signex — Unsaved Edits" confirmation modal.

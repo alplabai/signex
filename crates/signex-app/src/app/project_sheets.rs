@@ -523,8 +523,41 @@ pub(crate) fn resolve_child_reference(parent_dir: &Path, child_filename: &str) -
     if trimmed.is_empty() {
         return None;
     }
-    let raw = PathBuf::from(trimmed);
-    let resolved = lexically_normalize(&parent_dir.join(&raw));
+    match contained_child_path(parent_dir, trimmed) {
+        Ok(resolved) => Some(resolved),
+        Err((resolved, root)) => {
+            crate::diagnostics::log_error(
+                "Rejected child-sheet reference outside its resolution root",
+                &anyhow::anyhow!(
+                    "'{trimmed}' resolves to {} which escapes {}",
+                    resolved.display(),
+                    if root.as_os_str().is_empty() {
+                        "an empty resolution root".to_string()
+                    } else {
+                        root.display().to_string()
+                    }
+                ),
+            );
+            None
+        }
+    }
+}
+
+/// [`resolve_child_reference`] without the diagnostic: the normalized child
+/// path, or `None` for an empty reference or one that escapes `parent_dir`.
+/// For callers that probe many references and report a summary themselves.
+pub(crate) fn child_reference_in_root(parent_dir: &Path, child_filename: &str) -> Option<PathBuf> {
+    let trimmed = child_filename.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    contained_child_path(parent_dir, trimmed).ok()
+}
+
+/// The containment rule behind both resolvers. `Err` carries the resolved
+/// path and root so the caller can say what escaped what.
+fn contained_child_path(parent_dir: &Path, trimmed: &str) -> Result<PathBuf, (PathBuf, PathBuf)> {
+    let resolved = lexically_normalize(&parent_dir.join(PathBuf::from(trimmed)));
     let root = lexically_normalize(parent_dir);
 
     // A resolved path that leads with a literal ".." (nothing left to pop,
@@ -542,21 +575,9 @@ pub(crate) fn resolve_child_reference(parent_dir: &Path, child_filename: &str) -
         && resolved.starts_with(&root);
 
     if contained {
-        Some(resolved)
+        Ok(resolved)
     } else {
-        crate::diagnostics::log_error(
-            "Rejected child-sheet reference outside its resolution root",
-            &anyhow::anyhow!(
-                "'{trimmed}' resolves to {} which escapes {}",
-                resolved.display(),
-                if root.as_os_str().is_empty() {
-                    "an empty resolution root".to_string()
-                } else {
-                    root.display().to_string()
-                }
-            ),
-        );
-        None
+        Err((resolved, root))
     }
 }
 
@@ -565,7 +586,7 @@ pub(crate) fn resolve_child_reference(parent_dir: &Path, child_filename: &str) -
 /// path to exist). A `..` with nothing left to pop is kept as a literal `..`
 /// component, so a reference that escapes its root still fails the caller's
 /// `starts_with(root)` check instead of silently collapsing onto the root.
-fn lexically_normalize(path: &Path) -> PathBuf {
+pub(crate) fn lexically_normalize(path: &Path) -> PathBuf {
     let mut out = PathBuf::new();
     for component in path.components() {
         match component {

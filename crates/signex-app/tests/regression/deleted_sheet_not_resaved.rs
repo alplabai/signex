@@ -84,10 +84,24 @@ fn open_dirty_sheet(app: &mut Signex, path: &Path, project: ProjectId) {
     app.document_state.dirty_paths.insert(path.to_path_buf());
 }
 
+/// Click Close Project on the first project and complete the off-thread
+/// sheet-reference task the way the iced runtime would: run its body and feed
+/// the result back as the completion message.
 fn close_first_project(app: &mut Signex) {
-    let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+    let project_id = app.document_state.projects[0].id;
+    let task = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
         ProjectTreeAction::CloseProject(vec![0]),
     )));
+    assert_eq!(task.units(), 1, "Close Project must start the resolve task");
+    assert!(
+        app.ui_state.project_close_confirm.is_none(),
+        "the gate must wait for the task, not read the disk in update",
+    );
+    let result = app.resolve_sheet_refs_blocking();
+    let _ = app.update(Message::Project(ProjectMsg::CloseRefsResolved {
+        project_id,
+        result,
+    }));
 }
 
 #[test]
@@ -476,4 +490,123 @@ fn closing_a_project_collects_a_sheet_it_lists_outside_its_directory() {
         .as_ref()
         .expect("closing B must prompt for the sheet it owns");
     assert_eq!(modal.dirty_paths, vec![orphan]);
+}
+
+#[test]
+fn closing_a_project_keeps_a_child_shared_by_two_projects_outside_both_directories() {
+    let tmp = TempDir::new().expect("tempdir");
+    let (a_dir, b_dir, shared_dir) = (
+        tmp.path().join("A"),
+        tmp.path().join("B"),
+        tmp.path().join("shared"),
+    );
+    for dir in [&a_dir, &b_dir, &shared_dir] {
+        std::fs::create_dir_all(dir).expect("mkdir");
+    }
+    let shared = shared_dir.join("s.snxsch");
+    let shared_ref = shared.to_str().expect("utf8 path");
+    write_sheet_with_child(&a_dir.join("a.snxsch"), shared_ref);
+    write_sheet_with_child(&b_dir.join("b.snxsch"), shared_ref);
+    let (mut app, _task) = Signex::new();
+    let a = add_project(&mut app, &a_dir.join("A.snxprj"), "a.snxsch");
+    let b = add_project(&mut app, &b_dir.join("B.snxprj"), "b.snxsch");
+    open_dirty_sheet(&mut app, &a_dir.join("a.snxsch"), a);
+    // Open and dirty under B; A reaches it too, but B does as well.
+    open_dirty_sheet(&mut app, &shared, b);
+
+    close_first_project(&mut app);
+    let modal = app
+        .ui_state
+        .project_close_confirm
+        .as_ref()
+        .expect("A is dirty, so close must prompt");
+    assert_eq!(
+        modal.dirty_paths,
+        vec![a_dir.join("a.snxsch")],
+        "a sheet B also reaches must not be offered for A's Discard All",
+    );
+    let _ = app.update(Message::Project(ProjectMsg::CloseConfirm(
+        ProjectCloseChoice::DiscardAll,
+    )));
+
+    assert!(app.document_state.dirty_paths.contains(&shared));
+    assert!(app.document_state.engines.contains_key(&shared));
+}
+
+#[test]
+fn an_unreadable_sibling_sheet_fails_closed_for_everything_under_its_directory() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().expect("tempdir");
+    let (mut app, _task) = Signex::new();
+    let a = add_project(&mut app, &tmp.path().join("A.snxprj"), "a.snxsch");
+    let b = add_project(
+        &mut app,
+        &tmp.path().join("B.snxprj"),
+        "failclosed_b.snxsch",
+    );
+    // B's root is corrupt, so which sheets it parents is unknowable.
+    std::fs::write(tmp.path().join("failclosed_b.snxsch"), b"not a schematic")
+        .expect("write corrupt sheet");
+    let a_sheet = tmp.path().join("a.snxsch");
+    let unknown = tmp.path().join("failclosed_child.snxsch");
+    open_dirty_sheet(&mut app, &a_sheet, a);
+    open_dirty_sheet(&mut app, &unknown, b);
+
+    close_first_project(&mut app);
+    let modal = app
+        .ui_state
+        .project_close_confirm
+        .as_ref()
+        .expect("A is dirty, so close must prompt");
+    assert_eq!(modal.dirty_paths, vec![a_sheet.clone()]);
+    let _ = app.update(Message::Project(ProjectMsg::CloseConfirm(
+        ProjectCloseChoice::DiscardAll,
+    )));
+
+    assert!(app.document_state.dirty_paths.contains(&unknown));
+    assert!(app.document_state.engines.contains_key(&unknown));
+    assert!(
+        app.document_state.panel_ctx.diagnostics.iter().any(|e| {
+            e.message.contains("failclosed_b.snxsch") && e.message.contains("folder open")
+        }),
+        "the fail-closed decision must be explained in the Messages panel",
+    );
+}
+
+#[test]
+fn a_dotdot_reference_cycle_terminates_without_a_warning() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().expect("tempdir");
+    let dir = tmp.path().join("loopdir");
+    std::fs::create_dir_all(&dir).expect("mkdir");
+    // `../loopdir/dotdot_cycle.snxsch` from inside `loopdir` is the sheet itself.
+    write_sheet_with_child(
+        &dir.join("dotdot_cycle.snxsch"),
+        "../loopdir/dotdot_cycle.snxsch",
+    );
+    let (mut app, _task) = Signex::new();
+    let a = add_project(&mut app, &dir.join("A.snxprj"), "dotdot_cycle.snxsch");
+    add_project(&mut app, &tmp.path().join("B.snxprj"), "b.snxsch");
+    open_dirty_sheet(&mut app, &dir.join("dotdot_cycle.snxsch"), a);
+
+    let started = std::time::Instant::now();
+    let result = app.resolve_sheet_refs_blocking();
+    let elapsed = started.elapsed();
+    let _ = app.update(Message::Project(ProjectMsg::CloseRefsResolved {
+        project_id: a,
+        result,
+    }));
+
+    assert!(
+        elapsed.as_secs() < 2,
+        "the cycle must fold, took {elapsed:?}"
+    );
+    assert!(
+        !app.document_state
+            .panel_ctx
+            .diagnostics
+            .iter()
+            .any(|e| e.message.contains("dotdot_cycle")),
+        "a loop is not an unreadable sheet and must not warn",
+    );
 }

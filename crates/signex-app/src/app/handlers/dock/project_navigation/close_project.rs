@@ -5,6 +5,8 @@
 //! behaviour change.
 
 use super::*;
+use crate::app::state::scope::CaseFold;
+use crate::app::state::sheet_refs::SheetRefs;
 
 impl Signex {
     /// Close every tab backed by the project whose root is at
@@ -18,13 +20,77 @@ impl Signex {
     /// immediately. The modal's choice handler
     /// (`handle_project_close_confirm`) calls back into this method
     /// once the user picks Save All or Discard All.
+    ///
+    /// Attributing a sibling project's child sheets reads sheet files, so
+    /// this only starts that read on a worker thread; the gate itself runs
+    /// in [`handle_close_refs_resolved`](Self::handle_close_refs_resolved)
+    /// when the result comes back.
     pub(super) fn close_project_at_tree_path(&mut self, tree_path: &[usize]) -> Task<Message> {
-        // The gate reads `dirty_paths`; do not rely on every edit site
-        // having refreshed the panel context since its last footprint edit.
-        self.sync_footprint_dirty_paths();
         let Some(&project_idx) = tree_path.first() else {
             return Task::none();
         };
+        let Some(project_id) = self.document_state.projects.get(project_idx).map(|p| p.id) else {
+            return Task::none();
+        };
+        let inputs = self.document_state.sheet_ref_inputs();
+        Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || inputs.resolve(CaseFold::host_default()))
+                    .await
+                    .map_err(|e| format!("sheet-reference worker failed: {e}"))
+            },
+            move |result| Message::Project(ProjectMsg::CloseRefsResolved { project_id, result }),
+        )
+    }
+
+    /// Everything the Close Project task reads, resolved on the calling
+    /// thread. The body the task runs off-thread, exposed so a regression
+    /// test can complete the task without an async runtime.
+    #[doc(hidden)]
+    pub fn resolve_sheet_refs_blocking(&self) -> Result<SheetRefs, String> {
+        Ok(self
+            .document_state
+            .sheet_ref_inputs()
+            .resolve(CaseFold::host_default()))
+    }
+
+    /// The Close Project gate, run once the sheet references are resolved:
+    /// open the confirm modal when the project owns unsaved work, otherwise
+    /// close it.
+    pub(crate) fn handle_close_refs_resolved(
+        &mut self,
+        project_id: ProjectId,
+        result: Result<SheetRefs, String>,
+    ) -> Task<Message> {
+        let sheet_refs = match result {
+            Ok(refs) => refs,
+            Err(reason) => {
+                crate::diagnostics::log_error(
+                    "Close Project cancelled: child-sheet ownership could not be resolved",
+                    &anyhow::anyhow!(reason),
+                );
+                self.refresh_panel_ctx();
+                return Task::none();
+            }
+        };
+        for sheet in &sheet_refs.unreadable {
+            crate::diagnostics::log_warning(sheet.warning());
+        }
+        if !sheet_refs.unreadable.is_empty() {
+            self.refresh_panel_ctx();
+        }
+        // The gate reads `dirty_paths`; do not rely on every edit site
+        // having refreshed the panel context since its last footprint edit.
+        self.sync_footprint_dirty_paths();
+        let Some(project_idx) = self
+            .document_state
+            .projects
+            .iter()
+            .position(|p| p.id == project_id)
+        else {
+            return Task::none();
+        };
+        let tree_path = vec![project_idx];
         let Some(project) = self.document_state.projects.get(project_idx) else {
             return Task::none();
         };
@@ -41,15 +107,6 @@ impl Signex {
         // project's own `.snxprj` file (when added to dirty_paths
         // by the auto-attach-library flow) sits exactly at the
         // project root and is also picked up here.
-        let sheet_refs = self.document_state.child_sheet_refs_from_projects();
-        for problem in &sheet_refs.unreadable {
-            crate::diagnostics::log_warning(format!(
-                "Close Project: {problem}; its child sheets cannot be attributed to a project"
-            ));
-        }
-        if !sheet_refs.unreadable.is_empty() {
-            self.refresh_panel_ctx();
-        }
         let dirty: Vec<std::path::PathBuf> = if let Some(dir) = project_dir.as_deref() {
             let mut v: Vec<std::path::PathBuf> = self
                 .document_state
@@ -59,9 +116,9 @@ impl Signex {
                     (p.starts_with(dir)
                         || self
                             .document_state
-                            .owned_by_project(&sheet_refs.refs, project_idx, p))
+                            .owned_by_project(&sheet_refs, project_idx, p))
                         && !self.document_state.claimed_by_other_project(
-                            &sheet_refs.refs,
+                            &sheet_refs,
                             project_idx,
                             p,
                         )
@@ -84,15 +141,16 @@ impl Signex {
 
         if !dirty.is_empty() || !dirty_rows.is_empty() {
             self.ui_state.project_close_confirm = Some(crate::app::ProjectCloseConfirmState {
-                tree_path: tree_path.to_vec(),
+                tree_path,
                 project_name,
                 dirty_paths: dirty,
                 dirty_rows,
+                sheet_refs,
             });
             return Task::none();
         }
 
-        self.execute_close_project_at_tree_path(tree_path)
+        self.execute_close_project_at_tree_path(&tree_path, &sheet_refs)
     }
 
     /// Inner close-project flow that actually drops tabs + the
@@ -100,7 +158,11 @@ impl Signex {
     /// the project-close confirm modal once the user picks Save All
     /// or Discard All. Trusts that `dirty_paths` for this project is
     /// already empty (callers ensure this).
-    fn execute_close_project_at_tree_path(&mut self, tree_path: &[usize]) -> Task<Message> {
+    fn execute_close_project_at_tree_path(
+        &mut self,
+        tree_path: &[usize],
+        sheet_refs: &SheetRefs,
+    ) -> Task<Message> {
         let Some(&project_idx) = tree_path.first() else {
             return Task::none();
         };
@@ -134,7 +196,6 @@ impl Signex {
             && let Some(dir) = project.path.parent()
         {
             let dir = dir.to_path_buf();
-            let sheet_refs = self.document_state.child_sheet_refs_from_projects();
             let sweep: Vec<std::path::PathBuf> = self
                 .document_state
                 .engines
@@ -143,12 +204,10 @@ impl Signex {
                     (p.parent() == Some(&dir)
                         || self
                             .document_state
-                            .owned_by_project(&sheet_refs.refs, project_idx, p))
-                        && !self.document_state.claimed_by_other_project(
-                            &sheet_refs.refs,
-                            project_idx,
-                            p,
-                        )
+                            .owned_by_project(sheet_refs, project_idx, p))
+                        && !self
+                            .document_state
+                            .claimed_by_other_project(sheet_refs, project_idx, p)
                 })
                 .cloned()
                 .collect();
@@ -321,7 +380,7 @@ impl Signex {
                         )));
                     return Task::none();
                 }
-                self.execute_close_project_at_tree_path(&state.tree_path)
+                self.execute_close_project_at_tree_path(&state.tree_path, &state.sheet_refs)
             }
             ProjectCloseChoice::DiscardAll => {
                 // Drop dirty engines + clear the dirty flags. The
@@ -349,7 +408,9 @@ impl Signex {
                 for address in &state.dirty_rows {
                     tasks.push(self.close_component_preview(address));
                 }
-                tasks.push(self.execute_close_project_at_tree_path(&state.tree_path));
+                tasks.push(
+                    self.execute_close_project_at_tree_path(&state.tree_path, &state.sheet_refs),
+                );
                 Task::batch(tasks)
             }
         }
@@ -574,7 +635,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let (mut app, path) = app_with_unsynced_dirty_footprint(dir.path());
 
-        let _ = app.close_project_at_tree_path(&[0]);
+        let project_id = app.document_state.projects[0].id;
+        let task = app.close_project_at_tree_path(&[0]);
+        assert_eq!(task.units(), 1, "the disk read must run off-thread");
+        let result = app.resolve_sheet_refs_blocking();
+        let _ = app.handle_close_refs_resolved(project_id, result);
 
         let modal = app
             .ui_state
