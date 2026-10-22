@@ -109,8 +109,13 @@ mod rename_save_as_rekey;
 
 #[path = "regression/deleted_sheet_not_resaved.rs"]
 mod deleted_sheet_not_resaved;
+#[path = "regression/library_components_panel_actions.rs"]
+mod library_components_panel_actions;
 #[path = "regression/library_git_recovery.rs"]
 mod library_git_recovery;
 
 #[path = "regression/sync_sheet_pins.rs"]
 mod sync_sheet_pins;
+
+#[path = "regression/start_screen.rs"]
+mod start_screen;

@@ -247,20 +247,14 @@ impl Signex {
                     ));
                 }
                 v.push(DropdownEntry::Separator);
-                // Stage 18 distributor refresh stub — resolves the clicked
-                // library's `.snxlib` file via the project tree.
-                if let Some(lib_path) = self.library_node_path_from_tree(path.as_slice()) {
-                    v.push(dd_msg(
-                        None,
-                        "Refresh All Pricing",
-                        "",
-                        Message::Library(crate::library::LibraryMessage::LibraryRefreshAllPricing(
-                            lib_path,
-                        )),
-                    ));
-                } else {
-                    v.push(dd_disabled(None, "Refresh All Pricing", None));
-                }
+                // Distributor pricing refresh has no backing implementation
+                // yet (no row-to-part binding or pricing store), so the row
+                // is shown greyed rather than wired to a no-op.
+                v.push(dd_disabled(
+                    None,
+                    "Refresh All Pricing",
+                    Some("Not yet available"),
+                ));
                 v.push(DropdownEntry::Separator);
                 // Enable Version Control on the library directory itself —
                 // hidden once the library has a `.git/`.

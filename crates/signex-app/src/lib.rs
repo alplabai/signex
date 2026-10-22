@@ -48,6 +48,7 @@ pub mod render_config;
 pub mod renderer_scene_canvas;
 pub mod scene_shader;
 pub mod schematic_runtime;
+pub mod start_screen;
 pub mod startup_args;
 pub mod status_bar;
 pub mod styles;
