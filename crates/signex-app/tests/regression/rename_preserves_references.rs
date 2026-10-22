@@ -311,3 +311,127 @@ fn save_all_after_renaming_a_child_persists_parent_and_project_references() {
     assert!(prj.sheets.iter().any(|s| s.filename == "renamed.snxsch"));
     assert!(!prj.sheets.iter().any(|s| s.filename == "child.snxsch"));
 }
+
+#[test]
+fn renaming_an_unrelated_file_leaves_dirty_paths_empty() {
+    let mut f = fixture();
+    // A footprint-like file that no project field references.
+    let other = f.prj.with_file_name("pad.snxfpt");
+    fs::write(&other, b"").expect("write footprint");
+
+    submit_rename(&mut f.app, &other, "pad2.snxfpt");
+
+    assert!(f.app.ui_state.rename_dialog.is_none(), "rename succeeded");
+    assert!(f.prj.with_file_name("pad2.snxfpt").exists());
+    assert!(
+        f.app.document_state.dirty_paths.is_empty(),
+        "an unrelated rename must not dirty the project: {:?}",
+        f.app.document_state.dirty_paths
+    );
+}
+
+#[test]
+fn a_malformed_project_sheet_is_reported_in_the_notice_and_the_messages_panel() {
+    // A parent that cannot be parsed cannot be planned against, so the
+    // rename must say its references were not checked rather than skip it.
+    {
+        let label = "malformed";
+        let mut f = fixture();
+        fs::write(&f.root, b"not a schematic").expect("corrupt parent");
+        let _ = signex_app::diagnostics::init_logging();
+        // Unique per run: the temp directory name is part of the parent path.
+        let marker = f
+            .root
+            .parent()
+            .and_then(|d| d.file_name())
+            .and_then(|n| n.to_str())
+            .expect("temp dir name")
+            .to_string();
+
+        submit_rename(&mut f.app, &f.child, "renamed.snxsch");
+
+        assert!(
+            f.app.document_state.error_notice.is_some(),
+            "{label}: the modal notice is set"
+        );
+        assert!(
+            f.child.with_file_name("renamed.snxsch").exists(),
+            "{label}: the file itself still moved"
+        );
+        assert!(
+            !f.app.document_state.engines.contains_key(&f.root),
+            "{label}: a parent that failed to load is not registered"
+        );
+        assert!(
+            signex_app::diagnostics::recent_entries().iter().any(|e| {
+                e.message.contains("sheet reference not updated") && e.message.contains(&marker)
+            }),
+            "{label}: the failure must also reach the Messages panel log"
+        );
+    }
+}
+
+#[test]
+fn closing_the_project_after_a_rename_keeps_the_prompt_and_strands_no_engine() {
+    use signex_app::app::{ContextMenuMsg, ProjectCloseChoice, ProjectMsg, ProjectTreeAction};
+
+    let mut f = fixture();
+    submit_rename(&mut f.app, &f.child, "renamed.snxsch");
+    assert!(
+        f.app.document_state.engines.contains_key(&f.root) && f.app.document_state.tabs.is_empty(),
+        "precondition: a tab-less dirty parent engine"
+    );
+
+    let _ = f
+        .app
+        .update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+            ProjectTreeAction::CloseProject(vec![0]),
+        )));
+    let modal = f
+        .app
+        .ui_state
+        .project_close_confirm
+        .as_ref()
+        .expect("the dirty tab-less parent still prompts");
+    assert!(modal.dirty_paths.contains(&f.root));
+    assert!(modal.dirty_paths.contains(&f.prj));
+
+    let _ = f.app.update(Message::Project(ProjectMsg::CloseConfirm(
+        ProjectCloseChoice::DiscardAll,
+    )));
+    assert!(f.app.document_state.projects.is_empty());
+    assert!(
+        f.app.document_state.engines.is_empty(),
+        "no engine entry survives the project"
+    );
+    assert!(f.app.document_state.dirty_paths.is_empty());
+}
+
+/// The extension check is deliberately exact and case-sensitive: the native
+/// extensions are lowercase, so a case change (`.SNXSCH`) is refused rather
+/// than silently accepted, and only the final extension counts, so a dotted
+/// stem (`a.b.snxsch`) is a legal name.
+#[test]
+fn extension_check_is_case_sensitive_and_ignores_dots_in_the_stem() {
+    let mut f = fixture();
+    submit_rename(&mut f.app, &f.child, "renamed.SNXSCH");
+    assert!(
+        f.app
+            .ui_state
+            .rename_dialog
+            .as_ref()
+            .and_then(|d| d.error.as_deref())
+            .is_some_and(|m| m.contains(".snxsch")),
+        "a case-changed extension is refused with the extension named"
+    );
+    assert!(f.child.exists());
+
+    let mut f = fixture();
+    submit_rename(&mut f.app, &f.child, "a.b.snxsch");
+    assert!(
+        f.app.ui_state.rename_dialog.is_none(),
+        "dotted stem is fine"
+    );
+    assert!(f.child.with_file_name("a.b.snxsch").exists());
+    assert_eq!(child_refs(&f.app, &f.root), vec!["a.b.snxsch"]);
+}

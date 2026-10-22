@@ -111,7 +111,7 @@ impl Signex {
 
         // Find every parent sheet that references this file BEFORE it
         // moves, while the hierarchy walk can still reach it.
-        let rewrites = state
+        let plan = state
             .tree_path
             .first()
             .map(|&idx| self.plan_reference_rewrites(idx, &state.target_path, new_name))
@@ -169,7 +169,7 @@ impl Signex {
         // rebuild sees the new filenames.
         self.rekey_open_document(&state.target_path, &new_path);
 
-        let failures = self.apply_reference_rewrites(&rewrites);
+        let failures = self.apply_reference_rewrites(&plan);
         if !failures.is_empty() {
             self.document_state.error_notice = Some(crate::app::state::ErrorNotice::rename(
                 super::sheet_references::rename_incomplete_detail(&failures),

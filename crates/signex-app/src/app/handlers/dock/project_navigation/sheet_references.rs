@@ -14,11 +14,21 @@ use crate::app::state::scope::path_key;
 
 /// One parent-sheet reference to re-point: `parent` holds a child entry whose
 /// `filename` is currently `from` and must become `to`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) struct ReferenceRewrite {
     pub(super) parent: PathBuf,
     pub(super) from: String,
     pub(super) to: String,
+}
+
+/// What a rename has to do to the rest of the project, planned before the
+/// file moves.
+#[derive(Debug, Default)]
+pub(super) struct ReferencePlan {
+    pub(super) rewrites: Vec<ReferenceRewrite>,
+    /// Project sheets that could not be read or parsed, so whether they
+    /// reference the renamed file is unknown. Reported, never skipped silently.
+    pub(super) unchecked: Vec<String>,
 }
 
 /// `filename` with its last path component replaced by `new_name`, keeping any
@@ -50,9 +60,9 @@ impl Signex {
         project_idx: usize,
         old_path: &Path,
         new_name: &str,
-    ) -> Vec<ReferenceRewrite> {
+    ) -> ReferencePlan {
         let Some(project) = self.document_state.projects.get(project_idx) else {
-            return Vec::new();
+            return ReferencePlan::default();
         };
         let dir = project.dir();
         let pages: Vec<PathBuf> = project
@@ -80,25 +90,49 @@ impl Signex {
                     from: child.filename.clone(),
                     to: with_new_leaf(&child.filename, new_name),
                 };
-                if !plan.contains(&rewrite) {
-                    plan.push(rewrite);
-                }
+                plan.push(rewrite);
             }
         }
-        plan.sort_by(|a, b| a.parent.cmp(&b.parent).then(a.from.cmp(&b.from)));
-        plan
+        // Sort first so the dedupe is a single pass and the result order
+        // does not depend on the hierarchy walk.
+        plan.sort();
+        plan.dedup();
+        let mut unchecked: Vec<String> = set
+            .unreadable
+            .iter()
+            .map(|(path, why)| {
+                format!(
+                    "{} — could not be read, so its references to this sheet were not checked: {why}",
+                    path.display()
+                )
+            })
+            .collect();
+        unchecked.sort();
+        ReferencePlan {
+            rewrites: plan,
+            unchecked,
+        }
     }
 
     /// Apply the planned rewrites through the engine, marking each touched
     /// parent dirty. A parent that is not open is loaded into an engine (no
     /// tab) so Save All can persist it. Returns one message per parent that
-    /// could not be updated.
-    pub(super) fn apply_reference_rewrites(&mut self, plan: &[ReferenceRewrite]) -> Vec<String> {
+    /// could not be updated or checked; each is also logged.
+    pub(super) fn apply_reference_rewrites(&mut self, plan: &ReferencePlan) -> Vec<String> {
         let mut failures = Vec::new();
-        for rewrite in plan {
+        for rewrite in &plan.rewrites {
             if let Err(why) = self.apply_one_rewrite(rewrite) {
                 failures.push(format!("{} — {why}", rewrite.parent.display()));
             }
+        }
+        failures.extend(plan.unchecked.iter().cloned());
+        // The modal card is dismissible; the Messages panel keeps every
+        // dangling or unverified reference visible after it is gone.
+        for line in &failures {
+            crate::diagnostics::log_error(
+                "rename: sheet reference not updated",
+                &anyhow::anyhow!("{line}"),
+            );
         }
         failures
     }
