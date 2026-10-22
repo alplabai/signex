@@ -66,10 +66,9 @@ impl Signex {
             return None;
         };
 
-        // Panic-safe update: if the closure panics, the engine would
-        // otherwise be dropped along with `session`. Catch + resume
-        // ensures the engine returns to the HashMap at its original
-        // path before the panic propagates.
+        // Panic guard: the engine moves into `session`, so a panicking
+        // closure drops it. We cannot get it back; catch the unwind only
+        // to clear `active_path` (no dangling key) before re-raising.
         let session = SchematicTabSession::new(engine, title, old_path.clone(), dirty);
         let update_result = catch_unwind(AssertUnwindSafe(move || {
             let mut session = session;
@@ -93,6 +92,13 @@ impl Signex {
                 // `dirty_paths` set so the Projects-panel red dot
                 // survives tab close and is single-source-of-truth
                 // for "the file has unsaved edits".
+                if new_path != old_path {
+                    // Save As re-keyed the document; the old key no longer
+                    // has an engine, so a lingering dirty marker would make
+                    // every later Save All fail on it.
+                    self.document_state.dirty_paths.remove(&old_path);
+                    self.rekey_undocked_windows(&old_path, &new_path);
+                }
                 if dirty {
                     self.document_state.dirty_paths.insert(new_path.clone());
                 } else {
@@ -105,9 +111,11 @@ impl Signex {
             }
             Err(payload) => {
                 // Engine was consumed by the panicking session; the
-                // HashMap is now missing its entry. We can't restore
-                // the engine (it unwound), but we can at least clear
-                // `active_path` so callers don't see a dangling key.
+                // HashMap is now missing its entry and cannot be restored.
+                tracing::error!(
+                    path = %old_path.display(),
+                    "schematic session panicked; its engine was dropped"
+                );
                 self.document_state.active_path = None;
                 resume_unwind(payload);
             }

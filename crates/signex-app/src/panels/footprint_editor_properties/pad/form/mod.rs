@@ -122,7 +122,7 @@ impl PadFormValues {
             // is intentional anchor for v0.22 cleanup.)
             size_y_mm: pad.size_mm[1],
             drill_diameter_mm: pad.drill_diameter_mm,
-            drill_slot_length_mm: None, // selected-pad slot_length follow-up in v0.21
+            drill_slot_length_mm: pad.drill_slot_length_mm,
             stack: pad.stack.clone(),
             feature_top: pad.feature_top,
             feature_bottom: pad.feature_bottom,

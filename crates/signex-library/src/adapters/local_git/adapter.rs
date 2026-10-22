@@ -160,14 +160,12 @@ impl LibraryAdapter for LocalGitAdapter {
     fn remove_library_class(&self, key: &str, msg: &str) -> Result<(), LibraryError> {
         let owned_key = key.to_string();
         let fallback = format!("remove class {owned_key}");
-        self.mutate_library_file(
+        self.mutate_library_file_if_changed(
             move |lf| {
                 let before = lf.manifest.classes.len();
                 lf.manifest.classes.retain(|c| c.key != owned_key);
-                // Never error when the key is missing — keeps the
-                // UI's "× delete" idempotent.
-                let _ = before;
-                Ok(())
+                // Absent key: no error (idempotent `×`), no write, no commit.
+                Ok(lf.manifest.classes.len() != before)
             },
             msg,
             &fallback,
@@ -216,9 +214,8 @@ impl LibraryAdapter for LocalGitAdapter {
             return Err(LibraryError::Backend("table name cannot be empty".into()));
         }
         // Reject the same characters we reject elsewhere for filenames /
-        // identifiers — keeps round-trips through the TOML key safe and
-        // avoids surprising the user with a name they can't see in
-        // their file browser.
+        // identifiers — avoids surprising the user with a name they can't
+        // see in their file browser.
         if trimmed.chars().any(|c| {
             matches!(
                 c,
