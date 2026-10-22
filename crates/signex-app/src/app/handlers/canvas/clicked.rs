@@ -333,6 +333,7 @@ impl Signex {
             Tool::Component if self.interaction_state.pending_power.is_some() => {
                 if let Some((ref net_name, ref lib_id)) = self.interaction_state.pending_power {
                     let sym = signex_types::schematic::Symbol {
+                        unknown: Default::default(),
                         uuid: uuid::Uuid::new_v4(),
                         lib_id: lib_id.clone(),
                         reference: "#PWR?".to_string(),

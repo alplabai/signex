@@ -44,6 +44,7 @@ use std::path::{Path, PathBuf};
 
 fn symbol(uuid: uuid::Uuid, reference: &str, x: f64) -> Symbol {
     Symbol {
+        unknown: Default::default(),
         uuid,
         lib_id: "Device:R".to_string(),
         reference: reference.to_string(),
@@ -77,6 +78,7 @@ fn symbol(uuid: uuid::Uuid, reference: &str, x: f64) -> Symbol {
 
 fn sheet_with(symbols: Vec<Symbol>) -> SchematicSheet {
     SchematicSheet {
+        unknown: Default::default(),
         uuid: uuid::Uuid::new_v4(),
         version: 0,
         generator: String::new(),
