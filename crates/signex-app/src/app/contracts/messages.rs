@@ -159,6 +159,9 @@ pub enum OverlayMsg {
     /// Open an external page (About dialog's licence link) in the default
     /// browser.
     OpenLink(crate::about::ExternalLink),
+    /// The default browser could not be launched for an external link;
+    /// carries the reason for the shared error card.
+    LinkOpenFailed(String),
     /// Open the Tools > Passive Network Calculator modal — fired by the
     /// Tools menu entry. Re-invoking while it is already open is a no-op.
     OpenPassiveCalculator,

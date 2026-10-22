@@ -51,9 +51,11 @@ impl Signex {
             }
             MenuMessage::OpenDocumentation => Some(crate::about::open_link(
                 crate::about::ExternalLink::Documentation,
+                |detail| Message::Overlay(OverlayMsg::LinkOpenFailed(detail)),
             )),
             MenuMessage::ReportIssue => Some(crate::about::open_link(
                 crate::about::ExternalLink::IssueTracker,
+                |detail| Message::Overlay(OverlayMsg::LinkOpenFailed(detail)),
             )),
             _ => None,
         }

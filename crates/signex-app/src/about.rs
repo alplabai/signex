@@ -1,7 +1,7 @@
 //! Help-menu facts: the version block, the licence line and the external
 //! pages the Help menu and the About dialog link to.
 //!
-//! Pure data and one fire-and-forget URL opener — no iced state — so the
+//! Pure data and one URL opener — no iced state — so the
 //! About dialog, the Help menu handlers and the tests all read the same
 //! values.
 
@@ -47,9 +47,13 @@ pub fn version_info_text() -> String {
     )
 }
 
-/// Open `link` in the default browser without blocking `update`. A failure
-/// is logged and never fatal.
-pub fn open_link<M: Send + 'static>(link: ExternalLink) -> iced::Task<M> {
+/// Open `link` in the default browser without blocking `update`. A launch
+/// failure is turned into a message by `on_failed` (given the
+/// user-readable reason) so the caller can put it on the error card.
+pub fn open_link<M: Send + 'static>(
+    link: ExternalLink,
+    on_failed: impl FnOnce(String) -> M + Send + 'static,
+) -> iced::Task<M> {
     let url = link.url();
     iced::Task::future(async move {
         let result = tokio::task::spawn_blocking({
@@ -58,12 +62,19 @@ pub fn open_link<M: Send + 'static>(link: ExternalLink) -> iced::Task<M> {
         })
         .await;
         match result {
-            Ok(Ok(())) => {}
-            Ok(Err(err)) => tracing::warn!("could not open {url} in a browser: {err}"),
-            Err(err) => tracing::warn!("browser launch task for {url} failed: {err}"),
+            Ok(Ok(())) => None,
+            Ok(Err(err)) => Some(on_failed(format!(
+                "Could not open {url} in a browser: {err}"
+            ))),
+            Err(err) => Some(on_failed(format!(
+                "The browser launch for {url} did not complete: {err}"
+            ))),
         }
     })
-    .discard()
+    .then(|message| match message {
+        Some(message) => iced::Task::done(message),
+        None => iced::Task::none(),
+    })
 }
 
 #[cfg(test)]

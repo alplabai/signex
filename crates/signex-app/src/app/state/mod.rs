@@ -171,6 +171,14 @@ impl ErrorNotice {
         }
     }
 
+    /// An external page could not be opened in the default browser.
+    pub fn link(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Could Not Open Link".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
     /// A file could not be opened — unreadable, unparseable, or empty
     /// where it must not be (#532).
     pub fn open(detail: impl Into<String>) -> Self {
