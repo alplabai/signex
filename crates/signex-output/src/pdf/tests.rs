@@ -58,6 +58,82 @@ fn produces_valid_pdf_header() {
     assert_eq!(out.page_count, 1);
 }
 
+fn markup_ctx(note: &str, label: &str) -> ExportContext {
+    use signex_types::schematic::{HAlign, Label, LabelType, Point, TextNote, VAlign};
+
+    let mut ctx = sample_ctx(1);
+    ctx.sheets[0].schematic.text_notes.push(TextNote {
+        uuid: uuid::Uuid::nil(),
+        text: note.into(),
+        position: Point::new(20.0, 20.0),
+        rotation: 0.0,
+        font_size: 2.54,
+        justify_h: HAlign::Left,
+        justify_v: VAlign::Bottom,
+    });
+    ctx.sheets[0].schematic.labels.push(Label {
+        uuid: uuid::Uuid::nil(),
+        text: label.into(),
+        position: Point::new(20.0, 30.0),
+        rotation: 0.0,
+        label_type: LabelType::Global,
+        shape: "input".into(),
+        font_size: 2.54,
+        justify: HAlign::Left,
+        justify_v: VAlign::Bottom,
+    });
+    ctx
+}
+
+#[test]
+fn escaped_unicode_markup_exports_like_unescaped_text() {
+    let opts = PdfOptions {
+        // Bookmark titles retain raw markup; compare the rendered page.
+        generate_nets_info: false,
+        ..PdfOptions::default()
+    };
+    // Use the exporter's existing transliteration; full Unicode PDF fonts
+    // are separate from markup parsing (issue #352).
+    let expected = PdfExporter
+        .export(&markup_ctx("~Ölçüm~", "*Ölçüm*"), &opts)
+        .expect("unescaped markup export");
+    let actual = PdfExporter
+        .export(&markup_ctx(r"~\Ölçüm~", r"*\Ölçüm*"), &opts)
+        .expect("escaped markup export");
+    assert_eq!(actual.page_count, 1);
+    assert!(actual.bytes == expected.bytes, "rendered PDF must match");
+    let empty = PdfExporter
+        .export(&sample_ctx(1), &opts)
+        .expect("empty export");
+    assert_ne!(actual.bytes, empty.bytes, "text must reach the PDF");
+}
+
+#[test]
+fn escaped_unicode_markup_preview_matches_unescaped_text() {
+    let render = |ctx: &ExportContext| {
+        crate::svg::SvgRenderContext::from_sheet(
+            &ctx.sheets[0],
+            &PdfOptions::default(),
+            297.0,
+            210.0,
+            2.0,
+            None,
+        )
+        .rasterize_rgba(594, 420)
+        .expect("preview pixels")
+    };
+    let expected = render(&markup_ctx("~µA~", "*Ölçüm*"));
+    let actual = render(&markup_ctx(r"~\µA~", r"*\Ölçüm*"));
+    assert!(
+        actual == expected,
+        "escaped text must render the same glyphs"
+    );
+    assert!(
+        actual != render(&sample_ctx(1)),
+        "text must reach the preview"
+    );
+}
+
 #[test]
 fn multi_sheet_produces_multi_page() {
     let ctx = sample_ctx(4);

@@ -9,6 +9,7 @@ mod project_actions;
 mod remove;
 mod remove_guard;
 mod rename;
+mod sheet_references;
 mod version_control;
 
 impl Signex {
