@@ -6,6 +6,7 @@ use signex_output::{ExportContext, ProjectMetadata, SheetSnapshot};
 
 mod bom;
 mod page_setup;
+mod erc_report;
 mod pdf_netlist;
 mod print_preview;
 #[cfg(test)]

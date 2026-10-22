@@ -2,8 +2,7 @@
 //! close-library confirmation modal (Save All / Discard All / Cancel),
 //! and the left-dock library-tree node toggle.
 //!
-//! Extracted verbatim from the library dispatcher (`dispatch/library`);
-//! pure code motion, zero behaviour change.
+//! Split out of the library dispatcher (`dispatch/library`).
 
 use super::*;
 
@@ -28,7 +27,13 @@ impl Signex {
     pub(super) fn handle_open_library_at(&mut self, path: std::path::PathBuf) -> Task<Message> {
         if let Err(e) = commands::open_library(&mut self.library, path.clone()) {
             tracing::warn!(target: "signex::library", error = %e, path = %path.display(), "open_library failed");
-            route_open_error(&mut self.library, &path, &e);
+            // Recoverable failures open their recovery dialog; anything
+            // else must still reach the user, so raise the error card.
+            if !route_open_error(&mut self.library, &path, &e) {
+                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(
+                    format!("Cannot open library {}: {e}", path.display()),
+                ));
+            }
         }
         Task::none()
     }

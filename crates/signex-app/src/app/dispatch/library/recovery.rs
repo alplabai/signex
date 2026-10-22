@@ -2,8 +2,7 @@
 //! `route_open_error` classification, and the per-choice recovery
 //! actions (library-missing / git-missing / broken-binding).
 //!
-//! Extracted verbatim from the library dispatcher (`dispatch/library`);
-//! pure code motion, zero behaviour change.
+//! Split out of the library dispatcher (`dispatch/library`).
 
 use super::*;
 
@@ -33,10 +32,14 @@ use crate::library::recovery::{
 use crate::library::state::LibraryState;
 use signex_library::{LibraryError, LocalGitAdapter};
 
-/// Classify a `LocalGitAdapter::open` error and, if recoverable,
-/// stash the matching `RecoveryDialog` on `LibraryState::recovery`.
-/// Unrecoverable errors are left alone — the caller's `tracing::warn!`
-/// is the only surface.
+/// Classify a `LocalGitAdapter::open` error and, if recoverable and no
+/// other recovery dialog is open, stash the matching `RecoveryDialog` on
+/// `LibraryState::recovery`.
+///
+/// Returns `true` only when this call opened a dialog for this failure.
+/// `false` means the failure produced nothing the user can see — it is
+/// not recoverable, or an earlier recovery dialog is still open and must
+/// not be clobbered — so the caller has to raise the error card itself.
 ///
 /// String-matches the error message produced by `LocalGitAdapter::open`
 /// because the underlying `LibraryError` enum doesn't carry structured
@@ -49,12 +52,7 @@ pub(crate) fn route_open_error(
     state: &mut LibraryState,
     path: &std::path::Path,
     err: &LibraryError,
-) {
-    // Don't clobber an already-open recovery dialog; the user resolves
-    // them sequentially.
-    if state.recovery.is_some() {
-        return;
-    }
+) -> bool {
     let dialog = match err {
         LibraryError::NotFound(msg) if msg.contains("no .snxlib") => {
             Some(RecoveryDialog::LibraryMissing {
@@ -73,8 +71,14 @@ pub(crate) fn route_open_error(
         }
         _ => None,
     };
-    if let Some(d) = dialog {
-        state.recovery = Some(d);
+    // Don't clobber an already-open recovery dialog; the user resolves
+    // them sequentially.
+    match dialog {
+        Some(d) if state.recovery.is_none() => {
+            state.recovery = Some(d);
+            true
+        }
+        _ => false,
     }
 }
 

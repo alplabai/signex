@@ -1,9 +1,8 @@
 //! Library Browser grid-interaction handlers — active-table / row
-//! selection, search, sort, per-cell edit buffers, the lifecycle and
-//! class filters, and the distributor pricing-refresh stubs.
+//! selection, search, sort, per-cell edit buffers, the lifecycle
+//! and class filters.
 //!
-//! Extracted verbatim from the library dispatcher (`dispatch/library`);
-//! pure code motion, zero behaviour change.
+//! Split out of the library dispatcher (`dispatch/library`).
 
 use super::*;
 
@@ -138,47 +137,6 @@ impl Signex {
             // is filtered out.
             state.selected_row = None;
         }
-        Task::none()
-    }
-
-    /// Right-click on a Library Browser row → "Refresh Pricing".
-    /// Stage 18 stub.
-    pub(in crate::app::dispatch::library) fn handle_browser_refresh_pricing(
-        &mut self,
-        library_path: std::path::PathBuf,
-        table: String,
-        row_id: RowId,
-    ) -> Task<Message> {
-        // Stage 18 stub — the real adapter dispatch lands once
-        // `signex_library::DistributorAdapter::refresh_pricing`
-        // gets a row-binding loop. For now we log so the wiring
-        // path is observable when the user clicks the menu item.
-        tracing::info!(
-            target: "signex::library",
-            path = %library_path.display(),
-            table = %table,
-            row = %row_id,
-            "TODO: distributor refresh wiring (BrowserRefreshPricing)"
-        );
-        Task::none()
-    }
-
-    /// Library node right-click → "Refresh All Pricing". Stage 18 stub.
-    pub(in crate::app::dispatch::library) fn handle_library_refresh_all_pricing(
-        &mut self,
-        library_path: std::path::PathBuf,
-    ) -> Task<Message> {
-        let count = self
-            .library
-            .library_at(&library_path)
-            .map(|lib| lib.total_rows())
-            .unwrap_or(0);
-        tracing::info!(
-            target: "signex::library",
-            path = %library_path.display(),
-            rows = count,
-            "TODO: distributor refresh wiring (LibraryRefreshAllPricing)"
-        );
         Task::none()
     }
 }
