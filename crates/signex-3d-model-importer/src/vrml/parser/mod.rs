@@ -59,6 +59,8 @@ pub enum ParseError {
     UnexpectedEof { line: usize },
     #[error("unresolved USE node: {name}")]
     UnresolvedUse { name: String },
+    #[error("node nesting deeper than {limit} at line {line}")]
+    NestingTooDeep { line: usize, limit: usize },
     #[error("malformed number at line {line}: {value:?}")]
     MalformedNumber { line: usize, value: String },
 }
@@ -155,49 +157,54 @@ fn build_mesh(
 ) -> VrmlMesh {
     let mut out_positions: Vec<f32> = Vec::new();
     let mut out_indices: Vec<u32> = Vec::new();
-    let mut face: Vec<i32> = Vec::new();
+    let mut face: Vec<usize> = Vec::new();
 
     for &idx in face_indices {
         if idx == -1 {
             // face separator: triangulate using fan
-            if face.len() >= 3 {
-                let base = face[0] as usize;
-                for i in 1..face.len() - 1 {
-                    for &vi in &[base, face[i] as usize, face[i + 1] as usize] {
-                        if vi < positions.len() {
-                            let p = xf.apply_point(positions[vi]);
-                            let vertex_index = out_positions.len() as u32 / 3;
-                            out_positions.extend_from_slice(&p);
-                            out_indices.push(vertex_index);
-                        }
-                    }
-                }
-            }
+            fan_triangulate(&face, positions, xf, &mut out_positions, &mut out_indices);
             face.clear();
         } else if idx >= 0 {
-            face.push(idx);
+            face.push(idx as usize);
         }
     }
 
     // Handle missing trailing -1
-    if face.len() >= 3 {
-        let base = face[0] as usize;
-        for i in 1..face.len() - 1 {
-            for &vi in &[base, face[i] as usize, face[i + 1] as usize] {
-                if vi < positions.len() {
-                    let p = xf.apply_point(positions[vi]);
-                    let vertex_index = out_positions.len() as u32 / 3;
-                    out_positions.extend_from_slice(&p);
-                    out_indices.push(vertex_index);
-                }
-            }
-        }
-    }
+    fan_triangulate(&face, positions, xf, &mut out_positions, &mut out_indices);
 
+    debug_assert_eq!(out_indices.len() % 3, 0);
     VrmlMesh {
         positions: out_positions,
         indices: out_indices,
         color,
+    }
+}
+
+/// Fan-triangulate one polygon. A triangle is emitted only when all three of
+/// its corners are in range, so the index buffer is always a whole number of
+/// triangles; a face with a bad index loses just the triangles that use it (#147).
+fn fan_triangulate(
+    face: &[usize],
+    positions: &[[f32; 3]],
+    xf: &Transform,
+    out_positions: &mut Vec<f32>,
+    out_indices: &mut Vec<u32>,
+) {
+    if face.len() < 3 {
+        return;
+    }
+    let base = face[0];
+    for pair in face[1..].windows(2) {
+        let corners = [base, pair[0], pair[1]];
+        if corners.iter().any(|&vi| vi >= positions.len()) {
+            continue;
+        }
+        for vi in corners {
+            let p = xf.apply_point(positions[vi]);
+            let vertex_index = out_positions.len() as u32 / 3;
+            out_positions.extend_from_slice(&p);
+            out_indices.push(vertex_index);
+        }
     }
 }
 
@@ -287,5 +294,39 @@ mod tests {
         assert!((c[1] - 0.4).abs() < 1e-5);
         assert!((c[2] - 0.6).abs() < 1e-5);
         assert!((c[3] - 1.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn out_of_range_vertex_drops_only_its_triangles() {
+        // Quad 0 1 2 99: fan = (0,1,2) ok, (0,2,99) bad.
+        let src = r#"
+        Shape {
+          geometry IndexedFaceSet {
+            coord Coordinate { point [ 0 0 0, 1 0 0, 1 1 0 ] }
+            coordIndex [ 0 1 2 99 -1 ]
+          }
+        }
+        "#;
+        let meshes = parse_src(src);
+        assert_eq!(meshes.len(), 1);
+        assert_eq!(meshes[0].indices.len(), 3);
+        assert_eq!(meshes[0].positions.len(), 9);
+    }
+
+    #[test]
+    fn index_buffer_is_always_whole_triangles() {
+        let src = r#"
+        Shape {
+          geometry IndexedFaceSet {
+            coord Coordinate { point [ 0 0 0, 1 0 0, 1 1 0, 0 1 0 ] }
+            coordIndex [ 0 1 9 -1  9 8 7 -1  0 1 2 3 -1  0 2 5 3 ]
+          }
+        }
+        "#;
+        for mesh in parse_src(src) {
+            assert_eq!(mesh.indices.len() % 3, 0);
+            let verts = (mesh.positions.len() / 3) as u32;
+            assert!(mesh.indices.iter().all(|&i| i < verts));
+        }
     }
 }

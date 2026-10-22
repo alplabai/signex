@@ -28,6 +28,7 @@ use signex_library::primitive::{
 use uuid::Uuid;
 
 fn empty_snx_manifest(name: &str, review_required: bool) -> SnxlibManifest {
+    signex_library::git_identity::test_identity::install();
     SnxlibManifest {
         format: FORMAT_TOKEN.into(),
         library_id: Uuid::now_v7(),
@@ -49,6 +50,7 @@ fn empty_snx_manifest(name: &str, review_required: bool) -> SnxlibManifest {
 /// down (`dir/<name>/<name>.snxlib`) so each test gets its own
 /// directory for the parent-keyed git repo.
 fn snxlib_path(dir: &Path, name: &str) -> PathBuf {
+    signex_library::git_identity::test_identity::install();
     dir.join(name).join(format!("{name}.snxlib"))
 }
 
@@ -886,7 +888,7 @@ fn local_git_commits_with_message() {
 
     let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
     let head = repo.head().unwrap().peel_to_commit().unwrap();
-    assert_eq!(head.summary(), Some("msg-XYZ"));
+    assert_eq!(head.summary().unwrap(), Some("msg-XYZ"));
 }
 
 // ── Cascade engine (Stage 15) ────────────────────────────────────────────
@@ -895,6 +897,7 @@ fn local_git_commits_with_message() {
 /// behaviour gates on this — Personal silently bumps every bound row,
 /// Team leaves released rows stale.
 fn snx_manifest_with_mode(name: &str, mode: WorkflowMode) -> SnxlibManifest {
+    signex_library::git_identity::test_identity::install();
     SnxlibManifest {
         format: FORMAT_TOKEN.into(),
         library_id: Uuid::now_v7(),

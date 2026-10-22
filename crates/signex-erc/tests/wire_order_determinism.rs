@@ -22,6 +22,7 @@ fn pt(x: f64, y: f64) -> Point {
 
 fn sheet(wires: Vec<Wire>, labels: Vec<Label>) -> SchematicSheet {
     SchematicSheet {
+        unknown: Default::default(),
         uuid: Uuid::nil(),
         version: 0,
         generator: String::new(),

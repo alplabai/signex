@@ -1,0 +1,136 @@
+format = "snxsch/1"
+schematic_id = "00000000-0000-0000-0000-000000000000"
+version = 1
+generator = "signex-test"
+generator_version = "0.9"
+paper_size = "A4"
+root_sheet_page = "1"
+
+
+[sheets.components]
+content = """
+uuid                                  ref  library        pos_x     pos_y     rotation  value   mpn
+0192a8c0-0001-7000-8000-000000000001  U1   lm2596.snxsym  50800000  25400000  0         LM2596  LM2596S-5.0
+"""
+
+[sheets.wires]
+content = """
+uuid                                  net  start_x   start_y   end_x     end_y     stroke_width
+0192a8c0-0004-7000-8000-000000000001  ""   10000000  20000000  30000000  20000000  0
+0192a8c0-0004-7000-8000-000000000002  ""   30000000  20000000  30000000  40000000  0
+"""
+
+[sheets.junctions]
+content = """
+uuid                                  pos_x     pos_y     diameter
+0192a8c0-0002-7000-8000-000000000001  30000000  20000000  0.5
+"""
+
+[sheets.labels]
+content = """
+uuid                                  text  pos_x     pos_y     rotation  kind   shape  font_size  justify  justify_v
+0192a8c0-0003-7000-8000-000000000001  VIN   10000000  20000000  0         local  ""     1.27       center   center
+"""
+
+[extras.symbols.0192a8c0-0001-7000-8000-000000000001]
+footprint = "TO-263.snxfpt"
+datasheet = ""
+mirror_x = false
+mirror_y = false
+unit = 1
+is_power = false
+fields_autoplaced = false
+fields_user_placed = false
+dnp = false
+in_bom = true
+on_board = true
+exclude_from_sim = false
+locked = false
+custom_properties = []
+instances = []
+
+[extras.symbols.0192a8c0-0001-7000-8000-000000000001.fields]
+MPN = "LM2596S-5.0"
+Manufacturer = "Example Semi"
+Rating = "5V"
+Tolerance = "1%"
+
+[extras.symbols.0192a8c0-0001-7000-8000-000000000001.pin_uuids]
+GND = "0192a8c0-0001-7000-8000-000000000011"
+VIN = "0192a8c0-0001-7000-8000-000000000010"
+VOUT = "0192a8c0-0001-7000-8000-000000000012"
+
+[extras.junctions.0192a8c0-0002-7000-8000-000000000001]
+minted = true
+
+[extras.sheet]
+child_sheets = []
+no_connects = []
+text_notes = []
+buses = []
+bus_entries = []
+drawings = []
+no_erc_directives = []
+
+[extras.sheet.title_block]
+company = "Alp Lab"
+date = "2026-07-18"
+revision = "A"
+title = "Regulator stage"
+
+[extras.sheet.lib_symbols.alpha]
+id = "alpha"
+reference = "U"
+value = "alpha"
+footprint = ""
+datasheet = ""
+description = "alpha library symbol"
+keywords = ""
+fp_filters = ""
+in_bom = true
+on_board = true
+in_pos_files = true
+duplicate_pin_numbers_are_jumpers = false
+graphics = []
+pins = []
+show_pin_numbers = true
+show_pin_names = true
+pin_name_offset = 0.0
+
+[extras.sheet.lib_symbols.middle]
+id = "middle"
+reference = "U"
+value = "middle"
+footprint = ""
+datasheet = ""
+description = "middle library symbol"
+keywords = ""
+fp_filters = ""
+in_bom = true
+on_board = true
+in_pos_files = true
+duplicate_pin_numbers_are_jumpers = false
+graphics = []
+pins = []
+show_pin_numbers = true
+show_pin_names = true
+pin_name_offset = 0.0
+
+[extras.sheet.lib_symbols.zeta]
+id = "zeta"
+reference = "U"
+value = "zeta"
+footprint = ""
+datasheet = ""
+description = "zeta library symbol"
+keywords = ""
+fp_filters = ""
+in_bom = true
+on_board = true
+in_pos_files = true
+duplicate_pin_numbers_are_jumpers = false
+graphics = []
+pins = []
+show_pin_numbers = true
+show_pin_names = true
+pin_name_offset = 0.0

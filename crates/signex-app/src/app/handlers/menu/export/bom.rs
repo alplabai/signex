@@ -36,7 +36,7 @@ impl Signex {
             },
             ..BomOptions::default()
         };
-        let Some(table) = self.rebuild_bom_table(&opts) else {
+        let Some((table, validation_report)) = self.rebuild_bom_table(&opts) else {
             self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
                 "Cannot build BOM: no active schematic.".to_string(),
             ));
@@ -53,6 +53,7 @@ impl Signex {
         self.document_state.bom_preview = Some(crate::app::state::BomPreviewState {
             options: opts,
             table,
+            validation_report,
             variants,
             sort: default_sort,
             column_drag: None,
@@ -90,6 +91,26 @@ impl Signex {
             preview.options.include_not_fitted = include;
         }
         self.rerollup_bom_preview();
+    }
+
+    /// Turn one validation rule on or off and re-validate. Rule flags do not
+    /// change the rolled-up table, so no re-rollup happens.
+    pub(crate) fn handle_bom_preview_set_rule(
+        &mut self,
+        rule: signex_output::BomRule,
+        enabled: bool,
+    ) {
+        let Some(preview) = self.document_state.bom_preview.as_mut() else {
+            return;
+        };
+        preview.options.rule_options.set_enabled(rule, enabled);
+        let opts = preview.options.clone();
+        let Some(ctx) = super::build_export_context(&self.document_state) else {
+            return;
+        };
+        if let Some(preview) = self.document_state.bom_preview.as_mut() {
+            preview.validation_report = signex_output::bom::validate(&ctx, &opts, &preview.table);
+        }
     }
 
     /// Flip a column's presence in `BomOptions.columns`. Removing a
@@ -255,9 +276,12 @@ impl Signex {
     /// Build (or rebuild) the BomTable from the current document
     /// state and the supplied options. Returns `None` when there's
     /// no active schematic to roll up.
-    fn rebuild_bom_table(&self, opts: &BomOptions) -> Option<signex_output::BomTable> {
+    fn rebuild_bom_table(
+        &self,
+        opts: &BomOptions,
+    ) -> Option<(signex_output::BomTable, signex_output::BomValidationReport)> {
         let ctx = super::build_export_context(&self.document_state)?;
-        Some(signex_output::bom::rollup(&ctx, opts))
+        Some(signex_output::bom::rollup_with_validation(&ctx, opts))
     }
 
     fn rerollup_bom_preview(&mut self) {
@@ -269,10 +293,11 @@ impl Signex {
         else {
             return;
         };
-        if let Some(table) = self.rebuild_bom_table(&opts)
+        if let Some((table, report)) = self.rebuild_bom_table(&opts)
             && let Some(preview) = self.document_state.bom_preview.as_mut()
         {
             preview.table = table;
+            preview.validation_report = report;
         }
     }
 
@@ -355,11 +380,20 @@ impl Signex {
 
         match BomExporter.export(&ctx, &opts) {
             Ok(output) => match std::fs::write(&save_path, &output.bytes) {
-                Ok(()) => log::info!(
-                    "Wrote {} ({} bytes)",
-                    save_path.display(),
-                    output.bytes.len(),
-                ),
+                Ok(()) => {
+                    log::info!(
+                        "Wrote {} ({} bytes)",
+                        save_path.display(),
+                        output.bytes.len(),
+                    );
+                    // Advisory, not a gate: the file is written; tell the
+                    // user what validation found instead of dropping it.
+                    if let Some(notice) =
+                        bom_validation_notice(&output.validation_report, &save_path)
+                    {
+                        self.document_state.error_notice = Some(notice);
+                    }
+                }
                 Err(e) => {
                     self.document_state.error_notice =
                         Some(crate::app::state::ErrorNotice::export(format!(
@@ -377,4 +411,29 @@ impl Signex {
 
         Task::none()
     }
+}
+
+/// Summary card shown after a BOM export whose validation found issues;
+/// `None` when the report is empty.
+fn bom_validation_notice(
+    report: &signex_output::BomValidationReport,
+    saved: &std::path::Path,
+) -> Option<crate::app::state::ErrorNotice> {
+    let summary = report.summary()?;
+    let mut detail = format!("Wrote {} with {summary}.", saved.display());
+    for issue in report.issues.iter().take(8) {
+        detail.push_str(&format!(
+            "
+- {}",
+            issue.message
+        ));
+    }
+    if report.issues.len() > 8 {
+        detail.push_str(&format!(
+            "
+... and {} more",
+            report.issues.len() - 8
+        ));
+    }
+    Some(crate::app::state::ErrorNotice::export_advisory(detail))
 }

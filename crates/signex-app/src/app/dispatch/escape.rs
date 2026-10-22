@@ -151,23 +151,26 @@ impl Signex {
             .and_then(|t| t.kind.as_symbol_editor())
             .cloned();
         if let Some(path) = symbol_path {
-            // Symbol editor tab: Esc's one job today is closing an open
-            // right-click context menu (no per-tool cancel state to reset
-            // yet, unlike the footprint editor's `ToolEscape`).
-            let menu_open = self
-                .document_state
-                .symbol_editors
-                .get(&path)
-                .is_some_and(|e| e.context_menu.is_some());
-            if !menu_open {
+            // Symbol editor tab: Esc closes an open right-click context
+            // menu first, otherwise leaves the active placement tool
+            // (an in-flight gesture was already cancelled by the canvas,
+            // which only claims the key while one exists).
+            let Some(editor) = self.document_state.symbol_editors.get(&path) else {
                 return Task::none();
-            }
+            };
+            let msg = if editor.context_menu.is_some() {
+                crate::library::messages::SymbolEditorMsg::CloseContextMenu
+            } else if editor.tool != crate::library::editor::symbol::canvas::SymbolTool::Select {
+                crate::library::messages::SymbolEditorMsg::SetTool(
+                    crate::library::messages::SymbolToolMsg::Select,
+                )
+            } else {
+                return Task::none();
+            };
             return self.update(Message::Library(
                 crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                     path,
-                    msg: crate::library::messages::PrimitiveEdit::Symbol(
-                        crate::library::messages::SymbolEditorMsg::CloseContextMenu,
-                    ),
+                    msg: crate::library::messages::PrimitiveEdit::Symbol(msg),
                 },
             ));
         }
@@ -594,6 +597,78 @@ mod tests {
         assert!(
             !app.interaction_state.wire_drawing,
             "the app-wide session flag must be cleared once"
+        );
+    }
+
+    // ── #170: Esc in the symbol editor ──────────────────────────────
+
+    fn app_with_symbol_editor(
+        tool: crate::library::editor::symbol::canvas::SymbolTool,
+    ) -> (Signex, std::path::PathBuf) {
+        let mut app = quiet_app();
+        let path = std::path::PathBuf::from("/tmp/part.snxsym");
+        let mut editor = crate::app::SymbolEditorState::new(
+            path.clone(),
+            signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("T")),
+        );
+        editor.tool = tool;
+        app.document_state
+            .symbol_editors
+            .insert(path.clone(), editor);
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "part".to_string(),
+            path: path.clone(),
+            cached_document: None,
+            dirty: false,
+            project_id: None,
+            kind: crate::app::TabKind::SymbolEditor(path.clone()),
+        });
+        app.document_state.active_tab = app.document_state.tabs.len() - 1;
+        (app, path)
+    }
+
+    #[test]
+    fn esc_closes_the_symbol_context_menu_before_leaving_the_tool() {
+        use crate::library::editor::symbol::canvas::SymbolTool;
+        use crate::library::editor::symbol::state::{SymbolContextMenuState, SymbolContextTarget};
+        let (mut app, path) = app_with_symbol_editor(SymbolTool::AddPin);
+        app.document_state
+            .symbol_editors
+            .get_mut(&path)
+            .unwrap()
+            .context_menu = Some(SymbolContextMenuState {
+            x: 1.0,
+            y: 2.0,
+            target: SymbolContextTarget::Empty,
+            open_submenu: None,
+        });
+
+        let _task = app.update(Message::EscapePressed { window: None });
+        let editor = &app.document_state.symbol_editors[&path];
+        assert!(editor.context_menu.is_none(), "the menu must close");
+        assert_eq!(editor.tool, SymbolTool::AddPin, "the tool is untouched");
+
+        let _task = app.update(Message::EscapePressed { window: None });
+        assert_eq!(
+            app.document_state.symbol_editors[&path].tool,
+            SymbolTool::Select,
+            "the next Esc leaves the tool"
+        );
+    }
+
+    #[test]
+    fn esc_with_a_modal_open_leaves_the_symbol_tool_alone() {
+        use crate::library::editor::symbol::canvas::SymbolTool;
+        let (mut app, path) = app_with_symbol_editor(SymbolTool::AddPin);
+        app.ui_state.keyboard_shortcuts_open = true;
+
+        let _task = app.update(Message::EscapePressed { window: None });
+
+        assert!(!app.ui_state.keyboard_shortcuts_open);
+        assert_eq!(
+            app.document_state.symbol_editors[&path].tool,
+            SymbolTool::AddPin,
+            "the modal rung claims the key; the editor behind it must not change"
         );
     }
 }

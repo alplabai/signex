@@ -157,6 +157,65 @@ pub(crate) fn project_owning_sheet_with<'a>(
     None
 }
 
+/// True when `path` is `root` or lies under it, compared component-wise on
+/// [`path_key_with`] keys so a differently-cased or `\\`-separated spelling of
+/// the same file still matches.
+pub(crate) fn path_is_under(path: &Path, root: &Path, fold: CaseFold) -> bool {
+    let path_key = path_key_with(path, fold);
+    let root_key = path_key_with(root, fold);
+    Path::new(&path_key).starts_with(Path::new(&root_key))
+}
+
+/// True when `path` belongs to an open project other than `projects[closing]`:
+/// another project's own `.snxprj`, a sheet another project lists or reaches
+/// through its child-sheet graph, or anything under a project nested inside
+/// the closing one's directory. A directory-ancestor test alone cannot tell
+/// projects in the same or nested directories apart.
+///
+/// A sheet the closing project owns is never claimed by directory nesting,
+/// but a sheet listed by several projects counts as claimed by the others so
+/// closing one never discards a document another still has open.
+pub(crate) fn claimed_by_other_project(
+    projects: &[LoadedProject],
+    loaded: &HashMap<PathBuf, Vec<String>>,
+    closing: usize,
+    path: &Path,
+    fold: CaseFold,
+) -> bool {
+    let Some(mine) = projects.get(closing) else {
+        return false;
+    };
+    let key = path_key_with(path, fold);
+    let lists = |p: &LoadedProject| {
+        let dir = p.dir();
+        p.data
+            .sheets
+            .iter()
+            .any(|s| path_key_with(&dir.join(&s.filename), fold) == key)
+    };
+    let other_lists = projects
+        .iter()
+        .enumerate()
+        .any(|(i, p)| i != closing && lists(p));
+    let owner = project_owning_sheet_with(projects, loaded, path, fold);
+    let owned_by_closing = lists(mine) || owner.is_some_and(|o| o.id == mine.id);
+    let owned_by_other = other_lists || owner.is_some_and(|o| o.id != mine.id);
+    if owned_by_other {
+        return true;
+    }
+    projects.iter().enumerate().any(|(i, other)| {
+        if i == closing {
+            return false;
+        }
+        let other_dir = other.dir();
+        path_key_with(&other.path, fold) == key
+            || (!owned_by_closing
+                && path_key_with(other_dir, fold) != path_key_with(mine.dir(), fold)
+                && path_is_under(other_dir, mine.dir(), fold)
+                && path_is_under(path, other_dir, fold))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -400,5 +459,106 @@ mod tests {
         let keep = project_owning_sheet_with(&projects, &open, &child, CaseFold::Preserve);
         assert_eq!(fold.map(|p| p.id), Some(ProjectId(1)));
         assert!(keep.is_none());
+    }
+
+    fn project_at(id: u32, prj: &str, filenames: &[&str]) -> LoadedProject {
+        let mut p = project(id, "", filenames);
+        p.path = PathBuf::from(prj);
+        p
+    }
+
+    fn claimed(
+        projects: &[LoadedProject],
+        open: &HashMap<PathBuf, Vec<String>>,
+        path: &str,
+        fold: CaseFold,
+    ) -> bool {
+        claimed_by_other_project(projects, open, 0, &PathBuf::from(path), fold)
+    }
+
+    #[test]
+    fn child_sheet_of_a_same_directory_project_is_claimed() {
+        let projects = vec![
+            project_at(1, "/w/A.snxprj", &["a.snxsch"]),
+            project_at(2, "/w/B.snxprj", &["b.snxsch"]),
+        ];
+        let open = loaded(&[("/w/b.snxsch", &["b_child.snxsch"])]);
+        assert!(claimed(
+            &projects,
+            &open,
+            "/w/b_child.snxsch",
+            CaseFold::Preserve
+        ));
+        assert!(!claimed(
+            &projects,
+            &open,
+            "/w/a.snxsch",
+            CaseFold::Preserve
+        ));
+    }
+
+    #[test]
+    fn other_projects_sheet_is_claimed_across_case_on_a_folding_host() {
+        let projects = vec![
+            project_at(1, "/w/A.snxprj", &["a.snxsch"]),
+            project_at(2, "/w/B.snxprj", &["B.snxsch"]),
+        ];
+        let open = HashMap::new();
+        assert!(claimed(&projects, &open, "/w/b.snxsch", CaseFold::Fold));
+        assert!(!claimed(
+            &projects,
+            &open,
+            "/w/b.snxsch",
+            CaseFold::Preserve
+        ));
+    }
+
+    #[test]
+    fn a_nested_project_does_not_override_the_closing_projects_own_listing() {
+        let projects = vec![
+            project_at(1, "/w/A.snxprj", &["sub/x.snxsch"]),
+            project_at(2, "/w/sub/B.snxprj", &["b.snxsch"]),
+        ];
+        let open = HashMap::new();
+        assert!(!claimed(
+            &projects,
+            &open,
+            "/w/sub/x.snxsch",
+            CaseFold::Preserve
+        ));
+        assert!(claimed(
+            &projects,
+            &open,
+            "/w/sub/other.snxsch",
+            CaseFold::Preserve
+        ));
+    }
+
+    #[test]
+    fn a_sheet_listed_by_two_projects_is_claimed_by_the_other() {
+        let projects = vec![
+            project_at(1, "/w/A.snxprj", &["shared.snxsch"]),
+            project_at(2, "/w/B.snxprj", &["shared.snxsch"]),
+        ];
+        let open = HashMap::new();
+        assert!(claimed(
+            &projects,
+            &open,
+            "/w/shared.snxsch",
+            CaseFold::Preserve
+        ));
+    }
+
+    #[test]
+    fn path_is_under_is_component_wise_and_case_policy_aware() {
+        let root = PathBuf::from("/w/Lib.snxlib");
+        let inner = PathBuf::from("/w/lib.snxlib/footprints/g.snxfpt");
+        assert!(path_is_under(&inner, &root, CaseFold::Fold));
+        assert!(!path_is_under(&inner, &root, CaseFold::Preserve));
+        assert!(!path_is_under(
+            &PathBuf::from("/w/Lib.snxlib2/x"),
+            &root,
+            CaseFold::Fold
+        ));
     }
 }

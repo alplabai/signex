@@ -68,6 +68,7 @@ pub(crate) fn route_open_error(
             Some(RecoveryDialog::GitMissing {
                 path: path.to_path_buf(),
                 remote: None,
+                error: None,
             })
         }
         _ => None,
@@ -163,9 +164,11 @@ pub(super) fn handle_recovery_git_missing(
                     return Task::none();
                 }
             };
-            app.library.recovery = None;
             match LocalGitAdapter::recover_init(&path) {
-                Ok(_) => Task::done(Message::Library(LibraryMessage::OpenLibraryAt(Some(path)))),
+                Ok(_) => {
+                    app.library.recovery = None;
+                    Task::done(Message::Library(LibraryMessage::OpenLibraryAt(Some(path))))
+                }
                 Err(e) => {
                     tracing::warn!(
                         target: "signex::library",
@@ -173,6 +176,13 @@ pub(super) fn handle_recovery_git_missing(
                         error = %e,
                         "git recover-init failed"
                     );
+                    // Keep the dialog open and show the reason so the
+                    // click is never a silent no-op (#141).
+                    if let Some(RecoveryDialog::GitMissing { error, .. }) =
+                        app.library.recovery.as_mut()
+                    {
+                        *error = Some(e.to_string());
+                    }
                     Task::none()
                 }
             }

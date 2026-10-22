@@ -1,0 +1,41 @@
+format = "snxpcb/1"
+pcb_id = "00000000-0000-0000-0000-000000000000"
+version = 1
+generator = "signex-test"
+thickness = 1.6
+
+
+[stackup]
+layers = [
+    "TopCopper",
+    "BottomCopper",
+]
+
+[footprints]
+content = """
+uuid                                  ref  library           pos_x     pos_y     rotation  layer      value
+0192a8c0-0010-7000-8000-000000000001  U1   stm32f407.snxfpt  50000000  25000000  0         TopCopper  STM32F407
+"""
+
+[pads]
+content = """
+uuid                                  footprint_ref  pin  pos_x     pos_y     size_x   size_y  pad_type  shape      layers     drill  net_number  net_name  roundrect_ratio
+0192a8c0-0011-7000-8000-000000000001  U1             1    50500000  25000000  1000000  600000  smd       roundrect  TopCopper  0      1           VCC       0.25
+0192a8c0-0011-7000-8000-000000000002  U1             2    51500000  25000000  1000000  600000  smd       roundrect  TopCopper  0      2           GND       0.25
+"""
+
+[tracks]
+content = """
+uuid  net  layer  width  start_x  start_y  end_x  end_y
+"""
+
+[vias]
+content = """
+uuid  net  pos_x  pos_y  drill  diameter  layers  via_type
+"""
+
+[extras.footprints.0192a8c0-0010-7000-8000-000000000001]
+footprint_id = "stm32f407.snxfpt"
+locked = false
+graphics = []
+properties = []
