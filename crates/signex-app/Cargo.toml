@@ -91,6 +91,8 @@ test-prefs-redirect = []
 [dev-dependencies]
 signex-app = { path = ".", features = ["test-prefs-redirect"] }
 wiremock = "0.6"
+signex-library = { workspace = true, features = ["test-identity"] }
+git2 = { workspace = true }
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1"

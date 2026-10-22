@@ -99,6 +99,7 @@ fn arm_remove_dialog(app: &mut Signex, target: &Path) {
             .and_then(|n| n.to_str())
             .unwrap_or("file")
             .to_string(),
+        is_outside_project: false,
     });
 }
 
@@ -243,6 +244,210 @@ fn remove_with_exclude_choice_keeps_the_file_on_disk() {
         target.exists(),
         "ExcludeFromProject must NOT delete the file on disk"
     );
+}
+
+/// #139 — a Shared library package lives outside the project root and is
+/// referenced by absolute path. Returns its directory (a `.snxlib` package
+/// holding one file) and the temp dir that owns it.
+fn register_shared_library(app: &mut Signex) -> (TempDir, PathBuf, PathBuf) {
+    let shared = TempDir::new().expect("shared tempdir");
+    let lib_dir = shared.path().join("Power.snxlib");
+    fs::create_dir(&lib_dir).expect("create .snxlib package");
+    let inner = lib_dir.join("part.snxsym");
+    fs::write(&inner, b"shared-symbol").expect("write shared part");
+    app.document_state.projects[0]
+        .data
+        .libraries
+        .push(signex_types::project::LibraryEntry {
+            path: lib_dir.clone(),
+            kind: signex_types::project::LibraryEntryKind::Shared,
+            library_id: None,
+        });
+    (shared, lib_dir, inner)
+}
+
+#[test]
+fn remove_delete_choice_refuses_shared_library_outside_project() {
+    let (mut app, _tmp, _prj) = fixture_project_with_companions("Golf");
+    let (_shared, lib_dir, inner) = register_shared_library(&mut app);
+
+    // Dialog state deliberately WRONG (flag false): the handler guard must
+    // hold on its own.
+    arm_remove_dialog(&mut app, &lib_dir);
+    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
+        RemoveChoice::DeleteFile,
+    )));
+
+    assert!(lib_dir.is_dir(), "shared library must survive DeleteFile");
+    assert!(inner.exists(), "shared library contents must survive");
+    let notice = app
+        .document_state
+        .error_notice
+        .as_ref()
+        .expect("refusal must be surfaced to the user");
+    assert_eq!(notice.title, "Delete Refused");
+    // Still excluded from the project's in-memory list.
+    assert!(app.document_state.projects[0].data.libraries.is_empty());
+}
+
+#[test]
+fn remove_delete_choice_refuses_shared_library_file_outside_project() {
+    let (mut app, _tmp, _prj) = fixture_project_with_companions("Hotel");
+    let shared = TempDir::new().expect("shared tempdir");
+    let outside = shared.path().join("Shared.snxlib");
+    fs::write(&outside, b"shared-lib-file").expect("write shared lib file");
+
+    arm_remove_dialog(&mut app, &outside);
+    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
+        RemoveChoice::DeleteFile,
+    )));
+
+    assert!(outside.exists(), "file outside the project must survive");
+    assert!(app.document_state.error_notice.is_some());
+}
+
+#[test]
+fn remove_delete_choice_still_deletes_project_local_library() {
+    let (mut app, tmp, _prj) = fixture_project_with_companions("India");
+    let lib_dir = tmp.path().join("Local.snxlib");
+    fs::create_dir(&lib_dir).expect("create local package");
+    fs::write(lib_dir.join("part.snxsym"), b"local").expect("write part");
+
+    arm_remove_dialog(&mut app, &lib_dir);
+    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
+        RemoveChoice::DeleteFile,
+    )));
+
+    assert!(!lib_dir.exists(), "project-local package may be deleted");
+    assert!(app.document_state.error_notice.is_none());
+}
+
+/// #139 — kind beats path: a Shared library whose package physically sits
+/// inside the project folder is still not the project's to delete.
+#[test]
+fn remove_delete_choice_refuses_shared_library_inside_project_folder() {
+    let (mut app, tmp, _prj) = fixture_project_with_companions("Juliet");
+    let lib_dir = tmp.path().join("Vendored.snxlib");
+    fs::create_dir(&lib_dir).expect("create package");
+    let inner = lib_dir.join("part.snxsym");
+    fs::write(&inner, b"shared").expect("write part");
+    app.document_state.projects[0]
+        .data
+        .libraries
+        .push(signex_types::project::LibraryEntry {
+            path: lib_dir.clone(),
+            kind: signex_types::project::LibraryEntryKind::Shared,
+            library_id: None,
+        });
+
+    arm_remove_dialog(&mut app, &lib_dir);
+    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
+        RemoveChoice::DeleteFile,
+    )));
+
+    assert!(lib_dir.is_dir(), "Shared library must survive DeleteFile");
+    assert!(inner.exists(), "Shared library contents must survive");
+    let notice = app
+        .document_state
+        .error_notice
+        .as_ref()
+        .expect("refusal must be surfaced");
+    assert_eq!(notice.title, "Delete Refused");
+    assert!(app.document_state.projects[0].data.libraries.is_empty());
+}
+
+/// Rebuild the cached project tree. The Remove confirm path refreshes it,
+/// and a dialog whose target matches nothing prunes nothing.
+fn refresh_tree(app: &mut Signex) {
+    arm_remove_dialog(app, Path::new("no-such-file.snxsch"));
+    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
+        RemoveChoice::ExcludeFromProject,
+    )));
+}
+
+/// Tree path of the first node labelled `label`, depth-first.
+fn find_tree_path(
+    nodes: &[signex_widgets::tree_view::TreeNode],
+    label: &str,
+    prefix: &mut Vec<usize>,
+) -> Option<Vec<usize>> {
+    for (i, n) in nodes.iter().enumerate() {
+        prefix.push(i);
+        if n.label.trim_end_matches("  (missing)") == label {
+            return Some(prefix.clone());
+        }
+        if let Some(found) = find_tree_path(&n.children, label, prefix) {
+            return Some(found);
+        }
+        prefix.pop();
+    }
+    None
+}
+
+fn open_remove_dialog_for_label(app: &mut Signex, label: &str) {
+    refresh_tree(app);
+    let path = find_tree_path(
+        &app.document_state.panel_ctx.project_tree,
+        label,
+        &mut Vec::new(),
+    )
+    .unwrap_or_else(|| panic!("tree row {label} must exist"));
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+        ProjectTreeAction::OpenRemoveDialog(path),
+    )));
+}
+
+#[test]
+fn remove_dialog_flags_shared_library_as_outside_project() {
+    let (mut app, _tmp, _prj) = fixture_project_with_companions("Kilo");
+    let (_shared, _lib_dir, _inner) = register_shared_library(&mut app);
+
+    open_remove_dialog_for_label(&mut app, "Power.snxlib");
+
+    let dialog = app.ui_state.remove_dialog.as_ref().expect("dialog opened");
+    assert!(dialog.is_outside_project, "Shared library is outside");
+}
+
+/// #139 — the dialog decides by kind too: a Shared library whose package
+/// sits inside the project folder must not be offered "Delete file".
+#[test]
+fn remove_dialog_flags_shared_library_inside_project_folder() {
+    let (mut app, tmp, _prj) = fixture_project_with_companions("Mike");
+    let lib_dir = tmp.path().join("Vendored.snxlib");
+    fs::create_dir(&lib_dir).expect("create package");
+    app.document_state.projects[0]
+        .data
+        .libraries
+        .push(signex_types::project::LibraryEntry {
+            path: lib_dir.clone(),
+            kind: signex_types::project::LibraryEntryKind::Shared,
+            library_id: None,
+        });
+
+    open_remove_dialog_for_label(&mut app, "Vendored.snxlib");
+
+    let dialog = app.ui_state.remove_dialog.as_ref().expect("dialog opened");
+    assert!(dialog.is_outside_project, "Shared kind wins over path");
+}
+
+#[test]
+fn remove_dialog_does_not_flag_project_local_library() {
+    let (mut app, tmp, _prj) = fixture_project_with_companions("Lima");
+    let lib_dir = tmp.path().join("Local.snxlib");
+    fs::create_dir(&lib_dir).expect("create local package");
+    app.document_state.projects[0]
+        .data
+        .libraries
+        .push(signex_types::project::LibraryEntry {
+            path: PathBuf::from("Local.snxlib"),
+            kind: signex_types::project::LibraryEntryKind::ProjectLocal,
+            library_id: None,
+        });
+
+    open_remove_dialog_for_label(&mut app, "Local.snxlib");
+
+    let dialog = app.ui_state.remove_dialog.as_ref().expect("dialog opened");
+    assert!(!dialog.is_outside_project, "project-local is inside");
 }
 
 // ─────────────────────────────────────────────────────────────────

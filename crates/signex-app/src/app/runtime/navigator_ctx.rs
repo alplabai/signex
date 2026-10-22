@@ -6,6 +6,10 @@
 //! tabs, and the child-sheet references of the open sheets — has changed.
 //! Everything cheaper (active-row highlight, open markers) is re-derived each
 //! time from the cached hierarchy.
+//!
+//! Known limit: a *closed* child sheet that changes on disk (renamed, deleted,
+//! corrupted) is not noticed until a tab opens or closes, because stat-ing
+//! every sheet on each refresh would cost more than the staleness does.
 
 use std::path::PathBuf;
 
@@ -22,13 +26,6 @@ impl Signex {
             return NavigatorModel::default();
         };
 
-        let fingerprint = self.navigator_fingerprint(&root, &pages);
-        if previous.fingerprint != fingerprint || previous.hierarchy.is_none() {
-            let set = assemble_project_sheets(&self.document_state, &pages, &root);
-            previous.hierarchy = Some(build_sheet_hierarchy(&set.sheets, &root));
-            previous.fingerprint = fingerprint;
-        }
-
         let open: Vec<PathBuf> = self
             .document_state
             .tabs
@@ -40,7 +37,29 @@ impl Signex {
             .tabs
             .get(self.document_state.active_tab)
             .map(|tab| tab.path.clone());
-        previous.rebuild_tree(active.as_deref(), &open);
+
+        let fingerprint = self.navigator_fingerprint(&root, &pages);
+        if previous.fingerprint != fingerprint || previous.hierarchy.is_none() {
+            let set = assemble_project_sheets(&self.document_state, &pages, &root);
+            // Said once per rebuild, not per refresh: the reason a sheet that
+            // exists could not be read would otherwise only be a bare marker.
+            for (path, why) in &set.unreadable {
+                crate::diagnostics::log_warning(format!(
+                    "Navigator: sheet {} is unreadable: {why}",
+                    path.display()
+                ));
+            }
+            let hierarchy = build_sheet_hierarchy(
+                &set.sheets,
+                &set.unreadable,
+                &root,
+                &set.pages_outside_the_hierarchy,
+            );
+            previous.replace_hierarchy(hierarchy, active.as_deref(), &open);
+            previous.fingerprint = fingerprint;
+        } else {
+            previous.rebuild_tree(active.as_deref(), &open);
+        }
         previous
     }
 

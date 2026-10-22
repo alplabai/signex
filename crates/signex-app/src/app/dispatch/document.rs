@@ -114,10 +114,7 @@ impl Signex {
                 self.document_state.pending_opens.remove(&path);
                 match result {
                     Ok(sheet) => self.open_schematic_tab(path, title, *sheet),
-                    Err(message) => crate::diagnostics::log_error(
-                        "Failed to open document path",
-                        &anyhow::anyhow!(message),
-                    ),
+                    Err(message) => self.report_open_failure(message),
                 }
                 self.finish_update()
             }
@@ -130,10 +127,7 @@ impl Signex {
                 self.document_state.pending_opens.remove(&path);
                 match result {
                     Ok(board) => self.open_pcb_tab(path, title, *board),
-                    Err(message) => crate::diagnostics::log_error(
-                        "Failed to open document path",
-                        &anyhow::anyhow!(message),
-                    ),
+                    Err(message) => self.report_open_failure(message),
                 }
                 self.finish_update()
             }
@@ -174,6 +168,14 @@ impl Signex {
                 let task = self.handle_export_bom_finished(result);
                 iced::Task::batch([task, self.finish_update()])
             }
+            ExportMsg::ErcReportPathChosen(result) => {
+                let task = self.handle_erc_report_path_chosen(result);
+                iced::Task::batch([task, self.finish_update()])
+            }
+            ExportMsg::ErcReportWritten(result) => {
+                let task = self.handle_erc_report_written(result);
+                iced::Task::batch([task, self.finish_update()])
+            }
         }
     }
 
@@ -194,6 +196,10 @@ impl Signex {
             }
             BomPreviewMsg::SetIncludeNotFitted(b) => {
                 self.handle_bom_preview_set_include_not_fitted(b);
+                self.finish_update()
+            }
+            BomPreviewMsg::SetRule(rule, enabled) => {
+                self.handle_bom_preview_set_rule(rule, enabled);
                 self.finish_update()
             }
             BomPreviewMsg::ToggleColumn(col) => {

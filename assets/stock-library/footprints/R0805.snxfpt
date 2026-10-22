@@ -1,8 +1,8 @@
 format = "snxfpt/1"
 file_uuid = "019df45d-af64-7bb2-b787-add74d246d40"
 display_name = "R0805"
-created = "2026-05-04T19:01:13.700006500Z"
-updated = "2026-05-04T19:01:13.700006500Z"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
 
 [[footprints]]
 uuid = "019df45d-af63-7823-b5c3-01594028ccef"
@@ -20,8 +20,8 @@ fab_f = []
 fab_b = []
 version = "0.0.1"
 released = false
-created = "2026-05-04T19:01:13.699958200Z"
-updated = "2026-05-04T19:01:13.699958200Z"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
 schema_version = 3
 
 [footprints.courtyard]
@@ -58,6 +58,7 @@ kind = "BoardTop"
 id = "7c39d334-33d5-41a9-be67-8df6b3b0f382"
 plane = "cdbf6963-91f5-44b7-9f96-a2e01a046265"
 construction = false
+centerline = false
 kind = "Point"
 x = 0.0
 y = 0.0
@@ -78,10 +79,18 @@ shape = "Rect"
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
 
+[footprints.sketch.entities.pad.stack]
+paste_top_enabled = false
+paste_bottom_enabled = false
+mask_top_tented = false
+mask_bottom_tented = false
+thermal_relief = false
+
 [[footprints.sketch.entities]]
 id = "321de7ce-bd80-4bef-9fc4-a2a8fe6bc82c"
 plane = "cdbf6963-91f5-44b7-9f96-a2e01a046265"
 construction = false
+centerline = false
 kind = "Point"
 x = 0.0
 y = 0.0
@@ -101,6 +110,13 @@ shape = "Rect"
 
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
+
+[footprints.sketch.entities.pad.stack]
+paste_top_enabled = false
+paste_bottom_enabled = false
+mask_top_tented = false
+mask_bottom_tented = false
+thermal_relief = false
 
 [footprints.sketch.parameters]
 body_h = "1.25mm"

@@ -36,7 +36,12 @@ impl Signex {
         let Some(node) = navigator.node_at(path) else {
             return;
         };
-        let (sheet_path, kind, label) = (node.path.clone(), node.kind, node.name.clone());
+        let (sheet_path, kind, label, detail) = (
+            node.path.clone(),
+            node.kind,
+            node.name.clone(),
+            node.detail.clone(),
+        );
         navigator.selected = Some(path.to_vec());
         if !navigator.register_click(path, std::time::Instant::now()) {
             return;
@@ -44,7 +49,16 @@ impl Signex {
         match kind {
             SheetNodeKind::Present => self.open_or_focus_sheet_path(sheet_path),
             SheetNodeKind::Missing => crate::diagnostics::log_warning(format!(
-                "Sheet '{label}' cannot be opened: {} is missing or unreadable",
+                "Sheet '{label}' cannot be opened: {} is missing",
+                sheet_path.display()
+            )),
+            SheetNodeKind::Unreadable => crate::diagnostics::log_warning(format!(
+                "Sheet '{label}' cannot be opened: {} is unreadable ({})",
+                sheet_path.display(),
+                detail.as_deref().unwrap_or("no reason recorded")
+            )),
+            SheetNodeKind::Rejected => crate::diagnostics::log_warning(format!(
+                "Sheet '{label}' cannot be opened: its reference '{}' points outside the sheet's folder",
                 sheet_path.display()
             )),
             SheetNodeKind::Cycle | SheetNodeKind::Truncated => {
@@ -63,9 +77,13 @@ impl Signex {
     /// ignored.
     pub(crate) fn ascend_to_parent_sheet(&mut self) {
         let Some(active) = self.active_tab_path() else {
+            crate::diagnostics::log_warning("Up Hierarchy: no sheet is focused");
             return;
         };
         let Some((root, pages)) = self.navigator_project_scope() else {
+            crate::diagnostics::log_warning(
+                "Up Hierarchy: the focused sheet is not part of a loaded project",
+            );
             return;
         };
         let set = assemble_project_sheets(&self.document_state, &pages, &root);
@@ -196,5 +214,73 @@ mod tests {
         assert_eq!(active_tab(&app), Some(root.clone()));
         app.ascend_to_parent_sheet();
         assert_eq!(active_tab(&app), Some(root), "the root has no parent");
+    }
+
+    fn double_click(app: &mut Signex, path: &[usize]) {
+        let select = PanelMsg::Navigator(TreeMsg::Select(path.to_vec()));
+        let _ = app.handle_dock_navigator_panel_message(&select);
+        let _ = app.handle_dock_navigator_panel_message(&select);
+    }
+
+    #[test]
+    fn a_dot_dot_reference_opens_the_already_open_tab_not_a_second_engine() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = write_sheet(dir.path(), "root.snxsch", &[("Mid", "sub/../mid.snxsch")]);
+        let mid = write_sheet(dir.path(), "mid.snxsch", &[]);
+        let mut app = app_workspace(&dir.path().to_string_lossy(), &["root.snxsch"]);
+        app.open_or_focus_sheet_path(mid.clone());
+        app.refresh_panel_ctx();
+        assert!(root.exists());
+
+        double_click(&mut app, &[0, 0]);
+
+        assert_eq!(app.document_state.tabs.len(), 1, "no second tab");
+        assert_eq!(app.document_state.engines.len(), 1, "no second engine");
+        assert_eq!(active_tab(&app), Some(mid));
+    }
+
+    #[test]
+    fn escaping_and_absolute_references_cannot_be_opened() {
+        let outer = tempfile::tempdir().expect("tempdir");
+        let dir = outer.path().join("proj");
+        std::fs::create_dir_all(&dir).expect("project dir");
+        write_sheet(outer.path(), "x.snxsch", &[]);
+        let abs = write_sheet(outer.path(), "abs.snxsch", &[]);
+        let abs_ref = abs.to_string_lossy().into_owned();
+        write_sheet(
+            &dir,
+            "root.snxsch",
+            &[("Up", "../x.snxsch"), ("Abs", abs_ref.as_str())],
+        );
+        let mut app = app_workspace(&dir.to_string_lossy(), &["root.snxsch"]);
+        app.refresh_panel_ctx();
+
+        assert_eq!(labels(&app, &[0, 0]), ["root", "Up (rejected)"]);
+        assert_eq!(labels(&app, &[0, 1]), ["root", "Abs (rejected)"]);
+        double_click(&mut app, &[0, 0]);
+        double_click(&mut app, &[0, 1]);
+
+        assert!(app.document_state.tabs.is_empty(), "nothing was opened");
+    }
+
+    #[test]
+    fn a_cycle_spelled_through_dot_dot_in_another_folder_is_marked_at_depth_two() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let sub = dir.path().join("sub");
+        std::fs::create_dir_all(&sub).expect("sub dir");
+        write_sheet(dir.path(), "root.snxsch", &[("Mid", "sub/mid.snxsch")]);
+        write_sheet(&sub, "mid.snxsch", &[("Again", "deep/../mid.snxsch")]);
+        let mut app = app_workspace(&dir.path().to_string_lossy(), &["root.snxsch"]);
+
+        app.refresh_panel_ctx();
+
+        assert_eq!(labels(&app, &[0, 0, 0]), ["root", "Mid", "Again (cycle)"]);
+    }
+
+    #[test]
+    fn up_hierarchy_outside_a_project_says_so() {
+        let mut app = app_workspace("/nowhere", &[]);
+        app.ascend_to_parent_sheet();
+        assert!(app.document_state.tabs.is_empty());
     }
 }

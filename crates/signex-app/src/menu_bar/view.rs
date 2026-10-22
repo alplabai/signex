@@ -66,6 +66,12 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
                 MenuMessage::ExportBom,
                 ctx.has_schematic,
             ),
+            leaf_if(
+                "ERC Report…",
+                None,
+                MenuMessage::ExportErcReport,
+                ctx.has_schematic,
+            ),
         ]),
     );
 

@@ -42,7 +42,10 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
 }
 
 /// Write a single CSV row with proper quoting and escaping per RFC 4180.
-fn write_csv_row(output: &mut Vec<u8>, fields: &[impl AsRef<str>]) -> Result<(), BomError> {
+pub(crate) fn write_csv_row(
+    output: &mut Vec<u8>,
+    fields: &[impl AsRef<str>],
+) -> Result<(), BomError> {
     for (i, field) in fields.iter().enumerate() {
         let s = field.as_ref();
 

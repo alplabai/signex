@@ -1,6 +1,6 @@
 use signex_types::schematic::{
-    Bus, BusEntry, HAlign, Junction, Label, NoConnect, SchematicSheet, SelectedItem, StrokeColor,
-    Symbol, TextNote, Wire,
+    Bus, BusEntry, ChildSheet, HAlign, Junction, Label, NoConnect, SchematicSheet, SelectedItem,
+    StrokeColor, Symbol, TextNote, Wire,
 };
 use uuid::Uuid;
 
@@ -40,6 +40,8 @@ pub enum CommandKind {
     UpdateText,
     UpdateLabelProps,
     SetSymbolRotation,
+    SetSymbolLocked,
+    SetSymbolDnp,
     UpdateSymbolTextSize,
     UpdateSymbolLibId,
     UpdateSymbolFootprint,
@@ -48,6 +50,7 @@ pub enum CommandKind {
     PlaceBus,
     PlaceLabel,
     PlaceSymbol,
+    PlaceChildSheet,
     PlaceJunction,
     PlaceNoConnect,
     PlaceBusEntry,
@@ -59,6 +62,7 @@ pub enum CommandKind {
     MoveSymbolAbsolute,
     ReorderObjects,
     ReconcileChildSheetPins,
+    RenameChildSheetFile,
     SetPaperSize,
 }
 
@@ -99,6 +103,17 @@ pub enum Command {
     SetSymbolRotation {
         symbol_id: Uuid,
         rotation_degrees: f64,
+    },
+    /// Set a symbol's `locked` flag (Properties panel "Locked" checkbox).
+    SetSymbolLocked {
+        symbol_id: Uuid,
+        locked: bool,
+    },
+    /// Set a symbol's `dnp` (Do Not Populate) flag (Properties panel "DNP"
+    /// checkbox). The BOM exporters read this flag.
+    SetSymbolDnp {
+        symbol_id: Uuid,
+        dnp: bool,
     },
     /// Set the font size of a symbol's value/reference text property.
     /// `field` is "value" or "reference".
@@ -144,6 +159,11 @@ pub enum Command {
     },
     PlaceSymbol {
         symbol: Symbol,
+    },
+    /// Add a hierarchical sheet symbol. Rejected with
+    /// [`EngineError::EmptyChildSheetFilename`] when `filename` is blank.
+    PlaceChildSheet {
+        child_sheet: ChildSheet,
     },
     PlaceJunction {
         junction: Junction,
@@ -209,6 +229,13 @@ pub enum Command {
         child_filename: String,
         ports: Vec<SheetPort>,
     },
+    /// Re-point every hierarchical child-sheet reference whose `filename`
+    /// is `from` at `to` — the follow-up to renaming the referenced
+    /// `.snxsch` on disk. Undoable like any other edit.
+    RenameChildSheetFile {
+        from: String,
+        to: String,
+    },
     /// Set the sheet's paper size (a named format like "A4"/"A3" — the
     /// Page Options panel is the producer). Persists through
     /// `SchematicSheet.paper_size` and is undoable like any other edit.
@@ -252,6 +279,8 @@ impl Command {
             Command::UpdateText { .. } => CommandKind::UpdateText,
             Command::UpdateLabelProps { .. } => CommandKind::UpdateLabelProps,
             Command::SetSymbolRotation { .. } => CommandKind::SetSymbolRotation,
+            Command::SetSymbolLocked { .. } => CommandKind::SetSymbolLocked,
+            Command::SetSymbolDnp { .. } => CommandKind::SetSymbolDnp,
             Command::UpdateSymbolTextSize { .. } => CommandKind::UpdateSymbolTextSize,
             Command::UpdateSymbolLibId { .. } => CommandKind::UpdateSymbolLibId,
             Command::UpdateSymbolFootprint { .. } => CommandKind::UpdateSymbolFootprint,
@@ -261,6 +290,7 @@ impl Command {
             Command::PlaceBus { .. } => CommandKind::PlaceBus,
             Command::PlaceLabel { .. } => CommandKind::PlaceLabel,
             Command::PlaceSymbol { .. } => CommandKind::PlaceSymbol,
+            Command::PlaceChildSheet { .. } => CommandKind::PlaceChildSheet,
             Command::PlaceJunction { .. } => CommandKind::PlaceJunction,
             Command::PlaceNoConnect { .. } => CommandKind::PlaceNoConnect,
             Command::PlaceBusEntry { .. } => CommandKind::PlaceBusEntry,
@@ -272,6 +302,7 @@ impl Command {
             Command::MoveSymbolAbsolute { .. } => CommandKind::MoveSymbolAbsolute,
             Command::ReorderObjects { .. } => CommandKind::ReorderObjects,
             Command::ReconcileChildSheetPins { .. } => CommandKind::ReconcileChildSheetPins,
+            Command::RenameChildSheetFile { .. } => CommandKind::RenameChildSheetFile,
             Command::SetPaperSize { .. } => CommandKind::SetPaperSize,
         }
     }
