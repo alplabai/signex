@@ -443,6 +443,7 @@ mod tests {
             library_id: None,
             row_id: None,
             library_version: String::new(),
+            unknown: Default::default(),
         });
         (Engine::new(sheet).unwrap(), uuid)
     }
