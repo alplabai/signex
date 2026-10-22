@@ -14,7 +14,7 @@ All notable changes to Signex ship here. Format follows [Keep a Changelog](https
 
 Each release section is authored **before** the `vX.Y.Z` tag is created, so the release workflow picks it up as the GitHub Release body. `.github/workflows/release.yml` ("Extract CHANGELOG entry for this tag") matches `## [X.Y.Z]` against the tag with the leading `v` stripped — so that heading line is load-bearing and must not be reworded.
 
-**Nothing enforces this.** A missing section is not an error — the workflow silently falls back to auto-generated notes, so a tag cut without a section still ships, just with a worse release page. This file previously cited `.claude/hooks/pre-release-guard.sh` as the enforcement; that path is gitignored and no such hook exists.
+**The release workflow enforces this.** A `vX.Y.Z` tag push fails before any build unless `scripts/check_release_version.sh` passes: the tag must equal `[workspace.package] version` in `Cargo.toml`, and CHANGELOG must hold a dated, not-`unreleased` `## [X.Y.Z]` section. The extractor's fallback to auto-generated notes for a missing section remains as a second line of defence. This file previously cited `.claude/hooks/pre-release-guard.sh` as the enforcement; that path is gitignored and no such hook exists.
 
 ## [Unreleased]
 
@@ -26,6 +26,9 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 ### Added — PDF export
 
 - **Roboto/Iosevka embedded as Type0 fonts (#352)** — exported PDFs now carry the bundled TTFs as `Identity-H` Type0/CIDFontType2 fonts with a `/W` widths array, a `/FontFile2` stream subset to the glyphs actually used, and a `/ToUnicode` CMap, instead of referencing Helvetica/Courier. `µ`, `°`, `±`, Turkish letters and Greek render in the intended typeface and extract/copy back as the original text; the ASCII-mangling `sanitize_pdf_text` workaround is gone. Characters no bundled face covers (e.g. CJK) draw as `.notdef`.
+### Added — release workflow
+
+- **Release version guard** — the release workflow now runs `scripts/check_release_version.sh` before any build and fails unless the tag, `[workspace.package] version` in `Cargo.toml`, and a dated (not `unreleased`) `## [X.Y.Z]` CHANGELOG section all agree, printing all three values on a mismatch (#343).
 
 ### Fixed
 
