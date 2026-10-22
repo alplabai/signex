@@ -35,6 +35,9 @@
 #[path = "regression/project.rs"]
 mod project;
 
+#[path = "regression/bom_validation.rs"]
+mod bom_validation;
+
 #[path = "regression/prefs.rs"]
 mod prefs;
 
