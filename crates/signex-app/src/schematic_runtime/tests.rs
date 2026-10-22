@@ -2,6 +2,7 @@ use super::*;
 
 fn empty_snapshot() -> SchematicRenderSnapshot {
     SchematicRenderSnapshot {
+        unknown: Default::default(),
         uuid: uuid::Uuid::nil(),
         version: 1,
         generator: "signex-test".into(),

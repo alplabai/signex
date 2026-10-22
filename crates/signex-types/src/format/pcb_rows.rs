@@ -374,6 +374,7 @@ pub(in crate::format) fn row_to_footprint(
         pads: Vec::new(),
         graphics: extras.graphics,
         properties: extras.properties,
+        unknown: extras.unknown,
     }
 }
 
@@ -440,6 +441,7 @@ pub(in crate::format) fn row_to_pad(row: PcbPadRow, extras: PadExtras) -> Pad {
         layers: split_layers(&row.layers),
         net,
         roundrect_ratio: row.roundrect_ratio,
+        unknown: extras.unknown,
     }
 }
 
