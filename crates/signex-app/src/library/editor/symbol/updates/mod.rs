@@ -296,6 +296,28 @@ pub(crate) fn apply_symbol_primitive_edit(
 ) {
     use crate::library::editor::symbol::state::SymbolSelection;
 
+    // The measurement carries the event that triggered it: apply the
+    // view, then process that event as if it had arrived on its own.
+    if let SymbolEditorMsg::ViewportMeasured {
+        width,
+        height,
+        then,
+    } = msg
+    {
+        apply_symbol_camera(
+            editor,
+            SymbolEditorMsg::ViewportMeasured {
+                width,
+                height,
+                then: None,
+            },
+        );
+        if let Some(next) = then {
+            apply_symbol_primitive_edit(editor, *next);
+        }
+        return;
+    }
+
     clear_stale_status_message(editor, &msg);
 
     match msg {
@@ -432,6 +454,7 @@ pub(crate) fn apply_symbol_primitive_edit(
         SymbolEditorMsg::Pan { .. }
         | SymbolEditorMsg::Zoom { .. }
         | SymbolEditorMsg::Fit
+        | SymbolEditorMsg::ViewportMeasured { .. }
         | SymbolEditorMsg::CursorAt { .. } => apply_symbol_camera(editor, msg),
 
         // ── Display settings intercepted upstream; no-op here ────

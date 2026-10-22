@@ -1,8 +1,8 @@
 format = "snxfpt/1"
 file_uuid = "019df45d-af61-7612-8d18-c80e4c879451"
 display_name = "QFN-16"
-created = "2026-05-04T19:01:13.697452Z"
-updated = "2026-05-04T19:01:13.697452Z"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
 
 [[footprints]]
 uuid = "019df45d-af61-7612-8d18-c7f4c67e4b0e"
@@ -20,8 +20,8 @@ fab_f = []
 fab_b = []
 version = "0.0.1"
 released = false
-created = "2026-05-04T19:01:13.697362200Z"
-updated = "2026-05-04T19:01:13.697362200Z"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
 schema_version = 3
 
 [footprints.courtyard]
@@ -58,6 +58,7 @@ kind = "BoardTop"
 id = "f83b5630-3d88-4bdd-b8f9-46f0a8565577"
 plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
+centerline = false
 kind = "Point"
 x = 0.0
 y = 0.0
@@ -79,10 +80,18 @@ shape = "Rect"
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
 
+[footprints.sketch.entities.pad.stack]
+paste_top_enabled = false
+paste_bottom_enabled = false
+mask_top_tented = false
+mask_bottom_tented = false
+thermal_relief = false
+
 [[footprints.sketch.entities]]
 id = "1707c465-dcd3-4895-9926-70267973ba1c"
 plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
+centerline = false
 kind = "Point"
 x = 0.0
 y = 0.0
@@ -104,10 +113,18 @@ shape = "Rect"
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
 
+[footprints.sketch.entities.pad.stack]
+paste_top_enabled = false
+paste_bottom_enabled = false
+mask_top_tented = false
+mask_bottom_tented = false
+thermal_relief = false
+
 [[footprints.sketch.entities]]
 id = "56b4c552-855b-4b61-8975-6f44107d97e5"
 plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
+centerline = false
 kind = "Point"
 x = 0.0
 y = 0.0
@@ -129,10 +146,18 @@ shape = "Rect"
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
 
+[footprints.sketch.entities.pad.stack]
+paste_top_enabled = false
+paste_bottom_enabled = false
+mask_top_tented = false
+mask_bottom_tented = false
+thermal_relief = false
+
 [[footprints.sketch.entities]]
 id = "7a701422-da8f-4f1a-9915-de54ca7ea5db"
 plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
+centerline = false
 kind = "Point"
 x = 0.0
 y = 0.0
@@ -154,10 +179,18 @@ shape = "Rect"
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
 
+[footprints.sketch.entities.pad.stack]
+paste_top_enabled = false
+paste_bottom_enabled = false
+mask_top_tented = false
+mask_bottom_tented = false
+thermal_relief = false
+
 [[footprints.sketch.entities]]
 id = "40918ad0-1223-4928-8d7d-7460fed0173a"
 plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
+centerline = false
 kind = "Point"
 x = 0.0
 y = 0.0
@@ -179,10 +212,18 @@ shape = "Rect"
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
 
+[footprints.sketch.entities.pad.stack]
+paste_top_enabled = false
+paste_bottom_enabled = false
+mask_top_tented = false
+mask_bottom_tented = false
+thermal_relief = false
+
 [[footprints.sketch.entities]]
 id = "61e00863-ed6f-406d-9e62-f0b752e0203a"
 plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
+centerline = false
 kind = "Point"
 x = 0.0
 y = 0.0
@@ -204,10 +245,18 @@ shape = "Rect"
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
 
+[footprints.sketch.entities.pad.stack]
+paste_top_enabled = false
+paste_bottom_enabled = false
+mask_top_tented = false
+mask_bottom_tented = false
+thermal_relief = false
+
 [[footprints.sketch.entities]]
 id = "53fb08b5-a61b-4bdb-a4d6-b567d5cf1909"
 plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
+centerline = false
 kind = "Point"
 x = 0.0
 y = 0.0
@@ -229,10 +278,18 @@ shape = "Rect"
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
 
+[footprints.sketch.entities.pad.stack]
+paste_top_enabled = false
+paste_bottom_enabled = false
+mask_top_tented = false
+mask_bottom_tented = false
+thermal_relief = false
+
 [[footprints.sketch.entities]]
 id = "43661ebe-cad5-4976-aa03-80034b7cbe4c"
 plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
+centerline = false
 kind = "Point"
 x = 0.0
 y = 0.0
@@ -254,10 +311,18 @@ shape = "Rect"
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
 
+[footprints.sketch.entities.pad.stack]
+paste_top_enabled = false
+paste_bottom_enabled = false
+mask_top_tented = false
+mask_bottom_tented = false
+thermal_relief = false
+
 [[footprints.sketch.entities]]
 id = "b842a0e5-c7b0-411a-bd83-d9ead411b85b"
 plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
+centerline = false
 kind = "Point"
 x = 0.0
 y = 0.0
@@ -279,10 +344,18 @@ shape = "Rect"
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
 
+[footprints.sketch.entities.pad.stack]
+paste_top_enabled = false
+paste_bottom_enabled = false
+mask_top_tented = false
+mask_bottom_tented = false
+thermal_relief = false
+
 [[footprints.sketch.entities]]
 id = "d73e721d-e653-400c-baa5-4cb59d422bdc"
 plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
+centerline = false
 kind = "Point"
 x = 0.0
 y = 0.0
@@ -304,10 +377,18 @@ shape = "Rect"
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
 
+[footprints.sketch.entities.pad.stack]
+paste_top_enabled = false
+paste_bottom_enabled = false
+mask_top_tented = false
+mask_bottom_tented = false
+thermal_relief = false
+
 [[footprints.sketch.entities]]
 id = "6b691a25-b7df-4e85-b9d0-202cba270eb0"
 plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
+centerline = false
 kind = "Point"
 x = 0.0
 y = 0.0
@@ -329,10 +410,18 @@ shape = "Rect"
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
 
+[footprints.sketch.entities.pad.stack]
+paste_top_enabled = false
+paste_bottom_enabled = false
+mask_top_tented = false
+mask_bottom_tented = false
+thermal_relief = false
+
 [[footprints.sketch.entities]]
 id = "22ca65aa-011d-4db4-b215-19ec429ce816"
 plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
+centerline = false
 kind = "Point"
 x = 0.0
 y = 0.0
@@ -354,10 +443,18 @@ shape = "Rect"
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
 
+[footprints.sketch.entities.pad.stack]
+paste_top_enabled = false
+paste_bottom_enabled = false
+mask_top_tented = false
+mask_bottom_tented = false
+thermal_relief = false
+
 [[footprints.sketch.entities]]
 id = "b2b8e853-45b5-4260-9acc-94f19e238c44"
 plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
+centerline = false
 kind = "Point"
 x = 0.0
 y = 0.0
@@ -379,10 +476,18 @@ shape = "Rect"
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
 
+[footprints.sketch.entities.pad.stack]
+paste_top_enabled = false
+paste_bottom_enabled = false
+mask_top_tented = false
+mask_bottom_tented = false
+thermal_relief = false
+
 [[footprints.sketch.entities]]
 id = "97191339-fd95-4500-8021-72c38ac4c4f9"
 plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
+centerline = false
 kind = "Point"
 x = 0.0
 y = 0.0
@@ -404,10 +509,18 @@ shape = "Rect"
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
 
+[footprints.sketch.entities.pad.stack]
+paste_top_enabled = false
+paste_bottom_enabled = false
+mask_top_tented = false
+mask_bottom_tented = false
+thermal_relief = false
+
 [[footprints.sketch.entities]]
 id = "434e5442-6831-4d41-9209-dac04c1069b1"
 plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
+centerline = false
 kind = "Point"
 x = 0.0
 y = 0.0
@@ -429,10 +542,18 @@ shape = "Rect"
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
 
+[footprints.sketch.entities.pad.stack]
+paste_top_enabled = false
+paste_bottom_enabled = false
+mask_top_tented = false
+mask_bottom_tented = false
+thermal_relief = false
+
 [[footprints.sketch.entities]]
 id = "eab4a114-124e-44cb-b1c8-a3bfde628ca1"
 plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
+centerline = false
 kind = "Point"
 x = 0.0
 y = 0.0
@@ -453,6 +574,13 @@ shape = "Rect"
 
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
+
+[footprints.sketch.entities.pad.stack]
+paste_top_enabled = false
+paste_bottom_enabled = false
+mask_top_tented = false
+mask_bottom_tented = false
+thermal_relief = false
 
 [footprints.sketch.parameters]
 body_h = "3.0mm"
