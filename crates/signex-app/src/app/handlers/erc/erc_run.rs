@@ -8,25 +8,9 @@ impl Signex {
     pub(crate) fn handle_run_erc(&mut self) -> Task<Message> {
         let dsl_eval_fns = self.load_project_dsl_eval_fns();
         let overrides = self.ui_state.erc_severity_override.clone();
-        let apply_overrides =
-            |mut violations: Vec<signex_erc::Violation>| -> Vec<signex_erc::Violation> {
-                for v in &mut violations {
-                    if let Some(&sev) = overrides.get(&v.rule) {
-                        v.severity = sev;
-                    }
-                }
-                violations.retain(|v| v.severity != signex_erc::Severity::Off);
-                violations.sort_by_key(|v| {
-                    let bucket = match v.severity {
-                        signex_erc::Severity::Error => 0,
-                        signex_erc::Severity::Warning => 1,
-                        signex_erc::Severity::Info => 2,
-                        signex_erc::Severity::Off => 3,
-                    };
-                    (bucket, format!("{:?}", v.rule))
-                });
-                violations
-            };
+        let apply_overrides = |violations: Vec<signex_erc::Violation>| {
+            signex_erc::apply_overrides(violations, &overrides)
+        };
 
         let mut by_path: std::collections::HashMap<std::path::PathBuf, Vec<signex_erc::Violation>> =
             std::collections::HashMap::new();
@@ -254,8 +238,8 @@ impl Signex {
                             }
                             _ => crate::panels::ErcSeverityLite::Info,
                         },
-                        rule_label: v.rule.label(),
-                        rule_kind: v.rule,
+                        rule_label: v.display_name(),
+                        rule_kind: v.builtin_kind(),
                         message: v.message.clone(),
                         world_x: v.location.x,
                         world_y: v.location.y,
@@ -301,7 +285,7 @@ impl Signex {
         self.ensure_sheet_open_and_active(&target.sheet_path);
 
         match target.rule_kind {
-            signex_erc::RuleKind::UnusedPin => {
+            Some(signex_erc::RuleKind::UnusedPin) => {
                 let nc = signex_types::schematic::NoConnect {
                     uuid: uuid::Uuid::new_v4(),
                     position: signex_types::schematic::Point::new(target.world_x, target.world_y),

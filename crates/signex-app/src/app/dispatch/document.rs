@@ -190,6 +190,10 @@ impl Signex {
                 self.handle_bom_preview_set_include_not_fitted(b);
                 self.finish_update()
             }
+            BomPreviewMsg::SetRule(rule, enabled) => {
+                self.handle_bom_preview_set_rule(rule, enabled);
+                self.finish_update()
+            }
             BomPreviewMsg::ToggleColumn(col) => {
                 self.handle_bom_preview_toggle_column(col);
                 self.finish_update()

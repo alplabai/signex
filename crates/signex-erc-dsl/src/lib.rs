@@ -117,6 +117,38 @@ mod tests {
     }
 
     #[test]
+    fn dsl_rule_keeps_its_declared_severity_when_the_placeholder_builtin_is_off() {
+        use signex_erc::{RuleKind, Severity, Violation, apply_overrides, engine};
+
+        let src = r#"
+            rule net_rule
+            on net
+            when has_driver() and net.name matches "^I2C_"
+            then warning "Driver net"
+        "#;
+        let eval_fns = parse_validate_compile_to_eval_fns(src).expect("dsl should compile");
+        let violations: Vec<Violation> = engine::run_all_with_dsl(&sample_context(), &eval_fns)
+            .into_iter()
+            .map(Violation::from)
+            .collect();
+
+        // The compiler files a Net rule under NetLabelConflict; switching
+        // that built-in off or to Error must not touch the user's rule.
+        for level in [Severity::Off, Severity::Error, Severity::Info] {
+            let overrides = HashMap::from([(RuleKind::NetLabelConflict, level)]);
+            let out = apply_overrides(violations.clone(), &overrides);
+            let user: Vec<_> = out
+                .iter()
+                .filter(|v| v.rule_id.as_str() == "user::net_rule")
+                .collect();
+            assert_eq!(user.len(), 1, "override {level:?} removed the DSL rule");
+            assert_eq!(user[0].severity, Severity::Warning);
+            assert_eq!(user[0].display_name(), "user::net_rule");
+            assert_eq!(user[0].builtin_kind(), None);
+        }
+    }
+
+    #[test]
     fn invalid_regex_returns_compile_error() {
         let src = r#"
             rule bad_rx

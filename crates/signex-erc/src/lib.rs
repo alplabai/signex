@@ -22,11 +22,15 @@ use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind}
 pub mod context;
 pub mod diagnostic;
 pub mod engine;
+#[cfg(test)]
+mod fixtures;
+mod overrides;
 pub mod rule;
 mod rules;
 
 pub use context::ErcContext;
 pub use diagnostic::Diagnostic;
+pub use overrides::apply_overrides;
 pub use rule::{AnalysisScope, Applicability, RuleDefinition, RuleId, RuleTarget};
 
 /// What kind of violation this is. Stable identifier that maps to a severity
@@ -82,8 +86,27 @@ impl RuleKind {
         }
     }
 
-    /// Default severity. Users can override per-rule in the Preferences
-    /// panel via `ui_state.erc_severity_override`.
+    /// Every built-in rule, in the order the ERC dialog lists them.
+    pub const ALL: [RuleKind; 12] = [
+        RuleKind::UnusedPin,
+        RuleKind::DuplicateRefDesignator,
+        RuleKind::HierPortDisconnected,
+        RuleKind::DanglingWire,
+        RuleKind::NetLabelConflict,
+        RuleKind::OrphanLabel,
+        RuleKind::BusBitWidthMismatch,
+        RuleKind::BadHierSheetPin,
+        RuleKind::MissingPowerFlag,
+        RuleKind::PowerPortShort,
+        RuleKind::SymbolOutsideSheet,
+        RuleKind::AmbiguousLabelAnchor,
+    ];
+
+    /// The one source of truth for a rule's severity: [`Diagnostic::new`]
+    /// stamps it on every diagnostic and the ERC dialog highlights it.
+    /// `BadHierSheetPin` is the sole rule that grades individual findings
+    /// below this level. Users override per rule via
+    /// `ui_state.erc_severity_override`; see [`apply_overrides`].
     pub fn default_severity(self) -> Severity {
         match self {
             RuleKind::DuplicateRefDesignator
@@ -95,9 +118,8 @@ impl RuleKind {
             | RuleKind::DanglingWire
             | RuleKind::NetLabelConflict
             | RuleKind::OrphanLabel
-            | RuleKind::MissingPowerFlag
             | RuleKind::AmbiguousLabelAnchor => Severity::Warning,
-            RuleKind::SymbolOutsideSheet => Severity::Info,
+            RuleKind::MissingPowerFlag | RuleKind::SymbolOutsideSheet => Severity::Info,
         }
     }
 }
@@ -116,6 +138,13 @@ pub enum Severity {
 /// mm; the app uses it to centre the canvas when the user clicks the message.
 #[derive(Debug, Clone)]
 pub struct Violation {
+    /// Which rule fired. Authoritative for identity: built-ins are
+    /// `builtin::<slug>`, DSL rules `user::<name>`.
+    pub rule_id: RuleId,
+    /// Built-in kind this violation is filed under. For a DSL violation it is
+    /// only the compiler's placeholder (see `fallback_kind` in
+    /// `signex-erc-dsl`) — nothing may read it to decide labels, overrides or
+    /// quick fixes; use [`Violation::builtin_kind`] instead.
     pub rule: RuleKind,
     pub severity: Severity,
     pub message: String,
@@ -124,6 +153,23 @@ pub struct Violation {
     pub primary: Option<SelectedItem>,
     /// Optional peer — the "other" object in two-object rules.
     pub peer: Option<SelectedItem>,
+}
+
+impl Violation {
+    /// The built-in rule that produced this violation, or `None` for a DSL
+    /// (`user::`) rule.
+    pub fn builtin_kind(&self) -> Option<RuleKind> {
+        self.rule_id.builtin_kind()
+    }
+
+    /// Name for the Messages panel: the built-in's label, or a DSL rule's own
+    /// id.
+    pub fn display_name(&self) -> String {
+        match self.builtin_kind() {
+            Some(kind) => kind.label().to_string(),
+            None => self.rule_id.to_string(),
+        }
+    }
 }
 
 /// Run every enabled rule against the snapshot. Returns a flat list of
