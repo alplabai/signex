@@ -104,11 +104,13 @@ impl Signex {
             .collect();
         let selected_files: std::collections::HashSet<PathBuf> =
             sheet_files.iter().map(|(p, _)| p.clone()).collect();
+        let page_setup = crate::app::state::PageSetupInputs::from_options(&pdf_opts);
         self.document_state.preview = Some(crate::app::state::PreviewState {
             pages,
             page_handles,
             selected: 0,
             pdf_options: pdf_opts,
+            page_setup,
             specific_page_input: "1".to_string(),
             zoom: 1.0,
             active_tab: crate::app::state::PdfPreviewTab::Preview,
@@ -175,17 +177,6 @@ impl Signex {
         if parsed_page.map(|p| p > 0).unwrap_or(false) {
             self.rerasterize_print_preview();
         }
-    }
-
-    pub(crate) fn handle_print_preview_set_fit_to_page(&mut self, fit: bool) {
-        if let Some(preview) = self.document_state.preview.as_mut() {
-            preview.pdf_options.scale = if fit {
-                signex_output::PdfScale::FitToPage
-            } else {
-                signex_output::PdfScale::OneToOne
-            };
-        }
-        self.rerasterize_print_preview();
     }
 
     pub(crate) fn handle_print_preview_set_include_title_block(&mut self, include: bool) {
@@ -285,7 +276,7 @@ impl Signex {
         self.rerasterize_print_preview();
     }
 
-    fn rerasterize_print_preview(&mut self) {
+    pub(super) fn rerasterize_print_preview(&mut self) {
         let (pdf_opts, preview_dpi) = match self.document_state.preview.as_ref() {
             Some(preview) => (preview.pdf_options.clone(), preview.quality.preview_dpi()),
             None => return,

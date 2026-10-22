@@ -519,3 +519,52 @@ fn outlines_emitted_when_components_toggle_is_on() {
     let title_count = bytes.matches("/Title").count();
     assert!(title_count >= 3, "got only {title_count} /Title entries");
 }
+
+/// First page's `/MediaBox [0 0 w h]` as points.
+fn media_box_pt(bytes: &[u8]) -> (f64, f64) {
+    let text = String::from_utf8_lossy(bytes);
+    let at = text.find("/MediaBox").expect("MediaBox present");
+    let open = text[at..].find('[').expect("open") + at + 1;
+    let close = text[open..].find(']').expect("close") + open;
+    let nums: Vec<f64> = text[open..close]
+        .split_whitespace()
+        .map(|n| n.parse().expect("number"))
+        .collect();
+    assert_eq!(nums.len(), 4, "{nums:?}");
+    (nums[2], nums[3])
+}
+
+#[test]
+fn media_box_matches_every_selectable_page_size_and_custom() {
+    let ctx = sample_ctx(1);
+    let pt = |mm: f64| mm * 72.0 / 25.4;
+    for kind in PageSizeKind::ALL {
+        for orientation in [Orientation::Portrait, Orientation::Landscape] {
+            let size = kind.select(PageSize::IsoA4, orientation);
+            let opts = PdfOptions {
+                page_size: size,
+                orientation,
+                ..Default::default()
+            };
+            let out = PdfExporter.export(&ctx, &opts).expect("export");
+            let (w, h) = media_box_pt(&out.bytes);
+            let (want_w, want_h) = size.dimensions_mm(orientation);
+            assert!((w - pt(want_w)).abs() < 0.01, "{kind} {orientation} w {w}");
+            assert!((h - pt(want_h)).abs() < 0.01, "{kind} {orientation} h {h}");
+        }
+    }
+    let custom = PageSize::Custom {
+        width_mm: 123.0,
+        height_mm: 456.0,
+    };
+    let opts = PdfOptions {
+        page_size: custom,
+        ..Default::default()
+    };
+    let out = PdfExporter.export(&ctx, &opts).expect("export");
+    let (w, h) = media_box_pt(&out.bytes);
+    assert!(
+        (w - pt(123.0)).abs() < 0.01 && (h - pt(456.0)).abs() < 0.01,
+        "{w}x{h}"
+    );
+}

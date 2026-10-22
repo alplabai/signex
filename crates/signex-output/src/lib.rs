@@ -26,8 +26,9 @@ pub use bom::{
 };
 pub use netlist::{NetlistExporter, NetlistOptions, NetlistOutput};
 pub use pdf::{
-    ColourMode, Margins, Orientation, PageRange, PageSize, PdfExporter, PdfOptions, PdfOutput,
-    PdfScale, SchematicPalette,
+    ColourMode, MAX_PAGE_EDGE_MM, MAX_SCALE_PERCENT, MIN_PRINTABLE_MM, MarginEdge, MarginUpdate,
+    Margins, Orientation, PageRange, PageSetupError, PageSize, PageSizeKind, PdfExporter,
+    PdfOptions, PdfOutput, PdfScale, PdfScaleMode, SchematicPalette, parse_mm, parse_percent,
 };
 pub use preview::{PreviewOptions, PreviewPage, PreviewRasterizer};
 pub use substitution::{SubstitutionContext, resolve};

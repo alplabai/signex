@@ -38,6 +38,9 @@ mod project;
 #[path = "regression/bom_validation.rs"]
 mod bom_validation;
 
+#[path = "regression/pdf_page_setup.rs"]
+mod pdf_page_setup;
+
 #[path = "regression/prefs.rs"]
 mod prefs;
 

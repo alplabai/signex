@@ -7,10 +7,12 @@ use crate::dock::DockArea;
 use super::TabInfo;
 
 mod interaction;
+mod pdf_page_setup;
 pub(crate) mod scope;
 mod ui;
 
 pub use interaction::InteractionState;
+pub use pdf_page_setup::PageSetupInputs;
 pub use ui::UiState;
 
 pub struct Signex {
@@ -644,6 +646,9 @@ pub struct PreviewState {
     /// `pdf_options.dpi` at export time; the preview always rasterises
     /// at 96 DPI for speed.
     pub quality: PdfQuality,
+    /// Typed text of the page-setup fields (custom size, margins, percent)
+    /// plus the reason the last edit was rejected or clamped.
+    pub page_setup: PageSetupInputs,
 }
 
 impl PreviewState {
