@@ -20,7 +20,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use super::LoadedProject;
-use crate::app::project_sheets::lexically_normalize;
+use crate::app::project_sheets::{normalize_clamped, ownership_reference};
 
 /// How [`path_key_with`] treats case (and, with it, the separator) when it
 /// builds a comparison key.
@@ -175,8 +175,11 @@ pub(crate) fn path_is_under(path: &Path, root: &Path, fold: CaseFold) -> bool {
 /// names a single owner. Ownership questions that must not miss a sibling
 /// ask this instead.
 ///
-/// References are joined to the parent's directory and lexically normalized,
-/// so a `../` loop folds onto an already-seen key and the walk terminates.
+/// Every reference is followed, absolute and `../` alike, through the one
+/// ownership rule ([`ownership_reference`]); containment applies only to
+/// opening a file in the editor. Claiming too much is the safe direction,
+/// so this never refuses an escape. `..` is clamped at the filesystem root and
+/// each key is visited once, so a loop or a `/../..` chain terminates.
 fn reachable_keys(
     project: &LoadedProject,
     loaded: &HashMap<PathBuf, Vec<String>>,
@@ -191,7 +194,7 @@ fn reachable_keys(
         .data
         .sheets
         .iter()
-        .map(|s| lexically_normalize(&dir.join(&s.filename)))
+        .map(|s| normalize_clamped(&dir.join(&s.filename)))
         .collect();
     let mut reached: HashSet<String> = HashSet::new();
     while let Some(path) = pending.pop() {
@@ -206,7 +209,7 @@ fn reachable_keys(
         pending.extend(
             children
                 .iter()
-                .map(|c| lexically_normalize(&parent_dir.join(c))),
+                .filter_map(|c| ownership_reference(parent_dir, c)),
         );
     }
     reached
@@ -235,7 +238,9 @@ pub(crate) fn owned_by_project(
 /// `unreadable` are sheets that exist but could not be read or parsed, so
 /// their children are unknown. Fail closed: when another project reaches such
 /// a sheet, everything under its directory that the closing project does not
-/// itself own counts as claimed, so a Discard All never touches it.
+/// itself own counts as claimed, so a Discard All never touches it. The
+/// closing project owns its reachable set, its `.snxprj` and, when the
+/// unreadable sheet sits strictly above it, its whole directory.
 ///
 /// A sheet the closing project owns is never claimed by directory nesting,
 /// but a sheet reached by several projects counts as claimed by the others so
@@ -270,9 +275,10 @@ pub(crate) fn claimed_by_other_project(
     let under_unreadable_sibling_sheet = !owned_by_closing
         && unreadable.iter().any(|sheet| {
             others().any(|r| r.contains(&path_key_with(sheet, fold)))
-                && sheet
-                    .parent()
-                    .is_some_and(|dir| path_is_under(path, dir, fold))
+                && sheet.parent().is_some_and(|dir| {
+                    path_is_under(path, dir, fold)
+                        && !closing_dir_is_below(mine.dir(), dir, path, fold)
+                })
         });
     if under_unreadable_sibling_sheet {
         return true;
@@ -288,6 +294,17 @@ pub(crate) fn claimed_by_other_project(
                 && path_is_under(other_dir, mine.dir(), fold)
                 && path_is_under(path, other_dir, fold))
     })
+}
+
+/// True when `path` sits in the closing project's own directory and that
+/// directory lies strictly below `sheet_dir`, the directory of an unreadable
+/// sheet. A sibling's unreadable sheet high up the tree (`$HOME`) says nothing
+/// about the closing project's own folder, so fail-closed must not swallow it;
+/// an unreadable sheet in the SAME directory still does.
+fn closing_dir_is_below(closing_dir: &Path, sheet_dir: &Path, path: &Path, fold: CaseFold) -> bool {
+    path_is_under(path, closing_dir, fold)
+        && path_is_under(closing_dir, sheet_dir, fold)
+        && path_key_with(closing_dir, fold) != path_key_with(sheet_dir, fold)
 }
 
 #[cfg(test)]
@@ -638,6 +655,100 @@ mod tests {
         assert!(is_claimed("/w/unknown_child.snxsch"));
         assert!(!is_claimed("/w/a.snxsch"), "A's own sheet stays A's");
         assert!(!is_claimed("/w/A.snxprj"), "A's own .snxprj stays A's");
+    }
+
+    #[test]
+    fn a_child_reached_through_an_escaping_reference_is_claimed() {
+        // #741 review: B's sheet reaches `../A/s.snxsch`, which references
+        // `g.snxsch`; closing A must not treat g as A's alone.
+        let projects = vec![
+            project_at(1, "/w/A/A.snxprj", &["a.snxsch"]),
+            project_at(2, "/w/B/B.snxprj", &["b.snxsch"]),
+        ];
+        let open = loaded(&[
+            ("/w/B/b.snxsch", &["../A/s.snxsch"]),
+            ("/w/A/s.snxsch", &["g.snxsch"]),
+        ]);
+        assert!(claimed(
+            &projects,
+            &open,
+            "/w/A/g.snxsch",
+            CaseFold::Preserve
+        ));
+    }
+
+    #[test]
+    fn a_child_reached_through_an_absolute_reference_is_claimed() {
+        let projects = vec![
+            project_at(1, "/w/A/A.snxprj", &["a.snxsch"]),
+            project_at(2, "/w/B/B.snxprj", &["b.snxsch"]),
+        ];
+        let s = native("/w/A/s.snxsch");
+        let open = loaded(&[
+            ("/w/B/b.snxsch", &[s.as_str()]),
+            ("/w/A/s.snxsch", &["g.snxsch"]),
+        ]);
+        assert!(claimed(
+            &projects,
+            &open,
+            "/w/A/g.snxsch",
+            CaseFold::Preserve
+        ));
+    }
+
+    #[test]
+    fn a_chain_of_parent_references_past_the_root_terminates_and_is_followed() {
+        let projects = vec![
+            project_at(1, "/w/A/A.snxprj", &["a.snxsch"]),
+            project_at(2, "/w/B/B.snxprj", &["b.snxsch"]),
+        ];
+        // `/../..` clamps to `/`: the first reference folds onto b itself, the
+        // second lands on `/w/x.snxsch`.
+        let open = loaded(&[(
+            "/w/B/b.snxsch",
+            &["/../../w/B/b.snxsch", "../../../../../w/x.snxsch"],
+        )]);
+        assert!(claimed(&projects, &open, "/w/x.snxsch", CaseFold::Preserve));
+        assert!(claimed(
+            &projects,
+            &open,
+            "/w/B/b.snxsch",
+            CaseFold::Preserve
+        ));
+    }
+
+    #[test]
+    fn an_unreadable_sheet_above_the_closing_project_does_not_claim_its_own_folder() {
+        // B lists `../b.snxsch`, unreadable, in /w -- above A's /w/A. A's
+        // unlisted sheets and library drafts are still A's.
+        let projects = vec![
+            project_at(1, "/w/A/A.snxprj", &["a.snxsch"]),
+            project_at(2, "/w/B/B.snxprj", &["../b.snxsch"]),
+        ];
+        let unreadable = [PathBuf::from(native("/w/b.snxsch"))];
+        let open = HashMap::new();
+        let is_claimed = |path: &str| {
+            claimed_by_other_project(
+                &projects,
+                &open,
+                &unreadable,
+                0,
+                &PathBuf::from(native(path)),
+                CaseFold::Preserve,
+            )
+        };
+        assert!(!is_claimed("/w/A/stray.snxsch"));
+        assert!(!is_claimed("/w/A/lib.snxlib/symbols/d.snxsym"));
+        assert!(is_claimed("/w/elsewhere.snxsch"), "outside A stays claimed");
+    }
+
+    #[test]
+    fn normalize_clamped_stops_at_the_root_but_keeps_a_relative_head() {
+        assert_eq!(
+            normalize_clamped(Path::new(&native("/../../x"))),
+            PathBuf::from(native("/x"))
+        );
+        assert_eq!(normalize_clamped(Path::new("../x")), PathBuf::from("../x"));
     }
 
     #[test]

@@ -12,9 +12,9 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use super::DocumentState;
 use super::scope::{self, CaseFold, path_key_with};
-use crate::app::project_sheets::{child_reference_in_root, lexically_normalize};
+use super::{DocumentState, ProjectId};
+use crate::app::project_sheets::{normalize_clamped, ownership_reference};
 
 /// A sheet that exists but could not be read or parsed, so its children are
 /// unknown.
@@ -46,6 +46,19 @@ impl UnreadableSheet {
 pub struct SheetRefs {
     pub(crate) refs: HashMap<PathBuf, Vec<String>>,
     pub(crate) unreadable: Vec<UnreadableSheet>,
+    /// The open projects this was resolved for. A project opened afterwards
+    /// has disk-only children nobody read, so a consumer re-resolves when
+    /// [`SheetRefs::is_current_for`] says no.
+    pub(crate) resolved_for: Vec<ProjectId>,
+}
+
+impl SheetRefs {
+    /// True when exactly the projects in `open` were open at resolve time.
+    pub(crate) fn is_current_for(&self, open: &[ProjectId]) -> bool {
+        let resolved: HashSet<ProjectId> = self.resolved_for.iter().copied().collect();
+        let now: HashSet<ProjectId> = open.iter().copied().collect();
+        resolved == now
+    }
 }
 
 /// Everything the disk walk needs, owned so it can move to a worker thread.
@@ -56,19 +69,25 @@ pub(crate) struct SheetRefInputs {
     loaded: HashMap<PathBuf, Vec<String>>,
     /// Every sheet each open project lists.
     roots: Vec<PathBuf>,
+    /// The projects the roots came from.
+    projects: Vec<ProjectId>,
 }
 
 impl SheetRefInputs {
     /// Walk the open projects' sheets, reading only the ones no engine holds.
     ///
-    /// Child references are resolved with the rule `Open Child Sheet` uses
-    /// (joined, lexically normalized, rejected when they escape the parent's
-    /// directory) and visited once per [`path_key_with`] key, so a `../` loop
-    /// folds onto a seen sheet instead of growing the path.
+    /// Every reference is followed (see [`ownership_reference`]): ownership
+    /// never refuses an escape, only opening a file does. Each sheet is
+    /// visited once per [`path_key_with`] key and `..` is clamped at the
+    /// filesystem root, so a `../` loop or chain terminates.
     ///
     /// Blocking file IO: call from a worker thread.
     pub(crate) fn resolve(self, fold: CaseFold) -> SheetRefs {
-        let Self { loaded, roots } = self;
+        let Self {
+            loaded,
+            roots,
+            projects,
+        } = self;
         let loaded_by_key: HashMap<String, &Vec<String>> = loaded
             .iter()
             .map(|(path, refs)| (path_key_with(path, fold), refs))
@@ -76,7 +95,7 @@ impl SheetRefInputs {
         let mut from_disk: HashMap<PathBuf, Vec<String>> = HashMap::new();
         let mut unreadable = Vec::new();
         let mut seen: HashSet<String> = HashSet::new();
-        let mut pending: Vec<PathBuf> = roots.iter().map(|r| lexically_normalize(r)).collect();
+        let mut pending: Vec<PathBuf> = roots.iter().map(|r| normalize_clamped(r)).collect();
         while let Some(path) = pending.pop() {
             let key = path_key_with(&path, fold);
             if !seen.insert(key.clone()) {
@@ -99,16 +118,48 @@ impl SheetRefInputs {
                 },
             };
             let dir = path.parent().unwrap_or_else(|| Path::new(""));
-            pending.extend(
-                children
-                    .iter()
-                    .filter_map(|c| child_reference_in_root(dir, c)),
-            );
+            pending.extend(children.iter().filter_map(|c| ownership_reference(dir, c)));
         }
         let mut refs = loaded.clone();
         refs.extend(from_disk);
-        SheetRefs { refs, unreadable }
+        SheetRefs {
+            refs,
+            unreadable,
+            resolved_for: projects,
+        }
     }
+}
+
+/// A closing project's dirty documents, split so none falls through: each
+/// one is either in `mine` (offered to Save All / Discard All) or in `kept`
+/// (another open project claims it, so closing leaves it open and says so).
+#[derive(Debug, Clone, Default)]
+pub(crate) struct CloseScan {
+    pub(crate) mine: Vec<PathBuf>,
+    pub(crate) kept: Vec<PathBuf>,
+}
+
+impl CloseScan {
+    /// Messages-panel line naming the closing project's kept files.
+    pub(crate) fn warning(&self, project_name: &str) -> Option<String> {
+        if self.kept.is_empty() {
+            return None;
+        }
+        let names: Vec<String> = self.kept.iter().map(|p| file_label(p)).collect();
+        Some(format!(
+            "Close Project '{project_name}': kept {} unsaved document(s) open because another open project uses them: {}",
+            names.len(),
+            names.join(", "),
+        ))
+    }
+}
+
+/// File name of `path` for display, the whole path when it has none.
+pub(crate) fn file_label(path: &Path) -> String {
+    path.file_name().map_or_else(
+        || path.display().to_string(),
+        |n| n.to_string_lossy().into_owned(),
+    )
 }
 
 impl DocumentState {
@@ -124,7 +175,39 @@ impl DocumentState {
                     p.data.sheets.iter().map(move |s| dir.join(&s.filename))
                 })
                 .collect(),
+            projects: self.projects.iter().map(|p| p.id).collect(),
         }
+    }
+
+    /// Split the dirty documents of `projects[closing]` into [`CloseScan`]'s
+    /// two lists. A dirty path is the project's when it sits in the project
+    /// directory, is reached by the project, or backs one of its tabs; of
+    /// those, the ones another project claims are kept, the rest are its own.
+    pub(crate) fn close_scan(&self, sheet_refs: &SheetRefs, closing: usize) -> CloseScan {
+        let Some(project) = self.projects.get(closing) else {
+            return CloseScan::default();
+        };
+        let mut scan = CloseScan::default();
+        for path in &self.dirty_paths {
+            let backs_tab = self
+                .tabs
+                .iter()
+                .any(|t| t.path == *path && t.project_id == Some(project.id));
+            let is_mine = path.starts_with(project.dir())
+                || backs_tab
+                || self.owned_by_project(sheet_refs, closing, path);
+            if !is_mine {
+                continue;
+            }
+            if self.claimed_by_other_project(sheet_refs, closing, path) {
+                scan.kept.push(path.clone());
+            } else {
+                scan.mine.push(path.clone());
+            }
+        }
+        scan.mine.sort();
+        scan.kept.sort();
+        scan
     }
 
     /// Whether `path` belongs to an open project other than
@@ -251,6 +334,7 @@ mod tests {
         let inputs = SheetRefInputs {
             loaded: HashMap::new(),
             roots: vec![root.clone()],
+            projects: Vec::new(),
         };
 
         let resolved = inputs.resolve(CaseFold::Preserve);
@@ -271,6 +355,7 @@ mod tests {
         let inputs = SheetRefInputs {
             loaded: HashMap::from([(loaded_child.clone(), vec!["grand.snxsch".to_string()])]),
             roots: vec![root],
+            projects: Vec::new(),
         };
 
         let resolved = inputs.resolve(CaseFold::Fold);
@@ -287,21 +372,81 @@ mod tests {
     }
 
     #[test]
-    fn a_reference_that_escapes_its_parent_directory_is_not_followed() {
+    fn a_reference_that_escapes_its_parent_directory_is_followed_for_ownership() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dir = tmp.path().join("d");
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let outside = tmp.path().join("outside.snxsch");
+        let grandchild = tmp.path().join("grand.snxsch");
+        write_sheet(&outside, &["grand.snxsch"]);
+        write_sheet(&grandchild, &[]);
+        let root = dir.join("x.snxsch");
+        write_sheet(&root, &["../outside.snxsch"]);
+        let inputs = SheetRefInputs {
+            loaded: HashMap::new(),
+            roots: vec![root],
+            projects: Vec::new(),
+        };
+
+        let resolved = inputs.resolve(CaseFold::Preserve);
+
+        assert!(
+            resolved.refs.contains_key(&outside),
+            "{:?}",
+            resolved.refs.keys()
+        );
+        assert!(
+            resolved.refs.contains_key(&grandchild),
+            "{:?}",
+            resolved.refs.keys()
+        );
+    }
+
+    #[test]
+    fn an_absolute_reference_is_followed_for_ownership() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let dir = tmp.path().join("d");
         std::fs::create_dir_all(&dir).expect("mkdir");
         let outside = tmp.path().join("outside.snxsch");
         write_sheet(&outside, &[]);
         let root = dir.join("x.snxsch");
-        write_sheet(&root, &["../outside.snxsch"]);
+        write_sheet(&root, &[outside.to_str().expect("utf8 path")]);
         let inputs = SheetRefInputs {
             loaded: HashMap::new(),
             roots: vec![root],
+            projects: Vec::new(),
         };
 
         let resolved = inputs.resolve(CaseFold::Preserve);
 
-        assert!(!resolved.refs.contains_key(&outside));
+        assert!(
+            resolved.refs.contains_key(&outside),
+            "{:?}",
+            resolved.refs.keys()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_chain_of_parent_references_past_the_root_terminates() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dir = tmp.path().join("d");
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let root = dir.join("x.snxsch");
+        // `/../../..` clamps to `/`, so this names the sheet itself and the
+        // walk folds onto the key it already saw instead of chasing `..`.
+        let chained = format!("/../../../..{}", root.display());
+        write_sheet(&root, &[chained.as_str(), "../../../../../../../x.snxsch"]);
+        let inputs = SheetRefInputs {
+            loaded: HashMap::new(),
+            roots: vec![root.clone()],
+            projects: Vec::new(),
+        };
+
+        let resolved = inputs.resolve(CaseFold::Preserve);
+
+        assert!(resolved.unreadable.is_empty(), "{:?}", resolved.unreadable);
+        assert!(resolved.refs.contains_key(&root));
+        assert!(resolved.refs.len() <= 3, "{:?}", resolved.refs.keys());
     }
 }

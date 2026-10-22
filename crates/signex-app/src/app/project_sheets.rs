@@ -523,41 +523,8 @@ pub(crate) fn resolve_child_reference(parent_dir: &Path, child_filename: &str) -
     if trimmed.is_empty() {
         return None;
     }
-    match contained_child_path(parent_dir, trimmed) {
-        Ok(resolved) => Some(resolved),
-        Err((resolved, root)) => {
-            crate::diagnostics::log_error(
-                "Rejected child-sheet reference outside its resolution root",
-                &anyhow::anyhow!(
-                    "'{trimmed}' resolves to {} which escapes {}",
-                    resolved.display(),
-                    if root.as_os_str().is_empty() {
-                        "an empty resolution root".to_string()
-                    } else {
-                        root.display().to_string()
-                    }
-                ),
-            );
-            None
-        }
-    }
-}
-
-/// [`resolve_child_reference`] without the diagnostic: the normalized child
-/// path, or `None` for an empty reference or one that escapes `parent_dir`.
-/// For callers that probe many references and report a summary themselves.
-pub(crate) fn child_reference_in_root(parent_dir: &Path, child_filename: &str) -> Option<PathBuf> {
-    let trimmed = child_filename.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-    contained_child_path(parent_dir, trimmed).ok()
-}
-
-/// The containment rule behind both resolvers. `Err` carries the resolved
-/// path and root so the caller can say what escaped what.
-fn contained_child_path(parent_dir: &Path, trimmed: &str) -> Result<PathBuf, (PathBuf, PathBuf)> {
-    let resolved = lexically_normalize(&parent_dir.join(PathBuf::from(trimmed)));
+    let raw = PathBuf::from(trimmed);
+    let resolved = lexically_normalize(&parent_dir.join(&raw));
     let root = lexically_normalize(parent_dir);
 
     // A resolved path that leads with a literal ".." (nothing left to pop,
@@ -575,10 +542,61 @@ fn contained_child_path(parent_dir: &Path, trimmed: &str) -> Result<PathBuf, (Pa
         && resolved.starts_with(&root);
 
     if contained {
-        Ok(resolved)
+        Some(resolved)
     } else {
-        Err((resolved, root))
+        crate::diagnostics::log_error(
+            "Rejected child-sheet reference outside its resolution root",
+            &anyhow::anyhow!(
+                "'{trimmed}' resolves to {} which escapes {}",
+                resolved.display(),
+                if root.as_os_str().is_empty() {
+                    "an empty resolution root".to_string()
+                } else {
+                    root.display().to_string()
+                }
+            ),
+        );
+        None
     }
+}
+
+/// The path a child-sheet reference names, for OWNERSHIP questions: which
+/// open project reaches this file. Unlike [`resolve_child_reference`], which
+/// refuses to open a file outside its parent's directory, ownership follows
+/// EVERY reference, absolute and `../` alike: a sheet one project reaches
+/// through an escape is still that project's, and under-claiming it is the
+/// data-loss direction (#741). The path is joined to `parent_dir`, normalized
+/// with `..` clamped at the filesystem root (`/..` is `/`), so a chain of
+/// `..` cannot grow the path without bound and a loop folds onto a key
+/// already seen. `None` only for an empty reference.
+pub(crate) fn ownership_reference(parent_dir: &Path, reference: &str) -> Option<PathBuf> {
+    let trimmed = reference.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    Some(normalize_clamped(&parent_dir.join(PathBuf::from(trimmed))))
+}
+
+/// [`lexically_normalize`] that drops a `..` standing directly on a root or
+/// drive prefix instead of keeping it, matching how the OS resolves `/..`.
+/// A `..` at the head of a *relative* path is still kept: there is no root
+/// to clamp against.
+pub(crate) fn normalize_clamped(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => match out.components().next_back() {
+                Some(std::path::Component::Normal(_)) => {
+                    out.pop();
+                }
+                Some(std::path::Component::RootDir | std::path::Component::Prefix(_)) => {}
+                _ => out.push(".."),
+            },
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
 }
 
 /// Lexically normalize `path` — resolve `.` and `..` components without
@@ -586,7 +604,7 @@ fn contained_child_path(parent_dir: &Path, trimmed: &str) -> Result<PathBuf, (Pa
 /// path to exist). A `..` with nothing left to pop is kept as a literal `..`
 /// component, so a reference that escapes its root still fails the caller's
 /// `starts_with(root)` check instead of silently collapsing onto the root.
-pub(crate) fn lexically_normalize(path: &Path) -> PathBuf {
+fn lexically_normalize(path: &Path) -> PathBuf {
     let mut out = PathBuf::new();
     for component in path.components() {
         match component {

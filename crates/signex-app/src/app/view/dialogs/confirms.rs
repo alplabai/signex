@@ -209,6 +209,27 @@ impl Signex {
             .height(Length::Fixed(160.0))
             .width(Length::Fill);
 
+        // Documents another open project claims stay open; say so, by name.
+        let kept_note: Element<'_, Message> = if st.kept_paths.is_empty() {
+            Space::new().height(0).into()
+        } else {
+            let names: Vec<String> = st
+                .kept_paths
+                .iter()
+                .map(|p| crate::app::state::sheet_refs::file_label(p))
+                .collect();
+            container(
+                text(format!(
+                    "Kept open, another project uses them: {}",
+                    names.join(", ")
+                ))
+                .size(11)
+                .color(text_muted),
+            )
+            .padding([10, 14])
+            .into()
+        };
+
         let dialog = container(
             column![
                 header,
@@ -223,6 +244,7 @@ impl Signex {
                 )
                 .padding([14, 14]),
                 container(file_list).padding([0, 14]),
+                kept_note,
                 container(
                     row![
                         Space::new().width(Length::Fill),

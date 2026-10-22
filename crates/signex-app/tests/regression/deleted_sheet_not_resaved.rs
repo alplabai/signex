@@ -2,8 +2,9 @@
 //! must only prompt for and discard the closing project's own documents.
 
 use signex_app::app::{
-    LoadedProject, Message, ProjectCloseChoice, ProjectId, ProjectMsg, RemoveChoice,
-    RemoveDialogState, RemoveMsg, Signex, TabInfo, TabKind, WindowMsg,
+    ContextMenuMsg, LoadedProject, Message, ProjectCloseChoice, ProjectId, ProjectMsg,
+    ProjectTreeAction, RemoveChoice, RemoveDialogState, RemoveMsg, Signex, TabInfo, TabKind,
+    WindowMsg,
 };
 use signex_types::project::{ProjectData, SheetEntry};
 use signex_types::schematic::SchematicSheet;
@@ -585,4 +586,268 @@ fn a_dotdot_reference_cycle_terminates_without_a_warning() {
             .any(|e| e.message.contains("dotdot_loop_dir")),
         "a loop is not an unreadable sheet and must not warn",
     );
+}
+
+/// `tmp/A` and `tmp/B`, created empty. Returns `(a_dir, b_dir)`.
+fn two_project_dirs(tmp: &TempDir) -> (PathBuf, PathBuf) {
+    let (a_dir, b_dir) = (tmp.path().join("A"), tmp.path().join("B"));
+    std::fs::create_dir_all(&a_dir).expect("mkdir A");
+    std::fs::create_dir_all(&b_dir).expect("mkdir B");
+    (a_dir, b_dir)
+}
+
+/// B's root reaches A's `s.snxsch` through `reference`, and `s` parents
+/// `g.snxsch` in A's directory. `s` stays unloaded; `g` is dirty under A.
+/// Returns `(app, a_sheet, g)` with A first in the project list.
+fn escape_fixture(
+    tmp: &TempDir,
+    reference: &dyn Fn(&Path) -> String,
+) -> (Signex, PathBuf, PathBuf) {
+    let (a_dir, b_dir) = two_project_dirs(tmp);
+    let s = a_dir.join("s.snxsch");
+    write_sheet_with_child(&s, "g.snxsch");
+    write_sheet_with_child(&b_dir.join("b.snxsch"), &reference(&s));
+    let (mut app, _task) = Signex::new();
+    let a = add_project(&mut app, &a_dir.join("A.snxprj"), "a.snxsch");
+    add_project(&mut app, &b_dir.join("B.snxprj"), "b.snxsch");
+    let a_sheet = a_dir.join("a.snxsch");
+    let g = a_dir.join("g.snxsch");
+    open_dirty_sheet(&mut app, &a_sheet, a);
+    open_dirty_sheet(&mut app, &g, a);
+    (app, a_sheet, g)
+}
+
+fn assert_discard_all_keeps_the_kept_sheet(mut app: Signex, a_sheet: &Path, g: &Path) {
+    close_first_project(&mut app);
+    let modal = app
+        .ui_state
+        .project_close_confirm
+        .as_ref()
+        .expect("A is dirty, so close must prompt");
+    assert_eq!(modal.dirty_paths, vec![a_sheet.to_path_buf()]);
+    assert_eq!(modal.kept_paths, vec![g.to_path_buf()]);
+    let _ = app.update(Message::Project(ProjectMsg::CloseConfirm(
+        ProjectCloseChoice::DiscardAll,
+    )));
+
+    assert!(app.document_state.dirty_paths.contains(g));
+    assert!(app.document_state.engines.contains_key(g));
+    assert!(
+        app.document_state.tabs.iter().any(|t| t.path == g),
+        "the kept sheet's tab must stay open, never orphaned",
+    );
+    assert!(!app.document_state.dirty_paths.contains(a_sheet));
+    assert_eq!(app.document_state.projects.len(), 1, "A itself is closed");
+}
+
+#[test]
+fn discard_all_keeps_a_sheet_reached_through_a_siblings_dotdot_escape() {
+    let tmp = TempDir::new().expect("tempdir");
+    let (app, a_sheet, g) = escape_fixture(&tmp, &|_| "../A/s.snxsch".to_string());
+    assert_discard_all_keeps_the_kept_sheet(app, &a_sheet, &g);
+}
+
+#[test]
+fn discard_all_keeps_a_sheet_reached_through_a_siblings_absolute_reference() {
+    let tmp = TempDir::new().expect("tempdir");
+    let (app, a_sheet, g) = escape_fixture(&tmp, &|s| s.to_str().expect("utf8 path").to_string());
+    assert_discard_all_keeps_the_kept_sheet(app, &a_sheet, &g);
+}
+
+#[test]
+fn every_dirty_document_of_the_closing_project_is_saved_or_kept_and_named() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().expect("tempdir");
+    let (a_dir, b_dir) = two_project_dirs(&tmp);
+    let shared_dir = tmp.path().join("shared");
+    std::fs::create_dir_all(&shared_dir).expect("mkdir shared");
+    // A's root is clean and unloaded; it reaches `x` past a `../` escape.
+    write_sheet_with_child(&a_dir.join("a.snxsch"), "../shared/x.snxsch");
+    write_sheet_with_child(&a_dir.join("s.snxsch"), "g.snxsch");
+    write_sheet_with_child(&b_dir.join("b.snxsch"), "../A/s.snxsch");
+    let (mut app, _task) = Signex::new();
+    let a = add_project(&mut app, &a_dir.join("A.snxprj"), "a.snxsch");
+    let b = add_project(&mut app, &b_dir.join("B.snxprj"), "b.snxsch");
+    let x = shared_dir.join("x.snxsch");
+    let g = a_dir.join("g.snxsch");
+    let draft = a_dir.join("lib.snxlib").join("symbols").join("d.snxsym");
+    let b_sheet = b_dir.join("b2.snxsch");
+    open_dirty_sheet(&mut app, &x, a);
+    open_dirty_sheet(&mut app, &g, a);
+    open_dirty_sheet(&mut app, &b_sheet, b);
+    app.document_state.dirty_paths.insert(draft.clone());
+
+    close_first_project(&mut app);
+
+    let modal = app
+        .ui_state
+        .project_close_confirm
+        .as_ref()
+        .expect("A has unsaved work, so close must prompt");
+    let mut expected_mine = vec![x.clone(), draft.clone()];
+    expected_mine.sort();
+    assert_eq!(modal.dirty_paths, expected_mine);
+    assert_eq!(modal.kept_paths, vec![g.clone()]);
+    // A's dirty documents are exactly mine + kept, with no overlap and none
+    // dropped; B's own sheet is neither.
+    for path in [&x, &g, &draft] {
+        let in_mine = modal.dirty_paths.contains(path);
+        let in_kept = modal.kept_paths.contains(path);
+        assert!(in_mine ^ in_kept, "{path:?} must be in exactly one list");
+    }
+    assert!(!modal.dirty_paths.contains(&b_sheet) && !modal.kept_paths.contains(&b_sheet));
+    assert!(
+        app.document_state
+            .panel_ctx
+            .diagnostics
+            .iter()
+            .any(|e| e.message.contains("g.snxsch") && e.message.contains("kept")),
+        "the Messages panel must name A's kept file",
+    );
+}
+
+#[test]
+fn an_unreadable_sheet_above_the_closing_project_does_not_swallow_its_own_files() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().expect("tempdir");
+    let (a_dir, b_dir) = two_project_dirs(&tmp);
+    // B lists `../b.snxsch`, which sits above A's directory and is corrupt.
+    std::fs::write(tmp.path().join("b.snxsch"), b"not a schematic").expect("write corrupt sheet");
+    let (mut app, _task) = Signex::new();
+    let a = add_project(&mut app, &a_dir.join("A.snxprj"), "a.snxsch");
+    add_project(&mut app, &b_dir.join("B.snxprj"), "../b.snxsch");
+    let a_sheet = a_dir.join("a.snxsch");
+    let stray = a_dir.join("stray.snxsch");
+    let draft = a_dir.join("lib.snxlib").join("symbols").join("d.snxsym");
+    open_dirty_sheet(&mut app, &a_sheet, a);
+    open_dirty_sheet(&mut app, &stray, a);
+    app.document_state.dirty_paths.insert(draft.clone());
+
+    close_first_project(&mut app);
+
+    let modal = app
+        .ui_state
+        .project_close_confirm
+        .as_ref()
+        .expect("A is dirty, so close must prompt");
+    let mut expected = vec![a_sheet, stray, draft];
+    expected.sort();
+    assert_eq!(modal.dirty_paths, expected);
+    assert!(modal.kept_paths.is_empty(), "{:?}", modal.kept_paths);
+}
+
+#[test]
+fn confirm_closes_the_project_by_id_after_the_list_shifted() {
+    let tmp = TempDir::new().expect("tempdir");
+    let (mut app, _task) = Signex::new();
+    let a = add_project(&mut app, &tmp.path().join("A.snxprj"), "a.snxsch");
+    let b = add_project(&mut app, &tmp.path().join("B.snxprj"), "b.snxsch");
+    open_dirty_sheet(&mut app, &tmp.path().join("a.snxsch"), a);
+    close_first_project(&mut app);
+    assert!(app.ui_state.project_close_confirm.is_some());
+    app.document_state.projects.reverse();
+
+    let _ = app.update(Message::Project(ProjectMsg::CloseConfirm(
+        ProjectCloseChoice::DiscardAll,
+    )));
+
+    let left: Vec<ProjectId> = app.document_state.projects.iter().map(|p| p.id).collect();
+    assert_eq!(left, vec![b], "A closes by id, not by its old index");
+}
+
+#[test]
+fn confirm_aborts_with_a_log_line_when_the_project_is_gone() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().expect("tempdir");
+    let (mut app, _task) = Signex::new();
+    let a = add_project(&mut app, &tmp.path().join("A.snxprj"), "a.snxsch");
+    add_project(&mut app, &tmp.path().join("B.snxprj"), "b.snxsch");
+    let a_sheet = tmp.path().join("a.snxsch");
+    open_dirty_sheet(&mut app, &a_sheet, a);
+    close_first_project(&mut app);
+    app.document_state.projects.retain(|p| p.id != a);
+
+    let _ = app.update(Message::Project(ProjectMsg::CloseConfirm(
+        ProjectCloseChoice::DiscardAll,
+    )));
+
+    assert!(
+        app.document_state.dirty_paths.contains(&a_sheet),
+        "nothing discarded",
+    );
+    assert!(
+        app.document_state
+            .panel_ctx
+            .diagnostics
+            .iter()
+            .any(|e| e.message.contains("no longer open")),
+        "the abort must reach the Messages panel",
+    );
+}
+
+#[test]
+fn confirm_re_resolves_when_a_project_was_opened_since_the_refs_were_read() {
+    let tmp = TempDir::new().expect("tempdir");
+    let (mut app, _task) = Signex::new();
+    let a = add_project(&mut app, &tmp.path().join("A.snxprj"), "a.snxsch");
+    let a_sheet = tmp.path().join("a.snxsch");
+    open_dirty_sheet(&mut app, &a_sheet, a);
+    // C is opened later; its root sits unloaded on disk and parents c_child.
+    let c_child = tmp.path().join("c_child.snxsch");
+    write_sheet_with_child(&tmp.path().join("c.snxsch"), "c_child.snxsch");
+    open_dirty_sheet(&mut app, &c_child, a);
+    close_first_project(&mut app);
+    let first = app.ui_state.project_close_confirm.as_ref().expect("prompt");
+    assert!(first.dirty_paths.contains(&c_child), "C is not open yet");
+    add_project(&mut app, &tmp.path().join("C.snxprj"), "c.snxsch");
+
+    let task = app.update(Message::Project(ProjectMsg::CloseConfirm(
+        ProjectCloseChoice::DiscardAll,
+    )));
+
+    assert_eq!(task.units(), 1, "stale refs must trigger a fresh resolve");
+    assert!(
+        app.document_state.dirty_paths.contains(&a_sheet),
+        "nothing discarded yet",
+    );
+    assert_eq!(app.document_state.projects.len(), 2, "A is still open");
+    let project_id = app.document_state.projects[0].id;
+    let result = app.resolve_sheet_refs_blocking();
+    let _ = app.update(Message::Project(ProjectMsg::CloseRefsResolved {
+        project_id,
+        result,
+    }));
+    let modal = app
+        .ui_state
+        .project_close_confirm
+        .as_ref()
+        .expect("re-prompt");
+    assert_eq!(modal.dirty_paths, vec![a_sheet]);
+    assert_eq!(modal.kept_paths, vec![c_child], "C's child is kept now");
+}
+
+#[test]
+fn a_project_opened_while_the_resolve_runs_triggers_a_fresh_resolve() {
+    let tmp = TempDir::new().expect("tempdir");
+    let (mut app, _task) = Signex::new();
+    let a = add_project(&mut app, &tmp.path().join("A.snxprj"), "a.snxsch");
+    open_dirty_sheet(&mut app, &tmp.path().join("a.snxsch"), a);
+    let project_id = app.document_state.projects[0].id;
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+        ProjectTreeAction::CloseProject(vec![0]),
+    )));
+    let stale = app.resolve_sheet_refs_blocking();
+    add_project(&mut app, &tmp.path().join("C.snxprj"), "c.snxsch");
+
+    let task = app.update(Message::Project(ProjectMsg::CloseRefsResolved {
+        project_id,
+        result: stale,
+    }));
+
+    assert_eq!(
+        task.units(),
+        1,
+        "the gate must not run on refs that predate C"
+    );
+    assert!(app.ui_state.project_close_confirm.is_none());
 }
