@@ -210,8 +210,8 @@ pub enum ExportMsg {
     /// Completion of BOM export — carries either the saved path or error.
     BomFinished(Result<std::path::PathBuf, String>),
     /// #431 — user clicked "Export anyway (incomplete)" on the
-    /// netlist-incomplete prompt. Writes the partial `.net` with an INCOMPLETE
-    /// header comment listing the omitted pages, then clears the prompt.
+    /// netlist-incomplete prompt. Writes the partial `.net` (a clean file, no
+    /// header) and logs the omitted pages as a warning, then clears the prompt.
     NetlistExportAnyway,
     /// #431 — user clicked "Cancel" on the netlist-incomplete prompt (or
     /// clicked outside it). Writes nothing and clears the prompt.

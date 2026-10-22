@@ -50,18 +50,12 @@ struct Component {
 }
 
 /// Emit the Protel netlist for `netlist`, joining footprint/value from the
-/// symbols in `ctx.netlist_sheets`. When `incomplete_note` is `Some`, a `# `-marked
-/// header naming the omitted pages is written ahead of the first block (#431).
-pub(super) fn emit(
-    ctx: &ExportContext,
-    netlist: &Netlist,
-    incomplete_note: Option<&[String]>,
-) -> Result<Vec<u8>, NetlistError> {
+/// symbols in `ctx.netlist_sheets`. The output is always a clean, valid Protel
+/// file: the format has no comment syntax, so an incomplete export is not
+/// marked in the file — the caller reports it to the user instead.
+pub(super) fn emit(ctx: &ExportContext, netlist: &Netlist) -> Result<Vec<u8>, NetlistError> {
     check_designators(ctx)?;
     let mut out = String::new();
-    if let Some(note) = incomplete_note {
-        out.push_str(&super::incomplete_header(note).replace('\n', EOL));
-    }
     for component in collect_components(ctx) {
         push_component(&mut out, &component);
     }
@@ -93,11 +87,14 @@ pub(super) fn emit(
 /// structure keys terminals on the designator alone, so an unannotated `R?` or
 /// two parts sharing `R1` would silently merge into one component and wire
 /// pins of different parts together. These are the conditions the annotate and
-/// Reset Duplicate Designators commands act on; a multi-unit part (one
-/// designator, distinct units, one library symbol) is not a duplicate.
+/// "Annotate Schematics..." and "Reset Duplicate Schematic Designators..."
+/// menu commands act on; a multi-unit part (one designator, distinct units,
+/// one library symbol) is not a duplicate. A real part with a blank designator
+/// is refused too: it has no name to key its terminals on.
 fn check_designators(ctx: &ExportContext) -> Result<(), NetlistError> {
     let mut unannotated = BTreeSet::new();
     let mut duplicates = BTreeSet::new();
+    let mut blank = 0;
     let mut units: HashSet<(String, i64)> = HashSet::new();
     let mut lib_ids: HashMap<String, &str> = HashMap::new();
     for sym in ctx.netlist_sheets.iter().flat_map(|s| &s.symbols) {
@@ -105,6 +102,10 @@ fn check_designators(ctx: &ExportContext) -> Result<(), NetlistError> {
             continue;
         }
         let designator = field(&sym.reference);
+        if designator.is_empty() {
+            blank += 1;
+            continue;
+        }
         if designator.ends_with('?') {
             unannotated.insert(designator);
             continue;
@@ -115,6 +116,9 @@ fn check_designators(ctx: &ExportContext) -> Result<(), NetlistError> {
         if *lib_ids.entry(designator.clone()).or_insert(&sym.lib_id) != sym.lib_id {
             duplicates.insert(designator);
         }
+    }
+    if blank > 0 {
+        return Err(NetlistError::BlankDesignators(blank));
     }
     if !unannotated.is_empty() {
         return Err(NetlistError::UnannotatedDesignators(join(&unannotated)));
@@ -154,21 +158,28 @@ fn collect_components(ctx: &ExportContext) -> Vec<Component> {
     components
 }
 
-/// True for a symbol that gets no component block: a power symbol (same
-/// predicate as the BOM) or one with no designator.
+/// True for a symbol that gets no component block and whose terminals stay
+/// out of the nets: a power symbol (same predicate as the BOM) or one that is
+/// not on the board. A real part with no designator is not skipped — it is
+/// refused by [`check_designators`].
 fn is_skipped_symbol(sym: &Symbol) -> bool {
-    sym.reference.starts_with("#PWR") || sym.is_power || field(&sym.reference).is_empty()
+    sym.reference.starts_with("#PWR") || sym.is_power || !sym.on_board
 }
 
 /// Designators of the skipped symbols. The netlist still carries their
 /// terminals (a GND port is a pin on the GND net), but naming one in a net
 /// block would point at a component the file never declares.
 fn unplaced_references(ctx: &ExportContext) -> HashSet<String> {
-    ctx.netlist_sheets
-        .iter()
-        .flat_map(|s| &s.symbols)
+    let symbols = || ctx.netlist_sheets.iter().flat_map(|s| &s.symbols);
+    // A designator that also names a real board part stays in the nets.
+    let placed: HashSet<String> = symbols()
+        .filter(|sym| !is_skipped_symbol(sym))
+        .map(|sym| field(&sym.reference))
+        .collect();
+    symbols()
         .filter(|sym| is_skipped_symbol(sym))
         .map(|sym| field(&sym.reference))
+        .filter(|reference| !placed.contains(reference))
         .collect()
 }
 
@@ -394,13 +405,55 @@ mod tests {
             vec![
                 symbol("R1", "10k", "R_0603", false),
                 symbol("#PWR01", "GND", "", true),
-                symbol("", "X", "", false),
+                symbol("", "GND", "", true),
             ],
             vec![net(1, "GND", &[("#PWR01", "1"), ("R1", "1"), ("", "4")])],
         );
         let text = protel(&c, None);
         assert!(text.ends_with("(\r\nGND\r\nR1-1\r\n)\r\n"), "{text}");
         assert!(!text.contains("#PWR01") && !text.contains("-4"), "{text}");
+    }
+
+    #[test]
+    fn a_real_part_with_a_blank_designator_is_refused() {
+        let c = ctx(
+            vec![
+                symbol("R1", "10k", "R_0603", false),
+                symbol("", "X", "", false),
+                symbol(" ", "Y", "", false),
+            ],
+            vec![net(1, "N", &[("R1", "1"), ("", "4")])],
+        );
+        assert!(matches!(export_err(&c), NetlistError::BlankDesignators(2)));
+    }
+
+    #[test]
+    fn a_part_not_on_the_board_gets_no_block_and_no_terminals() {
+        let off_board = Symbol {
+            on_board: false,
+            ..symbol("TP1", "TP", "", false)
+        };
+        let c = ctx(
+            vec![symbol("R1", "10k", "R_0603", false), off_board],
+            vec![net(1, "N", &[("R1", "1"), ("TP1", "1")])],
+        );
+        let text = protel(&c, None);
+        assert!(!text.contains("TP1"), "{text}");
+        assert!(text.ends_with("(\r\nN\r\nR1-1\r\n)\r\n"), "{text}");
+        assert_eq!(text.matches("[\r\n").count(), 1, "{text}");
+    }
+
+    #[test]
+    fn an_off_board_part_sharing_a_designator_does_not_drop_the_real_one() {
+        let off_board = Symbol {
+            on_board: false,
+            ..symbol("R1", "10k", "", false)
+        };
+        let c = ctx(
+            vec![symbol("R1", "10k", "R_0603", false), off_board],
+            vec![net(1, "N", &[("R1", "1")])],
+        );
+        assert!(protel(&c, None).contains("R1-1"));
     }
 
     #[test]
@@ -548,17 +601,14 @@ mod tests {
     }
 
     #[test]
-    fn incomplete_note_is_a_comment_header_before_the_first_block() {
-        let text = protel(
-            &fixture(),
-            Some(vec!["page 'b.snxsch' omitted".to_string()]),
-        );
-        assert!(text.starts_with("# "), "{text}");
-        assert!(text.contains("INCOMPLETE NETLIST") && text.contains("b.snxsch"));
-        assert!(text.find("INCOMPLETE").unwrap() < text.find("[\r\n").unwrap());
+    fn an_incomplete_note_never_puts_a_comment_in_the_file() {
+        let note = Some(vec!["page 'b.snxsch' omitted".to_string()]);
+        let text = protel(&fixture(), note);
+        assert_eq!(text, protel(&fixture(), None), "the file is unchanged");
+        assert!(text.starts_with("[\r\n"), "{text}");
         assert!(
-            !text.replace("\r\n", "").contains('\n'),
-            "mixed line endings"
+            !text.contains("INCOMPLETE") && !text.contains('#'),
+            "{text}"
         );
     }
 }

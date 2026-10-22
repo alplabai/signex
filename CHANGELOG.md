@@ -25,7 +25,7 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ### Added — netlist export
 
-- **Protel `.NET` netlist** (#354) — File ▸ Export ▸ Netlist now writes a Protel-format netlist (`[ ... ]` component blocks, `( ... )` net blocks, CRLF) that downstream PCB tools read, instead of the `# Signex netlist` text dump. The dump stays available as `NetlistFormat::Listing`; the menu label and save dialog now name the Protel format, and the dead "Generate Netlist" menu stub is gone. Hierarchical projects export every child-sheet part; a child sheet placed more than once with shared designators is refused rather than merged.
+- **Protel `.NET` netlist** (#354) — File ▸ Export ▸ Netlist now writes a Protel-format netlist (`[ ... ]` component blocks, `( ... )` net blocks, CRLF) that downstream PCB tools read, instead of the `# Signex netlist` text dump. The dump stays available as `NetlistFormat::Listing`; the menu label and save dialog now name the Protel format, and the dead "Generate Netlist" menu stub is gone. Hierarchical projects export every child-sheet part. The export refuses, and writes nothing, when a designator is held by more than one part (clear it with Reset Duplicate Schematic Designators...), when a part is unannotated, such as `R?` (clear it with Annotate Schematics...), when a real part has a blank designator (annotate it), or when a child sheet is placed more than once and keeps shared designators (give each placement its own). Power ports and parts excluded from the board are left out of the file. "Export anyway (incomplete)" writes a clean netlist with no header, since the format has no comment syntax; the omitted pages are reported in the Messages panel.
 
 ### Fixed
 

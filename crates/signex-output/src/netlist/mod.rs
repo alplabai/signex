@@ -53,12 +53,12 @@ impl NetlistFormat {
 pub struct NetlistOptions {
     /// Which emitter runs; defaults to [`NetlistFormat::Protel`].
     pub format: NetlistFormat,
-    /// When `Some`, the listing is prefixed with an INCOMPLETE-netlist header
-    /// comment block — one comment line per string, naming the pages this
-    /// export does not cover. Set by the app when the user chooses "Export
-    /// anyway (incomplete)" (#431) so the omission is recorded *in the file*,
-    /// not only in a dismissible dialog: a downstream PCB import can then see
-    /// the netlist is partial. `None` (the default) emits the listing
+    /// When `Some`, the [`NetlistFormat::Listing`] output is prefixed with an
+    /// INCOMPLETE-netlist header comment block — one comment line per string,
+    /// naming the pages this export does not cover (#431). The Protel format
+    /// has no comment syntax, so it ignores this field and always writes a
+    /// clean netlist; the app reports the omission through the Messages panel
+    /// and the export dialog instead. `None` (the default) emits the listing
     /// unchanged, byte-for-byte.
     pub incomplete_note: Option<Vec<String>>,
 }
@@ -75,13 +75,17 @@ pub enum NetlistError {
     )]
     NoNetlist,
     #[error(
-        "the Protel netlist cannot be written: designator(s) {0} are held by more than one part — run Reset Duplicate Designators and export again"
+        "the Protel netlist cannot be written: designator(s) {0} are held by more than one part — run \"Reset Duplicate Schematic Designators...\" and export again"
     )]
     DuplicateDesignators(String),
     #[error(
-        "the Protel netlist cannot be written: designator(s) {0} are unannotated — run Annotate and export again"
+        "the Protel netlist cannot be written: designator(s) {0} are unannotated — run \"Annotate Schematics...\" and export again"
     )]
     UnannotatedDesignators(String),
+    #[error(
+        "the Protel netlist cannot be written: {0} part(s) have a blank designator — run \"Annotate Schematics...\" (or give each part a designator) and export again"
+    )]
+    BlankDesignators(usize),
 }
 
 impl Exporter for NetlistExporter {
@@ -98,7 +102,7 @@ impl Exporter for NetlistExporter {
         let note = opts.incomplete_note.as_deref();
         let bytes = match opts.format {
             NetlistFormat::Listing => render_listing(netlist, note),
-            NetlistFormat::Protel => protel::emit(ctx, netlist, note)?,
+            NetlistFormat::Protel => protel::emit(ctx, netlist)?,
         };
         Ok(NetlistOutput { bytes })
     }

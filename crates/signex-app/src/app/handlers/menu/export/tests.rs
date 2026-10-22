@@ -550,9 +550,21 @@ fn diagnostic_count(marker: &str) -> usize {
         .count()
 }
 
+/// Whether the Messages panel holds a warning from an "Export anyway" write
+/// that also names `marker`.
+fn export_anyway_warning_reached_the_panel(marker: &str) -> bool {
+    crate::diagnostics::recent_entries().iter().any(|e| {
+        e.level == crate::diagnostics::DiagnosticLevel::Warning
+            && e.message.contains("Export: INCOMPLETE")
+            && e.message.contains(marker)
+    })
+}
+
 /// A project whose root references `missing` — a child that is neither open
 /// nor on disk. The one case that is a *genuine* `MissingChild`.
 fn app_with_missing_child(missing: &str) -> Signex {
+    // The Messages-panel buffer only fills once the logger is installed.
+    let _ = crate::diagnostics::init_logging();
     let dir = std::env::temp_dir().join(format!("signex-export-missing-{}", Uuid::new_v4()));
     let mut app = app_workspace(&dir.to_string_lossy(), &["top.snxsch"]);
     let top = dir.join("top.snxsch");
@@ -606,11 +618,11 @@ fn netlist_export_refuses_to_write_an_incomplete_netlist() {
 }
 
 #[test]
-fn export_anyway_writes_a_partial_netlist_with_an_incomplete_header() {
+fn export_anyway_writes_a_clean_netlist_and_warns_in_the_messages_panel() {
     // #431 Option 2: the user chose "Export anyway (incomplete)". The partial
-    // .net is written, and the omission is recorded IN THE FILE — an INCOMPLETE
-    // header comment naming the omitted page — not only in the dismissed
-    // dialog, so a downstream PCB import can see the netlist is partial.
+    // .net is written as a clean, valid Protel netlist (the format has no
+    // comment syntax, so no header), and the omission reaches the user through
+    // the Messages panel, not only the dismissed dialog.
     let mut app = app_with_missing_child("gone-anyway.snxsch");
     let out = std::env::temp_dir().join(format!("signex-anyway-{}.net", Uuid::new_v4()));
 
@@ -632,32 +644,32 @@ fn export_anyway_writes_a_partial_netlist_with_an_incomplete_header() {
     assert!(out.exists(), "Export anyway writes the partial .net");
     let bytes = std::fs::read_to_string(&out).expect("read written netlist");
     assert!(
-        bytes.starts_with("# "),
-        "the incomplete header must be comment-marked so an importer skips it: {bytes}"
+        bytes.starts_with("[\r\n") || bytes.starts_with("(\r\n"),
+        "the file must open with a component or net block, no header: {bytes}"
     );
     assert!(
-        bytes.contains("INCOMPLETE"),
-        "the file itself must carry an INCOMPLETE header, not only the dialog: {bytes}"
+        !bytes.contains("INCOMPLETE") && !bytes.contains('#'),
+        "Protel has no comment syntax: {bytes}"
     );
     assert!(
-        bytes.contains("gone-anyway.snxsch"),
-        "the header must name the omitted page: {bytes}"
+        export_anyway_warning_reached_the_panel("gone-anyway.snxsch"),
+        "the omission must be reported to the Messages panel naming the page"
     );
     std::fs::remove_file(&out).ok();
 }
 
 #[test]
 fn export_anyway_writes_from_the_prompt_snapshot_not_a_fresh_re_derivation() {
-    // #431 review (CRITICAL): the INCOMPLETE header names the pages omitted when
-    // the prompt was RAISED, so the written bytes must come from that same
+    // #431 review (CRITICAL): the warning names the pages omitted when the
+    // prompt was RAISED, so the written bytes must come from that same
     // prompt-time derivation — never a fresh one at click time. The document can
     // change while the modal is up (no modal-aware input gating exists), and a
-    // header describing a different state than the bytes is the exact fab hazard
-    // #431 exists to prevent, just relocated to "wrong header".
+    // warning describing a different state than the bytes is the exact fab
+    // hazard #431 exists to prevent.
     //
     // Guard it by making a fresh derivation IMPOSSIBLE: drop the active engine
     // after the prompt is raised. With the snapshot, Export anyway still writes
-    // the partial .net with its header; a re-derivation would find no active
+    // the partial .net and its warning; a re-derivation would find no active
     // schematic and write nothing.
     let mut app = app_with_missing_child("gone-snapshot.snxsch");
     let out = std::env::temp_dir().join(format!("signex-snapshot-{}.net", Uuid::new_v4()));
@@ -682,12 +694,12 @@ fn export_anyway_writes_from_the_prompt_snapshot_not_a_fresh_re_derivation() {
     );
     let bytes = std::fs::read_to_string(&out).expect("read written netlist");
     assert!(
-        bytes.contains("INCOMPLETE"),
-        "the snapshot preserves the INCOMPLETE header: {bytes}"
+        bytes.starts_with("[\r\n") || bytes.starts_with("(\r\n"),
+        "the snapshot writes a clean netlist: {bytes}"
     );
     assert!(
-        bytes.contains("gone-snapshot.snxsch"),
-        "the header names the page omitted at prompt time: {bytes}"
+        export_anyway_warning_reached_the_panel("gone-snapshot.snxsch"),
+        "the warning names the page omitted at prompt time"
     );
     assert!(
         app.document_state.error_notice.is_none(),
