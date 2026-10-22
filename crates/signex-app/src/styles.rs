@@ -112,7 +112,6 @@ pub fn modal_footer_strip(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container:
 }
 
 /// Active Bar strip (centered toolbar above canvas)
-#[allow(dead_code)]
 pub fn active_bar_strip(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
     let bg = ti(tokens.statusbar_bg);
     move |_| container::Style {
@@ -180,7 +179,6 @@ pub fn resize_handle(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Styl
 }
 
 /// Panel content area (inside the dock)
-#[allow(dead_code)]
 pub fn panel_content(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
     let bg = ti(tokens.panel_bg);
     let text = ti(tokens.text);
@@ -307,7 +305,6 @@ pub fn dock_zone_highlight(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container
 
 // ─── Button styles ────────────────────────────────────────────
 
-#[allow(dead_code)]
 pub fn dock_tab_container(
     tokens: &ThemeTokens,
     is_active: bool,

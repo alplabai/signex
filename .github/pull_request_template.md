@@ -56,10 +56,17 @@ Hard CI gates (must pass to merge):
 - [ ] `cargo test --workspace` passes (**Test**)
 - [ ] `cargo deny check licenses` clean — no GPL transitive deps (**License audit**)
 - [ ] License-compliance question above is answered (**self-declaration**)
+- [ ] `cargo fmt --all -- --check` clean (**fmt · rustfmt**)
+- [ ] `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+      is clean — since #539 **every** warning fails the **Check** job, not just
+      the deny-by-default ones. Fix the code; `#[expect(lint, reason = "…")]`
+      with a real reason is the escape hatch and has to survive review
+- [ ] No new or growing over-cap file (**no god-files**)
+- [ ] No discarded `iced::Task` (**no discarded tasks**)
+- [ ] Every `[workspace.lints.*]` entry still reaches the non-inheriting
+      members (**lint lockstep**)
 
 Advisory (surfaced by CI, not blocking — please still keep them clean):
 
-- [ ] `cargo fmt --all` applied
-- [ ] `cargo clippy --workspace` reviewed
 - [ ] New code has tests where appropriate
 - [ ] Milestone is set on this PR

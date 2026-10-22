@@ -10,6 +10,16 @@
 //! Tracks current stroke colour/width to avoid redundant ops. Coordinates in
 //! PDF points (bottom-left origin).
 
+/// An RGB colour (each channel 0.0-1.0). Groups the three channels that
+/// travel together as a single fill colour — built at the `fill_rect` call
+/// site (currently reserved for the v0.9 template backgrounds/fills) instead
+/// of passed as three bare floats.
+pub struct RgbColor {
+    pub r: f32,
+    pub g: f32,
+    pub b: f32,
+}
+
 /// `PdfSurface` emits PDF content-stream operators into a buffer.
 pub struct PdfSurface {
     bytes: Vec<u8>,
@@ -81,7 +91,6 @@ impl PdfSurface {
     }
 
     /// Stroke a line from (x1, y1) to (x2, y2).
-    #[allow(dead_code)]
     pub fn stroke_line(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, width_pt: f32) {
         self.set_stroke_width(width_pt);
         self.write_operator(&format!("{} {} m\n", x1, y1));
@@ -97,9 +106,12 @@ impl PdfSurface {
     }
 
     /// Fill a rectangle (top-left at (x, y), width w, height h) with RGB color.
-    #[allow(dead_code)] // Reserved for v0.9 template backgrounds / fills.
-    pub fn fill_rect(&mut self, x: f32, y: f32, w: f32, h: f32, r: f32, g: f32, b: f32) {
-        self.write_operator(&format!("{} {} {} rg\n", r, g, b));
+    #[expect(
+        dead_code,
+        reason = "reserved for the v0.9 template backgrounds / fills"
+    )]
+    pub fn fill_rect(&mut self, x: f32, y: f32, w: f32, h: f32, color: RgbColor) {
+        self.write_operator(&format!("{} {} {} rg\n", color.r, color.g, color.b));
         self.write_operator(&format!("{} {} {} {} re\n", x, y, w, h));
         self.write_operator("f\n");
     }

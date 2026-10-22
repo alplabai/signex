@@ -133,10 +133,10 @@ impl Signex {
             Some(a) => a,
             None => return Task::none(),
         };
-        if let Err(error) = adapter.remove_library_class(&key, &format!("delete class {key}")) {
-            if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
-                s.class_error = Some(error.to_string());
-            }
+        if let Err(error) = adapter.remove_library_class(&key, &format!("delete class {key}"))
+            && let Some(s) = self.library.library_browsers.get_mut(&library_path)
+        {
+            s.class_error = Some(error.to_string());
         }
         Task::none()
     }

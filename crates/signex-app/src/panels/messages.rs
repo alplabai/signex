@@ -4,7 +4,6 @@ use super::*;
 
 /// Panel-level message wrapping widget messages.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum PanelMsg {
     Tree(TreeMsg),
     SetUnit(Unit),
@@ -820,7 +819,7 @@ pub enum PanelMsg {
     },
     /// Properties panel — edit the active symbol's name (Altium
     /// "Design Item ID"). Affects the SCH Library panel row label
-    /// + the on-disk container's `display_name` when the active
+    /// and the on-disk container's `display_name` when the active
     /// symbol is the only one in the file.
     SymEditorSetSymbolName(String),
     /// Properties panel — edit the active symbol's designator
@@ -917,7 +916,6 @@ pub enum PanelMsg {
     /// Toggle snap to electrical object hotspots.
     ToggleSnapHotspots,
     /// Change the UI font (saved to prefs; applies on next restart).
-    #[allow(dead_code)]
     SetUiFont(String),
     /// Change the canvas font (applied immediately to schematic/PCB text).
     SetCanvasFont(String),

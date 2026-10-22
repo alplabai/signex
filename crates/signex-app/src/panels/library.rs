@@ -516,9 +516,7 @@ pub fn view_library_row_properties<'a>(
     muted: iced::Color,
     primary: iced::Color,
     border_c: iced::Color,
-    tokens: &'a ThemeTokens,
 ) -> Element<'a, PanelMsg> {
-    let _ = tokens;
     // Truncate the row UUID to its first 8 hex chars for a
     // human-scannable identity line.
     let row_id_short = {

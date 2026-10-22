@@ -5,7 +5,13 @@
 //! live here so each test file can import them via
 //! `mod common;` and avoid drifting fixtures.
 
-#![allow(dead_code)] // tests pull in only the helpers they use
+// Not `#![expect]`: this module is compiled into every `constraints_*.rs` test
+// binary separately, and a helper unused by one is used by another — so an
+// expectation is unfulfilled in some binary no matter which way it is written.
+#![allow(
+    dead_code,
+    reason = "each constraints_*.rs test binary imports this module whole but uses only the builders it needs"
+)]
 
 use signex_sketch::SketchData;
 use signex_sketch::entity::{Entity, EntityKind};

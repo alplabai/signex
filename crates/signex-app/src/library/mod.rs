@@ -24,13 +24,17 @@ pub mod document_options;
 pub mod edit_row_modal;
 pub mod editor;
 pub mod messages;
+pub mod mount;
 pub mod new_component;
 pub mod panel;
 pub mod picker;
 pub mod primitive_picker;
 pub mod recovery;
+pub mod resolve;
 pub mod settings;
 pub mod state;
+#[cfg(test)]
+pub(crate) mod test_adapters;
 pub mod updates_dialog;
 
 // Re-export the heavily-used types so callers don't have to know
@@ -39,11 +43,9 @@ pub mod updates_dialog;
 // `Signex`. The remaining sub-types are used widely enough across
 // the app crate to warrant a flat re-export, even where the only
 // current consumer is the dispatcher (Phase 2 widens the surface).
-#[allow(unused_imports)]
 pub use messages::{
     BrowserEditMsg, EditorMsg, LibraryMessage, PickerMsg, PrimitivePickerMsg, SettingsMsg,
 };
-#[allow(unused_imports)]
 pub use state::{
     ComponentEditorState, ComponentPreviewState, ComponentsMountSource, ComponentsPanelState,
     DeleteConfirmState, EditRowModalState, LibraryBrowserState, LibraryState, OpenLibrary,

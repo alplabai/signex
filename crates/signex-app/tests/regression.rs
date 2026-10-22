@@ -21,6 +21,17 @@
 //! shared `support` module, since no helper is called from more than
 //! one module (confirmed while doing the split).
 
+// This integration-test binary discards fallible test-setup calls with
+// `let _ = ...` routinely (not a production `Task` getting dropped — see
+// GH #99 part 1 / crates/signex-app/src/lib.rs's crate-level suppression
+// for the equivalent in-src-test-module allow). `[lints]` in Cargo.toml
+// is package-scoped, not target-scoped, so each integration-test crate
+// root needs its own allow.
+#![expect(
+    clippy::let_underscore_must_use,
+    reason = "integration tests discard Results with `let _ = ...` routinely; this is test scaffolding, not a production `iced::Task` being dropped, and `[lints]` in Cargo.toml is package-scoped so each integration-test crate root needs its own"
+)]
+
 #[path = "regression/project.rs"]
 mod project;
 
@@ -29,6 +40,27 @@ mod prefs;
 
 #[path = "regression/preferences_dirty_guard.rs"]
 mod preferences_dirty_guard;
+
+#[path = "regression/diagnostics_routing.rs"]
+mod diagnostics_routing;
+
+#[path = "regression/preferences_export_status.rs"]
+mod preferences_export_status;
+
+#[path = "regression/preferences_prefs_recovery.rs"]
+mod preferences_prefs_recovery;
+
+#[path = "regression/preferences_symbol_drafts.rs"]
+mod preferences_symbol_drafts;
+
+#[path = "regression/undo_marker_divergence.rs"]
+mod undo_marker_divergence;
+
+#[path = "regression/primitive_dirty_quit.rs"]
+mod primitive_dirty_quit;
+
+#[path = "regression/dirty_paths_gateway.rs"]
+mod dirty_paths_gateway;
 
 #[path = "regression/library_undo.rs"]
 mod library_undo;
@@ -53,3 +85,15 @@ mod sketch_state;
 
 #[path = "regression/file_open_async.rs"]
 mod file_open_async;
+
+#[path = "regression/history_load_failure.rs"]
+mod history_load_failure;
+
+#[path = "regression/library_browser_cell_commit.rs"]
+mod library_browser_cell_commit;
+
+#[path = "regression/render_config_grid_style.rs"]
+mod render_config_grid_style;
+
+#[path = "regression/rename_save_as_rekey.rs"]
+mod rename_save_as_rekey;

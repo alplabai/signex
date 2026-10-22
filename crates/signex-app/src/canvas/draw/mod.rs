@@ -2,7 +2,7 @@
 //! background, scene (content + auto-focus dim + selection), then the Layer-4
 //! overlay broken into previews, ghosts, drag guides, and cursor HUD.
 //!
-//! Each file adds `impl SchematicCanvas` methods; `canvas::Program::draw`
+//! Each file adds `impl CanvasSlot` methods; `canvas::Program::draw`
 //! assembles them in the original z-order.
 
 mod background;

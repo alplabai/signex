@@ -252,7 +252,7 @@ pub fn segment_circle_intersections(seg: Segment2, circle: Circle2) -> Vec<(Poin
     let t0 = (-b - sqrt_disc) / (2.0 * a);
     let t1 = (-b + sqrt_disc) / (2.0 * a);
     let mut out = Vec::new();
-    let on_seg = |t: f64| t >= -DEFAULT_TOL && t <= 1.0 + DEFAULT_TOL;
+    let on_seg = |t: f64| (-DEFAULT_TOL..=1.0 + DEFAULT_TOL).contains(&t);
     if on_seg(t0) {
         let tc = t0.clamp(0.0, 1.0);
         out.push((seg.at(tc), tc));

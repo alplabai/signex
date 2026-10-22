@@ -133,6 +133,6 @@ pub fn center_of(id: SketchEntityId, sketch: &SketchData) -> Option<SketchEntity
 }
 
 /// Lookup helper used by tests that need an [`Entity`] by ID.
-pub fn find_entity<'a>(id: SketchEntityId, sketch: &'a SketchData) -> Option<&'a Entity> {
+pub fn find_entity(id: SketchEntityId, sketch: &SketchData) -> Option<&Entity> {
     sketch.entities.iter().find(|e| e.id == id)
 }

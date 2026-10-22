@@ -29,23 +29,18 @@ use std::collections::{BTreeMap, HashMap};
 
 use signex_library::primitive::footprint::Pad as LibPad;
 use signex_sketch::SketchError;
-use signex_sketch::array::{ArrayKind, NumberingScheme};
+use signex_sketch::array::ArrayKind;
 use signex_sketch::expr::ast::ExprNode;
-use signex_sketch::expr::eval::{EvalContext, eval};
-use signex_sketch::expr::parse::parse;
-use signex_sketch::id::SketchEntityId;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 use signex_sketch::unit::Quantity;
-
-use crate::pad::bake_one_pad;
 
 mod grid;
 mod linear;
 mod numbering;
 mod polar;
 
-use grid::bake_grid;
+use grid::{GridSpec, bake_grid};
 use linear::bake_linear;
 use polar::bake_polar;
 
@@ -92,20 +87,15 @@ pub fn bake_arrays(
                 dy_expr,
                 depopulation,
             } => {
-                bake_grid(
-                    *source,
+                let spec = GridSpec {
                     nx_expr,
                     ny_expr,
                     dx_expr,
                     dy_expr,
-                    depopulation.as_ref(),
-                    &array.numbering,
-                    &params_ast,
-                    sketch,
-                    solve,
-                    out,
-                    warnings,
-                )?;
+                    depopulation: depopulation.as_ref(),
+                    numbering: &array.numbering,
+                };
+                bake_grid(*source, &spec, &params_ast, sketch, solve, out, warnings)?;
             }
             ArrayKind::Polar {
                 source,

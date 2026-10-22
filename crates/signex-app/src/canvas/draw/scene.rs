@@ -1,6 +1,6 @@
 use super::super::*;
 
-impl SchematicCanvas {
+impl SchematicCanvas<'_> {
     /// Layer 2 — the schematic content (cached unless panning/dragging).
     pub(in crate::canvas) fn draw_content(
         &self,
@@ -10,22 +10,21 @@ impl SchematicCanvas {
         effective_snapshot: Option<&crate::schematic_runtime::SchematicRenderSnapshot>,
         drag_offset: Option<(f64, f64)>,
     ) -> canvas::Geometry {
+        let cam = self.camera();
         let live_transform = crate::schematic_runtime::ScreenTransform {
-            offset_x: state.camera.offset.x,
-            offset_y: state.camera.offset.y,
-            scale: state.camera.scale,
+            offset_x: cam.offset.x,
+            offset_y: cam.offset.y,
+            scale: cam.scale,
         };
-        // Publish the live camera every frame so world-anchored overlays
-        // (inline editor) can track pan/zoom without waiting on cache rebuilds.
-        self.live_camera.set((
-            state.camera.offset.x,
-            state.camera.offset.y,
-            state.camera.scale,
-        ));
+        // #632 — this used to republish the camera into a
+        // `live_camera: Cell<(f32, f32, f32)>` on every frame so `view` could
+        // place world-anchored overlays. `view` now reads
+        // `CanvasSlot::live_camera()` off the same cell `draw` reads,
+        // so there is nothing to publish and nothing that can lag a frame.
         let (cached_offset_x, cached_offset_y, cached_scale) = self.content_cache_camera.get();
-        let camera_matches_cache = (cached_offset_x - state.camera.offset.x).abs() < 0.01
-            && (cached_offset_y - state.camera.offset.y).abs() < 0.01
-            && (cached_scale - state.camera.scale).abs() < 0.0001;
+        let camera_matches_cache = (cached_offset_x - cam.offset.x).abs() < 0.01
+            && (cached_offset_y - cam.offset.y).abs() < 0.01
+            && (cached_scale - cam.scale).abs() < 0.0001;
         let focus_set = self.auto_focus_set();
         let focus_ref = focus_set.as_ref();
         if state.panning || drag_offset.is_some() {
@@ -35,10 +34,10 @@ impl SchematicCanvas {
                     &mut frame,
                     snapshot,
                     &live_transform,
-                    &self.canvas_colors,
+                    &self.prefs.canvas_colors,
                     bounds,
                     focus_ref,
-                    Some(&self.wire_color_overrides),
+                    Some(self.prefs.wire_color_overrides),
                 );
             }
             frame.into_geometry()
@@ -47,20 +46,17 @@ impl SchematicCanvas {
                 self.content_cache.clear();
             }
             self.content_cache.draw(renderer, bounds.size(), |frame| {
-                self.content_cache_camera.set((
-                    state.camera.offset.x,
-                    state.camera.offset.y,
-                    state.camera.scale,
-                ));
+                self.content_cache_camera
+                    .set((cam.offset.x, cam.offset.y, cam.scale));
                 if let Some(snapshot) = effective_snapshot {
                     crate::schematic_runtime::render_schematic(
                         frame,
                         snapshot,
                         &live_transform,
-                        &self.canvas_colors,
+                        &self.prefs.canvas_colors,
                         bounds,
                         focus_ref,
-                        Some(&self.wire_color_overrides),
+                        Some(self.prefs.wire_color_overrides),
                     );
                 }
             })
@@ -70,17 +66,17 @@ impl SchematicCanvas {
     /// Layer 2.5 — AutoFocus (F9) dim frame around the selection bbox.
     pub(in crate::canvas) fn draw_autofocus_dim(
         &self,
-        state: &CanvasState,
         renderer: &Renderer,
         bounds: Rectangle,
         effective_snapshot: Option<&crate::schematic_runtime::SchematicRenderSnapshot>,
     ) -> Option<canvas::Geometry> {
+        let cam = self.camera();
         // Layer 2.5: AutoFocus dim — when F9 is on and a selection
         // exists, fade everything outside the selection bbox + margin
         // with a translucent dark overlay. Uses four rects forming a
         // frame around the bbox, so 2D paths can express the hole
         // without compositing modes.
-        if self.auto_focus
+        if self.prefs.auto_focus
             && !self.selected.is_empty()
             && let Some(snapshot) = effective_snapshot
         {
@@ -196,12 +192,8 @@ impl SchematicCanvas {
                 let max_x = xs.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
                 let min_y = ys.iter().cloned().fold(f32::INFINITY, f32::min);
                 let max_y = ys.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-                let p_min = state
-                    .camera
-                    .world_to_screen(iced::Point::new(min_x, min_y), bounds);
-                let p_max = state
-                    .camera
-                    .world_to_screen(iced::Point::new(max_x, max_y), bounds);
+                let p_min = cam.world_to_screen(iced::Point::new(min_x, min_y), bounds);
+                let p_max = cam.world_to_screen(iced::Point::new(max_x, max_y), bounds);
                 let margin = 30.0_f32;
                 let sx0 = p_min.x.min(p_max.x) - margin;
                 let sy0 = p_min.y.min(p_max.y) - margin;
@@ -248,13 +240,13 @@ impl SchematicCanvas {
     /// Layer 3 — selection overlay + ERC markers (uncached while dragging).
     pub(in crate::canvas) fn draw_selection(
         &self,
-        state: &CanvasState,
         renderer: &Renderer,
         bounds: Rectangle,
         effective_snapshot: Option<&crate::schematic_runtime::SchematicRenderSnapshot>,
         drag_offset: Option<(f64, f64)>,
     ) -> Option<canvas::Geometry> {
-        // Layer 3: selection overlay — always uses live camera (redrawn each frame)
+        let cam = self.camera();
+        // Layer 3: selection overlay — always uses live cam (redrawn each frame)
         // During drag we use the shifted snapshot so the selection rectangle
         // travels with the dragged items instead of staying behind.
         if !self.selected.is_empty()
@@ -264,9 +256,9 @@ impl SchematicCanvas {
             // with the shifted positions every frame.
             let draw_overlay = |frame: &mut canvas::Frame| {
                 let transform = crate::schematic_runtime::ScreenTransform {
-                    offset_x: state.camera.offset.x,
-                    offset_y: state.camera.offset.y,
-                    scale: state.camera.scale,
+                    offset_x: cam.offset.x,
+                    offset_y: cam.offset.y,
+                    scale: cam.scale,
                 };
                 crate::schematic_runtime::selection::draw_selection_overlay(
                     frame,

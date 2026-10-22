@@ -113,20 +113,15 @@ fn v025_bga_set_skip_letters_round_trips_bool() {
     use signex_app::dock::DockMessage;
     use signex_app::panels::PanelMsg;
     let (mut app, array_id) = fixture_footprint_with_bga_array("v025-bga-skip");
-    assert_eq!(
-        read_bga_config(&app).0,
-        true,
-        "fixture seeds skip_letters=true"
-    );
+    assert!(read_bga_config(&app).0, "fixture seeds skip_letters=true");
     let _ = app.update(Message::Dock(DockMessage::Panel(
         PanelMsg::FpEditorSetBgaSkipLetters {
             array_id,
             value: false,
         },
     )));
-    assert_eq!(
-        read_bga_config(&app).0,
-        false,
+    assert!(
+        !read_bga_config(&app).0,
         "FpEditorSetBgaSkipLetters must round-trip the bool into the array"
     );
 }

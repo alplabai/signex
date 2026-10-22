@@ -4,12 +4,10 @@
 //! rows, individual data cells) — used by `pad_form::render_pad_form_pad_stack`
 //! to compose the COPPER / HOLE / PASTE / SOLDER rows.
 
-use iced::widget::{
-    Column, Space, button, column, container, pick_list, row, scrollable, text, text_input,
-};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::widget::{container, pick_list, text, text_input};
+use iced::{Color, Length, Theme};
 
-use super::super::super::PanelMsg;
+use super::super::super::{PanelMsg, PanelPalette};
 use super::form::{
     PadEditTarget, PadFormValues, pad_shape_msg, pad_size_x_msg, pad_size_y_msg,
     pad_thermal_relief_msg,
@@ -62,11 +60,9 @@ pub(super) fn pad_table_row<'a>(
     label: &'a str,
     cells: Vec<iced::Element<'a, PanelMsg>>,
     portions: &[u16],
-    muted: Color,
     primary: Color,
     _border_c: Color,
 ) -> iced::Element<'a, PanelMsg> {
-    let _ = muted;
     let label_portion = 3_u16;
     let mut row = iced::widget::Row::new()
         .spacing(4)
@@ -191,11 +187,15 @@ pub(super) fn pad_copper_row<'a>(
     values: &PadFormValues,
     current_shape: PadShapeChoice,
     target: PadEditTarget,
-    muted: Color,
-    primary: Color,
-    border_c: Color,
+    palette: PanelPalette,
     is_authoritative: bool,
 ) -> iced::Element<'a, PanelMsg> {
+    let PanelPalette {
+        muted,
+        primary,
+        border: border_c,
+        ..
+    } = palette;
     // v0.25 polish — render empty when the value is effectively
     // zero so the user can clear the input by deleting all
     // characters. With format!("{:.3}", 0.0) the field rebuilds to
@@ -242,11 +242,11 @@ pub(super) fn pad_copper_row<'a>(
     } else {
         // Mid / Bottom rows mirror Top — no per-layer overrides yet.
         vec![
-            pad_table_disabled_cell(&format!("{:.3}", values.size_x_mm), muted, border_c),
-            pad_table_disabled_cell(&format!("{:.3}", values.size_y_mm), muted, border_c),
-            pad_table_static_cell(&format!("{current_shape}"), muted),
+            pad_table_disabled_cell(format!("{:.3}", values.size_x_mm), muted, border_c),
+            pad_table_disabled_cell(format!("{:.3}", values.size_y_mm), muted, border_c),
+            pad_table_static_cell(format!("{current_shape}"), muted),
             pad_table_disabled_cell("", muted, border_c),
         ]
     };
-    pad_table_row(label, cells, &[2, 2, 3, 1], muted, primary, border_c)
+    pad_table_row(label, cells, &[2, 2, 3, 1], primary, border_c)
 }

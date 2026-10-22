@@ -51,14 +51,18 @@ impl ColourMap {
     }
 
     /// Map a fill colour for B&W mode — white for any colour.
-    #[allow(dead_code)] // Used once fill operations are added in v0.9.
+    // Not `#[expect]`: the item is dead in the lib unit but live in the lib-test
+    // unit, so an expectation is unfulfilled in one of the two either way.
+    #[allow(
+        dead_code,
+        reason = "reserved for the v0.9 fill operations; no caller emits fills yet"
+    )]
     pub fn map_fill_bw(&self, r: f32, g: f32, b: f32) -> (f32, f32, f32) {
         if matches!(self.mode, ColourMode::BlackAndWhite) {
-            if is_approximately_white(r, g, b) {
-                (1.0, 1.0, 1.0)
-            } else {
-                (1.0, 1.0, 1.0) // Non-white fills also become white in B&W
-            }
+            // Fills always render white in B&W mode — both the
+            // already-white case and the non-white case (e.g. a coloured
+            // copper pour) map to the same output colour.
+            (1.0, 1.0, 1.0)
         } else {
             self.map_rgb(r, g, b)
         }

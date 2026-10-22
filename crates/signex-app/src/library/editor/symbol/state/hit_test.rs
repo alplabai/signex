@@ -198,7 +198,6 @@ fn polygon_outline_hit(x: f64, y: f64, vertices: &[[f64; 2]], tol: f64) -> bool 
 /// Returns `None` if the handle variant doesn't match the graphic
 /// kind — defensive against stale `GraphicHandle` values lingering
 /// across selection swaps.
-#[allow(dead_code)]
 pub fn graphic_handle_position(
     sym: &Symbol,
     idx: usize,

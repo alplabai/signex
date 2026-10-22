@@ -62,13 +62,12 @@ pub fn resolve_dim(target: &DimTarget, params: &ResolvedParams) -> Result<f64, S
             if !body.is_empty()
                 && body.chars().all(|c| c.is_alphanumeric() || c == '_')
                 && !body.chars().next().unwrap().is_ascii_digit()
+                && let Some(v) = params.get(body)
             {
-                if let Some(v) = params.get(body) {
-                    return Ok(*v);
-                }
-                // Bare-name with no entry — fall through to full parse so
-                // the error path produces a structured ExprError.
+                return Ok(*v);
             }
+            // Bare-name with no entry — fall through to full parse so
+            // the error path produces a structured ExprError.
 
             let ast = parse_expr(body).map_err(SketchError::Expr)?;
             let mut params_ast: BTreeMap<String, ExprNode> = BTreeMap::new();

@@ -122,10 +122,10 @@ impl FootprintCanvas<'_> {
         };
         // v0.27 — Sketch-mode rubber-band: pick every entity whose
         // bbox is inside the rect.
-        if matches!(self.state.mode, EditorMode::Sketch) {
-            if let Some(sketch) = self.sketch {
-                return self.box_select_sketch(sketch, x0, y0, x1, y1);
-            }
+        if matches!(self.state.mode, EditorMode::Sketch)
+            && let Some(sketch) = self.sketch
+        {
+            return self.box_select_sketch(sketch, x0, y0, x1, y1);
         }
         self.box_select_pads(cstate, x0, y0, x1, y1)
     }

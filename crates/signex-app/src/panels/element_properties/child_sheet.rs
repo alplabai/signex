@@ -37,6 +37,7 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
     let border_advanced_open = ctx.child_sheet_border_advanced_open;
     let fill_advanced_open = ctx.child_sheet_fill_advanced_open;
     let stroke_width_buf = ctx.child_sheet_stroke_width_buf.clone();
+    let palette = PanelPalette::from_tokens(&ctx.tokens);
 
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
@@ -72,8 +73,7 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
                 stroke_color,
                 border_picker_open,
                 border_advanced_open,
-                muted,
-                border_c,
+                palette,
                 /* is_border */ true,
             ));
             c = c.push(child_sheet_color_row(
@@ -82,8 +82,7 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
                 fill_color,
                 fill_picker_open,
                 fill_advanced_open,
-                muted,
-                border_c,
+                palette,
                 /* is_border */ false,
             ));
             c = c.push(child_sheet_stroke_width_row(
@@ -133,11 +132,16 @@ fn child_sheet_color_row<'a>(
     current: Option<signex_types::schematic::StrokeColor>,
     show_picker: bool,
     show_advanced: bool,
-    muted: Color,
-    border_c: Color,
+    palette: PanelPalette,
     is_border: bool,
 ) -> Element<'a, PanelMsg> {
     use std::rc::Rc;
+
+    let PanelPalette {
+        muted,
+        border: border_c,
+        ..
+    } = palette;
 
     // StrokeColor → [u8; 4] RGBA so the generic widget stays agnostic
     // of the schematic colour type.

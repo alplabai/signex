@@ -35,7 +35,7 @@ pub use adapter::{
     ComponentSummary, FieldSet, HistoryEntry, LibraryAdapter, LibraryError, LibraryQuery,
     PrimitiveSummary,
 };
-pub use adapters::library_set::LibrarySet;
+pub use adapters::library_set::{LibrarySet, UnresolvedRefs};
 #[cfg(feature = "ai-stub")]
 pub use ai_stub::{PinGuess, PinoutGuess, extract_pinout};
 pub use cascade::{

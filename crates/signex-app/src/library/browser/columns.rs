@@ -191,10 +191,10 @@ pub(super) fn derive_columns(
     // classes.
     let mut classes: std::collections::BTreeSet<String> =
         rows.iter().map(|r| r.class.as_str().to_string()).collect();
-    if classes.is_empty() {
-        if let Some(stem) = table_name.strip_suffix('s') {
-            classes.insert(stem.to_string());
-        }
+    if classes.is_empty()
+        && let Some(stem) = table_name.strip_suffix('s')
+    {
+        classes.insert(stem.to_string());
     }
     for class in &classes {
         if let Some(tmpl) = registry.resolve(library_id, class) {

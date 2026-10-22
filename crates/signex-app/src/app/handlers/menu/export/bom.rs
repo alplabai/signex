@@ -37,8 +37,9 @@ impl Signex {
             ..BomOptions::default()
         };
         let Some(table) = self.rebuild_bom_table(&opts) else {
-            self.document_state.export_error =
-                Some("Cannot build BOM: no active schematic.".to_string());
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
+                "Cannot build BOM: no active schematic.".to_string(),
+            ));
             return Task::none();
         };
         // Default sort: ascending by the Designator column when it
@@ -151,30 +152,40 @@ impl Signex {
     pub(crate) fn handle_bom_preview_column_drag_drop(&mut self, dest: usize) {
         if let Some(preview) = self.document_state.bom_preview.as_mut() {
             preview.column_drag_press_x = None;
-            if let Some(src) = preview.column_drag.take() {
-                if src != dest
-                    && src < preview.options.columns.len()
-                    && dest < preview.options.columns.len()
-                {
-                    let col = preview.options.columns.remove(src);
-                    let insert_at = if src < dest { dest } else { dest };
-                    let insert_at = insert_at.min(preview.options.columns.len());
-                    preview.options.columns.insert(insert_at, col);
-                    // Sort spec follows the moved column. If the
-                    // sort was on a different column, indices may
-                    // have shifted under it.
-                    if let Some((sort_idx, asc)) = preview.sort {
-                        let new_idx = if sort_idx == src {
-                            insert_at
-                        } else if src < sort_idx && insert_at >= sort_idx {
-                            sort_idx - 1
-                        } else if src > sort_idx && insert_at <= sort_idx {
-                            sort_idx + 1
-                        } else {
-                            sort_idx
-                        };
-                        preview.sort = Some((new_idx, asc));
-                    }
+            if let Some(src) = preview.column_drag.take()
+                && src != dest
+                && src < preview.options.columns.len()
+                && dest < preview.options.columns.len()
+            {
+                let col = preview.options.columns.remove(src);
+                // `dest` is an index in the *pre-removal* column list, and
+                // both drag directions deliberately reuse it unchanged
+                // after the `remove(src)` shift:
+                //   - dragging right (src < dest): dest's own index slid
+                //     down to `dest - 1`, so inserting at `dest` drops the
+                //     column immediately *after* the header it was
+                //     released on.
+                //   - dragging left (src > dest): dest kept its index, so
+                //     inserting at `dest` drops the column immediately
+                //     *before* that header.
+                // i.e. the insertion point always sits on the edge the
+                // drag approached from.
+                let insert_at = dest.min(preview.options.columns.len());
+                preview.options.columns.insert(insert_at, col);
+                // Sort spec follows the moved column. If the
+                // sort was on a different column, indices may
+                // have shifted under it.
+                if let Some((sort_idx, asc)) = preview.sort {
+                    let new_idx = if sort_idx == src {
+                        insert_at
+                    } else if src < sort_idx && insert_at >= sort_idx {
+                        sort_idx - 1
+                    } else if src > sort_idx && insert_at <= sort_idx {
+                        sort_idx + 1
+                    } else {
+                        sort_idx
+                    };
+                    preview.sort = Some((new_idx, asc));
                 }
             }
         }
@@ -284,8 +295,9 @@ impl Signex {
             Some(c) => c,
             None => {
                 self.document_state.pending_bom_options = None;
-                self.document_state.export_error =
-                    Some("Cannot export BOM: no active schematic.".to_string());
+                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
+                    "Cannot export BOM: no active schematic.".to_string(),
+                ));
                 return Task::none();
             }
         };
@@ -349,14 +361,17 @@ impl Signex {
                     output.bytes.len(),
                 ),
                 Err(e) => {
-                    self.document_state.export_error = Some(format!(
-                        "Could not write BOM to {}:\n{e}",
-                        save_path.display(),
-                    ));
+                    self.document_state.error_notice =
+                        Some(crate::app::state::ErrorNotice::export(format!(
+                            "Could not write BOM to {}:\n{e}",
+                            save_path.display(),
+                        )));
                 }
             },
             Err(e) => {
-                self.document_state.export_error = Some(format!("BOM export failed: {e}"));
+                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
+                    format!("BOM export failed: {e}"),
+                ));
             }
         }
 

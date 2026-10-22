@@ -22,7 +22,14 @@ use super::super::state::EditorMode;
 pub enum SketchEdit {
     /// Append a new entity (Point / Line / Arc / Circle plus
     /// optional bake attributes already attached).
-    AddEntity(Entity),
+    ///
+    /// Boxed on purpose. `Entity` carries every optional bake-attr
+    /// slot inline and weighs ~1 KiB, and this enum rides inside
+    /// [`SketchModeMsg`] through the iced runtime — an unboxed payload
+    /// would make *every* sketch message, down to `ForceRebuild`, cost
+    /// a kilobyte to move. Build it through [`SketchEdit::add_entity`]
+    /// rather than boxing at each call site.
+    AddEntity(Box<Entity>),
     /// Remove an entity by ID. Constraints / arrays referencing the
     /// entity are pruned by the dispatcher.
     DeleteEntity(SketchEntityId),
@@ -53,6 +60,15 @@ pub enum SketchEdit {
 
     /// Force a solve + bake even if the sketch hasn't changed.
     ForceRebuild,
+}
+
+impl SketchEdit {
+    /// Build an [`AddEntity`](SketchEdit::AddEntity) edit from a plain
+    /// `Entity`. Callers mint entities on the stack; this is the single
+    /// place that moves one into the variant's box.
+    pub fn add_entity(entity: Entity) -> Self {
+        Self::AddEntity(Box::new(entity))
+    }
 }
 
 /// The active drawing tool inside Sketch mode. The Phase 6 UI's

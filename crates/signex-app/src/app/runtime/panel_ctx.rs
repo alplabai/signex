@@ -27,20 +27,47 @@ impl Signex {
             .iter()
             .find(|r| signex_library::RowId::from_uuid(r.row_id) == row_id)?;
 
+        // A read failure and an absent UUID are different diagnoses.
+        // Reporting "UUID not in mounted libraries" for a corrupt
+        // `.snxsym` or a library server returning 500 sends the user
+        // off to re-bind a perfectly good UUID, so the error arm gets
+        // its own wording and a Messages-panel record.
         let symbol_summary = match self.library.set.resolve_symbol(&row.symbol_ref) {
-            Some(s) => format!(
+            Ok(Some(s)) => format!(
                 "Symbol bound — {} pin{}",
                 s.pins.len(),
                 if s.pins.len() == 1 { "" } else { "s" }
             ),
-            None if row.symbol_ref.uuid == uuid::Uuid::nil() => "Symbol unbound".to_string(),
-            None => "Symbol unresolved (UUID not in mounted libraries)".to_string(),
+            Ok(None) if row.symbol_ref.uuid == uuid::Uuid::nil() => "Symbol unbound".to_string(),
+            Ok(None) => "Symbol unresolved (UUID not in mounted libraries)".to_string(),
+            Err(e) => {
+                tracing::error!(
+                    target: "signex::library",
+                    error = %e,
+                    library_id = %row.symbol_ref.library_id,
+                    symbol_uuid = %row.symbol_ref.uuid,
+                    internal_pn = %row.internal_pn,
+                    "symbol could not be read from its library — the binding is not known to be wrong"
+                );
+                format!("Symbol could not be read from its library — {e}")
+            }
         };
         let footprint_summary = match &row.footprint_ref {
             Some(fp) if fp.uuid == uuid::Uuid::nil() => "Footprint unbound".to_string(),
             Some(fp) => match self.library.set.resolve_footprint(fp) {
-                Some(_) => "Footprint bound".to_string(),
-                None => "Footprint unresolved (UUID not in mounted libraries)".to_string(),
+                Ok(Some(_)) => "Footprint bound".to_string(),
+                Ok(None) => "Footprint unresolved (UUID not in mounted libraries)".to_string(),
+                Err(e) => {
+                    tracing::error!(
+                        target: "signex::library",
+                        error = %e,
+                        library_id = %fp.library_id,
+                        footprint_uuid = %fp.uuid,
+                        internal_pn = %row.internal_pn,
+                        "footprint could not be read from its library — the binding is not known to be wrong"
+                    );
+                    format!("Footprint could not be read from its library — {e}")
+                }
             },
             None => "Footprint unbound".to_string(),
         };
@@ -58,6 +85,9 @@ impl Signex {
     }
 
     pub(crate) fn refresh_panel_ctx(&mut self) {
+        // The dirty dots below read `dirty_paths`; make sure footprint
+        // edits are in it first (#666).
+        self.sync_footprint_dirty_paths();
         // Build per-project panel info from every loaded project in the
         // workspace. The `project_name` / `project_file` / `pcb_file` /
         // `sheets` legacy singletons mirror whichever entry is `is_active`
@@ -179,28 +209,35 @@ impl Signex {
                             // chain — the regression from F34 where
                             // freshly-created `.snxsym` files never
                             // appeared in the project tree.
+                            //
+                            // That chain is now `list_dir_or_report`,
+                            // which keeps the same empty result but
+                            // reports anything other than "the
+                            // directory is not there" to the Messages
+                            // panel, so the next wrong path or
+                            // unreadable dir says so instead of
+                            // rendering as a library with no symbols.
                             let lib_root = resolved
                                 .parent()
                                 .map(std::path::Path::to_path_buf)
                                 .unwrap_or_else(|| resolved.clone());
                             let read_dir_names = |sub: &str, ext: &str| -> Vec<String> {
                                 let dir = lib_root.join(sub);
-                                let mut names: Vec<String> = std::fs::read_dir(&dir)
-                                    .ok()
-                                    .into_iter()
-                                    .flatten()
-                                    .filter_map(|entry| entry.ok())
-                                    .filter_map(|entry| {
-                                        let path = entry.path();
-                                        if path.extension().and_then(|e| e.to_str()) == Some(ext) {
-                                            path.file_stem()
-                                                .and_then(|s| s.to_str())
-                                                .map(|s| s.to_string())
-                                        } else {
-                                            None
-                                        }
-                                    })
-                                    .collect();
+                                let mut names: Vec<String> =
+                                    crate::app::dir_listing::list_dir_or_report(&dir, sub)
+                                        .into_iter()
+                                        .filter_map(|path| {
+                                            if path.extension().and_then(|e| e.to_str())
+                                                == Some(ext)
+                                            {
+                                                path.file_stem()
+                                                    .and_then(|s| s.to_str())
+                                                    .map(|s| s.to_string())
+                                            } else {
+                                                None
+                                            }
+                                        })
+                                        .collect();
                                 names.sort();
                                 names
                             };
@@ -414,6 +451,12 @@ impl Signex {
             snap_enabled: self.ui_state.snap_enabled,
             grid_size_mm: self.ui_state.grid_size_mm,
             visible_grid_mm: self.ui_state.visible_grid_mm,
+            // Preserve the effective (possibly live-preview) style — a
+            // panel_ctx rebuild mid-Preferences must not snap the Symbol
+            // Editor grid back to the committed value. Seeded from
+            // `ui_state.symbol_grid_style` at boot; every later write
+            // goes through the Preferences handler.
+            symbol_grid_style: self.document_state.panel_ctx.symbol_grid_style,
             snap_hotspots: self.ui_state.snap_hotspots,
             ui_font_name: self.ui_state.ui_font_name.clone(),
             component_classes: self.ui_state.component_classes.clone(),

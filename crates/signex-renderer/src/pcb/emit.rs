@@ -231,10 +231,14 @@ pub(super) fn emit_static_polygons(
     theme: &ResolvedTheme,
     scene: &mut Scene,
 ) {
+    // Zones and rule areas stay in `polygons` (under the traces); pads go to
+    // `top_polygons`, which composites above traces and vias.
     scene.polygons.clear();
     scene
         .polygons
-        .reserve(snapshot.pads.len() + snapshot.zones.len() + snapshot.rule_areas.len());
+        .reserve(snapshot.zones.len() + snapshot.rule_areas.len());
+    scene.top_polygons.clear();
+    scene.top_polygons.reserve(snapshot.pads.len());
 
     let base_fill = theme.color(ColorSlot::Pin);
     let stroke_color = theme.color(ColorSlot::SymbolBody);
@@ -248,7 +252,7 @@ pub(super) fn emit_static_polygons(
 
         let stroke_width = (pad.size_mm[0].min(pad.size_mm[1]) * 0.08).max(0.02);
 
-        scene.polygons.push(GpuPolygon {
+        scene.top_polygons.push(GpuPolygon {
             vertices: pad_vertices(pad),
             fill_color,
             stroke_color: Some(stroke_color),

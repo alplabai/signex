@@ -10,6 +10,8 @@ use iced::{Background, Border, Element, Length, Theme};
 pub(super) fn content_keyboard_shortcuts<'a>(
     editor: &'a crate::keymap::KeymapEditorModel,
     status: &'a str,
+    load_error: Option<&'a str>,
+    backup: Option<&'a str>,
     search: &'a str,
     recorder: Option<&'a crate::app::KeymapRecorderState>,
 ) -> Element<'a, PrefMsg> {
@@ -46,6 +48,59 @@ pub(super) fn content_keyboard_shortcuts<'a>(
             .style(text_muted),
     ]
     .spacing(6);
+
+    // Persistent banner for a shortcuts file that exists on disk but could
+    // not be honoured at boot (#595). Distinct from `status_line` below,
+    // which is transient per-action feedback: this one stays for the whole
+    // session, because until the pane is saved the user's own profiles are
+    // still in that file and NOT in the running set. Built as an
+    // `Option<Element>` and extended in, so the `None` case adds nothing
+    // rather than forking the column type.
+    let load_error_banner: Option<Element<'a, PrefMsg>> = load_error.map(|error| {
+        let location = crate::keymap::config_path()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| "its usual location".to_string());
+        text(format!(
+            "Your saved keyboard shortcuts could not be loaded from {location} — {error}. \
+             The built-in profiles are in use for this session and that file has not been \
+             changed. Saving from this pane overwrites it, so the original is kept beside \
+             it as a .bak file."
+        ))
+        .size(10)
+        .style(text_warning)
+        .into()
+    });
+
+    // #603 — the backup outlives the failure that produced it, so this
+    // row is gated on the file existing rather than on `load_error`.
+    // Before it, a successful save cleared the banner and with it the
+    // only mention the app ever made of the backup: the user's profiles
+    // sat in a file nothing could see, restore or remove.
+    //
+    // Restore reads the backup through the normal loader rather than
+    // copying the file back — the backup IS the file that failed to
+    // load, so a copy back would just reproduce the failure. Discard is
+    // the only thing in the app that deletes it; no save path does.
+    let backup_row: Option<Element<'a, PrefMsg>> = backup.map(|bak| {
+        column![
+            text(format!(
+                "A backup of your previous keyboard shortcuts is kept at {bak}."
+            ))
+            .size(10)
+            .style(text_muted),
+            row![
+                button(container(text("Restore from backup").size(11)).padding([5, 12]))
+                    .on_press(PrefMsg::KeymapRestoreFromBackup)
+                    .style(secondary_button_style),
+                button(container(text("Delete the backup").size(11)).padding([5, 12]))
+                    .on_press(PrefMsg::KeymapDiscardBackup)
+                    .style(danger_button_style),
+            ]
+            .spacing(8),
+        ]
+        .spacing(6)
+        .into()
+    });
 
     // Profile picker + recorder stay ABOVE the search box and groups.
     let profile_row = row![
@@ -110,13 +165,11 @@ pub(super) fn content_keyboard_shortcuts<'a>(
     let active_profile_is_custom = editor.active_profile_is_custom();
     let filtered = editor.filtered_rows(search);
 
-    let mut content = column![
-        header,
-        profile_row,
-        text(status_line).size(10).style(text_muted),
-    ]
-    .spacing(10)
-    .padding(20);
+    let mut content = column![header].spacing(10).padding(20);
+    content = content.extend(load_error_banner);
+    content = content.extend(backup_row);
+    content = content.push(profile_row);
+    content = content.push(text(status_line).size(10).style(text_muted));
 
     if let Some(recorder) = recorder {
         content = content.push(keymap_recorder_control(recorder));

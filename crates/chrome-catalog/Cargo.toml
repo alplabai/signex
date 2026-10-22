@@ -14,3 +14,7 @@ signex-widgets = { path = "../signex-widgets" }
 [[bin]]
 name = "chrome-catalog"
 path = "src/main.rs"
+
+# GH #548 — inherit [workspace.lints.rust] (unused_must_use = deny).
+[lints]
+workspace = true

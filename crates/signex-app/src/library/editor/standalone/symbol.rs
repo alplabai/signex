@@ -29,16 +29,15 @@ pub fn view_symbol<'a>(
     editor: &'a SymbolEditorState,
     panel_ctx: &'a PanelContext,
     display: LibraryDisplaySettings,
-    theme_id: signex_types::theme::ThemeId,
-    path: &'a std::path::PathBuf,
+    path: &'a std::path::Path,
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
     let toolbar = view_symbol_toolbar(editor, panel_ctx);
     // Active bar moved to the app-view layer (view_main_for) so it
     // shares the schematic's window-absolute coordinate system — see
     // symbol::active_bar::{bar_items, dropdown_overlay}. The body here
-    // renders just toolbar + canvas; the bar is layered on top there.
-    let _ = theme_id;
+    // renders just toolbar + canvas; the bar is layered on top there,
+    // which is also where the theme id for its icons is resolved.
     let canvas_widget = view_symbol_canvas(editor, panel_ctx, display);
 
     let body = column![toolbar, canvas_widget]
@@ -70,7 +69,7 @@ fn view_symbol_status<'a>(
     editor: &'a SymbolEditorState,
     panel_ctx: &'a PanelContext,
     display: LibraryDisplaySettings,
-    path: &'a std::path::PathBuf,
+    path: &'a std::path::Path,
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
     let muted = theme_ext::text_secondary(tokens);
@@ -97,7 +96,7 @@ fn view_symbol_status<'a>(
     let grid_toggle = button(text(grid_vis_label).size(11).color(text_c))
         .padding([2, 6])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
-            path: path.clone(),
+            path: path.to_path_buf(),
             msg: PrimitiveEdit::Symbol(SymbolEditorMsg::ToggleGrid),
         })
         .style(symbol_tool_button_style(false, border));
@@ -107,7 +106,7 @@ fn view_symbol_status<'a>(
     let grid_cycle = button(text(grid_size_label).size(11).color(muted))
         .padding([2, 6])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
-            path: path.clone(),
+            path: path.to_path_buf(),
             msg: PrimitiveEdit::Symbol(SymbolEditorMsg::CycleGridSize),
         })
         .style(symbol_tool_button_style(false, border));
@@ -253,6 +252,7 @@ fn view_symbol_canvas<'a>(
         &editor.camera,
         display.grid_size_mm as f64,
         display.grid_visible,
+        panel_ctx.symbol_grid_style,
         display.pin_selection.allows_label_grab(),
         display.sheet_color.to_color(),
         crate::styles::ti(tokens.accent),

@@ -82,7 +82,6 @@ fn wordmark_tier(scale: f32) -> u8 {
 // ─── Messages ─────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum MenuMessage {
     /// No-op dispatched by passive menu-bar roots ("File", "Edit", …) and
     /// submenu headers ("Export", "Annotation"). iced's `button` widget
@@ -178,8 +177,11 @@ pub enum MenuMessage {
     // Tools
     /// Open the Preferences dialog.
     OpenPreferences,
-    /// Tools ▸ Passive Network Calculator — opens or focuses the dedicated
-    /// resistor/capacitor/inductor calculator window.
+    /// Tools ▸ Passive Network Calculator — opens the in-app
+    /// resistor/capacitor/inductor calculator modal. Not an OS window
+    /// (see `passive_calculator_modal.rs` for why); re-invoking while it
+    /// is already open is a no-op, and the entered state survives a
+    /// close/reopen. Routed to `OverlayMsg::OpenPassiveCalculator`.
     OpenPassiveCalculator,
     /// Open the Keyboard Shortcuts reference modal — a single page
     /// listing every binding from `shortcuts.rs`, callable from
@@ -213,7 +215,6 @@ pub struct MenuContext {
     /// navigator, BOM across project) when those land. Currently no
     /// menu entry reads this but the field stays so callers don't
     /// need to update their struct literal when we wire it up.
-    #[allow(dead_code)]
     pub has_project: bool,
     pub has_selection: bool,
     pub can_undo: bool,

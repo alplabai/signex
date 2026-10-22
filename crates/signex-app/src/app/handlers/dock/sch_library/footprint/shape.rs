@@ -9,6 +9,49 @@
 
 use super::super::*;
 
+use crate::app::FootprintEditorState as Editor;
+
+/// The active footprint's sketch entity `id`, if it has a sketch and
+/// the entity exists.
+fn sketch_entity_mut(
+    editor: &mut Editor,
+    id: signex_sketch::id::SketchEntityId,
+) -> Option<&mut signex_sketch::entity::Entity> {
+    editor
+        .primitive_mut()
+        .sketch
+        .as_mut()?
+        .entities
+        .iter_mut()
+        .find(|e| e.id == id)
+}
+
+/// The active footprint's sketch array `array_id`, if it exists.
+fn sketch_array_mut(
+    editor: &mut Editor,
+    array_id: signex_sketch::array::ArrayId,
+) -> Option<&mut signex_sketch::array::Array> {
+    editor
+        .primitive_mut()
+        .sketch
+        .as_mut()?
+        .arrays
+        .iter_mut()
+        .find(|a| a.id == array_id)
+}
+
+/// Re-solve and re-bake after a sketch attribute edit, then mark the
+/// editor dirty and redraw.
+fn rebuild_sketch(editor: &mut Editor) {
+    use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
+    use crate::library::editor::footprint::sketch_mode::SketchEdit;
+    editor.with_parts(|state, primitive| {
+        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+    });
+    editor.dirty = true;
+    editor.canvas_cache.clear();
+}
+
 impl Signex {
     /// v0.16.4 — mutate the selected entity's pour `net` and re-bake.
     pub(crate) fn fp_editor_set_pour_net(
@@ -22,20 +65,14 @@ impl Signex {
             Some(value)
         };
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
-                if let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id) {
-                    if let Some(p) = e.pour.as_mut() {
-                        p.net = net;
-                    }
-                }
-            }
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-            use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+            editor.record_edit(Some(("pour_net", id.0.as_u128())), |editor| {
+                let Some(p) = sketch_entity_mut(editor, id).and_then(|e| e.pour.as_mut()) else {
+                    return false;
+                };
+                p.net = net;
+                rebuild_sketch(editor);
+                true
             });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -47,20 +84,14 @@ impl Signex {
         value: signex_sketch::attr::PourFillType,
     ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
-                if let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id) {
-                    if let Some(p) = e.pour.as_mut() {
-                        p.fill_type = value;
-                    }
-                }
-            }
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-            use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+            editor.record_edit(None, |editor| {
+                let Some(p) = sketch_entity_mut(editor, id).and_then(|e| e.pour.as_mut()) else {
+                    return false;
+                };
+                p.fill_type = value;
+                rebuild_sketch(editor);
+                true
             });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -71,24 +102,18 @@ impl Signex {
         id: signex_sketch::id::SketchEntityId,
         value: String,
     ) -> bool {
-        let parsed = value.trim().parse::<u32>().ok();
+        let Ok(n) = value.trim().parse::<u32>() else {
+            return true;
+        };
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
-                if let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id) {
-                    if let Some(p) = e.pour.as_mut() {
-                        if let Some(n) = parsed {
-                            p.priority = n;
-                        }
-                    }
-                }
-            }
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-            use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+            editor.record_edit(Some(("pour_priority", id.0.as_u128())), |editor| {
+                let Some(p) = sketch_entity_mut(editor, id).and_then(|e| e.pour.as_mut()) else {
+                    return false;
+                };
+                p.priority = n;
+                rebuild_sketch(editor);
+                true
             });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -102,27 +127,21 @@ impl Signex {
     ) -> bool {
         use crate::panels::KeepoutKindFlag;
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
-                if let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id) {
-                    if let Some(k) = e.keepout.as_mut() {
-                        match kind {
-                            KeepoutKindFlag::NoRouting => k.kinds.no_routing = value,
-                            KeepoutKindFlag::NoComponents => k.kinds.no_components = value,
-                            KeepoutKindFlag::NoCopper => k.kinds.no_copper = value,
-                            KeepoutKindFlag::NoVias => k.kinds.no_vias = value,
-                            KeepoutKindFlag::NoDrilling => k.kinds.no_drilling = value,
-                            KeepoutKindFlag::NoPours => k.kinds.no_pours = value,
-                        }
-                    }
+            editor.record_edit(None, |editor| {
+                let Some(k) = sketch_entity_mut(editor, id).and_then(|e| e.keepout.as_mut()) else {
+                    return false;
+                };
+                match kind {
+                    KeepoutKindFlag::NoRouting => k.kinds.no_routing = value,
+                    KeepoutKindFlag::NoComponents => k.kinds.no_components = value,
+                    KeepoutKindFlag::NoCopper => k.kinds.no_copper = value,
+                    KeepoutKindFlag::NoVias => k.kinds.no_vias = value,
+                    KeepoutKindFlag::NoDrilling => k.kinds.no_drilling = value,
+                    KeepoutKindFlag::NoPours => k.kinds.no_pours = value,
                 }
-            }
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-            use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+                rebuild_sketch(editor);
+                true
             });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -139,20 +158,15 @@ impl Signex {
             Some(value)
         };
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
-                if let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id) {
-                    if let Some(c) = e.board_cutout.as_mut() {
-                        c.edge_radius_expr = edge_radius;
-                    }
-                }
-            }
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-            use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+            editor.record_edit(Some(("cutout_edge_radius", id.0.as_u128())), |editor| {
+                let Some(c) = sketch_entity_mut(editor, id).and_then(|e| e.board_cutout.as_mut())
+                else {
+                    return false;
+                };
+                c.edge_radius_expr = edge_radius;
+                rebuild_sketch(editor);
+                true
             });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -202,11 +216,11 @@ impl Signex {
 
     /// v0.13 — Altium "Snap Distance" setter.
     pub(crate) fn handle_fp_set_snap_distance(&mut self, raw: String) -> bool {
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Ok(v) = raw.trim().parse::<f64>() {
-                editor.state.snap_options.snap_distance_mm = v.clamp(0.001, 100.0);
-                editor.canvas_cache.clear();
-            }
+        if let Some(editor) = self.active_footprint_editor_mut()
+            && let Ok(v) = raw.trim().parse::<f64>()
+        {
+            editor.state.snap_options.snap_distance_mm = v.clamp(0.001, 100.0);
+            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -214,11 +228,11 @@ impl Signex {
 
     /// v0.13 — Altium "Axis Snap Range" setter.
     pub(crate) fn handle_fp_set_axis_snap_range(&mut self, raw: String) -> bool {
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Ok(v) = raw.trim().parse::<f64>() {
-                editor.state.snap_options.axis_snap_range_mm = v.clamp(0.001, 100.0);
-                editor.canvas_cache.clear();
-            }
+        if let Some(editor) = self.active_footprint_editor_mut()
+            && let Ok(v) = raw.trim().parse::<f64>()
+        {
+            editor.state.snap_options.axis_snap_range_mm = v.clamp(0.001, 100.0);
+            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -258,20 +272,15 @@ impl Signex {
         value: bool,
     ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
-                if let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id) {
-                    if let Some(c) = e.board_cutout.as_mut() {
-                        c.through = value;
-                    }
-                }
-            }
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-            use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+            editor.record_edit(None, |editor| {
+                let Some(c) = sketch_entity_mut(editor, id).and_then(|e| e.board_cutout.as_mut())
+                else {
+                    return false;
+                };
+                c.through = value;
+                rebuild_sketch(editor);
+                true
             });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -292,80 +301,78 @@ impl Signex {
         use crate::panels::ArrayParamField;
         use signex_sketch::array::{ArrayKind, GridDepopulation};
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
-                if let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id) {
-                    let trimmed = value.trim();
-                    match (&mut array.kind, field) {
-                        (
-                            ArrayKind::Linear { count_expr, .. },
-                            ArrayParamField::LinearCountExpr,
-                        ) => {
-                            *count_expr = value;
-                        }
-                        (ArrayKind::Linear { dx_expr, .. }, ArrayParamField::LinearDxExpr) => {
-                            *dx_expr = value;
-                        }
-                        (ArrayKind::Linear { dy_expr, .. }, ArrayParamField::LinearDyExpr) => {
-                            *dy_expr = value;
-                        }
-                        (ArrayKind::Grid { nx_expr, .. }, ArrayParamField::GridNxExpr) => {
-                            *nx_expr = value;
-                        }
-                        (ArrayKind::Grid { ny_expr, .. }, ArrayParamField::GridNyExpr) => {
-                            *ny_expr = value;
-                        }
-                        (ArrayKind::Grid { dx_expr, .. }, ArrayParamField::GridDxExpr) => {
-                            *dx_expr = value;
-                        }
-                        (ArrayKind::Grid { dy_expr, .. }, ArrayParamField::GridDyExpr) => {
-                            *dy_expr = value;
-                        }
-                        (ArrayKind::Polar { count_expr, .. }, ArrayParamField::PolarCountExpr) => {
-                            *count_expr = value;
-                        }
-                        (
-                            ArrayKind::Polar {
-                                sweep_angle_expr, ..
-                            },
-                            ArrayParamField::PolarSweepAngleExpr,
-                        ) => {
-                            *sweep_angle_expr = value;
-                        }
-                        (
-                            ArrayKind::Grid { depopulation, .. }
-                            | ArrayKind::Polar { depopulation, .. },
-                            ArrayParamField::MaskExpr,
-                        ) => {
-                            // Preserve any existing per-instance
-                            // suppression list when editing the mask
-                            // expression — the user might be tweaking
-                            // both at once via the Properties panel.
-                            let prior = depopulation
-                                .as_ref()
-                                .map(|d| d.suppressed_instances.clone())
-                                .unwrap_or_default();
-                            if trimmed.is_empty() && prior.is_empty() {
-                                *depopulation = None;
-                            } else {
-                                *depopulation = Some(GridDepopulation {
-                                    mask_expr: value,
-                                    suppressed_instances: prior,
-                                });
-                            }
-                        }
-                        // Mismatched (kind, field) pairs no-op so a
-                        // stale panel can't corrupt the array.
-                        _ => {}
+            // Low byte = which field, so two fields of one array do not merge.
+            let key = Some((
+                "array_param",
+                (array_id.0.as_u128() & !0xff) | field as u128,
+            ));
+            editor.record_edit(key, |editor| {
+                let Some(array) = sketch_array_mut(editor, array_id) else {
+                    return false;
+                };
+                let trimmed = value.trim();
+                match (&mut array.kind, field) {
+                    (ArrayKind::Linear { count_expr, .. }, ArrayParamField::LinearCountExpr) => {
+                        *count_expr = value;
                     }
+                    (ArrayKind::Linear { dx_expr, .. }, ArrayParamField::LinearDxExpr) => {
+                        *dx_expr = value;
+                    }
+                    (ArrayKind::Linear { dy_expr, .. }, ArrayParamField::LinearDyExpr) => {
+                        *dy_expr = value;
+                    }
+                    (ArrayKind::Grid { nx_expr, .. }, ArrayParamField::GridNxExpr) => {
+                        *nx_expr = value;
+                    }
+                    (ArrayKind::Grid { ny_expr, .. }, ArrayParamField::GridNyExpr) => {
+                        *ny_expr = value;
+                    }
+                    (ArrayKind::Grid { dx_expr, .. }, ArrayParamField::GridDxExpr) => {
+                        *dx_expr = value;
+                    }
+                    (ArrayKind::Grid { dy_expr, .. }, ArrayParamField::GridDyExpr) => {
+                        *dy_expr = value;
+                    }
+                    (ArrayKind::Polar { count_expr, .. }, ArrayParamField::PolarCountExpr) => {
+                        *count_expr = value;
+                    }
+                    (
+                        ArrayKind::Polar {
+                            sweep_angle_expr, ..
+                        },
+                        ArrayParamField::PolarSweepAngleExpr,
+                    ) => {
+                        *sweep_angle_expr = value;
+                    }
+                    (
+                        ArrayKind::Grid { depopulation, .. }
+                        | ArrayKind::Polar { depopulation, .. },
+                        ArrayParamField::MaskExpr,
+                    ) => {
+                        // Preserve any existing per-instance
+                        // suppression list when editing the mask
+                        // expression — the user might be tweaking
+                        // both at once via the Properties panel.
+                        let prior = depopulation
+                            .as_ref()
+                            .map(|d| d.suppressed_instances.clone())
+                            .unwrap_or_default();
+                        if trimmed.is_empty() && prior.is_empty() {
+                            *depopulation = None;
+                        } else {
+                            *depopulation = Some(GridDepopulation {
+                                mask_expr: value,
+                                suppressed_instances: prior,
+                            });
+                        }
+                    }
+                    // Mismatched (kind, field) pairs no-op so a
+                    // stale panel can't corrupt the array.
+                    _ => return false,
                 }
-            }
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-            use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+                rebuild_sketch(editor);
+                true
             });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -384,33 +391,27 @@ impl Signex {
         use crate::panels::NumberingSchemeKindUi;
         use signex_sketch::array::NumberingScheme;
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
-                if let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id) {
-                    array.numbering = match scheme {
-                        NumberingSchemeKindUi::LinearIncrement => {
-                            NumberingScheme::LinearIncrement {
-                                start_expr: "1".into(),
-                                step_expr: "1".into(),
-                            }
-                        }
-                        NumberingSchemeKindUi::BgaRowCol => NumberingScheme::BgaRowCol {
-                            skip_letters: true,
-                            start_row: 'A',
-                            start_col: 1,
-                        },
-                        NumberingSchemeKindUi::Explicit => {
-                            NumberingScheme::Explicit { names: Vec::new() }
-                        }
-                    };
-                }
-            }
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-            use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+            editor.record_edit(None, |editor| {
+                let Some(array) = sketch_array_mut(editor, array_id) else {
+                    return false;
+                };
+                array.numbering = match scheme {
+                    NumberingSchemeKindUi::LinearIncrement => NumberingScheme::LinearIncrement {
+                        start_expr: "1".into(),
+                        step_expr: "1".into(),
+                    },
+                    NumberingSchemeKindUi::BgaRowCol => NumberingScheme::BgaRowCol {
+                        skip_letters: true,
+                        start_row: 'A',
+                        start_col: 1,
+                    },
+                    NumberingSchemeKindUi::Explicit => {
+                        NumberingScheme::Explicit { names: Vec::new() }
+                    }
+                };
+                rebuild_sketch(editor);
+                true
             });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -423,23 +424,20 @@ impl Signex {
     ) -> bool {
         use signex_sketch::array::NumberingScheme;
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
-                if let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id) {
-                    if let NumberingScheme::BgaRowCol {
-                        skip_letters: s, ..
-                    } = &mut array.numbering
-                    {
-                        *s = skip_letters;
-                    }
-                }
-            }
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-            use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+            editor.record_edit(None, |editor| {
+                let Some(array) = sketch_array_mut(editor, array_id) else {
+                    return false;
+                };
+                let NumberingScheme::BgaRowCol {
+                    skip_letters: s, ..
+                } = &mut array.numbering
+                else {
+                    return false;
+                };
+                *s = skip_letters;
+                rebuild_sketch(editor);
+                true
             });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -464,20 +462,17 @@ impl Signex {
         }
         let upper = first_char.to_ascii_uppercase();
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
-                if let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id) {
-                    if let NumberingScheme::BgaRowCol { start_row, .. } = &mut array.numbering {
-                        *start_row = upper;
-                    }
-                }
-            }
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-            use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+            editor.record_edit(Some(("bga_start_row", array_id.0.as_u128())), |editor| {
+                let Some(array) = sketch_array_mut(editor, array_id) else {
+                    return false;
+                };
+                let NumberingScheme::BgaRowCol { start_row, .. } = &mut array.numbering else {
+                    return false;
+                };
+                *start_row = upper;
+                rebuild_sketch(editor);
+                true
             });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -492,25 +487,21 @@ impl Signex {
         value: String,
     ) -> bool {
         use signex_sketch::array::NumberingScheme;
-        let trimmed = value.trim();
-        let Ok(parsed) = trimmed.parse::<u32>() else {
+        let Ok(parsed) = value.trim().parse::<u32>() else {
             return true;
         };
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
-                if let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id) {
-                    if let NumberingScheme::BgaRowCol { start_col, .. } = &mut array.numbering {
-                        *start_col = parsed;
-                    }
-                }
-            }
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-            use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+            editor.record_edit(Some(("bga_start_col", array_id.0.as_u128())), |editor| {
+                let Some(array) = sketch_array_mut(editor, array_id) else {
+                    return false;
+                };
+                let NumberingScheme::BgaRowCol { start_col, .. } = &mut array.numbering else {
+                    return false;
+                };
+                *start_col = parsed;
+                rebuild_sketch(editor);
+                true
             });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -524,16 +515,18 @@ impl Signex {
         array_id: signex_sketch::array::ArrayId,
     ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
+            editor.record_edit(None, |editor| {
+                let Some(sketch) = editor.primitive_mut().sketch.as_mut() else {
+                    return false;
+                };
+                let before = sketch.arrays.len();
                 sketch.arrays.retain(|a| a.id != array_id);
-            }
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-            use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+                if sketch.arrays.len() == before {
+                    return false;
+                }
+                rebuild_sketch(editor);
+                true
             });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -576,45 +569,41 @@ impl Signex {
     ) -> bool {
         use signex_sketch::array::{ArrayKind, GridDepopulation};
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
-                if let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id) {
-                    let depop_slot: &mut Option<GridDepopulation> = match &mut array.kind {
-                        ArrayKind::Grid { depopulation, .. } => depopulation,
-                        ArrayKind::Polar { depopulation, .. } => depopulation,
-                        ArrayKind::Linear { .. } => return true,
-                    };
-                    if value {
-                        // Re-enable the instance — drop matching entries.
-                        if let Some(d) = depop_slot.as_mut() {
-                            d.suppressed_instances
-                                .retain(|(si, sj)| !(*si == i && *sj == j));
-                            if d.mask_expr.trim().is_empty() && d.suppressed_instances.is_empty() {
-                                *depop_slot = None;
-                            }
-                        }
-                    } else {
-                        // Suppress the instance — append if absent.
-                        let d = depop_slot.get_or_insert_with(|| GridDepopulation {
-                            mask_expr: String::new(),
-                            suppressed_instances: Vec::new(),
-                        });
-                        if !d
-                            .suppressed_instances
-                            .iter()
-                            .any(|(si, sj)| *si == i && *sj == j)
-                        {
-                            d.suppressed_instances.push((i, j));
+            editor.record_edit(None, |editor| {
+                let Some(array) = sketch_array_mut(editor, array_id) else {
+                    return false;
+                };
+                let depop_slot: &mut Option<GridDepopulation> = match &mut array.kind {
+                    ArrayKind::Grid { depopulation, .. } => depopulation,
+                    ArrayKind::Polar { depopulation, .. } => depopulation,
+                    ArrayKind::Linear { .. } => return false,
+                };
+                if value {
+                    // Re-enable the instance — drop matching entries.
+                    if let Some(d) = depop_slot.as_mut() {
+                        d.suppressed_instances
+                            .retain(|(si, sj)| !(*si == i && *sj == j));
+                        if d.mask_expr.trim().is_empty() && d.suppressed_instances.is_empty() {
+                            *depop_slot = None;
                         }
                     }
+                } else {
+                    // Suppress the instance — append if absent.
+                    let d = depop_slot.get_or_insert_with(|| GridDepopulation {
+                        mask_expr: String::new(),
+                        suppressed_instances: Vec::new(),
+                    });
+                    if !d
+                        .suppressed_instances
+                        .iter()
+                        .any(|(si, sj)| *si == i && *sj == j)
+                    {
+                        d.suppressed_instances.push((i, j));
+                    }
                 }
-            }
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-            use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+                rebuild_sketch(editor);
+                true
             });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true

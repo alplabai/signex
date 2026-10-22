@@ -240,11 +240,10 @@ impl Signex {
                         .net_color_undo
                         .push(self.ui_state.wire_color_overrides.clone());
                 }
+                // #631 — clearing `ui_state` is the whole operation now;
+                // the canvas reads that map through `CanvasViewPrefs`
+                // instead of keeping a cleared-in-parallel copy.
                 self.ui_state.wire_color_overrides.clear();
-                self.interaction_state
-                    .active_canvas_mut()
-                    .wire_color_overrides
-                    .clear();
                 self.ui_state.pending_net_color = None;
                 self.interaction_state.active_canvas_mut().pending_net_color = None;
                 self.interaction_state

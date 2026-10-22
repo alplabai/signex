@@ -1,28 +1,30 @@
 //! Linear array baking —  instances stepped by
 //!  from the source pad.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 use signex_library::primitive::footprint::Pad as LibPad;
 use signex_sketch::SketchError;
-use signex_sketch::array::{ArrayKind, NumberingScheme};
+use signex_sketch::array::NumberingScheme;
 use signex_sketch::expr::ast::ExprNode;
 use signex_sketch::expr::eval::{EvalContext, eval};
 use signex_sketch::expr::parse::parse;
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
-use signex_sketch::unit::Quantity;
 
 use crate::pad::bake_one_pad;
 
-use super::numbering::{derive_pad_number, linear_increment_number, strip_eq_prefix};
+use super::numbering::{derive_pad_number, strip_eq_prefix};
 
 /// One LinearArray expansion. Steps `0..count`, evaluating `dx_expr`
 /// / `dy_expr` once per step (each in its own `EvalContext` with the
 /// instance index), and dispatches per-instance to
 /// [`bake_one_pad`].
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "linear-array placement takes the whole geometry + numbering spec at once"
+)]
 pub(super) fn bake_linear(
     source: SketchEntityId,
     count_expr: &str,

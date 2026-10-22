@@ -65,34 +65,18 @@ impl Signex {
             return false;
         };
 
-        let invalidation = {
-            let mut changed_steps = 0usize;
-            let mut invalidation = crate::schematic_runtime::RenderInvalidation::NONE;
-
-            for command in commands {
-                match engine.execute(command) {
-                    Ok(result) => {
-                        if let Some(patch_pair) = result.patch_pair {
-                            changed_steps += 1;
-                            invalidation |=
-                                Self::render_invalidation_for_patch(patch_pair.document);
-                        }
-                    }
-                    Err(error) => {
-                        let error = anyhow::Error::new(error);
-                        crate::diagnostics::log_error("Engine command execution failed", &error);
-                        return false;
-                    }
-                }
-            }
-
-            if changed_steps > 0 {
-                self.interaction_state
-                    .undo_stack
-                    .record_engine_marker(changed_steps);
-                invalidation
-            } else {
-                crate::schematic_runtime::RenderInvalidation::NONE
+        // One engine history entry for the whole batch, with the patches
+        // OR-ed together — the grouping the app's marker stack used to
+        // encode, now owned by the engine that holds the history.
+        let invalidation = match engine.execute_batch(commands) {
+            Ok(result) => result
+                .patch_pair
+                .map(|patch_pair| Self::render_invalidation_for_patch(patch_pair.document))
+                .unwrap_or(crate::schematic_runtime::RenderInvalidation::NONE),
+            Err(error) => {
+                let error = anyhow::Error::new(error);
+                crate::diagnostics::log_error("Engine command execution failed", &error);
+                return false;
             }
         };
 
@@ -110,14 +94,10 @@ impl Signex {
         };
 
         let invalidation = match engine.execute(command) {
-            Ok(result) if result.changed => {
-                let invalidation = result
-                    .patch_pair
-                    .map(|patch_pair| Self::render_invalidation_for_patch(patch_pair.document))
-                    .unwrap_or(crate::schematic_runtime::RenderInvalidation::NONE);
-                self.interaction_state.undo_stack.record_engine_marker(1);
-                invalidation
-            }
+            Ok(result) if result.changed => result
+                .patch_pair
+                .map(|patch_pair| Self::render_invalidation_for_patch(patch_pair.document))
+                .unwrap_or(crate::schematic_runtime::RenderInvalidation::NONE),
             Ok(_) => crate::schematic_runtime::RenderInvalidation::NONE,
             Err(error) => {
                 let error = anyhow::Error::new(error);
@@ -129,33 +109,46 @@ impl Signex {
         self.finish_schematic_mutation(invalidation, clear_overlay_cache, update_selection_info)
     }
 
+    /// Mark the active document as having unsaved edits, without running a
+    /// render invalidation.
+    ///
+    /// For the one edit path that mutates the engine through a method that
+    /// is not a `Command` — `Engine::annotate_with_seed_and_locks`, which
+    /// records its own history entry — so it cannot go through
+    /// [`Signex::apply_engine_command`] but still has to reach
+    /// `dirty_paths` (#585). Everything else should use the gateway, which
+    /// calls this as part of `finish_schematic_mutation`.
+    ///
+    /// Returns `false` when there is no active schematic session to mark.
+    pub(crate) fn mark_active_document_dirty(&mut self) -> bool {
+        self.with_active_schematic_session_mut(|session| {
+            session.set_dirty(true);
+        })
+        .is_some()
+    }
+
+    /// Undo one step of the **active** engine's own history.
+    ///
+    /// One `Engine::undo` per invocation: a batch recorded through
+    /// `apply_engine_commands` is already a single entry, so grouping needs
+    /// no second stack to count it. This used to be driven by an app-side
+    /// marker stack, which was one global stack shared by every open
+    /// document's engine and was never cleared on tab switch — so its
+    /// counts drifted out of step with the history they were counting and
+    /// an edit could be reverted with no invalidation and no dirty flag
+    /// (#533). Reading the history straight off the engine that owns it
+    /// also makes the `Engine::can_undo` the Edit menu reads
+    /// (`app/view/mod.rs`) agree with what Undo will actually do.
     pub(crate) fn apply_engine_undo(&mut self, update_selection_info: bool) -> bool {
         let invalidation = if let Some(engine) = self.document_state.active_engine_mut() {
-            let Some(steps) = self.interaction_state.undo_stack.peek_undo_engine_steps() else {
-                return false;
-            };
-
-            let mut undone_steps = 0usize;
-            let mut invalidation = crate::schematic_runtime::RenderInvalidation::NONE;
-            for _ in 0..steps {
-                match engine.undo() {
-                    Ok(Some(patch_pair)) => {
-                        undone_steps += 1;
-                        invalidation |= Self::render_invalidation_for_patch(patch_pair.document);
-                    }
-                    Ok(None) => break,
-                    Err(error) => {
-                        let error = anyhow::Error::new(error);
-                        crate::diagnostics::log_error("Engine undo failed", &error);
-                        return false;
-                    }
+            match engine.undo() {
+                Ok(Some(patch_pair)) => Self::render_invalidation_for_patch(patch_pair.document),
+                Ok(None) => return false,
+                Err(error) => {
+                    let error = anyhow::Error::new(error);
+                    crate::diagnostics::log_error("Engine undo failed", &error);
+                    return false;
                 }
-            }
-
-            if undone_steps == steps && self.interaction_state.undo_stack.step_back() {
-                invalidation
-            } else {
-                crate::schematic_runtime::RenderInvalidation::NONE
             }
         } else {
             crate::schematic_runtime::RenderInvalidation::NONE
@@ -164,33 +157,18 @@ impl Signex {
         self.finish_schematic_mutation(invalidation, true, update_selection_info)
     }
 
+    /// Redo one step of the **active** engine's own history. Mirror of
+    /// [`Signex::apply_engine_undo`].
     pub(crate) fn apply_engine_redo(&mut self, update_selection_info: bool) -> bool {
         let invalidation = if let Some(engine) = self.document_state.active_engine_mut() {
-            let Some(steps) = self.interaction_state.undo_stack.peek_redo_engine_steps() else {
-                return false;
-            };
-
-            let mut redone_steps = 0usize;
-            let mut invalidation = crate::schematic_runtime::RenderInvalidation::NONE;
-            for _ in 0..steps {
-                match engine.redo() {
-                    Ok(Some(patch_pair)) => {
-                        redone_steps += 1;
-                        invalidation |= Self::render_invalidation_for_patch(patch_pair.document);
-                    }
-                    Ok(None) => break,
-                    Err(error) => {
-                        let error = anyhow::Error::new(error);
-                        crate::diagnostics::log_error("Engine redo failed", &error);
-                        return false;
-                    }
+            match engine.redo() {
+                Ok(Some(patch_pair)) => Self::render_invalidation_for_patch(patch_pair.document),
+                Ok(None) => return false,
+                Err(error) => {
+                    let error = anyhow::Error::new(error);
+                    crate::diagnostics::log_error("Engine redo failed", &error);
+                    return false;
                 }
-            }
-
-            if redone_steps == steps && self.interaction_state.undo_stack.step_forward() {
-                invalidation
-            } else {
-                crate::schematic_runtime::RenderInvalidation::NONE
             }
         } else {
             crate::schematic_runtime::RenderInvalidation::NONE
@@ -290,20 +268,46 @@ impl Signex {
             &[],
             &active_path,
         );
-        let Some(root) = set.sheets.get(&active_path).cloned() else {
-            return;
-        };
-        let (children, children_issues) =
-            crate::app::project_sheets::project_children_map(&set.sheets);
         let project_dir = self
             .document_state
             .active_document_project()
             .map(|p| p.dir().to_path_buf());
-        let root_filename =
-            crate::app::project_sheets::root_reference_name(&active_path, project_dir.as_deref());
-        let mut result =
-            signex_net::build_project_netlist(&root, &children, root_filename.as_deref());
-        result.issues.extend(children_issues);
+        let base_dir = project_dir
+            .clone()
+            .or_else(|| active_path.parent().map(std::path::PathBuf::from));
+        let graph = crate::app::project_sheets::project_graph(
+            &set.sheets,
+            base_dir.as_deref(),
+            Some(&active_path),
+        );
+        let root_key = crate::app::project_sheets::sheet_key(&active_path, base_dir.as_deref());
+        if !graph.sheets.contains_key(&root_key) {
+            // The active sheet is exempt from losing a SheetKey collision
+            // (#536), so reaching here means it was never assembled at
+            // all. Report what the assembler did find, and say why the
+            // netlist is not being refreshed: the success path below logs
+            // every issue, and returning here skipped all of it — leaving
+            // `NET_NAME()` resolving against a stale cache with nothing
+            // in the Messages panel to explain it.
+            for issue in &graph.issues {
+                crate::diagnostics::log_warning(crate::app::project_sheets::stitch_issue_message(
+                    issue,
+                ));
+            }
+            crate::diagnostics::log_warning(format!(
+                "Netlist: active sheet '{}' is not part of the assembled project, so the \
+                 project netlist was not refreshed",
+                active_path.display()
+            ));
+            return;
+        }
+        let roots = [signex_net::ProjectRoot { key: root_key }];
+        let mut result = signex_net::build_project_netlist(&signex_net::ProjectGraph {
+            sheets: &graph.sheets,
+            resolved: &graph.resolved,
+            roots: &roots,
+        });
+        result.issues.extend(graph.issues);
         // A child that exists but will not parse reaches the stitcher as a
         // plain MissingChild; say which it was, or the user hunts for a file
         // that is sitting right there.

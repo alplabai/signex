@@ -2,25 +2,28 @@ use iced::widget::{Column, button, container, row, text, text_input};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
 use super::super::{
-    CollapsedSections, FootprintEditorPanelContext, FootprintModeKind, PanelMsg, SnapOptionFlag,
+    CollapsedSections, FootprintEditorPanelContext, FootprintModeKind, PanelMsg, PanelPalette,
+    SnapOptionFlag,
 };
 use super::managers::{render_grid_manager, render_other_section};
 use super::snap_options::render_snapping_mode_row;
 use super::{fp_is_collapsed, props_kv_row, props_section_header};
 
-#[allow(clippy::too_many_arguments)]
 pub(super) fn view_sections<'a>(
     mut col: Column<'a, PanelMsg>,
     fp: &'a FootprintEditorPanelContext,
-    muted: Color,
-    primary: Color,
-    border_c: Color,
-    input_bg: Color,
-    input_bdr: Color,
+    palette: PanelPalette,
     collapsed_sections: &'a CollapsedSections,
     unit: signex_types::coord::Unit,
-    seg_hover: Color,
 ) -> Column<'a, PanelMsg> {
+    let PanelPalette {
+        muted,
+        primary,
+        border: border_c,
+        input_bg,
+        input_bdr,
+        ..
+    } = palette;
     // Track no-selection state so the v0.18.13 Library Options
     // sections (Grid Manager / Guide Manager / Other) only render
     // in the empty-canvas Properties body.
@@ -276,9 +279,7 @@ pub(super) fn view_sections<'a>(
             border_c,
         ));
         if !fp_is_collapsed("fp_other", collapsed_sections) {
-            col = render_other_section(
-                col, fp, primary, muted, border_c, input_bg, input_bdr, unit, seg_hover,
-            );
+            col = render_other_section(col, fp, palette, unit);
         }
     }
 
@@ -414,8 +415,16 @@ pub(super) fn view_sections<'a>(
                             .width(Length::Fill),
                     );
                     for oc in s.over_constraints.iter().take(8) {
-                        let label =
-                            format!("{} — residual {:.3e}", oc.kind_label, oc.residual_magnitude);
+                        // GH #599 — an unevaluable residual says so.
+                        // It used to render as "residual 0.000e0",
+                        // identical to a satisfied constraint.
+                        let label = match oc.residual_magnitude {
+                            Some(mag) => format!("{} — residual {:.3e}", oc.kind_label, mag),
+                            None => format!(
+                                "{} — residual unavailable (target expression did not evaluate)",
+                                oc.kind_label
+                            ),
+                        };
                         let inner: Element<'_, _> = if let Some(focus_id) = oc.focus_entity_id {
                             button(
                                 text(label)

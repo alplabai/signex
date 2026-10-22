@@ -46,6 +46,17 @@ pub struct UiState {
     /// resolver clears it on a match, a definite miss, or via the
     /// single-stroke restart retry.
     pub keymap_pending_sequence: Vec<crate::keymap::KeyStroke>,
+    /// Which window the pending chord began in (#559).
+    ///
+    /// The buffer above is app-wide, so without this a sequence could
+    /// start in one window, finish in another, and resolve against the
+    /// contexts of a third. `resolve_keymap_stroke` drops the prefix
+    /// whenever the next stroke arrives from a different target.
+    ///
+    /// `pub(crate)` unlike its neighbours: `InputTarget` is crate-private,
+    /// and a `pub` field carrying it would leak a private type out of the
+    /// crate's interface. Nothing outside needs to read it.
+    pub(crate) keymap_pending_target: Option<crate::app::dispatch::input::InputTarget>,
     pub canvas_font_name: String,
     pub canvas_font_size: f32,
     pub canvas_font_bold: bool,
@@ -77,6 +88,13 @@ pub struct UiState {
     pub preferences_nav: crate::preferences::PrefNav,
     pub preferences_draft_theme: ThemeId,
     pub preferences_draft_font: String,
+    /// Status / error line shown under Appearance ▸ Import/Export Theme.
+    /// The export writes a file the user picked in a save dialog, so a
+    /// failed write has to reach the user rather than leaving them
+    /// believing the theme was saved (#533). Sibling of
+    /// [`Self::preferences_keymap_status`]; empty renders nothing. Pure
+    /// feedback — never part of the dirty predicate.
+    pub preferences_theme_status: String,
     pub power_port_style: PowerPortStyle,
     pub preferences_draft_power_port_style: PowerPortStyle,
     pub label_style: LabelStyle,
@@ -95,10 +113,26 @@ pub struct UiState {
     pub preferences_draft_pcb_gpu_render: bool,
     /// Default symbol-editor grid size (mm) — used when a library is
     /// first opened. Changed from Preferences ▸ Appearance ▸ Symbol Editor.
+    ///
+    /// #629 — these three had no committed field at all until this one and
+    /// its two siblings were added: the `preferences_draft_*` mirror WAS
+    /// the saved value, seeded from disk at boot and written back on every
+    /// picker move. That left `revert_preferences_drafts` nothing to
+    /// restore from, so Cancel silently kept the change while the four
+    /// settings above it reverted.
+    pub symbol_grid_size_mm: f32,
+    /// Draft mirror of [`Self::symbol_grid_size_mm`].
     pub preferences_draft_symbol_grid_size_mm: f32,
     /// Symbol-editor grid display style (Dots / Crosses / Lines).
+    pub symbol_grid_style: crate::render_config::GridStyle,
+    /// Draft mirror of [`Self::symbol_grid_style`]. The only one of the
+    /// three with a live preview: the draft is pushed into
+    /// `PanelContext::symbol_grid_style` on change, so Cancel has to push
+    /// the committed value back there as well as restoring this field.
     pub preferences_draft_symbol_grid_style: crate::render_config::GridStyle,
     /// Symbol-editor pin-selection mode (pin body only / body + labels).
+    pub symbol_pin_selection: crate::render_config::PinSelectionMode,
+    /// Draft mirror of [`Self::symbol_pin_selection`].
     pub preferences_draft_symbol_pin_selection: crate::render_config::PinSelectionMode,
     /// Keyboard Shortcuts pane — editable working copy of the shortcut
     /// profile set. Seeded from [`keymap_profiles`] each time the
@@ -112,6 +146,73 @@ pub struct UiState {
     /// error is swallowed silently. Empty renders the default conflict
     /// summary instead.
     pub preferences_keymap_status: String,
+    /// Boot-time keyboard-shortcut load failure, carried for the life of
+    /// the session (#595). `Some` means a shortcuts file EXISTS on disk
+    /// and could not be honoured — unreadable, unparseable, or naming an
+    /// `active_profile` that no longer resolves — so the running set is
+    /// the bundled built-in fallback rather than the user's own profiles.
+    ///
+    /// That is emphatically NOT the same as the user having no custom
+    /// profiles: [`crate::keymap::load_profile_set_at`] returns `Ok` for a
+    /// missing file, so a fresh install leaves this `None`. Treating the
+    /// two alike is what let a Preferences Apply serialise the
+    /// custom-profile-free fallback over the user's real file.
+    ///
+    /// Unlike [`Self::preferences_keymap_status`] this is NOT cleared when
+    /// the Preferences dialog opens — it is a persistent banner, not
+    /// transient feedback. Only a successful save clears it, because only
+    /// then is the file on disk one this process wrote.
+    pub keymap_load_error: Option<String>,
+    /// Path of `keyboard_shortcuts.toml.bak` when that file is on disk
+    /// (#603).
+    ///
+    /// Distinct from [`Self::keymap_load_error`] on purpose: the backup
+    /// outlives the failure that produced it. Once a successful save
+    /// clears the load error the banner goes away, and before this field
+    /// existed that was the last time the app ever mentioned the backup
+    /// — the user's profiles sat in a file nothing could see or act on.
+    /// `Some` here means the Keyboard pane offers Restore and Discard,
+    /// error or no error.
+    ///
+    /// Refreshed on every Preferences open and after either action, the
+    /// same way `prefs_load_error` is re-probed (#602). It is a cached
+    /// answer to "does that file exist", not a claim about its contents.
+    pub keymap_backup: Option<String>,
+    /// The last known health of `prefs.json` (#602) — NOT a boot-time
+    /// snapshot, unlike [`Self::keymap_load_error`] right above. It is
+    /// set at boot and refreshed on every Preferences open and at the end
+    /// of every Preferences Save, so the boot value only ever reaches a
+    /// user through the boot `tracing::error!`:
+    /// `seed_preferences_drafts_from_live` re-probes and overwrites it
+    /// before the dialog first renders. The boot assignment still has to
+    /// be right, because the field must not lie in the window before that
+    /// first open.
+    ///
+    /// `Some` means the file EXISTS and could not be loaded — unreadable,
+    /// unparseable, or with a non-object root — so every preference
+    /// reader is silently handing back its default and
+    /// [`crate::fonts::check_prefs_file`]'s sibling `update_prefs_json`
+    /// is refusing every write to keep the bytes repairable. The UI looks
+    /// factory-reset and nothing the user changes sticks, which is
+    /// exactly the pair that has to be said out loud rather than left in
+    /// the Messages panel.
+    ///
+    /// As with [`Self::keymap_load_error`], absence is NOT a failure:
+    /// a missing (or all-whitespace) file is a fresh install, which the
+    /// writer starts from happily, so this stays `None` there.
+    ///
+    /// Re-probing is what [`Self::keymap_load_error`] cannot do: that
+    /// flag can only be cleared by a successful save, because only then
+    /// is the file on disk one this process wrote. Here the check is a
+    /// single file read with no state behind it, so a user who repairs
+    /// `prefs.json` by hand sees the banner go on the next open, and one
+    /// who breaks it mid-session sees it appear on the next Save.
+    pub prefs_load_error: Option<String>,
+    /// Result line for the Preferences prefs-file recovery action (#602).
+    /// Transient per-action feedback — never part of the dirty
+    /// predicate — and cleared on every dialog open, exactly like
+    /// [`Self::preferences_theme_status`]. Empty renders nothing.
+    pub preferences_prefs_status: String,
     /// Live search query for the Keyboard Shortcuts pane. Filters the
     /// grouped shortcut table case-insensitively by label / command id /
     /// trigger. Reset to empty each time Preferences opens.
@@ -190,7 +291,6 @@ pub struct UiState {
     /// net-colour flood populates; kept here so a future net-name
     /// palette (maybe the F5 dialog) can cross-reference it without
     /// another round-trip through state plumbing.
-    #[allow(dead_code)]
     pub net_colors: std::collections::HashMap<String, signex_types::theme::Color>,
     /// AutoFocus mode — when true, non-selected items dim on the canvas.
     pub auto_focus: bool,
@@ -289,9 +389,14 @@ impl UiState {
     /// Single source of truth so every live-preview `PrefMsg::Draft*` handler
     /// stays consistent as new drafts are added (the old per-handler inline
     /// chains had drifted to different term sets). Covers ALL draft state —
-    /// the 7 appearance drafts, the component-class table and the keymap
+    /// the 10 appearance drafts, the component-class table and the keymap
     /// working copy — so an appearance recompute can't report "clean" while
     /// a pending rebind or class edit would be lost on close.
+    ///
+    /// The three Symbol Editor terms joined in #629. Until then the claim
+    /// above was false: they wrote themselves to `prefs.json` on change and
+    /// were deliberately left out, so the predicate was consistent with
+    /// their behaviour but not with the footer the user was looking at.
     pub fn preferences_draft_differs(&self) -> bool {
         self.preferences_draft_theme != self.theme_id
             || self.preferences_draft_font != self.ui_font_name
@@ -300,6 +405,13 @@ impl UiState {
             || self.preferences_draft_multisheet_style != self.multisheet_style
             || self.preferences_draft_grid_style != self.grid_style
             || self.preferences_draft_pcb_gpu_render != self.pcb_gpu_render
+            || self.preferences_draft_symbol_grid_style != self.symbol_grid_style
+            // Exact `!=` on the f32 is deliberate: the picker assigns from
+            // `canvas::grid::GRID_SIZES_MM`, so draft and committed are the
+            // same constant unless the user actually moved it. A tolerance
+            // here would let a real change read as clean.
+            || self.preferences_draft_symbol_grid_size_mm != self.symbol_grid_size_mm
+            || self.preferences_draft_symbol_pin_selection != self.symbol_pin_selection
             || self.preferences_draft_component_classes != self.component_classes
             || self
                 .preferences_keymap_editor

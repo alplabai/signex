@@ -22,8 +22,8 @@ use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig, Workflo
 use signex_library::manufacturer::ManufacturerPart;
 use signex_library::param::ParamMap;
 use signex_library::primitive::{
-    Body3D, BodyShape, Footprint, LayerId, Pad, PadKind, PadShape, PinDirection, PinOrientation,
-    Polygon, PrimitiveKind, PrimitiveRef, SimKind, SimModel, Symbol, SymbolPin,
+    Body3D, BodyShape, Footprint, FootprintFile, LayerId, Pad, PadKind, PadShape, PinDirection,
+    Polygon, PrimitiveKind, PrimitiveRef, SimFile, SimKind, SimModel, Symbol, SymbolPin,
 };
 use uuid::Uuid;
 
@@ -333,7 +333,6 @@ fn history_returns_per_primitive_commits() {
     let dir = tempfile::tempdir().unwrap();
     let (file, adapter) = init_adapter(&dir, "Hist", false);
     let mut sym = fixture_symbol("OPAMP-DUAL-8");
-    let uuid = sym.uuid;
     adapter
         .save_symbol(sym.clone(), "add OPAMP-DUAL-8")
         .unwrap();
@@ -379,7 +378,6 @@ fn history_returns_per_primitive_commits() {
     let rel = std::path::PathBuf::from("symbols").join("opamp-dual-8.snxsym");
     let entries_rel = adapter.history(&rel).unwrap();
     assert_eq!(entries_rel.len(), entries.len());
-    let _ = uuid; // uuid retained for clarity; not asserted on.
 }
 
 /// `list_symbols` / `list_footprints` / `list_sims` walk the per-kind dir,
@@ -409,6 +407,136 @@ fn list_primitives_returns_alphabetic_summaries() {
     assert_eq!(fps.len(), 1);
     assert_eq!(fps[0].kind, PrimitiveKind::Footprint);
     assert_eq!(fps[0].name, "SOIC-8");
+}
+
+/// `list_footprints` / `list_sims` read the name out of every
+/// `<uuid>.<ext>` envelope in the per-kind directory, tag each summary
+/// with the right [`PrimitiveKind`], and hand the whole list back
+/// sorted by name — not by uuid and not in directory-walk order.
+///
+/// The save order below is deliberately not alphabetic, and the uuids
+/// are `now_v7` so filename order tracks save order: a listing that
+/// forgot to sort would come back in save order and fail here.
+#[test]
+fn list_footprints_and_sims_are_name_sorted() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_file, adapter) = init_adapter(&dir, "Listing", false);
+
+    for name in ["QFN-32", "SOIC-8", "0402", "TSSOP-20"] {
+        adapter
+            .save_footprint(fixture_footprint(name), "add")
+            .unwrap();
+    }
+    for name in ["LM358", "2N3904", "TL072"] {
+        adapter.save_sim(fixture_sim(name), "add").unwrap();
+    }
+
+    let fps = adapter.list_footprints().unwrap();
+    let fp_names: Vec<&str> = fps.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(fp_names, vec!["0402", "QFN-32", "SOIC-8", "TSSOP-20"]);
+    for s in &fps {
+        assert_eq!(s.kind, PrimitiveKind::Footprint);
+        assert_eq!(s.used_by_count, 0);
+    }
+
+    let sims = adapter.list_sims().unwrap();
+    let sim_names: Vec<&str> = sims.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(sim_names, vec!["2N3904", "LM358", "TL072"]);
+    for s in &sims {
+        assert_eq!(s.kind, PrimitiveKind::Sim);
+        assert_eq!(s.used_by_count, 0);
+    }
+
+    // Every summary's uuid must be the one the primitive was saved
+    // under — the listing parses it out of the filename stem, so a
+    // uuid/name mismatch here means the two halves drifted apart.
+    for summary in fps.iter().chain(sims.iter()) {
+        let fetched_name = match summary.kind {
+            PrimitiveKind::Footprint => adapter.get_footprint(summary.uuid).unwrap().name,
+            PrimitiveKind::Sim => adapter.get_sim(summary.uuid).unwrap().name,
+            _ => unreachable!("only footprints and sims in this listing"),
+        };
+        assert_eq!(fetched_name, summary.name);
+    }
+}
+
+/// Files whose stem is not a uuid, and files with a foreign extension,
+/// are skipped rather than surfaced or errored on. A `README.md` or a
+/// stray editor backup dropped into `footprints/` must not break the
+/// Library Browser.
+#[test]
+fn list_primitives_skips_non_uuid_and_foreign_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "Skip", false);
+    adapter
+        .save_footprint(fixture_footprint("SOIC-8"), "add")
+        .unwrap();
+
+    let fpt_dir = file.parent().unwrap().join("footprints");
+    std::fs::write(fpt_dir.join("README.md"), b"not a footprint").unwrap();
+    std::fs::write(fpt_dir.join("notauuid.snxfpt"), b"garbage").unwrap();
+
+    let fps = adapter.list_footprints().unwrap();
+    assert_eq!(fps.len(), 1);
+    assert_eq!(fps[0].name, "SOIC-8");
+}
+
+/// A well-formed envelope carrying *zero* primitives is a corrupt
+/// library, not an empty one: the listing must fail loudly with the
+/// `empty .snxfpt <file>` / `empty .snxsim <file>` diagnostic rather
+/// than silently dropping the entry.
+#[test]
+fn list_primitives_rejects_zero_primitive_envelope() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "Envelope", false);
+    let root = file.parent().unwrap();
+    let now = chrono::Utc::now();
+
+    let fpt_uuid = Uuid::now_v7();
+    let empty_fpt = FootprintFile {
+        format: "snxfpt/1".into(),
+        file_uuid: Uuid::now_v7(),
+        display_name: "empty".into(),
+        footprints: Vec::new(),
+        created: now,
+        updated: now,
+    };
+    let fpt_dir = root.join("footprints");
+    std::fs::create_dir_all(&fpt_dir).unwrap();
+    std::fs::write(
+        fpt_dir.join(format!("{fpt_uuid}.snxfpt")),
+        empty_fpt.to_toml_string().unwrap(),
+    )
+    .unwrap();
+
+    let err = adapter.list_footprints().unwrap_err();
+    let LibraryError::Backend(msg) = &err else {
+        panic!("expected Backend, got {err:?}");
+    };
+    assert_eq!(msg, &format!("empty .snxfpt {fpt_uuid}.snxfpt"));
+
+    let sim_uuid = Uuid::now_v7();
+    let empty_sim = SimFile {
+        format: "snxsim/v1".into(),
+        file_uuid: Uuid::now_v7(),
+        display_name: "empty".into(),
+        models: Vec::new(),
+        created: now,
+        updated: now,
+    };
+    let sim_dir = root.join("sims");
+    std::fs::create_dir_all(&sim_dir).unwrap();
+    std::fs::write(
+        sim_dir.join(format!("{sim_uuid}.snxsim")),
+        empty_sim.to_toml_string().unwrap(),
+    )
+    .unwrap();
+
+    let err = adapter.list_sims().unwrap_err();
+    let LibraryError::Backend(msg) = &err else {
+        panic!("expected Backend, got {err:?}");
+    };
+    assert_eq!(msg, &format!("empty .snxsim {sim_uuid}.snxsim"));
 }
 
 /// LibrarySet integration test — mount two LocalGit libraries and resolve a
@@ -471,32 +599,99 @@ fn library_set_resolves_across_two_local_libs() {
     // Cross-library resolution: refs disambiguated by library_id.
     let from_a = set
         .resolve_symbol(&PrimitiveRef::new(lib_a, shared_uuid))
+        .expect("lib A lookup succeeds")
         .expect("symbol from lib A resolves");
     assert_eq!(from_a.name, "OPAMP-IN-A");
     let from_b = set
         .resolve_symbol(&PrimitiveRef::new(lib_b, shared_uuid))
+        .expect("lib B lookup succeeds")
         .expect("symbol from lib B resolves");
     assert_eq!(from_b.name, "OPAMP-IN-B");
 
     // Footprint only resolves through lib B's id; lib A returns None.
     assert!(
         set.resolve_footprint(&PrimitiveRef::new(lib_b, fp_b_uuid))
+            .expect("lib B lookup succeeds")
             .is_some()
     );
     assert!(
         set.resolve_footprint(&PrimitiveRef::new(lib_a, fp_b_uuid))
+            .expect("lib A lookup succeeds")
             .is_none()
     );
 
-    // unresolved_refs filters down to misses across both libs.
+    // unresolved_refs filters down to misses across both libs. Nothing
+    // is unreadable here, so `undetermined` must stay empty — an entry
+    // there would mean a good binding was about to be reported wrong.
     let bogus_lib = PrimitiveRef::new(Uuid::now_v7(), Uuid::now_v7());
     let bogus_uuid = PrimitiveRef::new(lib_a, Uuid::now_v7());
     let resolves = PrimitiveRef::new(lib_a, shared_uuid);
     let unresolved = set.unresolved_refs([&bogus_lib, &bogus_uuid, &resolves]);
-    assert_eq!(unresolved.len(), 2);
-    assert!(unresolved.contains(&bogus_lib));
-    assert!(unresolved.contains(&bogus_uuid));
-    assert!(!unresolved.contains(&resolves));
+    assert_eq!(unresolved.missing.len(), 2);
+    assert!(unresolved.missing.contains(&bogus_lib));
+    assert!(unresolved.missing.contains(&bogus_uuid));
+    assert!(!unresolved.missing.contains(&resolves));
+    assert!(
+        unresolved.undetermined.is_empty(),
+        "unexpected read failures: {:?}",
+        unresolved.undetermined
+    );
+}
+
+/// A corrupt `.snxsym` on disk must not read as "this row's symbol_ref
+/// points at a UUID that isn't in the library". The resolver hands the
+/// caller the parse error so the UI can say what actually happened.
+#[test]
+fn corrupt_symbol_file_resolves_to_an_error_not_a_missing_uuid() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = snxlib_path(dir.path(), "corrupt");
+    let manifest = empty_snx_manifest("corrupt", false);
+    let lib_id = manifest.library_id;
+    let adapter = LocalGitAdapter::init(
+        &file,
+        manifest,
+        LibraryInitOptions {
+            enable_git: false,
+            use_lfs: false,
+        },
+    )
+    .unwrap();
+
+    let sym = fixture_symbol("U1");
+    let sym_uuid = sym.uuid;
+    adapter.save_symbol(sym, "add U1").unwrap();
+
+    // Truncate the on-disk container mid-record — exactly what a half
+    // written file or a bad merge leaves behind.
+    let symbols_dir = file.parent().expect("library dir").join("symbols");
+    let written = std::fs::read_dir(&symbols_dir)
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .find(|p| p.extension().and_then(|s| s.to_str()) == Some("snxsym"))
+        .expect("symbol file written");
+    std::fs::write(&written, b"format = \"snxsym/").unwrap();
+
+    let mut set = LibrarySet::new();
+    set.mount(Box::new(adapter)).unwrap();
+
+    let r = PrimitiveRef::new(lib_id, sym_uuid);
+    let err = set
+        .resolve_symbol(&r)
+        .expect_err("a corrupt symbol container must not read as an absent UUID");
+    assert!(
+        !matches!(err, signex_library::LibraryError::NotFound(_)),
+        "corrupt file reported as NotFound: {err}"
+    );
+
+    let sweep = set.unresolved_refs([&r]);
+    assert!(
+        sweep.missing.is_empty(),
+        "corrupt file filed as a wrong binding: {:?}",
+        sweep.missing
+    );
+    assert_eq!(sweep.undetermined.len(), 1);
+    assert_eq!(sweep.undetermined[0].0, r);
 }
 
 // ── Row CRUD ──────────────────────────────────────────────────────────────

@@ -6,10 +6,14 @@
 //!
 //! The Roboto + Iosevka TTF bytes below are bundled at compile time but NOT
 //! yet wired into the PDF pipeline — they're parked for v0.9 when the Type0
-//! composite-font dict + FontFile2 stream emission lands. The `#[allow(dead_code)]`
-//! annotations that follow are deliberate.
+//! composite-font dict + FontFile2 stream emission lands. The module-wide
+//! `#![expect(dead_code)]` below is deliberate, and it expires on its own:
+//! once the pipeline uses these, `unfulfilled_lint_expectations` says so.
 
-#![allow(dead_code)]
+#![expect(
+    dead_code,
+    reason = "Roboto + Iosevka TTF bytes are bundled at compile time but not yet wired into the PDF pipeline; they land with the v0.9 Type0 composite-font dict + FontFile2 stream"
+)]
 
 use pdf_writer::Ref;
 use ttf_parser::Face;
@@ -79,7 +83,6 @@ impl PdfFont {
 
     /// PostScript base name for this font (used in /BaseFont). Matches the
     /// embedded TTF — used once full Type0 emission lands in v0.9.
-    #[allow(dead_code)]
     pub fn base_name(&self) -> &'static str {
         match self {
             PdfFont::RobotoRegular => "Roboto",
@@ -370,8 +373,8 @@ mod tests {
 
         let font_data = cat.font_data();
         assert_eq!(font_data.len(), 2);
-        assert!(font_data[0].1.len() > 0);
-        assert!(font_data[1].1.len() > 0);
+        assert!(!font_data[0].1.is_empty());
+        assert!(!font_data[1].1.is_empty());
     }
 
     #[test]
@@ -383,7 +386,9 @@ mod tests {
             PdfFont::IosevkaRegular,
             PdfFont::IosevkaBold,
         ] {
-            let face = font.face().expect(&format!("Font {:?} should parse", font));
+            let face = font
+                .face()
+                .unwrap_or_else(|| panic!("Font {:?} should parse", font));
             assert!(face.units_per_em() > 0, "Font {:?} should have UPM", font);
             assert!(
                 face.ascender() > face.descender(),

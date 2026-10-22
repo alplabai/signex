@@ -51,6 +51,17 @@ impl Engine {
     }
 
     pub(crate) fn record_history(&mut self, snapshot: SchematicSheet, patch_pair: PatchPair) {
+        // Inside `execute_batch` the individual commands must not each land
+        // an entry: the batch pushes one coalesced entry of its own once the
+        // loop is done. Skipping the `redo_stack.clear()` below along with
+        // the push is deliberate — a batch that turns out to have changed
+        // nothing records nothing, so it must not consume a redoable step
+        // either. See `exec/batch.rs` for why this is suppressed up front
+        // rather than truncated away afterwards.
+        if self.history_suppressed {
+            return;
+        }
+
         if self.history.len() >= MAX_HISTORY_ENTRIES {
             self.history.remove(0);
         }

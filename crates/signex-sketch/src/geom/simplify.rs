@@ -42,10 +42,11 @@ impl MultiContour {
 pub fn dedup(polygon: &[Point2], eps: f64) -> Vec<Point2> {
     let mut out: Vec<Point2> = Vec::with_capacity(polygon.len());
     for &p in polygon {
-        if let Some(last) = out.last() {
-            if (p.x - last.x).abs() <= eps && (p.y - last.y).abs() <= eps {
-                continue;
-            }
+        if let Some(last) = out.last()
+            && (p.x - last.x).abs() <= eps
+            && (p.y - last.y).abs() <= eps
+        {
+            continue;
         }
         out.push(p);
     }

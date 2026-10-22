@@ -1,12 +1,10 @@
-//! Grid Manager + Guide Manager + Other section + grid_manager_btn —
-//! the per-editor library Options surfaces below the Pad form.
+//! Grid Manager + Other section + grid_manager_btn — the per-editor
+//! library Options surfaces below the Pad form.
 
-use iced::widget::{
-    Column, Space, button, column, container, pick_list, row, scrollable, text, text_input,
-};
+use iced::widget::{Column, Space, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
-use super::super::{FootprintEditorPanelContext, PanelMsg};
+use super::super::{FootprintEditorPanelContext, PanelMsg, PanelPalette};
 
 /// v0.18.21 — Grid Manager table. One row per `GridDef`. The active
 /// row is highlighted; clicking another row activates it (mirrors its
@@ -154,125 +152,22 @@ pub(super) fn render_grid_manager<'a>(
     col
 }
 
-/// v0.18.20 — Guide Manager. One row per guide carrying an enabled
-/// checkbox, axis label, position field, and a per-row delete button.
-/// Footer surfaces `Add Vertical` / `Add Horizontal` buttons that
-/// append a new entry at world (0, 0) on the chosen axis.
-pub(super) fn render_guide_manager<'a>(
-    mut col: Column<'a, PanelMsg>,
-    fp: &'a FootprintEditorPanelContext,
-    primary: Color,
-    muted: Color,
-    border_c: Color,
-) -> Column<'a, PanelMsg> {
-    use crate::library::editor::footprint::state::GuideAxis;
-
-    col = col.push(
-        container(
-            row![
-                text("On").size(10).color(muted).width(Length::Fixed(28.0)),
-                text("Axis")
-                    .size(10)
-                    .color(muted)
-                    .width(Length::Fixed(60.0)),
-                text("Position (mm)")
-                    .size(10)
-                    .color(muted)
-                    .width(Length::Fill),
-                text("").size(10).color(muted).width(Length::Fixed(50.0)),
-            ]
-            .spacing(4)
-            .align_y(iced::Alignment::Center),
-        )
-        .padding([2, 8])
-        .width(Length::Fill),
-    );
-
-    if fp.guides.is_empty() {
-        col = col.push(
-            container(text("(no guides)").size(10).color(muted))
-                .padding([4, 8])
-                .width(Length::Fill),
-        );
-    } else {
-        for (idx, g) in fp.guides.iter().enumerate() {
-            let axis_label = match g.axis {
-                GuideAxis::Vertical => "Vert",
-                GuideAxis::Horizontal => "Horiz",
-            };
-            let pos_str = format!("{:.3}", g.position_mm);
-            let toggle_label = if g.enabled { "X" } else { " " };
-            col = col.push(
-                container(
-                    row![
-                        iced::widget::button(text(toggle_label).size(10).color(primary))
-                            .padding([2, 6])
-                            .style(iced::widget::button::secondary)
-                            .on_press(PanelMsg::FpEditorGuideToggle(idx))
-                            .width(Length::Fixed(24.0)),
-                        text(axis_label)
-                            .size(10)
-                            .color(primary)
-                            .width(Length::Fixed(60.0)),
-                        iced::widget::text_input("0.000", &pos_str)
-                            .size(10)
-                            .padding([2, 4])
-                            .on_input(move |raw| { PanelMsg::FpEditorGuideSetPosition(idx, raw) })
-                            .width(Length::Fill),
-                        grid_manager_btn(
-                            "Del",
-                            Some(PanelMsg::FpEditorGuideDelete(idx)),
-                            primary,
-                            border_c,
-                        ),
-                    ]
-                    .spacing(4)
-                    .align_y(iced::Alignment::Center),
-                )
-                .padding([2, 8])
-                .width(Length::Fill),
-            );
-        }
-    }
-
-    col = col.push(
-        container(
-            row![
-                grid_manager_btn(
-                    "Add Vertical",
-                    Some(PanelMsg::FpEditorGuideAddVertical),
-                    primary,
-                    border_c,
-                ),
-                grid_manager_btn(
-                    "Add Horizontal",
-                    Some(PanelMsg::FpEditorGuideAddHorizontal),
-                    primary,
-                    border_c,
-                ),
-            ]
-            .spacing(4)
-            .align_y(iced::Alignment::Center),
-        )
-        .padding([4, 8])
-        .width(Length::Fill),
-    );
-    col
-}
-
 /// v0.18.13 — Other section. Today carries only a Units toggle;
 /// future home for additional document-level options.
 pub(super) fn render_other_section<'a>(
     mut col: Column<'a, PanelMsg>,
     _fp: &'a FootprintEditorPanelContext,
-    primary: Color,
-    muted: Color,
-    _border_c: Color,
-    input_bg: Color,
-    input_bdr: Color,
+    palette: PanelPalette,
     unit: signex_types::coord::Unit,
-    seg_hover: Color,
 ) -> Column<'a, PanelMsg> {
+    let PanelPalette {
+        muted,
+        primary,
+        input_bg,
+        input_bdr,
+        seg_hover,
+        ..
+    } = palette;
     use signex_types::coord::Unit;
     // Units row — mm/mils segmented selector (Altium parity). Reuses
     // the schematic Properties panel's `seg_btn` widget so the chrome

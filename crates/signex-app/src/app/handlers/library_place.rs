@@ -78,7 +78,23 @@ impl Signex {
             }
         };
 
-        let symbol = self.library.set.resolve_symbol(&row.symbol_ref);
+        // A failed read is not the same as an unbound symbol — say so
+        // instead of letting `symbol_resolved = false` imply the row
+        // points at a UUID that isn't there.
+        let symbol = match self.library.set.resolve_symbol(&row.symbol_ref) {
+            Ok(sym) => sym,
+            Err(e) => {
+                tracing::error!(
+                    target: "signex::library",
+                    error = %e,
+                    library_id = %library_id,
+                    symbol_uuid = %row.symbol_ref.uuid,
+                    internal_pn = %row.internal_pn,
+                    "place flow: symbol could not be read from its library — placing without it"
+                );
+                None
+            }
+        };
         let pin_count = symbol.as_ref().map(|s| s.pins.len()).unwrap_or(0);
 
         tracing::warn!(
@@ -113,7 +129,10 @@ fn hex_short(hash: &[u8; 32]) -> String {
 /// dispatch message. Pulled out so the picker handler stays small
 /// and the dispatcher's "what message do I emit?" logic lives next
 /// to the rest of the place-flow code.
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "kept next to the rest of the place-flow code so the picker handler stays small"
+)]
 pub(crate) fn place_message_from_picker(
     library_path: PathBuf,
     table: String,

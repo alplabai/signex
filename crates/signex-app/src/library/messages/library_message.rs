@@ -298,6 +298,22 @@ pub enum LibraryMessage {
     /// `TabKind::LibraryBrowser(path)` tab (or activates the existing
     /// one when the path is already open).
     OpenLibraryBrowser(PathBuf),
+    /// A `.snxlib` mount prepared off the UI thread has finished — issue
+    /// #99 part 2c. Produced by
+    /// `library::mount::prepare_mount_off_thread`, handled in
+    /// `app/dispatch/library/mod.rs`.
+    ///
+    /// Carries only the path plus a one-shot cell. What happens next —
+    /// open a Library Browser tab, or stay silent — is deliberately
+    /// *not* in this message: the handler reads the intent from
+    /// `LibraryState::pending_mounts`, because a second request for the
+    /// same path can have upgraded it while this preparation was in
+    /// flight. A cell whose path is no longer pending was cancelled by
+    /// `close_library` and is discarded.
+    MountFinished {
+        path: PathBuf,
+        prepared: crate::library::mount::PreparedMountCell,
+    },
     /// Active table change inside a Library Browser tab — clicked one
     /// of the category tabs in the strip.
     BrowserSelectTable {

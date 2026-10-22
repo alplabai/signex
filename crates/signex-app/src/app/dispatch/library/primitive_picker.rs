@@ -6,6 +6,7 @@
 //! pure code motion, zero behaviour change.
 
 use super::*;
+use crate::library::resolve::{ResolvedKind, report_read_failure};
 
 impl Signex {
     /// Open the Symbol/Footprint primitive picker modal. `target`
@@ -231,15 +232,30 @@ impl Signex {
         match kind {
             PrimitiveKind::Symbol => {
                 state.row.symbol_ref = primitive_ref;
-                state.symbol = self.library.set.resolve_symbol(&primitive_ref);
+                state.symbol = report_read_failure(
+                    self.library.set.resolve_symbol(&primitive_ref),
+                    ResolvedKind::Symbol,
+                    &primitive_ref,
+                    "primitive pick",
+                );
             }
             PrimitiveKind::Footprint => {
                 state.row.footprint_ref = Some(primitive_ref);
-                state.footprint = self.library.set.resolve_footprint(&primitive_ref);
+                state.footprint = report_read_failure(
+                    self.library.set.resolve_footprint(&primitive_ref),
+                    ResolvedKind::Footprint,
+                    &primitive_ref,
+                    "primitive pick",
+                );
             }
             PrimitiveKind::Sim => {
                 state.row.sim_ref = Some(primitive_ref);
-                state.sim = self.library.set.resolve_sim(&primitive_ref);
+                state.sim = report_read_failure(
+                    self.library.set.resolve_sim(&primitive_ref),
+                    ResolvedKind::Sim,
+                    &primitive_ref,
+                    "primitive pick",
+                );
             }
             _ => return,
         }

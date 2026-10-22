@@ -6,13 +6,10 @@ use iced::widget::column;
 /// Per-sheet info for the project tree.
 #[derive(Debug, Clone)]
 pub struct SheetInfo {
-    #[allow(dead_code)]
     pub name: String,
     pub filename: String,
     pub sym_count: usize,
-    #[allow(dead_code)]
     pub wire_count: usize,
-    #[allow(dead_code)]
     pub label_count: usize,
     /// True when this sheet is currently in `document_state.tabs`.
     /// Drives the small accent-coloured dot on the tree row (Altium parity).

@@ -228,15 +228,15 @@ pub(super) fn draw_filled_closed_loops(
         sketch: &signex_sketch::SketchData,
         state: &FootprintEditorState,
     ) -> Option<(f64, f64)> {
-        if let Some(solve) = state.last_solve.as_ref() {
-            if let Some(p) = signex_sketch::solver::state::point_xy(
+        if let Some(solve) = state.last_solve.as_ref()
+            && let Some(p) = signex_sketch::solver::state::point_xy(
                 id,
                 &solve.result.state,
                 &solve.result.index,
                 sketch,
-            ) {
-                return Some(p);
-            }
+            )
+        {
+            return Some(p);
         }
         sketch
             .entities

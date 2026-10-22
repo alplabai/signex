@@ -261,6 +261,17 @@ impl Signex {
     }
 
     pub(crate) fn save_active_document_as(&mut self, path: PathBuf) -> Result<()> {
+        // Refuse a target another open tab hosts: re-keying onto it would
+        // replace that tab's engine and discard its unsaved edits.
+        let is_other_open_document = self.document_state.active_path.as_ref() != Some(&path)
+            && (self.document_state.engines.contains_key(&path)
+                || self.document_state.tabs.iter().any(|tab| tab.path == path));
+        if is_other_open_document {
+            anyhow::bail!(
+                "save as {}: that file is open in another tab or holds unsaved edits from a closed tab",
+                path.display()
+            );
+        }
         if let Some(result) =
             self.with_active_schematic_session_mut(|session| session.save_as(path.clone()))
         {
@@ -395,18 +406,17 @@ impl Signex {
         // Mount through `state.open_library` (idempotent — re-opening a
         // mounted library is a no-op). Bail on failure: an invalid
         // library directory shouldn't poison the project's library list.
-        if self.library.library_at(lib_dir).is_none() {
-            if let Err(e) =
+        if self.library.library_at(lib_dir).is_none()
+            && let Err(e) =
                 crate::library::commands::open_library(&mut self.library, lib_dir.to_path_buf())
-            {
-                tracing::warn!(
-                    target: "signex::library",
-                    path = %lib_dir.display(),
-                    error = %e,
-                    "save-as: open_library failed — leaving project untouched"
-                );
-                return;
-            }
+        {
+            tracing::warn!(
+                target: "signex::library",
+                path = %lib_dir.display(),
+                error = %e,
+                "save-as: open_library failed — leaving project untouched"
+            );
+            return;
         }
         let library_id = self.library.library_at(lib_dir).map(|l| l.library_id);
 

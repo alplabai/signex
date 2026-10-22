@@ -25,10 +25,32 @@ use uuid::Uuid;
 
 use super::state::LibraryState;
 
-/// Open a `*.snxlib/` and refresh its component list.
+/// Open a `*.snxlib/` and, when it was already mounted, refresh its
+/// component list.
+///
+/// The refresh is warm-path only — the same split #528 made in
+/// `auto_mount_project_libraries`, applied here to the interactive path
+/// (#530). Not a micro-optimisation: the duplicate scan measured
+/// **128.653 ms** for a medium library (500 symbols + 500 footprints) and
+/// **540.508 ms** for a large one (2000 + 2000), and every manual "open a
+/// library" gesture paid it.
+///
+/// COLD (not yet mounted): [`LibraryState::open_library`] has just run
+/// `reload_tables` → `reload_primitives`, priming all five caches off the
+/// exact adapter calls a refresh would repeat. Refreshing here recomputes
+/// identical values.
+///
+/// WARM (already mounted): `open_library` early-returns at
+/// `state/methods.rs:83-85` and never reaches `reload_tables`, so this
+/// refresh is the *only* thing that rescans. Dropping it unconditionally
+/// would leave an already-mounted library showing a stale snapshot —
+/// which is why this is a guard and not a deletion. Reachable from every
+/// caller: `self.library` is app-global, so re-opening an
+/// already-mounted library lands here.
 pub fn open_library(state: &mut LibraryState, root: PathBuf) -> Result<(), LibraryError> {
+    let already_open = state.library_at(&root).is_some();
     state.open_library(root.clone())?;
-    if let Err(e) = state.refresh_components(&root) {
+    if already_open && let Err(e) = state.refresh_components(&root) {
         tracing::warn!(target: "signex::library", path = %root.display(), error = %e, "refresh_components failed; UI starts with empty list");
     }
     Ok(())
@@ -192,19 +214,24 @@ pub fn materialize_pending_library(
         library_id: Some(library_id),
     });
 
+    // No `refresh_components` chaser here (#530). This mount is
+    // provably cold and the library is provably empty, so a refresh
+    // could only recompute what `open_library` just cached:
+    //
+    // - `spec.lib_path` was rejected above if it existed on disk, and
+    //   `LocalGitAdapter::init` created it moments ago. A path that did
+    //   not exist cannot have been mounted, because mounting requires
+    //   `LocalGitAdapter::open` on an existing path — so the warm branch
+    //   that keeps the refresh alive in `open_library` is unreachable.
+    // - The library `init` writes has zero rows and no `symbols/` /
+    //   `footprints/` / `sims/` entries, so every cache it primes is
+    //   empty by construction.
     if let Err(e) = state.open_library(spec.lib_path.clone()) {
         tracing::warn!(
             target: "signex::library",
             path = %spec.lib_path.display(),
             error = %e,
             "freshly-materialised library failed initial open — entry registered, retry from tree"
-        );
-    } else if let Err(e) = state.refresh_components(&spec.lib_path) {
-        tracing::warn!(
-            target: "signex::library",
-            path = %spec.lib_path.display(),
-            error = %e,
-            "freshly-materialised library failed initial refresh"
         );
     }
 
@@ -227,7 +254,6 @@ pub fn materialize_pending_library(
 /// Options" modal that pops up after the Save-As dialog; non-UI
 /// callers (tests, fixtures) pass `false` to stay independent of a
 /// local `git lfs` install.
-#[allow(clippy::too_many_arguments)]
 pub fn create_library_at(
     state: &mut LibraryState,
     project: &mut ProjectData,
@@ -344,22 +370,24 @@ pub fn create_library_at(
         library_id: Some(library_id),
     });
 
-    // Best-effort runtime mount + initial component-cache refresh.
-    // Errors here downgrade to warnings so the entry stays
-    // registered and the user can retry from the tree later.
+    // Best-effort runtime mount. Errors here downgrade to warnings so
+    // the entry stays registered and the user can retry from the tree
+    // later.
+    //
+    // No `refresh_components` chaser (#530) — same proof as
+    // `materialize_pending_library`: `lib_path` was rejected above if it
+    // existed, `LocalGitAdapter::init` created it moments ago, and a path
+    // that did not exist cannot already be mounted. So the mount is
+    // provably cold (the warm branch in `open_library` is unreachable)
+    // and the library is provably empty (zero rows, no primitive files).
+    // A refresh could only recompute the empty caches `open_library` just
+    // primed.
     if let Err(e) = state.open_library(lib_path.clone()) {
         tracing::warn!(
             target: "signex::library",
             path = %lib_path.display(),
             error = %e,
             "freshly-created library failed initial open — entry registered, retry from tree"
-        );
-    } else if let Err(e) = state.refresh_components(&lib_path) {
-        tracing::warn!(
-            target: "signex::library",
-            path = %lib_path.display(),
-            error = %e,
-            "freshly-created library failed initial refresh"
         );
     }
 
@@ -371,7 +399,6 @@ pub fn create_library_at(
 /// call sites that don't go through the Save-As dialog working
 /// (currently none — all new code goes through `create_library_at`,
 /// which lets the user pick the location).
-#[allow(dead_code)]
 pub fn create_library(
     state: &mut LibraryState,
     project: &mut ProjectData,
@@ -394,12 +421,52 @@ pub fn create_library(
     create_library_at(state, project, lib_path, false, false)
 }
 
+/// What one `auto_mount_project_libraries` pass decided — issue #99
+/// part 2c.
+///
+/// Two numbers instead of one count, because a cold mount is no longer
+/// finished when this function returns: it has only been *recorded*. A
+/// single `mounted: usize` would have claimed work that has not happened
+/// yet. Total libraries handled is `refreshed + pending.len()`.
+#[derive(Debug, Default, Clone)]
+pub struct AutoMountOutcome {
+    /// Already-mounted libraries refreshed synchronously (the warm path).
+    pub refreshed: usize,
+    /// `.snxlib` paths recorded as pending mounts. The caller must spawn
+    /// one `mount::prepare_mount_off_thread` per path; each lands as a
+    /// `LibraryMessage::MountFinished`.
+    pub pending: Vec<PathBuf>,
+}
+
 /// Auto-mount every library referenced by `project.libraries`. Called
 /// once when a project loads. Failures are logged and skipped — a
 /// missing or corrupt library shouldn't block the rest of the project
 /// from opening.
-pub fn auto_mount_project_libraries(state: &mut LibraryState, project: &ProjectData) -> usize {
-    let mut mounted = 0usize;
+///
+/// **Cold mounts are prepared off the UI thread** (#99 part 2c): this
+/// function records them and returns their paths, and the caller fans
+/// them out. Six libraries then parse in parallel instead of serially
+/// inside `update()` — the measured cost was 826.229 ms after #528, about
+/// 50 dropped frames, and a single mount already crosses one 60 Hz frame
+/// at ~58 symbols + 58 footprints.
+///
+/// The `refresh_components` chaser still runs on the warm path **only**.
+/// On the cold path the caches are primed by `mount::prepare_mount`
+/// (off-thread) exactly as [`LibraryState::open_library`] primed them
+/// inline before, so re-running it would be the same pure duplicate work
+/// #528 removed: it roughly doubled every project open, costing a
+/// six-medium-library project 795.7 ms of its 1 622.571 ms mount.
+/// `tests/library_open_cache.rs` pins both halves — that the cold path
+/// primes everything, and that the warm path still rescans the primitive
+/// directories.
+pub fn auto_mount_project_libraries(
+    state: &mut LibraryState,
+    project: &ProjectData,
+) -> AutoMountOutcome {
+    use super::mount::{MountIntent, MountRequest};
+
+    let mut refreshed = 0usize;
+    let mut pending: Vec<PathBuf> = Vec::new();
     for entry in &project.libraries {
         let resolved = project.resolve_library_path(entry);
         // Standalone `.snxsym` / `.snxfpt` files are tracked on
@@ -415,29 +482,68 @@ pub fn auto_mount_project_libraries(state: &mut LibraryState, project: &ProjectD
         if !is_snxlib {
             continue;
         }
-        match state.open_library(resolved.clone()) {
-            Ok(()) => {
+        // Cold vs warm mount — do NOT collapse this into an
+        // unconditional refresh, and do NOT delete the refresh outright.
+        //
+        // COLD (not yet mounted): `open_library` has just primed all
+        // five caches — `tables` + `cached_components` via
+        // `reload_tables`, then `cached_symbols` / `cached_footprints` /
+        // `cached_sims` via `reload_primitives` — off exactly the
+        // adapter calls a refresh would repeat. Skipping it here is
+        // where the whole #99 win lives.
+        //
+        // WARM (already mounted): `open_library` early-returns `Ok(())`
+        // at `state/methods.rs:83-85` and never reaches
+        // `reload_tables`, so the refresh below is the only thing that
+        // rescans. It is reachable in normal use — `self.library` is
+        // app-global, not per-project (see
+        // `app/handlers/document_files/open.rs:209`), so a second
+        // project referencing an already-mounted `.snxlib` lands here.
+        //
+        // What the warm refresh actually buys, precisely: `list_symbols`
+        // / `list_footprints` / `list_sims` walk `symbols/` /
+        // `footprints/` / `sims/` on every call, so it DOES pick up
+        // primitive files another process wrote. It does NOT pick up
+        // rows added to the `.snxlib` itself — `LocalGitAdapter` parses
+        // that once at `open()` into `RwLock<LibraryFile>`
+        // (`adapters/local_git/mod.rs:88-92`) and `list_tables` /
+        // `read_table` serve from that in-memory copy. Seeing external
+        // row edits needs a re-opened adapter, which only
+        // `app/handlers/document_files/history.rs:259` does today.
+        // COLD vs WARM, decided by `request_mount` rather than by a
+        // `library_at` probe here (#99 part 2c). `AlreadyMounted` is the
+        // warm path and keeps its synchronous refresh — that refresh is
+        // the only thing that rescans `symbols/` / `footprints/` /
+        // `sims/`, so dropping it would lose primitive files another
+        // process wrote (#528's `library_open_cache.rs` pins this).
+        //
+        // `Spawn` is the cold path and no longer mounts here: the caller
+        // fans the returned paths out through
+        // `mount::prepare_mount_off_thread`, so six libraries prepare in
+        // parallel off the UI thread instead of serially inside
+        // `update()`.
+        match state.request_mount(&resolved, MountIntent::Silent) {
+            MountRequest::AlreadyMounted => {
                 if let Err(e) = state.refresh_components(&resolved) {
                     tracing::warn!(
                         target: "signex::library",
                         path = %resolved.display(),
                         error = %e,
-                        "auto-mount: refresh_components failed"
+                        "auto-mount: refresh of already-mounted library failed; cache may be stale"
                     );
                 }
-                mounted += 1;
+                refreshed += 1;
             }
-            Err(e) => {
-                tracing::warn!(
-                    target: "signex::library",
-                    path = %resolved.display(),
-                    error = %e,
-                    "auto-mount: open_library failed; skipping"
-                );
-            }
+            // Another request for this path is already in flight — a
+            // second project referencing the same `.snxlib`, or a user
+            // double-click that beat the project open. Its completion
+            // mounts the library once; recording it twice would spawn a
+            // duplicate preparation.
+            MountRequest::InFlight => {}
+            MountRequest::Spawn => pending.push(resolved),
         }
     }
-    mounted
+    AutoMountOutcome { refreshed, pending }
 }
 
 // ─────────────────────────────────────────────────────────────────────

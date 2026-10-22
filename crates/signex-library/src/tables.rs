@@ -482,6 +482,12 @@ mod tests {
     /// `atomic_write`'s `File::create(&tmp)` fails deterministically
     /// regardless of the unique per-writer temp name it picks (#416).
     /// Restores permissions on drop.
+    ///
+    /// On Windows, `icacls`'s exit code is not proof the deny is enforced
+    /// yet — under full-workspace parallel test load its write to the
+    /// directory's security descriptor can lose the race against the very
+    /// next `File::create` in the same directory (#482), so `on` settles
+    /// the deny with a real probe write before returning.
     struct DenyNewFiles {
         dir: std::path::PathBuf,
     }
@@ -504,10 +510,29 @@ mod tests {
                     .status()
                     .expect("run icacls /deny for test");
                 assert!(status.success(), "icacls /deny failed");
+                Self::settle_deny(dir);
             }
             Self {
                 dir: dir.to_path_buf(),
             }
+        }
+
+        /// Poll with a real probe write instead of trusting `icacls`'s exit
+        /// code, so the caller never proceeds through a window where the
+        /// directory still silently accepts new files (#482).
+        #[cfg(windows)]
+        fn settle_deny(dir: &std::path::Path) {
+            let probe = dir.join(format!(".icacls-settle-probe-{}", std::process::id()));
+            for _ in 0..100 {
+                match std::fs::File::create(&probe) {
+                    Ok(_) => {
+                        let _ = std::fs::remove_file(&probe);
+                        std::thread::sleep(std::time::Duration::from_millis(10));
+                    }
+                    Err(_) => return,
+                }
+            }
+            panic!("icacls /deny on {dir:?} did not take effect within 1s (#482)");
         }
     }
 

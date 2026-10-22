@@ -209,8 +209,6 @@ pub enum ExportMsg {
     BomRequested,
     /// Completion of BOM export — carries either the saved path or error.
     BomFinished(Result<std::path::PathBuf, String>),
-    /// User clicked the OK button on the export-error modal.
-    DismissError,
     /// #431 — user clicked "Export anyway (incomplete)" on the
     /// netlist-incomplete prompt. Writes the partial `.net` with an INCOMPLETE
     /// header comment listing the omitted pages, then clears the prompt.

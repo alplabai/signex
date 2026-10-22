@@ -42,8 +42,9 @@ impl Signex {
             None => {
                 self.document_state.pending_pdf_options = None;
                 self.document_state.pending_pdf_files = None;
-                self.document_state.export_error =
-                    Some("Cannot export PDF: no active schematic.".to_string());
+                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
+                    "Cannot export PDF: no active schematic.".to_string(),
+                ));
                 return Task::none();
             }
         };
@@ -66,8 +67,9 @@ impl Signex {
         if let Some(files) = self.document_state.pending_pdf_files.take() {
             ctx.sheets.retain(|s| files.contains(&s.path));
             if ctx.sheets.is_empty() {
-                self.document_state.export_error =
-                    Some("Cannot export PDF: no files selected in the Settings tab.".to_string());
+                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
+                    "Cannot export PDF: no files selected in the Settings tab.".to_string(),
+                ));
                 return Task::none();
             }
         }
@@ -95,14 +97,17 @@ impl Signex {
                     output.bytes.len(),
                 ),
                 Err(e) => {
-                    self.document_state.export_error = Some(format!(
-                        "Could not write PDF to {}:\n{e}",
-                        save_path.display(),
-                    ));
+                    self.document_state.error_notice =
+                        Some(crate::app::state::ErrorNotice::export(format!(
+                            "Could not write PDF to {}:\n{e}",
+                            save_path.display(),
+                        )));
                 }
             },
             Err(e) => {
-                self.document_state.export_error = Some(format!("PDF export failed: {e}"));
+                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
+                    format!("PDF export failed: {e}"),
+                ));
             }
         }
 
@@ -191,22 +196,21 @@ impl Signex {
                     output.bytes.len(),
                 ),
                 Err(e) => {
-                    self.document_state.export_error = Some(format!(
-                        "Could not write netlist to {}:\n{e}",
-                        save_path.display(),
-                    ));
+                    self.document_state.error_notice =
+                        Some(crate::app::state::ErrorNotice::export(format!(
+                            "Could not write netlist to {}:\n{e}",
+                            save_path.display(),
+                        )));
                 }
             },
             Err(e) => {
-                self.document_state.export_error = Some(format!("Netlist export failed: {e}"));
+                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
+                    format!("Netlist export failed: {e}"),
+                ));
             }
         }
 
         Task::none()
-    }
-
-    pub(crate) fn handle_dismiss_export_error(&mut self) {
-        self.document_state.export_error = None;
     }
 
     /// #431 — "Export anyway (incomplete)". The user explicitly chose to ship
@@ -241,14 +245,17 @@ impl Signex {
                     output.bytes.len(),
                 ),
                 Err(e) => {
-                    self.document_state.export_error = Some(format!(
-                        "Could not write netlist to {}:\n{e}",
-                        save_path.display(),
-                    ));
+                    self.document_state.error_notice =
+                        Some(crate::app::state::ErrorNotice::export(format!(
+                            "Could not write netlist to {}:\n{e}",
+                            save_path.display(),
+                        )));
                 }
             },
             Err(e) => {
-                self.document_state.export_error = Some(format!("Netlist export failed: {e}"));
+                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
+                    format!("Netlist export failed: {e}"),
+                ));
             }
         }
 

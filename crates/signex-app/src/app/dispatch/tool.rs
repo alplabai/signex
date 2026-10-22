@@ -8,7 +8,10 @@ impl Signex {
     /// selection-aware Properties panel (with full per-kind fields) renders.
     /// Returns without committing for kinds that have no in-place properties
     /// (wire / bus / bus entry / no-connect / component fallback).
-    #[allow(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "kept until the selection-aware Properties panel renders full per-kind fields"
+    )]
     fn commit_ghost_for_pre_placement(
         &mut self,
         kind: crate::panels::PrePlacementKind,
@@ -163,18 +166,17 @@ impl Signex {
                 // tracks schematic tools, not footprint pads).
                 if let Some(active_tab) =
                     self.document_state.tabs.get(self.document_state.active_tab)
+                    && let Some(path) = active_tab.kind.as_footprint_editor()
                 {
-                    if let Some(path) = active_tab.kind.as_footprint_editor() {
-                        let path = path.clone();
-                        return self.update(crate::app::contracts::Message::Library(
-                            crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
-                                path,
-                                msg: crate::library::messages::PrimitiveEdit::Footprint(
-                                    crate::library::messages::FootprintEditorMsg::TogglePlacementPause,
-                                ),
-                            },
-                        ));
-                    }
+                    let path = path.clone();
+                    return self.update(crate::app::contracts::Message::Library(
+                        crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                            path,
+                            msg: crate::library::messages::PrimitiveEdit::Footprint(
+                                crate::library::messages::FootprintEditorMsg::TogglePlacementPause,
+                            ),
+                        },
+                    ));
                 }
                 if self.interaction_state.current_tool != Tool::Select {
                     use crate::panels::PrePlacementKind;
@@ -362,7 +364,6 @@ impl Signex {
                         .as_ref()
                         .map(|pp| pp.shape_fill)
                         .unwrap_or(signex_types::schematic::FillType::None);
-                    let label_text_for_commit = label_text.clone();
                     self.document_state.panel_ctx.pre_placement =
                         Some(crate::panels::PrePlacementData {
                             tool_name,
@@ -382,16 +383,19 @@ impl Signex {
                             shape_width_mm: prev_shape_width,
                             shape_fill: prev_shape_fill,
                         });
-                    self.document_state
-                        .dock
-                        .add_panel(PanelPosition::Right, crate::panels::PanelKind::Properties);
+                    // TAB opens the pre-placement form in Properties, so
+                    // the panel has to end up in front. `add_panel`
+                    // returned early whenever Properties was already
+                    // docked behind another tab, and the form the user
+                    // just asked for stayed hidden (#641).
+                    let show_properties = self.show_panel(crate::panels::PanelKind::Properties);
                     // Freeze ghost + suppress canvas clicks until OK. TAB
                     // does NOT place the object — it pauses placement and
                     // the pre-placement form edits the properties used by
                     // the next click. Placement resumes when the user hits
                     // Resume or Enter.
                     self.interaction_state.active_canvas_mut().placement_paused = true;
-                    let _ = label_text_for_commit;
+                    return Task::batch([show_properties, self.finish_update()]);
                 }
                 self.finish_update()
             }
@@ -425,8 +429,6 @@ impl Signex {
             }
             ToolMessage::CycleDrawMode => {
                 self.interaction_state.draw_mode = self.interaction_state.draw_mode.next();
-                self.interaction_state.active_canvas_mut().draw_mode =
-                    self.interaction_state.draw_mode;
                 self.finish_update()
             }
             ToolMessage::CancelDrawing => {

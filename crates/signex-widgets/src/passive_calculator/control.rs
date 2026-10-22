@@ -108,6 +108,16 @@ impl CalculatorControl {
                 let state = self.active_state_mut();
                 state.target_input = value;
                 state.validation_error = None;
+                // GH #599 — a result belongs to the target it was solved
+                // for. Leaving it standing while the target changes
+                // rendered the whole summary against `target = 0.0`:
+                // "Target" read 0 and all three deltas were computed
+                // against 0 while Nominal / Minimum / Maximum still
+                // showed the real network — with no error text either,
+                // because this arm has just cleared `validation_error`.
+                // Every sibling edit arm (PrefixChanged, SeriesChanged,
+                // MaxComponentsChanged) already drops the stale result.
+                state.result = None;
             }
             CalculatorMessage::PrefixChanged(prefix) => {
                 let state = self.active_state_mut();
@@ -310,7 +320,13 @@ impl CalculatorControl {
         result: &'a Network,
         tokens: &'a ThemeTokens,
     ) -> Element<'a, CalculatorMessage> {
-        let target = self.target_value().unwrap_or_default();
+        // GH #599 — never substitute 0.0 for a target that cannot be
+        // read. `unwrap_or_default()` here silently turned "Target" into
+        // 0 and computed all three deltas against 0, next to Nominal /
+        // Minimum / Maximum still showing the real network. Clearing
+        // `result` on every target edit makes that unreachable; keeping
+        // the `Err` explicit here means it can never come back silently.
+        let target = self.target_value().ok();
         let nominal = result.nominal(self.kind);
         let minimum = result.minimum(self.kind);
         let maximum = result.maximum(self.kind);
@@ -320,13 +336,25 @@ impl CalculatorControl {
                 .size(14)
                 .color(token_color(tokens.text)),
             row![
-                metric("Target", format_value(target, self.kind), tokens),
+                metric("Target", format_target(target, self.kind), tokens),
                 metric("Nominal", format_value(nominal, self.kind), tokens),
                 metric("Minimum", format_value(minimum, self.kind), tokens),
                 metric("Maximum", format_value(maximum, self.kind), tokens),
-                metric("Nominal Δ", format_difference(nominal, target), tokens),
-                metric("Lower Δ", format_difference(minimum, target), tokens),
-                metric("Upper Δ", format_difference(maximum, target), tokens),
+                metric(
+                    "Nominal Δ",
+                    format_optional_difference(nominal, target),
+                    tokens
+                ),
+                metric(
+                    "Lower Δ",
+                    format_optional_difference(minimum, target),
+                    tokens
+                ),
+                metric(
+                    "Upper Δ",
+                    format_optional_difference(maximum, target),
+                    tokens
+                ),
             ]
             .spacing(18),
         ]
@@ -435,6 +463,29 @@ fn metric<'a>(
     .into()
 }
 
+/// GH #599 — what a target-dependent metric reads when the target
+/// itself cannot be read. A dash says "not available"; a `0` would have
+/// read as a real, satisfied value.
+pub const TARGET_UNAVAILABLE: &str = "—";
+
+/// The "Target" metric, or [`TARGET_UNAVAILABLE`] when the target input
+/// is not a number.
+pub fn format_target(target: Option<f64>, kind: ComponentKind) -> String {
+    target.map_or_else(
+        || TARGET_UNAVAILABLE.to_string(),
+        |target| format_value(target, kind),
+    )
+}
+
+/// A delta against the target, or [`TARGET_UNAVAILABLE`] when there is
+/// no readable target to measure against.
+pub fn format_optional_difference(value: f64, target: Option<f64>) -> String {
+    target.map_or_else(
+        || TARGET_UNAVAILABLE.to_string(),
+        |target| format_difference(value, target),
+    )
+}
+
 pub fn format_difference(value: f64, target: f64) -> String {
     if value == target {
         return "0 (0%)".to_string();
@@ -465,5 +516,77 @@ fn panel_style(tokens: &ThemeTokens) -> container::Style {
             color: token_color(tokens.border),
         },
         ..container::Style::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A control that has just produced a network for target `100`.
+    fn calculated() -> CalculatorControl {
+        let mut control = CalculatorControl::default();
+        control.update(CalculatorMessage::TargetChanged("100".into()));
+        control.update(CalculatorMessage::Calculate);
+        assert!(
+            control.active_state().result.is_some(),
+            "setup: Calculate must produce a network for target 100"
+        );
+        control
+    }
+
+    // GH #599 — the result used to survive an edit that left the target
+    // unreadable, and the summary then rendered against `target = 0.0`:
+    // "Target" read 0 and all three deltas were measured against 0 while
+    // Nominal / Minimum / Maximum still showed the real network. No
+    // error text either, because TargetChanged clears validation_error.
+    #[test]
+    fn an_unreadable_target_edit_drops_the_result_it_was_solved_for() {
+        let mut control = calculated();
+        control.update(CalculatorMessage::TargetChanged("22o".into()));
+        assert!(
+            control.active_state().result.is_none(),
+            "a result outlived the target it was solved for"
+        );
+    }
+
+    #[test]
+    fn clearing_the_target_drops_the_result() {
+        let mut control = calculated();
+        control.update(CalculatorMessage::TargetChanged(String::new()));
+        assert!(control.active_state().result.is_none());
+    }
+
+    // Mid-typing states are the same shape: `2.` is not yet a number.
+    #[test]
+    fn a_partial_target_drops_the_result() {
+        let mut control = calculated();
+        control.update(CalculatorMessage::TargetChanged("2.".into()));
+        assert!(control.active_state().result.is_none());
+    }
+
+    // A readable edit must still clear the stale network — the siblings
+    // (PrefixChanged / SeriesChanged / MaxComponentsChanged) all do.
+    #[test]
+    fn a_readable_target_edit_also_drops_the_stale_result() {
+        let mut control = calculated();
+        control.update(CalculatorMessage::TargetChanged("220".into()));
+        assert!(control.active_state().result.is_none());
+        control.update(CalculatorMessage::Calculate);
+        assert!(control.active_state().result.is_some());
+    }
+
+    // GH #599 — a missing target must never render as a real `0`.
+    #[test]
+    fn target_dependent_metrics_read_unavailable_without_a_target() {
+        assert_eq!(
+            format_target(None, ComponentKind::Resistor),
+            TARGET_UNAVAILABLE
+        );
+        assert_eq!(format_optional_difference(120.0, None), TARGET_UNAVAILABLE);
+        assert_eq!(
+            format_optional_difference(100.0, Some(100.0)),
+            format_difference(100.0, 100.0)
+        );
     }
 }

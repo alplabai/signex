@@ -356,9 +356,7 @@ impl FootprintCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<LibraryMessage>> {
-        let Some(cursor_pos) = cursor.position_in(bounds) else {
-            return None;
-        };
+        let cursor_pos = cursor.position_in(bounds)?;
         if let Some(action) = self.pan_on_cursor_moved(cstate, cursor_pos) {
             return Some(action);
         }

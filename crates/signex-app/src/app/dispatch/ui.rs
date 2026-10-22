@@ -17,9 +17,6 @@ impl Signex {
             }
             UiMsg::GridToggle | UiMsg::StatusBar(StatusBarRequest::ToggleGrid) => {
                 self.ui_state.grid_visible = !self.ui_state.grid_visible;
-                self.interaction_state.active_canvas_mut().grid_visible =
-                    self.ui_state.grid_visible;
-                self.interaction_state.pcb_canvas.grid_visible = self.ui_state.grid_visible;
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
                 crate::fonts::write_grid_visible_pref(self.ui_state.grid_visible);
@@ -100,24 +97,23 @@ impl Signex {
             }
             UiMsg::GridPickerSelect(step_mm) => {
                 self.interaction_state.grid_picker = None;
-                if let Some(editor) = self.active_footprint_editor_mut() {
-                    if step_mm > 0.0 && step_mm.is_finite() {
-                        editor.state.snap_options.grid_step_mm = step_mm;
-                        // v0.18.21 — mirror onto active grid row.
-                        let idx = editor.state.active_grid_idx;
-                        if let Some(row) = editor.state.grids.get_mut(idx) {
-                            row.step_mm = step_mm;
-                        }
-                        editor.canvas_cache.clear();
+                if let Some(editor) = self.active_footprint_editor_mut()
+                    && step_mm > 0.0
+                    && step_mm.is_finite()
+                {
+                    editor.state.snap_options.grid_step_mm = step_mm;
+                    // v0.18.21 — mirror onto active grid row.
+                    let idx = editor.state.active_grid_idx;
+                    if let Some(row) = editor.state.grids.get_mut(idx) {
+                        row.step_mm = step_mm;
                     }
+                    editor.canvas_cache.clear();
                 }
                 self.refresh_panel_ctx();
                 self.finish_update()
             }
             UiMsg::StatusBar(StatusBarRequest::ToggleSnap) => {
                 self.ui_state.snap_enabled = !self.ui_state.snap_enabled;
-                self.interaction_state.active_canvas_mut().snap_enabled =
-                    self.ui_state.snap_enabled;
                 crate::fonts::write_snap_enabled_pref(self.ui_state.snap_enabled);
                 // v0.18.25.1 — mirror the global toggle into every open
                 // footprint editor so the .snxfpt snap chain (guides /
@@ -141,7 +137,7 @@ impl Signex {
                 self.document_state.panel_ctx.snap_hotspots = self.ui_state.snap_hotspots;
                 self.finish_update()
             }
-            UiMsg::KeymapStroke(stroke) => self.resolve_keymap_stroke(stroke),
+            UiMsg::KeymapStroke { window, stroke } => self.resolve_keymap_stroke(window, stroke),
         }
     }
 
@@ -315,10 +311,11 @@ impl Signex {
                     .and_then(|s| s.step_x_mm.trim().parse::<f64>().ok());
                 if let (Some(d), Some(editor)) = (draft, self.active_footprint_editor_mut()) {
                     let opts = &mut editor.state.snap_options;
-                    if let Some(step) = parsed_x {
-                        if step > 0.0 && step.is_finite() {
-                            opts.grid_step_mm = step;
-                        }
+                    if let Some(step) = parsed_x
+                        && step > 0.0
+                        && step.is_finite()
+                    {
+                        opts.grid_step_mm = step;
                     }
                     opts.fine_grid_display = d.fine_display;
                     opts.coarse_grid_display = d.coarse_display;

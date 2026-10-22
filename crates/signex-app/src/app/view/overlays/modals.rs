@@ -20,42 +20,40 @@ impl Signex {
     pub(in crate::app::view) fn preferences_overlay(&self) -> Option<Element<'_, Message>> {
         let ui = &self.ui_state;
         let document = &self.document_state;
-        let prefs_detached = ui.windows.values().any(|kind| {
-            matches!(
-                kind,
-                crate::app::state::WindowKind::DetachedModal(
-                    crate::app::state::ModalId::Preferences
-                )
-            )
-        });
+        let prefs_detached = self.modal_detached(crate::app::state::ModalId::Preferences);
         if !(ui.preferences_open && !prefs_detached) {
             return None;
         }
-        let pref_view = crate::preferences::view(
-            ui.preferences_nav,
-            ui.preferences_draft_theme,
-            ui.theme_id,
-            &ui.preferences_draft_font,
-            ui.preferences_draft_power_port_style,
-            ui.preferences_draft_label_style,
-            ui.preferences_draft_multisheet_style,
-            ui.preferences_draft_grid_style,
-            ui.preferences_draft_pcb_gpu_render,
-            ui.preferences_draft_symbol_grid_size_mm,
-            ui.preferences_draft_symbol_grid_style,
-            ui.preferences_draft_symbol_pin_selection,
-            ui.custom_theme.as_ref().map(|c| c.name.as_str()),
-            ui.preferences_dirty,
-            &ui.erc_severity_override,
-            &self.library.settings,
-            &document.panel_ctx.tokens,
-            &ui.preferences_draft_component_classes,
-            &ui.preferences_keymap_editor,
-            &ui.preferences_keymap_status,
-            &ui.preferences_keymap_search,
-            ui.preferences_keymap_recorder.as_ref(),
-            ui.theme_id,
-        )
+        let pref_view = crate::preferences::view(crate::preferences::PrefsView {
+            nav: ui.preferences_nav,
+            draft_theme: ui.preferences_draft_theme,
+            saved_theme: ui.theme_id,
+            draft_font: &ui.preferences_draft_font,
+            draft_power_port_style: ui.preferences_draft_power_port_style,
+            draft_label_style: ui.preferences_draft_label_style,
+            draft_multisheet_style: ui.preferences_draft_multisheet_style,
+            draft_grid_style: ui.preferences_draft_grid_style,
+            draft_pcb_gpu_render: ui.preferences_draft_pcb_gpu_render,
+            draft_symbol_grid_size_mm: ui.preferences_draft_symbol_grid_size_mm,
+            draft_symbol_grid_style: ui.preferences_draft_symbol_grid_style,
+            draft_symbol_pin_selection: ui.preferences_draft_symbol_pin_selection,
+            custom_name: ui.custom_theme.as_ref().map(|c| c.name.as_str()),
+            theme_status: &ui.preferences_theme_status,
+            dirty: ui.preferences_dirty,
+            erc_overrides: &ui.erc_severity_override,
+            distributor_settings: &self.library.settings,
+            panel_tokens: &document.panel_ctx.tokens,
+            draft_component_classes: &ui.preferences_draft_component_classes,
+            keymap_editor: &ui.preferences_keymap_editor,
+            keymap_status: &ui.preferences_keymap_status,
+            keymap_load_error: ui.keymap_load_error.as_deref(),
+            keymap_backup: ui.keymap_backup.as_deref(),
+            prefs_load_error: ui.prefs_load_error.as_deref(),
+            prefs_status: &ui.preferences_prefs_status,
+            keymap_search: &ui.preferences_keymap_search,
+            keymap_recorder: ui.preferences_keymap_recorder.as_ref(),
+            theme_id: ui.theme_id,
+        })
         .map(|m| Message::Preferences(PreferencesMsg::Inner(m)));
         Some(pref_view)
     }
@@ -78,11 +76,15 @@ impl Signex {
         if !ui.keyboard_shortcuts_open {
             return None;
         }
-        Some(crate::keyboard_shortcuts_modal::view(
+        // #618 experiment — `opaque` captures mouse presses inside the
+        // layer so they cannot pass through to the layers below it in the
+        // `Stack`. Testing whether event leakage is what makes this modal
+        // inert.
+        Some(iced::widget::opaque(crate::keyboard_shortcuts_modal::view(
             &self.document_state.panel_ctx.tokens,
             ui.theme_id,
             &ui.keymap_profiles,
-        ))
+        )))
     }
 
     /// Tools > Passive Network Calculator modal.
@@ -108,67 +110,126 @@ impl Signex {
         ))
     }
 
-    /// The simple, non-detachable confirm/property dialogs. Each is an
-    /// independent single-condition push; order matches the inline
-    /// sequence exactly (rename → remove → project-close → app-quit →
-    /// project-options → enable-VC → grid-properties → selection-filter).
-    pub(in crate::app::view) fn simple_dialogs_overlay(&self) -> Vec<Element<'_, Message>> {
-        let ui = &self.ui_state;
-        let mut out: Vec<Element<'_, Message>> = Vec::new();
-        if ui.rename_dialog.is_some() {
-            out.push(self.view_rename_dialog());
-        }
-        if ui.remove_dialog.is_some() {
-            out.push(self.view_remove_dialog());
-        }
-        if ui.project_close_confirm.is_some() {
-            out.push(self.view_project_close_confirm());
-        }
-        if ui.app_quit_confirm.is_some() {
-            out.push(self.view_app_quit_confirm());
-        }
-        if ui.project_options.is_some() {
-            out.push(self.view_project_options_dialog());
-        }
-        if ui.enable_version_control.is_some() {
-            out.push(self.view_enable_version_control_dialog());
-        }
-        if ui.grid_properties.is_some() {
-            out.push(self.view_grid_properties_dialog());
-        }
-        if ui.selection_filter_custom.is_some() {
-            out.push(self.view_selection_filter_custom_dialog());
-        }
-        out
+    // ── Simple, non-detachable confirm / property dialogs ────────────
+    //
+    // These eight used to be pushed into one `Vec` by a single
+    // `simple_dialogs_overlay`, and the three below them by
+    // `detachable_dialogs_overlay` (#535 part 2a). Splitting them is not
+    // cosmetic: both round-2 Esc regressions lived in the *intra-vec*
+    // push order inside those composites — grid-properties vs enable-VC,
+    // and annotate vs its reset confirm — where paint order was real but
+    // invisible from `collect_overlays`. The order is now stated once, in
+    // the one place that owns paint order, which is also what lets the
+    // upcoming `PAINT_ORDER` express it at all.
+    //
+    // Pure code motion: same conditions, same `view_*` calls, same
+    // sequence.
+
+    /// True while `modal` is showing in its own detached OS window rather
+    /// than as an in-window card. The detachable builders below skip
+    /// painting in that case, so the modal never renders in both windows
+    /// at once.
+    ///
+    /// Visible to the whole `view` module since #547: `bars.rs` had two
+    /// hand-rolled copies of this predicate and a third place —
+    /// `has_blocking_modal` — that was missing it entirely.
+    ///
+    /// `pub(crate)` since #555: the input router asks the same question
+    /// to decide which window a detachable modal's keys belong to.
+    pub(crate) fn modal_detached(&self, modal: crate::app::state::ModalId) -> bool {
+        self.ui_state.windows.values().any(
+            |kind| matches!(kind, crate::app::state::WindowKind::DetachedModal(x) if *x == modal),
+        )
     }
 
-    /// Detachable dialogs (annotate, annotate-reset confirm, ERC). Each
-    /// is skipped when its detached OS window owns the view so the modal
-    /// never renders in both windows at once.
-    pub(in crate::app::view) fn detachable_dialogs_overlay(&self) -> Vec<Element<'_, Message>> {
-        let ui = &self.ui_state;
-        let modal_detached = |m: crate::app::state::ModalId| -> bool {
-            ui.windows.values().any(
-                |kind| matches!(kind, crate::app::state::WindowKind::DetachedModal(x) if *x == m),
-            )
-        };
-        let mut out: Vec<Element<'_, Message>> = Vec::new();
-        if ui.annotate_dialog_open && !modal_detached(crate::app::state::ModalId::AnnotateDialog) {
-            out.push(self.view_annotate_dialog());
-        }
-        if ui.annotate_reset_confirm
-            && !modal_detached(crate::app::state::ModalId::AnnotateResetConfirm)
-        {
-            out.push(self.view_annotate_reset_confirm());
-        }
-        if ui.erc_dialog_open && !modal_detached(crate::app::state::ModalId::ErcDialog) {
-            out.push(self.view_erc_dialog());
-        }
-        out
+    pub(in crate::app::view) fn rename_dialog_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .rename_dialog
+            .is_some()
+            .then(|| self.view_rename_dialog())
+    }
+
+    pub(in crate::app::view) fn remove_dialog_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .remove_dialog
+            .is_some()
+            .then(|| self.view_remove_dialog())
+    }
+
+    pub(in crate::app::view) fn project_close_confirm_overlay(
+        &self,
+    ) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .project_close_confirm
+            .is_some()
+            .then(|| self.view_project_close_confirm())
+    }
+
+    pub(in crate::app::view) fn app_quit_confirm_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .app_quit_confirm
+            .is_some()
+            .then(|| self.view_app_quit_confirm())
+    }
+
+    pub(in crate::app::view) fn project_options_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .project_options
+            .is_some()
+            .then(|| self.view_project_options_dialog())
+    }
+
+    pub(in crate::app::view) fn enable_version_control_overlay(
+        &self,
+    ) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .enable_version_control
+            .is_some()
+            .then(|| self.view_enable_version_control_dialog())
+    }
+
+    pub(in crate::app::view) fn grid_properties_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .grid_properties
+            .is_some()
+            .then(|| self.view_grid_properties_dialog())
+    }
+
+    pub(in crate::app::view) fn selection_filter_custom_overlay(
+        &self,
+    ) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .selection_filter_custom
+            .is_some()
+            .then(|| self.view_selection_filter_custom_dialog())
+    }
+
+    // ── Detachable dialogs ───────────────────────────────────────────
+
+    pub(in crate::app::view) fn annotate_dialog_overlay(&self) -> Option<Element<'_, Message>> {
+        (self.ui_state.annotate_dialog_open
+            && !self.modal_detached(crate::app::state::ModalId::AnnotateDialog))
+        .then(|| self.view_annotate_dialog())
+    }
+
+    pub(in crate::app::view) fn annotate_reset_confirm_overlay(
+        &self,
+    ) -> Option<Element<'_, Message>> {
+        (self.ui_state.annotate_reset_confirm
+            && !self.modal_detached(crate::app::state::ModalId::AnnotateResetConfirm))
+        .then(|| self.view_annotate_reset_confirm())
+    }
+
+    pub(in crate::app::view) fn erc_dialog_overlay(&self) -> Option<Element<'_, Message>> {
+        (self.ui_state.erc_dialog_open
+            && !self.modal_detached(crate::app::state::ModalId::ErcDialog))
+        .then(|| self.view_erc_dialog())
     }
 
     /// v0.9 Library — picker modal overlay. Centered card on a dim
-    /// backdrop; dismiss-on-ESC handled via the close X.
+    /// backdrop; Esc dismisses via `OpenOverlays::escape_message`'s
+    /// `library_picker_open` rung (`app/bootstrap/subscription.rs`), the
+    /// close X is the mouse-click path.
     pub(in crate::app::view) fn library_picker_overlay(&self) -> Option<Element<'_, Message>> {
         let document = &self.document_state;
         let picker = self.library.picker.as_ref()?;
@@ -189,38 +250,16 @@ impl Signex {
     }
 
     /// New Component modal was removed (v0.13); "Add Component" now
-    /// appends a draft row directly to the Library Browser table. This
-    /// branch keeps the per-library class computation compiled/exercised
-    /// until the append-row-direct dispatcher migration lands and the
-    /// `library.new_component` state + messages can be pruned. It
-    /// deliberately contributes no overlay.
+    /// appends a draft row directly to the Library Browser table, so this
+    /// overlay deliberately contributes no layers.
+    ///
+    /// It used to compute the per-library class list here purely to keep
+    /// that code exercised; the same computation lives in
+    /// `library/browser/sidebar.rs` and `dispatch/library/browser/classes.rs`,
+    /// which are the real consumers, so the copy was dropped. Prune this
+    /// function together with the `library.new_component` state + messages
+    /// once the append-row-direct dispatcher migration lands.
     pub(in crate::app::view) fn new_component_overlay(&self) -> Vec<Element<'_, Message>> {
-        if let Some(nc) = self.library.new_component.as_ref() {
-            // Class registry is per-library: use the picked library's
-            // manifest classes. Falls back to the user's prefs default
-            // when no library is selected yet.
-            let library_classes: Vec<crate::fonts::ComponentClassEntry> = nc
-                .library_idx
-                .and_then(|i| self.library.open_libraries.get(i))
-                .and_then(|lib| self.library.set.get(lib.library_id))
-                .map(|adapter| {
-                    adapter
-                        .library_classes()
-                        .into_iter()
-                        .map(|c| crate::fonts::ComponentClassEntry {
-                            key: c.key,
-                            label: c.label,
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-            let classes_to_show = if library_classes.is_empty() {
-                self.ui_state.component_classes.clone()
-            } else {
-                library_classes
-            };
-            let _ = (nc, classes_to_show);
-        }
         Vec::new()
     }
 
@@ -232,7 +271,6 @@ impl Signex {
         let document = &self.document_state;
         const EDIT_MODAL_ENABLED: bool = false;
         let mut out: Vec<Element<'_, Message>> = Vec::new();
-        #[allow(clippy::overly_complex_bool_expr)]
         for (lib_path, browser_state) in &self.library.library_browsers {
             if EDIT_MODAL_ENABLED && let Some(edit) = browser_state.edit_modal.as_ref() {
                 // Class registry is per-library — read from the

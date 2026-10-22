@@ -37,7 +37,8 @@ pub use context_menu::{
 };
 pub use mode::{EditorMode, FpActiveBarMenu, PadStackTab};
 pub use pad::{
-    AlignOp, CourtyardRect, EditorPad, NextPadDefaults, PadSide, PadStackUi, ShapeParamMap,
+    AlignOp, CourtyardRect, EditorPad, NextPadDefaults, PadPassthrough, PadSide, PadStackUi,
+    ShapeParamMap,
 };
 pub use placement::{PlaceArcPending, PlacementInput, PlacementInputKind};
 pub use selection_filter::{FpSelectionMode, SelectionFilter, SelectionFilterKind};
@@ -49,7 +50,6 @@ pub use tool::{PadsTool, SketchTool, ToolPending};
 use signex_library::{Footprint, LayerId};
 
 use super::layers::LayerVisibility;
-use pad::NEW_PAD_SIZE_MM;
 
 /// Slack on each side of the pad bounding box when auto-fitting the
 /// courtyard polygon.
@@ -179,8 +179,8 @@ pub struct FootprintEditorState {
     /// v0.13.3 — secondary selected sketch entity.
     pub selected_sketch_secondary: Option<signex_sketch::id::SketchEntityId>,
     /// v0.27 — Altium / Fusion-style multi-select for sketch
-    /// entities. Populated by the sketch-mode rubber-band release
-    /// + Ctrl/Shift modifier clicks. Drawn with the same selection
+    /// entities. Populated by the sketch-mode rubber-band release +
+    /// Ctrl/Shift modifier clicks. Drawn with the same selection
     /// highlight as `selected_sketch`. Cleared whenever a single-
     /// click select fires without a modifier.
     pub selected_sketch_extra: Vec<signex_sketch::id::SketchEntityId>,
@@ -273,7 +273,6 @@ impl FootprintEditorState {
 
     /// Empty state — used for brand-new components and as the fallback
     /// when the binding has no footprint primitive yet.
-    #[allow(dead_code)]
     pub fn empty() -> Self {
         let mut s = Self::with_pads(Vec::new());
         s.recompute_courtyard();
@@ -666,10 +665,10 @@ impl FootprintEditorState {
         // ambiguous — is relinked from the sketch.
         pad::relink_pads_to_sketch(&mut new_pads, fp);
         self.pads = new_pads;
-        if let Some(idx) = self.selected_pad {
-            if idx >= self.pads.len() {
-                self.selected_pad = None;
-            }
+        if let Some(idx) = self.selected_pad
+            && idx >= self.pads.len()
+        {
+            self.selected_pad = None;
         }
     }
 

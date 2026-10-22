@@ -26,6 +26,8 @@ pub mod sketch_mode;
 pub mod snap;
 pub mod state;
 pub mod step_attach;
+#[cfg(test)]
+mod swallowed_input_tests;
 pub mod text_frame;
 pub mod unified_active_bar;
 pub(crate) mod updates;

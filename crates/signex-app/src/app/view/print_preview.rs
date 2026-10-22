@@ -11,11 +11,10 @@ impl Signex {
     /// message" dialog with an OK button. Sits on top of the print-preview
     /// overlay when both would otherwise render; dismiss_layer handles
     /// click-outside-to-close.
-    pub(super) fn view_export_error(&self) -> Element<'_, Message> {
+    pub(super) fn view_error_notice(&self) -> Element<'_, Message> {
         use iced::widget::{button, column, container, row, text};
-        let msg = match &self.document_state.export_error {
-            Some(m) => m.clone(),
-            None => return iced::widget::Space::new().into(),
+        let Some(notice) = self.document_state.error_notice.as_ref() else {
+            return iced::widget::Space::new().into();
         };
 
         let tokens = &self.document_state.panel_ctx.tokens;
@@ -26,7 +25,7 @@ impl Signex {
 
         let ok_btn = button(text("OK").size(12).color(iced::Color::WHITE))
             .padding([6, 20])
-            .on_press(Message::Export(ExportMsg::DismissError))
+            .on_press(Message::Overlay(OverlayMsg::DismissErrorNotice))
             .style(
                 move |_: &iced::Theme, _status| iced::widget::button::Style {
                     background: Some(err_red.into()),
@@ -43,11 +42,11 @@ impl Signex {
             row![
                 text("\u{26A0}").size(24).color(err_red),
                 iced::widget::Space::new().width(10),
-                text("Export Failed").size(14).color(text_c),
+                text(notice.title.clone()).size(14).color(text_c),
             ]
             .align_y(iced::Alignment::Center),
             iced::widget::Space::new().height(8),
-            text(msg).size(12).color(text_c),
+            text(notice.detail.clone()).size(12).color(text_c),
             iced::widget::Space::new().height(12),
             row![iced::widget::Space::new().width(Length::Fill), ok_btn,],
         ]
@@ -80,7 +79,7 @@ impl Signex {
 
     /// #431 — netlist-incomplete "Export anyway (incomplete)?" prompt.
     ///
-    /// Same card idiom as [`Self::view_export_error`] (theme-token panel /
+    /// Same card idiom as [`Self::view_error_notice`] (theme-token panel /
     /// text / border; the sibling modal's severity glyph), but it leads with
     /// the refusal explanation — unchanged severity, this is a fab deliverable
     /// — and offers TWO actions: write the partial `.net` anyway (with the

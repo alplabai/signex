@@ -307,7 +307,6 @@ pub(super) fn view_table_sidebar<'a>(
     // message handlers in `dispatch/library.rs` stay live as dead
     // code — a follow-up cleanup pass can prune them once we're sure
     // the Tables-only model sticks.
-    #[allow(clippy::overly_complex_bool_expr)]
     if false {
         col = col.push(Space::new().height(12));
         col = col.push(

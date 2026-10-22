@@ -184,10 +184,12 @@ impl LinePipeline {
             buffer,
             capacity,
             lines.len(),
-            std::mem::size_of::<LineSegment>(),
-            label,
-            wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            device.limits().max_buffer_size,
+            &super::growth::GrowthParams {
+                elem_size: std::mem::size_of::<LineSegment>(),
+                label,
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                max_buffer_size: device.limits().max_buffer_size,
+            },
         );
         *count = writable as u32;
 

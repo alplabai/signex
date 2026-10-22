@@ -6,7 +6,7 @@ use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point};
 
 use crate::library::editor::footprint::canvas::FootprintCanvasState;
-use crate::library::editor::footprint::state::{EditorPad, FootprintEditorState};
+use crate::library::editor::footprint::state::FootprintEditorState;
 
 use super::constraints::draw_constraint_icons;
 use super::fills::draw_filled_closed_loops;
@@ -32,15 +32,15 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_overlay(
     ) -> Option<(f64, f64)> {
         // Prefer the solved state if available; fall back to the
         // entity's authored coords.
-        if let Some(solve) = state.last_solve.as_ref() {
-            if let Some((x, y)) = signex_sketch::solver::state::point_xy(
+        if let Some(solve) = state.last_solve.as_ref()
+            && let Some((x, y)) = signex_sketch::solver::state::point_xy(
                 id,
                 &solve.result.state,
                 &solve.result.index,
                 sketch,
-            ) {
-                return Some((x, y));
-            }
+            )
+        {
+            return Some((x, y));
         }
         sketch
             .entities

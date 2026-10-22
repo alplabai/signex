@@ -25,8 +25,7 @@ use crate::library::messages::{EditorMsg, FootprintEditorMsg, LibraryMessage, Pr
 pub fn view_footprint<'a>(
     editor: &'a FootprintEditorState,
     tokens: &'a ThemeTokens,
-    theme_id: signex_types::theme::ThemeId,
-    custom_filter_presets: &'a [crate::active_bar::CustomFilterPreset],
+    _theme_id: signex_types::theme::ThemeId,
 ) -> Element<'a, LibraryMessage> {
     use crate::library::editor::footprint::state::EditorMode;
     // v0.16.2.2 — footprint canvas uses Altium PCB-editor colours
@@ -73,9 +72,8 @@ pub fn view_footprint<'a>(
     // the schematic's window-absolute coordinate system. The body
     // here renders just canvas + layers strip + footer; the bar
     // (and its dropdown overlay) is layered on top in
-    // `view_main_for`. `custom_filter_presets` is unused here now
-    // but kept on the signature for backwards compat with callers.
-    let _ = custom_filter_presets;
+    // `view_main_for`, which is where the Selection Filter presets
+    // are consumed — this view no longer takes them.
     let body: Element<'a, LibraryMessage> = match editor.state.mode {
         EditorMode::Sketch | EditorMode::Normal => {
             let canvas_with_bar = iced::widget::Stack::new()
@@ -110,7 +108,10 @@ pub fn view_footprint<'a>(
 /// mode. Hosts the mode segmented control + Save button. Stays the
 /// same height across mode switches so the active bar's vertical
 /// position is constant.
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "standalone footprint chrome superseded by the Active Bar; kept for one migration cycle"
+)]
 fn view_footprint_top_strip<'a>(
     editor: &'a FootprintEditorState,
     tokens: &'a ThemeTokens,
@@ -330,7 +331,10 @@ fn view_footprint_layers_strip<'a>(
     .into()
 }
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "standalone footprint chrome superseded by the Active Bar; kept for one migration cycle"
+)]
 fn view_footprint_sketch_toolbar<'a>(
     editor: &'a FootprintEditorState,
     tokens: &'a ThemeTokens,
@@ -408,7 +412,10 @@ fn view_footprint_sketch_toolbar<'a>(
         .into()
 }
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "standalone footprint chrome superseded by the Active Bar; kept for one migration cycle"
+)]
 fn view_footprint_toolbar<'a>(
     editor: &'a FootprintEditorState,
     tokens: &'a ThemeTokens,

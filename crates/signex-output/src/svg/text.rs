@@ -12,18 +12,33 @@ use signex_types::markup::{RichSegment, parse_signex_markup};
 use tiny_skia::{FillRule, Paint, PathBuilder, Pixmap, Stroke};
 use ttf_parser::{Face, GlyphId, OutlineBuilder};
 
-pub(super) fn draw_text_outline(
-    pixmap: &mut Pixmap,
-    x: f32,
-    y: f32,
-    size_pt: f32,
-    align: SvgTextAlign,
-    v_align: SvgTextVAlign,
-    rotation_deg: f32,
-    fill_rgb: (f32, f32, f32),
-    font_alias: &str,
-    text: &str,
-) {
+/// How a text run is placed and painted — everything `draw_text_outline`
+/// needs besides the render target (`pixmap`) and the string content
+/// (`text`). Built once per `SvgElement::Text` in `document.rs` and
+/// passed by reference since the drawing routine only reads it.
+pub(super) struct TextStyle<'a> {
+    pub x: f32,
+    pub y: f32,
+    pub size_pt: f32,
+    pub align: SvgTextAlign,
+    pub v_align: SvgTextVAlign,
+    pub rotation_deg: f32,
+    pub fill_rgb: (f32, f32, f32),
+    pub font_alias: &'a str,
+}
+
+pub(super) fn draw_text_outline(pixmap: &mut Pixmap, style: &TextStyle, text: &str) {
+    let TextStyle {
+        x,
+        y,
+        size_pt,
+        align,
+        v_align,
+        rotation_deg,
+        fill_rgb,
+        font_alias,
+    } = *style;
+
     let Some(face) = face_for_alias(font_alias) else {
         return;
     };

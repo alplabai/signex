@@ -22,7 +22,12 @@
 #
 set -euo pipefail
 
-CAP=1000
+# Physical lines, comments included. Long comments therefore spend the budget,
+# which is the point: rationale and history belong in docs/*.md, with a
+# one-line pointer in the code (CONTRIBUTING.md, "Code Style"). 1200 leaves a
+# normally commented file about as much code room as the old 1000 did. It is
+# meant as the last raise (800 -> 1000 -> 1200).
+CAP=1200
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BASELINE="$ROOT/scripts/godfile-baseline.txt"
 

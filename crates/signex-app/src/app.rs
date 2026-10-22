@@ -16,6 +16,7 @@ mod bootstrap;
 pub(crate) mod command;
 pub mod command_palette;
 pub mod contracts;
+mod dir_listing;
 pub(crate) mod dispatch;
 mod documents;
 mod handlers;
@@ -49,7 +50,6 @@ pub use state::{
 };
 
 // Re-exported so modal dialogs outside `state` can reference the type.
-#[allow(unused_imports)]
 pub use state::AnnotateOrder;
 
 impl Signex {

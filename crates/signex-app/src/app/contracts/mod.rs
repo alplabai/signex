@@ -22,7 +22,6 @@ pub enum DragTarget {
 #[derive(Debug, Clone)]
 pub enum Message {
     Menu(MenuMessage),
-    OpenPassiveCalculator,
     PassiveCalculator(signex_widgets::passive_calculator::CalculatorMessage),
     Tool(ToolMessage),
     /// Tab-bar message carrying the id of the window whose tab bar emitted
@@ -41,7 +40,7 @@ pub enum Message {
     Ui(UiMsg),
     CanvasEvent(CanvasEvent),
     /// Canvas event stamped with the window that produced it. The
-    /// dispatch layer swaps the window's `SchematicCanvas` into the
+    /// dispatch layer swaps the window's `CanvasSlot` into the
     /// main canvas slot for the duration of the handler so the
     /// hundreds of `active_canvas_mut()` call sites read and write the
     /// right canvas transparently. Keyboard-generated canvas events
@@ -168,7 +167,37 @@ pub enum Message {
     /// `FootprintToolEscape` (resets PadsTool + SketchTool +
     /// tool_pending); otherwise falls back to the schematic
     /// `Tool::Select` reset.
-    EscapePressed,
+    EscapePressed {
+        /// Which OS window the key was pressed in (#547).
+        ///
+        /// `keyboard::listen()` drops this — `iced_futures-0.14.0`'s
+        /// filter matches `subscription::Event::Interaction { .. }` and
+        /// the `..` swallows the `window` field — so every Esc used to
+        /// look identical no matter which window produced it, and an Esc
+        /// typed into a detached modal's own window reset the MAIN
+        /// window's canvas tool. The subscription now goes through
+        /// `event::listen_with`, which hands the window id to its filter.
+        ///
+        /// `None` means the Esc was synthesised rather than typed — the
+        /// `cancel_current_tool` command id arriving from the palette or
+        /// a keymap binding (`app/command/bridge.rs`). It resolves
+        /// exactly as a main-window Esc does.
+        window: Option<iced::window::Id>,
+    },
+    /// A keyboard event no widget wanted, with the window it landed in
+    /// (#557 phase 1).
+    ///
+    /// The keyboard subscription is a pure transport: it filters
+    /// `Status::Ignored` keyboard events and forwards them unexamined.
+    /// Which app-level consumer owns the event is decided in
+    /// `app/dispatch/input.rs` against live state — those branches used
+    /// to live in the subscription closure, resolving against a snapshot
+    /// baked one update earlier and blind to which window produced the
+    /// key.
+    KeyInput {
+        window: iced::window::Id,
+        event: iced::keyboard::Event,
+    },
     Noop,
 }
 

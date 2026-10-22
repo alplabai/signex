@@ -192,7 +192,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     move |_theme: &Theme, status: iced::widget::button::Status| {
                         let base = crate::styles::menu_item(&ctx.tokens)(_theme, status);
                         iced::widget::button::Style {
-                            background: row_bg.clone().or(base.background),
+                            background: row_bg.or(base.background),
                             ..base
                         }
                     },

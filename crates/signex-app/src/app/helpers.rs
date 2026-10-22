@@ -50,29 +50,25 @@ pub(super) fn find_standard_symbols_dir() -> Option<PathBuf> {
 }
 
 /// List .standard_sym filenames in a directory.
+///
+/// Read once, from `Signex::new()`, into the Components panel's library
+/// pick_list — so a directory that cannot be read leaves that list empty
+/// for the whole session. `list_dir_or_report` surfaces that instead of
+/// letting it read as "no standard libraries installed".
 pub(super) fn list_standard_libraries(dir: &std::path::Path) -> Vec<String> {
-    std::fs::read_dir(dir)
-        .ok()
-        .map(|entries| {
-            let mut names: Vec<String> = entries
-                .filter_map(|e| e.ok())
-                .filter(|e| {
-                    e.path()
-                        .extension()
-                        .is_some_and(|ext| ext == "standard_sym")
-                })
-                .map(|e| {
-                    e.path()
-                        .file_stem()
-                        .unwrap_or_default()
-                        .to_string_lossy()
-                        .to_string()
-                })
-                .collect();
-            names.sort();
-            names
-        })
-        .unwrap_or_default()
+    let mut names: Vec<String> =
+        super::dir_listing::list_dir_or_report(dir, "standard symbol libraries")
+            .into_iter()
+            .filter(|path| path.extension().is_some_and(|ext| ext == "standard_sym"))
+            .map(|path| {
+                path.file_stem()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string()
+            })
+            .collect();
+    names.sort();
+    names
 }
 
 /// Given a start and end point, produce wire segments constrained by the draw mode.

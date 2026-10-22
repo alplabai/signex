@@ -243,6 +243,27 @@ impl Signex {
             // No OS chrome — the modal body supplies its own header with
             // an X close button and a click-to-drag region.
             decorations: false,
+            // A detached modal must not fall behind the window it was
+            // detached from. It carries no OS title bar, so once the main
+            // window covers it there is nothing to grab and no entry in a
+            // window menu to bring it back — the user is left with a
+            // dialog that is open, blocking, and invisible.
+            //
+            // `iced` 0.14 exposes no owner/parent relationship
+            // (`window::Settings` has no `parent_window`), so
+            // `AlwaysOnTop` is the only mechanism available. It is
+            // system-wide rather than app-scoped: the modal also floats
+            // above other applications while it is open. That is the
+            // cost of the guarantee. The alternative — raising it on
+            // every focus event — would fight the user for focus on the
+            // non-blocking members of this set (Print Preview, BOM
+            // Preview, Parameter Manager).
+            //
+            // Deliberately NOT applied to the two sibling `window::open`
+            // calls above: an undocked tab and a detached panel are
+            // ordinary document windows the user is meant to be able to
+            // put behind something.
+            level: iced::window::Level::AlwaysOnTop,
             ..Default::default()
         });
         // Stash the mapping right away — view(id) for the new window
@@ -300,18 +321,18 @@ impl Signex {
             self.ui_state.move_selection.open = false;
             return Task::none();
         }
-        if let Some(engine) = self.document_state.active_engine_mut() {
-            let _ = engine.execute(signex_engine::Command::MoveSelection { items, dx, dy });
-        }
         self.ui_state.move_selection.open = false;
-        self.interaction_state
-            .active_canvas_mut()
-            .clear_content_cache();
-        self.interaction_state
-            .active_canvas_mut()
-            .clear_overlay_cache();
-        self.sync_canvas_from_visible_schematic(crate::schematic_runtime::RenderInvalidation::FULL);
-        self.update_selection_info();
+        // Through the mutation gateway, not `engine.execute` directly: the
+        // gateway consumes the `CommandResult` this used to discard, so the
+        // sheet reaches `dirty_paths` — without it the quit guard sees a
+        // clean workspace and the move goes out with the process (#585) —
+        // and it re-derives the project netlist and invalidates only what
+        // the move touched instead of the whole canvas.
+        self.apply_engine_command(
+            signex_engine::Command::MoveSelection { items, dx, dy },
+            true,
+            true,
+        );
         Task::none()
     }
 
@@ -321,20 +342,20 @@ impl Signex {
         key: String,
         value: String,
     ) -> Task<Message> {
-        if let Some(engine) = self.document_state.active_engine_mut() {
-            let _ = engine.execute(signex_engine::Command::SetSymbolField {
+        // Same reasoning as `handle_move_selection_apply` (#585). The
+        // gateway clears the content cache, syncs the canvas and refreshes
+        // the panel context, so the hand-rolled versions of those are gone;
+        // the overlay cache and the selection info were not touched before
+        // and still are not.
+        self.apply_engine_command(
+            signex_engine::Command::SetSymbolField {
                 symbol_id: symbol_uuid,
                 key,
                 value,
-            });
-            self.interaction_state
-                .active_canvas_mut()
-                .clear_content_cache();
-            self.sync_canvas_from_visible_schematic(
-                crate::schematic_runtime::RenderInvalidation::FULL,
-            );
-            self.refresh_panel_ctx();
-        }
+            },
+            false,
+            false,
+        );
         Task::none()
     }
 

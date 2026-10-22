@@ -10,7 +10,10 @@
 use super::*;
 use iced::widget::column;
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "F15 removed the preview pane; the builders stay until the Properties panel absorbs them"
+)]
 fn view_preview_pane<'a>(
     library_path: &'a std::path::Path,
     table: &str,
@@ -63,11 +66,30 @@ fn view_preview_pane<'a>(
             )
             .padding(10);
 
-            let symbol = library_state.set.resolve_symbol(&r.symbol_ref);
-            let footprint = r
+            // This is a `view` builder, so it cannot log — a record
+            // here would repeat on every redraw. It renders the read
+            // failure instead, which is the whole point: "the file
+            // could not be read" and "the UUID is not in the library"
+            // are different diagnoses, and only the second one means
+            // the binding is wrong.
+            let read_failure_summary = |label: &str, error: &signex_library::LibraryError| {
+                format!(
+                    "{label} primitive could not be read.\n\nThe library reported: {error}\n\nThe binding itself is not known to be wrong."
+                )
+            };
+            let symbol_text = match library_state.set.resolve_symbol(&r.symbol_ref) {
+                Ok(sym) => symbol_summary(sym.as_ref()),
+                Err(e) => read_failure_summary("Symbol", &e),
+            };
+            let footprint_text = match r
                 .footprint_ref
                 .as_ref()
-                .and_then(|fp| library_state.set.resolve_footprint(fp));
+                .map(|fp| library_state.set.resolve_footprint(fp))
+            {
+                None => footprint_summary(None),
+                Some(Ok(fp)) => footprint_summary(fp.as_ref()),
+                Some(Err(e)) => read_failure_summary("Footprint", &e),
+            };
 
             // F15 — bind primitives directly from the inline preview.
             // BrowserRow target applies + saves through the adapter
@@ -81,7 +103,7 @@ fn view_preview_pane<'a>(
 
             let symbol_panel = preview_panel_with_pick(
                 "Symbol",
-                symbol_summary(symbol.as_ref()),
+                symbol_text,
                 "Pick Symbol…",
                 LibraryMessage::OpenPrimitivePicker {
                     kind: signex_library::PrimitiveKind::Symbol,
@@ -93,7 +115,7 @@ fn view_preview_pane<'a>(
             );
             let footprint_panel = preview_panel_with_pick(
                 "Footprint",
-                footprint_summary(footprint.as_ref()),
+                footprint_text,
                 "Pick Footprint…",
                 LibraryMessage::OpenPrimitivePicker {
                     kind: signex_library::PrimitiveKind::Footprint,
@@ -134,7 +156,10 @@ fn view_preview_pane<'a>(
     body
 }
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "F15 removed the preview pane; the builders stay until the Properties panel absorbs them"
+)]
 fn short_row_id(uuid: uuid::Uuid) -> String {
     let s = uuid.simple().to_string();
     if s.len() >= 8 {
@@ -144,7 +169,10 @@ fn short_row_id(uuid: uuid::Uuid) -> String {
     }
 }
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "F15 removed the preview pane; the builders stay until the Properties panel absorbs them"
+)]
 fn preview_panel<'a>(
     label: &'a str,
     summary: String,
@@ -179,7 +207,10 @@ fn preview_panel<'a>(
 /// of the header row. F15 — primitive binding lives next to the row
 /// status so the user has the Pick button visible whenever they see
 /// "unbound" or "unresolved".
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "F15 removed the preview pane; the builders stay until the Properties panel absorbs them"
+)]
 fn preview_panel_with_pick<'a>(
     label: &'a str,
     summary: String,
@@ -234,7 +265,10 @@ fn preview_panel_with_pick<'a>(
         .into()
 }
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "F15 removed the preview pane; the builders stay until the Properties panel absorbs them"
+)]
 fn symbol_summary(sym: Option<&signex_library::Symbol>) -> String {
     match sym {
         None => {
@@ -265,7 +299,10 @@ fn symbol_summary(sym: Option<&signex_library::Symbol>) -> String {
     }
 }
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "F15 removed the preview pane; the builders stay until the Properties panel absorbs them"
+)]
 fn footprint_summary(fp: Option<&signex_library::Footprint>) -> String {
     match fp {
         None => "No footprint bound.".to_string(),

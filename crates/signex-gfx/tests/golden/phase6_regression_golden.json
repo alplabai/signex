@@ -4,7 +4,7 @@
     "circle_instances": 1,
     "arc_instances": 1,
     "polygon_vertices": 6,
-    "text_instances": 2,
+    "text_instances": 1,
     "grid_minor_lod_alpha": 1.0,
     "grid_major_lod_alpha": 1.0,
     "text_geometry_text_instances": 1,

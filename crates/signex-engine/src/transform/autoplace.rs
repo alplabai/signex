@@ -32,7 +32,10 @@ use super::*;
 ///
 /// `pub(crate)` until a real caller lands; flip to `pub` when signex-app
 /// wires it into the "Re-autoplace all fields" command.
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "waiting on signex-app to wire the Re-autoplace all fields command"
+)]
 pub(crate) fn autoplace_all_marked_fields(document: &mut signex_types::schematic::SchematicSheet) {
     let lib_symbols = document.lib_symbols.clone();
     let snapshot = document.clone();

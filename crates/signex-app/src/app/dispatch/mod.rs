@@ -4,10 +4,11 @@ use super::*;
 
 mod command_palette;
 mod document;
+mod escape;
+pub(crate) mod input;
 mod keymap;
 pub(crate) mod library;
 mod overlay;
-mod passive_calculator;
 mod text_edit;
 mod tool;
 mod ui;
@@ -17,7 +18,6 @@ impl Signex {
         self.apply_pcb_renderer_dirty_hint(&message);
 
         match message {
-            Message::OpenPassiveCalculator => self.handle_open_passive_calculator(),
             Message::PassiveCalculator(message) => {
                 self.ui_state.passive_calculator.update(message);
                 Task::none()
@@ -145,7 +145,6 @@ impl Signex {
                     SelectionMode::Inside => SelectionMode::Touching,
                     SelectionMode::Touching => SelectionMode::Inside,
                     SelectionMode::Single => SelectionMode::Inside,
-                    _ => SelectionMode::Inside,
                 };
                 crate::diagnostics::log_info(format!(
                     "Selection mode: {:?}",
@@ -158,7 +157,7 @@ impl Signex {
             Message::CommandPalette(msg) => self.dispatch_command_palette_message(msg),
             Message::HistoryLoaded {
                 generation,
-                path: _,
+                path,
                 result,
             } => {
                 // Drop stale results from a previous tab — the
@@ -169,80 +168,50 @@ impl Signex {
                     return Task::none();
                 }
                 self.document_state.history.loading = false;
-                self.document_state.history.mode = crate::panels::history::HistoryRenderMode::Ready;
-                self.document_state.history.entries = match result {
-                    Ok(entries) => entries,
-                    Err(_) => Vec::new(),
-                };
+                match result {
+                    Ok(entries) => {
+                        self.document_state.history.mode =
+                            crate::panels::history::HistoryRenderMode::Ready;
+                        self.document_state.history.entries = entries;
+                    }
+                    // A failed revwalk used to be `unwrap_or_default()`d
+                    // into an empty `Ready`, which the panel renders as
+                    // the "No history yet." card — a corrupt object or an
+                    // unreadable `.git/` presented as "this file has no
+                    // commits" (#599).
+                    Err(error) => {
+                        // `error` before `path`: the Messages panel
+                        // compacts a record to 160 characters
+                        // (`diagnostics::compact_message`), and the
+                        // diagnosis is worth more there than the path,
+                        // which the panel itself is already showing.
+                        tracing::error!(
+                            target: "signex::history",
+                            error = %error,
+                            path = %path.display(),
+                            "git history could not be read; Restore is unavailable"
+                        );
+                        self.document_state.history.mode =
+                            crate::panels::history::HistoryRenderMode::Error(error);
+                        self.document_state.history.entries = Vec::new();
+                        // This arm does not run `finish_update`, so
+                        // republish here or the failure sits in the ring
+                        // buffer until some unrelated later message
+                        // happens to flush it.
+                        self.sync_diagnostics_panel_ctx();
+                    }
+                }
                 self.document_state.panel_ctx.history = self.document_state.history.clone();
                 Task::none()
             }
-            Message::EscapePressed => {
-                // v0.15 — if active tab is a footprint editor, reset
-                // its tool state via `FootprintToolEscape`; otherwise
-                // fall back to the schematic Tool::Select reset.
-                let footprint_path = self
-                    .document_state
-                    .tabs
-                    .get(self.document_state.active_tab)
-                    .and_then(|t| t.kind.as_footprint_editor())
-                    .cloned();
-                if let Some(path) = footprint_path {
-                    // #370 — when the "Align…" dialog is open, Esc just
-                    // dismisses it (leaving the selection intact) rather
-                    // than falling through to `ToolEscape`, which would
-                    // also clear the selected pad. Any other footprint
-                    // Esc keeps the tool-reset behaviour.
-                    let align_open = self
-                        .document_state
-                        .footprint_editors
-                        .get(&path)
-                        .is_some_and(|ed| ed.state.align_modal.is_some());
-                    let esc_msg = if align_open {
-                        crate::library::messages::FootprintEditorMsg::AlignCancel
-                    } else {
-                        crate::library::messages::FootprintEditorMsg::ToolEscape
-                    };
-                    self.update(Message::Library(
-                        crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
-                            path,
-                            msg: crate::library::messages::PrimitiveEdit::Footprint(esc_msg),
-                        },
-                    ))
-                } else if let Some(path) = self
-                    .document_state
-                    .tabs
-                    .get(self.document_state.active_tab)
-                    .and_then(|t| t.kind.as_symbol_editor())
-                    .cloned()
-                {
-                    // Symbol editor tab: Esc's one job today is
-                    // closing an open right-click context menu (no
-                    // per-tool cancel state to reset yet, unlike the
-                    // footprint editor's `ToolEscape`).
-                    let menu_open = self
-                        .document_state
-                        .symbol_editors
-                        .get(&path)
-                        .is_some_and(|e| e.context_menu.is_some());
-                    if menu_open {
-                        self.update(Message::Library(
-                            crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
-                                path,
-                                msg: crate::library::messages::PrimitiveEdit::Symbol(
-                                    crate::library::messages::SymbolEditorMsg::CloseContextMenu,
-                                ),
-                            },
-                        ))
-                    } else {
-                        Task::none()
-                    }
-                } else {
-                    self.update(Message::Tool(crate::app::ToolMessage::SelectTool(
-                        crate::app::Tool::Select,
-                    )))
-                }
-            }
+            // Esc means different things in different OS windows, so its
+            // whole resolution lives in `dispatch/escape.rs` (#554).
+            Message::EscapePressed { window } => self.handle_escape_pressed(window),
+            // Every other key the widgets didn't want. Which consumer
+            // owns it is decided in `dispatch/input.rs` against live
+            // state (#557 phase 1) — the subscription no longer decides
+            // anything.
+            Message::KeyInput { window, event } => self.handle_key_input(window, event),
             Message::FootprintModeShortcut(target) => {
                 // v0.14.2 — gate on "active tab is a footprint
                 // editor". When yes, route through the existing
@@ -391,13 +360,17 @@ impl Signex {
                         WindowKind::UndockedTab { .. } => {
                             self.interaction_state.canvases.remove(&id);
                         }
-                        // Closing a detached panel reattaches it as a
-                        // docked panel in the right column so the user
-                        // doesn't lose access to the panel kind.
+                        // Closing a detached panel reattaches it to the
+                        // dock so the user doesn't lose access to the
+                        // panel kind. It goes back to its home region
+                        // rather than always to the right column, and
+                        // `show_panel` makes it the active tab there.
+                        // The `windows.remove` above already dropped
+                        // this window, so the dock call is the whole
+                        // job — no detached copy is left to focus.
                         WindowKind::DetachedPanel(kind) => {
-                            self.document_state
-                                .dock
-                                .add_panel(crate::dock::PanelPosition::Right, kind);
+                            self.document_state.dock.show_panel(kind);
+                            crate::fonts::write_dock_layout(&self.document_state.dock);
                         }
                         // The Component Preview lives as a tab in the
                         // main window; its state outlasts the
@@ -471,9 +444,9 @@ impl Signex {
                 // Spin up a fresh canvas for this window, seeded from
                 // the engine that the tab points at so the new window
                 // renders the correct schematic from its first frame.
-                // Pan/zoom/selection start at SchematicCanvas::new
+                // Pan/zoom/selection start at CanvasSlot::new
                 // defaults — independent of the main canvas.
-                let mut per_window = crate::canvas::SchematicCanvas::new();
+                let mut per_window = crate::canvas::CanvasSlot::new();
                 if let Some(engine) = self.document_state.engines.get(&path) {
                     per_window.set_render_cache(Some(
                         crate::schematic_runtime::SchematicRenderCache::from_sheet(
@@ -481,17 +454,12 @@ impl Signex {
                         ),
                     ));
                 }
-                // Mirror the main canvas's theme / snap / grid / paper
-                // settings so the new window doesn't flash with the
-                // defaults before any sync happens.
-                per_window.theme_bg = self.interaction_state.canvas.theme_bg;
-                per_window.theme_grid = self.interaction_state.canvas.theme_grid;
-                per_window.theme_paper = self.interaction_state.canvas.theme_paper;
-                per_window.canvas_colors = self.interaction_state.canvas.canvas_colors;
-                per_window.snap_enabled = self.interaction_state.canvas.snap_enabled;
-                per_window.snap_grid_mm = self.interaction_state.canvas.snap_grid_mm;
-                per_window.visible_grid_mm = self.interaction_state.canvas.visible_grid_mm;
-                per_window.grid_visible = self.interaction_state.canvas.grid_visible;
+                // #631 — theme, snap, grid size/style and grid visibility
+                // used to be mirrored here so the new window would not
+                // flash the defaults. They are read from `UiState` in
+                // `view` now, so a fresh window is correct on its first
+                // frame with nothing copied. Paper size stays: it belongs
+                // to *this* window's document, not to the app.
                 per_window.paper_width_mm = self.interaction_state.canvas.paper_width_mm;
                 per_window.paper_height_mm = self.interaction_state.canvas.paper_height_mm;
                 per_window.fit_to_paper();
@@ -544,10 +512,10 @@ impl Signex {
                 // path silently no-ops on borderless windows after
                 // the first attempt.
                 let id = self.ui_state.windows.iter().find_map(|(id, kind)| {
-                    if let super::state::WindowKind::DetachedModal(m) = kind {
-                        if *m == modal {
-                            return Some(*id);
-                        }
+                    if let super::state::WindowKind::DetachedModal(m) = kind
+                        && *m == modal
+                    {
+                        return Some(*id);
                     }
                     None
                 });

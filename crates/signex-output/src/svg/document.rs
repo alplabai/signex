@@ -17,7 +17,7 @@ use super::labels::{
 use super::symbols::{
     field_effective_style, push_symbol_lib_graphics, push_symbol_pins, symbol_eval_variables,
 };
-use super::text::draw_text_outline;
+use super::text::{TextStyle, draw_text_outline};
 use super::*;
 use crate::SheetSnapshot;
 use crate::pdf::layout::PageTransform;
@@ -439,18 +439,17 @@ impl SvgRenderContext {
                     font_alias,
                 } => {
                     let mapped_fill = map_colour_mode(*fill_rgb, colour_mode);
-                    draw_text_outline(
-                        &mut pixmap,
-                        *x,
-                        *y,
-                        *size_pt,
-                        *align,
-                        *v_align,
-                        *rotation_deg,
-                        mapped_fill,
+                    let style = TextStyle {
+                        x: *x,
+                        y: *y,
+                        size_pt: *size_pt,
+                        align: *align,
+                        v_align: *v_align,
+                        rotation_deg: *rotation_deg,
+                        fill_rgb: mapped_fill,
                         font_alias,
-                        text,
-                    );
+                    };
+                    draw_text_outline(&mut pixmap, &style, text);
                 }
             }
         }

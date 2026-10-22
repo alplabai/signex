@@ -72,24 +72,33 @@ pub const RANK_TOL: f64 = 1e-9;
 /// rank-vs-`n` test with per-column rank-deficiency detection
 /// (rank-1 update / column-zeroing test) for finer per-entity
 /// granularity.
+///
+/// `params` MUST be the resolved parameter map from the same solve
+/// that produced `solve_result` — see the HI-14 note on
+/// [`over_constraint_ids`], which this function delegates the `Over`
+/// classification to.
 pub fn entity_colours(
     sketch: &SketchData,
     solve_result: &SolveResult,
     jacobian: &[Vec<f64>],
     index: &EntityIndex,
+    params: &crate::solver::residual::ResolvedParams,
 ) -> HashMap<SketchEntityId, DofColor> {
     let mut colours = HashMap::new();
 
     // Step 1: identify constraints whose residual exceeds RANK_TOL
     // after solve. These are over-constrained; the entities they
-    // touch get marked Over. HI-14: callers must thread the solved
-    // `params` through; constructing an empty `ResolvedParams` here
-    // would false-positive every parameter-driven constraint as
-    // over-constrained (the expression resolves to `Unknown` and the
-    // residual error gets caught by the `Err(_) => continue` filter,
-    // missing the actual deviation).
-    let params = crate::solver::residual::ResolvedParams::new();
-    let over_ids: Vec<ConstraintId> = over_constraint_ids(sketch, solve_result, jacobian, &params);
+    // touch get marked Over. HI-14: `params` is threaded in from the
+    // caller. Constructing an empty `ResolvedParams` here — which
+    // this function used to do — false-NEGATIVES every
+    // parameter-driven constraint: the target expression resolves to
+    // `ExprError::Unknown`, the error is caught by the `Err(_) =>
+    // continue` filter inside `over_constraint_ids`, and the
+    // conflict is dropped instead of reported. Measured on a
+    // conflicting parametric sketch: 2 flagged with the real map, 0
+    // with an empty one, so the overlay painted an over-constrained
+    // sketch Full/Under.
+    let over_ids: Vec<ConstraintId> = over_constraint_ids(sketch, solve_result, jacobian, params);
     let mut over_points = std::collections::HashSet::new();
     if !over_ids.is_empty() {
         let over_set: std::collections::HashSet<ConstraintId> = over_ids.into_iter().collect();
@@ -167,16 +176,39 @@ pub fn over_constraint_ids(
     use crate::solver::residual::residual;
 
     let mut over = Vec::new();
+    // A constraint whose residual cannot be evaluated is dropped from
+    // over-constraint detection and is otherwise indistinguishable
+    // from a satisfied one, so the skip is reported rather than
+    // swallowed. One aggregated record per call — this runs once per
+    // solve and a broken expression would otherwise emit a record per
+    // constraint.
+    let mut unevaluable: Vec<ConstraintId> = Vec::new();
+    let mut first_error: Option<String> = None;
     for c in &sketch.constraints {
         let r = match residual(c, &solve_result.state, &solve_result.index, sketch, params) {
             Ok(r) => r,
-            Err(_) => continue,
+            Err(e) => {
+                unevaluable.push(c.id);
+                if first_error.is_none() {
+                    first_error = Some(e.to_string());
+                }
+                continue;
+            }
         };
         // |r| = sqrt(Σ rᵢ²)
         let mag = r.iter().map(|&v| v * v).sum::<f64>().sqrt();
         if mag > RANK_TOL {
             over.push(c.id);
         }
+    }
+    if !unevaluable.is_empty() {
+        tracing::warn!(
+            target: "signex::sketch",
+            skipped = unevaluable.len(),
+            constraints = ?unevaluable,
+            error = first_error.as_deref().unwrap_or("unknown"),
+            "over-constraint detection skipped constraints whose residual could not be evaluated; conflicts touching them are not reported",
+        );
     }
     over
 }

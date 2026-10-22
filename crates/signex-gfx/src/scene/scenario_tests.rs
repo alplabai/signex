@@ -114,58 +114,57 @@ fn outline_only_rule_area() -> GpuPolygon {
 /// an active selection/highlight and ERC markers hands to both the CPU
 /// canvas renderer and the GPU scene shader.
 fn build_full_board_scene() -> Scene {
-    let mut scene = Scene::default();
-
-    scene.lines = vec![
-        solid_line(0.0, 0.0, 10.0, 0.0),
-        solid_line(0.0, 5.0, 10.0, 5.0),
-        dashed_line(0.0, 10.0, 10.0, 10.0),
-    ];
-    scene.circles = vec![filled_circle(0.0, 0.0, 1.0), outline_circle(5.0, 5.0, 1.0)];
-    scene.arcs = vec![Arc {
-        center: [0.0, 0.0],
-        radius: 3.0,
-        start_angle: 0.0,
-        end_angle: std::f32::consts::FRAC_PI_2,
-        width: 0.2,
-        color: [0.5, 0.5, 0.5, 1.0],
-        _pad: [0.0; 3],
-    }];
-    scene.polygons = vec![
-        convex_filled_pad(),
-        concave_zone(),
-        filled_and_stroked_polygon(),
-        outline_only_rule_area(),
-    ];
-    scene.texts = vec![TextItem {
-        content: "R1".to_string(),
-        position: [1.0, 1.0],
-        size_mm: 1.0,
-        color: [1.0, 1.0, 1.0, 1.0],
-        bold: false,
-        italic: false,
-        rotation: 0.0,
-        h_align: TextHAlign::Center,
-        v_align: TextVAlign::Center,
-    }];
-    scene.overlay_lines = vec![solid_line(0.0, -1.0, 10.0, -1.0)];
-    scene.overlay_circles = vec![filled_circle(-5.0, -5.0, 0.5)];
-    scene.overlay_polygons = vec![GpuPolygon {
-        vertices: vec![[40.0, 0.0], [42.0, 0.0], [42.0, 2.0], [40.0, 2.0]],
-        fill_color: [0.6, 0.6, 1.0, 0.4],
-        stroke_color: None,
-        stroke_width: 0.0,
-    }];
-    scene.erc_marker_lines = vec![solid_line(-1.0, -1.0, -2.0, -2.0)];
-    scene.erc_marker_circles = vec![outline_circle(-3.0, -3.0, 0.3)];
-    scene.erc_marker_polygons = vec![GpuPolygon {
-        vertices: vec![[50.0, 0.0], [52.0, 0.0], [51.0, 2.0]],
-        fill_color: [1.0, 0.0, 0.0, 1.0],
-        stroke_color: None,
-        stroke_width: 0.0,
-    }];
-
-    scene
+    Scene {
+        lines: vec![
+            solid_line(0.0, 0.0, 10.0, 0.0),
+            solid_line(0.0, 5.0, 10.0, 5.0),
+            dashed_line(0.0, 10.0, 10.0, 10.0),
+        ],
+        circles: vec![filled_circle(0.0, 0.0, 1.0), outline_circle(5.0, 5.0, 1.0)],
+        arcs: vec![Arc {
+            center: [0.0, 0.0],
+            radius: 3.0,
+            start_angle: 0.0,
+            end_angle: std::f32::consts::FRAC_PI_2,
+            width: 0.2,
+            color: [0.5, 0.5, 0.5, 1.0],
+            _pad: [0.0; 3],
+        }],
+        top_polygons: vec![convex_filled_pad()],
+        polygons: vec![
+            concave_zone(),
+            filled_and_stroked_polygon(),
+            outline_only_rule_area(),
+        ],
+        texts: vec![TextItem {
+            content: "R1".to_string(),
+            position: [1.0, 1.0],
+            size_mm: 1.0,
+            color: [1.0, 1.0, 1.0, 1.0],
+            bold: false,
+            italic: false,
+            rotation: 0.0,
+            h_align: TextHAlign::Center,
+            v_align: TextVAlign::Center,
+        }],
+        overlay_lines: vec![solid_line(0.0, -1.0, 10.0, -1.0)],
+        overlay_circles: vec![filled_circle(-5.0, -5.0, 0.5)],
+        overlay_polygons: vec![GpuPolygon {
+            vertices: vec![[40.0, 0.0], [42.0, 0.0], [42.0, 2.0], [40.0, 2.0]],
+            fill_color: [0.6, 0.6, 1.0, 0.4],
+            stroke_color: None,
+            stroke_width: 0.0,
+        }],
+        erc_marker_lines: vec![solid_line(-1.0, -1.0, -2.0, -2.0)],
+        erc_marker_circles: vec![outline_circle(-3.0, -3.0, 0.3)],
+        erc_marker_polygons: vec![GpuPolygon {
+            vertices: vec![[50.0, 0.0], [52.0, 0.0], [51.0, 2.0]],
+            fill_color: [1.0, 0.0, 0.0, 1.0],
+            stroke_color: None,
+            stroke_width: 0.0,
+        }],
+        ..Scene::default()
+    }
 }
 
 #[test]
@@ -176,9 +175,10 @@ fn full_board_scenario_populates_every_bucket() {
     assert_eq!(scene.arcs.len(), 1);
     assert_eq!(
         scene.polygons.len(),
-        4,
-        "convex pad, concave zone, filled+stroked, outline-only"
+        3,
+        "concave zone, filled+stroked, outline-only"
     );
+    assert_eq!(scene.top_polygons.len(), 1, "convex pad");
     assert_eq!(scene.texts.len(), 1);
     assert_eq!(scene.overlay_lines.len(), 1);
     assert_eq!(scene.overlay_circles.len(), 1);
@@ -215,17 +215,17 @@ fn circle_and_polygon_predicates_split_correctly_across_the_scenario() {
         "stroke_width > 0.0 => outline"
     );
 
-    let pad = &scene.polygons[0];
-    let zone = &scene.polygons[1];
-    let filled_stroked = &scene.polygons[2];
-    let outline_only = &scene.polygons[3];
+    let pad = &scene.top_polygons[0];
+    let zone = &scene.polygons[0];
+    let filled_stroked = &scene.polygons[1];
+    let outline_only = &scene.polygons[2];
 
     assert!(!pad.is_stroked(), "plain pad: fill only, no outline");
     assert!(!zone.is_stroked(), "zone in this scenario: fill only");
     assert!(filled_stroked.is_stroked());
     assert!(
         outline_only.is_stroked(),
-        "transparent fill does not stop the stroke predicate: colour+width is all that matters"
+        "transparent fill does not stop the stroke predicate: the stroke colour is all that matters"
     );
 }
 
@@ -322,9 +322,11 @@ fn triangulate_the_full_scenario_polygon_batch_matches_the_per_polygon_sum() {
     let per_polygon_total: usize = scene
         .polygons
         .iter()
+        .chain(&scene.top_polygons)
         .map(|polygon| triangulate_polygons(std::slice::from_ref(polygon)).len())
         .sum();
-    let batch_total = triangulate_polygons(&scene.polygons).len();
+    let batch_total = triangulate_polygons(&scene.polygons).len()
+        + triangulate_polygons(&scene.top_polygons).len();
     assert_eq!(
         batch_total, per_polygon_total,
         "batching polygons must not change per-polygon vertex counts"
@@ -341,6 +343,7 @@ fn bucket_count(scene: &Scene, bucket: SceneBucket) -> usize {
         SceneBucket::Circles => scene.circles.len(),
         SceneBucket::Arcs => scene.arcs.len(),
         SceneBucket::Polygons => scene.polygons.len(),
+        SceneBucket::TopPolygons => scene.top_polygons.len(),
         SceneBucket::Texts => scene.texts.len(),
         SceneBucket::OverlayLines => scene.overlay_lines.len(),
         SceneBucket::OverlayCircles => scene.overlay_circles.len(),
@@ -373,11 +376,9 @@ fn nonempty_bucket_sequence(scene: &Scene, order: &[SceneBucket]) -> Vec<SceneBu
 /// dedicated overlay pass runs strictly after every base bucket regardless of
 /// scene content — and on CPU, every populated overlay bucket's position in
 /// `CPU_PCB_DRAW_ORDER` is after every populated base bucket's. (The base
-/// `Polygons`-vs-`Lines` order — pad/pour geometry, not overlays — remains a
-/// separate, deliberately open question pinned exactly by `scene::order`'s
-/// own `gpu_scene_draw_order_is_fills_then_strokes_then_text` /
-/// `cpu_pcb_draw_order_is_main_geometry_then_overlays`, unaffected by this
-/// fix.)
+/// `Polygons`-vs-`Lines` order — pad/pour geometry, not overlays — was
+/// settled separately in #653, fills first on both paths, and is pinned by
+/// `scene::order`'s `pcb_cpu_base_pass_matches_the_gpu_order`.)
 #[test]
 fn overlays_composite_above_base_content_in_a_fully_populated_scene() {
     let scene = build_full_board_scene();
@@ -385,6 +386,7 @@ fn overlays_composite_above_base_content_in_a_fully_populated_scene() {
         SceneBucket::Lines,
         SceneBucket::Circles,
         SceneBucket::Polygons,
+        SceneBucket::TopPolygons,
     ];
     let overlay_buckets = [
         SceneBucket::OverlayLines,

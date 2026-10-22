@@ -1,6 +1,6 @@
 use super::super::*;
 
-impl SchematicCanvas {
+impl SchematicCanvas<'_> {
     /// Layer 4 — every-frame overlay: cursor HUD, in-progress previews,
     /// placement ghosts, and drag guides, composed in the original order.
     pub(in crate::canvas) fn draw_overlay(
@@ -10,31 +10,32 @@ impl SchematicCanvas {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> canvas::Geometry {
+        let cam = self.camera();
         let mut frame = canvas::Frame::new(renderer, bounds.size());
 
         if let Some(cursor_pos) = cursor.position_in(bounds) {
             // Snap cursor visuals to the grid so they match where the click
             // will commit.
-            let cursor_pos = if self.snap_enabled && self.snap_grid_mm > 0.0 {
-                let w = state.camera.screen_to_world(cursor_pos, bounds);
-                let g = self.snap_grid_mm as f32;
+            let cursor_pos = if self.prefs.snap_enabled && self.prefs.snap_grid_mm > 0.0 {
+                let w = cam.screen_to_world(cursor_pos, bounds);
+                let g = self.prefs.snap_grid_mm as f32;
                 let snapped_w = iced::Point::new((w.x / g).round() * g, (w.y / g).round() * g);
-                state.camera.world_to_screen(snapped_w, bounds)
+                cam.world_to_screen(snapped_w, bounds)
             } else {
                 cursor_pos
             };
 
             self.draw_placement_x(&mut frame, cursor_pos);
             self.draw_net_color_pen(&mut frame, cursor_pos);
-            self.draw_shape_preview(&mut frame, state, bounds, cursor_pos);
-            self.draw_polyline_preview(&mut frame, state, bounds, cursor_pos);
-            self.draw_arc_preview(&mut frame, state, bounds, cursor_pos);
-            self.draw_lasso_preview(&mut frame, state, bounds, cursor_pos);
-            self.draw_wire_preview(&mut frame, state, bounds, cursor_pos);
-            self.draw_ghost_symbol(&mut frame, state, bounds, cursor_pos);
-            self.draw_ghost_text(&mut frame, state, bounds, cursor_pos);
-            self.draw_ghost_label(&mut frame, state, bounds, cursor_pos);
-            self.draw_tool_chip(&mut frame, state, bounds, cursor_pos);
+            self.draw_shape_preview(&mut frame, bounds, cursor_pos);
+            self.draw_polyline_preview(&mut frame, bounds, cursor_pos);
+            self.draw_arc_preview(&mut frame, bounds, cursor_pos);
+            self.draw_lasso_preview(&mut frame, bounds, cursor_pos);
+            self.draw_wire_preview(&mut frame, bounds, cursor_pos);
+            self.draw_ghost_symbol(&mut frame, bounds, cursor_pos);
+            self.draw_ghost_text(&mut frame, bounds, cursor_pos);
+            self.draw_ghost_label(&mut frame, bounds, cursor_pos);
+            self.draw_tool_chip(&mut frame, bounds, cursor_pos);
         }
 
         self.draw_move_guides(&mut frame, state, bounds);
@@ -136,10 +137,10 @@ impl SchematicCanvas {
     pub(in crate::canvas) fn draw_tool_chip(
         &self,
         frame: &mut canvas::Frame,
-        state: &CanvasState,
         bounds: Rectangle,
         cursor_pos: iced::Point,
     ) {
+        let cam = self.camera();
         // Tool-specific cursor marker: a bright X that locks onto
         // the grid dot the next click will commit to (when snap is
         // enabled), so the user can see exactly where the wire/bus
@@ -155,14 +156,12 @@ impl SchematicCanvas {
         if let Some(ref label) = self.tool_preview
             && !has_ghost
         {
-            let snapped_screen = if self.snap_enabled && self.snap_grid_mm > 0.0 {
-                let world = state.camera.screen_to_world(cursor_pos, bounds);
-                let g = self.snap_grid_mm as f32;
+            let snapped_screen = if self.prefs.snap_enabled && self.prefs.snap_grid_mm > 0.0 {
+                let world = cam.screen_to_world(cursor_pos, bounds);
+                let g = self.prefs.snap_grid_mm as f32;
                 let sx = (world.x / g).round() * g;
                 let sy = (world.y / g).round() * g;
-                state
-                    .camera
-                    .world_to_screen(iced::Point::new(sx, sy), bounds)
+                cam.world_to_screen(iced::Point::new(sx, sy), bounds)
             } else {
                 cursor_pos
             };

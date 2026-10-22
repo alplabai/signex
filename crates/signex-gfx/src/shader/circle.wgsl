@@ -6,7 +6,16 @@ struct Camera {
     view_proj: mat4x4<f32>,
     viewport: vec2<f32>,
     mm_per_px: f32,
-    _pad: f32,
+    // Screen-space legibility floors, in pixels; 0.0 disables. Mirrors
+    // `CameraUniform` — the two layouts must agree byte for byte.
+    min_stroke_px: f32,
+    min_radius_px: f32,
+    // Three scalars, not a vec3: a `vec3<f32>` carries 16-byte alignment in
+    // WGSL, which would push the struct to 112 bytes and mismatch the
+    // 96-byte `CameraUniform`. wgpu rejects the bind group outright.
+    _pad0: f32,
+    _pad1: f32,
+    _pad2: f32,
 }
 
 @group(0) @binding(0)
@@ -38,7 +47,22 @@ fn sdf_ring(p: vec2<f32>, center: vec2<f32>, radius: f32, half_stroke: f32) -> f
 
 @vertex
 fn vs_main(@builtin(vertex_index) vi: u32, inst: CircleInstance) -> VertexOut {
-    let half_extent = inst.radius + max(inst.stroke_width * 0.5, 0.0);
+    // Legibility floors in screen space, matching the CPU replays: a dot never
+    // renders smaller than `min_radius_px`, a ring never thinner than
+    // `min_stroke_px`. `mm_per_px` converts each pixel floor into the world
+    // units these instances carry. `0.0` disables either one.
+    let radius = max(inst.radius, camera.min_radius_px * camera.mm_per_px);
+    // A zero stroke width is the "filled disc" sentinel (`Circle::is_filled`),
+    // so it has to survive the floor — clamping it would turn every junction
+    // dot into a ring.
+    var stroke_width = inst.stroke_width;
+    if (stroke_width > 0.0) {
+        stroke_width = max(stroke_width, camera.min_stroke_px * camera.mm_per_px);
+    }
+
+    // Size the quad from the floored values, or an enlarged circle gets clipped
+    // by a quad built for the original.
+    let half_extent = radius + max(stroke_width * 0.5, 0.0);
 
     let c0 = inst.center + vec2<f32>(-half_extent, -half_extent);
     let c1 = inst.center + vec2<f32>(-half_extent, half_extent);
@@ -71,8 +95,8 @@ fn vs_main(@builtin(vertex_index) vi: u32, inst: CircleInstance) -> VertexOut {
     out.clip_pos = camera.view_proj * vec4<f32>(world, 0.0, 1.0);
     out.world_pos = world;
     out.center = inst.center;
-    out.radius = inst.radius;
-    out.half_stroke = inst.stroke_width * 0.5;
+    out.radius = radius;
+    out.half_stroke = stroke_width * 0.5;
     out.color = inst.color;
     return out;
 }

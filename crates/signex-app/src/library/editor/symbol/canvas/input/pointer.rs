@@ -262,14 +262,14 @@ impl SymbolCanvas<'_> {
             state.arc_cursor = Some((wx, wy));
             // Phase 2: keep a continuous (unwrapped) end angle so
             // arcs that sweep past ±180° don't jump.
-            if let Some((cx, cy)) = state.arc_center {
-                if state.arc_radius_start.is_some() {
-                    let raw = (wy - cy).atan2(wx - cx).to_degrees();
-                    state.arc_end_deg_unwrapped = Some(match state.arc_end_deg_unwrapped {
-                        Some(prev) => unwrap_angle(prev, raw),
-                        None => raw,
-                    });
-                }
+            if let Some((cx, cy)) = state.arc_center
+                && state.arc_radius_start.is_some()
+            {
+                let raw = (wy - cy).atan2(wx - cx).to_degrees();
+                state.arc_end_deg_unwrapped = Some(match state.arc_end_deg_unwrapped {
+                    Some(prev) => unwrap_angle(prev, raw),
+                    None => raw,
+                });
             }
             return Some(
                 canvas::Action::publish(CanvasAction::CursorAt {

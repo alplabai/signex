@@ -91,9 +91,10 @@ impl std::fmt::Display for ElectricalType {
 /// Pad Features section exposes this exactly:
 ///   - `None`        — bare copper / no machining.
 ///   - `Counterbore` — flat-bottom recess machined around the hole
-///                     to seat a fastener head flush.
+///     to seat a fastener head flush.
 ///   - `Countersink` — conical recess machined around the hole for
-///                     a flat-head fastener.
+///     a flat-head fastener.
+///
 /// The earlier "Solder Bumps / Glue Dots / Adhesive Beads" variants
 /// were factually wrong — those are mechanical-layer purposes
 /// (Glue Points / Coating / Gold Plating) authored as separate
@@ -385,7 +386,9 @@ pub enum CustomPadShape {
 /// Solder-paste aperture layout for a pad.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "PascalCase")]
+#[derive(Default)]
 pub enum PasteAperturePattern {
+    #[default]
     Single,
     Grid {
         nx_expr: String,
@@ -395,12 +398,6 @@ pub enum PasteAperturePattern {
     Custom {
         source: Vec<SketchEntityId>,
     },
-}
-
-impl Default for PasteAperturePattern {
-    fn default() -> Self {
-        Self::Single
-    }
 }
 
 /// Closed sketch profile bakes as a silkscreen line/arc set.

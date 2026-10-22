@@ -23,9 +23,7 @@ use super::state::PreviewTab;
 // at `ComponentPreviewState`. The original `ComponentId` was a
 // `uuid::Uuid` newtype; `Version` was a `u32` revision counter. Both
 // fold away once the row tier ships everywhere.
-#[allow(dead_code)]
 pub type ComponentId = Uuid;
-#[allow(dead_code)]
 pub type Version = u32;
 
 mod library_message;
@@ -307,8 +305,10 @@ pub enum SymbolToolMsg {
 /// v0.13.3 — selection-aware constraint kind tag. The dispatcher
 /// resolves these against the editor's primary + secondary
 /// selection slots into the matching `ConstraintKind` and emits the
-/// SketchEdit. Tags that don't apply to the current selection are
-/// no-ops in the dispatcher.
+/// SketchEdit. A tag that doesn't apply to the current selection, or
+/// whose dimension field cannot be read as a number, adds no constraint
+/// and is reported to the Messages panel and the sketch warning list
+/// (#599) — it is never a silent no-op.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SketchConstraintTag {
     /// 1 Point selected → fix it in place.

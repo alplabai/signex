@@ -11,6 +11,7 @@
 #![cfg(feature = "search-tantivy")]
 
 use std::collections::BTreeMap;
+use std::sync::Mutex;
 
 use chrono::Utc;
 use signex_library::{
@@ -18,6 +19,23 @@ use signex_library::{
     ParamMap, ParamValue, PlmReserved, PrimitiveRef, SearchIndex, SearchQuery, TantivySearchIndex,
 };
 use uuid::Uuid;
+
+// Every test below opens its own `tempfile::tempdir()` — none of them share
+// an on-disk path. The flake this guards against (#482) is Tantivy's own
+// commit/merge/GC I/O: libtest runs this file's tests concurrently by
+// default, so several `IndexWriter`s can be committing (each spawning its
+// own background merge/GC work) at the same moment, and on Windows that
+// concurrent segment-file churn has intermittently turned into
+// `Tantivy(IoError(Os { code: 5, PermissionDenied }))` on `commit()` under
+// full-workspace parallel load — passes reliably alone. Run them one at a
+// time instead of pulling in a `serial_test` dependency for a single file.
+static SERIAL: Mutex<()> = Mutex::new(());
+
+fn serial_guard() -> std::sync::MutexGuard<'static, ()> {
+    SERIAL
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
 
 // ── fixture builders ───────────────────────────────────────────────────
 
@@ -161,6 +179,7 @@ fn fixture_corpus() -> Vec<ComponentRow> {
 
 #[test]
 fn text_query_pinpoints_the_single_matching_part() {
+    let _guard = serial_guard();
     let dir = tempfile::tempdir().unwrap();
     let idx = TantivySearchIndex::open(dir.path()).expect("open index");
 
@@ -203,6 +222,7 @@ fn text_query_pinpoints_the_single_matching_part() {
 
 #[test]
 fn numeric_facet_lt_returns_only_sub_threshold_parts() {
+    let _guard = serial_guard();
     let dir = tempfile::tempdir().unwrap();
     let idx = TantivySearchIndex::open(dir.path()).expect("open index");
 
@@ -255,6 +275,7 @@ fn numeric_facet_lt_returns_only_sub_threshold_parts() {
 
 #[test]
 fn index_persists_across_drop_and_reopen() {
+    let _guard = serial_guard();
     let dir = tempfile::tempdir().unwrap();
     let dir_path = dir.path().to_path_buf();
 
@@ -283,6 +304,7 @@ fn index_persists_across_drop_and_reopen() {
 
 #[test]
 fn add_or_update_replaces_existing_doc() {
+    let _guard = serial_guard();
     let dir = tempfile::tempdir().unwrap();
     let idx = TantivySearchIndex::open(dir.path()).expect("open index");
 
@@ -330,6 +352,7 @@ fn add_or_update_replaces_existing_doc() {
 
 #[test]
 fn category_only_query_filters_corpus() {
+    let _guard = serial_guard();
     let dir = tempfile::tempdir().unwrap();
     let idx = TantivySearchIndex::open(dir.path()).expect("open index");
 
@@ -363,10 +386,77 @@ fn category_only_query_filters_corpus() {
     }
 }
 
+/// Tantivy reads `( ) + - : " [ ] ^ *` as operators, and real part
+/// numbers are full of them. A query that fails to parse used to be
+/// replaced with `AllQuery`, handing back the entire library dressed
+/// up as matches. The fallback now matches the same text literally.
+#[test]
+fn unparseable_query_text_matches_literally_instead_of_returning_the_library() {
+    let _guard = serial_guard();
+    let dir = tempfile::tempdir().unwrap();
+    let idx = TantivySearchIndex::open(dir.path()).expect("open index");
+
+    let corpus = fixture_corpus();
+    for c in &corpus {
+        idx.add_or_update(c).expect("add row");
+    }
+    idx.commit().expect("commit");
+
+    // Unbalanced parenthesis — the shape a user produces the moment
+    // they type a tolerance or a package suffix into the search bar.
+    let q = SearchQuery {
+        text: Some("Murata GRM21BR71E106KE12L(".into()),
+        category: None,
+        facets: vec![],
+        limit: 200,
+    };
+    let hits = idx.query(&q);
+
+    assert!(
+        hits.len() < corpus.len(),
+        "the whole library came back as matches ({} of {})",
+        hits.len(),
+        corpus.len()
+    );
+    assert_eq!(
+        hits.len(),
+        1,
+        "expected the one Murata part, got {:?}",
+        hits.iter()
+            .map(|h| h.internal_pn.as_str())
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(hits[0].internal_pn.as_str(), "C0805_10uF_25V_X7R");
+}
+
+/// A query whose text survives quoting but matches nothing must come
+/// back empty, not widened into the whole library.
+#[test]
+fn unparseable_query_text_with_no_match_returns_nothing() {
+    let _guard = serial_guard();
+    let dir = tempfile::tempdir().unwrap();
+    let idx = TantivySearchIndex::open(dir.path()).expect("open index");
+
+    for c in &fixture_corpus() {
+        idx.add_or_update(c).expect("add row");
+    }
+    idx.commit().expect("commit");
+
+    let q = SearchQuery {
+        text: Some("NOTAPARTNUMBER(".into()),
+        category: None,
+        facets: vec![],
+        limit: 200,
+    };
+    assert!(
+        idx.query(&q).is_empty(),
+        "a miss must read as a miss, not as the whole library"
+    );
+}
+
 // Defensive: keep an unused `BTreeMap` import in scope so cargo doesn't warn
 // when the test file evolves; suppression rather than removal because adapter
 // tests often re-introduce these collections.
-#[allow(dead_code)]
 fn _force_use_btreemap() -> BTreeMap<String, String> {
     BTreeMap::new()
 }

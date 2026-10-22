@@ -22,26 +22,26 @@ impl Signex {
         // `FootprintToggleAutoFit` dispatch so the toggle
         // shares its dirty / panel-refresh behaviour with
         // the active-bar button.
-        if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab) {
-            if let Some(path) = active_tab.kind.as_footprint_editor() {
-                let path = path.clone();
-                follow = self.update(Message::Library(
-                    crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
-                        path,
-                        msg: crate::library::messages::PrimitiveEdit::Footprint(
-                            crate::library::messages::FootprintEditorMsg::ToggleAutoFit,
-                        ),
-                    },
-                ));
-                // v0.16.x — rebuild the panel context so the
-                // pill's pressed-state style reflects the new
-                // `auto_fit_courtyard` bool. Without this the
-                // button click looked like a no-op because
-                // `PanelContext.footprint_editor.auto_fit_courtyard`
-                // was stale until the next unrelated panel
-                // refresh.
-                self.refresh_panel_ctx();
-            }
+        if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
+            && let Some(path) = active_tab.kind.as_footprint_editor()
+        {
+            let path = path.clone();
+            follow = self.update(Message::Library(
+                crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                    path,
+                    msg: crate::library::messages::PrimitiveEdit::Footprint(
+                        crate::library::messages::FootprintEditorMsg::ToggleAutoFit,
+                    ),
+                },
+            ));
+            // v0.16.x — rebuild the panel context so the
+            // pill's pressed-state style reflects the new
+            // `auto_fit_courtyard` bool. Without this the
+            // button click looked like a no-op because
+            // `PanelContext.footprint_editor.auto_fit_courtyard`
+            // was stale until the next unrelated panel
+            // refresh.
+            self.refresh_panel_ctx();
         }
         follow
     }
@@ -57,22 +57,22 @@ impl Signex {
         // the standard PrimitiveEditorEvent path so the role
         // mutation goes through `apply_sketch_role_with_warnings`
         // (clears all attrs, sets matching one, runs solve+bake).
-        if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab) {
-            if let Some(path) = active_tab.kind.as_footprint_editor() {
-                let path = path.clone();
-                follow = self.update(Message::Library(
-                    crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
-                        path,
-                        msg: crate::library::messages::PrimitiveEdit::Footprint(
-                            crate::library::messages::FootprintEditorMsg::SketchSetRole {
-                                id: *id,
-                                role: *role,
-                            },
-                        ),
-                    },
-                ));
-                self.refresh_panel_ctx();
-            }
+        if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
+            && let Some(path) = active_tab.kind.as_footprint_editor()
+        {
+            let path = path.clone();
+            follow = self.update(Message::Library(
+                crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                    path,
+                    msg: crate::library::messages::PrimitiveEdit::Footprint(
+                        crate::library::messages::FootprintEditorMsg::SketchSetRole {
+                            id: *id,
+                            role: *role,
+                        },
+                    ),
+                },
+            ));
+            self.refresh_panel_ctx();
         }
         follow
     }
@@ -82,8 +82,11 @@ impl Signex {
         v: &str,
     ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
-            editor.primitive_mut().description = v.to_string();
-            editor.dirty = true;
+            editor.record_edit(Some(("description", 0)), |editor| {
+                editor.primitive_mut().description = v.to_string();
+                editor.dirty = true;
+                true
+            });
         }
         self.refresh_panel_ctx();
         true
@@ -94,8 +97,11 @@ impl Signex {
         v: &str,
     ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
-            editor.primitive_mut().default_designator = v.to_string();
-            editor.dirty = true;
+            editor.record_edit(Some(("default_designator", 0)), |editor| {
+                editor.primitive_mut().default_designator = v.to_string();
+                editor.dirty = true;
+                true
+            });
         }
         self.refresh_panel_ctx();
         true
@@ -106,8 +112,11 @@ impl Signex {
         t: &signex_library::primitive::footprint::ComponentType,
     ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
-            editor.primitive_mut().component_type = *t;
-            editor.dirty = true;
+            editor.record_edit(None, |editor| {
+                editor.primitive_mut().component_type = *t;
+                editor.dirty = true;
+                true
+            });
         }
         self.refresh_panel_ctx();
         true
@@ -118,8 +127,11 @@ impl Signex {
         v: &str,
     ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
-            editor.primitive_mut().height_mm = fp_parse_optional_mm(v);
-            editor.dirty = true;
+            editor.record_edit(Some(("height", 0)), |editor| {
+                editor.primitive_mut().height_mm = fp_parse_optional_mm(v);
+                editor.dirty = true;
+                true
+            });
         }
         self.refresh_panel_ctx();
         true
@@ -130,9 +142,12 @@ impl Signex {
         name: &str,
     ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
-            editor.primitive_mut().name = name.to_string();
-            editor.dirty = true;
-            editor.canvas_cache.clear();
+            editor.record_edit(Some(("name", 0)), |editor| {
+                editor.primitive_mut().name = name.to_string();
+                editor.dirty = true;
+                editor.canvas_cache.clear();
+                true
+            });
         }
         self.refresh_panel_ctx();
         true

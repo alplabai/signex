@@ -54,7 +54,10 @@ use sidebar::view_table_sidebar;
 
 const BROWSER_TEXT_SIZE: f32 = 11.0;
 const BROWSER_HEADER_SIZE: f32 = 10.0;
-#[allow(dead_code)] // F15 (final): preview pane removed; constant retained for the moment in case the Properties panel needs the same width hint.
+#[expect(
+    dead_code,
+    reason = "F15 removed the preview pane; the width hint is retained in case the Properties panel needs it"
+)]
 const PREVIEW_PANE_WIDTH: f32 = 380.0;
 const MAX_PARAM_COLUMNS: usize = 4;
 /// Width reserved at the start of every grid row for the per-row
@@ -136,7 +139,7 @@ pub fn view<'a>(
     let mut visible: Vec<&ComponentRow> = rows
         .iter()
         .filter(|r| lifecycle_filter.allows(r.state))
-        .filter(|r| class_filter.map_or(true, |cls| r.class.as_str() == cls))
+        .filter(|r| class_filter.is_none_or(|cls| r.class.as_str() == cls))
         .filter(|r| needle.is_empty() || row_matches_filter(r, &needle))
         .collect();
 
@@ -150,15 +153,15 @@ pub fn view<'a>(
     // Stage 8: apply the user's sort selection to the visible rows
     // before grid rendering. The grid view is a pure projection of
     // `visible`, so sorting here doesn't ripple into the render path.
-    if let Some(sort) = browser.sort_by.as_ref() {
-        if let Some(column) = columns.iter().find(|c| c.kind.sort_key() == sort.key) {
-            visible.sort_by(|a, b| {
-                let ca = column.kind.cell_value(a);
-                let cb = column.kind.cell_value(b);
-                let ord = compare_cells(&ca, &cb);
-                if sort.descending { ord.reverse() } else { ord }
-            });
-        }
+    if let Some(sort) = browser.sort_by.as_ref()
+        && let Some(column) = columns.iter().find(|c| c.kind.sort_key() == sort.key)
+    {
+        visible.sort_by(|a, b| {
+            let ca = column.kind.cell_value(a);
+            let cb = column.kind.cell_value(b);
+            let ord = compare_cells(&ca, &cb);
+            if sort.descending { ord.reverse() } else { ord }
+        });
     }
 
     let grid = view_grid(
@@ -185,9 +188,9 @@ pub fn view<'a>(
     // and Pick Symbol / Pick Footprint live in the right-edge
     // Properties panel now (`view_library_row_properties`), so the
     // Library Browser tab body keeps the full width for the grid.
-    // `library_state` and `view_preview_pane` retained but unused
-    // here; remove in a follow-up cleanup pass once the Properties-
-    // panel approach is locked.
+    // `view_preview_pane` is retained but no longer mounted here;
+    // remove it in a follow-up cleanup pass once the Properties-panel
+    // approach is locked.
     //
     // The Row needs explicit `Length::Fill` width — the
     // `feedback_iced_layout.md` anti-pattern: a Fill child inside a
@@ -196,7 +199,6 @@ pub fn view<'a>(
     // (visible regression: "double-clicking the .snxlib opens
     // nothing"). The original three-child Row hid this because two
     // of the children were fixed-width.
-    let _ = library_state;
     let body = row![left].width(Length::Fill).height(Length::Fill);
 
     let right = column![

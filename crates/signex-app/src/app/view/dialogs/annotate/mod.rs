@@ -91,7 +91,6 @@ impl Signex {
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
         .into();
-        let _ = border_c;
         let header = if draggable {
             draggable_header(
                 header_content,
@@ -636,7 +635,6 @@ impl Signex {
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
         .into();
-        let _ = border_c;
         let header = if draggable {
             draggable_header(
                 header_content,

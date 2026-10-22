@@ -196,13 +196,25 @@ impl ErcContext {
         Self::project(snapshot, HashMap::new())
     }
 
+    /// `resolved` is THIS sheet's own resolution submap — `cs.filename ->
+    /// SheetKey` — not a project-wide map; `sheets` is the shared
+    /// `SheetKey -> SchematicSheet` table every sheet's submap is looked up
+    /// against. Keying `resolved` per-sheet (rather than a single project-wide
+    /// filename map) is what keeps this in step with
+    /// `signex_net::build_project_netlist` when two parents in different
+    /// directories reference a child by the same filename string (#466).
     pub fn from_snapshot_with_children(
         snapshot: &SchematicSheet,
-        children: &HashMap<String, SchematicSheet>,
+        resolved: &HashMap<String, signex_net::SheetKey>,
+        sheets: &HashMap<signex_net::SheetKey, SchematicSheet>,
     ) -> Self {
-        let child_ctxs = children
+        let child_ctxs = resolved
             .iter()
-            .map(|(k, v)| (k.clone(), Self::from_snapshot(v)))
+            .filter_map(|(filename, key)| {
+                sheets
+                    .get(key)
+                    .map(|s| (filename.clone(), Self::from_snapshot(s)))
+            })
             .collect();
         Self::project(snapshot, child_ctxs)
     }

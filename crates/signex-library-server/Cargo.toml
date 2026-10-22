@@ -31,3 +31,7 @@ tokio = { workspace = true }
 reqwest = { workspace = true }
 tower = { version = "0.5", features = ["util"] }
 tempfile = "3"
+
+# GH #548 — inherit [workspace.lints.rust] (unused_must_use = deny).
+[lints]
+workspace = true

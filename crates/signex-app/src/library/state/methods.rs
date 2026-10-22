@@ -2,6 +2,37 @@
 
 use super::*;
 
+/// Move one primitive listing onto its cache, keeping the previous
+/// contents when the adapter failed.
+///
+/// A listing failure is transient — a lock held by another process, a
+/// library server 500, an unreadable `symbols/` directory — but the
+/// cache it feeds is the *only* thing the picker renders. Substituting
+/// an empty vec turns "the listing failed" into "this library has no
+/// symbols", so the user re-creates a primitive that is already on
+/// disk. The stale cache is the better answer: it is what the picker
+/// showed a moment ago, and the next successful refresh replaces it.
+///
+/// The failure itself reaches the Messages panel at `warn` — the same
+/// treatment `refresh_components` gives a failed `read_table`.
+fn apply_primitive_listing(
+    cache: &mut Vec<PrimitiveSummary>,
+    listing: Result<Vec<PrimitiveSummary>, LibraryError>,
+    library: &str,
+    kind: &str,
+) {
+    match listing {
+        Ok(entries) => *cache = entries,
+        Err(error) => tracing::warn!(
+            target: "signex::library",
+            library = %library,
+            listing = kind,
+            error = %error,
+            "primitive listing failed; previous cache kept"
+        ),
+    }
+}
+
 impl Default for LibraryState {
     fn default() -> Self {
         let mut settings = DistributorSettings::default();
@@ -30,6 +61,7 @@ impl Default for LibraryState {
             installed_libraries: Vec::new(),
             global_libraries: Vec::new(),
             components_panel: ComponentsPanelState::default(),
+            pending_mounts: HashMap::new(),
         }
     }
 }
@@ -90,10 +122,19 @@ impl LibraryState {
         let manifest = adapter.manifest();
         let display_name = manifest.library.name.clone();
         let library_id = manifest.library.library_id;
-        // `LibrarySet::mount` rejects duplicate `library_id`s — this
-        // surfaces the case where the user has copy-pasted a `.snxlib/`
-        // without regenerating the manifest UUID, so cross-library
-        // `PrimitiveRef`s can't silently resolve to the wrong file.
+        // `LibrarySet::mount` keys file-backed adapters by their
+        // `.snxlib` *path*, so the `Conflict` it can return here means
+        // "this same path is already mounted" — not "this library_id is
+        // already taken". Two copies of a library sharing a `library_id`
+        // at different paths both mount fine, by design (see
+        // `adapters/library_set.rs`, "Resolution semantics").
+        //
+        // So this is NOT a guard against the copy-pasted-`.snxlib`-
+        // without-a-regenerated-manifest-UUID case: `set.get(library_id)`
+        // returns the *first* match, and a cross-library `PrimitiveRef`
+        // can still resolve to whichever copy wins. Detecting and
+        // surfacing that collision is the Components Panel's job at
+        // presentation time.
         self.set.mount(Box::new(adapter))?;
         let mut entry = OpenLibrary {
             root,
@@ -125,6 +166,15 @@ impl LibraryState {
     /// every editor pointing at it. (TODO(v0.9): unsaved-edits prompt
     /// is wired from the dispatcher via `dirty_editors_for_library`.)
     pub fn close_library(&mut self, root: &Path) {
+        // Cancel any mount still being prepared off-thread for this path
+        // (#99 part 2c). `pending_mounts` doubles as the cancellation
+        // tombstone: `take_mount_intent` returns `None` for a path that
+        // is gone, so an in-flight preparation that lands after this
+        // point drops its payload instead of re-mounting a library the
+        // user just closed. Unconditional — the entry only exists while
+        // a preparation is in flight, and closing a library that was
+        // mounted synchronously simply has nothing to remove.
+        self.pending_mounts.remove(root);
         if let Some(idx) = self.open_libraries.iter().position(|lib| lib.root == root) {
             let entry = self.open_libraries.remove(idx);
             self.set.unmount(entry.library_id);
@@ -187,15 +237,28 @@ impl LibraryState {
         // Snapshot primitive listings before the second mut borrow so
         // we don't have to call adapter methods while `library_at_mut`
         // holds &mut self.
-        let symbols = adapter.list_symbols().unwrap_or_default();
-        let footprints = adapter.list_footprints().unwrap_or_default();
-        let sims = adapter.list_sims().unwrap_or_default();
+        let symbols = adapter.list_symbols();
+        let footprints = adapter.list_footprints();
+        let sims = adapter.list_sims();
         if let Some(lib) = self.library_at_mut(root) {
             lib.tables = tables;
             lib.cached_components = summaries;
-            lib.cached_symbols = symbols;
-            lib.cached_footprints = footprints;
-            lib.cached_sims = sims;
+            // A failed listing keeps the previous cache and warns —
+            // blanking it here would render a mounted library as
+            // empty. See `apply_primitive_listing`.
+            apply_primitive_listing(
+                &mut lib.cached_symbols,
+                symbols,
+                &lib.display_name,
+                "symbols",
+            );
+            apply_primitive_listing(
+                &mut lib.cached_footprints,
+                footprints,
+                &lib.display_name,
+                "footprints",
+            );
+            apply_primitive_listing(&mut lib.cached_sims, sims, &lib.display_name, "sims");
         }
         Ok(())
     }
@@ -216,7 +279,6 @@ impl LibraryState {
     /// `refs` — `(row_id, instance_id)` tuples. The index keys by
     /// `RowId` directly; revisions and per-instance version pins are
     /// not part of the DBLib model.
-    #[allow(dead_code)]
     pub fn ingest_sheet(&mut self, project: &Path, sheet: &Path, refs: &[(Uuid, String)]) {
         let trimmed: Vec<(RowId, String)> = refs
             .iter()
@@ -232,10 +294,29 @@ impl LibraryState {
 
     /// Editor addresses currently pointing at `root` that have unsaved edits.
     pub fn dirty_editors_for_library(&self, root: &Path) -> Vec<EditorAddress> {
+        self.collect_dirty_editors(|key| key.library_path == root)
+    }
+
+    /// Dirty editor addresses whose library lives under `dir` — the
+    /// rows a project-close prompt has to account for.
+    pub fn dirty_editors_under(&self, dir: &Path) -> Vec<EditorAddress> {
+        self.collect_dirty_editors(|key| key.library_path.starts_with(dir))
+    }
+
+    /// Every dirty editor address across all open libraries — the rows
+    /// an app-quit prompt has to account for.
+    pub fn dirty_editors(&self) -> Vec<EditorAddress> {
+        self.collect_dirty_editors(|_| true)
+    }
+
+    fn collect_dirty_editors(
+        &self,
+        include: impl Fn(&EditorAddress) -> bool,
+    ) -> Vec<EditorAddress> {
         let mut keys: Vec<EditorAddress> = self
             .editors
             .iter()
-            .filter(|(key, st)| key.library_path == root && st.dirty)
+            .filter(|(key, st)| st.dirty && include(key))
             .map(|(key, _)| key.clone())
             .collect();
         keys.sort_by(|a, b| {
@@ -245,6 +326,16 @@ impl LibraryState {
                 .then_with(|| a.row_id.cmp(&b.row_id))
         });
         keys
+    }
+
+    /// Human label for an editor row in a confirm modal: its part
+    /// number and table, falling back to the raw address when the
+    /// editor is already gone.
+    pub fn editor_label(&self, address: &EditorAddress) -> String {
+        match self.editors.get(address) {
+            Some(st) => format!("{} ({})", st.row.internal_pn.as_str(), address.table),
+            None => format!("{} ({})", address.row_id, address.table),
+        }
     }
 
     /// Classify how a mounted library got there — drives the
@@ -273,7 +364,6 @@ impl LibraryState {
     }
 
     /// Existing editor for `(library_root, table, row_id)`, if any.
-    #[allow(dead_code)]
     pub fn editor_for(
         &self,
         library_root: &Path,
@@ -439,45 +529,28 @@ impl OpenLibrary {
     /// the picker modal sees the new primitive without re-scanning
     /// the filesystem on every view tick.
     ///
-    /// Adapter errors degrade to empty lists with a tracing warn —
-    /// the picker just shows fewer entries until the next refresh.
+    /// An adapter error keeps the previous cache and emits a tracing
+    /// warn — the picker keeps showing the entries it showed a moment
+    /// ago until the next successful refresh. Assigning an empty vec
+    /// here (what this did before) reported a transient listing
+    /// failure as an empty library.
     pub fn reload_primitives(&mut self, adapter: &dyn LibraryAdapter) {
-        match adapter.list_symbols() {
-            Ok(v) => self.cached_symbols = v,
-            Err(e) => {
-                tracing::warn!(
-                    target: "signex::library",
-                    library = %self.display_name,
-                    error = %e,
-                    "list_symbols failed; cache left empty"
-                );
-                self.cached_symbols = Vec::new();
-            }
-        }
-        match adapter.list_footprints() {
-            Ok(v) => self.cached_footprints = v,
-            Err(e) => {
-                tracing::warn!(
-                    target: "signex::library",
-                    library = %self.display_name,
-                    error = %e,
-                    "list_footprints failed; cache left empty"
-                );
-                self.cached_footprints = Vec::new();
-            }
-        }
-        match adapter.list_sims() {
-            Ok(v) => self.cached_sims = v,
-            Err(e) => {
-                tracing::warn!(
-                    target: "signex::library",
-                    library = %self.display_name,
-                    error = %e,
-                    "list_sims failed; cache left empty"
-                );
-                self.cached_sims = Vec::new();
-            }
-        }
+        let symbols = adapter.list_symbols();
+        let footprints = adapter.list_footprints();
+        let sims = adapter.list_sims();
+        apply_primitive_listing(
+            &mut self.cached_symbols,
+            symbols,
+            &self.display_name,
+            "symbols",
+        );
+        apply_primitive_listing(
+            &mut self.cached_footprints,
+            footprints,
+            &self.display_name,
+            "footprints",
+        );
+        apply_primitive_listing(&mut self.cached_sims, sims, &self.display_name, "sims");
     }
 
     /// Total number of rows across every cached table.

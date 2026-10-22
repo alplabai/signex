@@ -73,7 +73,7 @@ impl SymbolCanvas<'_> {
                     };
                     let dot_radius = (minor_screen * 0.06).clamp(0.5, 1.6);
                     let cross_arm = (minor_screen * 0.18).clamp(1.5, 4.0);
-                    let grid_style = crate::render_config::symbol_grid_style();
+                    let grid_style = self.grid_style;
                     let minor_stroke = canvas::Stroke::default()
                         .with_color(dot_color)
                         .with_width(0.6);

@@ -1,7 +1,9 @@
 use iced::widget::{Column, container, pick_list, row, text};
 use iced::{Color, Length};
 
-use super::super::{CollapsedSections, FootprintEditorPanelContext, FootprintModeKind, PanelMsg};
+use super::super::{
+    CollapsedSections, FootprintEditorPanelContext, FootprintModeKind, PanelMsg, PanelPalette,
+};
 use super::managers::grid_manager_btn;
 use super::pad::{
     PadEditTarget, PadFormValues, pad_check_row, pad_input_row, pad_pick_row,
@@ -13,22 +15,23 @@ use super::subforms::{
 };
 use super::{fp_is_collapsed, props_kv_row, props_section_header};
 
-#[allow(clippy::too_many_arguments)]
 pub(super) fn view_selection<'a>(
     mut col: Column<'a, PanelMsg>,
     fp: &'a FootprintEditorPanelContext,
     mode_label: &str,
-    muted: Color,
-    primary: Color,
-    border_c: Color,
-    input_bg: Color,
-    input_bdr: Color,
+    palette: PanelPalette,
     custom_filter_presets: Vec<crate::active_bar::CustomFilterPreset>,
     active_custom_filter_tab: usize,
     collapsed_sections: &'a CollapsedSections,
-    accent_c: Color,
-    tag_hover: Color,
 ) -> Column<'a, PanelMsg> {
+    let PanelPalette {
+        muted,
+        primary,
+        border: border_c,
+        input_bg,
+        input_bdr,
+        ..
+    } = palette;
     match (
         fp.mode_kind,
         fp.selected_pad.as_ref(),
@@ -47,9 +50,7 @@ pub(super) fn view_selection<'a>(
                 &values,
                 target,
                 false,
-                muted,
-                primary,
-                border_c,
+                palette,
                 collapsed_sections,
             );
             // Position is the one read-only field (use drag to move).
@@ -65,21 +66,11 @@ pub(super) fn view_selection<'a>(
                 col,
                 &values,
                 target,
-                muted,
-                primary,
-                border_c,
+                palette,
                 collapsed_sections,
                 &fp.selected_pad_shape_params,
             );
-            col = render_pad_form_pad_features(
-                col,
-                &values,
-                target,
-                muted,
-                primary,
-                border_c,
-                collapsed_sections,
-            );
+            col = render_pad_form_pad_features(col, &values, target, palette, collapsed_sections);
         }
         (FootprintModeKind::Sketch, _, Some(ent)) => {
             col = col.push(props_section_header(
@@ -173,21 +164,19 @@ pub(super) fn view_selection<'a>(
             // right-click "Unlink radius" action; clicking it mints
             // a per-corner override for that one Arc and leaves the
             // other 3 corners on the shared corner_r parameter.
-            if ent.kind_label == "Arc" {
-                if let Some(id) = fp.selected_sketch_entity_id {
-                    col = col.push(
-                        container(
-                            iced::widget::button(
-                                text("Unlink corner radius").size(10).color(primary),
-                            )
+            if ent.kind_label == "Arc"
+                && let Some(id) = fp.selected_sketch_entity_id
+            {
+                col = col.push(
+                    container(
+                        iced::widget::button(text("Unlink corner radius").size(10).color(primary))
                             .padding([4, 10])
                             .on_press(PanelMsg::FpEditorUnlinkCornerRadius { arc_entity_id: id })
                             .style(iced::widget::button::secondary),
-                        )
-                        .padding([6, 8])
-                        .width(Length::Fill),
-                    );
-                }
+                    )
+                    .padding([6, 8])
+                    .width(Length::Fill),
+                );
             }
 
             // v0.16.2 — Role pick_list. Visible when an entity is
@@ -200,49 +189,42 @@ pub(super) fn view_selection<'a>(
                 primary,
                 border_c,
             ));
-            if !fp_is_collapsed("fp_role", collapsed_sections) {
-                if let Some(id) = fp.selected_sketch_entity_id {
-                    use crate::library::messages::RoleTag;
-                    let current = fp.selected_sketch_role;
-                    let dropdown = pick_list(RoleTag::ALL, Some(current), move |new_role| {
-                        PanelMsg::FpEditorSetRole { id, role: new_role }
-                    })
-                    .text_size(11)
-                    .padding([3, 8])
-                    .width(Length::Fill);
-                    col = col.push(container(dropdown).padding([4, 8]).width(Length::Fill));
-                    if !fp.selected_sketch_is_point {
-                        col = col.push(
-                            container(text("Pad role applies to Points only").size(9).color(muted))
-                                .padding([0, 8])
-                                .width(Length::Fill),
-                        );
-                    }
-
-                    // v0.16.4 — role sub-forms. Render when the
-                    // matching `*Attr` is set on the selected entity.
-                    col = render_pour_subform(col, fp, id, muted, primary, border_c);
-                    col = render_keepout_subform(col, fp, id, muted, primary, border_c);
-                    col = render_cutout_subform(col, fp, id, muted, primary, border_c);
-                    col = render_sketch_pad_subform(
-                        col,
-                        fp,
-                        muted,
-                        primary,
-                        border_c,
-                        collapsed_sections,
-                    );
-                    // v0.23 — Pattern sub-form. Renders when the
-                    // selected entity is the source of an Array.
-                    col = render_pattern_subform(
-                        col,
-                        fp,
-                        muted,
-                        primary,
-                        border_c,
-                        collapsed_sections,
+            if !fp_is_collapsed("fp_role", collapsed_sections)
+                && let Some(id) = fp.selected_sketch_entity_id
+            {
+                use crate::library::messages::RoleTag;
+                let current = fp.selected_sketch_role;
+                let dropdown = pick_list(RoleTag::ALL, Some(current), move |new_role| {
+                    PanelMsg::FpEditorSetRole { id, role: new_role }
+                })
+                .text_size(11)
+                .padding([3, 8])
+                .width(Length::Fill);
+                col = col.push(container(dropdown).padding([4, 8]).width(Length::Fill));
+                if !fp.selected_sketch_is_point {
+                    col = col.push(
+                        container(text("Pad role applies to Points only").size(9).color(muted))
+                            .padding([0, 8])
+                            .width(Length::Fill),
                     );
                 }
+
+                // v0.16.4 — role sub-forms. Render when the
+                // matching `*Attr` is set on the selected entity.
+                col = render_pour_subform(col, fp, id, muted, primary, border_c);
+                col = render_keepout_subform(col, fp, id, muted, primary, border_c);
+                col = render_cutout_subform(col, fp, id, muted, primary, border_c);
+                col = render_sketch_pad_subform(
+                    col,
+                    fp,
+                    muted,
+                    primary,
+                    border_c,
+                    collapsed_sections,
+                );
+                // v0.23 — Pattern sub-form. Renders when the
+                // selected entity is the source of an Array.
+                col = render_pattern_subform(col, fp, muted, primary, border_c, collapsed_sections);
             }
         }
         _ => {
@@ -418,16 +400,11 @@ pub(super) fn view_selection<'a>(
                 // (redundant with Custom Selection Filters below + the
                 // active bar's Filter dropdown). The Custom presets
                 // section is the single Properties-panel surface.
-                let _ = (fp, accent_c, tag_hover); // keep imports satisfied
                 col = col.push(super::super::view_custom_selection_filters_section(
                     custom_filter_presets,
                     active_custom_filter_tab,
                     collapsed_sections,
-                    muted,
-                    primary,
-                    border_c,
-                    accent_c,
-                    tag_hover,
+                    palette,
                 ));
                 col = col.push(props_section_header(
                     "Footprint",
@@ -447,7 +424,6 @@ pub(super) fn view_selection<'a>(
                         muted,
                         PanelMsg::FpEditorSetFootprintName,
                     ));
-                    let _ = (input_bg, input_bdr); // form_edit_row uses iced default text_input chrome
 
                     // v0.21 — Altium-parity Component fields. Editable
                     // Description / Default Designator / Component

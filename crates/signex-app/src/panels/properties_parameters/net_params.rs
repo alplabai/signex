@@ -47,7 +47,6 @@ pub fn net_numeric_row<'a>(
 /// Parameters (Net) segmented tabs — All / Parameters / Rules / Classes.
 pub fn net_params_tabs<'a>(
     primary: Color,
-    label_c: Color,
     input_bg: Color,
     input_bdr: Color,
 ) -> Element<'a, PanelMsg> {
@@ -84,7 +83,6 @@ pub fn net_params_tabs<'a>(
         })
         .into()
     };
-    let _ = label_c;
     container(
         row![
             tab("All", true),
@@ -211,14 +209,16 @@ pub fn justification_grid(
     id: uuid::Uuid,
     rotation_deg: f64,
     h: signex_types::schematic::HAlign,
-    input_bg: Color,
-    input_bdr: Color,
-    primary: Color,
-    muted: Color,
+    palette: PanelPalette,
     theme: signex_types::theme::ThemeId,
 ) -> Element<'static, PanelMsg> {
     use signex_types::schematic::HAlign;
-    let _ = muted;
+    let PanelPalette {
+        input_bg,
+        input_bdr,
+        primary,
+        ..
+    } = palette;
 
     // Cell size mimics Altium's compact 24×24 px anchor picker.
     const CELL_SIZE: f32 = 24.0;
@@ -381,11 +381,9 @@ pub fn preplacement_justification_grid(
     input_bg: Color,
     input_bdr: Color,
     primary: Color,
-    muted: Color,
     theme: signex_types::theme::ThemeId,
 ) -> Element<'static, PanelMsg> {
     use signex_types::schematic::HAlign;
-    let _ = muted;
 
     const CELL_SIZE: f32 = 24.0;
     let cell = |handle: iced::widget::svg::Handle,

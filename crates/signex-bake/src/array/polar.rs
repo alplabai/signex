@@ -2,18 +2,17 @@
 //! centre point, sweeping `sweep_angle_expr` total degrees, with
 //! optional per-instance depopulation.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 use signex_library::primitive::footprint::Pad as LibPad;
 use signex_sketch::SketchError;
-use signex_sketch::array::{ArrayKind, NumberingScheme};
+use signex_sketch::array::NumberingScheme;
 use signex_sketch::expr::ast::ExprNode;
 use signex_sketch::expr::eval::{EvalContext, eval};
 use signex_sketch::expr::parse::parse;
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
-use signex_sketch::unit::Quantity;
 
 use crate::pad::bake_one_pad;
 
@@ -28,7 +27,10 @@ use super::numbering::strip_eq_prefix;
 /// v0.22 Phase B5 — optional `depopulation` works the same as Grid:
 /// `mask_expr` is evaluated per `(i, j=0)` and `false` skips the
 /// instance without breaking the parametric chain.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "11 arguments: polar-array placement takes the whole geometry + numbering spec at once"
+)]
 pub(super) fn bake_polar(
     source: SketchEntityId,
     center: SketchEntityId,

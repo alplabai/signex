@@ -200,7 +200,7 @@ impl Signex {
             }
             selection_request::SelectionRequest::ArmDrag => {
                 // Placeholder — full immediate-drag requires shared state
-                // across SchematicCanvas and CanvasState (which are updated
+                // across CanvasSlot and CanvasState (which are updated
                 // in different phases). Deferred; for now the user can still
                 // drag by clicking a selected item in the standard way.
                 crate::diagnostics::log_info(

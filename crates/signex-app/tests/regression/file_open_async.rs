@@ -2,12 +2,12 @@
 //!
 //! `open_schematic_file` / `open_pcb_file` used to `fs::read_to_string`
 //! + parse synchronously inside `update()`. They now return a
-//! `Task::perform` (`spawn_blocking` body) that completes with
-//! `FileMsg::SchematicOpenFinished` / `FileMsg::PcbOpenFinished` —
-//! mirrors the `HistoryLoaded` pattern. These tests pin both halves:
-//! `update()` must not synchronously open the tab, and the completion
-//! message must apply exactly like the old inline path did (success
-//! opens the tab, failure logs and opens nothing).
+//!   `Task::perform` (`spawn_blocking` body) that completes with
+//!   `FileMsg::SchematicOpenFinished` / `FileMsg::PcbOpenFinished` —
+//!   mirrors the `HistoryLoaded` pattern. These tests pin both halves:
+//!   `update()` must not synchronously open the tab, and the completion
+//!   message must apply exactly like the old inline path did (success
+//!   opens the tab, failure logs and opens nothing).
 
 use signex_app::app::{FileMsg, Message, Signex};
 

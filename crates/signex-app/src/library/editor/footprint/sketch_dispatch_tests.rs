@@ -5,7 +5,7 @@
 
 #[cfg(test)]
 mod tests {
-    use chrono::Utc;
+
     use signex_library::primitive::footprint::Footprint;
     use signex_sketch::SketchData;
     use signex_sketch::attr::{PadAttr, PadKind, PadShape, PadSide, PasteAperturePattern};
@@ -58,7 +58,7 @@ mod tests {
         let mut state = FootprintEditorState::from_footprint(&fp);
 
         let (entity, _id) = point_with_pad(plane, 0.0, 0.0, "1");
-        apply_sketch_edit(&mut state, &mut fp, SketchEdit::AddEntity(entity)).unwrap();
+        apply_sketch_edit(&mut state, &mut fp, SketchEdit::add_entity(entity)).unwrap();
 
         assert_eq!(fp.pads.len(), 1);
         assert_eq!(fp.pads[0].number, "1");
@@ -119,6 +119,78 @@ mod tests {
         assert!(
             (dist - 5.0).abs() < 1e-6,
             "expected P2 at distance 5, got {dist}"
+        );
+    }
+
+    /// #613 — a failed solve must not leave the previous solve's answer
+    /// on the canvas. Everything that paints constraint colours,
+    /// dimensions and DOF state reads `state.last_solve`, so a stale
+    /// `Some` is the canvas confidently showing a solution that no
+    /// longer describes the sketch. This is the case #610's
+    /// `entity_colours` fix cannot reach: the conflict touches a free
+    /// point, the solver returns `DidNotConverge`, and `entity_colours`
+    /// never runs at all.
+    #[test]
+    fn a_failed_solve_clears_the_previous_solves_colours() {
+        // Arrange — solve once, cleanly, so there is a good answer to
+        // go stale.
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        let (e1, p1) = point_with_pad(plane, 0.0, 0.0, "1");
+        let (e2, p2) = point_with_pad(plane, 1.0, 0.0, "2");
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![e1, e2],
+            constraints: vec![Constraint {
+                id: ConstraintId::new(),
+                kind: ConstraintKind::Fixed { point: p1 },
+            }],
+            ..SketchData::default()
+        });
+        let mut state = FootprintEditorState::from_footprint(&fp);
+        apply_sketch_edit(
+            &mut state,
+            &mut fp,
+            SketchEdit::AddConstraint(Constraint {
+                id: ConstraintId::new(),
+                kind: ConstraintKind::DistancePtPt {
+                    p1,
+                    p2,
+                    target: DimTarget::Literal(5.0),
+                },
+            }),
+        )
+        .expect("the first solve is satisfiable");
+        assert!(
+            state.last_solve.is_some(),
+            "precondition: there is a good solve to go stale"
+        );
+
+        // Act — the same pair, a second distance it cannot also satisfy.
+        let failed = apply_sketch_edit(
+            &mut state,
+            &mut fp,
+            SketchEdit::AddConstraint(Constraint {
+                id: ConstraintId::new(),
+                kind: ConstraintKind::DistancePtPt {
+                    p1,
+                    p2,
+                    target: DimTarget::Literal(9.0),
+                },
+            }),
+        );
+
+        // Assert
+        assert!(
+            failed.is_err(),
+            "two conflicting distances on the same pair must not solve"
+        );
+        assert!(
+            state.last_solve.is_none(),
+            "a failed solve must drop the previous answer, not leave it to be painted"
         );
     }
 
@@ -193,7 +265,7 @@ mod tests {
         // on LineFirst.
         let p1 = SketchEntityId::new();
         let pt = Entity::new(p1, plane, EntityKind::Point { x: 0.0, y: 0.0 });
-        apply_sketch_edit(&mut state, &mut fp, SketchEdit::AddEntity(pt)).unwrap();
+        apply_sketch_edit(&mut state, &mut fp, SketchEdit::add_entity(pt)).unwrap();
         state.tool_pending = ToolPending::LineFirst { first: p1 };
 
         // Second click — adds endpoint + Line entity. We do this
@@ -201,10 +273,10 @@ mod tests {
         // glue; this test verifies the SketchEdit-level behaviour.
         let p2 = SketchEntityId::new();
         let pt2 = Entity::new(p2, plane, EntityKind::Point { x: 5.0, y: 0.0 });
-        apply_sketch_edit(&mut state, &mut fp, SketchEdit::AddEntity(pt2)).unwrap();
+        apply_sketch_edit(&mut state, &mut fp, SketchEdit::add_entity(pt2)).unwrap();
         let line_id = SketchEntityId::new();
         let line = Entity::new(line_id, plane, EntityKind::Line { start: p1, end: p2 });
-        apply_sketch_edit(&mut state, &mut fp, SketchEdit::AddEntity(line)).unwrap();
+        apply_sketch_edit(&mut state, &mut fp, SketchEdit::add_entity(line)).unwrap();
 
         let sketch = fp.sketch.as_ref().unwrap();
         assert_eq!(sketch.entities.len(), 3);

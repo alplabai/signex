@@ -1,6 +1,6 @@
 use super::super::*;
 
-impl SchematicCanvas {
+impl SchematicCanvas<'_> {
     /// Track Ctrl/Shift modifier state for multi-select.
     pub(in crate::canvas) fn update_modifiers_changed(
         &self,

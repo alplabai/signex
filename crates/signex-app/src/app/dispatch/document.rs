@@ -158,10 +158,6 @@ impl Signex {
                 let task = self.handle_export_pdf_open_dialog();
                 iced::Task::batch([task, self.finish_update()])
             }
-            ExportMsg::DismissError => {
-                self.handle_dismiss_export_error();
-                self.finish_update()
-            }
             ExportMsg::NetlistExportAnyway => {
                 let task = self.handle_netlist_export_anyway();
                 iced::Task::batch([task, self.finish_update()])
@@ -227,10 +223,10 @@ impl Signex {
                 self.finish_update()
             }
             BomPreviewMsg::ColumnHoverExit(idx) => {
-                if let Some(p) = self.document_state.bom_preview.as_mut() {
-                    if p.column_hover == Some(idx) {
-                        p.column_hover = None;
-                    }
+                if let Some(p) = self.document_state.bom_preview.as_mut()
+                    && p.column_hover == Some(idx)
+                {
+                    p.column_hover = None;
                 }
                 self.finish_update()
             }

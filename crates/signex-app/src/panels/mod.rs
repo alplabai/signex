@@ -2,9 +2,7 @@
 
 use iced::mouse;
 use iced::widget::canvas;
-use iced::widget::{
-    Column, Row, Space, button, container, pick_list, row, scrollable, svg, text, text_input,
-};
+use iced::widget::{Column, Row, Space, button, container, row, scrollable, svg, text};
 use iced::{Background, Border, Color, Element, Length, Point, Rectangle, Renderer, Theme};
 use iced_aw::{NumberInput, Wrap};
 use signex_types::coord::Unit;
@@ -27,6 +25,7 @@ mod context;
 mod footprint_context;
 mod library;
 mod messages;
+mod palette;
 mod paper;
 mod projects;
 mod properties;
@@ -43,12 +42,11 @@ use footprint_editor_properties::view_footprint_editor_properties;
 // symbol_editor_properties, footprint_editor_properties) and other
 // view fns still in this file can reach them via `super::name(...)`.
 pub(super) use properties_parameters::{
-    canvas_font_popup, custom_filter_tab, empty_section_row, font_style_row, form_check_row,
-    form_check_row_shortcut, form_edit_row, form_font_link_row, form_grid_row, form_grid_size_row,
-    form_input_row, form_int_edit_row, form_label, form_label_row, form_mm_edit_row, form_pick_row,
-    justification_grid, net_numeric_row, net_params_add_bar, net_params_header, net_params_tabs,
-    param_table_row, preplacement_justification_grid, preset_chip, props_tab_btn, section_hdr,
-    seg_btn, tag_btn, thin_sep, view_custom_selection_filters_section,
+    canvas_font_popup, empty_section_row, font_style_row, form_check_row, form_check_row_shortcut,
+    form_edit_row, form_font_link_row, form_grid_row, form_input_row, form_int_edit_row,
+    form_label, form_mm_edit_row, form_pick_row, justification_grid, net_numeric_row,
+    net_params_add_bar, net_params_header, net_params_tabs, preplacement_justification_grid,
+    props_tab_btn, section_hdr, seg_btn, thin_sep, view_custom_selection_filters_section,
 };
 use properties_parameters::{view_properties_general, view_properties_parameters};
 use symbol_editor_properties::view_symbol_editor_properties;
@@ -69,6 +67,7 @@ pub use footprint_context::{
 pub use library::{LibraryRowDetail, LibrarySymbolEntry};
 pub(super) use library::{view_footprint_library, view_library_row_properties, view_sch_library};
 pub use messages::PanelMsg;
+pub use palette::PanelPalette;
 pub use paper::{PAPER_SIZES, PageFormatMode, PageOrigin, SheetColor, paper_dimensions};
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
 pub(super) use projects::{view_navigator, view_projects};
@@ -90,7 +89,6 @@ pub(super) use widgets::{
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[allow(dead_code)]
 pub enum PanelKind {
     Projects,
     Components,

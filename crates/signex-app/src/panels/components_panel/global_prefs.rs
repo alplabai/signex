@@ -138,7 +138,6 @@ pub fn add_path(path: PathBuf) -> Result<Vec<GlobalLibraryEntry>, String> {
 }
 
 /// Remove a path from the global list and persist.
-#[allow(dead_code)]
 pub fn remove_path(path: &Path) -> Result<Vec<GlobalLibraryEntry>, String> {
     let mut current = load();
     let before = current.len();

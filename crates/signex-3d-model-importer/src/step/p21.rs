@@ -262,10 +262,10 @@ fn parse_refs(params: &str) -> Vec<u32> {
             while i < bytes.len() && bytes[i].is_ascii_digit() {
                 i += 1;
             }
-            if start < i {
-                if let Ok(id) = params[start..i].parse::<u32>() {
-                    refs.push(id);
-                }
+            if start < i
+                && let Ok(id) = params[start..i].parse::<u32>()
+            {
+                refs.push(id);
             }
         } else {
             i += 1;

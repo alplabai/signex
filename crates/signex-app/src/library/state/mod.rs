@@ -81,10 +81,11 @@ impl EditorAddress {
 /// are hidden by default. Stage 18 surfaces these as a single dropdown
 /// pill in the browser header so users can pivot the visible row set
 /// without touching every row's lifecycle field.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum LifecycleFilter {
     /// Default — show `Released` / `InReview` / `Draft` and tint
     /// `Deprecated`. Hides `Obsolete`.
+    #[default]
     ActiveAndPreferred,
     /// Show only `Released` (the "preferred for new designs" subset
     /// once admins promote rows out of `Draft`).
@@ -137,12 +138,6 @@ impl LifecycleFilter {
             (_, L::Obsolete) => false,
             _ => false,
         }
-    }
-}
-
-impl Default for LifecycleFilter {
-    fn default() -> Self {
-        Self::ActiveAndPreferred
     }
 }
 
@@ -427,7 +422,6 @@ pub struct LibraryState {
     /// because both the editor and the validator borrow it. The
     /// Component Preview tab + the validator both read through this
     /// registry; this struct owns the field.
-    #[allow(dead_code)]
     pub template_registry: Arc<TemplateRegistry>,
     /// Per-browser-tab state, keyed by `.snxlib` root path. One entry
     /// per `TabKind::LibraryBrowser(path)` tab in the main window's
@@ -462,7 +456,6 @@ pub struct LibraryState {
     /// Set of schematic paths the user explicitly skipped updates on
     /// — drives the persistent "Library Updates" status-bar indicator.
     /// Cleared on apply / re-scan / close-tab.
-    #[allow(dead_code)]
     pub skipped_updates_for: std::collections::HashSet<PathBuf>,
     /// Session-scoped "Installed" libraries — opened via the
     /// Components Panel's "+ Add Library…" button (Stage 9 of
@@ -479,6 +472,29 @@ pub struct LibraryState {
     /// filter. Stage 9 ships the simple substring matcher; the full
     /// search syntax (plan §5) is polish work.
     pub components_panel: ComponentsPanelState,
+    /// `.snxlib` mounts currently being prepared off the UI thread —
+    /// issue #99 part 2c. Keyed by the `.snxlib` file path, valued by
+    /// why the mount was asked for.
+    ///
+    /// Three jobs in one map, which is why it is an intent map and not
+    /// the `HashSet<PathBuf>` that `DocumentState.pending_opens` uses
+    /// for schematic/PCB opens:
+    ///
+    /// - **In-flight marker.** A path present here must not be spawned
+    ///   again, or two adapters race to mount it.
+    /// - **Intent, re-read at completion.** A project auto-mount and a
+    ///   user double-click can request the same path concurrently; the
+    ///   intent is upgraded in place (`Silent` → `OpenBrowserTab`) and
+    ///   the completion handler reads it from *here*, never from a value
+    ///   captured at spawn time.
+    /// - **Cancellation tombstone.** `close_library` removes the entry,
+    ///   so a completion whose path is gone discards its payload instead
+    ///   of resurrecting a library the user just closed.
+    ///
+    /// Path-keyed rather than generation-counted on purpose: two
+    /// concurrent mounts of *different* libraries are both legitimate,
+    /// so a single counter would cancel the wrong one.
+    pub pending_mounts: HashMap<PathBuf, super::mount::MountIntent>,
 }
 
 /// Three mount sources surfaced as collapsible sections inside the

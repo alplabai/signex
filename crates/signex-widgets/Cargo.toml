@@ -11,3 +11,7 @@ signex-types = { workspace = true }
 iced = { workspace = true }
 iced_aw = { workspace = true }
 chrono = { workspace = true }
+
+# GH #548 — inherit [workspace.lints.rust] (unused_must_use = deny).
+[lints]
+workspace = true

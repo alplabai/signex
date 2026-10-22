@@ -16,3 +16,7 @@ serde_json = { workspace = true }
 [dev-dependencies]
 regex = { workspace = true }
 tempfile = "3"
+
+# GH #548 — inherit [workspace.lints.rust] (unused_must_use = deny).
+[lints]
+workspace = true

@@ -132,7 +132,7 @@ impl Signex {
                 // Replace the engine's schematic without resetting
                 // the camera (don't fit-to-paper — the user's pan/zoom
                 // is preserved across a restore).
-                self.apply_loaded_schematic(Some(parsed), true, false, false, false);
+                self.apply_loaded_schematic(Some(parsed), true, false, false);
             }
             crate::app::TabKind::Pcb => {
                 let text = match std::fs::read_to_string(&path) {
@@ -180,6 +180,13 @@ impl Signex {
                         self.document_state
                             .footprint_editors
                             .insert(p.clone(), state);
+                        // The reloaded editor is clean, so the stale
+                        // dirty marker must go or quit asks about a
+                        // file that matches disk.
+                        self.document_state.dirty_paths.remove(&p);
+                        if let Some(tab) = self.document_state.tabs.get_mut(active_idx) {
+                            tab.dirty = false;
+                        }
                         if let Some(editor) = self.document_state.footprint_editors.get_mut(&p) {
                             editor.canvas_cache.clear();
                         }

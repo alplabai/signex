@@ -11,10 +11,14 @@ use crate::styles;
 #[derive(Debug, Clone)]
 pub enum TabMessage {
     Select(usize),
-    /// User pressed the mouse on this tab at (x, y). Arms the tab for
+    /// User pressed the mouse on this tab. Arms the tab for
     /// drag-to-undock — if the cursor later leaves the main window, the
     /// tab auto-detaches.
-    StartDrag(usize, f32, f32),
+    ///
+    /// Carries no press position: `mouse_area::on_press` hands back a
+    /// fixed message with no cursor in it, so the handler reads the live
+    /// position from `interaction_state.last_mouse_pos` instead.
+    StartDrag(usize),
     /// Right-click on this tab — the app opens the per-tab context
     /// menu (Close [filename] / Close All Others / Close All / Open
     /// In New Window). Replaces the inline close-X / undock buttons
@@ -100,7 +104,7 @@ pub fn view<'a>(
             iced::mouse::Interaction::Pointer
         };
         let tab_el: Element<'_, TabMessage> = mouse_area(TabPill::new(inner, pill_style))
-            .on_press(TabMessage::StartDrag(i, 0.0, 0.0))
+            .on_press(TabMessage::StartDrag(i))
             .on_release(TabMessage::Select(i))
             .on_right_press(TabMessage::ContextMenu(i))
             .interaction(cursor)

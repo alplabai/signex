@@ -23,7 +23,7 @@ impl Signex {
     /// the dwell timer was running).
     pub(super) fn view_hover_tooltip(&self) -> Option<Element<'_, Message>> {
         use iced::widget::{column, container, text};
-        use iced::{Background, Border, Color};
+        use iced::{Background, Border};
 
         let interaction = &self.interaction_state;
         let uuid = interaction.hover_symbol_uuid?;
@@ -286,6 +286,12 @@ impl Signex {
         // closes the context menu once the pan actually starts moving
         // (see `canvas/mod.rs`'s `CursorMoved` handler, which fires
         // `ContextMenuMsg::Close` the moment `pan_moved` flips on).
+        //
+        // The wheel is a separate matter, handled one level up:
+        // `collect_overlays` wraps every overlay whose id
+        // `overlay_id::swallows_scroll` marks, so scroll cannot reach the
+        // canvas through an overlay regardless of whether that overlay
+        // built a dismiss layer at all (#562).
         const BACKDROP_OPACITY: f32 = 0.55;
         iced::widget::mouse_area(
             container(iced::widget::Space::new())
@@ -364,7 +370,7 @@ impl Signex {
         // CONTEXT_MENU_WIDTH; flip-up / flip-left when the click
         // lands too close to an edge.
         let (win_w, win_h) = self.ui_state.window_size;
-        let menu_w = Self::CONTEXT_MENU_WIDTH as f32;
+        let menu_w = Self::CONTEXT_MENU_WIDTH;
         let est_menu_h: f32 = 22.0 * 22.0 + 8.0;
         let edge_margin: f32 = 4.0;
         let x = if ctx_menu.x + menu_w + edge_margin > win_w {
@@ -464,7 +470,7 @@ impl Signex {
         let menu = self.view_tab_context_menu(tab_ctx);
         // Conservative footprint matches the project-tree menu so
         // the two visually align.
-        let menu_w = Self::CONTEXT_MENU_WIDTH as f32;
+        let menu_w = Self::CONTEXT_MENU_WIDTH;
         let est_menu_h: f32 = 5.0 * 22.0 + 8.0;
         let (win_w, win_h) = ui.window_size;
         let edge_margin: f32 = 4.0;
@@ -507,7 +513,7 @@ impl Signex {
         // Conservative footprint: at most 6 rows × 22 px + 8 px
         // padding. Width matches the canvas menu so the two look
         // consistent.
-        let menu_w = Self::CONTEXT_MENU_WIDTH as f32;
+        let menu_w = Self::CONTEXT_MENU_WIDTH;
         let est_menu_h: f32 = 6.0 * 22.0 + 8.0;
         let (win_w, win_h) = ui.window_size;
         let edge_margin: f32 = 4.0;

@@ -61,7 +61,6 @@ impl Signex {
     /// matches what Altium shows in each context. Empty-area clicks are
     /// filtered upstream (no menu shown), so `path` is `Some` whenever
     /// this runs.
-    #[allow(clippy::vec_init_then_push)]
     pub(in crate::app::view) fn view_project_tree_context_menu(
         &self,
         ctx: &crate::app::ProjectTreeContextMenuState,

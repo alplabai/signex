@@ -15,15 +15,24 @@
 //! Oval pad also owns anchors and arc centres that the corner mover
 //! never touches.
 
+// This integration-test binary discards fallible test-setup calls with
+// `let _ = ...` routinely (not a production `Task` getting dropped — see
+// GH #99 part 1). `[lints]` in Cargo.toml is package-scoped, not
+// target-scoped, so each integration-test crate root needs its own allow.
+#![expect(
+    clippy::let_underscore_must_use,
+    reason = "integration tests discard Results with `let _ = ...` routinely; this is test scaffolding, not a production `iced::Task` being dropped, and `[lints]` in Cargo.toml is package-scoped so each integration-test crate root needs its own"
+)]
+
 use signex_app::app::{EditMsg, Message, Signex};
 use signex_app::library::editor::footprint::state::EditorPad;
 use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use signex_sketch::sketch::SketchData;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-fn dispatch(app: &mut Signex, path: &PathBuf, msg: FootprintEditorMsg) {
+fn dispatch(app: &mut Signex, path: &Path, msg: FootprintEditorMsg) {
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
-        path: path.clone(),
+        path: path.to_path_buf(),
         msg: PrimitiveEdit::Footprint(msg),
     }));
 }

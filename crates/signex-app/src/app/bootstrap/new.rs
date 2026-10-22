@@ -3,7 +3,7 @@
 
 use super::super::*;
 
-use crate::canvas::SchematicCanvas;
+use crate::canvas::CanvasSlot;
 use crate::dock::{DockArea, PanelPosition};
 use crate::panels::PanelKind;
 
@@ -17,21 +17,29 @@ impl Signex {
         let mut dock = match crate::fonts::read_dock_layout() {
             Some(saved) => saved,
             None => {
+                // Which panels open, in tab order. *Where* each one
+                // goes is `PanelPosition::default_for`, so the boot
+                // layout and every later "open panel X" agree on one
+                // home per kind (#641).
                 let mut d = DockArea::new();
-                d.add_panel(PanelPosition::Left, PanelKind::Projects);
-                d.add_panel(PanelPosition::Left, PanelKind::Components);
-                d.add_panel(PanelPosition::Left, PanelKind::Library);
-                d.add_panel(PanelPosition::Left, PanelKind::Signal);
-                d.add_panel(PanelPosition::Right, PanelKind::Properties);
-                d.add_panel(PanelPosition::Right, PanelKind::Messages);
-                d.add_panel(PanelPosition::Bottom, PanelKind::Erc);
+                for kind in [
+                    PanelKind::Projects,
+                    PanelKind::Components,
+                    PanelKind::Library,
+                    PanelKind::Signal,
+                    PanelKind::Properties,
+                    PanelKind::Messages,
+                    PanelKind::Erc,
+                ] {
+                    d.add_panel(PanelPosition::default_for(kind), kind);
+                }
                 d
             }
         };
         // Silence unused-mut when read_dock_layout returns Some.
         let _ = &mut dock;
 
-        let sch_canvas = SchematicCanvas::new();
+        let sch_canvas = CanvasSlot::new();
         let mut pcb_canvas = crate::pcb_canvas::PcbCanvas::new();
         // Read the persisted GPU-render preference ONCE — each read is a full
         // `prefs.json` parse and three consumers need the same value: the
@@ -40,6 +48,13 @@ impl Signex {
         // `ui_state.pcb_gpu_render` saved mirror and its Preferences draft.
         let pcb_gpu_render = crate::fonts::read_pcb_gpu_render_pref();
         pcb_canvas.gpu_render = pcb_gpu_render;
+        // #629 — same shape for the three Symbol Editor settings: one read
+        // each, feeding both the committed field and its Preferences draft.
+        // Reading twice would be harmless today but invites the two to be
+        // seeded from different parses of a file edited mid-launch.
+        let symbol_grid_size_mm = crate::fonts::read_symbol_grid_size_mm_pref();
+        let symbol_grid_style = crate::fonts::read_symbol_grid_style_pref();
+        let symbol_pin_selection = crate::fonts::read_symbol_pin_selection_pref();
         // Default to the 50-mil Altium grid; user-set value overrides
         // through the prefs file (UX §1.5 — last-used grid persists).
         let grid_size_mm =
@@ -57,10 +72,68 @@ impl Signex {
         // the OS config dir, else fall back to the bundled Altium /
         // Classic built-ins (which must always parse). The active
         // profile is compiled once here into a fast lookup table.
-        let keymap_profiles = crate::keymap::load_profile_set().unwrap_or_else(|_| {
-            crate::keymap::ShortcutProfileSet::built_ins()
-                .expect("bundled keyboard shortcut profiles must parse")
-        });
+        //
+        // An `Err` here never means "no shortcuts file" — `load_profile_set`
+        // returns `Ok` when the path does not exist. It always means a file
+        // IS there and could not be honoured, so the fallback set is missing
+        // custom profiles the user still has on disk. Booting with working
+        // keys is right, but the reason has to survive: it raises the
+        // Preferences banner and arms the backup-before-save guard that stops
+        // the next Apply from writing the fallback over their file (#595).
+        let (keymap_profiles, keymap_load_error) = match crate::keymap::load_profile_set() {
+            Ok(set) => (set, None),
+            Err(error) => (
+                crate::keymap::ShortcutProfileSet::built_ins()
+                    .expect("bundled keyboard shortcut profiles must parse"),
+                Some(error.to_string()),
+            ),
+        };
+        // Reported at `Error` level, once: the default filter is
+        // `LevelFilter::Info` (`crate::diagnostics`), so `warn!` / `debug!`
+        // would never reach the user's Messages panel — and this is one step
+        // away from losing every shortcut they have customised.
+        if let Some(error) = keymap_load_error.as_deref() {
+            tracing::error!(
+                target: "signex::keymap",
+                path = %crate::keymap::config_path()
+                    .map(|path| path.display().to_string())
+                    .unwrap_or_else(|| "<no config directory>".to_string()),
+                error = error,
+                "saved keyboard shortcuts could not be loaded; the bundled built-in \
+                 profiles are in use for this session and the file on disk was left \
+                 untouched — repair or delete it to load your own profiles again"
+            );
+        }
+        // The prefs file's own health (#602). Every `read_*_pref` above
+        // has just swallowed this same failure with `.ok()` and handed
+        // back its default, so by this line the whole UI is already
+        // showing factory settings — and `update_prefs_json` will refuse
+        // every write for the rest of the session to keep the bytes
+        // repairable. Neither half is visible without asking, so ask
+        // once and carry the answer to the Preferences banner.
+        //
+        // `main.rs` installs the logger and takes the first prefs read
+        // (which is what runs `migrate_legacy_prefs`) before `Signex::new`
+        // is called, so this probe sees the post-migration file and its
+        // log line is not emitted into a missing subscriber.
+        let prefs_load_error = crate::fonts::check_prefs_file()
+            .err()
+            .map(|error| error.to_string());
+        // `Error` level for the same reason as the keymap report above:
+        // the default filter is `LevelFilter::Info` (`crate::diagnostics`),
+        // so `warn!` / `debug!` would never reach the user's Messages
+        // panel — and this is every preference they have, not saving.
+        if let Some(error) = prefs_load_error.as_deref() {
+            tracing::error!(
+                target: "signex::prefs",
+                path = %crate::fonts::prefs_file_path().display(),
+                error = error,
+                "the preferences file could not be loaded; every preference is showing \
+                 its default and no change will be saved while it stays that way — the \
+                 file itself was left untouched, so repair it by hand or use \
+                 Preferences to start a fresh one beside it"
+            );
+        }
         let active_keymap = keymap_profiles.compile_active();
         // Working copy for the Preferences ▸ Keyboard Shortcuts pane.
         // Re-seeded from `keymap_profiles` every time the window opens,
@@ -89,6 +162,7 @@ impl Signex {
                 keymap_profiles,
                 active_keymap,
                 keymap_pending_sequence: Vec::new(),
+                keymap_pending_target: None,
                 canvas_font_name: crate::fonts::DEFAULT_CANVAS_FONT.to_string(),
                 canvas_font_size: 11.0,
                 canvas_font_bold: false,
@@ -104,7 +178,13 @@ impl Signex {
                 first_run_tour_open: !crate::fonts::read_first_run_tour_dismissed(),
                 find_replace: crate::find_replace::FindReplaceState::default(),
                 preferences_nav: crate::preferences::PrefNav::Appearance,
-                preferences_draft_theme: ThemeId::Signex,
+                // #631 — seeded from the saved theme, not hardcoded. This
+                // was harmless while nothing read the draft before the
+                // dialog first opened (`seed_preferences_drafts_from_live`
+                // fixed it there); the canvas now renders from it, so a
+                // user whose saved theme is not Signex would have opened
+                // to the wrong canvas colours.
+                preferences_draft_theme: crate::fonts::read_theme_pref(),
                 preferences_draft_font: String::new(),
                 power_port_style: crate::fonts::read_power_port_style_pref(),
                 preferences_draft_power_port_style: crate::fonts::read_power_port_style_pref(),
@@ -116,13 +196,24 @@ impl Signex {
                 preferences_draft_grid_style: crate::fonts::read_grid_style_pref(),
                 pcb_gpu_render,
                 preferences_draft_pcb_gpu_render: pcb_gpu_render,
-                preferences_draft_symbol_grid_size_mm: crate::fonts::read_symbol_grid_size_mm_pref(
-                ),
-                preferences_draft_symbol_grid_style: crate::fonts::read_symbol_grid_style_pref(),
-                preferences_draft_symbol_pin_selection:
-                    crate::fonts::read_symbol_pin_selection_pref(),
+                symbol_grid_size_mm,
+                preferences_draft_symbol_grid_size_mm: symbol_grid_size_mm,
+                symbol_grid_style,
+                preferences_draft_symbol_grid_style: symbol_grid_style,
+                symbol_pin_selection,
+                preferences_draft_symbol_pin_selection: symbol_pin_selection,
+                preferences_theme_status: String::new(),
                 preferences_keymap_editor: keymap_editor,
                 preferences_keymap_status: String::new(),
+                keymap_load_error,
+                // #603 — probed independently of `keymap_load_error`,
+                // because the backup outlives the failure that produced
+                // it and must stay reachable after a successful save
+                // clears the banner.
+                keymap_backup: crate::keymap::existing_backup_profiles_path()
+                    .map(|bak| bak.display().to_string()),
+                prefs_load_error,
+                preferences_prefs_status: String::new(),
                 preferences_keymap_search: String::new(),
                 preferences_keymap_recorder: None,
                 preferences_dirty: false,
@@ -202,6 +293,9 @@ impl Signex {
                     snap_enabled: true,
                     grid_size_mm: 1.27,
                     visible_grid_mm: 1.27,
+                    // Overwritten from `ui_state.symbol_grid_style` once
+                    // the app value is assembled, below.
+                    symbol_grid_style: crate::render_config::GridStyle::Dots,
                     snap_hotspots: true,
                     ui_font_name: crate::fonts::read_ui_font_pref(),
                     component_classes: crate::fonts::read_component_classes_pref(),
@@ -267,7 +361,7 @@ impl Signex {
                 pending_pdf_options: None,
                 pending_pdf_files: None,
                 pending_bom_options: None,
-                export_error: None,
+                error_notice: None,
                 netlist_incomplete_prompt: None,
                 bom_preview: None,
                 pending_git_commits: Vec::new(),
@@ -283,7 +377,6 @@ impl Signex {
                 drag_start_pos: None,
                 drag_start_size: 0.0,
                 tab_drag_origin: None,
-                undo_stack: crate::undo::UndoStack::new(100),
                 wire_points: Vec::new(),
                 wire_drawing: false,
                 arc_points: Vec::new(),
@@ -332,19 +425,12 @@ impl Signex {
         // section is populated from the get-go.
         app.library.global_libraries =
             crate::panels::components_panel::global_prefs::load_and_mount_all(&mut app.library);
-        crate::render_config::set_canvas_font_name(&app.ui_state.canvas_font_name);
-        crate::render_config::set_canvas_font_size(app.ui_state.canvas_font_size);
-        crate::render_config::set_canvas_font_style(
-            app.ui_state.canvas_font_bold,
-            app.ui_state.canvas_font_italic,
-        );
-        crate::render_config::set_power_port_style(app.ui_state.power_port_style);
-        crate::render_config::set_label_style(app.ui_state.label_style);
-        crate::render_config::set_multisheet_style(app.ui_state.multisheet_style);
-        crate::render_config::set_grid_style(app.ui_state.grid_style);
-        crate::render_config::set_symbol_grid_style(
-            app.ui_state.preferences_draft_symbol_grid_style,
-        );
+        // #630 — seed the two render surfaces that consume a grid style
+        // from the saved preferences. Everything else the old
+        // `render_config` global carried (canvas font/size/style, power
+        // port / label / multisheet style) had no reader in any draw
+        // path, so there is nothing left to seed.
+        app.document_state.panel_ctx.symbol_grid_style = app.ui_state.symbol_grid_style;
 
         // Multi-window (Phase 1): open the main OS window here. Phase 2
         // will open additional windows on demand when the user drags a

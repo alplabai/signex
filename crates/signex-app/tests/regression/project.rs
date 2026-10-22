@@ -808,7 +808,7 @@ fn app_exit_save_all_never_loses_an_unsaveable_file() {
     // Modal resolved, but the unsaveable file is reported and retained.
     assert!(app.ui_state.app_quit_confirm.is_none());
     assert!(
-        app.document_state.export_error.is_some(),
+        app.document_state.error_notice.is_some(),
         "Save All must report files it could not save"
     );
     assert!(
@@ -928,6 +928,87 @@ fn opening_snxsym_still_creates_editable_tab() {
     assert!(
         app.document_state.symbol_editors.contains_key(&sym),
         "a SymbolEditorState should be registered for the opened .snxsym path"
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────
+// #532 — a failed primitive open must say so.
+//
+// Every failure leg of `handle_open_primitive` used to be a
+// `tracing::warn!` and a bare return. The user double-clicked a corrupt
+// `.snxsym` and nothing happened: no tab, no card, indistinguishable
+// from a mis-click. The warning reached the Messages panel, but that is
+// a panel you have to already suspect something to open.
+// ─────────────────────────────────────────────────────────────────
+
+#[test]
+fn a_corrupt_snxsym_raises_the_error_card_naming_the_file() {
+    let tmp = TempDir::new().expect("tempdir");
+    let sym = tmp.path().join("corrupt.snxsym");
+    fs::write(&sym, b"this is not a symbol envelope\x00\xff").expect("write corrupt .snxsym");
+    let (mut app, _t) = Signex::new();
+
+    let _ = app.update(Message::File(FileMsg::Opened(Some(sym.clone()))));
+
+    let notice = app
+        .document_state
+        .error_notice
+        .as_ref()
+        .expect("a corrupt .snxsym must raise the error card, not fail silently");
+    assert_eq!(
+        notice.title, "Open Failed",
+        "the shared card must name the operation that failed — it read \"Export Failed\" for \
+         every caller until #532"
+    );
+    assert!(
+        notice.detail.contains("corrupt.snxsym"),
+        "the card must name the file the user tried to open, got: {}",
+        notice.detail
+    );
+    assert!(
+        !app.document_state.tabs.iter().any(|t| t.path == sym),
+        "a file that would not parse must not leave a tab behind"
+    );
+}
+
+#[test]
+fn a_valid_snxsym_leaves_the_error_card_clear() {
+    // Negative control: without this the test above passes just as well
+    // against an implementation that raises the card on every open.
+    let tmp = TempDir::new().expect("tempdir");
+    let sym = tmp.path().join("fine.snxsym");
+    write_valid_snxsym(&sym, "FINE");
+    let (mut app, _t) = Signex::new();
+
+    let _ = app.update(Message::File(FileMsg::Opened(Some(sym))));
+
+    assert!(
+        app.document_state.error_notice.is_none(),
+        "a successful open must not raise the error card"
+    );
+}
+
+#[test]
+fn dismissing_the_card_clears_it() {
+    use signex_app::app::contracts::OverlayMsg;
+    let tmp = TempDir::new().expect("tempdir");
+    let sym = tmp.path().join("corrupt.snxsym");
+    fs::write(&sym, b"not a symbol envelope").expect("write corrupt .snxsym");
+    let (mut app, _t) = Signex::new();
+    let _ = app.update(Message::File(FileMsg::Opened(Some(sym))));
+    assert!(
+        app.document_state.error_notice.is_some(),
+        "card should be up"
+    );
+
+    // The dismiss moved off `ExportMsg` in #532 — an open failure
+    // acknowledged by a message called `Export` was the same naming
+    // drift that put "Export Failed" over a failed project close.
+    let _ = app.update(Message::Overlay(OverlayMsg::DismissErrorNotice));
+
+    assert!(
+        app.document_state.error_notice.is_none(),
+        "OverlayMsg::DismissErrorNotice must clear the card"
     );
 }
 
@@ -1100,7 +1181,7 @@ fn save_all_writes_dirty_snxprj_and_clears_dirty_marker() {
         "Save All must resolve the modal"
     );
     assert!(
-        app.document_state.export_error.is_none(),
+        app.document_state.error_notice.is_none(),
         "the real project's .snxprj is saveable — Save All must not report a failure"
     );
     assert!(

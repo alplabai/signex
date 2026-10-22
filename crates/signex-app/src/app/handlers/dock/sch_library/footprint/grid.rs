@@ -95,21 +95,21 @@ impl Signex {
         // least one grid (UI gates the button when only one
         // remains, so this branch should normally only fire
         // when len > 1).
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            if editor.state.grids.len() > 1 {
-                let idx = editor.state.active_grid_idx;
-                editor.state.grids.remove(idx);
-                if editor.state.active_grid_idx >= editor.state.grids.len() {
-                    editor.state.active_grid_idx = editor.state.grids.len() - 1;
-                }
-                // Mirror new active onto SnapOptions.
-                let row = &editor.state.grids[editor.state.active_grid_idx];
-                editor.state.snap_options.grid_step_mm = row.step_mm;
-                editor.state.snap_options.fine_grid_display = row.fine_display;
-                editor.state.snap_options.coarse_grid_display = row.coarse_display;
-                editor.state.snap_options.coarse_multiplier = row.coarse_multiplier;
-                editor.canvas_cache.clear();
+        if let Some(editor) = self.active_footprint_editor_mut()
+            && editor.state.grids.len() > 1
+        {
+            let idx = editor.state.active_grid_idx;
+            editor.state.grids.remove(idx);
+            if editor.state.active_grid_idx >= editor.state.grids.len() {
+                editor.state.active_grid_idx = editor.state.grids.len() - 1;
             }
+            // Mirror new active onto SnapOptions.
+            let row = &editor.state.grids[editor.state.active_grid_idx];
+            editor.state.snap_options.grid_step_mm = row.step_mm;
+            editor.state.snap_options.fine_grid_display = row.fine_display;
+            editor.state.snap_options.coarse_grid_display = row.coarse_display;
+            editor.state.snap_options.coarse_multiplier = row.coarse_multiplier;
+            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -120,16 +120,16 @@ impl Signex {
         idx: &usize,
     ) -> bool {
         let idx = *idx;
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            if idx < editor.state.grids.len() {
-                editor.state.active_grid_idx = idx;
-                let row = &editor.state.grids[idx];
-                editor.state.snap_options.grid_step_mm = row.step_mm;
-                editor.state.snap_options.fine_grid_display = row.fine_display;
-                editor.state.snap_options.coarse_grid_display = row.coarse_display;
-                editor.state.snap_options.coarse_multiplier = row.coarse_multiplier;
-                editor.canvas_cache.clear();
-            }
+        if let Some(editor) = self.active_footprint_editor_mut()
+            && idx < editor.state.grids.len()
+        {
+            editor.state.active_grid_idx = idx;
+            let row = &editor.state.grids[idx];
+            editor.state.snap_options.grid_step_mm = row.step_mm;
+            editor.state.snap_options.fine_grid_display = row.fine_display;
+            editor.state.snap_options.coarse_grid_display = row.coarse_display;
+            editor.state.snap_options.coarse_multiplier = row.coarse_multiplier;
+            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -197,11 +197,11 @@ impl Signex {
         idx: &usize,
     ) -> bool {
         let idx = *idx;
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            if idx < editor.state.guides.len() {
-                editor.state.guides.remove(idx);
-                editor.canvas_cache.clear();
-            }
+        if let Some(editor) = self.active_footprint_editor_mut()
+            && idx < editor.state.guides.len()
+        {
+            editor.state.guides.remove(idx);
+            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -212,11 +212,11 @@ impl Signex {
         idx: &usize,
     ) -> bool {
         let idx = *idx;
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(g) = editor.state.guides.get_mut(idx) {
-                g.enabled = !g.enabled;
-                editor.canvas_cache.clear();
-            }
+        if let Some(editor) = self.active_footprint_editor_mut()
+            && let Some(g) = editor.state.guides.get_mut(idx)
+        {
+            g.enabled = !g.enabled;
+            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -229,11 +229,11 @@ impl Signex {
     ) -> bool {
         let idx = *idx;
         if let Ok(parsed) = raw.trim().parse::<f64>() {
-            if let Some(editor) = self.active_footprint_editor_mut() {
-                if let Some(g) = editor.state.guides.get_mut(idx) {
-                    g.position_mm = parsed;
-                    editor.canvas_cache.clear();
-                }
+            if let Some(editor) = self.active_footprint_editor_mut()
+                && let Some(g) = editor.state.guides.get_mut(idx)
+            {
+                g.position_mm = parsed;
+                editor.canvas_cache.clear();
             }
             self.refresh_panel_ctx();
         }

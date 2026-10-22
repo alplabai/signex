@@ -10,12 +10,12 @@ impl Signex {
                 Task::none()
             }
             OverlayMsg::OpenPanel(kind) => {
+                // The generic panel-list entry point. It used to send
+                // *every* kind to the right column, so picking a panel
+                // whose home is elsewhere — Projects, Signal, ERC —
+                // grew a second copy on the right (#641).
                 self.ui_state.panel_list_open = false;
-                self.document_state
-                    .dock
-                    .add_panel(crate::dock::PanelPosition::Right, kind);
-                crate::fonts::write_dock_layout(&self.document_state.dock);
-                Task::none()
+                self.show_panel(kind)
             }
             OverlayMsg::OpenFind => self.handle_find_replace_open_requested(false),
             OverlayMsg::OpenReplace => self.handle_find_replace_open_requested(true),
@@ -23,8 +23,26 @@ impl Signex {
                 self.ui_state.keyboard_shortcuts_open = false;
                 Task::none()
             }
+            // Tools > Passive Network Calculator. Deliberately an in-app
+            // modal and not an OS window: Signex runs borderless
+            // (`bootstrap/new.rs` - `decorations: false`), so a default
+            // `iced::window::open` would arrive with a native title bar
+            // that appears nowhere else in the app. Setting the flag while
+            // it is already open is a no-op, matching every other modal
+            // here.
+            OverlayMsg::OpenPassiveCalculator => {
+                self.ui_state.passive_calculator_open = true;
+                Task::none()
+            }
             OverlayMsg::ClosePassiveCalculator => {
                 self.ui_state.passive_calculator_open = false;
+                Task::none()
+            }
+            OverlayMsg::DismissErrorNotice => {
+                // Inlined rather than a handler in `menu/export`, which
+                // is where it used to live: the card is not export-only
+                // (#532), so neither is clearing it.
+                self.document_state.error_notice = None;
                 Task::none()
             }
             OverlayMsg::DismissFirstRunTour => {
@@ -82,10 +100,10 @@ impl Signex {
     ) -> Task<Message> {
         match msg {
             MoveSelectionMsg::Open => self.handle_open_move_selection_dialog(),
-            MoveSelectionMsg::Close => {
-                let _ = self.handle_close_move_selection_dialog();
-                self.close_detached_modal(super::state::ModalId::MoveSelection)
-            }
+            MoveSelectionMsg::Close => Task::batch([
+                self.handle_close_move_selection_dialog(),
+                self.close_detached_modal(super::state::ModalId::MoveSelection),
+            ]),
             MoveSelectionMsg::DxChanged(s) => {
                 self.ui_state.move_selection.dx = s;
                 Task::none()
@@ -245,18 +263,18 @@ impl Signex {
                 Task::none()
             }
             ContextMenuMsg::SubmenuTickHover => {
-                if let Some((kind, started)) = self.interaction_state.pending_submenu {
-                    if started.elapsed() >= std::time::Duration::from_millis(200) {
-                        self.interaction_state.context_submenu = Some(kind);
-                        self.interaction_state.pending_submenu = None;
-                        self.interaction_state.submenu_unhovered_since = None;
-                    }
+                if let Some((kind, started)) = self.interaction_state.pending_submenu
+                    && started.elapsed() >= std::time::Duration::from_millis(200)
+                {
+                    self.interaction_state.context_submenu = Some(kind);
+                    self.interaction_state.pending_submenu = None;
+                    self.interaction_state.submenu_unhovered_since = None;
                 }
-                if let Some(since) = self.interaction_state.submenu_unhovered_since {
-                    if since.elapsed() >= std::time::Duration::from_millis(150) {
-                        self.interaction_state.context_submenu = None;
-                        self.interaction_state.submenu_unhovered_since = None;
-                    }
+                if let Some(since) = self.interaction_state.submenu_unhovered_since
+                    && since.elapsed() >= std::time::Duration::from_millis(150)
+                {
+                    self.interaction_state.context_submenu = None;
+                    self.interaction_state.submenu_unhovered_since = None;
                 }
                 Task::none()
             }
@@ -417,12 +435,21 @@ impl Signex {
 
     /// Preferences modal family handler (namespaced, ADR-0001 D3).
     pub(crate) fn dispatch_preferences_message(&mut self, msg: PreferencesMsg) -> Task<Message> {
-        match msg {
+        let task = match msg {
             PreferencesMsg::Open => self.handle_preferences_open_requested(),
             PreferencesMsg::Close => self.handle_preferences_close_requested(),
             PreferencesMsg::Nav(nav) => self.handle_preferences_navigation_requested(nav),
             PreferencesMsg::Inner(msg) => self.handle_preferences_message(msg),
-        }
+        };
+        // Preferences handlers report real failures — a refused write, a
+        // recovery action that could not move the broken file aside — and
+        // this dispatcher does not run `finish_update`, so without this
+        // those records sit in the ring buffer until some unrelated later
+        // message republishes them. A log window that shows a failure
+        // several actions after it happened is worse than useless: it
+        // attaches the message to the wrong action.
+        self.sync_diagnostics_panel_ctx();
+        task
     }
 
     /// Enable Version Control modal family handler (namespaced, ADR-0001 D3).
@@ -438,10 +465,10 @@ impl Signex {
                 Task::none()
             }
             EnableVersionControlMsg::ToggleItem(idx) => {
-                if let Some(s) = self.ui_state.enable_version_control.as_mut() {
-                    if let Some(item) = s.items.get_mut(idx) {
-                        item.tracked = !item.tracked;
-                    }
+                if let Some(s) = self.ui_state.enable_version_control.as_mut()
+                    && let Some(item) = s.items.get_mut(idx)
+                {
+                    item.tracked = !item.tracked;
                 }
                 Task::none()
             }

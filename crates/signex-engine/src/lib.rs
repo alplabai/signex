@@ -10,6 +10,9 @@ mod transform;
 
 mod exec;
 
+#[cfg(test)]
+pub(crate) mod test_support;
+
 use std::path::{Path, PathBuf};
 
 pub use command::{
@@ -30,6 +33,12 @@ pub struct Engine {
     path: Option<PathBuf>,
     history: Vec<HistoryEntry>,
     redo_stack: Vec<HistoryEntry>,
+    /// Set for the duration of an `execute_batch` loop so the commands in
+    /// the batch do not each land their own history entry — the batch
+    /// records one coalesced entry when the loop finishes. Always `false`
+    /// outside that loop, so every other path behaves exactly as before.
+    /// See `exec/batch.rs`.
+    history_suppressed: bool,
 }
 
 impl Engine {
@@ -46,6 +55,7 @@ impl Engine {
             path,
             history: Vec::new(),
             redo_stack: Vec::new(),
+            history_suppressed: false,
         })
     }
 
@@ -66,6 +76,7 @@ impl Engine {
             path: Some(path.to_path_buf()),
             history: Vec::new(),
             redo_stack: Vec::new(),
+            history_suppressed: false,
         })
     }
 
@@ -147,34 +158,11 @@ impl Engine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::test_sheet;
     use signex_types::schematic::{
         BusEntry, ChildSheet, FillType, GRID_MM, Label, LabelType, Point, SelectedItem,
         SelectedKind, SheetPin,
     };
-
-    fn test_sheet() -> SchematicSheet {
-        SchematicSheet {
-            uuid: uuid::Uuid::new_v4(),
-            version: 0,
-            generator: String::new(),
-            generator_version: String::new(),
-            paper_size: "A4".to_string(),
-            root_sheet_page: "1".to_string(),
-            symbols: Vec::new(),
-            wires: Vec::new(),
-            junctions: Vec::new(),
-            labels: Vec::new(),
-            child_sheets: Vec::new(),
-            no_connects: Vec::new(),
-            text_notes: Vec::new(),
-            buses: Vec::new(),
-            bus_entries: Vec::new(),
-            drawings: Vec::new(),
-            no_erc_directives: Vec::new(),
-            title_block: std::collections::HashMap::new(),
-            lib_symbols: std::collections::HashMap::new(),
-        }
-    }
 
     #[test]
     fn collect_exposed_sheet_ports_prefers_hierarchical_over_global() {

@@ -56,7 +56,6 @@ const MODAL_W: f32 = 520.0;
 
 /// One of the three recovery flows. At most one is open at a time.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum RecoveryDialog {
     /// `.snxlib` file is gone — manifest can't be loaded.
     LibraryMissing { path: PathBuf },
@@ -82,7 +81,6 @@ pub enum RecoveryDialog {
 
 /// User choice from the *Library missing* dialog.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum LibraryMissingChoice {
     Locate,
     RemoveFromProject,
@@ -91,7 +89,6 @@ pub enum LibraryMissingChoice {
 
 /// User choice from the *Git missing* dialog.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum GitMissingChoice {
     ReInit,
     Skip,
@@ -101,7 +98,6 @@ pub enum GitMissingChoice {
 
 /// User choice from the *Broken primitive binding* dialog.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum BrokenBindingChoice {
     Rebind,
     RemoveRow,

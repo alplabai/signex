@@ -29,15 +29,15 @@ pub(super) fn draw_constraint_icons(
         .unwrap_or_default();
 
     let point_world_local = |id: SketchEntityId| -> Option<(f64, f64)> {
-        if let Some(solve) = state.last_solve.as_ref() {
-            if let Some(p) = signex_sketch::solver::state::point_xy(
+        if let Some(solve) = state.last_solve.as_ref()
+            && let Some(p) = signex_sketch::solver::state::point_xy(
                 id,
                 &solve.result.state,
                 &solve.result.index,
                 sketch,
-            ) {
-                return Some(p);
-            }
+            )
+        {
+            return Some(p);
         }
         sketch
             .entities

@@ -111,8 +111,8 @@ pub(crate) fn lock_sheet_pin_to_child_edge(
         best = dist_top;
         edge = 2;
     }
+    // Last candidate — `best` is never read again, so only `edge` moves.
     if dist_bottom < best {
-        let _ = best;
         edge = 3;
     }
 
@@ -221,5 +221,8 @@ pub(crate) fn reconcile_child_sheet_pins(child: &mut ChildSheet, ports: &[SheetP
 }
 
 // Keep the unused import silent — SchematicSheet is referenced via super.
-#[allow(unused_imports)]
+#[expect(
+    unused_imports,
+    reason = "the re-export exists so `SchematicSheet` resolves via `super` in this module's paths"
+)]
 use SchematicSheet as _;

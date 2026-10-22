@@ -51,7 +51,6 @@ impl Signex {
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
         .into();
-        let _ = border_c;
         let header = if draggable {
             draggable_header(
                 header_content,
@@ -93,7 +92,7 @@ impl Signex {
                         .size(11)
                         .color(text_c)
                         .width(Length::FillPortion(3)),
-                    severity_segmented(*rule, current, border_c, text_c, text_muted),
+                    severity_segmented(*rule, current, border_c, text_muted),
                 ]
                 .align_y(iced::Alignment::Center)
                 .padding([2, 8]),
@@ -177,7 +176,6 @@ fn severity_segmented(
     rule: signex_erc::RuleKind,
     current: signex_erc::Severity,
     border: Color,
-    text_c: Color,
     text_muted: Color,
 ) -> Element<'static, Message> {
     let seg = |label: &'static str,
@@ -205,7 +203,6 @@ fn severity_segmented(
             })
             .into()
     };
-    let _ = text_c;
     row![
         seg(
             "E",

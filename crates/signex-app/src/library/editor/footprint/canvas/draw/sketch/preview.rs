@@ -21,6 +21,7 @@ use crate::library::editor::footprint::state::FootprintEditorState;
 ///   (cursor will become the start endpoint).
 /// - **Arc tool, after click 2** → ghost arc from start through the
 ///   cursor angle, around the centre.
+///
 /// v0.27 — Fusion-style dimension pill chrome. Centred at
 /// `centre` (screen coords), draws a soft grey rounded-look
 /// rectangle behind a centred white label. Used by the live
@@ -122,15 +123,15 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
     }
 
     let resolve_point = |id: SketchEntityId| -> Option<(f64, f64)> {
-        if let Some(solve) = state.last_solve.as_ref() {
-            if let Some((x, y)) = signex_sketch::solver::state::point_xy(
+        if let Some(solve) = state.last_solve.as_ref()
+            && let Some((x, y)) = signex_sketch::solver::state::point_xy(
                 id,
                 &solve.result.state,
                 &solve.result.index,
                 sketch,
-            ) {
-                return Some((x, y));
-            }
+            )
+        {
+            return Some((x, y));
         }
         sketch
             .entities

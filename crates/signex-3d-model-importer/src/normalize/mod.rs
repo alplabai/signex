@@ -77,7 +77,7 @@ pub fn meshes_to_gltf(
 
         // ── index buffer view ─────────────────────────────────────────────────
         // Align to 4-byte boundary before writing u32 indices
-        while bin.len() % 4 != 0 {
+        while !bin.len().is_multiple_of(4) {
             bin.push(0u8);
         }
         let idx_bv_index = buffer_views.len();

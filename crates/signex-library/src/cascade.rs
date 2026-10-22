@@ -74,14 +74,14 @@ impl CascadeReport {
 /// - `"draft"` → `"draft.1"`
 pub fn patch_bump(version: &str) -> String {
     let parts: Vec<&str> = version.split('.').collect();
-    if parts.len() == 3 {
-        if let (Ok(major), Ok(minor), Ok(patch)) = (
+    if parts.len() == 3
+        && let (Ok(major), Ok(minor), Ok(patch)) = (
             parts[0].parse::<u64>(),
             parts[1].parse::<u64>(),
             parts[2].parse::<u64>(),
-        ) {
-            return format!("{major}.{minor}.{}", patch + 1);
-        }
+        )
+    {
+        return format!("{major}.{minor}.{}", patch + 1);
     }
     format!("{version}.1")
 }

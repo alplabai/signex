@@ -250,7 +250,7 @@ impl Signex {
     fn resolve_child_sheet_path(&self, child_filename: &str) -> Option<std::path::PathBuf> {
         // #339/#406 — resolve a relative child reference against the directory
         // of the sheet that CARRIES the reference (the active tab's path), not
-        // the project directory. This matches `project_children_map` / the
+        // the project directory. This matches `project_graph` / the
         // netlist, so navigation lands on the same file the netlist stitched
         // instead of a phantom sibling beside the `.snxprj`. Falls back to the
         // project directory when the active tab is unsaved (no path). Both call

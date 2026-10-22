@@ -21,16 +21,19 @@ use iced::window::{Direction, Id};
 /// Fire-and-forget task that applies OS-native rounded corners to the
 /// given window id. Returns a `Task<M>` for any `M` so callers can
 /// batch this into whatever message flow they already have.
+#[cfg(windows)]
 pub fn apply_rounded_corners<M: 'static + Send>(id: Id) -> Task<M> {
-    #[cfg(windows)]
-    {
-        iced::window::run(id, |w| windows_impl::set_rounded(w)).discard()
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = id;
-        Task::none()
-    }
+    iced::window::run(id, |w| windows_impl::set_rounded(w)).discard()
+}
+
+/// Non-Windows stub for [`apply_rounded_corners`]. macOS already rounds
+/// top-level windows itself and Linux rounding is WM-dependent, so there
+/// is no attribute to set and the window id goes unread — hence `_id`.
+/// Replace with a real implementation if the transparent-window +
+/// rounded-container fallback described in the module docs ever lands.
+#[cfg(not(windows))]
+pub fn apply_rounded_corners<M: 'static + Send>(_id: Id) -> Task<M> {
+    Task::none()
 }
 
 /// Begin an OS-level move on the given window. Uses iced's

@@ -11,18 +11,31 @@
 
 mod classes;
 mod grid;
+mod param_commit;
 mod tables;
 
 use super::*;
 
 impl Signex {
-    /// Open `.snxlib` at `path` as a Library Browser tab. Mounts the
-    /// library if not already mounted, seeds the browser state, and
-    /// pushes (or activates) a `TabKind::LibraryBrowser` tab. Phase 1.
+    /// Open `.snxlib` at `path` as a Library Browser tab.
+    ///
+    /// Step 1 — the mount — now happens **off the UI thread** (#99 part
+    /// 2c). `LocalGitAdapter::open` plus the table/primitive scans are
+    /// the expensive half of this gesture and blocking `update()` on them
+    /// dropped frames; the tab opens one update tick later instead, when
+    /// `LibraryMessage::MountFinished` lands and
+    /// [`Self::finish_open_library_browser`] runs steps 2 and 3.
+    ///
+    /// Three outcomes, and conflating any two of them is a bug:
+    /// already-mounted finishes immediately, an in-flight preparation
+    /// does nothing (its completion will finish, on the upgraded intent),
+    /// and only a fresh request spawns.
     pub(crate) fn handle_open_library_browser(
         &mut self,
         path: std::path::PathBuf,
     ) -> Task<Message> {
+        use crate::library::mount::{MountIntent, MountRequest};
+
         tracing::info!(
             target: "signex::library",
             path = %path.display(),
@@ -30,18 +43,49 @@ impl Signex {
             already_mounted = self.library.library_at(&path).is_some(),
             "open_library_browser: enter"
         );
-        // 1. Mount the library if it isn't already. `open_library` is
-        //    idempotent — re-mounting an already-open library is a
-        //    no-op.
-        if let Err(e) = commands::open_library(&mut self.library, path.clone()) {
-            tracing::warn!(
-                target: "signex::library",
-                path = %path.display(),
-                error = %e,
-                "open_library_browser: open_library failed"
-            );
+        match self
+            .library
+            .request_mount(&path, MountIntent::OpenBrowserTab)
+        {
+            MountRequest::AlreadyMounted => self.finish_open_library_browser(path),
+            MountRequest::InFlight => {
+                // A preparation for this path is already running and the
+                // call above upgraded its intent to `OpenBrowserTab`, so
+                // its completion opens the tab. Spawning a second
+                // preparation here would race two adapters onto one path.
+                tracing::debug!(
+                    target: "signex::library",
+                    path = %path.display(),
+                    "open_library_browser: mount already in flight; intent upgraded"
+                );
+                Task::none()
+            }
+            MountRequest::Spawn => {
+                let spawn_path = path.clone();
+                Task::perform(
+                    crate::library::mount::prepare_mount_off_thread(spawn_path),
+                    move |prepared| {
+                        Message::Library(LibraryMessage::MountFinished {
+                            path: path.clone(),
+                            prepared,
+                        })
+                    },
+                )
+            }
         }
+    }
 
+    /// Steps 2 and 3 of opening a Library Browser tab — seed the
+    /// per-browser state, then activate or push the tab.
+    ///
+    /// Split out of [`Self::handle_open_library_browser`] so the mount
+    /// completion handler (`handle_mount_finished`) can finish the
+    /// gesture without re-running the mount. Pure code motion: the body
+    /// below is what ran inline before #99 part 2c, in the same order.
+    pub(super) fn finish_open_library_browser(
+        &mut self,
+        path: std::path::PathBuf,
+    ) -> Task<Message> {
         // 2. Seed per-browser state if the path isn't already there.
         // 2b. Default `active_table` to the first table the library
         //     exposes, if any. Compute it through an immutable borrow
@@ -607,33 +651,43 @@ impl Signex {
             }
             other if other.starts_with("parameters.") => {
                 let key = &other["parameters.".len()..];
-                // Preserve unit on commit by reading the existing value.
-                let new_value = match row.parameters.get(key) {
-                    Some(signex_library::ParamValue::Measurement { unit, .. }) => {
-                        match buf.parse::<f64>() {
-                            Ok(n) => signex_library::ParamValue::Measurement {
-                                value: n,
-                                unit: unit.clone(),
-                            },
-                            Err(_) => signex_library::ParamValue::Text(buf.clone()),
-                        }
+                // Preserve unit AND type on commit by reading the
+                // existing value. A typed cell that cannot read the
+                // buffer refuses the commit rather than retyping the
+                // parameter to text and dropping its unit (#599).
+                match param_commit::param_value_for_commit(row.parameters.get(key), &buf) {
+                    Ok(new_value) => {
+                        row.parameters.insert(key.to_string(), new_value);
                     }
-                    Some(signex_library::ParamValue::Number(_)) => match buf.parse::<f64>() {
-                        Ok(n) => signex_library::ParamValue::Number(n),
-                        Err(_) => signex_library::ParamValue::Text(buf.clone()),
-                    },
-                    Some(signex_library::ParamValue::Bool(_)) => {
-                        if buf.eq_ignore_ascii_case("true") {
-                            signex_library::ParamValue::Bool(true)
-                        } else if buf.eq_ignore_ascii_case("false") {
-                            signex_library::ParamValue::Bool(false)
-                        } else {
-                            signex_library::ParamValue::Text(buf.clone())
+                    Err(refusal) => {
+                        // Field order is load-bearing: the Messages
+                        // panel compacts a record to 160 characters
+                        // (`diagnostics::compact_message`), so the
+                        // diagnosis goes first and the long, low-value
+                        // fields (table, row, path) go last where a
+                        // truncation costs least.
+                        tracing::warn!(
+                            target: "signex::library",
+                            parameter = %key,
+                            typed = %buf,
+                            kept = %refusal.kept,
+                            expected = %refusal.expected,
+                            table = %table,
+                            row = %row_id,
+                            path = %library_path.display(),
+                            "browser cell commit refused; the stored value is kept"
+                        );
+                        if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+                            state.cell_edit.insert((row_id, column), buf);
                         }
+                        // This handler does not run `finish_update`, so
+                        // republish here or the refusal sits in the ring
+                        // buffer until some unrelated later message
+                        // happens to flush it.
+                        self.sync_diagnostics_panel_ctx();
+                        return Task::none();
                     }
-                    _ => signex_library::ParamValue::Text(buf.clone()),
-                };
-                row.parameters.insert(key.to_string(), new_value);
+                }
             }
             _ => {
                 tracing::warn!(

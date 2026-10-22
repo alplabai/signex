@@ -1,5 +1,7 @@
 use iced::Task;
 
+mod keymap;
+
 use super::super::*;
 
 impl Signex {
@@ -57,14 +59,64 @@ impl Signex {
         self.ui_state.preferences_draft_component_classes = self.ui_state.component_classes.clone();
         self.ui_state.preferences_draft_grid_style = self.ui_state.grid_style;
         self.ui_state.preferences_draft_pcb_gpu_render = self.ui_state.pcb_gpu_render;
+        // #629 — the three Symbol Editor settings. Before they had
+        // committed fields there was nothing to seed them from, so a
+        // Discard left them showing (and rendering) the abandoned value.
+        self.ui_state.preferences_draft_symbol_grid_size_mm = self.ui_state.symbol_grid_size_mm;
+        self.ui_state.preferences_draft_symbol_grid_style = self.ui_state.symbol_grid_style;
+        self.ui_state.preferences_draft_symbol_pin_selection = self.ui_state.symbol_pin_selection;
         // Fresh working copy of the live profile set for the Keyboard
         // Shortcuts pane; drop any stale recorder / status with it.
         self.ui_state.preferences_keymap_editor =
             crate::keymap::KeymapEditorModel::new(self.ui_state.keymap_profiles.clone());
         self.ui_state.preferences_keymap_status.clear();
         self.ui_state.preferences_keymap_recorder = None;
+        // The Appearance status line is transient feedback about one
+        // export, not a draft — a fresh dialog (or a Discard) must not
+        // reopen showing the last session's result.
+        self.ui_state.preferences_theme_status.clear();
+        // Same rule for the prefs-file recovery result — one action's
+        // outcome, not a draft.
+        self.ui_state.preferences_prefs_status.clear();
+        // Re-probe the prefs file itself (#602). `keymap_load_error` is
+        // deliberately NOT cleared here (see `UiState`): it can only be
+        // trusted again once this process has written that file. This one
+        // can, because the check is a single file read with no state
+        // behind it — so a user who repairs `prefs.json` in an editor and
+        // reopens Preferences sees the banner gone instead of being told
+        // to restart, and one who breaks it mid-session sees it appear.
+        self.refresh_prefs_load_error();
+        // #603 — and the shortcuts backup, for the same reason: the file
+        // can appear or be removed between two openings of this dialog.
+        self.refresh_keymap_backup();
         self.ui_state.preferences_dirty = false;
         self.ui_state.preferences_dirty_sticky = false;
+    }
+
+    /// Re-check whether `keyboard_shortcuts.toml.bak` is on disk (#603).
+    ///
+    /// Deliberately not derived from `keymap_load_error`: the backup
+    /// outlives the failure that produced it, so the Restore and Discard
+    /// controls have to stay reachable long after the banner is gone.
+    fn refresh_keymap_backup(&mut self) {
+        self.ui_state.keymap_backup =
+            crate::keymap::existing_backup_profiles_path().map(|bak| bak.display().to_string());
+    }
+
+    /// Re-read `prefs.json`'s health into the banner flag (#602).
+    ///
+    /// One cheap file read, so it can run on every Preferences open and
+    /// after every burst of preference writes rather than being trusted
+    /// from boot. That second call site is what catches a file broken
+    /// *while* the dialog is open: `handle_preferences_open_requested`
+    /// early-returns when the dialog is already up, so without a probe on
+    /// the Save path a user who hand-edits the file beside the running app
+    /// — the very workflow the banner's "repair it by hand" advice invites
+    /// — gets every write refused with the dialog still reporting success.
+    fn refresh_prefs_load_error(&mut self) {
+        self.ui_state.prefs_load_error = crate::fonts::check_prefs_file()
+            .err()
+            .map(|error| error.to_string());
     }
 
     /// Recompute the cached dirty flag from the full unsaved-state
@@ -98,7 +150,7 @@ impl Signex {
         // cache clear below repaints the PCB canvas so a discarded toggle
         // takes no effect.
         self.interaction_state.pcb_canvas.gpu_render = self.ui_state.pcb_gpu_render;
-        // Revert the render_config globals used for schematic live preview.
+        // Revert the render inputs used for schematic live preview.
         let tokens = if self.ui_state.theme_id == ThemeId::Custom {
             self.ui_state
                 .custom_theme
@@ -109,17 +161,22 @@ impl Signex {
             signex_types::theme::theme_tokens(self.ui_state.theme_id)
         };
         self.document_state.panel_ctx.tokens = tokens;
-        crate::render_config::set_power_port_style(self.ui_state.power_port_style);
-        crate::render_config::set_label_style(self.ui_state.label_style);
-        crate::render_config::set_multisheet_style(self.ui_state.multisheet_style);
-        crate::render_config::set_grid_style(self.ui_state.grid_style);
+        // #630 — the schematic grid style previewed live, so push the
+        // committed value back to every window's canvas. Power port /
+        // label / multisheet style have no draw-path reader at all, so
+        // restoring their draft fields above is the whole revert.
+        // #629 — the symbol grid style is the only one of the three
+        // Symbol Editor settings with a live preview, so it is the only
+        // one to push back. Grid size and pin selection reach the editor
+        // through `LibraryDisplaySettings` when a library is opened, so
+        // restoring their draft fields above is enough.
+        self.document_state.panel_ctx.symbol_grid_style = self.ui_state.symbol_grid_style;
         // `update_canvas_theme` re-derives the canvas colours from the saved
         // theme and clears BOTH content caches (schematic + PCB) — don't
-        // clear them again here. Only the bg caches (grid style / dot layer)
-        // are ours to invalidate.
+        // clear them again here. `set_grid_style` already dropped every
+        // schematic bg cache, so only the PCB one is left to invalidate.
         self.update_canvas_theme();
         self.interaction_state.pcb_canvas.clear_bg_cache();
-        self.interaction_state.active_canvas_mut().clear_bg_cache();
     }
 
     pub(crate) fn handle_preferences_message(
@@ -164,6 +221,14 @@ impl Signex {
                 self.ui_state.multisheet_style = self.ui_state.preferences_draft_multisheet_style;
                 self.ui_state.grid_style = self.ui_state.preferences_draft_grid_style;
                 self.ui_state.pcb_gpu_render = self.ui_state.preferences_draft_pcb_gpu_render;
+                // #629 — the three Symbol Editor settings commit here like
+                // every other appearance draft, instead of writing
+                // themselves to disk the moment the picker moved.
+                self.ui_state.symbol_grid_size_mm =
+                    self.ui_state.preferences_draft_symbol_grid_size_mm;
+                self.ui_state.symbol_grid_style = self.ui_state.preferences_draft_symbol_grid_style;
+                self.ui_state.symbol_pin_selection =
+                    self.ui_state.preferences_draft_symbol_pin_selection;
                 // The live-preview already pushed the draft into the widget;
                 // re-assert it so the saved and effective flags can't diverge.
                 self.interaction_state.pcb_canvas.gpu_render = self.ui_state.pcb_gpu_render;
@@ -179,10 +244,10 @@ impl Signex {
                 };
                 self.document_state.panel_ctx.tokens = tokens;
                 self.document_state.panel_ctx.ui_font_name = self.ui_state.ui_font_name.clone();
-                crate::render_config::set_power_port_style(self.ui_state.power_port_style);
-                crate::render_config::set_label_style(self.ui_state.label_style);
-                crate::render_config::set_multisheet_style(self.ui_state.multisheet_style);
-                crate::render_config::set_grid_style(self.ui_state.grid_style);
+                // The live preview already pushed the draft onto the
+                // canvases; re-assert from the committed value so the
+                // saved and rendered styles can't diverge (same rule as
+                // the PCB GPU flag above).
                 crate::fonts::write_ui_font_pref(&self.ui_state.ui_font_name);
                 crate::fonts::write_power_port_style_pref(self.ui_state.power_port_style);
                 crate::fonts::write_label_style_pref(self.ui_state.label_style);
@@ -190,6 +255,15 @@ impl Signex {
                 crate::fonts::write_grid_style_pref(self.ui_state.grid_style);
                 crate::fonts::write_pcb_gpu_render_pref(self.ui_state.pcb_gpu_render);
                 crate::fonts::write_theme_pref(self.ui_state.theme_id);
+                // #629 — moved here from the three `PrefMsg::DraftSymbol*`
+                // arms, which wrote on every picker move. Re-asserting the
+                // render input from the committed value keeps the saved
+                // and effective styles from diverging, the same way the
+                // PCB GPU flag is re-asserted above.
+                self.document_state.panel_ctx.symbol_grid_style = self.ui_state.symbol_grid_style;
+                crate::fonts::write_symbol_grid_size_mm_pref(self.ui_state.symbol_grid_size_mm);
+                crate::fonts::write_symbol_grid_style_pref(self.ui_state.symbol_grid_style);
+                crate::fonts::write_symbol_pin_selection_pref(self.ui_state.symbol_pin_selection);
                 // Component classes — keep entries with non-empty keys
                 // and labels, dedupe by key (last write wins) so the
                 // dropdown never shows blanks or duplicates.
@@ -231,6 +305,37 @@ impl Signex {
                     .preferences_keymap_editor
                     .clone()
                     .into_profiles();
+                // The running set is the built-in fallback whenever the
+                // saved file could not be honoured at boot, and only
+                // custom profiles are serialised — so saving now would
+                // land a custom-profile-free document over profiles the
+                // user still has on disk. Copy the file aside first, and
+                // refuse to save at all if that copy cannot be made:
+                // overwriting after a failed backup is the bug (#595).
+                let mut backup_note = String::new();
+                if self.ui_state.keymap_load_error.is_some() {
+                    match crate::keymap::back_up_profile_file() {
+                        Ok(Some(bak)) => {
+                            backup_note =
+                                format!(" The previous file was kept as {}.", bak.display());
+                        }
+                        Ok(None) => {}
+                        Err(error) => {
+                            self.ui_state.preferences_keymap_status = format!(
+                                "Could not save keyboard shortcuts: the existing file could \
+                                 not be backed up first, so it was left untouched rather than \
+                                 overwritten ({error})."
+                            );
+                            // The prefs writes above already ran, so this
+                            // early return is still a path that has to
+                            // report a file that broke since the dialog
+                            // opened (#602).
+                            self.refresh_prefs_load_error();
+                            self.recompute_preferences_dirty();
+                            return Task::none();
+                        }
+                    }
+                }
                 match crate::keymap::save_profile_set(&keymap_profiles) {
                     Ok(()) => {
                         self.ui_state.keymap_profiles = keymap_profiles;
@@ -238,15 +343,32 @@ impl Signex {
                             self.ui_state.keymap_profiles.compile_active();
                         self.ui_state.preferences_keymap_recorder = None;
                         self.ui_state.preferences_keymap_status =
-                            "Keyboard shortcuts saved.".to_string();
+                            format!("Keyboard shortcuts saved.{backup_note}");
+                        // The file on disk is now valid and written by this
+                        // process, so the boot-time failure no longer holds:
+                        // drop the banner and let the next Apply be an
+                        // ordinary save.
+                        self.ui_state.keymap_load_error = None;
                     }
                     Err(error) => {
                         self.ui_state.preferences_keymap_status =
                             format!("Could not save keyboard shortcuts: {error}");
+                        // Same reason as the backup-failure return above:
+                        // the prefs writes already ran (#602).
+                        self.refresh_prefs_load_error();
                         self.recompute_preferences_dirty();
                         return Task::none();
                     }
                 }
+                // Every prefs write in this arm has now been attempted, so
+                // ask the file whether they landed (#602). This is the
+                // only probe on the path a user takes when they break
+                // `prefs.json` beside the running app with Preferences
+                // already open — the open handler early-returns in that
+                // case, so nothing else would ever raise the banner and
+                // the dialog would keep reporting a save that was refused.
+                // One extra file read per Save.
+                self.refresh_prefs_load_error();
                 self.ui_state.preferences_dirty = false;
                 self.ui_state.preferences_dirty_sticky = false;
             }
@@ -262,21 +384,11 @@ impl Signex {
                     signex_types::theme::theme_tokens(id)
                 };
                 self.document_state.panel_ctx.tokens = tokens;
-                let canvas_colors = if id == ThemeId::Custom {
-                    self.ui_state
-                        .custom_theme
-                        .as_ref()
-                        .map(|c| c.canvas)
-                        .unwrap_or_else(|| signex_types::theme::canvas_colors(ThemeId::Signex))
-                } else {
-                    signex_types::theme::canvas_colors(id)
-                };
-                self.interaction_state.active_canvas_mut().set_theme_colors(
-                    crate::render_config::to_iced(&canvas_colors.background),
-                    crate::render_config::to_iced(&canvas_colors.grid),
-                    crate::render_config::to_iced(&canvas_colors.paper),
-                );
-                self.interaction_state.active_canvas_mut().canvas_colors = canvas_colors;
+                // #631 — the canvas colours used to be computed here and
+                // pushed onto the canvas for the live preview. `view` now
+                // derives them from `preferences_draft_theme` every frame,
+                // so setting the draft above IS the preview; only the
+                // content cache still has to be dropped to repaint.
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
@@ -286,9 +398,13 @@ impl Signex {
                 self.ui_state.preferences_draft_font = name;
                 self.recompute_preferences_dirty();
             }
+            // #630 — these three settings persist and round-trip, but no
+            // draw path consults them: the old `render_config` setters
+            // wrote to a struct nothing read. The content-cache clear is
+            // kept so the preview repaints if a renderer ever starts
+            // honouring them.
             PrefMsg::DraftPowerPortStyle(style) => {
                 self.ui_state.preferences_draft_power_port_style = style;
-                crate::render_config::set_power_port_style(style);
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
@@ -296,7 +412,6 @@ impl Signex {
             }
             PrefMsg::DraftLabelStyle(style) => {
                 self.ui_state.preferences_draft_label_style = style;
-                crate::render_config::set_label_style(style);
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
@@ -304,7 +419,6 @@ impl Signex {
             }
             PrefMsg::DraftMultisheetStyle(style) => {
                 self.ui_state.preferences_draft_multisheet_style = style;
-                crate::render_config::set_multisheet_style(style);
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
@@ -312,8 +426,8 @@ impl Signex {
             }
             PrefMsg::DraftGridStyle(style) => {
                 self.ui_state.preferences_draft_grid_style = style;
-                crate::render_config::set_grid_style(style);
-                self.interaction_state.active_canvas_mut().clear_bg_cache();
+                // Live preview — `set_grid_style` also drops the bg cache
+                // on every window's canvas.
                 self.recompute_preferences_dirty();
             }
             PrefMsg::DraftPcbGpuRender(enabled) => {
@@ -326,18 +440,24 @@ impl Signex {
                 self.interaction_state.pcb_canvas.clear_bg_cache();
                 self.recompute_preferences_dirty();
             }
+            // #629 — these three used to call `write_*_pref` right here,
+            // making the change permanent before the user reached the
+            // footer. They now behave like every other draft in this pane:
+            // update the draft, preview it, and let Save persist it.
             PrefMsg::DraftSymbolGridSize(size) => {
                 self.ui_state.preferences_draft_symbol_grid_size_mm = size;
-                crate::fonts::write_symbol_grid_size_mm_pref(size);
+                self.recompute_preferences_dirty();
             }
             PrefMsg::DraftSymbolGridStyle(style) => {
                 self.ui_state.preferences_draft_symbol_grid_style = style;
-                crate::render_config::set_symbol_grid_style(style);
-                crate::fonts::write_symbol_grid_style_pref(style);
+                // Live preview only — `revert_preferences_drafts` pushes
+                // the committed style back if the user discards.
+                self.document_state.panel_ctx.symbol_grid_style = style;
+                self.recompute_preferences_dirty();
             }
             PrefMsg::DraftSymbolPinSelection(mode) => {
                 self.ui_state.preferences_draft_symbol_pin_selection = mode;
-                crate::fonts::write_symbol_pin_selection_pref(mode);
+                self.recompute_preferences_dirty();
             }
             PrefMsg::ImportTheme => {
                 return Task::future(async {
@@ -390,6 +510,9 @@ impl Signex {
                     canvas,
                 };
                 let json = serde_json::to_string_pretty(&export).unwrap_or_default();
+                // Drop any status from a previous attempt so the line the
+                // user sees always describes the export they just started.
+                self.ui_state.preferences_theme_status.clear();
                 return Task::future(async move {
                     let picked = rfd::AsyncFileDialog::new()
                         .set_title("Export Signex Theme")
@@ -397,11 +520,33 @@ impl Signex {
                         .set_file_name("custom-theme.json")
                         .save_file()
                         .await;
-                    if let Some(f) = picked {
-                        let _ = f.write(json.as_bytes()).await;
-                    }
-                    Message::Noop
+                    let Some(f) = picked else {
+                        // Cancelled the save dialog — nothing was
+                        // attempted, so there is nothing to report.
+                        return Message::Noop;
+                    };
+                    let path = f.path().to_path_buf();
+                    // `rfd::FileHandle::write` is a whole-file
+                    // `std::fs::write` on a worker thread and yields
+                    // `io::Result<()>` — no short write to handle, but a
+                    // real failure (read-only volume, full disk, a path
+                    // that vanished between pick and write) used to be
+                    // discarded here, leaving the user believing the
+                    // theme had been exported (#533).
+                    let outcome = match f.write(json.as_bytes()).await {
+                        Ok(()) => Ok(path),
+                        Err(error) => Err(format!("{path}: {error}", path = path.display())),
+                    };
+                    Message::Preferences(PreferencesMsg::Inner(PrefMsg::ThemeExportFinished(
+                        outcome,
+                    )))
                 });
+            }
+            PrefMsg::ThemeExportFinished(result) => {
+                self.ui_state.preferences_theme_status = match result {
+                    Ok(path) => format!("Exported theme to {}.", path.display()),
+                    Err(detail) => format!("Could not export theme: {detail}"),
+                };
             }
             PrefMsg::ThemeFileLoaded(content) => {
                 if let Ok(custom) =
@@ -436,6 +581,91 @@ impl Signex {
             PrefMsg::ResetErcSeverities => {
                 self.ui_state.erc_severity_override.clear();
                 crate::fonts::write_erc_severity_overrides(&self.ui_state.erc_severity_override);
+            }
+            PrefMsg::ResetPrefsFile => {
+                // Never move a healthy file aside. The user may have
+                // repaired it by hand between this banner being painted
+                // and the click, and renaming a good prefs.json away
+                // would be #594 again, by hand.
+                // Every outcome below is reported to the Messages panel as
+                // well as to the dialog. The status string dies with the
+                // dialog and is invisible to anyone reading a bug report;
+                // a recovery action that touches the user's config files
+                // has to leave a trace that outlives the window.
+                match crate::fonts::check_prefs_file() {
+                    Ok(()) => {
+                        self.ui_state.prefs_load_error = None;
+                        tracing::info!(
+                            target: "signex::prefs",
+                            path = %crate::fonts::prefs_file_path().display(),
+                            "preferences reset was requested but the file now loads cleanly, \
+                             so nothing was moved"
+                        );
+                        self.ui_state.preferences_prefs_status =
+                            "Your preferences file is readable again — nothing was moved."
+                                .to_string();
+                    }
+                    Err(_) => match crate::fonts::move_prefs_file_aside() {
+                        Ok(Some(aside)) => {
+                            self.ui_state.prefs_load_error = None;
+                            tracing::info!(
+                                target: "signex::prefs",
+                                path = %crate::fonts::prefs_file_path().display(),
+                                kept_as = %aside.display(),
+                                "the unreadable preferences file was moved aside on the user's \
+                                 request and a fresh empty one put in its place; preferences \
+                                 save again from now on"
+                            );
+                            // This arm deliberately writes no drafts, so
+                            // the fresh file is empty and anything the
+                            // user "saved" while writes were being refused
+                            // is still only in memory. Saying "Preferences
+                            // reset." alone would let them quit believing
+                            // it persisted. Re-persisting live state from
+                            // here is a different feature and a different
+                            // decision; telling the truth is not.
+                            self.ui_state.preferences_prefs_status = format!(
+                                "Preferences reset. The unreadable file was kept as {}. \
+                                 Change and save a setting to write a new one.",
+                                aside.display()
+                            );
+                        }
+                        Ok(None) => {
+                            self.ui_state.prefs_load_error = None;
+                            // `warn!`, not `info!`: the probe a moment ago
+                            // said this file was unloadable and the rename
+                            // then found nothing there, so something
+                            // outside this process removed it mid-action.
+                            tracing::warn!(
+                                target: "signex::prefs",
+                                path = %crate::fonts::prefs_file_path().display(),
+                                "the unreadable preferences file was gone before it could be \
+                                 moved aside; something outside this process removed it"
+                            );
+                            self.ui_state.preferences_prefs_status =
+                                "There was no preferences file to move aside.".to_string();
+                        }
+                        Err(error) => {
+                            // The flag deliberately stays set: nothing
+                            // changed on disk, so the banner must stay up
+                            // and keep offering the action.
+                            tracing::error!(
+                                target: "signex::prefs",
+                                path = %crate::fonts::prefs_file_path().display(),
+                                error = %error,
+                                "the unreadable preferences file could not be moved aside, so \
+                                 it was left exactly as it is and preferences still cannot be \
+                                 saved"
+                            );
+                            self.ui_state.preferences_prefs_status = format!(
+                                "Could not start a fresh preferences file: the unreadable one \
+                                 could not be moved aside, so it was left untouched ({error})."
+                            );
+                        }
+                    },
+                }
+                // No draft was touched, so the dirty flag is not
+                // recomputed — same as `ResetErcSeverities` above.
             }
             PrefMsg::LibrarySettings(settings_msg) => {
                 // Route the Distributor APIs panel's SettingsMsg back
@@ -490,251 +720,31 @@ impl Signex {
                     crate::fonts::default_component_classes();
                 self.recompute_preferences_dirty();
             }
-            PrefMsg::KeymapSearchChanged(query) => {
-                // Pure view filter — does not touch the editor model or the
-                // dirty flag, so opening/searching never marks unsaved work.
-                self.ui_state.preferences_keymap_search = query;
-            }
-            PrefMsg::KeymapProfileSelected(id) => {
-                match self
-                    .ui_state
-                    .preferences_keymap_editor
-                    .set_active_profile(id)
-                {
-                    Ok(()) => {
-                        self.ui_state.preferences_keymap_status.clear();
-                        self.recompute_preferences_dirty();
-                    }
-                    Err(error) => {
-                        self.ui_state.preferences_keymap_status =
-                            format!("Could not switch profile: {error}");
-                    }
-                }
-            }
-            PrefMsg::KeymapCreateCustomProfile => {
-                // Pick the first free `custom-N` id so repeated forks
-                // don't collide with an existing draft.
-                let profiles = self.ui_state.preferences_keymap_editor.profiles();
-                let next_index = profiles
-                    .iter()
-                    .filter(|profile| profile.kind == crate::keymap::ShortcutProfileKind::Custom)
-                    .count()
-                    + 1;
-                let mut candidate = next_index;
-                loop {
-                    let id = format!("custom-{candidate}");
-                    if profiles.iter().all(|profile| profile.id != id) {
-                        let name = format!("Custom {candidate}");
-                        match self
-                            .ui_state
-                            .preferences_keymap_editor
-                            .create_custom_from_active(id, name)
-                        {
-                            Ok(()) => {
-                                self.ui_state.preferences_keymap_status =
-                                    "Created a custom profile draft.".to_string();
-                                self.recompute_preferences_dirty();
-                            }
-                            Err(error) => {
-                                self.ui_state.preferences_keymap_status =
-                                    format!("Could not create profile: {error}");
-                            }
-                        }
-                        break;
-                    }
-                    candidate += 1;
-                }
-            }
-            PrefMsg::KeymapDeleteActiveProfile => {
-                let active_id = self
-                    .ui_state
-                    .preferences_keymap_editor
-                    .profiles()
-                    .into_iter()
-                    .find(|profile| profile.active)
-                    .map(|profile| profile.id);
-                if let Some(id) = active_id {
-                    match self
-                        .ui_state
-                        .preferences_keymap_editor
-                        .delete_custom_profile(&id)
-                    {
-                        Ok(()) => {
-                            self.ui_state.preferences_keymap_status =
-                                "Deleted the custom profile draft.".to_string();
-                            self.recompute_preferences_dirty();
-                        }
-                        Err(error) => {
-                            self.ui_state.preferences_keymap_status =
-                                format!("Could not delete profile: {error}");
-                        }
-                    }
-                }
-            }
-            PrefMsg::KeymapImportProfile => {
-                return Task::future(async {
-                    let picked = rfd::AsyncFileDialog::new()
-                        .set_title("Import Signex Keyboard Shortcuts")
-                        .add_filter("Signex Keyboard Shortcuts", &["toml"])
-                        .pick_file()
-                        .await;
-                    if let Some(f) = picked {
-                        let bytes = f.read().await;
-                        let source = String::from_utf8_lossy(&bytes).to_string();
-                        Message::Preferences(PreferencesMsg::Inner(PrefMsg::KeymapProfileLoaded(
-                            source,
-                        )))
-                    } else {
-                        Message::Noop
-                    }
-                });
-            }
-            PrefMsg::KeymapProfileLoaded(source) => {
-                match crate::keymap::import_custom_profile(&source).and_then(|profile| {
-                    self.ui_state
-                        .preferences_keymap_editor
-                        .insert_custom_profile(profile)
-                }) {
-                    Ok(()) => {
-                        self.ui_state.preferences_keymap_status =
-                            "Imported a custom keyboard shortcut profile.".to_string();
-                        self.recompute_preferences_dirty();
-                    }
-                    Err(error) => {
-                        self.ui_state.preferences_keymap_status =
-                            format!("Could not import keyboard shortcuts: {error}");
-                    }
-                }
-            }
-            PrefMsg::KeymapExportProfile => {
-                let profile = self
-                    .ui_state
-                    .preferences_keymap_editor
-                    .active_profile()
-                    .clone();
-                match crate::keymap::export_custom_profile(&profile) {
-                    Ok(source) => {
-                        let filename = format!("{}.toml", profile.id);
-                        return Task::future(async move {
-                            let picked = rfd::AsyncFileDialog::new()
-                                .set_title("Export Signex Keyboard Shortcuts")
-                                .add_filter("Signex Keyboard Shortcuts", &["toml"])
-                                .set_file_name(&filename)
-                                .save_file()
-                                .await;
-                            if let Some(f) = picked {
-                                let _ = f.write(source.as_bytes()).await;
-                            }
-                            Message::Noop
-                        });
-                    }
-                    Err(error) => {
-                        self.ui_state.preferences_keymap_status =
-                            format!("Could not export keyboard shortcuts: {error}");
-                    }
-                }
-            }
-            PrefMsg::KeymapBindingChanged {
-                command,
-                context,
-                trigger,
-            } => {
-                match self
-                    .ui_state
-                    .preferences_keymap_editor
-                    .edit_active_trigger(command, context, trigger)
-                {
-                    Ok(()) => {
-                        self.ui_state.preferences_keymap_status.clear();
-                        self.recompute_preferences_dirty();
-                    }
-                    Err(error) => {
-                        self.ui_state.preferences_keymap_status =
-                            format!("Invalid shortcut: {error}");
-                        self.recompute_preferences_dirty();
-                    }
-                }
-            }
-            PrefMsg::KeymapRecorderOpen {
-                command,
-                label,
-                context,
-                trigger,
-            } => {
-                self.ui_state.preferences_keymap_recorder = Some(
-                    crate::app::KeymapRecorderState::new(command, label, context, trigger),
-                );
-                self.ui_state.preferences_keymap_status.clear();
-            }
-            PrefMsg::KeymapRecorderCancel => {
-                self.ui_state.preferences_keymap_recorder = None;
-            }
-            PrefMsg::KeymapRecorderStart => {
-                if let Some(recorder) = &mut self.ui_state.preferences_keymap_recorder {
-                    recorder.recording = true;
-                    recorder.strokes.clear();
-                    recorder.modifiers = crate::keymap::Modifiers::default();
-                }
-            }
-            PrefMsg::KeymapRecorderStop => {
-                if let Some(recorder) = &mut self.ui_state.preferences_keymap_recorder {
-                    recorder.recording = false;
-                    recorder.modifiers = crate::keymap::Modifiers::default();
-                }
-            }
-            PrefMsg::KeymapRecorderClear => {
-                if let Some(recorder) = &mut self.ui_state.preferences_keymap_recorder {
-                    recorder.strokes.clear();
-                    recorder.modifiers = crate::keymap::Modifiers::default();
-                    recorder.recording = true;
-                }
-            }
-            PrefMsg::KeymapRecorderModifiersChanged(modifiers) => {
-                if let Some(recorder) = &mut self.ui_state.preferences_keymap_recorder
-                    && recorder.recording
-                {
-                    recorder.modifiers = modifiers;
-                }
-            }
-            PrefMsg::KeymapRecorderKeyPressed(stroke) => {
-                if let Some(recorder) = &mut self.ui_state.preferences_keymap_recorder
-                    && recorder.recording
-                {
-                    // Wrap back to a single stroke once the chord is
-                    // full so a fourth press starts a fresh capture.
-                    if recorder.strokes.len() >= crate::app::KeymapRecorderState::MAX_STROKES {
-                        recorder.strokes.clear();
-                    }
-                    recorder.strokes.push(stroke);
-                    recorder.modifiers = crate::keymap::Modifiers::default();
-                }
-            }
-            PrefMsg::KeymapRecorderApply => {
-                let Some(recorder) = self.ui_state.preferences_keymap_recorder.clone() else {
-                    return Task::none();
-                };
-                if recorder.strokes.is_empty() {
-                    self.ui_state.preferences_keymap_status =
-                        "Record at least one keystroke before applying.".to_string();
-                    return Task::none();
-                }
-                let trigger = recorder.trigger_text();
-                match self.ui_state.preferences_keymap_editor.edit_active_trigger(
-                    recorder.command,
-                    recorder.context,
-                    trigger,
-                ) {
-                    Ok(()) => {
-                        self.ui_state.preferences_keymap_status.clear();
-                        self.recompute_preferences_dirty();
-                        self.ui_state.preferences_keymap_recorder = None;
-                    }
-                    Err(error) => {
-                        self.ui_state.preferences_keymap_status =
-                            format!("Invalid shortcut: {error}");
-                        self.recompute_preferences_dirty();
-                    }
-                }
+            // Keyboard Shortcuts pane — the arms live in the sibling
+            // `keymap` module. Listed one by one rather than caught by a
+            // `_ =>` so this match stays exhaustive over `PrefMsg`: a new
+            // non-keymap variant is a compile error here, not a message
+            // silently routed to a handler that does not own it.
+            msg @ (PrefMsg::KeymapSearchChanged(..)
+            | PrefMsg::KeymapProfileSelected(..)
+            | PrefMsg::KeymapCreateCustomProfile
+            | PrefMsg::KeymapDeleteActiveProfile
+            | PrefMsg::KeymapRestoreFromBackup
+            | PrefMsg::KeymapDiscardBackup
+            | PrefMsg::KeymapImportProfile
+            | PrefMsg::KeymapProfileLoaded(..)
+            | PrefMsg::KeymapExportProfile
+            | PrefMsg::KeymapExportFinished(..)
+            | PrefMsg::KeymapBindingChanged { .. }
+            | PrefMsg::KeymapRecorderOpen { .. }
+            | PrefMsg::KeymapRecorderCancel
+            | PrefMsg::KeymapRecorderStart
+            | PrefMsg::KeymapRecorderStop
+            | PrefMsg::KeymapRecorderClear
+            | PrefMsg::KeymapRecorderModifiersChanged(..)
+            | PrefMsg::KeymapRecorderKeyPressed(..)
+            | PrefMsg::KeymapRecorderApply) => {
+                return self.handle_keymap_pref_message(msg);
             }
         }
 

@@ -151,6 +151,9 @@ pub enum OverlayMsg {
     /// Close the Help ▸ Keyboard Shortcuts modal — fired by the close
     /// chrome ✕ and by Esc dismiss handling.
     CloseKeyboardShortcuts,
+    /// Open the Tools > Passive Network Calculator modal — fired by the
+    /// Tools menu entry. Re-invoking while it is already open is a no-op.
+    OpenPassiveCalculator,
     /// Close the Tools > Passive Network Calculator modal - fired by
     /// the close chrome X.
     ClosePassiveCalculator,
@@ -158,6 +161,14 @@ pub enum OverlayMsg {
     /// never reappears. Fired by the card's ✕ button, by Esc, and by
     /// the first canvas interaction after launch.
     DismissFirstRunTour,
+    /// Dismiss the shared error card (`DocumentState::error_notice`).
+    /// Fired by its OK button, its click-outside backdrop, and Esc.
+    ///
+    /// Lived on `ExportMsg` as `DismissError` until #532. The card was
+    /// never export-only — the project-close path raised it too — and a
+    /// message named for one caller is how it ended up showing "Export
+    /// Failed" over a failed save.
+    DismissErrorNotice,
     /// User pressed the title bar of a modal at window-space (x, y) —
     /// begin dragging it. The next DragMove events update its offset.
     ModalDragStart {
@@ -224,7 +235,17 @@ pub enum UiMsg {
     /// `UiState::keymap_pending_sequence` and resolved here in `update`
     /// (where `&mut self` is available), which keeps the chord buffer
     /// out of a process-global static.
-    KeymapStroke(crate::keymap::KeyStroke),
+    KeymapStroke {
+        /// Which window produced the stroke (#559). Shortcut contexts
+        /// resolve against it rather than against the main window's
+        /// active tab, and a multi-stroke chord is dropped when the
+        /// window changes mid-sequence.
+        ///
+        /// `None` for a synthesised stroke that names no window, which
+        /// resolves as the main window does.
+        window: Option<iced::window::Id>,
+        stroke: crate::keymap::KeyStroke,
+    },
 }
 
 /// Move Selection dialog message family (ADR-0001 D3). Namespaced under

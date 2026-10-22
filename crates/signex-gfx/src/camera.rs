@@ -7,17 +7,30 @@
 use wgpu::util::DeviceExt;
 
 /// Shared camera uniform uploaded once per frame.
+///
+/// The layout is mirrored by the `Camera` struct in every `shader/*.wgsl`, and
+/// the two must agree byte for byte: `view_proj` 64, `viewport` 8,
+/// `mm_per_px` 4, the two feature floors 8, then 12 of padding to the 16-byte
+/// alignment a uniform block requires — 96 bytes total.
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct CameraUniform {
     pub view_proj: [[f32; 4]; 4],
     pub viewport: [f32; 2],
     pub mm_per_px: f32,
-    pub _pad: f32,
+    /// Thinnest a stroke may render, in **screen pixels**. `0.0` disables the
+    /// floor. See [`Self::with_min_feature_px`].
+    pub min_stroke_px: f32,
+    /// Smallest a circle may render, in **screen pixels**. `0.0` disables it.
+    pub min_radius_px: f32,
+    pub _pad: [f32; 3],
 }
 
 impl CameraUniform {
     /// Build an orthographic camera for 2D views.
+    ///
+    /// Feature floors default to off; a surface that wants them adds
+    /// [`Self::with_min_feature_px`].
     pub fn ortho(viewport_px: [f32; 2], offset_mm: [f32; 2], scale_px_per_mm: f32) -> Self {
         let width_mm = viewport_px[0] / scale_px_per_mm;
         let height_mm = viewport_px[1] / scale_px_per_mm;
@@ -33,8 +46,37 @@ impl CameraUniform {
             view_proj: proj.to_cols_array_2d(),
             viewport: viewport_px,
             mm_per_px: 1.0 / scale_px_per_mm,
-            _pad: 0.0,
+            min_stroke_px: 0.0,
+            min_radius_px: 0.0,
+            _pad: [0.0; 3],
         }
+    }
+
+    /// Keep thin geometry legible when zoomed out, the way the CPU replays do.
+    ///
+    /// Both CPU paths clamp in screen space — the schematic to 0.6 px and the
+    /// PCB to 0.5 px for strokes, both to 0.5 px for circle radii — so
+    /// world-space geometry never fades below a readable width. The GPU had no
+    /// equivalent, which is why thin traces and junction dots thinned toward
+    /// nothing as you zoomed out on the shader path (#645).
+    ///
+    /// The floors travel in the uniform rather than as shader constants
+    /// because they differ per surface, and because `mm_per_px` is already the
+    /// conversion the shaders need: a floor of `p` pixels is `p * mm_per_px`
+    /// world millimetres at the current zoom.
+    ///
+    /// Does **not** reach polygon outlines. Those are expanded into triangles
+    /// at upload time (`pipeline::polygon::append_stroke`), before any camera
+    /// exists, so the shader never sees a stroke width to clamp. Giving them a
+    /// floor means either handing the scale to `upload` — which would make the
+    /// scene camera-dependent, the very property the GPU path exists to avoid
+    /// — or moving stroke expansion into the shader. That is a design call,
+    /// not an oversight; recorded on #645.
+    #[must_use]
+    pub fn with_min_feature_px(mut self, min_stroke_px: f32, min_radius_px: f32) -> Self {
+        self.min_stroke_px = min_stroke_px.max(0.0);
+        self.min_radius_px = min_radius_px.max(0.0);
+        self
     }
 
     /// Build a perspective camera for future 3D views.
@@ -57,8 +99,13 @@ impl CameraUniform {
         Self {
             view_proj: view_proj.to_cols_array_2d(),
             viewport: viewport_px,
+            // A perspective view has no single mm-per-pixel — it varies with
+            // depth — so the screen-space feature floors, which are derived
+            // from it, are meaningless here and stay off.
             mm_per_px: 0.0,
-            _pad: 0.0,
+            min_stroke_px: 0.0,
+            min_radius_px: 0.0,
+            _pad: [0.0; 3],
         }
     }
 }

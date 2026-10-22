@@ -66,10 +66,9 @@ impl Signex {
             return None;
         };
 
-        // Panic-safe update: if the closure panics, the engine would
-        // otherwise be dropped along with `session`. Catch + resume
-        // ensures the engine returns to the HashMap at its original
-        // path before the panic propagates.
+        // Panic guard: the engine moves into `session`, so a panicking
+        // closure drops it. We cannot get it back; catch the unwind only
+        // to clear `active_path` (no dangling key) before re-raising.
         let session = SchematicTabSession::new(engine, title, old_path.clone(), dirty);
         let update_result = catch_unwind(AssertUnwindSafe(move || {
             let mut session = session;
@@ -93,6 +92,13 @@ impl Signex {
                 // `dirty_paths` set so the Projects-panel red dot
                 // survives tab close and is single-source-of-truth
                 // for "the file has unsaved edits".
+                if new_path != old_path {
+                    // Save As re-keyed the document; the old key no longer
+                    // has an engine, so a lingering dirty marker would make
+                    // every later Save All fail on it.
+                    self.document_state.dirty_paths.remove(&old_path);
+                    self.rekey_undocked_windows(&old_path, &new_path);
+                }
                 if dirty {
                     self.document_state.dirty_paths.insert(new_path.clone());
                 } else {
@@ -105,9 +111,11 @@ impl Signex {
             }
             Err(payload) => {
                 // Engine was consumed by the panicking session; the
-                // HashMap is now missing its entry. We can't restore
-                // the engine (it unwound), but we can at least clear
-                // `active_path` so callers don't see a dangling key.
+                // HashMap is now missing its entry and cannot be restored.
+                tracing::error!(
+                    path = %old_path.display(),
+                    "schematic session panicked; its engine was dropped"
+                );
                 self.document_state.active_path = None;
                 resume_unwind(payload);
             }
@@ -222,7 +230,7 @@ impl Signex {
         });
         self.document_state.active_tab = self.document_state.tabs.len() - 1;
 
-        self.apply_loaded_schematic(Some(sheet), true, true, true, true);
+        self.apply_loaded_schematic(Some(sheet), true, true, true);
 
         // Stage 16 §3.5 — Library Updates Available scan.
         // Walks placed Symbols whose `library_id` is set and
@@ -265,7 +273,7 @@ impl Signex {
         // path and just refreshes the canvas / panel against the
         // existing engine.
         self.document_state.active_path = Some(path);
-        self.apply_loaded_schematic(None, true, true, true, true);
+        self.apply_loaded_schematic(None, true, true, true);
     }
 
     pub(crate) fn open_pcb_tab(&mut self, path: PathBuf, title: String, board: PcbBoard) {
@@ -299,7 +307,7 @@ impl Signex {
 
         if is_schematic {
             if self.activate_active_schematic_session() {
-                self.apply_loaded_schematic(None, true, false, false, false);
+                self.apply_loaded_schematic(None, true, false, false);
             }
         } else if is_pcb {
             self.apply_loaded_pcb_document(false, false);
@@ -371,12 +379,21 @@ impl Signex {
         }
     }
 
+    /// Refresh the canvas and panel context against the active schematic
+    /// engine, optionally installing `schematic` as that engine's document
+    /// first.
+    ///
+    /// There is no "commit to the active tab" step: since the parked-session
+    /// refactor, schematic tabs keep their document in
+    /// `document_state.engines` (keyed by path) and carry
+    /// `cached_document: None`. `TabDocument` has no `Schematic` variant to
+    /// write back to, and dirty tracking runs through
+    /// `with_active_schematic_session_mut` in the mutation gateway.
     pub(crate) fn apply_loaded_schematic(
         &mut self,
         schematic: Option<SchematicSheet>,
         clear_bg_cache: bool,
         fit_to_paper: bool,
-        commit_to_active_tab: bool,
         refresh_panel_ctx: bool,
     ) {
         if let Some(schematic) = schematic {
@@ -396,8 +413,6 @@ impl Signex {
         self.interaction_state
             .active_canvas_mut()
             .clear_content_cache();
-
-        let _ = commit_to_active_tab;
 
         if refresh_panel_ctx {
             self.refresh_panel_ctx();

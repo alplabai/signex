@@ -159,7 +159,7 @@ impl Signex {
         };
         // Column picker — toggles for the standard column set + any
         // custom-field column discovered in the rolled-up rows. The
-        // pill state mirrors `preview.options.columns`; clicking
+        // toggle state mirrors `preview.options.columns`; clicking
         // adds/removes from that Vec via `handle_bom_preview_toggle_column`.
         let mut custom_keys: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
         for r in &preview.table.rows {
@@ -176,37 +176,6 @@ impl Signex {
             (BomColumn::LibRef, "LibRef"),
             (BomColumn::Qty, "Qty"),
         ];
-        let mut column_row = row![
-            text("Columns:").size(11).color(text_muted),
-            Space::new().width(8)
-        ]
-        .align_y(iced::Alignment::Center);
-        for (col, label) in &column_options {
-            let on = preview.options.columns.iter().any(|c| c == col);
-            column_row = column_row.push(row_pill(
-                label.to_string(),
-                on,
-                Message::BomPreview(BomPreviewMsg::ToggleColumn(col.clone())),
-            ));
-            column_row = column_row.push(Space::new().width(4));
-        }
-        for key in &custom_keys {
-            let col = BomColumn::Custom(key.clone());
-            let on = preview.options.columns.iter().any(|c| c == &col);
-            column_row = column_row.push(row_pill(
-                key.clone(),
-                on,
-                Message::BomPreview(BomPreviewMsg::ToggleColumn(col)),
-            ));
-            column_row = column_row.push(Space::new().width(4));
-        }
-        let column_row: Element<'_, Message> = scrollable(column_row)
-            .direction(iced::widget::scrollable::Direction::Horizontal(
-                iced::widget::scrollable::Scrollbar::new()
-                    .width(0)
-                    .scroller_width(0),
-            ))
-            .into();
         // Properties sidebar — General / Columns tabs, collapsible
         // sections inside.
         use crate::app::state::BomSidebarTab;
@@ -268,7 +237,6 @@ impl Signex {
         // rows. Each row is clickable and toggles via
         // `Message::BomPreview(BomPreviewMsg::ToggleColumn)` — the existing handler
         // already does add/remove on the Vec.
-        let _ = column_row; // pill row obsoleted by the list layout
         let mut col_list: Column<'_, Message> = Column::new().spacing(0);
         col_list = col_list.push(section_header("Columns", text_muted));
         let mut list_items: Column<'_, Message> = Column::new().spacing(0);

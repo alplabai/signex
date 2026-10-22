@@ -14,7 +14,7 @@ mod scenario_tests;
 
 pub use dirty::DirtyFlags;
 pub use frame::Scene;
-pub use order::{CPU_PCB_DRAW_ORDER, GPU_SCENE_DRAW_ORDER, SceneBucket};
+pub use order::{CPU_PCB_DRAW_ORDER, CPU_SCHEMATIC_DRAW_ORDER, GPU_SCENE_DRAW_ORDER, SceneBucket};
 pub use upload::{
     SceneUploadTarget, TextUploadParams, UploadCounters, UploadCulling, ViewportAabbMm,
     apply_dirty_uploads, apply_dirty_uploads_with_culling,

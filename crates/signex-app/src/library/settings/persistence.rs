@@ -105,7 +105,6 @@ pub fn config_path() -> Option<PathBuf> {
 /// Test-friendly variant — same layout, but rooted under the supplied
 /// directory. Lets unit tests round-trip without touching the real
 /// per-user config dir.
-#[allow(dead_code)]
 pub fn config_path_for_dir(base: &std::path::Path) -> PathBuf {
     crate::config_root::config_root_for_dir(base).join(FILE_NAME)
 }

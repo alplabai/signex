@@ -296,10 +296,11 @@ mod drag_track_end {
     /// screen (100,300)) so a chosen world point maps to a screen cursor
     /// that lands inside the test bounds and inverts back exactly.
     fn seated_cstate() -> FootprintCanvasState {
-        let mut cstate = FootprintCanvasState::default();
-        cstate.scale = 10.0;
-        cstate.offset = Point::new(100.0, 300.0);
-        cstate
+        FootprintCanvasState {
+            scale: 10.0,
+            offset: Point::new(100.0, 300.0),
+            ..FootprintCanvasState::default()
+        }
     }
 
     fn left_press_at(

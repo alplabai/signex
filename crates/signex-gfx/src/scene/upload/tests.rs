@@ -19,6 +19,7 @@ struct MockUploadTarget {
     uploaded_circles: usize,
     uploaded_arcs: usize,
     uploaded_polygons: usize,
+    uploaded_top_polygons: usize,
     uploaded_texts: usize,
     uploaded_overlay_lines: usize,
     uploaded_overlay_circles: usize,
@@ -55,6 +56,10 @@ impl SceneUploadTarget for MockUploadTarget {
     fn upload_polygons(&mut self, _polygons: &[GpuPolygon]) {
         self.uploaded_polygons = _polygons.len();
         self.calls.polygon_uploads += 1;
+    }
+
+    fn upload_top_polygons(&mut self, polygons: &[GpuPolygon]) {
+        self.uploaded_top_polygons = polygons.len();
     }
 
     fn upload_texts(

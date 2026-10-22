@@ -10,6 +10,11 @@
 //! evaluation → LM solver → DOF analysis → pad bake → sketch ↔ library
 //! integration. No UI required.
 
+// This integration-test binary discards fallible test-setup calls with
+// `let _ = ...` routinely (not a production `Task` getting dropped — see
+// GH #99 part 1). `[lints]` in Cargo.toml is package-scoped, not
+// target-scoped, so each integration-test crate root needs its own allow.
+
 use chrono::Utc;
 use signex_app::library::editor::footprint::sketch_dispatch::apply_sketch_edit;
 use signex_app::library::editor::footprint::sketch_mode::SketchEdit;
@@ -190,7 +195,6 @@ fn qfn16_solve_warnings_empty_on_clean_sketch() {
 
 // Unused-import linter sanity: tie the chrono pull-in to this stub
 // so an `cargo check` doesn't strip it (Footprint::empty needs Utc::now()).
-#[allow(dead_code)]
 fn _link_chrono() -> chrono::DateTime<Utc> {
     Utc::now()
 }

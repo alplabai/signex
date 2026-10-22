@@ -23,3 +23,7 @@ signex-sketch = { workspace = true }
 pollster = "0.4"
 serde.workspace = true
 serde_json.workspace = true
+
+# GH #548 — inherit [workspace.lints.rust] (unused_must_use = deny).
+[lints]
+workspace = true
