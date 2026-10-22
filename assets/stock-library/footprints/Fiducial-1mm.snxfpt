@@ -1,8 +1,8 @@
 format = "snxfpt/1"
 file_uuid = "019df45d-af66-75c0-b9cf-2bbf173b0066"
 display_name = "Fiducial-1mm"
-created = "2026-05-04T19:01:13.702958300Z"
-updated = "2026-05-04T19:01:13.702958300Z"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
 
 [[footprints]]
 uuid = "019df45d-af66-75c0-b9cf-2ba7e253d69c"
@@ -20,8 +20,8 @@ fab_f = []
 fab_b = []
 version = "0.0.1"
 released = false
-created = "2026-05-04T19:01:13.702918600Z"
-updated = "2026-05-04T19:01:13.702918600Z"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
 schema_version = 3
 
 [footprints.courtyard]
@@ -58,6 +58,7 @@ kind = "BoardTop"
 id = "4373d9fb-b5a8-49e6-adc7-5f6307803a36"
 plane = "7c74fab9-10b4-4550-aad0-cec6d5b2c3e9"
 construction = false
+centerline = false
 kind = "Point"
 x = 0.0
 y = 0.0
@@ -75,6 +76,13 @@ shape = "Round"
 
 [footprints.sketch.entities.pad.paste_apertures]
 kind = "Single"
+
+[footprints.sketch.entities.pad.stack]
+paste_top_enabled = false
+paste_bottom_enabled = false
+mask_top_tented = false
+mask_bottom_tented = false
+thermal_relief = false
 
 [footprints.sketch.parameters]
 copper_dia = "1.0mm"
