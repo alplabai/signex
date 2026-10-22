@@ -11,6 +11,7 @@ fn ctx() -> ExportContext {
 
 fn row(sheet: &str, sev: ErcReportSeverity, rule: &str, msg: &str, x: f64, y: f64) -> ErcReportRow {
     ErcReportRow {
+        sheet_key: sheet.into(),
         sheet_name: sheet.into(),
         severity: sev,
         rule: rule.into(),
@@ -128,5 +129,63 @@ fn format_follows_extension() {
     assert_eq!(
         ErcReportFormat::from_output_path(Path::new("x.txt")),
         ErcReportFormat::Text
+    );
+}
+
+#[test]
+fn same_file_name_in_different_directories_is_not_merged() {
+    let mk = |dir: &str, msg: &str| ErcReportRow {
+        sheet_key: format!("{dir}/power.snxsch"),
+        sheet_name: "power.snxsch".into(),
+        severity: ErcReportSeverity::Error,
+        rule: "Unused pin".into(),
+        message: msg.into(),
+        x: 0.0,
+        y: 0.0,
+    };
+    let mut o = ErcReportOptions {
+        format: ErcReportFormat::Text,
+        group_by_sheet: true,
+        violations: Some(vec![mk("a", "one"), mk("b", "two"), mk("a", "three")]),
+        ..Default::default()
+    };
+    let got = run(o.clone());
+    assert!(got.contains("== a/power.snxsch (2) =="), "{got}");
+    assert!(got.contains("== b/power.snxsch (1) =="), "{got}");
+    o.group_by_sheet = false;
+    assert!(run(o).contains("b/power.snxsch [Error]"));
+}
+
+#[test]
+fn newlines_in_fields_do_not_split_a_text_row() {
+    let o = ErcReportOptions {
+        format: ErcReportFormat::Text,
+        violations: Some(vec![row(
+            "a.snxsch",
+            ErcReportSeverity::Error,
+            "Rule\nX",
+            "line one\r\nline two",
+            0.0,
+            0.0,
+        )]),
+        ..Default::default()
+    };
+    let got = run(o);
+    assert_eq!(got.lines().count(), 2, "{got:?}");
+    assert!(got.contains(r"line one\r\nline two"), "{got:?}");
+    assert!(got.contains(r"Rule\nX"), "{got:?}");
+}
+
+#[test]
+fn ran_but_clean_is_a_header_only_report() {
+    let o = ErcReportOptions {
+        violations: Some(Vec::new()),
+        ..Default::default()
+    };
+    let out = ErcReportExporter.export(&ctx(), &o).expect("not a refusal");
+    assert_eq!(out.row_count, 0);
+    assert_eq!(
+        String::from_utf8(out.bytes).unwrap(),
+        "ERC report: 0 violation(s)\n"
     );
 }

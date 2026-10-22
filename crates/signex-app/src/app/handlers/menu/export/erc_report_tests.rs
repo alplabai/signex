@@ -66,20 +66,59 @@ fn menu_entry_refuses_with_a_message_when_erc_never_ran() {
 }
 
 #[test]
-fn finishing_without_erc_writes_no_file_and_surfaces_the_refusal() {
+fn refusal_names_the_real_menu_path() {
     let (mut app, _task) = Signex::new();
-    let dir = std::env::temp_dir().join(format!("signex-351-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let path = dir.join("erc.csv");
-    let _ = app.update(Message::Export(ExportMsg::ErcReportFinished(Ok(
-        path.clone()
+    let _ = app.update(Message::Menu(MenuMessage::ExportErcReport));
+    let notice = app.document_state.error_notice.as_ref().expect("notice");
+    assert!(
+        notice
+            .detail
+            .contains(&crate::menu_bar::run_erc_menu_path()),
+        "{}",
+        notice.detail
+    );
+    assert!(notice.detail.contains("Design"), "{}", notice.detail);
+    assert!(!notice.detail.contains("Tools"), "{}", notice.detail);
+}
+
+#[test]
+fn picking_a_path_without_erc_surfaces_the_refusal() {
+    let (mut app, _task) = Signex::new();
+    let _ = app.update(Message::Export(ExportMsg::ErcReportPathChosen(Ok(
+        PathBuf::from("erc.csv"),
     ))));
-    assert!(!path.exists(), "no empty report may be written");
     let notice = app.document_state.error_notice.as_ref().expect("notice");
     assert!(
         notice.detail.contains("has not been run"),
         "{}",
         notice.detail
     );
-    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn erc_ran_clean_exports_a_header_only_report_without_refusal() {
+    let (mut app, _task) = Signex::new();
+    app.ui_state
+        .erc_violations_by_path
+        .insert(PathBuf::from("clean.snxsch"), Vec::new());
+    assert_eq!(app.erc_report_rows().expect("ERC has run").len(), 0);
+    let _ = app.update(Message::Export(ExportMsg::ErcReportPathChosen(Ok(
+        PathBuf::from("erc.txt"),
+    ))));
+    assert!(app.document_state.error_notice.is_none());
+}
+
+#[test]
+fn same_file_name_in_two_directories_gets_distinct_sheet_keys() {
+    let (mut app, _task) = Signex::new();
+    for dir in ["one", "two"] {
+        app.ui_state.erc_violations_by_path.insert(
+            PathBuf::from(dir).join("power.snxsch"),
+            vec![violation(RuleKind::UnusedPin, Severity::Error, "e", 1.0)],
+        );
+    }
+    let rows = app.erc_report_rows().expect("ERC has run");
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].sheet_name, rows[1].sheet_name);
+    assert_ne!(rows[0].sheet_key, rows[1].sheet_key);
 }

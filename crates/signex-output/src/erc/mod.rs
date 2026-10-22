@@ -36,6 +36,10 @@ impl ErcReportSeverity {
 /// One violation as it appears in the report.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ErcReportRow {
+    /// Identity of the sheet (its full path). Grouping keys on this, so two
+    /// sheets that share a file name in different directories stay apart.
+    pub sheet_key: String,
+    /// Bare display name of the sheet (its file name).
     pub sheet_name: String,
     pub severity: ErcReportSeverity,
     pub rule: String,
@@ -103,9 +107,10 @@ impl Exporter for ErcReportExporter {
         opts: &Self::Options,
     ) -> Result<Self::Output, Self::Error> {
         let rows = select_rows(opts).ok_or(ErcReportError::NeverRun)?;
+        let labels = sheet_labels(&rows);
         let bytes = match opts.format {
-            ErcReportFormat::Text => text::emit(&rows, opts.group_by_sheet),
-            ErcReportFormat::Csv => csv::emit(&rows)?,
+            ErcReportFormat::Text => text::emit(&rows, &labels, opts.group_by_sheet),
+            ErcReportFormat::Csv => csv::emit(&rows, &labels)?,
         };
         Ok(ErcReportOutput {
             bytes,
@@ -124,14 +129,32 @@ fn select_rows(opts: &ErcReportOptions) -> Option<Vec<&ErcReportRow>> {
     if opts.group_by_sheet {
         let mut order: Vec<&str> = Vec::new();
         for r in &rows {
-            if !order.contains(&r.sheet_name.as_str()) {
-                order.push(&r.sheet_name);
+            if !order.contains(&r.sheet_key.as_str()) {
+                order.push(&r.sheet_key);
             }
         }
         // Stable sort keeps in-sheet order.
-        rows.sort_by_key(|r| order.iter().position(|s| *s == r.sheet_name));
+        rows.sort_by_key(|r| order.iter().position(|s| *s == r.sheet_key));
     }
     Some(rows)
+}
+
+/// Display name per row, parallel to `rows`. The bare file name is used unless
+/// two different sheets share it, in which case the full sheet path is shown
+/// so the reader can tell them apart.
+fn sheet_labels(rows: &[&ErcReportRow]) -> Vec<String> {
+    rows.iter()
+        .map(|r| {
+            let clash = rows
+                .iter()
+                .any(|o| o.sheet_name == r.sheet_name && o.sheet_key != r.sheet_key);
+            if clash {
+                r.sheet_key.clone()
+            } else {
+                r.sheet_name.clone()
+            }
+        })
+        .collect()
 }
 
 pub(crate) const COLUMNS: [&str; 6] = ["Sheet", "Severity", "Rule", "Message", "X", "Y"];

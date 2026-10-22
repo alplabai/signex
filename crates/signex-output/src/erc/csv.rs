@@ -3,16 +3,16 @@
 use super::{COLUMNS, ErcReportError, ErcReportRow, coord};
 use crate::bom::csv::write_csv_row;
 
-pub(super) fn emit(rows: &[&ErcReportRow]) -> Result<Vec<u8>, ErcReportError> {
+pub(super) fn emit(rows: &[&ErcReportRow], labels: &[String]) -> Result<Vec<u8>, ErcReportError> {
     let mut out = Vec::new();
     // UTF-8 BOM so spreadsheets detect the encoding; CRLF line endings.
     out.extend_from_slice(b"\xef\xbb\xbf");
     let to_err = |e: crate::bom::BomError| ErcReportError::Csv(e.to_string());
     write_csv_row(&mut out, &COLUMNS).map_err(to_err)?;
     out.extend_from_slice(b"\r\n");
-    for r in rows {
+    for (r, label) in rows.iter().zip(labels) {
         let fields = [
-            r.sheet_name.clone(),
+            label.clone(),
             r.severity.label().to_string(),
             r.rule.clone(),
             r.message.clone(),

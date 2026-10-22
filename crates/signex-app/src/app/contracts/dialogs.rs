@@ -210,7 +210,7 @@ pub enum ExportMsg {
     /// Completion of BOM export — carries either the saved path or error.
     BomFinished(Result<std::path::PathBuf, String>),
     /// User picked a path for File → Export → ERC Report — format and write.
-    ErcReportFinished(Result<std::path::PathBuf, String>),
+    ErcReportPathChosen(Result<std::path::PathBuf, String>),
     /// The ERC report write completed — carries the path or the IO error.
     ErcReportWritten(Result<std::path::PathBuf, String>),
     /// #431 — user clicked "Export anyway (incomplete)" on the

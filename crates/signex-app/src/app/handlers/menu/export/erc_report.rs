@@ -23,6 +23,7 @@ mod tests;
 
 fn report_row(entry: &ErcDiagnosticEntry) -> ErcReportRow {
     ErcReportRow {
+        sheet_key: entry.sheet_path.display().to_string(),
         sheet_name: entry.sheet_name.clone(),
         severity: match entry.severity {
             ErcSeverityLite::Error => ErcReportSeverity::Error,
@@ -54,10 +55,11 @@ impl Signex {
     }
 
     fn refuse_erc_report_before_run(&mut self) {
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(format!(
             "Cannot export the ERC report: ERC has not been run. \
-             Run ERC (Tools ▸ Electrical Rules Check) first, then export.",
-        ));
+                 Run ERC ({}) first, then export.",
+            crate::menu_bar::run_erc_menu_path()
+        )));
     }
 
     /// Menu entry: refuse if ERC never ran, otherwise ask where to save.
@@ -78,7 +80,7 @@ impl Signex {
                     .map(|file| file.path().to_path_buf())
             },
             |path| match path {
-                Some(path) => Message::Export(ExportMsg::ErcReportFinished(Ok(path))),
+                Some(path) => Message::Export(ExportMsg::ErcReportPathChosen(Ok(path))),
                 None => Message::Noop,
             },
         )
@@ -86,7 +88,7 @@ impl Signex {
 
     /// The user picked a path: format the cached rows and write them off the
     /// update thread. The format follows the saved-as extension.
-    pub(crate) fn handle_erc_report_finished(
+    pub(crate) fn handle_erc_report_path_chosen(
         &mut self,
         result: Result<PathBuf, String>,
     ) -> Task<Message> {

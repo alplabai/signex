@@ -345,6 +345,15 @@ fn cmd_label(command_id: &str, fallback: &str) -> String {
         .unwrap_or_else(|| fallback.to_string())
 }
 
+/// Menu path of the Run ERC command, built from the same command label and
+/// menu the Design menu uses so a message naming it cannot drift.
+pub(crate) fn run_erc_menu_path() -> String {
+    format!(
+        "Design ▸ {}",
+        cmd_label("run_erc", "Electrical Rules Check")
+    )
+}
+
 fn shortcut_for(ctx: &MenuContext, command_id: &str, fallback: &str) -> Option<String> {
     let command = AppCommandId::new(command_id).ok()?;
     Some(
