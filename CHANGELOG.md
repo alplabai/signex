@@ -104,6 +104,11 @@ persistence, and CI/toolchain hardening (pinned Rust 1.97.0, an enforced
 
 ### Added — ERC
 
+- **File ▸ Export ▸ ERC Report** writes the cached ERC results as plain text or
+  CSV (chosen by the saved file's extension), in the Messages panel's row order.
+  It never runs ERC; before a run it shows a message instead of writing a file.
+  `signex_output::ErcReportExporter` also offers a minimum-severity filter and
+  group-by-sheet. CSV fields are escaped by the BOM's shared helper (#351).
 - **`AmbiguousLabelAnchor`** (warning). A label sitting where two or more wires
   cross with no junction is anchored to exactly one of them by the tiebreak
   above. The answer is deterministic but not predictable from the geometry, so

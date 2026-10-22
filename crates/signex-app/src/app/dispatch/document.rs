@@ -174,6 +174,14 @@ impl Signex {
                 let task = self.handle_export_bom_finished(result);
                 iced::Task::batch([task, self.finish_update()])
             }
+            ExportMsg::ErcReportFinished(result) => {
+                let task = self.handle_erc_report_finished(result);
+                iced::Task::batch([task, self.finish_update()])
+            }
+            ExportMsg::ErcReportWritten(result) => {
+                let task = self.handle_erc_report_written(result);
+                iced::Task::batch([task, self.finish_update()])
+            }
         }
     }
 
