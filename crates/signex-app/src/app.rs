@@ -27,6 +27,7 @@ mod pcb_dirty_adapter;
 pub(crate) mod project_sheets;
 mod runtime;
 mod selection_request;
+pub(crate) mod sheet_hierarchy;
 mod state;
 pub(crate) mod view;
 
