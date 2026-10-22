@@ -15,6 +15,9 @@ pub enum ContextAction {
     Paste,
     SmartPaste,
     OpenChildSheet,
+    /// Reconcile the selected sheet symbol's pins with the child schematic's
+    /// hierarchical / global labels (#359). Gated like `OpenChildSheet`.
+    SyncSheetPins,
     Delete,
     SelectAll,
     ZoomFit,

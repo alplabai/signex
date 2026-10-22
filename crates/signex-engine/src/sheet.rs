@@ -8,34 +8,70 @@ impl Engine {
     /// Returns the ports this sheet exposes to a parent hierarchical symbol.
     /// Hierarchical labels have precedence over global labels with the same name.
     pub fn collect_exposed_sheet_ports(&self) -> Vec<SheetPort> {
-        let mut ports: std::collections::BTreeMap<String, (u8, String)> =
-            std::collections::BTreeMap::new();
+        exposed_sheet_ports(&self.document)
+    }
+}
 
-        for label in &self.document.labels {
-            let Some(priority) = port_label_priority(label.label_type) else {
-                continue;
-            };
+/// The ports `child` exposes to a parent: its Hierarchical and Global labels,
+/// de-duplicated by name (Hierarchical wins), each carrying the direction of
+/// the winning label's shape. This is the one port model the reconcile
+/// command consumes; `Engine::collect_exposed_sheet_ports` delegates here.
+pub fn exposed_sheet_ports(child: &SchematicSheet) -> Vec<SheetPort> {
+    let mut ports: std::collections::BTreeMap<String, (u8, String)> =
+        std::collections::BTreeMap::new();
 
-            let name = label.text.trim();
-            if name.is_empty() {
-                continue;
-            }
+    for label in &child.labels {
+        let Some(priority) = port_label_priority(label.label_type) else {
+            continue;
+        };
 
-            let direction = normalize_sheet_pin_direction(&label.shape).to_string();
-
-            match ports.get(name) {
-                Some((existing_priority, _)) if *existing_priority <= priority => {}
-                _ => {
-                    ports.insert(name.to_string(), (priority, direction));
-                }
-            }
+        let name = label.text.trim();
+        if name.is_empty() {
+            continue;
         }
 
-        ports
-            .into_iter()
-            .map(|(name, (_, direction))| SheetPort { name, direction })
-            .collect()
+        let direction = normalize_sheet_pin_direction(&label.shape).to_string();
+
+        match ports.get(name) {
+            Some((existing_priority, _)) if *existing_priority <= priority => {}
+            _ => {
+                ports.insert(name.to_string(), (priority, direction));
+            }
+        }
     }
+
+    ports
+        .into_iter()
+        .map(|(name, (_, direction))| SheetPort { name, direction })
+        .collect()
+}
+
+/// The ports to hand `Command::ReconcileChildSheetPins` for the sheet symbols
+/// of `parent` that reference `child_filename`.
+///
+/// Direction policy: a NEW pin takes the direction of its child label's shape
+/// (`bidirectional` when the label carries none); a pin that already exists on
+/// a symbol keeps the direction the user (or an earlier sync) gave it. The
+/// reconcile command itself overwrites an existing pin's direction with the
+/// port's, so the preservation has to happen here, before dispatch.
+pub fn ports_for_pin_sync(
+    child: &SchematicSheet,
+    parent: &SchematicSheet,
+    child_filename: &str,
+) -> Vec<SheetPort> {
+    let mut ports = exposed_sheet_ports(child);
+    for port in &mut ports {
+        let existing = parent
+            .child_sheets
+            .iter()
+            .filter(|symbol| symbol.filename == child_filename)
+            .flat_map(|symbol| symbol.pins.iter())
+            .find(|pin| pin.name == port.name);
+        if let Some(pin) = existing {
+            port.direction = pin.direction.clone();
+        }
+    }
+    ports
 }
 
 // ---------------------------------------------------------------------------

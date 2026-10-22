@@ -18,6 +18,10 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
+### Added — schematic
+
+- **Sync Sheet Pins (#359)** — right-clicking a selected sheet symbol now offers "Sync Sheet Pins", which reconciles its pins with the child schematic's Hierarchical and Global labels (live tab if open, else the file on disk) through `Command::ReconcileChildSheetPins`, so it is one undo step and refreshes the netlist. New pins take their label's shape as direction (bidirectional if none); existing pins keep their direction, and moved or hand-added pins are preserved. A missing or unparseable child, or one with no port labels, is reported in the Messages panel.
+
 ### Added — native-format test corpus
 
 - **Fixture-corpus round-trip harness** — `signex-types/tests/round_trip_corpus.rs` walks the checked-in `.snxsch` / `.snxpcb` goldens under `tests/corpus/` and asserts each parses, and re-saves byte-identically (which also implies a second parse -> write -> parse hop is stable); every failing fixture is listed with its path and first differing line. `SIGNEX_BLESS_CORPUS=1` rewrites fixtures for an intentional format change, and a `MIN_CORPUS_FILES` guard stops the corpus shrinking silently (#334).

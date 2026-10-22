@@ -111,3 +111,6 @@ mod rename_save_as_rekey;
 mod deleted_sheet_not_resaved;
 #[path = "regression/library_git_recovery.rs"]
 mod library_git_recovery;
+
+#[path = "regression/sync_sheet_pins.rs"]
+mod sync_sheet_pins;

@@ -153,7 +153,7 @@ pub(crate) fn netlist_root_fallback_warning(document_state: &DocumentState) -> O
 /// unsaved edits are in the answer), a disk parse otherwise.
 ///
 /// `Ok(None)` means genuinely absent; `Err` means present but unusable.
-fn load_sheet(
+pub(crate) fn load_sheet(
     document_state: &DocumentState,
     path: &Path,
 ) -> Result<Option<SchematicSheet>, String> {
