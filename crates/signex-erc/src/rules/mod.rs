@@ -15,7 +15,7 @@ use signex_net::{SheetConnectivity, point_on_segment, pt_key};
 use signex_types::schematic::{LabelType, Point, SelectedKind};
 
 use crate::context::ErcContext;
-use crate::diagnostic::Diagnostic;
+use crate::diagnostic::{Diagnostic, LocationSpace};
 use crate::{RuleKind, Severity, sel};
 
 // ---------------------------------------------------------------------------
@@ -502,6 +502,7 @@ pub(crate) fn bad_hier_sheet_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
                         lbl.position,
                     )
                     .with_severity(Severity::Warning)
+                    .in_space(LocationSpace::ChildSheet)
                     .with_primary(sel(lbl.uuid, SelectedKind::Label)),
                 );
             }
@@ -582,7 +583,6 @@ pub(crate) fn missing_power_flag(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
                 ),
                 symbol.position,
             )
-            .with_severity(Severity::Info)
             .with_primary(sel(symbol.uuid, SelectedKind::Symbol)),
         );
     }

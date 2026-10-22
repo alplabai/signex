@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use crate::context::ErcContext;
-use crate::diagnostic::Diagnostic;
+use crate::diagnostic::{Diagnostic, LocationSpace};
 use crate::rules;
 
 /// Evaluation function produced by the DSL compiler. Takes a read-only
@@ -34,12 +34,15 @@ pub fn run_all(ctx: &ErcContext) -> Vec<Diagnostic> {
 }
 
 /// Drop every diagnostic located on a No-ERC directive. Positional only: the
-/// directive silences all rules at its point.
+/// directive silences all rules at its point. Diagnostics whose location is a
+/// placeholder or lives in another sheet's coordinates are never matched.
 fn drop_suppressed(ctx: &ErcContext, diagnostics: &mut Vec<Diagnostic>) {
     if ctx.no_erc_directives.is_empty() {
         return;
     }
-    diagnostics.retain(|d| !ctx.has_no_erc_directive_at(&d.location));
+    diagnostics.retain(|d| {
+        d.location_space != LocationSpace::ThisSheet || !ctx.has_no_erc_directive_at(&d.location)
+    });
 }
 
 /// Run built-in rules **and** any DSL-compiled rules in a single pass.

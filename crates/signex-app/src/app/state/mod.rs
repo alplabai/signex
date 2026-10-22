@@ -171,11 +171,36 @@ impl ErrorNotice {
         }
     }
 
+    /// The BOM was written, but validation found issues the user should
+    /// still see. Advisory: the file exists.
+    pub fn export_advisory(detail: impl Into<String>) -> Self {
+        Self {
+            title: "BOM Exported with Issues".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
+    /// A rename moved the file but could not finish updating what refers to it.
+    pub fn rename(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Rename Incomplete".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
     /// A file could not be opened — unreadable, unparseable, or empty
     /// where it must not be (#532).
     pub fn open(detail: impl Into<String>) -> Self {
         Self {
             title: "Open Failed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
+    /// The requested action has no backing flow yet.
+    pub fn unavailable(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Not Available".to_owned(),
             detail: detail.into(),
         }
     }
@@ -454,11 +479,12 @@ pub struct PendingGitCommit {
 }
 
 /// Which sidebar tab is currently shown inside the BOM preview's
-/// Properties panel — Altium-style General / Columns split.
+/// Properties panel — Altium-style General / Columns / Rules split.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BomSidebarTab {
     General,
     Columns,
+    Rules,
 }
 
 /// Live BOM preview state — the rolled-up table for the active project
@@ -467,6 +493,10 @@ pub enum BomSidebarTab {
 pub struct BomPreviewState {
     pub options: signex_output::BomOptions,
     pub table: signex_output::BomTable,
+    /// Live validation of `table` under `options.rule_options`. Refreshed on
+    /// every rollup and every rule toggle so it never goes stale against the
+    /// displayed table. Advisory only — it never blocks export.
+    pub validation_report: signex_output::BomValidationReport,
     /// Available variants for the active project. Reserved for the
     /// variant picker dropdown — empty when no variants are defined.
     /// Currently only seeded; the picker UI lands in v0.8.1.
@@ -699,10 +729,22 @@ impl DocumentState {
         paths
     }
 
+    /// Whether `path` belongs to an open project other than
+    /// `projects[closing]` (see [`scope::claimed_by_other_project`]).
+    pub(crate) fn claimed_by_other_project(&self, closing: usize, path: &std::path::Path) -> bool {
+        scope::claimed_by_other_project(
+            &self.projects,
+            &self.child_sheet_refs(),
+            closing,
+            path,
+            scope::CaseFold::host_default(),
+        )
+    }
+
     /// `sheet path → the `filename` strings it references as child sheets`,
     /// over every loaded engine. Input to the hierarchy walk in
     /// [`active_document_project`](Self::active_document_project).
-    fn child_sheet_refs(&self) -> std::collections::HashMap<PathBuf, Vec<String>> {
+    pub(crate) fn child_sheet_refs(&self) -> std::collections::HashMap<PathBuf, Vec<String>> {
         self.engines
             .iter()
             .map(|(path, engine)| {

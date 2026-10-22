@@ -14,6 +14,7 @@ fn pt(x: f64, y: f64) -> Point {
 
 fn empty_sheet() -> SchematicSheet {
     SchematicSheet {
+        unknown: Default::default(),
         uuid: Uuid::nil(),
         version: 0,
         generator: String::new(),
@@ -119,6 +120,7 @@ fn add_lib(sheet: &mut SchematicSheet, lib_id: &str, pins: Vec<LibPin>) {
 /// `(origin.x + lx, origin.y - ly)`.
 fn place(sheet: &mut SchematicSheet, reference: &str, lib_id: &str, origin: Point) {
     sheet.symbols.push(Symbol {
+        unknown: Default::default(),
         uuid: Uuid::nil(),
         lib_id: lib_id.to_string(),
         reference: reference.to_string(),

@@ -12,6 +12,8 @@ pub enum SemanticPatch {
     SelectionMirrored,
     ObjectPlaced,
     SheetPinsReconciled,
+    /// A hierarchical child-sheet reference was re-pointed at a renamed file.
+    SheetFileRenamed,
     /// MD-11: a `SchDrawing::*` (line/rect/circle/arc/polyline) was
     /// edited. Distinct from `TextUpdated` so consumers branching on
     /// "did the user change a TextProp" don't take the wrong reflow

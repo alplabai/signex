@@ -570,12 +570,9 @@ impl Signex {
                 }
             }
             PrefMsg::DraftErcSeverity(rule, severity) => {
-                let default_sev = rule.default_severity();
-                if severity == default_sev {
-                    self.ui_state.erc_severity_override.remove(&rule);
-                } else {
-                    self.ui_state.erc_severity_override.insert(rule, severity);
-                }
+                // Verbatim, like the ERC dialog: a rule that grades its own
+                // findings must be flattenable to its default level too.
+                self.ui_state.erc_severity_override.insert(rule, severity);
                 crate::fonts::write_erc_severity_overrides(&self.ui_state.erc_severity_override);
             }
             PrefMsg::ResetErcSeverities => {

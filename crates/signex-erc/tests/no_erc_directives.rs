@@ -2,7 +2,7 @@
 //! built-in and DSL rules alike (issue #349). Suppression is positional only.
 
 use signex_erc::engine::{self, EvalFn};
-use signex_erc::{Diagnostic, ErcContext, RuleId, RuleKind};
+use signex_erc::{Diagnostic, ErcContext, LocationSpace, RuleId, RuleKind};
 use signex_types::format::SnxSchematic;
 use signex_types::schematic::{NoConnect, Point, SchematicSheet, Wire};
 use std::collections::HashMap;
@@ -34,6 +34,7 @@ fn sheet(wires: Vec<Wire>, directives: Vec<NoConnect>) -> SchematicSheet {
         no_erc_directives: directives,
         title_block: HashMap::new(),
         lib_symbols: HashMap::new(),
+        unknown: Default::default(),
     }
 }
 
@@ -107,6 +108,32 @@ fn directive_suppresses_dsl_diagnostic_at_same_point_only() {
     let diags = engine::run_all_with_dsl(&ctx, &[rule]);
     let messages: Vec<&str> = diags.iter().map(|d| d.message.as_str()).collect();
     assert_eq!(messages, vec!["dsl elsewhere"]);
+}
+
+#[test]
+fn origin_directive_does_not_suppress_unplaced_diagnostics() {
+    let rule: EvalFn = Arc::new(|_ctx: &ErcContext| {
+        vec![
+            Diagnostic::new(RuleKind::UnusedPin, "net-scoped", pt(0.0, 0.0))
+                .in_space(LocationSpace::Unplaced),
+        ]
+    });
+    let ctx = ErcContext::from_snapshot(&sheet(Vec::new(), vec![directive(pt(0.0, 0.0))]));
+    let diags = engine::run_all_with_dsl(&ctx, &[rule]);
+    assert_eq!(diags.len(), 1);
+}
+
+#[test]
+fn directive_does_not_suppress_child_sheet_coordinate_diagnostics() {
+    let rule: EvalFn = Arc::new(|_ctx: &ErcContext| {
+        vec![
+            Diagnostic::new(RuleKind::BadHierSheetPin, "child label", pt(5.0, 5.0))
+                .in_space(LocationSpace::ChildSheet),
+        ]
+    });
+    let ctx = ErcContext::from_snapshot(&sheet(Vec::new(), vec![directive(pt(5.0, 5.0))]));
+    let diags = engine::run_all_with_dsl(&ctx, &[rule]);
+    assert_eq!(diags.len(), 1);
 }
 
 #[test]
