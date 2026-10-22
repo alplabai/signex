@@ -87,12 +87,14 @@ pub(crate) fn sheet_with_net(reference: &str, net_name: &str, children: &[&str])
     let mut sheet = schematic(children);
     let origin = Point::new(0.0, 0.0);
     sheet.wires.push(Wire {
+        unknown_columns: Default::default(),
         uuid: Uuid::new_v4(),
         start: origin,
         end: Point::new(10.0, 0.0),
         stroke_width: 0.0,
     });
     sheet.labels.push(Label {
+        unknown_columns: Default::default(),
         uuid: Uuid::new_v4(),
         text: net_name.to_string(),
         position: origin,
@@ -141,6 +143,7 @@ pub(crate) fn sheet_with_net(reference: &str, net_name: &str, children: &[&str])
         },
     );
     sheet.symbols.push(Symbol {
+        unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::new_v4(),
         lib_id: "Device:R".to_string(),

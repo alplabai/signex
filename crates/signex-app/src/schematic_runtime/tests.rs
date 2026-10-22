@@ -30,6 +30,7 @@ fn hit_test_wire_uses_segment_tolerance() {
     let mut snapshot = empty_snapshot();
     let wire_uuid = uuid::Uuid::new_v4();
     snapshot.wires.push(signex_types::schematic::Wire {
+        unknown_columns: Default::default(),
         uuid: wire_uuid,
         start: Point::new(0.0, 0.0),
         end: Point::new(10.0, 0.0),
@@ -45,6 +46,7 @@ fn hit_test_rect_mode_distinguishes_inside_and_touching() {
     let mut snapshot = empty_snapshot();
     let wire_uuid = uuid::Uuid::new_v4();
     snapshot.wires.push(signex_types::schematic::Wire {
+        unknown_columns: Default::default(),
         uuid: wire_uuid,
         start: Point::new(-4.0, 0.0),
         end: Point::new(4.0, 0.0),
@@ -67,12 +69,14 @@ fn hit_test_polygon_selects_wire_and_label_by_anchor() {
     let label_uuid = uuid::Uuid::new_v4();
 
     snapshot.wires.push(signex_types::schematic::Wire {
+        unknown_columns: Default::default(),
         uuid: wire_uuid,
         start: Point::new(1.0, 1.0),
         end: Point::new(9.0, 1.0),
         stroke_width: 0.15,
     });
     snapshot.labels.push(Label {
+        unknown_columns: Default::default(),
         uuid: label_uuid,
         text: "NET_MAIN".into(),
         position: Point::new(4.0, 4.0),

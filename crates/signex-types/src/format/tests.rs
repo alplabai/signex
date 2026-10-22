@@ -109,6 +109,7 @@ fn escape_tsv_body_for_toml_never_leaves_a_triple_quote_run() {
 
 fn label_with_text(text: &str) -> Label {
     Label {
+        unknown_columns: Default::default(),
         uuid: Uuid::nil(),
         text: text.to_string(),
         position: SchPoint { x: 0.0, y: 0.0 },
@@ -226,6 +227,7 @@ fn snxpcb_includes_tsv_blocks_substring() {
 
 pub(super) fn sample_symbol() -> Symbol {
     Symbol {
+        unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::parse_str("0192a8c0-0001-7000-8000-000000000001").unwrap(),
         lib_id: "lm2596.snxsym".to_string(),
@@ -260,6 +262,7 @@ pub(super) fn sample_symbol() -> Symbol {
 
 fn sample_wire(sx: f64, sy: f64, ex: f64, ey: f64) -> Wire {
     Wire {
+        unknown_columns: Default::default(),
         uuid: Uuid::new_v4(),
         start: SchPoint { x: sx, y: sy },
         end: SchPoint { x: ex, y: ey },
@@ -286,6 +289,7 @@ fn show_serialised_pcb_for_inspection() {
         },
     ];
     board.footprints.push(Footprint {
+        unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::parse_str("0192a8c0-0010-7000-8000-000000000001").unwrap(),
         reference: "U1".into(),
@@ -310,12 +314,14 @@ fn snxsch_round_trip_with_data() {
     sheet.wires.push(sample_wire(10.0, 20.0, 30.0, 20.0));
     sheet.wires.push(sample_wire(30.0, 20.0, 30.0, 40.0));
     sheet.junctions.push(Junction {
+        unknown_columns: Default::default(),
         uuid: Uuid::parse_str("0192a8c0-0002-7000-8000-000000000001").unwrap(),
         position: SchPoint { x: 30.0, y: 20.0 },
         diameter: 0.5,
         minted: true,
     });
     sheet.labels.push(Label {
+        unknown_columns: Default::default(),
         uuid: Uuid::parse_str("0192a8c0-0003-7000-8000-000000000001").unwrap(),
         text: "VIN".to_string(),
         position: SchPoint { x: 10.0, y: 20.0 },
@@ -374,6 +380,7 @@ fn snxsch_round_trip_with_data() {
 fn snxsch_without_junction_extras_defaults_to_user_placed() {
     let mut sheet = empty_sheet();
     sheet.junctions.push(Junction {
+        unknown_columns: Default::default(),
         uuid: Uuid::parse_str("0192a8c0-0002-7000-8000-000000000002").unwrap(),
         position: SchPoint { x: 5.0, y: 0.0 },
         diameter: 0.0,
@@ -408,6 +415,7 @@ fn snxpcb_round_trip_with_data() {
     let mut board = empty_board();
 
     let pad1 = Pad {
+        unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::parse_str("0192a8c0-0011-7000-8000-000000000001").unwrap(),
         number: "1".into(),
@@ -424,6 +432,7 @@ fn snxpcb_round_trip_with_data() {
         roundrect_ratio: 0.25,
     };
     let pad2 = Pad {
+        unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::parse_str("0192a8c0-0011-7000-8000-000000000002").unwrap(),
         number: "2".into(),
@@ -441,6 +450,7 @@ fn snxpcb_round_trip_with_data() {
     };
 
     let footprint = Footprint {
+        unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::parse_str("0192a8c0-0010-7000-8000-000000000001").unwrap(),
         reference: "U1".into(),
@@ -480,6 +490,7 @@ fn snxpcb_round_trip_with_data() {
         ),
     ] {
         board.segments.push(Segment {
+            unknown_columns: Default::default(),
             uuid: Uuid::parse_str(uuid).unwrap(),
             start: PcbPoint { x: sx, y: sy },
             end: PcbPoint { x: ex, y: ey },
@@ -490,6 +501,7 @@ fn snxpcb_round_trip_with_data() {
     }
 
     board.vias.push(Via {
+        unknown_columns: Default::default(),
         uuid: Uuid::parse_str("0192a8c0-0030-7000-8000-000000000001").unwrap(),
         position: PcbPoint { x: 100.0, y: 200.0 },
         diameter: 0.6,
@@ -549,19 +561,21 @@ fn snxpcb_round_trip_with_data() {
 fn tsv_writer_pads_columns_for_legibility() {
     let rows = vec![
         SchJunctionRow {
+            unknown_columns: Default::default(),
             uuid: Uuid::nil(),
             pos_x: 100,
             pos_y: 200,
             diameter: 0.5,
         },
         SchJunctionRow {
+            unknown_columns: Default::default(),
             uuid: Uuid::nil(),
             pos_x: 30000000,
             pos_y: 40000000,
             diameter: 0.5,
         },
     ];
-    let body = write_tsv_block(&rows);
+    let body = write_tsv_block("t", &rows).unwrap();
     let lines: Vec<&str> = body.lines().collect();
     assert_eq!(lines[0].split_whitespace().next().unwrap(), "uuid");
     // header columns "pos_x" "pos_y" "diameter" preserved

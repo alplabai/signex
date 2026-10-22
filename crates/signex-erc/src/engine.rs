@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use crate::context::ErcContext;
-use crate::diagnostic::Diagnostic;
+use crate::diagnostic::{Diagnostic, LocationSpace};
 use crate::rules;
 
 /// Evaluation function produced by the DSL compiler. Takes a read-only
@@ -29,14 +29,30 @@ pub fn run_all(ctx: &ErcContext) -> Vec<Diagnostic> {
     rules::power_port_short(ctx, &mut out);
     rules::symbol_outside_sheet(ctx, &mut out);
     rules::ambiguous_label_anchor(ctx, &mut out);
+    drop_suppressed(ctx, &mut out);
     out
+}
+
+/// Drop every diagnostic located on a No-ERC directive. Positional only: the
+/// directive silences all rules at its point. Diagnostics whose location is a
+/// placeholder or lives in another sheet's coordinates are never matched.
+fn drop_suppressed(ctx: &ErcContext, diagnostics: &mut Vec<Diagnostic>) {
+    if ctx.no_erc_directives.is_empty() {
+        return;
+    }
+    diagnostics.retain(|d| {
+        d.location_space != LocationSpace::ThisSheet || !ctx.has_no_erc_directive_at(&d.location)
+    });
 }
 
 /// Run built-in rules **and** any DSL-compiled rules in a single pass.
 pub fn run_all_with_dsl(ctx: &ErcContext, dsl_rules: &[EvalFn]) -> Vec<Diagnostic> {
     let mut out = run_all(ctx);
+    let mut dsl = Vec::new();
     for rule in dsl_rules {
-        out.extend(rule(ctx));
+        dsl.extend(rule(ctx));
     }
+    drop_suppressed(ctx, &mut dsl);
+    out.extend(dsl);
     out
 }

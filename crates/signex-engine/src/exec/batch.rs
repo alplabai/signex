@@ -147,6 +147,7 @@ mod tests {
     fn place_label() -> Command {
         Command::PlaceLabel {
             label: Label {
+                unknown_columns: Default::default(),
                 uuid: uuid::Uuid::new_v4(),
                 text: "NET".to_string(),
                 position: Point::new(0.0, 0.0),
