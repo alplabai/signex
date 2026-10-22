@@ -121,6 +121,12 @@ pub struct ErcNoConnect {
     pub position: Point,
 }
 
+/// A No-ERC directive: suppresses every diagnostic located at its point.
+#[derive(Debug, Clone, Copy)]
+pub struct ErcNoErcDirective {
+    pub position: Point,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct ErcBusEntry {
     pub position: Point,
@@ -181,6 +187,7 @@ pub struct ErcContext {
     pub labels: Vec<ErcLabel>,
     pub junctions: Vec<ErcJunction>,
     pub no_connects: Vec<ErcNoConnect>,
+    pub no_erc_directives: Vec<ErcNoErcDirective>,
     pub bus_entries: Vec<ErcBusEntry>,
     pub child_sheets: Vec<ErcChildSheet>,
     /// Logical net summaries for the DSL, projected off the shared
@@ -192,6 +199,15 @@ pub struct ErcContext {
 }
 
 impl ErcContext {
+    /// True when a No-ERC directive sits at `p`, compared in the 1 µm key
+    /// space (`pt_key`) like every other point test in this crate.
+    pub fn has_no_erc_directive_at(&self, p: &Point) -> bool {
+        let k = pt_key(p);
+        self.no_erc_directives
+            .iter()
+            .any(|d| pt_key(&d.position) == k)
+    }
+
     pub fn from_snapshot(snapshot: &SchematicSheet) -> Self {
         Self::project(snapshot, HashMap::new())
     }
@@ -264,6 +280,14 @@ impl ErcContext {
             .iter()
             .map(|nc| ErcNoConnect {
                 position: nc.position,
+            })
+            .collect();
+
+        let no_erc_directives: Vec<ErcNoErcDirective> = snapshot
+            .no_erc_directives
+            .iter()
+            .map(|d| ErcNoErcDirective {
+                position: d.position,
             })
             .collect();
 
@@ -352,6 +376,7 @@ impl ErcContext {
             labels,
             junctions,
             no_connects,
+            no_erc_directives,
             bus_entries,
             child_sheets,
             nets,

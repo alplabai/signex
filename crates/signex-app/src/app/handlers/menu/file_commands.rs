@@ -19,6 +19,10 @@ impl Signex {
                 },
                 |p| Message::File(FileMsg::Opened(p)),
             )),
+            MenuMessage::OpenRecentProject(path) => {
+                Some(self.handle_open_recent_project(path.clone()))
+            }
+            MenuMessage::ClearRecentProjects => Some(self.handle_clear_recent_projects()),
             MenuMessage::Save => Some(self.update(Message::File(FileMsg::Save))),
             MenuMessage::SaveAs => Some(Task::perform(
                 async {

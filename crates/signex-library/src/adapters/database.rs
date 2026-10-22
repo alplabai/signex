@@ -15,7 +15,7 @@
 
 use std::time::Duration;
 
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use uuid::Uuid;
 
 use crate::adapter::{LibraryAdapter, LibraryError, PrimitiveSummary};
@@ -23,7 +23,7 @@ use crate::component::ComponentRow;
 use crate::identity::{InternalPn, RowId};
 use crate::library_file::SnxlibManifest;
 use crate::manifest::{LibraryMeta, LibraryMode, Manifest};
-use crate::primitive::{Footprint, SimModel, Symbol};
+use crate::primitive::{Footprint, PrimitiveKind, SimModel, Symbol};
 
 /// Connect-timeout for the HTTP client. A hung TLS handshake should
 /// not freeze the iced runtime — fail fast and let the dispatcher
@@ -185,8 +185,8 @@ impl DatabaseAdapter {
         }
     }
 
-    /// Generic GET → JSON for a primitive at `/{collection}/{uuid}`.
-    /// `collection` is percent-encoded; `uuid` is hex (Display) so it
+    /// Generic GET → JSON for a primitive at `/{collection}/{uuid}` in this
+    /// library. `collection` is percent-encoded; `uuid` is hex (Display) so it
     /// is already URL-safe.
     fn get_primitive_json<T: DeserializeOwned>(
         &self,
@@ -196,7 +196,10 @@ impl DatabaseAdapter {
     ) -> Result<T, LibraryError> {
         let coll = Self::encode_segment(collection);
         let resp = self
-            .auth(self.client.get(self.url(&format!("/{coll}/{uuid}"))))
+            .auth(
+                self.client
+                    .get(self.url(&format!("/{coll}/{uuid}?{}", self.library_id_query()))),
+            )
             .send()
             .map_err(|e| LibraryError::Backend(e.to_string()))?;
         match resp.status() {
@@ -211,7 +214,9 @@ impl DatabaseAdapter {
     }
 
     /// Generic POST primitive JSON to `/{collection}` with the supplied
-    /// commit message in the `x-signex-message` header.
+    /// commit message in the `x-signex-message` header. The server reads the
+    /// owning library from a top-level `library_id` beside the primitive's
+    /// own fields.
     fn post_primitive_json<T: Serialize>(
         &self,
         collection: &str,
@@ -224,7 +229,10 @@ impl DatabaseAdapter {
                 self.client
                     .post(self.url(&format!("/{coll}")))
                     .header("x-signex-message", message)
-                    .json(body),
+                    .json(&InLibrary {
+                        library_id: self.manifest.library.library_id,
+                        primitive: body,
+                    }),
             )
             .send()
             .map_err(|e| LibraryError::Backend(e.to_string()))?;
@@ -237,14 +245,21 @@ impl DatabaseAdapter {
         Ok(())
     }
 
-    /// Generic GET → list at `/{collection}` returning [`PrimitiveSummary`].
+    /// Generic GET → list at `/{collection}` returning this library's
+    /// [`PrimitiveSummary`]s. Without `library_id` the server lists every
+    /// library's primitives. The server's rows carry no kind, so each takes
+    /// the collection's `kind`.
     fn list_primitives_json(
         &self,
         collection: &str,
+        kind: PrimitiveKind,
     ) -> Result<Vec<PrimitiveSummary>, LibraryError> {
         let coll = Self::encode_segment(collection);
         let resp = self
-            .auth(self.client.get(self.url(&format!("/{coll}"))))
+            .auth(
+                self.client
+                    .get(self.url(&format!("/{coll}?{}", self.library_id_query()))),
+            )
             .send()
             .map_err(|e| LibraryError::Backend(e.to_string()))?;
         if !resp.status().is_success() {
@@ -253,17 +268,43 @@ impl DatabaseAdapter {
                 resp.status()
             )));
         }
-        resp.json::<Vec<PrimitiveSummary>>()
-            .map_err(|e| LibraryError::Backend(e.to_string()))
+        let listed = resp
+            .json::<Vec<ListedPrimitive>>()
+            .map_err(|e| LibraryError::Backend(e.to_string()))?;
+        Ok(listed
+            .into_iter()
+            .map(|row| PrimitiveSummary {
+                uuid: row.uuid,
+                name: row.name,
+                kind,
+                used_by_count: 0,
+            })
+            .collect())
     }
 
-    /// `library_id` query string segment used by every row/table call. The
-    /// server keys row storage by `(library_id, table_name, row_id)`; a
-    /// missing or wrong id surfaces as a 404 from the route, which we map
-    /// to `NotFound` at the call site.
+    /// `library_id` query string segment used by every row, table and
+    /// primitive read. The server keys storage by `library_id`; a missing or
+    /// wrong id surfaces as a 404 from the route, which we map to `NotFound`
+    /// at the call site.
     fn library_id_query(&self) -> String {
         format!("library_id={}", self.manifest.library.library_id)
     }
+}
+
+/// One row of the server's primitive list (`GET /{collection}`).
+#[derive(Deserialize)]
+struct ListedPrimitive {
+    uuid: Uuid,
+    name: String,
+}
+
+/// A primitive's JSON with the owning library beside its fields — the body
+/// the server's primitive `POST` routes expect.
+#[derive(Serialize)]
+struct InLibrary<'a, T> {
+    library_id: Uuid,
+    #[serde(flatten)]
+    primitive: &'a T,
 }
 
 impl LibraryAdapter for DatabaseAdapter {
@@ -497,15 +538,15 @@ impl LibraryAdapter for DatabaseAdapter {
     }
 
     fn list_symbols(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
-        self.list_primitives_json("symbols")
+        self.list_primitives_json("symbols", PrimitiveKind::Symbol)
     }
 
     fn list_footprints(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
-        self.list_primitives_json("footprints")
+        self.list_primitives_json("footprints", PrimitiveKind::Footprint)
     }
 
     fn list_sims(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
-        self.list_primitives_json("sims")
+        self.list_primitives_json("sims", PrimitiveKind::Sim)
     }
 }
 
