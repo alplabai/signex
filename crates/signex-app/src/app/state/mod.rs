@@ -171,6 +171,23 @@ impl ErrorNotice {
         }
     }
 
+    /// An external page could not be opened in the default browser.
+    pub fn link(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Could Not Open Link".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
+    /// A delete was refused because it would have removed a file the
+    /// project does not own (#139).
+    pub fn delete(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Delete Refused".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
     /// The BOM was written, but validation found issues the user should
     /// still see. Advisory: the file exists.
     pub fn export_advisory(detail: impl Into<String>) -> Self {
@@ -193,6 +210,14 @@ impl ErrorNotice {
     pub fn open(detail: impl Into<String>) -> Self {
         Self {
             title: "Open Failed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
+    /// The requested action has no backing flow yet.
+    pub fn unavailable(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Not Available".to_owned(),
             detail: detail.into(),
         }
     }

@@ -182,6 +182,9 @@ impl Signex {
 
     fn open_project_file(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
         let (_, mount_task) = self.load_or_activate_project(&path)?;
+        // Success path only: `?` above returns before a project that
+        // failed to load can be recorded.
+        self.record_recent_project(&path);
         self.refresh_panel_ctx();
         Ok(mount_task)
     }

@@ -385,6 +385,9 @@ pub struct RemoveDialogState {
     pub target_path: std::path::PathBuf,
     pub tree_path: Vec<usize>,
     pub display_name: String,
+    /// Does the target live outside the project folder (a Shared / Global
+    /// library)? Such a target is never offered for deletion (#139).
+    pub is_outside_project: bool,
 }
 
 /// User choice from the Remove-from-Project modal.

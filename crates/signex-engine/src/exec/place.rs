@@ -143,6 +143,30 @@ impl Engine {
 
                 Ok(CommandResult::changed(patch_pair))
             }
+            Command::PlaceChildSheet { child_sheet } => {
+                // A sheet with no target file cannot be stitched or
+                // navigated, so a blank filename is rejected up front,
+                // before any mutation or history entry.
+                //
+                // An empty `name` IS allowed: the sheet is still addressable
+                // by uuid and filename, parsed files may carry one, and the
+                // placing tool is expected to default it (e.g. to the file
+                // stem). The netlist then qualifies child nets with an empty
+                // segment (a leading `/`), which is cosmetic only.
+                if child_sheet.filename.trim().is_empty() {
+                    return Err(EngineError::EmptyChildSheetFilename);
+                }
+                self.document.child_sheets.push(child_sheet);
+
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::ObjectPlaced,
+                    document: DocumentPatch::CHILD_SHEETS,
+                };
+
+                self.record_history(before, patch_pair);
+
+                Ok(CommandResult::changed(patch_pair))
+            }
             Command::PlaceWireSegment { wire } => {
                 let wire_item = SelectedItem::new(wire.uuid, SelectedKind::Wire);
                 self.document.wires.push(wire);
