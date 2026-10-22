@@ -28,35 +28,10 @@ impl SymbolCanvas<'_> {
         let (ux, uy) = world_unsnapped(self, pos.x, pos.y, bounds);
         match self.tool {
             SymbolTool::Select => {
-                // Screen-pixel tolerance so grab zones are equally easy
-                // to hit at any zoom level.
-                let tol_mm = self.pick_tolerance_mm();
-                // Pins win over everything: nearest pin along its whole
-                // tip-to-base segment, else by its name/number label.
-                let pin_hit = state::hit_test_pin(
-                    self.symbol,
-                    ux,
-                    uy,
-                    tol_mm,
-                    self.active_part,
-                    &self.selection_filter,
-                )
-                .or_else(|| self.pin_hit_by_label(ux, uy));
-                // Next the resize handles of the SELECTED graphics (the
-                // only ones drawn); then any graphic body.
-                let handle_hit = if pin_hit.is_some() {
-                    None
-                } else {
-                    state::hit_test_graphic_handle(
-                        self.symbol,
-                        ux,
-                        uy,
-                        tol_mm,
-                        self.active_part,
-                        &self.selected,
-                    )
-                };
-                if let Some((idx, handle)) = handle_hit {
+                // One shared priority (pin, selected graphic's handle,
+                // graphic body) so the hover cursor agrees with the press.
+                let target = self.press_target(ux, uy);
+                if let Some(PressTarget::Handle(idx, handle)) = target {
                     state.dragging_handle = Some((idx, handle));
                     state.dragging = false;
                     state.drag_anchor_offset = None;
@@ -65,16 +40,11 @@ impl SymbolCanvas<'_> {
                     state.box_select_current = None;
                     return Some(canvas::Action::capture());
                 }
-                let sel = pin_hit.map(state::SymbolSelection::Pin).or_else(|| {
-                    state::hit_test_graphic(
-                        self.symbol,
-                        ux,
-                        uy,
-                        self.active_part,
-                        &self.selection_filter,
-                    )
-                    .map(state::SymbolSelection::Graphic)
-                });
+                let sel = match target {
+                    Some(PressTarget::Pin(idx)) => Some(state::SymbolSelection::Pin(idx)),
+                    Some(PressTarget::Graphic(idx)) => Some(state::SymbolSelection::Graphic(idx)),
+                    _ => None,
+                };
                 if let Some(sel) = sel {
                     state.box_select_origin = None;
                     state.box_select_current = None;

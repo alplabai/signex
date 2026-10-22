@@ -234,12 +234,185 @@ fn a_pin_can_be_dragged_by_its_body_line() {
     let mut s = Symbol::empty("T");
     s.pins.push(pin("1", 0.0, 0.0, PinOrientation::Right));
     let mut rig = Rig::new(s);
+    // 4x zoom: the screen-space tip zone shrinks to ~0.67 mm, so a press
+    // 1.9 mm along the 2.54 mm line can only be a hit through the
+    // tip-to-base segment, never the tip disc.
+    rig.editor.camera.scale *= 4.0;
+    rig.editor.camera.offset = Point::new(450.0, 300.0);
+    assert!(
+        rig.editor.camera.scale > 8.0 / 0.67,
+        "premise: tolerance well under 1.9 mm"
+    );
 
-    // 1.9 mm along the 2.54 mm body: far outside the old 1.5 mm tip disc.
     rig.drag((1.9, 0.0), (1.9, 2.54));
 
     assert_eq!(rig.editor.selected, Some(state::SymbolSelection::Pin(0)));
     assert_eq!(rig.editor.primitive().pins[0].position[1], 2.54);
+}
+
+#[test]
+fn a_line_touching_a_pin_base_is_still_clickable_at_default_zoom() {
+    // A clock-wedge style line starting at the pin's base (pin tip at
+    // x = -2.54, base at the body edge x = 0). Pins used to outrank it
+    // everywhere within 2.67 mm.
+    let mut s = Symbol::empty("T");
+    s.graphics.push(rectangle([0.0, -5.08], [10.16, 5.08]));
+    s.graphics.push(SymbolGraphic {
+        kind: SymbolGraphicKind::Line {
+            from: [0.0, -0.635],
+            to: [0.9, 0.0],
+        },
+        stroke_width: 0.15,
+        part_number: 0,
+        fill: None,
+    });
+    s.pins.push(pin("1", -2.54, 0.0, PinOrientation::Right));
+    let mut rig = Rig::new(s);
+
+    rig.press((0.45, -0.32));
+
+    assert_eq!(
+        rig.editor.selected,
+        Some(state::SymbolSelection::Graphic(1))
+    );
+}
+
+#[test]
+fn a_press_inside_the_body_near_a_pinned_edge_selects_the_body() {
+    let mut s = Symbol::empty("T");
+    s.graphics.push(rectangle([0.0, -5.08], [10.16, 5.08]));
+    s.pins.push(pin("1", -2.54, 0.0, PinOrientation::Right));
+    let mut rig = Rig::new(s);
+
+    rig.drag((1.5, 1.0), (4.0, 1.0));
+
+    assert_eq!(
+        rig.editor.selected,
+        Some(state::SymbolSelection::Graphic(0))
+    );
+    assert_eq!(
+        rig.editor.primitive().pins[0].position,
+        [-2.54, 0.0],
+        "dragging the body must not move the pin beside it"
+    );
+}
+
+#[test]
+fn a_pin_still_wins_over_the_body_edge_it_is_attached_to() {
+    // The pin's own line, outside the body, stays grabbable.
+    let mut s = Symbol::empty("T");
+    s.graphics.push(rectangle([0.0, -5.08], [10.16, 5.08]));
+    s.pins.push(pin("1", -2.54, 0.0, PinOrientation::Right));
+    let mut rig = Rig::new(s);
+
+    rig.press((-1.27, 0.0));
+
+    assert_eq!(rig.editor.selected, Some(state::SymbolSelection::Pin(0)));
+}
+
+#[test]
+fn a_pin_on_a_selected_rectangles_handle_is_still_dragged_not_the_handle() {
+    let mut rig = Rig::new(pin_on_body_edge());
+    // The rectangle is selected first, so its edge-midpoint handle (0, 0)
+    // is drawn - and the pin tip sits exactly on it.
+    rig.editor.selected = Some(state::SymbolSelection::Graphic(0));
+    let before = rig.editor.primitive().graphics[0].kind.clone();
+
+    rig.drag((0.0, 0.0), (0.0, 2.54));
+
+    assert_eq!(rig.editor.primitive().pins[0].position, [0.0, 2.54]);
+    assert_eq!(rig.editor.primitive().graphics[0].kind, before);
+}
+
+#[test]
+fn the_hover_cursor_agrees_with_the_press_over_a_pin_on_a_handle() {
+    let mut rig = Rig::new(pin_on_body_edge());
+    rig.editor.selected = Some(state::SymbolSelection::Graphic(0));
+    let editor = &rig.editor;
+    let canvas = SymbolCanvas::new(
+        editor.primitive(),
+        editor.selected.clone(),
+        editor.tool,
+        &editor.polygon_vertices,
+        editor.active_part,
+        false,
+        &editor.camera,
+        1.27,
+        true,
+        crate::render_config::GridStyle::default(),
+        true,
+        Color::WHITE,
+        Color::from_rgb(0.2, 0.4, 0.9),
+        Color::BLACK,
+        Color::BLACK,
+        Color::BLACK,
+    );
+    let cursor = mouse::Cursor::Available(rig.screen(0.0, 0.0));
+
+    let shown = canvas::Program::mouse_interaction(&canvas, &rig.cstate, BOUNDS, cursor);
+
+    assert_eq!(
+        shown,
+        mouse::Interaction::Crosshair,
+        "a press here grabs the pin, so no resize cursor"
+    );
+}
+
+#[test]
+fn a_resize_handle_of_a_filtered_out_graphic_is_not_grabbable() {
+    let mut s = Symbol::empty("T");
+    s.graphics.push(rectangle([0.0, 0.0], [5.08, 5.08]));
+    let mut rig = Rig::new(s);
+    rig.editor.selected = Some(state::SymbolSelection::Graphic(0));
+    rig.editor.selection_filter.drawings = false;
+    let before = rig.editor.primitive().graphics[0].kind.clone();
+
+    rig.drag((5.08, 5.08), (8.0, 8.0));
+
+    assert_eq!(rig.editor.primitive().graphics[0].kind, before);
+}
+
+#[test]
+fn a_box_over_everything_stays_multiple_under_a_restricted_filter() {
+    let mut s = Symbol::empty("T");
+    s.graphics.push(rectangle([0.0, 0.0], [5.08, 5.08]));
+    s.pins.push(pin("1", -10.0, 0.0, PinOrientation::Right));
+    let mut rig = Rig::new(s);
+    // Texts are off but the symbol has none, so the box still picks every
+    // item - which must not become `All` while a pill is off.
+    rig.editor.selection_filter.texts = false;
+
+    rig.press((-12.0, -2.0));
+    rig.moved((8.0, 8.0));
+    rig.release((8.0, 8.0));
+
+    assert_eq!(
+        rig.editor.selected,
+        Some(state::SymbolSelection::Multiple {
+            pin_indices: vec![0],
+            graphic_indices: vec![0],
+        })
+    );
+}
+
+#[test]
+fn a_pin_drag_is_one_undo_step_and_marks_the_document_dirty() {
+    let mut s = Symbol::empty("T");
+    s.pins.push(pin("1", 0.0, 0.0, PinOrientation::Right));
+    let mut rig = Rig::new(s);
+    assert!(!rig.editor.dirty && rig.editor.undo_snapshots.is_empty());
+
+    rig.press((0.0, 0.0));
+    rig.moved((0.0, 1.27));
+    rig.moved((0.0, 2.54));
+    rig.release((0.0, 2.54));
+
+    assert_eq!(
+        rig.editor.undo_snapshots.len(),
+        1,
+        "one drag, one undo step"
+    );
+    assert!(rig.editor.dirty);
 }
 
 #[test]
@@ -354,6 +527,12 @@ fn add_pin_lands_where_the_button_is_released() {
     let pins = &rig.editor.primitive().pins;
     assert_eq!(pins.len(), 1, "one gesture places exactly one pin");
     assert_eq!(pins[0].position, [5.08, 2.54]);
+    assert_eq!(
+        rig.editor.undo_snapshots.len(),
+        1,
+        "one placement, one undo"
+    );
+    assert!(rig.editor.dirty);
 }
 
 #[test]

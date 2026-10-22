@@ -55,7 +55,7 @@ pub fn delete_selected(
 }
 
 /// Hit-test cursor world coordinates against pins, then graphic
-/// bodies. Pins win (small hit target, often inside graphics);
+/// bodies. Pins win inside their grab zone (see [`hit_test_pin`]);
 /// graphics scan in reverse so the most-recently-placed graphic
 /// wins overlap. Both honour the selection `filter`.
 ///
@@ -74,12 +74,21 @@ pub fn hit_test(
         .or_else(|| hit_test_graphic(sym, x, y, active_part, filter).map(SymbolSelection::Graphic))
 }
 
-/// Nearest pin to `(x, y)` within `tol_mm` of its tip-to-base
-/// segment. Measuring the whole segment (not just the tip) makes the
-/// pin's body line grabbable, and picking the nearest - not the first
-/// in vector order - keeps adjacent pins at the 1.27 mm snap pitch
-/// from stealing each other's drag. A distance tie goes to the later
-/// pin (the one drawn on top). Honours `filter.pins`.
+/// Half-width (mm) of the grab zone along a pin's tip-to-base line. Kept
+/// well below the 1.27 mm snap pitch and the 2.54 mm pin length so a pin
+/// does not swallow a graphic that touches its base (a clock wedge, a
+/// negation bubble) or a press in the body next to a pinned edge. The
+/// larger screen-space radius applies at the tip only.
+pub const PIN_LINE_GRAB_MM: f64 = 0.4;
+
+/// Nearest pin to `(x, y)`. A pin is grabbed within `tol_mm` of its
+/// tip (the generous, screen-space zone) or within the much narrower
+/// `min(tol_mm, PIN_LINE_GRAB_MM)` of its tip-to-base line, so the
+/// pin's body line is grabbable without outranking nearby graphics.
+/// Picking the nearest - not the first in vector order - keeps adjacent
+/// pins at the 1.27 mm snap pitch from stealing each other's drag. A
+/// distance tie goes to the later pin (the one drawn on top). Honours
+/// `filter.pins`.
 pub fn hit_test_pin(
     sym: &Symbol,
     x: f64,
@@ -100,7 +109,10 @@ pub fn hit_test_pin(
         let tip = pin.position;
         let base = [tip[0] + bdx, tip[1] + bdy];
         let d_sq = point_to_segment_dist_sq([x, y], tip, base);
-        if d_sq <= tol_mm * tol_mm && best.is_none_or(|(_, b)| d_sq <= b) {
+        let tip_sq = (x - tip[0]).powi(2) + (y - tip[1]).powi(2);
+        let line_tol = tol_mm.min(PIN_LINE_GRAB_MM);
+        let grabbed = tip_sq <= tol_mm * tol_mm || d_sq <= line_tol * line_tol;
+        if grabbed && best.is_none_or(|(_, b)| d_sq <= b) {
             best = Some((i, d_sq));
         }
     }
@@ -396,13 +408,14 @@ pub fn hit_test_graphic_handle(
     tol_mm: f64,
     active_part: u8,
     selected: &Option<SymbolSelection>,
+    filter: &SymbolSelectionFilter,
 ) -> Option<(usize, GraphicHandle)> {
     let r_sq = tol_mm * tol_mm;
     for idx in (0..sym.graphics.len()).rev() {
         let Some(g) = sym.graphics.get(idx) else {
             continue;
         };
-        if !super::graphic_on_part(g, active_part) {
+        if !super::graphic_on_part(g, active_part) || !filter.allows_graphic(&g.kind) {
             continue;
         }
         if !super::graphic_is_selected(selected, idx) {

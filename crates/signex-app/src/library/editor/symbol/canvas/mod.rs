@@ -45,11 +45,13 @@ mod draw;
 mod geometry;
 mod input;
 mod pins;
+mod press;
 mod types;
 
 pub use types::{CanvasAction, CanvasState, RotatePivotMode, SymbolTool};
 
 use pins::{PIN_TEXT_LAYOUT, PinRenderGeometry, SymbolPalette};
+use press::PressTarget;
 
 // Re-export the free math / coordinate helpers so the `input` and
 // `draw` submodules keep resolving them via their `use super::super::*`
@@ -469,15 +471,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
             && let Some(pos) = cursor.position_in(bounds)
         {
             let (wx, wy) = world_unsnapped(self, pos.x, pos.y, bounds);
-            let tol_mm = self.pick_tolerance_mm();
-            if let Some((_, handle)) = state::hit_test_graphic_handle(
-                self.symbol,
-                wx,
-                wy,
-                tol_mm,
-                self.active_part,
-                &self.selected,
-            ) {
+            if let Some(PressTarget::Handle(_, handle)) = self.press_target(wx, wy) {
                 return state::handle_interaction(handle);
             }
         }

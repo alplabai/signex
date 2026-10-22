@@ -169,7 +169,15 @@ fn hit_test_graphic_handle_finds_rectangle_corner() {
     });
     // BR corner is at (to.x, from.y) = (10.0, 0.0).
     let selected = Some(SymbolSelection::Graphic(0));
-    let hit = hit_test_graphic_handle(&s, 10.0, 0.0, 1.5, 1, &selected);
+    let hit = hit_test_graphic_handle(
+        &s,
+        10.0,
+        0.0,
+        1.5,
+        1,
+        &selected,
+        &SymbolSelectionFilter::default(),
+    );
     assert_eq!(hit, Some((0, GraphicHandle::RectCorner(2))));
 }
 
@@ -744,7 +752,15 @@ fn graphic_handles_returns_one_per_polygon_vertex() {
 fn hit_test_graphic_handle_finds_polygon_vertex_when_selected() {
     let s = polygon_symbol(vec![[0.0, 0.0], [2.0, 0.0], [1.0, 2.0]], None);
     let selected = Some(SymbolSelection::Graphic(0));
-    let hit = hit_test_graphic_handle(&s, 2.0, 0.0, 1.5, 1, &selected);
+    let hit = hit_test_graphic_handle(
+        &s,
+        2.0,
+        0.0,
+        1.5,
+        1,
+        &selected,
+        &SymbolSelectionFilter::default(),
+    );
     assert_eq!(hit, Some((0, GraphicHandle::PolygonVertex(1))));
 }
 
@@ -755,7 +771,15 @@ fn hit_test_graphic_handle_finds_polygon_vertex_when_selected() {
 #[test]
 fn hit_test_graphic_handle_ignores_polygon_vertex_when_not_selected() {
     let s = polygon_symbol(vec![[0.0, 0.0], [2.0, 0.0], [1.0, 2.0]], None);
-    let hit = hit_test_graphic_handle(&s, 2.0, 0.0, 1.5, 1, &None);
+    let hit = hit_test_graphic_handle(
+        &s,
+        2.0,
+        0.0,
+        1.5,
+        1,
+        &None,
+        &SymbolSelectionFilter::default(),
+    );
     assert_eq!(
         hit, None,
         "vertex hit-test misses when the polygon isn't selected"
