@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use signex_types::schematic::SchematicSheet;
 
 use crate::app::state::DocumentState;
-use crate::app::state::scope::path_key;
+use crate::app::state::scope::{CaseFold, path_key, path_key_with};
 
 /// The sheets a project consists of, plus what could not be made sense of
 /// while assembling them.
@@ -341,12 +341,21 @@ pub(crate) fn project_roots(
 /// tightening it belongs with `path_key`, which project membership also
 /// depends on.
 pub(crate) fn sheet_key(path: &Path, base: Option<&Path>) -> signex_net::SheetKey {
+    sheet_key_with(path, base, CaseFold::host_default())
+}
+
+/// [`sheet_key`] under an explicit case policy, so both run on any host.
+pub(crate) fn sheet_key_with(
+    path: &Path,
+    base: Option<&Path>,
+    fold: CaseFold,
+) -> signex_net::SheetKey {
     let relative = base
         .and_then(|dir| path.strip_prefix(dir).ok())
         .map(Path::to_path_buf)
         .or_else(|| path.file_name().map(PathBuf::from))
         .unwrap_or_else(|| path.to_path_buf());
-    signex_net::SheetKey::new(path_key(&relative))
+    signex_net::SheetKey::new(path_key_with(&relative, fold))
 }
 
 /// Re-key `sheets` (the app's `path → SchematicSheet` set) into the
@@ -382,6 +391,16 @@ pub(crate) fn project_graph(
     base_dir: Option<&Path>,
     root: Option<&Path>,
 ) -> AssembledGraph {
+    project_graph_with(sheets, base_dir, root, CaseFold::host_default())
+}
+
+/// [`project_graph`] under an explicit case policy, so both run on any host.
+pub(crate) fn project_graph_with(
+    sheets: &HashMap<PathBuf, SchematicSheet>,
+    base_dir: Option<&Path>,
+    root: Option<&Path>,
+    fold: CaseFold,
+) -> AssembledGraph {
     let mut keyed_sheets: HashMap<signex_net::SheetKey, SchematicSheet> = HashMap::new();
     let mut key_to_path: HashMap<signex_net::SheetKey, PathBuf> = HashMap::new();
     let mut issues: Vec<signex_net::StitchIssue> = Vec::new();
@@ -397,7 +416,7 @@ pub(crate) fn project_graph(
         b_is_root.cmp(&a_is_root).then_with(|| a.cmp(b))
     });
     for path in paths {
-        let key = sheet_key(path, base_dir);
+        let key = sheet_key_with(path, base_dir, fold);
         if let Some(existing) = key_to_path.get(&key) {
             issues.push(signex_net::StitchIssue::SheetKeyCollision {
                 key: key.to_string(),
@@ -425,7 +444,7 @@ pub(crate) fn project_graph(
             let Some(child_path) = resolve_child_reference(dir, &cs.filename) else {
                 continue;
             };
-            let child_key = sheet_key(&child_path, base_dir);
+            let child_key = sheet_key_with(&child_path, base_dir, fold);
             if keyed_sheets.contains_key(&child_key) {
                 submap.insert(cs.filename.clone(), child_key);
             }
@@ -754,32 +773,50 @@ mod tests {
     fn case_fold_collision_between_two_loaded_paths_is_the_remaining_ambiguity() {
         // The only ambiguity left after keying by resolved path: two DISTINCT
         // loaded paths that differ only in case collapse onto one `SheetKey`
-        // where `path_key` folds — one sheet loses the slot entirely, so the
-        // caller must be told. `path_key` folds on `cfg!(windows)` only, so
-        // this asserts the two-key outcome everywhere else; see `sheet_key`
-        // for why that under-folds on a case-insensitive macOS volume.
+        // where the policy folds — one sheet loses the slot entirely, so the
+        // caller must be told. Both policies run on every host (#543); see
+        // `sheet_key` for why the host-family default is only a proxy.
         let mut sheets = HashMap::new();
         sheets.insert(PathBuf::from("/proj/A.snxsch"), sheet(0xA, &[]));
         sheets.insert(PathBuf::from("/proj/a.snxsch"), sheet(0xB, &[]));
+        let base = Some(Path::new("/proj"));
 
-        let graph = project_graph(&sheets, Some(Path::new("/proj")), None);
+        let folded = project_graph_with(&sheets, base, None, CaseFold::Fold);
+        assert_eq!(folded.sheets.len(), 1, "one key wins the collision");
+        assert_eq!(folded.issues.len(), 1, "the collision must not be silent");
+        assert!(matches!(
+            &folded.issues[0],
+            signex_net::StitchIssue::SheetKeyCollision { .. }
+        ));
+        // Sorted-path first-wins: "/proj/A.snxsch" < "/proj/a.snxsch".
+        assert_eq!(
+            folded.sheets.values().next().unwrap().uuid,
+            Uuid::from_u128(0xA)
+        );
 
-        if cfg!(windows) {
-            assert_eq!(graph.sheets.len(), 1, "one key wins the collision");
-            assert_eq!(graph.issues.len(), 1, "the collision must not be silent");
-            assert!(matches!(
-                &graph.issues[0],
-                signex_net::StitchIssue::SheetKeyCollision { .. }
-            ));
-            // Sorted-path first-wins: "/proj/A.snxsch" < "/proj/a.snxsch".
-            assert_eq!(
-                graph.sheets.values().next().unwrap().uuid,
-                Uuid::from_u128(0xA)
-            );
-        } else {
-            assert_eq!(graph.sheets.len(), 2, "unix paths are case-sensitive");
-            assert!(graph.issues.is_empty());
-        }
+        let preserved = project_graph_with(&sheets, base, None, CaseFold::Preserve);
+        assert_eq!(preserved.sheets.len(), 2, "case-sensitive: two files");
+        assert!(preserved.issues.is_empty());
+    }
+
+    #[test]
+    fn sheet_key_identity_follows_the_injected_case_policy() {
+        let base = Some(Path::new("/proj"));
+        let upper = Path::new("/proj/Top.snxsch");
+        let lower = Path::new("/proj/top.snxsch");
+        assert_eq!(
+            sheet_key_with(upper, base, CaseFold::Fold),
+            sheet_key_with(lower, base, CaseFold::Fold)
+        );
+        assert_ne!(
+            sheet_key_with(upper, base, CaseFold::Preserve),
+            sheet_key_with(lower, base, CaseFold::Preserve)
+        );
+        // The host-default wrapper must agree with its own policy.
+        assert_eq!(
+            sheet_key(upper, base),
+            sheet_key_with(upper, base, CaseFold::host_default())
+        );
     }
 
     #[test]
