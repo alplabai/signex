@@ -71,6 +71,11 @@
 #   * `drop(name)` where `name` was bound earlier IN THE SAME FILE by a
 #     single-line `let [mut] name: <type containing Task> = ...` or
 #     `let [mut] name = <recv>.handle_x(...)`.
+# `drop` may be spelled `mem::drop` / `std::mem::drop` / `core::mem::drop`, and
+# a rustfmt-wrapped `drop(` at end of line takes its argument from the next
+# non-blank line (the flagged line is the `drop(` one). An annotation counts
+# only when the type names `Task<...>` or is exactly `[path::]Task`, so
+# `TaskId` is not a Task.
 # Blind spots: a binding the awk cannot see (multi-line `let`, a `Task`
 # returned from a non-`handle_` method with no annotation, a function
 # parameter), and name shadowing (a later non-Task `name` re-binds and
@@ -170,22 +175,36 @@ find_discards() {
 find_task_drops() {
   local f="$1"
   awk '
+    function is_task_arg(arg) {
+      gsub(/[ \t]/, "", arg)
+      sub(/,$/, "", arg)
+      return (arg ~ /^([A-Za-z_][A-Za-z0-9_]*)(\.|::)handle_/ || (arg in tasks))
+    }
     {
       line = $0
+      if (pending_line) {
+        # rustfmt-wrapped `drop(` / `    <arg>,` / `);` — the argument is
+        # the next non-blank line.
+        if (line ~ /^[ \t]*$/) next
+        if (is_task_arg(line)) print pending_line
+        pending_line = 0
+      }
       if (match(line, /^[ \t]*let (mut )?[A-Za-z_][A-Za-z0-9_]*/)) {
         decl = substr(line, RSTART, RLENGTH)
         sub(/^[ \t]*let (mut )?/, "", decl)
-        if (line ~ /:[^=]*Task[^=]*=/ || line ~ /= *([A-Za-z_][A-Za-z0-9_]*)(\.|::)handle_/) {
+        if (line ~ /:[^=]*(^|[^A-Za-z0-9_])Task</ || line ~ /:[ \t]*([A-Za-z_]+::)*Task[ \t]*=/ || line ~ /= *([A-Za-z_][A-Za-z0-9_]*)(\.|::)handle_/) {
           tasks[decl] = 1
         } else {
           delete tasks[decl]
         }
       }
-      if (match(line, /(^|[^A-Za-z0-9_.:])drop\([^)]*/)) {
+      # `drop(`, `mem::drop(`, `std::mem::drop(`, `core::mem::drop(`.
+      if (match(line, /(^|[^A-Za-z0-9_.:])((std::|core::)?mem::)?drop\([^)]*/)) {
         arg = substr(line, RSTART, RLENGTH)
         sub(/^.*drop\(/, "", arg)
         gsub(/[ \t]/, "", arg)
-        if (arg ~ /^([A-Za-z_][A-Za-z0-9_]*)(\.|::)handle_/ || (arg in tasks)) print NR
+        if (arg == "") pending_line = NR
+        else if (is_task_arg(arg)) print NR
       }
     }
   ' "$f"
