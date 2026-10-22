@@ -97,3 +97,6 @@ mod render_config_grid_style;
 
 #[path = "regression/rename_save_as_rekey.rs"]
 mod rename_save_as_rekey;
+
+#[path = "regression/library_components_panel_actions.rs"]
+mod library_components_panel_actions;
