@@ -294,10 +294,29 @@ impl LibraryState {
 
     /// Editor addresses currently pointing at `root` that have unsaved edits.
     pub fn dirty_editors_for_library(&self, root: &Path) -> Vec<EditorAddress> {
+        self.collect_dirty_editors(|key| key.library_path == root)
+    }
+
+    /// Dirty editor addresses whose library lives under `dir` — the
+    /// rows a project-close prompt has to account for.
+    pub fn dirty_editors_under(&self, dir: &Path) -> Vec<EditorAddress> {
+        self.collect_dirty_editors(|key| key.library_path.starts_with(dir))
+    }
+
+    /// Every dirty editor address across all open libraries — the rows
+    /// an app-quit prompt has to account for.
+    pub fn dirty_editors(&self) -> Vec<EditorAddress> {
+        self.collect_dirty_editors(|_| true)
+    }
+
+    fn collect_dirty_editors(
+        &self,
+        include: impl Fn(&EditorAddress) -> bool,
+    ) -> Vec<EditorAddress> {
         let mut keys: Vec<EditorAddress> = self
             .editors
             .iter()
-            .filter(|(key, st)| key.library_path == root && st.dirty)
+            .filter(|(key, st)| st.dirty && include(key))
             .map(|(key, _)| key.clone())
             .collect();
         keys.sort_by(|a, b| {
@@ -307,6 +326,16 @@ impl LibraryState {
                 .then_with(|| a.row_id.cmp(&b.row_id))
         });
         keys
+    }
+
+    /// Human label for an editor row in a confirm modal: its part
+    /// number and table, falling back to the raw address when the
+    /// editor is already gone.
+    pub fn editor_label(&self, address: &EditorAddress) -> String {
+        match self.editors.get(address) {
+            Some(st) => format!("{} ({})", st.row.internal_pn.as_str(), address.table),
+            None => format!("{} ({})", address.row_id, address.table),
+        }
     }
 
     /// Classify how a mounted library got there — drives the

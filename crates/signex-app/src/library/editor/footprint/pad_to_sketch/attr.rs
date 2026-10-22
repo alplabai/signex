@@ -6,8 +6,8 @@ use signex_library::primitive::footprint::{
     Footprint, PadKind as LibPadKind, PadShape as LibPadShape,
 };
 use signex_sketch::attr::{
-    ChamferedCorners as SkChamferedCorners, CustomPadShape, PadAttr, PadKind as SkPadKind,
-    PadShape as SkPadShape, PadSide, PasteAperturePattern,
+    ChamferedCorners as SkChamferedCorners, CustomPadShape, DrillSpec, PadAttr,
+    PadKind as SkPadKind, PadShape as SkPadShape, PadSide, PasteAperturePattern,
 };
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
@@ -48,6 +48,12 @@ pub fn mirror_pad_attrs_into_sketch(pads: &[EditorPad], sketch: &mut SketchData)
         attr.copper_offset_x_mm = pad.copper_offset_x_mm;
         attr.copper_offset_y_mm = pad.copper_offset_y_mm;
         mirror_rotation_expr(&mut attr.rotation_expr, pad.rotation_deg);
+        mirror_drill(&mut attr.drill, pad);
+        mirror_len_expr(
+            &mut attr.mask_margin_expr,
+            pad.passthrough.solder_mask_margin_mm,
+        );
+        mirror_len_expr(&mut attr.paste_margin_expr, pad.passthrough.paste_margin_mm);
         mirror_shape(&mut attr.shape, &pad.shape);
     }
 }
@@ -88,6 +94,45 @@ pub fn mirror_rotation_expr(current: &mut Option<String>, deg: f64) {
     if current.as_deref().is_none_or(is_numeric_literal) {
         *current = Some(super::rotation_expr(deg));
     }
+}
+
+/// Optional millimetre length (slot length, mask / paste margin) onto
+/// its sketch expression. Same rule as rotation: only an absent or
+/// bare-literal expression is overwritten, so a margin bound to a named
+/// parameter survives the Pads-mode edit.
+fn mirror_len_expr(current: &mut Option<String>, mm: Option<f64>) {
+    if current.as_deref().is_none_or(is_numeric_literal) {
+        *current = mm.map(mm_expr);
+    }
+}
+
+/// Drill diameter and slot length onto the sketch `DrillSpec`. Without
+/// this a Pads-mode drill or slot edit is reverted by the next
+/// solve-and-bake, which replaces `footprint.pads` from the sketch. A
+/// diameter bound to a parameter is left alone, and so is its drill.
+fn mirror_drill(current: &mut Option<DrillSpec>, pad: &EditorPad) {
+    let Some(diameter) = pad.drill_diameter_mm else {
+        if current
+            .as_ref()
+            .is_some_and(|d| is_numeric_literal(&d.diameter_expr))
+        {
+            *current = None;
+        }
+        return;
+    };
+    let spec = current.get_or_insert_with(|| DrillSpec {
+        diameter_expr: mm_expr(diameter),
+        slot_length_expr: None,
+        plated: true,
+    });
+    if is_numeric_literal(&spec.diameter_expr) {
+        spec.diameter_expr = mm_expr(diameter);
+    }
+    spec.plated = !matches!(pad.kind, LibPadKind::NptHole);
+    mirror_len_expr(
+        &mut spec.slot_length_expr,
+        pad.passthrough.drill_slot_length_mm,
+    );
 }
 
 /// True when `expr` is a plain number with an optional unit suffix
@@ -137,13 +182,11 @@ pub(super) fn pad_attr_from_editor_pad(pad: &EditorPad) -> PadAttr {
     // v0.18.12.1 — carry `drill_diameter_mm` into the sketch PadAttr.
     // Without this, NPT-hole pads lose their drill on the first
     // sketch round-trip. Plated/NPT semantics follow the pad kind.
-    let drill = pad
-        .drill_diameter_mm
-        .map(|d| signex_sketch::attr::DrillSpec {
-            diameter_expr: format!("{}mm", format_f64(d)),
-            slot_length_expr: None,
-            plated: !matches!(pad.kind, LibPadKind::NptHole),
-        });
+    let drill = pad.drill_diameter_mm.map(|d| DrillSpec {
+        diameter_expr: format!("{}mm", format_f64(d)),
+        slot_length_expr: pad.passthrough.drill_slot_length_mm.map(mm_expr),
+        plated: !matches!(pad.kind, LibPadKind::NptHole),
+    });
     PadAttr {
         number: pad.number.clone(),
         kind: map_kind(pad.kind),
@@ -158,8 +201,10 @@ pub(super) fn pad_attr_from_editor_pad(pad: &EditorPad) -> PadAttr {
         offset_x_expr: None,
         offset_y_expr: None,
         drill,
-        mask_margin_expr: None,
-        paste_margin_expr: None,
+        // `signex_bake::pad` reads exactly these once the sketch owns
+        // the pads, so a `None` here erased the legacy margins on save.
+        mask_margin_expr: pad.passthrough.solder_mask_margin_mm.map(mm_expr),
+        paste_margin_expr: pad.passthrough.paste_margin_mm.map(mm_expr),
         paste_apertures: PasteAperturePattern::Single,
         ..PadAttr::default()
     }
@@ -218,6 +263,11 @@ pub(super) fn map_shape(s: &LibPadShape) -> SkPadShape {
             })
         }
     }
+}
+
+/// A millimetre length as a sketch expression (`"1.8mm"`).
+fn mm_expr(v: f64) -> String {
+    format!("{}mm", format_f64(v))
 }
 
 /// Format a float with up to 4 fractional digits, trimming trailing
