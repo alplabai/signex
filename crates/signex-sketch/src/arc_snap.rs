@@ -7,6 +7,8 @@
 //! onto the circle instead, keeping its angle, so centre and start — the
 //! geometry the user drew — never move.
 
+use std::collections::HashMap;
+
 use crate::entity::EntityKind;
 use crate::id::SketchEntityId;
 use crate::sketch::SketchData;
@@ -17,29 +19,37 @@ const ON_CIRCLE_REL_TOL: f64 = 1e-9;
 /// Snap every off-circle arc end point onto its circle. Returns the ids of
 /// the arcs that were adjusted, in entity order. Centre and start points
 /// are never touched.
+///
+/// Linear in the number of entities: points are indexed once, so the sketch
+/// may come from untrusted input without a quadratic scan per arc.
 pub fn snap_arc_ends_onto_circles(sketch: &mut SketchData) -> Vec<SketchEntityId> {
-    let mut adjusted = Vec::new();
-    let arcs: Vec<(
-        SketchEntityId,
-        SketchEntityId,
-        SketchEntityId,
-        SketchEntityId,
-    )> = sketch
+    let point_index: HashMap<SketchEntityId, usize> = sketch
+        .entities
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| matches!(e.kind, EntityKind::Point { .. }))
+        .map(|(i, e)| (e.id, i))
+        .collect();
+    let arcs: Vec<(SketchEntityId, [SketchEntityId; 3])> = sketch
         .entities
         .iter()
         .filter_map(|e| match e.kind {
             EntityKind::Arc {
                 center, start, end, ..
-            } => Some((e.id, center, start, end)),
+            } => Some((e.id, [center, start, end])),
             _ => None,
         })
         .collect();
-    for (arc, center, start, end) in arcs {
-        let (Some(c), Some(s), Some(e)) = (
-            point_at(sketch, center),
-            point_at(sketch, start),
-            point_at(sketch, end),
+    let mut adjusted = Vec::new();
+    for (arc, [center, start, end]) in arcs {
+        let (Some(&ci), Some(&si), Some(&ei)) = (
+            point_index.get(&center),
+            point_index.get(&start),
+            point_index.get(&end),
         ) else {
+            continue;
+        };
+        let (Some(c), Some(s), Some(e)) = (xy(sketch, ci), xy(sketch, si), xy(sketch, ei)) else {
             continue;
         };
         let radius = (s.0 - c.0).hypot(s.1 - c.1);
@@ -53,23 +63,21 @@ pub fn snap_arc_ends_onto_circles(sketch: &mut SketchData) -> Vec<SketchEntityId
         } else {
             (1.0, 0.0)
         };
-        set_point(sketch, end, (c.0 + ux * radius, c.1 + uy * radius));
+        set_xy(sketch, ei, (c.0 + ux * radius, c.1 + uy * radius));
         adjusted.push(arc);
     }
     adjusted
 }
 
-fn point_at(sketch: &SketchData, id: SketchEntityId) -> Option<(f64, f64)> {
-    sketch.entities.iter().find_map(|e| match e.kind {
-        EntityKind::Point { x, y } if e.id == id => Some((x, y)),
+fn xy(sketch: &SketchData, index: usize) -> Option<(f64, f64)> {
+    match sketch.entities[index].kind {
+        EntityKind::Point { x, y } => Some((x, y)),
         _ => None,
-    })
+    }
 }
 
-fn set_point(sketch: &mut SketchData, id: SketchEntityId, (nx, ny): (f64, f64)) {
-    if let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id)
-        && let EntityKind::Point { x, y } = &mut e.kind
-    {
+fn set_xy(sketch: &mut SketchData, index: usize, (nx, ny): (f64, f64)) {
+    if let EntityKind::Point { x, y } = &mut sketch.entities[index].kind {
         *x = nx;
         *y = ny;
     }
@@ -117,8 +125,15 @@ mod tests {
         (data, arc, [cid, sid, eid])
     }
 
-    fn xy(sketch: &SketchData, id: SketchEntityId) -> (f64, f64) {
-        point_at(sketch, id).expect("point")
+    fn at(sketch: &SketchData, id: SketchEntityId) -> (f64, f64) {
+        sketch
+            .entities
+            .iter()
+            .find_map(|e| match e.kind {
+                EntityKind::Point { x, y } if e.id == id => Some((x, y)),
+                _ => None,
+            })
+            .expect("point")
     }
 
     #[test]
@@ -128,9 +143,9 @@ mod tests {
         let adjusted = snap_arc_ends_onto_circles(&mut data);
 
         assert_eq!(adjusted, vec![arc]);
-        assert_eq!(xy(&data, c), (0.0, 0.0));
-        assert_eq!(xy(&data, s), (5.0, 0.0));
-        let (ex, ey) = xy(&data, e);
+        assert_eq!(at(&data, c), (0.0, 0.0));
+        assert_eq!(at(&data, s), (5.0, 0.0));
+        let (ex, ey) = at(&data, e);
         assert!(ex.abs() < 1e-12 && (ey - 5.0).abs() < 1e-12, "({ex}, {ey})");
     }
 
@@ -139,7 +154,7 @@ mod tests {
         let (mut data, _arc, [_, _, e]) = arc_sketch((1.0, 1.0), (6.0, 1.0), (1.0, 6.0));
 
         assert!(snap_arc_ends_onto_circles(&mut data).is_empty());
-        assert_eq!(xy(&data, e), (1.0, 6.0));
+        assert_eq!(at(&data, e), (1.0, 6.0));
     }
 
     #[test]
@@ -151,8 +166,60 @@ mod tests {
             .solve(&data, &ResolvedParams::new())
             .expect("a snapped arc alone is satisfiable");
 
-        let at = |p| point_xy(p, &out.result.state, &out.result.index, &data).unwrap();
-        assert_eq!(at(c), (2.0, 3.0));
-        assert_eq!(at(s), (7.0, 3.0));
+        let pos = |p| point_xy(p, &out.result.state, &out.result.index, &data).unwrap();
+        assert_eq!(pos(c), (2.0, 3.0));
+        assert_eq!(pos(s), (7.0, 3.0));
+    }
+
+    #[test]
+    fn a_large_sketch_is_repaired_in_linear_time() {
+        const ARCS: usize = 10_000;
+        let plane = Plane {
+            id: PlaneId::new(),
+            kind: PlaneKind::BoardTop,
+        };
+        let pid = plane.id;
+        let mut data = SketchData::default();
+        data.planes.push(plane);
+        let mut point = |data: &mut SketchData, x: f64, y: f64| {
+            let id = SketchEntityId::new();
+            data.entities
+                .push(Entity::new(id, pid, EntityKind::Point { x, y }));
+            id
+        };
+        let mut ends = Vec::with_capacity(ARCS);
+        let mut arcs = Vec::with_capacity(ARCS);
+        for i in 0..ARCS {
+            let x = i as f64;
+            let center = point(&mut data, x, 0.0);
+            let start = point(&mut data, x + 5.0, 0.0);
+            let end = point(&mut data, x, 9.0);
+            ends.push((center, end));
+            arcs.push(Entity::new(
+                SketchEntityId::new(),
+                pid,
+                EntityKind::Arc {
+                    center,
+                    start,
+                    end,
+                    sweep_ccw: true,
+                },
+            ));
+        }
+        data.entities.extend(arcs);
+
+        let started = std::time::Instant::now();
+        let adjusted = snap_arc_ends_onto_circles(&mut data);
+        let took = started.elapsed();
+
+        assert_eq!(adjusted.len(), ARCS);
+        assert!(
+            took < std::time::Duration::from_secs(1),
+            "30k points / 10k arcs took {took:?}"
+        );
+        let (c, e) = ends[ARCS - 1];
+        let (cx, cy) = at(&data, c);
+        let (ex, ey) = at(&data, e);
+        assert!(((ex - cx).hypot(ey - cy) - 5.0).abs() < 1e-9);
     }
 }

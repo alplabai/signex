@@ -354,12 +354,13 @@ pub struct Footprint {
     /// signex-sketch solver in v0.13+. v1 footprints (no
     /// `schema_version`) deserialise with `sketch == None` and
     /// preserve their literal pad-list authoring.
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "load_repair::deserialize_repaired_sketch"
-    )]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sketch: Option<signex_sketch::SketchData>,
+    /// Arcs whose end point [`Footprint::repair_stored_sketch`] moved onto
+    /// the circle when this footprint was read from storage. Transient: never
+    /// serialised. The editor that opens the footprint reports and clears it.
+    #[serde(skip)]
+    pub load_repairs: Vec<signex_sketch::id::SketchEntityId>,
     /// Copper pour / region polygons. v0.14+; fill generation is v0.15.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pours: Vec<FpPour>,
@@ -570,11 +571,7 @@ struct FootprintWire {
     updated: DateTime<Utc>,
     #[serde(default = "default_schema_v2")]
     schema_version: u32,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "load_repair::deserialize_repaired_sketch"
-    )]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     sketch: Option<signex_sketch::SketchData>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pours: Vec<FpPour>,
@@ -646,7 +643,7 @@ impl FootprintFile {
         let mut footprints = Vec::with_capacity(wire.footprints.len());
         for fw in wire.footprints {
             let pads = pads_from_tsv(&fw.pads_tsv)?;
-            footprints.push(Footprint {
+            let mut footprint = Footprint {
                 uuid: fw.uuid,
                 name: fw.name,
                 anchor: fw.anchor,
@@ -665,6 +662,7 @@ impl FootprintFile {
                 updated: fw.updated,
                 schema_version: fw.schema_version,
                 sketch: fw.sketch,
+                load_repairs: Vec::new(),
                 pours: fw.pours,
                 keepouts: fw.keepouts,
                 cutouts: fw.cutouts,
@@ -676,7 +674,9 @@ impl FootprintFile {
                 default_designator: fw.default_designator,
                 component_type: fw.component_type,
                 height_mm: fw.height_mm,
-            });
+            };
+            footprint.repair_stored_sketch();
+            footprints.push(footprint);
         }
         Ok(FootprintFile {
             format: wire.format,
@@ -783,6 +783,7 @@ impl Footprint {
             updated: timestamp,
             schema_version: FOOTPRINT_SCHEMA_VERSION,
             sketch: None,
+            load_repairs: Vec::new(),
             pours: Vec::new(),
             keepouts: Vec::new(),
             cutouts: Vec::new(),

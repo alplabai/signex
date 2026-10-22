@@ -11,7 +11,16 @@ use signex_sketch::{SketchError, SolveError};
 
 use super::sketch_dispatch::solve_and_bake;
 use super::state::FootprintEditorState;
-use super::state::conflict::ConflictHighlight;
+
+/// True when `error` is a named conflict, the one failure for which
+/// [`mutate_solve_or_revert`] puts the sketch back. Every other solve
+/// failure leaves the edit in place.
+pub(super) fn was_reverted(error: &SketchError) -> bool {
+    matches!(
+        error,
+        SketchError::SolveFailed(SolveError::OverConstrained(ids)) if !ids.is_empty()
+    )
+}
 
 /// Run `mutate`, then solve and bake. An over-constrained result reverts
 /// the sketch to its pre-edit state, re-solves that state so the canvas
@@ -26,6 +35,19 @@ pub(super) fn mutate_solve_or_revert(
     mutate(footprint);
     match solve_and_bake(state, footprint) {
         Err(SketchError::SolveFailed(SolveError::OverConstrained(ids))) if !ids.is_empty() => {
+            // Read the named constraints' entities now: the rejected edit's
+            // own constraint disappears with the revert below.
+            let named_entities = footprint
+                .sketch
+                .as_ref()
+                .map(|s| {
+                    s.constraints
+                        .iter()
+                        .filter(|c| ids.contains(&c.id))
+                        .flat_map(|c| c.kind.entity_refs())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
             footprint.sketch = before;
             drop_dangling_selection(state, footprint);
             if let Err(e) = solve_and_bake(state, footprint) {
@@ -35,7 +57,7 @@ pub(super) fn mutate_solve_or_revert(
                     "the sketch reverted after a conflict could not be re-solved"
                 );
             }
-            state.conflict = ConflictHighlight::new(ids.clone());
+            state.conflict.record_rejection(ids.clone(), named_entities);
             Err(SketchError::SolveFailed(SolveError::OverConstrained(ids)))
         }
         other => other,

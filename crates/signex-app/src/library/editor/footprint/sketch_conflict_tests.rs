@@ -87,6 +87,29 @@ fn a_conflicting_edit_sets_the_highlight_and_reverts_the_sketch() {
 }
 
 #[test]
+fn the_rejected_constraints_entities_stay_highlighted_after_the_revert() {
+    let (mut fp, mut state, p1, p2) = solved_footprint();
+    let conflicting = distance(p1, p2, 9.0);
+    let conflicting_id = conflicting.id;
+
+    apply_sketch_edit(&mut state, &mut fp, SketchEdit::AddConstraint(conflicting))
+        .expect_err("9 mm contradicts 5 mm");
+
+    let sketch = fp.sketch.as_ref().expect("sketch");
+    assert!(
+        !sketch.constraints.iter().any(|c| c.id == conflicting_id),
+        "precondition: the rejected constraint no longer exists"
+    );
+    // Resolve against a sketch with no constraints at all: only the refs
+    // stored before the revert can name the entities now.
+    let from_stored_refs = state.conflict.entities(&SketchData::default());
+    assert!(
+        from_stored_refs.contains(&p1) && from_stored_refs.contains(&p2),
+        "{from_stored_refs:?}"
+    );
+}
+
+#[test]
 fn a_successful_solve_clears_the_highlight() {
     let (mut fp, mut state, p1, p2) = solved_footprint();
     apply_sketch_edit(

@@ -202,6 +202,65 @@ mod tests {
         );
     }
 
+    /// #613 — the other half of the `last_solve = None` rule: a failure
+    /// that is not a named conflict is not reverted, so there is no
+    /// reverted sketch to re-solve. The previous answer must still go,
+    /// the edit stays, and the message must not claim it was rejected.
+    #[test]
+    fn a_non_conflict_failure_clears_the_solve_and_keeps_the_edit() {
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        let (e1, p1) = point_with_pad(plane, 0.0, 0.0, "1");
+        let (e2, p2) = point_with_pad(plane, 1.0, 0.0, "2");
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![e1, e2],
+            constraints: vec![Constraint {
+                id: ConstraintId::new(),
+                kind: ConstraintKind::Fixed { point: p1 },
+            }],
+            ..SketchData::default()
+        });
+        let mut state = FootprintEditorState::from_footprint(&fp);
+        apply_sketch_edit(&mut state, &mut fp, SketchEdit::ForceRebuild)
+            .expect("the starting sketch solves");
+        assert!(state.last_solve.is_some(), "precondition: a good solve");
+        // No iterations allowed: the solve cannot converge, and it is not
+        // a conflict.
+        state.sketch_solver.max_iters = 0;
+
+        let failed = apply_sketch_edit(
+            &mut state,
+            &mut fp,
+            SketchEdit::AddConstraint(Constraint {
+                id: ConstraintId::new(),
+                kind: ConstraintKind::DistancePtPt {
+                    p1,
+                    p2,
+                    target: DimTarget::Literal(5.0),
+                },
+            }),
+        )
+        .expect_err("a solver with no iterations cannot converge");
+
+        assert!(
+            !super::super::sketch_conflict::was_reverted(&failed),
+            "{failed:?} is not a named conflict"
+        );
+        assert!(
+            state.last_solve.is_none(),
+            "the failed solve drops the previous answer"
+        );
+        assert_eq!(
+            fp.sketch.as_ref().expect("sketch").constraints.len(),
+            2,
+            "the edit is kept, not reverted"
+        );
+    }
+
     #[test]
     fn set_mode_initialises_sketch_field_and_preserves_literal_pads() {
         // Footprint with literal (manually-authored) pads and no sketch

@@ -42,9 +42,9 @@ pub use contracts::{
     TextEditState, TrackItem, UiMsg, VersionControlScope, WindowMsg,
 };
 pub use documents::{
-    ComponentEditorTab, DrawMode, FootprintEditorState, GraphicFillPicker, LocalColorPicker,
-    LocalColorSlot, SchematicTabSession, SymbolEditorState, SymbolViewRequest, TabDocument,
-    TabInfo, TabKind, Tool,
+    ComponentEditorTab, DrawMode, FootprintEditorState, FootprintHistorySnapshot,
+    GraphicFillPicker, LocalColorPicker, LocalColorSlot, SchematicTabSession, SymbolEditorState,
+    SymbolViewRequest, TabDocument, TabInfo, TabKind, Tool,
 };
 pub use state::{
     DocumentState, InteractionState, KeymapRecorderState, LoadedProject, ProjectId, Signex, UiState,

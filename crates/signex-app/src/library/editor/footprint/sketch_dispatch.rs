@@ -22,7 +22,7 @@ use signex_library::primitive::footprint::Footprint;
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::{SketchData, SketchError, parameter};
 
-use super::sketch_conflict::mutate_solve_or_revert;
+use super::sketch_conflict::{mutate_solve_or_revert, was_reverted};
 use super::sketch_mode::SketchEdit;
 use super::state::FootprintEditorState;
 use crate::library::messages::RoleTag;
@@ -42,10 +42,16 @@ pub fn apply_sketch_edit(
 }
 
 /// Surface a failed edit: Properties-strip warning plus the Messages
-/// panel, which names the conflicting constraints.
+/// panel. A named conflict was reverted and says so; any other failure
+/// (no convergence, an empty conflict) left the edit in place and says that.
 fn report_solve_failure(state: &mut FootprintEditorState, error: &SketchError) {
     state.solve_warnings.push(format!("{error}"));
-    crate::diagnostics::log_warning(format!("Sketch edit rejected: {error}"));
+    let message = if was_reverted(error) {
+        format!("Sketch edit rejected: {error}")
+    } else {
+        format!("Sketch solve failed (the edit was kept): {error}")
+    };
+    crate::diagnostics::log_warning(message);
 }
 
 /// Same as [`apply_sketch_edit`] but captures any returned

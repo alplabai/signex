@@ -12,6 +12,9 @@
 //!   · active_bar · geometry · selection · context_menu · view
 
 mod active_bar;
+mod attempt;
+#[cfg(test)]
+mod attempt_tests;
 mod context_menu;
 mod geometry;
 mod selection;
@@ -326,10 +329,17 @@ pub(crate) fn apply_footprint_primitive_edit(
     // dispatcher is the canonical entry point for footprint
     // mutations, so wrapping here covers every message type
     // uniformly without each arm needing its own push.
-    if mutates_footprint_state(&msg) {
-        editor.push_history();
-    }
+    //
+    // The snapshot is taken now but only recorded once the edit is known to
+    // be kept: a conflicting sketch edit is rejected and reverted, and must
+    // leave no undo step, redo clear or dirty flag behind.
+    let attempt = attempt::EditAttempt::begin(editor, &msg);
+    route_primitive_edit(editor, msg);
+    attempt.settle(editor);
+}
 
+/// Route one footprint-editor message to the slice that owns it.
+fn route_primitive_edit(editor: &mut crate::app::FootprintEditorState, msg: FootprintEditorMsg) {
     match msg {
         FootprintEditorMsg::SelectActiveIdx(..)
         | FootprintEditorMsg::ToggleSelectionFilter(..)

@@ -518,7 +518,10 @@ impl LibraryAdapter for DatabaseAdapter {
     }
 
     fn get_footprint(&self, uuid: Uuid) -> Result<Footprint, LibraryError> {
-        self.get_primitive_json::<Footprint>("footprints", uuid, "footprint")
+        let mut footprint =
+            self.get_primitive_json::<Footprint>("footprints", uuid, "footprint")?;
+        footprint.repair_stored_sketch();
+        Ok(footprint)
     }
 
     fn get_sim(&self, uuid: Uuid) -> Result<SimModel, LibraryError> {
