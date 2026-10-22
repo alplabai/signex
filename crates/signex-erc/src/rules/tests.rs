@@ -8,6 +8,36 @@ fn pt(x: f64, y: f64) -> Point {
     Point { x, y }
 }
 
+/// Every rule must emit exactly `RuleKind::default_severity()` (#346). If a
+/// rule hard-codes a different level, the ERC dialog's highlighted chip
+/// disagrees with the Messages panel for that rule. The sole exception is
+/// `BadHierSheetPin`, which deliberately grades its findings: structural
+/// breakage (duplicate pins) is an Error, advisory findings (no pins, an
+/// unexposed hierarchical label) are Warnings.
+#[test]
+fn every_rule_emits_its_default_severity() {
+    use crate::fixtures::violations_for;
+    use crate::{RuleKind, Severity};
+    for kind in RuleKind::ALL {
+        let found = violations_for(kind);
+        assert!(!found.is_empty(), "fixture for {kind:?} produced nothing");
+        if kind == RuleKind::BadHierSheetPin {
+            assert!(found.iter().any(|v| v.severity == Severity::Error));
+            assert!(found.iter().any(|v| v.severity == Severity::Warning));
+            continue;
+        }
+        for v in found {
+            assert_eq!(
+                v.severity,
+                kind.default_severity(),
+                "{kind:?} emits {:?} but default_severity() says {:?}",
+                v.severity,
+                kind.default_severity(),
+            );
+        }
+    }
+}
+
 fn wire(a: Point, b: Point) -> ErcWire {
     ErcWire {
         uuid: Uuid::nil(),

@@ -308,6 +308,7 @@ impl Signex {
         let sidebar_body: Element<'_, Message> = match sidebar_tab {
             BomSidebarTab::General => general_pane,
             BomSidebarTab::Columns => columns_pane,
+            BomSidebarTab::Rules => self.bom_rules_pane(),
         };
         let sidebar = column![
             container(text("Properties").size(13).color(text_c))
@@ -318,6 +319,8 @@ impl Signex {
                     tab_pill("General", BomSidebarTab::General),
                     Space::new().width(4),
                     tab_pill("Columns", BomSidebarTab::Columns),
+                    Space::new().width(4),
+                    tab_pill("Rules", BomSidebarTab::Rules),
                 ]
                 .align_y(iced::Alignment::Center),
             )

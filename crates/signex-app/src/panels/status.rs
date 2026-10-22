@@ -12,13 +12,13 @@ pub struct ErcDiagnosticEntry {
     pub sheet_name: String,
     pub sheet_path: std::path::PathBuf,
     pub severity: ErcSeverityLite,
-    pub rule_label: &'static str,
-    /// Underlying rule kind — drives the Quick Fix chip's label and
+    pub rule_label: String,
+    /// Built-in rule kind (`None` for a DSL rule) — drives the Quick Fix chip's label and
     /// per-rule action (UnusedPin → place a NoConnect; others →
     /// zoom + select on the canvas). Carrying it here means the panel
     /// view can decide both the label and the dispatch with no
     /// extra lookup against `erc_violations_by_path`.
-    pub rule_kind: signex_erc::RuleKind,
+    pub rule_kind: Option<signex_erc::RuleKind>,
     pub message: String,
     pub world_x: f64,
     pub world_y: f64,
@@ -155,7 +155,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         // even when the row's text is long enough that the click
         // target's centre lands far from the cursor.
         let quick_fix_label = match v.rule_kind {
-            signex_erc::RuleKind::UnusedPin => "Add No-Connect",
+            Some(signex_erc::RuleKind::UnusedPin) => "Add No-Connect",
             _ => "Show on Canvas",
         };
         col = col.push(
@@ -164,7 +164,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     row![
                         text(sev_label).size(9).color(sev_color),
                         Space::new().width(4).height(Length::Shrink),
-                        text(v.rule_label)
+                        text(v.rule_label.clone())
                             .size(9)
                             .color(theme_ext::text_primary(&ctx.tokens)),
                         Space::new().width(6).height(Length::Shrink),
