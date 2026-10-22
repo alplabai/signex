@@ -97,3 +97,6 @@ mod render_config_grid_style;
 
 #[path = "regression/rename_save_as_rekey.rs"]
 mod rename_save_as_rekey;
+
+#[path = "regression/deleted_sheet_not_resaved.rs"]
+mod deleted_sheet_not_resaved;

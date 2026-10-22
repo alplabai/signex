@@ -115,7 +115,14 @@ impl SymbolCanvas<'_> {
             // near an unrelated pin and misses an off-grid shape the
             // user right-clicked directly on.
             let (wx, wy) = world_unsnapped(self, cursor_pos.x, cursor_pos.y, bounds);
-            let target = match state::hit_test(self.symbol, wx, wy, self.active_part) {
+            let target = match state::hit_test(
+                self.symbol,
+                wx,
+                wy,
+                self.pick_tolerance_mm(),
+                self.active_part,
+                &self.selection_filter,
+            ) {
                 Some(SymbolSelection::Pin(idx)) => state::SymbolContextTarget::Pin(idx),
                 Some(SymbolSelection::Graphic(idx)) => state::SymbolContextTarget::Graphic(idx),
                 _ => state::SymbolContextTarget::Empty,
@@ -289,6 +296,9 @@ impl SymbolCanvas<'_> {
                 .and_capture(),
             );
         }
+        if self.tool == SymbolTool::AddPin {
+            state.pin_cursor = Some((wx, wy));
+        }
         // Idle cursor — publish the unsnapped world position
         // for the status footer X/Y readout.
         Some(canvas::Action::publish(CanvasAction::CursorAt {
@@ -305,6 +315,7 @@ impl SymbolCanvas<'_> {
         state.panning = false;
         state.last_pan_pos = None;
         state.secondary_press_pos = None;
+        state.pin_cursor = None;
         Some(canvas::Action::publish(CanvasAction::CursorAt {
             x_mm: None,
             y_mm: None,
@@ -323,6 +334,14 @@ impl SymbolCanvas<'_> {
         state.drag_anchor_offset = None;
         state.last_drag_world_pos = None;
 
+        // AddPin: the pin lands where the button was released.
+        if std::mem::take(&mut state.pin_armed)
+            && self.tool == SymbolTool::AddPin
+            && let Some((x, y)) = state.pin_cursor
+        {
+            return Some(canvas::Action::publish(CanvasAction::AddPin { x, y }).and_capture());
+        }
+
         // Commit a rubber-band box selection if one was in progress.
         if let (Some((ox, oy)), Some((cx, cy))) = (
             state.box_select_origin.take(),
@@ -336,8 +355,16 @@ impl SymbolCanvas<'_> {
                 } else {
                     state::BoxSelectKind::Crossing
                 };
-                let result =
-                    state::select_in_box(self.symbol, ox, oy, cx, cy, kind, self.active_part);
+                let result = state::select_in_box(
+                    self.symbol,
+                    ox,
+                    oy,
+                    cx,
+                    cy,
+                    kind,
+                    self.active_part,
+                    &self.selection_filter,
+                );
                 return Some(match result {
                     Some(sel) => canvas::Action::publish(CanvasAction::Select(sel)).and_capture(),
                     None => canvas::Action::publish(CanvasAction::Deselect).and_capture(),

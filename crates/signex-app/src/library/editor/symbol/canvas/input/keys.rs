@@ -56,9 +56,16 @@ impl SymbolCanvas<'_> {
                     }
                     _ => false,
                 };
-                if cancelled {
+                // An armed AddPin press is a gesture in flight too: drop
+                // it so a later release cannot place a pin.
+                let pin_cancelled = std::mem::take(&mut state.pin_armed);
+                state.pin_cursor = None;
+                if cancelled || pin_cancelled {
                     return Some(canvas::Action::capture());
                 }
+                // Nothing in flight: leave the key unclaimed so the app's
+                // Esc ladder (modals, context menu, then "leave the tool")
+                // decides — see `escape_editor_or_tool_reset`.
                 None
             }
             // Enter commits the in-flight Polygon stash. The
