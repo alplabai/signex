@@ -505,6 +505,7 @@ mod tests {
 
     fn test_symbol() -> Symbol {
         Symbol {
+            unknown: Default::default(),
             uuid: Uuid::new_v4(),
             lib_id: "Device:R".to_string(),
             reference: "R1".to_string(),
