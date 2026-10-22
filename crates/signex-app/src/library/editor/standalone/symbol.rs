@@ -11,7 +11,7 @@ use crate::library::editor::symbol::canvas::{self as sym_canvas, SymbolCanvas};
 use crate::library::editor::symbol::state as sym_state;
 use crate::library::messages::{
     GraphicHandleMsg, LibraryMessage, PrimitiveEdit, SymbolEditorMsg, SymbolRotatePivotMsg,
-    SymbolSelectionMsg, SymbolToolMsg,
+    SymbolSelectionMsg,
 };
 use crate::library::state::LibraryDisplaySettings;
 use crate::panels::PanelContext;
@@ -344,7 +344,6 @@ pub(crate) fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -
         CanvasAction::Pan { dx, dy } => SymbolEditorMsg::Pan { dx, dy },
         CanvasAction::Zoom { sx, sy, delta } => SymbolEditorMsg::Zoom { sx, sy, delta },
         CanvasAction::Fit => SymbolEditorMsg::Fit,
-        CanvasAction::ToolCancelled => SymbolEditorMsg::SetTool(SymbolToolMsg::Select),
         CanvasAction::ViewportMeasured { width, height } => {
             SymbolEditorMsg::ViewportMeasured { width, height }
         }

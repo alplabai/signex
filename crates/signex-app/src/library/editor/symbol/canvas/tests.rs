@@ -47,7 +47,8 @@ impl Rig {
     }
 
     /// Feed one event through the canvas and apply what it publishes.
-    fn send(&mut self, event: Event, at: Option<(f64, f64)>) {
+    /// Returns whether the canvas claimed the event (produced an action).
+    fn send(&mut self, event: Event, at: Option<(f64, f64)>) -> bool {
         let cursor = at.map_or(mouse::Cursor::Unavailable, |(x, y)| {
             mouse::Cursor::Available(self.screen(x, y))
         });
@@ -73,12 +74,14 @@ impl Rig {
         .with_selection_filter(editor.selection_filter)
         .with_view_pending(editor.pending_view.is_some());
         let action = canvas::Program::update(&canvas, &mut self.cstate, &event, BOUNDS, cursor);
+        let claimed = action.is_some();
         if let Some((Some(published), _, _)) = action.map(canvas::Action::into_inner) {
             apply_symbol_primitive_edit(
                 &mut self.editor,
                 symbol_action_to_primitive_msg(published),
             );
         }
+        claimed
     }
 
     fn press(&mut self, at: (f64, f64)) {
@@ -103,7 +106,7 @@ impl Rig {
         );
     }
 
-    fn escape(&mut self) {
+    fn escape(&mut self) -> bool {
         self.send(
             Event::Keyboard(keyboard::Event::KeyPressed {
                 key: keyboard::Key::Named(keyboard::key::Named::Escape),
@@ -115,7 +118,7 @@ impl Rig {
                 repeat: false,
             }),
             Some((0.0, 0.0)),
-        );
+        )
     }
 
     /// A press-drag-release of the Select tool from `from` to `to`.
@@ -280,29 +283,44 @@ fn the_drawings_filter_pill_gates_graphic_picking_and_box_select() {
 }
 
 #[test]
-fn escape_returns_the_add_pin_tool_to_select() {
+fn escape_with_nothing_in_flight_is_left_to_the_app_ladder() {
     let mut s = Symbol::empty("T");
     s.pins.push(pin("1", 0.0, 0.0, PinOrientation::Right));
     let mut rig = Rig::new(s);
     rig.editor.tool = SymbolTool::AddPin;
 
-    rig.escape();
+    let claimed = rig.escape();
 
-    assert_eq!(rig.editor.tool, SymbolTool::Select);
+    assert!(
+        !claimed,
+        "an unclaimed Esc lets modals and the context menu take it first"
+    );
+    assert_eq!(rig.editor.tool, SymbolTool::AddPin);
 }
 
 #[test]
-fn escape_cancels_an_in_flight_rectangle_before_leaving_the_tool() {
+fn escape_cancels_an_in_flight_rectangle_and_keeps_the_tool() {
     let mut rig = Rig::new(Symbol::empty("T"));
     rig.editor.tool = SymbolTool::PlaceRectangle;
 
     rig.press((0.0, 0.0));
-    rig.escape();
+    assert!(rig.escape(), "an in-flight gesture claims the key");
     assert_eq!(rig.editor.tool, SymbolTool::PlaceRectangle);
     assert!(rig.cstate.rect_from.is_none());
 
-    rig.escape();
-    assert_eq!(rig.editor.tool, SymbolTool::Select);
+    assert!(!rig.escape(), "the second Esc is the ladder's");
+}
+
+#[test]
+fn escape_drops_an_armed_add_pin_press_so_release_places_nothing() {
+    let mut rig = Rig::new(Symbol::empty("T"));
+    rig.editor.tool = SymbolTool::AddPin;
+
+    rig.press((0.0, 0.0));
+    assert!(rig.escape());
+    rig.release((0.0, 0.0));
+
+    assert!(rig.editor.primitive().pins.is_empty());
 }
 
 #[test]

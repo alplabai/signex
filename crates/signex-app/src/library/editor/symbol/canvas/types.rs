@@ -121,9 +121,6 @@ pub enum CanvasAction {
     },
     /// Fit the symbol bbox into the viewport (Home key).
     Fit,
-    /// Esc with no gesture in flight: leave the active placement tool
-    /// and return to Select.
-    ToolCancelled,
     /// The canvas measured its real size while a Fit / centre-origin
     /// camera request was queued.
     ViewportMeasured {
