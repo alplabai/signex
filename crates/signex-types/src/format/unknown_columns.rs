@@ -15,13 +15,38 @@
 //!   the block stays rectangular. Original position among the known
 //!   columns is not kept; relative order of the foreign ones is.
 //! - Names are unique per block; a repeated header name is rejected.
+//!
+//! # Hostile-input caps
+//!
+//! `.snxsch` / `.snxpcb` files may come from untrusted sources, so a
+//! block's foreign columns are bounded. A file that exceeds a cap fails
+//! to load with a precise [`FormatError`](super::FormatError); nothing
+//! is ever truncated silently.
+//!
+//! - [`MAX_FOREIGN_COLUMNS`] (256) foreign columns per block —
+//!   `FormatError::TsvTooManyForeignColumns`.
+//! - [`MAX_FOREIGN_COLUMN_NAME_BYTES`] (256) bytes per foreign column
+//!   name — `FormatError::TsvForeignColumnNameTooLong`.
+//!
+//! Each foreign column name is allocated once per block and shared
+//! (`Arc<str>`) by every row, so memory grows with the cell values, not
+//! with `rows x name length`.
+
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-/// Foreign cells of one TSV row, in original column order.
+/// Most foreign columns one TSV block may carry.
+pub const MAX_FOREIGN_COLUMNS: usize = 256;
+
+/// Longest foreign column name, in bytes.
+pub const MAX_FOREIGN_COLUMN_NAME_BYTES: usize = 256;
+
+/// Foreign cells of one TSV row, in original column order. The column
+/// names are shared with every other row of the same block.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct UnknownColumns(Vec<(String, String)>);
+pub struct UnknownColumns(Vec<(Arc<str>, String)>);
 
 impl UnknownColumns {
     /// `true` when the row carries no foreign cells.
@@ -31,7 +56,7 @@ impl UnknownColumns {
 
     /// Foreign `(column, cell)` pairs in original order.
     pub fn iter(&self) -> impl Iterator<Item = (&str, &str)> {
-        self.0.iter().map(|(k, v)| (k.as_str(), v.as_str()))
+        self.0.iter().map(|(k, v)| (&**k, v.as_str()))
     }
 
     /// The cell under `column`, if this row has one.
@@ -39,7 +64,7 @@ impl UnknownColumns {
         self.iter().find(|(k, _)| *k == column).map(|(_, v)| v)
     }
 
-    pub(in crate::format) fn from_pairs(pairs: Vec<(String, String)>) -> Self {
+    pub(in crate::format) fn from_pairs(pairs: Vec<(Arc<str>, String)>) -> Self {
         Self(pairs)
     }
 }

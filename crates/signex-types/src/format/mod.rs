@@ -48,7 +48,7 @@ pub use pcb_rows::{PcbFootprintRow, PcbPadRow, PcbTrackRow, PcbViaRow};
 pub use sch_rows::{SchComponentRow, SchJunctionRow, SchLabelRow, SchWireRow};
 pub use tsv::{parse_tsv_block, write_tsv_block};
 pub use unknown::{BoardUnknown, SheetUnknown, UnknownFields};
-pub use unknown_columns::UnknownColumns;
+pub use unknown_columns::{MAX_FOREIGN_COLUMN_NAME_BYTES, MAX_FOREIGN_COLUMNS, UnknownColumns};
 
 // Subtree-internal helpers used by the container types below.
 use extras::{
@@ -106,6 +106,26 @@ pub enum FormatError {
     },
     #[error("TSV block {block:?}: header repeats column {column:?}")]
     TsvDuplicateColumn { block: String, column: String },
+    #[error(
+        "TSV block {block:?}: {count} foreign columns exceeds the limit of {max} \
+         (refusing to load rather than drop columns)"
+    )]
+    TsvTooManyForeignColumns {
+        block: String,
+        count: usize,
+        max: usize,
+    },
+    #[error(
+        "TSV block {block:?}: foreign column name {prefix:?}... is {len} bytes, \
+         over the limit of {max} (refusing to load rather than truncate it)"
+    )]
+    TsvForeignColumnNameTooLong {
+        block: String,
+        /// First characters of the name, for identification only.
+        prefix: String,
+        len: usize,
+        max: usize,
+    },
     #[error("TSV block {block:?}: row {row} field {field:?} parse error: {message}")]
     TsvFieldParse {
         block: String,

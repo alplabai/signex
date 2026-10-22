@@ -344,3 +344,114 @@ fn files_without_foreign_columns_write_unchanged_json_and_text() {
     assert_eq!(SnxSchematic::new(again).write_string().unwrap(), saved);
     assert!(squash(&saved).contains("uuid pos_x pos_y diameter\n"));
 }
+
+// ---------------------------------------------------------------------------
+// Hostile-input hardening: shared names, linear validation, hard caps
+// ---------------------------------------------------------------------------
+
+const JUNCTION_HEAD: &str = "uuid  pos_x  pos_y  diameter";
+
+fn header_with(extra: impl Iterator<Item = String>) -> String {
+    let mut h = JUNCTION_HEAD.to_string();
+    for name in extra {
+        h.push_str("  ");
+        h.push_str(&name);
+    }
+    h.push('\n');
+    h
+}
+
+#[test]
+fn foreign_names_are_shared_across_rows() {
+    let text = format!(
+        "{JUNCTION_HEAD}  vendor\n{JUNCTION_UUID}  1  2  0  a\n{JUNCTION_UUID}  3  4  0  b\n"
+    );
+    let rows = parse_tsv_block::<SchJunctionRow>("t", &text).unwrap();
+    let ptr = |r: &SchJunctionRow| r.unknown_columns.iter().next().unwrap().0.as_ptr();
+    assert_eq!(ptr(&rows[0]), ptr(&rows[1]), "one allocation per name");
+    let out = write_tsv_block(&rows);
+    assert!(squash(&out).starts_with("uuid pos_x pos_y diameter vendor\n"));
+    assert_eq!(cell(&rows[1].unknown_columns, "vendor"), "b");
+}
+
+#[test]
+fn header_at_both_caps_still_loads() {
+    let long = "n".repeat(MAX_FOREIGN_COLUMN_NAME_BYTES);
+    let names = (0..MAX_FOREIGN_COLUMNS - 1)
+        .map(|i| format!("c{i}"))
+        .chain(std::iter::once(long));
+    let text = header_with(names);
+    let width = JUNCTION_HEAD.split_whitespace().count() + MAX_FOREIGN_COLUMNS;
+    let mut cells = vec!["1"; width];
+    cells[0] = JUNCTION_UUID;
+    let row = cells.join("  ");
+    let rows = parse_tsv_block::<SchJunctionRow>("t", &format!("{text}{row}\n"));
+    assert!(rows.is_ok(), "{:?}", rows.err());
+}
+
+#[test]
+fn ten_thousand_column_header_is_rejected_quickly() {
+    let text = header_with((0..10_000).map(|i| format!("c{i}")));
+    let started = std::time::Instant::now();
+    let err = parse_tsv_block::<SchJunctionRow>("t", &text).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            FormatError::TsvTooManyForeignColumns {
+                count: 10_000,
+                max: MAX_FOREIGN_COLUMNS,
+                ..
+            }
+        ),
+        "{err}"
+    );
+    assert!(started.elapsed() < std::time::Duration::from_secs(1));
+}
+
+#[test]
+fn duplicate_is_still_found_in_a_ten_thousand_column_header() {
+    let names = (0..10_000)
+        .map(|i| format!("c{i}"))
+        .chain(["c9999".to_string()]);
+    let started = std::time::Instant::now();
+    let err = parse_tsv_block::<SchJunctionRow>("t", &header_with(names)).unwrap_err();
+    assert!(
+        matches!(&err, FormatError::TsvDuplicateColumn { column, .. } if column == "c9999"),
+        "{err}"
+    );
+    assert!(started.elapsed() < std::time::Duration::from_secs(1));
+}
+
+#[test]
+fn one_foreign_column_over_the_cap_errors() {
+    let text = header_with((0..=MAX_FOREIGN_COLUMNS).map(|i| format!("c{i}")));
+    let err = parse_tsv_block::<SchJunctionRow>("t", &text).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            FormatError::TsvTooManyForeignColumns {
+                count: 257,
+                max: 256,
+                ..
+            }
+        ),
+        "{err}"
+    );
+}
+
+#[test]
+fn foreign_name_over_the_byte_cap_errors_with_a_short_prefix() {
+    let long = "x".repeat(MAX_FOREIGN_COLUMN_NAME_BYTES + 1);
+    let err =
+        parse_tsv_block::<SchJunctionRow>("t", &header_with(std::iter::once(long))).unwrap_err();
+    match &err {
+        FormatError::TsvForeignColumnNameTooLong {
+            prefix, len, max, ..
+        } => {
+            assert_eq!((*len, *max), (257, 256));
+            assert_eq!(prefix.len(), 32);
+        }
+        other => panic!("{other}"),
+    }
+    assert!(err.to_string().len() < 300, "error must not echo the name");
+}
