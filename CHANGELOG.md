@@ -18,6 +18,14 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
+### Added — ERC
+
+- **File ▸ Export ▸ ERC Report** writes the cached ERC results as plain text or
+  CSV (chosen by the saved file's extension), in the Messages panel's row order.
+  It never runs ERC; before a run it shows a message instead of writing a file.
+  `signex_output::ErcReportExporter` also offers a minimum-severity filter and
+  group-by-sheet. CSV fields are escaped by the BOM's shared helper (#351).
+
 ### Added — PCB GPU shader render (experimental, default-off)
 
 - **GPU scene render path** — the PCB editor canvas can render traces, pads, vias, and zones through the `signex_gfx` wgpu pipelines via iced's `shader` widget instead of CPU `canvas::Frame` tessellation. Gated behind `feature_flags::PCB_GPU_RENDER` (default `false`) plus a Preferences toggle; the CPU path stays the default until GPU visual parity is confirmed on hardware.
@@ -104,11 +112,6 @@ persistence, and CI/toolchain hardening (pinned Rust 1.97.0, an enforced
 
 ### Added — ERC
 
-- **File ▸ Export ▸ ERC Report** writes the cached ERC results as plain text or
-  CSV (chosen by the saved file's extension), in the Messages panel's row order.
-  It never runs ERC; before a run it shows a message instead of writing a file.
-  `signex_output::ErcReportExporter` also offers a minimum-severity filter and
-  group-by-sheet. CSV fields are escaped by the BOM's shared helper (#351).
 - **`AmbiguousLabelAnchor`** (warning). A label sitting where two or more wires
   cross with no junction is anchored to exactly one of them by the tiebreak
   above. The answer is deterministic but not predictable from the geometry, so
