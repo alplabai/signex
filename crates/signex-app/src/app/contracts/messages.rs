@@ -313,6 +313,8 @@ pub enum BomPreviewMsg {
     /// User clicked a Properties-sidebar tab (General / Columns) in
     /// the BOM preview modal.
     SetSidebarTab(crate::app::state::BomSidebarTab),
+    /// User toggled one validation rule in the Rules tab.
+    SetRule(signex_output::BomRule, bool),
     /// User clicked Export in the BOM preview modal — drives the file
     /// dialog with the live options.
     Export,

@@ -171,6 +171,15 @@ impl ErrorNotice {
         }
     }
 
+    /// The BOM was written, but validation found issues the user should
+    /// still see. Advisory: the file exists.
+    pub fn export_advisory(detail: impl Into<String>) -> Self {
+        Self {
+            title: "BOM Exported with Issues".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
     /// A file could not be opened — unreadable, unparseable, or empty
     /// where it must not be (#532).
     pub fn open(detail: impl Into<String>) -> Self {
@@ -454,11 +463,12 @@ pub struct PendingGitCommit {
 }
 
 /// Which sidebar tab is currently shown inside the BOM preview's
-/// Properties panel — Altium-style General / Columns split.
+/// Properties panel — Altium-style General / Columns / Rules split.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BomSidebarTab {
     General,
     Columns,
+    Rules,
 }
 
 /// Live BOM preview state — the rolled-up table for the active project
@@ -467,6 +477,10 @@ pub enum BomSidebarTab {
 pub struct BomPreviewState {
     pub options: signex_output::BomOptions,
     pub table: signex_output::BomTable,
+    /// Live validation of `table` under `options.rule_options`. Refreshed on
+    /// every rollup and every rule toggle so it never goes stale against the
+    /// displayed table. Advisory only — it never blocks export.
+    pub validation_report: signex_output::BomValidationReport,
     /// Available variants for the active project. Reserved for the
     /// variant picker dropdown — empty when no variants are defined.
     /// Currently only seeded; the picker UI lands in v0.8.1.
