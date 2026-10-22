@@ -1,28 +1,61 @@
-//! Repairs applied to a footprint's sketch as its file is read.
+//! Repairs applied to a footprint's sketch whenever it is deserialised.
+//!
+//! The repair hangs off the `sketch` field's serde hook, so every path that
+//! turns stored bytes into a [`Footprint`](super::Footprint) runs it: the
+//! TOML container, the local-git JSON round trip, the database adapter and
+//! the library server's rows and request bodies.
 
+use std::collections::HashSet;
+use std::sync::{Mutex, OnceLock};
+
+use serde::{Deserialize, Deserializer};
+use signex_sketch::id::SketchEntityId;
 use signex_sketch::{SketchData, snap_arc_ends_onto_circles};
 
-/// Snap off-circle arc end points onto their circles (see
-/// [`signex_sketch::snap_arc_ends_onto_circles`]) and report the adjusted
-/// arcs once, so the Messages panel names what changed. This is the single
-/// place a stored sketch is repaired; every consumer reads the result.
-pub(super) fn repair_loaded_sketch(
-    footprint_name: &str,
-    sketch: Option<SketchData>,
-) -> Option<SketchData> {
-    let mut sketch = sketch?;
+/// Serde hook for the `sketch` field: deserialise, then snap off-circle arc
+/// end points onto their circles (see
+/// [`signex_sketch::snap_arc_ends_onto_circles`]). The one place a stored
+/// sketch is repaired; every consumer reads the result.
+pub(super) fn deserialize_repaired_sketch<'de, D>(
+    deserializer: D,
+) -> Result<Option<SketchData>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let sketch = Option::<SketchData>::deserialize(deserializer)?;
+    Ok(sketch.map(repair_loaded_sketch))
+}
+
+fn repair_loaded_sketch(mut sketch: SketchData) -> SketchData {
     let adjusted = snap_arc_ends_onto_circles(&mut sketch);
-    if !adjusted.is_empty() {
-        let arcs: Vec<String> = adjusted.iter().map(ToString::to_string).collect();
+    let fresh: Vec<String> = adjusted
+        .iter()
+        .filter(|arc| first_report_of(**arc))
+        .map(ToString::to_string)
+        .collect();
+    if !fresh.is_empty() {
         tracing::warn!(
             target: "signex::sketch",
-            "footprint \"{footprint_name}\": moved the end point of {} arc(s) onto its circle \
-             (centre and start unchanged): {}",
-            arcs.len(),
-            arcs.join(", ")
+            "moved the end point of {} stored arc(s) onto its circle \
+             (centre and start unchanged; saving persists the repair): {}",
+            fresh.len(),
+            fresh.join(", ")
         );
     }
-    Some(sketch)
+    sketch
+}
+
+/// True the first time `arc` is reported in this process. A stored sketch is
+/// deserialised on every preview, mount and history read until it is saved,
+/// so without this the same repair would flood the Messages panel. Log
+/// dedupe only: it never changes what the repair does.
+fn first_report_of(arc: SketchEntityId) -> bool {
+    static REPORTED: OnceLock<Mutex<HashSet<SketchEntityId>>> = OnceLock::new();
+    let mut seen = REPORTED
+        .get_or_init(Mutex::default)
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    seen.insert(arc)
 }
 
 #[cfg(test)]
@@ -100,6 +133,29 @@ mod tests {
         let (ex, ey) = at(e);
         let reach = (ex - 2.0).hypot(ey - 3.0);
         assert!((reach - 5.0).abs() < 1e-9, "|E-C| = {reach}");
+    }
+
+    #[test]
+    fn an_off_circle_arc_in_footprint_json_is_repaired_on_deserialise() {
+        let (fp, [c, _, e]) = off_circle_footprint();
+        let json = serde_json::to_string(&fp).expect("serialise");
+
+        let back: Footprint = serde_json::from_str(&json).expect("parse");
+
+        let sketch = back.sketch.expect("sketch");
+        let at = |id| {
+            sketch
+                .entities
+                .iter()
+                .find_map(|en| match en.kind {
+                    EntityKind::Point { x, y } if en.id == id => Some((x, y)),
+                    _ => None,
+                })
+                .expect("point")
+        };
+        let (cx, cy) = at(c);
+        let (ex, ey) = at(e);
+        assert!(((ex - cx).hypot(ey - cy) - 5.0).abs() < 1e-9);
     }
 
     #[test]

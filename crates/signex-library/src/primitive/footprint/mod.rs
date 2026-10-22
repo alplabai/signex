@@ -354,7 +354,11 @@ pub struct Footprint {
     /// signex-sketch solver in v0.13+. v1 footprints (no
     /// `schema_version`) deserialise with `sketch == None` and
     /// preserve their literal pad-list authoring.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "load_repair::deserialize_repaired_sketch"
+    )]
     pub sketch: Option<signex_sketch::SketchData>,
     /// Copper pour / region polygons. v0.14+; fill generation is v0.15.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -566,7 +570,11 @@ struct FootprintWire {
     updated: DateTime<Utc>,
     #[serde(default = "default_schema_v2")]
     schema_version: u32,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "load_repair::deserialize_repaired_sketch"
+    )]
     sketch: Option<signex_sketch::SketchData>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pours: Vec<FpPour>,
@@ -638,7 +646,6 @@ impl FootprintFile {
         let mut footprints = Vec::with_capacity(wire.footprints.len());
         for fw in wire.footprints {
             let pads = pads_from_tsv(&fw.pads_tsv)?;
-            let sketch = load_repair::repair_loaded_sketch(&fw.name, fw.sketch);
             footprints.push(Footprint {
                 uuid: fw.uuid,
                 name: fw.name,
@@ -657,7 +664,7 @@ impl FootprintFile {
                 created: fw.created,
                 updated: fw.updated,
                 schema_version: fw.schema_version,
-                sketch,
+                sketch: fw.sketch,
                 pours: fw.pours,
                 keepouts: fw.keepouts,
                 cutouts: fw.cutouts,
