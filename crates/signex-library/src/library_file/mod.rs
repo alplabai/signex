@@ -271,8 +271,8 @@ pub enum LibraryFileError {
         expected: usize,
     },
     #[error(
-        "table {table:?}: row {row_index} cell {column:?} contains a tab or newline; \
-         TSV cells must be free of \\t and \\n"
+        "table {table:?}: row {row_index} cell {column:?} contains a tab, newline or other control character; \
+         TSV cells must be free of them"
     )]
     DisallowedControlInCell {
         table: String,
@@ -280,8 +280,8 @@ pub enum LibraryFileError {
         column: String,
     },
     #[error(
-        "table {table:?}: column {column:?} name contains a tab or newline; \
-         TSV column names must be free of \\t and \\n"
+        "table {table:?}: column {column:?} name contains a tab, newline or other control character; \
+         TSV column names must be free of them"
     )]
     DisallowedControlInColumn { table: String, column: String },
     #[error(
@@ -289,6 +289,18 @@ pub enum LibraryFileError {
          (\"'''\") which would terminate the embedded TOML literal multi-line string"
     )]
     DisallowedTripleQuoteInCell { table: String, column: String },
+    #[error(
+        "table {table:?}: column name {column:?} contains the literal triple single-quote \
+         (\"'''\") which would terminate the embedded TOML literal multi-line string"
+    )]
+    DisallowedTripleQuoteInColumn { table: String, column: String },
+    #[error("the written .snxlib document does not parse back: {reason}")]
+    WrittenDocumentUnreadable { reason: String },
+    #[error(
+        "the written .snxlib document does not read back as the same table {table:?}; \
+         refusing to overwrite the file with lossy output"
+    )]
+    WrittenDocumentDiffers { table: String },
     #[error(
         "table {table:?}: column_types declares {column:?} but the TSV header \
          does not include that column"
