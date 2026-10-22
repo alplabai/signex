@@ -135,6 +135,10 @@ pub struct ProjectCloseConfirmState {
     /// The view layer renders the file basenames; the handler uses
     /// the absolute paths to locate the engines for save / discard.
     pub dirty_paths: Vec<std::path::PathBuf>,
+    /// Component Preview rows with unsaved edits whose library lives
+    /// inside the project's directory. They are keyed by row address,
+    /// not by file, so `dirty_paths` cannot carry them.
+    pub dirty_rows: Vec<crate::library::state::EditorAddress>,
 }
 
 /// State for the "Exit Signex — Unsaved Edits" confirmation modal.
@@ -148,6 +152,10 @@ pub struct AppQuitConfirmState {
     /// Absolute paths of every dirty file in the workspace, sorted
     /// for a stable display order. The view renders the basenames.
     pub dirty_paths: Vec<std::path::PathBuf>,
+    /// Every Component Preview row with unsaved edits, sorted. Rows are
+    /// keyed by `(library, table, row)` rather than a file path, so they
+    /// are listed and saved alongside `dirty_paths`, not inside it.
+    pub dirty_rows: Vec<crate::library::state::EditorAddress>,
 }
 
 /// User choice from the project-close confirmation modal.

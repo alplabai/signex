@@ -34,19 +34,7 @@ impl Signex {
         msg: EditorMsg,
     ) -> Task<Message> {
         match msg {
-            EditorMsg::CloseEditor => {
-                let synthetic = address.synthetic_tab_path();
-                if let Some(idx) = self
-                    .document_state
-                    .tabs
-                    .iter()
-                    .position(|t| t.path == synthetic)
-                {
-                    return self.close_tab_now(idx);
-                }
-                self.library.editors.remove(&address);
-                return Task::none();
-            }
+            EditorMsg::CloseEditor => return self.close_component_preview(&address),
             EditorMsg::SaveDraft | EditorMsg::Commit => {
                 self.handle_save_row(&address);
                 return Task::none();
@@ -184,8 +172,20 @@ impl Signex {
     }
 
     pub(super) fn handle_save_row(&mut self, address: &EditorAddress) {
+        if let Err(e) = self.try_save_row(address) {
+            crate::diagnostics::log_error("save row failed", &e);
+        }
+    }
+
+    /// Write one Component Preview row back through its library adapter
+    /// and clear the editor's dirty flag. Returns why a save failed so a
+    /// Save-All flow (app quit, project close) can keep the app open and
+    /// name the row instead of dropping the edit. A row whose editor is
+    /// already gone has nothing to save and counts as saved.
+    pub(crate) fn try_save_row(&mut self, address: &EditorAddress) -> anyhow::Result<()> {
+        use anyhow::Context as _;
         let Some(state) = self.library.editors.get(address) else {
-            return;
+            return Ok(());
         };
         let library_path = state.library_path.clone();
         let table = state.table.clone();
@@ -195,33 +195,43 @@ impl Signex {
             tracing::warn!(target: "signex::library", error = %e, "save row: refresh_content_hash failed");
         }
 
-        let library_id = match self.library.library_at(&library_path) {
-            Some(lib) => lib.library_id,
-            None => {
-                tracing::warn!(target: "signex::library", "save row: library not open");
-                return;
-            }
-        };
-        let adapter = match self.library.set.get(library_id) {
-            Some(a) => a,
-            None => {
-                tracing::warn!(target: "signex::library", "save row: library not mounted");
-                return;
-            }
-        };
-        match adapter.update_row(&table, row.clone(), "edit row (signex-app)") {
-            Ok(()) => {
-                if let Some(state) = self.library.editors.get_mut(address) {
-                    state.row = row;
-                    state.dirty = false;
-                }
-                if let Err(e) = self.library.refresh_components(&library_path) {
-                    tracing::warn!(target: "signex::library", error = %e, "post-save refresh failed");
-                }
-            }
-            Err(e) => {
-                tracing::warn!(target: "signex::library", error = %e, "update_row failed");
-            }
+        let library_id = self
+            .library
+            .library_at(&library_path)
+            .map(|lib| lib.library_id)
+            .with_context(|| format!("library {} is not open", library_path.display()))?;
+        let adapter = self
+            .library
+            .set
+            .get(library_id)
+            .with_context(|| format!("library {} is not mounted", library_path.display()))?;
+        adapter
+            .update_row(&table, row.clone(), "edit row (signex-app)")
+            .with_context(|| format!("update row in table {table}"))?;
+        if let Some(state) = self.library.editors.get_mut(address) {
+            state.row = row;
+            state.dirty = false;
         }
+        if let Err(e) = self.library.refresh_components(&library_path) {
+            tracing::warn!(target: "signex::library", error = %e, "post-save refresh failed");
+        }
+        Ok(())
+    }
+
+    /// Close one Component Preview editor, discarding its draft: closes
+    /// the tab that shows it, or drops the orphan editor state when no
+    /// tab does.
+    pub(crate) fn close_component_preview(&mut self, address: &EditorAddress) -> Task<Message> {
+        let synthetic = address.synthetic_tab_path();
+        if let Some(idx) = self
+            .document_state
+            .tabs
+            .iter()
+            .position(|t| t.path == synthetic)
+        {
+            return self.close_tab_now(idx);
+        }
+        self.library.editors.remove(address);
+        Task::none()
     }
 }
