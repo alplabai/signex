@@ -1231,6 +1231,7 @@ fn fixture_schematic_with_symbol_and_child_sheet()
     let sheet_uuid = uuid::Uuid::new_v4();
 
     let sheet = SchematicSheet {
+        unknown: Default::default(),
         uuid: uuid::Uuid::new_v4(),
         version: 0,
         generator: String::new(),
@@ -1238,6 +1239,7 @@ fn fixture_schematic_with_symbol_and_child_sheet()
         paper_size: "A4".to_string(),
         root_sheet_page: "1".to_string(),
         symbols: vec![Symbol {
+            unknown: Default::default(),
             uuid: symbol_uuid,
             lib_id: "Device:R".to_string(),
             reference: "R1".to_string(),
