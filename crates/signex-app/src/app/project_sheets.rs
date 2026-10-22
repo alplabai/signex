@@ -76,10 +76,7 @@ pub(crate) fn assemble_active_project_sheets(
     let Some(active_path) = document_state.active_path.clone() else {
         return (pages, ProjectSheetSet::empty());
     };
-    let root = document_state
-        .active_document_project()
-        .and_then(project_root_sheet_path)
-        .unwrap_or(active_path);
+    let root = resolve_netlist_root(document_state).unwrap_or(active_path);
     let set = assemble_project_sheets(document_state, &pages, &root);
     (pages, set)
 }
@@ -109,17 +106,47 @@ pub(crate) fn ordered_project_sheet_paths(
     paths
 }
 
-/// Absolute path of a project's root schematic — its declared
-/// `schematic_root`, falling back to the first entry in the sheet list.
+/// Absolute path of a project's declared root schematic (`schematic_root`
+/// joined to the project directory). `None` when the project declares none.
 pub(crate) fn project_root_sheet_path(
     project: &crate::app::state::LoadedProject,
 ) -> Option<PathBuf> {
-    let filename = project
-        .data
-        .schematic_root
-        .clone()
-        .or_else(|| project.data.sheets.first().map(|s| s.filename.clone()))?;
+    let filename = project.data.schematic_root.as_ref()?;
     Some(project.dir().join(filename))
+}
+
+/// The single answer to "which sheet roots the project netlist": the owning
+/// project's declared `schematic_root`, never the focused tab, so a child
+/// sheet in focus still yields the whole-design netlist (#338).
+///
+/// The explicit fallback is the active document, used only when there is no
+/// owning project (a loose schematic) or the project declares no root.
+/// Shared by the cached canvas/ERC netlist and the export scope.
+pub(crate) fn resolve_netlist_root(document_state: &DocumentState) -> Option<PathBuf> {
+    document_state
+        .active_document_project()
+        .and_then(project_root_sheet_path)
+        .or_else(|| document_state.active_path.clone())
+}
+
+/// The warning to surface when [`resolve_netlist_root`] had to fall back to the
+/// active sheet *inside a project* because the project declares no root sheet
+/// (#338). `None` for a declared root and for a loose document, where rooting
+/// at the active sheet is the whole scope rather than a degradation.
+///
+/// Kept apart from the resolver so the resolver stays pure (`view` reaches it
+/// through [`assemble_active_project_sheets`]); update-side callers log this.
+pub(crate) fn netlist_root_fallback_warning(document_state: &DocumentState) -> Option<String> {
+    let project = document_state.active_document_project()?;
+    if project.data.schematic_root.is_some() {
+        return None;
+    }
+    let active = document_state.active_path.as_ref()?;
+    Some(format!(
+        "Netlist: project '{}' declares no root sheet; rooting at the active sheet '{}'",
+        project.data.name,
+        active.display()
+    ))
 }
 
 /// Read one sheet: the live engine snapshot when the file is open as a tab (so

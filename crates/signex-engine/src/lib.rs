@@ -110,6 +110,8 @@ impl Engine {
             | Command::UpdateText { .. }
             | Command::UpdateLabelProps { .. }
             | Command::SetSymbolRotation { .. }
+            | Command::SetSymbolLocked { .. }
+            | Command::SetSymbolDnp { .. }
             | Command::UpdateSymbolTextSize { .. }
             | Command::UpdateSymbolLibId { .. }
             | Command::UpdateSymbolFootprint { .. }

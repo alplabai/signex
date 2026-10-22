@@ -39,6 +39,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use crate::adapter::{HistoryEntry, LibraryError};
+use crate::git_identity::identity_for_repo;
 
 /// Project-scoped git adapter.
 ///
@@ -460,74 +461,4 @@ fn history_entry_from_commit(commit: &git2::Commit<'_>, stats: CommitPathStats) 
         additions: stats.additions,
         deletions: stats.deletions,
     }
-}
-
-/// Resolve the user identity for a commit. Walks a chain of sources
-/// so the user's real name lands on the commit even when the OS
-/// distribution didn't pre-populate `~/.gitconfig`:
-///
-/// 1. Repo-local `user.name` / `user.email` (the standard git path).
-/// 2. Process env vars `GIT_AUTHOR_NAME` / `GIT_AUTHOR_EMAIL` and
-///    `GIT_COMMITTER_NAME` / `GIT_COMMITTER_EMAIL` — git's own
-///    fallback hierarchy, which Signex honours so CI / scripted
-///    flows don't need to mutate `~/.gitconfig`.
-/// 3. POSIX-style env hints `USER` / `EMAIL` for the convenience case
-///    of "developer hasn't configured git yet but their shell knows
-///    their identity". Email derives a synthetic local-host address
-///    when `EMAIL` is unset (`<user>@<hostname>`).
-///
-/// Returns `Err(LibraryError::Backend("git identity not configured…"))`
-/// when none of the above resolves a name. Durable project rule:
-/// commits must carry the user's identity — never a generic
-/// "Signex Project" / "Signex bot" fallback. Surfaces through the
-/// async commit pipeline as a `Message::ProjectGitCommitDone` error
-/// the user can act on.
-fn identity_for_repo(repo: &git2::Repository) -> Result<(String, String), LibraryError> {
-    let cfg = repo.config().ok();
-    // Layer 1 — git config.
-    let cfg_name = cfg
-        .as_ref()
-        .and_then(|c| c.get_string("user.name").ok())
-        .filter(|s| !s.trim().is_empty());
-    let cfg_email = cfg
-        .as_ref()
-        .and_then(|c| c.get_string("user.email").ok())
-        .filter(|s| !s.trim().is_empty());
-
-    // Layer 2 — git's own env-var fallback.
-    let env_name = std::env::var("GIT_AUTHOR_NAME")
-        .ok()
-        .or_else(|| std::env::var("GIT_COMMITTER_NAME").ok())
-        .filter(|s| !s.trim().is_empty());
-    let env_email = std::env::var("GIT_AUTHOR_EMAIL")
-        .ok()
-        .or_else(|| std::env::var("GIT_COMMITTER_EMAIL").ok())
-        .filter(|s| !s.trim().is_empty());
-
-    // Layer 3 — POSIX-style USER/EMAIL hint for the bare-shell case.
-    let posix_name = std::env::var("USER")
-        .ok()
-        .or_else(|| std::env::var("USERNAME").ok())
-        .filter(|s| !s.trim().is_empty());
-    let posix_email = std::env::var("EMAIL").ok().filter(|s| !s.trim().is_empty());
-
-    let name = cfg_name.or(env_name).or(posix_name).ok_or_else(|| {
-        LibraryError::Backend(
-            "git identity not configured — set user.name via \
-             `git config --global user.name \"…\"` (or set GIT_AUTHOR_NAME). \
-             Signex won't author commits with a generic identity."
-                .to_string(),
-        )
-    })?;
-    let email = cfg_email.or(env_email).or(posix_email).unwrap_or_else(|| {
-        // Synthetic `<user>@<hostname>` lands the commit author in
-        // git log without leaking a fake organisation domain. Users
-        // who care can set `user.email` properly; we just don't
-        // BLOCK the commit on its absence.
-        let host = std::env::var("HOSTNAME")
-            .or_else(|_| std::env::var("COMPUTERNAME"))
-            .unwrap_or_else(|_| "localhost".to_string());
-        format!("{}@{}", name, host)
-    });
-    Ok((name, email))
 }
