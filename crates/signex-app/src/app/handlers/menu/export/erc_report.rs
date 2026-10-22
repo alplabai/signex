@@ -109,6 +109,7 @@ impl Signex {
             sheets: Vec::new(),
             metadata: ProjectMetadata::default(),
             netlist: None,
+            netlist_sheets: Vec::new(),
         };
         let output = match ErcReportExporter.export(&ctx, &opts) {
             Ok(o) => o,
