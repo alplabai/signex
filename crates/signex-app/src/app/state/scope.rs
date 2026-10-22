@@ -21,7 +21,39 @@ use std::path::{Path, PathBuf};
 
 use super::LoadedProject;
 
-/// Comparison key for a filesystem path.
+/// How [`path_key_with`] treats case (and, with it, the separator) when it
+/// builds a comparison key.
+///
+/// An injectable input rather than a `cfg!(windows)` read inside the key
+/// function, so both policies run on every host — including the Linux-only
+/// `cargo test` CI job. The call sites still default it from the host family
+/// ([`CaseFold::host_default`]); see [`path_key`] for what that gets wrong.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CaseFold {
+    /// Case-insensitive volume: lowercase the path and normalize `\` to `/`.
+    Fold,
+    /// Case-sensitive volume: the path verbatim.
+    Preserve,
+}
+
+impl CaseFold {
+    /// The policy the running host family implies: [`CaseFold::Fold`] on
+    /// Windows, [`CaseFold::Preserve`] elsewhere. Not a per-volume answer.
+    pub(crate) const fn host_default() -> Self {
+        if cfg!(windows) {
+            Self::Fold
+        } else {
+            Self::Preserve
+        }
+    }
+}
+
+/// Comparison key for a filesystem path under the host-default [`CaseFold`].
+///
+/// The host family is only a proxy for the per-volume truth: it under-folds on
+/// a case-insensitive macOS APFS volume and over-folds on a Windows directory
+/// with NTFS per-directory case sensitivity (#543). Probing the volume is the
+/// open follow-up; callers needing a specific policy use [`path_key_with`].
 ///
 /// Windows filesystems are case-insensitive and accept either separator, but
 /// Rust's `Path` comparison is neither — a `.snxprj` recording `Top.snxsch`
@@ -30,11 +62,15 @@ use super::LoadedProject;
 /// and silently degrade a project export to a single page. Unix paths are
 /// case-sensitive, so there the key is the path verbatim.
 pub(crate) fn path_key(path: &Path) -> String {
+    path_key_with(path, CaseFold::host_default())
+}
+
+/// [`path_key`] with an explicit case policy.
+pub(crate) fn path_key_with(path: &Path, fold: CaseFold) -> String {
     let raw = path.to_string_lossy();
-    if cfg!(windows) {
-        raw.to_lowercase().replace('\\', "/")
-    } else {
-        raw.into_owned()
+    match fold {
+        CaseFold::Fold => raw.to_lowercase().replace('\\', "/"),
+        CaseFold::Preserve => raw.into_owned(),
     }
 }
 
@@ -282,6 +318,41 @@ mod tests {
                 "owner must be the lexicographically-smallest parent path (iter {i})",
             );
         }
+    }
+
+    #[test]
+    fn fold_policy_ignores_case_and_separator_on_any_host() {
+        let a = Path::new("/w/a/Top.snxsch");
+        let b = Path::new("/w/a/top.snxsch");
+        assert_eq!(
+            path_key_with(a, CaseFold::Fold),
+            path_key_with(b, CaseFold::Fold)
+        );
+        assert_eq!(
+            path_key_with(Path::new("W\\Sub\\Top.snxsch"), CaseFold::Fold),
+            "w/sub/top.snxsch"
+        );
+    }
+
+    #[test]
+    fn preserve_policy_keeps_case_and_separator_on_any_host() {
+        let a = Path::new("/w/a/Top.snxsch");
+        let b = Path::new("/w/a/top.snxsch");
+        assert_ne!(
+            path_key_with(a, CaseFold::Preserve),
+            path_key_with(b, CaseFold::Preserve)
+        );
+        assert_eq!(
+            path_key_with(Path::new("W\\Top.snxsch"), CaseFold::Preserve),
+            "W\\Top.snxsch"
+        );
+    }
+
+    #[test]
+    fn path_key_follows_the_host_default_policy() {
+        let p = Path::new("/w/A/Top.snxsch");
+        assert_eq!(path_key(p), path_key_with(p, CaseFold::host_default()));
+        assert_eq!(CaseFold::host_default() == CaseFold::Fold, cfg!(windows));
     }
 
     #[test]
