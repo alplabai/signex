@@ -8,6 +8,7 @@ use crate::{ExportContext, ProjectMetadata, SheetSnapshot};
 
 fn empty_sheet() -> SchematicSheet {
     SchematicSheet {
+        unknown: Default::default(),
         uuid: uuid::Uuid::nil(),
         version: 0,
         generator: String::new(),
@@ -145,6 +146,7 @@ fn exports_schematic_content() {
 
     // Add one symbol.
     sheet.symbols.push(Symbol {
+        unknown: Default::default(),
         uuid: Uuid::nil(),
         lib_id: "Device:R".to_string(),
         reference: "R1".to_string(),
@@ -390,6 +392,7 @@ fn outlines_emitted_when_components_toggle_is_on() {
 
     let mut sheet = empty_sheet();
     sheet.symbols.push(Symbol {
+        unknown: Default::default(),
         uuid: Uuid::nil(),
         lib_id: "Device:R".to_string(),
         reference: "R1".to_string(),

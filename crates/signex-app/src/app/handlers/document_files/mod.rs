@@ -69,6 +69,7 @@ pub(crate) fn blank_schematic_sheet_for_new_doc() -> signex_types::schematic::Sc
 
 fn blank_schematic_sheet() -> signex_types::schematic::SchematicSheet {
     signex_types::schematic::SchematicSheet {
+        unknown: Default::default(),
         uuid: uuid::Uuid::new_v4(),
         version: 1,
         generator: "signex".into(),
