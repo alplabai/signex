@@ -32,6 +32,9 @@
     reason = "integration tests discard Results with `let _ = ...` routinely; this is test scaffolding, not a production `iced::Task` being dropped, and `[lints]` in Cargo.toml is package-scoped so each integration-test crate root needs its own"
 )]
 
+#[path = "regression/close_support.rs"]
+mod close_support;
+
 #[path = "regression/project.rs"]
 mod project;
 

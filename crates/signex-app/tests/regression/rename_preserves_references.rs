@@ -391,7 +391,7 @@ fn a_malformed_project_sheet_is_reported_in_the_notice_and_the_messages_panel() 
 
 #[test]
 fn closing_the_project_after_a_rename_keeps_the_prompt_and_strands_no_engine() {
-    use signex_app::app::{ContextMenuMsg, ProjectCloseChoice, ProjectMsg, ProjectTreeAction};
+    use signex_app::app::{ProjectCloseChoice, ProjectMsg};
 
     let mut f = fixture();
     submit_rename(&mut f.app, &f.child, "renamed.snxsch");
@@ -400,11 +400,7 @@ fn closing_the_project_after_a_rename_keeps_the_prompt_and_strands_no_engine() {
         "precondition: a tab-less dirty parent engine"
     );
 
-    let _ = f
-        .app
-        .update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-            ProjectTreeAction::CloseProject(vec![0]),
-        )));
+    crate::close_support::close_first_project(&mut f.app);
     let modal = f
         .app
         .ui_state

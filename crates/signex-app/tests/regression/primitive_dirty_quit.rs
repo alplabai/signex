@@ -8,8 +8,8 @@
 //! straight away and the edits went out with the process.
 
 use signex_app::app::{
-    ContextMenuMsg, FootprintEditorState, LoadedProject, Message, ProjectCloseChoice, ProjectMsg,
-    ProjectTreeAction, Signex, TabInfo, TabKind, WindowMsg,
+    FootprintEditorState, LoadedProject, Message, ProjectCloseChoice, ProjectMsg, Signex, TabInfo,
+    TabKind, WindowMsg,
 };
 use signex_app::dock::DockMessage;
 use signex_app::library::messages::{EditorMsg, LibraryMessage};
@@ -144,9 +144,7 @@ fn project_close_prompts_for_an_edited_footprint_and_discard_clears_it() {
     open_footprint_editor(&mut app, &path);
     edit_description_via_panel(&mut app);
 
-    let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-        ProjectTreeAction::CloseProject(vec![0]),
-    )));
+    crate::close_support::close_first_project(&mut app);
 
     let modal = app
         .ui_state
@@ -258,9 +256,7 @@ fn project_close_prompts_for_a_preview_row_under_the_project_and_discard_drops_i
     let app = app_with_open_project(tmp.path());
     let mut app = preview_edit_in(app, tmp.path().join("lib.snxlib"));
 
-    let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-        ProjectTreeAction::CloseProject(vec![0]),
-    )));
+    crate::close_support::close_first_project(&mut app);
     let modal = app
         .ui_state
         .project_close_confirm
@@ -280,9 +276,7 @@ fn project_close_save_all_keeps_the_project_when_a_row_cannot_be_saved() {
     let tmp = TempDir::new().unwrap();
     let app = app_with_open_project(tmp.path());
     let mut app = preview_edit_in(app, tmp.path().join("lib.snxlib"));
-    let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-        ProjectTreeAction::CloseProject(vec![0]),
-    )));
+    crate::close_support::close_first_project(&mut app);
 
     let _ = app.update(Message::Project(ProjectMsg::CloseConfirm(
         ProjectCloseChoice::SaveAll,

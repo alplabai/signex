@@ -2,9 +2,8 @@
 //! must only prompt for and discard the closing project's own documents.
 
 use signex_app::app::{
-    ContextMenuMsg, LoadedProject, Message, ProjectCloseChoice, ProjectId, ProjectMsg,
-    ProjectTreeAction, RemoveChoice, RemoveDialogState, RemoveMsg, Signex, TabInfo, TabKind,
-    WindowMsg,
+    LoadedProject, Message, ProjectCloseChoice, ProjectId, ProjectMsg, RemoveChoice,
+    RemoveDialogState, RemoveMsg, Signex, TabInfo, TabKind, WindowMsg,
 };
 use signex_types::project::{ProjectData, SheetEntry};
 use signex_types::schematic::SchematicSheet;
@@ -84,25 +83,7 @@ fn open_dirty_sheet(app: &mut Signex, path: &Path, project: ProjectId) {
     app.document_state.dirty_paths.insert(path.to_path_buf());
 }
 
-/// Click Close Project on the first project and complete the off-thread
-/// sheet-reference task the way the iced runtime would: run its body and feed
-/// the result back as the completion message.
-fn close_first_project(app: &mut Signex) {
-    let project_id = app.document_state.projects[0].id;
-    let task = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-        ProjectTreeAction::CloseProject(vec![0]),
-    )));
-    assert_eq!(task.units(), 1, "Close Project must start the resolve task");
-    assert!(
-        app.ui_state.project_close_confirm.is_none(),
-        "the gate must wait for the task, not read the disk in update",
-    );
-    let result = app.resolve_sheet_refs_blocking();
-    let _ = app.update(Message::Project(ProjectMsg::CloseRefsResolved {
-        project_id,
-        result,
-    }));
-}
+use crate::close_support::close_first_project;
 
 #[test]
 fn deleting_a_dirty_sheet_is_not_resurrected_by_save_all_on_quit() {
