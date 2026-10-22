@@ -251,6 +251,7 @@ mod tests {
                 no_erc_directives: vec![],
                 title_block: Default::default(),
                 lib_symbols: Default::default(),
+                unknown: Default::default(),
             },
             sheet_name: "a".into(),
             sheet_number: 1,
@@ -288,6 +289,7 @@ mod tests {
             library_id: None,
             row_id: None,
             library_version: String::new(),
+            unknown: Default::default(),
         }
     }
 
