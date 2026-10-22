@@ -29,7 +29,7 @@ pub use erc::{
     ErcReportError, ErcReportExporter, ErcReportFormat, ErcReportOptions, ErcReportOutput,
     ErcReportRow, ErcReportSeverity,
 };
-pub use netlist::{NetlistExporter, NetlistOptions, NetlistOutput};
+pub use netlist::{NetlistExporter, NetlistFormat, NetlistOptions, NetlistOutput};
 pub use pdf::{
     ColourMode, Margins, Orientation, PageRange, PageSize, PdfExporter, PdfOptions, PdfOutput,
     PdfScale, SchematicPalette,
@@ -65,6 +65,13 @@ pub struct ExportContext {
     /// (e.g. a PDF-only export). Exporters read this rather than re-deriving
     /// nets from `sheets` (ADR-0002 D7).
     pub netlist: Option<signex_types::net::Netlist>,
+    /// Every sheet [`Self::netlist`] was derived from, in a stable order:
+    /// the printed pages *plus* the hierarchical children reached through
+    /// `child_sheets`, which are never printed pages. A terminal in the
+    /// netlist can sit on any of these, so anything that joins netlist
+    /// terminals back to symbols (the Protel component blocks) must walk this
+    /// set, not [`Self::sheets`]. A sheet placed several times appears once.
+    pub netlist_sheets: Vec<SchematicSheet>,
 }
 
 #[derive(Debug, Clone)]
