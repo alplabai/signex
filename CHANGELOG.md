@@ -18,6 +18,9 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
+### Added — start screen
+
+- **Actionable start screen** — with nothing loaded, the empty centre region now shows the product name and version with **New Project**, **Open Project…** and **Keyboard Shortcuts (F1)** buttons, all dispatching existing menu messages and styled from `ThemeTokens`. A loaded project with no document selected keeps its own quieter hint. Open Sample Project and recent projects are left out until those features land (#331).
 ### Added — ERC
 
 - **File ▸ Export ▸ ERC Report** writes the cached ERC results as plain text or

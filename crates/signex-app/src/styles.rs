@@ -362,6 +362,38 @@ pub fn rail_tab(
     }
 }
 
+/// Start-screen action button — bordered, hover-highlighted. The
+/// `primary` action takes the accent colour for its border so the
+/// first thing to do reads as the default.
+pub fn start_action(
+    tokens: &ThemeTokens,
+    primary: bool,
+) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
+    let hover = ti(tokens.hover);
+    let text = ti(tokens.text);
+    let border = ti(if primary {
+        tokens.accent
+    } else {
+        tokens.border
+    });
+    move |_: &Theme, status: button::Status| {
+        let bg = match status {
+            button::Status::Hovered | button::Status::Pressed => Some(Background::Color(hover)),
+            _ => None,
+        };
+        button::Style {
+            background: bg,
+            border: Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: border,
+            },
+            text_color: text,
+            ..button::Style::default()
+        }
+    }
+}
+
 /// Menu item / popup list button — full-width hover highlight.
 pub fn menu_item(
     tokens: &ThemeTokens,

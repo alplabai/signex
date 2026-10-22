@@ -113,3 +113,5 @@ mod deleted_sheet_not_resaved;
 mod library_components_panel_actions;
 #[path = "regression/library_git_recovery.rs"]
 mod library_git_recovery;
+#[path = "regression/start_screen.rs"]
+mod start_screen;
