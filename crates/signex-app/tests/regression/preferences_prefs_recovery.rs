@@ -352,3 +352,43 @@ fn reopening_preferences_clears_the_reset_status() {
         app.ui_state.preferences_prefs_status
     );
 }
+
+/// #346 — an ERC severity override is stored verbatim, even when it equals
+/// the rule's default. `BadHierSheetPin` grades its own findings, so picking
+/// its default level is a real choice that must flatten them; dropping the
+/// entry would silently discard it. Drives both entry points: the ERC dialog
+/// handler and the Preferences draft message.
+#[test]
+fn erc_severity_override_equal_to_the_default_is_stored_verbatim() {
+    use signex_app::app::ErcMsg;
+    use signex_erc::RuleKind;
+
+    // Arrange
+    let _serial = serial();
+    let _guard = PrefsPathGuard::capture();
+    let rule = RuleKind::BadHierSheetPin;
+    let default = rule.default_severity();
+    let (mut app, _t) = Signex::new();
+    app.ui_state.erc_severity_override.clear();
+
+    // Act: ERC dialog
+    let _ = app.update(Message::Erc(ErcMsg::SeverityChanged(rule, default)));
+
+    // Assert
+    assert_eq!(
+        app.ui_state.erc_severity_override.get(&rule),
+        Some(&default),
+        "the ERC dialog must keep an override equal to the default"
+    );
+
+    // Act: Preferences chip
+    app.ui_state.erc_severity_override.clear();
+    let _ = app.update(inner(PrefMsg::DraftErcSeverity(rule, default)));
+
+    // Assert
+    assert_eq!(
+        app.ui_state.erc_severity_override.get(&rule),
+        Some(&default),
+        "the Preferences chip must keep an override equal to the default"
+    );
+}

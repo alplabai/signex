@@ -582,7 +582,6 @@ pub(crate) fn missing_power_flag(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
                 ),
                 symbol.position,
             )
-            .with_severity(Severity::Info)
             .with_primary(sel(symbol.uuid, SelectedKind::Symbol)),
         );
     }

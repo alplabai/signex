@@ -42,9 +42,10 @@ cat > "$APP_DIR/signex.desktop" <<DESKTOP_EOF
 Type=Application
 Name=Signex
 Comment=AI-first EDA editor
-Exec=signex
+Exec=signex %F
 Icon=signex
 Categories=Development;Electronics;Engineering;
+MimeType=application/vnd.alpcaner.signex.snxprj;application/vnd.alpcaner.signex.snxsch;application/vnd.alpcaner.signex.snxpcb;application/vnd.alpcaner.signex.snxfpt;application/vnd.alpcaner.signex.snxsim;application/vnd.alpcaner.signex.snxlib;application/vnd.alpcaner.signex.snxsym;application/vnd.alpcaner.signex.snxpkg;application/vnd.alpcaner.signex.snxmat;application/vnd.alpcaner.signex.snxcfg;application/vnd.alpcaner.signex.snxmod;
 Terminal=false
 DESKTOP_EOF
 cp "$APP_DIR/signex.desktop" "$APP_DIR/usr/share/applications/signex.desktop"
