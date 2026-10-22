@@ -233,8 +233,10 @@ fn build_bom_context(ctx: &ExportContext, opts: &BomOptions) -> BomContext {
             custom.remove("Name");
             custom.remove("Description");
             custom.remove("LibRef");
-            custom.remove("VariantFitted");
-            custom.remove("Fitted");
+            // Fit-state fields feed `variant_fitted`/`base_fitted`, not the
+            // part's identity. Drop whatever the resolvers recognise so a
+            // variant override cannot split otherwise identical parts.
+            custom.retain(|key, _| !is_fit_state_field(key));
 
             components.push(BomComponent {
                 reference: sym.reference.clone(),
@@ -341,6 +343,12 @@ fn parse_variant_field_key(key: &str) -> Option<(String, VariantFieldKind)> {
         return None;
     }
     Some((variant.to_string(), kind))
+}
+
+/// True for any field key the fit-state resolvers read, so the BOM identity
+/// strips exactly what they consume and the two cannot drift.
+fn is_fit_state_field(key: &str) -> bool {
+    parse_variant_field_key(key).is_some() || property_variant_kind(key).is_some()
 }
 
 fn property_variant_kind(key: &str) -> Option<VariantFieldKind> {
@@ -1079,5 +1087,72 @@ mod tests {
         opts.include_not_fitted = true;
         let (_t, report) = rollup_with_validation(&ctx, &opts);
         assert_eq!(report.issues.len(), 1, "{:?}", report.issues);
+    }
+
+    // ---- grouping identity (#673) ----
+
+    fn part_with_fields(reference: &str, fields: &[(&str, &str)]) -> Symbol {
+        let mut symbol = test_symbol();
+        symbol.reference = reference.to_string();
+        for (key, value) in fields {
+            symbol
+                .fields
+                .insert((*key).to_string(), (*value).to_string());
+        }
+        symbol
+    }
+
+    #[test]
+    fn identical_parts_with_mpn_and_manufacturer_merge() {
+        let part = [("MPN", "RC0603FR-0710KL"), ("Manufacturer", "Yageo")];
+        let ctx = export_ctx(vec![
+            part_with_fields("R1", &part),
+            part_with_fields("R2", &part),
+        ]);
+        let table = rollup(&ctx, &BomOptions::default());
+        assert_eq!(table.rows.len(), 1);
+        assert_eq!(table.rows[0].references, vec!["R1", "R2"]);
+    }
+
+    #[test]
+    fn variant_fit_fields_do_not_split_identical_parts() {
+        let variant_keys = [
+            "DNP",
+            "fitted",
+            "Fitted@Lite",
+            "dnp@Lite",
+            "Lite.DNP",
+            "lite.fitted",
+            "Variant:Lite:Fitted",
+            "VARIANT:Lite:dnp",
+        ];
+        for key in variant_keys {
+            let ctx = export_ctx(vec![
+                part_with_fields("R1", &[("MPN", "RC0603FR-0710KL")]),
+                part_with_fields("R2", &[("MPN", "RC0603FR-0710KL"), (key, "no")]),
+            ]);
+            let opts = BomOptions {
+                include_not_fitted: true,
+                include_dnp: true,
+                ..BomOptions::default()
+            };
+            let table = rollup(&ctx, &opts);
+            assert_eq!(table.rows.len(), 1, "{key} split identical parts");
+            assert_eq!(table.rows[0].references, vec!["R1", "R2"], "{key}");
+            assert!(
+                table.rows[0].custom.keys().all(|k| k == "MPN"),
+                "{key} leaked into custom: {:?}",
+                table.rows[0].custom
+            );
+        }
+    }
+
+    #[test]
+    fn part_level_fields_still_split_parts() {
+        let ctx = export_ctx(vec![
+            part_with_fields("R1", &[("Tolerance", "1%")]),
+            part_with_fields("R2", &[("Tolerance", "5%")]),
+        ]);
+        assert_eq!(rollup(&ctx, &BomOptions::default()).rows.len(), 2);
     }
 }

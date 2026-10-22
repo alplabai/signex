@@ -96,6 +96,7 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 - **A variant can fit a part marked DNP (#674)** — a part with DNP set in the base schematic was left out of a variant's BOM even when that variant fitted it, because the DNP filter ran before the variant was read; export validation skipped it the same way. Only the active variant's own override now lets a DNP part through. A leftover `Fitted`, `VariantFitted` or `DNP` field on the part does not, with or without an active variant.
 - **Library actions no longer silently do nothing (#152)** — Components Panel "Add Library" on the Project section and a failed Installed/Global mount now raise the error card, a failed `global_libraries.toml` write is reported, "Refresh All Pricing" is shown disabled ("Not yet available") instead of logging a TODO, and the never-emitted Manage/Add-to-Project/row-refresh stub messages are removed.
+- **Grouped BOM keeps parts with different MPNs apart (#673)** — grouping keyed only on name, value, footprint and library reference, so two parts differing in MPN, manufacturer, description or any other field merged into one row carrying the first part's data, and the BOM ordered the wrong part. A group now requires every part-level field to match; an empty field counts as absent, and variant fit-state fields (`DNP`, `Fitted@<V>`, …) never split identical parts.
 
 ### Changed
 
