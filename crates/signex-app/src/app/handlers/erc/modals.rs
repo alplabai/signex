@@ -21,12 +21,9 @@ impl Signex {
         rule: signex_erc::RuleKind,
         severity: signex_erc::Severity,
     ) -> Task<Message> {
-        if severity == rule.default_severity() {
-            // Match default → remove override so the map stays minimal.
-            self.ui_state.erc_severity_override.remove(&rule);
-        } else {
-            self.ui_state.erc_severity_override.insert(rule, severity);
-        }
+        // Store the choice verbatim: a rule that grades its own findings
+        // (BadHierSheetPin) must be flattenable to its default level too.
+        self.ui_state.erc_severity_override.insert(rule, severity);
         // Persist so the override survives restart. Silent on I/O errors —
         // this is a preference, not critical state.
         crate::fonts::write_erc_severity_overrides(&self.ui_state.erc_severity_override);

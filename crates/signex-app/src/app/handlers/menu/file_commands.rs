@@ -19,6 +19,10 @@ impl Signex {
                 },
                 |p| Message::File(FileMsg::Opened(p)),
             )),
+            MenuMessage::OpenRecentProject(path) => {
+                Some(self.handle_open_recent_project(path.clone()))
+            }
+            MenuMessage::ClearRecentProjects => Some(self.handle_clear_recent_projects()),
             MenuMessage::Save => Some(self.update(Message::File(FileMsg::Save))),
             MenuMessage::SaveAs => Some(Task::perform(
                 async {
@@ -52,6 +56,7 @@ impl Signex {
             MenuMessage::ExportPdf => Some(self.update(Message::Export(ExportMsg::PdfOpenDialog))),
             MenuMessage::ExportNetlist => self.handle_export_netlist_requested(),
             MenuMessage::ExportBom => Some(self.handle_bom_preview_open()),
+            MenuMessage::ExportErcReport => Some(self.handle_erc_report_requested()),
             MenuMessage::Exit => Some(self.update(Message::Window(WindowMsg::CloseMainWindow))),
             MenuMessage::LibraryOpenLibrary => Some(self.update(Message::Library(
                 crate::library::LibraryMessage::OpenLibraryDialog,

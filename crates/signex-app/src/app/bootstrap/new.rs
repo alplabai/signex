@@ -8,6 +8,25 @@ use crate::dock::{DockArea, PanelPosition};
 use crate::panels::PanelKind;
 
 impl Signex {
+    /// [`Signex::new`] plus one `FileMsg::Opened` per command-line
+    /// document (#317), so a file association opens its file through the
+    /// same flow as File > Open — including its error notice.
+    pub fn boot(startup_paths: Vec<std::path::PathBuf>) -> (Self, Task<Message>) {
+        let (app, boot_task) = Self::new();
+        let opens = Self::startup_open_messages(startup_paths)
+            .into_iter()
+            .map(Task::done);
+        (app, Task::batch(std::iter::once(boot_task).chain(opens)))
+    }
+
+    /// The open messages a launch with `paths` dispatches, in argv order.
+    pub fn startup_open_messages(paths: Vec<std::path::PathBuf>) -> Vec<Message> {
+        paths
+            .into_iter()
+            .map(|path| Message::File(FileMsg::Opened(Some(path))))
+            .collect()
+    }
+
     pub fn new() -> (Self, Task<Message>) {
         // Default panel layout — restored from disk if a previous
         // session persisted one, otherwise seeded with the Altium-ish
@@ -175,6 +194,10 @@ impl Signex {
                 panel_list_open: false,
                 preferences_open: false,
                 keyboard_shortcuts_open: false,
+                about_open: false,
+                recent_projects: crate::recent_projects::RecentProjects::from_paths(
+                    crate::fonts::read_recent_projects(),
+                ),
                 first_run_tour_open: !crate::fonts::read_first_run_tour_dismissed(),
                 find_replace: crate::find_replace::FindReplaceState::default(),
                 preferences_nav: crate::preferences::PrefNav::Appearance,

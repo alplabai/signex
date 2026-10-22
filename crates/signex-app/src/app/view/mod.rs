@@ -202,6 +202,7 @@ impl Signex {
             // a secondary window onto a monitor with a different DPI.
             scale_factor: ui.main_window_scale,
             active_keymap: Some(ui.active_keymap.clone()),
+            recent_projects: ui.recent_projects.entries().to_vec(),
         };
         let menu_row = menu_bar::view(&document.panel_ctx.tokens, menu_ctx).map(Message::Menu);
 
@@ -412,6 +413,7 @@ impl Signex {
             || ui.find_replace.open
             || ui.preferences_open
             || ui.keyboard_shortcuts_open
+            || ui.about_open
             || ui.passive_calculator_open
             || ui.first_run_tour_open
             || ui.rename_dialog.is_some()
@@ -666,39 +668,17 @@ impl Signex {
                 base
             }
         } else {
-            // Distinguish "nothing loaded at all" from "project loaded,
-            // but no document picked yet" — the second case is what
-            // the user sees right after opening a .standard_pro before
-            // clicking any node in the project tree.
-            let (title, hint) = if self.document_state.active_project.is_some() {
-                (
-                    "No document selected",
-                    "Choose a schematic or PCB from the project tree".to_string(),
-                )
-            } else {
-                let open_shortcut = self.keymap_shortcut_label("open_document", "Ctrl+O");
-                (
-                    "No document open",
-                    format!("Open a project with File > Open or {open_shortcut}"),
-                )
-            };
-            container(
-                column![
-                    iced::widget::text(title).size(14).color(crate::styles::ti(
-                        self.document_state.panel_ctx.tokens.text_secondary
-                    )),
-                    iced::widget::text(hint).size(11).color(crate::styles::ti(
-                        self.document_state.panel_ctx.tokens.text_secondary
-                    )),
-                ]
-                .spacing(8)
-                .align_x(iced::Alignment::Center),
-            )
-            .center(Length::Fill)
-            .style(crate::styles::panel_region(
-                &self.document_state.panel_ctx.tokens,
-            ))
-            .into()
+            // "Nothing loaded" gets the actionable start screen; "project
+            // loaded, no document picked" keeps its own quieter hint.
+            use crate::start_screen::{self, Surface};
+            let tokens = &self.document_state.panel_ctx.tokens;
+            match Surface::select(self.document_state.active_project.is_some()) {
+                Surface::ProjectHint => start_screen::hint_view(tokens),
+                Surface::Start => {
+                    let open_shortcut = self.keymap_shortcut_label("open_document", "Ctrl+O");
+                    start_screen::view(tokens, &open_shortcut)
+                }
+            }
         }
     }
 

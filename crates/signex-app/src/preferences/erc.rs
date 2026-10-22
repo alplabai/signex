@@ -10,20 +10,6 @@ pub(super) fn content_erc<'a>(
     overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
 ) -> Element<'a, PrefMsg> {
     use signex_erc::{RuleKind, Severity};
-    const RULES: &[RuleKind] = &[
-        RuleKind::UnusedPin,
-        RuleKind::DuplicateRefDesignator,
-        RuleKind::HierPortDisconnected,
-        RuleKind::DanglingWire,
-        RuleKind::NetLabelConflict,
-        RuleKind::OrphanLabel,
-        RuleKind::BusBitWidthMismatch,
-        RuleKind::BadHierSheetPin,
-        RuleKind::MissingPowerFlag,
-        RuleKind::PowerPortShort,
-        RuleKind::SymbolOutsideSheet,
-        RuleKind::AmbiguousLabelAnchor,
-    ];
     const CHOICES: &[Severity] = &[
         Severity::Error,
         Severity::Warning,
@@ -41,12 +27,11 @@ pub(super) fn content_erc<'a>(
     .padding([16, 20]);
 
     let mut rows_col = column![].spacing(0).padding([0, 20]);
-    for rule in RULES {
+    for rule in &RuleKind::ALL {
         let current = overrides
             .get(rule)
             .copied()
             .unwrap_or_else(|| rule.default_severity());
-        let default_sev = rule.default_severity();
         let mut row_ui = row![
             text(rule.label())
                 .size(12)
@@ -59,7 +44,6 @@ pub(super) fn content_erc<'a>(
             let active = current == sev;
             let r = *rule;
             let s = sev;
-            let d = default_sev;
             row_ui = row_ui.push(
                 button(
                     text(severity_label(sev))
@@ -76,7 +60,7 @@ pub(super) fn content_erc<'a>(
                         }),
                 )
                 .padding([4, 10])
-                .on_press(PrefMsg::DraftErcSeverity(r, if s == d { d } else { s }))
+                .on_press(PrefMsg::DraftErcSeverity(r, s))
                 .style(move |theme: &Theme, status: button::Status| {
                     let palette = theme.extended_palette();
                     let bg = if active {

@@ -3,6 +3,40 @@
 use crate::*;
 
 impl Engine {
+    /// Write one boolean symbol flag; a missing symbol or an unchanged
+    /// value is a no-op that records no history entry.
+    fn set_symbol_flag(
+        &mut self,
+        before: SchematicSheet,
+        symbol_id: uuid::Uuid,
+        flag: impl Fn(&mut signex_types::schematic::Symbol) -> &mut bool,
+        value: bool,
+    ) -> Result<CommandResult, EngineError> {
+        let changed = self
+            .document
+            .symbols
+            .iter_mut()
+            .find(|s| s.uuid == symbol_id)
+            .map(|s| {
+                let slot = flag(s);
+                let differs = *slot != value;
+                *slot = value;
+                differs
+            })
+            .unwrap_or(false);
+
+        if !changed {
+            return Ok(CommandResult::unchanged());
+        }
+
+        let patch_pair = PatchPair {
+            semantic: SemanticPatch::SymbolFieldsUpdated,
+            document: DocumentPatch::SYMBOLS,
+        };
+        self.record_history(before, patch_pair);
+        Ok(CommandResult::changed(patch_pair))
+    }
+
     pub(crate) fn exec_edits(
         &mut self,
         before: SchematicSheet,
@@ -181,6 +215,12 @@ impl Engine {
                 self.record_history(before, patch_pair);
 
                 Ok(CommandResult::changed(patch_pair))
+            }
+            Command::SetSymbolLocked { symbol_id, locked } => {
+                self.set_symbol_flag(before, symbol_id, |s| &mut s.locked, locked)
+            }
+            Command::SetSymbolDnp { symbol_id, dnp } => {
+                self.set_symbol_flag(before, symbol_id, |s| &mut s.dnp, dnp)
             }
             Command::UpdateSymbolTextSize {
                 symbol_id,
@@ -363,5 +403,102 @@ impl Engine {
             }
             _ => unreachable!(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::test_sheet;
+
+    fn engine_with_symbol() -> (Engine, uuid::Uuid) {
+        let uuid = uuid::Uuid::new_v4();
+        let mut sheet = test_sheet();
+        sheet.symbols.push(signex_types::schematic::Symbol {
+            uuid,
+            lib_id: "Device:R".to_string(),
+            reference: "R1".to_string(),
+            value: "10k".to_string(),
+            footprint: String::new(),
+            datasheet: String::new(),
+            position: signex_types::schematic::Point::new(0.0, 0.0),
+            rotation: 0.0,
+            mirror_x: false,
+            mirror_y: false,
+            unit: 1,
+            is_power: false,
+            ref_text: None,
+            val_text: None,
+            fields_autoplaced: false,
+            fields_user_placed: false,
+            dnp: false,
+            in_bom: true,
+            on_board: true,
+            exclude_from_sim: false,
+            locked: false,
+            fields: Default::default(),
+            custom_properties: Vec::new(),
+            pin_uuids: Default::default(),
+            instances: Vec::new(),
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
+            unknown: Default::default(),
+        });
+        (Engine::new(sheet).unwrap(), uuid)
+    }
+
+    #[test]
+    fn set_symbol_dnp_applies_and_one_undo_reverts() {
+        let (mut engine, id) = engine_with_symbol();
+        let r = engine
+            .execute(Command::SetSymbolDnp {
+                symbol_id: id,
+                dnp: true,
+            })
+            .unwrap();
+        assert!(r.changed);
+        assert!(engine.document().symbols[0].dnp);
+        assert!(!engine.document().symbols[0].locked);
+        assert!(engine.undo().unwrap().is_some());
+        assert!(!engine.document().symbols[0].dnp);
+        assert!(!engine.can_undo());
+    }
+
+    #[test]
+    fn set_symbol_locked_applies_and_one_undo_reverts() {
+        let (mut engine, id) = engine_with_symbol();
+        let r = engine
+            .execute(Command::SetSymbolLocked {
+                symbol_id: id,
+                locked: true,
+            })
+            .unwrap();
+        assert!(r.changed);
+        assert!(engine.document().symbols[0].locked);
+        assert!(!engine.document().symbols[0].dnp);
+        assert!(engine.undo().unwrap().is_some());
+        assert!(!engine.document().symbols[0].locked);
+        assert!(!engine.can_undo());
+    }
+
+    #[test]
+    fn unchanged_or_unknown_symbol_flag_records_no_history() {
+        let (mut engine, id) = engine_with_symbol();
+        let same = engine
+            .execute(Command::SetSymbolDnp {
+                symbol_id: id,
+                dnp: false,
+            })
+            .unwrap();
+        assert!(!same.changed);
+        let missing = engine
+            .execute(Command::SetSymbolLocked {
+                symbol_id: uuid::Uuid::new_v4(),
+                locked: true,
+            })
+            .unwrap();
+        assert!(!missing.changed);
+        assert!(!engine.can_undo());
     }
 }

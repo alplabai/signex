@@ -1,8 +1,10 @@
 //! Wiremock-backed integration tests for `DatabaseAdapter`.
 //!
-//! Row CRUD speaks to the `/tables` and `/rows` routes; primitive
-//! (`/symbols` / `/footprints` / `/sims`) coverage stays unchanged
-//! under the DBLib model.
+//! Row CRUD speaks to the `/tables` and `/rows` routes; primitives to
+//! `/symbols` / `/footprints` / `/sims`. The stubs follow the server's
+//! contract; `signex-library-server/tests/database_adapter.rs` runs the
+//! adapter against the real router, so a stub that drifts from the server
+//! is caught there (#688).
 //!
 //! Mirrors the `distributor_*` test layout — a private tokio runtime
 //! drives a `MockServer`; the adapter (which uses `reqwest::blocking`)
@@ -13,7 +15,7 @@
 
 use std::future::Future;
 
-use signex_library::adapter::{LibraryAdapter, PrimitiveSummary};
+use signex_library::adapter::LibraryAdapter;
 use signex_library::adapters::database::DatabaseAdapter;
 use signex_library::component::{ComponentRow, DatasheetRef, PlmReserved};
 use signex_library::identity::{ComponentClass, InternalPn, RowId};
@@ -24,7 +26,7 @@ use signex_library::primitive::{
     PinDirection, PrimitiveKind, PrimitiveRef, SimKind, SimModel, Symbol, SymbolPin,
 };
 use uuid::Uuid;
-use wiremock::matchers::{header, method, path, query_param};
+use wiremock::matchers::{body_partial_json, header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 /// Test bearer token — every request must carry it via `Authorization: Bearer`.
@@ -82,6 +84,7 @@ fn get_symbol_round_trips_through_get_symbols_uuid() {
             Box::pin(async move {
                 Mock::given(method("GET"))
                     .and(path(path_for_mock.as_str()))
+                    .and(query_param("library_id", Uuid::nil().to_string()))
                     .and(header(
                         "authorization",
                         format!("Bearer {TEST_TOKEN}").as_str(),
@@ -114,6 +117,10 @@ fn save_symbol_posts_to_symbols_with_message_header() {
                         format!("Bearer {TEST_TOKEN}").as_str(),
                     ))
                     .and(header("x-signex-message", "add OPAMP-DUAL-8"))
+                    .and(body_partial_json(serde_json::json!({
+                        "library_id": Uuid::nil(),
+                        "name": "OPAMP-DUAL-8",
+                    })))
                     .respond_with(ResponseTemplate::new(201))
                     .expect(1)
                     .mount(server)
@@ -151,6 +158,10 @@ fn save_sim_posts_to_sims_route() {
                         "authorization",
                         format!("Bearer {TEST_TOKEN}").as_str(),
                     ))
+                    .and(body_partial_json(serde_json::json!({
+                        "library_id": Uuid::nil(),
+                        "name": "LM358",
+                    })))
                     .respond_with(ResponseTemplate::new(201))
                     .expect(1)
                     .mount(server)
@@ -165,22 +176,11 @@ fn save_sim_posts_to_sims_route() {
 
 #[test]
 fn list_symbols_round_trips_through_get_symbols() {
-    let summaries = vec![
-        PrimitiveSummary {
-            uuid: Uuid::now_v7(),
-            name: "Alpha".into(),
-            kind: PrimitiveKind::Symbol,
-            used_by_count: 3,
-        },
-        PrimitiveSummary {
-            uuid: Uuid::now_v7(),
-            name: "Mu".into(),
-            kind: PrimitiveKind::Symbol,
-            used_by_count: 0,
-        },
-    ];
-    let body = serde_json::to_value(&summaries).unwrap();
-    let expected_len = summaries.len();
+    // The server's list rows: `{ library_id, uuid, name }`, no kind.
+    let body = serde_json::json!([
+        { "library_id": Uuid::nil(), "uuid": Uuid::now_v7(), "name": "Alpha" },
+        { "library_id": Uuid::nil(), "uuid": Uuid::now_v7(), "name": "Mu" },
+    ]);
 
     with_mock_server(
         move |server| {
@@ -188,6 +188,7 @@ fn list_symbols_round_trips_through_get_symbols() {
             Box::pin(async move {
                 Mock::given(method("GET"))
                     .and(path("/symbols"))
+                    .and(query_param("library_id", Uuid::nil().to_string()))
                     .and(header(
                         "authorization",
                         format!("Bearer {TEST_TOKEN}").as_str(),
@@ -200,10 +201,13 @@ fn list_symbols_round_trips_through_get_symbols() {
         },
         move |adapter| {
             let got = adapter.list_symbols().expect("list_symbols");
-            assert_eq!(got.len(), expected_len);
+            assert_eq!(got.len(), 2);
             assert_eq!(got[0].name, "Alpha");
-            assert_eq!(got[0].used_by_count, 3);
-            assert_eq!(got[1].kind, PrimitiveKind::Symbol);
+            assert_eq!(got[1].name, "Mu");
+            assert!(
+                got.iter()
+                    .all(|summary| summary.kind == PrimitiveKind::Symbol)
+            );
         },
     );
 }
@@ -219,6 +223,7 @@ fn get_symbol_404_maps_to_not_found() {
             Box::pin(async move {
                 Mock::given(method("GET"))
                     .and(path(path_for_mock.as_str()))
+                    .and(query_param("library_id", Uuid::nil().to_string()))
                     .respond_with(ResponseTemplate::new(404))
                     .expect(1)
                     .mount(server)

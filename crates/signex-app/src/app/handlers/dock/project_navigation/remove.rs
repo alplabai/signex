@@ -17,11 +17,98 @@ impl Signex {
             .and_then(|s| s.to_str())
             .unwrap_or("")
             .to_string();
+        let is_outside_project = self.is_outside_project_target(&tree_path, &target_path);
         self.ui_state.remove_dialog = Some(crate::app::RemoveDialogState {
             target_path,
             tree_path,
             display_name,
+            is_outside_project,
         });
+    }
+
+    /// Folder holding the `.snxprj` that owns the tree row at `tree_path`.
+    fn project_root_for_tree_path(&self, tree_path: &[usize]) -> Option<std::path::PathBuf> {
+        let project = self.document_state.projects.get(*tree_path.first()?)?;
+        project.path.parent().map(std::path::Path::to_path_buf)
+    }
+
+    /// Is the tree row's target a Shared / Global library entry?
+    fn is_shared_library_target(&self, tree_path: &[usize], target: &std::path::Path) -> bool {
+        tree_path
+            .first()
+            .and_then(|i| self.document_state.projects.get(*i))
+            .is_some_and(|p| super::remove_guard::is_shared_or_global_library(&p.data, target))
+    }
+
+    /// Kind-aware outside check: a Shared / Global library entry is outside
+    /// the project whatever its path says; otherwise fall back to path
+    /// containment (#139).
+    fn is_outside_project_target(&self, tree_path: &[usize], target: &std::path::Path) -> bool {
+        self.is_shared_library_target(tree_path, target)
+            || super::remove_guard::is_outside_project(
+                target,
+                self.project_root_for_tree_path(tree_path).as_deref(),
+            )
+    }
+
+    /// Delete the dialog's target from disk, but only if it is provably
+    /// inside the owning project's folder (#139). A Shared / Global
+    /// library lives outside it and belongs to other projects too, so a
+    /// refusal is surfaced to the user rather than only logged. This
+    /// holds even when the dialog state's `is_outside_project` is wrong.
+    fn delete_project_owned_target(&mut self, state: &crate::app::RemoveDialogState) {
+        // F23 — three cases:
+        //   1. Regular file (sheets, pcbs, primitives) → remove_file.
+        //   2. `.snxlib` directory package → remove_dir_all.
+        //   3. Orphan entry (missing on disk) → no-op; the caller still
+        //      prunes the in-memory entry.
+        let target = &state.target_path;
+        match target.try_exists() {
+            Ok(true) => {}
+            Ok(false) => {
+                // Orphan entry: nothing on disk, but a tab may still hold it (#736).
+                self.drop_deleted_documents(target, CaseFold::host_default());
+                return;
+            }
+            Err(e) => {
+                crate::diagnostics::log_error(
+                    "Could not check whether the project file exists",
+                    &anyhow::anyhow!("{}: {e}", target.display()),
+                );
+                return;
+            }
+        }
+        let root = self.project_root_for_tree_path(&state.tree_path);
+        let contained = root
+            .as_deref()
+            .is_some_and(|r| super::remove_guard::is_inside_project_root(target, r));
+        if !contained || self.is_shared_library_target(&state.tree_path, target) {
+            self.document_state.error_notice =
+                Some(crate::app::state::ErrorNotice::delete(format!(
+                    "\"{}\" is a shared library or lives outside this project's folder, so \
+                     it was not deleted from disk. It has only been removed from the project.",
+                    state.display_name
+                )));
+            return;
+        }
+        let result = if target.is_dir() {
+            std::fs::remove_dir_all(target)
+        } else {
+            std::fs::remove_file(target)
+        };
+        match result {
+            // The file is gone: forget any document still held for it (#736).
+            Ok(()) => self.drop_deleted_documents(target, CaseFold::host_default()),
+            Err(e) => {
+                crate::diagnostics::log_error(
+                    "Failed to delete project file",
+                    &anyhow::anyhow!("{}: {e}", target.display()),
+                );
+                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
+                    format!("Could not delete \"{}\": {e}", state.display_name),
+                ));
+            }
+        }
     }
 
     /// Close the tabs of the file being removed. A delete also closes tabs
@@ -95,28 +182,7 @@ impl Signex {
             //   3. Orphan entry (file/dir missing on disk) → no-op,
             //      Exclude semantic falls through naturally so the
             //      LibraryEntry / SheetEntry is still pruned below.
-            let target = &state.target_path;
-            match target.try_exists() {
-                Ok(true) => {
-                    let result = if target.is_dir() {
-                        std::fs::remove_dir_all(target)
-                    } else {
-                        std::fs::remove_file(target)
-                    };
-                    match result {
-                        Ok(()) => self.drop_deleted_documents(target, CaseFold::host_default()),
-                        Err(e) => crate::diagnostics::log_error(
-                            "Failed to delete project file",
-                            &anyhow::anyhow!("{}: {e}", target.display()),
-                        ),
-                    }
-                }
-                Ok(false) => self.drop_deleted_documents(target, CaseFold::host_default()),
-                Err(e) => crate::diagnostics::log_error(
-                    "Could not check whether the project file exists",
-                    &anyhow::anyhow!("{}: {e}", target.display()),
-                ),
-            }
+            self.delete_project_owned_target(&state);
             // Orphan target: silently fall through. The user's intent
             // ("get this row out of the project") is satisfied by the
             // in-memory entry pruning below.
