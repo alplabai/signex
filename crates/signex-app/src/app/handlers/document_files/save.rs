@@ -261,6 +261,22 @@ impl Signex {
     }
 
     pub(crate) fn save_active_document_as(&mut self, path: PathBuf) -> Result<()> {
+        // Route by the active tab's document kind (#671).
+        match self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .map(|tab| tab.kind.clone())
+        {
+            Some(TabKind::SymbolEditor(from)) | Some(TabKind::FootprintEditor(from)) => {
+                return self.handle_save_primitive_as(&from, &path);
+            }
+            Some(TabKind::Schematic) => {}
+            _ => anyhow::bail!(
+                "save as {}: Save As is not supported for the active tab",
+                path.display()
+            ),
+        }
         // Refuse a target another open tab hosts: re-keying onto it would
         // replace that tab's engine and discard its unsaved edits.
         let is_other_open_document = self.document_state.active_path.as_ref() != Some(&path)
@@ -277,8 +293,10 @@ impl Signex {
         {
             result.with_context(|| format!("save active schematic as {}", path.display()))?;
             crate::diagnostics::log_info(format!("[save-as] Wrote {}", path.display()));
+            Ok(())
+        } else {
+            anyhow::bail!("save as {}: no active schematic to save", path.display())
         }
-        Ok(())
     }
 
     /// Resolve `Message::File(FileMsg::SavePrimitiveAs { from_path, to_path })` —
@@ -291,20 +309,22 @@ impl Signex {
         &mut self,
         from_path: &std::path::Path,
         to_path: &std::path::Path,
-    ) {
+    ) -> Result<()> {
         // Reject re-keying onto a path that already hosts a different
-        // open editor — would clobber the other editor's state.
+        // open editor or tab — would clobber the other editor's state.
         if from_path != to_path
             && (self.document_state.symbol_editors.contains_key(to_path)
-                || self.document_state.footprint_editors.contains_key(to_path))
+                || self.document_state.footprint_editors.contains_key(to_path)
+                || self
+                    .document_state
+                    .tabs
+                    .iter()
+                    .any(|tab| tab.path == to_path))
         {
-            tracing::warn!(
-                target: "signex::library",
-                from = %from_path.display(),
-                to = %to_path.display(),
-                "save-as: target path already hosts another open editor — refusing"
+            anyhow::bail!(
+                "save as {}: that file is already open in another tab",
+                to_path.display()
             );
-            return;
         }
 
         // Move the SymbolEditorState (or FootprintEditorState) to the
@@ -322,12 +342,11 @@ impl Signex {
                 .footprint_editors
                 .insert(to_path.to_path_buf(), editor);
         } else {
-            tracing::warn!(
-                target: "signex::library",
-                from = %from_path.display(),
-                "save-as: no editor at source path — was the tab closed?"
+            anyhow::bail!(
+                "save as {}: no editor at {} — was the tab closed?",
+                to_path.display(),
+                from_path.display()
             );
-            return;
         }
 
         // Update the tab(s) — title, path, kind variant.
@@ -379,6 +398,7 @@ impl Signex {
         // but the dirty marker means the next project-close prompt
         // will surface the unsaved library binding.
         self.attach_library_for_path(to_path);
+        Ok(())
     }
 
     /// Walk `path`'s ancestors looking for a `.snxlib` directory and,

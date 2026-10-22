@@ -100,7 +100,9 @@ impl Signex {
                 self.finish_update()
             }
             FileMsg::SavePrimitiveAs { from_path, to_path } => {
-                self.handle_save_primitive_as(&from_path, &to_path);
+                if let Err(error) = self.handle_save_primitive_as(&from_path, &to_path) {
+                    crate::diagnostics::log_error("Save As failed", &error);
+                }
                 self.finish_update()
             }
             FileMsg::SchematicOpenFinished {

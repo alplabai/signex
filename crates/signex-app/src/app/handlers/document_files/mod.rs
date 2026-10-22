@@ -16,6 +16,23 @@ mod save;
 /// a global library directory outside the project if they want a
 /// shared symbol. Cancel = no save (editor stays dirty).
 pub(crate) fn spawn_save_as_for_new_primitive(suggested: PathBuf) -> iced::Task<Message> {
+    spawn_primitive_save_dialog(suggested, |from_path, to_path| {
+        Message::File(FileMsg::SavePrimitiveAs { from_path, to_path })
+    })
+}
+
+/// File > Save As on a symbol / footprint tab (#671): same dialog,
+/// resolved through `FileMsg::SaveAs` so the active tab re-keys.
+pub(crate) fn spawn_save_as_for_active_primitive(current: PathBuf) -> iced::Task<Message> {
+    spawn_primitive_save_dialog(current, |_from, to_path| {
+        Message::File(FileMsg::SaveAs(to_path))
+    })
+}
+
+fn spawn_primitive_save_dialog(
+    suggested: PathBuf,
+    on_picked: fn(PathBuf, PathBuf) -> Message,
+) -> iced::Task<Message> {
     let ext = suggested
         .extension()
         .and_then(|s| s.to_str())
@@ -51,10 +68,7 @@ pub(crate) fn spawn_save_as_for_new_primitive(suggested: PathBuf) -> iced::Task<
                 .map(|file| file.path().to_path_buf())
         },
         move |picked| match picked {
-            Some(to_path) => Message::File(FileMsg::SavePrimitiveAs {
-                from_path: from.clone(),
-                to_path,
-            }),
+            Some(to_path) => on_picked(from.clone(), to_path),
             None => Message::Noop,
         },
     )
