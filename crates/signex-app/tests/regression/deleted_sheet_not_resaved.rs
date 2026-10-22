@@ -346,3 +346,134 @@ fn closing_a_project_keeps_a_same_directory_projects_dirty_child_sheet() {
     assert!(app.document_state.dirty_paths.contains(&child));
     assert!(app.document_state.engines.contains_key(&child));
 }
+
+/// Write `parent` to disk referencing `child_filename` as a hierarchical child.
+fn write_sheet_with_child(parent: &Path, child_filename: &str) {
+    let mut sheet = empty_sheet();
+    sheet
+        .child_sheets
+        .push(signex_types::schematic::ChildSheet {
+            uuid: uuid::Uuid::nil(),
+            name: String::new(),
+            filename: child_filename.to_string(),
+            position: signex_types::schematic::Point::new(0.0, 0.0),
+            size: (0.0, 0.0),
+            stroke_width: 0.0,
+            fill: signex_types::schematic::FillType::None,
+            stroke_color: None,
+            fill_color: None,
+            fields_autoplaced: false,
+            pins: Vec::new(),
+            instances: Vec::new(),
+        });
+    let text = signex_types::format::SnxSchematic::new(sheet)
+        .write_string()
+        .expect("serialise parent sheet");
+    std::fs::write(parent, text).expect("write parent sheet");
+}
+
+#[test]
+fn closing_a_project_keeps_a_sibling_child_whose_parent_sheet_is_unloaded() {
+    let tmp = TempDir::new().expect("tempdir");
+    let (mut app, _task) = Signex::new();
+    add_project(&mut app, &tmp.path().join("A.snxprj"), "a.snxsch");
+    let b = add_project(&mut app, &tmp.path().join("B.snxprj"), "b.snxsch");
+    let b_root = tmp.path().join("b.snxsch");
+    let child = tmp.path().join("b_child.snxsch");
+    write_sheet_with_child(&b_root, "b_child.snxsch");
+    // B's root tab was closed clean: only the dirty child's engine remains.
+    open_dirty_sheet(&mut app, &child, b);
+
+    close_first_project(&mut app);
+
+    assert!(
+        app.ui_state.project_close_confirm.is_none(),
+        "b_child belongs to B, so closing A must not prompt for it",
+    );
+    assert!(app.document_state.dirty_paths.contains(&child));
+    assert!(app.document_state.engines.contains_key(&child));
+}
+
+#[test]
+fn discard_all_keeps_a_sibling_child_whose_parent_sheet_is_unloaded() {
+    let tmp = TempDir::new().expect("tempdir");
+    let (mut app, _task) = Signex::new();
+    let a = add_project(&mut app, &tmp.path().join("A.snxprj"), "a.snxsch");
+    let b = add_project(&mut app, &tmp.path().join("B.snxprj"), "b.snxsch");
+    let a_sheet = tmp.path().join("a.snxsch");
+    let child = tmp.path().join("b_child.snxsch");
+    write_sheet_with_child(&tmp.path().join("b.snxsch"), "b_child.snxsch");
+    open_dirty_sheet(&mut app, &a_sheet, a);
+    open_dirty_sheet(&mut app, &child, b);
+
+    close_first_project(&mut app);
+    let modal = app
+        .ui_state
+        .project_close_confirm
+        .as_ref()
+        .expect("A is dirty, so close must prompt");
+    assert_eq!(modal.dirty_paths, vec![a_sheet.clone()]);
+    let _ = app.update(Message::Project(ProjectMsg::CloseConfirm(
+        ProjectCloseChoice::DiscardAll,
+    )));
+
+    assert!(app.document_state.dirty_paths.contains(&child));
+    assert!(app.document_state.engines.contains_key(&child));
+    assert!(app.document_state.tabs.iter().any(|t| t.path == child));
+}
+
+#[test]
+fn an_unreadable_sibling_sheet_is_logged_to_the_messages_panel() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().expect("tempdir");
+    let (mut app, _task) = Signex::new();
+    let a = add_project(&mut app, &tmp.path().join("A.snxprj"), "a.snxsch");
+    add_project(&mut app, &tmp.path().join("B.snxprj"), "b.snxsch");
+    std::fs::write(tmp.path().join("b.snxsch"), b"not a schematic").expect("write corrupt sheet");
+    open_dirty_sheet(&mut app, &tmp.path().join("a.snxsch"), a);
+
+    close_first_project(&mut app);
+
+    assert!(
+        app.document_state
+            .panel_ctx
+            .diagnostics
+            .iter()
+            .any(|e| e.message.contains("b.snxsch") && e.message.contains("Close Project")),
+        "an unparsable sibling sheet must reach the Messages panel",
+    );
+}
+
+#[test]
+fn closing_a_project_collects_a_sheet_it_lists_outside_its_directory() {
+    let tmp = TempDir::new().expect("tempdir");
+    let a_dir = tmp.path().join("A");
+    let b_dir = tmp.path().join("B");
+    std::fs::create_dir_all(&a_dir).expect("mkdir A");
+    std::fs::create_dir_all(&b_dir).expect("mkdir B");
+    let orphan = a_dir.join("x.snxsch");
+    let (mut app, _task) = Signex::new();
+    add_project(&mut app, &a_dir.join("A.snxprj"), "a.snxsch");
+    // B lists A's sheet by absolute path, so it sits outside B's directory.
+    let b = add_project(
+        &mut app,
+        &b_dir.join("B.snxprj"),
+        orphan.to_str().expect("utf8 path"),
+    );
+    open_dirty_sheet(&mut app, &orphan, b);
+
+    close_first_project(&mut app);
+    assert!(
+        app.ui_state.project_close_confirm.is_none(),
+        "x is B's, so closing A must not prompt for it",
+    );
+    assert!(app.document_state.dirty_paths.contains(&orphan));
+
+    close_first_project(&mut app);
+    let modal = app
+        .ui_state
+        .project_close_confirm
+        .as_ref()
+        .expect("closing B must prompt for the sheet it owns");
+    assert_eq!(modal.dirty_paths, vec![orphan]);
+}

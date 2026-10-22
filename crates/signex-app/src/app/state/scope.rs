@@ -166,6 +166,21 @@ pub(crate) fn path_is_under(path: &Path, root: &Path, fold: CaseFold) -> bool {
     Path::new(&path_key).starts_with(Path::new(&root_key))
 }
 
+/// True when `projects[closing]` owns `path`: it lists the sheet or reaches it
+/// through the child-sheet graph, wherever the file sits on disk.
+pub(crate) fn owned_by_project(
+    projects: &[LoadedProject],
+    loaded: &HashMap<PathBuf, Vec<String>>,
+    closing: usize,
+    path: &Path,
+    fold: CaseFold,
+) -> bool {
+    let Some(mine) = projects.get(closing) else {
+        return false;
+    };
+    project_owning_sheet_with(projects, loaded, path, fold).is_some_and(|o| o.id == mine.id)
+}
+
 /// True when `path` belongs to an open project other than `projects[closing]`:
 /// another project's own `.snxprj`, a sheet another project lists or reaches
 /// through its child-sheet graph, or anything under a project nested inside

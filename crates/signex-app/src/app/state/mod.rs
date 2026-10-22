@@ -8,6 +8,7 @@ use super::TabInfo;
 
 mod interaction;
 pub(crate) mod scope;
+pub(crate) mod sheet_refs;
 mod ui;
 
 pub use interaction::InteractionState;
@@ -747,11 +748,33 @@ impl DocumentState {
     }
 
     /// Whether `path` belongs to an open project other than
-    /// `projects[closing]` (see [`scope::claimed_by_other_project`]).
-    pub(crate) fn claimed_by_other_project(&self, closing: usize, path: &std::path::Path) -> bool {
+    /// `projects[closing]` (see [`scope::claimed_by_other_project`]). `refs`
+    /// comes from [`child_sheet_refs_from_projects`](Self::child_sheet_refs_from_projects).
+    pub(crate) fn claimed_by_other_project(
+        &self,
+        refs: &std::collections::HashMap<PathBuf, Vec<String>>,
+        closing: usize,
+        path: &std::path::Path,
+    ) -> bool {
         scope::claimed_by_other_project(
             &self.projects,
-            &self.child_sheet_refs(),
+            refs,
+            closing,
+            path,
+            scope::CaseFold::host_default(),
+        )
+    }
+
+    /// Whether `projects[closing]` owns `path` (see [`scope::owned_by_project`]).
+    pub(crate) fn owned_by_project(
+        &self,
+        refs: &std::collections::HashMap<PathBuf, Vec<String>>,
+        closing: usize,
+        path: &std::path::Path,
+    ) -> bool {
+        scope::owned_by_project(
+            &self.projects,
+            refs,
             closing,
             path,
             scope::CaseFold::host_default(),

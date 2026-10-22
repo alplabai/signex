@@ -29,6 +29,7 @@ impl Signex {
             return Task::none();
         };
         let project_dir = project.path.parent().map(|p| p.to_path_buf());
+        let project_name = project.data.name.clone();
         // Collect dirty paths inside this project's directory tree.
         // `dirty_paths` is project-scoped by ancestor check —
         // primitive editors live under `<project>/<lib>.snxlib/
@@ -40,14 +41,30 @@ impl Signex {
         // project's own `.snxprj` file (when added to dirty_paths
         // by the auto-attach-library flow) sits exactly at the
         // project root and is also picked up here.
+        let sheet_refs = self.document_state.child_sheet_refs_from_projects();
+        for problem in &sheet_refs.unreadable {
+            crate::diagnostics::log_warning(format!(
+                "Close Project: {problem}; its child sheets cannot be attributed to a project"
+            ));
+        }
+        if !sheet_refs.unreadable.is_empty() {
+            self.refresh_panel_ctx();
+        }
         let dirty: Vec<std::path::PathBuf> = if let Some(dir) = project_dir.as_deref() {
             let mut v: Vec<std::path::PathBuf> = self
                 .document_state
                 .dirty_paths
                 .iter()
                 .filter(|p| {
-                    p.starts_with(dir)
-                        && !self.document_state.claimed_by_other_project(project_idx, p)
+                    (p.starts_with(dir)
+                        || self
+                            .document_state
+                            .owned_by_project(&sheet_refs.refs, project_idx, p))
+                        && !self.document_state.claimed_by_other_project(
+                            &sheet_refs.refs,
+                            project_idx,
+                            p,
+                        )
                 })
                 .cloned()
                 .collect();
@@ -68,7 +85,7 @@ impl Signex {
         if !dirty.is_empty() || !dirty_rows.is_empty() {
             self.ui_state.project_close_confirm = Some(crate::app::ProjectCloseConfirmState {
                 tree_path: tree_path.to_vec(),
-                project_name: project.data.name.clone(),
+                project_name,
                 dirty_paths: dirty,
                 dirty_rows,
             });
@@ -117,13 +134,21 @@ impl Signex {
             && let Some(dir) = project.path.parent()
         {
             let dir = dir.to_path_buf();
+            let sheet_refs = self.document_state.child_sheet_refs_from_projects();
             let sweep: Vec<std::path::PathBuf> = self
                 .document_state
                 .engines
                 .keys()
                 .filter(|p| {
-                    p.parent() == Some(&dir)
-                        && !self.document_state.claimed_by_other_project(project_idx, p)
+                    (p.parent() == Some(&dir)
+                        || self
+                            .document_state
+                            .owned_by_project(&sheet_refs.refs, project_idx, p))
+                        && !self.document_state.claimed_by_other_project(
+                            &sheet_refs.refs,
+                            project_idx,
+                            p,
+                        )
                 })
                 .cloned()
                 .collect();
