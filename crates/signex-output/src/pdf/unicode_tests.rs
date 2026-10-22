@@ -2,7 +2,7 @@
 //! through `/ToUnicode`, and the embedded faces must be real subsets.
 
 use signex_types::schematic::{HAlign, Point, TextNote, VAlign};
-use ttf_parser::{Face, GlyphId};
+use ttf_parser::{Face, GlyphId, OutlineBuilder, Tag};
 
 use super::font::PdfFont;
 use super::subset::subset_truetype;
@@ -175,6 +175,35 @@ fn single_glyph_document_embeds_a_subset_not_the_whole_face() {
     );
 }
 
+/// Resolved outline commands of a glyph (composites already flattened into
+/// their components), so renumbered component references are really checked.
+#[derive(Default, PartialEq, Debug)]
+struct Outline(Vec<String>);
+
+impl OutlineBuilder for Outline {
+    fn move_to(&mut self, x: f32, y: f32) {
+        self.0.push(format!("M{x},{y}"));
+    }
+    fn line_to(&mut self, x: f32, y: f32) {
+        self.0.push(format!("L{x},{y}"));
+    }
+    fn quad_to(&mut self, x1: f32, y1: f32, x: f32, y: f32) {
+        self.0.push(format!("Q{x1},{y1},{x},{y}"));
+    }
+    fn curve_to(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x: f32, y: f32) {
+        self.0.push(format!("C{x1},{y1},{x2},{y2},{x},{y}"));
+    }
+    fn close(&mut self) {
+        self.0.push("Z".into());
+    }
+}
+
+fn outline(face: &Face, gid: u16) -> (Outline, Option<ttf_parser::Rect>) {
+    let mut out = Outline::default();
+    let bbox = face.outline_glyph(GlyphId(gid), &mut out);
+    (out, bbox)
+}
+
 #[test]
 fn subset_keeps_outlines_for_simple_and_composite_glyphs() {
     let data = PdfFont::RobotoRegular.font_bytes();
@@ -194,8 +223,8 @@ fn subset_keeps_outlines_for_simple_and_composite_glyphs() {
     assert!(keep.len() >= requested);
     for (new, &orig) in keep.iter().enumerate() {
         assert_eq!(
-            sub.glyph_bounding_box(GlyphId(new as u16)),
-            face.glyph_bounding_box(GlyphId(orig)),
+            outline(&sub, new as u16),
+            outline(&face, orig),
             "outline of new glyph {new} (orig {orig}) differs"
         );
         assert_eq!(
@@ -215,4 +244,42 @@ fn every_bundled_face_subsets() {
             .unwrap_or_else(|e| panic!("{}: {e}", font.base_name()));
         assert!(Face::parse(&subset, 0).is_ok(), "{}", font.base_name());
     }
+}
+
+#[test]
+fn glyph_shared_by_two_characters_keeps_each_character_in_to_unicode() {
+    let face = PdfFont::RobotoRegular.face().expect("roboto");
+    let (ohm, omega) = ('\u{2126}', '\u{03A9}');
+    assert_eq!(
+        face.glyph_index(ohm),
+        face.glyph_index(omega),
+        "premise: Roboto draws OHM SIGN and GREEK CAPITAL OMEGA with one glyph"
+    );
+    let shown = extract_text(&export_notes(&["\u{2126}", "\u{03A9}"]));
+    assert!(shown.iter().any(|s| s == "\u{2126}"), "got {shown:?}");
+    assert!(shown.iter().any(|s| s == "\u{03A9}"), "got {shown:?}");
+}
+
+#[test]
+fn subset_carries_the_tables_strict_readers_expect() {
+    let data = PdfFont::RobotoRegular.font_bytes();
+    let gid = Face::parse(data, 0)
+        .expect("roboto")
+        .glyph_index('A')
+        .expect("A")
+        .0;
+    let mut keep = vec![0, gid, gid];
+    let subset = subset_truetype(data, &mut keep).expect("subset");
+    let raw = ttf_parser::RawFace::parse(&subset, 0).expect("raw");
+    for tag in [b"OS/2", b"name", b"post"] {
+        assert!(raw.table(Tag::from_bytes(tag)).is_some(), "missing {tag:?}");
+    }
+    let post = raw.table(Tag::from_bytes(b"post")).expect("post");
+    assert_eq!(&post[..4], &0x0003_0000u32.to_be_bytes());
+    let sub = Face::parse(&subset, 0).expect("parses");
+    assert_eq!(
+        usize::from(sub.number_of_glyphs()),
+        3,
+        "duplicate CIDs keep their own glyph"
+    );
 }

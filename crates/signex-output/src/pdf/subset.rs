@@ -5,8 +5,11 @@
 //! `i` is original glyph `keep[i]`. Composite glyphs pull in their components,
 //! which are appended to `keep` and renumbered too. Only the tables a PDF
 //! reader needs to rasterise outlines are written (`head`, `hhea`, `maxp`,
-//! `hmtx`, `loca`, `glyf`, plus the hinting tables when present); there is no
-//! `cmap` because Identity-H CIDs address glyphs directly.
+//! `hmtx`, `loca`, `glyf`, plus the hinting tables, `OS/2` and `name` when
+//! present, and a version 3.0 `post`); there is no `cmap` because Identity-H
+//! CIDs address glyphs directly (`/CIDToGIDMap /Identity`: CID `i` is new
+//! glyph `i`). `keep` may list one original glyph under several CIDs; each
+//! gets its own copy so the identity mapping stays exact.
 
 use ttf_parser::{RawFace, Tag};
 
@@ -16,7 +19,10 @@ const MAXP: Tag = Tag::from_bytes(b"maxp");
 const HMTX: Tag = Tag::from_bytes(b"hmtx");
 const LOCA: Tag = Tag::from_bytes(b"loca");
 const GLYF: Tag = Tag::from_bytes(b"glyf");
-const OPTIONAL_TABLES: [Tag; 3] = [
+const POST: Tag = Tag::from_bytes(b"post");
+const OPTIONAL_TABLES: [Tag; 5] = [
+    Tag::from_bytes(b"OS/2"),
+    Tag::from_bytes(b"name"),
     Tag::from_bytes(b"cvt "),
     Tag::from_bytes(b"fpgm"),
     Tag::from_bytes(b"prep"),
@@ -214,6 +220,15 @@ pub(super) fn subset_truetype(data: &[u8], keep: &mut Vec<u16>) -> Result<Vec<u8
         if let Some(table) = raw.table(tag) {
             tables.push((tag, table.to_vec()));
         }
+    }
+    // `post` keeps the source's metrics but drops glyph names (version 3.0),
+    // which would otherwise describe the pre-renumbering glyph order.
+    if let Some(post) = raw.table(POST)
+        && post.len() >= 32
+    {
+        let mut post = post[..32].to_vec();
+        post[..4].copy_from_slice(&0x0003_0000u32.to_be_bytes());
+        tables.push((POST, post));
     }
     tables.sort_by_key(|(tag, _)| tag.0);
     Ok(assemble(&tables))

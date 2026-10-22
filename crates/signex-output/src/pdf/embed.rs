@@ -1,8 +1,9 @@
 //! Type0 / CIDFontType2 font embedding.
 //!
 //! While content streams are generated, [`FontUsage`] hands out a compact CID
-//! per distinct glyph per font (CID 0 is `.notdef`) and records the character
-//! it came from. After every page is built, [`write_fonts`] emits for each
+//! per distinct (glyph, character) pair per font (CID 0 is `.notdef`), so a
+//! glyph shared by several characters (Roboto's OHM SIGN and GREEK CAPITAL
+//! OMEGA) still maps back to the exact character through `/ToUnicode`. After every page is built, [`write_fonts`] emits for each
 //! used font a Type0 dict (`Identity-H`), a `CIDFontType2` descendant with a
 //! `/W` array, a `/FontDescriptor`, a subset `/FontFile2` stream holding only
 //! the used glyphs, and a `/ToUnicode` CMap so text stays searchable.
@@ -24,11 +25,11 @@ pub(super) const REFS_PER_FONT: i32 = 5;
 /// Glyphs handed out so far for one font.
 struct FaceUsage {
     face: Option<Face<'static>>,
-    /// Original glyph id -> CID.
-    cid_by_gid: HashMap<u16, u16>,
+    /// (Original glyph id, character) -> CID.
+    cid_by_glyph_char: HashMap<(u16, char), u16>,
     /// `orig_gids[cid]` is the original glyph id; index 0 is `.notdef`.
     orig_gids: Vec<u16>,
-    /// `chars[cid]` is the first character that mapped to the glyph.
+    /// `chars[cid]` is the character the CID stands for.
     chars: Vec<char>,
 }
 
@@ -36,7 +37,7 @@ impl FaceUsage {
     fn new(font: PdfFont) -> Self {
         Self {
             face: font.face(),
-            cid_by_gid: HashMap::new(),
+            cid_by_glyph_char: HashMap::new(),
             orig_gids: vec![0],
             chars: vec!['\0'],
         }
@@ -51,11 +52,11 @@ impl FaceUsage {
         if gid == 0 {
             return 0;
         }
-        if let Some(&cid) = self.cid_by_gid.get(&gid) {
+        if let Some(&cid) = self.cid_by_glyph_char.get(&(gid, ch)) {
             return cid;
         }
         let cid = self.orig_gids.len() as u16;
-        self.cid_by_gid.insert(gid, cid);
+        self.cid_by_glyph_char.insert((gid, ch), cid);
         self.orig_gids.push(gid);
         self.chars.push(ch);
         cid
