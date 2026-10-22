@@ -600,14 +600,20 @@ impl FootprintFile {
     /// Build a new container holding a single footprint — what the
     /// `Add New ▸ Footprint Library` flow seeds.
     pub fn from_footprint(footprint: Footprint) -> Self {
-        let now = Utc::now();
+        Self::with_identity(footprint, Uuid::now_v7(), Utc::now())
+    }
+
+    /// Like [`FootprintFile::from_footprint`] but with caller-supplied
+    /// identity, so a generator can emit byte-identical files on every
+    /// run (the stock-library emitter pins both).
+    pub fn with_identity(footprint: Footprint, file_uuid: Uuid, timestamp: DateTime<Utc>) -> Self {
         Self {
             format: default_footprint_format(),
-            file_uuid: Uuid::now_v7(),
+            file_uuid,
             display_name: footprint.name.clone(),
             footprints: vec![footprint],
-            created: now,
-            updated: now,
+            created: timestamp,
+            updated: timestamp,
         }
     }
 
@@ -743,9 +749,14 @@ impl FootprintFile {
 impl Footprint {
     /// Empty footprint with no pads — what the New Component flow seeds.
     pub fn empty(name: impl Into<String>) -> Self {
-        let now = Utc::now();
+        Self::with_identity(name, Uuid::now_v7(), Utc::now())
+    }
+
+    /// Empty footprint with a caller-supplied `uuid` and
+    /// `created`/`updated` timestamp instead of freshly minted ones.
+    pub fn with_identity(name: impl Into<String>, uuid: Uuid, timestamp: DateTime<Utc>) -> Self {
         Self {
-            uuid: Uuid::now_v7(),
+            uuid,
             name: name.into(),
             anchor: [0.0, 0.0],
             pads: Vec::new(),
@@ -759,8 +770,8 @@ impl Footprint {
             pcb_params: ParamMap::new(),
             version: default_footprint_version(),
             released: false,
-            created: now,
-            updated: now,
+            created: timestamp,
+            updated: timestamp,
             schema_version: FOOTPRINT_SCHEMA_VERSION,
             sketch: None,
             pours: Vec::new(),
