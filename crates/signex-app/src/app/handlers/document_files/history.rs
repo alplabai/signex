@@ -180,6 +180,13 @@ impl Signex {
                         self.document_state
                             .footprint_editors
                             .insert(p.clone(), state);
+                        // The reloaded editor is clean, so the stale
+                        // dirty marker must go or quit asks about a
+                        // file that matches disk.
+                        self.document_state.dirty_paths.remove(&p);
+                        if let Some(tab) = self.document_state.tabs.get_mut(active_idx) {
+                            tab.dirty = false;
+                        }
                         if let Some(editor) = self.document_state.footprint_editors.get_mut(&p) {
                             editor.canvas_cache.clear();
                         }

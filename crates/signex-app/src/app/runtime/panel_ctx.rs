@@ -85,6 +85,9 @@ impl Signex {
     }
 
     pub(crate) fn refresh_panel_ctx(&mut self) {
+        // The dirty dots below read `dirty_paths`; make sure footprint
+        // edits are in it first (#666).
+        self.sync_footprint_dirty_paths();
         // Build per-project panel info from every loaded project in the
         // workspace. The `project_name` / `project_file` / `pcb_file` /
         // `sheets` legacy singletons mirror whichever entry is `is_active`
