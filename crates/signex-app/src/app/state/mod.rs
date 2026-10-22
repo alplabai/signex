@@ -336,20 +336,21 @@ impl LoadedProject {
 /// Raised (instead of a dead-end error) when `File ▸ Export Netlist` derives a
 /// netlist that does not cover the whole project. Holds the picked `save_path`
 /// and the omitted-page `messages` so the two prompt actions can act without
-/// re-deriving: "Export anyway" writes the partial `.net` with these messages
-/// recorded in its INCOMPLETE header comment; "Cancel" writes nothing. The
+/// re-deriving: "Export anyway" writes the partial `.net` (a clean file —
+/// Protel has no comment syntax) and logs these messages as a warning;
+/// "Cancel" writes nothing. The
 /// refusal stays the default — nothing reaches disk until the user acts.
 #[derive(Debug, Clone)]
 pub struct NetlistIncompletePrompt {
     /// Where the file dialog said to write the `.net`.
     pub save_path: PathBuf,
     /// One user-facing line per omitted / uncovered page — the same
-    /// `ExportIssues::messages()` shown in the prompt and written into the
-    /// exported file's INCOMPLETE header.
+    /// `ExportIssues::messages()` shown in the prompt and logged as a
+    /// warning when the user exports anyway.
     pub messages: Vec<String>,
     /// The export scope snapshotted when the prompt was raised. "Export anyway"
     /// writes from THIS, never a fresh re-derivation — so the bytes on disk and
-    /// the INCOMPLETE header (drawn from `messages`, the same derivation) always
+    /// the warning (drawn from `messages`, the same derivation) always
     /// describe the same project state, even if the document changes while the
     /// modal is up (#431 review).
     pub ctx: signex_output::ExportContext,

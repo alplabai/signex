@@ -137,8 +137,8 @@ impl Signex {
                 },
             );
 
-        // The omitted pages, one line each — the same detail the exported
-        // file's INCOMPLETE header will carry.
+        // The omitted pages, one line each — the same detail the
+        // warning logged on export will carry.
         let detail = prompt.messages.join("\n");
 
         let body = column![
@@ -153,8 +153,8 @@ impl Signex {
                 "The project netlist does not cover the whole project. Exporting it \
                  would produce a file missing components and carrying the wrong net \
                  names wherever nets merge through a page that is not in it — and a \
-                 PCB import cannot tell. You can export it anyway: the file will be \
-                 marked INCOMPLETE in its header and will list the omitted pages."
+                 PCB import cannot tell. You can export it anyway: the file stays \
+                 a valid netlist, and the omitted pages are reported in the Messages panel."
             )
             .size(12)
             .color(text_c),
