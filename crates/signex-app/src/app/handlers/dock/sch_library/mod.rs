@@ -272,7 +272,7 @@ impl Signex {
                 self.with_selected_pad(*idx, |pad| pad.electrical_type = *value)
             }
             PanelMsg::FpEditorSetSelectedPadNet { idx, value } => {
-                self.with_selected_pad(*idx, |pad| pad.net = value.clone())
+                self.with_selected_pad_field(*idx, Some("pad_net"), |pad| pad.net = value.clone())
             }
             PanelMsg::FpEditorToggleSelectedPadLocked { idx, value } => {
                 self.with_selected_pad(*idx, |pad| pad.locked = *value)
