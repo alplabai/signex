@@ -7,6 +7,7 @@ use super::super::*;
 mod git;
 mod history;
 mod open;
+mod recent;
 mod save;
 
 /// Build the AsyncFileDialog Task for a primitive's first save.

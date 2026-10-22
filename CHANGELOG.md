@@ -26,6 +26,7 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 ### Added — Help menu and File ▸ Open Recent
 
 - **Help menu** — `Help ▸ About Signex` is a real dialog (version from the workspace manifest, licence link, Copy version info) instead of a disabled stub, and `Help ▸ Documentation` / `Help ▸ Report an Issue` open the user guide and the issue tracker in the default browser (#332).
+- **File ▸ Open Recent** — the last 10 projects opened (or created) are remembered in `prefs.json`, de-duplicated by canonical path and listed newest first; choosing one reopens it through File ▸ Open, a project that has been deleted is dropped with a notice, and Clear Recent empties the list (#333).
 
 ### Fixed
 
