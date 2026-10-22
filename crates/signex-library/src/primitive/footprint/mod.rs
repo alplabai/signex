@@ -17,6 +17,7 @@ use uuid::Uuid;
 
 use crate::param::ParamMap;
 
+mod load_repair;
 mod pad;
 mod serde_tsv;
 #[cfg(test)]
@@ -637,6 +638,7 @@ impl FootprintFile {
         let mut footprints = Vec::with_capacity(wire.footprints.len());
         for fw in wire.footprints {
             let pads = pads_from_tsv(&fw.pads_tsv)?;
+            let sketch = load_repair::repair_loaded_sketch(&fw.name, fw.sketch);
             footprints.push(Footprint {
                 uuid: fw.uuid,
                 name: fw.name,
@@ -655,7 +657,7 @@ impl FootprintFile {
                 created: fw.created,
                 updated: fw.updated,
                 schema_version: fw.schema_version,
-                sketch: fw.sketch,
+                sketch,
                 pours: fw.pours,
                 keepouts: fw.keepouts,
                 cutouts: fw.cutouts,
