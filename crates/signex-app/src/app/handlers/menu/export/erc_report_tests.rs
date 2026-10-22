@@ -4,6 +4,7 @@ use signex_types::schematic::Point;
 
 fn violation(rule: RuleKind, severity: Severity, msg: &str, x: f64) -> Violation {
     Violation {
+        rule_id: signex_erc::RuleId::builtin(rule),
         rule,
         severity,
         message: msg.to_string(),
