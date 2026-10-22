@@ -18,6 +18,13 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
+### Added — ERC
+
+- **File ▸ Export ▸ ERC Report** writes the cached ERC results as plain text or
+  CSV (chosen by the saved file's extension), in the Messages panel's row order.
+  It never runs ERC; before a run it shows a message instead of writing a file.
+  `signex_output::ErcReportExporter` also offers a minimum-severity filter and
+  group-by-sheet. CSV fields are escaped by the BOM's shared helper (#351).
 ### Added — native-format test corpus
 
 - **Fixture-corpus round-trip harness** — `signex-types/tests/round_trip_corpus.rs` walks the checked-in `.snxsch` / `.snxpcb` goldens under `tests/corpus/` and asserts each parses, and re-saves byte-identically (which also implies a second parse -> write -> parse hop is stable); every failing fixture is listed with its path and first differing line. `SIGNEX_BLESS_CORPUS=1` rewrites fixtures for an intentional format change, and a `MIN_CORPUS_FILES` guard stops the corpus shrinking silently (#334).
@@ -69,6 +76,8 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 - **Project-tree rename keeps the native extension and sheet references** (#145) — renaming a file can no longer drop or change its extension (the dialog shows a validation message instead), and renaming a `.snxsch` now re-points every parent sheet's hierarchical reference through the engine (`Command::RenameChildSheetFile`, undoable) and updates the `.snxprj` sheet list. Affected parents and the project are marked dirty, not written; unopened parents are loaded so Save All persists them. Renaming the project's `.snxpcb` re-points `pcb_file`, and library entries refuse a tree rename with a message. Undoing the parent-reference edit points the parent back at the old filename while the on-disk rename stays, so an undo after a rename leaves a dangling reference until the file is renamed back. Unparseable sheets are reported separately from references that could not be updated, and renaming a non-sheet file never walks the sheets.
 - **Symbol editor pin drag (#170)** — pressing a pin that sits on a body rectangle's edge resized the rectangle through an undrawn resize handle, and the pin hit-test took the first pin in vector order within a fixed 1.5 mm tip disc. Only selected graphics now expose handles, and a pin is grabbed by an 8 px screen-space zone around its tip plus a narrow (at most 0.4 mm) zone along its tip-to-base line, nearest pin first. The line zone is deliberately narrow so a graphic touching a pin's base, or a press in the body beside a pinned edge, still picks the graphic; a pin's name/number label is the lowest-priority grab, after graphics. The hover cursor uses the same priority as the press, and resize handles honour the selection filter. The selection-filter pills now gate picking and box select, Esc leaves a placement tool, Add Pin shows a ghost and places on release (no more stacked pins), and Fit/initial view use the real canvas size instead of 800x500.
 - **Dropped-`Task` gate hole (#627)** — `check_discarded_tasks.sh` now also flags `drop(<task>)` of a `handle_*` result or a Task-typed binding, which walked past both `unused_must_use = "deny"` and the `let _ =` grep; the one site (a test in `open_document.rs`) now asserts on the Task instead.
+
+- **Library actions no longer silently do nothing (#152)** — Components Panel "Add Library" on the Project section and a failed Installed/Global mount now raise the error card, a failed `global_libraries.toml` write is reported, "Refresh All Pricing" is shown disabled ("Not yet available") instead of logging a TODO, and the never-emitted Manage/Add-to-Project/row-refresh stub messages are removed.
 
 ### Changed
 

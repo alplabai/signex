@@ -205,6 +205,14 @@ impl ErrorNotice {
             detail: detail.into(),
         }
     }
+
+    /// The requested action has no backing flow yet.
+    pub fn unavailable(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Not Available".to_owned(),
+            detail: detail.into(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

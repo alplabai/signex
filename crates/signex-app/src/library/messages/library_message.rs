@@ -430,17 +430,6 @@ pub enum LibraryMessage {
         library_path: PathBuf,
         key: String,
     },
-    /// Right-click on a Library Browser row → "Refresh Pricing".
-    /// Stage 18 stub — real distributor adapter wiring lands later.
-    BrowserRefreshPricing {
-        library_path: PathBuf,
-        table: String,
-        row_id: RowId,
-    },
-    /// Library node right-click → "Refresh All Pricing".
-    /// Stage 18 stub — touches every row in every cached table once
-    /// the per-row stub is fleshed out.
-    LibraryRefreshAllPricing(PathBuf),
     // ── Tools ▸ Document Options modal ──────────────────────────────
     /// Tools menu fired Document Options for the library at
     /// `library_path`. Opens the modal pre-filled with the library's
@@ -514,16 +503,6 @@ pub enum LibraryMessage {
     /// the session-scoped Vec to the persisted TOML file. No-op when
     /// the path isn't currently Installed.
     ComponentsPanelPromoteToGlobal(PathBuf),
-    /// "Manage…" button on the Global section header — opens the
-    /// global libraries management dialog. Stage 9 stub: logs and
-    /// no-ops so the wiring path is observable.
-    ComponentsPanelManageGlobal,
-    /// "Add to Project" button on a Components Panel row — adds
-    /// the row's library to the active project's
-    /// `Project.libraries` list. Stage 9 stub.
-    ComponentsPanelAddToProject {
-        library_path: PathBuf,
-    },
     /// "Place into Schematic" button on a Components Panel row.
     /// Stage 9 stub — full ghost-component drag is polish work.
     ComponentsPanelPlace {
