@@ -8,6 +8,7 @@ mod open_document;
 mod project_actions;
 mod remove;
 mod rename;
+mod sheet_references;
 mod version_control;
 
 impl Signex {
