@@ -1,9 +1,8 @@
 //! Library Browser grid-interaction handlers — active-table / row
-//! selection, search, sort, per-cell edit buffers, the lifecycle and
+//! selection, search, sort, per-cell edit buffers, the lifecycle
 //! and class filters.
 //!
-//! Extracted verbatim from the library dispatcher (`dispatch/library`);
-//! pure code motion, zero behaviour change.
+//! Split out of the library dispatcher (`dispatch/library`).
 
 use super::*;
 

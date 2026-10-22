@@ -2,8 +2,7 @@
 //! from the Installed / Global headers, promote-to-global, and
 //! place-into-schematic.
 //!
-//! Extracted verbatim from the library dispatcher (`dispatch/library`);
-//! pure code motion, zero behaviour change.
+//! Split out of the library dispatcher (`dispatch/library`).
 
 use super::*;
 
@@ -74,8 +73,7 @@ impl Signex {
             );
             // Recoverable failures open their recovery dialog; anything
             // else must still reach the user, so raise the error card.
-            route_open_error(&mut self.library, &path, &e);
-            if self.library.recovery.is_none() {
+            if !route_open_error(&mut self.library, &path, &e) {
                 self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(
                     format!("Cannot add library {}: {e}", path.display()),
                 ));
@@ -105,14 +103,15 @@ impl Signex {
     /// has no backing flow yet (project libraries come from `.snxprj`),
     /// so say so instead of silently dropping the request.
     fn reject_project_add_library(&mut self) -> Task<Message> {
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::unavailable(
             "Adding a library to the project from the Components Panel is not yet available.",
         ));
         Task::none()
     }
 
-    /// `global_libraries.toml` could not be written — the in-memory list
-    /// is unchanged, and the user has to know the change did not stick.
+    /// `global_libraries.toml` could not be written, so the change did not
+    /// stick. The caller leaves the in-memory library lists as they were,
+    /// and the user has to be told.
     fn report_global_libraries_save_failure(&mut self, action: &str, err: &dyn std::fmt::Display) {
         tracing::warn!(
             target: "signex::library",
@@ -129,17 +128,23 @@ impl Signex {
         &mut self,
         path: std::path::PathBuf,
     ) -> Task<Message> {
-        if let Some(idx) = self
+        let Some(idx) = self
             .library
             .installed_libraries
             .iter()
             .position(|p| p == &path)
-        {
-            self.library.installed_libraries.remove(idx);
-            match crate::panels::components_panel::global_prefs::add_path(path.clone()) {
-                Ok(updated) => self.library.global_libraries = updated,
-                Err(e) => self.report_global_libraries_save_failure("promote to global", &e),
+        else {
+            return Task::none();
+        };
+        // Persist first: the library leaves the Installed list only once
+        // it is safely recorded as Global, otherwise a failed write would
+        // leave it in neither list and gone from the panel.
+        match crate::panels::components_panel::global_prefs::add_path(path) {
+            Ok(updated) => {
+                self.library.installed_libraries.remove(idx);
+                self.library.global_libraries = updated;
             }
+            Err(e) => self.report_global_libraries_save_failure("promote to global", &e),
         }
         Task::none()
     }
