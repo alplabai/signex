@@ -80,6 +80,7 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 - **Dropped-`Task` gate hole (#627)** — `check_discarded_tasks.sh` now also flags `drop(<task>)` of a `handle_*` result or a Task-typed binding, which walked past both `unused_must_use = "deny"` and the `let _ =` grep; the one site (a test in `open_document.rs`) now asserts on the Task instead.
 
 - **Library actions no longer silently do nothing (#152)** — Components Panel "Add Library" on the Project section and a failed Installed/Global mount now raise the error card, a failed `global_libraries.toml` write is reported, "Refresh All Pricing" is shown disabled ("Not yet available") instead of logging a TODO, and the never-emitted Manage/Add-to-Project/row-refresh stub messages are removed.
+- **Removing a library deletes the row you clicked (#731)** — a project-tree library row was resolved by file name, so with two libraries both named `Power.snxlib` (say a project-local one and a shared one) *Delete file* could remove the other library's file and entry. Rows now resolve by their position in the Libraries branch, checked against the live list, and a stale row is refused instead of being redirected; Rename and Enable Version Control use the same resolution, and the Remove dialog shows the library's full path.
 
 ### Changed
 
