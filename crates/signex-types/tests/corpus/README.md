@@ -36,11 +36,12 @@ Run the same bless command, review every fixture diff as the format
 change it is, and commit them together with the writer change. Blessing
 an unmodified tree produces no diff.
 
-## Known limitation
+## Map ordering
 
-The `[extras.*]` tables of a `.snxsch` were not yet written in sorted key
-order when this harness landed. Until that is fixed, fixtures must not
-carry a `title_block` or symbol `fields`.
+`regulator_stage.snxsch` carries a populated `title_block`, symbol
+`fields`, `pin_uuids` and several `lib_symbols`. These maps are written in
+sorted key order, so a fixture that stays byte-stable proves the writer
+is deterministic for them. Keep such data in the corpus.
 
 ## Line endings
 

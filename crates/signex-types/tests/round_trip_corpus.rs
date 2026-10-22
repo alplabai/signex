@@ -208,6 +208,22 @@ fn a_single_edited_byte_is_reported_with_its_line() {
 }
 
 #[test]
+fn reordered_map_keys_are_not_byte_stable() {
+    let (kind, bytes) = seed("schematic/regulator_stage.snxsch");
+    let text = String::from_utf8(bytes).unwrap();
+    let company = "company = \"Alp Lab\"
+";
+    let date = "date = \"2026-07-18\"
+";
+    let sorted = format!("{company}{date}");
+    assert!(text.contains(&sorted), "seed title_block is sorted");
+    let swapped = text.replace(&sorted, &format!("{date}{company}"));
+    let err = check_bytes(kind, swapped.as_bytes()).expect_err("unsorted keys must fail the gate");
+    assert!(err.contains("not byte-stable"), "{err}");
+    assert!(err.contains("company"), "{err}");
+}
+
+#[test]
 fn trailing_whitespace_edit_is_not_byte_stable() {
     let (kind, mut bytes) = seed("pcb/empty_board.snxpcb");
     bytes.push(b'\n');
