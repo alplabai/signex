@@ -24,14 +24,17 @@
 //! is ever truncated silently.
 //!
 //! - [`MAX_FOREIGN_COLUMNS`] (256) foreign columns per block —
-//!   `FormatError::TsvTooManyForeignColumns`.
+//!   `FormatError::TsvTooManyForeignColumns` (names the first column
+//!   over the cap).
 //! - [`MAX_FOREIGN_COLUMN_NAME_BYTES`] (256) bytes per foreign column
 //!   name — `FormatError::TsvForeignColumnNameTooLong`.
 //!
 //! The same caps bind both directions, so a file this build writes is
 //! always one it can read back: `write_tsv_block` checks the union of
 //! its rows' foreign names before emitting a byte and returns the same
-//! errors (`write_string` fails, the atomic write is never reached and
+//! errors, plus `TsvForeignColumnShadowsKnown` when a foreign name equals
+//! a known column (the header would repeat it and the loader would
+//! refuse the file) (`write_string` fails, the atomic write is never reached and
 //! the previous file stays intact). A row that is deserialised (not
 //! parsed) is validated on the way in too, so an `UnknownColumns` with an
 //! over-long or repeated name cannot be constructed.
@@ -70,6 +73,11 @@ pub(in crate::format) fn check_foreign_names<S: AsRef<str>>(
             block: block.to_string(),
             count: names.len(),
             max: MAX_FOREIGN_COLUMNS,
+            first_over: names[MAX_FOREIGN_COLUMNS]
+                .as_ref()
+                .chars()
+                .take(32)
+                .collect(),
         });
     }
     for name in names {

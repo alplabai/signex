@@ -193,6 +193,12 @@ pub fn write_tsv_block<R: SnxTable>(block: &str, rows: &[R]) -> Result<String, F
 
     let foreign = foreign_column_names(rows);
     check_foreign_names(block, &foreign)?;
+    if let Some(shadow) = foreign.iter().find(|n| columns.contains(&n.as_str())) {
+        return Err(FormatError::TsvForeignColumnShadowsKnown {
+            block: block.to_string(),
+            column: shadow.clone(),
+        });
+    }
 
     // Pre-compute every row's encoded cell so we can pad to the
     // widest column.

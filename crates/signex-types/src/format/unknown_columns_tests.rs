@@ -501,6 +501,30 @@ fn merged_rows_whose_union_exceeds_the_cap_fail_to_write() {
 }
 
 #[test]
+fn too_many_columns_error_names_the_first_one_over_the_cap() {
+    let rows = vec![
+        with_foreign(junction_row(1), &names(0..129)),
+        with_foreign(junction_row(2), &names(129..257)),
+    ];
+    let err = write_tsv_block("t", &rows).unwrap_err();
+    assert!(
+        matches!(&err, FormatError::TsvTooManyForeignColumns { first_over, .. } if first_over == "c256"),
+        "{err}"
+    );
+    assert!(err.to_string().contains("c256"), "{err}");
+}
+
+#[test]
+fn foreign_column_named_like_a_known_one_fails_to_write() {
+    let rows = vec![with_foreign(junction_row(1), &["uuid".to_string()])];
+    let err = write_tsv_block("t", &rows).unwrap_err();
+    assert!(
+        matches!(&err, FormatError::TsvForeignColumnShadowsKnown { column, .. } if column == "uuid"),
+        "{err}"
+    );
+}
+
+#[test]
 fn a_failed_save_leaves_the_existing_file_untouched() {
     let mut sheet = empty_sheet();
     let mut a = sample_symbol();

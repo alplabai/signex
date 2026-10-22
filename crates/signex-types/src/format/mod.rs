@@ -107,14 +107,23 @@ pub enum FormatError {
     #[error("TSV block {block:?}: header repeats column {column:?}")]
     TsvDuplicateColumn { block: String, column: String },
     #[error(
-        "TSV block {block:?}: {count} foreign columns exceeds the limit of {max} \
-         (refusing to load rather than drop columns)"
+        "TSV block {block:?}: {count} foreign columns exceeds the limit of {max}; \
+         the first column over the limit is {first_over:?}... \
+         (refusing rather than drop columns)"
     )]
     TsvTooManyForeignColumns {
         block: String,
         count: usize,
         max: usize,
+        /// First characters of the first foreign column past the cap, so
+        /// the user can tell which rows to remove.
+        first_over: String,
     },
+    #[error(
+        "TSV block {block:?}: foreign column {column:?} has the name of a known column \
+         (refusing to write a header the loader would reject)"
+    )]
+    TsvForeignColumnShadowsKnown { block: String, column: String },
     #[error(
         "TSV block {block:?}: foreign column name {prefix:?}... is {len} bytes, \
          over the limit of {max} (refusing to load rather than truncate it)"
