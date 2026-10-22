@@ -183,3 +183,25 @@ fn failed_promote_keeps_the_library_listed_and_shows_the_error() {
         notice.detail
     );
 }
+
+#[test]
+fn open_library_failure_raises_the_error_card() {
+    let (mut app, _t) = Signex::new();
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let _ = app.update(Message::Library(LibraryMessage::OpenLibraryAt(Some(
+        unparseable_library(tmp.path()),
+    ))));
+
+    assert!(app.library.recovery.is_none());
+    let notice = app
+        .document_state
+        .error_notice
+        .as_ref()
+        .expect("File > Library > Open Library must not only log a failure");
+    assert!(
+        notice.detail.contains("Cannot open library"),
+        "{:?}",
+        notice.detail
+    );
+}
