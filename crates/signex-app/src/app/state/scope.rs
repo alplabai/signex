@@ -23,8 +23,9 @@ use super::LoadedProject;
 
 /// How [`path_key`] treats case and separators.
 ///
-/// `Insensitive` also rewrites `\` to `/`, since the filesystems that fold
-/// case accept either separator.
+/// `Insensitive` also rewrites `\` to `/`. The two rules are bundled only
+/// because they match the Windows host today; a case-insensitive volume that
+/// treats `\` as an ordinary filename character (APFS) needs them split.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CaseFold {
     Insensitive,
@@ -116,6 +117,7 @@ pub(crate) fn project_owning_sheet<'a>(
     project_owning_sheet_with(projects, loaded, path, CaseFold::HOST)
 }
 
+/// Explicit-fold form of [`project_owning_sheet`]; production uses that one.
 pub(crate) fn project_owning_sheet_with<'a>(
     projects: &'a [LoadedProject],
     loaded: &HashMap<PathBuf, Vec<String>>,
@@ -341,6 +343,19 @@ mod tests {
         let owner = |fold| {
             project_owning_sheet_with(&projects, &HashMap::new(), &variant, fold).map(|p| p.id)
         };
+        assert_eq!(owner(CaseFold::Insensitive), Some(ProjectId(1)));
+        assert_eq!(owner(CaseFold::Sensitive), None);
+    }
+
+    #[test]
+    fn child_reference_ownership_follows_the_fold() {
+        // `Top.snxsch` is listed and references `Child.snxsch`; the child tab
+        // was opened as `child.snxsch`.
+        let projects = vec![project(1, "/w/a", &["Top.snxsch"])];
+        let open = loaded(&[("/w/a/Top.snxsch", &["Child.snxsch"])]);
+        let variant = PathBuf::from("/w/a/child.snxsch");
+        let owner =
+            |fold| project_owning_sheet_with(&projects, &open, &variant, fold).map(|p| p.id);
         assert_eq!(owner(CaseFold::Insensitive), Some(ProjectId(1)));
         assert_eq!(owner(CaseFold::Sensitive), None);
     }

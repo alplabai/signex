@@ -337,6 +337,7 @@ pub(crate) fn sheet_key(path: &Path, base: Option<&Path>) -> signex_net::SheetKe
     sheet_key_with(path, base, CaseFold::HOST)
 }
 
+/// Explicit-fold form of [`sheet_key`]; production uses that one.
 pub(crate) fn sheet_key_with(
     path: &Path,
     base: Option<&Path>,
@@ -386,6 +387,7 @@ pub(crate) fn project_graph(
     project_graph_with(sheets, base_dir, root, CaseFold::HOST)
 }
 
+/// Explicit-fold form of [`project_graph`]; production uses that one.
 pub(crate) fn project_graph_with(
     sheets: &HashMap<PathBuf, SchematicSheet>,
     base_dir: Option<&Path>,
@@ -789,6 +791,33 @@ mod tests {
     }
 
     #[test]
+    fn child_reference_resolves_across_case_only_when_insensitive() {
+        let mut sheets = HashMap::new();
+        sheets.insert(
+            PathBuf::from("/proj/Root.snxsch"),
+            sheet(1, &["CHILD.snxsch"]),
+        );
+        sheets.insert(PathBuf::from("/proj/Child.snxsch"), sheet(2, &[]));
+        let base = Some(Path::new("/proj"));
+        let resolve = |fold| {
+            let graph = project_graph_with(&sheets, base, None, fold);
+            let root = sheet_key_with(Path::new("/proj/Root.snxsch"), base, fold);
+            graph.resolved[&root].get("CHILD.snxsch").cloned()
+        };
+
+        let folded = resolve(CaseFold::Insensitive);
+        assert_eq!(
+            folded,
+            Some(sheet_key_with(
+                Path::new("/proj/Child.snxsch"),
+                base,
+                CaseFold::Insensitive
+            ))
+        );
+        assert_eq!(resolve(CaseFold::Sensitive), None);
+    }
+
+    #[test]
     fn sheet_key_is_one_key_for_case_variants_only_when_insensitive() {
         let base = Some(Path::new("/proj"));
         let upper = Path::new("/proj/A.snxsch");
@@ -1008,12 +1037,12 @@ mod tests {
 
     /// #536 — the root must survive a `SheetKey` collision.
     ///
-    /// Reproducible on EVERY platform, not just Windows as the issue
-    /// first read. `path_key` may fold case, but
-    /// `sheet_key` relativizes against `base` and falls back to the bare
-    /// `file_name()` when a path is not under it. A sheet living outside
-    /// the project directory therefore keys as `top.snxsch` and collides
-    /// with the project's own `/proj/top.snxsch`, case-folding or not.
+    /// Reproducible on EVERY platform, not just Windows as the issue first
+    /// read. `path_key` may fold case, but `sheet_key` relativizes against
+    /// `base` and falls back to the bare `file_name()` when a path is not
+    /// under it. A sheet living outside the project directory therefore keys
+    /// as `top.snxsch` and collides with the project's own
+    /// `/proj/top.snxsch`, case-folding or not.
     ///
     /// Sorted first-wins then handed the slot to the outsider — `/other`
     /// sorts before `/proj` — and both netlist callers, finding no root
