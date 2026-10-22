@@ -126,12 +126,11 @@ mod tests {
     /// on the canvas. Everything that paints constraint colours,
     /// dimensions and DOF state reads `state.last_solve`, so a stale
     /// `Some` is the canvas confidently showing a solution that no
-    /// longer describes the sketch. This is the case #610's
-    /// `entity_colours` fix cannot reach: the conflict touches a free
-    /// point, the solver returns `DidNotConverge`, and `entity_colours`
-    /// never runs at all.
+    /// longer describes the sketch. A conflicting edit is now reverted,
+    /// so the answer on screen is the re-solve of the reverted sketch,
+    /// not the stale one.
     #[test]
-    fn a_failed_solve_clears_the_previous_solves_colours() {
+    fn a_conflicting_edit_leaves_the_reverted_sketchs_solve_not_a_stale_one() {
         // Arrange — solve once, cleanly, so there is a good answer to
         // go stale.
         let mut fp = empty_footprint();
@@ -188,9 +187,18 @@ mod tests {
             failed.is_err(),
             "two conflicting distances on the same pair must not solve"
         );
+        assert_eq!(
+            fp.sketch.as_ref().expect("sketch").constraints.len(),
+            2,
+            "the conflicting constraint was reverted"
+        );
+        let solve = state
+            .last_solve
+            .as_ref()
+            .expect("reverted sketch re-solved");
         assert!(
-            state.last_solve.is_none(),
-            "a failed solve must drop the previous answer, not leave it to be painted"
+            solve.over_constraints.is_empty(),
+            "the answer on screen describes the reverted sketch"
         );
     }
 
