@@ -32,7 +32,7 @@ use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 
-use ids::{STOCK_IDS, StockIds};
+use ids::{STOCK_IDS, StockIds, StockKind};
 
 /// Fixed `created` / `updated` stamp for every stock footprint, so a
 /// regeneration never rewrites the files just because the clock moved.
@@ -52,13 +52,12 @@ fn next_id(ids: &mut impl Iterator<Item = SketchEntityId>) -> SketchEntityId {
 
 /// Author the footprint named by one id-table row.
 fn build(ids: &StockIds) -> Footprint {
-    match ids.file_name {
-        "SOIC-8.snxfpt" => build_soic8(ids),
-        "QFN-16.snxfpt" => build_qfn16(ids),
-        "R0805.snxfpt" => build_r0805(ids),
-        "MountingHole-3.2mm.snxfpt" => build_mounting_hole_3p2(ids),
-        "Fiducial-1mm.snxfpt" => build_fiducial_1mm(ids),
-        other => panic!("no stock footprint builder for {other}"),
+    match ids.kind {
+        StockKind::Soic8 => build_soic8(ids),
+        StockKind::Qfn16 => build_qfn16(ids),
+        StockKind::R0805 => build_r0805(ids),
+        StockKind::MountingHole3p2 => build_mounting_hole_3p2(ids),
+        StockKind::Fiducial1mm => build_fiducial_1mm(ids),
     }
 }
 

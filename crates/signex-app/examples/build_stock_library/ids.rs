@@ -10,8 +10,21 @@ use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::PlaneId;
 use uuid::Uuid;
 
+/// Which builder authors a stock footprint. Keys each [`StockIds`]
+/// row to its builder, so a new row cannot name a builder that does
+/// not exist.
+#[derive(Clone, Copy)]
+pub enum StockKind {
+    Soic8,
+    Qfn16,
+    R0805,
+    MountingHole3p2,
+    Fiducial1mm,
+}
+
 /// Pinned identity of one stock `.snxfpt` file.
 pub struct StockIds {
+    pub kind: StockKind,
     pub file_name: &'static str,
     file_uuid: &'static str,
     footprint_uuid: &'static str,
@@ -55,6 +68,7 @@ impl StockIds {
 
 pub const STOCK_IDS: &[StockIds] = &[
     StockIds {
+        kind: StockKind::Soic8,
         file_name: "SOIC-8.snxfpt",
         file_uuid: "019df45d-af5f-7bb0-914a-26cc90477b10",
         footprint_uuid: "019df45d-af5f-7bb0-914a-26b538180e51",
@@ -71,6 +85,7 @@ pub const STOCK_IDS: &[StockIds] = &[
         ],
     },
     StockIds {
+        kind: StockKind::Qfn16,
         file_name: "QFN-16.snxfpt",
         file_uuid: "019df45d-af61-7612-8d18-c80e4c879451",
         footprint_uuid: "019df45d-af61-7612-8d18-c7f4c67e4b0e",
@@ -95,6 +110,7 @@ pub const STOCK_IDS: &[StockIds] = &[
         ],
     },
     StockIds {
+        kind: StockKind::R0805,
         file_name: "R0805.snxfpt",
         file_uuid: "019df45d-af64-7bb2-b787-add74d246d40",
         footprint_uuid: "019df45d-af63-7823-b5c3-01594028ccef",
@@ -105,6 +121,7 @@ pub const STOCK_IDS: &[StockIds] = &[
         ],
     },
     StockIds {
+        kind: StockKind::MountingHole3p2,
         file_name: "MountingHole-3.2mm.snxfpt",
         file_uuid: "019df45d-af65-71a1-b568-29e703608649",
         footprint_uuid: "019df45d-af65-71a1-b568-29d0a5242184",
@@ -112,6 +129,7 @@ pub const STOCK_IDS: &[StockIds] = &[
         entities: &["a2de0bf0-adc5-448c-adf8-3b190a702392"],
     },
     StockIds {
+        kind: StockKind::Fiducial1mm,
         file_name: "Fiducial-1mm.snxfpt",
         file_uuid: "019df45d-af66-75c0-b9cf-2bbf173b0066",
         footprint_uuid: "019df45d-af66-75c0-b9cf-2ba7e253d69c",

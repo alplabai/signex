@@ -755,7 +755,6 @@ impl Footprint {
     /// Empty footprint with a caller-supplied `uuid` and
     /// `created`/`updated` timestamp instead of freshly minted ones.
     pub fn with_identity(name: impl Into<String>, uuid: Uuid, timestamp: DateTime<Utc>) -> Self {
-        let now = timestamp;
         Self {
             uuid,
             name: name.into(),
@@ -771,8 +770,8 @@ impl Footprint {
             pcb_params: ParamMap::new(),
             version: default_footprint_version(),
             released: false,
-            created: now,
-            updated: now,
+            created: timestamp,
+            updated: timestamp,
             schema_version: FOOTPRINT_SCHEMA_VERSION,
             sketch: None,
             pours: Vec::new(),
