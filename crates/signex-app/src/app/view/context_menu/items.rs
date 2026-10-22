@@ -1,8 +1,7 @@
 //! Shared context-menu primitives — the pure `DropdownEntry` builders
 //! (`dd_kb`, `dd_msg`, `dd_disabled`, `save_entry`), the hover-driven
 //! submenu launcher (`submenu_launcher`, an owned `Custom` row), and the
-//! two `&self` lookups the menu builders need (`keymap_shortcut_label`,
-//! `library_node_path_from_tree`).
+//! `&self` lookup the menu builders need (`keymap_shortcut_label`).
 //!
 //! Data-to-view (#269): every context menu is a `Vec<DropdownEntry>` that
 //! the shared `signex_widgets::active_bar_dropdown` widget renders, so the
@@ -175,29 +174,6 @@ pub(super) fn submenu_launcher(
 }
 
 impl Signex {
-    /// Resolve the on-disk `.snxlib` path for a project-tree library
-    /// node click. The tree path under the `Libraries` group is
-    /// `[project_idx, libraries_branch_idx, library_idx]` — the
-    /// matching project's `LibraryNodeInfo[library_idx].root` carries
-    /// the absolute path. Returns `None` when the path doesn't sit at
-    /// a library leaf (defensive — `view_project_tree_context_menu`
-    /// already gates on the library role, but the icon-by-depth
-    /// detection there isn't strict enough to skip the lookup).
-    pub(super) fn library_node_path_from_tree(
-        &self,
-        tree_path: &[usize],
-    ) -> Option<std::path::PathBuf> {
-        let project_idx = *tree_path.first()?;
-        let library_idx = *tree_path.get(2)?;
-        self.document_state
-            .panel_ctx
-            .projects
-            .get(project_idx)?
-            .libraries
-            .get(library_idx)
-            .map(|lib| lib.root.clone())
-    }
-
     /// Resolve a keymap command id to its display label under the active
     /// profile, falling back to `fallback` when the command is unbound.
     pub(in crate::app::view) fn keymap_shortcut_label(

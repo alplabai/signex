@@ -1,9 +1,8 @@
 //! #731 — a project-tree action on a library row must act on exactly the
 //! library that row represents, even when two libraries share a file name.
 //!
-//! The row used to be resolved by `.snxlib` file name, so right-clicking the
-//! Shared `Power.snxlib` targeted the first same-named entry (the project-local
-//! one) and Remove pruned both entries.
+//! Rows resolve by position in the library list and are refused when the
+//! cached tree no longer matches it.
 
 use signex_app::app::{
     ContextMenuMsg, LoadedProject, Message, ProjectTreeAction, RemoveChoice, RemoveMsg, Signex,
@@ -158,4 +157,59 @@ fn exclude_on_first_library_row_keeps_the_second_entry() {
 
     assert!(f.local_lib.exists() && f.shared_lib.exists());
     assert_eq!(library_paths(&f.app), vec![f.shared_lib.clone()]);
+}
+
+#[test]
+fn stale_row_after_entry_removed_is_refused() {
+    let mut f = two_libraries_one_name();
+    // Entry removed behind the tree's back: the cached rows are now stale.
+    f.app.document_state.projects[0].data.libraries.remove(0);
+
+    for row in [LOCAL_ROW, SHARED_ROW] {
+        tree_action(
+            &mut f.app,
+            ProjectTreeAction::OpenRemoveDialog(row.to_vec()),
+        );
+        assert!(
+            f.app.ui_state.remove_dialog.is_none(),
+            "stale row {row:?} must not open a destructive dialog"
+        );
+    }
+}
+
+#[test]
+fn version_control_targets_the_clicked_row_with_a_pending_library() {
+    let mut f = two_libraries_one_name();
+    let pending_path = f._project_tmp.path().join("Pending.snxlib");
+    f.app.document_state.projects[0].pending_libraries.insert(
+        uuid::Uuid::new_v4(),
+        signex_app::library::commands::PendingLibrarySpec {
+            lib_path: pending_path,
+            enable_git: false,
+            use_lfs: false,
+            display_name: "Pending".into(),
+        },
+    );
+    let _ = f.app.update(Message::Ui(UiMsg::GridPickerSelect(1.0)));
+
+    tree_action(
+        &mut f.app,
+        ProjectTreeAction::OpenLibraryEnableVersionControl(SHARED_ROW.to_vec()),
+    );
+
+    let vc = f
+        .app
+        .ui_state
+        .enable_version_control
+        .as_ref()
+        .expect("dialog open");
+    assert_eq!(Some(vc.project_dir.as_path()), f.shared_lib.parent());
+
+    // The pending row is not on disk yet, so there is nothing to track.
+    f.app.ui_state.enable_version_control = None;
+    tree_action(
+        &mut f.app,
+        ProjectTreeAction::OpenLibraryEnableVersionControl(vec![0, 0, 2]),
+    );
+    assert!(f.app.ui_state.enable_version_control.is_none());
 }

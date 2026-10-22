@@ -249,7 +249,7 @@ impl Signex {
                 v.push(DropdownEntry::Separator);
                 // Stage 18 distributor refresh stub — resolves the clicked
                 // library's `.snxlib` file via the project tree.
-                if let Some(lib_path) = self.library_node_path_from_tree(path.as_slice()) {
+                if let Some(lib_path) = self.library_row_path(path.as_slice()) {
                     v.push(dd_msg(
                         None,
                         "Refresh All Pricing",
@@ -264,7 +264,7 @@ impl Signex {
                 v.push(DropdownEntry::Separator);
                 // Enable Version Control on the library directory itself —
                 // hidden once the library has a `.git/`.
-                if let Some(lib_file) = self.library_node_path_from_tree(path.as_slice())
+                if let Some(lib_file) = self.library_row_path(path.as_slice())
                     && let Some(lib_dir) = lib_file.parent()
                     && !lib_dir.join(".git").exists()
                 {

@@ -99,12 +99,24 @@ impl Signex {
             column![
                 header,
                 container(
-                    text(format!(
-                        "Please choose how to remove file \"{}\"",
-                        st.display_name
-                    ))
-                    .size(11)
-                    .color(text_muted)
+                    column![
+                        text(format!(
+                            "Please choose how to remove file \"{}\"",
+                            st.display_name
+                        ))
+                        .size(11)
+                        .color(text_muted),
+                        // Library names can repeat across folders; the
+                        // full path says which one is affected.
+                        text(if st.display_name.ends_with(".snxlib") {
+                            st.target_path.display().to_string()
+                        } else {
+                            String::new()
+                        })
+                        .size(10)
+                        .color(text_muted),
+                    ]
+                    .spacing(4)
                 )
                 .padding([14, 14]),
                 container(

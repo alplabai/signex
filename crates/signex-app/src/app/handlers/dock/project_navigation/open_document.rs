@@ -54,29 +54,6 @@ impl Signex {
         Some(dir.join(raw_label))
     }
 
-    /// On-disk path of the library at `tree_path`
-    /// (`[project, Libraries branch, library]`), read from the same
-    /// list the tree rows were built from so row and path always agree.
-    fn library_row_path(&self, tree_path: &[usize]) -> Option<std::path::PathBuf> {
-        let [project_idx, _, library_idx] = *tree_path else {
-            return None;
-        };
-        let branch = signex_widgets::tree_view::get_node(
-            self.document_state.panel_ctx.project_tree.as_slice(),
-            &tree_path[..2],
-        )?;
-        if branch.label != crate::panels::LIBRARIES_BRANCH_LABEL {
-            return None;
-        }
-        self.document_state
-            .panel_ctx
-            .projects
-            .get(project_idx)?
-            .libraries
-            .get(library_idx)
-            .map(|lib| lib.root.clone())
-    }
-
     pub(super) fn open_project_tree_document(
         &mut self,
         tree_path: &[usize],

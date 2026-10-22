@@ -47,22 +47,19 @@ impl Signex {
     /// project tree. The library context-menu only surfaces this when
     /// the library's `root_dir` has no `.git/` already.
     pub(crate) fn open_library_enable_version_control_dialog(&mut self, tree_path: Vec<usize>) {
-        // Tree path under a project's `Libraries` group is
-        // `[project_idx, libraries_branch_idx, library_idx]` — see
-        // `library_node_path_from_tree` for the canonical lookup.
-        let Some(&project_idx) = tree_path.first() else {
+        let Some(library_file_path) = self.library_row_path(&tree_path) else {
+            crate::diagnostics::log_warning(format!(
+                "Enable version control: no library resolved for tree row {tree_path:?}"
+            ));
             return;
         };
-        let Some(&library_idx) = tree_path.get(2) else {
+        if !library_file_path.exists() {
+            crate::diagnostics::log_warning(format!(
+                "Enable version control: {} is not on disk yet; save the project first",
+                library_file_path.display()
+            ));
             return;
-        };
-        let Some(project) = self.document_state.projects.get(project_idx) else {
-            return;
-        };
-        let Some(entry) = project.data.libraries.get(library_idx) else {
-            return;
-        };
-        let library_file_path = project.data.resolve_library_path(entry);
+        }
         let Some(root_dir) = library_file_path.parent().map(|p| p.to_path_buf()) else {
             return;
         };

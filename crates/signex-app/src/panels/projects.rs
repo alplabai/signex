@@ -123,15 +123,15 @@ pub struct LibraryNodeInfo {
 
 // ─── Projects Panel (TreeView) ────────────────────────────────
 
+/// Label of the project-tree branch that holds one row per library.
+pub const LIBRARIES_BRANCH_LABEL: &str = "Libraries";
+
 /// Build the project tree from panel context data. Produces one root
 /// per loaded project so multi-project workspaces show all their
 /// projects side by side. Single-project users see the same shape as
 /// before (one root). `PanelContext::projects` is the source of truth;
 /// the legacy `project_name` / `sheets` singletons are ignored here so
 /// we never emit a duplicate root for the active project.
-/// Label of the project-tree branch that holds one row per library.
-pub const LIBRARIES_BRANCH_LABEL: &str = "Libraries";
-
 pub fn build_project_tree(ctx: &PanelContext) -> Vec<TreeNode> {
     if ctx.projects.is_empty() {
         return vec![];

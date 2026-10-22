@@ -1,8 +1,6 @@
 //! Remove-from-project / delete-file flow for the project-navigation dock.
 //!
-//! Extracted verbatim from the project-navigation dock handlers
-//! (`handlers/dock/project_navigation`); pure code motion, zero
-//! behaviour change.
+//! Library rows are targeted and pruned by resolved path, never by file name.
 
 use super::*;
 

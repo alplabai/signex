@@ -4,6 +4,7 @@ use super::super::super::*;
 
 mod add;
 mod close_project;
+mod library_row;
 mod open_document;
 mod project_actions;
 mod remove;
