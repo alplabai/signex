@@ -4,7 +4,59 @@ use iced::Task;
 
 use super::super::super::*;
 
+/// Annotate a sheet that exists only on disk and write it back. Returns
+/// `true` when the file was rewritten; every failure is logged with the path.
+/// Only for sheets with no engine at all — an engine (open or parked) holds the
+/// user's unsaved edits and is annotated in place instead (#669).
+fn annotate_and_save_unopened(
+    sheet: signex_types::schematic::SchematicSheet,
+    path: &std::path::Path,
+    mode: signex_engine::AnnotateMode,
+    next_by_prefix: &mut std::collections::HashMap<String, u32>,
+    locked: &std::collections::HashSet<uuid::Uuid>,
+) -> bool {
+    let context = format!("Annotate failed on unopened sheet '{}'", path.display());
+    let mut engine = match signex_engine::Engine::new(sheet) {
+        Ok(engine) => engine,
+        Err(error) => {
+            crate::diagnostics::log_error(&context, &anyhow::Error::new(error));
+            return false;
+        }
+    };
+    engine.set_path(Some(path.to_path_buf()));
+    match engine.annotate_with_seed_and_locks(mode, next_by_prefix, locked) {
+        Ok(true) => {}
+        Ok(false) => return false,
+        Err(error) => {
+            crate::diagnostics::log_error(&context, &anyhow::Error::new(error));
+            return false;
+        }
+    }
+    if let Err(error) = engine.save() {
+        crate::diagnostics::log_error(
+            &format!("Annotate could not save '{}'", path.display()),
+            &anyhow::Error::new(error),
+        );
+        return false;
+    }
+    crate::diagnostics::log_info(format!("Annotate: saved {}", path.display()));
+    true
+}
+
 impl Signex {
+    /// Record that a non-active engine (a cached tab, or a parked engine whose
+    /// tab was closed) now holds unsaved edits. `tab.dirty` alone is not
+    /// enough: `dirty_paths` is what the quit guard, the tab-close engine
+    /// parking, the title-bar count and Save-All read, and a bare
+    /// `tab.dirty = true` never propagates into it (#585). Shared by Annotate
+    /// and Reset Duplicate Designators so the two cannot drift (#669).
+    fn mark_cached_sheet_dirty(&mut self, path: &std::path::Path) {
+        if let Some(tab) = self.document_state.tabs.iter_mut().find(|t| t.path == path) {
+            tab.dirty = true;
+        }
+        self.document_state.dirty_paths.insert(path.to_path_buf());
+    }
+
     pub(crate) fn handle_annotate(&mut self, mode: signex_engine::AnnotateMode) -> Task<Message> {
         // Share one per-prefix counter across every open sheet so designators
         // don't collide across sheets of the same project.
@@ -92,26 +144,28 @@ impl Signex {
                 }
                 continue;
             }
-            if let Some(tab_idx) = self
-                .document_state
-                .tabs
-                .iter()
-                .position(|t| &t.path == path)
-            {
-                // An open, non-active (cached) tab.
+            if self.document_state.engines.contains_key(path) {
+                // A live engine that is not the active one: a cached tab, or
+                // a dirty sheet whose tab was closed and whose engine is
+                // parked (#669). Either way the engine is the document, so
+                // annotate it in memory and leave it dirty for the user to
+                // save — never write it behind their back.
                 let result = self.document_state.engines.get_mut(path).map(|engine| {
                     engine.annotate_with_seed_and_locks(mode, &mut next_by_prefix, &locked)
                 });
-                if let Some(Ok(true)) = result {
-                    if let Some(tab) = self.document_state.tabs.get_mut(tab_idx) {
-                        tab.dirty = true;
+                match result {
+                    Some(Ok(true)) => {
+                        self.mark_cached_sheet_dirty(path);
+                        any_cached_changed = true;
                     }
-                    // `tab.dirty` alone is not enough: `dirty_paths` is what
-                    // the quit guard, the tab-close engine parking, the
-                    // title-bar count and Save-All read, and a bare
-                    // `tab.dirty = true` never propagates into it (#585).
-                    self.document_state.dirty_paths.insert(path.clone());
-                    any_cached_changed = true;
+                    Some(Err(error)) => {
+                        let error = anyhow::Error::new(error);
+                        crate::diagnostics::log_error(
+                            &format!("Annotate failed on '{}'", path.display()),
+                            &error,
+                        );
+                    }
+                    Some(Ok(false)) | None => {}
                 }
                 continue;
             }
@@ -122,22 +176,8 @@ impl Signex {
             let Some(sheet) = project_set.sheets.get(path).cloned() else {
                 continue;
             };
-            let Ok(mut engine) = signex_engine::Engine::new(sheet) else {
-                continue;
-            };
-            engine.set_path(Some(path.clone()));
-            let Ok(changed) =
-                engine.annotate_with_seed_and_locks(mode, &mut next_by_prefix, &locked)
-            else {
-                continue;
-            };
-            if !changed {
-                continue;
-            }
-            if engine.save().is_ok() {
+            if annotate_and_save_unopened(sheet, path, mode, &mut next_by_prefix, &locked) {
                 disk_touched += 1;
-                self.document_state.dirty_paths.remove(path);
-                crate::diagnostics::log_info(format!("Annotate: saved {}", path.display()));
             }
         }
         if disk_touched > 0 {
@@ -301,25 +341,24 @@ impl Signex {
             );
             resets += 1;
         }
-        // Cached tabs — same ReplaceDocument path; each tab's own
-        // history records the reset.
-        let active_idx = self.document_state.active_tab;
-        let cached_paths: Vec<(usize, PathBuf)> = self
+        // Every other live engine of this project — a cached tab, or a dirty
+        // sheet whose tab was closed and whose engine is parked (#669). The
+        // project set counted parked engines (it prefers `engines`), so they
+        // must be reset too, in memory: never written behind the user's back.
+        // Driven by `engines`, not `tabs`; a loose engine from another
+        // project was never counted, so it is not reset either.
+        let active_path = self.document_state.active_path.clone();
+        let mut cached_paths: Vec<PathBuf> = self
             .document_state
-            .tabs
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, tab)| {
-                // Only this project's sheets: a loose tab from somewhere else
-                // was never counted, so it must not be reset either.
-                if idx == active_idx || !project_paths.contains(&tab.path) {
-                    None
-                } else {
-                    Some((idx, tab.path.clone()))
-                }
+            .engines
+            .keys()
+            .filter(|path| {
+                project_paths.contains(*path) && active_path.as_deref() != Some(path.as_path())
             })
+            .cloned()
             .collect();
-        for (idx, path) in cached_paths {
+        cached_paths.sort();
+        for path in cached_paths {
             let applied = self.document_state.engines.get_mut(&path).map(|engine| {
                 let mut sheet = engine.document().clone();
                 if !reset_in(&mut sheet, &duplicates) {
@@ -342,10 +381,7 @@ impl Signex {
                 }
             });
             if let Some(true) = applied {
-                if let Some(tab) = self.document_state.tabs.get_mut(idx) {
-                    tab.dirty = true;
-                }
-                self.document_state.dirty_paths.insert(path);
+                self.mark_cached_sheet_dirty(&path);
                 resets += 1;
             }
         }
