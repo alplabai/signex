@@ -181,7 +181,7 @@ mod tests {
         let pid = plane.id;
         let mut data = SketchData::default();
         data.planes.push(plane);
-        let mut point = |data: &mut SketchData, x: f64, y: f64| {
+        let point = |data: &mut SketchData, x: f64, y: f64| {
             let id = SketchEntityId::new();
             data.entities
                 .push(Entity::new(id, pid, EntityKind::Point { x, y }));

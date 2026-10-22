@@ -37,7 +37,6 @@ mod tests {
     use signex_sketch::solver::state::point_xy;
 
     use super::super::{Footprint, FootprintFile};
-    use super::*;
 
     fn off_circle_footprint() -> (Footprint, [SketchEntityId; 3]) {
         let plane = Plane {
