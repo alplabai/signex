@@ -22,15 +22,26 @@ pub struct BomComponent {
     pub dnp: bool,
     pub in_bom: bool,
     pub on_board: bool,
-    /// Variant override for fitted state.
-    /// `None` means fallback to base schematic flags.
+    /// Fitted state set by the active variant's own override for this part.
+    /// `None` means the variant does not override it.
     pub variant_fitted: Option<bool>,
+    /// Fitted state from the part's own base fields (`Fitted`, `DNP`, ...),
+    /// used when the variant does not override it.
+    pub base_fitted: Option<bool>,
     pub custom: BTreeMap<String, String>,
 }
 
 impl BomComponent {
+    /// Whether this component passes the DNP filter. Only the active
+    /// variant's fitted override lets a DNP part through; base fields do not.
+    /// The other BOM inclusion filters still apply.
+    pub fn passes_dnp_filter(&self, include_dnp: bool) -> bool {
+        include_dnp || !self.dnp || self.variant_fitted == Some(true)
+    }
+
     pub fn is_fitted(&self) -> bool {
         self.variant_fitted
+            .or(self.base_fitted)
             .unwrap_or(!self.dnp && self.in_bom && self.on_board)
     }
 }
@@ -244,7 +255,7 @@ pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
     let mut components = ctx
         .components
         .iter()
-        .filter(|component| opts.include_dnp || !component.dnp)
+        .filter(|component| component.passes_dnp_filter(opts.include_dnp))
         .filter(|component| opts.include_not_fitted || component.is_fitted())
         .filter(|component| opts.include_excluded_from_bom || component.in_bom)
         .filter(|component| opts.include_not_on_board || component.on_board)
@@ -440,6 +451,7 @@ mod tests {
             in_bom: true,
             on_board: true,
             variant_fitted: None,
+            base_fitted: None,
             custom: BTreeMap::new(),
         }
     }
@@ -577,6 +589,123 @@ mod tests {
         let table = build_table(&ctx, &BomEngineOptions::default());
         assert_eq!(table.rows.len(), 1);
         assert_eq!(table.rows[0].references, vec!["R1".to_string()]);
+    }
+
+    #[test]
+    fn variant_fitting_respects_bom_inclusion_options() {
+        let ctx = BomContext {
+            components: [
+                ("R1", false, None),
+                ("R2", true, None),
+                ("R3", false, Some(false)),
+                ("R4", true, Some(false)),
+                ("R5", false, Some(true)),
+                ("R6", true, Some(true)),
+            ]
+            .into_iter()
+            .map(|(reference, dnp, variant_fitted)| BomComponent {
+                dnp,
+                variant_fitted,
+                ..component(reference, "10k", "R_0603")
+            })
+            .collect(),
+            metadata: BomMetadata::default(),
+        };
+
+        for (include_dnp, include_not_fitted, expected_refs, not_fitted_qty) in [
+            (false, false, vec!["R1", "R5", "R6"], 0),
+            (true, false, vec!["R1", "R5", "R6"], 0),
+            (false, true, vec!["R1", "R3", "R5", "R6"], 1),
+            (true, true, vec!["R1", "R2", "R3", "R4", "R5", "R6"], 3),
+        ] {
+            for grouping in [
+                BomGrouping::Grouped,
+                BomGrouping::Ungrouped,
+                BomGrouping::Flat,
+            ] {
+                let opts = BomEngineOptions {
+                    grouping,
+                    include_dnp,
+                    include_not_fitted,
+                    ..BomEngineOptions::default()
+                };
+                let table = build_table(&ctx, &opts);
+                let references = table
+                    .rows
+                    .iter()
+                    .flat_map(|row| row.references.iter().map(String::as_str))
+                    .collect::<Vec<_>>();
+                assert_eq!(references, expected_refs, "{opts:?}");
+                let expected_rows = if grouping == BomGrouping::Grouped {
+                    1
+                } else {
+                    expected_refs.len()
+                };
+                assert_eq!(table.rows.len(), expected_rows);
+                assert_eq!(
+                    table.rows.iter().map(|row| row.qty).sum::<u32>(),
+                    3 + not_fitted_qty
+                );
+                assert_eq!(table.rows.iter().map(|row| row.fitted_qty).sum::<u32>(), 3);
+                assert_eq!(
+                    table.rows.iter().map(|row| row.not_fitted_qty).sum::<u32>(),
+                    not_fitted_qty
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn only_the_variant_override_bypasses_dnp() {
+        let dnp = |variant_fitted, base_fitted| BomComponent {
+            dnp: true,
+            variant_fitted,
+            base_fitted,
+            ..component("R5", "10k", "R_0603")
+        };
+        assert!(dnp(Some(true), None).passes_dnp_filter(false));
+        assert!(dnp(Some(true), Some(false)).passes_dnp_filter(false));
+        assert!(!dnp(None, Some(true)).passes_dnp_filter(false));
+        assert!(!dnp(Some(false), Some(true)).passes_dnp_filter(false));
+
+        // The fitted state itself still takes the variant, then the base fields.
+        assert!(dnp(None, Some(true)).is_fitted());
+        assert!(!dnp(Some(false), Some(true)).is_fitted());
+        assert!(!dnp(None, None).is_fitted());
+    }
+
+    #[test]
+    fn variant_fitting_preserves_bom_and_board_exclusions() {
+        for (in_bom, on_board) in [(false, true), (true, false), (false, false)] {
+            let ctx = BomContext {
+                components: vec![BomComponent {
+                    dnp: true,
+                    variant_fitted: Some(true),
+                    in_bom,
+                    on_board,
+                    ..component("R5", "10k", "R_0603")
+                }],
+                metadata: BomMetadata::default(),
+            };
+            assert!(
+                build_table(&ctx, &BomEngineOptions::default())
+                    .rows
+                    .is_empty()
+            );
+
+            let table = build_table(
+                &ctx,
+                &BomEngineOptions {
+                    include_excluded_from_bom: !in_bom,
+                    include_not_on_board: !on_board,
+                    ..BomEngineOptions::default()
+                },
+            );
+            assert_eq!(table.rows.len(), 1);
+            assert_eq!(table.rows[0].references, vec!["R5"]);
+            assert_eq!(table.rows[0].fitted_qty, 1);
+            assert_eq!(table.rows[0].not_fitted_qty, 0);
+        }
     }
 
     #[test]

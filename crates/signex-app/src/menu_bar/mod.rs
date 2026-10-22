@@ -92,9 +92,21 @@ pub enum MenuMessage {
     /// dropdown. The message is swallowed by `handle_menu_message` via
     /// its `Task::none()` fallthrough — no handler needs to match it.
     NoOp,
+    /// Help ▸ About Signex.
+    OpenAbout,
+    /// Help ▸ Documentation — opens the user guide in the browser.
+    OpenDocumentation,
+    /// Help ▸ Report an Issue — opens the issue tracker in the browser.
+    ReportIssue,
     // File
     NewProject,
     OpenProject,
+    /// File ▸ Open Recent ▸ `<project>` — reopens through the same path
+    /// as File ▸ Open. A path that has vanished is dropped from the list
+    /// with a notice instead of being opened.
+    OpenRecentProject(std::path::PathBuf),
+    /// File ▸ Open Recent ▸ Clear Recent.
+    ClearRecentProjects,
     Save,
     SaveAs,
     PrintPreview,
@@ -236,6 +248,8 @@ pub struct MenuContext {
     pub scale_factor: f32,
     /// Active committed shortcut profile for menu shortcut labels.
     pub active_keymap: Option<CompiledKeymap>,
+    /// File ▸ Open Recent entries, most recent first.
+    pub recent_projects: Vec<std::path::PathBuf>,
 }
 
 impl Default for MenuContext {
@@ -251,6 +265,7 @@ impl Default for MenuContext {
             has_footprint_editor: false,
             scale_factor: 1.0,
             active_keymap: None,
+            recent_projects: Vec::new(),
         }
     }
 }

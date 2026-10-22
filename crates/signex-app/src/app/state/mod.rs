@@ -171,6 +171,14 @@ impl ErrorNotice {
         }
     }
 
+    /// An external page could not be opened in the default browser.
+    pub fn link(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Could Not Open Link".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
     /// A delete was refused because it would have removed a file the
     /// project does not own (#139).
     pub fn delete(detail: impl Into<String>) -> Self {

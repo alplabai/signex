@@ -839,6 +839,7 @@ mod erc;
 mod misc;
 mod prefs_file;
 mod presets;
+mod recent;
 
 /// The one read-modify-write every preference writer in this module
 /// tree goes through (#594). Imported here rather than re-exported —
@@ -860,6 +861,7 @@ pub use dock_layout::*;
 pub use erc::*;
 pub use misc::*;
 pub use presets::*;
+pub use recent::*;
 
 #[cfg(test)]
 mod tests {

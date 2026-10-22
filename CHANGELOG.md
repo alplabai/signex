@@ -18,6 +18,9 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
+### Added — schematic engine
+
+- **`PlaceChildSheet` engine command** — adds a hierarchical sheet symbol to the schematic as one undoable step and marks `CHILD_SHEETS` dirty so the project netlist cache invalidates. A blank `filename` is rejected with `EngineError::EmptyChildSheetFilename`; an empty `name` is allowed. Engine only — the Place Sheet canvas tool is separate (#357).
 ### Added — start screen
 
 - **Actionable start screen** — with nothing loaded, the empty centre region now shows the product name and version with **New Project**, **Open Project…** and **Keyboard Shortcuts (F1)** buttons, all dispatching existing menu messages and styled from `ThemeTokens`. A loaded project with no document selected keeps its own quieter hint. Open Sample Project and recent projects are left out until those features land (#331).
@@ -40,6 +43,10 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 ### Added — netlist export
 
 - **Protel `.NET` netlist** (#354) — File ▸ Export ▸ Netlist now writes a Protel-format netlist (`[ ... ]` component blocks, `( ... )` net blocks, CRLF) that downstream PCB tools read, instead of the `# Signex netlist` text dump. The dump stays available as `NetlistFormat::Listing`; the menu label and save dialog now name the Protel format, and the dead "Generate Netlist" menu stub is gone. Hierarchical projects export every child-sheet part. The export refuses, and writes nothing, when a designator is held by more than one part (clear it with Reset Duplicate Schematic Designators...), when a part is unannotated, such as `R?` (clear it with Annotate Schematics...), when a real part has a blank designator (annotate it), or when a child sheet is placed more than once and keeps shared designators (give each placement its own). Power ports and parts excluded from the board are left out of the file. "Export anyway (incomplete)" writes a clean netlist with no header, since the format has no comment syntax; the omitted pages are reported in the Messages panel.
+### Added — Help menu and File ▸ Open Recent
+
+- **Help menu** — `Help ▸ About Signex` is a real dialog (version from the workspace manifest, licence link, Copy version info) instead of a disabled stub, and `Help ▸ Documentation` / `Help ▸ Report an Issue` open the user guide and the issue tracker in the default browser (#332).
+- **File ▸ Open Recent** — the last 10 projects opened (or created) are remembered in `prefs.json`, de-duplicated by canonical path and listed newest first; choosing one reopens it through File ▸ Open, a project that has been deleted is dropped with a notice, and Clear Recent empties the list (#333).
 ### Added — BOM
 
 - **BOM validation in the export modal** — a new Rules tab lists the four `signex-bom` rules as toggles and the live issues (by severity, naming each designator); the footer shows the error/warning count next to Export. The report re-validates on every grouping / variant / DNP / rule change, and an export with issues still writes the file and reports the summary (#355).
@@ -83,6 +90,9 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 - **Symbol editor pin drag (#170)** — pressing a pin that sits on a body rectangle's edge resized the rectangle through an undrawn resize handle, and the pin hit-test took the first pin in vector order within a fixed 1.5 mm tip disc. Only selected graphics now expose handles, and a pin is grabbed by an 8 px screen-space zone around its tip plus a narrow (at most 0.4 mm) zone along its tip-to-base line, nearest pin first. The line zone is deliberately narrow so a graphic touching a pin's base, or a press in the body beside a pinned edge, still picks the graphic; a pin's name/number label is the lowest-priority grab, after graphics. The hover cursor uses the same priority as the press, and resize handles honour the selection filter. The selection-filter pills now gate picking and box select, Esc leaves a placement tool, Add Pin shows a ghost and places on release (no more stacked pins), and Fit/initial view use the real canvas size instead of 800x500.
 - **Dropped-`Task` gate hole (#627)** — `check_discarded_tasks.sh` now also flags `drop(<task>)` of a `handle_*` result or a Task-typed binding, which walked past both `unused_must_use = "deny"` and the `let _ =` grep; the one site (a test in `open_document.rs`) now asserts on the Task instead.
 
+### Fixed — BOM
+
+- **A variant can fit a part marked DNP (#674)** — a part with DNP set in the base schematic was left out of a variant's BOM even when that variant fitted it, because the DNP filter ran before the variant was read; export validation skipped it the same way. Only the active variant's own override now lets a DNP part through. A leftover `Fitted`, `VariantFitted` or `DNP` field on the part does not, with or without an active variant.
 - **Library actions no longer silently do nothing (#152)** — Components Panel "Add Library" on the Project section and a failed Installed/Global mount now raise the error card, a failed `global_libraries.toml` write is reported, "Refresh All Pricing" is shown disabled ("Not yet available") instead of logging a TODO, and the never-emitted Manage/Add-to-Project/row-refresh stub messages are removed.
 
 ### Changed

@@ -202,6 +202,7 @@ impl Signex {
             // a secondary window onto a monitor with a different DPI.
             scale_factor: ui.main_window_scale,
             active_keymap: Some(ui.active_keymap.clone()),
+            recent_projects: ui.recent_projects.entries().to_vec(),
         };
         let menu_row = menu_bar::view(&document.panel_ctx.tokens, menu_ctx).map(Message::Menu);
 
@@ -412,6 +413,7 @@ impl Signex {
             || ui.find_replace.open
             || ui.preferences_open
             || ui.keyboard_shortcuts_open
+            || ui.about_open
             || ui.passive_calculator_open
             || ui.first_run_tour_open
             || ui.rename_dialog.is_some()
