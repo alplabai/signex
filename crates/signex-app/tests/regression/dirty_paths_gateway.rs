@@ -27,6 +27,7 @@ use std::path::{Path, PathBuf};
 
 fn symbol(uuid: uuid::Uuid, reference: &str, x: f64) -> Symbol {
     Symbol {
+        unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid,
         lib_id: "Device:R".to_string(),

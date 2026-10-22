@@ -43,6 +43,7 @@ impl Signex {
                 };
                 let uuid = uuid::Uuid::new_v4();
                 let label = sch::Label {
+                    unknown_columns: Default::default(),
                     uuid,
                     text: if label_text.is_empty() {
                         "NET".to_string()
@@ -102,6 +103,7 @@ impl Signex {
                 };
                 let uuid = uuid::Uuid::new_v4();
                 let symbol = sch::Symbol {
+                    unknown_columns: Default::default(),
                     unknown: Default::default(),
                     uuid,
                     lib_id,

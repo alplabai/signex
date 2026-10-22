@@ -84,6 +84,7 @@ mod tests {
             labels: vec![],
             junctions: vec![],
             no_connects: vec![],
+            no_erc_directives: vec![],
             bus_entries: vec![],
             child_sheets: vec![],
             nets: vec![ErcNet {
@@ -114,6 +115,23 @@ mod tests {
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].rule_id.as_str(), "user::net_rule");
         assert_eq!(diagnostics[0].message, "Driver net");
+    }
+
+    #[test]
+    fn origin_no_erc_directive_does_not_suppress_a_net_scoped_diagnostic() {
+        let src = r#"
+            rule net_rule
+            on net
+            when has_driver()
+            then warning "Driver net"
+        "#;
+        let eval_fns = parse_validate_compile_to_eval_fns(src).expect("dsl should compile");
+        let mut ctx = sample_context();
+        ctx.no_erc_directives = vec![signex_erc::context::ErcNoErcDirective {
+            position: Point::new(0.0, 0.0),
+        }];
+        let diagnostics = signex_erc::engine::run_all_with_dsl(&ctx, &eval_fns);
+        assert!(diagnostics.iter().any(|d| d.message == "Driver net"));
     }
 
     #[test]

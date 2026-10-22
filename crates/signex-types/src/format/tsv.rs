@@ -10,7 +10,10 @@
 //! quoting rules are byte-for-byte unchanged (a wrong byte here makes a
 //! schematic unreloadable, #96).
 
+use super::unknown_columns::check_foreign_names;
 use super::*;
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use uuid::Uuid;
 
 /// Encode a single TSV cell. Empty strings emit `""` so column
@@ -176,19 +179,35 @@ fn split_row(line: &str) -> Vec<String> {
 
 /// Write a TSV block: header row + one row per item, columns aligned
 /// to the longest cell per column for legibility (matches the
-/// `.snxlib` writer's whitespace-flexible style).
-pub fn write_tsv_block<R: SnxTable>(rows: &[R]) -> String {
+/// `.snxlib` writer's whitespace-flexible style). Foreign columns
+/// follow the known ones — see [`UnknownColumns`] for the union rule.
+///
+/// Fails with the same caps the reader enforces (see
+/// `unknown_columns`) when the rows' foreign-column union is too wide,
+/// before anything is written — never truncating.
+pub fn write_tsv_block<R: SnxTable>(block: &str, rows: &[R]) -> Result<String, FormatError> {
     let columns = R::columns();
     if columns.is_empty() {
-        return String::new();
+        return Ok(String::new());
+    }
+
+    let foreign = foreign_column_names(rows);
+    check_foreign_names(block, &foreign)?;
+    if let Some(shadow) = foreign.iter().find(|n| columns.contains(&n.as_str())) {
+        return Err(FormatError::TsvForeignColumnShadowsKnown {
+            block: block.to_string(),
+            column: shadow.clone(),
+        });
     }
 
     // Pre-compute every row's encoded cell so we can pad to the
     // widest column.
     let mut all_rows: Vec<Vec<String>> = Vec::with_capacity(rows.len() + 1);
-    all_rows.push(columns.iter().map(|c| (*c).to_string()).collect());
+    let mut header: Vec<String> = columns.iter().map(|c| (*c).to_string()).collect();
+    header.extend(foreign.iter().map(|name| encode_cell(name)));
+    all_rows.push(header);
     for row in rows {
-        let cells = row.to_row();
+        let mut cells = row.to_row();
         debug_assert_eq!(
             cells.len(),
             columns.len(),
@@ -196,11 +215,21 @@ pub fn write_tsv_block<R: SnxTable>(rows: &[R]) -> String {
             cells.len(),
             columns.len()
         );
+        // One map per row (<= MAX_FOREIGN_COLUMNS entries) keeps the
+        // writer linear instead of columns x columns per row.
+        let unknown: HashMap<&str, &str> = row.unknown_columns().iter().collect();
+        cells.extend(foreign.iter().map(|name| {
+            unknown
+                .get(name.as_str())
+                .copied()
+                .unwrap_or_default()
+                .to_string()
+        }));
         all_rows.push(cells.into_iter().map(|c| encode_cell(&c)).collect());
     }
 
     // Compute per-column widths. Two-space separator between columns.
-    let mut widths = vec![0usize; columns.len()];
+    let mut widths = vec![0usize; columns.len() + foreign.len()];
     for row in &all_rows {
         for (idx, cell) in row.iter().enumerate() {
             if idx < widths.len() && cell.chars().count() > widths[idx] {
@@ -228,11 +257,26 @@ pub fn write_tsv_block<R: SnxTable>(rows: &[R]) -> String {
         }
         out.push('\n');
     }
-    out
+    Ok(out)
 }
 
-/// Parse a TSV block: validate the header against `R::columns()`,
-/// then parse each data row through `R::from_row`.
+/// Union of the rows' foreign column names, first-seen order.
+fn foreign_column_names<R: SnxTable>(rows: &[R]) -> Vec<String> {
+    let mut seen: HashSet<&str> = HashSet::new();
+    let mut names: Vec<String> = Vec::new();
+    for row in rows {
+        for (name, _) in row.unknown_columns().iter() {
+            if seen.insert(name) {
+                names.push(name.to_string());
+            }
+        }
+    }
+    names
+}
+
+/// Parse a TSV block. Columns resolve by header name: every column in
+/// `R::columns()` must be present (any order); extra columns are
+/// captured per row as [`UnknownColumns`] instead of refusing the file.
 pub fn parse_tsv_block<R: SnxTable>(block: &str, content: &str) -> Result<Vec<R>, FormatError> {
     // Strip the leading/trailing newlines TOML's literal multi-line
     // string padding adds, but preserve interior newlines.
@@ -247,33 +291,90 @@ pub fn parse_tsv_block<R: SnxTable>(block: &str, content: &str) -> Result<Vec<R>
     let header_line = lines.next().ok_or_else(|| FormatError::TsvEmpty {
         block: block.to_string(),
     })?;
-    let header_cells = split_row(header_line);
-    let expected: Vec<String> = R::columns().iter().map(|c| (*c).to_string()).collect();
-    if header_cells != expected {
-        return Err(FormatError::TsvHeaderMismatch {
-            block: block.to_string(),
-            got: header_cells,
-            expected,
-        });
-    }
+    let header: Vec<String> = split_row(header_line)
+        .iter()
+        .map(|c| decode_cell(c))
+        .collect();
+    let layout = HeaderLayout::resolve::<R>(block, header)?;
 
     let mut rows = Vec::new();
     for (idx, line) in lines.enumerate() {
         let cells = split_row(line);
-        if cells.len() != expected.len() {
+        if cells.len() != layout.header.len() {
             return Err(FormatError::TsvCellCountMismatch {
                 block: block.to_string(),
                 row: idx,
                 got: cells.len(),
-                expected: expected.len(),
-                columns: expected,
+                expected: layout.header.len(),
+                columns: layout.header,
             });
         }
-        let decoded: Vec<String> = cells.iter().map(|c| decode_cell(c)).collect();
-        let refs: Vec<&str> = decoded.iter().map(String::as_str).collect();
-        rows.push(R::from_row(&refs, block, idx)?);
+        let mut decoded: Vec<String> = cells.iter().map(|c| decode_cell(c)).collect();
+        let known: Vec<&str> = layout.known.iter().map(|&i| decoded[i].as_str()).collect();
+        let parsed = R::from_row(&known, block, idx)?;
+        // Move the foreign cells out (no copy); names are shared Arcs.
+        let foreign = layout
+            .foreign
+            .iter()
+            .zip(&layout.foreign_names)
+            .map(|(&i, name)| (Arc::clone(name), std::mem::take(&mut decoded[i])))
+            .collect();
+        rows.push(parsed.with_unknown_columns(UnknownColumns::from_pairs(foreign)));
     }
     Ok(rows)
+}
+
+/// Where each known column sits in a block's actual header, and which
+/// header positions are foreign.
+struct HeaderLayout {
+    header: Vec<String>,
+    /// Header index of each `R::columns()` entry, in that order.
+    known: Vec<usize>,
+    /// Header indices of the foreign columns, in file order.
+    foreign: Vec<usize>,
+    /// The foreign column names, allocated once and shared by every row.
+    foreign_names: Vec<Arc<str>>,
+}
+
+impl HeaderLayout {
+    /// Validate the header in O(columns): duplicates and known-column
+    /// lookup share one `HashMap`, then the foreign-column caps (see
+    /// `unknown_columns`) apply.
+    fn resolve<R: SnxTable>(block: &str, header: Vec<String>) -> Result<Self, FormatError> {
+        let mut index_of: HashMap<&str, usize> = HashMap::with_capacity(header.len());
+        for (i, name) in header.iter().enumerate() {
+            if index_of.insert(name.as_str(), i).is_some() {
+                return Err(FormatError::TsvDuplicateColumn {
+                    block: block.to_string(),
+                    column: name.clone(),
+                });
+            }
+        }
+        let known: Option<Vec<usize>> = R::columns()
+            .iter()
+            .map(|c| index_of.get(c).copied())
+            .collect();
+        let Some(known) = known else {
+            return Err(FormatError::TsvHeaderMismatch {
+                block: block.to_string(),
+                got: header,
+                expected: R::columns().iter().map(|c| (*c).to_string()).collect(),
+            });
+        };
+        let known_set: HashSet<usize> = known.iter().copied().collect();
+        let foreign: Vec<usize> = (0..header.len())
+            .filter(|i| !known_set.contains(i))
+            .collect();
+        let names: Vec<&str> = foreign.iter().map(|&i| header[i].as_str()).collect();
+        check_foreign_names(block, &names)?;
+        let foreign_names: Vec<Arc<str>> = names.into_iter().map(Arc::from).collect();
+        Ok(Self {
+            header,
+            known,
+            foreign,
+            foreign_names,
+        })
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -368,10 +469,15 @@ pub(in crate::format) fn format_f64(f: f64) -> String {
 // TSV section writer (TOML `[name]` + literal multi-line `content`)
 // ---------------------------------------------------------------------------
 
-pub(in crate::format) fn write_tsv_section<R: SnxTable>(out: &mut String, name: &str, rows: &[R]) {
-    let body = write_tsv_block(rows);
+pub(in crate::format) fn write_tsv_section<R: SnxTable>(
+    out: &mut String,
+    name: &str,
+    rows: &[R],
+) -> Result<(), FormatError> {
+    let body = write_tsv_block(name, rows)?;
     out.push_str(&format!("\n[{name}]\n"));
     out.push_str("content = \"\"\"\n");
     out.push_str(&escape_tsv_body_for_toml(&body));
     out.push_str("\"\"\"\n");
+    Ok(())
 }

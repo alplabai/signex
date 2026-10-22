@@ -47,6 +47,7 @@ fn sheet(wires: Vec<Wire>, labels: Vec<Label>) -> SchematicSheet {
 
 fn wire(a: Point, b: Point) -> Wire {
     Wire {
+        unknown_columns: Default::default(),
         uuid: Uuid::new_v4(),
         start: a,
         end: b,
@@ -56,6 +57,7 @@ fn wire(a: Point, b: Point) -> Wire {
 
 fn net_label(text: &str, pos: Point) -> Label {
     Label {
+        unknown_columns: Default::default(),
         uuid: Uuid::new_v4(),
         text: text.to_string(),
         position: pos,

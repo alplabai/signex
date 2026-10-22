@@ -172,6 +172,7 @@ mod tests {
     fn collect_exposed_sheet_ports_prefers_hierarchical_over_global() {
         let mut document = test_sheet();
         document.labels.push(Label {
+            unknown_columns: Default::default(),
             uuid: uuid::Uuid::new_v4(),
             text: "ALERT".to_string(),
             position: Point::new(0.0, 0.0),
@@ -183,6 +184,7 @@ mod tests {
             justify_v: signex_types::schematic::VAlign::Bottom,
         });
         document.labels.push(Label {
+            unknown_columns: Default::default(),
             uuid: uuid::Uuid::new_v4(),
             text: "ALERT".to_string(),
             position: Point::new(1.0, 1.0),
@@ -627,6 +629,7 @@ mod tests {
 
     fn wire(a: Point, b: Point) -> signex_types::schematic::Wire {
         signex_types::schematic::Wire {
+            unknown_columns: Default::default(),
             uuid: uuid::Uuid::new_v4(),
             start: a,
             end: b,
@@ -856,6 +859,7 @@ mod tests {
         engine
             .execute(Command::PlaceJunction {
                 junction: signex_types::schematic::Junction {
+                    unknown_columns: Default::default(),
                     uuid: user_junction_uuid,
                     position: Point::new(50.0, 50.0),
                     diameter: 0.0,
