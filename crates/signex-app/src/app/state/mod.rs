@@ -171,6 +171,14 @@ impl ErrorNotice {
         }
     }
 
+    /// A rename moved the file but could not finish updating what refers to it.
+    pub fn rename(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Rename Incomplete".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
     /// A file could not be opened — unreadable, unparseable, or empty
     /// where it must not be (#532).
     pub fn open(detail: impl Into<String>) -> Self {

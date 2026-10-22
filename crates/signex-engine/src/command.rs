@@ -61,6 +61,7 @@ pub enum CommandKind {
     MoveSymbolAbsolute,
     ReorderObjects,
     ReconcileChildSheetPins,
+    RenameChildSheetFile,
     SetPaperSize,
 }
 
@@ -222,6 +223,13 @@ pub enum Command {
         child_filename: String,
         ports: Vec<SheetPort>,
     },
+    /// Re-point every hierarchical child-sheet reference whose `filename`
+    /// is `from` at `to` — the follow-up to renaming the referenced
+    /// `.snxsch` on disk. Undoable like any other edit.
+    RenameChildSheetFile {
+        from: String,
+        to: String,
+    },
     /// Set the sheet's paper size (a named format like "A4"/"A3" — the
     /// Page Options panel is the producer). Persists through
     /// `SchematicSheet.paper_size` and is undoable like any other edit.
@@ -287,6 +295,7 @@ impl Command {
             Command::MoveSymbolAbsolute { .. } => CommandKind::MoveSymbolAbsolute,
             Command::ReorderObjects { .. } => CommandKind::ReorderObjects,
             Command::ReconcileChildSheetPins { .. } => CommandKind::ReconcileChildSheetPins,
+            Command::RenameChildSheetFile { .. } => CommandKind::RenameChildSheetFile,
             Command::SetPaperSize { .. } => CommandKind::SetPaperSize,
         }
     }

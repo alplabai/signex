@@ -136,6 +136,7 @@ impl Engine {
             | Command::MoveSymbolAbsolute { .. }
             | Command::ReorderObjects { .. }
             | Command::ReconcileChildSheetPins { .. }
+            | Command::RenameChildSheetFile { .. }
             | Command::SetPaperSize { .. } => self.exec_structure(before, cmd),
         }
     }
