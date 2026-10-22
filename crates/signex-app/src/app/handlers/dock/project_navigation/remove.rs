@@ -23,6 +23,25 @@ impl Signex {
         });
     }
 
+    /// Forget the in-memory documents of a file (or `.snxlib` directory)
+    /// the user just deleted. A parked dirty engine or draft would
+    /// otherwise survive in `dirty_paths` and be written back by Save All.
+    fn drop_deleted_documents(&mut self, deleted: &std::path::Path) {
+        let doc = &mut self.document_state;
+        let gone = |p: &std::path::PathBuf| p.starts_with(deleted);
+        doc.engines.retain(|p, _| !gone(p));
+        doc.symbol_editors.retain(|p, _| !gone(p));
+        doc.footprint_editors.retain(|p, _| !gone(p));
+        let discarded = doc.dirty_paths.iter().filter(|p| gone(p)).count();
+        doc.dirty_paths.retain(|p| !gone(p));
+        if discarded > 0 {
+            crate::diagnostics::log_warning(format!(
+                "Deleted {}: discarded {discarded} unsaved document(s)",
+                deleted.display()
+            ));
+        }
+    }
+
     pub(crate) fn handle_remove_confirm(
         &mut self,
         choice: crate::app::RemoveChoice,
@@ -60,12 +79,15 @@ impl Signex {
                 } else {
                     std::fs::remove_file(target)
                 };
-                if let Err(e) = result {
-                    crate::diagnostics::log_error(
+                match result {
+                    Ok(()) => self.drop_deleted_documents(target),
+                    Err(e) => crate::diagnostics::log_error(
                         "Failed to delete project file",
                         &anyhow::anyhow!("{e}"),
-                    );
+                    ),
                 }
+            } else {
+                self.drop_deleted_documents(target);
             }
             // Orphan target: silently fall through. The user's intent
             // ("get this row out of the project") is satisfied by the

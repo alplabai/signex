@@ -5,6 +5,7 @@
 //! behaviour change.
 
 use super::*;
+use crate::app::state::scope::claimed_by_other_project;
 
 impl Signex {
     /// Close every tab backed by the project whose root is at
@@ -45,7 +46,10 @@ impl Signex {
                 .document_state
                 .dirty_paths
                 .iter()
-                .filter(|p| p.starts_with(dir))
+                .filter(|p| {
+                    p.starts_with(dir)
+                        && !claimed_by_other_project(&self.document_state.projects, project_idx, p)
+                })
                 .cloned()
                 .collect();
             v.sort();
@@ -114,9 +118,10 @@ impl Signex {
             && let Some(dir) = project.path.parent()
         {
             let dir = dir.to_path_buf();
-            self.document_state
-                .engines
-                .retain(|p, _| p.parent() != Some(&dir));
+            let projects = &self.document_state.projects;
+            self.document_state.engines.retain(|p, _| {
+                p.parent() != Some(&dir) || claimed_by_other_project(projects, project_idx, p)
+            });
         }
 
         // Drop the project from the workspace, then pick a new active

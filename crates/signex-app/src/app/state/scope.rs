@@ -157,6 +157,35 @@ pub(crate) fn project_owning_sheet_with<'a>(
     None
 }
 
+/// True when `path` is claimed by an open project other than
+/// `projects[closing]`: another project's own `.snxprj`, a sheet only that
+/// project lists, or anything under a project nested inside the closing
+/// one's directory. A directory-ancestor test alone cannot tell two projects
+/// in the same or nested directories apart.
+pub(crate) fn claimed_by_other_project(
+    projects: &[LoadedProject],
+    closing: usize,
+    path: &Path,
+) -> bool {
+    let Some(mine) = projects.get(closing) else {
+        return false;
+    };
+    let my_dir = mine.dir();
+    let lists = |p: &LoadedProject| {
+        let dir = p.dir();
+        p.data.sheets.iter().any(|s| dir.join(&s.filename) == path)
+    };
+    projects.iter().enumerate().any(|(i, other)| {
+        if i == closing {
+            return false;
+        }
+        let other_dir = other.dir();
+        other.path == path
+            || (lists(other) && !lists(mine))
+            || (other_dir != my_dir && other_dir.starts_with(my_dir) && path.starts_with(other_dir))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
