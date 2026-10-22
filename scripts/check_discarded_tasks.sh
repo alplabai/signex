@@ -109,7 +109,7 @@
 #
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="${DISCARDED_TASKS_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 ALLOWLIST="$ROOT/scripts/discarded-tasks-allowlist.txt"
 
 cd "$ROOT"
