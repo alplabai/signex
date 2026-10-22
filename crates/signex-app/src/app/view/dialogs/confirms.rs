@@ -197,19 +197,7 @@ impl Signex {
         // has dozens of unsaved sheets. Filenames only — paths would
         // overflow narrow modals and the project context already
         // implies the parent dir.
-        let mut file_rows: Vec<Element<'_, Message>> = Vec::new();
-        for path in &st.dirty_paths {
-            let name = path
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or("(unnamed)")
-                .to_string();
-            file_rows.push(
-                container(text(name).size(11).color(text_c))
-                    .padding([4, 8])
-                    .into(),
-            );
-        }
+        let file_rows = self.dirty_entry_rows(&st.dirty_paths, &st.dirty_rows, text_c);
         let file_list = scrollable(column(file_rows).spacing(0))
             .height(Length::Fixed(160.0))
             .width(Length::Fill);
@@ -219,9 +207,9 @@ impl Signex {
                 header,
                 container(
                     text(format!(
-                        "'{}' has {} unsaved file(s). What would you like to do?",
+                        "'{}' has {} unsaved item(s). What would you like to do?",
                         st.project_name,
-                        st.dirty_paths.len()
+                        st.dirty_paths.len() + st.dirty_rows.len()
                     ))
                     .size(11)
                     .color(text_muted)
@@ -274,6 +262,33 @@ impl Signex {
         wrap_modal(dialog, offset, self.ui_state.window_size, (520.0, 360.0))
     }
 
+    /// One list row per unsaved entry in a confirm modal: file
+    /// basenames first, then Component Preview rows by part number.
+    fn dirty_entry_rows(
+        &self,
+        paths: &[std::path::PathBuf],
+        rows: &[crate::library::state::EditorAddress],
+        text_c: iced::Color,
+    ) -> Vec<Element<'_, Message>> {
+        let path_labels = paths.iter().map(|path| {
+            path.file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("(unnamed)")
+                .to_string()
+        });
+        let row_labels = rows
+            .iter()
+            .map(|address| self.library.editor_label(address));
+        path_labels
+            .chain(row_labels)
+            .map(|name| {
+                container(text(name).size(11).color(text_c))
+                    .padding([4, 8])
+                    .into()
+            })
+            .collect()
+    }
+
     fn view_app_quit_confirm_body(&self) -> Element<'_, Message> {
         use crate::app::ProjectCloseChoice;
         let Some(ref st) = self.ui_state.app_quit_confirm else {
@@ -313,19 +328,7 @@ impl Signex {
         // List of dirty filenames across the whole workspace,
         // scrollable in case many files are unsaved. Basenames only —
         // full paths would overflow the modal.
-        let mut file_rows: Vec<Element<'_, Message>> = Vec::new();
-        for path in &st.dirty_paths {
-            let name = path
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or("(unnamed)")
-                .to_string();
-            file_rows.push(
-                container(text(name).size(11).color(text_c))
-                    .padding([4, 8])
-                    .into(),
-            );
-        }
+        let file_rows = self.dirty_entry_rows(&st.dirty_paths, &st.dirty_rows, text_c);
         let file_list = scrollable(column(file_rows).spacing(0))
             .height(Length::Fixed(160.0))
             .width(Length::Fill);
@@ -335,8 +338,8 @@ impl Signex {
                 header,
                 container(
                     text(format!(
-                        "You have {} unsaved file(s). Save before exiting?",
-                        st.dirty_paths.len()
+                        "You have {} unsaved item(s). Save before exiting?",
+                        st.dirty_paths.len() + st.dirty_rows.len()
                     ))
                     .size(11)
                     .color(text_muted)

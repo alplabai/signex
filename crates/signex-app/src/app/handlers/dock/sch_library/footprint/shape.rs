@@ -9,6 +9,49 @@
 
 use super::super::*;
 
+use crate::app::FootprintEditorState as Editor;
+
+/// The active footprint's sketch entity `id`, if it has a sketch and
+/// the entity exists.
+fn sketch_entity_mut(
+    editor: &mut Editor,
+    id: signex_sketch::id::SketchEntityId,
+) -> Option<&mut signex_sketch::entity::Entity> {
+    editor
+        .primitive_mut()
+        .sketch
+        .as_mut()?
+        .entities
+        .iter_mut()
+        .find(|e| e.id == id)
+}
+
+/// The active footprint's sketch array `array_id`, if it exists.
+fn sketch_array_mut(
+    editor: &mut Editor,
+    array_id: signex_sketch::array::ArrayId,
+) -> Option<&mut signex_sketch::array::Array> {
+    editor
+        .primitive_mut()
+        .sketch
+        .as_mut()?
+        .arrays
+        .iter_mut()
+        .find(|a| a.id == array_id)
+}
+
+/// Re-solve and re-bake after a sketch attribute edit, then mark the
+/// editor dirty and redraw.
+fn rebuild_sketch(editor: &mut Editor) {
+    use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
+    use crate::library::editor::footprint::sketch_mode::SketchEdit;
+    editor.with_parts(|state, primitive| {
+        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+    });
+    editor.dirty = true;
+    editor.canvas_cache.clear();
+}
+
 impl Signex {
     /// v0.16.4 — mutate the selected entity's pour `net` and re-bake.
     pub(crate) fn fp_editor_set_pour_net(
@@ -22,19 +65,14 @@ impl Signex {
             Some(value)
         };
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut()
-                && let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id)
-                && let Some(p) = e.pour.as_mut()
-            {
+            editor.record_edit(Some(("pour_net", id.0.as_u128())), |editor| {
+                let Some(p) = sketch_entity_mut(editor, id).and_then(|e| e.pour.as_mut()) else {
+                    return false;
+                };
                 p.net = net;
-            }
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-            use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+                rebuild_sketch(editor);
+                true
             });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -46,19 +84,14 @@ impl Signex {
         value: signex_sketch::attr::PourFillType,
     ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut()
-                && let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id)
-                && let Some(p) = e.pour.as_mut()
-            {
+            editor.record_edit(None, |editor| {
+                let Some(p) = sketch_entity_mut(editor, id).and_then(|e| e.pour.as_mut()) else {
+                    return false;
+                };
                 p.fill_type = value;
-            }
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-            use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+                rebuild_sketch(editor);
+                true
             });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -69,22 +102,18 @@ impl Signex {
         id: signex_sketch::id::SketchEntityId,
         value: String,
     ) -> bool {
-        let parsed = value.trim().parse::<u32>().ok();
+        let Ok(n) = value.trim().parse::<u32>() else {
+            return true;
+        };
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut()
-                && let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id)
-                && let Some(p) = e.pour.as_mut()
-                && let Some(n) = parsed
-            {
+            editor.record_edit(Some(("pour_priority", id.0.as_u128())), |editor| {
+                let Some(p) = sketch_entity_mut(editor, id).and_then(|e| e.pour.as_mut()) else {
+                    return false;
+                };
                 p.priority = n;
-            }
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-            use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+                rebuild_sketch(editor);
+                true
             });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -98,10 +127,10 @@ impl Signex {
     ) -> bool {
         use crate::panels::KeepoutKindFlag;
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut()
-                && let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id)
-                && let Some(k) = e.keepout.as_mut()
-            {
+            editor.record_edit(None, |editor| {
+                let Some(k) = sketch_entity_mut(editor, id).and_then(|e| e.keepout.as_mut()) else {
+                    return false;
+                };
                 match kind {
                     KeepoutKindFlag::NoRouting => k.kinds.no_routing = value,
                     KeepoutKindFlag::NoComponents => k.kinds.no_components = value,
@@ -110,14 +139,9 @@ impl Signex {
                     KeepoutKindFlag::NoDrilling => k.kinds.no_drilling = value,
                     KeepoutKindFlag::NoPours => k.kinds.no_pours = value,
                 }
-            }
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-            use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+                rebuild_sketch(editor);
+                true
             });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -134,19 +158,15 @@ impl Signex {
             Some(value)
         };
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut()
-                && let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id)
-                && let Some(c) = e.board_cutout.as_mut()
-            {
+            editor.record_edit(Some(("cutout_edge_radius", id.0.as_u128())), |editor| {
+                let Some(c) = sketch_entity_mut(editor, id).and_then(|e| e.board_cutout.as_mut())
+                else {
+                    return false;
+                };
                 c.edge_radius_expr = edge_radius;
-            }
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-            use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+                rebuild_sketch(editor);
+                true
             });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -252,19 +272,15 @@ impl Signex {
         value: bool,
     ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut()
-                && let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id)
-                && let Some(c) = e.board_cutout.as_mut()
-            {
+            editor.record_edit(None, |editor| {
+                let Some(c) = sketch_entity_mut(editor, id).and_then(|e| e.board_cutout.as_mut())
+                else {
+                    return false;
+                };
                 c.through = value;
-            }
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-            use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+                rebuild_sketch(editor);
+                true
             });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -285,9 +301,15 @@ impl Signex {
         use crate::panels::ArrayParamField;
         use signex_sketch::array::{ArrayKind, GridDepopulation};
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut()
-                && let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id)
-            {
+            // Low byte = which field, so two fields of one array do not merge.
+            let key = Some((
+                "array_param",
+                (array_id.0.as_u128() & !0xff) | field as u128,
+            ));
+            editor.record_edit(key, |editor| {
+                let Some(array) = sketch_array_mut(editor, array_id) else {
+                    return false;
+                };
                 let trimmed = value.trim();
                 match (&mut array.kind, field) {
                     (ArrayKind::Linear { count_expr, .. }, ArrayParamField::LinearCountExpr) => {
@@ -346,16 +368,11 @@ impl Signex {
                     }
                     // Mismatched (kind, field) pairs no-op so a
                     // stale panel can't corrupt the array.
-                    _ => {}
+                    _ => return false,
                 }
-            }
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-            use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+                rebuild_sketch(editor);
+                true
             });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -374,9 +391,10 @@ impl Signex {
         use crate::panels::NumberingSchemeKindUi;
         use signex_sketch::array::NumberingScheme;
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut()
-                && let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id)
-            {
+            editor.record_edit(None, |editor| {
+                let Some(array) = sketch_array_mut(editor, array_id) else {
+                    return false;
+                };
                 array.numbering = match scheme {
                     NumberingSchemeKindUi::LinearIncrement => NumberingScheme::LinearIncrement {
                         start_expr: "1".into(),
@@ -391,14 +409,9 @@ impl Signex {
                         NumberingScheme::Explicit { names: Vec::new() }
                     }
                 };
-            }
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-            use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+                rebuild_sketch(editor);
+                true
             });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -411,21 +424,20 @@ impl Signex {
     ) -> bool {
         use signex_sketch::array::NumberingScheme;
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut()
-                && let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id)
-                && let NumberingScheme::BgaRowCol {
+            editor.record_edit(None, |editor| {
+                let Some(array) = sketch_array_mut(editor, array_id) else {
+                    return false;
+                };
+                let NumberingScheme::BgaRowCol {
                     skip_letters: s, ..
                 } = &mut array.numbering
-            {
+                else {
+                    return false;
+                };
                 *s = skip_letters;
-            }
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-            use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+                rebuild_sketch(editor);
+                true
             });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -450,19 +462,17 @@ impl Signex {
         }
         let upper = first_char.to_ascii_uppercase();
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut()
-                && let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id)
-                && let NumberingScheme::BgaRowCol { start_row, .. } = &mut array.numbering
-            {
+            editor.record_edit(Some(("bga_start_row", array_id.0.as_u128())), |editor| {
+                let Some(array) = sketch_array_mut(editor, array_id) else {
+                    return false;
+                };
+                let NumberingScheme::BgaRowCol { start_row, .. } = &mut array.numbering else {
+                    return false;
+                };
                 *start_row = upper;
-            }
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-            use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+                rebuild_sketch(editor);
+                true
             });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -477,24 +487,21 @@ impl Signex {
         value: String,
     ) -> bool {
         use signex_sketch::array::NumberingScheme;
-        let trimmed = value.trim();
-        let Ok(parsed) = trimmed.parse::<u32>() else {
+        let Ok(parsed) = value.trim().parse::<u32>() else {
             return true;
         };
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut()
-                && let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id)
-                && let NumberingScheme::BgaRowCol { start_col, .. } = &mut array.numbering
-            {
+            editor.record_edit(Some(("bga_start_col", array_id.0.as_u128())), |editor| {
+                let Some(array) = sketch_array_mut(editor, array_id) else {
+                    return false;
+                };
+                let NumberingScheme::BgaRowCol { start_col, .. } = &mut array.numbering else {
+                    return false;
+                };
                 *start_col = parsed;
-            }
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-            use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+                rebuild_sketch(editor);
+                true
             });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -508,16 +515,18 @@ impl Signex {
         array_id: signex_sketch::array::ArrayId,
     ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
+            editor.record_edit(None, |editor| {
+                let Some(sketch) = editor.primitive_mut().sketch.as_mut() else {
+                    return false;
+                };
+                let before = sketch.arrays.len();
                 sketch.arrays.retain(|a| a.id != array_id);
-            }
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-            use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+                if sketch.arrays.len() == before {
+                    return false;
+                }
+                rebuild_sketch(editor);
+                true
             });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -560,13 +569,14 @@ impl Signex {
     ) -> bool {
         use signex_sketch::array::{ArrayKind, GridDepopulation};
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive_mut().sketch.as_mut()
-                && let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id)
-            {
+            editor.record_edit(None, |editor| {
+                let Some(array) = sketch_array_mut(editor, array_id) else {
+                    return false;
+                };
                 let depop_slot: &mut Option<GridDepopulation> = match &mut array.kind {
                     ArrayKind::Grid { depopulation, .. } => depopulation,
                     ArrayKind::Polar { depopulation, .. } => depopulation,
-                    ArrayKind::Linear { .. } => return true,
+                    ArrayKind::Linear { .. } => return false,
                 };
                 if value {
                     // Re-enable the instance — drop matching entries.
@@ -591,14 +601,9 @@ impl Signex {
                         d.suppressed_instances.push((i, j));
                     }
                 }
-            }
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-            use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+                rebuild_sketch(editor);
+                true
             });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
