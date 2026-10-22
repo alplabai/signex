@@ -715,8 +715,8 @@ fn an_unreadable_sheet_above_the_closing_project_does_not_swallow_its_own_files(
     std::fs::write(tmp.path().join("b.snxsch"), b"not a schematic").expect("write corrupt sheet");
     let (mut app, _task) = Signex::new();
     let a = add_project(&mut app, &a_dir.join("A.snxprj"), "a.snxsch");
-    // A's library mount is positive evidence that the draft under it is A's;
-    // sitting in A's folder alone would not be.
+    // A's `.snxlib` file is positive evidence that the draft at that path is
+    // A's; sitting in A's folder, under a library folder or in a tab is not.
     app.document_state.projects[0]
         .data
         .libraries
@@ -728,7 +728,7 @@ fn an_unreadable_sheet_above_the_closing_project_does_not_swallow_its_own_files(
     add_project(&mut app, &b_dir.join("B.snxprj"), "../b.snxsch");
     let a_sheet = a_dir.join("a.snxsch");
     let stray = a_dir.join("stray.snxsch");
-    let draft = a_dir.join("lib.snxlib").join("symbols").join("d.snxsym");
+    let draft = a_dir.join("lib.snxlib");
     open_dirty_sheet(&mut app, &a_sheet, a);
     open_dirty_sheet(&mut app, &stray, a);
     app.document_state.dirty_paths.insert(draft.clone());
@@ -740,10 +740,46 @@ fn an_unreadable_sheet_above_the_closing_project_does_not_swallow_its_own_files(
         .project_close_confirm
         .as_ref()
         .expect("A is dirty, so close must prompt");
-    let mut expected = vec![a_sheet, stray, draft];
+    let mut expected = vec![a_sheet, draft];
     expected.sort();
     assert_eq!(modal.dirty_paths, expected);
-    assert!(modal.kept_paths.is_empty(), "{:?}", modal.kept_paths);
+    // `stray` only backs a tab, which proves where it sits, not who owns it.
+    assert_eq!(modal.kept_paths, vec![stray]);
+}
+
+#[test]
+fn a_tab_does_not_prove_a_file_is_the_closing_projects_under_a_corrupt_sibling_sheet() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().expect("tempdir");
+    let (a_dir, b_dir) = two_project_dirs(&tmp);
+    // B lists `../b.snxsch`, corrupt, in the folder that holds `g`. `g` is
+    // open in a tab tagged with A (the parent-directory guess), but nothing A
+    // reaches or mounts leads to it.
+    std::fs::write(tmp.path().join("b.snxsch"), b"not a schematic").expect("write corrupt sheet");
+    let (mut app, _task) = Signex::new();
+    let a = add_project(&mut app, &a_dir.join("A.snxprj"), "a.snxsch");
+    add_project(&mut app, &b_dir.join("B.snxprj"), "../b.snxsch");
+    let a_sheet = a_dir.join("a.snxsch");
+    let g = tmp.path().join("g.snxsch");
+    open_dirty_sheet(&mut app, &a_sheet, a);
+    open_dirty_sheet(&mut app, &g, a);
+
+    close_first_project(&mut app);
+
+    let modal = app
+        .ui_state
+        .project_close_confirm
+        .as_ref()
+        .expect("A is dirty, so close must prompt");
+    assert_eq!(modal.dirty_paths, vec![a_sheet.clone()]);
+    assert_eq!(modal.kept_paths, vec![g.clone()]);
+    let _ = app.update(Message::Project(ProjectMsg::CloseConfirm(
+        ProjectCloseChoice::DiscardAll,
+    )));
+    assert!(
+        app.document_state.dirty_paths.contains(&g),
+        "Discard All must not drop a file only a tab ties to A",
+    );
 }
 
 #[test]
