@@ -10,6 +10,7 @@
 //! quoting rules are byte-for-byte unchanged (a wrong byte here makes a
 //! schematic unreloadable, #96).
 
+use super::unknown_columns::check_foreign_names;
 use super::*;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -180,13 +181,18 @@ fn split_row(line: &str) -> Vec<String> {
 /// to the longest cell per column for legibility (matches the
 /// `.snxlib` writer's whitespace-flexible style). Foreign columns
 /// follow the known ones — see [`UnknownColumns`] for the union rule.
-pub fn write_tsv_block<R: SnxTable>(rows: &[R]) -> String {
+///
+/// Fails with the same caps the reader enforces (see
+/// `unknown_columns`) when the rows' foreign-column union is too wide,
+/// before anything is written — never truncating.
+pub fn write_tsv_block<R: SnxTable>(block: &str, rows: &[R]) -> Result<String, FormatError> {
     let columns = R::columns();
     if columns.is_empty() {
-        return String::new();
+        return Ok(String::new());
     }
 
     let foreign = foreign_column_names(rows);
+    check_foreign_names(block, &foreign)?;
 
     // Pre-compute every row's encoded cell so we can pad to the
     // widest column.
@@ -245,7 +251,7 @@ pub fn write_tsv_block<R: SnxTable>(rows: &[R]) -> String {
         }
         out.push('\n');
     }
-    out
+    Ok(out)
 }
 
 /// Union of the rows' foreign column names, first-seen order.
@@ -353,26 +359,9 @@ impl HeaderLayout {
         let foreign: Vec<usize> = (0..header.len())
             .filter(|i| !known_set.contains(i))
             .collect();
-        if foreign.len() > MAX_FOREIGN_COLUMNS {
-            return Err(FormatError::TsvTooManyForeignColumns {
-                block: block.to_string(),
-                count: foreign.len(),
-                max: MAX_FOREIGN_COLUMNS,
-            });
-        }
-        let mut foreign_names: Vec<Arc<str>> = Vec::with_capacity(foreign.len());
-        for &i in &foreign {
-            let name = &header[i];
-            if name.len() > MAX_FOREIGN_COLUMN_NAME_BYTES {
-                return Err(FormatError::TsvForeignColumnNameTooLong {
-                    block: block.to_string(),
-                    prefix: name.chars().take(32).collect(),
-                    len: name.len(),
-                    max: MAX_FOREIGN_COLUMN_NAME_BYTES,
-                });
-            }
-            foreign_names.push(Arc::from(name.as_str()));
-        }
+        let names: Vec<&str> = foreign.iter().map(|&i| header[i].as_str()).collect();
+        check_foreign_names(block, &names)?;
+        let foreign_names: Vec<Arc<str>> = names.into_iter().map(Arc::from).collect();
         Ok(Self {
             header,
             known,
@@ -474,10 +463,15 @@ pub(in crate::format) fn format_f64(f: f64) -> String {
 // TSV section writer (TOML `[name]` + literal multi-line `content`)
 // ---------------------------------------------------------------------------
 
-pub(in crate::format) fn write_tsv_section<R: SnxTable>(out: &mut String, name: &str, rows: &[R]) {
-    let body = write_tsv_block(rows);
+pub(in crate::format) fn write_tsv_section<R: SnxTable>(
+    out: &mut String,
+    name: &str,
+    rows: &[R],
+) -> Result<(), FormatError> {
+    let body = write_tsv_block(name, rows)?;
     out.push_str(&format!("\n[{name}]\n"));
     out.push_str("content = \"\"\"\n");
     out.push_str(&escape_tsv_body_for_toml(&body));
     out.push_str("\"\"\"\n");
+    Ok(())
 }

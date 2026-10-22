@@ -28,13 +28,23 @@
 //! - [`MAX_FOREIGN_COLUMN_NAME_BYTES`] (256) bytes per foreign column
 //!   name — `FormatError::TsvForeignColumnNameTooLong`.
 //!
+//! The same caps bind both directions, so a file this build writes is
+//! always one it can read back: `write_tsv_block` checks the union of
+//! its rows' foreign names before emitting a byte and returns the same
+//! errors (`write_string` fails, the atomic write is never reached and
+//! the previous file stays intact). A row that is deserialised (not
+//! parsed) is validated on the way in too, so an `UnknownColumns` with an
+//! over-long or repeated name cannot be constructed.
+//!
 //! Each foreign column name is allocated once per block and shared
 //! (`Arc<str>`) by every row, so memory grows with the cell values, not
 //! with `rows x name length`.
 
 use std::sync::Arc;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+
+use super::FormatError;
 
 /// Most foreign columns one TSV block may carry.
 pub const MAX_FOREIGN_COLUMNS: usize = 256;
@@ -44,9 +54,52 @@ pub const MAX_FOREIGN_COLUMN_NAME_BYTES: usize = 256;
 
 /// Foreign cells of one TSV row, in original column order. The column
 /// names are shared with every other row of the same block.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
 #[serde(transparent)]
 pub struct UnknownColumns(Vec<(Arc<str>, String)>);
+
+/// Enforce the caps on a block's foreign column names (in file or
+/// first-seen order). Shared by the reader, the writer and
+/// deserialisation so the three can never disagree.
+pub(in crate::format) fn check_foreign_names<S: AsRef<str>>(
+    block: &str,
+    names: &[S],
+) -> Result<(), FormatError> {
+    if names.len() > MAX_FOREIGN_COLUMNS {
+        return Err(FormatError::TsvTooManyForeignColumns {
+            block: block.to_string(),
+            count: names.len(),
+            max: MAX_FOREIGN_COLUMNS,
+        });
+    }
+    for name in names {
+        let name = name.as_ref();
+        if name.len() > MAX_FOREIGN_COLUMN_NAME_BYTES {
+            return Err(FormatError::TsvForeignColumnNameTooLong {
+                block: block.to_string(),
+                prefix: name.chars().take(32).collect(),
+                len: name.len(),
+                max: MAX_FOREIGN_COLUMN_NAME_BYTES,
+            });
+        }
+    }
+    Ok(())
+}
+
+impl<'de> Deserialize<'de> for UnknownColumns {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let pairs = Vec::<(Arc<str>, String)>::deserialize(deserializer)?;
+        let names: Vec<&str> = pairs.iter().map(|(k, _)| &**k).collect();
+        check_foreign_names("<row>", &names).map_err(serde::de::Error::custom)?;
+        let mut seen = std::collections::HashSet::with_capacity(names.len());
+        if let Some(dup) = names.iter().find(|n| !seen.insert(**n)) {
+            return Err(serde::de::Error::custom(format!(
+                "repeated foreign column {dup:?}"
+            )));
+        }
+        Ok(Self(pairs))
+    }
+}
 
 impl UnknownColumns {
     /// `true` when the row carries no foreign cells.

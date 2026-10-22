@@ -224,10 +224,10 @@ impl SnxSchematic {
             self.sheet.junctions.iter().map(junction_to_row).collect();
         let label_rows: Vec<SchLabelRow> = self.sheet.labels.iter().map(label_to_row).collect();
 
-        write_tsv_section(&mut out, "sheets.components", &component_rows);
-        write_tsv_section(&mut out, "sheets.wires", &wire_rows);
-        write_tsv_section(&mut out, "sheets.junctions", &junction_rows);
-        write_tsv_section(&mut out, "sheets.labels", &label_rows);
+        write_tsv_section(&mut out, "sheets.components", &component_rows)?;
+        write_tsv_section(&mut out, "sheets.wires", &wire_rows)?;
+        write_tsv_section(&mut out, "sheets.junctions", &junction_rows)?;
+        write_tsv_section(&mut out, "sheets.labels", &label_rows)?;
 
         // Extras: auxiliary TOML tables for fields the bulk row
         // doesn't carry. Wrap the whole extras tree in a single
@@ -531,10 +531,10 @@ impl SnxPcb {
         let track_rows: Vec<PcbTrackRow> = self.board.segments.iter().map(track_to_row).collect();
         let via_rows: Vec<PcbViaRow> = self.board.vias.iter().map(via_to_row).collect();
 
-        write_tsv_section(&mut out, "footprints", &footprint_rows);
-        write_tsv_section(&mut out, "pads", &pad_rows);
-        write_tsv_section(&mut out, "tracks", &track_rows);
-        write_tsv_section(&mut out, "vias", &via_rows);
+        write_tsv_section(&mut out, "footprints", &footprint_rows)?;
+        write_tsv_section(&mut out, "pads", &pad_rows)?;
+        write_tsv_section(&mut out, "tracks", &track_rows)?;
+        write_tsv_section(&mut out, "vias", &via_rows)?;
 
         // Zones — full struct array (each zone serialises naturally
         // under `[[zones]]` with its own uuid scalar).

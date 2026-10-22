@@ -575,7 +575,7 @@ fn tsv_writer_pads_columns_for_legibility() {
             diameter: 0.5,
         },
     ];
-    let body = write_tsv_block(&rows);
+    let body = write_tsv_block("t", &rows).unwrap();
     let lines: Vec<&str> = body.lines().collect();
     assert_eq!(lines[0].split_whitespace().next().unwrap(), "uuid");
     // header columns "pos_x" "pos_y" "diameter" preserved

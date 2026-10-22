@@ -324,7 +324,7 @@ fn foreign_column_name_needing_quotes_round_trips() {
     let text = format!("uuid  pos_x  pos_y  diameter  \"my col\"\n{JUNCTION_UUID}  1  2  0  v\n");
     let rows = parse_tsv_block::<SchJunctionRow>("t", &text).unwrap();
     assert_eq!(rows[0].unknown_columns.get("my col"), Some("v"));
-    let out = write_tsv_block(&rows);
+    let out = write_tsv_block("t", &rows).unwrap();
     assert!(
         squash(&out).starts_with("uuid pos_x pos_y diameter \"my col\"\n"),
         "{out}"
@@ -369,7 +369,7 @@ fn foreign_names_are_shared_across_rows() {
     let rows = parse_tsv_block::<SchJunctionRow>("t", &text).unwrap();
     let ptr = |r: &SchJunctionRow| r.unknown_columns.iter().next().unwrap().0.as_ptr();
     assert_eq!(ptr(&rows[0]), ptr(&rows[1]), "one allocation per name");
-    let out = write_tsv_block(&rows);
+    let out = write_tsv_block("t", &rows).unwrap();
     assert!(squash(&out).starts_with("uuid pos_x pos_y diameter vendor\n"));
     assert_eq!(cell(&rows[1].unknown_columns, "vendor"), "b");
 }
@@ -454,4 +454,91 @@ fn foreign_name_over_the_byte_cap_errors_with_a_short_prefix() {
         other => panic!("{other}"),
     }
     assert!(err.to_string().len() < 300, "error must not echo the name");
+}
+
+// ---------------------------------------------------------------------------
+// Writer/reader symmetry: what the writer emits, the reader accepts
+// ---------------------------------------------------------------------------
+
+/// A row carrying `names` as foreign columns, built through the same
+/// deserialisation path a clipboard/merge would use.
+fn with_foreign(mut row: SchJunctionRow, names: &[String]) -> SchJunctionRow {
+    row.unknown_columns = foreign_cols(names);
+    row
+}
+
+fn foreign_cols(names: &[String]) -> UnknownColumns {
+    let pairs: Vec<(String, String)> = names.iter().map(|n| (n.clone(), "v".into())).collect();
+    serde_json::from_value(serde_json::json!(pairs)).unwrap()
+}
+
+fn junction_row(n: u32) -> SchJunctionRow {
+    let text = format!("{JUNCTION_HEAD}\n{}  1  2  0\n", uuid_n(n));
+    parse_tsv_block::<SchJunctionRow>("t", &text)
+        .unwrap()
+        .remove(0)
+}
+
+fn names(range: std::ops::Range<usize>) -> Vec<String> {
+    range.map(|i| format!("c{i}")).collect()
+}
+
+#[test]
+fn merged_rows_whose_union_exceeds_the_cap_fail_to_write() {
+    // Each row alone is valid (200 columns); together they are 400.
+    let rows = vec![
+        with_foreign(junction_row(1), &names(0..200)),
+        with_foreign(junction_row(2), &names(200..400)),
+    ];
+    let err = write_tsv_block("t", &rows).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            FormatError::TsvTooManyForeignColumns { count: 400, .. }
+        ),
+        "{err}"
+    );
+}
+
+#[test]
+fn a_failed_save_leaves_the_existing_file_untouched() {
+    let mut sheet = empty_sheet();
+    let mut a = sample_symbol();
+    a.unknown_columns = foreign_cols(&names(0..200));
+    let mut b = sample_symbol();
+    b.uuid = uuid_n(7);
+    b.unknown_columns = foreign_cols(&names(200..400));
+    sheet.symbols.extend([a, b]);
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("s.snxsch");
+    std::fs::write(&path, b"previous good contents").unwrap();
+
+    // The engine's save sequence: serialise first, write only on success.
+    let err = SnxSchematic::new(sheet).write_string().unwrap_err();
+    assert!(err.to_string().contains("foreign columns"), "{err}");
+    assert_eq!(std::fs::read(&path).unwrap(), b"previous good contents");
+}
+
+#[test]
+fn writing_exactly_at_the_caps_round_trips() {
+    let mut all = names(0..MAX_FOREIGN_COLUMNS - 1);
+    all.push("n".repeat(MAX_FOREIGN_COLUMN_NAME_BYTES));
+    let rows = vec![with_foreign(junction_row(1), &all)];
+    let out = write_tsv_block("t", &rows).unwrap();
+    let back = parse_tsv_block::<SchJunctionRow>("t", &out).unwrap();
+    assert_eq!(back[0].unknown_columns, rows[0].unknown_columns);
+}
+
+#[test]
+fn deserialising_an_invalid_unknown_columns_is_refused() {
+    let too_many: Vec<(String, String)> = names(0..MAX_FOREIGN_COLUMNS + 1)
+        .into_iter()
+        .map(|n| (n, String::new()))
+        .collect();
+    assert!(serde_json::from_value::<UnknownColumns>(serde_json::json!(too_many)).is_err());
+    let long = vec![("x".repeat(MAX_FOREIGN_COLUMN_NAME_BYTES + 1), "v")];
+    assert!(serde_json::from_value::<UnknownColumns>(serde_json::json!(long)).is_err());
+    let dup = vec![("a", "1"), ("a", "2")];
+    assert!(serde_json::from_value::<UnknownColumns>(serde_json::json!(dup)).is_err());
 }
