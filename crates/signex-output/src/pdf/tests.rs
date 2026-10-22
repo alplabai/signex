@@ -6,7 +6,7 @@ use signex_types::schematic::SchematicSheet;
 use super::*;
 use crate::{ExportContext, ProjectMetadata, SheetSnapshot};
 
-fn empty_sheet() -> SchematicSheet {
+pub(super) fn empty_sheet() -> SchematicSheet {
     SchematicSheet {
         unknown: Default::default(),
         uuid: uuid::Uuid::nil(),
@@ -31,7 +31,7 @@ fn empty_sheet() -> SchematicSheet {
     }
 }
 
-fn sample_ctx(sheet_count: usize) -> ExportContext {
+pub(super) fn sample_ctx(sheet_count: usize) -> ExportContext {
     ExportContext {
         sheets: (0..sheet_count)
             .map(|i| SheetSnapshot {
