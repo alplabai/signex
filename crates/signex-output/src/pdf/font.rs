@@ -143,14 +143,13 @@ pub fn text_advance_pt(alias: &str, text: &str, size_pt: f32) -> f32 {
     let scale = size_pt.max(1.0) / upm;
     let mut advance = 0.0_f32;
     for ch in text.chars() {
-        if let Some(gid) = face.glyph_index(ch) {
-            advance += face
-                .glyph_hor_advance(gid)
-                .map(|v| v as f32 * scale)
-                .unwrap_or(upm * scale * 0.5);
-        } else {
-            advance += upm * scale * 0.5;
-        }
+        // A character the face lacks is drawn as `.notdef` (glyph 0), so
+        // measure that glyph's real advance, matching the PDF's /W array.
+        let gid = face.glyph_index(ch).unwrap_or(ttf_parser::GlyphId(0));
+        advance += face
+            .glyph_hor_advance(gid)
+            .map(|v| v as f32 * scale)
+            .unwrap_or(upm * scale * 0.5);
     }
     advance
 }

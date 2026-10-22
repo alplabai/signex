@@ -8,7 +8,7 @@
 //! `/W` array, a `/FontDescriptor`, a subset `/FontFile2` stream holding only
 //! the used glyphs, and a `/ToUnicode` CMap so text stays searchable.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 use pdf_writer::types::{CidFontType, FontFlags, SystemInfo, UnicodeCmap};
 use pdf_writer::{Finish, Name, Pdf, Rect, Ref, Str};
@@ -31,6 +31,12 @@ struct FaceUsage {
     orig_gids: Vec<u16>,
     /// `chars[cid]` is the character the CID stands for.
     chars: Vec<char>,
+    /// Set as soon as any text is encoded with this face, even text the face
+    /// has no glyph for: the content stream names the face in `Tf` either way,
+    /// so it must be defined in `/Font`.
+    referenced: bool,
+    /// Characters the face has no glyph for (drawn as `.notdef`).
+    uncovered: BTreeSet<char>,
 }
 
 impl FaceUsage {
@@ -40,6 +46,8 @@ impl FaceUsage {
             cid_by_glyph_char: HashMap::new(),
             orig_gids: vec![0],
             chars: vec!['\0'],
+            referenced: false,
+            uncovered: BTreeSet::new(),
         }
     }
 
@@ -50,12 +58,19 @@ impl FaceUsage {
             .and_then(|face| face.glyph_index(ch))
             .map_or(0, |g| g.0);
         if gid == 0 {
+            if !ch.is_control() {
+                self.uncovered.insert(ch);
+            }
             return 0;
         }
         if let Some(&cid) = self.cid_by_glyph_char.get(&(gid, ch)) {
             return cid;
         }
-        let cid = self.orig_gids.len() as u16;
+        // Past 65535 distinct pairs a CID no longer fits; show `.notdef`.
+        let Ok(cid) = u16::try_from(self.orig_gids.len()) else {
+            self.uncovered.insert(ch);
+            return 0;
+        };
         self.cid_by_glyph_char.insert((gid, ch), cid);
         self.orig_gids.push(gid);
         self.chars.push(ch);
@@ -63,7 +78,30 @@ impl FaceUsage {
     }
 
     fn is_used(&self) -> bool {
-        self.orig_gids.len() > 1
+        self.referenced
+    }
+
+    /// Six capitals derived from the kept glyph set and the font slot, so two
+    /// documents with different subsets carry different names (PDF 32000-1
+    /// 9.6.4). FNV-1a over the slot and glyph ids.
+    fn subset_tag(&self, slot: usize) -> String {
+        let mut hash: u32 = 0x811c_9dc5;
+        let mut feed = |byte: u8| {
+            hash ^= u32::from(byte);
+            hash = hash.wrapping_mul(0x0100_0193);
+        };
+        feed(slot as u8);
+        for gid in &self.orig_gids {
+            for byte in gid.to_be_bytes() {
+                feed(byte);
+            }
+        }
+        (0..6)
+            .map(|i| {
+                let letter = (hash >> (i * 5)) % 26;
+                (b'A' + letter as u8) as char
+            })
+            .collect()
     }
 }
 
@@ -83,11 +121,23 @@ impl FontUsage {
         PdfFont::ALL.iter().position(|&f| f == font).unwrap_or(0)
     }
 
+    /// Characters no bundled face covers, across all faces, sorted and
+    /// de-duplicated. They were drawn as `.notdef`.
+    pub(super) fn uncovered_chars(&self) -> Vec<char> {
+        let all: BTreeSet<char> = self
+            .faces
+            .iter()
+            .flat_map(|f| f.uncovered.iter().copied())
+            .collect();
+        all.into_iter().collect()
+    }
+
     /// Encode `text` as a PDF hex string of 2-byte CIDs (`<00010002>`),
     /// registering every glyph for embedding. Glyphs the font lacks encode as
     /// `.notdef` (CID 0).
     pub(super) fn encode(&mut self, font: PdfFont, text: &str) -> String {
         let face = &mut self.faces[Self::slot(font)];
+        face.referenced = true;
         let mut out = String::with_capacity(text.len() * 4 + 2);
         out.push('<');
         for ch in text.chars() {
@@ -156,8 +206,7 @@ fn write_font(
     let subset = subset_truetype(font.font_bytes(), &mut keep)
         .map_err(|e| PdfError::Font(format!("{}: {e}", font.base_name())))?;
 
-    // Subset tag: six capitals, unique per slot (PDF 32000-1 9.6.4).
-    let base_name = format!("SNX{}A+{}", (b'A' + slot as u8) as char, font.base_name());
+    let base_name = format!("{}+{}", usage.subset_tag(slot), font.base_name());
     let base = Name(base_name.as_bytes());
     let info = SystemInfo {
         registry: Str(b"Adobe"),

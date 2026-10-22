@@ -283,3 +283,121 @@ fn subset_carries_the_tables_strict_readers_expect() {
         "duplicate CIDs keep their own glyph"
     );
 }
+
+/// Every `/Fn size Tf` in the file must have a `/Fn N 0 R` entry in some
+/// `/Font` resources dictionary, or readers report an undefined font.
+fn assert_every_used_font_is_defined(bytes: &[u8]) {
+    let text = latin1(bytes);
+    let mut used = Vec::new();
+    for (at, _) in text.match_indices(" Tf\n") {
+        let line_start = text[..at].rfind('\n').map_or(0, |i| i + 1);
+        let alias = text[line_start..at].split_whitespace().next().unwrap_or("");
+        used.push(alias.trim_start_matches('/').to_string());
+    }
+    assert!(!used.is_empty(), "premise: the page shows text");
+    for alias in used {
+        let defined = text.match_indices(&format!("/{alias} ")).any(|(at, pat)| {
+            let rest = &text[at + pat.len()..];
+            leading_number(rest).is_some_and(|n| rest[n.to_string().len()..].starts_with(" 0 R"))
+        });
+        assert!(defined, "/{alias} is used by Tf but not defined in /Font");
+    }
+}
+
+#[test]
+fn a_cjk_only_note_still_defines_the_font_it_selects() {
+    assert_every_used_font_is_defined(&export_notes(&["中文"]));
+}
+
+#[test]
+fn every_builtin_template_with_an_empty_title_defines_all_used_fonts() {
+    for id in crate::template::builtin::all_builtin_ids() {
+        let ctx = sample_ctx(1);
+        assert!(ctx.metadata.title.is_empty(), "premise: empty title");
+        let opts = PdfOptions {
+            include_title_block: true,
+            sheet_template: Some(id.clone()),
+            ..Default::default()
+        };
+        let out = PdfExporter.export(&ctx, &opts).expect("export");
+        if latin1(&out.bytes).contains(" Tf\n") {
+            assert_every_used_font_is_defined(&out.bytes);
+        }
+    }
+}
+
+#[test]
+fn a_font_with_only_notdef_glyphs_is_embedded() {
+    let bytes = export_notes(&["中文"]);
+    let text = latin1(&bytes);
+    assert!(
+        text.contains("/Type0"),
+        "the referenced face must be written"
+    );
+}
+
+#[test]
+fn subset_tags_are_six_capitals_derived_from_the_glyph_set() {
+    fn tags(bytes: &[u8]) -> Vec<String> {
+        let text = latin1(bytes);
+        text.match_indices("/BaseFont /")
+            .map(|(at, pat)| {
+                text[at + pat.len()..]
+                    .split(|c: char| c.is_whitespace() || c == '/')
+                    .next()
+                    .unwrap_or("")
+                    .to_string()
+            })
+            .collect()
+    }
+    let one = tags(&export_notes(&["abc"]));
+    let other = tags(&export_notes(&["abc", "xyz"]));
+    assert!(!one.is_empty());
+    for tag in one.iter().chain(&other) {
+        let (prefix, _) = tag.split_once('+').expect("subset tag has a plus");
+        assert!(
+            prefix.len() == 6 && prefix.chars().all(|c| c.is_ascii_uppercase()),
+            "bad subset tag {tag}"
+        );
+    }
+    assert_ne!(one, other, "different glyph sets must carry different tags");
+}
+
+#[test]
+fn uncovered_characters_are_reported_to_the_caller() {
+    let mut sheet = empty_sheet();
+    sheet.text_notes.push(note("a中文中", 20.0));
+    let mut ctx = sample_ctx(1);
+    ctx.sheets[0].schematic = sheet;
+    let opts = PdfOptions {
+        include_title_block: false,
+        ..Default::default()
+    };
+    let out = PdfExporter.export(&ctx, &opts).expect("export");
+    assert_eq!(out.uncovered_chars, vec!['中', '文']);
+
+    let clean = PdfExporter.export(&sample_ctx(1), &opts).expect("export");
+    assert!(clean.uncovered_chars.is_empty());
+}
+
+#[test]
+fn layout_uses_the_notdef_advance_for_uncovered_characters() {
+    let face = PdfFont::RobotoRegular.face().expect("roboto");
+    let upm = f32::from(face.units_per_em());
+    let notdef = f32::from(face.glyph_hor_advance(GlyphId(0)).expect("notdef"));
+    let got = font::text_advance_pt("F1", "中", 10.0);
+    assert!((got - notdef * 10.0 / upm).abs() < 1e-3, "got {got}");
+}
+
+#[test]
+fn subset_fixes_the_whole_font_checksum() {
+    let data = PdfFont::RobotoRegular.font_bytes();
+    let mut keep = vec![0];
+    let subset = subset_truetype(data, &mut keep).expect("subset");
+    let sum = subset.chunks(4).fold(0u32, |s, c| {
+        let mut w = [0u8; 4];
+        w[..c.len()].copy_from_slice(c);
+        s.wrapping_add(u32::from_be_bytes(w))
+    });
+    assert_eq!(sum, 0xB1B0_AFBA);
+}

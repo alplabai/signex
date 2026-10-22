@@ -231,7 +231,25 @@ pub(super) fn subset_truetype(data: &[u8], keep: &mut Vec<u16>) -> Result<Vec<u8
         tables.push((POST, post));
     }
     tables.sort_by_key(|(tag, _)| tag.0);
-    Ok(assemble(&tables))
+    let mut font = assemble(&tables);
+    fix_checksum_adjustment(&mut font);
+    Ok(font)
+}
+
+/// Set `head.checkSumAdjustment` to `0xB1B0AFBA` minus the whole-font checksum.
+/// The field is 0 while the checksum is taken, as the spec requires.
+fn fix_checksum_adjustment(font: &mut [u8]) {
+    let head_offset = (0..be16(font, 4).unwrap_or(0) as usize).find_map(|i| {
+        let entry = 12 + i * 16;
+        (font.get(entry..entry + 4)? == HEAD.0.to_be_bytes()).then(|| be32(font, entry + 8))?
+    });
+    let Some(head_offset) = head_offset else {
+        return;
+    };
+    let adjustment = 0xB1B0_AFBAu32.wrapping_sub(checksum(font));
+    if let Some(slot) = font.get_mut(head_offset as usize + 8..head_offset as usize + 12) {
+        slot.copy_from_slice(&adjustment.to_be_bytes());
+    }
 }
 
 /// Lay out an sfnt container: directory followed by 4-byte-aligned tables.

@@ -143,6 +143,9 @@ pub struct PdfOptions {
 pub struct PdfOutput {
     pub bytes: Vec<u8>,
     pub page_count: usize,
+    /// Characters none of the bundled fonts cover. They are drawn as the
+    /// font's `.notdef` box; the caller should warn the user. Sorted, unique.
+    pub uncovered_chars: Vec<char>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -390,6 +393,7 @@ impl Exporter for PdfExporter {
         Ok(PdfOutput {
             bytes,
             page_count: page_refs.len(),
+            uncovered_chars: fonts.uncovered_chars(),
         })
     }
 }
