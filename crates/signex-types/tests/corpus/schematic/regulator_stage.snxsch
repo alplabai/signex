@@ -1,0 +1,57 @@
+format = "snxsch/1"
+schematic_id = "00000000-0000-0000-0000-000000000000"
+version = 1
+generator = "signex-test"
+generator_version = "0.9"
+paper_size = "A4"
+root_sheet_page = "1"
+
+
+[sheets.components]
+content = """
+uuid                                  ref  library        pos_x     pos_y     rotation  value   mpn
+0192a8c0-0001-7000-8000-000000000001  U1   lm2596.snxsym  50800000  25400000  0         LM2596  ""
+"""
+
+[sheets.wires]
+content = """
+uuid                                  net  start_x   start_y   end_x     end_y     stroke_width
+0192a8c0-0004-7000-8000-000000000001  ""   10000000  20000000  30000000  20000000  0
+0192a8c0-0004-7000-8000-000000000002  ""   30000000  20000000  30000000  40000000  0
+"""
+
+[sheets.junctions]
+content = """
+uuid                                  pos_x     pos_y     diameter
+0192a8c0-0002-7000-8000-000000000001  30000000  20000000  0.5
+"""
+
+[sheets.labels]
+content = """
+uuid                                  text  pos_x     pos_y     rotation  kind   shape  font_size  justify  justify_v
+0192a8c0-0003-7000-8000-000000000001  VIN   10000000  20000000  0         local  ""     1.27       center   center
+"""
+
+[extras.symbols.0192a8c0-0001-7000-8000-000000000001]
+footprint = "TO-263.snxfpt"
+datasheet = ""
+mirror_x = false
+mirror_y = false
+unit = 1
+is_power = false
+fields_autoplaced = false
+fields_user_placed = false
+dnp = false
+in_bom = true
+on_board = true
+exclude_from_sim = false
+locked = false
+custom_properties = []
+instances = []
+
+[extras.symbols.0192a8c0-0001-7000-8000-000000000001.fields]
+
+[extras.symbols.0192a8c0-0001-7000-8000-000000000001.pin_uuids]
+
+[extras.junctions.0192a8c0-0002-7000-8000-000000000001]
+minted = true
