@@ -327,6 +327,7 @@ fn make_row(index: usize, lib_id: Uuid, sym: Uuid, fpt: Uuid) -> ComponentRow {
 // ── Generator ────────────────────────────────────────────────────────────
 
 fn manifest(name: &str) -> SnxlibManifest {
+    signex_library::git_identity::test_identity::install();
     SnxlibManifest {
         format: FORMAT_TOKEN.into(),
         library_id: Uuid::now_v7(),

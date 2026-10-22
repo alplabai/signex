@@ -9,6 +9,7 @@ use std::collections::HashMap;
 
 fn empty_sheet() -> SchematicSheet {
     SchematicSheet {
+        unknown: Default::default(),
         uuid: uuid::Uuid::nil(),
         version: 0,
         generator: String::new(),
@@ -34,6 +35,7 @@ fn empty_sheet() -> SchematicSheet {
 fn ctx_with_one_sheet() -> ExportContext {
     let mut sheet = empty_sheet();
     sheet.symbols.push(Symbol {
+        unknown: Default::default(),
         uuid: uuid::Uuid::nil(),
         lib_id: "Device:R".to_string(),
         reference: "R1".to_string(),
@@ -84,6 +86,7 @@ fn ctx_with_one_sheet() -> ExportContext {
         }],
         metadata: ProjectMetadata::default(),
         netlist: None,
+        netlist_sheets: Vec::new(),
     }
 }
 
@@ -237,6 +240,7 @@ fn bookmark_zoom_clamps_out_of_range() {
 fn pin_bookmarks_skipped_when_subtoggle_off() {
     let mut sheet = empty_sheet();
     let mut sym = Symbol {
+        unknown: Default::default(),
         uuid: uuid::Uuid::nil(),
         lib_id: "Device:R".to_string(),
         reference: "R1".to_string(),
@@ -280,6 +284,7 @@ fn pin_bookmarks_skipped_when_subtoggle_off() {
         }],
         metadata: ProjectMetadata::default(),
         netlist: None,
+        netlist_sheets: Vec::new(),
     };
 
     let opts = PdfOptions {
@@ -313,6 +318,7 @@ fn multi_sheet_bookmarks_have_independent_groups() {
         for i in 0..3 {
             let mut sheet = empty_sheet();
             sheet.symbols.push(Symbol {
+                unknown: Default::default(),
                 uuid: uuid::Uuid::nil(),
                 lib_id: "Device:R".to_string(),
                 reference: format!("R{}", i + 1),
@@ -354,6 +360,7 @@ fn multi_sheet_bookmarks_have_independent_groups() {
             sheets,
             metadata: ProjectMetadata::default(),
             netlist: None,
+            netlist_sheets: Vec::new(),
         }
     };
     let opts = PdfOptions {

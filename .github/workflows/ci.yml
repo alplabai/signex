@@ -12,6 +12,7 @@ on:
     branches: [main, trunk]
   pull_request:
     branches: [main, trunk]
+  merge_group:
   workflow_dispatch:
 
 concurrency:
@@ -154,7 +155,7 @@ jobs:
 
       # Advisories are informational, not a merge gate: they fire on newly
       # published RUSTSEC entries against the shared Cargo.lock (mostly
-      # transitive GUI-stack crates like quick-xml / ttf-parser pinned deep
+      # transitive GUI-stack crates like ttf-parser / rustybuzz pinned deep
       # in iced/winit) with no code change on our side. Surface them as an
       # annotation; criticals are addressed by a human, not by blocking CI.
       # (deny.toml documents this same intent; `licenses` above stays hard.)
@@ -198,6 +199,9 @@ jobs:
       # scripts/check_discarded_tasks.sh; GH #99 part 1.
       - name: Discarded-Task ratchet gate
         run: bash scripts/check_discarded_tasks.sh
+
+      - name: Discarded-Task gate controls
+        run: bash scripts/test_check_discarded_tasks.sh
 
   lint-lockstep:
     name: lint lockstep

@@ -39,8 +39,8 @@ impl Diagnostic {
         }
     }
 
-    /// Override the severity (used by rules that hard-code a specific level
-    /// different from the kind's default, e.g. MissingPowerFlag → Info).
+    /// Grade one finding below the kind's default. Only `BadHierSheetPin`
+    /// does this; every other rule takes [`RuleKind::default_severity`].
     pub fn with_severity(mut self, severity: Severity) -> Self {
         self.severity = severity;
         self
@@ -64,6 +64,7 @@ impl Diagnostic {
 impl From<Diagnostic> for Violation {
     fn from(d: Diagnostic) -> Self {
         Violation {
+            rule_id: d.rule_id,
             rule: d.rule_kind,
             severity: d.severity,
             message: d.message,

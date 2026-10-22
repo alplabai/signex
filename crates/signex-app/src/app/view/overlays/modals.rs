@@ -87,6 +87,18 @@ impl Signex {
         )))
     }
 
+    /// Help ▸ About Signex dialog.
+    pub(in crate::app::view) fn about_overlay(&self) -> Option<Element<'_, Message>> {
+        let ui = &self.ui_state;
+        if !ui.about_open {
+            return None;
+        }
+        Some(iced::widget::opaque(crate::about_modal::view(
+            &self.document_state.panel_ctx.tokens,
+            ui.theme_id,
+        )))
+    }
+
     /// Tools > Passive Network Calculator modal.
     pub(in crate::app::view) fn passive_calculator_overlay(&self) -> Option<Element<'_, Message>> {
         let ui = &self.ui_state;

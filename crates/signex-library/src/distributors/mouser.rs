@@ -61,10 +61,7 @@ impl MouserAdapter {
             base_url: MOUSER_DEFAULT_BASE.into(),
             cache,
             throttle: Mutex::new(None),
-            http: reqwest::blocking::Client::builder()
-                .user_agent("signex-library/0.9 (+https://signex.dev)")
-                .build()
-                .expect("reqwest::blocking::Client::build is infallible with default opts"),
+            http: super::http::build_client(),
             auth: AuthSource::Keyring(KeyringStore::for_provider("mouser", "default")?),
         })
     }
@@ -79,25 +76,13 @@ impl MouserAdapter {
             base_url: base_url.into(),
             cache,
             throttle: Mutex::new(None),
-            http: reqwest::blocking::Client::builder()
-                .user_agent("signex-library/0.9 (+https://signex.dev)")
-                .build()
-                .expect("reqwest::blocking::Client::build is infallible with default opts"),
+            http: super::http::build_client(),
             auth: AuthSource::Inline(api_key.into()),
         }
     }
 
     fn polite_wait(&self) {
-        let mut guard = self.throttle.lock().expect("throttle mutex poisoned");
-        if let Some(prev) = *guard {
-            let elapsed = prev.elapsed();
-            if elapsed < THROTTLE_INTERVAL {
-                drop(guard);
-                std::thread::sleep(THROTTLE_INTERVAL - elapsed);
-                guard = self.throttle.lock().expect("throttle mutex poisoned");
-            }
-        }
-        *guard = Some(Instant::now());
+        super::throttle::polite_wait(&self.throttle, THROTTLE_INTERVAL);
     }
 
     fn resolve_api_key(&self) -> Result<String, DistributorError> {
@@ -336,10 +321,7 @@ mod tests {
             base_url: "http://unused.invalid".into(),
             cache: None,
             throttle: Mutex::new(None),
-            http: reqwest::blocking::Client::builder()
-                .user_agent("test")
-                .build()
-                .unwrap(),
+            http: super::super::http::build_client(),
             auth: AuthSource::Keyring(store),
         };
         let err = adapter.resolve_api_key().expect_err("should be Auth");

@@ -28,6 +28,7 @@ use signex_library::primitive::{
 use uuid::Uuid;
 
 fn empty_snx_manifest(name: &str, review_required: bool) -> SnxlibManifest {
+    signex_library::git_identity::test_identity::install();
     SnxlibManifest {
         format: FORMAT_TOKEN.into(),
         library_id: Uuid::now_v7(),
@@ -49,6 +50,7 @@ fn empty_snx_manifest(name: &str, review_required: bool) -> SnxlibManifest {
 /// down (`dir/<name>/<name>.snxlib`) so each test gets its own
 /// directory for the parent-keyed git repo.
 fn snxlib_path(dir: &Path, name: &str) -> PathBuf {
+    signex_library::git_identity::test_identity::install();
     dir.join(name).join(format!("{name}.snxlib"))
 }
 
@@ -886,7 +888,7 @@ fn local_git_commits_with_message() {
 
     let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
     let head = repo.head().unwrap().peel_to_commit().unwrap();
-    assert_eq!(head.summary(), Some("msg-XYZ"));
+    assert_eq!(head.summary().unwrap(), Some("msg-XYZ"));
 }
 
 // ── Cascade engine (Stage 15) ────────────────────────────────────────────
@@ -895,6 +897,7 @@ fn local_git_commits_with_message() {
 /// behaviour gates on this — Personal silently bumps every bound row,
 /// Team leaves released rows stale.
 fn snx_manifest_with_mode(name: &str, mode: WorkflowMode) -> SnxlibManifest {
+    signex_library::git_identity::test_identity::install();
     SnxlibManifest {
         format: FORMAT_TOKEN.into(),
         library_id: Uuid::now_v7(),
@@ -1114,4 +1117,63 @@ fn cascade_footprint_personal_mode_auto_bumps_bound_row() {
     // Symbol pin must NOT have moved — cascade stays scoped to the
     // primitive kind that was saved.
     assert_eq!(after.symbol_version, row.symbol_version);
+}
+
+fn commit_count(file: &Path) -> usize {
+    let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
+    let mut walk = repo.revwalk().unwrap();
+    walk.push_head().unwrap();
+    walk.count()
+}
+
+fn add_class(adapter: &LocalGitAdapter, key: &str, label: &str) {
+    use signex_library::library_file::ClassEntry;
+    adapter
+        .add_library_class(
+            ClassEntry {
+                key: key.into(),
+                label: label.into(),
+            },
+            &format!("add {key}"),
+        )
+        .unwrap();
+}
+
+/// Removing an absent class is an idempotent no-op: `Ok`, the `.snxlib`
+/// stays byte-identical, and no commit lands.
+#[test]
+fn remove_absent_library_class_adds_no_commit() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "Cls", false);
+    add_class(&adapter, "res", "Resistors");
+    let bytes_before = std::fs::read(&file).unwrap();
+    let commits_before = commit_count(&file);
+
+    adapter
+        .remove_library_class("missing", "delete class missing")
+        .unwrap();
+
+    assert_eq!(std::fs::read(&file).unwrap(), bytes_before);
+    assert_eq!(commit_count(&file), commits_before);
+}
+
+/// Removing a present class still removes it and still commits; a
+/// repeated remove (double-click on `×`) then adds nothing.
+#[test]
+fn remove_present_library_class_commits_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "Cls2", false);
+    add_class(&adapter, "res", "Resistors");
+    let commits_before = commit_count(&file);
+
+    adapter
+        .remove_library_class("res", "delete class res")
+        .unwrap();
+    assert!(adapter.library_classes().iter().all(|c| c.key != "res"));
+    assert_eq!(commit_count(&file), commits_before + 1);
+
+    adapter
+        .remove_library_class("res", "delete class res")
+        .unwrap();
+    assert_eq!(commit_count(&file), commits_before + 1);
 }

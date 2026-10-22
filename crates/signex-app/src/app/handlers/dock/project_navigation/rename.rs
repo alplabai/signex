@@ -71,6 +71,26 @@ impl Signex {
             self.set_rename_error("Name cannot contain path separators.");
             return iced::Task::none();
         }
+        // A native file keeps its extension: dropping or changing it
+        // would orphan the file from every editor and project reference.
+        let old_ext = state.target_path.extension().and_then(|e| e.to_str());
+        let new_ext = std::path::Path::new(new_name)
+            .extension()
+            .and_then(|e| e.to_str());
+        if old_ext != new_ext {
+            let msg = match old_ext {
+                Some(ext) => format!("The file extension must stay \".{ext}\"."),
+                None => "This file has no extension; the new name cannot add one.".to_string(),
+            };
+            self.set_rename_error(&msg);
+            return iced::Task::none();
+        }
+        if self.is_project_library_path(&state) {
+            self.set_rename_error(
+                "Libraries are referenced by path and cannot be renamed from the project tree.",
+            );
+            return iced::Task::none();
+        }
         let parent = match state.target_path.parent() {
             Some(p) => p,
             None => {
@@ -89,18 +109,27 @@ impl Signex {
             return iced::Task::none();
         }
 
+        // Find every parent sheet that references this file BEFORE it
+        // moves, while the hierarchy walk can still reach it.
+        // Only a schematic sheet can be a child-sheet target; any other
+        // file skips the walk so a malformed sheet cannot raise a notice.
+        let is_sheet = state.target_path.extension().and_then(|e| e.to_str()) == Some("snxsch");
+        let plan = state
+            .tree_path
+            .first()
+            .filter(|_| is_sheet)
+            .map(|&idx| self.plan_reference_rewrites(idx, &state.target_path, new_name))
+            .unwrap_or_default();
+
         if let Err(e) = std::fs::rename(&state.target_path, &new_path) {
             self.set_rename_error(&format!("Rename failed: {e}"));
             return iced::Task::none();
         }
 
-        // Update in-memory project data. NOTE: this does not rewrite
-        // parent sheets that reference this child sheet — if the
-        // renamed file is referenced from a parent `sheet` S-expr,
-        // the parent still points to the old name. Recorded as a
-        // known limitation; proper rewrite lands with project-write
-        // support (v0.9). For now, sheets at the root level (no
-        // parent reference) rename cleanly.
+        // Update in-memory project data (page list + schematic root);
+        // parent-sheet references are re-pointed through the engine
+        // below. Nothing besides the rename itself is written to disk:
+        // the touched documents are marked dirty for the user to save.
         let old_filename = state
             .target_path
             .file_name()
@@ -121,6 +150,10 @@ impl Signex {
                     changed = true;
                 }
             }
+            if loaded.data.pcb_file.as_deref() == Some(old.as_str()) {
+                loaded.data.pcb_file = Some(new_name.to_string());
+                changed = true;
+            }
             if loaded.data.schematic_root.as_deref() == Some(old.as_str()) {
                 loaded.data.schematic_root = Some(new_name.to_string());
                 changed = true;
@@ -140,9 +173,37 @@ impl Signex {
         // rebuild sees the new filenames.
         self.rekey_open_document(&state.target_path, &new_path);
 
+        let outcome = self.apply_reference_rewrites(&plan);
+        if !outcome.is_clean() {
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::rename(
+                super::sheet_references::rename_incomplete_detail(
+                    &outcome.failed,
+                    &outcome.unchecked,
+                ),
+            ));
+        }
+
         self.ui_state.rename_dialog = None;
         self.refresh_panel_ctx();
         iced::Task::none()
+    }
+
+    /// True when the dialog target is one of its owning project's
+    /// `libraries` entries (matched relative to the project dir or absolute).
+    fn is_project_library_path(&self, state: &crate::app::RenameDialogState) -> bool {
+        let Some(loaded) = state
+            .tree_path
+            .first()
+            .and_then(|&idx| self.document_state.projects.get(idx))
+        else {
+            return false;
+        };
+        let dir = std::path::Path::new(&loaded.data.dir);
+        loaded
+            .data
+            .libraries
+            .iter()
+            .any(|e| dir.join(&e.path) == state.target_path || e.path == state.target_path)
     }
 
     /// Move every path-keyed record of an open document from `old_path`

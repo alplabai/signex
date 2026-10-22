@@ -9,10 +9,12 @@
 
 pub mod cache;
 pub mod digikey;
+mod http;
 pub mod jlcpcb;
 pub mod keyring;
 pub mod lcsc;
 pub mod mouser;
+mod throttle;
 
 pub use cache::{CacheError, DEFAULT_TTL, DistributorCache};
 pub use digikey::DigiKeyAdapter;

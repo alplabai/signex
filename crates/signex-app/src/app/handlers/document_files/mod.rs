@@ -7,6 +7,7 @@ use super::super::*;
 mod git;
 mod history;
 mod open;
+mod recent;
 mod save;
 
 /// Build the AsyncFileDialog Task for a primitive's first save.
@@ -69,6 +70,7 @@ pub(crate) fn blank_schematic_sheet_for_new_doc() -> signex_types::schematic::Sc
 
 fn blank_schematic_sheet() -> signex_types::schematic::SchematicSheet {
     signex_types::schematic::SchematicSheet {
+        unknown: Default::default(),
         uuid: uuid::Uuid::new_v4(),
         version: 1,
         generator: "signex".into(),

@@ -151,6 +151,17 @@ pub enum OverlayMsg {
     /// Close the Help ▸ Keyboard Shortcuts modal — fired by the close
     /// chrome ✕ and by Esc dismiss handling.
     CloseKeyboardShortcuts,
+    /// Close the Help ▸ About Signex dialog — close chrome ✕ and Esc.
+    CloseAbout,
+    /// About dialog ▸ Copy version info — puts the plain-text version
+    /// block on the clipboard.
+    CopyAboutInfo,
+    /// Open an external page (About dialog's licence link) in the default
+    /// browser.
+    OpenLink(crate::about::ExternalLink),
+    /// The default browser could not be launched for an external link;
+    /// carries the reason for the shared error card.
+    LinkOpenFailed(String),
     /// Open the Tools > Passive Network Calculator modal — fired by the
     /// Tools menu entry. Re-invoking while it is already open is a no-op.
     OpenPassiveCalculator,
@@ -313,6 +324,8 @@ pub enum BomPreviewMsg {
     /// User clicked a Properties-sidebar tab (General / Columns) in
     /// the BOM preview modal.
     SetSidebarTab(crate::app::state::BomSidebarTab),
+    /// User toggled one validation rule in the Rules tab.
+    SetRule(signex_output::BomRule, bool),
     /// User clicked Export in the BOM preview modal — drives the file
     /// dialog with the live options.
     Export,
