@@ -83,7 +83,7 @@ regex = "1"
 
 # Output generation
 pdf-writer = "0.14"
-rust_xlsxwriter = "0.77"
+rust_xlsxwriter = "0.101"
 tiny-skia = "0.11"
 ttf-parser = "0.25"
 
@@ -105,7 +105,7 @@ chrono = { version = "0.4", features = ["serde"] }
 sha2 = "0.10"
 
 # Library subsystem — Phase 1 (adapters: local-git, database server, distributor APIs, search, AI-stub)
-git2 = { version = "0.19", default-features = false, features = ["vendored-libgit2"] }
+git2 = { version = "0.21", default-features = false, features = ["vendored-libgit2"] }
 keyring = "3"
 tantivy = "0.22"
 # NOTE: oauth2 is declared directly in signex-library (it needs
@@ -117,7 +117,7 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 axum = { version = "0.7", features = ["ws"] }
 tokio = { version = "1", features = ["full"] }
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres", "sqlite", "macros", "chrono", "uuid", "migrate"] }
-pdf-extract = "0.7"
+pdf-extract = "0.12"
 tower-http = { version = "0.6", features = ["cors", "trace", "auth", "validate-request", "limit"] }
 # Per-IP rate limiting for the library server (HI-2). Closes the DoS surface
 # on `/locks` (unbounded acquire) + mutating routes. `governor` is the
