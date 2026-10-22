@@ -17,9 +17,12 @@ on:
   pull_request:
     branches: [main, trunk]
     types: [opened, edited, reopened, synchronize]
+  merge_group:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  # A merge-queue run has no pull_request number; key it by ref so queued
+  # groups do not share one concurrency slot and cancel each other.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:

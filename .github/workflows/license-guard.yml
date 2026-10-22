@@ -25,6 +25,7 @@ on:
     branches: [main, trunk]
   pull_request:
     branches: [main, trunk]
+  merge_group:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

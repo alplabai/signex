@@ -9,6 +9,7 @@
 
 pub mod cache;
 pub mod digikey;
+mod http;
 pub mod jlcpcb;
 pub mod keyring;
 pub mod lcsc;
