@@ -158,6 +158,35 @@ pub fn rollup(ctx: &ExportContext, opts: &BomOptions) -> BomTable {
     build_table(&bom_ctx, &engine_opts)
 }
 
+/// Roll up and validate in one pass — the same table + report
+/// [`BomExporter::export`] produces, without emitting any bytes. The BOM
+/// preview calls this so the Rules tab can never disagree with the export.
+pub fn rollup_with_validation(
+    ctx: &ExportContext,
+    opts: &BomOptions,
+) -> (BomTable, BomValidationReport) {
+    let bom_ctx = build_bom_context(ctx, opts);
+    let table = build_table(&bom_ctx, &engine_options_from_opts(opts));
+    let report = validate_table(
+        &build_validation_context(&bom_ctx, opts),
+        &table,
+        &opts.rule_options,
+    );
+    (table, report)
+}
+
+/// Re-validate an already rolled-up `table` (e.g. after a rule toggle,
+/// which does not change the table). Uses the same exported-rows filter as
+/// [`BomExporter::export`].
+pub fn validate(ctx: &ExportContext, opts: &BomOptions, table: &BomTable) -> BomValidationReport {
+    let bom_ctx = build_bom_context(ctx, opts);
+    validate_table(
+        &build_validation_context(&bom_ctx, opts),
+        table,
+        &opts.rule_options,
+    )
+}
+
 fn engine_options_from_opts(opts: &BomOptions) -> BomEngineOptions {
     BomEngineOptions {
         grouping: opts.grouping,
@@ -474,10 +503,7 @@ impl Exporter for BomExporter {
         ctx: &ExportContext,
         opts: &Self::Options,
     ) -> Result<Self::Output, Self::Error> {
-        let bom_ctx = build_bom_context(ctx, opts);
-        let table = build_table(&bom_ctx, &engine_options_from_opts(opts));
-        let validation_ctx = build_validation_context(&bom_ctx, opts);
-        let validation_report = validate_table(&validation_ctx, &table, &opts.rule_options);
+        let (table, validation_report) = rollup_with_validation(ctx, opts);
 
         let bytes = match opts.format {
             BomFormat::Csv => csv_emit(&table, &opts.columns)?,
@@ -789,5 +815,111 @@ mod tests {
             BomFormat::from_output_path(Path::new("bom")),
             BomFormat::Csv
         );
+    }
+
+    // ---- validation surface (#355) ----
+
+    fn export_ctx(symbols: Vec<Symbol>) -> ExportContext {
+        use crate::{ProjectMetadata, SheetSnapshot};
+        use signex_types::schematic::SchematicSheet;
+        let schematic = SchematicSheet {
+            uuid: Uuid::new_v4(),
+            version: 0,
+            generator: String::new(),
+            generator_version: String::new(),
+            paper_size: "A4".to_string(),
+            root_sheet_page: "1".to_string(),
+            symbols,
+            wires: Vec::new(),
+            junctions: Vec::new(),
+            labels: Vec::new(),
+            child_sheets: Vec::new(),
+            no_connects: Vec::new(),
+            text_notes: Vec::new(),
+            buses: Vec::new(),
+            bus_entries: Vec::new(),
+            drawings: Vec::new(),
+            no_erc_directives: Vec::new(),
+            title_block: std::collections::HashMap::new(),
+            lib_symbols: std::collections::HashMap::new(),
+            unknown: Default::default(),
+        };
+        ExportContext {
+            sheets: vec![SheetSnapshot {
+                path: "a.snxsch".into(),
+                schematic,
+                sheet_name: "a".to_string(),
+                sheet_number: 1,
+                sheet_count: 1,
+            }],
+            metadata: ProjectMetadata::default(),
+            netlist: None,
+        }
+    }
+
+    /// R1 without a footprint + a second R1 (duplicate designator). MPN
+    /// rule off so exactly the two rules under test can fire.
+    fn faulty_fixture() -> (ExportContext, BomOptions) {
+        let mut no_fp = test_symbol();
+        no_fp.footprint = String::new();
+        let dup = test_symbol();
+        let mut opts = BomOptions::default();
+        opts.rule_options.missing_mpn = false;
+        (export_ctx(vec![no_fp, dup]), opts)
+    }
+
+    #[test]
+    fn missing_footprint_plus_duplicate_designator_is_exactly_two_issues() {
+        let (ctx, opts) = faulty_fixture();
+        let (_table, report) = rollup_with_validation(&ctx, &opts);
+        assert_eq!(report.issues.len(), 2, "{:?}", report.issues);
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|i| i.rule == BomRule::MissingFootprint)
+        );
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|i| i.rule == BomRule::DuplicateDesignator)
+        );
+    }
+
+    #[test]
+    fn disabling_duplicate_designator_drops_it_to_one_issue() {
+        let (ctx, mut opts) = faulty_fixture();
+        let (table, _) = rollup_with_validation(&ctx, &opts);
+        opts.rule_options
+            .set_enabled(BomRule::DuplicateDesignator, false);
+        let report = validate(&ctx, &opts, &table);
+        assert_eq!(report.issues.len(), 1, "{:?}", report.issues);
+        assert_eq!(report.issues[0].rule, BomRule::MissingFootprint);
+    }
+
+    #[test]
+    fn exporter_report_matches_the_preview_report() {
+        let (ctx, opts) = faulty_fixture();
+        let out = BomExporter.export(&ctx, &opts).expect("export");
+        let (_t, preview) = rollup_with_validation(&ctx, &opts);
+        assert_eq!(out.validation_report.issues, preview.issues);
+    }
+
+    #[test]
+    fn issues_respect_include_dnp() {
+        let mut dnp = test_symbol();
+        dnp.reference = "R9".to_string();
+        dnp.footprint = String::new();
+        dnp.dnp = true;
+        let ctx = export_ctx(vec![dnp]);
+        let mut opts = BomOptions::default();
+        opts.rule_options.missing_mpn = false;
+        let (_t, report) = rollup_with_validation(&ctx, &opts);
+        assert!(report.issues.is_empty(), "{:?}", report.issues);
+        opts.include_dnp = true;
+        opts.include_not_fitted = true;
+        let (_t, report) = rollup_with_validation(&ctx, &opts);
+        assert_eq!(report.issues.len(), 1, "{:?}", report.issues);
     }
 }
