@@ -21,6 +21,8 @@
 // production signal.
 #![cfg_attr(test, allow(clippy::let_underscore_must_use))]
 
+pub mod about;
+pub mod about_modal;
 pub mod active_bar;
 pub mod app;
 pub mod canvas;

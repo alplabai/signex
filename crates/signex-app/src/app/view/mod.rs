@@ -412,6 +412,7 @@ impl Signex {
             || ui.find_replace.open
             || ui.preferences_open
             || ui.keyboard_shortcuts_open
+            || ui.about_open
             || ui.passive_calculator_open
             || ui.first_run_tour_open
             || ui.rename_dialog.is_some()

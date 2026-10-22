@@ -92,6 +92,12 @@ pub enum MenuMessage {
     /// dropdown. The message is swallowed by `handle_menu_message` via
     /// its `Task::none()` fallthrough — no handler needs to match it.
     NoOp,
+    /// Help ▸ About Signex.
+    OpenAbout,
+    /// Help ▸ Documentation — opens the user guide in the browser.
+    OpenDocumentation,
+    /// Help ▸ Report an Issue — opens the issue tracker in the browser.
+    ReportIssue,
     // File
     NewProject,
     OpenProject,

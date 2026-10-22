@@ -71,6 +71,7 @@ pub(crate) enum OverlayId {
     Preferences,
     FindReplace,
     KeyboardShortcuts,
+    About,
     PassiveCalculator,
     FirstRunTour,
     RenameDialog,
@@ -117,7 +118,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 50] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 51] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -143,6 +144,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 50] = [
     OverlayId::Preferences,
     OverlayId::FindReplace,
     OverlayId::KeyboardShortcuts,
+    OverlayId::About,
     OverlayId::PassiveCalculator,
     OverlayId::FirstRunTour,
     OverlayId::RenameDialog,
@@ -242,6 +244,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::Preferences
         | OverlayId::FindReplace
         | OverlayId::KeyboardShortcuts
+        | OverlayId::About
         | OverlayId::PassiveCalculator
         | OverlayId::FirstRunTour
         | OverlayId::RenameDialog
@@ -323,6 +326,7 @@ impl Signex {
             OverlayId::Preferences => layers.extend(self.preferences_overlay()),
             OverlayId::FindReplace => layers.extend(self.find_replace_overlay()),
             OverlayId::KeyboardShortcuts => layers.extend(self.keyboard_shortcuts_overlay()),
+            OverlayId::About => layers.extend(self.about_overlay()),
             OverlayId::PassiveCalculator => layers.extend(self.passive_calculator_overlay()),
             OverlayId::FirstRunTour => layers.extend(self.first_run_tour_overlay()),
             OverlayId::RenameDialog => layers.extend(self.rename_dialog_overlay()),
