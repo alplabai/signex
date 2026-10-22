@@ -330,6 +330,7 @@ pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtra
         row_id: None,
         library_version: String::new(),
         instances: extras.instances,
+        unknown: extras.unknown,
     }
 }
 

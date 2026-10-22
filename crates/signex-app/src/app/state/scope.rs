@@ -21,7 +21,39 @@ use std::path::{Path, PathBuf};
 
 use super::LoadedProject;
 
-/// Comparison key for a filesystem path.
+/// How [`path_key_with`] treats case (and, with it, the separator) when it
+/// builds a comparison key.
+///
+/// An injectable input rather than a `cfg!(windows)` read inside the key
+/// function, so both policies run on every host — including the Linux-only
+/// `cargo test` CI job. The call sites still default it from the host family
+/// ([`CaseFold::host_default`]); see [`path_key`] for what that gets wrong.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CaseFold {
+    /// Case-insensitive volume: lowercase the path and normalize `\` to `/`.
+    Fold,
+    /// Case-sensitive volume: the path verbatim.
+    Preserve,
+}
+
+impl CaseFold {
+    /// The policy the running host family implies: [`CaseFold::Fold`] on
+    /// Windows, [`CaseFold::Preserve`] elsewhere. Not a per-volume answer.
+    pub(crate) const fn host_default() -> Self {
+        if cfg!(windows) {
+            Self::Fold
+        } else {
+            Self::Preserve
+        }
+    }
+}
+
+/// Comparison key for a filesystem path under the host-default [`CaseFold`].
+///
+/// The host family is only a proxy for the per-volume truth: it under-folds on
+/// a case-insensitive macOS APFS volume and over-folds on a Windows directory
+/// with NTFS per-directory case sensitivity (#543). Probing the volume is the
+/// open follow-up; callers needing a specific policy use [`path_key_with`].
 ///
 /// Windows filesystems are case-insensitive and accept either separator, but
 /// Rust's `Path` comparison is neither — a `.snxprj` recording `Top.snxsch`
@@ -30,11 +62,15 @@ use super::LoadedProject;
 /// and silently degrade a project export to a single page. Unix paths are
 /// case-sensitive, so there the key is the path verbatim.
 pub(crate) fn path_key(path: &Path) -> String {
+    path_key_with(path, CaseFold::host_default())
+}
+
+/// [`path_key`] with an explicit case policy.
+pub(crate) fn path_key_with(path: &Path, fold: CaseFold) -> String {
     let raw = path.to_string_lossy();
-    if cfg!(windows) {
-        raw.to_lowercase().replace('\\', "/")
-    } else {
-        raw.into_owned()
+    match fold {
+        CaseFold::Fold => raw.to_lowercase().replace('\\', "/"),
+        CaseFold::Preserve => raw.into_owned(),
     }
 }
 
@@ -47,14 +83,15 @@ pub(crate) fn path_key(path: &Path) -> String {
 fn project_listing_sheet<'a>(
     projects: &'a [LoadedProject],
     path: &Path,
+    fold: CaseFold,
 ) -> Option<&'a LoadedProject> {
-    let key = path_key(path);
+    let key = path_key_with(path, fold);
     projects.iter().find(|p| {
         let dir = p.dir();
         p.data
             .sheets
             .iter()
-            .any(|s| path_key(&dir.join(&s.filename)) == key)
+            .any(|s| path_key_with(&dir.join(&s.filename), fold) == key)
     })
 }
 
@@ -67,7 +104,7 @@ fn project_listing_sheet<'a>(
 /// resolved child key, the first-wins tie-break (lexicographically-smallest
 /// parent path) is the same every run, matching the identical hazard fixed in
 /// `project_sheets::project_graph`.
-fn parent_of(loaded: &HashMap<PathBuf, Vec<String>>) -> HashMap<String, PathBuf> {
+fn parent_of(loaded: &HashMap<PathBuf, Vec<String>>, fold: CaseFold) -> HashMap<String, PathBuf> {
     let mut entries: Vec<(&PathBuf, &Vec<String>)> = loaded.iter().collect();
     entries.sort_by(|a, b| a.0.cmp(b.0));
 
@@ -76,7 +113,7 @@ fn parent_of(loaded: &HashMap<PathBuf, Vec<String>>) -> HashMap<String, PathBuf>
         let dir = parent_path.parent().unwrap_or_else(|| Path::new(""));
         for filename in child_refs {
             parents
-                .entry(path_key(&dir.join(filename)))
+                .entry(path_key_with(&dir.join(filename), fold))
                 .or_insert_with(|| parent_path.clone());
         }
     }
@@ -94,15 +131,25 @@ pub(crate) fn project_owning_sheet<'a>(
     loaded: &HashMap<PathBuf, Vec<String>>,
     path: &Path,
 ) -> Option<&'a LoadedProject> {
-    if let Some(project) = project_listing_sheet(projects, path) {
+    project_owning_sheet_with(projects, loaded, path, CaseFold::host_default())
+}
+
+/// [`project_owning_sheet`] with an explicit case policy.
+pub(crate) fn project_owning_sheet_with<'a>(
+    projects: &'a [LoadedProject],
+    loaded: &HashMap<PathBuf, Vec<String>>,
+    path: &Path,
+    fold: CaseFold,
+) -> Option<&'a LoadedProject> {
+    if let Some(project) = project_listing_sheet(projects, path, fold) {
         return Some(project);
     }
-    let parents = parent_of(loaded);
+    let parents = parent_of(loaded, fold);
     let mut seen: HashSet<String> = HashSet::new();
     let mut current = path.to_path_buf();
-    while seen.insert(path_key(&current)) {
-        let parent = parents.get(&path_key(&current))?;
-        if let Some(project) = project_listing_sheet(projects, parent) {
+    while seen.insert(path_key_with(&current, fold)) {
+        let parent = parents.get(&path_key_with(&current, fold))?;
+        if let Some(project) = project_listing_sheet(projects, parent, fold) {
             return Some(project);
         }
         current = parent.clone();
@@ -285,19 +332,73 @@ mod tests {
     }
 
     #[test]
-    fn path_case_and_separator_do_not_change_ownership_on_windows() {
-        // A `.snxprj` records `Top.snxsch`; the tab was opened through a file
-        // dialog that handed back `top.snxsch`. Same file on Windows.
+    fn fold_policy_ignores_case_and_separator_on_any_host() {
+        let a = Path::new("/w/a/Top.snxsch");
+        let b = Path::new("/w/a/top.snxsch");
+        assert_eq!(
+            path_key_with(a, CaseFold::Fold),
+            path_key_with(b, CaseFold::Fold)
+        );
+        assert_eq!(
+            path_key_with(Path::new("W\\Sub\\Top.snxsch"), CaseFold::Fold),
+            "w/sub/top.snxsch"
+        );
+    }
+
+    #[test]
+    fn preserve_policy_keeps_case_and_separator_on_any_host() {
+        let a = Path::new("/w/a/Top.snxsch");
+        let b = Path::new("/w/a/top.snxsch");
+        assert_ne!(
+            path_key_with(a, CaseFold::Preserve),
+            path_key_with(b, CaseFold::Preserve)
+        );
+        assert_eq!(
+            path_key_with(Path::new("W\\Top.snxsch"), CaseFold::Preserve),
+            "W\\Top.snxsch"
+        );
+    }
+
+    #[test]
+    fn path_key_follows_the_host_default_policy() {
+        let p = Path::new("/w/A/Top.snxsch");
+        assert_eq!(path_key(p), path_key_with(p, CaseFold::host_default()));
+        assert_eq!(CaseFold::host_default() == CaseFold::Fold, cfg!(windows));
+    }
+
+    #[test]
+    fn fold_policy_matches_sheet_ownership_across_case() {
+        // A `.snxprj` records `Top.snxsch`; the tab was opened as `top.snxsch`.
         let projects = vec![project(1, "/w/a", &["Top.snxsch"])];
-        let found = project_owning_sheet(
+        let found = project_owning_sheet_with(
             &projects,
             &HashMap::new(),
             &PathBuf::from("/w/a/top.snxsch"),
+            CaseFold::Fold,
         );
-        if cfg!(windows) {
-            assert_eq!(found.map(|p| p.id), Some(ProjectId(1)));
-        } else {
-            assert!(found.is_none(), "unix paths are case-sensitive");
-        }
+        assert_eq!(found.map(|p| p.id), Some(ProjectId(1)));
+    }
+
+    #[test]
+    fn preserve_policy_keeps_sheet_ownership_case_sensitive() {
+        let projects = vec![project(1, "/w/a", &["Top.snxsch"])];
+        let found = project_owning_sheet_with(
+            &projects,
+            &HashMap::new(),
+            &PathBuf::from("/w/a/top.snxsch"),
+            CaseFold::Preserve,
+        );
+        assert!(found.is_none(), "preserve policy is case-sensitive");
+    }
+
+    #[test]
+    fn fold_policy_resolves_hierarchical_child_across_case() {
+        let projects = vec![project(1, "/w/a", &["Top.snxsch"])];
+        let open = loaded(&[("/w/a/Top.snxsch", &["Child.snxsch"])]);
+        let child = PathBuf::from("/w/a/child.snxsch");
+        let fold = project_owning_sheet_with(&projects, &open, &child, CaseFold::Fold);
+        let keep = project_owning_sheet_with(&projects, &open, &child, CaseFold::Preserve);
+        assert_eq!(fold.map(|p| p.id), Some(ProjectId(1)));
+        assert!(keep.is_none());
     }
 }
