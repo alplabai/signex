@@ -251,8 +251,10 @@ mod tests {
         // doesn't bail with "does not exist".
         std::fs::write(dir.path().join("Comp.snxsym"), b"").unwrap();
 
-        let opened: iced::Task<Message> = app.handle_document_file_opened(Some(project_path));
-        drop(opened);
+        // Named binding, not `drop(..)` (walks past the #577 / #627 gate) and
+        // not an assertion: what the project-open Task carries is not what
+        // this test is about.
+        let _opened_task: iced::Task<Message> = app.handle_document_file_opened(Some(project_path));
         assert_eq!(
             app.document_state.projects.len(),
             1,

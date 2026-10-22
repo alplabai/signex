@@ -111,9 +111,13 @@ impl Signex {
 
         // Find every parent sheet that references this file BEFORE it
         // moves, while the hierarchy walk can still reach it.
+        // Only a schematic sheet can be a child-sheet target; any other
+        // file skips the walk so a malformed sheet cannot raise a notice.
+        let is_sheet = state.target_path.extension().and_then(|e| e.to_str()) == Some("snxsch");
         let plan = state
             .tree_path
             .first()
+            .filter(|_| is_sheet)
             .map(|&idx| self.plan_reference_rewrites(idx, &state.target_path, new_name))
             .unwrap_or_default();
 
@@ -169,10 +173,13 @@ impl Signex {
         // rebuild sees the new filenames.
         self.rekey_open_document(&state.target_path, &new_path);
 
-        let failures = self.apply_reference_rewrites(&plan);
-        if !failures.is_empty() {
+        let outcome = self.apply_reference_rewrites(&plan);
+        if !outcome.is_clean() {
             self.document_state.error_notice = Some(crate::app::state::ErrorNotice::rename(
-                super::sheet_references::rename_incomplete_detail(&failures),
+                super::sheet_references::rename_incomplete_detail(
+                    &outcome.failed,
+                    &outcome.unchecked,
+                ),
             ));
         }
 

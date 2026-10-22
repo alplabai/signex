@@ -40,15 +40,43 @@ fn with_new_leaf(filename: &str, new_name: &str) -> String {
     }
 }
 
-/// Detail line for the "Rename Incomplete" card: the file moved, but these
-/// parent references could not be re-pointed (one entry per failure).
-pub(super) fn rename_incomplete_detail(failures: &[String]) -> String {
-    format!(
-        "The file was renamed, but {} sheet reference(s) could not be updated \
-         and still point at the old name:\n  {}",
-        failures.len(),
-        failures.join("\n  ")
-    )
+/// What applying a [`ReferencePlan`] could not finish.
+#[derive(Debug, Default)]
+pub(super) struct RewriteOutcome {
+    /// References that were found but could not be re-pointed.
+    pub(super) failed: Vec<String>,
+    /// Sheets that could not be read, so their references are unknown.
+    pub(super) unchecked: Vec<String>,
+}
+
+impl RewriteOutcome {
+    pub(super) fn is_clean(&self) -> bool {
+        self.failed.is_empty() && self.unchecked.is_empty()
+    }
+}
+
+/// Detail text for the "Rename Incomplete" card: the file moved, but some
+/// parent references were not re-pointed (`failed`, known stale) or could
+/// not be checked at all (`unchecked`, unknown).
+pub(super) fn rename_incomplete_detail(failed: &[String], unchecked: &[String]) -> String {
+    let mut parts = Vec::new();
+    if !failed.is_empty() {
+        parts.push(format!(
+            "The file was renamed, but {} sheet reference(s) could not be updated \
+             and still point at the old name:\n  {}",
+            failed.len(),
+            failed.join("\n  ")
+        ));
+    }
+    if !unchecked.is_empty() {
+        parts.push(format!(
+            "The file was renamed, but {} sheet(s) could not be read, so it is unknown \
+             whether they reference the old name:\n  {}",
+            unchecked.len(),
+            unchecked.join("\n  ")
+        ));
+    }
+    parts.join("\n\n")
 }
 
 impl Signex {
@@ -116,25 +144,27 @@ impl Signex {
 
     /// Apply the planned rewrites through the engine, marking each touched
     /// parent dirty. A parent that is not open is loaded into an engine (no
-    /// tab) so Save All can persist it. Returns one message per parent that
-    /// could not be updated or checked; each is also logged.
-    pub(super) fn apply_reference_rewrites(&mut self, plan: &ReferencePlan) -> Vec<String> {
+    /// tab) so Save All can persist it. Returns the parents that could not be
+    /// updated and those that could not be checked; each is also logged.
+    pub(super) fn apply_reference_rewrites(&mut self, plan: &ReferencePlan) -> RewriteOutcome {
         let mut failures = Vec::new();
         for rewrite in &plan.rewrites {
             if let Err(why) = self.apply_one_rewrite(rewrite) {
                 failures.push(format!("{} — {why}", rewrite.parent.display()));
             }
         }
-        failures.extend(plan.unchecked.iter().cloned());
         // The modal card is dismissible; the Messages panel keeps every
         // dangling or unverified reference visible after it is gone.
-        for line in &failures {
+        for line in failures.iter().chain(&plan.unchecked) {
             crate::diagnostics::log_error(
                 "rename: sheet reference not updated",
                 &anyhow::anyhow!("{line}"),
             );
         }
-        failures
+        RewriteOutcome {
+            failed: failures,
+            unchecked: plan.unchecked.clone(),
+        }
     }
 
     fn apply_one_rewrite(&mut self, rewrite: &ReferenceRewrite) -> Result<(), String> {
@@ -184,8 +214,10 @@ mod tests {
 
     #[test]
     fn rename_incomplete_detail_is_clean_text() {
-        let detail =
-            rename_incomplete_detail(&["a.snxsch — x".to_string(), "b.snxsch — y".to_string()]);
+        let detail = rename_incomplete_detail(
+            &["a.snxsch — x".to_string(), "b.snxsch — y".to_string()],
+            &[],
+        );
         assert_eq!(
             detail,
             "The file was renamed, but 2 sheet reference(s) could not be updated \
@@ -196,6 +228,17 @@ mod tests {
             !first_line.contains("  "),
             "no runs of spaces: {first_line}"
         );
+    }
+
+    #[test]
+    fn unchecked_sheets_get_their_own_wording() {
+        let detail = rename_incomplete_detail(&[], &["c.snxsch — bad".to_string()]);
+        assert_eq!(
+            detail,
+            "The file was renamed, but 1 sheet(s) could not be read, so it is unknown \
+             whether they reference the old name:\n  c.snxsch — bad"
+        );
+        assert!(!detail.contains("still point at the old name"));
     }
 
     #[test]

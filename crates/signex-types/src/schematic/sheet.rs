@@ -1,6 +1,7 @@
 //! Placed schematic-sheet elements and the sheet container.
 
 use super::*;
+use crate::format::SheetUnknown;
 
 // ---------------------------------------------------------------------------
 
@@ -253,6 +254,12 @@ pub struct SchematicSheet {
     pub title_block: HashMap<String, String>,
     #[serde(default)]
     pub lib_symbols: HashMap<String, LibSymbol>,
+    /// Keys in the `.snxsch` manifest and `[extras.sheet]` that this
+    /// build does not recognise, kept per section so a save re-emits
+    /// each where it was found. Empty for every file written by this
+    /// build.
+    #[serde(default, skip_serializing_if = "SheetUnknown::is_empty")]
+    pub unknown: SheetUnknown,
 }
 
 fn default_root_sheet_page() -> String {

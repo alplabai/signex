@@ -49,6 +49,7 @@ fn sheet(children: &[&str]) -> SchematicSheet {
         no_erc_directives: Vec::new(),
         title_block: HashMap::new(),
         lib_symbols: HashMap::new(),
+        unknown: Default::default(),
     }
 }
 
@@ -327,6 +328,23 @@ fn renaming_an_unrelated_file_leaves_dirty_paths_empty() {
         f.app.document_state.dirty_paths.is_empty(),
         "an unrelated rename must not dirty the project: {:?}",
         f.app.document_state.dirty_paths
+    );
+}
+
+#[test]
+fn renaming_a_non_sheet_file_with_a_malformed_sheet_sets_no_notice() {
+    let mut f = fixture();
+    fs::write(&f.root, b"not a schematic").expect("corrupt parent");
+    let other = f.prj.with_file_name("pad.snxfpt");
+    fs::write(&other, b"").expect("write footprint");
+
+    submit_rename(&mut f.app, &other, "pad2.snxfpt");
+
+    assert!(f.prj.with_file_name("pad2.snxfpt").exists());
+    assert!(
+        f.app.document_state.error_notice.is_none(),
+        "a non-sheet rename never consults the sheets: {:?}",
+        f.app.document_state.error_notice
     );
 }
 
