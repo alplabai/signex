@@ -854,6 +854,7 @@ mod tests {
             }],
             metadata: ProjectMetadata::default(),
             netlist: None,
+            netlist_sheets: Vec::new(),
         }
     }
 

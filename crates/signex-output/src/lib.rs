@@ -30,7 +30,6 @@ pub use erc::{
     ErcReportRow, ErcReportSeverity,
 };
 pub use netlist::{NetlistExporter, NetlistFormat, NetlistOptions, NetlistOutput};
-pub use netlist::{NetlistExporter, NetlistOptions, NetlistOutput};
 pub use pdf::{
     ColourMode, Margins, Orientation, PageRange, PageSize, PdfExporter, PdfOptions, PdfOutput,
     PdfScale, SchematicPalette,
