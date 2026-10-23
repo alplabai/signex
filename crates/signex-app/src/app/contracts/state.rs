@@ -103,16 +103,18 @@ pub struct SelectionFilterCustomState {
 }
 
 /// State for the Projects-panel tree-view right-click menu. The menu's
-/// action set is computed from `path` (leaf vs branch vs empty) at render
+/// action set is computed from `key` (leaf vs branch vs empty) at render
 /// time, so we only need to store the anchor coordinates + the clicked
-/// path (or `None` for the background menu).
+/// row's stable key (or `None` for the background menu). A key, not an
+/// index path: the tree can be rebuilt while the menu is open, and a stale
+/// index would aim the picked action at a different node.
 #[derive(Debug, Clone)]
 pub struct ProjectTreeContextMenuState {
     pub x: f32,
     pub y: f32,
-    /// `Some(path)` = right-click on a specific node; `None` = right-click
+    /// `Some(key)` = right-click on a specific node; `None` = right-click
     /// in empty tree area, offering only the generic actions.
-    pub path: Option<Vec<usize>>,
+    pub key: Option<signex_widgets::tree_view::TreeKey>,
 }
 
 /// State for the "Close Project — Unsaved Edits" confirmation modal.
@@ -122,13 +124,10 @@ pub struct ProjectTreeContextMenuState {
 /// user can see what they're about to lose.
 #[derive(Debug, Clone)]
 pub struct ProjectCloseConfirmState {
-    /// Project root tree path the close was requested for. Stored so
-    /// the modal's confirm action can dispatch back to
-    /// `close_project_at_tree_path` without re-resolving from the
-    /// project list (which may shift if the user closes another
-    /// project while this modal is up — Altium's modal is dismiss-
-    /// only, so this is defence-in-depth).
-    pub tree_path: Vec<usize>,
+    /// The project the close was requested for. Held by id, not list
+    /// index: the list may shift while the modal is up, so the confirm step
+    /// looks it up again and aborts when it is gone.
+    pub project_id: crate::app::ProjectId,
     /// Project display name shown in the modal header.
     pub project_name: String,
     /// Absolute paths of dirty files inside the project's directory.
@@ -139,6 +138,14 @@ pub struct ProjectCloseConfirmState {
     /// inside the project's directory. They are keyed by row address,
     /// not by file, so `dirty_paths` cannot carry them.
     pub dirty_rows: Vec<crate::library::state::EditorAddress>,
+    /// Dirty documents of this project that another open project claims.
+    /// They are not saved or discarded: closing leaves them open, and the
+    /// modal names them so nothing is dropped unannounced.
+    pub kept_paths: Vec<std::path::PathBuf>,
+    /// The child-sheet references the dirty list was attributed with. The
+    /// Save All / Discard All paths reuse them for the engine sweep instead
+    /// of reading the disk again.
+    pub sheet_refs: crate::app::state::sheet_refs::SheetRefs,
 }
 
 /// State for the "Exit Signex — Unsaved Edits" confirmation modal.

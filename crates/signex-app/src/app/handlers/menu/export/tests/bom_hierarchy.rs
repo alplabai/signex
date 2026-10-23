@@ -120,3 +120,34 @@ fn a_loose_documents_bom_keeps_every_unowned_open_tab() {
 
     assert_eq!(listed(&bom_of(&app)), ["R_X", "R_Y"]);
 }
+
+#[test]
+fn a_loose_documents_written_bom_matches_the_preview() {
+    // The file the user saves must list what the preview lists: both loose
+    // tabs, not only the focused sheet's hierarchy.
+    let mut app = app_workspace("/w/bw", &["a.snxsch"]);
+    let x = PathBuf::from("/w/loosew").join("x.snxsch");
+    let y = PathBuf::from("/w/loosew").join("y.snxsch");
+    open_with(
+        &mut app.document_state,
+        &x,
+        sheet_with_net("R_X", "NX", &[]),
+    );
+    open_with(
+        &mut app.document_state,
+        &y,
+        sheet_with_net("R_Y", "NY", &[]),
+    );
+    app.document_state.active_path = Some(x);
+    assert_eq!(listed(&bom_of(&app)), ["R_X", "R_Y"]);
+
+    let dir = std::env::temp_dir().join(format!("signex_bom_loose_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let out = dir.join("bom.csv");
+    let _ = app.handle_export_bom_finished(Ok(out.clone()));
+    let written = std::fs::read_to_string(&out).expect("the BOM was written");
+    let _ = std::fs::remove_dir_all(&dir);
+
+    assert!(written.contains("R_X"), "written BOM: {written}");
+    assert!(written.contains("R_Y"), "written BOM: {written}");
+}

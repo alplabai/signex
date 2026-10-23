@@ -6,7 +6,7 @@
 
 use super::super::state::{GraphicHandle, SymbolContextTarget, SymbolSelection};
 
-/// The actions a [`SymbolCanvas`] can emit upward.
+/// The actions a [`SymbolCanvas`](super::SymbolCanvas) can emit upward.
 #[derive(Debug, Clone)]
 pub enum CanvasAction {
     AddPin {

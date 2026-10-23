@@ -53,6 +53,8 @@ fn symbol(reference: &str, at: Point) -> ErcSymbol {
     ErcSymbol {
         uuid: Uuid::new_v4(),
         reference: reference.into(),
+        lib_id: String::new(),
+        unit: 1,
         value: String::new(),
         position: at,
         is_power: false,
@@ -85,6 +87,7 @@ pub(crate) fn context_for(kind: RuleKind) -> ErcContext {
             let mut s = symbol("U1", pt(10.0, 10.0));
             s.pins.push(ErcPin {
                 world_pos: pt(10.0, 10.0),
+                number: "1".into(),
                 electrical_type: PinDirection::Passive,
                 required: true,
                 connected: false,
@@ -143,6 +146,19 @@ pub(crate) fn context_for(kind: RuleKind) -> ErcContext {
             c.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
             c.wires.push(wire(pt(5.0, -5.0), pt(5.0, 5.0)));
             c.labels.push(label("X", pt(5.0, 0.0), LabelType::Net));
+        }
+        RuleKind::PinsTouchNotConnected => {
+            for r in ["R1", "R2"] {
+                let mut s = symbol(r, pt(10.0, 10.0));
+                s.pins.push(ErcPin {
+                    world_pos: pt(10.0, 10.0),
+                    number: "1".into(),
+                    electrical_type: PinDirection::Passive,
+                    required: true,
+                    connected: false,
+                });
+                c.symbols.push(s);
+            }
         }
     }
     c

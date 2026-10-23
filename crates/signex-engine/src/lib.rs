@@ -15,6 +15,7 @@ pub(crate) mod test_support;
 
 use std::path::{Path, PathBuf};
 
+pub use annotation::AnnotateScope;
 pub use command::{
     AnnotateMode, Command, CommandKind, MirrorAxis, ReorderDirection, SheetPort, SymbolTextField,
     TextTarget,
@@ -629,11 +630,10 @@ mod tests {
 
     fn wire(a: Point, b: Point) -> signex_types::schematic::Wire {
         signex_types::schematic::Wire {
-            unknown_columns: Default::default(),
             uuid: uuid::Uuid::new_v4(),
             start: a,
             end: b,
-            stroke_width: 0.0,
+            ..Default::default()
         }
     }
 
@@ -859,11 +859,9 @@ mod tests {
         engine
             .execute(Command::PlaceJunction {
                 junction: signex_types::schematic::Junction {
-                    unknown_columns: Default::default(),
                     uuid: user_junction_uuid,
                     position: Point::new(50.0, 50.0),
-                    diameter: 0.0,
-                    minted: false,
+                    ..Default::default()
                 },
             })
             .expect("place user junction");

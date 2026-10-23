@@ -1,0 +1,53 @@
+format = "snxsch/1"
+schematic_id = "00000000-0000-0000-0000-000000000000"
+version = 1
+generator = "signex-test"
+generator_version = "0.9"
+paper_size = "A4"
+root_sheet_page = "1"
+
+
+[sheets.components]
+content = """
+uuid                                  ref  library        pos_x      pos_y   rotation             value  mpn
+0192a8c0-0000-7001-8000-000000000001  R1   device.snxsym  100000001  800000  0.30000000000000004  10k    ""
+"""
+
+[sheets.wires]
+content = """
+uuid                                  net  start_x  start_y    end_x          end_y   stroke_width
+0192a8c0-0000-7004-8000-000000000001  ""   300000   1          33333333       900000  0
+0192a8c0-0000-7004-8000-000000000002  ""   -1       -12345678  1234567891234  1       0
+"""
+
+[sheets.junctions]
+content = """
+uuid                                  pos_x    pos_y   diameter
+0192a8c0-0000-7002-8000-000000000001  7777778  333333  0
+"""
+
+[sheets.labels]
+content = """
+uuid  text  pos_x  pos_y  rotation  kind  shape  font_size  justify  justify_v
+"""
+
+[extras.symbols.0192a8c0-0000-7001-8000-000000000001]
+footprint = "R_0603.snxfpt"
+datasheet = ""
+mirror_x = false
+mirror_y = false
+unit = 1
+is_power = false
+fields_autoplaced = false
+fields_user_placed = false
+dnp = false
+in_bom = true
+on_board = true
+exclude_from_sim = false
+locked = false
+custom_properties = []
+instances = []
+
+[extras.symbols.0192a8c0-0000-7001-8000-000000000001.fields]
+
+[extras.symbols.0192a8c0-0000-7001-8000-000000000001.pin_uuids]

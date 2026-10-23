@@ -6,42 +6,17 @@
 use signex_app::app::{BomPreviewMsg, ExportMsg, Message, Signex};
 use signex_app::menu_bar::MenuMessage;
 use signex_output::BomRule;
-use signex_types::schematic::{Point, SchematicSheet, Symbol};
-use std::collections::HashMap;
+use signex_types::schematic::{SchematicSheet, Symbol};
 use std::path::PathBuf;
 
 fn symbol(reference: &str, footprint: &str) -> Symbol {
     Symbol {
-        unknown_columns: Default::default(),
         uuid: uuid::Uuid::new_v4(),
         lib_id: "Device:R".to_string(),
         reference: reference.to_string(),
         value: "10k".to_string(),
         footprint: footprint.to_string(),
-        datasheet: String::new(),
-        position: Point::new(0.0, 0.0),
-        rotation: 0.0,
-        mirror_x: false,
-        mirror_y: false,
-        unit: 1,
-        is_power: false,
-        ref_text: None,
-        val_text: None,
-        fields_autoplaced: false,
-        fields_user_placed: false,
-        dnp: false,
-        in_bom: true,
-        on_board: true,
-        exclude_from_sim: false,
-        locked: false,
-        fields: HashMap::new(),
-        custom_properties: Vec::new(),
-        pin_uuids: HashMap::new(),
-        instances: Vec::new(),
-        library_id: None,
-        row_id: None,
-        library_version: String::new(),
-        unknown: Default::default(),
+        ..Default::default()
     }
 }
 
@@ -50,25 +25,9 @@ fn symbol(reference: &str, footprint: &str) -> Symbol {
 fn app_with_faulty_bom() -> Signex {
     let sheet = SchematicSheet {
         uuid: uuid::Uuid::new_v4(),
-        version: 0,
-        generator: String::new(),
-        generator_version: String::new(),
         paper_size: "A4".to_string(),
-        root_sheet_page: "1".to_string(),
         symbols: vec![symbol("R1", ""), symbol("R1", "R_0603")],
-        wires: Vec::new(),
-        junctions: Vec::new(),
-        labels: Vec::new(),
-        child_sheets: Vec::new(),
-        no_connects: Vec::new(),
-        text_notes: Vec::new(),
-        buses: Vec::new(),
-        bus_entries: Vec::new(),
-        drawings: Vec::new(),
-        no_erc_directives: Vec::new(),
-        title_block: HashMap::new(),
-        lib_symbols: HashMap::new(),
-        unknown: Default::default(),
+        ..Default::default()
     };
     let path = PathBuf::from("bom-validation.snxsch");
     let engine = signex_engine::Engine::new(sheet).expect("engine");
@@ -170,4 +129,48 @@ fn export_with_issues_still_writes_and_reports_the_summary() {
     assert!(notice.title.contains("Issues"), "{notice:?}");
     assert!(notice.detail.contains("1 error, 1 warning"), "{notice:?}");
     std::fs::remove_dir_all(&dir).expect("cleanup");
+}
+
+/// A column resize must end on a button release anywhere, in any window.
+/// Releasing away from the 4 px handle never reaches the handle's own
+/// `on_release`, so the global drag-end has to be live and has to clear the
+/// resize; otherwise the column keeps following the cursor.
+#[test]
+fn column_resize_ends_on_a_global_release_away_from_the_handle() {
+    use signex_app::app::UiMsg;
+
+    let mut app = app_with_faulty_bom();
+    let _ = app.update(Message::Menu(MenuMessage::ExportBom));
+    assert!(!app.is_pointer_drag_active());
+
+    let _ = app.update(Message::Ui(UiMsg::DragMove(100.0, 10.0)));
+    let _ = app.update(Message::BomPreview(BomPreviewMsg::ColumnResizeStart(0)));
+    assert!(
+        app.is_pointer_drag_active(),
+        "an active column resize must keep the global drag subscription live"
+    );
+
+    let _ = app.update(Message::Ui(UiMsg::DragMove(160.0, 10.0)));
+    let width_while_dragging = app
+        .document_state
+        .bom_preview
+        .as_ref()
+        .unwrap()
+        .column_widths[&0];
+
+    // The release arrives through the global drag-end path, not the handle.
+    let _ = app.update(Message::Ui(UiMsg::DragEnd));
+    let preview = app.document_state.bom_preview.as_ref().unwrap();
+    assert!(
+        preview.column_resize.is_none(),
+        "DragEnd must end the resize"
+    );
+    assert!(!app.is_pointer_drag_active());
+
+    let _ = app.update(Message::Ui(UiMsg::DragMove(400.0, 10.0)));
+    let preview = app.document_state.bom_preview.as_ref().unwrap();
+    assert_eq!(
+        preview.column_widths[&0], width_while_dragging,
+        "the column must stop following the cursor after the release"
+    );
 }

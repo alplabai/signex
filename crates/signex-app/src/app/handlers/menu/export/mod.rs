@@ -6,6 +6,7 @@ use signex_output::{ExportContext, ProjectMetadata, SheetSnapshot};
 
 mod bom;
 mod erc_report;
+mod page_setup;
 mod pdf_netlist;
 mod print_preview;
 #[cfg(test)]
@@ -36,12 +37,21 @@ fn build_export_context(
 fn build_bom_export_context(
     document_state: &crate::app::state::DocumentState,
 ) -> Option<ExportContext> {
-    let (mut ctx, _issues) = build_export_scope(document_state)?;
+    build_bom_export_scope(document_state).map(|(ctx, _issues)| ctx)
+}
+
+/// The BOM's scope, shared by the preview and the written file so the user
+/// sees what gets exported: [`build_export_scope`] plus the loose-document
+/// rule (drop the hierarchy, keep every unowned open tab).
+fn build_bom_export_scope(
+    document_state: &crate::app::state::DocumentState,
+) -> Option<(ExportContext, ExportIssues)> {
+    let (mut ctx, issues) = build_export_scope(document_state)?;
     if document_state.active_document_project().is_none() {
         ctx.netlist_sheets.clear();
         ctx.netlist_sheet_placements.clear();
     }
-    Some(ctx)
+    Some((ctx, issues))
 }
 
 /// Everything that went wrong while deriving the export's netlist.

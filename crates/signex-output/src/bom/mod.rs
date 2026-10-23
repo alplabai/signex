@@ -3,17 +3,17 @@
 //! See `OUTPUT_PLAN.md` §8. Walks every sheet in an ExportContext, aggregates
 //! components, skips power ports and DNP symbols, and emits in one of three formats.
 
-use std::collections::BTreeMap;
 use std::path::Path;
 
 use signex_bom::{BomComponent, BomContext, BomEngineOptions, build_table, validate_table};
-use signex_types::schematic::{SchematicSheet, Symbol};
+use signex_types::schematic::{SchematicSheet, Symbol, group_into_parts};
 use thiserror::Error;
 
 use crate::{ExportContext, Exporter};
 
 pub(crate) mod csv;
 mod html;
+mod units;
 mod xlsx;
 
 pub use csv::emit as csv_emit;
@@ -203,12 +203,11 @@ fn build_bom_context(ctx: &ExportContext, opts: &BomOptions) -> BomContext {
     let mut components = Vec::new();
 
     for (sheet, placements) in bom_sheets(ctx) {
-        let sheet_parts: Vec<BomComponent> = sheet
-            .symbols
-            .iter()
-            .filter(|sym| !(sym.reference.starts_with("#PWR") || sym.is_power))
-            .map(|sym| bom_component(sym, opts))
-            .collect();
+        // One component per physical part: every unit of a multi-unit part is
+        // a separate placed symbol, but it is bought and fitted once (#691).
+        // Parts are grouped per sheet: the same designator on two sheets is
+        // two parts, not two units of one.
+        let sheet_parts = sheet_components(sheet, opts);
         // A sheet placed N times contributes N copies of each part. Per-
         // instance designators do not exist yet (the netlist reports
         // `SharedReferenceAcrossInstances` for the same reason), so every copy
@@ -237,6 +236,11 @@ fn bom_sheets(ctx: &ExportContext) -> Vec<(&SchematicSheet, usize)> {
     if ctx.netlist_sheets.is_empty() {
         return ctx.sheets.iter().map(|s| (&s.schematic, 1)).collect();
     }
+    debug_assert_eq!(
+        ctx.netlist_sheets.len(),
+        ctx.netlist_sheet_placements.len(),
+        "netlist_sheet_placements is index-matched to netlist_sheets"
+    );
     ctx.netlist_sheets
         .iter()
         .enumerate()
@@ -247,52 +251,72 @@ fn bom_sheets(ctx: &ExportContext) -> Vec<(&SchematicSheet, usize)> {
         .collect()
 }
 
-fn bom_component(sym: &Symbol, opts: &BomOptions) -> BomComponent {
-    let name = sym
-        .fields
-        .get("Name")
-        .cloned()
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| sym.value.clone());
-    let description = sym.fields.get("Description").cloned().unwrap_or_default();
-    let lib_ref = sym
-        .fields
-        .get("LibRef")
-        .or_else(|| sym.fields.get("Part Number"))
-        .cloned()
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| sym.lib_id.clone());
-
-    let variant_fitted = resolve_active_variant_fitted(sym, opts.active_variant.as_deref());
-    let base_fitted = resolve_base_variant_fitted(sym);
-
-    let mut custom = sym
-        .fields
+/// The components of one sheet, one per physical part. A part takes what ANY
+/// of its units sets (see `units`), so an MPN typed on unit 2 or a DNP flag on
+/// unit 2 is not lost to unit 1.
+fn sheet_components(sheet: &SchematicSheet, opts: &BomOptions) -> Vec<BomComponent> {
+    let mut components = Vec::new();
+    let placed: Vec<&Symbol> = sheet
+        .symbols
         .iter()
-        .map(|(k, v)| (k.clone(), v.clone()))
-        .collect::<BTreeMap<_, _>>();
-    custom.remove("Name");
-    custom.remove("Description");
-    custom.remove("LibRef");
-    // Fit-state fields feed `variant_fitted`/`base_fitted`, not the
-    // part's identity. Drop whatever the resolvers recognise so a
-    // variant override cannot split otherwise identical parts.
-    custom.retain(|key, _| !is_fit_state_field(key));
+        .filter(|sym| !(sym.reference.starts_with("#PWR") || sym.is_power))
+        .collect();
+    let parts = group_into_parts(placed.iter().map(|sym| sym.part_key()));
 
-    BomComponent {
-        reference: sym.reference.clone(),
-        name,
-        value: sym.value.clone(),
-        footprint: sym.footprint.clone(),
-        lib_ref,
-        description,
-        dnp: sym.dnp,
-        in_bom: sym.in_bom,
-        on_board: sym.on_board,
-        variant_fitted,
-        base_fitted,
-        custom,
+    for part in &parts {
+        let units: Vec<&Symbol> = part.iter().map(|&member| placed[member]).collect();
+        let sym = units[0];
+        let merged = units::merge_units(&units, is_fit_state_field);
+
+        let name = merged
+            .fields
+            .get("Name")
+            .cloned()
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| merged.value.clone());
+        let description = merged
+            .fields
+            .get("Description")
+            .cloned()
+            .unwrap_or_default();
+        let lib_ref = merged
+            .fields
+            .get("LibRef")
+            .or_else(|| merged.fields.get("Part Number"))
+            .cloned()
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| sym.lib_id.clone());
+
+        let variant_fitted = units::merge_fit_states(
+            units
+                .iter()
+                .map(|unit| resolve_active_variant_fitted(unit, opts.active_variant.as_deref())),
+        );
+        let base_fitted =
+            units::merge_fit_states(units.iter().map(|unit| resolve_base_variant_fitted(unit)));
+
+        let mut custom = merged.fields;
+        custom.remove("Name");
+        custom.remove("Description");
+        custom.remove("LibRef");
+
+        components.push(BomComponent {
+            reference: sym.reference.clone(),
+            name,
+            value: merged.value,
+            footprint: merged.footprint,
+            lib_ref,
+            description,
+            dnp: units.iter().any(|unit| unit.dnp),
+            in_bom: units.iter().any(|unit| unit.in_bom),
+            on_board: units.iter().any(|unit| unit.on_board),
+            variant_fitted,
+            base_fitted,
+            custom,
+            unit_conflicts: merged.conflicts,
+        });
     }
+    components
 }
 
 fn component_is_exported(component: &BomComponent, opts: &BomOptions) -> bool {
@@ -561,7 +585,8 @@ mod tests {
     use super::*;
     use crate::{ProjectMetadata, SheetSnapshot};
     use signex_types::property::SchematicProperty;
-    use signex_types::schematic::{Point, SchematicSheet, Symbol};
+    use signex_types::schematic::{SchematicSheet, Symbol};
+    use std::collections::BTreeMap;
     use uuid::Uuid;
 
     /// The fit override `BomComponent::is_fitted` applies: the active
@@ -573,36 +598,12 @@ mod tests {
 
     fn test_symbol() -> Symbol {
         Symbol {
-            unknown_columns: Default::default(),
-            unknown: Default::default(),
             uuid: Uuid::new_v4(),
             lib_id: "Device:R".to_string(),
             reference: "R1".to_string(),
             value: "10k".to_string(),
             footprint: "R_0603".to_string(),
-            datasheet: String::new(),
-            position: Point { x: 0.0, y: 0.0 },
-            rotation: 0.0,
-            mirror_x: false,
-            mirror_y: false,
-            unit: 1,
-            is_power: false,
-            ref_text: None,
-            val_text: None,
-            fields_autoplaced: false,
-            fields_user_placed: false,
-            dnp: false,
-            in_bom: true,
-            on_board: true,
-            exclude_from_sim: false,
-            locked: false,
-            fields: std::collections::HashMap::new(),
-            custom_properties: Vec::new(),
-            pin_uuids: std::collections::HashMap::new(),
-            instances: Vec::new(),
-            library_id: None,
-            row_id: None,
-            library_version: String::new(),
+            ..Default::default()
         }
     }
 
@@ -627,26 +628,9 @@ mod tests {
             sheets: vec![SheetSnapshot {
                 path: "variant.snxsch".into(),
                 schematic: SchematicSheet {
-                    uuid: Uuid::nil(),
-                    version: 0,
-                    generator: String::new(),
-                    generator_version: String::new(),
                     paper_size: "A4".to_string(),
-                    root_sheet_page: "1".to_string(),
                     symbols: vec![symbol],
-                    wires: vec![],
-                    junctions: vec![],
-                    labels: vec![],
-                    child_sheets: vec![],
-                    no_connects: vec![],
-                    text_notes: vec![],
-                    buses: vec![],
-                    bus_entries: vec![],
-                    drawings: vec![],
-                    no_erc_directives: vec![],
-                    title_block: Default::default(),
-                    lib_symbols: Default::default(),
-                    unknown: Default::default(),
+                    ..Default::default()
                 },
                 sheet_name: "Main".to_string(),
                 sheet_number: 1,
@@ -657,6 +641,144 @@ mod tests {
             netlist_sheets: Vec::new(),
             netlist_sheet_placements: Vec::new(),
         }
+    }
+
+    fn unit_of(reference: &str, lib_id: &str, unit: u32) -> Symbol {
+        Symbol {
+            lib_id: lib_id.to_string(),
+            reference: reference.to_string(),
+            unit,
+            ..test_symbol()
+        }
+    }
+
+    fn context_with(symbols: Vec<Symbol>) -> ExportContext {
+        let mut ctx = base_dnp_variant_context(false);
+        ctx.sheets[0].schematic.symbols = symbols;
+        ctx
+    }
+
+    #[test]
+    fn units_of_one_part_are_one_row_with_quantity_one() {
+        let ctx = context_with(vec![
+            unit_of("U1", "Amplifier:LM358", 1),
+            unit_of("U1", "Amplifier:LM358", 2),
+        ]);
+        let table = rollup(&ctx, &BomOptions::default());
+        assert_eq!(table.rows.len(), 1);
+        assert_eq!(table.rows[0].qty, 1);
+        assert_eq!(table.rows[0].references, vec!["U1"]);
+    }
+
+    #[test]
+    fn units_of_one_part_do_not_raise_duplicate_designator() {
+        let ctx = context_with(vec![
+            unit_of("U1", "Amplifier:LM358", 1),
+            unit_of("U1", "Amplifier:LM358", 2),
+        ]);
+        let (_, report) = rollup_with_validation(&ctx, &BomOptions::default());
+        assert!(
+            !report
+                .issues
+                .iter()
+                .any(|i| i.rule == BomRule::DuplicateDesignator)
+        );
+    }
+
+    fn with_field(mut sym: Symbol, key: &str, value: &str) -> Symbol {
+        sym.fields.insert(key.to_string(), value.to_string());
+        sym
+    }
+
+    fn issues_for(ctx: &ExportContext) -> Vec<signex_bom::BomValidationIssue> {
+        rollup_with_validation(ctx, &BomOptions::default()).1.issues
+    }
+
+    #[test]
+    fn a_field_set_on_any_unit_applies_to_the_part() {
+        let ctx = context_with(vec![
+            unit_of("U1", "Amplifier:LM358", 1),
+            with_field(unit_of("U1", "Amplifier:LM358", 2), "MPN", "LM358DR"),
+        ]);
+        let opts = BomOptions {
+            columns: vec![BomColumn::Designator, BomColumn::Custom("MPN".to_string())],
+            ..BomOptions::default()
+        };
+        let output = BomExporter.export(&ctx, &opts).unwrap();
+        let csv = String::from_utf8(output.bytes).unwrap();
+        assert!(csv.contains("U1,LM358DR"), "{csv}");
+        assert!(
+            !output
+                .validation_report
+                .issues
+                .iter()
+                .any(|i| i.rule == BomRule::MissingMpn),
+            "MPN lives on unit 2 only"
+        );
+    }
+
+    #[test]
+    fn dnp_on_any_unit_makes_the_part_dnp() {
+        let mut unit2 = unit_of("U1", "Amplifier:LM358", 2);
+        unit2.dnp = true;
+        let ctx = context_with(vec![unit_of("U1", "Amplifier:LM358", 1), unit2]);
+        assert!(rollup(&ctx, &BomOptions::default()).rows.is_empty());
+    }
+
+    #[test]
+    fn conflicting_unit_fields_are_reported_by_part_and_field() {
+        let ctx = context_with(vec![
+            with_field(unit_of("U1", "Amplifier:LM358", 1), "MPN", "LM358DR"),
+            with_field(unit_of("U1", "Amplifier:LM358", 2), "MPN", "LM358P"),
+        ]);
+        let issues = issues_for(&ctx);
+        assert!(
+            issues.iter().any(|i| i.message.contains("U1")
+                && i.message.contains("MPN")
+                && i.message.contains("differ")),
+            "{issues:?}"
+        );
+    }
+
+    #[test]
+    fn one_included_unit_keeps_the_part_in_the_bom_and_warns() {
+        let mut excluded = unit_of("U1", "Amplifier:LM358", 2);
+        excluded.in_bom = false;
+        let ctx = context_with(vec![unit_of("U1", "Amplifier:LM358", 1), excluded]);
+        assert_eq!(rollup(&ctx, &BomOptions::default()).rows.len(), 1);
+        let issues = issues_for(&ctx);
+        assert!(
+            issues.iter().any(|i| i.message.contains("U1")
+                && i.message.contains("In BOM")
+                && i.message.contains("differ")),
+            "{issues:?}"
+        );
+    }
+
+    #[test]
+    fn matching_unit_fields_raise_no_conflict() {
+        let ctx = context_with(vec![
+            with_field(unit_of("U1", "Amplifier:LM358", 1), "MPN", "LM358DR"),
+            with_field(unit_of("U1", "Amplifier:LM358", 2), "MPN", "LM358DR"),
+        ]);
+        assert!(
+            !issues_for(&ctx)
+                .iter()
+                .any(|i| i.message.contains("differ"))
+        );
+    }
+
+    #[test]
+    fn two_parts_of_the_same_kind_stay_two_parts() {
+        let ctx = context_with(vec![
+            unit_of("U1", "Amplifier:LM358", 1),
+            unit_of("U1", "Amplifier:LM358", 2),
+            unit_of("U2", "Amplifier:LM358", 1),
+            unit_of("U2", "Amplifier:LM358", 2),
+        ]);
+        let table = rollup(&ctx, &BomOptions::default());
+        let qty: u32 = table.rows.iter().map(|r| r.qty).sum();
+        assert_eq!(qty, 2);
     }
 
     #[test]
@@ -1021,25 +1143,9 @@ mod tests {
         use signex_types::schematic::SchematicSheet;
         let schematic = SchematicSheet {
             uuid: Uuid::new_v4(),
-            version: 0,
-            generator: String::new(),
-            generator_version: String::new(),
             paper_size: "A4".to_string(),
-            root_sheet_page: "1".to_string(),
             symbols,
-            wires: Vec::new(),
-            junctions: Vec::new(),
-            labels: Vec::new(),
-            child_sheets: Vec::new(),
-            no_connects: Vec::new(),
-            text_notes: Vec::new(),
-            buses: Vec::new(),
-            bus_entries: Vec::new(),
-            drawings: Vec::new(),
-            no_erc_directives: Vec::new(),
-            title_block: std::collections::HashMap::new(),
-            lib_symbols: std::collections::HashMap::new(),
-            unknown: Default::default(),
+            ..Default::default()
         };
         ExportContext {
             sheets: vec![SheetSnapshot {

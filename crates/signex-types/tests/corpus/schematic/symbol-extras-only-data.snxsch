@@ -1,0 +1,98 @@
+format = "snxsch/1"
+schematic_id = "00000000-0000-0000-0000-000000000000"
+version = 1
+generator = "signex-test"
+generator_version = "0.9"
+paper_size = "A4"
+root_sheet_page = "1"
+
+
+[sheets.components]
+content = """
+uuid                                  ref  library        pos_x     pos_y     rotation  value  mpn
+0192a8c0-0000-7001-8000-000000000001  U1   device.snxsym  50800000  50800000  0         10k    ""
+"""
+
+[sheets.wires]
+content = """
+uuid  net  start_x  start_y  end_x  end_y  stroke_width
+"""
+
+[sheets.junctions]
+content = """
+uuid  pos_x  pos_y  diameter
+"""
+
+[sheets.labels]
+content = """
+uuid  text  pos_x  pos_y  rotation  kind  shape  font_size  justify  justify_v
+"""
+
+[extras.symbols.0192a8c0-0000-7001-8000-000000000001]
+footprint = "SOIC-8.snxfpt"
+datasheet = "ds/opa.pdf"
+mirror_x = false
+mirror_y = false
+unit = 1
+is_power = false
+fields_autoplaced = true
+fields_user_placed = true
+dnp = false
+in_bom = true
+on_board = true
+exclude_from_sim = false
+locked = false
+
+[extras.symbols.0192a8c0-0000-7001-8000-000000000001.fields]
+Alpha = "a"
+Manufacturer = "Example Semi"
+Tolerance = "1%"
+
+[[extras.symbols.0192a8c0-0000-7001-8000-000000000001.custom_properties]]
+key = "Rating"
+value = "0.25W"
+id = 7
+show_name = true
+do_not_autoplace = false
+
+[extras.symbols.0192a8c0-0000-7001-8000-000000000001.custom_properties.variant_overrides]
+alt = "0.5W"
+
+[[extras.symbols.0192a8c0-0000-7001-8000-000000000001.custom_properties]]
+key = "Plain"
+value = "x"
+
+[extras.symbols.0192a8c0-0000-7001-8000-000000000001.custom_properties.variant_overrides]
+
+[extras.symbols.0192a8c0-0000-7001-8000-000000000001.pin_uuids]
+1 = "0192a8c0-0000-7009-8000-000000000001"
+10 = "0192a8c0-0000-7009-8000-00000000000a"
+2 = "0192a8c0-0000-7009-8000-000000000002"
+
+[[extras.symbols.0192a8c0-0000-7001-8000-000000000001.instances]]
+project = "demo"
+path = "/root"
+reference = "U1"
+unit = 1
+
+[extras.symbols.0192a8c0-0000-7001-8000-000000000001.ref_text]
+rotation = 0.0
+font_size = 1.27
+justify_h = "left"
+justify_v = "bottom"
+hidden = false
+
+[extras.symbols.0192a8c0-0000-7001-8000-000000000001.ref_text.position]
+x = 50.8
+y = 45.72
+
+[extras.symbols.0192a8c0-0000-7001-8000-000000000001.val_text]
+rotation = 90.0
+font_size = 1.0
+justify_h = "right"
+justify_v = "top"
+hidden = true
+
+[extras.symbols.0192a8c0-0000-7001-8000-000000000001.val_text.position]
+x = 50.8
+y = 55.88
