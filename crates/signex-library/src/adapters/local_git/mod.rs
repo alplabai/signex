@@ -105,13 +105,14 @@ pub struct LocalGitAdapter {
     /// libgit2's responsibility; this only addresses the in-process
     /// race that `RwLock<LibraryFile>` does NOT cover.)
     git_lock: Mutex<()>,
-    /// Stamp of the `.snxlib` text behind `library_file` (#531). `None`
-    /// forces a reload on the next access. Lock order: `library_file`
-    /// before `disk_stamp`.
-    disk_stamp: Mutex<Option<disk_sync::DiskStamp>>,
+    /// Stamp and content hash of the `.snxlib` text behind `library_file`
+    /// (#531). `None` forces a reload on the next access. Lock order:
+    /// `library_file` before `disk_stamp`.
+    disk_stamp: Mutex<Option<disk_sync::KnownDisk>>,
     /// Last on-disk state whose failed reload was already logged, so a
-    /// persistently unreadable file warns once, not on every read.
-    warned_stamp: Mutex<Option<disk_sync::DiskStamp>>,
+    /// persistently unreadable or missing file warns once, not on every
+    /// read.
+    warned_state: Mutex<Option<disk_sync::DiskState>>,
 }
 
 impl LocalGitAdapter {
@@ -208,8 +209,8 @@ impl LocalGitAdapter {
             library_file: RwLock::new(library_file),
             manifest_synth,
             git_lock: Mutex::new(()),
-            disk_stamp: Mutex::new(Some(disk_stamp)),
-            warned_stamp: Mutex::new(None),
+            disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
+            warned_state: Mutex::new(None),
         })
     }
 
@@ -248,8 +249,8 @@ impl LocalGitAdapter {
             library_file: RwLock::new(library_file),
             manifest_synth,
             git_lock: Mutex::new(()),
-            disk_stamp: Mutex::new(Some(disk_stamp)),
-            warned_stamp: Mutex::new(None),
+            disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
+            warned_state: Mutex::new(None),
         })
     }
 
@@ -338,8 +339,8 @@ impl LocalGitAdapter {
             library_file: RwLock::new(library_file),
             manifest_synth,
             git_lock: Mutex::new(()),
-            disk_stamp: Mutex::new(Some(disk_stamp)),
-            warned_stamp: Mutex::new(None),
+            disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
+            warned_state: Mutex::new(None),
         })
     }
 
@@ -377,6 +378,7 @@ impl LocalGitAdapter {
 
 mod adapter;
 mod disk_sync;
+pub use disk_sync::DiskStamp;
 mod helpers;
 mod primitives;
 

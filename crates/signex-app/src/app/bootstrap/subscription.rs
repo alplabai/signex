@@ -669,6 +669,11 @@ impl Signex {
             Subscription::none()
         };
 
+        // External `.snxlib` edits (#531): a slow timer whose handler stats
+        // the mounted files off-thread; `view` only reads the caches.
+        let library_poll =
+            crate::library::external_poll::subscription(&self.library).map(Message::Library);
+
         Subscription::batch([
             kbd,
             mouse_sub,
@@ -677,6 +682,7 @@ impl Signex {
             window_resize,
             hover_tick,
             hover_tooltip_tick,
+            library_poll,
         ])
     }
 }
