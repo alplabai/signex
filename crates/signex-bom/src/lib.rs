@@ -446,7 +446,7 @@ pub fn validate_table(
                     rule: BomRule::UnitFieldConflict,
                     severity: BomIssueSeverity::Warning,
                     message: format!(
-                        "Units of {} carry differing values for {field}; the first unit's value is used",
+                        "Units of {} carry differing values for {field}; the BOM uses the first unit's value (or lists the part if any unit includes it)",
                         component.reference
                     ),
                     references: vec![component.reference.clone()],

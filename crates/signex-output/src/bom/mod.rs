@@ -259,8 +259,8 @@ fn build_bom_context(ctx: &ExportContext, opts: &BomOptions) -> BomContext {
             lib_ref,
             description,
             dnp: units.iter().any(|unit| unit.dnp),
-            in_bom: units.iter().all(|unit| unit.in_bom),
-            on_board: units.iter().all(|unit| unit.on_board),
+            in_bom: units.iter().any(|unit| unit.in_bom),
+            on_board: units.iter().any(|unit| unit.on_board),
             variant_fitted,
             base_fitted,
             custom,
@@ -693,6 +693,21 @@ mod tests {
         assert!(
             issues.iter().any(|i| i.message.contains("U1")
                 && i.message.contains("MPN")
+                && i.message.contains("differ")),
+            "{issues:?}"
+        );
+    }
+
+    #[test]
+    fn one_included_unit_keeps_the_part_in_the_bom_and_warns() {
+        let mut excluded = unit_of("U1", "Amplifier:LM358", 2);
+        excluded.in_bom = false;
+        let ctx = context_with(vec![unit_of("U1", "Amplifier:LM358", 1), excluded]);
+        assert_eq!(rollup(&ctx, &BomOptions::default()).rows.len(), 1);
+        let issues = issues_for(&ctx);
+        assert!(
+            issues.iter().any(|i| i.message.contains("U1")
+                && i.message.contains("In BOM")
                 && i.message.contains("differ")),
             "{issues:?}"
         );

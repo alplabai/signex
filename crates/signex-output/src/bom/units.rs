@@ -40,6 +40,16 @@ pub(super) fn merge_units(units: &[&Symbol], is_ignored: impl Fn(&str) -> bool) 
             absorb(key, candidate, slot, &mut conflicts);
         }
     }
+    // Inclusion flags: the part is listed if ANY unit includes it (see the
+    // caller), so a lone excluded unit can never drop a physical part from the
+    // BOM. Units that disagree are reported.
+    let disagree = |flag: fn(&Symbol) -> bool| units.iter().any(|u| flag(u) != flag(units[0]));
+    if disagree(|u| u.in_bom) {
+        conflicts.insert("In BOM".to_string());
+    }
+    if disagree(|u| u.on_board) {
+        conflicts.insert("On board".to_string());
+    }
     MergedUnits {
         fields,
         value,
