@@ -2,7 +2,7 @@
 //! ascend from the focused sheet to its parent.
 
 use iced::Task;
-use signex_widgets::tree_view::{TreeMsg, toggle};
+use signex_widgets::tree_view::{TreeMsg, resolve_path, toggle};
 
 use super::super::super::*;
 use crate::app::project_sheets::assemble_project_sheets;
@@ -19,10 +19,18 @@ impl Signex {
             return None;
         };
         match tree_msg {
-            TreeMsg::Toggle(path) => {
-                toggle(&mut self.document_state.panel_ctx.navigator.tree, path);
+            TreeMsg::Toggle(key) => {
+                let tree = &mut self.document_state.panel_ctx.navigator.tree;
+                if let Some(path) = resolve_path(tree, key) {
+                    toggle(tree, &path);
+                }
             }
-            TreeMsg::Select(path) => self.navigator_row_clicked(path),
+            TreeMsg::Select(key) => {
+                let tree = &self.document_state.panel_ctx.navigator.tree;
+                if let Some(path) = resolve_path(tree, key) {
+                    self.navigator_row_clicked(&path);
+                }
+            }
             // No context menu is defined for sheet rows.
             TreeMsg::ContextMenu(_) | TreeMsg::BackgroundContextMenu => {}
         }
@@ -186,7 +194,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let (mut app, [_, mid, _]) = three_level_project(&dir, &[]);
         app.refresh_panel_ctx();
-        let select = PanelMsg::Navigator(TreeMsg::Select(vec![0, 0]));
+        let select = PanelMsg::Navigator(TreeMsg::Select(key_at(&app, &[0, 0])));
 
         let _ = app.handle_dock_navigator_panel_message(&select);
         assert!(
@@ -216,8 +224,13 @@ mod tests {
         assert_eq!(active_tab(&app), Some(root), "the root has no parent");
     }
 
+    fn key_at(app: &Signex, path: &[usize]) -> signex_widgets::tree_view::TreeKey {
+        signex_widgets::tree_view::key_of(&app.document_state.panel_ctx.navigator.tree, path)
+            .expect("row exists")
+    }
+
     fn double_click(app: &mut Signex, path: &[usize]) {
-        let select = PanelMsg::Navigator(TreeMsg::Select(path.to_vec()));
+        let select = PanelMsg::Navigator(TreeMsg::Select(key_at(app, path)));
         let _ = app.handle_dock_navigator_panel_message(&select);
         let _ = app.handle_dock_navigator_panel_message(&select);
     }

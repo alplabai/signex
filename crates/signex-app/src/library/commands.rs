@@ -212,6 +212,7 @@ pub fn materialize_pending_library(
         path: entry_path,
         kind: entry_kind,
         library_id: Some(library_id),
+        unknown: Default::default(),
     });
 
     // No `refresh_components` chaser here (#530). This mount is
@@ -368,6 +369,7 @@ pub fn create_library_at(
         path: entry_path,
         kind: entry_kind,
         library_id: Some(library_id),
+        unknown: Default::default(),
     });
 
     // Best-effort runtime mount. Errors here downgrade to warnings so

@@ -15,6 +15,7 @@ pub(crate) mod test_support;
 
 use std::path::{Path, PathBuf};
 
+pub use annotation::AnnotateScope;
 pub use command::{
     AnnotateMode, Command, CommandKind, MirrorAxis, ReorderDirection, SheetPort, SymbolTextField,
     TextTarget,

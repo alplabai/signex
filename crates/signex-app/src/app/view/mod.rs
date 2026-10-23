@@ -1,6 +1,8 @@
 use iced::widget::{canvas, column, container, row, shader, stack, text_input};
 use iced::{Element, Length};
 
+/// Detached-modal native window title text.
+pub(crate) mod detached_title;
 pub(crate) mod dialogs;
 /// Overlay identity + paint order — shared with the Esc ladder in
 /// `app/bootstrap/subscription.rs`, hence `pub(crate)` and not a child

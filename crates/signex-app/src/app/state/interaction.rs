@@ -59,7 +59,7 @@ pub struct InteractionState {
     pub grid_picker: Option<crate::app::GridPickerState>,
     /// Document-tab right-click menu state. Anchored at the right-click
     /// coordinates inside the tab strip; carries the index of the
-    /// clicked tab so per-tab actions ("Close [filename]") resolve
+    /// clicked tab so per-tab actions ("Close \[filename\]") resolve
     /// against the correct entry. Mutually exclusive with
     /// `context_menu` and `project_tree_context_menu` — opening one
     /// dismisses the others.
@@ -93,7 +93,7 @@ pub struct InteractionState {
     /// Iced's `button` widget consumes mouse events before iced 0.14
     /// surfaces a built-in `on_double_click` for them, so we time the
     /// clicks ourselves at the app layer.
-    pub last_tree_click: Option<(Vec<usize>, std::time::Instant)>,
+    pub last_tree_click: Option<(signex_widgets::tree_view::TreeKey, std::time::Instant)>,
     pub active_bar_menu: Option<crate::active_bar::ActiveBarMenu>,
     pub selection_filters: std::collections::HashSet<crate::active_bar::SelectionFilter>,
     /// User-defined custom filter presets (capped at

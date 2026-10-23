@@ -1,0 +1,54 @@
+format = "snxsch/1"
+schematic_id = "00000000-0000-0000-0000-000000000000"
+version = 1
+generator = "signex-test"
+generator_version = "0.9"
+paper_size = "A4"
+root_sheet_page = "1"
+
+
+[sheets.components]
+content = """
+uuid  ref  library  pos_x  pos_y  rotation  value  mpn
+"""
+
+[sheets.wires]
+content = """
+uuid  net  start_x  start_y  end_x  end_y  stroke_width
+"""
+
+[sheets.junctions]
+content = """
+uuid  pos_x  pos_y  diameter
+"""
+
+[sheets.labels]
+content = """
+uuid  text  pos_x  pos_y  rotation  kind  shape  font_size  justify  justify_v
+"""
+
+[extras.sheet]
+child_sheets = []
+text_notes = []
+buses = []
+bus_entries = []
+drawings = []
+no_erc_directives = []
+
+[[extras.sheet.no_connects]]
+uuid = "0192a8c0-0000-7008-8000-000000000001"
+
+[extras.sheet.no_connects.position]
+x = 10.16
+y = 10.16
+
+[[extras.sheet.no_connects]]
+uuid = "0192a8c0-0000-7008-8000-000000000002"
+
+[extras.sheet.no_connects.position]
+x = 20.32
+y = 10.16
+
+[extras.sheet.title_block]
+
+[extras.sheet.lib_symbols]

@@ -1,5 +1,5 @@
 //! Sketch-mode Active Bar — floating toolbar over the footprint
-//! canvas when the editor is in [`EditorMode::Sketch`].
+//! canvas when the editor is in [`EditorMode::Sketch`](crate::library::editor::footprint::state::EditorMode::Sketch).
 //!
 //! Mirrors the Fusion 360 sketch toolbar layout, including its
 //! grouping: the geometry tools collapse into two dropdown triggers

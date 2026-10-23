@@ -151,16 +151,7 @@ impl Signex {
         // takes no effect.
         self.interaction_state.pcb_canvas.gpu_render = self.ui_state.pcb_gpu_render;
         // Revert the render inputs used for schematic live preview.
-        let tokens = if self.ui_state.theme_id == ThemeId::Custom {
-            self.ui_state
-                .custom_theme
-                .as_ref()
-                .map(|c| c.tokens)
-                .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::Signex))
-        } else {
-            signex_types::theme::theme_tokens(self.ui_state.theme_id)
-        };
-        self.document_state.panel_ctx.tokens = tokens;
+        self.document_state.panel_ctx.tokens = self.tokens_for(self.ui_state.theme_id);
         // #630 — the schematic grid style previewed live, so push the
         // committed value back to every window's canvas. Power port /
         // label / multisheet style have no draw-path reader at all, so
@@ -233,16 +224,7 @@ impl Signex {
                 // re-assert it so the saved and effective flags can't diverge.
                 self.interaction_state.pcb_canvas.gpu_render = self.ui_state.pcb_gpu_render;
                 self.update_canvas_theme();
-                let tokens = if self.ui_state.theme_id == ThemeId::Custom {
-                    self.ui_state
-                        .custom_theme
-                        .as_ref()
-                        .map(|c| c.tokens)
-                        .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::Signex))
-                } else {
-                    signex_types::theme::theme_tokens(self.ui_state.theme_id)
-                };
-                self.document_state.panel_ctx.tokens = tokens;
+                self.document_state.panel_ctx.tokens = self.tokens_for(self.ui_state.theme_id);
                 self.document_state.panel_ctx.ui_font_name = self.ui_state.ui_font_name.clone();
                 // The live preview already pushed the draft onto the
                 // canvases; re-assert from the committed value so the

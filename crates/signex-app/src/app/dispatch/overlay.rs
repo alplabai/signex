@@ -178,7 +178,7 @@ impl Signex {
                 self.interaction_state.submenu_unhovered_since = None;
                 Task::none()
             }
-            ContextMenuMsg::ShowProjectTree(path) => {
+            ContextMenuMsg::ShowProjectTree(key) => {
                 // Close any canvas context menu so the two menus never
                 // overlap, then anchor the new menu to `last_mouse_pos`
                 // (iced 0.14 mouse_area does not forward cursor coords
@@ -197,7 +197,7 @@ impl Signex {
                 self.interaction_state.submenu_unhovered_since = None;
                 let (x, y) = self.interaction_state.last_mouse_pos;
                 self.interaction_state.project_tree_context_menu =
-                    Some(crate::app::ProjectTreeContextMenuState { x, y, path });
+                    Some(crate::app::ProjectTreeContextMenuState { x, y, key });
                 Task::none()
             }
             ContextMenuMsg::CloseProjectTree => {
