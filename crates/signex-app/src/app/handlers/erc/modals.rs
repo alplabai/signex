@@ -234,35 +234,7 @@ impl Signex {
             ModalId::SelectionFilterCustom => iced::Size::new(440.0, 380.0),
         };
 
-        let (id, open_task) = iced::window::open(iced::window::Settings {
-            size,
-            resizable: true,
-            // No OS chrome — the modal body supplies its own header with
-            // an X close button and a click-to-drag region.
-            decorations: false,
-            // A detached modal must not fall behind the window it was
-            // detached from. It carries no OS title bar, so once the main
-            // window covers it there is nothing to grab and no entry in a
-            // window menu to bring it back — the user is left with a
-            // dialog that is open, blocking, and invisible.
-            //
-            // `iced` 0.14 exposes no owner/parent relationship
-            // (`window::Settings` has no `parent_window`), so
-            // `AlwaysOnTop` is the only mechanism available. It is
-            // system-wide rather than app-scoped: the modal also floats
-            // above other applications while it is open. That is the
-            // cost of the guarantee. The alternative — raising it on
-            // every focus event — would fight the user for focus on the
-            // non-blocking members of this set (Print Preview, BOM
-            // Preview, Parameter Manager).
-            //
-            // Deliberately NOT applied to the two sibling `window::open`
-            // calls above: an undocked tab and a detached panel are
-            // ordinary document windows the user is meant to be able to
-            // put behind something.
-            level: iced::window::Level::AlwaysOnTop,
-            ..Default::default()
-        });
+        let (id, open_task) = iced::window::open(detached_modal_settings(size));
         // Stash the mapping right away — view(id) for the new window
         // fires before open_task resolves on some platforms, and without
         // the entry the detached window would render empty.
@@ -376,5 +348,50 @@ impl Signex {
             Some(id) => crate::chrome::start_window_drag(id),
             None => Task::none(),
         }
+    }
+}
+
+/// Window settings for a detached modal.
+///
+/// The level is `Normal`: a detached modal stacks like any other window,
+/// so it never floats above other applications and never covers the
+/// in-window modals (shortcut sheet, tour, confirm dialogs) painted in the
+/// main window.
+///
+/// iced 0.14.0 offers no owner/parent relationship: `window::Settings` has
+/// no `parent_window`, and `iced_winit` never calls winit's
+/// `with_parent_window` / `with_transient_for`. "Stay above my owner only"
+/// is therefore not requestable. Residual behaviour: the modal has no OS
+/// chrome (its body draws its own header), so if the main window is raised
+/// over it the user brings it back with the OS window switcher.
+pub(crate) fn detached_modal_settings(size: iced::Size) -> iced::window::Settings {
+    iced::window::Settings {
+        size,
+        resizable: true,
+        // No OS chrome - the modal body supplies its own header with an X
+        // close button and a click-to-drag region.
+        decorations: false,
+        level: iced::window::Level::Normal,
+        ..Default::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::detached_modal_settings;
+
+    #[test]
+    fn detached_modal_is_not_always_on_top() {
+        let s = detached_modal_settings(iced::Size::new(420.0, 180.0));
+        assert_eq!(s.level, iced::window::Level::Normal);
+    }
+
+    #[test]
+    fn detached_modal_keeps_requested_size_and_custom_chrome() {
+        let size = iced::Size::new(900.0, 620.0);
+        let s = detached_modal_settings(size);
+        assert_eq!(s.size, size);
+        assert!(s.resizable);
+        assert!(!s.decorations);
     }
 }
