@@ -101,6 +101,9 @@ fn map_import_warning(warning: ModelImportWarning) -> RuntimeModelBridgeWarning 
         ModelImportWarning::UnsupportedGltfExtension { name } => {
             RuntimeModelBridgeWarning::UnsupportedGltfExtension { name }
         }
+        ModelImportWarning::GeometryAltered { line, reason } => {
+            RuntimeModelBridgeWarning::GeometryAltered { line, reason }
+        }
     }
 }
 

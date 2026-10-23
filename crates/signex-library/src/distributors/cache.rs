@@ -137,6 +137,25 @@ impl DistributorCache {
         Ok(Some(part))
     }
 
+    /// [`get`](Self::get) for adapter read paths: an unreadable entry (corrupt
+    /// JSON, permission error, rejected path) is logged at `warn` and treated
+    /// as a miss, so the caller falls through to a live fetch. Mirrors the
+    /// write side, which warns on a failed `put` rather than dropping it.
+    pub fn get_or_warn(&self, provider: &str, mpn: &str, ttl: Duration) -> Option<DistributorPart> {
+        match self.get(provider, mpn, ttl) {
+            Ok(hit) => hit,
+            Err(e) => {
+                tracing::warn!(
+                    error = %e,
+                    provider = %provider,
+                    mpn = %mpn,
+                    "distributor cache read failed; treating as a miss",
+                );
+                None
+            }
+        }
+    }
+
     /// Delete a cached entry, if present. Idempotent.
     pub fn invalidate(&self, provider: &str, mpn: &str) -> Result<(), CacheError> {
         let path = self.validate_entry_path(provider, mpn)?;
@@ -233,5 +252,63 @@ mod tests {
         // attackers can't probe filesystem state through a cache miss.
         assert!(cache.get("lcsc", "..", DEFAULT_TTL).is_err());
         assert!(cache.invalidate("..", "anything").is_err());
+    }
+
+    /// Captures `tracing` output from the current thread into a buffer.
+    #[derive(Clone, Default)]
+    struct Captured(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+    impl std::io::Write for Captured {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    fn logged(f: impl FnOnce()) -> String {
+        let buf = Captured::default();
+        let sink = buf.clone();
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(move || sink.clone())
+            .with_ansi(false)
+            .finish();
+        tracing::subscriber::with_default(subscriber, f);
+        String::from_utf8(buf.0.lock().unwrap().clone()).unwrap()
+    }
+
+    /// #806: a corrupt entry is a miss, and the read failure is logged
+    /// instead of being dropped.
+    #[test]
+    fn get_or_warn_logs_corrupt_entry_and_misses() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = DistributorCache::with_root(dir.path()).unwrap();
+        let path = cache.entry_path("lcsc", "R1");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, b"{").unwrap();
+
+        let mut hit = Some(part("sentinel"));
+        let log = logged(|| hit = cache.get_or_warn("lcsc", "R1", DEFAULT_TTL));
+        assert!(hit.is_none());
+        assert!(log.contains("WARN"), "{log}");
+        assert!(log.contains("distributor cache read failed"), "{log}");
+        assert!(log.contains("R1"), "{log}");
+    }
+
+    /// An absent entry is an ordinary miss: no warning.
+    #[test]
+    fn get_or_warn_is_silent_on_plain_miss_and_returns_hits() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = DistributorCache::with_root(dir.path()).unwrap();
+        let mut miss = Some(part("sentinel"));
+        let log = logged(|| miss = cache.get_or_warn("lcsc", "R1", DEFAULT_TTL));
+        assert!(miss.is_none());
+        assert!(log.is_empty(), "{log}");
+
+        cache.put("lcsc", &part("R1")).unwrap();
+        let hit = cache.get_or_warn("lcsc", "R1", DEFAULT_TTL).unwrap();
+        assert_eq!(hit.mpn, "R1");
     }
 }

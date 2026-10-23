@@ -135,7 +135,7 @@ impl DistributorAdapter for JlcpcbAdapter {
 
     fn lookup_by_mpn(&self, mpn: &str) -> Result<Vec<DistributorPart>, DistributorError> {
         if let Some(cache) = &self.cache
-            && let Ok(Some(hit)) = cache.get(JLCPCB_PROVIDER_KEY, mpn, DEFAULT_TTL)
+            && let Some(hit) = cache.get_or_warn(JLCPCB_PROVIDER_KEY, mpn, DEFAULT_TTL)
         {
             return Ok(vec![hit]);
         }
