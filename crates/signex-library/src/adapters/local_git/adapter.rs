@@ -371,6 +371,9 @@ impl LibraryAdapter for LocalGitAdapter {
                 return Ok(sym.clone());
             }
         }
+        if let Some(err) = self.symbol_lookup_undetermined(uuid) {
+            return Err(err);
+        }
         Err(LibraryError::NotFound(format!("symbol {uuid}")))
     }
 

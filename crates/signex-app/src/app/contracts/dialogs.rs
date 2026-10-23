@@ -341,14 +341,15 @@ pub enum ProjectMsg {
     /// v0.23 — Async project-git commit completed. The dispatcher
     /// removes the `(project_root, rel_path)` entry from
     /// `inflight_git_commits` and logs success/failure. `result.Ok`
-    /// carries the formatted commit OID; `result.Err` carries the
+    /// carries the formatted commit OID, or `None` when the file matched
+    /// HEAD and no commit was made (#149); `result.Err` carries the
     /// error string. Best-effort — a failure here doesn't roll back
     /// the on-disk save (data is already on disk; this just means git
     /// didn't capture it).
     GitCommitDone {
         project_root: std::path::PathBuf,
         rel_path: std::path::PathBuf,
-        result: Result<String, String>,
+        result: Result<Option<String>, String>,
     },
 }
 
