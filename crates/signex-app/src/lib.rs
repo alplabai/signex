@@ -58,4 +58,5 @@ pub mod styles;
 pub mod tab_bar;
 #[cfg(test)]
 pub(crate) mod test_support;
+pub(crate) mod text_trunc;
 pub mod toolbar;
