@@ -30,6 +30,7 @@ impl Signex {
         self.document_state.history.generation =
             self.document_state.history.generation.wrapping_add(1);
         self.document_state.history.active_path = new_active_path.clone();
+        self.document_state.history.pending_restore = None;
         self.document_state.history.entries = Vec::new();
 
         match target {

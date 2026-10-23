@@ -7,6 +7,7 @@
 
 use super::*;
 
+mod page_setup;
 mod preview;
 mod settings;
 

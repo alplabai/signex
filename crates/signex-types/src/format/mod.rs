@@ -496,7 +496,9 @@ impl SnxPcb {
         // right parent path.
         // A section holding only foreign keys is still emitted, with its
         // known members empty, so those keys are not lost.
-        let keep_stackup = !self.board.layers.is_empty() || !self.board.unknown.stackup.is_empty();
+        let keep_stackup = !self.board.layers.is_empty()
+            || self.board.setup.is_some()
+            || !self.board.unknown.stackup.is_empty();
         let keep_nets = !self.board.nets.is_empty() || !self.board.unknown.nets.is_empty();
         if keep_stackup || keep_nets {
             #[derive(Serialize)]

@@ -41,6 +41,9 @@ mod project;
 #[path = "regression/bom_validation.rs"]
 mod bom_validation;
 
+#[path = "regression/pdf_page_setup.rs"]
+mod pdf_page_setup;
+
 #[path = "regression/prefs.rs"]
 mod prefs;
 
@@ -127,3 +130,6 @@ mod idle_cursor_move;
 mod save_as_by_document_kind;
 #[path = "regression/stable_addressing.rs"]
 mod stable_addressing;
+
+#[path = "regression/surface_failures.rs"]
+mod surface_failures;

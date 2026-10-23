@@ -48,6 +48,22 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// The type word of a node-valued field: consumes an optional `DEF <name>`
+    /// prefix. `USE <name>` is not resolved (#591): it is warned about and
+    /// yields `"USE"`, which matches no node type, so the field is ignored.
+    fn expect_node_type(&mut self) -> Result<String, ParseError> {
+        let line = self.current_line();
+        let mut word = self.expect_word()?;
+        if word == "DEF" {
+            self.expect_word()?;
+            word = self.expect_word()?;
+        } else if word == "USE" {
+            let name = self.expect_word()?;
+            log::warn!("VRML: USE {name} at line {line} is not resolved; node dropped");
+        }
+        Ok(word)
+    }
+
     /// Skip the `#VRML V2.0 utf8` header line (already tokenized as words).
     pub(super) fn skip_vrml_header(&mut self) {
         // The header appears as tokens: "#VRML" "V2.0" "utf8" — but since `#`
@@ -55,12 +71,20 @@ impl<'a> Parser<'a> {
         // already dropped. Nothing to skip here.
     }
 
-    /// Parse zero or more top-level or child nodes until we hit RBrace / EOF.
+    /// Parse top-level nodes until EOF. A stray `}` is warned about and
+    /// skipped so the rest of the file still parses.
     pub(super) fn parse_node_list(&mut self) -> Result<Vec<Node>, ParseError> {
         let mut nodes = Vec::new();
         loop {
             match self.peek() {
-                None | Some(Token::RBrace) => break,
+                None => break,
+                Some(Token::RBrace) => {
+                    log::warn!(
+                        "VRML: unmatched '}}' at line {}; skipped",
+                        self.current_line()
+                    );
+                    self.next();
+                }
                 _ => {
                     if let Some(node) = self.parse_node()? {
                         nodes.push(node);
@@ -121,8 +145,10 @@ impl<'a> Parser<'a> {
     fn parse_transform(&mut self) -> Result<Node, ParseError> {
         self.expect_lbrace()?;
         let mut translation = [0.0f32; 3];
-        let mut rotation = [0.0f32, 1.0, 0.0, 0.0];
+        let mut rotation = [0.0f32, 0.0, 1.0, 0.0];
         let mut scale = [1.0f32; 3];
+        let mut center = [0.0f32; 3];
+        let mut scale_orientation = [0.0f32, 0.0, 1.0, 0.0];
         let mut children = Vec::new();
 
         loop {
@@ -144,11 +170,12 @@ impl<'a> Parser<'a> {
                     translation[1] = self.parse_f32()?;
                     translation[2] = self.parse_f32()?;
                 }
-                "rotation" => {
-                    rotation[0] = self.parse_f32()?;
-                    rotation[1] = self.parse_f32()?;
-                    rotation[2] = self.parse_f32()?;
-                    rotation[3] = self.parse_f32()?;
+                "rotation" => rotation = self.parse_rotation()?,
+                "scaleOrientation" => scale_orientation = self.parse_rotation()?,
+                "center" => {
+                    center[0] = self.parse_f32()?;
+                    center[1] = self.parse_f32()?;
+                    center[2] = self.parse_f32()?;
                 }
                 "scale" => {
                     scale[0] = self.parse_f32()?;
@@ -164,11 +191,18 @@ impl<'a> Parser<'a> {
             }
         }
         Ok(Node::Transform {
-            translation,
-            rotation,
-            scale,
+            local: Transform::from_fields(translation, rotation, scale, center, scale_orientation),
             children,
         })
+    }
+
+    fn parse_rotation(&mut self) -> Result<[f32; 4], ParseError> {
+        Ok([
+            self.parse_f32()?,
+            self.parse_f32()?,
+            self.parse_f32()?,
+            self.parse_f32()?,
+        ])
     }
 
     fn parse_group(&mut self) -> Result<Node, ParseError> {
@@ -223,7 +257,7 @@ impl<'a> Parser<'a> {
                     color = self.parse_appearance_color()?;
                 }
                 "geometry" => {
-                    let geom_type = self.expect_word()?;
+                    let geom_type = self.expect_node_type()?;
                     if geom_type == "IndexedFaceSet" {
                         (positions, indices) = self.parse_indexed_face_set()?;
                     } else if let Some(Token::LBrace) = self.peek() {
@@ -245,7 +279,7 @@ impl<'a> Parser<'a> {
     fn parse_appearance_color(&mut self) -> Result<[f32; 4], ParseError> {
         // appearance Appearance { material Material { diffuseColor r g b ... } }
         // We skip all appearance fields except diffuseColor.
-        let node_type = self.expect_word()?;
+        let node_type = self.expect_node_type()?;
         if node_type != "Appearance" {
             if let Some(Token::LBrace) = self.peek() {
                 self.consume_block()?;
@@ -269,7 +303,7 @@ impl<'a> Parser<'a> {
             let field = self.expect_word()?;
             match field.as_str() {
                 "material" => {
-                    let mat_type = self.expect_word()?;
+                    let mat_type = self.expect_node_type()?;
                     if mat_type == "Material" {
                         color = self.parse_material_color()?;
                     } else if let Some(Token::LBrace) = self.peek() {
@@ -338,7 +372,7 @@ impl<'a> Parser<'a> {
             let field = self.expect_word()?;
             match field.as_str() {
                 "coord" => {
-                    let coord_type = self.expect_word()?;
+                    let coord_type = self.expect_node_type()?;
                     if coord_type == "Coordinate" {
                         positions = self.parse_coordinate_point()?;
                     } else if let Some(Token::LBrace) = self.peek() {
@@ -485,7 +519,21 @@ impl<'a> Parser<'a> {
         match self.peek() {
             Some(Token::LBrace | Token::LBracket) => self.consume_block(),
             Some(Token::Word(_)) => {
-                self.next();
+                // An SFNode value is `[DEF name] Type { ... }`: the words are
+                // followed by a body that must be consumed with them, or its
+                // closing brace ends the enclosing node early (#689).
+                let word = self.expect_word()?;
+                if word == "USE" {
+                    self.expect_word()?;
+                    return Ok(());
+                }
+                if word == "DEF" {
+                    self.expect_word()?;
+                    self.expect_word()?;
+                }
+                if let Some(Token::LBrace) = self.peek() {
+                    self.consume_block()?;
+                }
                 Ok(())
             }
             _ => Ok(()),
@@ -494,29 +542,33 @@ impl<'a> Parser<'a> {
 
     /// Consume a `{ ... }` or `[ ... ]` block including all nested blocks.
     fn consume_block(&mut self) -> Result<(), ParseError> {
-        let open = match self.next() {
-            Some(Token::LBrace) => Token::LBrace,
-            Some(Token::LBracket) => Token::LBracket,
-            _ => return Ok(()),
-        };
-        let close = if open == Token::LBrace {
-            Token::RBrace
-        } else {
-            Token::RBracket
-        };
-        let mut depth = 1usize;
+        if !matches!(self.next(), Some(Token::LBrace | Token::LBracket)) {
+            return Ok(());
+        }
+        // Each opener ('{' or '[') pushes its own closer, so nested lists inside
+        // a node body close correctly (#689). A closer that does not match the
+        // innermost opener is warned about and skipped, never counted.
+        let mut expected = vec![self.tokens[self.pos - 1].closer()];
         loop {
-            match self.next() {
+            match self.next().cloned() {
                 None => {
                     return Err(ParseError::UnexpectedEof {
                         line: self.current_line(),
                     });
                 }
-                Some(t) if *t == Token::LBrace || *t == Token::LBracket => depth += 1,
-                Some(t) if *t == close => {
-                    depth -= 1;
-                    if depth == 0 {
-                        break;
+                Some(t @ (Token::LBrace | Token::LBracket)) => expected.push(t.closer()),
+                Some(t @ (Token::RBrace | Token::RBracket)) => {
+                    if t == expected[expected.len() - 1] {
+                        expected.pop();
+                        if expected.is_empty() {
+                            break;
+                        }
+                    } else {
+                        log::warn!(
+                            "VRML: mismatched closer {:?} at line {}; skipped",
+                            t,
+                            self.lines.get(self.pos - 1).copied().unwrap_or(0)
+                        );
                     }
                 }
                 _ => {}
