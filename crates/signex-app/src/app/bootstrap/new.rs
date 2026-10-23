@@ -57,6 +57,10 @@ impl Signex {
         };
         // Silence unused-mut when read_dock_layout returns Some.
         let _ = &mut dock;
+        let dock_layout_sync = crate::dock::DockLayoutSync::new(
+            std::sync::Arc::new(crate::fonts::PrefsDockLayoutStore::user_prefs()),
+            crate::dock::DockLayoutSnapshot::capture(&dock),
+        );
 
         let sch_canvas = CanvasSlot::new();
         let mut pcb_canvas = crate::pcb_canvas::PcbCanvas::new();
@@ -285,6 +289,7 @@ impl Signex {
             },
             document_state: DocumentState {
                 dock,
+                dock_layout_sync,
                 tabs: vec![],
                 active_tab: 0,
                 engines: std::collections::HashMap::new(),
@@ -443,6 +448,12 @@ impl Signex {
             },
             library: crate::library::LibraryState::default(),
         };
+        // The PCB canvas starts from the loaded grid state, not its own
+        // defaults, so the first frame honours a saved "grid off" (#682).
+        app.interaction_state.pcb_canvas.set_grid(
+            app.ui_state.grid_visible,
+            app.ui_state.visible_grid_mm as f64,
+        );
         // v0.9 Stage 9: load + mount globally-configured libraries
         // before the first frame so the Components Panel's Global
         // section is populated from the get-go.

@@ -33,6 +33,8 @@ fn app_with_cached_library() -> (Signex, PathBuf) {
         cached_symbols: vec![cached_summary("R_0805")],
         cached_footprints: vec![cached_summary("SOIC-8")],
         cached_sims: vec![cached_summary("BC547.lib")],
+        cached_classes: Vec::new(),
+        observed_stamp: None,
         display: LibraryDisplaySettings::default(),
     });
     let saved = dir.join("symbols").join("just-saved.snxsym");

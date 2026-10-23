@@ -771,6 +771,8 @@ impl Default for Symbol {
 // Wiring primitives
 mod field_style;
 pub use field_style::field_effective_style;
+mod parts;
+pub use parts::*;
 mod sheet;
 pub use sheet::*;
 
