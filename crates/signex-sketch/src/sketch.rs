@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
 
 use crate::array::Array;
+use crate::array::ArrayId;
 use crate::constraint::Constraint;
 use crate::entity::Entity;
 use crate::id::{ConstraintId, SketchEntityId};
@@ -30,12 +31,13 @@ pub struct SketchData {
 pub struct Removed {
     pub entities: Vec<SketchEntityId>,
     pub constraints: Vec<ConstraintId>,
+    pub arrays: Vec<ArrayId>,
 }
 
 impl SketchData {
     /// Remove `id` and everything that cannot exist without it: each
     /// line, arc or circle that names it as an endpoint or centre, and
-    /// each constraint that names any removed entity. The sketch never
+    /// each constraint and array that names any removed entity. The sketch never
     /// holds a dangling reference afterwards: a sketch that already had
     /// some (see [`Self::dangling_refs`]) is healed by the same pass, so
     /// a delete is also the way out of a corrupt file.
@@ -43,7 +45,7 @@ impl SketchData {
         let mut removed = Removed::default();
         let mut doomed: HashSet<SketchEntityId> = HashSet::from([id]);
         loop {
-            let before = removed.entities.len() + removed.constraints.len();
+            let before = removed.entities.len() + removed.constraints.len() + removed.arrays.len();
             let known: HashSet<SketchEntityId> = self.entities.iter().map(|e| e.id).collect();
             let is_gone = |r: &SketchEntityId| doomed.contains(r) || !known.contains(r);
             self.entities.retain(|e| {
@@ -60,7 +62,14 @@ impl SketchData {
                 }
                 !gone
             });
-            if removed.entities.len() + removed.constraints.len() == before {
+            self.arrays.retain(|a| {
+                let gone = a.kind.entity_refs().iter().any(is_gone);
+                if gone {
+                    removed.arrays.push(a.id);
+                }
+                !gone
+            });
+            if removed.entities.len() + removed.constraints.len() + removed.arrays.len() == before {
                 return removed;
             }
             doomed.extend(removed.entities.iter().copied());
@@ -77,6 +86,7 @@ impl SketchData {
             .iter()
             .flat_map(Entity::point_refs)
             .chain(self.constraints.iter().flat_map(|c| c.kind.entity_refs()))
+            .chain(self.arrays.iter().flat_map(|a| a.kind.entity_refs()))
             .filter(|r| !known.contains(r))
             .collect();
         missing.sort_by_key(ToString::to_string);

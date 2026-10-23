@@ -4,6 +4,7 @@
 mod common;
 use common::Sketch;
 
+use signex_sketch::array::{Array, ArrayId, ArrayKind, NumberingScheme};
 use signex_sketch::constraint::{Constraint, ConstraintKind};
 use signex_sketch::id::ConstraintId;
 use signex_sketch::solver::residual::ResolvedParams;
@@ -88,4 +89,71 @@ fn a_sketch_with_a_dangling_ref_returns_a_typed_error_then_heals() {
     Solver::default()
         .solve(&s.data, &ResolvedParams::new())
         .expect("healed sketch solves");
+}
+
+fn array(kind: ArrayKind) -> Array {
+    Array {
+        id: ArrayId::new(),
+        kind,
+        numbering: NumberingScheme::default(),
+    }
+}
+
+fn linear(source: signex_sketch::id::SketchEntityId) -> Array {
+    array(ArrayKind::Linear {
+        source,
+        count_expr: "3".into(),
+        dx_expr: "1mm".into(),
+        dy_expr: "0mm".into(),
+    })
+}
+
+#[test]
+fn deleting_a_linear_array_source_removes_the_array() {
+    let mut s = Sketch::new();
+    let src = s.add_point(0.0, 0.0);
+    let other = s.add_point(5.0, 5.0);
+    let arr = linear(src);
+    let id = arr.id;
+    s.data.arrays.push(arr);
+    s.data.arrays.push(linear(other));
+
+    let removed = s.data.remove_entity_cascade(src);
+
+    assert_eq!(removed.arrays, vec![id]);
+    assert_eq!(s.data.arrays.len(), 1);
+    assert!(s.data.dangling_refs().is_empty());
+}
+
+#[test]
+fn deleting_a_polar_array_centre_removes_the_array() {
+    let mut s = Sketch::new();
+    let src = s.add_point(1.0, 0.0);
+    let centre = s.add_point(0.0, 0.0);
+    s.data.arrays.push(array(ArrayKind::Polar {
+        source: src,
+        center: centre,
+        count_expr: "4".into(),
+        sweep_angle_expr: "360deg".into(),
+        depopulation: None,
+    }));
+
+    let removed = s.data.remove_entity_cascade(centre);
+
+    assert_eq!(removed.arrays.len(), 1);
+    assert!(s.data.arrays.is_empty());
+    assert!(s.data.dangling_refs().is_empty());
+}
+
+#[test]
+fn an_array_pointing_at_a_missing_entity_is_a_dangling_reference() {
+    let mut s = Sketch::new();
+    let ghost = signex_sketch::id::SketchEntityId::new();
+    s.data.arrays.push(linear(ghost));
+
+    assert_eq!(s.data.dangling_refs(), vec![ghost]);
+    let err = Solver::default()
+        .solve(&s.data, &ResolvedParams::new())
+        .unwrap_err();
+    assert!(matches!(err, SolveError::DanglingReference(_)), "{err:?}");
 }

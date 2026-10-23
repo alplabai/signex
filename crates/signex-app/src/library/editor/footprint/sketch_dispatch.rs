@@ -328,19 +328,15 @@ fn apply_edit_inner(footprint: &mut Footprint, edit: SketchEdit) {
         SketchEdit::AddEntity(e) => sketch.entities.push(*e),
         SketchEdit::DeleteEntity(id) => {
             // Structural cascade: lines/arcs/circles built on the entity
-            // and every constraint naming a removed entity go with it, in
+            // and every constraint or array naming a removed entity go with it, in
             // this one mutation (one undo step).
             let removed = sketch.remove_entity_cascade(id);
-            if removed.entities.len() > 1 || !removed.constraints.is_empty() {
+            let others = removed.entities.len().saturating_sub(1);
+            if others > 0 || !removed.constraints.is_empty() || !removed.arrays.is_empty() {
                 crate::diagnostics::log_info(format!(
-                    "Deleting a sketch entity also removed {} dependent entit{} and {} constraint(s)",
-                    removed.entities.len().saturating_sub(1),
-                    if removed.entities.len() == 2 {
-                        "y"
-                    } else {
-                        "ies"
-                    },
-                    removed.constraints.len()
+                    "Deleting a sketch entity also removed {others} dependent entity(ies), {} constraint(s) and {} array(s)",
+                    removed.constraints.len(),
+                    removed.arrays.len()
                 ));
             }
         }
