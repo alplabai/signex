@@ -5,7 +5,7 @@
 
 use iced::widget::canvas::{self, Cache, Geometry, Path, Stroke, Text};
 use iced::{Color, Element, Length, Point, Rectangle, Size, Theme};
-use signex_types::schematic::{Graphic, LibSymbol};
+use signex_types::schematic::{Graphic, LibSymbol, circumcircle};
 
 /// Canvas program that draws a LibSymbol preview.
 pub struct SymbolPreview {
@@ -32,17 +32,11 @@ fn is_shown(unit: u32, body_style: u32, shown_unit: u32, shown_body_style: u32) 
 fn arc_points(start: (f64, f64), mid: (f64, f64), end: (f64, f64)) -> Vec<(f64, f64)> {
     use std::f64::consts::TAU;
 
-    let (ax, ay) = start;
-    let (bx, by) = mid;
-    let (cx, cy) = end;
-    let det = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
-    if det.abs() < 1e-12 {
+    let point = |(x, y): (f64, f64)| signex_types::schematic::Point { x, y };
+    let Some((ox, oy, radius)) = circumcircle(point(start), point(mid), point(end)) else {
         return vec![start, mid, end];
-    }
-    let (a2, b2, c2) = (ax * ax + ay * ay, bx * bx + by * by, cx * cx + cy * cy);
-    let ox = (a2 * (by - cy) + b2 * (cy - ay) + c2 * (ay - by)) / det;
-    let oy = (a2 * (cx - bx) + b2 * (ax - cx) + c2 * (bx - ax)) / det;
-    let radius = (ax - ox).hypot(ay - oy);
+    };
+    let ((ax, ay), (bx, by), (cx, cy)) = (start, mid, end);
 
     let angle = |x: f64, y: f64| (y - oy).atan2(x - ox);
     let a_start = angle(ax, ay);
