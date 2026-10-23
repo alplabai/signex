@@ -17,10 +17,9 @@
 //! `auto_mount_refreshes_an_already_mounted_library` pins that — it is the
 //! case a blanket deletion would have silently broken.
 //!
-//! That test also pins the limit of what the refresh can do: it rescans the
-//! primitive *directories*, but cannot see rows added to the `.snxlib`
-//! itself, because the mounted `LocalGitAdapter` serves tables from an
-//! in-memory parse taken at `open()`. See the comments on its assertions.
+//! That test also pins that the refresh sees rows another process added to
+//! the `.snxlib` itself (#531): the mounted `LocalGitAdapter` re-reads the
+//! file when its mtime/length changed.
 //!
 //! Between them: trimming `reload_tables` / `reload_primitives` out of the
 //! open path fails here, and so does deleting the warm-path refresh, rather
@@ -136,8 +135,8 @@ fn refresh_components_after_open_changes_nothing() {
 /// thing that can notice an out-of-band edit.
 ///
 /// Deleting that refresh makes this test fail — which is the whole reason
-/// it is not deleted. It also documents exactly how far the refresh
-/// reaches: primitive directories yes, `.snxlib` rows no.
+/// it is not deleted. It covers both the primitive directories and the
+/// `.snxlib` rows.
 #[test]
 fn auto_mount_refreshes_an_already_mounted_library() {
     // Arrange — project A mounts the library (the cold path).
@@ -207,39 +206,25 @@ fn auto_mount_refreshes_an_already_mounted_library() {
         "warm auto-mount must rescan footprints/ and pick up the new .snxfpt"
     );
 
-    // …and the row caches do NOT, which is a real limitation, pinned here
-    // deliberately rather than papered over.
-    //
-    // `LocalGitAdapter` parses the `.snxlib` once at `open()` into
-    // `RwLock<LibraryFile>` (`adapters/local_git/mod.rs:88-92`); `list_tables`
-    // and `read_table`/`snapshot_table` serve from that in-memory copy and
-    // never re-stat the file. `refresh_components` reaches the library
-    // through `set.get(library_id)` — the adapter mounted at cold-open time
-    // — so a row added to the `.snxlib` by another process is invisible to
-    // it. Only re-opening the adapter sees it; `app/handlers/document_files/
-    // history.rs:259` is the one place that does, via a `fresh_adapter`.
-    //
-    // If someone makes the adapter re-read on refresh (or `auto_mount`
-    // remount), these two assertions flip to `SYMBOLS + 1` and this test
-    // fails — which is the correct signal, not a regression.
+    // …and since #531 so do the row caches: the mounted adapter re-reads a
+    // `.snxlib` another process changed, so the externally-added row shows
+    // up in both the panel grid (`tables`) and the picker
+    // (`cached_components`).
     assert_eq!(
         lib.tables.get("ICs").map(Vec::len),
-        Some(SYMBOLS),
-        "known limitation: the mounted adapter serves .snxlib rows from its \
-         in-memory snapshot, so an externally-added row is not visible"
+        Some(SYMBOLS + 1),
+        "warm auto-mount must pick up the row an external writer added to the .snxlib"
     );
     assert_eq!(
         lib.cached_components.len(),
-        SYMBOLS,
-        "known limitation: `cached_components` is built from the same \
-         in-memory table snapshot"
+        SYMBOLS + 1,
+        "`cached_components` must include the externally-added row"
     );
     assert!(
-        !lib.cached_components
+        lib.cached_components
             .iter()
             .any(|c| c.internal_pn.to_string() == new_pn),
-        "the externally-added row {new_pn} is expected NOT to appear until \
-         the adapter is re-opened"
+        "the externally-added row {new_pn} must appear after the warm refresh"
     );
 }
 
