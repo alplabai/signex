@@ -580,8 +580,7 @@ pub(super) fn silk_f_hit_at(
                 // Text stays AABB — the bake step doesn't expose
                 // per-glyph metrics; the placeholder width estimate
                 // is stable enough for selection purposes.
-                let w = (content.chars().count() as f64) * size * 0.6;
-                let h = *size;
+                let (w, h) = crate::library::editor::text_extent::text_extent(content, *size);
                 x >= position[0] - t
                     && x <= position[0] + w + t
                     && y >= position[1] - t

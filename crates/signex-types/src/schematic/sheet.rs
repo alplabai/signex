@@ -64,6 +64,33 @@ pub struct Label {
     pub unknown_columns: UnknownColumns,
 }
 
+impl Label {
+    /// The sheet-port name this label exposes to a parent sheet, or `None`
+    /// when it is not a port label (only Hierarchical and Global labels cross
+    /// a sheet boundary) or its text is blank. The single predicate +
+    /// normaliser the engine's port collector, the netlist stitcher and the
+    /// ERC hierarchy rule all share (#359).
+    pub fn port_name(&self) -> Option<&str> {
+        sheet_port_name(self.label_type, &self.text)
+    }
+}
+
+/// [`Label::port_name`] for callers that hold a label's kind and text
+/// separately (e.g. the ERC snapshot).
+pub fn sheet_port_name(label_type: LabelType, text: &str) -> Option<&str> {
+    match label_type {
+        LabelType::Hierarchical | LabelType::Global => normalize_port_name(text),
+        LabelType::Net | LabelType::Power => None,
+    }
+}
+
+/// Canonical form of a sheet port / sheet pin name: surrounding whitespace is
+/// not part of the name, and a blank name is no name at all.
+pub fn normalize_port_name(text: &str) -> Option<&str> {
+    let trimmed = text.trim();
+    (!trimmed.is_empty()).then_some(trimmed)
+}
+
 fn default_label_v_align() -> VAlign {
     VAlign::Bottom
 }

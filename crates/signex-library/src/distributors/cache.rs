@@ -137,6 +137,25 @@ impl DistributorCache {
         Ok(Some(part))
     }
 
+    /// [`get`](Self::get) for adapter read paths: an unreadable entry (corrupt
+    /// JSON, permission error, rejected path) is logged at `warn` and treated
+    /// as a miss, so the caller falls through to a live fetch. Mirrors the
+    /// write side, which warns on a failed `put` rather than dropping it.
+    pub fn get_or_warn(&self, provider: &str, mpn: &str, ttl: Duration) -> Option<DistributorPart> {
+        match self.get(provider, mpn, ttl) {
+            Ok(hit) => hit,
+            Err(e) => {
+                tracing::warn!(
+                    error = %e,
+                    provider = %provider,
+                    mpn = %mpn,
+                    "distributor cache read failed; treating as a miss",
+                );
+                None
+            }
+        }
+    }
+
     /// Delete a cached entry, if present. Idempotent.
     pub fn invalidate(&self, provider: &str, mpn: &str) -> Result<(), CacheError> {
         let path = self.validate_entry_path(provider, mpn)?;
@@ -233,5 +252,69 @@ mod tests {
         // attackers can't probe filesystem state through a cache miss.
         assert!(cache.get("lcsc", "..", DEFAULT_TTL).is_err());
         assert!(cache.invalidate("..", "anything").is_err());
+    }
+
+    /// Counts `warn!` events emitted on the current thread while `f` runs.
+    /// A tiny hand-written subscriber, so the crate needs no
+    /// `tracing-subscriber` dev-dependency (#830 review).
+    fn warnings(f: impl FnOnce()) -> usize {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use tracing::span::{Attributes, Id, Record};
+        use tracing::{Event, Level, Metadata, Subscriber};
+
+        struct Count(Arc<AtomicUsize>);
+        impl Subscriber for Count {
+            fn enabled(&self, _: &Metadata<'_>) -> bool {
+                true
+            }
+            fn new_span(&self, _: &Attributes<'_>) -> Id {
+                Id::from_u64(1)
+            }
+            fn record(&self, _: &Id, _: &Record<'_>) {}
+            fn record_follows_from(&self, _: &Id, _: &Id) {}
+            fn event(&self, event: &Event<'_>) {
+                if *event.metadata().level() == Level::WARN {
+                    self.0.fetch_add(1, Ordering::SeqCst);
+                }
+            }
+            fn enter(&self, _: &Id) {}
+            fn exit(&self, _: &Id) {}
+        }
+
+        let count = Arc::new(AtomicUsize::new(0));
+        tracing::subscriber::with_default(Count(count.clone()), f);
+        count.load(Ordering::SeqCst)
+    }
+
+    /// #806: a corrupt entry is a miss, and the read failure is logged
+    /// instead of being dropped.
+    #[test]
+    fn get_or_warn_logs_corrupt_entry_and_misses() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = DistributorCache::with_root(dir.path()).unwrap();
+        let path = cache.entry_path("lcsc", "R1");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, b"{").unwrap();
+
+        let mut hit = Some(part("sentinel"));
+        let warned = warnings(|| hit = cache.get_or_warn("lcsc", "R1", DEFAULT_TTL));
+        assert!(hit.is_none());
+        assert_eq!(warned, 1);
+    }
+
+    /// An absent entry is an ordinary miss: no warning.
+    #[test]
+    fn get_or_warn_is_silent_on_plain_miss_and_returns_hits() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = DistributorCache::with_root(dir.path()).unwrap();
+        let mut miss = Some(part("sentinel"));
+        let warned = warnings(|| miss = cache.get_or_warn("lcsc", "R1", DEFAULT_TTL));
+        assert!(miss.is_none());
+        assert_eq!(warned, 0);
+
+        cache.put("lcsc", &part("R1")).unwrap();
+        let hit = cache.get_or_warn("lcsc", "R1", DEFAULT_TTL).unwrap();
+        assert_eq!(hit.mpn, "R1");
     }
 }

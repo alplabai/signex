@@ -283,14 +283,19 @@ pub struct SymbolEditorState {
     pub active_bar_menu: Option<crate::library::editor::symbol::state::SymActiveBarMenu>,
     /// v0.13 — Pause flag for placement (TAB during Place Pin / etc.).
     pub placement_paused: bool,
-    /// Snapshot stack for undo. Each entry is a full clone of the
-    /// `Symbol` at the moment before a mutation was applied. Max 100
-    /// entries; oldest entries are dropped when the limit is exceeded.
-    pub undo_snapshots: Vec<signex_library::Symbol>,
+    /// Snapshot stack for undo. Each entry is the whole `.snxsym`
+    /// container (symbols shared structurally between entries) at the
+    /// moment before a mutation was applied. Max 100 entries; oldest
+    /// entries are dropped when the limit is exceeded.
+    pub undo_snapshots: Vec<crate::app::SymbolHistorySnapshot>,
     /// Snapshot stack for redo. Cleared whenever a new mutation is
     /// recorded; populated by `SymbolUndo` so the user can step
     /// forward again after undoing.
-    pub redo_snapshots: Vec<signex_library::Symbol>,
+    pub redo_snapshots: Vec<crate::app::SymbolHistorySnapshot>,
+    /// The field the last `record_edit` changed, tagged with the symbol
+    /// it belonged to, so a run of keystrokes in one text input shares
+    /// one undo step. Cleared by every other history push, undo and redo.
+    pub(in crate::app) last_edit_key: Option<(FieldEditKey, usize)>,
     /// Set to `true` on the first `Move`/`MoveAll`/`MoveGraphicHandle`
     /// in a drag sequence so subsequent move events in the same drag do
     /// NOT push additional snapshots (the pre-drag snapshot is already
@@ -361,6 +366,7 @@ impl SymbolEditorState {
             placement_paused: false,
             undo_snapshots: Vec::new(),
             redo_snapshots: Vec::new(),
+            last_edit_key: None,
             mid_drag: false,
             graphic_fill_picker: None,
             local_color_picker: None,
@@ -517,27 +523,40 @@ impl FootprintEditorState {
         }
     }
 
-    /// Report, once, the arcs the loader moved onto their circles (the
-    /// Messages panel names them) and clear the transient record so history
-    /// snapshots never carry it. Returns whether anything was repaired.
-    /// Opening a footprint into an editor is the only place this logs;
-    /// previews, mounts and history reads stay quiet.
+    /// Report, once, what the loader repaired (the Messages panel names it)
+    /// and clear the transient record so history snapshots never carry it.
+    /// Returns whether anything was repaired. Opening a footprint into an
+    /// editor is the only place this logs; previews, mounts and history
+    /// reads stay quiet.
     fn take_load_repairs(path: &std::path::Path, file: &mut signex_library::FootprintFile) -> bool {
+        use signex_library::LoadRepair;
         let mut moved: Vec<String> = Vec::new();
+        let mut removed = 0usize;
         for footprint in &mut file.footprints {
-            moved.extend(footprint.load_repairs.drain(..).map(|id| id.to_string()));
+            for repair in footprint.load_repairs.drain(..) {
+                match repair {
+                    LoadRepair::ArcEndMoved(id) => moved.push(id.to_string()),
+                    LoadRepair::DanglingRemoved(n) => removed += n,
+                }
+            }
         }
-        if moved.is_empty() {
-            return false;
+        if !moved.is_empty() {
+            crate::diagnostics::log_warning(format!(
+                "{}: moved the end point of {} arc(s) onto its circle (centre and start \
+                 unchanged); save the file to keep the repair: {}",
+                path.display(),
+                moved.len(),
+                moved.join(", ")
+            ));
         }
-        crate::diagnostics::log_warning(format!(
-            "{}: moved the end point of {} arc(s) onto its circle (centre and start \
-             unchanged); save the file to keep the repair: {}",
-            path.display(),
-            moved.len(),
-            moved.join(", ")
-        ));
-        true
+        if removed > 0 {
+            crate::diagnostics::log_warning(format!(
+                "{}: removed {removed} dangling sketch reference(s) (entities/constraints/arrays); \
+                 save the file to keep the repair",
+                path.display(),
+            ));
+        }
+        !moved.is_empty() || removed > 0
     }
 
     /// v0.24 Phase 1 (Track B) — depth cap for `history` / `redo`

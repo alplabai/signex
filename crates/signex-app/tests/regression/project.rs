@@ -857,11 +857,23 @@ fn project_git_commit_done_clears_inflight_entry() {
     let _ = app.update(Message::Project(ProjectMsg::GitCommitDone {
         project_root: project_root.clone(),
         rel_path: rel_path.clone(),
-        result: Ok("deadbeef".to_string()),
+        result: Ok(Some("deadbeef".to_string())),
     }));
     assert!(
         !app.document_state.inflight_git_commits.contains(&key),
         "inflight entry must be cleared on success"
+    );
+
+    // Unchanged save (no commit made, #149) also clears.
+    app.document_state.inflight_git_commits.insert(key.clone());
+    let _ = app.update(Message::Project(ProjectMsg::GitCommitDone {
+        project_root: project_root.clone(),
+        rel_path: rel_path.clone(),
+        result: Ok(None),
+    }));
+    assert!(
+        !app.document_state.inflight_git_commits.contains(&key),
+        "inflight entry must be cleared on an unchanged save"
     );
 
     // Failure path also clears (data is on disk regardless of git).

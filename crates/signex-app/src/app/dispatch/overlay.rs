@@ -310,6 +310,13 @@ impl Signex {
                         self.open_selected_child_sheet();
                         Task::none()
                     }
+                    ContextAction::SyncSheetPins => {
+                        self.sync_selected_sheet_pins();
+                        // This dispatcher does not run `finish_update`; publish
+                        // the outcome message to the Messages panel now.
+                        self.sync_diagnostics_panel_ctx();
+                        Task::none()
+                    }
                     ContextAction::Delete => self.dispatch_edit_message(EditMsg::DeleteSelected),
                     ContextAction::SelectAll => self
                         .handle_selection_request(selection_request::SelectionRequest::SelectAll),

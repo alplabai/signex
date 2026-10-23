@@ -29,6 +29,20 @@ impl Signex {
             }
             Message::Dock(msg) => self.handle_dock_message(msg),
             Message::Selection(request) => self.handle_selection_request(request),
+            // Idle cursor move (the subscription forwards every one): only
+            // the cached position changes, so skip the drag handlers and
+            // `finish_update`'s per-event work (#111).
+            // Dispatchers that skip `finish_update` leave the panel_ctx
+            // mirrors / History dirty bit stale; the cheap (IO-free)
+            // repair stays here, along with the drain + diagnostics
+            // republish safety net (no-ops when nothing is queued).
+            Message::Ui(UiMsg::DragMove(x, y)) if !self.is_layout_drag_active() => {
+                self.interaction_state.last_mouse_pos = (x, y);
+                self.sync_panel_ctx_mirrors();
+                self.sync_diagnostics_panel_ctx();
+                let history = self.refresh_history_panel_cheap();
+                Task::batch([history, self.drain_pending_git_commits()])
+            }
             Message::Ui(msg) => self.dispatch_ui_message(msg),
             // Canvas events keep their own top-level variants (hot path,
             // many emit sites). Both dismiss the first-run tour card on
@@ -59,7 +73,10 @@ impl Signex {
             Message::Overlay(msg) => self.dispatch_overlay_message(msg),
             Message::FindReplaceMsg(msg) => self.handle_find_replace_message(msg),
             Message::ActiveBar(msg) => self.handle_active_bar_message(msg),
-            Message::Project(msg) => self.dispatch_project_message(msg),
+            Message::Project(msg) => {
+                let task = self.dispatch_project_message(msg);
+                Task::batch([task, self.finish_update()])
+            }
             Message::ContextMenu(msg) => self.dispatch_context_menu_message(msg),
             Message::Annotate(msg) => self.dispatch_annotate_message(msg),
             Message::Erc(msg) => self.dispatch_erc_message(msg),

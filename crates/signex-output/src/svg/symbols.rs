@@ -12,9 +12,7 @@ use super::*;
 use crate::pdf::layout::PageTransform;
 use crate::pdf::palette::SchematicPalette;
 use signex_types::markup::ExpressionEvalContext;
-use signex_types::schematic::{
-    FillType, Graphic, HAlign, LibSymbol, Pin, Point, Symbol, TextProp, VAlign,
-};
+use signex_types::schematic::{FillType, Graphic, LibSymbol, Pin, Point, Symbol};
 use std::collections::HashMap;
 
 pub(super) fn push_symbol_lib_graphics(
@@ -441,40 +439,4 @@ pub(super) fn symbol_eval_variables(sym: &Symbol) -> HashMap<String, String> {
     vars.entry("value".to_string())
         .or_insert_with(|| sym.value.clone());
     vars
-}
-
-pub(super) fn field_effective_style(prop: &TextProp, sym: &Symbol) -> (f64, HAlign, VAlign) {
-    let total = (sym.rotation + prop.rotation).rem_euclid(360.0);
-    let (draw_rot, fold_h, fold_v) = match total.round() as i32 {
-        0 => (0.0, false, false),
-        90 => (90.0, false, false),
-        180 => (0.0, true, false),
-        270 => (90.0, false, true),
-        _ => (total, false, false),
-    };
-
-    let flip_h = fold_h ^ sym.mirror_y;
-    let flip_v = fold_v ^ sym.mirror_x;
-
-    let h = if flip_h {
-        match prop.justify_h {
-            HAlign::Left => HAlign::Right,
-            HAlign::Center => HAlign::Center,
-            HAlign::Right => HAlign::Left,
-        }
-    } else {
-        prop.justify_h
-    };
-
-    let v = if flip_v {
-        match prop.justify_v {
-            VAlign::Top => VAlign::Bottom,
-            VAlign::Center => VAlign::Center,
-            VAlign::Bottom => VAlign::Top,
-        }
-    } else {
-        prop.justify_v
-    };
-
-    (draw_rot, h, v)
 }
