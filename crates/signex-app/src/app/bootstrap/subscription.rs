@@ -543,16 +543,8 @@ impl Signex {
         // Mouse events for drag-to-resize/floating-drag.
         // Subscribing to cursor move only while dragging avoids per-frame
         // app updates when idle, which noticeably hurts smoothness on macOS.
-        let drag_active = self.interaction_state.dragging.is_some()
-            || self.document_state.dock.tab_drag.is_some()
-            || self.ui_state.modal_dragging.is_some()
-            || self.ui_state.tab_dragging.is_some()
-            || self
-                .document_state
-                .dock
-                .floating
-                .iter()
-                .any(|fp| fp.dragging);
+        // One drag-flag list, shared with the idle-move fast path in dispatch.
+        let drag_active = self.is_layout_drag_active();
         let modal_drag_active = self.ui_state.modal_dragging.is_some();
         let mouse_sub = if modal_drag_active {
             // Modal drag takes priority — release ends the modal drag

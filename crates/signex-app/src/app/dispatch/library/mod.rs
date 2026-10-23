@@ -53,7 +53,16 @@ use recovery::{
 };
 
 impl Signex {
+    /// Every library arm may queue a git commit (`commit_save_to_project_git`)
+    /// or log a diagnostic; `finish_update` drains the queue and republishes
+    /// the Messages panel, so run it after any of them rather than relying on
+    /// an unrelated later message to do it (#111).
     pub(crate) fn dispatch_library_message(&mut self, msg: LibraryMessage) -> Task<Message> {
+        let task = self.route_library_message(msg);
+        Task::batch([task, self.finish_update()])
+    }
+
+    fn route_library_message(&mut self, msg: LibraryMessage) -> Task<Message> {
         match msg {
             LibraryMessage::OpenLibraryDialog => self.handle_open_library_dialog(),
             LibraryMessage::OpenLibraryAt(None) => Task::none(),

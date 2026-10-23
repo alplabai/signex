@@ -450,4 +450,27 @@ mod tests {
             vec![0, 1]
         );
     }
+
+    /// Descending sort reverses the comparison, not the slice, so rows with
+    /// equal keys keep rollup order in both directions (and the cached
+    /// lowercase key makes "Alpha"/"alpha" equal).
+    #[test]
+    fn descending_sort_is_stable_for_equal_keys() {
+        let rows = vec![
+            row(&["R1"], 1, "Alpha"),
+            row(&["R2"], 1, "beta"),
+            row(&["R3"], 1, "alpha"),
+            row(&["R4"], 1, "BETA"),
+        ];
+        let columns = vec![BomColumn::Designator, BomColumn::Value];
+
+        assert_eq!(
+            sorted_row_order(&rows, &columns, Some((1, true))),
+            vec![0, 2, 1, 3]
+        );
+        assert_eq!(
+            sorted_row_order(&rows, &columns, Some((1, false))),
+            vec![1, 3, 0, 2]
+        );
+    }
 }
