@@ -35,6 +35,7 @@ fn app_with_cached_library() -> (Signex, PathBuf) {
         cached_sims: vec![cached_summary("BC547.lib")],
         cached_classes: Vec::new(),
         observed_stamp: None,
+        own_edit_unstamped: false,
         display: LibraryDisplaySettings::default(),
     });
     let saved = dir.join("symbols").join("just-saved.snxsym");

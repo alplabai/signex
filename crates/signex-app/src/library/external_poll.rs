@@ -16,6 +16,8 @@
 //! which compares content (see `signex-library`'s `disk_sync`).
 
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use iced::Subscription;
@@ -27,8 +29,25 @@ use super::state::LibraryState;
 /// How often mounted libraries are checked for external edits.
 pub const POLL_INTERVAL: Duration = Duration::from_secs(2);
 
+/// How long one `stat` pass may take before the poll reports it stalled
+/// (a dead network mount can block `stat` indefinitely, #827).
+pub const POLL_TIMEOUT: Duration = Duration::from_secs(10);
+
 /// A mounted library and the stamp its caches were filled under.
 pub type WatchedLibrary = (PathBuf, Option<DiskStamp>);
+
+/// A library whose file changed, with the stamp the file has now.
+pub type ChangedLibrary = (PathBuf, DiskStamp);
+
+/// The result of one poll pass.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PollOutcome {
+    /// The pass finished; the libraries whose file no longer matches.
+    Changed(Vec<ChangedLibrary>),
+    /// The pass did not finish within [`POLL_TIMEOUT`]. Its `stat` thread
+    /// keeps running and holds the `stat_running` flag until it returns.
+    TimedOut,
+}
 
 /// Tick while at least one library is mounted; no timer otherwise.
 pub fn subscription(state: &LibraryState) -> Subscription<LibraryMessage> {
@@ -38,24 +57,37 @@ pub fn subscription(state: &LibraryState) -> Subscription<LibraryMessage> {
     iced::time::every(POLL_INTERVAL).map(|_| LibraryMessage::ExternalEditsPollTicked)
 }
 
-/// Paths of the watched libraries whose file no longer matches the stamp
-/// their caches were filled under. A file that cannot be `stat`ed is not
-/// reported: the adapter already warns (once) about a missing library, and
-/// refreshing would only repeat the failure.
-pub fn libraries_changed(watched: &[WatchedLibrary]) -> Vec<PathBuf> {
+/// The watched libraries whose file no longer matches the stamp their
+/// caches were filled under, each with its current stamp. A file that cannot
+/// be `stat`ed is not reported: the adapter already warns (once) about a
+/// missing library, and refreshing would only repeat the failure.
+pub fn libraries_changed(watched: &[WatchedLibrary]) -> Vec<ChangedLibrary> {
     watched
         .iter()
-        .filter(|(path, observed)| match DiskStamp::of(path) {
-            Ok(now) => *observed != Some(now),
-            Err(_) => false,
+        .filter_map(|(path, observed)| match DiskStamp::of(path) {
+            Ok(now) if *observed != Some(now) => Some((path.clone(), now)),
+            _ => None,
         })
-        .map(|(path, _)| path.clone())
         .collect()
 }
 
-/// [`libraries_changed`] on the blocking pool, for `Task::perform`.
-pub async fn changed_libraries(watched: Vec<WatchedLibrary>) -> Vec<PathBuf> {
-    tokio::task::spawn_blocking(move || libraries_changed(&watched))
-        .await
-        .unwrap_or_default()
+/// [`libraries_changed`] on the blocking pool, for `Task::perform`, bounded
+/// by [`POLL_TIMEOUT`]. `stat_running` is set for as long as the blocking
+/// pass runs, including after a timeout, so the caller can refuse to start
+/// a second pass behind a hung one.
+pub async fn changed_libraries(
+    watched: Vec<WatchedLibrary>,
+    stat_running: Arc<AtomicBool>,
+) -> PollOutcome {
+    stat_running.store(true, Ordering::SeqCst);
+    let flag = Arc::clone(&stat_running);
+    let pass = tokio::task::spawn_blocking(move || {
+        let changed = libraries_changed(&watched);
+        flag.store(false, Ordering::SeqCst);
+        changed
+    });
+    match tokio::time::timeout(POLL_TIMEOUT, pass).await {
+        Ok(changed) => PollOutcome::Changed(changed.unwrap_or_default()),
+        Err(_) => PollOutcome::TimedOut,
+    }
 }
