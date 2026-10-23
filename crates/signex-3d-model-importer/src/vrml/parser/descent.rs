@@ -121,8 +121,10 @@ impl<'a> Parser<'a> {
     fn parse_transform(&mut self) -> Result<Node, ParseError> {
         self.expect_lbrace()?;
         let mut translation = [0.0f32; 3];
-        let mut rotation = [0.0f32, 1.0, 0.0, 0.0];
+        let mut rotation = [0.0f32, 0.0, 1.0, 0.0];
         let mut scale = [1.0f32; 3];
+        let mut center = [0.0f32; 3];
+        let mut scale_orientation = [0.0f32, 0.0, 1.0, 0.0];
         let mut children = Vec::new();
 
         loop {
@@ -144,11 +146,12 @@ impl<'a> Parser<'a> {
                     translation[1] = self.parse_f32()?;
                     translation[2] = self.parse_f32()?;
                 }
-                "rotation" => {
-                    rotation[0] = self.parse_f32()?;
-                    rotation[1] = self.parse_f32()?;
-                    rotation[2] = self.parse_f32()?;
-                    rotation[3] = self.parse_f32()?;
+                "rotation" => rotation = self.parse_rotation()?,
+                "scaleOrientation" => scale_orientation = self.parse_rotation()?,
+                "center" => {
+                    center[0] = self.parse_f32()?;
+                    center[1] = self.parse_f32()?;
+                    center[2] = self.parse_f32()?;
                 }
                 "scale" => {
                     scale[0] = self.parse_f32()?;
@@ -164,11 +167,18 @@ impl<'a> Parser<'a> {
             }
         }
         Ok(Node::Transform {
-            translation,
-            rotation,
-            scale,
+            local: Transform::from_fields(translation, rotation, scale, center, scale_orientation),
             children,
         })
+    }
+
+    fn parse_rotation(&mut self) -> Result<[f32; 4], ParseError> {
+        Ok([
+            self.parse_f32()?,
+            self.parse_f32()?,
+            self.parse_f32()?,
+            self.parse_f32()?,
+        ])
     }
 
     fn parse_group(&mut self) -> Result<Node, ParseError> {
@@ -485,7 +495,21 @@ impl<'a> Parser<'a> {
         match self.peek() {
             Some(Token::LBrace | Token::LBracket) => self.consume_block(),
             Some(Token::Word(_)) => {
-                self.next();
+                // An SFNode value is `[DEF name] Type { ... }`: the words are
+                // followed by a body that must be consumed with them, or its
+                // closing brace ends the enclosing node early (#689).
+                let word = self.expect_word()?;
+                if word == "USE" {
+                    self.expect_word()?;
+                    return Ok(());
+                }
+                if word == "DEF" {
+                    self.expect_word()?;
+                    self.expect_word()?;
+                }
+                if let Some(Token::LBrace) = self.peek() {
+                    self.consume_block()?;
+                }
                 Ok(())
             }
             _ => Ok(()),
@@ -494,16 +518,11 @@ impl<'a> Parser<'a> {
 
     /// Consume a `{ ... }` or `[ ... ]` block including all nested blocks.
     fn consume_block(&mut self) -> Result<(), ParseError> {
-        let open = match self.next() {
-            Some(Token::LBrace) => Token::LBrace,
-            Some(Token::LBracket) => Token::LBracket,
-            _ => return Ok(()),
-        };
-        let close = if open == Token::LBrace {
-            Token::RBrace
-        } else {
-            Token::RBracket
-        };
+        if !matches!(self.next(), Some(Token::LBrace | Token::LBracket)) {
+            return Ok(());
+        }
+        // Every opener ('{' or '[') is balanced by its own closer ('}' or ']'),
+        // so nested lists inside a node body close correctly (#689).
         let mut depth = 1usize;
         loop {
             match self.next() {
@@ -512,8 +531,8 @@ impl<'a> Parser<'a> {
                         line: self.current_line(),
                     });
                 }
-                Some(t) if *t == Token::LBrace || *t == Token::LBracket => depth += 1,
-                Some(t) if *t == close => {
+                Some(Token::LBrace | Token::LBracket) => depth += 1,
+                Some(Token::RBrace | Token::RBracket) => {
                     depth -= 1;
                     if depth == 0 {
                         break;

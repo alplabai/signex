@@ -18,6 +18,10 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
+### Fixed — VRML import
+
+- **VRML importer no longer hangs, desyncs, or mis-places nested geometry (#689)** — a `.wrl` containing form feed, vertical tab, NBSP, NEL or any other Unicode whitespace outside a comment no longer spins the lexer forever. An unknown node holding a `[ ... ]` list (such as `NavigationInfo { type [ "EXAMINE" ] }`) no longer swallows the rest of the file, and a node-valued field such as `normal Normal { ... }` no longer ends its parent early and drops the mesh. `Transform` now composes per VRML97 (`T * C * R * SR * S * -SR * -C`), so `rotation`, `center` and `scaleOrientation` apply and a child translation is scaled and rotated by its parent.
+
 ### Added
 
 - **Unknown TSV columns are preserved (#315)** — a `.snxsch` / `.snxpcb` bulk block with a column this build does not know no longer fails to load with a header mismatch; columns resolve by name, the extra cells stay attached to their row through an edit, and they are re-emitted after the known columns (in their original relative order) on save. A missing known column and a repeated column name still error. A block may carry at most 256 foreign columns, each name at most 256 bytes; a file over either cap fails to load, and a save fails (before any byte is written, the previous file stays intact) on the same caps or when a foreign column repeats a known column name, each with an error naming the offending column.

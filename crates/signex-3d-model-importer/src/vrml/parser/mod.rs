@@ -13,13 +13,8 @@ pub struct VrmlMesh {
 #[derive(Debug, Clone)]
 enum Node {
     Transform {
-        translation: [f32; 3],
-        #[expect(
-            dead_code,
-            reason = "axis-angle rotation is parsed but not applied until E3"
-        )]
-        rotation: [f32; 4], // axis-angle: [ax, ay, az, angle] — deferred to E3
-        scale: [f32; 3],
+        /// The node's own matrix (T * C * R * SR * S * -SR * -C).
+        local: Transform,
         children: Vec<Node>,
     },
     Shape {
@@ -93,25 +88,71 @@ impl Transform {
         [x, y, z]
     }
 
-    fn compose_translation(
-        parent: &Transform,
-        translation: [f32; 3],
-        scale: [f32; 3],
-    ) -> Transform {
-        // Build a simple TRS matrix (no rotation for Milestone D E1 - WRL
-        // root transforms are axis-aligned for most components).
-        // T * S applied on top of parent.
-        let mut m = parent.m;
-        // Apply scale then translate (column-major multiply simplified for TRS only)
-        for row in m.iter_mut().take(3) {
-            row[0] *= scale[0];
-            row[1] *= scale[1];
-            row[2] *= scale[2];
+    fn translation(t: [f32; 3]) -> Self {
+        let mut r = Self::identity();
+        for (row, v) in r.m.iter_mut().zip(t) {
+            row[3] = v;
         }
-        m[0][3] += translation[0];
-        m[1][3] += translation[1];
-        m[2][3] += translation[2];
+        r
+    }
+
+    fn scaling(s: [f32; 3]) -> Self {
+        let mut r = Self::identity();
+        for (i, v) in s.into_iter().enumerate() {
+            r.m[i][i] = v;
+        }
+        r
+    }
+
+    /// Axis-angle rotation `[ax, ay, az, angle]` (Rodrigues). A zero-length
+    /// axis is a no-op.
+    fn rotation(r: [f32; 4]) -> Self {
+        let len = (r[0] * r[0] + r[1] * r[1] + r[2] * r[2]).sqrt();
+        if len == 0.0 {
+            return Self::identity();
+        }
+        let (x, y, z) = (r[0] / len, r[1] / len, r[2] / len);
+        let (s, c) = r[3].sin_cos();
+        let t = 1.0 - c;
+        let mut out = Self::identity();
+        out.m[0][..3].copy_from_slice(&[t * x * x + c, t * x * y - s * z, t * x * z + s * y]);
+        out.m[1][..3].copy_from_slice(&[t * x * y + s * z, t * y * y + c, t * y * z - s * x]);
+        out.m[2][..3].copy_from_slice(&[t * x * z - s * y, t * y * z + s * x, t * z * z + c]);
+        out
+    }
+
+    /// `self * rhs`: `rhs` is applied to a point first.
+    fn mul(&self, rhs: &Transform) -> Transform {
+        let mut m = [[0.0f32; 4]; 4];
+        for (i, row) in m.iter_mut().enumerate() {
+            for (j, cell) in row.iter_mut().enumerate() {
+                *cell = (0..4).map(|k| self.m[i][k] * rhs.m[k][j]).sum();
+            }
+        }
         Transform { m }
+    }
+
+    /// VRML97 Transform node matrix: P' = T * C * R * SR * S * -SR * -C * P.
+    fn from_fields(
+        translation: [f32; 3],
+        rotation: [f32; 4],
+        scale: [f32; 3],
+        center: [f32; 3],
+        scale_orientation: [f32; 4],
+    ) -> Transform {
+        let inv_sr = Transform::rotation([
+            scale_orientation[0],
+            scale_orientation[1],
+            scale_orientation[2],
+            -scale_orientation[3],
+        ]);
+        Transform::translation(translation)
+            .mul(&Transform::translation(center))
+            .mul(&Transform::rotation(rotation))
+            .mul(&Transform::rotation(scale_orientation))
+            .mul(&Transform::scaling(scale))
+            .mul(&inv_sr)
+            .mul(&Transform::translation(center.map(|v| -v)))
     }
 }
 
@@ -119,13 +160,8 @@ impl Transform {
 
 fn collect_meshes(node: &Node, parent_transform: &Transform, out: &mut Vec<VrmlMesh>) {
     match node {
-        Node::Transform {
-            translation,
-            scale,
-            children,
-            ..
-        } => {
-            let xf = Transform::compose_translation(parent_transform, *translation, *scale);
+        Node::Transform { local, children } => {
+            let xf = parent_transform.mul(local);
             for child in children {
                 collect_meshes(child, &xf, out);
             }
@@ -268,6 +304,80 @@ mod tests {
         assert!((p[0] - 1.0).abs() < 1e-5, "x should be ~1.0, got {}", p[0]);
         assert!((p[1] - 2.0).abs() < 1e-5, "y should be ~2.0, got {}", p[1]);
         assert!((p[2] - 3.0).abs() < 1e-5, "z should be ~3.0, got {}", p[2]);
+    }
+
+    fn first_vertices(meshes: &[VrmlMesh]) -> Vec<f32> {
+        meshes[0].positions.clone()
+    }
+
+    fn assert_close(got: &[f32], want: &[f32]) {
+        assert_eq!(got.len(), want.len());
+        for (g, w) in got.iter().zip(want) {
+            assert!((g - w).abs() < 1e-5, "got {got:?}, want {want:?}");
+        }
+    }
+
+    const TRI: &str = "Shape { geometry IndexedFaceSet { coord Coordinate { point [ 0 0 0, 1 0 0, 0 1 0 ] } coordIndex [ 0 1 2 -1 ] } }";
+
+    #[test]
+    fn nested_transform_applies_parent_scale_to_child_translation() {
+        let src = format!(
+            "Transform {{ scale 2 2 2 children [ Transform {{ translation 1 0 0 children [ {TRI} ] }} ] }}"
+        );
+        assert_close(
+            &first_vertices(&parse_src(&src)),
+            &[2.0, 0.0, 0.0, 4.0, 0.0, 0.0, 2.0, 2.0, 0.0],
+        );
+    }
+
+    #[test]
+    fn transform_rotation_is_applied() {
+        // 90 degrees about Z: (0,0,0)->(0,0,0), (1,0,0)->(0,1,0), (0,1,0)->(-1,0,0).
+        let src = format!("Transform {{ rotation 0 0 1 1.5707964 children [ {TRI} ] }}");
+        assert_close(
+            &first_vertices(&parse_src(&src)),
+            &[0.0, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, 0.0, 0.0],
+        );
+    }
+
+    #[test]
+    fn nested_rotation_then_child_translation() {
+        // Child moves +X, parent rotates 90 degrees about Z: origin lands on +Y.
+        let src = format!(
+            "Transform {{ rotation 0 0 1 1.5707964 children [ Transform {{ translation 1 0 0 children [ {TRI} ] }} ] }}"
+        );
+        assert_close(
+            &first_vertices(&parse_src(&src)),
+            &[0.0, 1.0, 0.0, 0.0, 2.0, 0.0, -1.0, 1.0, 0.0],
+        );
+    }
+
+    #[test]
+    fn transform_scale_about_center() {
+        // scale 2 about (1,0,0): (0,0,0)->(-1,0,0), (1,0,0) fixed, (0,1,0)->(-1,2,0).
+        let src = format!("Transform {{ center 1 0 0 scale 2 2 2 children [ {TRI} ] }}");
+        assert_close(
+            &first_vertices(&parse_src(&src)),
+            &[-1.0, 0.0, 0.0, 1.0, 0.0, 0.0, -1.0, 2.0, 0.0],
+        );
+    }
+
+    #[test]
+    fn unknown_node_with_list_does_not_eat_following_shape() {
+        let src = format!("NavigationInfo {{ type [ \"EXAMINE\" ] }} {TRI}");
+        assert_eq!(parse_src(&src).len(), 1);
+    }
+
+    #[test]
+    fn nested_list_inside_block_closes() {
+        let src = format!("Group {{ foo Bar {{ v [ 1 2 ] w [ 3 ] }} children [ {TRI} ] }}");
+        assert_eq!(parse_src(&src).len(), 1);
+    }
+
+    #[test]
+    fn node_valued_field_before_coord_keeps_mesh() {
+        let src = "Shape { geometry IndexedFaceSet { normal Normal { vector [ 0 0 1 ] } coord Coordinate { point [ 0 0 0, 1 0 0, 0 1 0 ] } coordIndex [ 0 1 2 -1 ] } }";
+        assert_eq!(parse_src(src).len(), 1);
     }
 
     #[test]
