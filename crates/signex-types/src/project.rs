@@ -499,7 +499,8 @@ pub fn write_project(path: &Path, data: &ProjectData) -> Result<(), ProjectError
         path: path.display().to_string(),
         source: std::io::Error::other(err.to_string()),
     };
-    // Stamp the format token first so it leads the file.
+    // Add the format token. serde_json's map is sorted (no `preserve_order`),
+    // so keys come out alphabetically; the first save of an older file reorders it once.
     let mut stamped = serde_json::Map::new();
     stamped.insert(FORMAT_KEY.into(), Value::String(SNXPRJ_FORMAT_V1.into()));
     if let Value::Object(fields) = serde_json::to_value(data).map_err(io_err)? {
