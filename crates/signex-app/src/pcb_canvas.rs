@@ -111,6 +111,17 @@ impl PcbCanvas {
         *self.scene_generation.get_mut() += 1;
     }
 
+    /// On-screen grid line spacing in pixels at `scale` px/mm, or `None` when
+    /// the grid is toggled off or too dense to draw. `adaptive_pitch_mm` is
+    /// millimetres, so it is converted to pixels here.
+    pub fn grid_step_px(&self, scale: f32) -> Option<f32> {
+        if !self.grid_visible {
+            return None;
+        }
+        crate::canvas::grid::adaptive_pitch_mm(self.visible_grid_mm as f32, scale, PCB_GRID_MIN_PX)
+            .map(|mm| mm * scale)
+    }
+
     pub fn clear_bg_cache(&mut self) {
         self.bg_cache.clear();
     }
@@ -566,17 +577,7 @@ impl canvas::Program<Message> for PcbCanvas {
         let bg = self.bg_cache.draw(renderer, bounds.size(), |frame| {
             frame.fill_rectangle(iced::Point::ORIGIN, bounds.size(), self.theme_bg);
 
-            if let Some(step) = self
-                .grid_visible
-                .then(|| {
-                    crate::canvas::grid::adaptive_pitch_mm(
-                        self.visible_grid_mm as f32,
-                        camera.scale,
-                        PCB_GRID_MIN_PX,
-                    )
-                })
-                .flatten()
-            {
+            if let Some(step) = self.grid_step_px(camera.scale) {
                 let mut x = camera.offset.x.rem_euclid(step) - step;
                 while x <= bounds.width + step {
                     let path = canvas::Path::line(
@@ -665,6 +666,22 @@ mod tests {
     use super::*;
     use signex_renderer::pcb::{DrcMarkerInput, PcbSnapshot};
     use signex_types::violation::Severity;
+
+    #[test]
+    fn grid_step_px_is_pixels_not_millimetres() {
+        let canvas = PcbCanvas::new();
+        // Default zoom 3 px/mm, 2.54 mm grid: 7.62 px < 8 px floor, so the
+        // 5x level (12.7 mm) is drawn, which is 38.1 px on screen.
+        let step = canvas.grid_step_px(3.0).expect("grid is visible");
+        assert!((step - 38.1).abs() < 1e-3, "got {step}");
+    }
+
+    #[test]
+    fn grid_step_px_is_none_when_grid_toggled_off() {
+        let mut canvas = PcbCanvas::new();
+        canvas.set_grid(false, 2.54);
+        assert_eq!(canvas.grid_step_px(3.0), None);
+    }
 
     #[test]
     fn set_grid_adopts_toggle_and_size() {
