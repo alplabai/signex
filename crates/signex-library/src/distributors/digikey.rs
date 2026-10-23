@@ -209,7 +209,7 @@ impl DigiKeyAuth {
         expected_state: &CsrfToken,
         may_persist: &dyn Fn() -> bool,
     ) -> Result<String, DigiKeyAuthError> {
-        self.exchange_code_into(
+        self.exchange_code_inner(
             code,
             verifier,
             returned_state,
@@ -223,10 +223,39 @@ impl DigiKeyAuth {
         )
     }
 
-    /// Core of [`Self::exchange_code_guarded`] with the refresh-token sink
-    /// injected so tests can observe persistence without the OS keyring.
-    #[doc(hidden)]
+    /// [`Self::exchange_code_guarded`] with the refresh-token sink injected,
+    /// so tests can observe persistence without the OS keyring. Compiled only
+    /// with the `test-support` feature: a caller with this entry point could
+    /// bypass the keyring, so it is not part of the shipped API.
+    #[cfg(feature = "test-support")]
     pub fn exchange_code_into(
+        &self,
+        code: &str,
+        verifier: PkceCodeVerifier,
+        returned_state: &str,
+        expected_state: &CsrfToken,
+        may_persist: &dyn Fn() -> bool,
+        store_refresh: &dyn Fn(&str) -> Result<(), DigiKeyAuthError>,
+    ) -> Result<String, DigiKeyAuthError> {
+        self.exchange_code_inner(
+            code,
+            verifier,
+            returned_state,
+            expected_state,
+            may_persist,
+            store_refresh,
+        )
+    }
+
+    /// Delete the stored refresh token (idempotent). Used to undo a token a
+    /// cancelled OAuth flow managed to store before the cancel landed.
+    pub fn remove_stored_refresh_token() -> Result<(), DigiKeyAuthError> {
+        KeyringStore::for_provider("digikey", "refresh")
+            .and_then(|k| k.delete())
+            .map_err(|e| DigiKeyAuthError::Keyring(e.to_string()))
+    }
+
+    fn exchange_code_inner(
         &self,
         code: &str,
         verifier: PkceCodeVerifier,

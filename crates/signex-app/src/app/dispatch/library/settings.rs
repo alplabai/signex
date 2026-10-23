@@ -101,6 +101,14 @@ impl Signex {
                 // Drop stale results from a cancelled flow — see the
                 // comment on `DigiKeyConnect` for why.
                 if generation != self.library.settings.digikey_flow_generation {
+                    // A Connected result from a cancelled flow means the
+                    // token was stored before the cancel landed; nobody
+                    // will see it, so take it back out of the keyring.
+                    if connected_label.is_some() {
+                        digikey_oauth::discard_token_of_cancelled_flow(
+                            signex_library::distributors::digikey::DigiKeyAuth::remove_stored_refresh_token,
+                        );
+                    }
                     return Task::none();
                 }
                 self.library.settings.digikey_in_flight = false;

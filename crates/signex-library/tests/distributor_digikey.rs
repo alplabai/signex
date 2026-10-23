@@ -232,6 +232,21 @@ fn mount_code_exchange(server: &MockServer) -> std::pin::Pin<Box<dyn Future<Outp
     })
 }
 
+/// A token endpoint that must never be called: `.expect(0)` makes the mock
+/// server fail the test on drop if any request reaches it.
+fn mount_unreachable_token_endpoint(
+    server: &MockServer,
+) -> std::pin::Pin<Box<dyn Future<Output = ()> + '_>> {
+    Box::pin(async move {
+        Mock::given(method("POST"))
+            .and(path("/oauth/token"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(0)
+            .mount(server)
+            .await;
+    })
+}
+
 fn code_exchange_auth(base: &str) -> DigiKeyAuth {
     DigiKeyAuth::with_endpoints(
         "client-id",
@@ -306,7 +321,7 @@ fn uncancelled_code_exchange_stores_the_refresh_token() {
 /// request goes out and before anything is stored.
 #[test]
 fn mismatched_state_is_refused_without_storing() {
-    with_mock_server(mount_code_exchange, |base| {
+    with_mock_server(mount_unreachable_token_endpoint, |base| {
         let auth = code_exchange_auth(&base);
         let (_url, csrf, verifier) = auth.start_authorization();
         let stored = std::cell::RefCell::new(0usize);
