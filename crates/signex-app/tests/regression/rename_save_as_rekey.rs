@@ -19,25 +19,8 @@ use tempfile::TempDir;
 fn empty_sheet() -> SchematicSheet {
     SchematicSheet {
         uuid: uuid::Uuid::new_v4(),
-        version: 0,
-        generator: String::new(),
-        generator_version: String::new(),
         paper_size: "A4".to_string(),
-        root_sheet_page: "1".to_string(),
-        symbols: Vec::new(),
-        wires: Vec::new(),
-        junctions: Vec::new(),
-        labels: Vec::new(),
-        child_sheets: Vec::new(),
-        no_connects: Vec::new(),
-        text_notes: Vec::new(),
-        buses: Vec::new(),
-        bus_entries: Vec::new(),
-        drawings: Vec::new(),
-        no_erc_directives: Vec::new(),
-        title_block: HashMap::new(),
-        lib_symbols: HashMap::new(),
-        unknown: Default::default(),
+        ..Default::default()
     }
 }
 
@@ -199,7 +182,10 @@ fn save_as_onto_another_open_sheet_is_refused() {
     let b_uuid = open_sheet(&mut app, &b, true);
     activate(&mut app, 0);
 
-    let _ = app.update(Message::File(FileMsg::SaveAs(b.clone())));
+    let _ = app.update(Message::File(FileMsg::SaveAs {
+        from_path: a.clone(),
+        to_path: b.clone(),
+    }));
 
     let engines = &app.document_state.engines;
     assert_eq!(engines.get(&a).expect("A kept").document().uuid, a_uuid);
@@ -222,7 +208,10 @@ fn save_as_drops_the_old_path_from_dirty_paths() {
     open_sheet(&mut app, &a, true);
     activate(&mut app, 0);
 
-    let _ = app.update(Message::File(FileMsg::SaveAs(c.clone())));
+    let _ = app.update(Message::File(FileMsg::SaveAs {
+        from_path: a.clone(),
+        to_path: c.clone(),
+    }));
 
     assert!(c.exists(), "Save As must write the new file");
     assert!(app.document_state.engines.contains_key(&c));

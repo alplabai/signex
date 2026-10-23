@@ -324,30 +324,20 @@ pub fn view_navigator<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     col = col.push(section_title("Sheets", &ctx.tokens));
     col = col.push(separator(&ctx.tokens));
 
-    // Resolve the active project from the multi-project Vec — replaces
-    // the legacy `ctx.project_name` singleton (#54 phase 2.5).
-    let active_project = ctx.projects.iter().find(|p| p.is_active);
-    if let Some(project) = active_project {
-        let mut sheets = vec![];
-        for cs in &ctx.child_sheets {
-            sheets.push(TreeNode::leaf(cs.clone(), TreeIcon::Sheet));
-        }
-        let roots = vec![TreeNode::branch(
-            project.name.clone(),
-            TreeIcon::Schematic,
-            sheets,
-        )];
-        col = col.push(
-            TreeView::new(&roots, &ctx.tokens)
-                .view()
-                .map(PanelMsg::Tree),
-        );
-    } else {
+    // The tree is the whole project hierarchy, built from the project's root
+    // sheet — it does not depend on which sheet is focused.
+    if ctx.navigator.tree.is_empty() {
         col = col.push(
             text("No project")
                 .size(10)
                 .color(theme_ext::text_secondary(&ctx.tokens)),
         );
+    } else {
+        let mut tree = TreeView::new(&ctx.navigator.tree, &ctx.tokens);
+        if let Some(sel) = ctx.navigator.selected.as_deref() {
+            tree = tree.selected(sel);
+        }
+        col = col.push(tree.view().map(PanelMsg::Navigator));
     }
     container(col).width(Length::Fill).into()
 }

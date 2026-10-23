@@ -28,6 +28,10 @@ impl Signex {
                 Some(self.show_panel(crate::panels::PanelKind::Messages))
             }
             MenuMessage::OpenSignalPanel => Some(self.show_panel(crate::panels::PanelKind::Signal)),
+            MenuMessage::AscendToParentSheet => {
+                self.ascend_to_parent_sheet();
+                Some(Task::none())
+            }
             MenuMessage::OpenPreferences => {
                 Some(self.update(Message::Preferences(PreferencesMsg::Open)))
             }
@@ -43,6 +47,20 @@ impl Signex {
                 self.ui_state.panel_list_open = false;
                 Some(Task::none())
             }
+            MenuMessage::OpenAbout => {
+                self.ui_state.about_open = true;
+                self.interaction_state.context_menu = None;
+                self.ui_state.panel_list_open = false;
+                Some(Task::none())
+            }
+            MenuMessage::OpenDocumentation => Some(crate::about::open_link(
+                crate::about::ExternalLink::Documentation,
+                |detail| Message::Overlay(OverlayMsg::LinkOpenFailed(detail)),
+            )),
+            MenuMessage::ReportIssue => Some(crate::about::open_link(
+                crate::about::ExternalLink::IssueTracker,
+                |detail| Message::Overlay(OverlayMsg::LinkOpenFailed(detail)),
+            )),
             _ => None,
         }
     }

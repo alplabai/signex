@@ -27,8 +27,11 @@ pub enum SolveError {
         iters: usize,
         final_residual_norm: f64,
     },
-    #[error("over-constrained: redundant constraint {0}")]
-    OverConstrained(crate::id::ConstraintId),
+    /// The constraints cannot all hold: LM stalled at a least-squares
+    /// minimum with these constraints still violated. Empty when the
+    /// normal equations went singular and no constraint can be named.
+    #[error("over-constrained: conflicting constraints {}", join_ids(.0))]
+    OverConstrained(Vec<crate::id::ConstraintId>),
     #[error("solve exceeded time budget ({elapsed_ms} ms > {budget_ms} ms)")]
     Timeout { elapsed_ms: u64, budget_ms: u64 },
     /// LO-12: covers genuine internal failures (LU dimension mismatch,
@@ -37,4 +40,9 @@ pub enum SolveError {
     /// constraint id can be named.
     #[error("solver internal error: {0}")]
     Internal(String),
+}
+
+fn join_ids(ids: &[crate::id::ConstraintId]) -> String {
+    let names: Vec<String> = ids.iter().map(ToString::to_string).collect();
+    format!("[{}]", names.join(", "))
 }

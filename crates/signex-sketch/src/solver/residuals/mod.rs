@@ -4,6 +4,7 @@
 //! `pub fn <name>(...) -> Result<Vec<f64>, SketchError>` functions
 //! invoked by the dispatcher in [`crate::solver::residual`].
 
+pub mod arc_closure;
 pub mod equal_tangent;
 pub mod parallel_perp_angle;
 pub mod point_on;

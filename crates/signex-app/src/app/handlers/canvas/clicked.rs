@@ -286,6 +286,7 @@ impl Signex {
                     let mut wire_commands = Vec::new();
                     for seg in &segments {
                         let wire = signex_types::schematic::Wire {
+                            unknown_columns: Default::default(),
                             uuid: uuid::Uuid::new_v4(),
                             start: seg.0,
                             end: seg.1,
@@ -333,6 +334,7 @@ impl Signex {
             Tool::Component if self.interaction_state.pending_power.is_some() => {
                 if let Some((ref net_name, ref lib_id)) = self.interaction_state.pending_power {
                     let sym = signex_types::schematic::Symbol {
+                        unknown_columns: Default::default(),
                         unknown: Default::default(),
                         uuid: uuid::Uuid::new_v4(),
                         lib_id: lib_id.clone(),
@@ -633,6 +635,7 @@ impl Signex {
                         signex_types::schematic::VAlign::Bottom,
                     ));
                 let label = signex_types::schematic::Label {
+                    unknown_columns: Default::default(),
                     uuid: uuid::Uuid::new_v4(),
                     text,
                     position: signex_types::schematic::Point::new(wx, wy),

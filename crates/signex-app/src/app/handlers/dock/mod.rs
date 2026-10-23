@@ -6,6 +6,7 @@ use super::super::*;
 
 mod floating_layout;
 mod library_browser;
+mod navigator;
 mod panel_controls;
 mod panel_open;
 mod project_navigation;
@@ -32,6 +33,9 @@ impl Signex {
                 return Task::batch([task, self.finish_update()]);
             }
             if let Some(task) = self.handle_dock_project_navigation_panel_message(panel_msg) {
+                return Task::batch([task, self.finish_update()]);
+            }
+            if let Some(task) = self.handle_dock_navigator_panel_message(panel_msg) {
                 return Task::batch([task, self.finish_update()]);
             }
             if self.handle_dock_library_browser_message(panel_msg)

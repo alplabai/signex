@@ -96,7 +96,7 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
     html.push_str("      <tr>\n");
 
     for col in columns {
-        html.push_str(&format!("        <th>{}</th>\n", col.header()));
+        html.push_str(&format!("        <th>{}</th>\n", escape_html(col.header())));
     }
 
     html.push_str("      </tr>\n");
@@ -144,4 +144,21 @@ fn escape_html(s: &str) -> String {
             _ => ch.to_string(),
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn custom_column_header_is_escaped() {
+        let out = emit(
+            &BomTable::default(),
+            &[BomColumn::Custom("<script>alert(1)</script>".into())],
+        )
+        .unwrap();
+        let html = String::from_utf8(out).unwrap();
+        assert!(html.contains("<th>&lt;script&gt;alert(1)&lt;/script&gt;</th>"));
+        assert!(!html.contains("<script>"));
+    }
 }

@@ -253,10 +253,9 @@ mod tests {
     /// Attach `constraints` to `data`, flag them all over-constrained,
     /// and assemble the `FullSolveOutput` the panel reads.
     ///
-    /// Conflicting constraints make `solve_lm` legitimately return
-    /// `DidNotConverge`, so — exactly as `signex-sketch/tests/dof.rs`
-    /// does — the output is assembled at the packed initial state
-    /// rather than through `Solver::solve`. Everything
+    /// `Solver::solve` reports a conflicting set as `OverConstrained`
+    /// and returns no output, so the output is assembled at the packed
+    /// initial state instead. Everything
     /// `build_over_constraint_summaries` reads is real: the packed
     /// state, the entity index, and the params the solve ran with.
     fn output_for(

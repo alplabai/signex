@@ -11,8 +11,8 @@ use super::{SplitCtx, entity_point_xy};
 
 /// Rewrite every constraint in `sketch.constraints` against a
 /// completed split. Returns the full replacement list plus the ids of
-/// any constraint dropped outright (today only a `Midpoint` naming the
-/// retired line — see [`is_dropped_midpoint`]).
+/// any constraint dropped outright (a `Midpoint` or `EqualLength`
+/// naming the retired line — see [`is_dropped`]).
 pub(super) fn split_constraints(
     sketch: &SketchData,
     ctx: &SplitCtx,
@@ -20,7 +20,7 @@ pub(super) fn split_constraints(
     let mut kept = Vec::with_capacity(sketch.constraints.len());
     let mut dropped = Vec::new();
     for c in &sketch.constraints {
-        if is_dropped_midpoint(c, ctx) {
+        if is_dropped(c, ctx) {
             dropped.push(c.id);
             continue;
         }
@@ -29,17 +29,23 @@ pub(super) fn split_constraints(
     (kept, dropped)
 }
 
-/// `Midpoint` names the retired line — its referent is destroyed by
-/// the split (the original line's midpoint is the midpoint of NEITHER
-/// half), unlike `Parallel` / `EqualLength` / etc. where `line_a`
-/// genuinely still holds the relation. Dropped rather than re-pointed;
-/// the id is surfaced via `SplitResult::dropped_constraints` instead
-/// of silently vanishing.
-fn is_dropped_midpoint(c: &Constraint, ctx: &SplitCtx) -> bool {
-    matches!(&c.kind, ConstraintKind::Midpoint { line, .. } if *line == ctx.line)
+/// `Midpoint` and `EqualLength` naming the retired line are dropped.
+/// Both measure the whole line: the original midpoint is the midpoint
+/// of NEITHER half, and the original length is the length of neither
+/// half (`line_a` is only `t` of it), so re-pointing would make the
+/// next solve move geometry to satisfy a relation the user never
+/// asked of that half. Unlike `Parallel` / `Perpendicular` etc., where
+/// `line_a` genuinely still holds the relation. The id is surfaced via
+/// `SplitResult::dropped_constraints` instead of silently vanishing.
+fn is_dropped(c: &Constraint, ctx: &SplitCtx) -> bool {
+    match &c.kind {
+        ConstraintKind::Midpoint { line, .. } => *line == ctx.line,
+        ConstraintKind::EqualLength { l1, l2 } => *l1 == ctx.line || *l2 == ctx.line,
+        _ => false,
+    }
 }
 
-/// Rewrite one constraint (already confirmed not a dropped `Midpoint`)
+/// Rewrite one constraint (already confirmed not dropped)
 /// against a completed split. Returns 1 or 2 replacement constraints.
 /// A constraint whose fields never named `line` (including every kind
 /// that can only reference a Point / Arc / Circle — `Coincident`,
@@ -156,7 +162,7 @@ fn point_param(sketch: &SketchData, point: SketchEntityId, ctx: &SplitCtx) -> f6
     ((px - ctx.start_xy.0) * ctx.dx + (py - ctx.start_xy.1) * ctx.dy) / ctx.len_sq
 }
 
-/// `Parallel` / `Perpendicular` / `Angle` / `EqualLength` /
+/// `Parallel` / `Perpendicular` / `Angle` /
 /// `TangentLineArc` / `SymmetricAboutLine` / `DistancePtLine` —
 /// re-pointed onto `line_a` only; everything else (including a
 /// `Midpoint` NOT naming the retired line) passes through unchanged.
@@ -166,9 +172,9 @@ fn point_param(sketch: &SketchData, point: SketchEntityId, ctx: &SplitCtx) -> f6
 /// would assert the identical numeric relationship for two different
 /// physical segments against one external reference — generally
 /// infeasible the instant the mid point or the partner entity moves
-/// independently after the split (two segments can't both equal
-/// `l2`'s length, or both sit at `target` degrees from `l2`, unless
-/// the split happened to land exactly at the midpoint by coincidence).
+/// independently after the split (two segments can't both sit at
+/// `target` degrees from `l2`, unless the split happened to land
+/// exactly at the midpoint by coincidence).
 /// Re-pointing to one half preserves exactly what the original
 /// constraint asserted about the one physical line it still
 /// describes, and leaves the other half's extra DOF free — which is
@@ -190,10 +196,6 @@ fn retarget_relational(c: &Constraint, ctx: &SplitCtx) -> Constraint {
             l1: sub(*l1),
             l2: sub(*l2),
             target: target.clone(),
-        },
-        EqualLength { l1, l2 } => EqualLength {
-            l1: sub(*l1),
-            l2: sub(*l2),
         },
         TangentLineArc { line, arc } => TangentLineArc {
             line: sub(*line),

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::format::{BoardUnknown, UnknownFields};
+use crate::format::{BoardUnknown, UnknownColumns, UnknownFields};
 use crate::property::PcbProperty;
 
 pub use crate::schematic::Point;
@@ -182,6 +182,10 @@ pub struct Pad {
     /// does not recognise, kept so a save re-emits them.
     #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]
     pub unknown: UnknownFields,
+    /// TSV columns this build does not recognise, kept per row so a
+    /// save re-emits them (see [`UnknownColumns`]).
+    #[serde(default, skip_serializing_if = "UnknownColumns::is_empty")]
+    pub unknown_columns: UnknownColumns,
 }
 
 // ---------------------------------------------------------------------------
@@ -245,6 +249,10 @@ pub struct Footprint {
     /// this build does not recognise, kept so a save re-emits them.
     #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]
     pub unknown: UnknownFields,
+    /// TSV columns this build does not recognise, kept per row so a
+    /// save re-emits them (see [`UnknownColumns`]).
+    #[serde(default, skip_serializing_if = "UnknownColumns::is_empty")]
+    pub unknown_columns: UnknownColumns,
 }
 
 // ---------------------------------------------------------------------------
@@ -262,6 +270,10 @@ pub struct Segment {
     pub layer: String,
     #[serde(default)]
     pub net: u32,
+    /// TSV columns this build does not recognise, kept per row so a
+    /// save re-emits them (see [`UnknownColumns`]).
+    #[serde(default, skip_serializing_if = "UnknownColumns::is_empty")]
+    pub unknown_columns: UnknownColumns,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -278,6 +290,10 @@ pub struct Via {
     pub net: u32,
     #[serde(default = "default_via_type")]
     pub via_type: ViaType,
+    /// TSV columns this build does not recognise, kept per row so a
+    /// save re-emits them (see [`UnknownColumns`]).
+    #[serde(default, skip_serializing_if = "UnknownColumns::is_empty")]
+    pub unknown_columns: UnknownColumns,
 }
 
 fn default_via_type() -> ViaType {

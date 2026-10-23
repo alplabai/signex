@@ -95,12 +95,14 @@ impl Signex {
                 let task = self.handle_active_document_save_requested();
                 iced::Task::batch([task, self.finish_update()])
             }
-            FileMsg::SaveAs(path) => {
-                self.handle_active_document_save_as_requested(path);
+            FileMsg::SaveAs { from_path, to_path } => {
+                self.handle_active_document_save_as_requested(from_path, to_path);
                 self.finish_update()
             }
             FileMsg::SavePrimitiveAs { from_path, to_path } => {
-                self.handle_save_primitive_as(&from_path, &to_path);
+                if let Err(error) = self.handle_save_primitive_as(&from_path, &to_path) {
+                    crate::diagnostics::log_error("Save As failed", &error);
+                }
                 self.finish_update()
             }
             FileMsg::SchematicOpenFinished {

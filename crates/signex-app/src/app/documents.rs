@@ -495,8 +495,9 @@ impl FootprintEditorState {
     /// user opened. The editor opens on the first footprint in the
     /// file. The caller is responsible for confirming the file is
     /// non-empty before this call.
-    pub fn new(path: PathBuf, file: signex_library::FootprintFile) -> Self {
+    pub fn new(path: PathBuf, mut file: signex_library::FootprintFile) -> Self {
         let active_idx = 0;
+        let repaired = Self::take_load_repairs(&path, &mut file);
         let state = crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
             &file.footprints[active_idx],
         );
@@ -507,11 +508,36 @@ impl FootprintEditorState {
             panel_selected_idx: None,
             state,
             canvas_cache: iced::widget::canvas::Cache::default(),
-            dirty: false,
+            // An arc repaired on load differs from what is on disk, so the
+            // document opens dirty and a save persists the repair.
+            dirty: repaired,
             history: Vec::new(),
             redo: Vec::new(),
             last_edit_key: None,
         }
+    }
+
+    /// Report, once, the arcs the loader moved onto their circles (the
+    /// Messages panel names them) and clear the transient record so history
+    /// snapshots never carry it. Returns whether anything was repaired.
+    /// Opening a footprint into an editor is the only place this logs;
+    /// previews, mounts and history reads stay quiet.
+    fn take_load_repairs(path: &std::path::Path, file: &mut signex_library::FootprintFile) -> bool {
+        let mut moved: Vec<String> = Vec::new();
+        for footprint in &mut file.footprints {
+            moved.extend(footprint.load_repairs.drain(..).map(|id| id.to_string()));
+        }
+        if moved.is_empty() {
+            return false;
+        }
+        crate::diagnostics::log_warning(format!(
+            "{}: moved the end point of {} arc(s) onto its circle (centre and start \
+             unchanged); save the file to keep the repair: {}",
+            path.display(),
+            moved.len(),
+            moved.join(", ")
+        ));
+        true
     }
 
     /// v0.24 Phase 1 (Track B) — depth cap for `history` / `redo`
@@ -532,12 +558,31 @@ impl FootprintEditorState {
     /// natural integration site.
     pub fn push_history(&mut self) {
         let snap = self.snapshot();
+        self.commit_history(snap);
+    }
+
+    /// Snapshot taken before an edit whose outcome is not known yet; hand it
+    /// to [`Self::commit_history`] only if the edit is kept.
+    pub(crate) fn begin_edit(&self) -> FootprintHistorySnapshot {
+        self.snapshot()
+    }
+
+    /// Record `snap` as an undo step: clears redo and evicts the oldest step
+    /// at [`Self::HISTORY_DEPTH`]. Not called for a rejected edit, so a
+    /// rejection leaves history and redo exactly as they were.
+    pub(crate) fn commit_history(&mut self, snap: FootprintHistorySnapshot) {
         self.history.push(snap);
         if self.history.len() > Self::HISTORY_DEPTH {
             self.history.remove(0);
         }
         self.redo.clear();
         self.last_edit_key = None;
+    }
+
+    /// True when the footprint and pad list equal `snap`, i.e. the edit
+    /// since `snap` was taken changed nothing that history restores.
+    pub(crate) fn is_unchanged_since(&self, snap: &FootprintHistorySnapshot) -> bool {
+        self.file == snap.file && self.state.pads == snap.pads
     }
 
     /// Run a Properties-panel edit as one undo step. `edit` returns

@@ -277,7 +277,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
         &self,
         cstate: &Self::State,
         renderer: &Renderer,
-        _theme: &Theme,
+        theme: &Theme,
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
@@ -305,7 +305,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             self.draw_touching_line_ghost(frame, cstate);
             self.draw_lasso_ghost(frame, cstate);
             self.draw_rubber_band(frame, cstate);
-            self.draw_sketch_overlays(frame, cstate);
+            self.draw_sketch_overlays(frame, cstate, theme.palette().danger);
         });
 
         vec![geom]

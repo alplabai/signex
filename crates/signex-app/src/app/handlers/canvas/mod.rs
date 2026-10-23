@@ -272,7 +272,13 @@ impl Signex {
         let Some(path) = self.resolve_child_sheet_path(child_filename) else {
             return;
         };
+        self.open_or_focus_sheet_path(path);
+    }
 
+    /// Focus the tab already showing `path`, or open it as a new schematic tab.
+    /// The Navigator opens sheets by the path its hierarchy resolved; a
+    /// canvas double-click reaches here through `open_or_focus_child_sheet`.
+    pub(crate) fn open_or_focus_sheet_path(&mut self, path: std::path::PathBuf) {
         if !path.exists() {
             crate::diagnostics::log_info(format!("Child-sheet file not found: {}", path.display()));
             return;

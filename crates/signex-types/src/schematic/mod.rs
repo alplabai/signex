@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::format::UnknownFields;
+use crate::format::{UnknownColumns, UnknownFields};
 use crate::property::SchematicProperty;
 
 // ---------------------------------------------------------------------------
@@ -717,16 +717,63 @@ pub struct Symbol {
     /// every file written by this build.
     #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]
     pub unknown: UnknownFields,
+    /// TSV columns this build does not recognise, kept per row so a
+    /// save re-emits them (see [`UnknownColumns`]).
+    #[serde(default, skip_serializing_if = "UnknownColumns::is_empty")]
+    pub unknown_columns: UnknownColumns,
 }
 
 fn default_unit() -> u32 {
     1
 }
 
+/// Blank symbol at the origin with a nil uuid; serde defaults elsewhere
+/// (`unit` 1, `in_bom` and `on_board` true). For fixtures and partial
+/// literals; production code builds symbols exhaustively and mints real uuids.
+impl Default for Symbol {
+    fn default() -> Self {
+        Self {
+            uuid: Uuid::nil(),
+            lib_id: String::new(),
+            reference: String::new(),
+            value: String::new(),
+            footprint: String::new(),
+            datasheet: String::new(),
+            position: Point::default(),
+            rotation: 0.0,
+            mirror_x: false,
+            mirror_y: false,
+            unit: default_unit(),
+            is_power: false,
+            ref_text: None,
+            val_text: None,
+            fields_autoplaced: false,
+            fields_user_placed: false,
+            dnp: false,
+            in_bom: true,
+            on_board: true,
+            exclude_from_sim: false,
+            locked: false,
+            fields: HashMap::new(),
+            custom_properties: Vec::new(),
+            pin_uuids: HashMap::new(),
+            instances: Vec::new(),
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
+            unknown: UnknownFields::default(),
+            unknown_columns: UnknownColumns::default(),
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Wiring primitives
 mod sheet;
 pub use sheet::*;
+
+#[cfg(test)]
+mod default_tests;
 
 #[cfg(test)]
 mod symbol_transform_tests {

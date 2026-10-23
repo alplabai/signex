@@ -303,13 +303,14 @@ impl FootprintCanvas<'_> {
         &self,
         frame: &mut canvas::Frame,
         cstate: &FootprintCanvasState,
+        conflict_colour: iced::Color,
     ) {
         if matches!(
             self.state.mode,
             crate::library::editor::footprint::state::EditorMode::Sketch
         ) && let Some(sketch) = self.sketch
         {
-            draw_sketch_overlay(frame, cstate, sketch, self.state);
+            draw_sketch_overlay(frame, cstate, sketch, self.state, conflict_colour);
             // v0.22 Phase E2 — DOF direction-arrow overlay.
             draw_dof_direction_arrows(frame, cstate, sketch, self.state);
             draw_sketch_tool_preview(frame, cstate, sketch, self.state);
