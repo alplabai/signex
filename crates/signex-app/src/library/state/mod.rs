@@ -510,6 +510,9 @@ pub struct LibraryState {
     /// A stall was reported and the poll has not completed since, so the
     /// warning is not repeated every tick (#827).
     pub external_poll_stall_reported: bool,
+    /// A failed pass was reported and the poll has not completed since, so
+    /// a pass that fails every tick logs once, not every 2 s (#869 review).
+    pub external_poll_failure_reported: bool,
 }
 
 /// Three mount sources surfaced as collapsible sections inside the

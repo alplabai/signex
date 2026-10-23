@@ -114,7 +114,7 @@ fn mounted(name: &'static str) -> (tempfile::TempDir, std::path::PathBuf, Signex
 /// #827: a stalled pass is reported once across repeated timeouts, and
 /// "resumed" once when a pass completes again.
 #[test]
-fn a_timed_out_poll_is_reported_once_and_recovers() {
+fn a_stalled_or_failing_poll_is_reported_once_and_recovers() {
     let stalls = || logged(&["took longer than"]);
     let resumes = || logged(&["external-edit checks resumed"]);
     let (stalls_before, resumes_before) = (stalls(), resumes());
@@ -128,6 +128,21 @@ fn a_timed_out_poll_is_reported_once_and_recovers() {
 
     polled(&mut app, PollOutcome::Changed(Vec::new()));
     assert_eq!(resumes() - resumes_before, 1);
+
+    // #869 review: a pass that fails every tick is reported once too, not
+    // every 2 s, and the next completed pass says checks resumed.
+    let failures = || logged(&["external edits failed: stat exploded"]);
+    let failures_before = failures();
+    polled(&mut app, PollOutcome::Failed("stat exploded".into()));
+    polled(&mut app, PollOutcome::Failed("stat exploded".into()));
+    assert_eq!(
+        failures() - failures_before,
+        1,
+        "one warning for two failures"
+    );
+
+    polled(&mut app, PollOutcome::Changed(Vec::new()));
+    assert_eq!(resumes() - resumes_before, 2);
 }
 
 /// Positive control: a real external edit is refreshed and reported once.

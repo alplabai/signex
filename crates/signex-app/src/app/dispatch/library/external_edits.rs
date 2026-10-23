@@ -31,7 +31,8 @@ impl Signex {
 
     /// `stat` pass done: refresh every library it named and tell the user
     /// in the Messages panel, so an external edit never changes the view
-    /// silently. A pass that timed out is reported once, not per tick.
+    /// silently. A pass that timed out or failed is reported once, not per
+    /// tick.
     pub(super) fn handle_external_edits_polled(
         &mut self,
         outcome: external_poll::PollOutcome,
@@ -50,14 +51,20 @@ impl Signex {
                 return Task::none();
             }
             external_poll::PollOutcome::Failed(reason) => {
-                crate::diagnostics::log_warning(format!(
-                    "[library] checking mounted libraries for external edits failed: {reason}"
-                ));
+                if !self.library.external_poll_failure_reported {
+                    self.library.external_poll_failure_reported = true;
+                    crate::diagnostics::log_warning(format!(
+                        "[library] checking mounted libraries for external edits failed: \
+                         {reason}; retrying quietly until a check succeeds"
+                    ));
+                }
                 return Task::none();
             }
             external_poll::PollOutcome::Changed(changed) => changed,
         };
-        if std::mem::take(&mut self.library.external_poll_stall_reported) {
+        let stalled = std::mem::take(&mut self.library.external_poll_stall_reported);
+        let failed = std::mem::take(&mut self.library.external_poll_failure_reported);
+        if stalled || failed {
             crate::diagnostics::log_info("[library] external-edit checks resumed");
         }
         let mut refreshed = false;

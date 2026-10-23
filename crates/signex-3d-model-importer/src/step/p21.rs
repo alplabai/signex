@@ -563,6 +563,9 @@ mod tests {
 
             let (tx, rx) = mpsc::channel();
             let data = std::sync::Arc::clone(&large);
+            // Detached on purpose: past the deadline nothing waits for it.
+            // It runs on beside the next attempt, which only slows the
+            // already-failing regression case, and ends with the test binary.
             std::thread::spawn(move || {
                 let started = Instant::now();
                 let parsed = parse_entities(&data).expect("parse").len();
