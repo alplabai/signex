@@ -96,6 +96,9 @@ pub enum MenuMessage {
     OpenAbout,
     /// Help ▸ Documentation — opens the user guide in the browser.
     OpenDocumentation,
+    /// Help ▸ Open Sample Project — unpacks the bundled sample into the
+    /// per-user config directory (once) and opens it.
+    OpenSampleProject,
     /// Help ▸ Report an Issue — opens the issue tracker in the browser.
     ReportIssue,
     // File

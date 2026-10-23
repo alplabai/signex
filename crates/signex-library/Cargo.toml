@@ -73,6 +73,7 @@ distributors-community = [
 [dev-dependencies]
 signex-library = { path = ".", features = ["test-identity"] }
 tempfile = "3"
+tracing-subscriber = { workspace = true }
 pdf-writer = { workspace = true }
 tokio = { workspace = true }
 wiremock = "0.6"

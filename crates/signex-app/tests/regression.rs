@@ -125,18 +125,27 @@ mod deleted_sheet_not_resaved;
 mod library_components_panel_actions;
 #[path = "regression/library_git_recovery.rs"]
 mod library_git_recovery;
+
+#[path = "regression/sync_sheet_pins.rs"]
+mod sync_sheet_pins;
+
 #[path = "regression/start_screen.rs"]
 mod start_screen;
 
 #[path = "regression/dead_schematic_controls.rs"]
 mod dead_schematic_controls;
+#[path = "regression/library_delete_undo.rs"]
+mod library_delete_undo;
 #[path = "regression/save_as_by_document_kind.rs"]
 mod save_as_by_document_kind;
 #[path = "regression/stable_addressing.rs"]
 mod stable_addressing;
+#[path = "regression/symbol_undo_steps.rs"]
+mod symbol_undo_steps;
 
 #[path = "regression/canvas_editing_correctness.rs"]
 mod canvas_editing_correctness;
-
+#[path = "regression/schematic_field_drag.rs"]
+mod schematic_field_drag;
 #[path = "regression/surface_failures.rs"]
 mod surface_failures;

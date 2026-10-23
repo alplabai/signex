@@ -1207,4 +1207,72 @@ mod tests {
             "the rejected gesture resets to Idle (still armed) rather than getting stuck"
         );
     }
+
+    #[test]
+    fn deleting_a_point_cascades_to_line_and_arc_in_one_undo_step() {
+        use signex_library::primitive::footprint::FootprintFile;
+        use std::path::PathBuf;
+
+        let plane = PlaneId::new();
+        let (a, b, c) = (
+            SketchEntityId::new(),
+            SketchEntityId::new(),
+            SketchEntityId::new(),
+        );
+        let (line, arc) = (SketchEntityId::new(), SketchEntityId::new());
+        let pt = |id, x, y| Entity::new(id, plane, EntityKind::Point { x, y });
+        let mut fp = empty_footprint();
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![
+                pt(a, 0.0, 0.0),
+                pt(b, 2.0, 0.0),
+                pt(c, 0.0, 2.0),
+                Entity::new(line, plane, EntityKind::Line { start: a, end: b }),
+                Entity::new(
+                    arc,
+                    plane,
+                    EntityKind::Arc {
+                        center: c,
+                        start: a,
+                        end: b,
+                        sweep_ccw: true,
+                    },
+                ),
+            ],
+            constraints: vec![Constraint {
+                id: ConstraintId::new(),
+                kind: ConstraintKind::Horizontal { line },
+            }],
+            ..SketchData::default()
+        });
+        let before = fp.sketch.clone();
+        let file = FootprintFile::from_footprint(fp);
+        let mut editor =
+            crate::app::FootprintEditorState::new(PathBuf::from("cascade.snxfpt"), file);
+        editor.state.mode = crate::library::editor::footprint::state::EditorMode::Sketch;
+        editor.state.selected_sketch = Some(a);
+
+        crate::library::editor::footprint::updates::apply_footprint_primitive_edit(
+            &mut editor,
+            crate::library::messages::FootprintEditorMsg::DeleteSelected,
+        );
+
+        let after = editor.primitive().sketch.clone().unwrap();
+        let ids: Vec<_> = after.entities.iter().map(|e| e.id).collect();
+        assert_eq!(
+            ids,
+            vec![b, c],
+            "the line and arc built on the point go too"
+        );
+        assert!(after.constraints.is_empty());
+        assert!(after.dangling_refs().is_empty());
+        assert!(editor.state.last_solve.is_some(), "the solver still solves");
+
+        assert!(editor.undo());
+        assert_eq!(editor.primitive().sketch, before, "one undo restores all");
+    }
 }

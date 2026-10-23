@@ -141,6 +141,27 @@ pub fn hit_test_graphic(
 /// Tolerance band around line / arc / circle outlines (mm).
 const GRAPHIC_BODY_TOL: f64 = 0.5;
 
+/// Estimated drawn bounds `(xmin, xmax, ymin, ymax)` of a Text graphic,
+/// grown by `pad` on every side. The canvas draws text `HAlign::Left` /
+/// `VAlign::Top` from the anchor through the y-up map, so glyphs run
+/// right (+x) and down (-y world). The renderer clamps the drawn size to
+/// at least 0.1, so the box does too. Click hit-testing and both marquee
+/// predicates share this so they always agree.
+pub(super) fn text_bounds(
+    position: &[f64; 2],
+    content: &str,
+    size: f64,
+    pad: f64,
+) -> (f64, f64, f64, f64) {
+    let (w, h) = crate::library::editor::text_extent::text_extent(content, size.max(0.1));
+    (
+        position[0] - pad,
+        position[0] + w + pad,
+        position[1] - h - pad,
+        position[1] + pad,
+    )
+}
+
 /// Body hit test for the graphic at `idx`. Rectangle counts every
 /// interior point; line / arc / circle count any point within the
 /// stroke tolerance band so the user can grab thin strokes without
@@ -164,7 +185,11 @@ fn hit_test_graphic_body(sym: &Symbol, idx: usize, x: f64, y: f64) -> bool {
             let dx = x - center[0];
             let dy = y - center[1];
             let d = (dx * dx + dy * dy).sqrt();
-            (d - radius).abs() <= GRAPHIC_BODY_TOL
+            if g.fill.is_some() {
+                d <= radius + GRAPHIC_BODY_TOL
+            } else {
+                (d - radius).abs() <= GRAPHIC_BODY_TOL
+            }
         }
         SymbolGraphicKind::Arc {
             center,
@@ -201,11 +226,15 @@ fn hit_test_graphic_body(sym: &Symbol, idx: usize, x: f64, y: f64) -> bool {
                 a >= s || a <= e
             }
         }
-        SymbolGraphicKind::Text { position, size, .. } => {
-            // Approximate text bounds as a small box around the anchor.
-            let half_w = size * 0.5;
-            let half_h = size * 0.5;
-            (x - position[0]).abs() <= half_w && (y - position[1]).abs() <= half_h
+        SymbolGraphicKind::Text {
+            position,
+            content,
+            size,
+        } => {
+            // Padded by the stroke tolerance so empty or tiny text is
+            // still grabbable.
+            let (x0, x1, y0, y1) = text_bounds(position, content, *size, GRAPHIC_BODY_TOL);
+            x >= x0 && x <= x1 && y >= y0 && y <= y1
         }
         SymbolGraphicKind::Polygon { vertices } => {
             if vertices.len() < 2 {

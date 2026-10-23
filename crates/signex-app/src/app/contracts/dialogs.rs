@@ -257,6 +257,10 @@ pub enum FileMsg {
     /// parser is directory-driven) plus a blank `<stem>.snxsch` next
     /// to it, then loads the project + opens the schematic tab.
     NewProject(Option<PathBuf>),
+    /// Completion of the off-thread sample-project unpack kicked off by
+    /// Help > Open Sample Project. Carries the directory the sample
+    /// lives in, or the stringified `anyhow` chain on failure.
+    SampleProjectUnpacked(Result<PathBuf, String>),
     /// Completion of the async schematic read+parse kicked off by
     /// `open_schematic_file` — the `fs::read_to_string` +
     /// `SnxSchematic::parse` run in `spawn_blocking` so `update()`
@@ -341,14 +345,15 @@ pub enum ProjectMsg {
     /// v0.23 — Async project-git commit completed. The dispatcher
     /// removes the `(project_root, rel_path)` entry from
     /// `inflight_git_commits` and logs success/failure. `result.Ok`
-    /// carries the formatted commit OID; `result.Err` carries the
+    /// carries the formatted commit OID, or `None` when the file matched
+    /// HEAD and no commit was made (#149); `result.Err` carries the
     /// error string. Best-effort — a failure here doesn't roll back
     /// the on-disk save (data is already on disk; this just means git
     /// didn't capture it).
     GitCommitDone {
         project_root: std::path::PathBuf,
         rel_path: std::path::PathBuf,
-        result: Result<String, String>,
+        result: Result<Option<String>, String>,
     },
 }
 

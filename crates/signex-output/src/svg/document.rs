@@ -14,9 +14,7 @@ use super::labels::{
     halign_to_svg, label_colour, label_size_pt, label_spin_style, schematic_text_offset_global,
     schematic_text_offset_hier, schematic_text_offset_net, spin_text_style, valign_to_svg,
 };
-use super::symbols::{
-    field_effective_style, push_symbol_lib_graphics, push_symbol_pins, symbol_eval_variables,
-};
+use super::symbols::{push_symbol_lib_graphics, push_symbol_pins, symbol_eval_variables};
 use super::text::{TextStyle, draw_text_outline};
 use super::*;
 use crate::SheetSnapshot;
@@ -24,6 +22,7 @@ use crate::pdf::layout::PageTransform;
 use crate::pdf::{ColourMode, PdfOptions};
 use signex_types::markup::ExpressionEvalContext;
 use signex_types::schematic::LabelType;
+use signex_types::schematic::field_effective_style;
 use std::collections::HashMap;
 use std::fmt::Write as _;
 use tiny_skia::{Color, FillRule, Paint, Pixmap, Stroke};

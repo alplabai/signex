@@ -23,6 +23,7 @@ mod serde_tsv;
 #[cfg(test)]
 mod tests;
 
+pub use load_repair::LoadRepair;
 pub use pad::*;
 pub use serde_tsv::FootprintFileError;
 pub(crate) use serde_tsv::{pads_from_tsv, pads_to_tsv};
@@ -356,11 +357,12 @@ pub struct Footprint {
     /// preserve their literal pad-list authoring.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sketch: Option<signex_sketch::SketchData>,
-    /// Arcs whose end point [`Footprint::repair_stored_sketch`] moved onto
-    /// the circle when this footprint was read from storage. Transient: never
+    /// Changes [`Footprint::repair_stored_sketch`] made to the sketch when
+    /// this footprint was read from storage (arc ends moved, dangling
+    /// references removed). Transient: never
     /// serialised. The editor that opens the footprint reports and clears it.
     #[serde(skip)]
-    pub load_repairs: Vec<signex_sketch::id::SketchEntityId>,
+    pub load_repairs: Vec<LoadRepair>,
     /// Copper pour / region polygons. v0.14+; fill generation is v0.15.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pours: Vec<FpPour>,
