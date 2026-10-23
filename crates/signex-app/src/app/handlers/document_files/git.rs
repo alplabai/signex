@@ -11,7 +11,7 @@ impl Signex {
     /// Walks `document_state.projects` looking for the project whose
     /// `data.dir` is a prefix of `file_path`. If found AND
     /// `data.enable_git == true`, opens
-    /// [`LocalGitProjectAdapter`] and runs `commit_path`.
+    /// [`signex_library::adapters::local_git::project::LocalGitProjectAdapter`] and runs `commit_path`.
     ///
     /// Failure is best-effort: logged + surfaced as a non-modal
     /// status warning, never blocks the save. The user's data is on

@@ -68,6 +68,10 @@ pub struct PcbCanvas {
     pub visible_grid_mm: f64,
 }
 
+/// Narrowest on-screen grid pitch the PCB canvas draws; denser grids step up
+/// by whole multiples of the real pitch (see `adaptive_pitch_mm`).
+const PCB_GRID_MIN_PX: f32 = 8.0;
+
 impl Default for PcbCanvas {
     fn default() -> Self {
         Self::new()
@@ -107,8 +111,30 @@ impl PcbCanvas {
         *self.scene_generation.get_mut() += 1;
     }
 
+    /// On-screen grid line spacing in pixels at `scale` px/mm, or `None` when
+    /// the grid is toggled off or too dense to draw. `adaptive_pitch_mm` is
+    /// millimetres, so it is converted to pixels here.
+    pub fn grid_step_px(&self, scale: f32) -> Option<f32> {
+        if !self.grid_visible {
+            return None;
+        }
+        crate::canvas::grid::adaptive_pitch_mm(self.visible_grid_mm as f32, scale, PCB_GRID_MIN_PX)
+            .map(|mm| mm * scale)
+    }
+
     pub fn clear_bg_cache(&mut self) {
         self.bg_cache.clear();
+    }
+
+    /// Adopt the app-wide Grid Toggle and Visible Grid Size (`UiState`), the
+    /// same values the schematic canvas reads each frame (#682). Invalidates
+    /// the background cache only when something actually changed.
+    pub fn set_grid(&mut self, visible: bool, visible_grid_mm: f64) {
+        if self.grid_visible != visible || self.visible_grid_mm != visible_grid_mm {
+            self.grid_visible = visible;
+            self.visible_grid_mm = visible_grid_mm;
+            self.bg_cache.clear();
+        }
     }
 
     pub fn clear_content_cache(&mut self) {
@@ -178,7 +204,7 @@ impl PcbCanvas {
     /// Build the scene for GPU rendering: the same geometry as the CPU path.
     /// Overlay primitives (active-layer zone highlight, selection highlight)
     /// stay in their own `Scene::overlay_*` fields rather than folding into
-    /// the base buckets — [`crate::scene_shader::ScenePrimitive::draw`]
+    /// the base buckets — `ScenePrimitive::draw` (in `crate::scene_shader`)
     /// composites them in a dedicated pass *after* every base bucket, so they
     /// always render on top, matching the CPU `draw_scene` overlay pass.
     /// Returns `None` when no board snapshot is loaded.
@@ -551,8 +577,7 @@ impl canvas::Program<Message> for PcbCanvas {
         let bg = self.bg_cache.draw(renderer, bounds.size(), |frame| {
             frame.fill_rectangle(iced::Point::ORIGIN, bounds.size(), self.theme_bg);
 
-            if self.grid_visible {
-                let step = (self.visible_grid_mm as f32 * camera.scale).max(8.0);
+            if let Some(step) = self.grid_step_px(camera.scale) {
                 let mut x = camera.offset.x.rem_euclid(step) - step;
                 while x <= bounds.width + step {
                     let path = canvas::Path::line(
@@ -641,6 +666,30 @@ mod tests {
     use super::*;
     use signex_renderer::pcb::{DrcMarkerInput, PcbSnapshot};
     use signex_types::violation::Severity;
+
+    #[test]
+    fn grid_step_px_is_pixels_not_millimetres() {
+        let canvas = PcbCanvas::new();
+        // Default zoom 3 px/mm, 2.54 mm grid: 7.62 px < 8 px floor, so the
+        // 5x level (12.7 mm) is drawn, which is 38.1 px on screen.
+        let step = canvas.grid_step_px(3.0).expect("grid is visible");
+        assert!((step - 38.1).abs() < 1e-3, "got {step}");
+    }
+
+    #[test]
+    fn grid_step_px_is_none_when_grid_toggled_off() {
+        let mut canvas = PcbCanvas::new();
+        canvas.set_grid(false, 2.54);
+        assert_eq!(canvas.grid_step_px(3.0), None);
+    }
+
+    #[test]
+    fn set_grid_adopts_toggle_and_size() {
+        let mut canvas = PcbCanvas::new();
+        canvas.set_grid(false, 1.27);
+        assert!(!canvas.grid_visible);
+        assert_eq!(canvas.visible_grid_mm, 1.27);
+    }
 
     /// Correctness — thread #4 (z-order): `gpu_scene()` must NOT fold overlay
     /// geometry into the base `polygons`/`lines`/`circles` buckets. A DRC

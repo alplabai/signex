@@ -131,24 +131,46 @@ fn export_with_issues_still_writes_and_reports_the_summary() {
     std::fs::remove_dir_all(&dir).expect("cleanup");
 }
 
-/// #111 — a BOM column resize counts as an active layout drag, so a cursor
-/// move gets the drag branch and a release (`UiMsg::DragEnd`) clears it.
+/// A column resize must end on a button release anywhere, in any window.
+/// Releasing away from the 4 px handle never reaches the handle's own
+/// `on_release`, so the global drag-end has to be live and has to clear the
+/// resize; otherwise the column keeps following the cursor.
 #[test]
-fn drag_end_clears_a_bom_column_resize() {
+fn column_resize_ends_on_a_global_release_away_from_the_handle() {
+    use signex_app::app::UiMsg;
+
     let mut app = app_with_faulty_bom();
     let _ = app.update(Message::Menu(MenuMessage::ExportBom));
+    assert!(!app.is_pointer_drag_active());
+
+    let _ = app.update(Message::Ui(UiMsg::DragMove(100.0, 10.0)));
     let _ = app.update(Message::BomPreview(BomPreviewMsg::ColumnResizeStart(0)));
-    let resizing = |app: &Signex| {
-        app.document_state
-            .bom_preview
-            .as_ref()
-            .is_some_and(|p| p.column_resize.is_some())
-    };
-    assert!(resizing(&app));
-    assert!(app.is_layout_drag_active());
+    assert!(
+        app.is_pointer_drag_active(),
+        "an active column resize must keep the global drag subscription live"
+    );
 
-    let _ = app.update(Message::Ui(signex_app::app::UiMsg::DragEnd));
+    let _ = app.update(Message::Ui(UiMsg::DragMove(160.0, 10.0)));
+    let width_while_dragging = app
+        .document_state
+        .bom_preview
+        .as_ref()
+        .unwrap()
+        .column_widths[&0];
 
-    assert!(!resizing(&app));
-    assert!(!app.is_layout_drag_active());
+    // The release arrives through the global drag-end path, not the handle.
+    let _ = app.update(Message::Ui(UiMsg::DragEnd));
+    let preview = app.document_state.bom_preview.as_ref().unwrap();
+    assert!(
+        preview.column_resize.is_none(),
+        "DragEnd must end the resize"
+    );
+    assert!(!app.is_pointer_drag_active());
+
+    let _ = app.update(Message::Ui(UiMsg::DragMove(400.0, 10.0)));
+    let preview = app.document_state.bom_preview.as_ref().unwrap();
+    assert_eq!(
+        preview.column_widths[&0], width_while_dragging,
+        "the column must stop following the cursor after the release"
+    );
 }

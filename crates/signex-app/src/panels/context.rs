@@ -73,7 +73,7 @@ pub struct PanelContext {
     /// Path of the currently single-clicked tree row, used to drive
     /// the row highlight independently of which document is active.
     /// Set on `TreeMsg::Select`, cleared when the tree resets.
-    pub project_tree_selected: Option<Vec<usize>>,
+    pub project_tree_selected: Option<signex_widgets::tree_view::TreeKey>,
     /// Navigator panel: the whole project sheet hierarchy plus its click state.
     pub navigator: NavigatorModel,
     /// F15 — detail for the row currently selected in the active
