@@ -101,6 +101,49 @@ printf '%s\n' "$out" | awk '/^## \[Unreleased\]/{u=NR} /^## \[0.2.0\] — 2026-0
 run "$t" --version 0.2.0 --date 2026-02-02 >/dev/null 2>&1 && bad "duplicate version rejected" || ok "duplicate version rejected"
 run "$t" --version 0.3 --date 2026-02-02 >/dev/null 2>&1 && bad "bad version rejected" || ok "bad version rejected"
 
+# --- CRLF fragment: no \r reaches CHANGELOG.md ---------------------------------
+t="$(fresh_tree crlf)"
+printf -- '- **crlf** — a.\r\n- **crlf2** — b.\r\n' >"$t/changelog.d/4.added.md"
+run "$t" >/dev/null
+if [ "$(tr -cd '\r' <"$t/CHANGELOG.md" | wc -c | tr -d ' ')" = 0 ] && grep -q 'crlf2' "$t/CHANGELOG.md"; then
+  ok "CRLF fragment folded without \\r"
+else
+  bad "CRLF fragment folded without \\r"
+fi
+
+# --- fragment without a trailing newline ----------------------------------------
+t="$(fresh_tree nonl)"
+printf -- '- **nonl** — a.' >"$t/changelog.d/4.added.md"
+run "$t" >/dev/null
+awk '/^- \*\*nonl/{getline nx; exit !(nx=="" )}' "$t/CHANGELOG.md" && ok "no-trailing-newline fragment" || bad "no-trailing-newline fragment"
+
+# --- Unreleased with only scoped headings: a bare block is added ---------------
+t="$(fresh_tree scoped)"
+printf '# Changelog\n\n## [Unreleased]\n\n### Fixed — x\n\n- **old** — kept.\n\n## [0.1.0] — 2026-01-01\n' >"$t/CHANGELOG.md"
+printf '%s\n' '- **new** — fixed.' >"$t/changelog.d/6.fixed.md"
+run "$t" >/dev/null
+awk '/^### Fixed — x$/{a=NR} /^### Fixed$/{b=NR} /^- \*\*new/{n=NR} /^## \[0.1.0\]/{r=NR} END{exit !(a&&b>a&&n>b&&r>n)}' "$t/CHANGELOG.md" &&
+  ok "scoped-only Unreleased gets a bare block" || bad "scoped-only Unreleased gets a bare block"
+
+# --- empty Unreleased after a cut, then another cut ---------------------------------
+t="$(fresh_tree recut)"
+run "$t" --version 0.2.0 --date 2026-02-02 >/dev/null
+printf '%s\n' '- **later** — x.' >"$t/changelog.d/8.fixed.md"
+run "$t" --version 0.2.1 --date 2026-02-03 >/dev/null
+awk '/^## \[Unreleased\]/{u=NR} /^## \[0.2.1\]/{v=NR} v&&!p&&/^### Fixed$/{f=NR} /^- \*\*later/{l=NR} /^## \[0.2.0\]/{p=NR} END{exit !(u<v && v<f && f<l && l<p)}' "$t/CHANGELOG.md" &&
+  ok "cut from an empty Unreleased" || bad "cut from an empty Unreleased"
+
+# --- rc then final: prefix must not collide -------------------------------------------
+t="$(fresh_tree rc)"
+run "$t" --version 1.0.0-rc.1 --date 2026-02-02 >/dev/null
+run "$t" --version 1.0.0 --date 2026-02-03 >/dev/null && ok "1.0.0 after 1.0.0-rc.1" || bad "1.0.0 after 1.0.0-rc.1"
+run "$t" --version 1.0.0-rc.1 --date 2026-02-04 >/dev/null 2>&1 && bad "duplicate rc rejected" || ok "duplicate rc rejected"
+
+# --- dotfiles ignored -------------------------------------------------------------------
+t="$(fresh_tree dot)"
+printf 'junk' >"$t/changelog.d/.DS_Store"
+run "$t" --check >/dev/null && ok "dotfiles ignored" || bad "dotfiles ignored"
+
 if [ "$failures" -ne 0 ]; then
   echo "$failures control(s) failed" >&2
   exit 1

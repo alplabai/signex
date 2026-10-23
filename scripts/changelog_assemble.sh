@@ -50,7 +50,7 @@ fi
 errors=0
 names=""
 if [ -d "$FRAG_DIR" ]; then
-  names="$(cd "$FRAG_DIR" && find . -maxdepth 1 -type f | sed 's|^\./||' |
+  names="$(cd "$FRAG_DIR" && find . -maxdepth 1 -type f ! -name '.*' | sed 's|^\./||' |
     grep -v -x -e README.md -e .gitkeep |
     sort -t. -k1,1n -k3,3n || true)"
 fi
@@ -100,7 +100,7 @@ fi
 grep -q '^## \[Unreleased\]' "$CHANGELOG" || { echo "error: no '## [Unreleased]' heading" >&2; exit 1; }
 if [ -n "$version" ]; then
   esc="$(printf '%s' "$version" | sed 's/\./\\./g')"
-  if grep -Eq "^## \\[?$esc\\]?" "$CHANGELOG"; then
+  if grep -Eq "^## \\[?$esc([]]|[[:space:]]|\$)" "$CHANGELOG"; then
     echo "error: CHANGELOG.md already has a section for $version" >&2
     exit 1
   fi
@@ -113,7 +113,7 @@ IFS='
 for f in $valid; do
   slug="$(printf '%s' "$f" | cut -d. -f2)"
   # Drop trailing blank lines so bullets from different fragments stay adjacent.
-  awk 'NF{for(;b>0;b--)print ""; print; next}{b++}' "$FRAG_DIR/$f" >>"$tmp/$slug"
+  tr -d '\r' <"$FRAG_DIR/$f" | awk 'NF{for(;b>0;b--)print ""; print; next}{b++}' >>"$tmp/$slug"
 done
 IFS="$OLDIFS"
 
@@ -173,3 +173,7 @@ IFS='
 for f in $valid; do rm -f "$FRAG_DIR/$f"; done
 IFS="$OLDIFS"
 echo "assembled $count fragment(s) into CHANGELOG.md"
+if [ -n "$version" ]; then
+  echo "reminder: add the release headline, install block and the closing"
+  echo "  [Full changelog](https://github.com/alplabai/signex/compare/v<prev>...v$version) line by hand."
+fi

@@ -140,11 +140,15 @@ PR or issue number; `<section>` = `added`, `changed`, `deprecated`, `removed`,
 same section. Naming rule and examples: [`changelog.d/README.md`](changelog.d/README.md).
 
 Check yours with `bash scripts/changelog_assemble.sh --check`. The CI job
-`changelog · fragments` fails a PR that edits `CHANGELOG.md` (release PRs —
-head branch `chore/release-*` or `release/*` — are exempt) and warns when a
+`changelog · fragments` warns when a PR into `trunk` edits `CHANGELOG.md`
+directly (it becomes an error after a transition window; same-repo release PRs
+— head branch `chore/release-*` or `release/*` — are exempt) and warns when a
 `feat`/`fix` PR has no fragment. At release time the maintainer runs
 `scripts/changelog_assemble.sh --version X.Y.Z --date YYYY-MM-DD`, which folds
-the fragments in and opens the dated section `release.yml` extracts.
+the fragments in and opens the dated section `release.yml` extracts. The
+release PR then still adds by hand the headline, the install block and the
+closing `[Full changelog](…compare/v<prev>...v<this>)` line that the Format
+section of `CHANGELOG.md` requires.
 
 ### Commit Messages
 
