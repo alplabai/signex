@@ -91,7 +91,11 @@ pub fn tokenize(source: &str) -> (Vec<Token>, Vec<usize>) {
                         _ => break,
                     }
                 }
-                if !word.is_empty() {
+                if word.is_empty() {
+                    // Unreachable today (the arms above own every delimiter and
+                    // whitespace); guarantees progress if an arm is ever removed.
+                    chars.next();
+                } else {
                     tokens.push(Token::Word(word));
                     lines.push(line);
                 }

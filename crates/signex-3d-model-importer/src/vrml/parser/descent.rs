@@ -48,6 +48,22 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// The type word of a node-valued field: consumes an optional `DEF <name>`
+    /// prefix. `USE <name>` is not resolved (#591): it is warned about and
+    /// yields `"USE"`, which matches no node type, so the field is ignored.
+    fn expect_node_type(&mut self) -> Result<String, ParseError> {
+        let line = self.current_line();
+        let mut word = self.expect_word()?;
+        if word == "DEF" {
+            self.expect_word()?;
+            word = self.expect_word()?;
+        } else if word == "USE" {
+            let name = self.expect_word()?;
+            log::warn!("VRML: USE {name} at line {line} is not resolved; node dropped");
+        }
+        Ok(word)
+    }
+
     /// Skip the `#VRML V2.0 utf8` header line (already tokenized as words).
     pub(super) fn skip_vrml_header(&mut self) {
         // The header appears as tokens: "#VRML" "V2.0" "utf8" — but since `#`
@@ -241,7 +257,7 @@ impl<'a> Parser<'a> {
                     color = self.parse_appearance_color()?;
                 }
                 "geometry" => {
-                    let geom_type = self.expect_word()?;
+                    let geom_type = self.expect_node_type()?;
                     if geom_type == "IndexedFaceSet" {
                         (positions, indices) = self.parse_indexed_face_set()?;
                     } else if let Some(Token::LBrace) = self.peek() {
@@ -263,7 +279,7 @@ impl<'a> Parser<'a> {
     fn parse_appearance_color(&mut self) -> Result<[f32; 4], ParseError> {
         // appearance Appearance { material Material { diffuseColor r g b ... } }
         // We skip all appearance fields except diffuseColor.
-        let node_type = self.expect_word()?;
+        let node_type = self.expect_node_type()?;
         if node_type != "Appearance" {
             if let Some(Token::LBrace) = self.peek() {
                 self.consume_block()?;
@@ -287,7 +303,7 @@ impl<'a> Parser<'a> {
             let field = self.expect_word()?;
             match field.as_str() {
                 "material" => {
-                    let mat_type = self.expect_word()?;
+                    let mat_type = self.expect_node_type()?;
                     if mat_type == "Material" {
                         color = self.parse_material_color()?;
                     } else if let Some(Token::LBrace) = self.peek() {
@@ -356,7 +372,7 @@ impl<'a> Parser<'a> {
             let field = self.expect_word()?;
             match field.as_str() {
                 "coord" => {
-                    let coord_type = self.expect_word()?;
+                    let coord_type = self.expect_node_type()?;
                     if coord_type == "Coordinate" {
                         positions = self.parse_coordinate_point()?;
                     } else if let Some(Token::LBrace) = self.peek() {

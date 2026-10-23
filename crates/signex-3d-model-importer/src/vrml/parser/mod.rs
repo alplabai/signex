@@ -220,11 +220,19 @@ fn build_mesh(
     let mut out_positions: Vec<f32> = Vec::new();
     let mut out_indices: Vec<u32> = Vec::new();
     let mut face: Vec<usize> = Vec::new();
+    let mirrored = xf.is_mirroring();
 
     for &idx in face_indices {
         if idx == -1 {
             // face separator: triangulate using fan
-            fan_triangulate(&face, positions, xf, &mut out_positions, &mut out_indices);
+            fan_triangulate(
+                &face,
+                positions,
+                xf,
+                mirrored,
+                &mut out_positions,
+                &mut out_indices,
+            );
             face.clear();
         } else if idx >= 0 {
             face.push(idx as usize);
@@ -232,7 +240,14 @@ fn build_mesh(
     }
 
     // Handle missing trailing -1
-    fan_triangulate(&face, positions, xf, &mut out_positions, &mut out_indices);
+    fan_triangulate(
+        &face,
+        positions,
+        xf,
+        mirrored,
+        &mut out_positions,
+        &mut out_indices,
+    );
 
     debug_assert_eq!(out_indices.len() % 3, 0);
     VrmlMesh {
@@ -249,25 +264,29 @@ fn fan_triangulate(
     face: &[usize],
     positions: &[[f32; 3]],
     xf: &Transform,
+    mirrored: bool,
     out_positions: &mut Vec<f32>,
     out_indices: &mut Vec<u32>,
 ) {
     if face.len() < 3 {
         return;
     }
-    // A mirroring transform reverses winding; swap two corners to compensate.
-    let mirrored = xf.is_mirroring();
     let base = face[0];
     for pair in face[1..].windows(2) {
         let mut corners = [base, pair[0], pair[1]];
-        if mirrored {
-            corners.swap(1, 2);
-        }
         if corners.iter().any(|&vi| vi >= positions.len()) {
             continue;
         }
-        for vi in corners {
-            let p = xf.apply_point(positions[vi]);
+        // A mirroring transform reverses winding; swap two corners to compensate.
+        if mirrored {
+            corners.swap(1, 2);
+        }
+        let points = corners.map(|vi| xf.apply_point(positions[vi]));
+        if points.iter().flatten().any(|v| !v.is_finite()) {
+            log::warn!("VRML: transform overflowed to a non-finite vertex; triangle dropped");
+            continue;
+        }
+        for p in points {
             let vertex_index = out_positions.len() as u32 / 3;
             out_positions.extend_from_slice(&p);
             out_indices.push(vertex_index);
@@ -401,7 +420,7 @@ mod tests {
 
     #[test]
     fn stray_closer_inside_block_is_skipped() {
-        let src = format!("Foo {{ a [ 1 2 }} b ] }} {TRI}");
+        let src = format!("Foo {{ v [ 1 2 ] ] }} {TRI}");
         assert_eq!(parse_src(&src).len(), 1);
     }
 
@@ -462,9 +481,52 @@ mod tests {
         assert_eq!(meshes[0].indices.len(), 3);
     }
 
+    fn shape_with(appearance: &str, geometry: &str, coord: &str) -> String {
+        format!(
+            "Shape {{ {appearance} geometry {geometry} IndexedFaceSet {{ coord {coord} Coordinate {{ point [ 0 0 0, 1 0 0, 0 1 0 ] }} coordIndex [ 0 1 2 -1 ] }} }}"
+        )
+    }
+
+    #[test]
+    fn def_geometry_keeps_mesh() {
+        assert_eq!(parse_src(&shape_with("", "DEF g", "")).len(), 1);
+    }
+
+    #[test]
+    fn def_coord_keeps_mesh() {
+        assert_eq!(parse_src(&shape_with("", "", "DEF co")).len(), 1);
+    }
+
+    #[test]
+    fn use_coord_is_dropped_not_misparsed() {
+        // Unresolved USE (#591): no coordinates, so no mesh, but no desync/panic.
+        let src = "Shape { geometry IndexedFaceSet { coord USE co coordIndex [ 0 1 2 -1 ] } }";
+        assert!(parse_src(src).is_empty());
+    }
+
+    #[test]
+    fn def_appearance_and_material_keep_colour() {
+        for appearance in [
+            "appearance DEF a Appearance { material Material { diffuseColor 1 0 0 } }",
+            "appearance Appearance { material DEF m Material { diffuseColor 1 0 0 } }",
+        ] {
+            let meshes = parse_src(&shape_with(appearance, "", ""));
+            assert_eq!(meshes.len(), 1);
+            assert_eq!(meshes[0].color, [1.0, 0.0, 0.0, 1.0], "{appearance}");
+        }
+    }
+
+    #[test]
+    fn composed_overflow_drops_triangle_instead_of_emitting_nan() {
+        let src = format!(
+            "Transform {{ scale 1e30 1e30 1e30 children [ Transform {{ scale 1e30 1 1 children [ {TRI} ] }} ] }}"
+        );
+        assert!(parse_src(&src).is_empty());
+    }
+
     #[test]
     fn nested_list_inside_block_closes() {
-        let src = format!("Group {{ foo Bar {{ v [ 1 2 ] w [ 3 ] }} children [ {TRI} ] }}");
+        let src = format!("Foo {{ v [ 1 2 ] }} {TRI}");
         assert_eq!(parse_src(&src).len(), 1);
     }
 
