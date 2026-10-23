@@ -214,6 +214,63 @@ mod tests {
         assert!(editor.dirty, "adding a constraint dirties the editor");
     }
 
+    /// #678 — `f64::from_str` accepts these, but a NaN / infinite target
+    /// would make every later solve diverge and the saved constraint
+    /// would keep the footprint unsolvable.
+    #[test]
+    fn distance_constraint_with_a_non_finite_dimension_is_refused_and_reported() {
+        for bad in ["nan", "NaN", "inf", "-inf", "infinity", "1e999"] {
+            let (mut editor, start, end, _line) = line_editor();
+            editor.state.selected_sketch = Some(start);
+            editor.state.selected_sketch_secondary = Some(end);
+            editor.state.dimension_input = bad.into();
+
+            apply_footprint_primitive_edit(
+                &mut editor,
+                FootprintEditorMsg::SketchAddConstraintForSelection(
+                    SketchConstraintTag::DistancePtPt,
+                ),
+            );
+
+            assert_eq!(
+                constraint_count(&editor),
+                0,
+                "{bad:?} must not mint a constraint"
+            );
+            assert!(
+                editor.state.solve_warnings.iter().any(|w| w.contains(bad)),
+                "{bad:?} must be named back to the user, got {:?}",
+                editor.state.solve_warnings
+            );
+        }
+    }
+
+    #[test]
+    fn angle_constraint_with_a_non_finite_dimension_is_refused_and_reported() {
+        for bad in ["nan", "inf", "-inf"] {
+            let (mut editor, line_east, line_north) = corner_editor();
+            editor.state.selected_sketch = Some(line_east);
+            editor.state.selected_sketch_secondary = Some(line_north);
+            editor.state.dimension_input = bad.into();
+
+            apply_footprint_primitive_edit(
+                &mut editor,
+                FootprintEditorMsg::SketchAddConstraintForSelection(SketchConstraintTag::Angle),
+            );
+
+            assert_eq!(
+                constraint_count(&editor),
+                0,
+                "{bad:?} must not mint a constraint"
+            );
+            assert!(
+                editor.state.solve_warnings.iter().any(|w| w.contains(bad)),
+                "got {:?}",
+                editor.state.solve_warnings
+            );
+        }
+    }
+
     #[test]
     fn constraint_that_does_not_match_the_selection_is_reported() {
         let (mut editor, start, _end, _line) = line_editor();

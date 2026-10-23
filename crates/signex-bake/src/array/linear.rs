@@ -82,6 +82,9 @@ pub(super) fn bake_linear(
         return Ok(());
     }
     let count = count as usize;
+    if !super::within_instance_cap("linear", source, Some(count), warnings) {
+        return Ok(());
+    }
 
     for i in 0..count {
         // MD-2: re-evaluating dx/dy needs only the `array_index` change,

@@ -54,7 +54,7 @@ impl Signex {
 
     pub(crate) fn fp_editor_set_next_pad_size_x(&mut self, value: String) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut()
-            && let Ok(parsed) = value.trim().parse::<f64>()
+            && let Some(parsed) = crate::numeric_field::parse_field_f64(&value)
             && parsed > 0.0
         {
             editor.state.next_pad_defaults.size_x_mm = parsed;
@@ -65,7 +65,7 @@ impl Signex {
 
     pub(crate) fn fp_editor_set_next_pad_size_y(&mut self, value: String) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut()
-            && let Ok(parsed) = value.trim().parse::<f64>()
+            && let Some(parsed) = crate::numeric_field::parse_field_f64(&value)
             && parsed > 0.0
         {
             editor.state.next_pad_defaults.size_y_mm = parsed;
@@ -87,7 +87,7 @@ impl Signex {
 
     pub(crate) fn fp_editor_set_next_pad_rotation(&mut self, value: String) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut()
-            && let Ok(parsed) = value.trim().parse::<f64>()
+            && let Some(parsed) = crate::numeric_field::parse_field_f64(&value)
         {
             editor.state.next_pad_defaults.rotation_deg = parsed;
         }
@@ -101,7 +101,7 @@ impl Signex {
         value: String,
     ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut()
-            && let Ok(parsed) = value.trim().parse::<f64>()
+            && let Some(parsed) = crate::numeric_field::parse_field_f64(&value)
         {
             editor.record_edit(Some(("pad_rotation", idx as u128)), |editor| {
                 if editor.state.pads.get(idx).is_none() {
@@ -483,7 +483,7 @@ impl Signex {
         true
     }
     pub(crate) fn fp_editor_set_selected_pad_size_x(&mut self, idx: usize, value: String) -> bool {
-        if let Ok(parsed) = value.trim().parse::<f64>()
+        if let Some(parsed) = crate::numeric_field::parse_field_f64(&value)
             && parsed > 0.0
         {
             self.with_selected_pad_field(idx, Some("pad_size_x"), |pad| pad.size_mm.0 = parsed);
@@ -491,7 +491,7 @@ impl Signex {
         true
     }
     pub(crate) fn fp_editor_set_selected_pad_size_y(&mut self, idx: usize, value: String) -> bool {
-        if let Ok(parsed) = value.trim().parse::<f64>()
+        if let Some(parsed) = crate::numeric_field::parse_field_f64(&value)
             && parsed > 0.0
         {
             self.with_selected_pad_field(idx, Some("pad_size_y"), |pad| pad.size_mm.1 = parsed);

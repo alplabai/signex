@@ -406,14 +406,26 @@ pub(in crate::format) fn parse_f64(
     if value.is_empty() {
         return Ok(0.0);
     }
-    value
-        .parse()
-        .map_err(|e: std::num::ParseFloatError| FormatError::TsvFieldParse {
+    let parsed: f64 =
+        value
+            .parse()
+            .map_err(|e: std::num::ParseFloatError| FormatError::TsvFieldParse {
+                block: block.to_string(),
+                row,
+                field: field.to_string(),
+                message: e.to_string(),
+            })?;
+    // #678: `f64::from_str` accepts `NaN`, `inf` and overflows `1e999` to
+    // infinity. A non-finite cell would become NaN geometry downstream.
+    if !parsed.is_finite() {
+        return Err(FormatError::TsvFieldParse {
             block: block.to_string(),
             row,
             field: field.to_string(),
-            message: e.to_string(),
-        })
+            message: format!("{value:?} is not a finite number"),
+        });
+    }
+    Ok(parsed)
 }
 
 pub(in crate::format) fn parse_uuid(

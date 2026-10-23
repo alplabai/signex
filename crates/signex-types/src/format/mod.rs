@@ -41,6 +41,8 @@ mod unknown;
 mod unknown_columns;
 
 #[cfg(test)]
+mod non_finite_tests;
+#[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod unknown_columns_tests;

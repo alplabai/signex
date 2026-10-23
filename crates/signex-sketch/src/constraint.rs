@@ -8,6 +8,19 @@ use crate::id::{ConstraintId, SketchEntityId};
 ///
 /// Phase 2 honours `Literal` only; `Expr` is preserved through the
 /// schema and evaluated by the parser/evaluator added in Phase 4.
+/// Parse the text of a dimension input box into a canonical-unit number.
+///
+/// Rejects anything that is not a finite number: `NaN`, `inf` and values
+/// that overflow `f64` all parse under `f64::from_str` but would make
+/// every later solve diverge.
+pub fn parse_dimension_input(text: &str) -> Result<f64, crate::expr::ExprError> {
+    text.trim()
+        .parse::<f64>()
+        .ok()
+        .filter(|v| v.is_finite())
+        .ok_or_else(|| crate::expr::ExprError::BadQuantity(text.to_string()))
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum DimTarget {

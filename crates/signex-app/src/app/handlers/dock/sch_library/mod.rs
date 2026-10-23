@@ -773,7 +773,7 @@ pub(super) fn fp_parse_optional_mm(value: &str) -> Option<f64> {
     if s.is_empty() {
         return None;
     }
-    s.parse::<f64>().ok()
+    crate::numeric_field::parse_field_f64(s)
 }
 
 fn apply_graphic_field(

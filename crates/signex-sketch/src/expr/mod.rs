@@ -18,6 +18,17 @@ use thiserror::Error;
 
 use crate::unit::{Unit, UnitError, UnitFamily};
 
+/// Deepest expression nesting the parser accepts (parenthesis groups plus
+/// chained unary operators). Real parameter expressions nest a handful of
+/// levels; the cap keeps the recursive-descent parser, the evaluator and
+/// the recursive `Drop` of the AST well inside the thread stack.
+pub const MAX_EXPR_DEPTH: usize = 64;
+
+/// Longest expression source, in bytes, the parser accepts. A flat chain
+/// such as `1+1+1+...` nests one tree level per operator, so the length
+/// cap bounds the evaluator's and `Drop`'s recursion too.
+pub const MAX_EXPR_LEN: usize = 4096;
+
 /// Errors produced by the expression layer (parse + evaluate +
 /// parameter resolution).
 #[derive(Clone, Debug, PartialEq, Error)]
@@ -63,6 +74,18 @@ pub enum ExprError {
     /// Parameter table contains a dependency cycle (a → b → a).
     #[error("parameter cycle detected involving '{0}'")]
     Cycle(String),
+
+    /// An evaluated value, or a numeric literal, is NaN or infinite.
+    #[error("non-finite number: {0}")]
+    NonFinite(String),
+
+    /// Expression nesting exceeds [`MAX_EXPR_DEPTH`].
+    #[error("expression nests deeper than {max} levels")]
+    TooDeep { max: usize },
+
+    /// Expression source is longer than [`MAX_EXPR_LEN`] bytes.
+    #[error("expression is {len} bytes, over the limit of {max}")]
+    TooLong { max: usize, len: usize },
 
     /// Domain error in a function — `0^0`, `log(0)`, etc.
     #[error("domain error: {0}")]

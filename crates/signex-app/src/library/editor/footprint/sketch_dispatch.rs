@@ -525,6 +525,13 @@ pub(super) fn solve_and_bake(
                     &mut state.solve_warnings,
                 )?;
 
+                // Bake warnings (a skipped over-cap array, a dropped
+                // feature) are failures the user must be able to see:
+                // the inspector strip is not the Messages panel.
+                for warning in &state.solve_warnings {
+                    crate::diagnostics::log_warning(format!("Sketch bake: {warning}"));
+                }
+
                 // v0.22 Phase D2 — refresh editor-side pads cache so
                 // the canvas + Pads-mode Properties panel see what
                 // the bake just produced. Preserves sketch_entity_id

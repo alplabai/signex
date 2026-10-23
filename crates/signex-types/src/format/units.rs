@@ -26,7 +26,7 @@ const NM_PER_MM: f64 = 1.0e6;
 pub(in crate::format) fn mm_to_nm(mm: f64) -> i64 {
     let scaled = (mm * NM_PER_MM).round();
     if scaled.is_nan() {
-        return 0;
+        return i64::MAX;
     }
     if scaled >= i64::MAX as f64 {
         return i64::MAX;

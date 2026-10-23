@@ -42,6 +42,7 @@
 
 use crate::expr::ExprError;
 use crate::expr::ast::{ArrayIndex, BinOp, ExprNode, UnaryOp};
+use crate::expr::{MAX_EXPR_DEPTH, MAX_EXPR_LEN};
 use crate::unit::parse_quantity;
 
 // =========================================================================
@@ -339,13 +340,36 @@ struct Parser<'a> {
     lexer: Lexer<'a>,
     /// One-token look-ahead.
     peek: Spanned,
+    /// Current recursion depth, bounded by [`MAX_EXPR_DEPTH`].
+    depth: usize,
 }
 
 impl<'a> Parser<'a> {
     fn new(src: &'a str) -> Result<Self, ExprError> {
         let mut lexer = Lexer::new(src);
         let peek = lexer.next_token()?;
-        Ok(Self { lexer, peek })
+        Ok(Self {
+            lexer,
+            peek,
+            depth: 0,
+        })
+    }
+
+    /// Run `body` one nesting level deeper, failing with
+    /// [`ExprError::TooDeep`] instead of recursing past the cap.
+    fn nested<T>(
+        &mut self,
+        body: impl FnOnce(&mut Self) -> Result<T, ExprError>,
+    ) -> Result<T, ExprError> {
+        if self.depth >= MAX_EXPR_DEPTH {
+            return Err(ExprError::TooDeep {
+                max: MAX_EXPR_DEPTH,
+            });
+        }
+        self.depth += 1;
+        let result = body(self);
+        self.depth -= 1;
+        result
     }
 
     /// Consume the current look-ahead and refill from the lexer.
@@ -371,7 +395,7 @@ impl<'a> Parser<'a> {
     // -- expr ----------------------------------------------------------
 
     fn parse_expr(&mut self) -> Result<ExprNode, ExprError> {
-        self.parse_ternary()
+        self.nested(Self::parse_ternary)
     }
 
     // -- ternary -------------------------------------------------------
@@ -500,6 +524,10 @@ impl<'a> Parser<'a> {
     // -- unary ---------------------------------------------------------
 
     fn parse_unary(&mut self) -> Result<ExprNode, ExprError> {
+        self.nested(Self::parse_unary_inner)
+    }
+
+    fn parse_unary_inner(&mut self) -> Result<ExprNode, ExprError> {
         match self.peek.tok {
             Token::Minus => {
                 self.bump()?;
@@ -613,6 +641,15 @@ impl<'a> Parser<'a> {
 /// On success the returned tree has been fully consumed — any trailing
 /// junk produces [`ExprError::Parse`].
 pub fn parse(src: &str) -> Result<ExprNode, ExprError> {
+    // A long flat chain (`1+1+1+...`) builds an equally deep left-nested
+    // tree that the evaluator and `Drop` walk recursively, so bound the
+    // source length as well as the parser's own recursion.
+    if src.len() > MAX_EXPR_LEN {
+        return Err(ExprError::TooLong {
+            max: MAX_EXPR_LEN,
+            len: src.len(),
+        });
+    }
     let mut p = Parser::new(src)?;
     let node = p.parse_expr()?;
     if !matches!(p.peek.tok, Token::Eof) {
