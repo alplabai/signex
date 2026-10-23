@@ -559,7 +559,7 @@ impl Signex {
             Some(id) => iced::window::close(id),
             None => iced::exit(),
         };
-        self.flush_dock_layout_then(close)
+        self.flush_quit_writes_then(close)
     }
 
     /// Resolve the user's Save All / Discard All / Cancel choice on the

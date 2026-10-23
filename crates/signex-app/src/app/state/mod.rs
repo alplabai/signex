@@ -380,6 +380,9 @@ pub struct DocumentState {
     /// Change detection + debounce for persisting `dock` (#692). The
     /// write itself runs as a `Task`; see `handlers/dock/layout_persist.rs`.
     pub dock_layout_sync: crate::dock::DockLayoutSync,
+    /// The Components filter + Library Browser queries and the debounce
+    /// that persists them (#859); see `handlers/dock/search_prefs_persist.rs`.
+    pub search_prefs: crate::persist::SearchPrefsSync,
     pub tabs: Vec<TabInfo>,
     pub active_tab: usize,
     /// All live schematic engines keyed by their on-disk path. Every
