@@ -4,11 +4,11 @@
 //! its path happen in one synchronous `update`, like the sheet rename: the
 //! project's `LibraryEntry`, the mounted adapter, and every open tab, editor
 //! map and dirty marker move together, so no write can land between the file
-//! moving and the mount following it. The `.snxprj` is marked dirty, not
-//! flushed: the one library entry of the on-disk `.snxprj` is re-pointed in
-//! the same update (so a Discard, quit or crash cannot leave the project
-//! listing a file that no longer exists), but every other unsaved project edit
-//! stays in memory and the project stays dirty for it. A project that was
+//! moving and the mount following it. The one library entry of the saved
+//! `.snxprj` is patched atomically on disk in the same update (so a Discard,
+//! quit or crash cannot leave the project listing a file that no longer
+//! exists), but every other unsaved project edit stays in memory and the
+//! project stays dirty for it. A project that was
 //! never saved has no file to patch, so it is marked dirty and the Messages
 //! panel says it needs saving.
 //!
@@ -241,14 +241,7 @@ impl Signex {
         if let Err(e) = self.library.relocate_library(old_path, new_path) {
             let mut reason = format!("the mounted library could not follow the rename: {e}");
             if outcome == LibraryRetarget::Patched {
-                let old_name = old_path.file_name().unwrap_or_default();
-                if let Err(back) = retarget_library_entry(&project_path, new_path, old_name) {
-                    reason.push_str(&format!(
-                        "; the project file {} still lists {}: {back}",
-                        project_path.display(),
-                        new_path.display()
-                    ));
-                }
+                reason.push_str(&self.undo_project_patch(&project_path, old_path, new_path));
             }
             return Err(reason);
         }
@@ -267,6 +260,40 @@ impl Signex {
 
         self.rekey_library_documents(old_path, new_path);
         Ok(outcome)
+    }
+
+    /// Point the saved `.snxprj` entry back at `old_path` after the mount
+    /// could not follow. Returns text to append to the failure reason (empty
+    /// on success). When the reverse patch fails too, the saved project still
+    /// lists `new_path` while the file goes back to `old_path`, so the
+    /// project is marked dirty: a save writes the in-memory (old-path) entry
+    /// back, and Close Project and quit prompt for it.
+    fn undo_project_patch(
+        &mut self,
+        project_path: &Path,
+        old_path: &Path,
+        new_path: &Path,
+    ) -> String {
+        let old_name = old_path.file_name().unwrap_or_default();
+        let Err(back) = retarget_library_entry(project_path, new_path, old_name) else {
+            return String::new();
+        };
+        self.document_state
+            .dirty_paths
+            .insert(project_path.to_path_buf());
+        crate::diagnostics::log_error(
+            "Library rename: project file still lists the new path",
+            &anyhow::anyhow!(
+                "{} lists {}: {back}. Save the project to restore the old path.",
+                project_path.display(),
+                new_path.display()
+            ),
+        );
+        format!(
+            "; the project file {} still lists {}: {back}. Save the project to fix it",
+            project_path.display(),
+            new_path.display()
+        )
     }
 
     /// Move every open tab, dirty marker and undocked window that lives at
@@ -317,3 +344,6 @@ impl Signex {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

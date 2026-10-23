@@ -25,7 +25,7 @@ use signex_app::app::{
 };
 use signex_app::diagnostics;
 use signex_app::library::messages::{LibraryMessage, PrimitiveEdit};
-use signex_app::library::mount::prepare_mount;
+use signex_app::library::mount::{MountIntent, prepare_mount};
 use signex_types::project::{
     LibraryEntry, LibraryEntryKind, ProjectData, parse_project, write_project,
 };
@@ -46,12 +46,11 @@ struct Fixture {
     beta: PathBuf,
 }
 
+/// Built by deserialising only the fields the tests care about, so a field
+/// added to `LibraryEntry` later takes its serde default and breaks nothing.
 fn entry(rel: &str) -> LibraryEntry {
-    LibraryEntry {
-        path: PathBuf::from(rel),
-        kind: LibraryEntryKind::ProjectLocal,
-        library_id: None,
-    }
+    serde_json::from_value(serde_json::json!({ "path": rel, "kind": "project_local" }))
+        .expect("library entry")
 }
 
 /// Two project-local libraries (`alpha`, `beta`) mounted in a loaded project.
@@ -61,17 +60,14 @@ fn fixture() -> Fixture {
     let alpha = generate_library(&dir, "alpha", &Scale::new("alpha", 2, 2)).expect("alpha");
     let beta = generate_library(&dir, "beta", &Scale::new("beta", 2, 2)).expect("beta");
     let prj = dir.join("proj.snxprj");
-    let data = ProjectData {
-        name: "proj".to_string(),
-        dir: dir.to_string_lossy().into_owned(),
-        schematic_root: None,
-        pcb_file: None,
-        sheets: Vec::new(),
-        variant_definitions: Vec::new(),
-        active_variant: None,
-        libraries: vec![entry("alpha/alpha.snxlib"), entry("beta/beta.snxlib")],
-        enable_git: false,
-    };
+    let mut data: ProjectData = serde_json::from_value(serde_json::json!({
+        "name": "proj",
+        "dir": dir.to_string_lossy(),
+        "schematic_root": null,
+        "pcb_file": null,
+    }))
+    .expect("project data");
+    data.libraries = vec![entry("alpha/alpha.snxlib"), entry("beta/beta.snxlib")];
     // The user's last save: the project exists on disk.
     write_project(&prj, &data).expect("write prj");
 
@@ -395,6 +391,69 @@ fn shared_libraries_are_still_not_renameable_from_the_tree() {
         dialog.error.is_some(),
         "Shared/Global semantics are untouched (#657)"
     );
+}
+
+/// Asserts a refused rename: dialog open with an error, file unmoved, entry
+/// and saved `.snxprj` untouched.
+fn assert_refused(f: &Fixture, why: &str) {
+    let dialog = f
+        .app
+        .ui_state
+        .rename_dialog
+        .as_ref()
+        .unwrap_or_else(|| panic!("dialog must stay open: {why}"));
+    assert!(dialog.error.is_some(), "no error shown: {why}");
+    assert!(
+        f.alpha.exists() && !f.alpha.with_file_name("alpha2.snxlib").exists(),
+        "file moved: {why}"
+    );
+    assert_eq!(entry_paths(&f.app)[0], PathBuf::from("alpha/alpha.snxlib"));
+    assert_eq!(
+        disk_library_paths(&f.prj)[0],
+        PathBuf::from("alpha/alpha.snxlib"),
+        "saved project changed: {why}"
+    );
+}
+
+#[test]
+fn a_library_listed_by_another_open_project_is_refused() {
+    let mut f = fixture();
+    let mut other = f.app.document_state.projects[0].data.clone();
+    other.name = "other".to_string();
+    let other_id = f.app.document_state.mint_project_id();
+    f.app.document_state.projects.push(LoadedProject {
+        id: other_id,
+        path: f.prj.with_file_name("other.snxprj"),
+        data: other,
+        pending_libraries: Default::default(),
+    });
+
+    submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    assert_refused(&f, "another open project lists it");
+}
+
+#[test]
+fn a_globally_registered_library_is_refused() {
+    let mut f = fixture();
+    f.app.library.installed_libraries.push(f.alpha.clone());
+
+    submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    assert_refused(&f, "registered globally");
+}
+
+#[test]
+fn a_library_still_mounting_is_refused() {
+    let mut f = fixture();
+    f.app
+        .library
+        .pending_mounts
+        .insert(f.alpha.clone(), MountIntent::Silent);
+
+    submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    assert_refused(&f, "still mounting");
 }
 
 #[test]
