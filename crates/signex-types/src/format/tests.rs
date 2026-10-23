@@ -725,10 +725,7 @@ fn snxsch_without_symbol_extras_loads_with_serde_defaults() {
     // Drop the whole extras tail, leaving what the old writer emitted
     // for a symbol with no footprint.
     let legacy = full
-        .split(
-            "
-[extras",
-        )
+        .split("\n[extras")
         .next()
         .expect("split always yields the head")
         .to_string();

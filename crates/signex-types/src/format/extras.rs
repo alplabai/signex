@@ -134,27 +134,51 @@ impl SymbolExtras {
     /// True when nothing differs from [`SymbolExtras::default`], so the
     /// writer may omit the table and the parser's fallback restores it.
     pub(in crate::format) fn is_default(&self) -> bool {
+        // Exhaustive destructure, no `..`: a new field fails to compile here
+        // until it is judged against the default.
+        let SymbolExtras {
+            footprint,
+            datasheet,
+            mirror_x,
+            mirror_y,
+            unit,
+            is_power,
+            fields_autoplaced,
+            fields_user_placed,
+            dnp,
+            in_bom,
+            on_board,
+            exclude_from_sim,
+            locked,
+            fields,
+            custom_properties,
+            pin_uuids,
+            instances,
+            ref_text,
+            val_text,
+            unknown,
+        } = self;
         let d = Self::default();
-        self.footprint == d.footprint
-            && self.datasheet == d.datasheet
-            && self.mirror_x == d.mirror_x
-            && self.mirror_y == d.mirror_y
-            && self.unit == d.unit
-            && self.is_power == d.is_power
-            && self.fields_autoplaced == d.fields_autoplaced
-            && self.fields_user_placed == d.fields_user_placed
-            && self.dnp == d.dnp
-            && self.in_bom == d.in_bom
-            && self.on_board == d.on_board
-            && self.exclude_from_sim == d.exclude_from_sim
-            && self.locked == d.locked
-            && self.fields.is_empty()
-            && self.custom_properties.is_empty()
-            && self.pin_uuids.is_empty()
-            && self.instances.is_empty()
-            && self.ref_text.is_none()
-            && self.val_text.is_none()
-            && self.unknown.is_empty()
+        *footprint == d.footprint
+            && *datasheet == d.datasheet
+            && *mirror_x == d.mirror_x
+            && *mirror_y == d.mirror_y
+            && *unit == d.unit
+            && *is_power == d.is_power
+            && *fields_autoplaced == d.fields_autoplaced
+            && *fields_user_placed == d.fields_user_placed
+            && *dnp == d.dnp
+            && *in_bom == d.in_bom
+            && *on_board == d.on_board
+            && *exclude_from_sim == d.exclude_from_sim
+            && *locked == d.locked
+            && fields.is_empty()
+            && custom_properties.is_empty()
+            && pin_uuids.is_empty()
+            && instances.is_empty()
+            && ref_text.is_none()
+            && val_text.is_none()
+            && unknown.is_empty()
     }
 
     pub(in crate::format) fn from_symbol(s: &Symbol) -> Self {
