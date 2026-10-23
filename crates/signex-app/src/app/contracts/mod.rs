@@ -34,6 +34,9 @@ pub enum Message {
         msg: TabMessage,
     },
     Dock(DockMessage),
+    /// Debounced dock-layout persistence loop (#692), routed to
+    /// `dispatch_dock_layout_message`.
+    DockLayout(crate::dock::DockLayoutMsg),
     /// UI / chrome message family (ADR-0001 D3). Theme, unit + grid
     /// toggles, the grid picker, layout drag, window resize, and the
     /// status-bar request enum. Routed to `dispatch_ui_message`.

@@ -64,6 +64,67 @@ impl LibraryAdapter for FailingListingAdapter {
     }
 }
 
+/// An adapter that counts every call a `view` could use to reach the
+/// disk. `manifest()` is deliberately uncounted: it is a borrow of the
+/// in-memory header and does no IO.
+pub(crate) struct CountingAdapter {
+    manifest: Manifest,
+    calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+}
+
+impl CountingAdapter {
+    /// The adapter plus a handle on its counter — the adapter itself is
+    /// boxed into a `LibrarySet` and cannot be asked afterwards.
+    pub(crate) fn new(library_id: Uuid) -> (Self, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let adapter = Self {
+            manifest: FailingListingAdapter::new(library_id).manifest,
+            calls: calls.clone(),
+        };
+        (adapter, calls)
+    }
+
+    fn count(&self) {
+        self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+impl LibraryAdapter for CountingAdapter {
+    fn manifest(&self) -> &Manifest {
+        &self.manifest
+    }
+
+    fn list_tables(&self) -> Result<Vec<String>, LibraryError> {
+        self.count();
+        Ok(Vec::new())
+    }
+
+    fn library_classes(&self) -> Vec<signex_library::ClassEntry> {
+        self.count();
+        Vec::new()
+    }
+
+    fn read_table(&self, _name: &str) -> Result<Vec<signex_library::ComponentRow>, LibraryError> {
+        self.count();
+        Ok(Vec::new())
+    }
+
+    fn list_symbols(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
+        self.count();
+        Ok(Vec::new())
+    }
+
+    fn list_footprints(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
+        self.count();
+        Ok(Vec::new())
+    }
+
+    fn list_sims(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
+        self.count();
+        Ok(Vec::new())
+    }
+}
+
 /// A `PrimitiveSummary` standing in for an entry already on disk and
 /// already cached — the thing a failed listing used to erase.
 pub(crate) fn cached_summary(name: &str) -> PrimitiveSummary {

@@ -66,6 +66,7 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
         active_variant: None,
         libraries: Vec::new(),
         enable_git: false,
+        unknown: Default::default(),
     };
     app.document_state.projects.push(LoadedProject {
         id,
@@ -262,6 +263,7 @@ fn register_shared_library(app: &mut Signex) -> (TempDir, PathBuf, PathBuf) {
             path: lib_dir.clone(),
             kind: signex_types::project::LibraryEntryKind::Shared,
             library_id: None,
+            unknown: Default::default(),
         });
     (shared, lib_dir, inner)
 }
@@ -338,6 +340,7 @@ fn remove_delete_choice_refuses_shared_library_inside_project_folder() {
             path: lib_dir.clone(),
             kind: signex_types::project::LibraryEntryKind::Shared,
             library_id: None,
+            unknown: Default::default(),
         });
 
     arm_remove_dialog(&mut app, &lib_dir);
@@ -422,6 +425,7 @@ fn remove_dialog_flags_shared_library_inside_project_folder() {
             path: lib_dir.clone(),
             kind: signex_types::project::LibraryEntryKind::Shared,
             library_id: None,
+            unknown: Default::default(),
         });
 
     open_remove_dialog_for_label(&mut app, "Vendored.snxlib");
@@ -442,6 +446,7 @@ fn remove_dialog_does_not_flag_project_local_library() {
             path: PathBuf::from("Local.snxlib"),
             kind: signex_types::project::LibraryEntryKind::ProjectLocal,
             library_id: None,
+            unknown: Default::default(),
         });
 
     open_remove_dialog_for_label(&mut app, "Local.snxlib");
@@ -671,6 +676,7 @@ fn project_options_modal_opens_with_metadata_then_closes() {
             symbols_count: 3,
             wires_count: 5,
             labels_count: 2,
+            unknown: Default::default(),
         });
     }
 
@@ -816,6 +822,7 @@ fn loaded_project_data_round_trips_via_write_then_parse() {
         active_variant: Some("Production".into()),
         libraries: Vec::new(),
         enable_git: false,
+        unknown: Default::default(),
     };
 
     signex_types::project::write_project(&path, &data).expect("write");
@@ -850,11 +857,23 @@ fn project_git_commit_done_clears_inflight_entry() {
     let _ = app.update(Message::Project(ProjectMsg::GitCommitDone {
         project_root: project_root.clone(),
         rel_path: rel_path.clone(),
-        result: Ok("deadbeef".to_string()),
+        result: Ok(Some("deadbeef".to_string())),
     }));
     assert!(
         !app.document_state.inflight_git_commits.contains(&key),
         "inflight entry must be cleared on success"
+    );
+
+    // Unchanged save (no commit made, #149) also clears.
+    app.document_state.inflight_git_commits.insert(key.clone());
+    let _ = app.update(Message::Project(ProjectMsg::GitCommitDone {
+        project_root: project_root.clone(),
+        rel_path: rel_path.clone(),
+        result: Ok(None),
+    }));
+    assert!(
+        !app.document_state.inflight_git_commits.contains(&key),
+        "inflight entry must be cleared on an unchanged save"
     );
 
     // Failure path also clears (data is on disk regardless of git).
@@ -1041,6 +1060,45 @@ fn new_project_over_existing_non_empty_snxprj_is_refused() {
     assert_eq!(
         after, before,
         "New Project must not overwrite an existing .snxprj"
+    );
+}
+
+#[test]
+fn new_project_opens_the_project_and_returns_the_open_task() {
+    // #693 — File ▸ New Project must open the project it just created
+    // and hand the open Task(s) back to the runtime. The project-open
+    // Task carries the cold `.snxlib` mount preparations and must be
+    // propagated, never dropped; the schematic tab's read+parse Task
+    // rides alongside it.
+    let tmp = TempDir::new().expect("tempdir");
+    let prj_path = tmp.path().join("Fresh.snxprj");
+    let sch_path = tmp.path().join("Fresh.snxsch");
+
+    let (mut app, _t) = Signex::new();
+    let task = app.update(Message::File(FileMsg::NewProject(Some(prj_path.clone()))));
+
+    assert!(
+        app.document_state.error_notice.is_none(),
+        "creating a project in an empty directory must not raise an error notice"
+    );
+    assert!(prj_path.exists() && sch_path.exists(), "files not created");
+    let project = app
+        .document_state
+        .projects
+        .iter()
+        .find(|p| p.path == prj_path)
+        .expect("the new project must be loaded into the workspace");
+    assert_eq!(app.document_state.active_project, Some(project.id));
+    // The blank project carries no libraries yet, so its mount Task is
+    // empty; the schematic read+parse Task is the one unit that must
+    // reach the runtime.
+    assert!(
+        task.units() >= 1,
+        "the schematic open Task must be returned to the runtime"
+    );
+    assert!(
+        app.document_state.pending_opens.contains(&sch_path),
+        "the companion schematic must be recorded as opening"
     );
 }
 

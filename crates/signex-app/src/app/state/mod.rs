@@ -377,6 +377,9 @@ pub struct NetlistIncompletePrompt {
 
 pub struct DocumentState {
     pub dock: DockArea,
+    /// Change detection + debounce for persisting `dock` (#692). The
+    /// write itself runs as a `Task`; see `handlers/dock/layout_persist.rs`.
+    pub dock_layout_sync: crate::dock::DockLayoutSync,
     pub tabs: Vec<TabInfo>,
     pub active_tab: usize,
     /// All live schematic engines keyed by their on-disk path. Every

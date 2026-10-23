@@ -211,6 +211,13 @@ impl TreeIcon {
 
 #[derive(Debug, Clone)]
 pub struct TreeNode {
+    /// Identity of this row among its siblings. Unlike the row's position,
+    /// it survives inserts, removals and reorders of the list, so a stored
+    /// selection or a pending menu action keeps pointing at the same node.
+    /// Must be unique among siblings; `leaf`/`branch` default it to the
+    /// label, callers whose labels can change or repeat set it with
+    /// [`TreeNode::with_key`].
+    pub key: String,
     pub label: String,
     pub icon: TreeIcon,
     pub expanded: bool,
@@ -238,8 +245,10 @@ pub struct TreeNode {
 
 impl TreeNode {
     pub fn leaf(label: impl Into<String>, icon: TreeIcon) -> Self {
+        let label = label.into();
         Self {
-            label: label.into(),
+            key: label.clone(),
+            label,
             icon,
             expanded: false,
             children: Vec::new(),
@@ -253,8 +262,10 @@ impl TreeNode {
     }
 
     pub fn branch(label: impl Into<String>, icon: TreeIcon, children: Vec<TreeNode>) -> Self {
+        let label = label.into();
         Self {
-            label: label.into(),
+            key: label.clone(),
+            label,
             icon,
             expanded: true,
             children,
@@ -265,6 +276,12 @@ impl TreeNode {
             is_dirty: false,
             is_active: false,
         }
+    }
+
+    /// Builder: set the stable sibling-unique identity of this row.
+    pub fn with_key(mut self, key: impl Into<String>) -> Self {
+        self.key = key.into();
+        self
     }
 
     pub fn with_badge(mut self, badge: impl Into<String>) -> Self {
@@ -299,14 +316,19 @@ impl TreeNode {
 
 // ─── Messages ─────────────────────────────────────────────────
 
+/// Stable identity of a row: the [`TreeNode::key`] of every ancestor, root
+/// first, ending with the row's own key. Resolve it against the current
+/// tree with [`resolve_path`] at the moment it is used.
+pub type TreeKey = Vec<String>;
+
 #[derive(Debug, Clone)]
 pub enum TreeMsg {
-    Toggle(Vec<usize>),
-    Select(Vec<usize>),
+    Toggle(TreeKey),
+    Select(TreeKey),
     /// Right-click on a node. Anchor coordinates are resolved by the
     /// parent (from `last_mouse_pos`) since iced 0.14's `mouse_area` does
     /// not forward cursor position with `on_right_press`.
-    ContextMenu(Vec<usize>),
+    ContextMenu(TreeKey),
     /// Right-click in the tree area but not on any node — offer generic
     /// tree actions (Expand all / Collapse all / Refresh).
     BackgroundContextMenu,
@@ -345,7 +367,7 @@ const RIGHT_INDICATOR_GAP: f32 = 6.0;
 /// ```
 pub struct TreeView<'a> {
     roots: &'a [TreeNode],
-    selected: Option<&'a [usize]>,
+    selected: Option<&'a [String]>,
     tokens: &'a ThemeTokens,
 }
 
@@ -358,16 +380,23 @@ impl<'a> TreeView<'a> {
         }
     }
 
-    pub fn selected(mut self, path: &'a [usize]) -> Self {
-        self.selected = Some(path);
+    pub fn selected(mut self, key: &'a [String]) -> Self {
+        self.selected = Some(key);
         self
     }
 
     /// Build the tree into a scrollable Element.
     pub fn view(self) -> Element<'static, TreeMsg> {
         let mut col: Column<'static, TreeMsg> = Column::new().spacing(0.0).width(Length::Fill);
-        for (i, node) in self.roots.iter().enumerate() {
-            col = render_node(col, node, 0, &[i], self.selected, self.tokens);
+        for node in self.roots {
+            col = render_node(
+                col,
+                node,
+                0,
+                std::slice::from_ref(&node.key),
+                self.selected,
+                self.tokens,
+            );
         }
         // Right-click on the scrollable body (below the last row or in any
         // gap between rows that row-level mouse_areas don't cover) triggers
@@ -386,12 +415,11 @@ fn render_node(
     mut col: Column<'static, TreeMsg>,
     node: &TreeNode,
     depth: usize,
-    path: &[usize],
-    selected: Option<&[usize]>,
+    key: &[String],
+    selected: Option<&[String]>,
     tokens: &ThemeTokens,
 ) -> Column<'static, TreeMsg> {
-    let path_vec: Vec<usize> = path.to_vec();
-    let is_sel = selected.is_some_and(|s| s == path);
+    let is_sel = selected.is_some_and(|s| s == key);
     let has_kids = !node.children.is_empty();
     let is_expandable = has_kids || node.is_folder;
 
@@ -545,9 +573,9 @@ fn render_node(
 
     // Click action
     let msg = if is_expandable {
-        TreeMsg::Toggle(path_vec.clone())
+        TreeMsg::Toggle(key.to_vec())
     } else {
-        TreeMsg::Select(path_vec)
+        TreeMsg::Select(key.to_vec())
     };
 
     // Button with hover/selection styling. Active-row gets a
@@ -586,16 +614,16 @@ fn render_node(
     // Right-click → tree-scoped context menu. `mouse_area` wraps the
     // button so left-press still reaches the button's `on_press`; only
     // `on_right_press` is intercepted here.
-    let row_element = mouse_area(row_btn).on_right_press(TreeMsg::ContextMenu(path.to_vec()));
+    let row_element = mouse_area(row_btn).on_right_press(TreeMsg::ContextMenu(key.to_vec()));
     col = col.push(row_element);
 
     // Expanded children
     if is_expandable && node.expanded {
         if has_kids {
-            for (i, child) in node.children.iter().enumerate() {
-                let mut child_path = path.to_vec();
-                child_path.push(i);
-                col = render_node(col, child, depth + 1, &child_path, selected, tokens);
+            for child in &node.children {
+                let mut child_key = key.to_vec();
+                child_key.push(child.key.clone());
+                col = render_node(col, child, depth + 1, &child_key, selected, tokens);
             }
         } else {
             // "(empty)" indicator — matches React's italic muted placeholder
@@ -625,6 +653,34 @@ fn render_node(
 
 // ─── State Helpers ────────────────────────────────────────────
 
+/// The current index path of the row `key` names, or `None` when that row
+/// no longer exists (it was removed, or an ancestor was).
+///
+/// Index paths are only valid for the tree they were read from; resolve a
+/// stored [`TreeKey`] right before use instead of keeping the path.
+pub fn resolve_path(roots: &[TreeNode], key: &[String]) -> Option<Vec<usize>> {
+    let mut siblings = roots;
+    let mut path = Vec::with_capacity(key.len());
+    for wanted in key {
+        let index = siblings.iter().position(|n| &n.key == wanted)?;
+        path.push(index);
+        siblings = &siblings[index].children;
+    }
+    (!path.is_empty()).then_some(path)
+}
+
+/// The [`TreeKey`] of the row at index `path`, or `None` when out of range.
+pub fn key_of(roots: &[TreeNode], path: &[usize]) -> Option<TreeKey> {
+    let mut siblings = roots;
+    let mut key = Vec::with_capacity(path.len());
+    for &index in path {
+        let node = siblings.get(index)?;
+        key.push(node.key.clone());
+        siblings = &node.children;
+    }
+    (!key.is_empty()).then_some(key)
+}
+
 /// Get a node by path (immutable).
 pub fn get_node<'a>(roots: &'a [TreeNode], path: &[usize]) -> Option<&'a TreeNode> {
     if path.is_empty() {
@@ -653,4 +709,76 @@ fn get_node_mut<'a>(roots: &'a mut [TreeNode], path: &[usize]) -> Option<&'a mut
         current = current.children.get_mut(idx)?;
     }
     Some(current)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tree() -> Vec<TreeNode> {
+        vec![TreeNode::branch(
+            "proj",
+            TreeIcon::Folder,
+            vec![TreeNode::branch(
+                "Source Documents",
+                TreeIcon::Folder,
+                vec![
+                    TreeNode::leaf("b.snxsch", TreeIcon::SnxSchematic),
+                    TreeNode::leaf("c.snxsch", TreeIcon::SnxSchematic),
+                ],
+            )],
+        )]
+    }
+
+    fn key(parts: &[&str]) -> TreeKey {
+        parts.iter().map(|p| p.to_string()).collect()
+    }
+
+    #[test]
+    fn key_of_lists_every_ancestor_key_root_first() {
+        let roots = tree();
+        assert_eq!(
+            key_of(&roots, &[0, 0, 1]),
+            Some(key(&["proj", "Source Documents", "c.snxsch"]))
+        );
+    }
+
+    #[test]
+    fn key_follows_its_row_when_a_sibling_is_inserted_before_it() {
+        let mut roots = tree();
+        let selected = key(&["proj", "Source Documents", "c.snxsch"]);
+        assert_eq!(resolve_path(&roots, &selected), Some(vec![0, 0, 1]));
+
+        roots[0].children[0]
+            .children
+            .insert(0, TreeNode::leaf("a.snxsch", TreeIcon::SnxSchematic));
+
+        let path = resolve_path(&roots, &selected).expect("row still exists");
+        assert_eq!(path, vec![0, 0, 2], "index shifted, identity did not");
+        assert_eq!(get_node(&roots, &path).unwrap().label, "c.snxsch");
+    }
+
+    #[test]
+    fn key_of_a_removed_row_resolves_to_nothing_not_to_a_neighbour() {
+        let mut roots = tree();
+        let selected = key(&["proj", "Source Documents", "b.snxsch"]);
+        roots[0].children[0].children.remove(0);
+        assert_eq!(resolve_path(&roots, &selected), None);
+    }
+
+    #[test]
+    fn explicit_key_survives_a_label_change() {
+        let before = TreeNode::leaf("a.snxsch", TreeIcon::File).with_key("/p/a.snxsch");
+        let after = TreeNode::leaf("a.snxsch  (missing)", TreeIcon::File).with_key("/p/a.snxsch");
+        assert_eq!(before.key, after.key);
+        assert_ne!(before.label, after.label);
+    }
+
+    #[test]
+    fn empty_key_and_empty_path_resolve_to_nothing() {
+        let roots = tree();
+        assert_eq!(resolve_path(&roots, &[]), None);
+        assert_eq!(key_of(&roots, &[]), None);
+        assert_eq!(key_of(&roots, &[3]), None);
+    }
 }

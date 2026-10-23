@@ -16,7 +16,7 @@ use signex_types::rotation2d::{
 };
 
 /// Coarse pin classification — kept independent of the canonical
-/// [`PinDirection`] so the AI-stub heuristic can hand back a
+/// [`signex_library::PinDirection`] so the AI-stub heuristic can hand back a
 /// limited subset.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PinKind {
@@ -94,9 +94,9 @@ pub enum GraphicRotationPivotMode {
     GeometryCenter,
 }
 
-/// Resize-handle identity for a placed [`SymbolGraphic`]. Each
+/// Resize-handle identity for a placed [`signex_library::SymbolGraphic`]. Each
 /// variant identifies one grabbable point on the graphic so the
-/// canvas can fire [`canvas::CanvasAction::MoveGraphicHandle`] with
+/// canvas can fire [`CanvasAction::MoveGraphicHandle`](super::canvas::CanvasAction::MoveGraphicHandle) with
 /// enough context for the dispatcher to mutate the right field.
 ///
 /// Corner ordering for `RectCorner`: `0=TL, 1=TR, 2=BR, 3=BL` in the

@@ -1,9 +1,19 @@
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::path::PathBuf;
 use thiserror::Error;
 use uuid::Uuid;
+
+mod unknown;
+pub use unknown::UnknownJson;
+
+/// Format token written into every saved `.snxprj` (`"format"` key). Files
+/// without it predate the token and are read as version 1.
+pub const SNXPRJ_FORMAT_V1: &str = "snxprj/1";
+
+const FORMAT_KEY: &str = "format";
 
 // ---------------------------------------------------------------------------
 // Document type
@@ -55,6 +65,10 @@ pub struct LibraryEntry {
     /// `None` for entries that have never been opened yet.
     #[serde(default)]
     pub library_id: Option<Uuid>,
+    /// Keys written by a newer build that this one does not know; kept so a
+    /// save does not drop them (#788).
+    #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
+    pub unknown: UnknownJson,
 }
 
 // ---------------------------------------------------------------------------
@@ -85,6 +99,10 @@ pub struct SheetEntry {
     pub wires_count: usize,
     #[serde(default)]
     pub labels_count: usize,
+    /// Keys written by a newer build that this one does not know; kept so a
+    /// save does not drop them (#788).
+    #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
+    pub unknown: UnknownJson,
 }
 
 // ---------------------------------------------------------------------------
@@ -95,10 +113,12 @@ pub struct SheetEntry {
 /// only native format that is not TOML+TSV; rationale and open questions in
 /// `docs/architecture/snxprj-format.md`).
 ///
-/// Forward compatibility is one-directional: `#[serde(default)]` lets an old
-/// file load in a new build, but a key written by a newer build is dropped
-/// on load and missing from the next save. There is no unknown-key bag and
-/// no format/version token (tracked in #788).
+/// Forward compatibility runs both ways (#788): `#[serde(default)]` lets an
+/// old file load in a new build, and keys this build does not know (top level,
+/// per sheet, per library) are carried in `unknown` and written back on save.
+/// The `format` token is handled by [`parse_project`] / [`write_project`], not
+/// stored here; a file from a newer format version is refused rather than
+/// opened and silently degraded.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectData {
     pub name: String,
@@ -133,6 +153,10 @@ pub struct ProjectData {
     /// pattern as `LibrarySpec.enable_git` for `.snxlib` files.
     #[serde(default)]
     pub enable_git: bool,
+    /// Keys written by a newer build that this one does not know; kept so a
+    /// save does not drop them (#788).
+    #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
+    pub unknown: UnknownJson,
 }
 
 impl ProjectData {
@@ -147,6 +171,9 @@ impl ProjectData {
         }
     }
 }
+
+#[cfg(test)]
+mod unknown_tests;
 
 #[cfg(test)]
 mod tests {
@@ -226,6 +253,7 @@ mod tests {
             path: PathBuf::from("MyLib.snxlib"),
             kind: LibraryEntryKind::ProjectLocal,
             library_id: Some(Uuid::nil()),
+            unknown: Default::default(),
         };
         let json = serde_json::to_string(&entry).expect("serialize");
         let back: LibraryEntry = serde_json::from_str(&json).expect("deserialize");
@@ -259,11 +287,13 @@ mod tests {
             active_variant: None,
             libraries: vec![],
             enable_git: false,
+            unknown: Default::default(),
         };
         let local = LibraryEntry {
             path: PathBuf::from("foo-lib.snxlib"),
             kind: LibraryEntryKind::ProjectLocal,
             library_id: None,
+            unknown: Default::default(),
         };
         assert_eq!(
             project.resolve_library_path(&local),
@@ -283,11 +313,13 @@ mod tests {
             active_variant: None,
             libraries: vec![],
             enable_git: false,
+            unknown: Default::default(),
         };
         let shared = LibraryEntry {
             path: PathBuf::from("/var/signex/Power.snxlib"),
             kind: LibraryEntryKind::Shared,
             library_id: None,
+            unknown: Default::default(),
         };
         assert_eq!(
             project.resolve_library_path(&shared),
@@ -319,6 +351,32 @@ pub enum ProjectError {
          it was not opened so a save cannot overwrite recoverable data"
     )]
     Corrupt { path: String, reason: String },
+    #[error(
+        "project file {path} uses format \"{found}\", which this Signex ({supported}) cannot read; \
+         it was not opened so a save cannot drop data written by another version. \
+         Update Signex to open it"
+    )]
+    UnsupportedFormat {
+        path: String,
+        found: String,
+        supported: &'static str,
+    },
+}
+
+/// Accept a missing token (pre-#788 file) or [`SNXPRJ_FORMAT_V1`]; refuse
+/// anything else, newer versions and garbage alike.
+fn check_format_token(path: &Path, token: Option<&Value>) -> Result<(), ProjectError> {
+    let unsupported = |found: String| ProjectError::UnsupportedFormat {
+        path: path.display().to_string(),
+        found,
+        supported: SNXPRJ_FORMAT_V1,
+    };
+    match token {
+        None => Ok(()),
+        Some(Value::String(s)) if s == SNXPRJ_FORMAT_V1 => Ok(()),
+        Some(Value::String(s)) => Err(unsupported(s.clone())),
+        Some(other) => Err(unsupported(other.to_string())),
+    }
 }
 
 /// Parse a `.snxprj` project file. Two paths:
@@ -370,11 +428,14 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
         // directory probe: the probe returns empty libraries / variants /
         // sheets, and the next save would then persist that loss over the
         // file that still holds the recoverable data.
-        let mut data =
-            serde_json::from_slice::<ProjectData>(&bytes).map_err(|err| ProjectError::Corrupt {
-                path: path.display().to_string(),
-                reason: err.to_string(),
-            })?;
+        let corrupt = |err: serde_json::Error| ProjectError::Corrupt {
+            path: path.display().to_string(),
+            reason: err.to_string(),
+        };
+        let mut value = serde_json::from_slice::<Value>(&bytes).map_err(corrupt)?;
+        let token = value.as_object_mut().and_then(|map| map.remove(FORMAT_KEY));
+        check_format_token(path, token.as_ref())?;
+        let mut data = serde_json::from_value::<ProjectData>(value).map_err(corrupt)?;
         data.dir = dir.to_string_lossy().to_string();
         // Project name in the file is informational; the on-disk
         // filename is authoritative so renaming the .snxprj outside
@@ -406,6 +467,7 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
             symbols_count: 0,
             wires_count: 0,
             labels_count: 0,
+            unknown: UnknownJson::default(),
         }],
         None => Vec::new(),
     };
@@ -420,6 +482,7 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
         active_variant: None,
         libraries: Vec::new(),
         enable_git: false,
+        unknown: UnknownJson::default(),
     })
 }
 
@@ -432,10 +495,18 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
 /// mid-write must never truncate it to a partial file — that would
 /// silently drop the project's contents on the next open.
 pub fn write_project(path: &Path, data: &ProjectData) -> Result<(), ProjectError> {
-    let json = serde_json::to_vec_pretty(data).map_err(|err| ProjectError::Io {
+    let io_err = |err: serde_json::Error| ProjectError::Io {
         path: path.display().to_string(),
         source: std::io::Error::other(err.to_string()),
-    })?;
+    };
+    // Add the format token. serde_json's map is sorted (no `preserve_order`),
+    // so keys come out alphabetically; the first save of an older file reorders it once.
+    let mut stamped = serde_json::Map::new();
+    stamped.insert(FORMAT_KEY.into(), Value::String(SNXPRJ_FORMAT_V1.into()));
+    if let Value::Object(fields) = serde_json::to_value(data).map_err(io_err)? {
+        stamped.extend(fields);
+    }
+    let json = serde_json::to_vec_pretty(&Value::Object(stamped)).map_err(io_err)?;
     crate::atomic_io::atomic_write(path, &json).map_err(|source| ProjectError::Io {
         path: path.display().to_string(),
         source,

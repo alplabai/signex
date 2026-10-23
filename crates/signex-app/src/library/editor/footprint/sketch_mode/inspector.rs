@@ -1,7 +1,7 @@
 //! v0.13.1 Phase 6.5 — sketch inspector (lite).
 //!
 //! Three sections, displayed as a horizontal strip below the
-//! footprint toolbar when [`EditorMode::Sketch`] is active:
+//! footprint toolbar when [`EditorMode::Sketch`](crate::library::editor::footprint::state::EditorMode::Sketch) is active:
 //!
 //! 1. **DOF readout** — `state.len()` / constraint count / rank
 //!    (free DoF) + last solve elapsed_ms + auto-pause status.
