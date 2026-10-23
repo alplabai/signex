@@ -464,7 +464,7 @@ impl Signex {
                 // to *this* window's document, not to the app.
                 per_window.paper_width_mm = self.interaction_state.canvas.paper_width_mm;
                 per_window.paper_height_mm = self.interaction_state.canvas.paper_height_mm;
-                per_window.fit_to_paper();
+                per_window.fit_to_content();
                 self.interaction_state.canvases.insert(id, per_window);
                 // Raise + focus the undocked tab window — like the
                 // detached modal, it opens at `Level::Normal` and can

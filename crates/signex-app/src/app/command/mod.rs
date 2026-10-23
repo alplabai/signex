@@ -45,6 +45,24 @@ impl Signex {
             None => Task::none(),
         }
     }
+
+    /// [`Self::dispatch_command`] for a command typed in `window`. A canvas
+    /// event goes to the canvas of the undocked window it was typed in; the
+    /// plain [`Message::CanvasEvent`] always targets the main window (#525).
+    pub(crate) fn dispatch_command_in_window(
+        &mut self,
+        command: &crate::keymap::AppCommandId,
+        window: Option<iced::window::Id>,
+    ) -> Task<Message> {
+        match (core_to_message(command), window) {
+            (Some(Message::CanvasEvent(event)), Some(window_id))
+                if self.interaction_state.canvases.contains_key(&window_id) =>
+            {
+                self.dispatch_update(Message::CanvasEventInWindow { window_id, event })
+            }
+            _ => self.dispatch_command(command, CommandArgs::none()),
+        }
+    }
 }
 
 #[cfg(test)]

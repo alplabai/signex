@@ -46,6 +46,9 @@ impl Signex {
             CanvasEvent::CursorAt { x, y, zoom_pct } => {
                 self.ui_state.cursor_x = x as f64;
                 self.ui_state.cursor_y = y as f64;
+                if self.ui_state.cursor_document != self.document_state.active_path {
+                    self.ui_state.cursor_document = self.document_state.active_path.clone();
+                }
                 self.ui_state.zoom = zoom_pct;
                 // Hover detection: fast hit-test against the active
                 // schematic snapshot so the tooltip overlay (in
@@ -188,33 +191,38 @@ impl Signex {
                 self.interaction_state.pcb_canvas.pending_fit.set(None);
             }
             CanvasEvent::CenterAtCursor => {
-                // `cursor_x/y` is the world position the active canvas last
-                // reported through `CursorAt`.
-                let (x, y) = (self.ui_state.cursor_x as f32, self.ui_state.cursor_y as f32);
-                if self.has_active_schematic() {
-                    let canvas = self.interaction_state.active_canvas_mut();
-                    canvas.center_on_world(x, y);
-                    canvas.clear_bg_cache();
-                    canvas.clear_content_cache();
-                } else if self.has_active_pcb() {
-                    let canvas = &mut self.interaction_state.pcb_canvas;
-                    canvas.center_on_world(x, y);
-                    canvas.clear_bg_cache();
-                    canvas.clear_content_cache();
+                // `cursor_x/y` is the world position `CursorAt` last reported.
+                // It means nothing in another document (a tab switched with
+                // the keyboard, another window), nor before the first hover.
+                if self.ui_state.cursor_document.is_none()
+                    || self.ui_state.cursor_document != self.document_state.active_path
+                {
+                    return Task::none();
                 }
+                let (x, y) = (self.ui_state.cursor_x as f32, self.ui_state.cursor_y as f32);
+                // A user camera move cancels a deferred fit, as in `CursorMoved`;
+                // otherwise a queued fit lands afterwards and undoes the centring.
+                self.interaction_state
+                    .active_canvas_mut()
+                    .pending_fit
+                    .set(None);
+                self.interaction_state.pcb_canvas.pending_fit.set(None);
+                if self.has_active_schematic() {
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .center_on_world(x, y);
+                } else if self.has_active_pcb() {
+                    self.interaction_state.pcb_canvas.center_on_world(x, y);
+                }
+                self.clear_active_camera_caches();
             }
             CanvasEvent::FitAll => {
                 if self.has_active_schematic() {
-                    self.interaction_state.active_canvas_mut().fit_to_paper();
-                    self.interaction_state.active_canvas_mut().clear_bg_cache();
-                    self.interaction_state
-                        .active_canvas_mut()
-                        .clear_content_cache();
+                    self.interaction_state.active_canvas_mut().fit_to_content();
                 } else if self.has_active_pcb() {
                     self.interaction_state.pcb_canvas.fit_to_board();
-                    self.interaction_state.pcb_canvas.clear_bg_cache();
-                    self.interaction_state.pcb_canvas.clear_content_cache();
                 }
+                self.clear_active_camera_caches();
             }
             CanvasEvent::CtrlClicked { world_x, world_y } => {
                 if let Some(snapshot) = self.active_render_snapshot()
@@ -364,6 +372,19 @@ impl Signex {
             true
         } else {
             false
+        }
+    }
+
+    /// Redraw the active schematic or PCB canvas after its camera moved.
+    fn clear_active_camera_caches(&mut self) {
+        if self.has_active_schematic() {
+            let canvas = self.interaction_state.active_canvas_mut();
+            canvas.clear_bg_cache();
+            canvas.clear_content_cache();
+        } else if self.has_active_pcb() {
+            let canvas = &mut self.interaction_state.pcb_canvas;
+            canvas.clear_bg_cache();
+            canvas.clear_content_cache();
         }
     }
 }

@@ -58,8 +58,7 @@ fn resolve(command: &AppCommandId) -> Option<Message> {
         "cancel_current_tool" => Message::EscapePressed { window: None },
         // Recentres without zooming; it used to share the fit arm below (#525).
         "center_view_at_cursor" => Message::CanvasEvent(CanvasEvent::CenterAtCursor),
-        // One fit primitive, and it frames object extents, which is what all
-        // three labels promise (`fit_to_paper` despite its name, #525).
+        // One fit primitive; it frames object extents, as all three labels promise.
         "show_all_design_objects" | "zoom_to_all_objects" | "zoom_to_fit" => {
             Message::CanvasEvent(CanvasEvent::FitAll)
         }

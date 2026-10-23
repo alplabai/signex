@@ -17,6 +17,10 @@ pub struct UiState {
     pub snap_enabled: bool,
     pub cursor_x: f64,
     pub cursor_y: f64,
+    /// The document `cursor_x/y` was last reported over. Center View At
+    /// Cursor uses the point only in that document, never in another tab or
+    /// window, and does nothing before the first hover (#525).
+    pub cursor_document: Option<std::path::PathBuf>,
     pub zoom: f64,
     pub grid_size_mm: f32,
     pub visible_grid_mm: f32,

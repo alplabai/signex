@@ -280,9 +280,8 @@ impl CanvasSlot {
     }
 
     /// Fit the camera to the extents of the sheet's objects (symbols, wires,
-    /// labels, ...) plus a 10 mm margin, not to the paper outline: this is
-    /// what "Zoom to all objects" relies on (#525).
-    pub fn fit_to_paper(&mut self) {
+    /// labels, ...) plus a 10 mm margin.
+    pub fn fit_to_content(&mut self) {
         if let Some(snapshot) = self.active_snapshot()
             && let Some(bounds) = snapshot.content_bounds()
         {

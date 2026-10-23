@@ -4,7 +4,9 @@
 //! "All Off" (were placeholders that closed the dialog).
 
 use iced::{Point as ScreenPoint, Rectangle};
-use signex_app::app::{AnnotateMsg, Message, Signex, UiMsg};
+use signex_app::app::{AnnotateMsg, Message, Signex, UiMsg, WindowMsg};
+use signex_app::canvas::CanvasEvent;
+use signex_app::keymap::ShortcutTrigger;
 use signex_app::menu_bar::MenuMessage;
 use signex_types::schematic::{Point, SchematicSheet, Symbol};
 use std::collections::HashMap;
@@ -232,27 +234,73 @@ fn annotate_all_on_off_keep_the_dialog_open() {
     assert!(app.ui_state.annotate_dialog_open);
 }
 
+fn cursor_at(app: &mut Signex, x: f32, y: f32) {
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::CursorAt {
+        x,
+        y,
+        zoom_pct: 100.0,
+    }));
+}
+
+/// The world point at the centre of an 800 x 600 view.
+fn view_centre((ox, oy, scale): (f32, f32, f32)) -> (f32, f32) {
+    ((400.0 - ox) / scale, (300.0 - oy) / scale)
+}
+
+fn add_second_sheet(app: &mut Signex) -> PathBuf {
+    let path = PathBuf::from("dead-controls-other.snxsch");
+    let engine = signex_engine::Engine::new(sheet_with(Vec::new())).expect("engine");
+    app.document_state.engines.insert(path.clone(), engine);
+    app.document_state.tabs.push(signex_app::app::TabInfo {
+        title: "dead-controls-other".to_string(),
+        path: path.clone(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: signex_app::app::TabKind::Schematic,
+    });
+    path
+}
+
 /// #525: Center View At Cursor recentres on the cursor and keeps the zoom.
-/// It used to share the Fit All arm and zoomed out to the whole sheet.
+/// It used to share the Fit All arm and zoomed out to the whole sheet. It
+/// also cancels a fit still queued from before, which would otherwise land
+/// on the next canvas tick and undo the centring.
 #[test]
-fn center_view_at_cursor_recentres_without_changing_zoom() {
-    let (mut app, _path) = app_with(vec![symbol(uuid::Uuid::new_v4(), "R1", 0.0)]);
+fn center_view_at_cursor_recentres_without_changing_zoom_and_cancels_a_queued_fit() {
+    let (mut app, path) = app_with(vec![symbol(uuid::Uuid::new_v4(), "R1", 0.0)]);
+    let sheet = app.document_state.engines[&path].document().clone();
+    app.interaction_state
+        .active_canvas_mut()
+        .set_render_cache(Some(
+            signex_app::schematic_runtime::SchematicRenderCache::from_sheet(&sheet),
+        ));
     app.interaction_state.active_canvas().set_viewport(VIEWPORT);
     let _ = app.update(Message::Menu(MenuMessage::ZoomIn));
-    let (_, _, s0) = app.interaction_state.active_canvas().live_camera();
-    app.ui_state.cursor_x = 50.0;
-    app.ui_state.cursor_y = 30.0;
-
-    let _ = app.update(Message::CanvasEvent(
-        signex_app::canvas::CanvasEvent::CenterAtCursor,
-    ));
-
-    let (ox, oy, s1) = app.interaction_state.active_canvas().live_camera();
-    assert!((s1 - s0).abs() < 1e-6, "zoom must not change: {s0} -> {s1}");
-    let world_at_centre = ((400.0 - ox) / s1, (300.0 - oy) / s1);
+    cursor_at(&mut app, 50.0, 30.0);
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::FitAll));
     assert!(
-        (world_at_centre.0 - 50.0).abs() < 1e-3 && (world_at_centre.1 - 30.0).abs() < 1e-3,
-        "cursor point must land at the view centre, got {world_at_centre:?}"
+        app.interaction_state
+            .active_canvas()
+            .pending_fit
+            .get()
+            .is_some(),
+        "precondition: a fit is queued"
+    );
+    let (_, _, s0) = app.interaction_state.active_canvas().live_camera();
+
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::CenterAtCursor));
+
+    let camera = app.interaction_state.active_canvas().live_camera();
+    assert!(
+        (camera.2 - s0).abs() < 1e-6,
+        "zoom must not change: {s0} -> {}",
+        camera.2
+    );
+    let centre = view_centre(camera);
+    assert!(
+        (centre.0 - 50.0).abs() < 1e-3 && (centre.1 - 30.0).abs() < 1e-3,
+        "cursor point must land at the view centre, got {centre:?}"
     );
     assert!(
         app.interaction_state
@@ -260,7 +308,83 @@ fn center_view_at_cursor_recentres_without_changing_zoom() {
             .pending_fit
             .get()
             .is_none(),
-        "centring must not queue a fit"
+        "the queued fit must be cancelled"
+    );
+}
+
+/// #525 review: the cursor point belongs to the document it was reported
+/// over. Before any hover, or once another tab is active, there is no point
+/// to centre on and the view stays put.
+#[test]
+fn center_view_at_cursor_ignores_a_point_from_another_document() {
+    let (mut app, _path) = app_with(vec![symbol(uuid::Uuid::new_v4(), "R1", 0.0)]);
+    app.interaction_state.active_canvas().set_viewport(VIEWPORT);
+    let before = app.interaction_state.active_canvas().live_camera();
+
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::CenterAtCursor));
+    assert_eq!(
+        app.interaction_state.active_canvas().live_camera(),
+        before,
+        "no hover yet: nothing to centre on"
+    );
+
+    cursor_at(&mut app, 50.0, 30.0);
+    let other = add_second_sheet(&mut app);
+    // The tab switch: the point above was reported over the first sheet.
+    app.document_state.active_tab = 1;
+    app.document_state.active_path = Some(other);
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::CenterAtCursor));
+    assert_eq!(
+        app.interaction_state.active_canvas().live_camera(),
+        before,
+        "a point from another sheet must not move this one"
+    );
+}
+
+/// #525 review: `Home` typed in an undocked sheet's window centres that
+/// window's view on its own cursor point, and leaves the main window alone.
+/// The plain `CanvasEvent` the command resolves to always targets the main
+/// window, so the keystroke has to be routed to the window it came from.
+#[test]
+fn home_in_an_undocked_window_centres_that_window_not_the_main_one() {
+    let (mut app, _path) = app_with(vec![symbol(uuid::Uuid::new_v4(), "R1", 0.0)]);
+    app.interaction_state.active_canvas().set_viewport(VIEWPORT);
+    let other = add_second_sheet(&mut app);
+    let window_id = iced::window::Id::unique();
+    let _ = app.update(Message::Window(WindowMsg::UndockedTabOpened {
+        path: other,
+        id: window_id,
+    }));
+    app.interaction_state.canvases[&window_id].set_viewport(VIEWPORT);
+    let _ = app.update(Message::CanvasEventInWindow {
+        window_id,
+        event: CanvasEvent::CursorAt {
+            x: 50.0,
+            y: 30.0,
+            zoom_pct: 100.0,
+        },
+    });
+    let main_before = app.interaction_state.active_canvas().live_camera();
+
+    let ShortcutTrigger::KeySequence(mut strokes) =
+        ShortcutTrigger::parse("Home").expect("Home parses")
+    else {
+        panic!("Home is a key, not a gesture");
+    };
+    let _ = app.update(Message::Ui(UiMsg::KeymapStroke {
+        window: Some(window_id),
+        stroke: strokes.remove(0),
+    }));
+
+    assert_eq!(
+        app.interaction_state.active_canvas().live_camera(),
+        main_before,
+        "the main window must not move"
+    );
+    let centre = view_centre(app.interaction_state.canvases[&window_id].live_camera());
+    assert!(
+        (centre.0 - 50.0).abs() < 1e-3 && (centre.1 - 30.0).abs() < 1e-3,
+        "the undocked view must centre on its cursor point, got {centre:?}"
     );
 }
 
@@ -279,9 +403,7 @@ fn zoom_to_all_objects_frames_object_extents_not_the_paper() {
         .set_render_cache(Some(
             signex_app::schematic_runtime::SchematicRenderCache::from_sheet(&sheet),
         ));
-    let _ = app.update(Message::CanvasEvent(
-        signex_app::canvas::CanvasEvent::FitAll,
-    ));
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::FitAll));
 
     let rect = app
         .interaction_state
