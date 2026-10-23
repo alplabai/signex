@@ -277,7 +277,7 @@ fn shorten_label(key: &str) -> String {
     if key.len() <= 14 {
         key.to_string()
     } else {
-        format!("{}…", &key[..13])
+        format!("{}…", crate::text_trunc::prefix_within_bytes(key, 13))
     }
 }
 
