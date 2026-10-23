@@ -56,10 +56,12 @@ fn resolve(command: &AppCommandId) -> Option<Message> {
         // No originating window: this Esc was invoked as a command, not
         // typed. `None` resolves as a main-window Esc (#547).
         "cancel_current_tool" => Message::EscapePressed { window: None },
-        "center_view_at_cursor"
-        | "show_all_design_objects"
-        | "zoom_to_all_objects"
-        | "zoom_to_fit" => Message::CanvasEvent(CanvasEvent::FitAll),
+        // Recentres without zooming; it used to share the fit arm below (#525).
+        "center_view_at_cursor" => Message::CanvasEvent(CanvasEvent::CenterAtCursor),
+        // One fit primitive; it frames object extents, as all three labels promise.
+        "show_all_design_objects" | "zoom_to_all_objects" | "zoom_to_fit" => {
+            Message::CanvasEvent(CanvasEvent::FitAll)
+        }
         "copy" => Message::Edit(EditMsg::Copy),
         "cycle_selection_mode" => Message::CycleSelectionMode,
         "next_grid" => Message::Ui(UiMsg::GridCycle),
@@ -443,6 +445,11 @@ mod tests {
         assert!(matches!(
             resolve("zoom_to_all_objects"),
             Message::CanvasEvent(CanvasEvent::FitAll)
+        ));
+        // #525: centring is not a fit.
+        assert!(matches!(
+            resolve("center_view_at_cursor"),
+            Message::CanvasEvent(CanvasEvent::CenterAtCursor)
         ));
     }
 

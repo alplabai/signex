@@ -159,6 +159,14 @@ impl PcbCanvas {
         self.camera.borrow_mut().zoom_at(centre, notch, bounds)
     }
 
+    /// Recentre the view on world point `(x, y)` without changing zoom (#525).
+    pub fn center_on_world(&self, x: f32, y: f32) {
+        let bounds = self.viewport.get();
+        self.camera
+            .borrow_mut()
+            .center_on(iced::Point::new(x, y), bounds);
+    }
+
     pub fn fit_to_board(&mut self) {
         if let Some(snapshot) = self.active_renderer_snapshot()
             && let Some(bounds) = renderer_snapshot_bounds(snapshot)

@@ -27,6 +27,7 @@ pub(crate) fn pcb_renderer_events_for_message(message: &Message) -> &'static [Pc
         Message::CanvasEvent(CanvasEvent::CursorMoved)
         | Message::CanvasEvent(CanvasEvent::CursorAt { .. })
         | Message::CanvasEvent(CanvasEvent::FitAll)
+        | Message::CanvasEvent(CanvasEvent::CenterAtCursor)
         | Message::CanvasEventInWindow {
             event: CanvasEvent::CursorMoved,
             ..
@@ -36,7 +37,7 @@ pub(crate) fn pcb_renderer_events_for_message(message: &Message) -> &'static [Pc
             ..
         }
         | Message::CanvasEventInWindow {
-            event: CanvasEvent::FitAll,
+            event: CanvasEvent::FitAll | CanvasEvent::CenterAtCursor,
             ..
         } => PCB_EVENTS_CAMERA,
         _ => PCB_EVENTS_NONE,

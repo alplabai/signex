@@ -40,7 +40,7 @@ impl Signex {
         match msg {
             MenuMessage::ZoomFit => {
                 if self.has_active_schematic() {
-                    self.interaction_state.active_canvas_mut().fit_to_paper();
+                    self.interaction_state.active_canvas_mut().fit_to_content();
                     self.interaction_state.active_canvas_mut().clear_bg_cache();
                     self.interaction_state
                         .active_canvas_mut()
