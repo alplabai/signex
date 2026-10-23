@@ -174,3 +174,36 @@ fn column_resize_ends_on_a_global_release_away_from_the_handle() {
         "the column must stop following the cursor after the release"
     );
 }
+
+/// #592: a dropped column takes the slot of the header it is released on,
+/// whichever direction it was dragged.
+#[test]
+fn a_dragged_column_takes_the_slot_of_the_header_it_is_dropped_on() {
+    let mut app = app_with_faulty_bom();
+    let _ = app.update(Message::Menu(MenuMessage::ExportBom));
+    let columns = |app: &Signex| {
+        app.document_state
+            .bom_preview
+            .as_ref()
+            .unwrap()
+            .options
+            .columns
+            .clone()
+    };
+    let start = columns(&app);
+    assert!(start.len() >= 4, "need four columns, have {start:?}");
+
+    // Drag right: column 0 onto column 2 lands at index 2.
+    let _ = app.update(Message::BomPreview(BomPreviewMsg::ColumnDragStart(0)));
+    let _ = app.update(Message::BomPreview(BomPreviewMsg::ColumnDragDrop(2)));
+    let after_right = columns(&app);
+    assert_eq!(after_right[2], start[0]);
+    assert_eq!(&after_right[..2], &start[1..3]);
+
+    // Drag left: column 3 onto column 1 lands at index 1.
+    let _ = app.update(Message::BomPreview(BomPreviewMsg::ColumnDragStart(3)));
+    let _ = app.update(Message::BomPreview(BomPreviewMsg::ColumnDragDrop(1)));
+    let after_left = columns(&app);
+    assert_eq!(after_left[1], after_right[3]);
+    assert_eq!(after_left[2], after_right[1]);
+}
