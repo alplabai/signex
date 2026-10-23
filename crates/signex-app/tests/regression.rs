@@ -32,11 +32,17 @@
     reason = "integration tests discard Results with `let _ = ...` routinely; this is test scaffolding, not a production `iced::Task` being dropped, and `[lints]` in Cargo.toml is package-scoped so each integration-test crate root needs its own"
 )]
 
+#[path = "regression/close_support.rs"]
+mod close_support;
+
 #[path = "regression/project.rs"]
 mod project;
 
 #[path = "regression/bom_validation.rs"]
 mod bom_validation;
+
+#[path = "regression/pdf_page_setup.rs"]
+mod pdf_page_setup;
 
 #[path = "regression/prefs.rs"]
 mod prefs;
@@ -44,8 +50,14 @@ mod prefs;
 #[path = "regression/preferences_dirty_guard.rs"]
 mod preferences_dirty_guard;
 
+#[path = "regression/detached_modal_os_close.rs"]
+mod detached_modal_os_close;
+
 #[path = "regression/diagnostics_routing.rs"]
 mod diagnostics_routing;
+
+#[path = "regression/dock_layout_persist.rs"]
+mod dock_layout_persist;
 
 #[path = "regression/preferences_export_status.rs"]
 mod preferences_export_status;
@@ -116,6 +128,10 @@ mod library_git_recovery;
 #[path = "regression/start_screen.rs"]
 mod start_screen;
 
+#[path = "regression/dead_schematic_controls.rs"]
+mod dead_schematic_controls;
+#[path = "regression/library_delete_undo.rs"]
+mod library_delete_undo;
 #[path = "regression/save_as_by_document_kind.rs"]
 mod save_as_by_document_kind;
 #[path = "regression/stable_addressing.rs"]
@@ -123,3 +139,9 @@ mod stable_addressing;
 
 #[path = "regression/place_sheet_tool.rs"]
 mod place_sheet_tool;
+
+#[path = "regression/symbol_undo_steps.rs"]
+mod symbol_undo_steps;
+
+#[path = "regression/surface_failures.rs"]
+mod surface_failures;

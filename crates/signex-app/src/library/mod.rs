@@ -23,6 +23,7 @@ pub mod create_options;
 pub mod document_options;
 pub mod edit_row_modal;
 pub mod editor;
+pub mod external_poll;
 pub mod messages;
 pub mod mount;
 pub mod new_component;
@@ -36,6 +37,8 @@ pub mod state;
 #[cfg(test)]
 pub(crate) mod test_adapters;
 pub mod updates_dialog;
+#[cfg(test)]
+mod view_purity_tests;
 
 // Re-export the heavily-used types so callers don't have to know
 // the internal module layout. `LibraryMessage` is folded into the

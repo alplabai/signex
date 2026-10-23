@@ -58,12 +58,21 @@ pub fn cache_path(
 /// A truncated or foreign file is a miss, so it is regenerated rather than
 /// served (#147).
 pub fn is_cache_valid(glb_path: &Path) -> bool {
-    validate_glb(glb_path).unwrap_or(false)
+    let Ok(file) = File::open(glb_path) else {
+        return false;
+    };
+    let Ok(len) = file.metadata().map(|m| m.len()) else {
+        return false;
+    };
+    validate_glb(file, len).unwrap_or(false)
 }
 
-fn validate_glb(glb_path: &Path) -> std::io::Result<bool> {
-    let mut file = File::open(glb_path)?;
-    let file_len = file.metadata()?.len();
+/// [`is_cache_valid`] for a GLB already held in memory.
+pub fn is_valid_glb(bytes: &[u8]) -> bool {
+    validate_glb(std::io::Cursor::new(bytes), bytes.len() as u64).unwrap_or(false)
+}
+
+fn validate_glb<R: Read + Seek>(mut file: R, file_len: u64) -> std::io::Result<bool> {
     if file_len < GLB_HEADER_LEN + CHUNK_HEADER_LEN {
         return Ok(false);
     }

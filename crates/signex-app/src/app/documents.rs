@@ -283,14 +283,19 @@ pub struct SymbolEditorState {
     pub active_bar_menu: Option<crate::library::editor::symbol::state::SymActiveBarMenu>,
     /// v0.13 — Pause flag for placement (TAB during Place Pin / etc.).
     pub placement_paused: bool,
-    /// Snapshot stack for undo. Each entry is a full clone of the
-    /// `Symbol` at the moment before a mutation was applied. Max 100
-    /// entries; oldest entries are dropped when the limit is exceeded.
-    pub undo_snapshots: Vec<signex_library::Symbol>,
+    /// Snapshot stack for undo. Each entry is the whole `.snxsym`
+    /// container (symbols shared structurally between entries) at the
+    /// moment before a mutation was applied. Max 100 entries; oldest
+    /// entries are dropped when the limit is exceeded.
+    pub undo_snapshots: Vec<crate::app::SymbolHistorySnapshot>,
     /// Snapshot stack for redo. Cleared whenever a new mutation is
     /// recorded; populated by `SymbolUndo` so the user can step
     /// forward again after undoing.
-    pub redo_snapshots: Vec<signex_library::Symbol>,
+    pub redo_snapshots: Vec<crate::app::SymbolHistorySnapshot>,
+    /// The field the last `record_edit` changed, tagged with the symbol
+    /// it belonged to, so a run of keystrokes in one text input shares
+    /// one undo step. Cleared by every other history push, undo and redo.
+    pub(in crate::app) last_edit_key: Option<(FieldEditKey, usize)>,
     /// Set to `true` on the first `Move`/`MoveAll`/`MoveGraphicHandle`
     /// in a drag sequence so subsequent move events in the same drag do
     /// NOT push additional snapshots (the pre-drag snapshot is already
@@ -361,6 +366,7 @@ impl SymbolEditorState {
             placement_paused: false,
             undo_snapshots: Vec::new(),
             redo_snapshots: Vec::new(),
+            last_edit_key: None,
             mid_drag: false,
             graphic_fill_picker: None,
             local_color_picker: None,
