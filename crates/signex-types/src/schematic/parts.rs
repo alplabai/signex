@@ -5,7 +5,9 @@
 //! in `unit`. Annotation, ERC and the BOM all have to agree on which
 //! instances are one part, so the rule lives here and nowhere else.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+
+use uuid::Uuid;
 
 use super::Symbol;
 
@@ -17,12 +19,24 @@ pub struct PartKey<'a> {
     pub unit: u32,
 }
 
+/// A library id as part grouping compares it: surrounding whitespace removed,
+/// case kept. Library lookups (`lib_symbols`) match the id exactly, so two ids
+/// that differ in case name two different library symbols; only stray
+/// whitespace from hand-edited files is forgiven.
+///
+/// Two units of one designator that resolve to different library symbols are
+/// not one part. ERC says so when it reports the designator: "units of U1 come
+/// from different library symbols".
+pub fn normalized_lib_id(lib_id: &str) -> &str {
+    lib_id.trim()
+}
+
 impl Symbol {
     /// The fields [`group_into_parts`] groups by.
     pub fn part_key(&self) -> PartKey<'_> {
         PartKey {
             reference: self.reference.trim(),
-            lib_id: &self.lib_id,
+            lib_id: normalized_lib_id(&self.lib_id),
             unit: self.unit,
         }
     }
@@ -65,24 +79,119 @@ pub fn group_into_parts<'a>(items: impl IntoIterator<Item = PartKey<'a>>) -> Vec
     parts
 }
 
-/// Part index per symbol index for the symbols a designator applies to
-/// (not power ports, not `#` markers), grouped in `order` by
-/// [`group_into_parts`]. Annotation and its preview both call this, so what
-/// the dialog promises is what the pass assigns.
-pub fn designatable_parts(symbols: &[Symbol], order: &[usize]) -> HashMap<usize, usize> {
-    let eligible: Vec<usize> = order
-        .iter()
-        .copied()
-        .filter(|&idx| !symbols[idx].is_power && !symbols[idx].reference.starts_with('#'))
-        .collect();
-    let parts = group_into_parts(eligible.iter().map(|&idx| symbols[idx].part_key()));
-    let mut part_of = HashMap::new();
-    for (part, members) in parts.iter().enumerate() {
-        for &member in members {
-            part_of.insert(eligible[member], part);
+/// Symbol indices in annotation order: top to bottom, then left to right,
+/// then by uuid so equal positions stay deterministic. Annotation and its
+/// preview both walk this order, so the number the dialog promises a symbol
+/// is the number the pass assigns it.
+pub fn annotation_order(symbols: &[Symbol]) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..symbols.len()).collect();
+    order.sort_by(|&a, &b| {
+        let (sa, sb) = (&symbols[a], &symbols[b]);
+        sa.position
+            .y
+            .partial_cmp(&sb.position.y)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(
+                sa.position
+                    .x
+                    .partial_cmp(&sb.position.x)
+                    .unwrap_or(std::cmp::Ordering::Equal),
+            )
+            .then(sa.uuid.cmp(&sb.uuid))
+    });
+    order
+}
+
+/// Parts of a whole project, grouped across every sheet before any pass
+/// renumbers anything, so a part whose units sit on different sheets stays one
+/// part. Sheets are addressed by their ordinal in the slice given to
+/// [`ProjectParts::new`]; the caller fixes that order (it decides which `U?`
+/// units pair up) and keeps it for every later lookup.
+///
+/// Only symbols a designator applies to take part (not power ports, not `#`
+/// markers).
+///
+/// # Locks
+///
+/// A part with a locked unit keeps its designator as a whole. Its unlocked
+/// units join the locked unit's designator; when that designator is still
+/// unannotated (`U?`) the part stays unannotated, so a lock never leaves one
+/// part holding two different designators.
+#[derive(Debug, Default)]
+pub struct ProjectParts {
+    part_of: HashMap<(usize, usize), usize>,
+    locked_designator: HashMap<usize, String>,
+}
+
+impl ProjectParts {
+    pub fn new(sheets: &[&[Symbol]], locked: &HashSet<Uuid>) -> Self {
+        let mut eligible: Vec<(usize, usize)> = Vec::new();
+        for (sheet, symbols) in sheets.iter().enumerate() {
+            for idx in annotation_order(symbols) {
+                let symbol = &symbols[idx];
+                if !symbol.is_power && !symbol.reference.starts_with('#') {
+                    eligible.push((sheet, idx));
+                }
+            }
+        }
+        let parts = group_into_parts(
+            eligible
+                .iter()
+                .map(|&(sheet, idx)| sheets[sheet][idx].part_key()),
+        );
+        let mut part_of = HashMap::new();
+        let mut locked_designator = HashMap::new();
+        for (part, members) in parts.iter().enumerate() {
+            for &member in members {
+                let (sheet, idx) = eligible[member];
+                part_of.insert((sheet, idx), part);
+                let symbol = &sheets[sheet][idx];
+                if locked.contains(&symbol.uuid) {
+                    locked_designator
+                        .entry(part)
+                        .or_insert_with(|| symbol.reference.clone());
+                }
+            }
+        }
+        Self {
+            part_of,
+            locked_designator,
         }
     }
-    part_of
+
+    /// The part a symbol belongs to, or `None` for a symbol designators skip.
+    pub fn part(&self, sheet: usize, symbol: usize) -> Option<usize> {
+        self.part_of.get(&(sheet, symbol)).copied()
+    }
+
+    /// The designator a part keeps because one of its units is locked.
+    pub fn locked_designator(&self, part: usize) -> Option<&str> {
+        self.locked_designator.get(&part).map(String::as_str)
+    }
+}
+
+/// References held by more than one distinct part, ignoring unannotated
+/// (`?`) ones. Units of one part sharing a designator are not duplicates.
+/// `symbols` may span every sheet of a project.
+pub fn duplicate_designators<'a>(symbols: impl IntoIterator<Item = &'a Symbol>) -> HashSet<String> {
+    let placed: Vec<&Symbol> = symbols
+        .into_iter()
+        .filter(|s| {
+            !s.is_power && !s.reference.starts_with('#') && !s.reference.trim().ends_with('?')
+        })
+        .collect();
+    let parts = group_into_parts(placed.iter().map(|s| s.part_key()));
+    let mut parts_per_reference: HashMap<&str, usize> = HashMap::new();
+    for members in &parts {
+        *parts_per_reference
+            .entry(placed[members[0]].reference.trim())
+            .or_default() += 1;
+    }
+    parts_per_reference
+        .into_iter()
+        .filter(|&(_, count)| count > 1)
+        .map(|(reference, _)| reference.to_string())
+        .collect()
 }
 
 #[cfg(test)]
@@ -129,5 +238,76 @@ mod tests {
     #[test]
     fn empty_input_has_no_parts() {
         assert!(group_into_parts(std::iter::empty()).is_empty());
+    }
+
+    fn placed(reference: &str, lib_id: &str, unit: u32) -> Symbol {
+        Symbol {
+            uuid: Uuid::new_v4(),
+            reference: reference.to_string(),
+            lib_id: lib_id.to_string(),
+            unit,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn library_ids_compare_trimmed_and_case_sensitive() {
+        assert_eq!(normalized_lib_id("  Lib:Part "), "Lib:Part");
+        assert_ne!(normalized_lib_id("Lib:Part"), normalized_lib_id("lib:part"));
+        let parts = group_into_parts([
+            placed("U1", "A", 1).part_key(),
+            placed("U1", " A ", 2).part_key(),
+        ]);
+        assert_eq!(parts, vec![vec![0, 1]]);
+    }
+
+    #[test]
+    fn project_parts_join_units_across_sheets() {
+        let (a, b) = ([placed("U1", "A", 1)], [placed("U1", "A", 2)]);
+        let parts = ProjectParts::new(&[&a, &b], &HashSet::new());
+        assert_eq!(parts.part(0, 0), parts.part(1, 0));
+        assert!(parts.part(0, 0).is_some());
+    }
+
+    #[test]
+    fn project_parts_skip_power_ports_and_hash_markers() {
+        let mut power = placed("#PWR01", "pwr", 1);
+        power.is_power = true;
+        let marker = placed("#FLG01", "flag", 1);
+        let sheet = [power, marker];
+        let parts = ProjectParts::new(&[&sheet], &HashSet::new());
+        assert_eq!(parts.part(0, 0), None);
+        assert_eq!(parts.part(0, 1), None);
+    }
+
+    #[test]
+    fn a_lock_pins_the_whole_part_to_the_locked_designator() {
+        let locked_unit = placed("U?", "A", 1);
+        let locked = HashSet::from([locked_unit.uuid]);
+        let sheet = [locked_unit, placed("U?", "A", 2)];
+        let parts = ProjectParts::new(&[&sheet], &locked);
+        let part = parts.part(0, 1).unwrap();
+        assert_eq!(parts.locked_designator(part), Some("U?"));
+    }
+
+    #[test]
+    fn units_of_one_part_are_not_duplicate_designators() {
+        let sheet = [placed("U1", "A", 1), placed("U1", "A", 2)];
+        assert!(duplicate_designators(&sheet).is_empty());
+    }
+
+    #[test]
+    fn a_repeated_unit_is_a_duplicate_designator() {
+        let sheet = [placed("U1", "A", 1), placed("U1", "A", 1)];
+        assert_eq!(
+            duplicate_designators(&sheet),
+            HashSet::from(["U1".to_string()])
+        );
+    }
+
+    #[test]
+    fn unannotated_references_are_never_duplicates() {
+        let sheet = [placed("U?", "A", 1), placed("U?", "A", 1)];
+        assert!(duplicate_designators(&sheet).is_empty());
     }
 }

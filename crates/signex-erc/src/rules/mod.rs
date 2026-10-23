@@ -12,7 +12,9 @@ pub(crate) use ambiguous_label_anchor::ambiguous_label_anchor;
 use std::collections::HashMap;
 
 use signex_net::{SheetConnectivity, point_on_segment, pt_key};
-use signex_types::schematic::{LabelType, PartKey, Point, SelectedKind, group_into_parts};
+use signex_types::schematic::{
+    LabelType, PartKey, Point, SelectedKind, group_into_parts, normalized_lib_id,
+};
 
 use crate::context::ErcContext;
 use crate::diagnostic::{Diagnostic, LocationSpace};
@@ -118,12 +120,24 @@ pub(crate) fn duplicate_ref_designator(ctx: &ErcContext, out: &mut Vec<Diagnosti
         // distinct parts holding the same designator are a duplicate (#691).
         let parts = group_into_parts(symbols.iter().map(|s| PartKey {
             reference: s.reference.trim(),
-            lib_id: &s.lib_id,
+            lib_id: normalized_lib_id(&s.lib_id),
             unit: s.unit,
         }));
         if parts.len() < 2 {
             continue;
         }
+        // Units that carry one designator but come from different library
+        // symbols are far more likely a wrong symbol pick than two parts that
+        // collided, so say so.
+        let first_lib = normalized_lib_id(&symbols[0].lib_id);
+        let hint = if symbols
+            .iter()
+            .any(|s| normalized_lib_id(&s.lib_id) != first_lib)
+        {
+            format!("; units of {reference} come from different library symbols")
+        } else {
+            String::new()
+        };
         for (part_idx, part) in parts.iter().enumerate() {
             let peer = &symbols[parts[(part_idx + 1) % parts.len()][0]];
             for &member in part {
@@ -131,7 +145,10 @@ pub(crate) fn duplicate_ref_designator(ctx: &ErcContext, out: &mut Vec<Diagnosti
                 out.push(
                     Diagnostic::new(
                         RuleKind::DuplicateRefDesignator,
-                        format!("Reference '{reference}' is used by {} parts", parts.len()),
+                        format!(
+                            "Reference '{reference}' is used by {} parts{hint}",
+                            parts.len()
+                        ),
                         sym.position,
                     )
                     .with_primary(sel(sym.uuid, SelectedKind::Symbol))

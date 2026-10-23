@@ -3,7 +3,6 @@
 //! See `OUTPUT_PLAN.md` §8. Walks every sheet in an ExportContext, aggregates
 //! components, skips power ports and DNP symbols, and emits in one of three formats.
 
-use std::collections::BTreeMap;
 use std::path::Path;
 
 use signex_bom::{BomComponent, BomContext, BomEngineOptions, build_table, validate_table};
@@ -14,6 +13,7 @@ use crate::{ExportContext, Exporter};
 
 pub(crate) mod csv;
 mod html;
+mod units;
 mod xlsx;
 
 pub use csv::emit as csv_emit;
@@ -204,7 +204,8 @@ fn build_bom_context(ctx: &ExportContext, opts: &BomOptions) -> BomContext {
 
     // One component per physical part: every unit of a multi-unit part is a
     // separate placed symbol, but it is bought and fitted once (#691). The
-    // first placed unit speaks for the part.
+    // part takes what ANY of its units sets (see `units`), so an MPN typed on
+    // unit 2 or a DNP flag on unit 2 is not lost to unit 1.
     let placed: Vec<&Symbol> = ctx
         .sheets
         .iter()
@@ -214,52 +215,56 @@ fn build_bom_context(ctx: &ExportContext, opts: &BomOptions) -> BomContext {
     let parts = group_into_parts(placed.iter().map(|sym| sym.part_key()));
 
     for part in &parts {
-        let sym = placed[part[0]];
+        let units: Vec<&Symbol> = part.iter().map(|&member| placed[member]).collect();
+        let sym = units[0];
+        let merged = units::merge_units(&units, is_fit_state_field);
 
-        let name = sym
+        let name = merged
             .fields
             .get("Name")
             .cloned()
             .filter(|value| !value.trim().is_empty())
-            .unwrap_or_else(|| sym.value.clone());
-        let description = sym.fields.get("Description").cloned().unwrap_or_default();
-        let lib_ref = sym
+            .unwrap_or_else(|| merged.value.clone());
+        let description = merged
+            .fields
+            .get("Description")
+            .cloned()
+            .unwrap_or_default();
+        let lib_ref = merged
             .fields
             .get("LibRef")
-            .or_else(|| sym.fields.get("Part Number"))
+            .or_else(|| merged.fields.get("Part Number"))
             .cloned()
             .filter(|value| !value.trim().is_empty())
             .unwrap_or_else(|| sym.lib_id.clone());
 
-        let variant_fitted = resolve_active_variant_fitted(sym, opts.active_variant.as_deref());
-        let base_fitted = resolve_base_variant_fitted(sym);
+        let variant_fitted = units::merge_fit_states(
+            units
+                .iter()
+                .map(|unit| resolve_active_variant_fitted(unit, opts.active_variant.as_deref())),
+        );
+        let base_fitted =
+            units::merge_fit_states(units.iter().map(|unit| resolve_base_variant_fitted(unit)));
 
-        let mut custom = sym
-            .fields
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect::<BTreeMap<_, _>>();
+        let mut custom = merged.fields;
         custom.remove("Name");
         custom.remove("Description");
         custom.remove("LibRef");
-        // Fit-state fields feed `variant_fitted`/`base_fitted`, not the
-        // part's identity. Drop whatever the resolvers recognise so a
-        // variant override cannot split otherwise identical parts.
-        custom.retain(|key, _| !is_fit_state_field(key));
 
         components.push(BomComponent {
             reference: sym.reference.clone(),
             name,
-            value: sym.value.clone(),
-            footprint: sym.footprint.clone(),
+            value: merged.value,
+            footprint: merged.footprint,
             lib_ref,
             description,
-            dnp: sym.dnp,
-            in_bom: sym.in_bom,
-            on_board: sym.on_board,
+            dnp: units.iter().any(|unit| unit.dnp),
+            in_bom: units.iter().all(|unit| unit.in_bom),
+            on_board: units.iter().all(|unit| unit.on_board),
             variant_fitted,
             base_fitted,
             custom,
+            unit_conflicts: merged.conflicts,
         });
     }
 
@@ -540,6 +545,7 @@ mod tests {
     use crate::{ProjectMetadata, SheetSnapshot};
     use signex_types::property::SchematicProperty;
     use signex_types::schematic::{SchematicSheet, Symbol};
+    use std::collections::BTreeMap;
     use uuid::Uuid;
 
     /// The fit override `BomComponent::is_fitted` applies: the active
@@ -634,6 +640,74 @@ mod tests {
                 .issues
                 .iter()
                 .any(|i| i.rule == BomRule::DuplicateDesignator)
+        );
+    }
+
+    fn with_field(mut sym: Symbol, key: &str, value: &str) -> Symbol {
+        sym.fields.insert(key.to_string(), value.to_string());
+        sym
+    }
+
+    fn issues_for(ctx: &ExportContext) -> Vec<signex_bom::BomValidationIssue> {
+        rollup_with_validation(ctx, &BomOptions::default()).1.issues
+    }
+
+    #[test]
+    fn a_field_set_on_any_unit_applies_to_the_part() {
+        let ctx = context_with(vec![
+            unit_of("U1", "Amplifier:LM358", 1),
+            with_field(unit_of("U1", "Amplifier:LM358", 2), "MPN", "LM358DR"),
+        ]);
+        let opts = BomOptions {
+            columns: vec![BomColumn::Designator, BomColumn::Custom("MPN".to_string())],
+            ..BomOptions::default()
+        };
+        let output = BomExporter.export(&ctx, &opts).unwrap();
+        let csv = String::from_utf8(output.bytes).unwrap();
+        assert!(csv.contains("U1,LM358DR"), "{csv}");
+        assert!(
+            !output
+                .validation_report
+                .issues
+                .iter()
+                .any(|i| i.rule == BomRule::MissingMpn),
+            "MPN lives on unit 2 only"
+        );
+    }
+
+    #[test]
+    fn dnp_on_any_unit_makes_the_part_dnp() {
+        let mut unit2 = unit_of("U1", "Amplifier:LM358", 2);
+        unit2.dnp = true;
+        let ctx = context_with(vec![unit_of("U1", "Amplifier:LM358", 1), unit2]);
+        assert!(rollup(&ctx, &BomOptions::default()).rows.is_empty());
+    }
+
+    #[test]
+    fn conflicting_unit_fields_are_reported_by_part_and_field() {
+        let ctx = context_with(vec![
+            with_field(unit_of("U1", "Amplifier:LM358", 1), "MPN", "LM358DR"),
+            with_field(unit_of("U1", "Amplifier:LM358", 2), "MPN", "LM358P"),
+        ]);
+        let issues = issues_for(&ctx);
+        assert!(
+            issues.iter().any(|i| i.message.contains("U1")
+                && i.message.contains("MPN")
+                && i.message.contains("differ")),
+            "{issues:?}"
+        );
+    }
+
+    #[test]
+    fn matching_unit_fields_raise_no_conflict() {
+        let ctx = context_with(vec![
+            with_field(unit_of("U1", "Amplifier:LM358", 1), "MPN", "LM358DR"),
+            with_field(unit_of("U1", "Amplifier:LM358", 2), "MPN", "LM358DR"),
+        ]);
+        assert!(
+            !issues_for(&ctx)
+                .iter()
+                .any(|i| i.message.contains("differ"))
         );
     }
 

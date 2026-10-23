@@ -13,7 +13,8 @@ fn annotate_and_save_unopened(
     path: &std::path::Path,
     mode: signex_engine::AnnotateMode,
     next_by_prefix: &mut std::collections::HashMap<String, u32>,
-    locked: &std::collections::HashSet<uuid::Uuid>,
+    scope: signex_engine::AnnotateScope<'_>,
+    assigned: &mut std::collections::HashMap<usize, String>,
 ) -> bool {
     let context = format!("Annotate failed on unopened sheet '{}'", path.display());
     let mut engine = match signex_engine::Engine::new(sheet) {
@@ -24,7 +25,7 @@ fn annotate_and_save_unopened(
         }
     };
     engine.set_path(Some(path.to_path_buf()));
-    match engine.annotate_with_seed_and_locks(mode, next_by_prefix, locked) {
+    match engine.annotate_in_project(mode, next_by_prefix, scope, assigned) {
         Ok(true) => {}
         Ok(false) => return false,
         Err(error) => {
@@ -116,20 +117,50 @@ impl Signex {
             &project_set,
             active_path.as_deref(),
         );
+        // Group units into parts across the WHOLE project before any sheet is
+        // touched: a part whose units sit on different sheets must stay one
+        // part through a reset, which a per-sheet grouping cannot see (#691).
+        // A live engine is the document, so it wins over the assembler's copy.
+        let parts = {
+            let documents: Vec<&[signex_types::schematic::Symbol]> = ordered_paths
+                .iter()
+                .map(|path| {
+                    self.document_state
+                        .engines
+                        .get(path)
+                        .map(|engine| engine.document().symbols.as_slice())
+                        .or_else(|| {
+                            project_set
+                                .sheets
+                                .get(path)
+                                .map(|sheet| sheet.symbols.as_slice())
+                        })
+                        .unwrap_or(&[])
+                })
+                .collect();
+            signex_types::schematic::ProjectParts::new(&documents, &locked)
+        };
+        let mut assigned: std::collections::HashMap<usize, String> =
+            std::collections::HashMap::new();
         let mut any_active_changed = false;
         let mut any_cached_changed = false;
         let mut disk_touched = 0usize;
         for (path, why) in &project_set.unreadable {
             crate::diagnostics::log_info(format!("Annotate: sheet '{}' {why}", path.display()));
         }
-        for path in &ordered_paths {
+        for (sheet, path) in ordered_paths.iter().enumerate() {
+            let scope = signex_engine::AnnotateScope {
+                parts: &parts,
+                sheet,
+                locked: &locked,
+            };
             if active_path.as_deref() == Some(path.as_path()) {
                 // The active engine — run through the raw engine method (not
                 // Command) so it shares the same counter. That also means it
                 // cannot go through the mutation gateway, so the dirty flag
                 // is set by hand once the whole pass is done (#585).
                 let outcome = self.document_state.active_engine_mut().map(|engine| {
-                    engine.annotate_with_seed_and_locks(mode, &mut next_by_prefix, &locked)
+                    engine.annotate_in_project(mode, &mut next_by_prefix, scope, &mut assigned)
                 });
                 match outcome {
                     Some(Ok(true)) => any_active_changed = true,
@@ -151,7 +182,7 @@ impl Signex {
                 // annotate it in memory and leave it dirty for the user to
                 // save — never write it behind their back.
                 let result = self.document_state.engines.get_mut(path).map(|engine| {
-                    engine.annotate_with_seed_and_locks(mode, &mut next_by_prefix, &locked)
+                    engine.annotate_in_project(mode, &mut next_by_prefix, scope, &mut assigned)
                 });
                 match result {
                     Some(Ok(true)) => {
@@ -173,10 +204,17 @@ impl Signex {
             // the already-parsed copy with the shared counter and write it
             // back. Altium's Annotate-Across-Project covers even the sheets
             // the user hasn't opened so designators stay unique project-wide.
-            let Some(sheet) = project_set.sheets.get(path).cloned() else {
+            let Some(document) = project_set.sheets.get(path).cloned() else {
                 continue;
             };
-            if annotate_and_save_unopened(sheet, path, mode, &mut next_by_prefix, &locked) {
+            if annotate_and_save_unopened(
+                document,
+                path,
+                mode,
+                &mut next_by_prefix,
+                scope,
+                &mut assigned,
+            ) {
                 disk_touched += 1;
             }
         }
@@ -236,24 +274,9 @@ impl Signex {
     /// graph. Unopened sheets are re-saved through the native
     /// `.snxsch` writer so the fix is project-wide.
     pub(crate) fn handle_reset_duplicate_designators(&mut self) -> Task<Message> {
-        use std::collections::{HashMap, HashSet};
+        use std::collections::HashSet;
         use std::path::PathBuf;
 
-        // Phase 1: walk every sheet and count how many symbols hold
-        // each (non-power, non-hash) reference.
-        let mut counts: HashMap<String, usize> = HashMap::new();
-        let bump = |counts: &mut HashMap<String, usize>,
-                    sheet: &signex_types::schematic::SchematicSheet| {
-            for sym in &sheet.symbols {
-                if sym.is_power || sym.reference.starts_with('#') {
-                    continue;
-                }
-                if sym.reference.ends_with('?') {
-                    continue;
-                }
-                *counts.entry(sym.reference.clone()).or_insert(0) += 1;
-            }
-        };
         // The project, not "every open engine plus the declared pages".
         // The old set both over- and under-reached: a loose tab from
         // another project made its R1 collide with this project's R1,
@@ -268,10 +291,18 @@ impl Signex {
         // written straight back to disk. The already-parsed
         // `SchematicSheet` is kept for phase 2 so counting and reset
         // see the same state.
+        // A designator is a duplicate when more than one PART holds it across
+        // the whole project; units of one multi-unit part sharing a designator
+        // (wherever they are placed) are not (#691).
+        let duplicates: HashSet<String> = signex_types::schematic::duplicate_designators(
+            project_set
+                .sheets
+                .values()
+                .flat_map(|sheet| sheet.symbols.iter()),
+        );
         let mut unopened: Vec<(PathBuf, signex_types::schematic::SchematicSheet)> = Vec::new();
         let mut project_paths: HashSet<PathBuf> = HashSet::new();
         for (path, sheet) in project_set.sheets {
-            bump(&mut counts, &sheet);
             project_paths.insert(path.clone());
             if !self.document_state.engines.contains_key(&path) {
                 unopened.push((path, sheet));
@@ -286,12 +317,6 @@ impl Signex {
         // Deterministic write order — `sheets` is a `HashMap`.
         unopened.sort_by(|a, b| a.0.cmp(&b.0));
 
-        // Phase 2: anything seen more than once is a duplicate that
-        // needs resetting.
-        let duplicates: HashSet<String> = counts
-            .into_iter()
-            .filter_map(|(r, n)| if n > 1 { Some(r) } else { None })
-            .collect();
         if duplicates.is_empty() {
             crate::diagnostics::log_info("Reset Duplicate Designators: no duplicates found");
             return Task::none();
@@ -309,7 +334,7 @@ impl Signex {
                 if sym.is_power || sym.reference.starts_with('#') {
                     continue;
                 }
-                if dupes.contains(&sym.reference) {
+                if dupes.contains(sym.reference.trim()) {
                     let prefix: String = sym
                         .reference
                         .chars()

@@ -43,7 +43,12 @@ fn duplicate_count(symbols: Vec<Symbol>) -> usize {
         symbols,
         ..Default::default()
     };
-    for id in ["Amplifier:LM358", "Logic:74HC00"] {
+    for id in [
+        "Amplifier:LM358",
+        "Logic:74HC00",
+        "  Amplifier:LM358 ",
+        "amplifier:lm358",
+    ] {
         sheet.lib_symbols.insert(id.to_string(), lib_symbol(id));
     }
     run(&sheet)
@@ -77,4 +82,72 @@ fn different_parts_sharing_a_designator_are_still_a_duplicate() {
         unit_symbol("U1", "Logic:74HC00", 2),
     ];
     assert_eq!(duplicate_count(symbols), 2);
+}
+
+fn duplicate_messages(symbols: Vec<Symbol>) -> Vec<String> {
+    let mut sheet = SchematicSheet {
+        paper_size: "A4".to_string(),
+        symbols,
+        ..Default::default()
+    };
+    for id in [
+        "Amplifier:LM358",
+        "Logic:74HC00",
+        "  Amplifier:LM358 ",
+        "amplifier:lm358",
+    ] {
+        sheet.lib_symbols.insert(id.to_string(), lib_symbol(id));
+    }
+    run(&sheet)
+        .iter()
+        .filter(|v| v.rule == RuleKind::DuplicateRefDesignator)
+        .map(|v| v.message.clone())
+        .collect()
+}
+
+#[test]
+fn padded_library_ids_still_pair_as_one_part() {
+    let symbols = vec![
+        unit_symbol("U1", "Amplifier:LM358", 1),
+        unit_symbol("U1", "  Amplifier:LM358 ", 2),
+    ];
+    assert_eq!(duplicate_count(symbols), 0);
+}
+
+#[test]
+fn library_ids_that_differ_in_case_are_different_parts() {
+    let symbols = vec![
+        unit_symbol("U1", "Amplifier:LM358", 1),
+        unit_symbol("U1", "amplifier:lm358", 2),
+    ];
+    assert_eq!(duplicate_count(symbols), 2);
+}
+
+#[test]
+fn units_from_different_library_symbols_get_a_hint() {
+    let messages = duplicate_messages(vec![
+        unit_symbol("U1", "Amplifier:LM358", 1),
+        unit_symbol("U1", "Logic:74HC00", 2),
+    ]);
+    assert!(!messages.is_empty());
+    assert!(
+        messages
+            .iter()
+            .all(|m| m.contains("units of U1 come from different library symbols")),
+        "{messages:?}"
+    );
+}
+
+#[test]
+fn a_plain_duplicate_gets_no_library_hint() {
+    let messages = duplicate_messages(vec![
+        unit_symbol("U1", "Amplifier:LM358", 1),
+        unit_symbol("U1", "Amplifier:LM358", 1),
+    ]);
+    assert!(!messages.is_empty());
+    assert!(
+        messages
+            .iter()
+            .all(|m| !m.contains("different library symbols"))
+    );
 }
