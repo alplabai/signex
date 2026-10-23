@@ -130,10 +130,14 @@ mod start_screen;
 
 #[path = "regression/dead_schematic_controls.rs"]
 mod dead_schematic_controls;
+#[path = "regression/library_delete_undo.rs"]
+mod library_delete_undo;
 #[path = "regression/save_as_by_document_kind.rs"]
 mod save_as_by_document_kind;
 #[path = "regression/stable_addressing.rs"]
 mod stable_addressing;
+#[path = "regression/symbol_undo_steps.rs"]
+mod symbol_undo_steps;
 
 #[path = "regression/surface_failures.rs"]
 mod surface_failures;
