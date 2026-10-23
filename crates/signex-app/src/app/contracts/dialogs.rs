@@ -257,6 +257,10 @@ pub enum FileMsg {
     /// parser is directory-driven) plus a blank `<stem>.snxsch` next
     /// to it, then loads the project + opens the schematic tab.
     NewProject(Option<PathBuf>),
+    /// Completion of the off-thread sample-project unpack kicked off by
+    /// Help > Open Sample Project. Carries the directory the sample
+    /// lives in, or the stringified `anyhow` chain on failure.
+    SampleProjectUnpacked(Result<PathBuf, String>),
     /// Completion of the async schematic read+parse kicked off by
     /// `open_schematic_file` — the `fs::read_to_string` +
     /// `SnxSchematic::parse` run in `spawn_blocking` so `update()`

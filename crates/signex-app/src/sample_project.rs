@@ -21,15 +21,30 @@ pub fn sample_root() -> Option<PathBuf> {
     crate::config_root::config_root().map(|root| root.join("samples").join("linear-regulator"))
 }
 
+/// The sample's project file inside `root`.
+pub fn project_path(root: &Path) -> PathBuf {
+    root.join(PROJECT_FILE)
+}
+
+/// The sample's schematic sheet inside `root`.
+pub fn sheet_path(root: &Path) -> PathBuf {
+    root.join(SHEET_FILE)
+}
+
 /// Make sure the sample files exist under `root`, writing only the ones
 /// that are missing. Returns the `(project, sheet)` paths.
 pub fn ensure_extracted(root: &Path) -> Result<(PathBuf, PathBuf)> {
     std::fs::create_dir_all(root)
         .with_context(|| format!("create sample directory {}", root.display()))?;
-    let project = root.join(PROJECT_FILE);
-    let sheet = root.join(SHEET_FILE);
+    let project = project_path(root);
+    let sheet = sheet_path(root);
     for (path, source) in [(&project, PROJECT_SOURCE), (&sheet, SHEET_SOURCE)] {
-        if !path.exists() {
+        // An unreadable path must not read as "missing": atomic_write
+        // would rename over the tester's copy.
+        let exists = path
+            .try_exists()
+            .with_context(|| format!("check sample file {}", path.display()))?;
+        if !exists {
             signex_types::atomic_io::atomic_write(path, source.as_bytes())
                 .with_context(|| format!("write sample file {}", path.display()))?;
         }

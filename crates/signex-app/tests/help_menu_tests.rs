@@ -5,7 +5,7 @@
     reason = "integration tests discard Results with `let _ = ...` routinely; this is test scaffolding, not a production `iced::Task` being dropped, and `[lints]` in Cargo.toml is package-scoped so each integration-test crate root needs its own"
 )]
 
-use signex_app::app::{Message, OverlayMsg, Signex};
+use signex_app::app::{FileMsg, Message, OverlayMsg, Signex};
 use signex_app::menu_bar::MenuMessage;
 
 #[test]
@@ -47,7 +47,15 @@ fn open_sample_project_unpacks_opens_and_never_clobbers_edits() {
     let root = signex_app::sample_project::sample_root().expect("test config root");
     let _ = std::fs::remove_dir_all(&root);
 
-    let _ = app.update(Message::Menu(MenuMessage::OpenSampleProject));
+    let task = app.update(Message::Menu(MenuMessage::OpenSampleProject));
+    assert_eq!(task.units(), 1, "the unpack must be scheduled as a task");
+    assert!(!root.exists(), "update must do no IO before the task runs");
+
+    // Run what the task would run, then feed its completion message.
+    signex_app::sample_project::ensure_extracted(&root).expect("unpack");
+    let _ = app.update(Message::File(FileMsg::SampleProjectUnpacked(Ok(
+        root.clone()
+    ))));
 
     let project = root.join("linear-regulator.snxprj");
     let sheet = root.join("linear-regulator.snxsch");
@@ -69,7 +77,7 @@ fn open_sample_project_unpacks_opens_and_never_clobbers_edits() {
 
     // A second invocation keeps the tester's edits.
     std::fs::write(&sheet, "edited").expect("edit sample");
-    let _ = app.update(Message::Menu(MenuMessage::OpenSampleProject));
+    signex_app::sample_project::ensure_extracted(&root).expect("re-unpack");
     assert_eq!(std::fs::read_to_string(&sheet).expect("read"), "edited");
 }
 
