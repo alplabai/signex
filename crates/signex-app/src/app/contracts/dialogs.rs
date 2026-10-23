@@ -305,6 +305,14 @@ pub enum ProjectMsg {
     /// (Save All / Discard All / Cancel) shown when closing a
     /// project that still has entries in `dirty_paths`.
     CloseConfirm(ProjectCloseChoice),
+    /// The off-thread child-sheet resolution that Close Project starts
+    /// finished (#741). Carries the project by id, not index, because the
+    /// project list can shift while the worker reads; `Err` is a worker that
+    /// died, which refuses the close rather than guessing ownership.
+    CloseRefsResolved {
+        project_id: crate::app::ProjectId,
+        result: Result<Box<crate::app::state::sheet_refs::SheetRefs>, String>,
+    },
     /// User choice (Save All / Discard All / Cancel) on the app-quit
     /// confirmation modal, shown when the user tries to exit Signex
     /// while `dirty_paths` is non-empty. Reuses `ProjectCloseChoice`.

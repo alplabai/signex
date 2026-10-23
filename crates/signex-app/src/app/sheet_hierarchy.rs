@@ -318,26 +318,9 @@ mod tests {
 
     fn sheet(children: &[(&str, &str)]) -> SchematicSheet {
         SchematicSheet {
-            uuid: Uuid::nil(),
-            version: 0,
-            generator: String::new(),
-            generator_version: String::new(),
-            paper_size: String::new(),
             root_sheet_page: String::new(),
-            symbols: Vec::new(),
-            wires: Vec::new(),
-            junctions: Vec::new(),
-            labels: Vec::new(),
             child_sheets: children.iter().map(|(n, f)| child(n, f)).collect(),
-            no_connects: Vec::new(),
-            text_notes: Vec::new(),
-            buses: Vec::new(),
-            bus_entries: Vec::new(),
-            drawings: Vec::new(),
-            no_erc_directives: Vec::new(),
-            title_block: HashMap::new(),
-            lib_symbols: HashMap::new(),
-            unknown: Default::default(),
+            ..Default::default()
         }
     }
 
