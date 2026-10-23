@@ -7,28 +7,7 @@ use super::*;
 use crate::{ExportContext, ProjectMetadata, SheetSnapshot};
 
 pub(super) fn empty_sheet() -> SchematicSheet {
-    SchematicSheet {
-        unknown: Default::default(),
-        uuid: uuid::Uuid::nil(),
-        version: 0,
-        generator: String::new(),
-        generator_version: String::new(),
-        paper_size: String::new(),
-        root_sheet_page: "1".into(),
-        symbols: vec![],
-        wires: vec![],
-        junctions: vec![],
-        labels: vec![],
-        child_sheets: vec![],
-        no_connects: vec![],
-        text_notes: vec![],
-        buses: vec![],
-        bus_entries: vec![],
-        drawings: vec![],
-        no_erc_directives: vec![],
-        title_block: Default::default(),
-        lib_symbols: Default::default(),
-    }
+    SchematicSheet::default()
 }
 
 pub(super) fn sample_ctx(sheet_count: usize) -> ExportContext {
@@ -210,52 +189,24 @@ fn page_size_reflected_in_media_box() {
 #[test]
 fn exports_schematic_content() {
     use signex_types::schematic::{Label, LabelType, Point, Symbol, Wire};
-    use std::collections::HashMap;
     use uuid::Uuid;
 
     let mut sheet = empty_sheet();
 
     // Add one wire.
     sheet.wires.push(Wire {
-        unknown_columns: Default::default(),
-        uuid: Uuid::nil(),
-        start: Point::new(0.0, 0.0),
         end: Point::new(10.0, 10.0),
         stroke_width: 0.15,
+        ..Default::default()
     });
 
     // Add one symbol.
     sheet.symbols.push(Symbol {
-        unknown_columns: Default::default(),
-        unknown: Default::default(),
-        uuid: Uuid::nil(),
         lib_id: "Device:R".to_string(),
         reference: "R1".to_string(),
         value: "10k".to_string(),
         position: Point::new(50.0, 50.0),
-        rotation: 0.0,
-        mirror_x: false,
-        mirror_y: false,
-        unit: 1,
-        is_power: false,
-        ref_text: None,
-        val_text: None,
-        fields_autoplaced: false,
-        fields_user_placed: false,
-        dnp: false,
-        in_bom: true,
-        on_board: true,
-        exclude_from_sim: false,
-        locked: false,
-        fields: HashMap::new(),
-        custom_properties: vec![],
-        pin_uuids: HashMap::new(),
-        instances: vec![],
-        footprint: String::new(),
-        datasheet: String::new(),
-        library_id: None,
-        row_id: None,
-        library_version: String::new(),
+        ..Default::default()
     });
 
     // Add one label.
@@ -325,16 +276,13 @@ fn colour_mode_bw_pushes_strokes_to_black() {
 #[test]
 fn fit_to_page_scales_large_content_down() {
     use signex_types::schematic::{Point, Wire};
-    use uuid::Uuid;
 
     let mut sheet = empty_sheet();
     // Add a very large wire (0, 0) to (500, 500) mm — much larger than A4.
     sheet.wires.push(Wire {
-        unknown_columns: Default::default(),
-        uuid: Uuid::nil(),
-        start: Point::new(0.0, 0.0),
         end: Point::new(500.0, 500.0),
         stroke_width: 0.15,
+        ..Default::default()
     });
 
     let mut ctx = sample_ctx(1);
@@ -362,16 +310,14 @@ fn fit_to_page_scales_large_content_down() {
 #[test]
 fn fit_to_page_does_not_upscale_small_content() {
     use signex_types::schematic::{Point, Wire};
-    use uuid::Uuid;
 
     let mut sheet = empty_sheet();
     // Add a small wire (10, 10) to (20, 20) mm — much smaller than A4.
     sheet.wires.push(Wire {
-        unknown_columns: Default::default(),
-        uuid: Uuid::nil(),
         start: Point::new(10.0, 10.0),
         end: Point::new(20.0, 20.0),
         stroke_width: 0.15,
+        ..Default::default()
     });
 
     let mut ctx = sample_ctx(1);
@@ -471,41 +417,14 @@ fn page_paper_colour_is_filled_in_content_stream() {
 #[test]
 fn outlines_emitted_when_components_toggle_is_on() {
     use signex_types::schematic::{Point, Symbol};
-    use std::collections::HashMap;
-    use uuid::Uuid;
 
     let mut sheet = empty_sheet();
     sheet.symbols.push(Symbol {
-        unknown_columns: Default::default(),
-        unknown: Default::default(),
-        uuid: Uuid::nil(),
         lib_id: "Device:R".to_string(),
         reference: "R1".to_string(),
         value: "10k".to_string(),
         position: Point::new(50.0, 50.0),
-        rotation: 0.0,
-        mirror_x: false,
-        mirror_y: false,
-        unit: 1,
-        is_power: false,
-        ref_text: None,
-        val_text: None,
-        fields_autoplaced: false,
-        fields_user_placed: false,
-        dnp: false,
-        in_bom: true,
-        on_board: true,
-        exclude_from_sim: false,
-        locked: false,
-        fields: HashMap::new(),
-        custom_properties: vec![],
-        pin_uuids: HashMap::new(),
-        instances: vec![],
-        footprint: String::new(),
-        datasheet: String::new(),
-        library_id: None,
-        row_id: None,
-        library_version: String::new(),
+        ..Default::default()
     });
     let mut ctx = sample_ctx(1);
     ctx.sheets[0].schematic = sheet;

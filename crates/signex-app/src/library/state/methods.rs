@@ -297,12 +297,6 @@ impl LibraryState {
         self.collect_dirty_editors(|key| key.library_path == root)
     }
 
-    /// Dirty editor addresses whose library lives under `dir` — the
-    /// rows a project-close prompt has to account for.
-    pub fn dirty_editors_under(&self, dir: &Path) -> Vec<EditorAddress> {
-        self.collect_dirty_editors(|key| key.library_path.starts_with(dir))
-    }
-
     /// Every dirty editor address across all open libraries — the rows
     /// an app-quit prompt has to account for.
     pub fn dirty_editors(&self) -> Vec<EditorAddress> {
