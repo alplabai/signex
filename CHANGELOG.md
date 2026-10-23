@@ -18,10 +18,6 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
-### Fixed — library browser
-
-- **Column sort is a total order (#721)** — a library column mixing numbers and text (`9`, `10`, `10k`) or containing `NaN` no longer risks a `slice::sort_by` panic. Numeric cells now sort before text cells (numbers by `f64::total_cmp`, text case-insensitively); a literal `NaN` cell sorts as text.
-
 ### Added
 
 - **Unknown TSV columns are preserved (#315)** — a `.snxsch` / `.snxpcb` bulk block with a column this build does not know no longer fails to load with a header mismatch; columns resolve by name, the extra cells stay attached to their row through an edit, and they are re-emitted after the known columns (in their original relative order) on save. A missing known column and a repeated column name still error. A block may carry at most 256 foreign columns, each name at most 256 bytes; a file over either cap fails to load, and a save fails (before any byte is written, the previous file stays intact) on the same caps or when a foreign column repeats a known column name, each with an error naming the offending column.
