@@ -1,4 +1,4 @@
-use signex_net::{point_on_segment, pt_key};
+use signex_net::{SheetPinContacts, pt_key};
 use signex_types::schematic::{
     ChildSheet, GRID_MM, LabelType, Point, SchematicSheet, SheetPin, normalize_port_name,
 };
@@ -51,8 +51,8 @@ pub fn exposed_sheet_ports(child: &SchematicSheet) -> Vec<SheetPort> {
 /// Direction policy: a NEW pin takes the direction of its child label's shape
 /// (`bidirectional` when the label carries none); a pin that already exists on
 /// a symbol keeps the direction the user (or an earlier sync) gave it. The
-/// reconcile command itself overwrites an existing pin's direction with the
-/// port's, so the preservation has to happen here, before dispatch.
+/// reconcile command never touches a matched pin's direction, so this only
+/// echoes the existing direction back to keep the port list self-consistent.
 pub fn ports_for_pin_sync(
     child: &SchematicSheet,
     parent: &SchematicSheet,
@@ -186,48 +186,20 @@ fn same_sheet_pin(lhs: &SheetPin, rhs: &SheetPin) -> bool {
         && lhs.user_moved == rhs.user_moved
 }
 
-/// Connectable points on the parent sheet that a new sheet pin must not land
-/// on: a pin placed on a wire (end or interior), label anchor, junction or
-/// no-connect silently joins that net.
-#[derive(Default)]
-pub(crate) struct SlotBlockers {
-    points: Vec<Point>,
-    segments: Vec<(Point, Point)>,
-}
-
-impl SlotBlockers {
-    pub(crate) fn of_sheet(sheet: &SchematicSheet) -> Self {
-        let mut points: Vec<Point> = sheet.labels.iter().map(|l| l.position).collect();
-        points.extend(sheet.junctions.iter().map(|j| j.position));
-        points.extend(sheet.no_connects.iter().map(|n| n.position));
-        let segments = sheet.wires.iter().map(|w| (w.start, w.end)).collect();
-        Self { points, segments }
-    }
-
-    fn hits(&self, x: f64, y: f64) -> bool {
-        let p = pt_key(&Point::new(x, y));
-        self.points.iter().any(|q| pt_key(q) == p)
-            || self
-                .segments
-                .iter()
-                .any(|(a, b)| point_on_segment(p, pt_key(a), pt_key(b)))
-    }
-}
-
 /// Reconcile `child`'s pins with `ports` without ever moving an existing pin.
 ///
 /// A pin that matches a port (by the shared trimmed port name) keeps its
 /// position, rotation, direction, uuid and `auto_generated` flag, so wires
 /// attached to it keep their nets and a hand-added pin stays hand-added. Only
 /// a port with no pin gets a new one, in the first edge slot that no surviving
-/// pin, no pin dropped in this same sync and nothing in `blockers` (the parent
-/// sheet's wires, labels, junctions, no-connects) occupies. When the edge has
+/// pin, no pin dropped in this same sync and nothing in `blockers` (everything a pin there
+/// would connect to: see `SheetPinContacts`) occupies. When the edge has
 /// no such slot the port gets no pin; the caller reports that. Auto-generated
 /// pins whose port is gone are dropped; hand-added pins with no port are kept.
 pub(crate) fn reconcile_child_sheet_pins(
     child: &mut ChildSheet,
     ports: &[SheetPort],
-    blockers: &SlotBlockers,
+    blockers: &SheetPinContacts,
 ) -> bool {
     let before = child.pins.clone();
     let mut existing = std::mem::take(&mut child.pins);
@@ -289,7 +261,7 @@ fn free_pin_anchor(
     child: &ChildSheet,
     direction: &str,
     taken: &[Point],
-    blockers: &SlotBlockers,
+    blockers: &SheetPinContacts,
 ) -> Option<(f64, f64, f64)> {
     let mut last = None;
     for slot in 0.. {
@@ -298,14 +270,40 @@ fn free_pin_anchor(
             return None;
         }
         last = Some((anchor.0, anchor.1));
-        let occupied = taken
-            .iter()
-            .any(|p| (p.x - anchor.0).abs() < 1e-6 && (p.y - anchor.1).abs() < 1e-6);
+        let key = pt_key(&Point::new(anchor.0, anchor.1));
+        let occupied = taken.iter().any(|p| pt_key(p) == key);
         if !occupied && !blockers.hits(anchor.0, anchor.1) {
             return Some(anchor);
         }
     }
     None
+}
+
+/// Ports that have no pin on a `filename` symbol after a reconcile (its edge
+/// had no free slot), per symbol: `(symbol name, port names)`.
+pub fn unplaced_sheet_ports(
+    parent: &SchematicSheet,
+    filename: &str,
+    ports: &[SheetPort],
+) -> Vec<(String, Vec<String>)> {
+    parent
+        .child_sheets
+        .iter()
+        .filter(|symbol| symbol.filename == filename)
+        .filter_map(|symbol| {
+            let missing: Vec<String> = ports
+                .iter()
+                .filter(|port| {
+                    !symbol
+                        .pins
+                        .iter()
+                        .any(|pin| normalize_port_name(&pin.name) == Some(port.name.as_str()))
+                })
+                .map(|port| port.name.clone())
+                .collect();
+            (!missing.is_empty()).then(|| (symbol.name.clone(), missing))
+        })
+        .collect()
 }
 
 // Keep the unused import silent — SchematicSheet is referenced via super.

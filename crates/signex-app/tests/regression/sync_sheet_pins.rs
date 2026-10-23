@@ -102,13 +102,6 @@ struct Fixture {
 /// symbol starts with OLD_AUTO (stale, auto), MANUAL (hand-added) and MOVED
 /// (auto, user-moved, direction "output").
 fn fixture(child: Option<SchematicSheet>) -> Fixture {
-    let tmp = TempDir::new().expect("tempdir");
-    let parent_path = tmp.path().join("parent.snxsch");
-    let child_path = tmp.path().join("child.snxsch");
-    if let Some(child) = child {
-        write_sheet(&child_path, child);
-    }
-
     let symbol = symbol_for(
         "child.snxsch",
         vec![
@@ -117,9 +110,21 @@ fn fixture(child: Option<SchematicSheet>) -> Fixture {
             pin("MOVED", "output", true, true, (123.0, 117.0)),
         ],
     );
-    let symbol_uuid = symbol.uuid;
+    fixture_with(child, vec![symbol])
+}
+
+/// `fixture` over explicit sheet symbols; the first one is selected.
+fn fixture_with(child: Option<SchematicSheet>, symbols: Vec<ChildSheet>) -> Fixture {
+    let tmp = TempDir::new().expect("tempdir");
+    let parent_path = tmp.path().join("parent.snxsch");
+    let child_path = tmp.path().join("child.snxsch");
+    if let Some(child) = child {
+        write_sheet(&child_path, child);
+    }
+
+    let symbol_uuid = symbols[0].uuid;
     let mut parent = empty_sheet();
-    parent.child_sheets.push(symbol);
+    parent.child_sheets.extend(symbols);
     write_sheet(&parent_path, parent.clone());
 
     let (mut app, _task) = Signex::new();
@@ -451,4 +456,78 @@ fn hand_added_pin_matching_a_label_stays_put_and_hand_added() {
     assert_eq!(after.uuid, manual.uuid);
     assert_eq!(after.position, manual.position);
     assert!(!after.auto_generated);
+}
+
+/// A 6 mm tall symbol has two edge slots, (100, 102.54) and (100, 103.46);
+/// these hand-added pins fill both.
+fn full_edge_symbol(name: &str, extra: &str) -> ChildSheet {
+    let mut symbol = symbol_for(
+        "child.snxsch",
+        vec![
+            pin(extra, "input", false, false, (100.0, 102.54)),
+            pin("OTHER", "input", false, false, (100.0, 103.46)),
+        ],
+    );
+    symbol.name = name.to_string();
+    symbol.size = (30.0, 6.0);
+    symbol
+}
+
+fn clk_child() -> SchematicSheet {
+    let mut child = empty_sheet();
+    child.labels = vec![label("CLK", LabelType::Hierarchical, "")];
+    child
+}
+
+#[test]
+fn a_full_edge_reports_the_unplaced_port_with_the_exact_message() {
+    setup_logger();
+    let mut f = fixture_with(Some(clk_child()), vec![full_edge_symbol("FullEdgeA", "X")]);
+
+    sync(&mut f.app);
+
+    assert!(named(&pins_of(&f), "CLK").is_none(), "no slot, no pin");
+    assert!(panel_has(
+        &f.app,
+        "Sync Sheet Pins: no free slot on sheet symbol 'FullEdgeA' ('child.snxsch') for CLK; enlarge the sheet symbol or move the wires on its edge, then sync again"
+    ));
+}
+
+#[test]
+fn a_padded_hand_added_pin_is_not_reported_as_unplaced() {
+    setup_logger();
+    let mut f = fixture_with(
+        Some(clk_child()),
+        vec![full_edge_symbol("FullEdgePadded", " CLK ")],
+    );
+
+    sync(&mut f.app);
+
+    assert!(
+        !panel_has(&f.app, "no free slot on sheet symbol 'FullEdgePadded'"),
+        "the padded pin already carries CLK"
+    );
+}
+
+#[test]
+fn only_the_symbol_that_lacks_the_pin_is_reported() {
+    setup_logger();
+    let mut roomy = symbol_for("child.snxsch", Vec::new());
+    roomy.name = "RoomyMulti".to_string();
+    roomy.position = Point::new(200.0, 200.0);
+    let mut f = fixture_with(
+        Some(clk_child()),
+        vec![full_edge_symbol("FullMulti", "X"), roomy],
+    );
+
+    sync(&mut f.app);
+
+    assert!(panel_has(
+        &f.app,
+        "no free slot on sheet symbol 'FullMulti' ('child.snxsch') for CLK"
+    ));
+    assert!(!panel_has(
+        &f.app,
+        "no free slot on sheet symbol 'RoomyMulti'"
+    ));
 }

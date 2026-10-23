@@ -5,17 +5,17 @@ use std::collections::HashMap;
 
 use signex_net::{ProjectGraph, ProjectRoot, SheetKey, build_project_netlist};
 use signex_types::schematic::{
-    ChildSheet, FillType, HAlign, Label, LabelType, LibPin, LibSymbol, Pin, PinDirection,
-    PinShapeStyle, Point, SchematicSheet, SheetPin, Symbol, VAlign, Wire,
+    ChildSheet, FillType, HAlign, Junction, Label, LabelType, LibPin, LibSymbol, NoConnect, Pin,
+    PinDirection, PinShapeStyle, Point, SchematicSheet, SheetPin, Symbol, VAlign, Wire,
 };
 
-use super::{SlotBlockers, reconcile_child_sheet_pins as reconcile_with};
+use super::{SheetPinContacts, reconcile_child_sheet_pins as reconcile_with};
 use crate::command::SheetPort;
 use crate::test_support::test_sheet;
 
 /// Reconcile with nothing on the parent sheet to avoid.
 fn reconcile_child_sheet_pins(child: &mut ChildSheet, ports: &[SheetPort]) -> bool {
-    reconcile_with(child, ports, &SlotBlockers::default())
+    reconcile_with(child, ports, &SheetPinContacts::default())
 }
 
 fn port(name: &str, direction: &str) -> SheetPort {
@@ -287,7 +287,7 @@ fn wired_pins_keep_their_nets_when_a_label_is_added_and_synced() {
 /// Reconcile the symbol at `parent.child_sheets[0]` as the app does: blockers
 /// come from the parent sheet's own wires, labels and junctions.
 fn sync(parent: &mut SchematicSheet, ports: &[SheetPort]) {
-    let blockers = SlotBlockers::of_sheet(parent);
+    let blockers = SheetPinContacts::of_sheet(parent);
     reconcile_with(&mut parent.child_sheets[0], ports, &blockers);
 }
 
@@ -384,4 +384,84 @@ fn a_full_edge_places_no_pin_instead_of_stacking() {
     names.sort();
     assert_eq!(names, ["A", "B"], "C has no free slot and is left unplaced");
     assert_ne!(pin_at(&symbol, "A").position, pin_at(&symbol, "B").position);
+}
+
+#[test]
+fn a_slot_under_a_junction_or_no_connect_is_not_free() {
+    let mut parent = test_sheet();
+    parent.child_sheets.push(symbol_with(Vec::new()));
+    parent.junctions.push(Junction {
+        uuid: uuid::Uuid::new_v4(),
+        position: Point::new(100.0, 102.54),
+        diameter: 0.0,
+        ..Default::default()
+    });
+    parent.no_connects.push(NoConnect {
+        uuid: uuid::Uuid::new_v4(),
+        position: Point::new(100.0, 105.08),
+    });
+
+    sync(&mut parent, &[port("Z", "")]);
+
+    let z = pin_at(&parent.child_sheets[0], "Z").position;
+    assert!((z.y - 107.62).abs() < 1e-6, "Z lands on slot 2, got {z:?}");
+}
+
+#[test]
+fn a_pin_never_lands_on_another_sheet_symbols_pin() {
+    let mut parent = test_sheet();
+    // Left symbol's right edge is the right symbol's left edge (x = 100).
+    let mut left = symbol_with(Vec::new());
+    left.position = Point::new(70.0, 100.0);
+    reconcile_child_sheet_pins(&mut left, &[port("O", "output")]);
+    let o = pin_at(&left, "O").position;
+    parent.child_sheets.push(left);
+    parent.child_sheets.push(symbol_with(Vec::new()));
+
+    let contacts = SheetPinContacts::of_sheet(&parent);
+    reconcile_with(
+        &mut parent.child_sheets[1],
+        &[port("Z", "input")],
+        &contacts,
+    );
+
+    assert_ne!(pin_at(&parent.child_sheets[1], "Z").position, o);
+}
+
+#[test]
+fn a_power_port_on_a_dropped_pin_does_not_capture_the_new_pins_net() {
+    let mut child = test_sheet();
+    child.lib_symbols.insert("R".to_string(), lib_resistor());
+    child.wires.push(Wire {
+        start: Point::new(0.0, 0.0),
+        end: Point::new(10.0, 0.0),
+        ..Default::default()
+    });
+    child
+        .labels
+        .push(hierarchical_label("Z", Point::new(0.0, 0.0)));
+    place(&mut child, "RCZ", Point::new(10.0, 0.0));
+
+    let (mut parent, a) = parent_with_wired_a();
+    parent.wires.clear();
+    parent.lib_symbols.insert("R".to_string(), lib_resistor());
+    // A GND port sitting directly on pin A (no wire), and another GND port
+    // with a resistor on it elsewhere.
+    for (at, reference) in [(a, "#PWR1"), (Point::new(50.0, 50.0), "#PWR2")] {
+        parent.symbols.push(Symbol {
+            lib_id: "R".to_string(),
+            reference: reference.to_string(),
+            value: "GND".to_string(),
+            is_power: true,
+            position: at,
+            ..Default::default()
+        });
+    }
+    place(&mut parent, "RPG", Point::new(50.0, 50.0));
+
+    sync(&mut parent, &[port("B", "")]);
+    sync(&mut parent, &[port("B", ""), port("Z", "")]);
+
+    assert!(!share_a_net(&parent, &child, "RPG", "RCZ"), "Z joined GND");
+    assert_ne!(pin_at(&parent.child_sheets[0], "Z").position, a);
 }
