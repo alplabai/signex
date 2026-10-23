@@ -50,26 +50,10 @@ fn child_ref(filename: &str) -> ChildSheet {
 
 fn schematic(children: &[&str]) -> SchematicSheet {
     SchematicSheet {
-        unknown: Default::default(),
         uuid: Uuid::new_v4(),
-        version: 0,
-        generator: String::new(),
-        generator_version: String::new(),
-        paper_size: String::new(),
         root_sheet_page: String::new(),
-        symbols: Vec::new(),
-        wires: Vec::new(),
-        junctions: Vec::new(),
-        labels: Vec::new(),
         child_sheets: children.iter().map(|f| child_ref(f)).collect(),
-        no_connects: Vec::new(),
-        text_notes: Vec::new(),
-        buses: Vec::new(),
-        bus_entries: Vec::new(),
-        drawings: Vec::new(),
-        no_erc_directives: Vec::new(),
-        title_block: HashMap::new(),
-        lib_symbols: HashMap::new(),
+        ..Default::default()
     }
 }
 
@@ -87,11 +71,10 @@ pub(crate) fn sheet_with_net(reference: &str, net_name: &str, children: &[&str])
     let mut sheet = schematic(children);
     let origin = Point::new(0.0, 0.0);
     sheet.wires.push(Wire {
-        unknown_columns: Default::default(),
         uuid: Uuid::new_v4(),
         start: origin,
         end: Point::new(10.0, 0.0),
-        stroke_width: 0.0,
+        ..Default::default()
     });
     sheet.labels.push(Label {
         unknown_columns: Default::default(),
@@ -143,36 +126,11 @@ pub(crate) fn sheet_with_net(reference: &str, net_name: &str, children: &[&str])
         },
     );
     sheet.symbols.push(Symbol {
-        unknown_columns: Default::default(),
-        unknown: Default::default(),
         uuid: Uuid::new_v4(),
         lib_id: "Device:R".to_string(),
         reference: reference.to_string(),
-        value: String::new(),
-        footprint: String::new(),
-        datasheet: String::new(),
         position: origin,
-        rotation: 0.0,
-        mirror_x: false,
-        mirror_y: false,
-        unit: 1,
-        is_power: false,
-        ref_text: None,
-        val_text: None,
-        fields_autoplaced: false,
-        fields_user_placed: false,
-        dnp: false,
-        in_bom: true,
-        on_board: true,
-        exclude_from_sim: false,
-        locked: false,
-        fields: HashMap::new(),
-        custom_properties: Vec::new(),
-        pin_uuids: HashMap::new(),
-        instances: Vec::new(),
-        library_id: None,
-        row_id: None,
-        library_version: String::new(),
+        ..Default::default()
     });
     sheet
 }

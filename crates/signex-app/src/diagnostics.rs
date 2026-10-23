@@ -255,7 +255,10 @@ fn compact_message(rendered: &str) -> String {
     if compact.len() <= 160 {
         compact
     } else {
-        format!("{}...", &compact[..157])
+        format!(
+            "{}...",
+            crate::text_trunc::prefix_within_bytes(&compact, 157)
+        )
     }
 }
 
@@ -294,4 +297,42 @@ fn join_preview(items: &[String], max_items: usize) -> String {
         .cloned()
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+#[cfg(test)]
+mod compact_message_tests {
+    use super::compact_message;
+
+    const LIMIT: usize = 160;
+
+    #[test]
+    fn short_message_is_unchanged() {
+        assert_eq!(compact_message("a  b\nc"), "a b c");
+    }
+
+    #[test]
+    fn multibyte_char_straddling_byte_157_does_not_panic() {
+        // 156 ASCII bytes, then 'ç' (2 bytes) at bytes 156..158, so byte 157
+        // is inside the character.
+        let msg = format!("{}ç{}", "a".repeat(156), "b".repeat(20));
+        let out = compact_message(&msg);
+        assert!(out.len() <= LIMIT, "len {}", out.len());
+        assert!(out.ends_with("..."));
+    }
+
+    #[test]
+    fn emoji_straddling_the_cut_does_not_panic() {
+        // 155 ASCII bytes, then a 4-byte emoji at bytes 155..159.
+        let msg = format!("{}😀{}", "a".repeat(155), "b".repeat(20));
+        let out = compact_message(&msg);
+        assert!(out.len() <= LIMIT, "len {}", out.len());
+        assert!(out.ends_with("..."));
+    }
+
+    #[test]
+    fn ascii_truncation_keeps_the_same_visible_limit() {
+        let out = compact_message(&"x".repeat(500));
+        assert_eq!(out.len(), LIMIT);
+        assert!(out.ends_with("..."));
+    }
 }
