@@ -12,8 +12,8 @@ use anyhow::{Context, Result};
 const PROJECT_FILE: &str = "linear-regulator.snxprj";
 const SHEET_FILE: &str = "linear-regulator.snxsch";
 
-const PROJECT_SOURCE: &str = include_str!("../../../assets/sample-project/linear-regulator.snxprj");
-const SHEET_SOURCE: &str = include_str!("../../../assets/sample-project/linear-regulator.snxsch");
+const PROJECT_SOURCE: &str = include_str!("../assets/sample-project/linear-regulator.snxprj");
+const SHEET_SOURCE: &str = include_str!("../assets/sample-project/linear-regulator.snxsch");
 
 /// `<config_dir>/signex/samples/linear-regulator/`, or `None` when the
 /// platform offers no config directory.
@@ -46,14 +46,11 @@ mod tests {
     fn sample_sheet_round_trips() {
         let first = SnxSchematic::parse(SHEET_SOURCE).expect("sample parses");
         let written = first.write_string().expect("sample serialises");
+        // The asset must be exactly what the writer emits: a field dropped
+        // on parse would otherwise survive a parse -> write -> parse check.
+        assert_eq!(written, SHEET_SOURCE, "asset must be writer-canonical");
         let second = SnxSchematic::parse(&written).expect("rewritten sample parses");
-        assert_eq!(
-            written,
-            second.write_string().expect("second serialise"),
-            "parse -> write -> parse must be stable"
-        );
-        assert_eq!(first.sheet.symbols.len(), second.sheet.symbols.len());
-        assert_eq!(first.sheet.wires.len(), second.sheet.wires.len());
+        assert_eq!(written, second.write_string().expect("second serialise"));
     }
 
     #[test]
@@ -68,11 +65,21 @@ mod tests {
                 symbol.lib_id
             );
         }
-        let errors: Vec<_> = signex_erc::run(&sheet)
-            .into_iter()
-            .filter(|v| v.severity == signex_erc::Severity::Error)
-            .collect();
-        assert!(errors.is_empty(), "sample must pass ERC: {errors:?}");
+        // Same entry point as F8 (`handle_run_erc`): a one-sheet project graph,
+        // the sheet's own resolution submap, then the severity overrides.
+        let path = PathBuf::from("linear-regulator.snxsch");
+        let sheets = std::collections::HashMap::from([(path.clone(), sheet.clone())]);
+        let graph = crate::app::project_sheets::project_graph(&sheets, None, None);
+        let key = crate::app::project_sheets::sheet_key(&path, None);
+        let resolved = graph.resolved.get(&key).cloned().unwrap_or_default();
+        let violations = signex_erc::apply_overrides(
+            signex_erc::run_with_project(&sheet, &resolved, &graph.sheets),
+            &std::collections::HashMap::new(),
+        );
+        assert!(
+            violations.is_empty(),
+            "sample must be ERC-clean: {violations:?}"
+        );
     }
 
     #[test]
