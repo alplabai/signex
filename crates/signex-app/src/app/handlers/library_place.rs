@@ -23,8 +23,9 @@
 //! that was active when the gesture started and refuses to place if that
 //! sheet is no longer the active one or the library was closed meanwhile:
 //! "Place Failed", never a placement into the wrong sheet. A symbol
-//! reference into a *different* library than the row's own is reported
-//! rather than resolved.
+//! reference into a *different* library is resolved through the other open
+//! libraries (the worker gets an id-to-path map); if that library is not
+//! open the failure says so.
 //!
 //! Drift tracking (embedded primitive slice, content-hash comparison) is
 //! out of scope: only `library_id`, `row_id` and `library_version` are
@@ -62,11 +63,19 @@ impl Signex {
             return Task::none();
         }
         let path = library_path.clone();
+        let open_libraries: Vec<(uuid::Uuid, PathBuf)> = self
+            .library
+            .open_libraries
+            .iter()
+            .map(|l| (l.library_id, l.root.clone()))
+            .collect();
         Task::perform(
             async move {
-                tokio::task::spawn_blocking(move || resolve_placement(&path, &table, row_id))
-                    .await
-                    .unwrap_or_else(|e| Err(format!("place worker failed: {e}")))
+                tokio::task::spawn_blocking(move || {
+                    resolve_placement(&path, &table, row_id, &open_libraries)
+                })
+                .await
+                .unwrap_or_else(|e| Err(format!("place worker failed: {e}")))
             },
             move |result| {
                 Message::Library(LibraryMessage::LibraryComponentResolved {
@@ -125,13 +134,20 @@ impl Signex {
             },
             signex_engine::Command::PlaceSymbol { symbol: placed },
         ];
+        // `false` covers an engine error (already logged by the gateway) or
+        // an unchanged result; either way nothing was placed.
         if self.apply_engine_commands(commands, false, false) {
             Ok(())
         } else {
-            Err(format!("The schematic engine rejected {internal_pn}."))
+            Err(format!(
+                "{internal_pn} was not placed; see the log for details."
+            ))
         }
     }
 
+    /// TODO(follow-up): duplicates `next_designator_for_prefix`; fold the two
+    /// once `actions.rs` is free of the open PR that edits it.
+    ///
     /// Next free `<prefix><n>` on the active sheet. Same rule as
     /// `next_designator_for_prefix` (max existing index + 1), which is
     /// private to `actions.rs`; read from the engine document directly.

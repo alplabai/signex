@@ -18,7 +18,9 @@ use signex_library::lifecycle::LifecycleState;
 use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig};
 use signex_library::manufacturer::ManufacturerPart;
 use signex_library::param::ParamMap;
-use signex_library::primitive::{PrimitiveRef, Symbol, SymbolFile, SymbolPin};
+use signex_library::primitive::{
+    PrimitiveRef, Symbol, SymbolFile, SymbolGraphic, SymbolGraphicKind, SymbolPin,
+};
 use signex_types::schematic::{NoConnect, SchematicSheet, SymbolTransform};
 use std::path::PathBuf;
 use uuid::Uuid;
@@ -26,6 +28,8 @@ use uuid::Uuid;
 struct Fixture {
     _tmp: tempfile::TempDir,
     snxlib: PathBuf,
+    library_id: Uuid,
+    symbol_id: Uuid,
     row_id: Uuid,
 }
 
@@ -39,19 +43,44 @@ fn two_unit_symbol() -> Symbol {
         p.part_number = part;
         s.pins.push(p);
     }
+    for part in [1u8, 2] {
+        s.graphics.push(SymbolGraphic {
+            kind: SymbolGraphicKind::Line {
+                from: [0.0, 0.0],
+                to: [f64::from(part), 0.0],
+            },
+            stroke_width: 0.1,
+            fill: None,
+            part_number: part,
+        });
+    }
     s
 }
 
+/// A library with a two-unit symbol and one row bound to it.
 fn fixture() -> Fixture {
+    build("lib", None)
+}
+
+/// Row in library A whose symbol lives in library B.
+fn cross_library() -> (Fixture, Fixture) {
+    let b = build("libb", None);
+    let a = build("liba", Some((b.library_id, b.symbol_id)));
+    (a, b)
+}
+
+/// `symbol_ref` overrides where the row's symbol lives; every library also
+/// carries its own copy of the symbol.
+fn build(name: &str, symbol_ref: Option<(Uuid, Uuid)>) -> Fixture {
     signex_library::git_identity::test_identity::install();
     let tmp = tempfile::tempdir().expect("tempdir");
-    let dir = tmp.path().join("lib");
-    let snxlib = dir.join("lib.snxlib");
+    let dir = tmp.path().join(name);
+    let snxlib = dir.join(format!("{name}.snxlib"));
     let manifest = SnxlibManifest {
         format: FORMAT_TOKEN.into(),
         library_id: Uuid::now_v7(),
         library: LibrarySection {
-            name: "lib".into(),
+            name: name.into(),
             description: None,
         },
         mode: LibraryMode::default(),
@@ -89,7 +118,10 @@ fn fixture() -> Fixture {
         class: ComponentClass::new("IC"),
         datasheet: DatasheetRef::default(),
         state: LifecycleState::Draft,
-        symbol_ref: PrimitiveRef::new(library_id, sym_uuid),
+        symbol_ref: match symbol_ref {
+            Some((lib, sym)) => PrimitiveRef::new(lib, sym),
+            None => PrimitiveRef::new(library_id, sym_uuid),
+        },
         footprint_ref: None,
         sim_ref: None,
         pin_map_overrides: Vec::new(),
@@ -113,12 +145,18 @@ fn fixture() -> Fixture {
     Fixture {
         _tmp: tmp,
         snxlib,
+        library_id,
+        symbol_id: sym_uuid,
         row_id,
     }
 }
 
 /// An app with an empty active sheet and the fixture library mounted.
 fn app_with_library(f: &Fixture) -> Signex {
+    app_with_libraries(&[f])
+}
+
+fn app_with_libraries(libs: &[&Fixture]) -> Signex {
     let path = PathBuf::from("place-364.snxsch");
     let sheet = SchematicSheet {
         uuid: Uuid::new_v4(),
@@ -140,15 +178,29 @@ fn app_with_library(f: &Fixture) -> Signex {
     });
     app.document_state.active_tab = 0;
     app.document_state.active_path = Some(path);
-    app.library
-        .open_library(f.snxlib.clone())
-        .expect("mount library");
+    for f in libs {
+        app.library
+            .open_library(f.snxlib.clone())
+            .expect("mount library");
+    }
     app
 }
 
 /// The worker half, run directly (the `Task` wraps it in `spawn_blocking`).
 fn resolve(f: &Fixture, row: Uuid) -> Result<Box<ResolvedPlacement>, String> {
-    resolve_placement(&f.snxlib, "ICs", signex_library::RowId(row)).map(Box::new)
+    resolve_with(f, row, &[f])
+}
+
+fn resolve_with(
+    f: &Fixture,
+    row: Uuid,
+    open: &[&Fixture],
+) -> Result<Box<ResolvedPlacement>, String> {
+    let open: Vec<_> = open
+        .iter()
+        .map(|l| (l.library_id, l.snxlib.clone()))
+        .collect();
+    resolve_placement(&f.snxlib, "ICs", signex_library::RowId(row), &open).map(Box::new)
 }
 
 /// Feed a worker result back as the completion message, targeting `sheet`.
@@ -310,6 +362,7 @@ fn worker_failures_reach_the_user_and_leave_the_sheet_alone() {
         &PathBuf::from("nowhere.snxlib"),
         "ICs",
         signex_library::RowId(f.row_id),
+        &[],
     );
     assert!(missing.is_err());
 }
@@ -353,4 +406,67 @@ fn a_changed_sheet_or_closed_library_is_reported_not_placed() {
     complete(&mut app, &f, "place-364.snxsch", resolved);
     assert!(app.document_state.error_notice.is_some(), "closed library");
     assert!(doc(&app).symbols.is_empty());
+}
+
+#[test]
+fn a_symbol_from_another_open_library_is_placed_keyed_on_its_library() {
+    let (a, b) = cross_library();
+    let mut app = app_with_libraries(&[&a, &b]);
+    let resolved = resolve_with(&a, a.row_id, &[&a, &b]).expect("resolves across libraries");
+    complete(&mut app, &a, "place-364.snxsch", Ok(resolved));
+
+    let sheet = doc(&app);
+    assert_eq!(sheet.symbols.len(), 1);
+    let placed = &sheet.symbols[0];
+    assert_eq!(placed.lib_id, format!("{}:{}", b.library_id, b.symbol_id));
+    assert!(sheet.lib_symbols.contains_key(&placed.lib_id));
+    // Identity slots name the row's own library.
+    assert_eq!(placed.library_id, Some(a.library_id));
+    assert_eq!(placed.row_id, Some(a.row_id));
+}
+
+#[test]
+fn a_symbol_whose_library_is_not_open_says_so() {
+    let (a, b) = cross_library();
+    let err = resolve_with(&a, a.row_id, &[&a]).expect_err("B is not open");
+    assert!(err.contains(&b.library_id.to_string()), "{err}");
+    assert!(err.contains("not open"), "{err}");
+}
+
+#[test]
+fn the_placement_survives_a_save_and_reload() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+
+    let text = signex_types::format::SnxSchematic::new(doc(&app).clone())
+        .write_string()
+        .expect("write");
+    let reloaded = signex_types::format::SnxSchematic::parse(&text)
+        .expect("parse")
+        .sheet;
+
+    let key = format!("{}:{}", f.library_id, f.symbol_id);
+    assert_eq!(reloaded.symbols[0].lib_id, key);
+    let lib = reloaded.lib_symbols.get(&key).expect("entry survives");
+    assert_eq!(lib.id, key);
+    assert!(lib.pins.iter().any(|p| p.unit == 0), "Part Zero pin kept");
+}
+
+#[test]
+fn each_unit_selects_its_own_body() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+
+    let lib = doc(&app).lib_symbols.values().next().expect("lib symbol");
+    let body_for = |unit: u32| -> Vec<u32> {
+        lib.graphics
+            .iter()
+            .filter(|g| g.unit == 0 || g.unit == unit)
+            .map(|g| g.unit)
+            .collect()
+    };
+    assert_eq!(body_for(1), [1]);
+    assert_eq!(body_for(2), [2]);
 }
