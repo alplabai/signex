@@ -76,6 +76,11 @@ pub struct ErcPin {
 pub struct ErcSymbol {
     pub uuid: Uuid,
     pub reference: String,
+    /// Library symbol id; with `reference` and `unit` it decides which
+    /// instances are units of one part.
+    pub lib_id: String,
+    /// Unit number of this instance within its part.
+    pub unit: u32,
     pub value: String,
     pub position: Point,
     pub is_power: bool,
@@ -356,6 +361,8 @@ impl ErcContext {
                 Some(ErcSymbol {
                     uuid: sym.uuid,
                     reference: sym.reference.clone(),
+                    lib_id: sym.lib_id.clone(),
+                    unit: sym.unit,
                     value: sym.value.clone(),
                     position: sym.position,
                     is_power: sym.is_power,
@@ -566,6 +573,8 @@ mod tests {
         ErcSymbol {
             uuid: Uuid::nil(),
             reference: "U1".into(),
+            lib_id: String::new(),
+            unit: 1,
             value: String::new(),
             position: pt(0.0, 0.0),
             is_power: false,

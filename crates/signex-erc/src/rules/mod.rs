@@ -12,7 +12,7 @@ pub(crate) use ambiguous_label_anchor::ambiguous_label_anchor;
 use std::collections::HashMap;
 
 use signex_net::{SheetConnectivity, point_on_segment, pt_key};
-use signex_types::schematic::{LabelType, Point, SelectedKind};
+use signex_types::schematic::{LabelType, PartKey, Point, SelectedKind, group_into_parts};
 
 use crate::context::ErcContext;
 use crate::diagnostic::{Diagnostic, LocationSpace};
@@ -113,22 +113,31 @@ pub(crate) fn duplicate_ref_designator(ctx: &ErcContext, out: &mut Vec<Diagnosti
         }
         by_ref.entry(r).or_default().push(symbol);
     }
-    for (reference, dupes) in by_ref {
-        if dupes.len() < 2 {
+    for (reference, symbols) in by_ref {
+        // Units of one multi-unit part share a designator legitimately; only
+        // distinct parts holding the same designator are a duplicate (#691).
+        let parts = group_into_parts(symbols.iter().map(|s| PartKey {
+            reference: s.reference.trim(),
+            lib_id: &s.lib_id,
+            unit: s.unit,
+        }));
+        if parts.len() < 2 {
             continue;
         }
-        for (idx, sym) in dupes.iter().enumerate() {
-            let peer = dupes.get((idx + 1) % dupes.len()).copied();
-            let mut d = Diagnostic::new(
-                RuleKind::DuplicateRefDesignator,
-                format!("Reference '{reference}' is used by {} symbols", dupes.len()),
-                sym.position,
-            )
-            .with_primary(sel(sym.uuid, SelectedKind::Symbol));
-            if let Some(p) = peer {
-                d = d.with_peer(sel(p.uuid, SelectedKind::Symbol));
+        for (part_idx, part) in parts.iter().enumerate() {
+            let peer = &symbols[parts[(part_idx + 1) % parts.len()][0]];
+            for &member in part {
+                let sym = symbols[member];
+                out.push(
+                    Diagnostic::new(
+                        RuleKind::DuplicateRefDesignator,
+                        format!("Reference '{reference}' is used by {} parts", parts.len()),
+                        sym.position,
+                    )
+                    .with_primary(sel(sym.uuid, SelectedKind::Symbol))
+                    .with_peer(sel(peer.uuid, SelectedKind::Symbol)),
+                );
             }
-            out.push(d);
         }
     }
 }

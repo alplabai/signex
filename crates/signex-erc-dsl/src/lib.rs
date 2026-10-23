@@ -68,6 +68,8 @@ mod tests {
                     .parse()
                     .expect("valid uuid"),
                 reference: "U1".to_string(),
+                lib_id: String::new(),
+                unit: 1,
                 value: "MCU".to_string(),
                 position: Point::new(10.0, 10.0),
                 is_power: false,

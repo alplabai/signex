@@ -153,16 +153,32 @@ impl super::super::super::Signex {
         let mut next = seed_counters(&sheets);
         let mut out = Vec::new();
         for (title, sheet) in &sheets {
-            for i in annotate_order(sheet) {
+            // Same grouping the engine's annotate pass uses, so the preview
+            // promises one designator per multi-unit part (#691).
+            let order = annotate_order(sheet);
+            let part_of = signex_types::schematic::designatable_parts(&sheet.symbols, &order);
+            let mut designator_of_part: std::collections::HashMap<usize, String> =
+                std::collections::HashMap::new();
+            for i in order {
                 let sym = &sheet.symbols[i];
                 if sym.reference.is_empty() || !is_target(sym) {
                     continue;
                 }
                 let prefix = prefix_of(&sym.reference);
+                let part = part_of.get(&i).copied();
                 let proposed = if sym.reference.ends_with('?') && !prefix.is_empty() {
-                    let n = next.entry(prefix.clone()).or_insert(0);
-                    *n += 1;
-                    format!("{prefix}{n}")
+                    match part.and_then(|p| designator_of_part.get(&p)) {
+                        Some(designator) => designator.clone(),
+                        None => {
+                            let n = next.entry(prefix.clone()).or_insert(0);
+                            *n += 1;
+                            let designator = format!("{prefix}{n}");
+                            if let Some(part) = part {
+                                designator_of_part.insert(part, designator.clone());
+                            }
+                            designator
+                        }
+                    }
                 } else {
                     sym.reference.clone()
                 };

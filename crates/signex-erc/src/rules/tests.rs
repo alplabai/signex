@@ -59,6 +59,8 @@ fn power_port(value: &str, pos: Point) -> ErcSymbol {
     ErcSymbol {
         uuid: Uuid::nil(),
         reference: "#PWR01".into(),
+        lib_id: String::new(),
+        unit: 1,
         value: value.into(),
         position: pos,
         is_power: true,
@@ -93,6 +95,8 @@ fn symbol_with_pin(reference: &str, world_pos: Point, connected: bool) -> ErcSym
     ErcSymbol {
         uuid: Uuid::nil(),
         reference: reference.into(),
+        lib_id: String::new(),
+        unit: 1,
         value: String::new(),
         position: world_pos,
         is_power: false,

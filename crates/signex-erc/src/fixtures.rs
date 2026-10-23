@@ -53,6 +53,8 @@ fn symbol(reference: &str, at: Point) -> ErcSymbol {
     ErcSymbol {
         uuid: Uuid::new_v4(),
         reference: reference.into(),
+        lib_id: String::new(),
+        unit: 1,
         value: String::new(),
         position: at,
         is_power: false,

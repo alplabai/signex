@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use signex_bom::{BomComponent, BomContext, BomEngineOptions, build_table, validate_table};
+use signex_types::schematic::{Symbol, group_into_parts};
 use thiserror::Error;
 
 use crate::{ExportContext, Exporter};
@@ -201,58 +202,65 @@ fn engine_options_from_opts(opts: &BomOptions) -> BomEngineOptions {
 fn build_bom_context(ctx: &ExportContext, opts: &BomOptions) -> BomContext {
     let mut components = Vec::new();
 
-    for sheet_snap in &ctx.sheets {
-        for sym in &sheet_snap.schematic.symbols {
-            if sym.reference.starts_with("#PWR") || sym.is_power {
-                continue;
-            }
+    // One component per physical part: every unit of a multi-unit part is a
+    // separate placed symbol, but it is bought and fitted once (#691). The
+    // first placed unit speaks for the part.
+    let placed: Vec<&Symbol> = ctx
+        .sheets
+        .iter()
+        .flat_map(|sheet_snap| sheet_snap.schematic.symbols.iter())
+        .filter(|sym| !(sym.reference.starts_with("#PWR") || sym.is_power))
+        .collect();
+    let parts = group_into_parts(placed.iter().map(|sym| sym.part_key()));
 
-            let name = sym
-                .fields
-                .get("Name")
-                .cloned()
-                .filter(|value| !value.trim().is_empty())
-                .unwrap_or_else(|| sym.value.clone());
-            let description = sym.fields.get("Description").cloned().unwrap_or_default();
-            let lib_ref = sym
-                .fields
-                .get("LibRef")
-                .or_else(|| sym.fields.get("Part Number"))
-                .cloned()
-                .filter(|value| !value.trim().is_empty())
-                .unwrap_or_else(|| sym.lib_id.clone());
+    for part in &parts {
+        let sym = placed[part[0]];
 
-            let variant_fitted = resolve_active_variant_fitted(sym, opts.active_variant.as_deref());
-            let base_fitted = resolve_base_variant_fitted(sym);
+        let name = sym
+            .fields
+            .get("Name")
+            .cloned()
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| sym.value.clone());
+        let description = sym.fields.get("Description").cloned().unwrap_or_default();
+        let lib_ref = sym
+            .fields
+            .get("LibRef")
+            .or_else(|| sym.fields.get("Part Number"))
+            .cloned()
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| sym.lib_id.clone());
 
-            let mut custom = sym
-                .fields
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect::<BTreeMap<_, _>>();
-            custom.remove("Name");
-            custom.remove("Description");
-            custom.remove("LibRef");
-            // Fit-state fields feed `variant_fitted`/`base_fitted`, not the
-            // part's identity. Drop whatever the resolvers recognise so a
-            // variant override cannot split otherwise identical parts.
-            custom.retain(|key, _| !is_fit_state_field(key));
+        let variant_fitted = resolve_active_variant_fitted(sym, opts.active_variant.as_deref());
+        let base_fitted = resolve_base_variant_fitted(sym);
 
-            components.push(BomComponent {
-                reference: sym.reference.clone(),
-                name,
-                value: sym.value.clone(),
-                footprint: sym.footprint.clone(),
-                lib_ref,
-                description,
-                dnp: sym.dnp,
-                in_bom: sym.in_bom,
-                on_board: sym.on_board,
-                variant_fitted,
-                base_fitted,
-                custom,
-            });
-        }
+        let mut custom = sym
+            .fields
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect::<BTreeMap<_, _>>();
+        custom.remove("Name");
+        custom.remove("Description");
+        custom.remove("LibRef");
+        // Fit-state fields feed `variant_fitted`/`base_fitted`, not the
+        // part's identity. Drop whatever the resolvers recognise so a
+        // variant override cannot split otherwise identical parts.
+        custom.retain(|key, _| !is_fit_state_field(key));
+
+        components.push(BomComponent {
+            reference: sym.reference.clone(),
+            name,
+            value: sym.value.clone(),
+            footprint: sym.footprint.clone(),
+            lib_ref,
+            description,
+            dnp: sym.dnp,
+            in_bom: sym.in_bom,
+            on_board: sym.on_board,
+            variant_fitted,
+            base_fitted,
+            custom,
+        });
     }
 
     BomContext {
