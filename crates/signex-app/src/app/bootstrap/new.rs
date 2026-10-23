@@ -214,12 +214,6 @@ impl Signex {
                 // to the wrong canvas colours.
                 preferences_draft_theme: crate::fonts::read_theme_pref(),
                 preferences_draft_font: String::new(),
-                power_port_style: crate::fonts::read_power_port_style_pref(),
-                preferences_draft_power_port_style: crate::fonts::read_power_port_style_pref(),
-                label_style: crate::fonts::read_label_style_pref(),
-                preferences_draft_label_style: crate::fonts::read_label_style_pref(),
-                multisheet_style: crate::fonts::read_multisheet_style_pref(),
-                preferences_draft_multisheet_style: crate::fonts::read_multisheet_style_pref(),
                 grid_style: crate::fonts::read_grid_style_pref(),
                 preferences_draft_grid_style: crate::fonts::read_grid_style_pref(),
                 pcb_gpu_render,

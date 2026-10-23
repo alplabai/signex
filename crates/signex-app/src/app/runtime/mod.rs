@@ -30,7 +30,8 @@ impl Signex {
         out
     }
 
-    pub(crate) fn finish_update(&mut self) -> Task<Message> {
+    /// Copy the UI-state grid/unit/snap fields into the panel context.
+    pub(in crate::app) fn sync_panel_ctx_mirrors(&mut self) {
         self.document_state.panel_ctx.unit = self.ui_state.unit;
         self.document_state.panel_ctx.grid_visible = self.ui_state.grid_visible;
         self.document_state.panel_ctx.snap_enabled = self.ui_state.snap_enabled;
@@ -41,6 +42,10 @@ impl Signex {
             self.ui_state.grid_visible,
             self.ui_state.visible_grid_mm as f64,
         );
+    }
+
+    pub(crate) fn finish_update(&mut self) -> Task<Message> {
+        self.sync_panel_ctx_mirrors();
         self.sync_diagnostics_panel_ctx();
 
         // Re-resolve the History panel's active path; on change, bump
@@ -68,6 +73,17 @@ impl Signex {
     pub(in crate::app) fn sync_diagnostics_panel_ctx(&mut self) {
         self.document_state.panel_ctx.diagnostics_level =
             crate::diagnostics::configured_level_label().to_string();
+        // Ids are monotonic and eviction only happens on push, so an
+        // unchanged newest id means the ring is unchanged: skip the clone.
+        let held = self
+            .document_state
+            .panel_ctx
+            .diagnostics
+            .last()
+            .map(|e| e.id);
+        if held.is_some() && held == crate::diagnostics::newest_entry_id() {
+            return;
+        }
         self.document_state.panel_ctx.diagnostics = crate::diagnostics::recent_entries();
     }
 

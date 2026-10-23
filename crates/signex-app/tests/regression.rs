@@ -134,6 +134,8 @@ mod start_screen;
 
 #[path = "regression/dead_schematic_controls.rs"]
 mod dead_schematic_controls;
+#[path = "regression/idle_cursor_move.rs"]
+mod idle_cursor_move;
 #[path = "regression/library_delete_undo.rs"]
 mod library_delete_undo;
 #[path = "regression/save_as_by_document_kind.rs"]
