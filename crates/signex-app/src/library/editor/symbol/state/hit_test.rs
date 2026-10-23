@@ -141,6 +141,9 @@ pub fn hit_test_graphic(
 /// Tolerance band around line / arc / circle outlines (mm).
 const GRAPHIC_BODY_TOL: f64 = 0.5;
 
+/// Estimated glyph advance as a fraction of the text size (em).
+const TEXT_ADVANCE_EM: f64 = 0.6;
+
 /// Body hit test for the graphic at `idx`. Rectangle counts every
 /// interior point; line / arc / circle count any point within the
 /// stroke tolerance band so the user can grab thin strokes without
@@ -164,7 +167,11 @@ fn hit_test_graphic_body(sym: &Symbol, idx: usize, x: f64, y: f64) -> bool {
             let dx = x - center[0];
             let dy = y - center[1];
             let d = (dx * dx + dy * dy).sqrt();
-            (d - radius).abs() <= GRAPHIC_BODY_TOL
+            if g.fill.is_some() {
+                d <= radius + GRAPHIC_BODY_TOL
+            } else {
+                (d - radius).abs() <= GRAPHIC_BODY_TOL
+            }
         }
         SymbolGraphicKind::Arc {
             center,
@@ -201,11 +208,17 @@ fn hit_test_graphic_body(sym: &Symbol, idx: usize, x: f64, y: f64) -> bool {
                 a >= s || a <= e
             }
         }
-        SymbolGraphicKind::Text { position, size, .. } => {
-            // Approximate text bounds as a small box around the anchor.
-            let half_w = size * 0.5;
-            let half_h = size * 0.5;
-            (x - position[0]).abs() <= half_w && (y - position[1]).abs() <= half_h
+        SymbolGraphicKind::Text {
+            position,
+            content,
+            size,
+        } => {
+            // The canvas draws text `HAlign::Left` / `VAlign::Top` from
+            // the anchor through the y-up map, so the glyphs run right
+            // (+x) and down (-y world). Width uses the same per-glyph
+            // advance estimate as the footprint editor's text hit test.
+            let w = content.chars().count() as f64 * size * TEXT_ADVANCE_EM;
+            x >= position[0] && x <= position[0] + w && y <= position[1] && y >= position[1] - size
         }
         SymbolGraphicKind::Polygon { vertices } => {
             if vertices.len() < 2 {

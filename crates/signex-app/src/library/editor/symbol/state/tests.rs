@@ -998,3 +998,52 @@ fn arc_endpoint_handle_drag_survives_save_reload() {
         "sweep must survive save/reload: {in_session} rad in-session vs {after} rad reloaded"
     );
 }
+
+fn sym_with_graphic(kind: SymbolGraphicKind, fill: Option<[u8; 4]>) -> Symbol {
+    let mut s = Symbol::empty("test");
+    s.graphics.push(signex_library::SymbolGraphic {
+        kind,
+        stroke_width: 0.15,
+        part_number: 0,
+        fill,
+    });
+    s
+}
+
+#[test]
+fn text_hit_box_follows_drawn_extent_right_and_down() {
+    // 11 glyphs at size 1.27 draw right of the anchor and below it
+    // (world y decreasing): x in [0, ~8.4], y in [-1.27, 0].
+    let s = sym_with_graphic(
+        SymbolGraphicKind::Text {
+            position: [0.0, 0.0],
+            content: "VCC_IO_BANK".into(),
+            size: 1.27,
+        },
+        None,
+    );
+    let hit = Some(SymbolSelection::Graphic(0));
+    assert_eq!(hit_test(&s, 3.0, -0.8, 1), hit);
+    assert_eq!(hit_test(&s, 8.0, -1.2, 1), hit);
+    // Up-left of the anchor: inside the old +/-size/2 square, outside the text.
+    assert_eq!(hit_test(&s, -0.5, 0.5, 1), None);
+    assert_eq!(hit_test(&s, 0.3, 0.3, 1), None);
+    // Past the right edge and below the bottom edge.
+    assert_eq!(hit_test(&s, 9.5, -0.5, 1), None);
+    assert_eq!(hit_test(&s, 3.0, -1.5, 1), None);
+}
+
+#[test]
+fn filled_circle_accepts_interior_click() {
+    let kind = SymbolGraphicKind::Circle {
+        center: [0.0, 0.0],
+        radius: 5.0,
+    };
+    let filled = sym_with_graphic(kind.clone(), Some([255, 0, 0, 255]));
+    let hollow = sym_with_graphic(kind, None);
+    assert_eq!(
+        hit_test(&filled, 0.0, 0.0, 1),
+        Some(SymbolSelection::Graphic(0))
+    );
+    assert_eq!(hit_test(&hollow, 0.0, 0.0, 1), None);
+}

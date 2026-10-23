@@ -73,6 +73,7 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ### Fixed
 
+- **Symbol Editor text and filled-circle hit boxes match what is drawn (#683)** — a Text graphic was selectable only inside a ±size/2 square round its anchor, although it draws right and down from it, so clicking the word missed and clicking empty space up-left selected it; the hit box is now the drawn extent. A filled Circle also accepts clicks on its interior, as filled Polygons already did.
 - **Scope tests pass on Windows (#747)** — the `claimed_by_other_project` tests spelled fixture paths with `/` while `Path::join` adds `\` on Windows, so the verbatim `Preserve` keys never matched; the fixtures now use the host separator. Production behaviour is unchanged.
 - **Project-tree Remove no longer deletes Shared / Global libraries (#139)** — "Delete file" could remove a `.snxlib` package other projects still use. Delete is now refused (and not offered) for any Shared or Global library entry whatever its path, and for any target outside the project folder; the library is only excluded, with a "Delete Refused" notice.
 - **`cargo deny check` is green again** — upgraded the vulnerable dependency paths (quick-xml 0.41, git2 0.21, rust_xlsxwriter 0.101 / zip 9, pdf-extract 0.12 / lopdf 0.42, plus lockfile bumps of anyhow, h2, rustls, rustls-webpki, webpki-roots, webbrowser, crossbeam-epoch); the remaining unmaintained-crate notices (core2, instant, paste, rustybuzz, ttf-parser, zbus_names, zvariant, zvariant_derive) carry narrow, dated `deny.toml` ignores. (#148)
