@@ -20,7 +20,6 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ### Added
 
-- **Help ▸ Open Sample Project (#330)** — a small original 5 V to 3.3 V linear-regulator schematic ships inside the binary (source under `crates/signex-app/assets/sample-project/`, generic values, Apache-2.0). It is self-contained (symbols embedded, no library needed), passes ERC with zero violations, and is unpacked once into `<config_dir>/signex/samples/linear-regulator/` so it is editable and saveable; a copy that already exists is opened as-is and never overwritten. An unpack or open failure raises the Open Failed notice and is logged.
 - **Unknown TSV columns are preserved (#315)** — a `.snxsch` / `.snxpcb` bulk block with a column this build does not know no longer fails to load with a header mismatch; columns resolve by name, the extra cells stay attached to their row through an edit, and they are re-emitted after the known columns (in their original relative order) on save. A missing known column and a repeated column name still error. A block may carry at most 256 foreign columns, each name at most 256 bytes; a file over either cap fails to load, and a save fails (before any byte is written, the previous file stays intact) on the same caps or when a foreign column repeats a known column name, each with an error naming the offending column.
 
 ### Added — schematic engine
