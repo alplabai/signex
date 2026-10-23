@@ -28,6 +28,9 @@
 //! the legacy schema in favour of user-defined columns.
 
 pub mod project;
+mod symbol_problems;
+
+pub use symbol_problems::SymbolFileProblem;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -105,6 +108,8 @@ pub struct LocalGitAdapter {
     /// libgit2's responsibility; this only addresses the in-process
     /// race that `RwLock<LibraryFile>` does NOT cover.)
     git_lock: Mutex<()>,
+    /// `.snxsym` containers the last symbol scan could not read (#690).
+    symbol_problems: Mutex<symbol_problems::SymbolProblemLedger>,
     /// Stamp and content hash of the `.snxlib` text behind `library_file`
     /// (#531). `None` forces a reload on the next access. Lock order:
     /// `library_file` before `disk_stamp`.
@@ -209,6 +214,7 @@ impl LocalGitAdapter {
             library_file: RwLock::new(library_file),
             manifest_synth,
             git_lock: Mutex::new(()),
+            symbol_problems: Mutex::default(),
             disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
             warned_state: Mutex::new(None),
         })
@@ -249,6 +255,7 @@ impl LocalGitAdapter {
             library_file: RwLock::new(library_file),
             manifest_synth,
             git_lock: Mutex::new(()),
+            symbol_problems: Mutex::default(),
             disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
             warned_state: Mutex::new(None),
         })
@@ -339,6 +346,7 @@ impl LocalGitAdapter {
             library_file: RwLock::new(library_file),
             manifest_synth,
             git_lock: Mutex::new(()),
+            symbol_problems: Mutex::default(),
             disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
             warned_state: Mutex::new(None),
         })
@@ -437,6 +445,35 @@ mod tests {
         .expect("init succeeds");
         assert!(path.exists(), "expected .snxlib file at {path:?}");
         assert!(path.parent().unwrap().join(".git").exists());
+    }
+
+    /// #149: committing a path whose content matches HEAD makes no commit.
+    #[test]
+    fn commit_path_skips_unchanged_tree() {
+        crate::git_identity::test_identity::install();
+        let dir = tempfile::tempdir().unwrap();
+        let path = fixture_snxlib_path(&dir, "Same");
+        let adapter = LocalGitAdapter::init(
+            &path,
+            fixture_snx_manifest("Same"),
+            LibraryInitOptions {
+                enable_git: true,
+                use_lfs: false,
+            },
+        )
+        .unwrap();
+        let repo = git2::Repository::open(adapter.root()).unwrap();
+        let head = || repo.head().unwrap().target().unwrap();
+
+        fs::write(adapter.root().join("note.txt"), "a").unwrap();
+        adapter.commit_path("note.txt", "", "add note").unwrap();
+        let first = head();
+        adapter.commit_path("note.txt", "", "again").unwrap();
+        assert_eq!(head(), first, "unchanged tree must not commit");
+
+        fs::write(adapter.root().join("note.txt"), "b").unwrap();
+        adapter.commit_path("note.txt", "", "edit note").unwrap();
+        assert_ne!(head(), first, "a real change still commits");
     }
 
     #[test]
