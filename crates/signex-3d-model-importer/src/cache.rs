@@ -5,7 +5,7 @@ use std::time::SystemTime;
 
 use sha2::{Digest, Sha256};
 
-use crate::error::ModelImportError;
+use crate::error::{ImportWarning, ModelImportError};
 
 const GLB_MAGIC: &[u8; 4] = b"glTF";
 const GLB_VERSION: u32 = 2;
@@ -48,6 +48,20 @@ pub fn cache_path(
     let hash = format!("{:x}", hasher.finalize());
 
     Ok(cache_dir.join(format!("{hash}.glb")))
+}
+
+/// The sidecar beside a cached GLB that holds the warnings its conversion
+/// produced, so a cache hit can report them too (#871).
+pub fn warnings_path(glb_path: &Path) -> PathBuf {
+    glb_path.with_extension("warnings.json")
+}
+
+/// The warnings recorded for `glb_path`'s conversion. `None` when the
+/// sidecar is missing or unreadable, which the caller treats as a cache miss
+/// so the model is converted again rather than served without its warnings.
+pub fn read_warnings(glb_path: &Path) -> Option<Vec<ImportWarning>> {
+    let bytes = std::fs::read(warnings_path(glb_path)).ok()?;
+    serde_json::from_slice(&bytes).ok()
 }
 
 /// Returns `true` only if `glb_path` holds a structurally complete GLB 2.0:

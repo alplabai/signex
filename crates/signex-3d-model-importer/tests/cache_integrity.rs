@@ -75,10 +75,13 @@ fn cache_write_leaves_no_temp_files() {
     let tmp = tempfile::tempdir().unwrap();
     std::fs::write(tmp.path().join("part.wrl"), WRL_A).unwrap();
     import(tmp.path());
-    let names: Vec<String> = std::fs::read_dir(tmp.path().join("cache"))
+    let mut names: Vec<String> = std::fs::read_dir(tmp.path().join("cache"))
         .unwrap()
         .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
         .collect();
-    assert_eq!(names.len(), 1, "unexpected cache contents: {names:?}");
-    assert!(names[0].ends_with(".glb"));
+    names.sort();
+    // The GLB and its warnings sidecar (#871), nothing else.
+    assert_eq!(names.len(), 2, "unexpected cache contents: {names:?}");
+    assert!(names[0].ends_with(".glb"), "{names:?}");
+    assert!(names[1].ends_with(".warnings.json"), "{names:?}");
 }

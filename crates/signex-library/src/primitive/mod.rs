@@ -21,7 +21,7 @@ pub mod symbol;
 
 pub use footprint::{
     Body3D, BodyShape, Drill, Footprint, FootprintFile, FootprintFileError, FpGraphic,
-    FpGraphicKind, LayerId, Pad, PadKind, PadShape, Polygon, StepAttachment,
+    FpGraphicKind, LayerId, LoadRepair, Pad, PadKind, PadShape, Polygon, StepAttachment,
 };
 pub use ref_::PrimitiveRef;
 pub use sim::{SimFile, SimFileError, SimKind, SimModel};

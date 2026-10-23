@@ -15,7 +15,8 @@ use std::collections::HashMap;
 
 use signex_net::{SheetConnectivity, point_on_segment, pt_key};
 use signex_types::schematic::{
-    LabelType, PartKey, Point, SelectedKind, group_into_parts, normalized_lib_id,
+    LabelType, PartKey, Point, SelectedKind, group_into_parts, normalize_port_name,
+    normalized_lib_id,
 };
 
 use crate::context::ErcContext;
@@ -493,12 +494,11 @@ pub(crate) fn bad_hier_sheet_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
         let hier_text: HashSet<&str> = child_ctx
             .labels
             .iter()
-            .filter(|l| matches!(l.label_type, LabelType::Hierarchical | LabelType::Global))
-            .map(|l| l.text.as_str())
+            .filter_map(|l| l.port_name())
             .collect();
 
         for pin in &child.pins {
-            if !hier_text.contains(pin.name.as_str()) {
+            if !normalize_port_name(&pin.name).is_some_and(|n| hier_text.contains(n)) {
                 out.push(
                     Diagnostic::new(
                         RuleKind::BadHierSheetPin,
@@ -513,13 +513,17 @@ pub(crate) fn bad_hier_sheet_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
             }
         }
 
-        let parent_pins: HashSet<&str> = child.pins.iter().map(|p| p.name.as_str()).collect();
+        let parent_pins: HashSet<&str> = child
+            .pins
+            .iter()
+            .filter_map(|p| normalize_port_name(&p.name))
+            .collect();
         for lbl in child_ctx
             .labels
             .iter()
             .filter(|l| matches!(l.label_type, LabelType::Hierarchical))
         {
-            if !parent_pins.contains(lbl.text.as_str()) {
+            if lbl.port_name().is_some_and(|n| !parent_pins.contains(n)) {
                 out.push(
                     Diagnostic::new(
                         RuleKind::BadHierSheetPin,

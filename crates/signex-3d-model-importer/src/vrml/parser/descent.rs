@@ -259,6 +259,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_shape(&mut self) -> Result<Node, ParseError> {
+        let line = self.current_line();
         self.expect_lbrace()?;
         let mut color = [0.7f32, 0.7, 0.7, 1.0];
         let mut positions: Vec<[f32; 3]> = Vec::new();
@@ -298,6 +299,7 @@ impl<'a> Parser<'a> {
             color,
             positions,
             indices,
+            line,
         })
     }
 

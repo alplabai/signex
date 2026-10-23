@@ -24,7 +24,9 @@ use uuid::Uuid;
 
 mod gate;
 pub use gate::ConnectedPoints;
+mod pin_contacts;
 use gate::touching_port_conflicts;
+pub use pin_contacts::SheetPinContacts;
 
 use crate::uf::{Key, find as uf_find, union as uf_union};
 
