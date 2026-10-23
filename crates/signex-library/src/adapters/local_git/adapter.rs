@@ -373,11 +373,11 @@ impl LibraryAdapter for LocalGitAdapter {
     }
 
     fn get_footprint(&self, uuid: Uuid) -> Result<Footprint, LibraryError> {
-        self.read_primitive::<Footprint>(PrimitiveKind::Footprint, uuid)
+        self.read_footprint(uuid)
     }
 
     fn get_sim(&self, uuid: Uuid) -> Result<SimModel, LibraryError> {
-        self.read_primitive::<SimModel>(PrimitiveKind::Sim, uuid)
+        self.read_sim(uuid)
     }
 
     fn save_symbol(&self, sym: Symbol, message: &str) -> Result<(), LibraryError> {
@@ -397,7 +397,7 @@ impl LibraryAdapter for LocalGitAdapter {
     fn save_footprint(&self, fp: Footprint, message: &str) -> Result<(), LibraryError> {
         let uuid = fp.uuid;
         let new_version = fp.version.clone();
-        self.write_primitive(PrimitiveKind::Footprint, fp.uuid, &fp, message)?;
+        self.write_footprint(&fp, message)?;
         let mode = self.manifest_synth.workflow.mode;
         let _report = crate::cascade::cascade_after_footprint_save(self, uuid, &new_version, mode)?;
         Ok(())
@@ -406,7 +406,7 @@ impl LibraryAdapter for LocalGitAdapter {
     fn save_sim(&self, sm: SimModel, message: &str) -> Result<(), LibraryError> {
         let uuid = sm.uuid;
         let new_version = sm.version.clone();
-        self.write_primitive(PrimitiveKind::Sim, sm.uuid, &sm, message)?;
+        self.write_sim(&sm, message)?;
         let mode = self.manifest_synth.workflow.mode;
         let _report = crate::cascade::cascade_after_sim_save(self, uuid, &new_version, mode)?;
         Ok(())

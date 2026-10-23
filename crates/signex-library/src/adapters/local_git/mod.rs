@@ -33,7 +33,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, RwLock};
 
-use serde::{Serialize, de::DeserializeOwned};
 use uuid::Uuid;
 
 use crate::adapter::{HistoryEntry, LibraryAdapter, LibraryError, PrimitiveSummary};
