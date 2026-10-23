@@ -11,6 +11,38 @@ use super::*;
 use crate::app::RemoveDialogState;
 use crate::app::state::scope::{CaseFold, path_is_under, path_key_with};
 
+/// Why the unsaved-edits prompt withholds Discard.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DiscardBlock {
+    /// Another open project reaches the target, or lists a library holding it.
+    Shared,
+    /// Another open project has sheets that are not loaded, so whether it
+    /// reaches the target cannot be told without reading disk.
+    Unknown,
+}
+
+impl DiscardBlock {
+    fn prompt_reason(self) -> &'static str {
+        match self {
+            Self::Shared => "Another open project also uses it, so the edits cannot be discarded.",
+            Self::Unknown => {
+                "Another open project has sheets that are not loaded, so it cannot be ruled out \
+                 that it uses this, and the edits cannot be discarded."
+            }
+        }
+    }
+
+    fn log_reason(self) -> &'static str {
+        match self {
+            Self::Shared => "another open project also uses it.",
+            Self::Unknown => {
+                "another open project has sheets that are not loaded, so shared use cannot be \
+                 ruled out."
+            }
+        }
+    }
+}
+
 /// How many document names the prompt lists before saying "and N more".
 const PROMPT_NAMES_SHOWN: usize = 3;
 
@@ -44,22 +76,9 @@ impl Signex {
         !self.unsaved_documents(target).is_empty()
     }
 
-    /// Does an open project other than `projects[owner]` use `path`?
-    ///
-    /// The ONE call site of `claimed_by_other_project` for this feature: PR
-    /// #756 replaces that helper with walk-based reach sets, so whichever of
-    /// the two lands second only has to adapt this function.
-    fn shared_with_other_project(&self, owner: Option<usize>, path: &std::path::Path) -> bool {
-        let Some(idx) = owner else {
-            return false;
-        };
-        self.document_state.claimed_by_other_project(idx, path)
-            || self.library_listed_by_other_project(idx, path)
-    }
-
     /// Does another open project list a `.snxlib` that is `path`, lies under
-    /// it, or contains it? `claimed_by_other_project` only sees sheets and
-    /// project files, so library entries are checked here, each resolved
+    /// it, or contains it? The ownership walk only sees sheets, so library
+    /// entries are checked here, each resolved
     /// against its own project's directory and compared under the prompt's
     /// case rule (`path_is_under` is component-wise, so `Lib.snxlib/.` and
     /// a trailing separator normalise away).
@@ -79,15 +98,32 @@ impl Signex {
             .any(|lib| path_is_under(&lib, path, fold) || path_is_under(path, &lib, fold))
     }
 
-    /// Is Discard withheld for this modal: does another open project use the
-    /// target or any unsaved document under it?
+    /// Why Discard is withheld for this modal, if it is: another open project
+    /// uses the target (or an unsaved document under it), or the other
+    /// projects' sheets are not all loaded so what they reach is unknown.
+    ///
+    /// The ownership walk is built from the loaded engines only. Reading the
+    /// other projects' sheets from disk would block `update`, and the Remove
+    /// modal has no resolved `SheetRefs` to reuse, so an incomplete walk is
+    /// treated as shared.
+    pub(crate) fn discard_block(&self, state: &RemoveDialogState) -> Option<DiscardBlock> {
+        let owner = state.tree_path.first().copied()?;
+        let reach = self.document_state.lexical_reach_sets();
+        let docs = self.unsaved_documents(&state.target_path);
+        let shared = |p: &std::path::Path| {
+            reach.reached_under_by_other(owner, p) || self.library_listed_by_other_project(owner, p)
+        };
+        if shared(&state.target_path) || docs.iter().any(|p| shared(p)) {
+            return Some(DiscardBlock::Shared);
+        }
+        reach
+            .other_walk_incomplete(owner)
+            .then_some(DiscardBlock::Unknown)
+    }
+
+    /// Is Discard withheld for this modal?
     pub(crate) fn discard_blocked_by_other_project(&self, state: &RemoveDialogState) -> bool {
-        let owner = state.tree_path.first().copied();
-        self.shared_with_other_project(owner, &state.target_path)
-            || self
-                .unsaved_documents(&state.target_path)
-                .iter()
-                .any(|p| self.shared_with_other_project(owner, p))
+        self.discard_block(state).is_some()
     }
 
     /// Body text of the unsaved-edits prompt, and whether Discard is offered.
@@ -118,16 +154,16 @@ impl Signex {
                 names.join(", ")
             )
         };
-        let can_discard = !self.discard_blocked_by_other_project(state);
-        if can_discard {
-            body.push_str(" Save them before excluding it from the project?");
-        } else {
-            body.push_str(
-                " Another open project also uses it, so the edits cannot be discarded. \
-                 Save them to exclude it, or Cancel.",
-            );
+        let block = self.discard_block(state);
+        match block {
+            None => body.push_str(" Save them before excluding it from the project?"),
+            Some(why) => {
+                body.push(' ');
+                body.push_str(why.prompt_reason());
+                body.push_str(" Save them to exclude it, or Cancel.");
+            }
         }
-        (body, can_discard)
+        (body, block.is_none())
     }
 
     /// Resolve the Save / Discard choice of the unsaved-edits stage.
@@ -160,11 +196,11 @@ impl Signex {
                 self.apply_remove(&state, RemoveChoice::ExcludeFromProject)
             }
             ExcludeDirtyChoice::Discard => {
-                if self.discard_blocked_by_other_project(&state) {
+                if let Some(why) = self.discard_block(&state) {
                     crate::diagnostics::log_warning(format!(
-                        "Cannot discard the unsaved edits of {}: another open project also \
-                         uses it. Save them or cancel.",
-                        state.display_name
+                        "Cannot discard the unsaved edits of {}: {} Save them or cancel.",
+                        state.display_name,
+                        why.log_reason()
                     ));
                     self.ui_state.remove_dialog = Some(state);
                     self.refresh_panel_ctx();

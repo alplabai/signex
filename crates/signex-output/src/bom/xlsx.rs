@@ -23,7 +23,7 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
     let worksheet = workbook.add_worksheet();
 
     // Create header format: bold, light grey background
-    let _header_format = Format::new()
+    let header_format = Format::new()
         .set_bold()
         .set_background_color(Color::RGB(0xF0F0F0))
         .set_border(FormatBorder::Thin);
@@ -43,7 +43,7 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
             BomColumn::Custom(_) => COL_WIDTH_CUSTOM,
         };
 
-        worksheet.write_string(0, col, header_text)?;
+        worksheet.write_string_with_format(0, col, header_text, &header_format)?;
         worksheet.set_column_width(col, width)?;
     }
 

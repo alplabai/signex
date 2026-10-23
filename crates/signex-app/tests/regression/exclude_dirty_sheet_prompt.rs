@@ -397,3 +397,56 @@ fn discard_is_refused_for_a_library_two_open_projects_list() {
     assert!(diagnostics_mention(&app, "another open project"));
     assert_eq!(std::fs::read(&fp).unwrap(), ORIGINAL);
 }
+
+/// Project A (dirty `X.snxsch`) plus project B in its own directory, listing
+/// `Y.snxsch`. When `load_other` is set B's sheet has an engine, so its walk
+/// is fully known; otherwise B's references cannot be read without disk IO.
+fn unrelated_project_fixture(load_other: bool) -> (Signex, TempDir, PathBuf) {
+    let tmp = TempDir::new().expect("tempdir");
+    let dir_b = tmp.path().join("b");
+    std::fs::create_dir(&dir_b).expect("mkdir b");
+    let sheet = tmp.path().join("X.snxsch");
+    std::fs::write(&sheet, ORIGINAL).expect("write sheet");
+    let (mut app, _task) = Signex::new();
+    let a = add_named_project(&mut app, tmp.path(), "A.snxprj", "X.snxsch");
+    let b = add_named_project(&mut app, &dir_b, "B.snxprj", "Y.snxsch");
+    open_sheet(&mut app, &sheet, a, true);
+    if load_other {
+        open_sheet(&mut app, &dir_b.join("Y.snxsch"), b, false);
+    }
+    (app, tmp, sheet)
+}
+
+#[test]
+fn discard_is_offered_when_every_other_project_walk_is_known_and_unrelated() {
+    let _ = signex_app::diagnostics::init_logging();
+    let (mut app, _tmp, sheet) = unrelated_project_fixture(true);
+    exclude(&mut app, &sheet);
+    assert!(app.ui_state.remove_dialog.is_some(), "prompt expected");
+
+    choose(&mut app, ExcludeDirtyChoice::Discard);
+
+    assert!(app.ui_state.remove_dialog.is_none(), "discard must proceed");
+    assert!(!app.document_state.engines.contains_key(&sheet));
+}
+
+#[test]
+fn discard_is_refused_when_another_projects_sheets_are_not_loaded() {
+    let _ = signex_app::diagnostics::init_logging();
+    let (mut app, _tmp, sheet) = unrelated_project_fixture(false);
+    exclude(&mut app, &sheet);
+    assert!(app.ui_state.remove_dialog.is_some(), "prompt expected");
+
+    choose(&mut app, ExcludeDirtyChoice::Discard);
+
+    assert!(
+        app.document_state.engines.contains_key(&sheet),
+        "nothing may be discarded while ownership is unknown"
+    );
+    assert!(app.ui_state.remove_dialog.is_some());
+    assert!(
+        diagnostics_mention(&app, "not loaded"),
+        "the refusal must say why"
+    );
+    assert_eq!(std::fs::read(&sheet).unwrap(), ORIGINAL);
+}
