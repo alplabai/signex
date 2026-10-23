@@ -24,6 +24,7 @@ use uuid::Uuid;
 
 mod gate;
 pub use gate::ConnectedPoints;
+use gate::touching_port_conflicts;
 
 use crate::uf::{Key, find as uf_find, union as uf_union};
 
@@ -188,6 +189,22 @@ fn power_port_pins(sheet: &SchematicSheet) -> Vec<(Point, &str)> {
     ports
 }
 
+/// [`power_port_pins`] minus the ports sitting on a contact-only tip (see
+/// [`touching_port_conflicts`]) — the ports that carry a name. One filter shared
+/// by the union-find merge and the name carriers, so `build_netlist` and
+/// `build_project_netlist` can never disagree on which ports name a net.
+fn joinable_power_ports(sheet: &SchematicSheet) -> Vec<(Point, &str)> {
+    let ports = power_port_pins(sheet);
+    let segments: Vec<(Point, Point)> = sheet.wires.iter().map(|w| (w.start, w.end)).collect();
+    let junctions: Vec<Point> = sheet.junctions.iter().map(|j| j.position).collect();
+    let label_points: Vec<Point> = sheet.labels.iter().map(|l| l.position).collect();
+    let conflicted = touching_port_conflicts(&ports, &segments, &junctions, &label_points);
+    ports
+        .into_iter()
+        .filter(|(tip, _)| !conflicted.contains(&pt_key(tip)))
+        .collect()
+}
+
 /// For each power-port symbol (`is_power && !value.is_empty()`) on the sheet,
 /// the net root each connected pin lands on, tagged with the port's `value`
 /// (its global net name). Power ports are implicit global name carriers — ERC
@@ -198,7 +215,7 @@ pub(crate) fn power_name_carriers(
     sheet: &SchematicSheet,
     parent: &mut HashMap<Key, Key>,
 ) -> Vec<(Key, String)> {
-    power_port_pins(sheet)
+    joinable_power_ports(sheet)
         .into_iter()
         .map(|(tip, value)| (uf_find(parent, pt_key(&tip)), value.to_string()))
         .collect()
@@ -325,7 +342,8 @@ impl SheetConnectivity {
     /// label — the same name-bucket rule the cross-sheet stitcher applies, so a
     /// single sheet and a one-sheet project agree (issue #675). A port taps the
     /// net at its pin tip exactly like a component pin: no interior anchoring.
-    /// Different-value ports that only touch never join (ADR-0002 D5.1).
+    /// Different-value ports that only touch never join (ADR-0002 D5.1); a wire
+    /// endpoint, junction or label on the tip is an anchor and joins them.
     ///
     /// Call after [`merge_named_labels`](Self::merge_named_labels); read every
     /// root only after this returns.
@@ -334,6 +352,7 @@ impl SheetConnectivity {
         ports: impl IntoIterator<Item = (Point, &'a str)>,
         labels: impl IntoIterator<Item = (Point, LabelType, &'a str)>,
         segments: &[(Point, Point)],
+        junctions: &[Point],
     ) {
         let labels: Vec<(Point, LabelType, &'a str)> = labels.into_iter().collect();
         let label_points: Vec<Point> = labels.iter().map(|(p, _, _)| *p).collect();
@@ -352,7 +371,7 @@ impl SheetConnectivity {
         }
         let ports: Vec<(Point, &'a str)> =
             ports.into_iter().filter(|(_, v)| !v.is_empty()).collect();
-        let conflicted = self.touching_port_conflicts(&ports, &label_points, segments);
+        let conflicted = touching_port_conflicts(&ports, segments, junctions, &label_points);
         for (pos, value) in ports {
             let key = pt_key(&pos);
             if conflicted.contains(&key) {
@@ -366,38 +385,6 @@ impl SheetConnectivity {
                 }
             }
         }
-    }
-
-    /// Tip keys where different-value power ports merely touch, with nothing
-    /// electrical (wire endpoint, junction, label) to connect them. Pin-to-pin
-    /// contact is not a connection (ADR-0002 D5.1), so such a tip must not be
-    /// glued into any net by the shared union-find key — that would short two
-    /// rails. `signex-erc` reports the touch as `PowerPortShort`.
-    fn touching_port_conflicts(
-        &self,
-        ports: &[(Point, &str)],
-        label_points: &[Point],
-        segments: &[(Point, Point)],
-    ) -> HashSet<Key> {
-        let mut linked: HashSet<Key> = HashSet::new();
-        for (k, v) in &self.parent {
-            if k != v {
-                linked.insert(*k);
-                linked.insert(*v);
-            }
-        }
-        linked.extend(label_points.iter().map(pt_key));
-        linked.extend(segments.iter().flat_map(|(a, b)| [pt_key(a), pt_key(b)]));
-
-        let mut values_at: HashMap<Key, HashSet<&str>> = HashMap::new();
-        for (pos, value) in ports {
-            values_at.entry(pt_key(pos)).or_default().insert(value);
-        }
-        values_at
-            .into_iter()
-            .filter(|(key, values)| values.len() > 1 && !linked.contains(key))
-            .map(|(key, _)| key)
-            .collect()
     }
 }
 
@@ -466,6 +453,7 @@ pub(crate) fn merged_sheet_parent(sheet: &SchematicSheet) -> HashMap<Key, Key> {
 fn merged_connectivity(sheet: &SchematicSheet) -> SheetConnectivity {
     let mut conn = SheetConnectivity::build(sheet);
     let segments: Vec<(Point, Point)> = sheet.wires.iter().map(|w| (w.start, w.end)).collect();
+    let junctions: Vec<Point> = sheet.junctions.iter().map(|j| j.position).collect();
     conn.merge_named_labels(
         sheet
             .labels
@@ -480,6 +468,7 @@ fn merged_connectivity(sheet: &SchematicSheet) -> SheetConnectivity {
             .iter()
             .map(|l| (l.position, l.label_type, l.text.as_str())),
         &segments,
+        &junctions,
     );
     conn
 }

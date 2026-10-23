@@ -692,3 +692,22 @@ fn touching_power_port_is_named_by_value_with_port_advice() {
         out[0].message
     );
 }
+
+#[test]
+fn a_gnd_vcc_touch_is_one_diagnostic_across_both_port_rules() {
+    let tip = Point::new(10.0, 10.0);
+    let c = ctx(
+        vec![],
+        vec![],
+        vec![],
+        vec![
+            power_port_with_tip("GND", tip, tip),
+            power_port_with_tip("VCC", tip, tip),
+        ],
+    );
+    let mut out = Vec::new();
+    power_port_short(&c, &mut out);
+    pins_touch_not_connected::pins_touch_not_connected(&c, &mut out);
+    assert_eq!(out.len(), 1, "{out:?}");
+    assert_eq!(out[0].rule_kind, RuleKind::PowerPortShort);
+}

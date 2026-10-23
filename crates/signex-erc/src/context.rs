@@ -460,6 +460,7 @@ fn summarize_nets(
             .iter()
             .map(|l| (l.position, l.label_type, l.text.as_str())),
         &segments,
+        &junction_pts,
     );
 
     // Group labels by net root.

@@ -208,3 +208,34 @@ fn erc_reports_the_touching_gnd_and_vcc_ports_as_a_short() {
     assert_eq!(shorts.len(), 1, "{shorts:?}");
     assert!(shorts[0].message.contains("GND") && shorts[0].message.contains("VCC"));
 }
+
+#[test]
+fn a_junction_under_touching_ports_is_one_net_and_a_reported_short_in_both_models() {
+    let mut sheet = touching_rails();
+    sheet.junctions.push(signex_types::schematic::Junction {
+        position: pt(50.0, 50.0),
+        ..Default::default()
+    });
+    let netlist = build_netlist(&sheet);
+    let ctx = ErcContext::from_snapshot(&sheet);
+
+    assert_eq!(netlist.nets.len(), 1, "{netlist:?}");
+    assert_eq!(ctx.nets.len(), netlist.nets.len(), "{:?}", ctx.nets);
+    let shorts = signex_erc::engine::run_all(&ctx)
+        .into_iter()
+        .filter(|d| d.rule_kind == signex_erc::RuleKind::PowerPortShort)
+        .count();
+    assert_eq!(shorts, 1);
+}
+
+#[test]
+fn a_gnd_vcc_touch_yields_exactly_one_diagnostic_from_the_port_rules() {
+    let diags = signex_erc::engine::run_all(&ErcContext::from_snapshot(&touching_rails()));
+    let count = |kind| diags.iter().filter(|d| d.rule_kind == kind).count();
+    assert_eq!(count(signex_erc::RuleKind::PowerPortShort), 1);
+    assert_eq!(
+        count(signex_erc::RuleKind::PinsTouchNotConnected),
+        0,
+        "{diags:?}"
+    );
+}

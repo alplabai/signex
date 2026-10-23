@@ -10,8 +10,9 @@
 //!
 //! Not flagged:
 //! - stacked pins of one symbol — a part's own geometry, not a user contact;
-//! - two power ports of the same value — they join by name, so nothing is
-//!   missing (different values are `PowerPortShort`'s business, not a missing wire);
+//! - two power ports — same value joins by name, so nothing is missing;
+//!   different values are `PowerPortShort`'s business (one touch, one
+//!   diagnostic);
 //! - a point where a wire, junction, label or no-connect sits — that anchor
 //!   is what connects the pins, so they are connected.
 
@@ -38,9 +39,11 @@ fn pin_label(symbol: &ErcSymbol, pin: &ErcPin) -> String {
     format!("{reference}.{}", pin.number)
 }
 
-/// Two power ports carrying the same value are one net by name.
-fn same_value_ports(a: &ErcSymbol, b: &ErcSymbol) -> bool {
-    a.is_power && b.is_power && !a.value.is_empty() && a.value == b.value
+/// A port-to-port pair is never this rule's business: same value joins by
+/// name, so nothing is missing; different values are `PowerPortShort`'s.
+fn port_pair(a: &ErcSymbol, b: &ErcSymbol) -> bool {
+    let named_port = |s: &ErcSymbol| s.is_power && !s.value.is_empty();
+    named_port(a) && named_port(b)
 }
 
 pub(crate) fn pins_touch_not_connected(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
@@ -78,7 +81,7 @@ pub(crate) fn pins_touch_not_connected(ctx: &ErcContext, out: &mut Vec<Diagnosti
             if symbol.uuid == first_symbol.uuid {
                 continue;
             }
-            if same_value_ports(first_symbol, symbol) {
+            if port_pair(first_symbol, symbol) {
                 continue;
             }
             let (subject, advice) = if first_symbol.is_power || symbol.is_power {

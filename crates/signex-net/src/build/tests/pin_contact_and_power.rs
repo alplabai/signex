@@ -126,3 +126,32 @@ fn touching_different_value_power_ports_do_not_short_two_rails() {
     assert!(gnd.terminals.iter().all(|t| t.reference != "U2"), "{gnd:?}");
     assert!(vcc.terminals.iter().all(|t| t.reference != "U1"), "{vcc:?}");
 }
+
+#[test]
+fn a_junction_under_touching_ports_anchors_them_into_one_net() {
+    // A junction is an anchor, so GND and VCC ports sharing its point are
+    // genuinely connected: the short is real and the nets reflect it — one
+    // net, never a phantom third net beside the two rails.
+    let mut sheet = empty_sheet();
+    add_one_pin(&mut sheet, "LOAD", PinDirection::PowerInput);
+    add_one_pin(&mut sheet, "P", PinDirection::PowerInput);
+    sheet.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+    sheet.wires.push(wire(pt(0.0, 20.0), pt(10.0, 20.0)));
+    place(&mut sheet, "U1", "LOAD", pt(0.0, 0.0));
+    place_power(&mut sheet, "#PWR1", "P", "GND", pt(10.0, 0.0));
+    place(&mut sheet, "U2", "LOAD", pt(0.0, 20.0));
+    place_power(&mut sheet, "#PWR2", "P", "VCC", pt(10.0, 20.0));
+    place_power(&mut sheet, "#PWR3", "P", "GND", pt(50.0, 50.0));
+    place_power(&mut sheet, "#PWR4", "P", "VCC", pt(50.0, 50.0));
+    sheet.junctions.push(junction(pt(50.0, 50.0)));
+
+    let netlist = build_netlist(&sheet);
+
+    assert_eq!(netlist.nets.len(), 1, "{netlist:?}");
+    let refs: Vec<&str> = netlist.nets[0]
+        .terminals
+        .iter()
+        .map(|t| t.reference.as_str())
+        .collect();
+    assert!(refs.contains(&"U1") && refs.contains(&"U2"), "{refs:?}");
+}

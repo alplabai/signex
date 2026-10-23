@@ -6,7 +6,7 @@
 //!
 //! [`build_netlist`]: super::build_netlist
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use signex_types::schematic::Point;
 
@@ -45,4 +45,33 @@ impl ConnectedPoints {
     pub fn contains(&self, p: &Point) -> bool {
         self.anchored.contains(&pt_key(p))
     }
+}
+
+/// Tip keys where power ports of different values share a point with no
+/// anchor (wire endpoint, junction or label) on it. Pin-to-pin contact is not a
+/// connection (ADR-0002 D5.1), so such a tip joins no net and names none —
+/// the shared point key would otherwise short two rails. A wire endpoint,
+/// junction or label there is an anchor: the ports are genuinely connected, the
+/// short is real, and the nets reflect it. `signex-erc` reports both cases as
+/// `PowerPortShort`. No-connect markers are not anchors here.
+pub fn touching_port_conflicts(
+    ports: &[(Point, &str)],
+    segments: &[(Point, Point)],
+    junctions: &[Point],
+    label_points: &[Point],
+) -> HashSet<Key> {
+    let mut anchored: HashSet<Key> = HashSet::new();
+    anchored.extend(segments.iter().flat_map(|(a, b)| [pt_key(a), pt_key(b)]));
+    anchored.extend(junctions.iter().map(pt_key));
+    anchored.extend(label_points.iter().map(pt_key));
+
+    let mut values_at: HashMap<Key, HashSet<&str>> = HashMap::new();
+    for (pos, value) in ports {
+        values_at.entry(pt_key(pos)).or_default().insert(value);
+    }
+    values_at
+        .into_iter()
+        .filter(|(key, values)| values.len() > 1 && !anchored.contains(key))
+        .map(|(key, _)| key)
+        .collect()
 }
