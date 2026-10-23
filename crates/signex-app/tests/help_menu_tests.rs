@@ -42,6 +42,38 @@ fn documentation_and_issue_items_return_a_browser_task() {
 }
 
 #[test]
+fn open_sample_project_unpacks_opens_and_never_clobbers_edits() {
+    let (mut app, _startup) = Signex::new();
+    let root = signex_app::sample_project::sample_root().expect("test config root");
+    let _ = std::fs::remove_dir_all(&root);
+
+    let _ = app.update(Message::Menu(MenuMessage::OpenSampleProject));
+
+    let project = root.join("linear-regulator.snxprj");
+    let sheet = root.join("linear-regulator.snxsch");
+    assert!(
+        project.exists() && sheet.exists(),
+        "sample must be unpacked"
+    );
+    assert!(
+        app.document_state
+            .projects
+            .iter()
+            .any(|p| p.path == project),
+        "sample project must be loaded"
+    );
+    assert!(
+        app.document_state.pending_opens.contains(&sheet),
+        "sample sheet must be opening"
+    );
+
+    // A second invocation keeps the tester's edits.
+    std::fs::write(&sheet, "edited").expect("edit sample");
+    let _ = app.update(Message::Menu(MenuMessage::OpenSampleProject));
+    assert_eq!(std::fs::read_to_string(&sheet).expect("read"), "edited");
+}
+
+#[test]
 fn copy_version_info_schedules_a_clipboard_write() {
     let (mut app, _startup) = Signex::new();
     let task = app.update(Message::Overlay(OverlayMsg::CopyAboutInfo));

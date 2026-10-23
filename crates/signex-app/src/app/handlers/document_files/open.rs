@@ -137,6 +137,31 @@ impl Signex {
         Ok(schematic_task)
     }
 
+    /// Help ▸ Open Sample Project: unpack the bundled sample (once) into
+    /// the per-user config directory and open it like any other project.
+    /// A failure reaches the log and the Open Failed notice.
+    pub(crate) fn handle_open_sample_project(&mut self) -> iced::Task<Message> {
+        match self.open_sample_project() {
+            Ok(task) => task,
+            Err(error) => {
+                crate::diagnostics::log_error("Open sample project", &error);
+                self.document_state.error_notice =
+                    Some(crate::app::state::ErrorNotice::open(format!("{error:#}")));
+                iced::Task::none()
+            }
+        }
+    }
+
+    fn open_sample_project(&mut self) -> Result<iced::Task<Message>> {
+        let root = crate::sample_project::sample_root()
+            .context("no per-user config directory to unpack the sample into")?;
+        let (project_path, sheet_path) = crate::sample_project::ensure_extracted(&root)?;
+        let project_task = self.open_document_path(project_path)?;
+        let sheet_task = self.open_document_path(sheet_path)?;
+        self.refresh_panel_ctx();
+        Ok(iced::Task::batch([project_task, sheet_task]))
+    }
+
     pub(crate) fn handle_active_document_save_requested(&mut self) -> iced::Task<Message> {
         match self.save_active_document() {
             Ok(task) => task,

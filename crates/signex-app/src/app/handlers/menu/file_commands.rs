@@ -37,6 +37,7 @@ impl Signex {
                 },
                 |p| Message::File(FileMsg::NewProject(p)),
             )),
+            MenuMessage::OpenSampleProject => Some(self.handle_open_sample_project()),
             MenuMessage::PrintPreview => {
                 Some(self.update(Message::PrintPreview(PrintPreviewMsg::Requested)))
             }
