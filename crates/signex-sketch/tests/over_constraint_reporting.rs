@@ -191,3 +191,58 @@ fn the_saddle_retry_does_not_drift_an_unrelated_free_point() {
         "the saddle still resolved: y = {y}"
     );
 }
+
+/// #765 item 1: a point one distance constraint pins only partly (it may
+/// slide around the circle) must not keep the retry's offset along the
+/// free direction. Its Jacobian column is non-zero, so the old per-column
+/// undo kept the offset and slid the point by ~1e-3 × the sketch extent.
+#[test]
+fn the_saddle_retry_does_not_slide_a_partly_constrained_point() {
+    let mut s = Sketch::new();
+    let a = s.add_point(0.0, 0.0);
+    let b = s.add_point(8.0, 0.0);
+    let p = s.add_point(4.0, 0.0);
+    // Far out, so the extent (and the retry offset) is large.
+    let q = s.add_point(0.0, 100.0);
+    for point in [a, b] {
+        s.data.constraints.push(Constraint {
+            id: ConstraintId::new(),
+            kind: ConstraintKind::Fixed { point },
+        });
+    }
+    s.data.constraints.push(distance(a, p, 5.0));
+    s.data.constraints.push(distance(b, p, 5.0));
+    s.data.constraints.push(distance(a, q, 100.0));
+
+    let params = ResolvedParams::new();
+    let out = common::solver()
+        .solve(&s.data, &params)
+        .expect("the saddle sketch solves");
+
+    let at = |id| {
+        signex_sketch::solver::state::point_xy(id, &out.result.state, &out.result.index, &s.data)
+            .expect("point")
+    };
+    let (qx, qy) = at(q);
+    assert!(
+        qx.abs() < 1e-6 && (qy - 100.0).abs() < 1e-6,
+        "q slid along its circle: ({qx}, {qy})"
+    );
+    let (_, y) = at(p);
+    assert!((y.abs() - 3.0).abs() < 1e-6, "the saddle still resolved");
+
+    // #765 item 2: the reported residual is the returned state's own.
+    let r = signex_sketch::solver::residual::total_residual(
+        &s.data,
+        &out.result.state,
+        &out.result.index,
+        &params,
+    )
+    .expect("residual");
+    let norm = r.iter().map(|v| v * v).sum::<f64>().sqrt();
+    assert!(
+        (norm - out.result.final_residual_norm).abs() < 1e-9,
+        "reported {} but the state's residual is {norm}",
+        out.result.final_residual_norm
+    );
+}
