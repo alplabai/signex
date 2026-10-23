@@ -23,6 +23,19 @@ impl Signex {
                 self.ui_state.keyboard_shortcuts_open = false;
                 Task::none()
             }
+            OverlayMsg::CloseAbout => {
+                self.ui_state.about_open = false;
+                Task::none()
+            }
+            OverlayMsg::CopyAboutInfo => iced::clipboard::write(crate::about::version_info_text()),
+            OverlayMsg::OpenLink(link) => crate::about::open_link(link, |detail| {
+                Message::Overlay(OverlayMsg::LinkOpenFailed(detail))
+            }),
+            OverlayMsg::LinkOpenFailed(detail) => {
+                self.document_state.error_notice =
+                    Some(crate::app::state::ErrorNotice::link(detail));
+                Task::none()
+            }
             // Tools > Passive Network Calculator. Deliberately an in-app
             // modal and not an OS window: Signex runs borderless
             // (`bootstrap/new.rs` - `decorations: false`), so a default
@@ -68,6 +81,9 @@ impl Signex {
     pub(crate) fn dispatch_project_message(&mut self, msg: ProjectMsg) -> Task<Message> {
         match msg {
             ProjectMsg::CloseConfirm(choice) => self.handle_project_close_confirm(choice),
+            ProjectMsg::CloseRefsResolved { project_id, result } => {
+                self.handle_close_refs_resolved(project_id, result)
+            }
             ProjectMsg::AppQuitConfirm(choice) => self.handle_app_quit_confirm(choice),
             ProjectMsg::CloseOptions => {
                 self.ui_state.project_options = None;

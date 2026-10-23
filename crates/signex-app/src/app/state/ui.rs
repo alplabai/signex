@@ -78,6 +78,11 @@ pub struct UiState {
     /// active keyboard-shortcut profile. Toggled from the Help menu
     /// and from F1.
     pub keyboard_shortcuts_open: bool,
+    /// Help ▸ About Signex dialog.
+    pub about_open: bool,
+    /// File ▸ Open Recent — loaded from `prefs.json` at boot, updated on
+    /// every successful project open.
+    pub recent_projects: crate::recent_projects::RecentProjects,
     /// First-run tour overlay — a single dismissible card shown only
     /// before the user has dismissed it once. Initial value is read
     /// from prefs in `bootstrap`; transitions to `false` on the first

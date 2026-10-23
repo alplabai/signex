@@ -11,6 +11,10 @@ use axum::http::{Request, StatusCode};
 use signex_library::primitive::{Footprint, SimKind, SimModel, Symbol};
 use signex_library_server::db::{AppState, PrimitiveSummary};
 use signex_library_server::{API_TOKEN_ENV, router_with_state};
+use signex_sketch::SketchData;
+use signex_sketch::entity::{Entity, EntityKind};
+use signex_sketch::id::SketchEntityId;
+use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 use tower::ServiceExt;
 use uuid::Uuid;
 
@@ -228,6 +232,71 @@ async fn post_then_get_footprint_round_trip() {
     assert_eq!(got.name, fp.name);
     // Body3D defaults round-trip cleanly.
     assert_eq!(got.body_3d, fp.body_3d);
+}
+
+/// A footprint whose sketch holds an arc about (2, 3) with start (7, 3) and an
+/// end point at (2, 10): off the radius-5 circle, as an older row stored it.
+/// Returns the footprint plus the ids of the centre and end points.
+fn off_circle_footprint() -> (Footprint, SketchEntityId, SketchEntityId) {
+    let plane = Plane {
+        id: PlaneId::new(),
+        kind: PlaneKind::BoardTop,
+    };
+    let pid = plane.id;
+    let mut sketch = SketchData::default();
+    sketch.planes.push(plane);
+    let mut point = |x, y| {
+        let id = SketchEntityId::new();
+        sketch
+            .entities
+            .push(Entity::new(id, pid, EntityKind::Point { x, y }));
+        id
+    };
+    let (c, s, e) = (point(2.0, 3.0), point(7.0, 3.0), point(2.0, 10.0));
+    sketch.entities.push(Entity::new(
+        SketchEntityId::new(),
+        pid,
+        EntityKind::Arc {
+            center: c,
+            start: s,
+            end: e,
+            sweep_ccw: true,
+        },
+    ));
+    let mut fp = Footprint::empty("arc");
+    fp.uuid = Uuid::now_v7();
+    fp.sketch = Some(sketch);
+    (fp, c, e)
+}
+
+#[tokio::test]
+async fn fetch_footprint_repairs_an_off_circle_arc_end_stored_in_the_row() {
+    let state = fresh_state().await;
+    let library_id = Uuid::now_v7();
+    let (fp, c, e) = off_circle_footprint();
+    // `insert_footprint` stores the sketch exactly as given, off circle.
+    state.insert_footprint(library_id, &fp).await.unwrap();
+
+    let got = state
+        .fetch_footprint(library_id, fp.uuid)
+        .await
+        .unwrap()
+        .expect("row exists");
+
+    let sketch = got.sketch.expect("sketch survives");
+    let at = |id| {
+        sketch
+            .entities
+            .iter()
+            .find_map(|en| match en.kind {
+                EntityKind::Point { x, y } if en.id == id => Some((x, y)),
+                _ => None,
+            })
+            .expect("point")
+    };
+    let (cx, cy) = at(c);
+    let (ex, ey) = at(e);
+    assert!(((ex - cx).hypot(ey - cy) - 5.0).abs() < 1e-9);
 }
 
 #[tokio::test]

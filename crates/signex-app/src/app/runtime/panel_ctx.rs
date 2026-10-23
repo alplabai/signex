@@ -88,6 +88,8 @@ impl Signex {
         // The dirty dots below read `dirty_paths`; make sure footprint
         // edits are in it first (#666).
         self.sync_footprint_dirty_paths();
+        let previous_navigator = std::mem::take(&mut self.document_state.panel_ctx.navigator);
+        let navigator = self.next_navigator_model(previous_navigator);
         // Build per-project panel info from every loaded project in the
         // workspace. The `project_name` / `project_file` / `pcb_file` /
         // `sheets` legacy singletons mirror whichever entry is `is_active`
@@ -389,15 +391,6 @@ impl Signex {
                 .map(|snapshot| snapshot.junctions.len())
                 .or_else(|| active_pcb_snapshot.map(|snapshot| snapshot.vias.len()))
                 .unwrap_or(0),
-            child_sheets: active_schematic_snapshot
-                .map(|snapshot| {
-                    snapshot
-                        .child_sheets
-                        .iter()
-                        .map(|child| child.name.clone())
-                        .collect()
-                })
-                .unwrap_or_default(),
             has_schematic: self.has_active_schematic(),
             has_pcb: self.has_active_pcb(),
             paper_size: active_schematic_snapshot
@@ -475,6 +468,7 @@ impl Signex {
             components_split,
             project_tree: vec![],
             project_tree_selected: self.document_state.panel_ctx.project_tree_selected.clone(),
+            navigator,
             library_row_detail: self.compute_library_row_detail(),
             selection_count,
             selected_uuid,

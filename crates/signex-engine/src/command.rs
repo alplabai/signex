@@ -1,6 +1,6 @@
 use signex_types::schematic::{
-    Bus, BusEntry, HAlign, Junction, Label, NoConnect, SchematicSheet, SelectedItem, StrokeColor,
-    Symbol, TextNote, Wire,
+    Bus, BusEntry, ChildSheet, HAlign, Junction, Label, NoConnect, SchematicSheet, SelectedItem,
+    StrokeColor, Symbol, TextNote, Wire,
 };
 use uuid::Uuid;
 
@@ -50,6 +50,7 @@ pub enum CommandKind {
     PlaceBus,
     PlaceLabel,
     PlaceSymbol,
+    PlaceChildSheet,
     PlaceJunction,
     PlaceNoConnect,
     PlaceBusEntry,
@@ -158,6 +159,11 @@ pub enum Command {
     },
     PlaceSymbol {
         symbol: Symbol,
+    },
+    /// Add a hierarchical sheet symbol. Rejected with
+    /// [`EngineError::EmptyChildSheetFilename`] when `filename` is blank.
+    PlaceChildSheet {
+        child_sheet: ChildSheet,
     },
     PlaceJunction {
         junction: Junction,
@@ -284,6 +290,7 @@ impl Command {
             Command::PlaceBus { .. } => CommandKind::PlaceBus,
             Command::PlaceLabel { .. } => CommandKind::PlaceLabel,
             Command::PlaceSymbol { .. } => CommandKind::PlaceSymbol,
+            Command::PlaceChildSheet { .. } => CommandKind::PlaceChildSheet,
             Command::PlaceJunction { .. } => CommandKind::PlaceJunction,
             Command::PlaceNoConnect { .. } => CommandKind::PlaceNoConnect,
             Command::PlaceBusEntry { .. } => CommandKind::PlaceBusEntry,

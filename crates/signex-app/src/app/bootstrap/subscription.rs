@@ -27,6 +27,7 @@ use iced::Subscription;
 struct OpenOverlays {
     find_replace_open: bool,
     kbd_shortcuts_open: bool,
+    about_open: bool,
     first_run_tour_open: bool,
     prefs_open: bool,
     annotate_open: bool,
@@ -221,6 +222,9 @@ impl OpenOverlays {
             OverlayId::KeyboardShortcuts => self
                 .kbd_shortcuts_open
                 .then(|| Message::Overlay(OverlayMsg::CloseKeyboardShortcuts)),
+            OverlayId::About => self
+                .about_open
+                .then(|| Message::Overlay(OverlayMsg::CloseAbout)),
             OverlayId::PassiveCalculator => self
                 .passive_calculator_open
                 .then(|| Message::Overlay(OverlayMsg::ClosePassiveCalculator)),
@@ -441,6 +445,7 @@ impl Signex {
         OpenOverlays {
             find_replace_open: self.ui_state.find_replace.open,
             kbd_shortcuts_open: self.ui_state.keyboard_shortcuts_open,
+            about_open: self.ui_state.about_open,
             first_run_tour_open: self.ui_state.first_run_tour_open,
             prefs_open: self.ui_state.preferences_open
                 && !modal_detached(crate::app::state::ModalId::Preferences),
@@ -1384,6 +1389,7 @@ mod tests {
         let field_names = open_overlays_field_names![
             find_replace_open,
             kbd_shortcuts_open,
+            about_open,
             first_run_tour_open,
             prefs_open,
             annotate_open,
@@ -1421,6 +1427,7 @@ mod tests {
         let setters: &[(&str, EscapeSetter)] = &[
             ("find_replace_open", |o| o.find_replace_open = true),
             ("kbd_shortcuts_open", |o| o.kbd_shortcuts_open = true),
+            ("about_open", |o| o.about_open = true),
             ("first_run_tour_open", |o| o.first_run_tour_open = true),
             ("erc_open", |o| o.erc_open = true),
             ("annotate_open", |o| o.annotate_open = true),

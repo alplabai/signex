@@ -430,7 +430,11 @@ impl AppState {
     ) -> sqlx::Result<Option<Footprint>> {
         fetch_primitive_payload(&self.pool, "footprints", library_id, uuid)
             .await?
-            .map(|p| serde_json::from_str(&p).map_err(decode_err))
+            .map(|p| {
+                let mut fp: Footprint = serde_json::from_str(&p).map_err(decode_err)?;
+                fp.repair_stored_sketch();
+                Ok(fp)
+            })
             .transpose()
     }
 

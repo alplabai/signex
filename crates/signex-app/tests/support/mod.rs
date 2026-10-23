@@ -261,6 +261,7 @@ fn make_footprint(index: usize) -> Footprint {
         updated: now,
         schema_version: 2,
         sketch: None,
+        load_repairs: Vec::new(),
         pours: Vec::new(),
         keepouts: Vec::new(),
         cutouts: Vec::new(),

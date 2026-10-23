@@ -8,6 +8,7 @@ use super::TabInfo;
 
 mod interaction;
 pub(crate) mod scope;
+pub(crate) mod sheet_refs;
 mod ui;
 
 pub use interaction::InteractionState;
@@ -171,6 +172,14 @@ impl ErrorNotice {
         }
     }
 
+    /// An external page could not be opened in the default browser.
+    pub fn link(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Could Not Open Link".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
     /// A delete was refused because it would have removed a file the
     /// project does not own (#139).
     pub fn delete(detail: impl Into<String>) -> Self {
@@ -328,20 +337,21 @@ impl LoadedProject {
 /// Raised (instead of a dead-end error) when `File ▸ Export Netlist` derives a
 /// netlist that does not cover the whole project. Holds the picked `save_path`
 /// and the omitted-page `messages` so the two prompt actions can act without
-/// re-deriving: "Export anyway" writes the partial `.net` with these messages
-/// recorded in its INCOMPLETE header comment; "Cancel" writes nothing. The
+/// re-deriving: "Export anyway" writes the partial `.net` (a clean file —
+/// Protel has no comment syntax) and logs these messages as a warning;
+/// "Cancel" writes nothing. The
 /// refusal stays the default — nothing reaches disk until the user acts.
 #[derive(Debug, Clone)]
 pub struct NetlistIncompletePrompt {
     /// Where the file dialog said to write the `.net`.
     pub save_path: PathBuf,
     /// One user-facing line per omitted / uncovered page — the same
-    /// `ExportIssues::messages()` shown in the prompt and written into the
-    /// exported file's INCOMPLETE header.
+    /// `ExportIssues::messages()` shown in the prompt and logged as a
+    /// warning when the user exports anyway.
     pub messages: Vec<String>,
     /// The export scope snapshotted when the prompt was raised. "Export anyway"
     /// writes from THIS, never a fresh re-derivation — so the bytes on disk and
-    /// the INCOMPLETE header (drawn from `messages`, the same derivation) always
+    /// the warning (drawn from `messages`, the same derivation) always
     /// describe the same project state, even if the document changes while the
     /// modal is up (#431 review).
     pub ctx: signex_output::ExportContext,
@@ -736,18 +746,6 @@ impl DocumentState {
             .collect();
         paths.sort();
         paths
-    }
-
-    /// Whether `path` belongs to an open project other than
-    /// `projects[closing]` (see [`scope::claimed_by_other_project`]).
-    pub(crate) fn claimed_by_other_project(&self, closing: usize, path: &std::path::Path) -> bool {
-        scope::claimed_by_other_project(
-            &self.projects,
-            &self.child_sheet_refs(),
-            closing,
-            path,
-            scope::CaseFold::host_default(),
-        )
     }
 
     /// `sheet path → the `filename` strings it references as child sheets`,

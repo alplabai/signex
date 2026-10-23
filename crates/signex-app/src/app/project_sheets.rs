@@ -252,7 +252,14 @@ fn walk(
         };
         let dir = path.parent().unwrap_or_else(|| Path::new("")).to_path_buf();
         for child in &sheet.child_sheets {
-            queue.push(dir.join(&child.filename));
+            // The same resolver the netlist uses: a `..`-spelled reference
+            // names the file it really names (so a cycle written through `..`
+            // revisits an already-visited key instead of minting a new path
+            // each lap), and a reference escaping the sheet's folder is not
+            // loaded (#463).
+            if let Some(resolved) = resolve_child_reference(&dir, &child.filename) {
+                queue.push(resolved);
+            }
         }
         loaded.insert(key);
         set.sheets.insert(path, sheet);
@@ -560,12 +567,51 @@ pub(crate) fn resolve_child_reference(parent_dir: &Path, child_filename: &str) -
     }
 }
 
+/// The path a child-sheet reference names, for OWNERSHIP questions: which
+/// open project reaches this file. Unlike [`resolve_child_reference`], which
+/// refuses to open a file outside its parent's directory, ownership follows
+/// EVERY reference, absolute and `../` alike: a sheet one project reaches
+/// through an escape is still that project's, and under-claiming it is the
+/// data-loss direction (#741). The path is joined to `parent_dir`, normalized
+/// with `..` clamped at the filesystem root (`/..` is `/`), so a chain of
+/// `..` cannot grow the path without bound and a loop folds onto a key
+/// already seen. `None` only for an empty reference.
+pub(crate) fn ownership_reference(parent_dir: &Path, reference: &str) -> Option<PathBuf> {
+    let trimmed = reference.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    Some(normalize_clamped(&parent_dir.join(PathBuf::from(trimmed))))
+}
+
+/// [`lexically_normalize`] that drops a `..` standing directly on a root or
+/// drive prefix instead of keeping it, matching how the OS resolves `/..`.
+/// A `..` at the head of a *relative* path is still kept: there is no root
+/// to clamp against.
+pub(crate) fn normalize_clamped(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => match out.components().next_back() {
+                Some(std::path::Component::Normal(_)) => {
+                    out.pop();
+                }
+                Some(std::path::Component::RootDir | std::path::Component::Prefix(_)) => {}
+                _ => out.push(".."),
+            },
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
+}
+
 /// Lexically normalize `path` — resolve `.` and `..` components without
 /// touching the filesystem (unlike `std::fs::canonicalize`, which needs the
 /// path to exist). A `..` with nothing left to pop is kept as a literal `..`
 /// component, so a reference that escapes its root still fails the caller's
 /// `starts_with(root)` check instead of silently collapsing onto the root.
-fn lexically_normalize(path: &Path) -> PathBuf {
+pub(crate) fn lexically_normalize(path: &Path) -> PathBuf {
     let mut out = PathBuf::new();
     for component in path.components() {
         match component {
@@ -662,26 +708,10 @@ mod tests {
 
     fn sheet(uuid: u128, children: &[&str]) -> SchematicSheet {
         SchematicSheet {
-            unknown: Default::default(),
             uuid: Uuid::from_u128(uuid),
-            version: 0,
-            generator: String::new(),
-            generator_version: String::new(),
-            paper_size: String::new(),
             root_sheet_page: String::new(),
-            symbols: Vec::new(),
-            wires: Vec::new(),
-            junctions: Vec::new(),
-            labels: Vec::new(),
             child_sheets: children.iter().map(|f| child_ref(f)).collect(),
-            no_connects: Vec::new(),
-            text_notes: Vec::new(),
-            buses: Vec::new(),
-            bus_entries: Vec::new(),
-            drawings: Vec::new(),
-            no_erc_directives: Vec::new(),
-            title_block: HashMap::new(),
-            lib_symbols: HashMap::new(),
+            ..Default::default()
         }
     }
 

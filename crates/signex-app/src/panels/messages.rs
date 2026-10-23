@@ -6,6 +6,10 @@ use super::*;
 #[derive(Debug, Clone)]
 pub enum PanelMsg {
     Tree(TreeMsg),
+    /// The Navigator panel's sheet-hierarchy tree. Separate from
+    /// [`PanelMsg::Tree`] because both trees number their rows from `[0]`:
+    /// one shared variant would act on the wrong tree.
+    Navigator(TreeMsg),
     SetUnit(Unit),
     RunErc,
     /// v0.14.2 — Properties panel toggle for the active footprint

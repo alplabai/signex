@@ -147,8 +147,12 @@ impl Signex {
         }
     }
 
-    pub(crate) fn handle_active_document_save_as_requested(&mut self, path: PathBuf) {
-        if let Err(error) = self.save_active_document_as(path) {
+    pub(crate) fn handle_active_document_save_as_requested(
+        &mut self,
+        from_path: PathBuf,
+        to_path: PathBuf,
+    ) {
+        if let Err(error) = self.save_active_document_as(&from_path, to_path) {
             crate::diagnostics::log_error("Failed to save active document as", &error);
         }
     }
@@ -182,6 +186,9 @@ impl Signex {
 
     fn open_project_file(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
         let (_, mount_task) = self.load_or_activate_project(&path)?;
+        // Success path only: `?` above returns before a project that
+        // failed to load can be recorded.
+        self.record_recent_project(&path);
         self.refresh_panel_ctx();
         Ok(mount_task)
     }
