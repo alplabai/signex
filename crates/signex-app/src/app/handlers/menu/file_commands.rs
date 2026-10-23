@@ -172,15 +172,18 @@ impl Signex {
             .interaction_state
             .project_tree_context_menu
             .as_ref()
-            .and_then(|m| m.path.clone())
-        {
+            .and_then(|m| m.key.as_deref())
+            .and_then(|key| {
+                signex_widgets::tree_view::resolve_path(
+                    self.document_state.panel_ctx.project_tree.as_slice(),
+                    key,
+                )
+            }) {
             Some(p) if !p.is_empty() => p,
             _ => {
-                tracing::warn!(
-                    target: "signex::library",
-                    ?kind,
-                    "Add Library primitive: no project node in context menu state"
-                );
+                crate::diagnostics::log_warning(format!(
+                    "Add {kind:?} library: the project node the menu was opened on no longer exists"
+                ));
                 return Task::none();
             }
         };

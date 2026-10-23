@@ -114,6 +114,21 @@ fn load_for_update(
     }
 }
 
+/// Serialises every `prefs.json` load -> mutate -> write. Without it two
+/// writers each read the same bytes and the second rename drops the first's
+/// key (#692: a background dock write lost a theme change). A process-wide
+/// static is acceptable here because it guards file IO only and holds no
+/// app state.
+static PREFS_IO: Mutex<()> = Mutex::new(());
+
+/// Take [`PREFS_IO`], recovering a poisoned lock: it guards no data, so a
+/// panicked writer leaves nothing half-updated.
+pub(super) fn prefs_io_lock() -> std::sync::MutexGuard<'static, ()> {
+    PREFS_IO
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 /// Paths currently in the refused state, so the report below fires on
 /// the transition into failure rather than on every attempt.
 /// `write_component_filter` runs once per keystroke in the Components
@@ -171,6 +186,7 @@ pub(super) fn update_prefs_json(
     context: &str,
     mutator: impl FnOnce(&mut serde_json::Map<String, serde_json::Value>),
 ) {
+    let _io = prefs_io_lock();
     let mut prefs = match load_for_update(path) {
         Ok(prefs) => prefs,
         Err(error) => {
@@ -191,6 +207,36 @@ pub(super) fn update_prefs_json(
              the existing file was left unchanged so no other setting was lost"
         ),
     }
+}
+
+/// [`update_prefs_json`] for callers that report the failure themselves.
+///
+/// The dock-layout writer runs on a background task and must hand the
+/// outcome back to `update` so the Messages panel and the retry logic see
+/// it (#692), so this returns the failure instead of logging it. The
+/// refusal rule is identical: a file that cannot be loaded is left
+/// byte-identical and reported as an error.
+pub(super) fn try_update_prefs_json(
+    path: &Path,
+    context: &str,
+    mutator: impl FnOnce(&mut serde_json::Map<String, serde_json::Value>),
+) -> Result<(), String> {
+    let _io = prefs_io_lock();
+    let mut prefs = load_for_update(path).map_err(|error| {
+        format!(
+            "{} {error}; it was left as it is, so no other setting was lost ({context} not saved)",
+            path.display()
+        )
+    })?;
+    mutator(&mut prefs);
+    let serialized = serde_json::to_string_pretty(&serde_json::Value::Object(prefs))
+        .map_err(|error| format!("{context} could not be serialised: {error}"))?;
+    signex_types::atomic_io::atomic_write(path, serialized.as_bytes()).map_err(|error| {
+        format!(
+            "writing {} failed ({context} not saved): {error}",
+            path.display()
+        )
+    })
 }
 
 /// The resolved `prefs.json` path, for UI that has to *name* the file.
@@ -332,6 +378,7 @@ pub fn move_prefs_file_aside_at(path: &Path) -> Result<Option<PathBuf>, std::io:
     // Carries the real errno when a candidate cannot be stat'ed, rather
     // than flattening every failure into one "the slots are taken"
     // sentence — see [`aside_path_for`].
+    let _io = prefs_io_lock();
     let aside = aside_path_for(path)?;
     // Let the rename itself answer whether there was a file, instead of
     // asking `Path::exists()` first. `exists()` is `metadata().is_ok()`
@@ -967,5 +1014,72 @@ mod tests {
             before,
             "the user's original bytes must survive untouched beside the fresh file"
         );
+    }
+
+    // ── Concurrent writers (#692) ──
+
+    /// The reviewer's interleaving: a background dock write has loaded the
+    /// file when a theme write runs to completion; the dock write then
+    /// saves its stale copy. With the shared IO lock the theme write waits
+    /// its turn, so the dock write's wait times out and both keys land.
+    #[test]
+    fn a_theme_write_during_a_dock_write_is_not_lost() {
+        // Arrange
+        let (_dir, path) = temp_prefs();
+        let (loaded_tx, loaded_rx) = std::sync::mpsc::channel::<()>();
+        let (theme_done_tx, theme_done_rx) = std::sync::mpsc::channel::<()>();
+
+        // Act
+        let dock_path = path.clone();
+        let dock = std::thread::spawn(move || {
+            try_update_prefs_json(&dock_path, "dock", |prefs| {
+                loaded_tx.send(()).expect("announce the load");
+                // Unlocked, the theme write finishes inside this window.
+                theme_done_rx
+                    .recv_timeout(std::time::Duration::from_millis(200))
+                    .ok();
+                prefs.insert("dock".to_string(), serde_json::json!({ "left": [] }));
+            })
+        });
+        loaded_rx.recv().expect("the dock write loaded the file");
+        update_prefs_json(&path, "theme", |prefs| {
+            prefs.insert("theme".to_string(), serde_json::json!("signex"));
+        });
+        drop(theme_done_tx);
+        dock.join().expect("dock thread").expect("dock write");
+
+        // Assert
+        let prefs = read_prefs_object(&path);
+        assert_eq!(prefs.get("theme"), Some(&serde_json::json!("signex")));
+        assert_eq!(prefs.get("dock"), Some(&serde_json::json!({ "left": [] })));
+    }
+
+    /// Many dock writes against many other-key writes: every key survives.
+    #[test]
+    fn concurrent_dock_and_key_writers_lose_no_key() {
+        // Arrange
+        const WRITES: usize = 40;
+        let (_dir, path) = temp_prefs();
+
+        // Act
+        let dock_path = path.clone();
+        let dock = std::thread::spawn(move || {
+            for i in 0..WRITES {
+                try_update_prefs_json(&dock_path, "dock", |prefs| {
+                    prefs.insert(format!("dock_{i}"), serde_json::json!(i));
+                })
+                .expect("dock write");
+            }
+        });
+        for i in 0..WRITES {
+            update_prefs_json(&path, "key", |prefs| {
+                prefs.insert(format!("key_{i}"), serde_json::json!(i));
+            });
+        }
+        dock.join().expect("dock thread");
+
+        // Assert
+        let prefs = read_prefs_object(&path);
+        assert_eq!(prefs.len(), 2 * WRITES, "no write may drop another's key");
     }
 }

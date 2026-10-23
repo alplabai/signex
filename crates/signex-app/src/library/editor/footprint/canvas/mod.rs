@@ -210,7 +210,7 @@ pub struct FootprintCanvas<'a> {
     /// layer if profiling later motivates it.
     pub cache: &'a canvas::Cache,
     /// v0.13.1 Phase 6.2 — sketch entities are read-only here so the
-    /// canvas can render them when [`EditorMode::Sketch`] is active.
+    /// canvas can render them when [`EditorMode::Sketch`](crate::library::editor::footprint::state::EditorMode::Sketch) is active.
     /// `None` for footprints with no sketch field set (legacy v1).
     pub sketch: Option<&'a signex_sketch::SketchData>,
     /// v0.18.16 — silk-front graphics (`Line` / `Arc` / `Text` /

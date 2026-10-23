@@ -173,8 +173,18 @@ impl Signex {
 
     pub(super) fn handle_save_row(&mut self, address: &EditorAddress) {
         if let Err(e) = self.try_save_row(address) {
-            crate::diagnostics::log_error("save row failed", &e);
+            self.report_save_row_failure(&e);
         }
+    }
+
+    /// Log a failed row save and raise the Save Failed card: the dirty
+    /// flag stays set, so without the card the Save button looks like it
+    /// worked (#110).
+    pub(crate) fn report_save_row_failure(&mut self, error: &anyhow::Error) {
+        crate::diagnostics::log_error("save row failed", error);
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(format!(
+            "The component row could not be saved: {error:#}"
+        )));
     }
 
     /// Write one Component Preview row back through its library adapter
@@ -191,9 +201,10 @@ impl Signex {
         let table = state.table.clone();
         let mut row = state.row.clone();
         row.updated = chrono::Utc::now();
-        if let Err(e) = row.refresh_content_hash() {
-            tracing::warn!(target: "signex::library", error = %e, "save row: refresh_content_hash failed");
-        }
+        // A stale hash would be written alongside the new content, so a
+        // hash failure fails the save instead of being warned past.
+        row.refresh_content_hash()
+            .context("refresh row content hash")?;
 
         let library_id = self
             .library

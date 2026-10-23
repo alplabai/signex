@@ -20,7 +20,7 @@ pub enum TabMessage {
     /// position from `interaction_state.last_mouse_pos` instead.
     StartDrag(usize),
     /// Right-click on this tab — the app opens the per-tab context
-    /// menu (Close [filename] / Close All Others / Close All / Open
+    /// menu (Close \[filename\] / Close All Others / Close All / Open
     /// In New Window). Replaces the inline close-X / undock buttons
     /// that used to live on every tab.
     ContextMenu(usize),

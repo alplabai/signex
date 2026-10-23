@@ -30,7 +30,7 @@ enum ReferenceKind {
     /// `\\server\share\..`, `//server/share/..` or `\\?\UNC\server\share\..`.
     /// `None` when the server or share is missing, which is never trusted.
     Network(Option<Share>),
-    /// `\\.\`, `\\?\` (non-UNC), `\??\`, or any other non-drive prefix.
+    /// `\\.\`, `\\?\` (non-UNC, non-disk), `\??\`, or any other non-drive prefix.
     Device,
 }
 
@@ -54,6 +54,17 @@ fn after_unc_segment(rest: &str) -> Option<&str> {
     (head.eq_ignore_ascii_case("UNC") && tail.starts_with(is_separator)).then_some(tail)
 }
 
+/// True for the verbatim-disk spelling `C:\..` (what `canonicalize` returns on
+/// Windows once `\\?\` is stripped): the same local disk as `C:\..`, so it is
+/// followed. A drive letter, a colon, then a separator or the end.
+fn is_verbatim_disk(rest: &str) -> bool {
+    let mut chars = rest.chars();
+    matches!(
+        (chars.next(), chars.next(), chars.next()),
+        (Some(d), Some(':'), None) | (Some(d), Some(':'), Some('/' | '\\')) if d.is_ascii_alphabetic()
+    )
+}
+
 /// Classify what follows a leading pair of separators.
 fn classify_double_separator(after: &str) -> ReferenceKind {
     let Some(marker) = after.chars().next().filter(|c| matches!(c, '.' | '?')) else {
@@ -66,6 +77,9 @@ fn classify_double_separator(after: &str) -> ReferenceKind {
     // `\\.\` is the device namespace; `\\?\` is verbatim, and only its UNC
     // spelling names a share.
     let rest = rest.trim_start_matches(is_separator);
+    if marker == '?' && is_verbatim_disk(rest) {
+        return ReferenceKind::Local;
+    }
     match after_unc_segment(rest) {
         Some(unc) if marker == '?' => ReferenceKind::Network(share_from(unc)),
         _ => ReferenceKind::Device,
@@ -166,12 +180,32 @@ mod tests {
         for reference in [
             r"\\.\COM1",
             r"\\.\srv\share\x",
-            r"\\?\C:\x.snxsch",
+            r"\\?\GLOBALROOT\Device\x",
+            r"\\?\Volume{01234567-89ab-cdef-0123-456789abcdef}\x",
+            r"\\?\C",
+            r"\\?\C:x",
             r"\\?\srv\share\x",
             r"\??\C:\x.snxsch",
             "/??/C:/x.snxsch",
         ] {
             assert!(is_refused(reference, &trusted), "{reference}");
+        }
+    }
+
+    #[test]
+    fn a_verbatim_disk_path_is_the_same_local_disk_and_is_followed() {
+        let trusted = trusting(r"\\srv\share\proj\p.snxprj");
+
+        for reference in [
+            r"\\?\C:\proj\p.snxprj",
+            r"\\?\c:\x.snxsch",
+            "//?/C:/x.snxsch",
+            r"\\?\C:",
+            r"  \\?\D:\padded.snxsch ",
+        ] {
+            assert!(!is_refused(reference, &[]), "{reference}");
+            assert!(!is_refused(reference, &trusted), "{reference}");
+            assert_eq!(share_of(Path::new(reference.trim())), None, "{reference}");
         }
     }
 

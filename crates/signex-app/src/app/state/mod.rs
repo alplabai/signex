@@ -7,6 +7,7 @@ use crate::dock::DockArea;
 use super::TabInfo;
 
 mod interaction;
+mod pdf_page_setup;
 mod reference_policy;
 pub(crate) mod scope;
 mod sheet_read;
@@ -15,6 +16,7 @@ mod ui;
 pub(crate) mod volume_case;
 
 pub use interaction::InteractionState;
+pub use pdf_page_setup::PageSetupInputs;
 pub use ui::UiState;
 
 pub struct Signex {
@@ -218,6 +220,22 @@ impl ErrorNotice {
         }
     }
 
+    /// A History restore did not happen.
+    pub fn restore(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Restore Failed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
+    /// A new project or document could not be created.
+    pub fn create(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Create Failed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
     /// The requested action has no backing flow yet.
     pub fn unavailable(detail: impl Into<String>) -> Self {
         Self {
@@ -362,6 +380,9 @@ pub struct NetlistIncompletePrompt {
 
 pub struct DocumentState {
     pub dock: DockArea,
+    /// Change detection + debounce for persisting `dock` (#692). The
+    /// write itself runs as a `Task`; see `handlers/dock/layout_persist.rs`.
+    pub dock_layout_sync: crate::dock::DockLayoutSync,
     pub tabs: Vec<TabInfo>,
     pub active_tab: usize,
     /// All live schematic engines keyed by their on-disk path. Every
@@ -674,6 +695,9 @@ pub struct PreviewState {
     /// `pdf_options.dpi` at export time; the preview always rasterises
     /// at 96 DPI for speed.
     pub quality: PdfQuality,
+    /// Typed text of the page-setup fields (custom size, margins, percent)
+    /// plus the reason the last edit was rejected or clamped.
+    pub page_setup: PageSetupInputs,
 }
 
 impl PreviewState {

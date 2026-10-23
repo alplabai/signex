@@ -29,6 +29,10 @@ pub struct BomComponent {
     /// used when the variant does not override it.
     pub base_fitted: Option<bool>,
     pub custom: BTreeMap<String, String>,
+    /// Fields on which the units of one multi-unit part carry different
+    /// non-empty values. Empty for a single-unit part. The BOM keeps the first
+    /// unit's value; [`BomRule::UnitFieldConflict`] reports each field here.
+    pub unit_conflicts: Vec<String>,
 }
 
 impl BomComponent {
@@ -95,15 +99,19 @@ pub enum BomRule {
     MissingMpn,
     DuplicateDesignator,
     EmptyOrZeroQty,
+    /// The units of one multi-unit part disagree on a field's value.
+    UnitFieldConflict,
 }
 
 /// Rule-level on/off switches for BOM validation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct BomRuleOptions {
     pub missing_footprint: bool,
     pub missing_mpn: bool,
     pub duplicate_designator: bool,
     pub empty_or_zero_qty: bool,
+    pub unit_field_conflict: bool,
 }
 
 impl Default for BomRuleOptions {
@@ -113,6 +121,7 @@ impl Default for BomRuleOptions {
             missing_mpn: true,
             duplicate_designator: true,
             empty_or_zero_qty: true,
+            unit_field_conflict: true,
         }
     }
 }
@@ -124,6 +133,7 @@ impl BomRuleOptions {
             BomRule::MissingMpn => self.missing_mpn,
             BomRule::DuplicateDesignator => self.duplicate_designator,
             BomRule::EmptyOrZeroQty => self.empty_or_zero_qty,
+            BomRule::UnitFieldConflict => self.unit_field_conflict,
         }
     }
 
@@ -134,17 +144,19 @@ impl BomRuleOptions {
             BomRule::MissingMpn => self.missing_mpn = enabled,
             BomRule::DuplicateDesignator => self.duplicate_designator = enabled,
             BomRule::EmptyOrZeroQty => self.empty_or_zero_qty = enabled,
+            BomRule::UnitFieldConflict => self.unit_field_conflict = enabled,
         }
     }
 }
 
 impl BomRule {
     /// Every rule, in the order the UI lists them.
-    pub const ALL: [BomRule; 4] = [
+    pub const ALL: [BomRule; 5] = [
         BomRule::MissingFootprint,
         BomRule::MissingMpn,
         BomRule::DuplicateDesignator,
         BomRule::EmptyOrZeroQty,
+        BomRule::UnitFieldConflict,
     ];
 
     /// Short user-facing rule name.
@@ -154,6 +166,7 @@ impl BomRule {
             BomRule::MissingMpn => "Missing MPN",
             BomRule::DuplicateDesignator => "Duplicate designator",
             BomRule::EmptyOrZeroQty => "Empty or zero quantity",
+            BomRule::UnitFieldConflict => "Conflicting unit fields",
         }
     }
 }
@@ -426,6 +439,22 @@ pub fn validate_table(
         }
     }
 
+    if options.is_enabled(BomRule::UnitFieldConflict) {
+        for component in &ctx.components {
+            for field in &component.unit_conflicts {
+                issues.push(BomValidationIssue {
+                    rule: BomRule::UnitFieldConflict,
+                    severity: BomIssueSeverity::Warning,
+                    message: format!(
+                        "Units of {} carry differing values for {field}; the BOM uses the first unit's value (or lists the part if any unit includes it)",
+                        component.reference
+                    ),
+                    references: vec![component.reference.clone()],
+                });
+            }
+        }
+    }
+
     if options.is_enabled(BomRule::DuplicateDesignator) {
         let mut refs: HashMap<String, Vec<String>> = HashMap::new();
         for component in &ctx.components {
@@ -478,6 +507,7 @@ mod tests {
             variant_fitted: None,
             base_fitted: None,
             custom: BTreeMap::new(),
+            unit_conflicts: Vec::new(),
         }
     }
 

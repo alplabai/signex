@@ -1,12 +1,12 @@
 //! Git history panel — right-dock surface that follows the active
-//! tab. Reuses [`signex_widgets::history_pane`] to render the
+//! tab. Reuses [`signex_widgets::history_pane()`] to render the
 //! actual cards. State is kept minimal: an active path resolved
 //! from the active tab + the last loaded vec of entries + a
 //! "loading" generation counter to discard stale async results.
 //!
 //! Phase 0 (this module) wires the read-only view; the load path
 //! is driven by `signex_app`'s dispatcher via
-//! [`crate::app::HistoryLoad`] (a `Message::HistoryLoaded` variant
+//! [`crate::app::Message::HistoryLoaded`] (a `Message` variant
 //! threads each result back to the panel context with a generation
 //! token, so a tab switch in flight discards any pending result).
 
@@ -46,6 +46,11 @@ pub struct HistoryPanelState {
     /// working tree (the engine reports it via `dirty_paths`).
     /// Drives the "Working tree (uncommitted changes)" pseudo-card.
     pub dirty: bool,
+    /// SHA of a Restore click waiting for confirmation. Set when the
+    /// active file has unsaved edits (restoring replaces the in-memory
+    /// document and its undo stack, so they would be lost); the matching
+    /// row then asks "Discard unsaved edits and restore?" (#110).
+    pub pending_restore: Option<String>,
 }
 
 /// What the panel should render when `entries` is non-empty
@@ -77,7 +82,7 @@ pub enum HistoryRenderMode {
 }
 
 /// Render the History panel. Delegates row rendering to
-/// [`signex_widgets::history_pane`]; layers on the "no active
+/// [`signex_widgets::history_pane()`]; layers on the "no active
 /// file" / "not in a git repo" / "loading" header + the working-
 /// tree pseudo-card.
 pub fn view_history<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
@@ -131,7 +136,15 @@ pub fn view_history<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             } else {
                 let now = Utc::now();
                 for entry in &state.entries {
-                    col = col.push(commit_card(entry, now, primary, muted, border, panel_bg));
+                    col = col.push(commit_card(
+                        entry,
+                        now,
+                        state.pending_restore.as_deref() == Some(entry.sha.as_str()),
+                        primary,
+                        muted,
+                        border,
+                        panel_bg,
+                    ));
                 }
             }
 
@@ -182,6 +195,7 @@ fn message_card<'a, M: 'a>(
 fn commit_card<'a>(
     entry: &'a signex_widgets::HistoryEntry,
     now: chrono::DateTime<Utc>,
+    confirming: bool,
     primary: Color,
     muted: Color,
     border_c: Color,
@@ -196,7 +210,12 @@ fn commit_card<'a>(
     ]
     .spacing(8);
 
-    let restore_btn = button(text("Restore this version").size(10).color(muted))
+    let restore_label = if confirming {
+        "Discard unsaved edits and restore"
+    } else {
+        "Restore this version"
+    };
+    let restore_btn = button(text(restore_label).size(10).color(muted))
         .padding([2, 6])
         .on_press(PanelMsg::HistoryRestoreClicked {
             sha: entry.sha.clone(),
@@ -212,13 +231,30 @@ fn commit_card<'a>(
             ..iced::widget::button::Style::default()
         });
 
-    let footer = iced::widget::row![
+    let mut footer = iced::widget::row![
         text(short_sha(&entry.sha)).size(11).color(muted),
         iced::widget::Space::new().width(Length::Fill),
-        restore_btn,
     ]
     .align_y(iced::Alignment::Center)
     .spacing(8);
+    if confirming {
+        footer = footer.push(
+            button(text("Cancel").size(10).color(muted))
+                .padding([2, 6])
+                .on_press(PanelMsg::HistoryRestoreCancelled)
+                .style(move |_t: &Theme, _| iced::widget::button::Style {
+                    background: None,
+                    border: Border {
+                        width: 1.0,
+                        radius: 2.0.into(),
+                        color: border_c,
+                    },
+                    text_color: muted,
+                    ..iced::widget::button::Style::default()
+                }),
+        );
+    }
+    let footer = footer.push(restore_btn);
 
     let card_inner = column![
         header,

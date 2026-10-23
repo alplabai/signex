@@ -63,8 +63,8 @@ impl Signex {
                 self.finish_update()
             }
             UiMsg::GridCycle => {
-                self.interaction_state.active_canvas_mut().clear_bg_cache();
-                self.finish_update()
+                let cycled = self.cycle_grid_size();
+                Task::batch([cycled, self.finish_update()])
             }
             UiMsg::GridPickerOpen => {
                 // v0.18.10 — only mount the picker when the active

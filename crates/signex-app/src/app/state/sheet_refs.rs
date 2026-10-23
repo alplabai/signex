@@ -37,14 +37,23 @@ pub struct UnreadableSheet {
     pub(crate) path: PathBuf,
     /// Why it was not followed, e.g. `is not a regular file`.
     pub(crate) reason: String,
+    /// Label with the whole reference text, not just its file name. A refused
+    /// network or device reference needs the host or share spelled out, and
+    /// only a Unix path keeps `\\host\share\x` as one component.
+    pub(crate) whole_path: bool,
 }
 
 impl UnreadableSheet {
     /// `name (reason)` for the Messages panel and the dialog.
     fn label(&self) -> String {
+        let name = if self.whole_path {
+            self.path.to_string_lossy().into_owned()
+        } else {
+            file_label(&self.path)
+        };
         match self.reason.as_str() {
-            "" => file_label(&self.path),
-            reason => format!("{} ({reason})", file_label(&self.path)),
+            "" => name,
+            reason => format!("{name} ({reason})"),
         }
     }
 }
@@ -181,14 +190,54 @@ fn identity_key(keys: &mut KeyMap, volume: &mut VolumeCase, path: &Path) -> Stri
     path_key_with(real, keys.fold)
 }
 
-/// Record a network / device / verbatim reference as unreadable, once.
-fn refuse_remote(unreadable: &mut Vec<UnreadableSheet>, reference: &str) {
-    let path = PathBuf::from(reference.trim());
-    if unreadable.iter().all(|u| u.path != path) {
+/// The network / device references the walk refused, each listed once and the
+/// list bounded: a hostile sheet can name a million distinct `\\h\s\<n>`
+/// children, and neither the list nor the duplicate check may grow with them.
+struct Refusals {
+    seen: HashSet<PathBuf>,
+    /// Entries listed in `unreadable`; once it reaches `cap` the rest only count.
+    listed: usize,
+    hidden: usize,
+    cap: usize,
+}
+
+impl Refusals {
+    fn new(cap: usize) -> Self {
+        Self {
+            seen: HashSet::new(),
+            listed: 0,
+            hidden: 0,
+            cap,
+        }
+    }
+
+    /// Record `reference` as unreadable, once.
+    fn refuse(&mut self, unreadable: &mut Vec<UnreadableSheet>, reference: &str) {
+        let path = PathBuf::from(reference.trim());
+        if !self.seen.insert(path.clone()) {
+            return;
+        }
+        if self.listed >= self.cap {
+            self.hidden += 1;
+            return;
+        }
+        self.listed += 1;
         unreadable.push(UnreadableSheet {
             path,
             reason: "is a network or device path, not followed".to_string(),
+            whole_path: true,
         });
+    }
+
+    /// The single `(+N more refused)` entry for what the cap hid.
+    fn finish(self, unreadable: &mut Vec<UnreadableSheet>) {
+        if self.hidden > 0 {
+            unreadable.push(UnreadableSheet {
+                path: PathBuf::from(format!("(+{} more refused)", self.hidden)),
+                reason: String::new(),
+                whole_path: true,
+            });
+        }
     }
 }
 
@@ -247,12 +296,13 @@ impl SheetRefInputs {
         }
         let mut disk: HashMap<PathBuf, Vec<String>> = HashMap::new();
         let mut unreadable = Vec::new();
+        let mut refusals = Refusals::new(limits.max_sheets);
         let mut walked: HashSet<String> = HashSet::new();
         let mut pending: Vec<PathBuf> = Vec::new();
         let mut truncated = false;
         for root in &roots {
             if path_is_refused(root, &trusted) {
-                refuse_remote(&mut unreadable, &root.to_string_lossy());
+                refusals.refuse(&mut unreadable, &root.to_string_lossy());
                 // Never canonicalised (that is the IO refused), so the key the
                 // staleness check computes is the one recorded by `identity_key`
                 // if anything else keyed this path, the lexical one if not.
@@ -270,6 +320,7 @@ impl SheetRefInputs {
                 unreadable.push(UnreadableSheet {
                     path: PathBuf::from("(rest of the walk)"),
                     reason: format!("stopped after {} sheets", limits.max_sheets),
+                    whole_path: false,
                 });
                 truncated = true;
                 break;
@@ -278,6 +329,7 @@ impl SheetRefInputs {
                 unreadable.push(UnreadableSheet {
                     path: path.clone(),
                     reason,
+                    whole_path: false,
                 });
                 Vec::new()
             });
@@ -292,13 +344,14 @@ impl SheetRefInputs {
                     continue;
                 };
                 if is_refused(child, &trusted) {
-                    refuse_remote(&mut unreadable, child);
+                    refusals.refuse(&mut unreadable, child);
                     walked.insert(keys.key(&next));
                 } else {
                     pending.push(next);
                 }
             }
         }
+        refusals.finish(&mut unreadable);
         SheetRefs {
             disk,
             unreadable,
@@ -628,6 +681,7 @@ mod tests {
                 .map(|n| UnreadableSheet {
                     path: PathBuf::from(n),
                     reason: String::new(),
+                    whole_path: false,
                 })
                 .collect(),
             ..SheetRefs::default()
@@ -790,11 +844,13 @@ mod tests {
                     symbols_count: 0,
                     wires_count: 0,
                     labels_count: 0,
+                    unknown: Default::default(),
                 }],
                 variant_definitions: Vec::new(),
                 active_variant: None,
                 libraries: Vec::new(),
                 enable_git: false,
+                unknown: Default::default(),
             },
             pending_libraries: HashMap::new(),
         }
@@ -940,6 +996,45 @@ mod tests {
             "{:?}",
             resolved.keys.real.keys(),
         );
+    }
+
+    #[test]
+    fn a_refused_reference_is_labelled_with_its_whole_text_on_every_host() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path().join("x.snxsch");
+        write_sheet(&root, &[r"\\attacker\share\y.snxsch"]);
+
+        let resolved = resolve_root(&root, WalkLimits::default());
+
+        let label = resolved.unreadable[0].label();
+        assert!(label.starts_with(r"\\attacker\share\y.snxsch ("), "{label}");
+    }
+
+    #[test]
+    fn many_refused_children_are_bounded_and_counted_once_each() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path().join("x.snxsch");
+        let children: Vec<String> = (0..5000).map(|n| format!(r"\\h\s\{n}.snxsch")).collect();
+        let refs: Vec<&str> = children.iter().map(String::as_str).collect();
+        write_sheet(&root, &refs);
+        let limits = WalkLimits {
+            max_sheets: 50,
+            ..WalkLimits::default()
+        };
+        let started = std::time::Instant::now();
+
+        let resolved = resolve_root(&root, limits);
+
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+        // 50 listed, plus the single summary entry for the other 4950.
+        assert_eq!(
+            resolved.unreadable.len(),
+            51,
+            "{}",
+            resolved.unreadable.len()
+        );
+        assert_eq!(resolved.unreadable[50].label(), "(+4950 more refused)");
+        assert_discard_blocked_by(&resolved, "network or device");
     }
 
     #[test]
