@@ -105,6 +105,9 @@ pub struct LocalGitAdapter {
     /// libgit2's responsibility; this only addresses the in-process
     /// race that `RwLock<LibraryFile>` does NOT cover.)
     git_lock: Mutex<()>,
+    /// Edits saved to disk whose commit failed; drained by
+    /// [`LocalGitAdapter::take_commit_warnings`].
+    commit_warnings: Mutex<Vec<String>>,
 }
 
 impl LocalGitAdapter {
@@ -200,6 +203,7 @@ impl LocalGitAdapter {
             library_file: RwLock::new(library_file),
             manifest_synth,
             git_lock: Mutex::new(()),
+            commit_warnings: Mutex::new(Vec::new()),
         })
     }
 
@@ -236,6 +240,7 @@ impl LocalGitAdapter {
             library_file: RwLock::new(library_file),
             manifest_synth,
             git_lock: Mutex::new(()),
+            commit_warnings: Mutex::new(Vec::new()),
         })
     }
 
@@ -322,6 +327,7 @@ impl LocalGitAdapter {
             library_file: RwLock::new(library_file),
             manifest_synth,
             git_lock: Mutex::new(()),
+            commit_warnings: Mutex::new(Vec::new()),
         })
     }
 

@@ -1,5 +1,7 @@
-//! Issue #831 — a failed encode, write or commit must leave the in-memory
-//! `LibraryFile` equal to the `.snxlib` on disk, and the library saveable.
+//! Issue #831 — a failed encode or write must leave the in-memory
+//! `LibraryFile` and the `.snxlib` on disk untouched. A failed git commit
+//! must NOT roll the edit back: it is kept (memory == disk), a warning is
+//! surfaced, and the next successful commit includes it.
 
 #![cfg(feature = "local-git")]
 
@@ -112,23 +114,108 @@ fn failed_write_leaves_memory_equal_to_disk() {
     assert_eq!(disk_classes(&file), vec!["res", "ind"]);
 }
 
+/// Blob id the index holds for the `.snxlib`, if staged.
+fn index_blob(root: &Path, rel: &str) -> Option<git2::Oid> {
+    let repo = git2::Repository::open(root).unwrap();
+    let index = repo.index().unwrap();
+    index.get_path(Path::new(rel), 0).map(|e| e.id)
+}
+
+fn head_blob(root: &Path, rel: &str) -> Option<git2::Oid> {
+    let repo = git2::Repository::open(root).unwrap();
+    let tree = repo
+        .head()
+        .unwrap()
+        .peel_to_commit()
+        .unwrap()
+        .tree()
+        .unwrap();
+    tree.get_path(Path::new(rel)).ok().map(|e| e.id())
+}
+
+/// The index must hold either the last committed content or the content
+/// on disk — never a third state (a rolled-back edit).
+fn assert_index_agrees_with_disk(root: &Path, file: &Path) {
+    let rel = file.file_name().unwrap().to_str().unwrap();
+    let disk =
+        git2::Oid::hash_object(git2::ObjectType::Blob, &std::fs::read(file).unwrap()).unwrap();
+    let staged = index_blob(root, rel);
+    assert!(
+        staged == Some(disk) || staged == head_blob(root, rel),
+        "index stages content that is neither HEAD nor disk"
+    );
+}
+
 #[test]
-fn failed_commit_restores_disk_and_memory() {
+fn failed_commit_keeps_the_edit_and_warns() {
     let dir = tempfile::tempdir().unwrap();
     let (file, _, adapter) = init(&dir);
+    let root = dir.path().join("Rb");
     adapter.add_library_class(class("res"), "add res").unwrap();
-    let before = std::fs::read(&file).unwrap();
 
-    let head = dir.path().join("Rb").join(".git").join("HEAD");
+    let head = root.join(".git").join("HEAD");
     let good_head = std::fs::read(&head).unwrap();
     std::fs::write(&head, b"garbage\n").unwrap();
-    assert!(adapter.add_library_class(class("cap"), "add cap").is_err());
-    assert_eq!(std::fs::read(&file).unwrap(), before, "disk rolled back");
-    assert_eq!(memory_classes(&adapter), vec!["res".to_string()]);
+    adapter
+        .add_library_class(class("cap"), "add cap")
+        .expect("a commit failure must not reject the edit");
+    assert_eq!(
+        disk_classes(&file),
+        vec!["res", "cap"],
+        "edit stays on disk"
+    );
+    assert_eq!(memory_classes(&adapter), disk_classes(&file));
+    let warnings = adapter.take_commit_warnings();
+    assert_eq!(warnings.len(), 1);
+    assert!(warnings[0].starts_with("saved, but the git commit failed:"));
+    assert!(warnings[0].ends_with("it will be included in the next commit"));
+    assert_index_agrees_with_disk(&root, &file);
 
     std::fs::write(&head, good_head).unwrap();
+    adapter.add_library_class(class("ind"), "add ind").unwrap();
+    assert!(adapter.take_commit_warnings().is_empty());
+    assert_eq!(disk_classes(&file), vec!["res", "cap", "ind"]);
+}
+
+#[test]
+fn index_lock_keeps_edit_and_next_commit_includes_both() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, _, adapter) = init(&dir);
+    let root = dir.path().join("Rb");
+    adapter.add_library_class(class("res"), "add res").unwrap();
+
+    let lock = root.join(".git").join("index.lock");
+    std::fs::write(&lock, b"").unwrap();
     adapter.add_library_class(class("cap"), "add cap").unwrap();
-    assert_eq!(disk_classes(&file), memory_classes(&adapter));
+    assert_eq!(disk_classes(&file), vec!["res", "cap"]);
+    assert_eq!(memory_classes(&adapter), disk_classes(&file));
+    assert_eq!(adapter.take_commit_warnings().len(), 1);
+    assert_index_agrees_with_disk(&root, &file);
+
+    std::fs::remove_file(&lock).unwrap();
+    adapter.add_library_class(class("ind"), "add ind").unwrap();
+    assert!(adapter.take_commit_warnings().is_empty());
+    assert_eq!(memory_classes(&adapter), disk_classes(&file));
+    // HEAD's `.snxlib` carries both the held-back and the new edit.
+    let repo = git2::Repository::open(&root).unwrap();
+    let tree = repo
+        .head()
+        .unwrap()
+        .peel_to_commit()
+        .unwrap()
+        .tree()
+        .unwrap();
+    let blob = repo
+        .find_blob(tree.get_path(Path::new("Rb.snxlib")).unwrap().id())
+        .unwrap();
+    let committed = LibraryFile::parse(std::str::from_utf8(blob.content()).unwrap()).unwrap();
+    let keys: Vec<_> = committed
+        .manifest
+        .classes
+        .into_iter()
+        .map(|c| c.key)
+        .collect();
+    assert_eq!(keys, vec!["res", "cap", "ind"]);
 }
 
 #[test]

@@ -260,15 +260,6 @@ impl LocalGitAdapter {
         file_name_str(&self.file_path)
     }
 
-    /// Persist the in-memory `library_file` to disk. Caller already holds
-    /// the appropriate read/write lock.
-    fn persist_library_file(&self, lf: &LibraryFile) -> Result<(), LibraryError> {
-        let text = lf.write()?;
-        // HI-6: atomic write — never half-write the manifest.
-        signex_types::atomic_io::atomic_write(&self.file_path, text.as_bytes())?;
-        Ok(())
-    }
-
     /// Mutate the in-memory `library_file`, persist it, and commit the
     /// `.snxlib` with the supplied message.
     pub(super) fn mutate_library_file<F>(
@@ -307,37 +298,54 @@ impl LocalGitAdapter {
             .library_file
             .write()
             .map_err(|_| LibraryError::Backend("library_file write lock poisoned".into()))?;
-        // #831: edit a clone and swap it in only once disk (and the
-        // commit) agree. A failed encode, write or commit leaves both the
-        // in-memory file and the `.snxlib` on disk exactly as they were.
+        // #831: edit a clone. An encode or write failure discards it, so
+        // memory and the `.snxlib` on disk stay exactly as they were.
         let mut candidate = guard.clone();
         if !f(&mut candidate)? {
             return Ok(());
         }
-        let previous = guard.write()?;
-        self.persist_library_file(&candidate)?;
+        // Encode once; the same bytes are written below.
+        let text = candidate.write()?;
+        // TODO(#822): route this write through `note_own_write` once it lands.
+        // HI-6: atomic write — never half-write the manifest.
+        signex_types::atomic_io::atomic_write(&self.file_path, text.as_bytes())?;
+        // Disk now holds the edit, so memory takes it too. A failed commit
+        // below must not undo it: memory == disk is the invariant.
+        *guard = candidate;
         let rel = self.snxlib_rel_path()?;
         if let Err(commit_err) = self.commit_path(&rel, message, fallback) {
-            return Err(self.restore_after_failed_commit(&previous, commit_err));
+            self.record_commit_warning(&commit_err);
         }
-        *guard = candidate;
         Ok(())
     }
 
-    /// Put the previous `.snxlib` text back after a failed commit so disk
-    /// does not run ahead of the (unchanged) in-memory file. If the
-    /// restore itself fails, both failures are reported.
-    fn restore_after_failed_commit(
-        &self,
-        previous: &str,
-        commit_err: LibraryError,
-    ) -> LibraryError {
-        match signex_types::atomic_io::atomic_write(&self.file_path, previous.as_bytes()) {
-            Ok(()) => commit_err,
-            Err(restore_err) => LibraryError::Backend(format!(
-                "{commit_err}; additionally restoring the previous .snxlib failed: {restore_err}"
-            )),
-        }
+    /// The edit is saved but its commit failed. Nothing is rolled back
+    /// (`add_path` restages the whole file, so the next successful commit
+    /// includes this edit); surface it to the Messages panel via the log
+    /// bridge and keep it for [`Self::take_commit_warnings`].
+    fn record_commit_warning(&self, commit_err: &LibraryError) {
+        let text = format!(
+            "saved, but the git commit failed: {commit_err}; it will be included in the next commit"
+        );
+        tracing::warn!(
+            target: "signex::library",
+            path = %self.file_path.display(),
+            "{text}"
+        );
+        self.commit_warnings
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(text);
+    }
+
+    /// Drain the warnings from edits that were saved but not committed.
+    pub fn take_commit_warnings(&self) -> Vec<String> {
+        std::mem::take(
+            &mut *self
+                .commit_warnings
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()),
+        )
     }
 
     /// Read the table named `table` as a snapshot of [`ComponentRow`]s,
