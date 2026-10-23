@@ -8,7 +8,6 @@ use common::Sketch;
 use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
 use signex_sketch::error::SolveError;
 use signex_sketch::id::ConstraintId;
-use signex_sketch::solver::Solver;
 use signex_sketch::solver::residual::ResolvedParams;
 
 fn distance(
@@ -40,7 +39,7 @@ fn conflicting_distances_are_reported_as_over_constrained() {
     s.data.constraints.push(five);
     s.data.constraints.push(ten);
 
-    let err = Solver::default()
+    let err = common::solver()
         .solve(&s.data, &ResolvedParams::new())
         .expect_err("5 mm and 10 mm cannot both hold");
 
@@ -61,7 +60,7 @@ fn a_satisfiable_sketch_is_not_reported_as_over_constrained() {
     });
     s.data.constraints.push(distance(p1, p2, 5.0));
 
-    let out = Solver::default()
+    let out = common::solver()
         .solve(&s.data, &ResolvedParams::new())
         .expect("one distance is satisfiable");
     assert!(out.over_constraints.is_empty());
@@ -85,7 +84,7 @@ fn a_saddle_start_still_converges_to_the_solution() {
     s.data.constraints.push(distance(a, p, 5.0));
     s.data.constraints.push(distance(b, p, 5.0));
 
-    let out = Solver::default()
+    let out = common::solver()
         .solve(&s.data, &ResolvedParams::new())
         .expect("two 5 mm distances to P are satisfiable");
 
@@ -118,7 +117,7 @@ fn the_reported_conflict_excludes_strained_bystanders() {
     s.data.constraints.push(distance(a, c, 2.0));
     s.data.constraints.push(distance(b, c, 2.5));
 
-    let err = Solver::default()
+    let err = common::solver()
         .solve(&s.data, &ResolvedParams::new())
         .expect_err("the 5 mm distance contradicts the fixed points");
 
@@ -147,7 +146,7 @@ fn a_conflict_no_single_removal_resolves_names_the_whole_set() {
     let mut trio_ids: Vec<_> = trio.iter().map(|c| c.id).collect();
     s.data.constraints.extend(trio);
 
-    let err = Solver::default()
+    let err = common::solver()
         .solve(&s.data, &ResolvedParams::new())
         .expect_err("three different distances cannot all hold");
 
@@ -177,7 +176,7 @@ fn the_saddle_retry_does_not_drift_an_unrelated_free_point() {
     s.data.constraints.push(distance(a, p, 5.0));
     s.data.constraints.push(distance(b, p, 5.0));
 
-    let out = Solver::default()
+    let out = common::solver()
         .solve(&s.data, &ResolvedParams::new())
         .expect("the saddle sketch solves");
 
