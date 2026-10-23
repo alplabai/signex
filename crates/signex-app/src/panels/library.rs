@@ -40,6 +40,9 @@ pub struct LibraryRowDetail {
     pub symbol_summary: String,
     /// Same shape for footprint — "Footprint bound", "unbound", …
     pub footprint_summary: String,
+    /// The row lives in a read-only mount (the stock library); the
+    /// Pick buttons render disabled.
+    pub read_only: bool,
 }
 
 // ─── SCH Library Panel (Altium parity) ───────────────────────────────
@@ -531,7 +534,7 @@ pub fn view_library_row_properties<'a>(
 
     let pick_symbol_btn = button(text("Pick Symbol…").size(11).color(primary))
         .padding([4, 10])
-        .on_press(PanelMsg::LibraryRowPickSymbol)
+        .on_press_maybe((!d.read_only).then_some(PanelMsg::LibraryRowPickSymbol))
         .style(move |_: &Theme, _| iced::widget::button::Style {
             background: Some(iced::Background::Color(iced::Color::from_rgba(
                 1.0, 1.0, 1.0, 0.04,
@@ -547,7 +550,7 @@ pub fn view_library_row_properties<'a>(
 
     let pick_footprint_btn = button(text("Pick Footprint…").size(11).color(primary))
         .padding([4, 10])
-        .on_press(PanelMsg::LibraryRowPickFootprint)
+        .on_press_maybe((!d.read_only).then_some(PanelMsg::LibraryRowPickFootprint))
         .style(move |_: &Theme, _| iced::widget::button::Style {
             background: Some(iced::Background::Color(iced::Color::from_rgba(
                 1.0, 1.0, 1.0, 0.04,

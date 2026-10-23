@@ -112,6 +112,35 @@ impl LibraryState {
     /// entries are left empty — one bad table doesn't sink the open
     /// flow.
     pub fn open_library(&mut self, root: PathBuf) -> Result<(), LibraryError> {
+        self.open_library_marked(root, false)
+    }
+
+    /// Mount the library at `root` read-only — the stock library that
+    /// ships with Signex. Every write through the mounted adapter fails
+    /// with `LibraryError::ReadOnly` whatever the install directory's
+    /// permissions are. Idempotent like [`Self::open_library`].
+    pub fn open_library_read_only(&mut self, root: PathBuf) -> Result<(), LibraryError> {
+        self.open_library_marked(root, true)
+    }
+
+    /// True when the library mounted at `root` is read-only.
+    pub fn is_read_only(&self, root: &Path) -> bool {
+        self.set.is_read_only_path(root)
+    }
+
+    /// Display name of the read-only library whose directory contains
+    /// `path`, or `None` when `path` is outside every read-only mount.
+    pub fn read_only_library_name_containing(&self, path: &Path) -> Option<String> {
+        self.open_libraries
+            .iter()
+            .find(|lib| {
+                self.is_read_only(&lib.root)
+                    && lib.root_dir().is_some_and(|dir| path.starts_with(dir))
+            })
+            .map(|lib| lib.display_name.clone())
+    }
+
+    fn open_library_marked(&mut self, root: PathBuf, read_only: bool) -> Result<(), LibraryError> {
         if self.library_at(&root).is_some() {
             return Ok(());
         }
@@ -135,7 +164,11 @@ impl LibraryState {
         // can still resolve to whichever copy wins. Detecting and
         // surfacing that collision is the Components Panel's job at
         // presentation time.
-        self.set.mount(Box::new(adapter))?;
+        if read_only {
+            self.set.mount_read_only(Box::new(adapter))?;
+        } else {
+            self.set.mount(Box::new(adapter))?;
+        }
         let mut entry = OpenLibrary {
             root,
             display_name,

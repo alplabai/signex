@@ -86,6 +86,9 @@ impl Signex {
         column: String,
         value: String,
     ) -> Task<Message> {
+        if self.refuse_read_only_write(&library_path) {
+            return Task::none();
+        }
         if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
             state.cell_edit.insert((row_id, column), value);
         }

@@ -397,6 +397,11 @@ impl Signex {
     /// events never reached `SignexLogger`, so a failed primitive save
     /// was invisible in both stderr and the Messages panel.
     pub(crate) fn save_primitive_tab_at(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
+        // These editors write the container file themselves, bypassing
+        // the adapter — so the read-only mount is enforced here too.
+        if let Some(error) = self.read_only_write_error(path) {
+            return Err(error);
+        }
         // Symbol path — write the full multi-symbol container back to
         // disk so other symbols in the same file are preserved.
         if let Some(editor) = self.document_state.symbol_editors.get_mut(path) {

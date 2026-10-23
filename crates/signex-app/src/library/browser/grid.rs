@@ -15,6 +15,7 @@ pub(super) fn view_grid<'a>(
     columns: &[GridColumn],
     browser: &'a LibraryBrowserState,
     tokens: &'a ThemeTokens,
+    read_only: bool,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
     let _text_c = theme_ext::text_primary(tokens);
@@ -178,6 +179,22 @@ pub(super) fn view_grid<'a>(
                 // Symbol / Pick Footprint — typing into the cell
                 // would have no defined semantics.
                 if matches!(c.kind, ColumnKind::Symbol | ColumnKind::Footprint) {
+                    data_row = data_row.push(
+                        container(
+                            text(row_value)
+                                .size(BROWSER_TEXT_SIZE)
+                                .color(theme_ext::text_secondary(tokens)),
+                        )
+                        .padding([4, 6])
+                        .width(Length::Fixed(c.width)),
+                    );
+                    continue;
+                }
+
+                // Read-only mount (the stock library): a plain label,
+                // not an input — editing is unavailable up front
+                // rather than failing on commit.
+                if read_only {
                     data_row = data_row.push(
                         container(
                             text(row_value)

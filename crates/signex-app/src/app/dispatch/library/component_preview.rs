@@ -33,6 +33,16 @@ impl Signex {
         address: EditorAddress,
         msg: EditorMsg,
     ) -> Task<Message> {
+        // Navigation stays available on a read-only mount; every other
+        // event edits or saves the row, so it is refused with the
+        // explanation card before any draft state changes.
+        let navigates = matches!(
+            msg,
+            EditorMsg::CloseEditor | EditorMsg::SelectTab(_) | EditorMsg::OpenWhereUsedTab
+        );
+        if !navigates && self.refuse_read_only_write(&address.library_path) {
+            return Task::none();
+        }
         match msg {
             EditorMsg::CloseEditor => return self.close_component_preview(&address),
             EditorMsg::SaveDraft | EditorMsg::Commit => {

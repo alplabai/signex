@@ -98,6 +98,9 @@ mod history_load_failure;
 #[path = "regression/library_browser_cell_commit.rs"]
 mod library_browser_cell_commit;
 
+#[path = "regression/library_read_only_mount.rs"]
+mod library_read_only_mount;
+
 #[path = "regression/render_config_grid_style.rs"]
 mod render_config_grid_style;
 
