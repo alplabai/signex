@@ -62,6 +62,11 @@ impl Signex {
             crate::dock::DockLayoutSnapshot::capture(&dock),
         );
 
+        let initial_component_filter = crate::fonts::read_component_filter();
+        let search_prefs = crate::persist::SearchPrefsSync::new(std::sync::Arc::new(
+            crate::fonts::PrefsSearchStore::user_prefs(),
+        ));
+
         let sch_canvas = CanvasSlot::new();
         let mut pcb_canvas = crate::pcb_canvas::PcbCanvas::new();
         // Read the persisted GPU-render preference ONCE — each read is a full
@@ -284,6 +289,7 @@ impl Signex {
             document_state: DocumentState {
                 dock,
                 dock_layout_sync,
+                search_prefs,
                 tabs: vec![],
                 active_tab: 0,
                 engines: std::collections::HashMap::new(),
@@ -351,7 +357,7 @@ impl Signex {
                     child_sheet_border_advanced_open: false,
                     child_sheet_fill_advanced_open: false,
                     child_sheet_stroke_width_buf: None,
-                    component_filter: crate::fonts::read_component_filter(),
+                    component_filter: initial_component_filter,
                     collapsed_sections: std::collections::HashSet::new(),
                     pre_placement: None,
                     erc_diagnostics: Vec::new(),

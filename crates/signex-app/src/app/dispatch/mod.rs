@@ -86,6 +86,7 @@ impl Signex {
             Message::Remove(msg) => self.dispatch_remove_message(msg),
             Message::Window(msg) => self.dispatch_window_message(msg),
             Message::DockLayout(msg) => self.dispatch_dock_layout_message(msg),
+            Message::SearchPrefs(msg) => self.dispatch_search_prefs_message(msg),
             Message::MoveSelection(msg) => self.dispatch_move_selection_message(msg),
             Message::NetColor(msg) => self.dispatch_net_color_message(msg),
             Message::ParameterManager(msg) => self.dispatch_parameter_manager_message(msg),
@@ -312,7 +313,7 @@ impl Signex {
             WindowMsg::SecondaryWindowClosed(id) => {
                 // Main window closed → terminate the process.
                 if self.ui_state.main_window_id == Some(id) {
-                    return self.flush_dock_layout_then(iced::exit());
+                    return self.flush_quit_writes_then(iced::exit());
                 }
                 let mut layout_persist = Task::none();
                 // Drop the entry and dismiss the backing modal state so
