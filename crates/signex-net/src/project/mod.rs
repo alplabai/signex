@@ -653,6 +653,11 @@ fn detect_shared_references(occs: &[Occ], issues: &mut Vec<StitchIssue>) {
 /// corruption. Sheet identity is the [`SheetKey`], never the uuid; every sheet
 /// in the graph is checked uniformly, root included, since the root is just
 /// another entry in `sheets`.
+///
+/// The scope is deliberately the **whole graph**, not just the sheets reachable
+/// from the root (#537): since #430 a declared project page outside the
+/// hierarchy is stitched as its own top-level root, so a uuid it shares with
+/// any other sheet is the same corruption and must be reported.
 fn detect_duplicate_uuids(
     sheets: &HashMap<SheetKey, SchematicSheet>,
     issues: &mut Vec<StitchIssue>,

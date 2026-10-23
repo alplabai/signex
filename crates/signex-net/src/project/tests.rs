@@ -978,3 +978,37 @@ fn same_filename_children_of_different_parents_stitch_from_their_own_files() {
 }
 
 mod multi_root;
+
+/// #537: duplicate-uuid detection covers the whole project graph, so a
+/// declared page outside the root's hierarchy that copies the root's uuid is
+/// reported, as is a child that copies it.
+#[test]
+fn a_duplicate_sheet_uuid_is_reported_anywhere_in_the_project_graph() {
+    // `empty_sheet` has the nil uuid, which the check skips; give it a real one.
+    let mut root = empty_sheet();
+    root.uuid = uuid::Uuid::new_v4();
+    let mut page = empty_sheet();
+    page.uuid = root.uuid;
+    let children: HashMap<String, SchematicSheet> = [("page.snxsch".to_string(), page)].into();
+
+    let p = stitch_pages(&root, "root.snxsch", &children, &["page.snxsch"]);
+    let dups: Vec<_> = p
+        .issues
+        .iter()
+        .filter(|i| matches!(i, StitchIssue::DuplicateSheetUuid { .. }))
+        .collect();
+    assert_eq!(dups.len(), 1, "{:?}", p.issues);
+
+    // Distinct uuids: nothing to report.
+    let mut other = empty_sheet();
+    other.uuid = uuid::Uuid::new_v4();
+    let children: HashMap<String, SchematicSheet> = [("page.snxsch".to_string(), other)].into();
+    let p = stitch_pages(&root, "root.snxsch", &children, &["page.snxsch"]);
+    assert!(
+        !p.issues
+            .iter()
+            .any(|i| matches!(i, StitchIssue::DuplicateSheetUuid { .. })),
+        "{:?}",
+        p.issues
+    );
+}
