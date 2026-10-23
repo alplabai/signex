@@ -38,7 +38,20 @@ impl Signex {
                 .map(|s| s.schematic.paper_size.as_str())
                 .unwrap_or("A4");
             let page_size = PageSize::from_standard_str(paper_str);
-            let orientation = PageSize::default_orientation_for_standard(paper_str);
+            let mut orientation = PageSize::default_orientation_for_standard(paper_str);
+            // A Custom page's orientation follows its shape, never the
+            // sheet's "portrait" suffix, so the modal opens consistent.
+            if let PageSize::Custom {
+                width_mm,
+                height_mm,
+            } = page_size
+            {
+                orientation = if width_mm >= height_mm {
+                    signex_output::Orientation::Landscape
+                } else {
+                    signex_output::Orientation::Portrait
+                };
+            }
             let palette = signex_output::SchematicPalette::from(
                 &signex_types::theme::canvas_colors(self.ui_state.theme_id),
             );
@@ -54,6 +67,7 @@ impl Signex {
         // into `PreviewState.quality` below, so the very first
         // rasterisation matches what the picker shows.
         let initial_quality = crate::app::state::PdfQuality::Medium300;
+        log_if_preview_downscaled(&pdf_opts, initial_quality.preview_dpi());
         let pages = PreviewRasterizer.rasterize(
             &ctx,
             &PreviewOptions {
@@ -104,11 +118,13 @@ impl Signex {
             .collect();
         let selected_files: std::collections::HashSet<PathBuf> =
             sheet_files.iter().map(|(p, _)| p.clone()).collect();
+        let page_setup = crate::app::state::PageSetupInputs::from_options(&pdf_opts);
         self.document_state.preview = Some(crate::app::state::PreviewState {
             pages,
             page_handles,
             selected: 0,
             pdf_options: pdf_opts,
+            page_setup,
             specific_page_input: "1".to_string(),
             zoom: 1.0,
             active_tab: crate::app::state::PdfPreviewTab::Preview,
@@ -175,17 +191,6 @@ impl Signex {
         if parsed_page.map(|p| p > 0).unwrap_or(false) {
             self.rerasterize_print_preview();
         }
-    }
-
-    pub(crate) fn handle_print_preview_set_fit_to_page(&mut self, fit: bool) {
-        if let Some(preview) = self.document_state.preview.as_mut() {
-            preview.pdf_options.scale = if fit {
-                signex_output::PdfScale::FitToPage
-            } else {
-                signex_output::PdfScale::OneToOne
-            };
-        }
-        self.rerasterize_print_preview();
     }
 
     pub(crate) fn handle_print_preview_set_include_title_block(&mut self, include: bool) {
@@ -285,7 +290,7 @@ impl Signex {
         self.rerasterize_print_preview();
     }
 
-    fn rerasterize_print_preview(&mut self) {
+    pub(super) fn rerasterize_print_preview(&mut self) {
         let (pdf_opts, preview_dpi) = match self.document_state.preview.as_ref() {
             Some(preview) => (preview.pdf_options.clone(), preview.quality.preview_dpi()),
             None => return,
@@ -341,6 +346,7 @@ impl Signex {
             return;
         }
 
+        log_if_preview_downscaled(&pdf_opts, preview_dpi);
         let pages = PreviewRasterizer.rasterize(
             &ctx,
             &PreviewOptions {
@@ -470,5 +476,17 @@ impl Signex {
         // SVG render pipeline. When it does, move this handler into
         // the visual-toggle group in the dispatcher (call
         // `handle_print_preview_rerender` after mutating).
+    }
+}
+
+/// A huge Custom page is previewed at a lower resolution than the quality
+/// picker says; tell the Messages panel so the softer preview is explained.
+pub(crate) fn log_if_preview_downscaled(pdf_opts: &PdfOptions, dpi: f64) {
+    let (w_mm, h_mm) = pdf_opts.page_size.dimensions_mm(pdf_opts.orientation);
+    if signex_output::preview_raster_size(w_mm, h_mm, dpi).3 {
+        crate::diagnostics::log_warning(format!(
+            "Print preview: {w_mm} x {h_mm} mm page drawn at reduced resolution (longest side capped at {} px); the export is unaffected.",
+            signex_output::MAX_PREVIEW_EDGE_PX
+        ));
     }
 }
