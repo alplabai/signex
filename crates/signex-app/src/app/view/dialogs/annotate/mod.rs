@@ -493,7 +493,7 @@ impl Signex {
             )
         } else {
             format!(
-                "Annotation will assign new designators to {changes} of {total_symbols} symbols on '{current_sheet_name}'. Click Accept Changes to apply, Update Changes List to recompute, or Reset All to clear every number first.",
+                "Annotation will assign new designators to {changes} of {total_symbols} symbols on '{current_sheet_name}'. The list updates live. Click Accept Changes to apply, or Reset All to clear every number first.",
             )
         };
         let summary = container(text(summary_text).size(10).color(text_muted)).padding([4, 4]);
@@ -514,25 +514,18 @@ impl Signex {
         let footer = row![
             secondary_button(
                 "All On",
-                Message::Annotate(AnnotateMsg::CloseDialog), // placeholder — multi-sheet v1.1
+                Message::Annotate(AnnotateMsg::SetAllLocked(false)),
                 text_c,
                 border_c,
             ),
             Space::new().width(4),
             secondary_button(
                 "All Off",
-                Message::Annotate(AnnotateMsg::CloseDialog), // placeholder — multi-sheet v1.1
+                Message::Annotate(AnnotateMsg::SetAllLocked(true)),
                 text_c,
                 border_c,
             ),
             Space::new().width(Length::Fill),
-            secondary_button(
-                "Update Changes List",
-                Message::Annotate(AnnotateMsg::CloseDialog), // preview is already live; close = cheap redraw
-                text_c,
-                border_c,
-            ),
-            Space::new().width(4),
             secondary_button(
                 "Reset All",
                 Message::Annotate(AnnotateMsg::Run(signex_engine::AnnotateMode::ResetOnly)),

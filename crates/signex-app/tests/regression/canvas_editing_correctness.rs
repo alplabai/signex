@@ -177,3 +177,47 @@ fn double_click_shape_commit_snaps_to_the_grid() {
         "end = {end:?}"
     );
 }
+
+#[test]
+fn tab_switch_drops_in_flight_drawing_buffers() {
+    let (mut app, _task) = Signex::new();
+    let window = iced::window::Id::unique();
+    app.ui_state.main_window_id = Some(window);
+    add_tab(&mut app, &PathBuf::from("a.snxsch"));
+    add_tab(&mut app, &PathBuf::from("b.snxsch"));
+    activate(&mut app, 0);
+
+    // Half-placed wire in tab A.
+    app.interaction_state.current_tool = Tool::Wire;
+    app.interaction_state.wire_drawing = true;
+    app.interaction_state.wire_points = vec![Point::new(1.0, 1.0)];
+    let _ = app.update(Message::Tab {
+        window_id: window,
+        msg: TabMessage::Select(1),
+    });
+    assert!(!app.interaction_state.wire_drawing);
+    assert!(app.interaction_state.wire_points.is_empty());
+
+    // Half-placed line in tab A must not complete into tab B.
+    activate(&mut app, 0);
+    app.interaction_state.current_tool = Tool::Line;
+    app.interaction_state.shape_anchor = Some(Point::new(100.0, 100.0));
+    let _ = app.update(Message::Tab {
+        window_id: window,
+        msg: TabMessage::Select(1),
+    });
+    assert!(app.interaction_state.shape_anchor.is_none());
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::DoubleClicked {
+        world_x: 5.08,
+        world_y: 5.08,
+        screen_x: 0.0,
+        screen_y: 0.0,
+    }));
+    let drawings = &app
+        .document_state
+        .active_engine()
+        .expect("engine")
+        .document()
+        .drawings;
+    assert!(drawings.is_empty(), "tab B got {drawings:?}");
+}

@@ -8,10 +8,9 @@ const DOUBLE_CLICK_MS: u128 = 300;
 /// at another (#102).
 const DOUBLE_CLICK_MAX_PX: f32 = 5.0;
 
-/// `dist_world_mm` is the world-space distance between the two presses and
-/// `scale` the camera's pixels-per-mm.
-fn is_double_click(dt_ms: u128, dist_world_mm: f64, scale: f32) -> bool {
-    dt_ms < DOUBLE_CLICK_MS && dist_world_mm * f64::from(scale) < f64::from(DOUBLE_CLICK_MAX_PX)
+/// `dist_px` is the screen-space distance between the two presses.
+fn is_double_click(dt_ms: u128, dist_px: f32) -> bool {
+    dt_ms < DOUBLE_CLICK_MS && dist_px < DOUBLE_CLICK_MAX_PX
 }
 
 impl SchematicCanvas<'_> {
@@ -30,13 +29,13 @@ impl SchematicCanvas<'_> {
             // Double-click detection (300ms, 5px threshold)
             let now = std::time::Instant::now();
             if let (Some(last_time), Some(last_pos)) =
-                (state.last_click_time, state.last_click_world)
+                (state.last_click_time, state.last_click_screen)
             {
                 let dt = now.duration_since(last_time);
-                let dist = ((wx - last_pos.0).powi(2) + (wy - last_pos.1).powi(2)).sqrt();
-                if is_double_click(dt.as_millis(), dist, self.camera().scale) {
+                let dist = (cursor_pos.x - last_pos.0).hypot(cursor_pos.y - last_pos.1);
+                if is_double_click(dt.as_millis(), dist) {
                     state.last_click_time = None;
-                    state.last_click_world = None;
+                    state.last_click_screen = None;
                     state.select_drag_start = None;
                     state.click_on_selected = false;
                     return Some(canvas::Action::publish(Message::CanvasEvent(
@@ -50,7 +49,7 @@ impl SchematicCanvas<'_> {
                 }
             }
             state.last_click_time = Some(now);
-            state.last_click_world = Some((wx, wy));
+            state.last_click_screen = Some((cursor_pos.x, cursor_pos.y));
 
             // Classify the click target:
             //   - hit an already-selected item  → defer click, prepare drag
@@ -388,14 +387,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn threshold_is_in_screen_pixels_at_any_zoom() {
-        // 4 px apart: a double-click at every zoom level.
-        assert!(is_double_click(100, 4.0 / 3.0, 3.0));
-        assert!(is_double_click(100, 4.0 / 48.0, 48.0));
-        // 8 px apart: never, even when that is under 3 mm at high zoom.
-        assert!(!is_double_click(100, 8.0 / 48.0, 48.0));
-        assert!(!is_double_click(100, 8.0 / 0.75, 0.75));
+    fn threshold_is_in_screen_pixels() {
+        assert!(is_double_click(100, 4.0));
+        assert!(!is_double_click(100, 8.0));
         // Too slow is never a double-click.
-        assert!(!is_double_click(300, 0.0, 3.0));
+        assert!(!is_double_click(300, 0.0));
     }
 }

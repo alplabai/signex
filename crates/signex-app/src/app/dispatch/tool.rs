@@ -450,7 +450,8 @@ impl Signex {
             }
             ToolMessage::SelectTool(tool) => {
                 // Buffers belong to the tool that started them (#102).
-                // Re-selecting the active tool mid-gesture keeps the gesture.
+                // Re-selecting the active tool mid-gesture keeps the gesture
+                // on purpose: only a switch to a different tool drops the buffers.
                 if tool != self.interaction_state.current_tool {
                     self.clear_drawing_buffers();
                 }

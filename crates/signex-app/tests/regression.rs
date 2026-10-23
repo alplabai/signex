@@ -41,6 +41,9 @@ mod project;
 #[path = "regression/bom_validation.rs"]
 mod bom_validation;
 
+#[path = "regression/pdf_page_setup.rs"]
+mod pdf_page_setup;
+
 #[path = "regression/prefs.rs"]
 mod prefs;
 
@@ -119,6 +122,8 @@ mod library_git_recovery;
 #[path = "regression/start_screen.rs"]
 mod start_screen;
 
+#[path = "regression/dead_schematic_controls.rs"]
+mod dead_schematic_controls;
 #[path = "regression/save_as_by_document_kind.rs"]
 mod save_as_by_document_kind;
 #[path = "regression/stable_addressing.rs"]
@@ -126,3 +131,6 @@ mod stable_addressing;
 
 #[path = "regression/canvas_editing_correctness.rs"]
 mod canvas_editing_correctness;
+
+#[path = "regression/surface_failures.rs"]
+mod surface_failures;
