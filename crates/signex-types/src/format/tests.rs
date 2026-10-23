@@ -558,9 +558,7 @@ fn snxpcb_round_trip_with_data() {
     assert_eq!(back.board.zones.len(), 1);
     assert_eq!(back.board.zones[0].net_name, "GND");
     assert_eq!(back.board.zones[0].outline.len(), 4);
-    assert_eq!(back.board.zones[0].holes.len(), 1);
-    assert_eq!(back.board.zones[0].holes[0].len(), 3);
-    assert!((back.board.zones[0].holes[0][1].x - 20.0).abs() < 1e-9);
+    assert_eq!(back.board.zones[0].holes, board.zones[0].holes);
 }
 
 /// #818: a zone without holes writes no `holes` key, so files saved before

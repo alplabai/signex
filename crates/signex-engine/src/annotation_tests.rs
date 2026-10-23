@@ -67,6 +67,38 @@ fn a_renumber_that_lands_on_the_same_designators_is_no_edit() {
     assert!(!engine.can_undo());
 }
 
+/// #873 review: a reset over designators that are already reset changes
+/// nothing, so it records no undo step and reports no change.
+#[test]
+fn a_reset_over_already_reset_designators_is_no_edit() {
+    let mut sheet = test_sheet();
+    sheet.symbols.push(unit("U?", 1, 0.0));
+    let mut engine = Engine::new(sheet).unwrap();
+
+    let changed = engine
+        .annotate_with_seed(AnnotateMode::ResetOnly, &mut HashMap::new())
+        .unwrap();
+
+    assert!(!changed);
+    assert!(!engine.can_undo());
+}
+
+/// The same reset over an annotated designator is an edit, with an undo step.
+#[test]
+fn a_reset_that_clears_a_designator_records_history() {
+    let mut sheet = test_sheet();
+    sheet.symbols.push(unit("U1", 1, 0.0));
+    let mut engine = Engine::new(sheet).unwrap();
+
+    let changed = engine
+        .annotate_with_seed(AnnotateMode::ResetOnly, &mut HashMap::new())
+        .unwrap();
+
+    assert!(changed);
+    assert_eq!(engine.document().symbols[0].reference, "U?");
+    assert!(engine.can_undo());
+}
+
 /// Item 4: `Command::AnnotateAll` uses the same part grouping, so the units
 /// of a multi-unit part keep one designator.
 #[test]
