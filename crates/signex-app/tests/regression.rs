@@ -50,6 +50,9 @@ mod prefs;
 #[path = "regression/preferences_dirty_guard.rs"]
 mod preferences_dirty_guard;
 
+#[path = "regression/detached_modal_os_close.rs"]
+mod detached_modal_os_close;
+
 #[path = "regression/diagnostics_routing.rs"]
 mod diagnostics_routing;
 

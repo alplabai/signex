@@ -2,6 +2,7 @@
 
 use iced::Task;
 
+use super::super::super::state::ModalId;
 use super::super::super::*;
 
 impl Signex {
@@ -173,6 +174,36 @@ impl Signex {
         })
     }
 
+    /// The message the modal's own close control sends. The OS close button
+    /// of a detached modal's native title bar goes through this, so it runs
+    /// the same close logic (dirty guard, state reset, window close) as the
+    /// in-body close did. `None` for modals without a dedicated close
+    /// message, which fall back to closing the window directly.
+    pub(crate) fn detached_modal_close_message(modal: ModalId) -> Option<Message> {
+        match modal {
+            ModalId::AnnotateDialog => Some(Message::Annotate(AnnotateMsg::CloseDialog)),
+            ModalId::AnnotateResetConfirm => {
+                Some(Message::Annotate(AnnotateMsg::CloseResetConfirm))
+            }
+            ModalId::ErcDialog => Some(Message::Erc(ErcMsg::CloseDialog)),
+            ModalId::MoveSelection => Some(Message::MoveSelection(MoveSelectionMsg::Close)),
+            ModalId::NetColorPalette => Some(Message::NetColor(NetColorMsg::Close)),
+            ModalId::ParameterManager => {
+                Some(Message::ParameterManager(ParameterManagerMsg::Close))
+            }
+            ModalId::Preferences => Some(Message::Preferences(PreferencesMsg::Close)),
+            ModalId::PrintPreview => Some(Message::PrintPreview(PrintPreviewMsg::Close)),
+            ModalId::BomPreview => Some(Message::BomPreview(BomPreviewMsg::Close)),
+            ModalId::FindReplace
+            | ModalId::RenameDialog
+            | ModalId::RemoveDialog
+            | ModalId::ProjectOptions
+            | ModalId::EnableVersionControl
+            | ModalId::GridProperties
+            | ModalId::SelectionFilterCustom => None,
+        }
+    }
+
     /// Find any OS window that currently hosts `modal` and request the
     /// OS to close it. Used by the in-body Close button so pressing Close
     /// inside a detached modal both dismisses the modal state and cleans
@@ -327,58 +358,60 @@ impl Signex {
         );
         Task::none()
     }
-
-    /// Ask the OS to start a borderless-window drag for whichever window
-    /// currently hosts `modal`. Wired to the decorations:false detached
-    /// modal header so the user can move the window without an OS
-    /// title bar.
-    pub(crate) fn handle_start_detached_window_drag(
-        &mut self,
-        modal: super::super::super::state::ModalId,
-    ) -> Task<Message> {
-        use super::super::super::state::WindowKind;
-        let id = self.ui_state.windows.iter().find_map(|(id, kind)| {
-            if matches!(kind, WindowKind::DetachedModal(m) if *m == modal) {
-                Some(*id)
-            } else {
-                None
-            }
-        });
-        match id {
-            Some(id) => crate::chrome::start_window_drag(id),
-            None => Task::none(),
-        }
-    }
 }
 
 /// Window settings for a detached modal.
 ///
-/// The level is `Normal`: a detached modal stacks like any other window,
-/// so it never floats above other applications and never covers the
-/// in-window modals (shortcut sheet, tour, confirm dialogs) painted in the
-/// main window.
+/// The level is `Normal` and the window keeps the OS decorations. A
+/// detached modal is therefore a first-class window: it stacks like any
+/// other window (never floats above other applications and never covers
+/// the in-window modals painted in the main window), shows in the
+/// taskbar / Dock, can be moved and resized from its native title bar, and
+/// can be raised again after the main window covers it.
 ///
 /// iced 0.14.0 offers no owner/parent relationship: `window::Settings` has
 /// no `parent_window`, and `iced_winit` never calls winit's
 /// `with_parent_window` / `with_transient_for`. "Stay above my owner only"
-/// is therefore not requestable. Residual behaviour: the modal has no OS
-/// chrome (its body draws its own header), so if the main window is raised
-/// over it the user brings it back with the OS window switcher.
+/// is therefore not requestable, which is why the window needs to be
+/// recoverable on its own. The window title is not a `Settings` field in
+/// iced; it comes from `Signex::title`, which uses `detached_modal_title`.
 pub(crate) fn detached_modal_settings(size: iced::Size) -> iced::window::Settings {
     iced::window::Settings {
         size,
         resizable: true,
-        // No OS chrome - the modal body supplies its own header with an X
-        // close button and a click-to-drag region.
-        decorations: false,
+        decorations: true,
         level: iced::window::Level::Normal,
         ..Default::default()
     }
 }
 
+/// Native title-bar text of a detached modal window. Matches the header
+/// the same dialog shows when it is painted inside the main window, so the
+/// OS window switcher names it the way the user knows it.
+pub(crate) fn detached_modal_title(modal: ModalId) -> &'static str {
+    match modal {
+        ModalId::AnnotateDialog => "Annotate",
+        ModalId::ErcDialog => "Electrical Rules Check",
+        ModalId::AnnotateResetConfirm => "Reset All Annotations",
+        ModalId::MoveSelection => "Move Selection",
+        ModalId::NetColorPalette => "Net Colors",
+        ModalId::ParameterManager => "Parameters",
+        ModalId::Preferences => "Preferences",
+        ModalId::FindReplace => "Find and Replace",
+        ModalId::RenameDialog => "Rename",
+        ModalId::RemoveDialog => "Remove",
+        ModalId::PrintPreview => "Export PDF",
+        ModalId::BomPreview => "Bill of Materials",
+        ModalId::ProjectOptions => "Project Options",
+        ModalId::EnableVersionControl => "Enable Version Control",
+        ModalId::GridProperties => "Grid Properties",
+        ModalId::SelectionFilterCustom => "Custom Selection Filter",
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::detached_modal_settings;
+    use super::{ModalId, detached_modal_settings, detached_modal_title};
 
     #[test]
     fn detached_modal_is_not_always_on_top() {
@@ -387,11 +420,21 @@ mod tests {
     }
 
     #[test]
-    fn detached_modal_keeps_requested_size_and_custom_chrome() {
+    fn detached_modal_keeps_requested_size_and_native_decorations() {
         let size = iced::Size::new(900.0, 620.0);
         let s = detached_modal_settings(size);
         assert_eq!(s.size, size);
         assert!(s.resizable);
-        assert!(!s.decorations);
+        assert!(s.decorations);
+    }
+
+    #[test]
+    fn detached_modal_title_names_the_dialog() {
+        assert_eq!(detached_modal_title(ModalId::Preferences), "Preferences");
+        assert_eq!(
+            detached_modal_title(ModalId::ErcDialog),
+            "Electrical Rules Check"
+        );
+        assert!(!detached_modal_title(ModalId::BomPreview).is_empty());
     }
 }

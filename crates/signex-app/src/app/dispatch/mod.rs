@@ -489,9 +489,6 @@ impl Signex {
                 // `Level::Normal` open-behind issue as the modal/tab.
                 iced::window::gain_focus(id)
             }
-            WindowMsg::StartDetachedWindowDrag(modal) => {
-                self.handle_start_detached_window_drag(modal)
-            }
             WindowMsg::StartMainWindowDrag => match self.ui_state.main_window_id {
                 Some(id) => crate::chrome::start_window_drag(id),
                 None => Task::none(),
@@ -500,30 +497,6 @@ impl Signex {
                 Some(id) => crate::chrome::start_window_resize(id, direction),
                 None => Task::none(),
             },
-            WindowMsg::StartDetachedModalResize { modal, direction } => {
-                // Find the OS window id hosting this modal, then ask
-                // the OS to start a resize drag in the requested
-                // direction. Same pattern as the main window —
-                // detached modals have `decorations: false`, so
-                // there's no OS frame to grab; the 6 px overlay
-                // strips are how we expose resize. Routed through
-                // `crate::chrome::start_window_resize` so the Win32
-                // SC_SIZE fallback applies here too — winit's own
-                // path silently no-ops on borderless windows after
-                // the first attempt.
-                let id = self.ui_state.windows.iter().find_map(|(id, kind)| {
-                    if let super::state::WindowKind::DetachedModal(m) = kind
-                        && *m == modal
-                    {
-                        return Some(*id);
-                    }
-                    None
-                });
-                match id {
-                    Some(id) => crate::chrome::start_window_resize(id, direction),
-                    None => Task::none(),
-                }
-            }
             WindowMsg::MinimizeMainWindow => match self.ui_state.main_window_id {
                 Some(id) => iced::window::minimize(id, true),
                 None => Task::none(),
@@ -536,23 +509,20 @@ impl Signex {
             WindowMsg::WindowCloseRequested(id) => {
                 // OS close request (Alt+F4 / native close). Daemon mode
                 // does not auto-close, so route the main window through
-                // the unsaved-changes guard and close any other window
-                // directly.
+                // the unsaved-changes guard, a detached modal through its
+                // own close message, and close any other window directly.
                 if self.ui_state.main_window_id == Some(id) {
                     self.handle_app_quit_requested()
-                } else if matches!(
-                    self.ui_state.windows.get(&id),
-                    Some(super::state::WindowKind::DetachedModal(
-                        super::state::ModalId::Preferences
-                    ))
-                ) && self.ui_state.preferences_dirty
+                } else if let Some(super::state::WindowKind::DetachedModal(modal)) =
+                    self.ui_state.windows.get(&id).cloned()
+                    && let Some(close) = Self::detached_modal_close_message(modal)
                 {
-                    // Same dirty-close guard as the in-dialog X / Esc: an
-                    // OS close request on a dirty Preferences window must
-                    // not silently discard unsaved edits. The window stays
-                    // open; the footer's "Unsaved changes" bar (Save /
-                    // Discard & Close) is the visible way out.
-                    Task::none()
+                    // The native close button of a detached modal runs
+                    // the modal's own close message, so the dirty guard
+                    // (Preferences keeps the window open until the user
+                    // saves or discards), the state reset and the window
+                    // close are the same as for the in-body close.
+                    self.update(close)
                 } else {
                     iced::window::close(id)
                 }
