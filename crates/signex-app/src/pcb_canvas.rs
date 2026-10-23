@@ -66,6 +66,10 @@ pub struct PcbCanvas {
     pub visible_grid_mm: f64,
 }
 
+/// Narrowest on-screen grid pitch the PCB canvas draws; denser grids step up
+/// by whole multiples of the real pitch (see `adaptive_pitch_mm`).
+const PCB_GRID_MIN_PX: f32 = 8.0;
+
 impl Default for PcbCanvas {
     fn default() -> Self {
         Self::new()
@@ -106,6 +110,17 @@ impl PcbCanvas {
 
     pub fn clear_bg_cache(&mut self) {
         self.bg_cache.clear();
+    }
+
+    /// Adopt the app-wide Grid Toggle and Visible Grid Size (`UiState`), the
+    /// same values the schematic canvas reads each frame (#682). Invalidates
+    /// the background cache only when something actually changed.
+    pub fn set_grid(&mut self, visible: bool, visible_grid_mm: f64) {
+        if self.grid_visible != visible || self.visible_grid_mm != visible_grid_mm {
+            self.grid_visible = visible;
+            self.visible_grid_mm = visible_grid_mm;
+            self.bg_cache.clear();
+        }
     }
 
     pub fn clear_content_cache(&mut self) {
@@ -531,8 +546,17 @@ impl canvas::Program<Message> for PcbCanvas {
         let bg = self.bg_cache.draw(renderer, bounds.size(), |frame| {
             frame.fill_rectangle(iced::Point::ORIGIN, bounds.size(), self.theme_bg);
 
-            if self.grid_visible {
-                let step = (self.visible_grid_mm as f32 * camera.scale).max(8.0);
+            if let Some(step) = self
+                .grid_visible
+                .then(|| {
+                    crate::canvas::grid::adaptive_pitch_mm(
+                        self.visible_grid_mm as f32,
+                        camera.scale,
+                        PCB_GRID_MIN_PX,
+                    )
+                })
+                .flatten()
+            {
                 let mut x = camera.offset.x.rem_euclid(step) - step;
                 while x <= bounds.width + step {
                     let path = canvas::Path::line(
@@ -621,6 +645,14 @@ mod tests {
     use super::*;
     use signex_renderer::pcb::{DrcMarkerInput, PcbSnapshot};
     use signex_types::violation::Severity;
+
+    #[test]
+    fn set_grid_adopts_toggle_and_size() {
+        let mut canvas = PcbCanvas::new();
+        canvas.set_grid(false, 1.27);
+        assert!(!canvas.grid_visible);
+        assert_eq!(canvas.visible_grid_mm, 1.27);
+    }
 
     /// Correctness — thread #4 (z-order): `gpu_scene()` must NOT fold overlay
     /// geometry into the base `polygons`/`lines`/`circles` buckets. A DRC

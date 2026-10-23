@@ -37,6 +37,10 @@ impl Signex {
         self.document_state.panel_ctx.grid_size_mm = self.ui_state.grid_size_mm;
         self.document_state.panel_ctx.visible_grid_mm = self.ui_state.visible_grid_mm;
         self.document_state.panel_ctx.snap_hotspots = self.ui_state.snap_hotspots;
+        self.interaction_state.pcb_canvas.set_grid(
+            self.ui_state.grid_visible,
+            self.ui_state.visible_grid_mm as f64,
+        );
         self.sync_diagnostics_panel_ctx();
 
         // Re-resolve the History panel's active path; on change, bump
@@ -269,6 +273,24 @@ impl Signex {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// #682 — the PCB canvas used to keep its own grid fields that nothing
+    /// ever wrote after construction, so the Grid Toggle and Visible Grid
+    /// Size never reached it. `finish_update` now hands them over.
+    #[test]
+    fn pcb_canvas_follows_grid_toggle_and_visible_size() {
+        let (mut app, _t) = Signex::new();
+        app.ui_state.grid_visible = false;
+        app.ui_state.visible_grid_mm = 5.08;
+
+        let _ = app.finish_update();
+
+        assert!(!app.interaction_state.pcb_canvas.grid_visible);
+        assert_eq!(
+            app.interaction_state.pcb_canvas.visible_grid_mm,
+            5.08_f32 as f64
+        );
+    }
 
     /// #631 — the canvas used to own copies of these settings, written by
     /// whichever handler changed them. Most of those sites wrote
