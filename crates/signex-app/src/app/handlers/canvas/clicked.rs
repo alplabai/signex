@@ -393,6 +393,17 @@ impl Signex {
                     false,
                 );
             }
+            Tool::NoErcDirective => {
+                let directive = signex_types::schematic::NoConnect {
+                    uuid: uuid::Uuid::new_v4(),
+                    position: signex_types::schematic::Point::new(wx, wy),
+                };
+                self.apply_engine_command(
+                    signex_engine::Command::PlaceNoErcDirective { directive },
+                    false,
+                    false,
+                );
+            }
             Tool::BusEntry => {
                 let be = signex_types::schematic::BusEntry {
                     uuid: uuid::Uuid::new_v4(),

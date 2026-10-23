@@ -388,6 +388,11 @@ fn primary_anchor_world(
             .iter()
             .find(|n| n.uuid == item.uuid)
             .map(|n| (n.position.x, n.position.y)),
+        SelectedKind::NoErcDirective => snap
+            .no_erc_directives
+            .iter()
+            .find(|d| d.uuid == item.uuid)
+            .map(|d| (d.position.x, d.position.y)),
         SelectedKind::TextNote => snap
             .text_notes
             .iter()

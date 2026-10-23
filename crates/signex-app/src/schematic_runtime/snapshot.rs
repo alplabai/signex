@@ -95,6 +95,43 @@ pub(super) fn build_renderer_snapshot(
         });
     }
 
+    // No-ERC directive: a diamond outline in the `no_connect` theme token,
+    // so it never reads as the no-connect X (which uses the body colour).
+    for directive in &snapshot.no_erc_directives {
+        let center = transform.world_to_screen((directive.position.x, directive.position.y));
+        if !point_visible(center, bounds, 10.0) {
+            continue;
+        }
+
+        let color = focus_color(to_iced(&colors.no_connect), focus_set, directive.uuid);
+        let half = signex_types::schematic::SCHEMATIC_RENDER_NO_CONNECT_HALF_LEN_MM.max(
+            screen_px_to_world_mm(
+                signex_types::schematic::SCHEMATIC_RENDER_NO_CONNECT_MIN_HALF_LEN_PX,
+                transform.scale,
+            ),
+        ) as f32;
+        let width_mm = stroke_world_mm(
+            signex_types::schematic::SCHEMATIC_RENDER_NO_CONNECT_STROKE_PX,
+            transform.scale,
+        );
+        let (cx, cy) = (directive.position.x as f32, directive.position.y as f32);
+        let corners = [
+            [cx, cy - half],
+            [cx + half, cy],
+            [cx, cy + half],
+            [cx - half, cy],
+        ];
+        for (i, p0) in corners.iter().enumerate() {
+            wires.push(WireInput {
+                id: renderer_id(directive.uuid).saturating_add(i as u64),
+                p0: *p0,
+                p1: corners[(i + 1) % corners.len()],
+                width_mm,
+                explicit_color: Some(to_rgba(color)),
+            });
+        }
+    }
+
     for junction in &snapshot.junctions {
         let center = transform.world_to_screen((junction.position.x, junction.position.y));
         if !point_visible(center, bounds, 6.0) {

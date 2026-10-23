@@ -137,3 +137,6 @@ mod stable_addressing;
 
 #[path = "regression/surface_failures.rs"]
 mod surface_failures;
+
+#[path = "regression/no_erc_directive.rs"]
+mod no_erc_directive;

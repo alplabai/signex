@@ -39,6 +39,11 @@ impl Engine {
                 .no_connects
                 .iter()
                 .any(|no_connect| no_connect.uuid == item.uuid),
+            SelectedKind::NoErcDirective => self
+                .document
+                .no_erc_directives
+                .iter()
+                .any(|directive| directive.uuid == item.uuid),
             SelectedKind::Symbol => self
                 .document
                 .symbols
@@ -89,6 +94,9 @@ impl Engine {
             SelectedKind::Label => remove_by_uuid(&mut self.document.labels, item.uuid),
             SelectedKind::Junction => remove_by_uuid(&mut self.document.junctions, item.uuid),
             SelectedKind::NoConnect => remove_by_uuid(&mut self.document.no_connects, item.uuid),
+            SelectedKind::NoErcDirective => {
+                remove_by_uuid(&mut self.document.no_erc_directives, item.uuid)
+            }
             SelectedKind::Symbol => remove_by_uuid(&mut self.document.symbols, item.uuid),
             SelectedKind::TextNote => remove_by_uuid(&mut self.document.text_notes, item.uuid),
             SelectedKind::Drawing => {
@@ -279,6 +287,17 @@ impl Engine {
                 .map(|no_connect| {
                     no_connect.position.x += dx;
                     no_connect.position.y += dy;
+                    true
+                })
+                .unwrap_or(false),
+            SelectedKind::NoErcDirective => self
+                .document
+                .no_erc_directives
+                .iter_mut()
+                .find(|directive| directive.uuid == item.uuid)
+                .map(|directive| {
+                    directive.position.x += dx;
+                    directive.position.y += dy;
                     true
                 })
                 .unwrap_or(false),

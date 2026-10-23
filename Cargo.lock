@@ -5392,8 +5392,10 @@ name = "signex-engine"
 version = "0.15.0"
 dependencies = [
  "anyhow",
+ "signex-erc",
  "signex-net",
  "signex-types",
+ "tempfile",
  "thiserror 2.0.18",
  "uuid",
 ]

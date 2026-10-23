@@ -395,13 +395,20 @@ impl Signex {
                 self.handle_print_preview_set_variant(v);
                 self.finish_update()
             }
-            // Visual toggles (No-ERC Markers, Notes) — affect what
+            // Visual toggles (No-ERC Markers, No-Connect Markers, Notes) — affect what
             // the SVG renderer emits, so we mutate `pdf_options`
             // directly and trigger a rerasterize so the Preview tab
             // reflects the change immediately.
             PrintPreviewMsg::SetIncludeNoErcMarkers(v) => {
                 if let Some(p) = self.document_state.preview.as_mut() {
                     p.pdf_options.include_no_erc_markers = v;
+                }
+                self.handle_print_preview_rerender();
+                self.finish_update()
+            }
+            PrintPreviewMsg::SetIncludeNoConnectMarkers(v) => {
+                if let Some(p) = self.document_state.preview.as_mut() {
+                    p.pdf_options.include_no_connect_markers = v;
                 }
                 self.handle_print_preview_rerender();
                 self.finish_update()

@@ -349,6 +349,8 @@ pub enum SelectedKind {
     BusEntry,
     Junction,
     NoConnect,
+    /// Generic No-ERC directive (`SchematicSheet::no_erc_directives`).
+    NoErcDirective,
     Label,
     /// Hierarchical sheet pin rendered on a child-sheet symbol.
     SheetPin,
@@ -463,6 +465,9 @@ impl SchematicSheet {
         }
         for n in &self.no_connects {
             extend(n.position.x, n.position.y);
+        }
+        for d in &self.no_erc_directives {
+            extend(d.position.x, d.position.y);
         }
         for t in &self.text_notes {
             extend(t.position.x, t.position.y);

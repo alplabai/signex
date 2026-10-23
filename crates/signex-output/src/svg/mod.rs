@@ -15,6 +15,7 @@ mod document;
 mod drawings;
 mod geometry;
 mod labels;
+mod markers;
 mod symbols;
 mod text;
 
