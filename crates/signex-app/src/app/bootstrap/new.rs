@@ -58,7 +58,7 @@ impl Signex {
         // Silence unused-mut when read_dock_layout returns Some.
         let _ = &mut dock;
         let dock_layout_sync = crate::dock::DockLayoutSync::new(
-            std::sync::Arc::new(crate::fonts::PrefsDockLayoutStore),
+            std::sync::Arc::new(crate::fonts::PrefsDockLayoutStore::user_prefs()),
             crate::dock::DockLayoutSnapshot::capture(&dock),
         );
 

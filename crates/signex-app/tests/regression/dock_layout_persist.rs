@@ -222,3 +222,99 @@ fn a_failed_write_is_reported_to_the_messages_panel_and_retried_on_the_next_chan
     let _ = run(write);
     assert_eq!(recorder.count(), 2, "the retry wrote after the failure");
 }
+
+/// Holds a write inside `write` until told to proceed, so a write can be
+/// "already running" when quit starts.
+struct GatedStore {
+    entered: Mutex<std::sync::mpsc::Sender<()>>,
+    proceed: Mutex<std::sync::mpsc::Receiver<()>>,
+    finished: std::sync::atomic::AtomicBool,
+}
+
+impl DockLayoutStore for GatedStore {
+    fn write(&self, _layout: &DockLayoutSnapshot) -> Result<(), String> {
+        self.entered.lock().unwrap().send(()).unwrap();
+        self.proceed.lock().unwrap().recv().unwrap();
+        self.finished
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        Ok(())
+    }
+}
+
+#[test]
+fn quit_waits_for_a_write_that_is_already_running() {
+    // Arrange: one write is running inside the store, nothing is pending.
+    let (mut app, _boot) = Signex::new();
+    let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+    let (proceed_tx, proceed_rx) = std::sync::mpsc::channel();
+    let store = Arc::new(GatedStore {
+        entered: Mutex::new(entered_tx),
+        proceed: Mutex::new(proceed_rx),
+        finished: std::sync::atomic::AtomicBool::new(false),
+    });
+    app.document_state.dock_layout_sync = DockLayoutSync::new(
+        store.clone(),
+        DockLayoutSnapshot::capture(&app.document_state.dock),
+    );
+    let _timer_not_run = app.update(Message::Dock(DockMessage::ToggleCollapse(
+        PanelPosition::Left,
+    )));
+    let running = app
+        .document_state
+        .dock_layout_sync
+        .flush()
+        .expect("the changed layout is pending");
+    let in_flight = std::thread::spawn(move || running.run());
+    entered_rx.recv().unwrap();
+    let release = std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        proceed_tx.send(()).unwrap();
+    });
+
+    // Act
+    let quit = app.update(Message::Window(WindowMsg::CloseMainWindow));
+    let _ = run(quit);
+
+    // Assert: the quit task only completed after the running write did.
+    assert!(
+        store.finished.load(std::sync::atomic::Ordering::SeqCst),
+        "quit must not exit while a dock write is still running"
+    );
+    in_flight.join().unwrap().unwrap();
+    release.join().unwrap();
+}
+
+/// The same loop against the real `PrefsDockLayoutStore` and
+/// `try_update_prefs_json`: the layout lands in the file and the user's
+/// other settings are still there.
+#[test]
+fn the_real_store_writes_the_dock_and_keeps_other_settings() {
+    // Arrange
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("prefs.json");
+    std::fs::write(
+        &path,
+        br#"{"theme": "signex", "erc": {"unused_pin": "off"}}"#,
+    )
+    .unwrap();
+    let (mut app, _boot) = Signex::new();
+    app.document_state.dock_layout_sync = DockLayoutSync::new(
+        Arc::new(signex_app::fonts::PrefsDockLayoutStore::at(path.clone())),
+        DockLayoutSnapshot::capture(&app.document_state.dock),
+    );
+
+    // Act
+    let change = app.update(Message::Dock(DockMessage::ToggleCollapse(
+        PanelPosition::Left,
+    )));
+    let elapsed = dock_layout_messages(run(change));
+    let saved = dock_layout_messages(run(app.update(Message::DockLayout(elapsed[0].clone()))));
+
+    // Assert
+    assert!(matches!(saved.as_slice(), [DockLayoutMsg::Saved(Ok(()))]));
+    let prefs: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    assert_eq!(prefs["theme"], "signex");
+    assert_eq!(prefs["erc"]["unused_pin"], "off");
+    assert_eq!(prefs["dock"]["left"]["collapsed"], true);
+    assert_eq!(prefs["dock"]["right"]["collapsed"], false);
+}

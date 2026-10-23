@@ -10,7 +10,7 @@ mod types;
 mod view;
 
 pub use layout_sync::{
-    DOCK_LAYOUT_SAVE_DEBOUNCE, DockLayoutMsg, DockLayoutSnapshot, DockLayoutStore, DockLayoutSync,
-    DockLayoutWrite, RegionLayout,
+    DOCK_LAYOUT_SAVE_DEBOUNCE, DockLayoutBarrier, DockLayoutMsg, DockLayoutSnapshot,
+    DockLayoutStore, DockLayoutSync, DockLayoutWrite, RegionLayout,
 };
 pub use types::{DockArea, DockMessage, FloatingPanel, PanelPosition, PanelSite};

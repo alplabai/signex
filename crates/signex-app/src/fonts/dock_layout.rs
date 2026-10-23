@@ -5,7 +5,21 @@ use super::*;
 /// Writes the dock layout into `prefs.json`. The production
 /// [`crate::dock::DockLayoutStore`]; it runs on a background thread via
 /// `Task`, never inside `update` (#692).
-pub struct PrefsDockLayoutStore;
+pub struct PrefsDockLayoutStore {
+    path: std::path::PathBuf,
+}
+
+impl PrefsDockLayoutStore {
+    /// The store for the user's real `prefs.json`.
+    pub fn user_prefs() -> Self {
+        Self::at(prefs_path())
+    }
+
+    /// The store for an explicit prefs file (tests).
+    pub fn at(path: std::path::PathBuf) -> Self {
+        Self { path }
+    }
+}
 
 impl crate::dock::DockLayoutStore for PrefsDockLayoutStore {
     fn write(&self, layout: &crate::dock::DockLayoutSnapshot) -> Result<(), String> {
@@ -17,7 +31,7 @@ impl crate::dock::DockLayoutStore for PrefsDockLayoutStore {
             })
         }
 
-        try_update_prefs_json(&prefs_path(), "dock", |prefs| {
+        try_update_prefs_json(&self.path, "dock", |prefs| {
             prefs.insert(
                 "dock".to_string(),
                 serde_json::json!({

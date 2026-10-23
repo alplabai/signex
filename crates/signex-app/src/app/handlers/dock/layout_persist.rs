@@ -53,11 +53,25 @@ impl Signex {
         }
     }
 
-    /// Write any pending layout now, then run `next` (the quit path).
+    /// Write any pending layout now and wait for a write that is already
+    /// running, then run `next` (the quit path).
     pub(crate) fn flush_dock_layout_then(&mut self, next: Task<Message>) -> Task<Message> {
-        match self.document_state.dock_layout_sync.flush() {
-            Some(write) => write_dock_layout_task(write).chain(next),
-            None => next,
+        let sync = &mut self.document_state.dock_layout_sync;
+        let barrier = sync.barrier();
+        let pending = sync.flush().map(write_dock_layout_task);
+        let drained = Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || barrier.wait())
+                    .await
+                    .map_err(|join_error| {
+                        format!("waiting for the dock write failed: {join_error}")
+                    })
+            },
+            |result| Message::DockLayout(DockLayoutMsg::Saved(result)),
+        );
+        match pending {
+            Some(write) => write.chain(drained).chain(next),
+            None => drained.chain(next),
         }
     }
 }

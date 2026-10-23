@@ -317,6 +317,8 @@ fn production_temp_fallback_path() -> PathBuf {
 /// pull from when canonical is missing. Production passes
 /// [`legacy_posix_prefs_path()`]; tests inject a tempdir-shaped path.
 pub fn migrate_legacy_prefs(canonical: &Path, legacy: &Path) {
+    // Both steps below are read-modify-write on `canonical`.
+    let _io = prefs_file::prefs_io_lock();
     // F1: copy legacy path → canonical, but only if canonical is empty.
     // Routed through `write_pref_atomic` (temp + fsync + rename) rather
     // than `std::fs::copy`: a kill mid-copy with a bare copy can leave a
