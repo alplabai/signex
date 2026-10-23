@@ -803,8 +803,11 @@ impl Signex {
             .document_state
             .project_for_path(&synthetic_path)
             .map(|p| p.id);
-        let preview = ComponentPreviewState::from_row(library_path.clone(), table.clone(), row);
-        self.library.editors.insert(address.clone(), preview);
+        // A dirty draft parked by a tab close wins over the stored row.
+        if !self.library.editors.contains_key(&address) {
+            let preview = ComponentPreviewState::from_row(library_path.clone(), table.clone(), row);
+            self.library.editors.insert(address.clone(), preview);
+        }
         self.park_active_schematic_session();
         self.document_state.tabs.push(crate::app::TabInfo {
             title,

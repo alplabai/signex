@@ -123,3 +123,6 @@ mod start_screen;
 mod save_as_by_document_kind;
 #[path = "regression/stable_addressing.rs"]
 mod stable_addressing;
+
+#[path = "regression/surface_failures.rs"]
+mod surface_failures;

@@ -107,9 +107,11 @@ impl Signex {
                 let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
 
                 let state = crate::app::SymbolEditorState::new(path.clone(), file);
+                // A dirty draft parked by a tab close wins over the disk copy.
                 self.document_state
                     .symbol_editors
-                    .insert(path.clone(), state);
+                    .entry(path.clone())
+                    .or_insert(state);
 
                 self.park_active_schematic_session();
                 self.document_state.tabs.push(crate::app::TabInfo {
@@ -175,7 +177,8 @@ impl Signex {
                     .with_global_snap_disabled(!self.ui_state.snap_enabled);
                 self.document_state
                     .footprint_editors
-                    .insert(path.clone(), state);
+                    .entry(path.clone())
+                    .or_insert(state);
 
                 self.park_active_schematic_session();
                 self.document_state.tabs.push(crate::app::TabInfo {
