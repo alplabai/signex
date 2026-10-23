@@ -520,6 +520,11 @@ fn snxpcb_round_trip_with_data() {
             PcbPoint { x: 30.0, y: 40.0 },
             PcbPoint { x: 10.0, y: 40.0 },
         ],
+        holes: vec![vec![
+            PcbPoint { x: 15.0, y: 25.0 },
+            PcbPoint { x: 20.0, y: 25.0 },
+            PcbPoint { x: 20.0, y: 30.0 },
+        ]],
         priority: 0,
         fill_type: String::new(),
         thermal_relief: false,
@@ -553,6 +558,39 @@ fn snxpcb_round_trip_with_data() {
     assert_eq!(back.board.zones.len(), 1);
     assert_eq!(back.board.zones[0].net_name, "GND");
     assert_eq!(back.board.zones[0].outline.len(), 4);
+    assert_eq!(back.board.zones[0].holes.len(), 1);
+    assert_eq!(back.board.zones[0].holes[0].len(), 3);
+    assert!((back.board.zones[0].holes[0][1].x - 20.0).abs() < 1e-9);
+}
+
+/// #818: a zone without holes writes no `holes` key, so files saved before
+/// the field existed re-save byte-identically, and they still parse.
+#[test]
+fn zone_without_holes_writes_no_holes_key() {
+    let mut board = empty_board();
+    board.zones.push(Zone {
+        uuid: Uuid::parse_str("0192a8c0-0040-7000-8000-000000000002").unwrap(),
+        net: 0,
+        net_name: String::new(),
+        layer: "TopCopper".into(),
+        outline: vec![
+            PcbPoint { x: 0.0, y: 0.0 },
+            PcbPoint { x: 1.0, y: 0.0 },
+            PcbPoint { x: 1.0, y: 1.0 },
+        ],
+        holes: Vec::new(),
+        priority: 0,
+        fill_type: String::new(),
+        thermal_relief: false,
+        thermal_gap: 0.0,
+        thermal_width: 0.0,
+        clearance: 0.0,
+        min_thickness: 0.0,
+    });
+    let text = SnxPcb::new(board).write_string().expect("serialise");
+    assert!(!text.contains("holes"), "{text}");
+    let back = SnxPcb::parse(&text).expect("parse");
+    assert!(back.board.zones[0].holes.is_empty());
 }
 
 #[test]
