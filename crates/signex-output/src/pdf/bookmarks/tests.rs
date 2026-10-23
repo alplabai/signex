@@ -5,66 +5,19 @@ use crate::pdf::{
 };
 use crate::{ExportContext, ProjectMetadata, SheetSnapshot};
 use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, Symbol};
-use std::collections::HashMap;
 
 fn empty_sheet() -> SchematicSheet {
-    SchematicSheet {
-        unknown: Default::default(),
-        uuid: uuid::Uuid::nil(),
-        version: 0,
-        generator: String::new(),
-        generator_version: String::new(),
-        paper_size: String::new(),
-        root_sheet_page: "1".into(),
-        symbols: vec![],
-        wires: vec![],
-        junctions: vec![],
-        labels: vec![],
-        child_sheets: vec![],
-        no_connects: vec![],
-        text_notes: vec![],
-        buses: vec![],
-        bus_entries: vec![],
-        drawings: vec![],
-        no_erc_directives: vec![],
-        title_block: Default::default(),
-        lib_symbols: Default::default(),
-    }
+    SchematicSheet::default()
 }
 
 fn ctx_with_one_sheet() -> ExportContext {
     let mut sheet = empty_sheet();
     sheet.symbols.push(Symbol {
-        unknown_columns: Default::default(),
-        unknown: Default::default(),
-        uuid: uuid::Uuid::nil(),
         lib_id: "Device:R".to_string(),
         reference: "R1".to_string(),
         value: "10k".to_string(),
         position: Point::new(50.0, 50.0),
-        rotation: 0.0,
-        mirror_x: false,
-        mirror_y: false,
-        unit: 1,
-        is_power: false,
-        ref_text: None,
-        val_text: None,
-        fields_autoplaced: false,
-        fields_user_placed: false,
-        dnp: false,
-        in_bom: true,
-        on_board: true,
-        exclude_from_sim: false,
-        locked: false,
-        fields: HashMap::new(),
-        custom_properties: vec![],
-        pin_uuids: HashMap::new(),
-        instances: vec![],
-        footprint: String::new(),
-        datasheet: String::new(),
-        library_id: None,
-        row_id: None,
-        library_version: String::new(),
+        ..Default::default()
     });
     sheet.labels.push(Label {
         unknown_columns: Default::default(),
@@ -242,36 +195,11 @@ fn bookmark_zoom_clamps_out_of_range() {
 fn pin_bookmarks_skipped_when_subtoggle_off() {
     let mut sheet = empty_sheet();
     let mut sym = Symbol {
-        unknown_columns: Default::default(),
-        unknown: Default::default(),
-        uuid: uuid::Uuid::nil(),
         lib_id: "Device:R".to_string(),
         reference: "R1".to_string(),
         value: "10k".to_string(),
         position: Point::new(50.0, 50.0),
-        rotation: 0.0,
-        mirror_x: false,
-        mirror_y: false,
-        unit: 1,
-        is_power: false,
-        ref_text: None,
-        val_text: None,
-        fields_autoplaced: false,
-        fields_user_placed: false,
-        dnp: false,
-        in_bom: true,
-        on_board: true,
-        exclude_from_sim: false,
-        locked: false,
-        fields: HashMap::new(),
-        custom_properties: vec![],
-        pin_uuids: HashMap::new(),
-        instances: vec![],
-        footprint: String::new(),
-        datasheet: String::new(),
-        library_id: None,
-        row_id: None,
-        library_version: String::new(),
+        ..Default::default()
     };
     sym.pin_uuids.insert("1".to_string(), uuid::Uuid::nil());
     sym.pin_uuids.insert("2".to_string(), uuid::Uuid::nil());
@@ -321,36 +249,11 @@ fn multi_sheet_bookmarks_have_independent_groups() {
         for i in 0..3 {
             let mut sheet = empty_sheet();
             sheet.symbols.push(Symbol {
-                unknown_columns: Default::default(),
-                unknown: Default::default(),
-                uuid: uuid::Uuid::nil(),
                 lib_id: "Device:R".to_string(),
                 reference: format!("R{}", i + 1),
                 value: "10k".to_string(),
                 position: Point::new(50.0, 50.0),
-                rotation: 0.0,
-                mirror_x: false,
-                mirror_y: false,
-                unit: 1,
-                is_power: false,
-                ref_text: None,
-                val_text: None,
-                fields_autoplaced: false,
-                fields_user_placed: false,
-                dnp: false,
-                in_bom: true,
-                on_board: true,
-                exclude_from_sim: false,
-                locked: false,
-                fields: HashMap::new(),
-                custom_properties: vec![],
-                pin_uuids: HashMap::new(),
-                instances: vec![],
-                footprint: String::new(),
-                datasheet: String::new(),
-                library_id: None,
-                row_id: None,
-                library_version: String::new(),
+                ..Default::default()
             });
             sheets.push(SheetSnapshot {
                 path: std::path::PathBuf::from(format!("sheet_{i}.standard_sch")),
