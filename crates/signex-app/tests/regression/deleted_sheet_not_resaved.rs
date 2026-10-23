@@ -100,6 +100,7 @@ fn deleting_a_dirty_sheet_is_not_resurrected_by_save_all_on_quit() {
         tree_path: vec![0, 0],
         display_name: "X.snxsch".to_string(),
         is_outside_project: false,
+        unsaved_prompt: false,
     });
     let _ = app.update(Message::Remove(RemoveMsg::Confirm(
         RemoveChoice::DeleteFile,
@@ -199,6 +200,7 @@ fn delete_file(app: &mut Signex, target: &Path) {
         tree_path: vec![0, 0],
         display_name: target.file_name().unwrap().to_string_lossy().into_owned(),
         is_outside_project: false,
+        unsaved_prompt: false,
     });
     let _ = app.update(Message::Remove(RemoveMsg::Confirm(
         RemoveChoice::DeleteFile,

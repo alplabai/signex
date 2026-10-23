@@ -141,6 +141,8 @@ pub enum RenameMsg {
 pub enum RemoveMsg {
     /// User picked Delete / Exclude in the Remove modal.
     Confirm(RemoveChoice),
+    /// User picked Save / Discard on the unsaved-edits stage (#738).
+    ExcludeDirty(ExcludeDirtyChoice),
     /// Dismiss the Remove modal without applying.
     Close,
 }
