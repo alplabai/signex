@@ -68,5 +68,7 @@ Hard CI gates (must pass to merge):
 
 Advisory (surfaced by CI, not blocking — please still keep them clean):
 
+- [ ] User-visible change? Added a fragment under `changelog.d/`
+      (`<number>.<section>.md`) — do **not** edit `CHANGELOG.md`
 - [ ] New code has tests where appropriate
 - [ ] Milestone is set on this PR

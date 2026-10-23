@@ -222,3 +222,56 @@ jobs:
       # otherwise it only annotates and the hole stays open.
       - name: Lint-lockstep gate
         run: bash scripts/check_lint_lockstep.sh
+
+  changelog-fragments:
+    name: changelog · fragments
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # Fragment names/bodies are validated on every event (PR, merge queue,
+      # push). Rule + rationale: changelog.d/README.md (GH #748).
+      - name: Validate fragments
+        run: |
+          bash scripts/changelog_assemble.sh --check
+          bash scripts/test_changelog_assemble.sh
+
+      # PR-only: CHANGELOG.md is edited solely by release PRs (head branch
+      # `chore/release-*` or `release/*`, the shape every release prep PR has
+      # used); everything else adds a fragment. Skipped in the merge queue,
+      # where the PR already passed this. Branch/title go through env, never
+      # inline-interpolated into the script.
+      - name: CHANGELOG.md is off-limits to non-release PRs
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          case "$HEAD_REF" in
+            chore/release-* | release/*)
+              echo "release PR ($HEAD_REF): CHANGELOG.md edits allowed"
+              exit 0
+              ;;
+          esac
+          git fetch --no-tags origin "$BASE_REF"
+          if git diff --name-only "origin/$BASE_REF...HEAD" | awk '$0 == "CHANGELOG.md" {f=1} END {exit !f}'; then
+            echo "::error file=CHANGELOG.md::Do not edit CHANGELOG.md in a PR. Add a fragment changelog.d/<number>.<section>.md instead (see changelog.d/README.md)."
+            exit 1
+          fi
+
+      # Advisory: a feat/fix PR with no new fragment gets a warning annotation.
+      - name: Warn when a feat/fix PR has no fragment
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          if printf '%s' "$PR_TITLE" | awk '/^(feat|fix)(\([^)]*\))?!?:/{f=1} END{exit !f}'; then
+            git fetch --no-tags origin "$BASE_REF"
+            if ! git diff --name-only --diff-filter=A "origin/$BASE_REF...HEAD" |
+              awk '/^changelog\.d\/[0-9]+\..+\.md$/{f=1} END{exit !f}'; then
+              echo "::warning title=No changelog fragment::feat/fix PR adds no changelog.d/<number>.<section>.md fragment. Add one, or ignore if the change is not user-visible."
+            fi
+          fi
