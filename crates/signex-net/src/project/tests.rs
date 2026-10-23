@@ -435,6 +435,31 @@ fn unmatched_sheet_pin_stays_local() {
     assert_eq!(p.netlist.nets.len(), 2, "unbound pin keeps nets separate");
 }
 
+// A padded label or pin name is the same port as its trimmed spelling: the
+// stitcher shares `Label::port_name` / `normalize_port_name` with the engine's
+// port collector and the ERC hierarchy rule (#359).
+#[test]
+fn padded_child_label_binds_the_trimmed_sheet_pin() {
+    let (root, map) = parent_child("CLK", pt(0.0, 0.0), " CLK ", LabelType::Hierarchical);
+    let p = stitch(&root, "root", &map);
+    assert_eq!(p.netlist.nets.len(), 1, "padded label still binds");
+    assert_eq!(p.netlist.nets[0].terminals.len(), 2);
+}
+
+#[test]
+fn padded_sheet_pin_binds_the_trimmed_child_label() {
+    let (root, map) = parent_child("  CLK", pt(0.0, 0.0), "CLK", LabelType::Global);
+    let p = stitch(&root, "root", &map);
+    assert_eq!(p.netlist.nets.len(), 1, "padded pin still binds");
+}
+
+#[test]
+fn blank_port_names_never_bind() {
+    let (root, map) = parent_child("   ", pt(0.0, 0.0), "  ", LabelType::Hierarchical);
+    let p = stitch(&root, "root", &map);
+    assert_eq!(p.netlist.nets.len(), 2, "blank names are not ports");
+}
+
 // 3 ── Global name spans sheets; power-port symbol + Power label merge.
 #[test]
 fn global_label_spans_two_sheets() {

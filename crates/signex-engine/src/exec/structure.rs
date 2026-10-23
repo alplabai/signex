@@ -362,13 +362,17 @@ impl Engine {
                 ports,
             } => {
                 let mut changed = false;
-                for child in self
-                    .document
-                    .child_sheets
-                    .iter_mut()
-                    .filter(|child| child.filename == child_filename)
-                {
-                    changed |= sheet::reconcile_child_sheet_pins(child, &ports);
+                // Per symbol: pins an earlier symbol just gained are contacts too.
+                for idx in 0..self.document.child_sheets.len() {
+                    if self.document.child_sheets[idx].filename != child_filename {
+                        continue;
+                    }
+                    let contacts = signex_net::SheetPinContacts::of_sheet(&self.document);
+                    changed |= sheet::reconcile_child_sheet_pins(
+                        &mut self.document.child_sheets[idx],
+                        &ports,
+                        &contacts,
+                    );
                 }
 
                 if !changed {
