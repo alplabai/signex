@@ -130,6 +130,16 @@ pub enum RenameMsg {
     Submit,
     /// Dismiss the rename modal without applying.
     Close,
+    /// The on-disk rename of a project library's `.snxlib` finished
+    /// (the `fs::rename` runs in a `Task`). `result` is the stringified
+    /// IO error on failure; on success the handler re-points the project
+    /// entry and the mounted library at `new_path`.
+    LibraryFileRenamed {
+        project: crate::app::ProjectId,
+        old_path: std::path::PathBuf,
+        new_path: std::path::PathBuf,
+        result: Result<(), String>,
+    },
 }
 
 /// Remove-from-project modal message family (ADR-0001 D3). Namespaced

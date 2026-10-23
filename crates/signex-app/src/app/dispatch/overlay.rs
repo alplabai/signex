@@ -511,6 +511,7 @@ impl Signex {
                 self.ui_state.rename_dialog = None;
                 Task::none()
             }
+            RenameMsg::LibraryFileRenamed { .. } => Task::none(),
         }
     }
 
