@@ -162,6 +162,37 @@ fn commits_use_the_user_identity_and_refuse_without_one() {
         ("Ada Lovelace".into(), "ada@example.org".into())
     );
 
+    // An existing .gitignore is replaced whole, with no temp file left behind.
+    let replaced = tempfile::tempdir().unwrap();
+    std::fs::write(
+        replaced.path().join(".gitignore"),
+        "old-rules-that-are-longer
+",
+    )
+    .unwrap();
+    enable_project_version_control(
+        replaced.path(),
+        true,
+        Some(
+            "*.tmp
+",
+        ),
+    )
+    .unwrap();
+    assert_eq!(
+        std::fs::read_to_string(replaced.path().join(".gitignore")).unwrap(),
+        "*.tmp
+"
+    );
+    assert!(replaced.path().join(".gitattributes").exists());
+    assert!(
+        !std::fs::read_dir(replaced.path())
+            .unwrap()
+            .filter_map(Result::ok)
+            .any(|e| e.path().extension().is_some_and(|x| x == "tmp")),
+        "no atomic_write temp file left behind"
+    );
+
     let adapter = LocalGitAdapter::init(
         &file,
         manifest(),
