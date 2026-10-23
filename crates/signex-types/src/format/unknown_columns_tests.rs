@@ -26,24 +26,21 @@ fn two_row_sheet() -> SchematicSheet {
         s.reference = format!("R{n}");
         sheet.symbols.push(s);
         sheet.wires.push(Wire {
-            unknown_columns: Default::default(),
             uuid: uuid_n(10 + n),
             start: SchPoint {
                 x: 1.0,
                 y: f64::from(n),
             },
             end: SchPoint { x: 2.0, y: 3.0 },
-            stroke_width: 0.0,
+            ..Default::default()
         });
         sheet.junctions.push(Junction {
-            unknown_columns: Default::default(),
             uuid: uuid_n(20 + n),
             position: SchPoint {
                 x: f64::from(n),
                 y: 1.0,
             },
-            diameter: 0.0,
-            minted: false,
+            ..Default::default()
         });
         sheet.labels.push(Label {
             unknown_columns: Default::default(),
