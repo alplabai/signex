@@ -11,7 +11,7 @@ use super::{
     SettingsMsg,
 };
 
-/// Top-level library message — folded into [`Message::Library`].
+/// Top-level library message — folded into [`Message::Library`](crate::app::Message::Library).
 #[derive(Debug, Clone)]
 pub enum LibraryMessage {
     /// File ▸ Library ▸ Open Library… — runs `rfd::AsyncFileDialog`
@@ -510,4 +510,10 @@ pub enum LibraryMessage {
         table: String,
         row_id: RowId,
     },
+    /// The external-edit poll timer fired (#531). The handler starts the
+    /// off-thread `stat` of every mounted `.snxlib`.
+    ExternalEditsPollTicked,
+    /// The `stat` pass finished; carries the libraries whose file no
+    /// longer matches the stamp their caches were filled under.
+    ExternalEditsPolled(Vec<PathBuf>),
 }

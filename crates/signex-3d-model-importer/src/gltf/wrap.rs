@@ -4,6 +4,7 @@ use base64::Engine;
 use serde_json::{Value, json};
 
 use crate::error::{ImportWarning, ModelImportError};
+use crate::read::ReadBudget;
 
 pub struct GltfWrapResult {
     pub json_bytes: Vec<u8>,
@@ -22,6 +23,18 @@ pub fn wrap_gltf(
     source: &str,
     source_path: &Path,
     converter_version: &str,
+) -> Result<GltfWrapResult, ModelImportError> {
+    let mut budget = ReadBudget::new(crate::read::MAX_READ_BYTES);
+    wrap_gltf_with_budget(source, source_path, converter_version, &mut budget)
+}
+
+/// [`wrap_gltf`] with an explicit allowance for the external buffer and image
+/// bytes it may read in total.
+fn wrap_gltf_with_budget(
+    source: &str,
+    source_path: &Path,
+    converter_version: &str,
+    budget: &mut ReadBudget,
 ) -> Result<GltfWrapResult, ModelImportError> {
     let mut root: Value =
         serde_json::from_str(source).map_err(|err| ModelImportError::GltfParseFailed {
@@ -47,13 +60,13 @@ pub fn wrap_gltf(
     for (index, buffer) in original_buffers.iter().enumerate() {
         align4(&mut merged_bin, 0u8);
         let offset = merged_bin.len();
-        let payload = read_buffer_payload(source_path, &base_dir, index, buffer)?;
+        let payload = read_buffer_payload(source_path, &base_dir, index, buffer, budget)?;
         merged_bin.extend_from_slice(&payload);
         buffer_offsets.push(offset);
     }
 
     rewrite_buffer_views(&mut root, &buffer_offsets, source_path)?;
-    embed_image_uris(&mut root, &base_dir, source_path, &mut warnings)?;
+    embed_image_uris(&mut root, &base_dir, source_path, &mut warnings, budget)?;
     rewrite_asset_extras(&mut root, source_path, converter_version);
 
     root["buffers"] = json!([{ "byteLength": merged_bin.len() }]);
@@ -120,6 +133,7 @@ fn read_buffer_payload(
     base_dir: &Path,
     index: usize,
     buffer: &Value,
+    budget: &mut ReadBudget,
 ) -> Result<Vec<u8>, ModelImportError> {
     let uri = buffer
         .get("uri")
@@ -143,13 +157,15 @@ fn read_buffer_payload(
             reason: format!("buffers[{index}] {reason}"),
         }
     })?;
-    std::fs::read(&buffer_path).map_err(|err| ModelImportError::GltfParseFailed {
-        path: source_path.to_path_buf(),
-        reason: format!(
-            "buffers[{index}] missing external resource {:?}: {err}",
-            buffer_path
-        ),
-    })
+    budget
+        .read(&buffer_path)
+        .map_err(|err| ModelImportError::GltfParseFailed {
+            path: source_path.to_path_buf(),
+            reason: format!(
+                "buffers[{index}] external resource {:?} unreadable: {err}",
+                buffer_path
+            ),
+        })
 }
 
 fn rewrite_buffer_views(
@@ -196,6 +212,7 @@ fn embed_image_uris(
     base_dir: &Path,
     source_path: &Path,
     warnings: &mut Vec<ImportWarning>,
+    budget: &mut ReadBudget,
 ) -> Result<(), ModelImportError> {
     let Some(images) = root.get_mut("images").and_then(Value::as_array_mut) else {
         return Ok(());
@@ -220,13 +237,19 @@ fn embed_image_uris(
                 reason: format!("images[{index}] {reason}"),
             }
         })?;
-        match std::fs::read(&image_path) {
+        match budget.read(&image_path) {
             Ok(bytes) => {
                 let mime = guess_mime_type(&image_path);
                 let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
                 image["uri"] = Value::String(format!("data:{mime};base64,{encoded}"));
             }
-            Err(_) => warnings.push(ImportWarning::TextureMissing { uri }),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                warnings.push(ImportWarning::TextureMissing { uri });
+            }
+            Err(err) => warnings.push(ImportWarning::TextureUnreadable {
+                uri,
+                reason: err.to_string(),
+            }),
         }
     }
     Ok(())
@@ -240,8 +263,13 @@ fn embed_image_uris(
 /// resolved, lands outside the canonical `base_dir`. A resource that does not
 /// exist is returned as-is so the caller reports it as missing, not as an
 /// escape.
-fn resolve_external_uri(base_dir: &Path, uri: &str) -> Result<PathBuf, String> {
-    let reject = |why: &str| Err(format!("uri {uri:?} rejected: {why}"));
+fn resolve_external_uri(base_dir: &Path, raw_uri: &str) -> Result<PathBuf, String> {
+    let reject = |why: &str| Err(format!("uri {raw_uri:?} rejected: {why}"));
+    // Decode first so `%2e%2e` or `%3A` cannot slip past the checks below (#708).
+    let Some(decoded) = percent_decode(raw_uri) else {
+        return reject("is not valid UTF-8 once percent-decoded");
+    };
+    let uri = decoded.as_str();
 
     if uri.contains('\0') {
         return reject("contains a NUL byte");
@@ -276,6 +304,27 @@ fn resolve_external_uri(base_dir: &Path, uri: &str) -> Result<PathBuf, String> {
         return reject("resolves outside the model directory");
     }
     Ok(canonical)
+}
+
+/// Decode `%XX` escapes. A `%` not followed by two hex digits stays literal.
+/// `None` when the decoded bytes are not UTF-8.
+fn percent_decode(uri: &str) -> Option<String> {
+    let bytes = uri.as_bytes();
+    let hex = |i: usize| bytes.get(i).and_then(|&b| (b as char).to_digit(16));
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%'
+            && let (Some(h), Some(l)) = (hex(i + 1), hex(i + 2))
+        {
+            out.push((h * 16 + l) as u8);
+            i += 3;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8(out).ok()
 }
 
 /// Directory external resources resolve against. A bare relative path such as
@@ -358,6 +407,31 @@ mod tests {
     fn decode_data_uri_non_base64_is_none() {
         let uri = "data:text/plain,abc";
         assert!(decode_data_uri(uri).is_none());
+    }
+
+    #[test]
+    fn percent_escapes_decode_before_the_traversal_check() {
+        let base = Path::new(".");
+        let ok = resolve_external_uri(base, "my%20tex.png").unwrap();
+        assert!(ok.ends_with("my tex.png"));
+        assert!(resolve_external_uri(base, "%2e%2e/secret.bin").is_err());
+        assert!(resolve_external_uri(base, "%2E%2E%2Fsecret.bin").is_err());
+        assert!(resolve_external_uri(base, "C%3A/x").is_err());
+        assert!(resolve_external_uri(base, "a%00b").is_err());
+        assert!(resolve_external_uri(base, "%ff").is_err());
+        assert!(resolve_external_uri(base, "100%").is_ok());
+    }
+
+    #[test]
+    fn buffers_sharing_one_file_are_charged_against_one_budget() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("big.bin"), [0u8; 100]).unwrap();
+        let gltf = r#"{"asset":{"version":"2.0"},"buffers":[
+            {"byteLength":100,"uri":"big.bin"},{"byteLength":100,"uri":"big.bin"}]}"#;
+        let path = dir.path().join("m.gltf");
+        let wrap = |total| wrap_gltf_with_budget(gltf, &path, "t", &mut ReadBudget::new(total));
+        assert!(wrap(150).is_err(), "200 combined bytes exceed a 150 budget");
+        assert_eq!(wrap(200).unwrap().bin_bytes.len(), 200);
     }
 
     #[test]

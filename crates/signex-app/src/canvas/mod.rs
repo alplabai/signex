@@ -90,6 +90,9 @@ pub struct CanvasSlot {
     /// Pending fit target to transfer to CanvasState.
     /// Uses Cell so canvas::Program::update (&self) can consume it.
     pub pending_fit: std::cell::Cell<Option<Rectangle>>,
+    /// Bounds of the canvas as of the last canvas event — lets menu zoom (which has no
+    /// cursor and no event bounds) find the view centre.
+    viewport: std::cell::Cell<Rectangle>,
     /// Wire-in-progress points for rubber-band preview.
     pub wire_preview: Vec<signex_types::schematic::Point>,
     /// Whether currently in wire/bus drawing mode.
@@ -193,6 +196,7 @@ impl CanvasSlot {
             render_cache: None,
             selected: Vec::new(),
             pending_fit: std::cell::Cell::new(None),
+            viewport: std::cell::Cell::new(Rectangle::with_size(iced::Size::ZERO)),
             wire_preview: Vec::new(),
             drawing_mode: false,
             tool_preview: None,
@@ -251,6 +255,21 @@ impl CanvasSlot {
         render_cache: Option<crate::schematic_runtime::SchematicRenderCache>,
     ) {
         self.render_cache = render_cache;
+    }
+
+    /// Record the canvas bounds (done on every canvas event; public so tests can
+    /// stand in for a drawn frame).
+    pub fn set_viewport(&self, bounds: Rectangle) {
+        self.viewport.set(bounds);
+    }
+
+    /// Zoom one wheel notch about the view centre (View > Zoom In/Out).
+    /// Returns whether the camera changed (false at the zoom limits).
+    pub fn zoom_about_centre(&self, zoom_in: bool) -> bool {
+        let bounds = self.viewport.get();
+        let centre = iced::Point::new(bounds.width / 2.0, bounds.height / 2.0);
+        let notch = if zoom_in { 1.0 } else { -1.0 };
+        self.camera_mut().zoom_at(centre, notch, bounds)
     }
 
     /// Fit the camera to show the schematic content.
@@ -365,6 +384,8 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
+        // Remember the bounds so menu zoom (no cursor) can find the view centre.
+        self.viewport.set(bounds);
         // Consume any pending fit-to-content before dispatching the event.
         if let Some(action) = self.update_pending_fit(bounds) {
             return Some(action);

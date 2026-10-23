@@ -238,9 +238,6 @@ impl Signex {
     }
 
     fn view_preferences_body(&self) -> Element<'_, Message> {
-        use crate::app::view::dialogs::{MODAL_CLOSE_X_HIT_W, MODAL_HEADER_HEIGHT};
-        use iced::widget::{Space, Stack, column as col_widget, mouse_area, row};
-
         let ui = &self.ui_state;
         let dialog: Element<'_, Message> =
             crate::preferences::view_body(crate::preferences::PrefsView {
@@ -275,33 +272,7 @@ impl Signex {
             })
             .map(|m| Message::Preferences(PreferencesMsg::Inner(m)));
 
-        // OS-level drag handle covering the header strip, minus the
-        // close-X hit zone on the right. Press anywhere on the title
-        // bar → SC_MOVE drag the borderless OS window. Without this,
-        // `decorations: false` strips the OS title bar so there's
-        // nothing else for the user to grab.
-        let modal = super::state::ModalId::Preferences;
-        let drag_layer: Element<'_, Message> = col_widget![
-            row![
-                mouse_area(
-                    Space::new()
-                        .width(Length::Fill)
-                        .height(Length::Fixed(MODAL_HEADER_HEIGHT))
-                )
-                .on_press(Message::Window(WindowMsg::StartDetachedWindowDrag(modal)))
-                .interaction(iced::mouse::Interaction::Grab),
-                Space::new()
-                    .width(Length::Fixed(MODAL_CLOSE_X_HIT_W))
-                    .height(Length::Fixed(MODAL_HEADER_HEIGHT)),
-            ]
-            .width(Length::Fill),
-            Space::new().width(Length::Fill).height(Length::Fill),
-        ]
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .into();
-
-        Stack::new().push(dialog).push(drag_layer).into()
+        dialog
     }
 
     pub(super) fn view_detached_modal(&self, modal: super::state::ModalId) -> Element<'_, Message> {
@@ -317,41 +288,7 @@ impl Signex {
             ModalId::NetColorPalette => self.view_net_color_palette_body(),
             ModalId::ParameterManager => self.view_parameter_manager_body(),
             ModalId::PrintPreview => self.view_print_preview_body(),
-            ModalId::BomPreview => {
-                // Stack the body underneath a 6 px edge-resize
-                // overlay so the borderless OS window can be
-                // resized by dragging its edges. Without this,
-                // `decorations: false` strips the OS frame and
-                // there's nothing to grab.
-                let body = self.view_bom_preview_body();
-                let resize_active = self
-                    .document_state
-                    .bom_preview
-                    .as_ref()
-                    .map(|p| p.column_resize.is_some())
-                    .unwrap_or(false);
-                let mut stack = iced::widget::Stack::new()
-                    .push(body)
-                    .push(Self::detached_modal_resize_overlay(modal));
-                // While a column-resize drag is in flight, lay an
-                // invisible mouse_area over the whole modal that
-                // pins the cursor to ResizingHorizontally. Without
-                // this, the cursor reverts to default the moment
-                // it leaves the 4 px handle's hit zone — which
-                // happens immediately on horizontal drag.
-                if resize_active {
-                    let overlay: Element<'_, Message> = iced::widget::mouse_area(
-                        iced::widget::Space::new()
-                            .width(Length::Fill)
-                            .height(Length::Fill),
-                    )
-                    .on_release(Message::BomPreview(BomPreviewMsg::ColumnResizeEnd))
-                    .interaction(iced::mouse::Interaction::ResizingHorizontally)
-                    .into();
-                    stack = stack.push(overlay);
-                }
-                stack.into()
-            }
+            ModalId::BomPreview => self.view_bom_preview_body(),
             ModalId::Preferences => self.view_preferences_body(),
             ModalId::FindReplace
             | ModalId::RenameDialog
@@ -365,79 +302,6 @@ impl Signex {
                     .into()
             }
         }
-    }
-
-    /// Same 6 px edge-resize overlay as the main window's, but
-    /// emitting `StartDetachedModalResize { modal, direction }`
-    /// so it dispatches to the right OS window. Used as a stack
-    /// layer above the modal's body in `view_detached_modal`.
-    fn detached_modal_resize_overlay<'a>(modal: super::state::ModalId) -> Element<'a, Message> {
-        use iced::mouse::Interaction;
-        use iced::widget::{Space, column, mouse_area, row};
-        use iced::window::Direction;
-
-        const EDGE: f32 = 6.0;
-
-        let straight = move |direction: Direction,
-                             cursor: Interaction,
-                             horizontal: bool|
-              -> Element<'a, Message> {
-            let (w, h) = if horizontal {
-                (Length::Fill, Length::Fixed(EDGE))
-            } else {
-                (Length::Fixed(EDGE), Length::Fill)
-            };
-            mouse_area(Space::new().width(w).height(h))
-                .on_press(Message::Window(WindowMsg::StartDetachedModalResize {
-                    modal,
-                    direction,
-                }))
-                .interaction(cursor)
-                .into()
-        };
-        let corner = move |direction: Direction, cursor: Interaction| -> Element<'a, Message> {
-            mouse_area(
-                Space::new()
-                    .width(Length::Fixed(EDGE))
-                    .height(Length::Fixed(EDGE)),
-            )
-            .on_press(Message::Window(WindowMsg::StartDetachedModalResize {
-                modal,
-                direction,
-            }))
-            .interaction(cursor)
-            .into()
-        };
-
-        let top = straight(Direction::North, Interaction::ResizingVertically, true);
-        let bottom = straight(Direction::South, Interaction::ResizingVertically, true);
-        let left = straight(Direction::West, Interaction::ResizingHorizontally, false);
-        let right = straight(Direction::East, Interaction::ResizingHorizontally, false);
-        let nw = corner(Direction::NorthWest, Interaction::ResizingDiagonallyDown);
-        let ne = corner(Direction::NorthEast, Interaction::ResizingDiagonallyUp);
-        let sw = corner(Direction::SouthWest, Interaction::ResizingDiagonallyUp);
-        let se = corner(Direction::SouthEast, Interaction::ResizingDiagonallyDown);
-
-        let middle = row![
-            left,
-            Space::new().width(Length::Fill).height(Length::Fill),
-            right
-        ]
-        .width(Length::Fill)
-        .height(Length::Fill);
-
-        column![
-            row![nw, top, ne]
-                .width(Length::Fill)
-                .height(Length::Fixed(EDGE)),
-            middle,
-            row![sw, bottom, se]
-                .width(Length::Fill)
-                .height(Length::Fixed(EDGE)),
-        ]
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .into()
     }
 
     /// Full-window-sized Stack overlay that anchors 6 px resize hit

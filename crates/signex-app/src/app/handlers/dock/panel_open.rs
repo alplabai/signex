@@ -31,8 +31,7 @@ impl Signex {
         // Opening from the View menu used to skip this while opening
         // from the panel list persisted — so which entry point you
         // used decided whether the layout survived a restart.
-        crate::fonts::write_dock_layout(&self.document_state.dock);
-        Task::none()
+        self.persist_dock_layout_soon()
     }
 
     /// The OS window hosting `kind` as a detached panel, if any.

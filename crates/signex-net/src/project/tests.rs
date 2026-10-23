@@ -275,6 +275,77 @@ fn equivalence_gate_root_only() {
     place(&mut d, "R1", "R", pt(10.0, 0.0));
     place_power(&mut d, "#PWR01", "PWR", "GND", pt(0.0, 0.0));
     assert_equiv(&d);
+
+    // (e) GND and VCC ports touching tip to tip, no anchor: stays two rails.
+    assert_equiv(&touching_rails(false));
+
+    // (f) the same touch with a junction under it: an anchor, so one net.
+    assert_equiv(&touching_rails(true));
+}
+
+/// A GND rail and a VCC rail, each wired to a resistor, plus a GND port and a
+/// VCC port whose tips share the wireless point `(50, 50)`; `with_junction`
+/// puts a junction there.
+fn touching_rails(with_junction: bool) -> SchematicSheet {
+    let mut s = empty_sheet();
+    add_lib(&mut s, "R");
+    add_lib(&mut s, "PWR");
+    s.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+    s.wires.push(wire(pt(0.0, 20.0), pt(10.0, 20.0)));
+    place(&mut s, "R1", "R", pt(0.0, 0.0));
+    place_power(&mut s, "#PWR1", "PWR", "GND", pt(10.0, 0.0));
+    place(&mut s, "R2", "R", pt(0.0, 20.0));
+    place_power(&mut s, "#PWR2", "PWR", "VCC", pt(10.0, 20.0));
+    place_power(&mut s, "#PWR3", "PWR", "GND", pt(50.0, 50.0));
+    place_power(&mut s, "#PWR4", "PWR", "VCC", pt(50.0, 50.0));
+    if with_junction {
+        s.junctions.push(junction(pt(50.0, 50.0)));
+    }
+    s
+}
+
+#[test]
+fn touching_gnd_and_vcc_ports_stay_two_rails_in_a_project_on_one_sheet() {
+    let p = stitch(&touching_rails(false), "root", &HashMap::new());
+    assert_eq!(p.netlist.nets.len(), 2, "{:?}", p.netlist);
+    let mut got = names(&p.netlist);
+    got.sort_unstable();
+    assert_eq!(got, ["GND", "VCC"]);
+}
+
+#[test]
+fn touching_gnd_and_vcc_ports_stay_two_rails_across_sheets() {
+    // The contact-only pair lives on the root; the child wires its own GND and
+    // VCC. The root's touch must not bridge the two global names.
+    let mut root = touching_rails(false);
+    root.child_sheets
+        .push(child_sheet("A", "a.sch", Vec::new()));
+
+    let mut child = empty_sheet();
+    add_lib(&mut child, "R");
+    add_lib(&mut child, "PWR");
+    child.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+    child.wires.push(wire(pt(0.0, 20.0), pt(10.0, 20.0)));
+    place(&mut child, "R3", "R", pt(0.0, 0.0));
+    place_power(&mut child, "#PWR5", "PWR", "GND", pt(10.0, 0.0));
+    place(&mut child, "R4", "R", pt(0.0, 20.0));
+    place_power(&mut child, "#PWR6", "PWR", "VCC", pt(10.0, 20.0));
+
+    let mut map = HashMap::new();
+    map.insert("a.sch".to_string(), child);
+    let p = stitch(&root, "root", &map);
+
+    assert_eq!(p.netlist.nets.len(), 2, "{:?}", p.netlist);
+    let gnd = p.netlist.nets.iter().find(|n| n.name == "GND").unwrap();
+    let vcc = p.netlist.nets.iter().find(|n| n.name == "VCC").unwrap();
+    let refs = |n: &Net| {
+        n.terminals
+            .iter()
+            .map(|t| t.reference.clone())
+            .collect::<Vec<_>>()
+    };
+    assert!(refs(gnd).contains(&"R3".to_string()) && !refs(gnd).contains(&"R4".to_string()));
+    assert!(refs(vcc).contains(&"R4".to_string()) && !refs(vcc).contains(&"R3".to_string()));
 }
 
 /// Library whose single pin sits at `local` (for the rotated-symbol case).

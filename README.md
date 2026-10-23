@@ -11,7 +11,7 @@
   <a href="https://github.com/alplabai/signex/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License"></a>
   <a href="https://github.com/alplabai/signex/releases/latest"><img src="https://img.shields.io/github/v/release/alplabai/signex?label=version" alt="Latest release"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.88%2B-orange.svg" alt="Rust"></a>
-  <a href="https://github.com/alplabai/signex/wiki"><img src="https://img.shields.io/badge/wiki-user%20guide-blueviolet.svg" alt="Wiki"></a>
+  <a href="docs/USER_GUIDE.md"><img src="https://img.shields.io/badge/docs-user%20guide-blueviolet.svg" alt="User guide"></a>
   <a href="https://github.com/alplabai/signex/discussions"><img src="https://img.shields.io/badge/discussions-join-brightgreen.svg" alt="Discussions"></a>
 </p>
 
@@ -21,7 +21,7 @@
   <a href="#download">Download</a> &middot;
   <a href="#building">Building</a> &middot;
   <a href="#roadmap">Roadmap</a> &middot;
-  <a href="https://github.com/alplabai/signex/wiki">Wiki</a> &middot;
+  <a href="docs/USER_GUIDE.md">User guide</a> &middot;
   <a href="#contributing">Contributing</a> &middot;
   <a href="#license">License</a>
 </p>
@@ -71,7 +71,8 @@ formats one-way. Run it once against your project; open the resulting
 - Advanced shape tools — Line, Rectangle, Circle, Arc (3-click), Polygon
   (click-by-click), editable drawing Properties with live preview
 - Copy/paste, undo/redo (100 levels), save to the native `.snxsch` /
-  `.snxprj` format (TOML envelope + TSV bulk blocks, line-diffable in git)
+  `.snxprj` formats (`.snxsch`: TOML envelope + TSV bulk blocks, line-diffable
+  in git; `.snxprj`: JSON, see [why](docs/architecture/snxprj-format.md))
 - 7 built-in themes with customizable theme editor
 - Altium-style docking panels with drag-to-undock/dock
 - Active Bar — 13-button floating toolbar with dropdown menus
@@ -182,7 +183,7 @@ signex/
 
 **Design principles:**
 
-- **Native `.snx*` formats first.** `.snxsch` / `.snxpcb` / `.snxprj` are the canonical format (TOML envelope + TSV bulk blocks, line-diffable, ~5× smaller than JSON). One-way KiCad → Signex import is an optional, independently-distributed companion tool.
+- **Native `.snx*` formats first.** `.snxsch` / `.snxpcb` / `.snxprj` are the canonical formats (TOML envelope + TSV bulk blocks, line-diffable, ~5× smaller than JSON; the `.snxprj` project file is the one JSON exception, see [docs/architecture/snxprj-format.md](docs/architecture/snxprj-format.md)). One-way KiCad → Signex import is an optional, independently-distributed companion tool.
 - **Elm architecture (MVU).** iced's `state → view → Message → update` cycle; `view` is pure, `update` is the only mutation site and never blocks — all IO returns as a `Task`. No process-global mutable state.
 - **Domain logic in domain crates.** Types and engines below `signex-app` carry zero `iced`/`wgpu` deps (Cargo-enforced); connectivity is derived once in `signex-net` and read everywhere else, never re-derived.
 - **Multi-window by default.** Built on `iced::daemon`; every undocked tab gets its own engine + canvas keyed by window id, so two schematics can be edited in parallel without cross-talk.
@@ -307,19 +308,17 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for the detailed version plan.
 
 ## Documentation
 
-The **[Signex Wiki](https://github.com/alplabai/signex/wiki)** is the user
-guide — installation, quick start, keyboard shortcuts, and feature-by-feature
-walkthroughs (ERC, annotation, multi-window editing, hierarchical sheets,
-net-color pen, the library subsystem, the symbol + footprint editors, themes,
-and more), plus an FAQ and roadmap.
+The **[User Guide](docs/USER_GUIDE.md)** takes you from a downloaded package
+to a saved schematic and an exported PDF, starting with **File ▸ New
+Project**. It lives in the repository, so it is versioned with the code and
+reviewed in pull requests.
 
-Start with **[Quick Start](https://github.com/alplabai/signex/wiki/Quick-Start)**
-to open your first Signex project, or jump straight to
-**[Keyboard Shortcuts](https://github.com/alplabai/signex/wiki/Keyboard-Shortcuts)**
-for the full reference. In-repo docs live under
-[`docs/`](docs/) — see [ROADMAP.md](docs/ROADMAP.md),
-[LICENSING.md](docs/LICENSING.md), and
-[REPOSITORY_AND_CODEBASE.md](docs/REPOSITORY_AND_CODEBASE.md).
+In-repo reference docs live under [`docs/`](docs/): the
+[command reference](docs/COMMANDS.md),
+[keyboard shortcut file format](docs/KEYBOARD_SHORTCUTS.md),
+[ROADMAP.md](docs/ROADMAP.md), [LICENSING.md](docs/LICENSING.md), and
+[REPOSITORY_AND_CODEBASE.md](docs/REPOSITORY_AND_CODEBASE.md). The
+[wiki](https://github.com/alplabai/signex/wiki) is no longer the primary guide.
 
 ## Contributing
 

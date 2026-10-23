@@ -108,7 +108,7 @@ impl DistributorCache {
             std::fs::create_dir_all(parent)?;
         }
         let json = serde_json::to_vec_pretty(part)?;
-        std::fs::write(&path, json)?;
+        signex_types::atomic_io::atomic_write(&path, &json)?;
         Ok(())
     }
 
@@ -173,6 +173,26 @@ mod tests {
             captured_at: Utc::now(),
             extra: Default::default(),
         }
+    }
+
+    /// Overwriting an existing entry replaces it and leaves no `*.tmp`
+    /// sibling behind. (Crash-safety itself is not observable in a unit test.)
+    #[test]
+    fn put_replaces_entry_atomically() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = DistributorCache::with_root(dir.path()).unwrap();
+        cache.put("lcsc", &part("R1")).unwrap();
+        let mut newer = part("R1");
+        newer.description = "newer".into();
+        cache.put("lcsc", &newer).unwrap();
+        let path = cache.entry_path("lcsc", "R1");
+        let back: DistributorPart = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(back.description, "newer");
+        let stray = std::fs::read_dir(path.parent().unwrap())
+            .unwrap()
+            .filter_map(Result::ok)
+            .any(|e| e.path().extension().is_some_and(|x| x == "tmp"));
+        assert!(!stray);
     }
 
     #[test]
