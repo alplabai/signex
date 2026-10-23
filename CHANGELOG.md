@@ -18,11 +18,6 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
-### Fixed — footprint sketch: deleting an entity (#108)
-
-- **Deleting a sketch point no longer leaves dangling references** — the delete now cascades structurally: every line, arc or circle built on the point and every constraint or array (source or polar centre) naming a removed entity go with it, as one undo step, and the Messages panel reports how many dependents were removed. Constraints were previously matched by searching their `Debug` text for the deleted id, which missed `Horizontal` and `PointOnLine` and left the lines and arcs in place.
-- **A sketch that names a missing entity fails the solve with a typed error** — `SolveError::DanglingReference` lists the missing ids instead of the solver reading entities that are gone; the failure reaches the Properties warnings and the Messages panel, the sketch stays editable, and deleting any entity heals it.
-
 ### Added
 
 - **Unknown TSV columns are preserved (#315)** — a `.snxsch` / `.snxpcb` bulk block with a column this build does not know no longer fails to load with a header mismatch; columns resolve by name, the extra cells stay attached to their row through an edit, and they are re-emitted after the known columns (in their original relative order) on save. A missing known column and a repeated column name still error. A block may carry at most 256 foreign columns, each name at most 256 bytes; a file over either cap fails to load, and a save fails (before any byte is written, the previous file stays intact) on the same caps or when a foreign column repeats a known column name, each with an error naming the offending column.
