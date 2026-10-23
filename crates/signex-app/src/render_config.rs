@@ -21,27 +21,6 @@ pub const CANVAS_FONT_FAMILY: &str = "Iosevka";
 pub const IOSEVKA: iced::Font = iced::Font::with_name(CANVAS_FONT_FAMILY);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum PowerPortStyle {
-    Standard,
-    #[default]
-    Altium,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum LabelStyle {
-    #[default]
-    Standard,
-    Altium,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum MultisheetStyle {
-    #[default]
-    Standard,
-    Altium,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum GridStyle {
     #[default]
     Dots,
@@ -52,33 +31,6 @@ pub enum GridStyle {
 impl GridStyle {
     pub const ALL: &'static [GridStyle] =
         &[GridStyle::Dots, GridStyle::Lines, GridStyle::SmallCrosses];
-}
-
-impl std::fmt::Display for PowerPortStyle {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            PowerPortStyle::Standard => write!(f, "Standard"),
-            PowerPortStyle::Altium => write!(f, "Altium"),
-        }
-    }
-}
-
-impl std::fmt::Display for LabelStyle {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            LabelStyle::Standard => write!(f, "Standard"),
-            LabelStyle::Altium => write!(f, "Altium"),
-        }
-    }
-}
-
-impl std::fmt::Display for MultisheetStyle {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MultisheetStyle::Standard => write!(f, "Standard"),
-            MultisheetStyle::Altium => write!(f, "Altium"),
-        }
-    }
 }
 
 impl std::fmt::Display for GridStyle {
