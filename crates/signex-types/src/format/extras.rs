@@ -52,7 +52,13 @@ impl JunctionExtras {
 }
 
 /// Per-symbol auxiliary fields that don't fit into [`SchComponentRow`].
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+///
+/// `Default` is hand-written, not derived: it must equal what serde
+/// fills in for an empty table (`unit = 1`, `in_bom` and `on_board`
+/// true). The writer omits a symbol whose extras are default and the
+/// parser substitutes `Default` for the missing table, so any
+/// disagreement silently rewrites the symbol on reload (#789).
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(in crate::format) struct SymbolExtras {
     #[serde(default)]
     pub(in crate::format) footprint: String,
@@ -97,21 +103,51 @@ pub(in crate::format) struct SymbolExtras {
     pub(in crate::format) unknown: UnknownFields,
 }
 
+impl Default for SymbolExtras {
+    fn default() -> Self {
+        SymbolExtras {
+            footprint: String::new(),
+            datasheet: String::new(),
+            mirror_x: false,
+            mirror_y: false,
+            unit: default_unit(),
+            is_power: false,
+            fields_autoplaced: false,
+            fields_user_placed: false,
+            dnp: false,
+            in_bom: default_true(),
+            on_board: default_true(),
+            exclude_from_sim: false,
+            locked: false,
+            fields: BTreeMap::new(),
+            custom_properties: Vec::new(),
+            pin_uuids: BTreeMap::new(),
+            instances: Vec::new(),
+            ref_text: None,
+            val_text: None,
+            unknown: UnknownFields::default(),
+        }
+    }
+}
+
 impl SymbolExtras {
+    /// True when nothing differs from [`SymbolExtras::default`], so the
+    /// writer may omit the table and the parser's fallback restores it.
     pub(in crate::format) fn is_default(&self) -> bool {
-        self.footprint.is_empty()
-            && self.datasheet.is_empty()
-            && !self.mirror_x
-            && !self.mirror_y
-            && self.unit == 1
-            && !self.is_power
-            && !self.fields_autoplaced
-            && !self.fields_user_placed
-            && !self.dnp
-            && self.in_bom
-            && self.on_board
-            && !self.exclude_from_sim
-            && !self.locked
+        let d = Self::default();
+        self.footprint == d.footprint
+            && self.datasheet == d.datasheet
+            && self.mirror_x == d.mirror_x
+            && self.mirror_y == d.mirror_y
+            && self.unit == d.unit
+            && self.is_power == d.is_power
+            && self.fields_autoplaced == d.fields_autoplaced
+            && self.fields_user_placed == d.fields_user_placed
+            && self.dnp == d.dnp
+            && self.in_bom == d.in_bom
+            && self.on_board == d.on_board
+            && self.exclude_from_sim == d.exclude_from_sim
+            && self.locked == d.locked
             && self.fields.is_empty()
             && self.custom_properties.is_empty()
             && self.pin_uuids.is_empty()

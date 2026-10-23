@@ -10,8 +10,13 @@
 //! polygons, the stackup, custom properties) lives in regular TOML
 //! sub-tables alongside the TSV blocks.
 //!
-//! `.snxprj` (project) is unchanged and uses its own pre-existing
-//! format. Stays as-is.
+//! `.snxprj` (project) is the one native format that is not TOML+TSV: it
+//! is pretty-printed JSON (`crate::project`). The v0.9 cutover scoped
+//! itself to document formats and left the project file alone; JSON
+//! persistence for it landed afterwards (0222a07c) with no recorded reason
+//! to prefer JSON. It is a small flat pointer record with no bulk rows, so
+//! the TSV blocks would add nothing, but it also has no format token and
+//! drops unknown keys on save. See `docs/architecture/snxprj-format.md`.
 //!
 //! These types are the canonical Signex schema. Standard I/O — when it
 //! returns via the `signex-standard-import` companion repo (GPL-3.0) —
