@@ -321,8 +321,32 @@ impl Signex {
                 self.handle_print_preview_set_specific_page_input(value);
                 self.finish_update()
             }
-            PrintPreviewMsg::SetFitToPage(fit) => {
-                self.handle_print_preview_set_fit_to_page(fit);
+            PrintPreviewMsg::SetPageSize(size) => {
+                self.handle_print_preview_set_page_size(size);
+                self.finish_update()
+            }
+            PrintPreviewMsg::SetOrientation(orientation) => {
+                self.handle_print_preview_set_orientation(orientation);
+                self.finish_update()
+            }
+            PrintPreviewMsg::SetCustomWidth(text) => {
+                self.handle_print_preview_set_custom_dimension(true, text);
+                self.finish_update()
+            }
+            PrintPreviewMsg::SetCustomHeight(text) => {
+                self.handle_print_preview_set_custom_dimension(false, text);
+                self.finish_update()
+            }
+            PrintPreviewMsg::SetMargin(edge, text) => {
+                self.handle_print_preview_set_margin(edge, text);
+                self.finish_update()
+            }
+            PrintPreviewMsg::SetScaleMode(mode) => {
+                self.handle_print_preview_set_scale_mode(mode);
+                self.finish_update()
+            }
+            PrintPreviewMsg::SetScalePercent(text) => {
+                self.handle_print_preview_set_scale_percent(text);
                 self.finish_update()
             }
             PrintPreviewMsg::SetIncludeTitleBlock(include) => {

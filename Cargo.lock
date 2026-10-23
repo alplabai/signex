@@ -5310,6 +5310,7 @@ name = "signex-3d-model-importer"
 version = "0.15.0"
 dependencies = [
  "base64",
+ "log",
  "serde",
  "serde_json",
  "sha2",

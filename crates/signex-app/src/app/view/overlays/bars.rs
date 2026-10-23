@@ -749,6 +749,9 @@ mod tests {
             page_handles: Vec::new(),
             selected: 0,
             pdf_options: signex_output::PdfOptions::default(),
+            page_setup: crate::app::state::PageSetupInputs::from_options(
+                &signex_output::PdfOptions::default(),
+            ),
             specific_page_input: "1".to_string(),
             zoom: 1.0,
             active_tab: crate::app::state::PdfPreviewTab::Preview,

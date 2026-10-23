@@ -25,7 +25,7 @@ use tempfile::TempDir;
 
 /// Park a clean footprint editor at `path` behind an active tab, the
 /// state right after opening a `.snxfpt`.
-fn open_footprint_editor(app: &mut Signex, path: &Path) {
+pub(crate) fn open_footprint_editor(app: &mut Signex, path: &Path) {
     let file = FootprintFile::from_footprint(Footprint::empty("fp"));
     app.document_state.footprint_editors.insert(
         path.to_path_buf(),
@@ -43,7 +43,7 @@ fn open_footprint_editor(app: &mut Signex, path: &Path) {
 }
 
 /// Edit the footprint description through the Properties panel.
-fn edit_description_via_panel(app: &mut Signex) {
+pub(crate) fn edit_description_via_panel(app: &mut Signex) {
     let _ = app.update(Message::Dock(DockMessage::Panel(
         PanelMsg::FpEditorSetFootprintDescription("edited".into()),
     )));
@@ -198,7 +198,7 @@ fn preview_row() -> ComponentRow {
 
 /// An app holding one unmounted Component Preview editor whose
 /// parameter has just been edited through the real update path.
-fn app_with_preview_edit() -> Signex {
+pub(crate) fn app_with_preview_edit() -> Signex {
     let (app, _t) = Signex::new();
     preview_edit_in(app, PathBuf::from("/tmp/signex-666/lib.snxlib"))
 }
