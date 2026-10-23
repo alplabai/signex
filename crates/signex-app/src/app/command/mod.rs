@@ -67,6 +67,21 @@ mod tests {
         assert_eq!(app.ui_state.selection_mode, SelectionMode::Inside);
     }
 
+    /// #791 — the `next_grid` command (the `N` key in the Classic profile) steps the grid through the
+    /// same presets as View > Cycle Grid Size.
+    #[test]
+    fn next_grid_command_steps_the_grid() {
+        let (mut app, _task) = Signex::new();
+        app.ui_state.grid_size_mm = 1.27;
+        app.ui_state.visible_grid_mm = 1.27;
+
+        let command = AppCommandId::new("next_grid").unwrap();
+        let _ = app.dispatch_command(&command, CommandArgs::none());
+
+        assert_eq!(app.ui_state.grid_size_mm, 2.54);
+        assert_eq!(app.ui_state.visible_grid_mm, 2.54);
+    }
+
     /// An id with no catalog entry at all is untrusted input, not a
     /// programmer error — it must resolve to a no-op, never panic.
     #[test]
