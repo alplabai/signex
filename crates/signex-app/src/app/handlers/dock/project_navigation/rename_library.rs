@@ -1,11 +1,12 @@
 //! Renaming a project library's `.snxlib` from the project tree (#739).
 //!
-//! The file rename runs in a `Task`; when it lands, everything that knows
-//! the library by its path moves with it in one step: the project's
-//! `LibraryEntry`, the persisted `.snxprj`, the mounted adapter, and every
-//! open tab, editor map and dirty marker. If any step fails the project is
-//! left on the old path and the file is renamed back, so the project never
-//! points at a missing library.
+//! The file rename and the re-point of everything that knows the library by
+//! its path happen in one synchronous `update`, like the sheet rename: the
+//! project's `LibraryEntry`, the mounted adapter, and every open tab, editor
+//! map and dirty marker move together, so no write can land between the file
+//! moving and the mount following it. The `.snxprj` is marked dirty, not
+//! written: nothing reaches disk without an explicit save, and Close Project
+//! and quit prompt for the unsaved path.
 //!
 //! Only project-local libraries are renameable here. Shared and Global
 //! libraries live outside the project and stay refused (#657).
@@ -18,13 +19,6 @@ use std::path::{Path, PathBuf};
 
 const NOT_PROJECT_LOCAL: &str = "Only libraries stored inside the project can be renamed from the \
      project tree. Shared and global libraries are referenced by path.";
-
-/// `fs::rename` off the UI thread.
-async fn rename_on_disk(from: PathBuf, to: PathBuf) -> Result<(), String> {
-    tokio::task::spawn_blocking(move || std::fs::rename(&from, &to).map_err(|e| e.to_string()))
-        .await
-        .unwrap_or_else(|e| Err(format!("rename task failed: {e}")))
-}
 
 impl Signex {
     /// The `.snxlib` the dialog targets, when it is one of its owning
@@ -46,9 +40,13 @@ impl Signex {
             .map(|e| e.kind)
     }
 
-    /// Validate a library rename and start it. Nothing changes until the
-    /// `fs::rename` task reports back through
-    /// [`handle_library_file_renamed`](Self::handle_library_file_renamed).
+    /// Validate and perform a library rename.
+    ///
+    /// The `fs::rename` and the in-memory re-point happen inside this one
+    /// `update`, the way a sheet rename does: no message can be processed
+    /// between the file moving and the mount following it, so no row edit
+    /// can recreate the old `.snxlib` or miss the renamed one. The
+    /// destination is checked for existence immediately before the rename.
     pub(super) fn begin_library_rename(
         &mut self,
         state: &crate::app::RenameDialogState,
@@ -68,16 +66,62 @@ impl Signex {
             self.set_rename_error("The owning project is no longer open.");
             return iced::Task::none();
         };
+        if new_path.exists() {
+            self.set_rename_error("A file with that name already exists.");
+            return iced::Task::none();
+        }
+        if let Err(e) = std::fs::rename(&old_path, &new_path) {
+            let reason = format!("the file could not be renamed: {e}");
+            self.report_library_rename_failure(&old_path, &reason);
+            self.set_rename_error(&format!("Rename failed: {e}"));
+            self.sync_diagnostics_panel_ctx();
+            return iced::Task::none();
+        }
         self.ui_state.rename_dialog = None;
-        let (from, to) = (old_path.clone(), new_path.clone());
-        iced::Task::perform(rename_on_disk(from, to), move |result| {
-            Message::Rename(RenameMsg::LibraryFileRenamed {
-                project,
-                old_path: old_path.clone(),
-                new_path: new_path.clone(),
-                result,
-            })
-        })
+        match self.apply_library_rename(project, &old_path, &new_path) {
+            Ok(()) => {
+                // The Messages panel clips a record at 160 characters, so
+                // the instruction goes first and only file names follow.
+                let file_name = |p: &Path| {
+                    p.file_name()
+                        .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
+                };
+                crate::diagnostics::log_warning(format!(
+                    "Save the project to keep the new path of library {} (renamed to {}).",
+                    file_name(&old_path),
+                    file_name(&new_path)
+                ));
+                self.refresh_panel_ctx();
+            }
+            Err(reason) => self.undo_library_file_rename(&old_path, &new_path, &reason),
+        }
+        self.sync_diagnostics_panel_ctx();
+        iced::Task::none()
+    }
+
+    /// The file moved but the app could not follow. Nothing has been
+    /// processed since (same `update`), so moving the file back restores the
+    /// exact prior state.
+    fn undo_library_file_rename(&mut self, old_path: &Path, new_path: &Path, reason: &str) {
+        match std::fs::rename(new_path, old_path) {
+            Ok(()) => self.report_library_rename_failure(
+                old_path,
+                &format!("{reason}. The file was renamed back."),
+            ),
+            Err(back) => {
+                let detail = format!(
+                    "The library is now at {} but the project still lists {}: {back}. \
+                     Move it back by hand.",
+                    new_path.display(),
+                    old_path.display()
+                );
+                crate::diagnostics::log_error(
+                    "Library rename rollback failed",
+                    &anyhow::anyhow!("{detail}"),
+                );
+                self.document_state.error_notice = Some(ErrorNotice::rename_failed(detail));
+            }
+        }
     }
 
     /// Why this library cannot be renamed right now, or `None` when it can.
@@ -131,94 +175,6 @@ impl Signex {
         None
     }
 
-    /// The `fs::rename` task finished.
-    pub(crate) fn handle_library_file_renamed(
-        &mut self,
-        project: crate::app::ProjectId,
-        old_path: &Path,
-        new_path: &Path,
-        result: Result<(), String>,
-    ) -> iced::Task<Message> {
-        let task = self.finish_library_file_renamed(project, old_path, new_path, result);
-        // The Rename dispatcher does not run `finish_update`; republish so
-        // the outcome is in the Messages panel when this message is done.
-        self.sync_diagnostics_panel_ctx();
-        task
-    }
-
-    fn finish_library_file_renamed(
-        &mut self,
-        project: crate::app::ProjectId,
-        old_path: &Path,
-        new_path: &Path,
-        result: Result<(), String>,
-    ) -> iced::Task<Message> {
-        if let Err(reason) = result {
-            self.report_library_rename_failure(
-                old_path,
-                &format!("the file could not be renamed: {reason}"),
-            );
-            return iced::Task::none();
-        }
-        match self.apply_library_rename(project, old_path, new_path) {
-            Ok(()) => {
-                crate::diagnostics::log_info(format!(
-                    "Renamed library {} to {}",
-                    old_path.display(),
-                    new_path.display()
-                ));
-                self.refresh_panel_ctx();
-                iced::Task::none()
-            }
-            Err(reason) => {
-                self.report_library_rename_failure(
-                    old_path,
-                    &format!("{reason}. The file is being renamed back."),
-                );
-                let (from, to) = (new_path.to_path_buf(), old_path.to_path_buf());
-                let (old, new) = (old_path.to_path_buf(), new_path.to_path_buf());
-                iced::Task::perform(rename_on_disk(from, to), move |result| {
-                    Message::Rename(RenameMsg::LibraryRenameRolledBack {
-                        old_path: old.clone(),
-                        new_path: new.clone(),
-                        result,
-                    })
-                })
-            }
-        }
-    }
-
-    /// The rollback `fs::rename` finished: say whether the library is back
-    /// where the project expects it.
-    pub(crate) fn handle_library_rename_rolled_back(
-        &mut self,
-        old_path: &Path,
-        new_path: &Path,
-        result: Result<(), String>,
-    ) {
-        match result {
-            Ok(()) => crate::diagnostics::log_info(format!(
-                "Library rename rolled back; {} is back at {}",
-                new_path.display(),
-                old_path.display()
-            )),
-            Err(reason) => {
-                let detail = format!(
-                    "The library is now at {} but the project still lists {}: {reason}. \
-                     Move it back by hand.",
-                    new_path.display(),
-                    old_path.display()
-                );
-                crate::diagnostics::log_error(
-                    "Library rename rollback failed",
-                    &anyhow::anyhow!("{detail}"),
-                );
-                self.document_state.error_notice = Some(ErrorNotice::rename_failed(detail));
-            }
-        }
-        self.sync_diagnostics_panel_ctx();
-    }
-
     fn report_library_rename_failure(&mut self, old_path: &Path, reason: &str) {
         let detail = format!("Could not rename library {}: {reason}", old_path.display());
         // The Messages panel clips a record at 160 characters, so the
@@ -234,9 +190,9 @@ impl Signex {
         self.document_state.error_notice = Some(ErrorNotice::rename_failed(detail));
     }
 
-    /// Re-point the project entry, the mounted library and every open
-    /// document at `new_path`, persisting the project. All-or-nothing: an
-    /// `Err` leaves every in-memory key on `old_path`.
+    /// Re-point the mounted library, the project entry and every open
+    /// document at `new_path` (the file is already there). All-or-nothing:
+    /// an `Err` leaves every in-memory key on `old_path`.
     fn apply_library_rename(
         &mut self,
         project: crate::app::ProjectId,
@@ -270,28 +226,14 @@ impl Signex {
             .relocate_library(old_path, new_path)
             .map_err(|e| format!("the mounted library could not follow the rename: {e}"))?;
 
-        let old_entry_path = {
+        {
             let entry = &mut self.document_state.projects[project_idx].data.libraries[entry_idx];
-            let old_entry_path = entry.path.clone();
-            entry.path = old_entry_path.with_file_name(new_name);
-            old_entry_path
-        };
-        let was_dirty = self.document_state.dirty_paths.contains(&project_path);
-        self.document_state.dirty_paths.insert(project_path.clone());
-        if let Err(error) = self.save_project_at_path(&project_path) {
-            self.document_state.projects[project_idx].data.libraries[entry_idx].path =
-                old_entry_path;
-            if !was_dirty {
-                self.document_state.dirty_paths.remove(&project_path);
-            }
-            if let Err(back) = self.library.relocate_library(new_path, old_path) {
-                crate::diagnostics::log_error(
-                    "Library rename revert failed",
-                    &anyhow::anyhow!(back),
-                );
-            }
-            return Err(format!("the project file could not be saved: {error:#}"));
+            entry.path = entry.path.with_file_name(new_name);
         }
+        // In memory only: the project is marked dirty so Close Project and
+        // quit prompt for it, and the user's explicit save writes the new
+        // path. Nothing but the rename itself reaches disk here.
+        self.document_state.dirty_paths.insert(project_path);
 
         self.rekey_library_documents(old_path, new_path);
         Ok(())

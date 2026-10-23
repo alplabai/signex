@@ -188,9 +188,11 @@ pub trait LibraryAdapter: Send + Sync {
     /// stays valid, so nothing is re-read. Without it, the next row write
     /// persists to the old path and recreates the library there.
     ///
-    /// The caller owns the file move: the path is taken on trust, so a
-    /// failed rename can be undone by relocating back before the file has
-    /// moved. Adapters with no on-disk file keep the default, which refuses.
+    /// The caller owns the file move and calls this once the file is at
+    /// `new_file`. A git-backed adapter records the rename in the library's
+    /// own repository (old name dropped, new name added, one commit); a
+    /// failure leaves the adapter on its old path. Adapters with no on-disk
+    /// file keep the default, which refuses.
     fn relocate_library_file(&mut self, _new_file: &std::path::Path) -> Result<(), LibraryError> {
         Err(LibraryError::Backend(
             "relocate_library_file not supported for this adapter".into(),

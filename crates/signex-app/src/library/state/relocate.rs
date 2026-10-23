@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 use signex_library::LibraryError;
 
-use super::{EditorAddress, LibraryState};
+use super::{EditorAddress, LibraryState, PrimitivePickerTarget};
 
 /// `path` moved from under `old` to under `new`, or `None` when it does
 /// not live at or below `old`. A library's own key equals `old`; the
@@ -27,6 +27,15 @@ fn rebased_or_same(path: &Path, old: &Path, new: &Path) -> PathBuf {
 
 fn rebase_address(address: &mut EditorAddress, old: &Path, new: &Path) {
     address.library_path = rebased_or_same(&address.library_path, old, new);
+}
+
+fn rebase_picker_target(target: &mut PrimitivePickerTarget, old: &Path, new: &Path) {
+    match target {
+        PrimitivePickerTarget::PreviewRow(address)
+        | PrimitivePickerTarget::EditRowModal(address)
+        | PrimitivePickerTarget::BrowserRow(address) => rebase_address(address, old, new),
+        PrimitivePickerTarget::NewComponentForm => {}
+    }
 }
 
 impl LibraryState {
@@ -85,6 +94,14 @@ impl LibraryState {
             confirm.library_path = rebased_or_same(&confirm.library_path, old, new);
             for address in &mut confirm.dirty_editors {
                 rebase_address(address, old, new);
+            }
+        }
+        if let Some(picker) = self.primitive_picker.as_mut() {
+            rebase_picker_target(&mut picker.target, old, new);
+        }
+        if let Some(updates) = self.library_updates.as_mut() {
+            for entry in &mut updates.entries {
+                entry.library_path = rebased_or_same(&entry.library_path, old, new);
             }
         }
         if let Some(options) = self.document_options.as_mut() {

@@ -29,7 +29,20 @@ impl LibraryAdapter for LocalGitAdapter {
 
     fn relocate_library_file(&mut self, new_file: &Path) -> Result<(), LibraryError> {
         Self::validate_file_path(new_file)?;
-        self.root_dir = parent_dir(new_file)?;
+        let new_root = parent_dir(new_file)?;
+        if new_root == self.root_dir {
+            // Record the rename in the library's own history before the
+            // adapter moves, so a failed commit leaves it on the old path.
+            let old_rel = self.snxlib_rel_path()?;
+            let new_rel = file_name_str(new_file)?;
+            self.commit_change(
+                Some(&old_rel),
+                &new_rel,
+                "",
+                &format!("rename {old_rel} to {new_rel}"),
+            )?;
+        }
+        self.root_dir = new_root;
         self.file_path = new_file.to_path_buf();
         Ok(())
     }

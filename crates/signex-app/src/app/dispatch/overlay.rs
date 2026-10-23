@@ -511,20 +511,6 @@ impl Signex {
                 self.ui_state.rename_dialog = None;
                 Task::none()
             }
-            RenameMsg::LibraryFileRenamed {
-                project,
-                old_path,
-                new_path,
-                result,
-            } => self.handle_library_file_renamed(project, &old_path, &new_path, result),
-            RenameMsg::LibraryRenameRolledBack {
-                old_path,
-                new_path,
-                result,
-            } => {
-                self.handle_library_rename_rolled_back(&old_path, &new_path, result);
-                Task::none()
-            }
         }
     }
 

@@ -200,6 +200,19 @@ impl LocalGitAdapter {
         message: &str,
         fallback_message: &str,
     ) -> Result<(), LibraryError> {
+        self.commit_change(None, rel_path, message, fallback_message)
+    }
+
+    /// Like [`commit_path`](Self::commit_path), but also drops
+    /// `removed_rel_path` from the index, so a file moved to `rel_path` is
+    /// recorded as a rename rather than left tracked at its old name.
+    pub(super) fn commit_change(
+        &self,
+        removed_rel_path: Option<&str>,
+        rel_path: &str,
+        message: &str,
+        fallback_message: &str,
+    ) -> Result<(), LibraryError> {
         if !self.root_dir.join(".git").exists() {
             return Ok(());
         }
@@ -218,6 +231,13 @@ impl LocalGitAdapter {
         let mut index = repo
             .index()
             .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
+        if let Some(removed) = removed_rel_path
+            && index.get_path(Path::new(removed), 0).is_some()
+        {
+            index
+                .remove_path(Path::new(removed))
+                .map_err(|e| LibraryError::Backend(format!("git rm: {e}")))?;
+        }
         index
             .add_path(Path::new(rel_path))
             .map_err(|e| LibraryError::Backend(format!("git add: {e}")))?;
@@ -256,7 +276,7 @@ impl LocalGitAdapter {
 
     // ── Table helpers ──────────────────────────────────────────────────────
 
-    fn snxlib_rel_path(&self) -> Result<String, LibraryError> {
+    pub(super) fn snxlib_rel_path(&self) -> Result<String, LibraryError> {
         file_name_str(&self.file_path)
     }
 
