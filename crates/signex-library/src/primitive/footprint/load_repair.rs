@@ -2,14 +2,24 @@
 //!
 //! Applied explicitly at each load site (the TOML container, the database
 //! adapter, the library server's row read) rather than hidden in a serde
-//! hook. The repair reports what it moved in [`Footprint::load_repairs`]; it
-//! logs only when it strips dangling references (a `warn`). The editor
-//! that opens the footprint reports it once and marks itself dirty.
+//! hook. The repair records what it changed in [`Footprint::load_repairs`];
+//! it does not log, because previews, mounts and history reads load too. The
+//! editor that opens the footprint reports it once and marks itself dirty.
 
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::snap_arc_ends_onto_circles;
 
 use super::Footprint;
+
+/// One change [`Footprint::repair_stored_sketch`] made to a stored sketch.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum LoadRepair {
+    /// The arc's end point was moved onto its circle.
+    ArcEndMoved(SketchEntityId),
+    /// Entities, constraints and arrays naming a missing entity were removed;
+    /// the count covers all three.
+    DanglingRemoved(usize),
+}
 
 impl Footprint {
     /// Snap off-circle arc end points of this footprint's sketch onto their
@@ -22,22 +32,16 @@ impl Footprint {
             return;
         };
         let adjusted: Vec<SketchEntityId> = snap_arc_ends_onto_circles(sketch);
-        self.load_repairs.extend(adjusted);
+        self.load_repairs
+            .extend(adjusted.into_iter().map(LoadRepair::ArcEndMoved));
 
         // A stored sketch may name entities that no longer exist (saved
         // by a build that did not cascade deletes). Strip them so the
         // solver does not refuse the whole sketch.
-        let missing = sketch.dangling_refs();
-        if let Some(first) = missing.first().copied() {
+        if let Some(first) = sketch.dangling_refs().first().copied() {
             let removed = sketch.remove_entity_cascade(first);
-            tracing::warn!(
-                target: "signex::sketch",
-                footprint = %self.name,
-                missing = missing.len(),
-                removed = removed.repaired,
-                "removed dangling references from a stored footprint sketch"
-            );
-            self.load_repairs.extend(removed.repaired_entities);
+            self.load_repairs
+                .push(LoadRepair::DanglingRemoved(removed.repaired));
         }
     }
 }
@@ -53,6 +57,7 @@ mod tests {
     use signex_sketch::solver::state::point_xy;
 
     use super::super::{Footprint, FootprintFile};
+    use super::LoadRepair;
 
     fn off_circle_footprint() -> (Footprint, [SketchEntityId; 3]) {
         let plane = Plane {
@@ -121,7 +126,14 @@ mod tests {
                 .all(|en| en.id != e || matches!(en.kind, EntityKind::Point { .. }))
         );
         assert!(sketch.entities.iter().any(|en| en.id == s));
-        assert!(!fp.load_repairs.is_empty(), "the removed arc is reported");
+        assert!(
+            sketch
+                .entities
+                .iter()
+                .all(|en| matches!(en.kind, EntityKind::Point { .. })),
+            "the orphaned arc is gone"
+        );
+        assert_eq!(fp.load_repairs, vec![LoadRepair::DanglingRemoved(2)]);
         Solver::default()
             .solve(&sketch, &ResolvedParams::new())
             .expect("a healed sketch solves");

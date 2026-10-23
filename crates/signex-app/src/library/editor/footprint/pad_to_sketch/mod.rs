@@ -533,8 +533,14 @@ pub fn mirror_delete_pad_from_sketch(pad: &EditorPad, footprint: &mut Footprint)
     // far endpoints of a user-drawn silk Line sharing one of the pad's
     // anchors are never pulled in, so deleting a pad does not take user
     // geometry with it.
+    let mut repaired = 0;
     for id in to_drop {
-        sketch.remove_entity_cascade(id);
+        repaired += sketch.remove_entity_cascade(id).repaired;
+    }
+    if repaired > 0 {
+        crate::diagnostics::log_warning(format!(
+            "Repaired {repaired} dangling sketch reference(s) left by an earlier edit"
+        ));
     }
 
     // v0.24 Track A — drop shape parameters keyed by the centre-Point

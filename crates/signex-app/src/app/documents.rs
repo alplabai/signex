@@ -517,27 +517,40 @@ impl FootprintEditorState {
         }
     }
 
-    /// Report, once, the arcs the loader moved onto their circles (the
-    /// Messages panel names them) and clear the transient record so history
-    /// snapshots never carry it. Returns whether anything was repaired.
-    /// Opening a footprint into an editor is the only place this logs;
-    /// previews, mounts and history reads stay quiet.
+    /// Report, once, what the loader repaired (the Messages panel names it)
+    /// and clear the transient record so history snapshots never carry it.
+    /// Returns whether anything was repaired. Opening a footprint into an
+    /// editor is the only place this logs; previews, mounts and history
+    /// reads stay quiet.
     fn take_load_repairs(path: &std::path::Path, file: &mut signex_library::FootprintFile) -> bool {
+        use signex_library::LoadRepair;
         let mut moved: Vec<String> = Vec::new();
+        let mut removed = 0usize;
         for footprint in &mut file.footprints {
-            moved.extend(footprint.load_repairs.drain(..).map(|id| id.to_string()));
+            for repair in footprint.load_repairs.drain(..) {
+                match repair {
+                    LoadRepair::ArcEndMoved(id) => moved.push(id.to_string()),
+                    LoadRepair::DanglingRemoved(n) => removed += n,
+                }
+            }
         }
-        if moved.is_empty() {
-            return false;
+        if !moved.is_empty() {
+            crate::diagnostics::log_warning(format!(
+                "{}: moved the end point of {} arc(s) onto its circle (centre and start \
+                 unchanged); save the file to keep the repair: {}",
+                path.display(),
+                moved.len(),
+                moved.join(", ")
+            ));
         }
-        crate::diagnostics::log_warning(format!(
-            "{}: moved the end point of {} arc(s) onto its circle (centre and start \
-             unchanged); save the file to keep the repair: {}",
-            path.display(),
-            moved.len(),
-            moved.join(", ")
-        ));
-        true
+        if removed > 0 {
+            crate::diagnostics::log_warning(format!(
+                "{}: removed {removed} dangling sketch reference(s) (entities/constraints/arrays); \
+                 save the file to keep the repair",
+                path.display(),
+            ));
+        }
+        !moved.is_empty() || removed > 0
     }
 
     /// v0.24 Phase 1 (Track B) — depth cap for `history` / `redo`
