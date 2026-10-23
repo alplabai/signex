@@ -232,6 +232,25 @@ fn corrupt_glb_source_is_rejected_not_cached() {
     import(&models, "ok.glb").expect("valid glb passes through");
 }
 
+/// A FIFO with no writer would block a plain `open`/`read` forever.
+#[cfg(unix)]
+#[test]
+fn fifo_named_like_a_model_is_a_typed_error_not_a_hang() {
+    let (_tmp, models) = fixture();
+    let fifo = models.join("pipe.stp");
+    assert!(
+        std::process::Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert!(matches!(
+        import(&models, "pipe.stp"),
+        Err(ModelImportError::IoFailed { .. })
+    ));
+}
+
 #[test]
 fn directory_named_like_a_model_is_a_typed_error() {
     let (_tmp, models) = fixture();

@@ -46,6 +46,11 @@ pub enum ImportWarning {
     TextureMissing {
         uri: String,
     },
+    /// The texture exists but was refused or failed to read.
+    TextureUnreadable {
+        uri: String,
+        reason: String,
+    },
     EmptyPrimitive {
         mesh_index: usize,
         primitive_index: usize,

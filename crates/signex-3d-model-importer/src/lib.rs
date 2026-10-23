@@ -161,7 +161,7 @@ pub fn import_model(request: ModelImportRequest) -> Result<ModelImportResult, Mo
                 }
             })?;
             // A corrupt source would otherwise be cached and then always miss.
-            if !cache::is_cache_valid(source_path) {
+            if !cache::is_valid_glb(&bytes) {
                 return Err(ModelImportError::GltfParseFailed {
                     path: source_path.clone(),
                     reason: "not a well-formed GLB (header, length or chunks)".to_owned(),
