@@ -186,6 +186,22 @@ impl Signex {
                     .set(None);
                 self.interaction_state.pcb_canvas.pending_fit.set(None);
             }
+            CanvasEvent::CenterAtCursor => {
+                // `cursor_x/y` is the world position the active canvas last
+                // reported through `CursorAt`.
+                let (x, y) = (self.ui_state.cursor_x as f32, self.ui_state.cursor_y as f32);
+                if self.has_active_schematic() {
+                    let canvas = self.interaction_state.active_canvas_mut();
+                    canvas.center_on_world(x, y);
+                    canvas.clear_bg_cache();
+                    canvas.clear_content_cache();
+                } else if self.has_active_pcb() {
+                    let canvas = &mut self.interaction_state.pcb_canvas;
+                    canvas.center_on_world(x, y);
+                    canvas.clear_bg_cache();
+                    canvas.clear_content_cache();
+                }
+            }
             CanvasEvent::FitAll => {
                 if self.has_active_schematic() {
                     self.interaction_state.active_canvas_mut().fit_to_paper();

@@ -231,3 +231,65 @@ fn annotate_all_on_off_keep_the_dialog_open() {
     let _ = app.update(Message::Annotate(AnnotateMsg::SetAllLocked(false)));
     assert!(app.ui_state.annotate_dialog_open);
 }
+
+/// #525: Center View At Cursor recentres on the cursor and keeps the zoom.
+/// It used to share the Fit All arm and zoomed out to the whole sheet.
+#[test]
+fn center_view_at_cursor_recentres_without_changing_zoom() {
+    let (mut app, _path) = app_with(vec![symbol(uuid::Uuid::new_v4(), "R1", 0.0)]);
+    app.interaction_state.active_canvas().set_viewport(VIEWPORT);
+    let _ = app.update(Message::Menu(MenuMessage::ZoomIn));
+    let (_, _, s0) = app.interaction_state.active_canvas().live_camera();
+    app.ui_state.cursor_x = 50.0;
+    app.ui_state.cursor_y = 30.0;
+
+    let _ = app.update(Message::CanvasEvent(
+        signex_app::canvas::CanvasEvent::CenterAtCursor,
+    ));
+
+    let (ox, oy, s1) = app.interaction_state.active_canvas().live_camera();
+    assert!((s1 - s0).abs() < 1e-6, "zoom must not change: {s0} -> {s1}");
+    let world_at_centre = ((400.0 - ox) / s1, (300.0 - oy) / s1);
+    assert!(
+        (world_at_centre.0 - 50.0).abs() < 1e-3 && (world_at_centre.1 - 30.0).abs() < 1e-3,
+        "cursor point must land at the view centre, got {world_at_centre:?}"
+    );
+    assert!(
+        app.interaction_state
+            .active_canvas()
+            .pending_fit
+            .get()
+            .is_none(),
+        "centring must not queue a fit"
+    );
+}
+
+/// #525: Zoom to All Objects frames the objects, not the paper, so parts
+/// bunched in one corner fill the view.
+#[test]
+fn zoom_to_all_objects_frames_object_extents_not_the_paper() {
+    let (mut app, path) = app_with(vec![
+        symbol(uuid::Uuid::new_v4(), "R1", 300.0),
+        symbol(uuid::Uuid::new_v4(), "R2", 320.0),
+    ]);
+    // Stand in for the first draw, which builds the render cache the fit reads.
+    let sheet = app.document_state.engines[&path].document().clone();
+    app.interaction_state
+        .active_canvas_mut()
+        .set_render_cache(Some(
+            signex_app::schematic_runtime::SchematicRenderCache::from_sheet(&sheet),
+        ));
+    let _ = app.update(Message::CanvasEvent(
+        signex_app::canvas::CanvasEvent::FitAll,
+    ));
+
+    let rect = app
+        .interaction_state
+        .active_canvas()
+        .pending_fit
+        .get()
+        .expect("fit queued");
+    // Object extents plus the 10 mm margin: x 290..330, far smaller than A4.
+    assert!((rect.x - 290.0).abs() < 1e-3, "{rect:?}");
+    assert!((rect.width - 40.0).abs() < 1e-3, "{rect:?}");
+}

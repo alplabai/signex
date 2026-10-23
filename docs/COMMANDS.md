@@ -36,7 +36,7 @@ shrink.
 | `cycle_fast_grid` | Cycle fast grid | view | — | `Alt+4` |
 | `cycle_selection_mode` | Cycle selection mode | select | — | — |
 | `cycle_snap_grid_backward` | Cycle backward through snap grids | view | `Shift+G` | — |
-| `cycle_snap_grid_forward` | Cycle forward through snap grids | view | `G` | — |
+| `cycle_snap_grid_forward` | Open the snap grid picker (footprint editor) | view | `G` | — |
 | `cycle_unit` | Cycle display unit | view | `Ctrl+Q` | `Ctrl+Q` |
 | `cycle_wire_bus_graphic_mode` | Cycle wire/bus/graphic-line mode: free, 90 degrees, 45 degrees | interactive | — | `Shift+Space` |
 | `cycle_wiring_mode` | Change wiring mode while dragging connected electrical objects | interactive | `Ctrl+Space` | — |
