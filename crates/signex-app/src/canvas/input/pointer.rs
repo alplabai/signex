@@ -1,5 +1,19 @@
 use super::super::*;
 
+/// Max gap between two presses of a double-click.
+const DOUBLE_CLICK_MS: u128 = 300;
+/// Max cursor travel between the presses, in screen pixels. Screen space,
+/// not world space: a fixed world distance grows with zoom-in and shrinks
+/// with zoom-out, so the same hand wobble would count at one zoom and not
+/// at another (#102).
+const DOUBLE_CLICK_MAX_PX: f32 = 5.0;
+
+/// `dist_world_mm` is the world-space distance between the two presses and
+/// `scale` the camera's pixels-per-mm.
+fn is_double_click(dt_ms: u128, dist_world_mm: f64, scale: f32) -> bool {
+    dt_ms < DOUBLE_CLICK_MS && dist_world_mm * f64::from(scale) < f64::from(DOUBLE_CLICK_MAX_PX)
+}
+
 impl SchematicCanvas<'_> {
     /// Left-press: select, tool action, start box-select, or start drag-move.
     pub(in crate::canvas) fn update_left_pressed(
@@ -13,14 +27,14 @@ impl SchematicCanvas<'_> {
             let wx = world.x as f64;
             let wy = world.y as f64;
 
-            // Double-click detection (300ms, 3mm threshold)
+            // Double-click detection (300ms, 5px threshold)
             let now = std::time::Instant::now();
             if let (Some(last_time), Some(last_pos)) =
                 (state.last_click_time, state.last_click_world)
             {
                 let dt = now.duration_since(last_time);
                 let dist = ((wx - last_pos.0).powi(2) + (wy - last_pos.1).powi(2)).sqrt();
-                if dt.as_millis() < 300 && dist < 3.0 {
+                if is_double_click(dt.as_millis(), dist, self.camera().scale) {
                     state.last_click_time = None;
                     state.last_click_world = None;
                     state.select_drag_start = None;
@@ -366,5 +380,22 @@ impl SchematicCanvas<'_> {
             )));
         }
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn threshold_is_in_screen_pixels_at_any_zoom() {
+        // 4 px apart: a double-click at every zoom level.
+        assert!(is_double_click(100, 4.0 / 3.0, 3.0));
+        assert!(is_double_click(100, 4.0 / 48.0, 48.0));
+        // 8 px apart: never, even when that is under 3 mm at high zoom.
+        assert!(!is_double_click(100, 8.0 / 48.0, 48.0));
+        assert!(!is_double_click(100, 8.0 / 0.75, 0.75));
+        // Too slow is never a double-click.
+        assert!(!is_double_click(300, 0.0, 3.0));
     }
 }

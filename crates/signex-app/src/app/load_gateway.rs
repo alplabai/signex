@@ -306,7 +306,14 @@ impl Signex {
         let is_pcb = matches!(self.active_tab_cached_document(), Some(TabDocument::Pcb(_)));
 
         if is_schematic {
+            // Selection UUIDs belong to the document they were picked in;
+            // carrying them to another schematic tab leaves ghost
+            // selections that delete/move would target (#102).
+            let previous_path = self.document_state.active_path.clone();
             if self.activate_active_schematic_session() {
+                if previous_path != self.document_state.active_path {
+                    self.interaction_state.active_canvas_mut().selected.clear();
+                }
                 self.apply_loaded_schematic(None, true, false, false);
             }
         } else if is_pcb {

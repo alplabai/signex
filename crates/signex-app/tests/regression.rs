@@ -120,3 +120,6 @@ mod start_screen;
 mod save_as_by_document_kind;
 #[path = "regression/stable_addressing.rs"]
 mod stable_addressing;
+
+#[path = "regression/canvas_editing_correctness.rs"]
+mod canvas_editing_correctness;
