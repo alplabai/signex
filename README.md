@@ -11,7 +11,7 @@
   <a href="https://github.com/alplabai/signex/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License"></a>
   <a href="https://github.com/alplabai/signex/releases/latest"><img src="https://img.shields.io/github/v/release/alplabai/signex?label=version" alt="Latest release"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.88%2B-orange.svg" alt="Rust"></a>
-  <a href="https://github.com/alplabai/signex/wiki"><img src="https://img.shields.io/badge/wiki-user%20guide-blueviolet.svg" alt="Wiki"></a>
+  <a href="docs/USER_GUIDE.md"><img src="https://img.shields.io/badge/docs-user%20guide-blueviolet.svg" alt="User guide"></a>
   <a href="https://github.com/alplabai/signex/discussions"><img src="https://img.shields.io/badge/discussions-join-brightgreen.svg" alt="Discussions"></a>
 </p>
 
@@ -21,7 +21,7 @@
   <a href="#download">Download</a> &middot;
   <a href="#building">Building</a> &middot;
   <a href="#roadmap">Roadmap</a> &middot;
-  <a href="https://github.com/alplabai/signex/wiki">Wiki</a> &middot;
+  <a href="docs/USER_GUIDE.md">User guide</a> &middot;
   <a href="#contributing">Contributing</a> &middot;
   <a href="#license">License</a>
 </p>
@@ -307,19 +307,17 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for the detailed version plan.
 
 ## Documentation
 
-The **[Signex Wiki](https://github.com/alplabai/signex/wiki)** is the user
-guide — installation, quick start, keyboard shortcuts, and feature-by-feature
-walkthroughs (ERC, annotation, multi-window editing, hierarchical sheets,
-net-color pen, the library subsystem, the symbol + footprint editors, themes,
-and more), plus an FAQ and roadmap.
+The **[User Guide](docs/USER_GUIDE.md)** takes you from a downloaded package
+to a saved schematic and an exported PDF, starting with **File ▸ New
+Project**. It lives in the repository, so it is versioned with the code and
+reviewed in pull requests.
 
-Start with **[Quick Start](https://github.com/alplabai/signex/wiki/Quick-Start)**
-to open your first Signex project, or jump straight to
-**[Keyboard Shortcuts](https://github.com/alplabai/signex/wiki/Keyboard-Shortcuts)**
-for the full reference. In-repo docs live under
-[`docs/`](docs/) — see [ROADMAP.md](docs/ROADMAP.md),
-[LICENSING.md](docs/LICENSING.md), and
-[REPOSITORY_AND_CODEBASE.md](docs/REPOSITORY_AND_CODEBASE.md).
+In-repo reference docs live under [`docs/`](docs/): the
+[command reference](docs/COMMANDS.md),
+[keyboard shortcut file format](docs/KEYBOARD_SHORTCUTS.md),
+[ROADMAP.md](docs/ROADMAP.md), [LICENSING.md](docs/LICENSING.md), and
+[REPOSITORY_AND_CODEBASE.md](docs/REPOSITORY_AND_CODEBASE.md). The
+[wiki](https://github.com/alplabai/signex/wiki) is no longer the primary guide.
 
 ## Contributing
 
