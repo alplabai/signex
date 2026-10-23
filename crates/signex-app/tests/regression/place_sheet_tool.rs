@@ -107,13 +107,26 @@ fn tiny_or_zero_area_drag_is_rejected_and_the_tool_stays_armed() {
     let path = tmp.path().join("root.snxsch");
     let mut app = app_with_sheet_tool(path.clone());
 
-    drag(&mut app, (10.0, 10.0), (10.0, 10.0));
+    // First click arms the tool; the tiny second click is refused and
+    // disarms the gesture without leaving the tool.
+    click(&mut app, 10.0, 10.0);
+    assert!(
+        app.interaction_state.shape_anchor.is_some(),
+        "the first click must arm the tool"
+    );
+    click(&mut app, 10.0, 10.0);
+    assert!(app.interaction_state.shape_anchor.is_none());
     drag(&mut app, (10.0, 10.0), (11.0, 40.0));
 
     assert!(sheets(&app).is_empty());
     assert!(!app.document_state.dirty_paths.contains(&path));
     assert_eq!(app.interaction_state.current_tool, Tool::Sheet);
     assert!(app.interaction_state.shape_anchor.is_none());
+
+    // Still armed: a valid drag now places exactly one sheet.
+    drag(&mut app, (10.0, 10.0), (40.0, 40.0));
+    assert_eq!(sheets(&app).len(), 1);
+    assert!(app.document_state.dirty_paths.contains(&path));
 }
 
 #[test]
@@ -195,4 +208,63 @@ fn defaults_are_unique_in_the_parent_and_the_project() {
 
     let names: Vec<String> = sheets(&app).into_iter().map(|s| s.filename).collect();
     assert_eq!(names, ["sheet2.snxsch", "sheet3.snxsch"]);
+}
+
+#[test]
+fn defaults_are_unique_across_parents_of_one_project() {
+    let tmp = TempDir::new().expect("tempdir");
+    let root = tmp.path().join("root.snxsch");
+    let other = tmp.path().join("other.snxsch");
+    let mut app = app_with_sheet_tool(root.clone());
+
+    // A second open parent in the same project.
+    app.document_state.engines.insert(
+        other.clone(),
+        signex_engine::Engine::new(empty_sheet()).expect("engine"),
+    );
+    app.document_state.tabs.push(TabInfo {
+        title: "other".to_string(),
+        path: other.clone(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: TabKind::Schematic,
+    });
+    let id = app.document_state.mint_project_id();
+    app.document_state.projects.push(LoadedProject {
+        id,
+        path: tmp.path().join("P.snxprj"),
+        data: ProjectData {
+            name: "P".to_string(),
+            dir: tmp.path().to_string_lossy().into_owned(),
+            schematic_root: Some("root.snxsch".to_string()),
+            pcb_file: None,
+            sheets: ["root.snxsch", "other.snxsch"]
+                .iter()
+                .map(|f| SheetEntry {
+                    name: (*f).to_string(),
+                    filename: (*f).to_string(),
+                    symbols_count: 0,
+                    wires_count: 0,
+                    labels_count: 0,
+                })
+                .collect(),
+            variant_definitions: Vec::new(),
+            active_variant: None,
+            libraries: Vec::new(),
+            enable_git: false,
+        },
+        pending_libraries: HashMap::new(),
+    });
+    app.document_state.tabs[0].project_id = Some(id);
+    app.document_state.tabs[1].project_id = Some(id);
+
+    drag(&mut app, (0.0, 0.0), (20.0, 20.0));
+    assert_eq!(sheets(&app)[0].filename, "sheet1.snxsch");
+
+    // Switch to the other parent: sheet1 is taken by a sibling parent.
+    app.document_state.active_tab = 1;
+    app.document_state.active_path = Some(other);
+    drag(&mut app, (0.0, 0.0), (20.0, 20.0));
+    assert_eq!(sheets(&app)[0].filename, "sheet2.snxsch");
 }

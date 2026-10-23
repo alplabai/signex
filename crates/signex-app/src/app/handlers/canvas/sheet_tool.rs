@@ -53,11 +53,11 @@ impl Signex {
         }
     }
 
-    /// `sheetN` not used as a name or file by the active sheet's children or
-    /// by any sheet listed in the owning project.
+    /// `sheetN` not used as a name or file by the children of any open sheet
+    /// in the active document's project, or by any sheet the project lists.
     fn unused_child_sheet_stem(&self) -> String {
         let mut taken: Vec<&str> = Vec::new();
-        if let Some(engine) = self.document_state.active_engine() {
+        for engine in self.document_state.engines_in_active_document_project() {
             for child in &engine.document().child_sheets {
                 taken.push(&child.name);
                 taken.push(&child.filename);
