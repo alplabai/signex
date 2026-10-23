@@ -188,7 +188,8 @@ impl LocalGitAdapter {
         self.commit_path(&rel_path, message, &fallback)
     }
 
-    /// Stage `rel_path` and create a new commit. Used by primitive saves
+    /// Stage `rel_path` and create a new commit, unless the staged tree
+    /// matches HEAD's (an unchanged save). Used by primitive saves
     /// (`*.snx*` files) and table writes (the `.snxlib` itself). When
     /// the parent directory has no `.git/`, this is a no-op — the file
     /// has already been written to disk by the caller, and the user
@@ -243,6 +244,11 @@ impl LocalGitAdapter {
             Err(e) if e.code() == git2::ErrorCode::UnbornBranch => None,
             Err(e) => return Err(LibraryError::Backend(format!("git head: {e}"))),
         };
+        // An unchanged save stages the same tree as HEAD; committing it would
+        // only add an empty history entry (#149).
+        if parent.as_ref().is_some_and(|p| p.tree_id() == tree_oid) {
+            return Ok(());
+        }
         let parents: Vec<&git2::Commit> = parent.as_ref().map(|c| vec![c]).unwrap_or_default();
         let commit_message = if message.is_empty() {
             fallback_message.to_string()

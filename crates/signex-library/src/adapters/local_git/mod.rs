@@ -418,6 +418,35 @@ mod tests {
         assert!(path.parent().unwrap().join(".git").exists());
     }
 
+    /// #149: committing a path whose content matches HEAD makes no commit.
+    #[test]
+    fn commit_path_skips_unchanged_tree() {
+        crate::git_identity::test_identity::install();
+        let dir = tempfile::tempdir().unwrap();
+        let path = fixture_snxlib_path(&dir, "Same");
+        let adapter = LocalGitAdapter::init(
+            &path,
+            fixture_snx_manifest("Same"),
+            LibraryInitOptions {
+                enable_git: true,
+                use_lfs: false,
+            },
+        )
+        .unwrap();
+        let repo = git2::Repository::open(adapter.root()).unwrap();
+        let head = || repo.head().unwrap().target().unwrap();
+
+        fs::write(adapter.root().join("note.txt"), "a").unwrap();
+        adapter.commit_path("note.txt", "", "add note").unwrap();
+        let first = head();
+        adapter.commit_path("note.txt", "", "again").unwrap();
+        assert_eq!(head(), first, "unchanged tree must not commit");
+
+        fs::write(adapter.root().join("note.txt"), "b").unwrap();
+        adapter.commit_path("note.txt", "", "edit note").unwrap();
+        assert_ne!(head(), first, "a real change still commits");
+    }
+
     #[test]
     fn save_then_load_symbol_round_trip() {
         let dir = tempfile::tempdir().unwrap();

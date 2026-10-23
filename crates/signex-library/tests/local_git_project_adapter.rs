@@ -73,7 +73,8 @@ fn commit_path_creates_first_commit_on_unborn_head() {
     write_file(&root, "my.snxprj", "[project]\nname = \"my\"\n");
     let oid = adapter
         .commit_path(Path::new("my.snxprj"), "Initial commit")
-        .unwrap();
+        .unwrap()
+        .expect("first commit");
     assert_ne!(oid.to_string(), "0000000000000000000000000000000000000000");
 
     // History should now have one entry.
@@ -101,6 +102,42 @@ fn commit_path_chains_subsequent_commits() {
     assert_eq!(entries[0].subject, "v3");
     assert_eq!(entries[1].subject, "v2");
     assert_eq!(entries[2].subject, "v1");
+}
+
+/// #149: re-saving identical content makes no commit and returns `None`.
+#[test]
+fn commit_path_skips_unchanged_tree() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_path_buf();
+    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+
+    write_file(&root, "my.snxprj", "v1");
+    let first = adapter.commit_path(Path::new("my.snxprj"), "v1").unwrap();
+    assert!(first.is_some());
+    write_file(&root, "my.snxprj", "v1");
+    assert_eq!(
+        adapter
+            .commit_path(Path::new("my.snxprj"), "again")
+            .unwrap(),
+        None
+    );
+    let head = git2::Repository::open(&root)
+        .unwrap()
+        .head()
+        .unwrap()
+        .target()
+        .unwrap();
+    assert_eq!(Some(head), first, "HEAD must not move on an unchanged save");
+
+    write_file(&root, "my.snxprj", "v2");
+    assert!(
+        adapter
+            .commit_path(Path::new("my.snxprj"), "v2")
+            .unwrap()
+            .is_some()
+    );
+    let entries = adapter.file_history(Path::new("my.snxprj"), 10).unwrap();
+    assert_eq!(entries.len(), 2);
 }
 
 #[test]
@@ -168,7 +205,10 @@ fn restore_at_round_trips_a_prior_version() {
     let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
 
     write_file(&root, "sheet.snxsch", "version-A content");
-    let oid_a = adapter.commit_path(Path::new("sheet.snxsch"), "A").unwrap();
+    let oid_a = adapter
+        .commit_path(Path::new("sheet.snxsch"), "A")
+        .unwrap()
+        .expect("commit A");
     write_file(&root, "sheet.snxsch", "version-B content");
     let _oid_b = adapter.commit_path(Path::new("sheet.snxsch"), "B").unwrap();
 
@@ -222,7 +262,10 @@ fn restore_at_from_sha_round_trips_via_string_oid() {
     let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
 
     write_file(&root, "x.snxsch", "v1");
-    let oid_a = adapter.commit_path(Path::new("x.snxsch"), "v1").unwrap();
+    let oid_a = adapter
+        .commit_path(Path::new("x.snxsch"), "v1")
+        .unwrap()
+        .expect("commit v1");
     write_file(&root, "x.snxsch", "v2");
     adapter.commit_path(Path::new("x.snxsch"), "v2").unwrap();
 
