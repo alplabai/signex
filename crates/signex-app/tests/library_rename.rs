@@ -348,16 +348,24 @@ fn a_destination_that_appeared_is_never_overwritten() {
 
 #[test]
 fn closing_the_project_after_a_library_rename_prompts_for_the_unsaved_path() {
-    use signex_app::app::{ContextMenuMsg, ProjectTreeAction};
+    use signex_app::app::{ContextMenuMsg, ProjectMsg, ProjectTreeAction};
 
     let mut f = unsaved_fixture();
     submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
 
+    // Close Project resolves the sheet references off-thread (#756); run
+    // the task body and send its result back as the completion message.
+    let project_id = f.app.document_state.projects[0].id;
     send(
         &mut f.app,
         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
             ProjectTreeAction::CloseProject(vec![0]),
         )),
+    );
+    let result = f.app.resolve_sheet_refs_blocking();
+    send(
+        &mut f.app,
+        Message::Project(ProjectMsg::CloseRefsResolved { project_id, result }),
     );
 
     let modal = f
