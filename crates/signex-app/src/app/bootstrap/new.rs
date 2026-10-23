@@ -443,6 +443,12 @@ impl Signex {
             },
             library: crate::library::LibraryState::default(),
         };
+        // The PCB canvas starts from the loaded grid state, not its own
+        // defaults, so the first frame honours a saved "grid off" (#682).
+        app.interaction_state.pcb_canvas.set_grid(
+            app.ui_state.grid_visible,
+            app.ui_state.visible_grid_mm as f64,
+        );
         // v0.9 Stage 9: load + mount globally-configured libraries
         // before the first frame so the Components Panel's Global
         // section is populated from the get-go.
