@@ -531,29 +531,48 @@ mod tests {
         data
     }
 
-    fn best_parse_time(data: &str, expected: usize) -> std::time::Duration {
-        (0..3)
-            .map(|_| {
-                let started = std::time::Instant::now();
-                let entities = parse_entities(data).expect("parse");
-                assert_eq!(entities.len(), expected);
-                started.elapsed()
-            })
-            .min()
-            .unwrap()
+    fn parse_time(data: &str, expected: usize) -> std::time::Duration {
+        let started = std::time::Instant::now();
+        let entities = parse_entities(data).expect("parse");
+        assert_eq!(entities.len(), expected);
+        started.elapsed()
     }
 
     #[test]
     fn many_entities_parse_in_linear_time() {
-        // The old per-statement newline recount was O(n^2). Compare a 20k and
-        // an 80k run instead of an absolute budget: 4x the input costs ~4x
-        // when linear and ~16x when quadratic, so a 10x ceiling separates
-        // them with slack for scheduler noise (best of three per size).
-        let small = best_parse_time(&synthetic_data(20_000), 20_000);
-        let large = best_parse_time(&synthetic_data(80_000), 80_000);
+        // Guards the #112 fix: the old per-statement newline recount was
+        // O(n^2). 16x the input costs ~16x when linear and ~256x when
+        // quadratic; a 64x ceiling separates them while tolerating 4x of
+        // scheduler noise. The two sizes are timed interleaved, best of five,
+        // so machine load lands on both rather than skewing the ratio (#851).
+        let (small_n, large_n) = (10_000u32, 160_000u32);
+        let (small_data, large_data) = (synthetic_data(small_n), synthetic_data(large_n));
+        let mut small = std::time::Duration::MAX;
+        let mut large = std::time::Duration::MAX;
+        for _ in 0..5 {
+            small = small.min(parse_time(&small_data, small_n as usize));
+            large = large.min(parse_time(&large_data, large_n as usize));
+        }
         let floor = std::time::Duration::from_millis(1);
         let ratio = large.as_secs_f64() / small.max(floor).as_secs_f64();
-        assert!(ratio < 10.0, "parse scaled {ratio:.1}x for 4x input");
+        assert!(ratio < 64.0, "parse scaled {ratio:.1}x for 16x input");
+    }
+
+    /// The deterministic half of the same fix: line numbers carried forward
+    /// across a large input are still exact.
+    #[test]
+    fn statement_lines_stay_exact_across_a_large_input() {
+        let data = synthetic_data(50_000);
+        // The trailing newline leaves a blank tail, skipped like `parse_entities` does.
+        let statements: Vec<_> = split_statements(&data)
+            .into_iter()
+            .filter(|(s, _)| s.trim().starts_with('#'))
+            .collect();
+        assert_eq!(statements.len(), 50_000);
+        for (i, (_, line)) in statements.iter().enumerate().step_by(4_999) {
+            assert_eq!(*line, i + 1);
+        }
+        assert_eq!(statements.last().unwrap().1, 50_000);
     }
 
     #[test]
