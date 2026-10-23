@@ -175,8 +175,8 @@ mod tests {
         }
     }
 
-    /// `put` goes through `atomic_write`: it replaces an existing entry and
-    /// leaves no `*.tmp` sibling behind.
+    /// Overwriting an existing entry replaces it and leaves no `*.tmp`
+    /// sibling behind. (Crash-safety itself is not observable in a unit test.)
     #[test]
     fn put_replaces_entry_atomically() {
         let dir = tempfile::tempdir().unwrap();
