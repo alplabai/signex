@@ -66,17 +66,12 @@ pub(in crate::app::view) fn draggable_header<'a>(
         .into()
 }
 
-/// Borderless-window header — pressing anywhere on the header region
-/// asks iced to start an OS-level window drag. Replaces the OS title
-/// bar for detached modals opened with `decorations: false`.
-pub(crate) fn detached_header<'a>(
-    header_content: Element<'a, Message>,
-    modal: super::super::super::state::ModalId,
-) -> Element<'a, Message> {
-    iced::widget::mouse_area(header_content)
-        .on_press(Message::Window(WindowMsg::StartDetachedWindowDrag(modal)))
-        .interaction(iced::mouse::Interaction::Grab)
-        .into()
+/// Header slot for a modal body shown in its own OS window. The window
+/// carries a native title bar (title, close button, move and raise), so
+/// the body draws no header of its own: an empty zero-height slot keeps
+/// the surrounding column layout identical to the in-window form.
+pub(crate) fn os_title_bar_slot<'a>() -> Element<'a, Message> {
+    Space::new().height(0).into()
 }
 
 /// Compact X close button for borderless modal headers. Matches the

@@ -16,6 +16,8 @@ use crate::pdf::{PageRange, PdfOptions};
 
 mod rasterize;
 
+pub use rasterize::{MAX_PREVIEW_EDGE_PX, preview_raster_size};
+
 pub struct PreviewRasterizer;
 
 #[derive(Debug, Clone)]

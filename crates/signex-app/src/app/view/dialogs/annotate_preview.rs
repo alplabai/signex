@@ -49,26 +49,6 @@ fn seed_counters(sheets: &[(String, SchematicSheet)]) -> std::collections::HashM
     next
 }
 
-/// Symbol indices in the engine's annotate order (y, then x, then uuid).
-fn annotate_order(sheet: &SchematicSheet) -> Vec<usize> {
-    let mut idx: Vec<usize> = (0..sheet.symbols.len()).collect();
-    idx.sort_by(|a, b| {
-        let (sa, sb) = (&sheet.symbols[*a], &sheet.symbols[*b]);
-        sa.position
-            .y
-            .partial_cmp(&sb.position.y)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then(
-                sa.position
-                    .x
-                    .partial_cmp(&sb.position.x)
-                    .unwrap_or(std::cmp::Ordering::Equal),
-            )
-            .then(sa.uuid.cmp(&sb.uuid))
-    });
-    idx
-}
-
 impl super::super::super::Signex {
     /// The display title a sheet is shown under: its tab title when it is open,
     /// its file stem otherwise.
@@ -151,18 +131,41 @@ impl super::super::super::Signex {
     pub(super) fn preview_project_annotations(&self) -> Vec<AnnotatePreviewEntry> {
         let sheets = self.preview_sheets();
         let mut next = seed_counters(&sheets);
+        let locked = &self.ui_state.annotate_locked;
+        // The same project-wide grouping the action builds, so the preview
+        // promises one designator per multi-unit part, even one split across
+        // sheets, and honours locks the way the pass does (#691).
+        let documents: Vec<&[Symbol]> = sheets
+            .iter()
+            .map(|(_, sheet)| sheet.symbols.as_slice())
+            .collect();
+        let parts = signex_types::schematic::ProjectParts::new(&documents, locked);
+        let mut designator_of_part: std::collections::HashMap<usize, String> =
+            std::collections::HashMap::new();
         let mut out = Vec::new();
-        for (title, sheet) in &sheets {
-            for i in annotate_order(sheet) {
+        for (sheet_ordinal, (title, sheet)) in sheets.iter().enumerate() {
+            for i in signex_types::schematic::annotation_order(&sheet.symbols) {
                 let sym = &sheet.symbols[i];
                 if sym.reference.is_empty() || !is_target(sym) {
                     continue;
                 }
                 let prefix = prefix_of(&sym.reference);
-                let proposed = if sym.reference.ends_with('?') && !prefix.is_empty() {
-                    let n = next.entry(prefix.clone()).or_insert(0);
-                    *n += 1;
-                    format!("{prefix}{n}")
+                let part = parts.part(sheet_ordinal, i);
+                let pinned = locked.contains(&sym.uuid)
+                    || part.is_some_and(|p| parts.locked_designator(p).is_some());
+                let proposed = if sym.reference.ends_with('?') && !prefix.is_empty() && !pinned {
+                    match part.and_then(|p| designator_of_part.get(&p)) {
+                        Some(designator) => designator.clone(),
+                        None => {
+                            let n = next.entry(prefix.clone()).or_insert(0);
+                            *n += 1;
+                            let designator = format!("{prefix}{n}");
+                            if let Some(part) = part {
+                                designator_of_part.insert(part, designator.clone());
+                            }
+                            designator
+                        }
+                    }
                 } else {
                     sym.reference.clone()
                 };

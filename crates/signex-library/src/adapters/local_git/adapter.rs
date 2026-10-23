@@ -30,6 +30,7 @@ impl LibraryAdapter for LocalGitAdapter {
     // ── Tables ─────────────────────────────────────────────────────────────
 
     fn list_tables(&self) -> Result<Vec<String>, LibraryError> {
+        self.refresh_for_read();
         let guard = self
             .library_file
             .read()
@@ -114,6 +115,7 @@ impl LibraryAdapter for LocalGitAdapter {
     }
 
     fn library_classes(&self) -> Vec<crate::library_file::ClassEntry> {
+        self.refresh_for_read();
         classes_or_report(&self.library_file, &self.file_path)
     }
 

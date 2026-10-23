@@ -292,14 +292,12 @@ impl Signex {
                 let row_classes: Vec<crate::fonts::ComponentClassEntry> = self
                     .library
                     .library_at(lib_path)
-                    .and_then(|lib| self.library.set.get(lib.library_id))
-                    .map(|adapter| {
-                        adapter
-                            .library_classes()
-                            .into_iter()
+                    .map(|lib| {
+                        lib.cached_classes
+                            .iter()
                             .map(|c| crate::fonts::ComponentClassEntry {
-                                key: c.key,
-                                label: c.label,
+                                key: c.key.clone(),
+                                label: c.label.clone(),
                             })
                             .collect()
                     })

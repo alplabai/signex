@@ -317,6 +317,8 @@ fn production_temp_fallback_path() -> PathBuf {
 /// pull from when canonical is missing. Production passes
 /// [`legacy_posix_prefs_path()`]; tests inject a tempdir-shaped path.
 pub fn migrate_legacy_prefs(canonical: &Path, legacy: &Path) {
+    // Both steps below are read-modify-write on `canonical`.
+    let _io = prefs_file::prefs_io_lock();
     // F1: copy legacy path → canonical, but only if canonical is empty.
     // Routed through `write_pref_atomic` (temp + fsync + rename) rather
     // than `std::fs::copy`: a kill mid-copy with a bare copy can leave a
@@ -844,7 +846,7 @@ mod recent;
 /// The one read-modify-write every preference writer in this module
 /// tree goes through (#594). Imported here rather than re-exported —
 /// the sibling modules pick it up through their own `use super::*;`.
-use prefs_file::update_prefs_json;
+use prefs_file::{try_update_prefs_json, update_prefs_json};
 
 /// The prefs file's health probe and its one in-app recovery (#602).
 /// Re-exported because the app shell owns the reporting: `Signex::new`

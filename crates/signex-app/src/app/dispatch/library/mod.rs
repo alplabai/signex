@@ -38,6 +38,7 @@ mod component_preview;
 mod components_panel;
 mod document_options;
 mod editor;
+mod external_edits;
 mod lifecycle;
 mod new_component;
 mod primitive_picker;
@@ -391,6 +392,10 @@ impl Signex {
                 table,
                 row_id,
             } => self.handle_components_panel_place(library_path, table, row_id),
+            LibraryMessage::ExternalEditsPollTicked => self.handle_external_edits_poll_ticked(),
+            LibraryMessage::ExternalEditsPolled(changed) => {
+                self.handle_external_edits_polled(changed)
+            }
         }
     }
 }

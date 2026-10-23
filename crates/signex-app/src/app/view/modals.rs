@@ -10,8 +10,8 @@ use super::*;
 
 impl Signex {
     /// Altium-style Move Selection dialog. Two numeric inputs plus
-    /// OK / Cancel. No header drag region on the body itself — the
-    /// modal opens borderless so the OS-window-drag handler owns that.
+    /// OK / Cancel. No header on the body: the dialog opens in its own
+    /// OS window, whose native title bar carries the title and close.
     pub(super) fn view_move_selection_body(&self) -> Element<'_, Message> {
         use iced::widget::{Space, button, column, container, row, text, text_input};
         let tokens = &self.document_state.panel_ctx.tokens;
@@ -20,23 +20,6 @@ impl Signex {
         let border_c = crate::styles::ti(tokens.border);
         let ms = &self.ui_state.move_selection;
         let selection_count = self.interaction_state.active_canvas().selected.len();
-
-        let header = iced::widget::mouse_area(
-            container(
-                row![
-                    text("Move Selection").size(14).color(text_c),
-                    Space::new().width(iced::Length::Fill),
-                    self.view_close_x(Message::MoveSelection(MoveSelectionMsg::Close)),
-                ]
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([10, 14])
-            .style(crate::styles::modal_header_strip(tokens)),
-        )
-        .on_press(Message::Window(WindowMsg::StartDetachedWindowDrag(
-            super::state::ModalId::MoveSelection,
-        )))
-        .interaction(iced::mouse::Interaction::Grab);
 
         let field = |label: &'static str, value: &str, msg: fn(String) -> Message| {
             column![
@@ -121,7 +104,7 @@ impl Signex {
         .padding([10, 14]);
 
         container(
-            column![header, body, footer]
+            column![body, footer]
                 .width(iced::Length::Fixed(420.0))
                 .height(iced::Length::Fixed(240.0)),
         )
@@ -172,23 +155,6 @@ impl Signex {
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
-
-        let header = iced::widget::mouse_area(
-            container(
-                row![
-                    text("Net Colors").size(14).color(text_c),
-                    Space::new().width(iced::Length::Fill),
-                    self.view_close_x(Message::NetColor(NetColorMsg::Close)),
-                ]
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([10, 14])
-            .style(crate::styles::modal_header_strip(tokens)),
-        )
-        .on_press(Message::Window(WindowMsg::StartDetachedWindowDrag(
-            super::state::ModalId::NetColorPalette,
-        )))
-        .interaction(iced::mouse::Interaction::Grab);
 
         // Gather unique net labels from the active snapshot.
         let mut nets: Vec<String> = self
@@ -313,7 +279,6 @@ impl Signex {
 
         container(
             column![
-                header,
                 container(scrollable(rows_col).height(iced::Length::Fill))
                     .padding([14, 14])
                     .height(iced::Length::Fill),
@@ -333,28 +298,11 @@ impl Signex {
     /// values inline. Changes route through Command::SetSymbolField so
     /// undo/redo / dirty-flagging behaves.
     pub(super) fn view_parameter_manager_body(&self) -> Element<'_, Message> {
-        use iced::widget::{Space, column, container, row, scrollable, text, text_input};
+        use iced::widget::{column, container, row, scrollable, text, text_input};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
-
-        let header = iced::widget::mouse_area(
-            container(
-                row![
-                    text("Parameters").size(14).color(text_c),
-                    Space::new().width(iced::Length::Fill),
-                    self.view_close_x(Message::ParameterManager(ParameterManagerMsg::Close)),
-                ]
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([10, 14])
-            .style(crate::styles::modal_header_strip(tokens)),
-        )
-        .on_press(Message::Window(WindowMsg::StartDetachedWindowDrag(
-            super::state::ModalId::ParameterManager,
-        )))
-        .interaction(iced::mouse::Interaction::Grab);
 
         // Collect all parameter keys across symbols (besides the built-
         // in reference / value / footprint). Keeps the table compact —
@@ -362,7 +310,6 @@ impl Signex {
         let Some(engine) = self.document_state.active_engine() else {
             return container(
                 column![
-                    header,
                     container(text("No active schematic.").size(11).color(text_muted))
                         .padding([14, 14]),
                 ]
@@ -453,7 +400,6 @@ impl Signex {
 
         container(
             column![
-                header,
                 container(
                     scrollable(rows_col)
                         .direction(scrollable::Direction::Both {

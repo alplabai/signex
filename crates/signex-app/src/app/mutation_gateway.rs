@@ -210,7 +210,7 @@ impl Signex {
         // Invalidate + re-derive the cached project netlist when this edit
         // touched connectivity (ADR-0002 D7). Same electrical bits that drive
         // net membership — deliberately including no-connects and buses, which
-        // `point_is_connected` reads.
+        // `ConnectedPoints` reads.
         if invalidation.intersects(Self::netlist_render_mask()) {
             self.ui_state.project_netlist = None;
             self.refresh_project_netlist();
@@ -227,7 +227,7 @@ impl Signex {
     /// The `RenderInvalidation` bits that mean project connectivity changed, so
     /// the cached netlist must be re-derived. Mirrors the electrical
     /// `DocumentPatch` bits: symbols, wires, labels, junctions, child sheets,
-    /// and — easy to miss — no-connects and buses, which `point_is_connected`
+    /// and — easy to miss — no-connects and buses, which `ConnectedPoints`
     /// reads when deciding whether a pin lands on a net.
     fn netlist_render_mask() -> crate::schematic_runtime::RenderInvalidation {
         use crate::schematic_runtime::RenderInvalidation as R;
@@ -343,7 +343,7 @@ mod tests {
     fn connectivity_edits_invalidate_the_netlist_cache() {
         // Every bit that changes net membership must invalidate the cache —
         // including the two the review flagged as easy to miss: no-connects and
-        // buses, which `point_is_connected` reads.
+        // buses, which `ConnectedPoints` reads.
         for bit in [
             DocumentPatch::SYMBOLS,
             DocumentPatch::WIRES,

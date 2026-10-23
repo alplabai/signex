@@ -29,6 +29,7 @@ pub fn run_all(ctx: &ErcContext) -> Vec<Diagnostic> {
     rules::power_port_short(ctx, &mut out);
     rules::symbol_outside_sheet(ctx, &mut out);
     rules::ambiguous_label_anchor(ctx, &mut out);
+    rules::pins_touch_not_connected(ctx, &mut out);
     drop_suppressed(ctx, &mut out);
     out
 }

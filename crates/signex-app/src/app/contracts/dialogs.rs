@@ -156,8 +156,8 @@ pub enum ContextMenuMsg {
     Close,
     Action(ContextAction),
     /// Right-click landed on a specific tree node — open the per-node
-    /// context menu at `last_mouse_pos`. `path = None` → background menu.
-    ShowProjectTree(Option<Vec<usize>>),
+    /// context menu at `last_mouse_pos`. `key = None` → background menu.
+    ShowProjectTree(Option<signex_widgets::tree_view::TreeKey>),
     /// Dismiss the Projects-panel tree context menu.
     CloseProjectTree,
     /// Menu item picked — route the action.
