@@ -2,13 +2,12 @@
 //!
 //! The place flow is keyed by `(library_path, table, row_id)`:
 //!
-//!   1. Look up the open library by path and read the picked row through
-//!      the mounted adapter.
-//!   2. Resolve the row's `symbol_ref` through `LibrarySet::resolve_symbol`
-//!      and convert it with `Symbol::to_lib_symbol`.
-//!   3. Register that `LibSymbol` on the active sheet and place a
-//!      schematic `Symbol` referencing it, as ONE engine batch so a single
-//!      undo removes both.
+//!   1. `PlaceLibraryComponent` validates cheaply and returns a `Task`
+//!      running [`resolve_placement`] off the update thread: read the
+//!      picked row and its `.snxsym`, convert with `Symbol::to_lib_symbol`.
+//!   2. `LibraryComponentResolved` registers that `LibSymbol` on the active
+//!      sheet and places a schematic `Symbol` referencing it, as ONE engine
+//!      batch so a single undo removes both.
 //!
 //! ## `lib_id` scheme
 //!
@@ -19,11 +18,13 @@
 //!
 //! ## IO
 //!
-//! `read_row` and `resolve_symbol` read one row and one `.snxsym` from the
-//! mounted adapter on the update thread. The handler already read the row
-//! here before, the adapter borrow is not `Send` into a `Task`, and the
-//! read is bounded; the heavy library scan is the mount, which is already
-//! off-thread.
+//! `update` does none. [`resolve_placement`] runs in `spawn_blocking` and
+//! opens its own adapter on the `.snxlib`. The completion carries the sheet
+//! that was active when the gesture started and refuses to place if that
+//! sheet is no longer the active one or the library was closed meanwhile:
+//! "Place Failed", never a placement into the wrong sheet. A symbol
+//! reference into a *different* library than the row's own is reported
+//! rather than resolved.
 //!
 //! Drift tracking (embedded primitive slice, content-hash comparison) is
 //! out of scope: only `library_id`, `row_id` and `library_version` are
@@ -36,12 +37,12 @@ use signex_library::RowId;
 
 use super::super::contracts::Message;
 use super::super::state::Signex;
+use crate::library::messages::{LibraryMessage, ResolvedPlacement};
+use crate::library::place::resolve_placement;
 
 impl Signex {
-    /// Resolve a `(library, table, row_id)` selection, register its
-    /// `LibSymbol` on the active sheet and place the part at the view
-    /// centre, then close the picker. Every failure reaches the Messages
-    /// panel and the error card.
+    /// Start a place gesture: validate cheaply, then read the row off the
+    /// update thread. Always closes the picker.
     pub(crate) fn handle_place_library_component(
         &mut self,
         library_path: PathBuf,
@@ -49,65 +50,85 @@ impl Signex {
         row_id: RowId,
     ) -> Task<Message> {
         self.library.picker = None;
-        if let Err(detail) = self.place_library_row(&library_path, &table, row_id) {
+        let Some(target_sheet) = self.document_state.active_path.clone() else {
+            self.report_place_failure("Open a schematic sheet before placing a library part.");
+            return Task::none();
+        };
+        if self.library.library_at(&library_path).is_none() {
+            self.report_place_failure(&format!(
+                "Library {} is no longer open.",
+                library_path.display()
+            ));
+            return Task::none();
+        }
+        let path = library_path.clone();
+        Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || resolve_placement(&path, &table, row_id))
+                    .await
+                    .unwrap_or_else(|e| Err(format!("place worker failed: {e}")))
+            },
+            move |result| {
+                Message::Library(LibraryMessage::LibraryComponentResolved {
+                    target_sheet: target_sheet.clone(),
+                    library_path: library_path.clone(),
+                    result: result.map(Box::new),
+                })
+            },
+        )
+    }
+
+    /// Completion of [`resolve_placement`]: register the `LibSymbol` and
+    /// place the part as one undo step.
+    pub(crate) fn handle_library_component_resolved(
+        &mut self,
+        target_sheet: PathBuf,
+        library_path: PathBuf,
+        result: Result<Box<ResolvedPlacement>, String>,
+    ) -> Task<Message> {
+        if let Err(detail) = self.place_resolved(&target_sheet, &library_path, result) {
             self.report_place_failure(&detail);
         }
         Task::none()
     }
 
-    fn place_library_row(
+    fn place_resolved(
         &mut self,
+        target_sheet: &Path,
         library_path: &Path,
-        table: &str,
-        row_id: RowId,
+        result: Result<Box<ResolvedPlacement>, String>,
     ) -> Result<(), String> {
-        if !self.document_state.has_active_engine() {
-            return Err("Open a schematic sheet before placing a library part.".into());
-        }
-        let library_id = self
-            .library
-            .library_at(library_path)
-            .ok_or_else(|| format!("Library {} is no longer open.", library_path.display()))?
-            .library_id;
-        let adapter = self.library.set.get(library_id).ok_or_else(|| {
-            format!(
-                "Library {} is not mounted; reopen it and try again.",
+        let resolved = *result?;
+        if self.library.library_at(library_path).is_none() {
+            return Err(format!(
+                "Library {} was closed before the part could be placed.",
                 library_path.display()
-            )
-        })?;
-        let row = adapter
-            .read_row(table, row_id)
-            .map_err(|e| format!("Could not read row {row_id} of table {table}: {e}"))?;
-        let symbol = self
-            .library
-            .set
-            .resolve_symbol(&row.symbol_ref)
-            .map_err(|e| format!("Could not read the symbol of {}: {e}", row.internal_pn))?
-            .ok_or_else(|| format!("{} has no symbol in its library.", row.internal_pn))?;
-
-        let lib_id = library_lib_id(&row.symbol_ref);
+            ));
+        }
+        if self.document_state.active_path.as_deref() != Some(target_sheet)
+            || !self.document_state.engines.contains_key(target_sheet)
+        {
+            return Err(format!(
+                "The sheet {} is no longer active; {} was not placed.",
+                target_sheet.display(),
+                resolved.internal_pn
+            ));
+        }
         let (x, y) = self.interaction_state.canvas.view_centre_world();
         let at = signex_types::schematic::Point::new(snap_mm(x), snap_mm(y));
-        let reference = self.next_library_reference(&designator_prefix(&symbol.designator));
-        let value = if row.primary_mpn.mpn.is_empty() {
-            symbol.comment.clone()
-        } else {
-            row.primary_mpn.mpn.clone()
-        };
-        let placed = placed_symbol(&lib_id, reference, value, at, &row, library_id);
+        let reference = self.next_library_reference(&resolved.prefix);
+        let placed = placed_symbol(&resolved, reference, at);
+        let internal_pn = resolved.internal_pn;
         let commands = vec![
             signex_engine::Command::RegisterLibSymbol {
-                lib_symbol: symbol.to_lib_symbol(lib_id),
+                lib_symbol: resolved.lib_symbol,
             },
             signex_engine::Command::PlaceSymbol { symbol: placed },
         ];
         if self.apply_engine_commands(commands, false, false) {
             Ok(())
         } else {
-            Err(format!(
-                "The schematic engine rejected {}.",
-                row.internal_pn
-            ))
+            Err(format!("The schematic engine rejected {internal_pn}."))
         }
     }
 
@@ -147,34 +168,12 @@ fn snap_mm(v: f64) -> f64 {
     (v / DROP_GRID_MM).round() * DROP_GRID_MM
 }
 
-/// `"<library uuid>:<symbol uuid>"` — see the module doc.
-fn library_lib_id(r: &signex_library::PrimitiveRef) -> String {
-    format!("{}:{}", r.library_id, r.uuid)
-}
-
-/// Reference prefix from a library designator: `"U?"` -> `"U"`, empty -> `"U"`.
-fn designator_prefix(designator: &str) -> String {
-    let prefix: String = designator
-        .trim()
-        .chars()
-        .take_while(|c| c.is_ascii_alphabetic())
-        .collect();
-    if prefix.is_empty() {
-        "U".into()
-    } else {
-        prefix.to_ascii_uppercase()
-    }
-}
-
-/// The schematic `Symbol` for a library row. Field set mirrors
+/// The schematic `Symbol` for a resolved row. Field set mirrors
 /// `place_selected_component`, plus the three library-identity slots.
 fn placed_symbol(
-    lib_id: &str,
+    resolved: &ResolvedPlacement,
     reference: String,
-    value: String,
     at: signex_types::schematic::Point,
-    row: &signex_library::ComponentRow,
-    library_id: uuid::Uuid,
 ) -> signex_types::schematic::Symbol {
     use signex_types::schematic::{HAlign, Point, SCHEMATIC_TEXT_MM, TextProp, VAlign};
     let text_at = |dy: f64| TextProp {
@@ -187,17 +186,17 @@ fn placed_symbol(
     };
     signex_types::schematic::Symbol {
         uuid: uuid::Uuid::new_v4(),
-        lib_id: lib_id.to_owned(),
+        lib_id: resolved.lib_id.clone(),
         reference,
-        value,
+        value: resolved.value.clone(),
         position: at,
         unit: 1,
         ref_text: Some(text_at(-2.54)),
         val_text: Some(text_at(2.54)),
         fields_autoplaced: true,
-        library_id: Some(library_id),
-        row_id: Some(row.row_id),
-        library_version: row.version.clone(),
+        library_id: Some(resolved.library_id),
+        row_id: Some(resolved.row_id),
+        library_version: resolved.library_version.clone(),
         ..Default::default()
     }
 }

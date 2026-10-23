@@ -7,6 +7,8 @@
 
 use signex_app::app::{Message, Signex, TabInfo, TabKind};
 use signex_app::library::LibraryMessage;
+use signex_app::library::messages::ResolvedPlacement;
+use signex_app::library::place::resolve_placement;
 use signex_library::adapter::LibraryAdapter;
 use signex_library::adapters::local_git::{LibraryInitOptions, LocalGitAdapter};
 use signex_library::component::{ComponentRow, DatasheetRef, PlmReserved};
@@ -144,12 +146,28 @@ fn app_with_library(f: &Fixture) -> Signex {
     app
 }
 
-fn place(app: &mut Signex, f: &Fixture) {
-    let _ = app.update(Message::Library(LibraryMessage::PlaceLibraryComponent {
+/// The worker half, run directly (the `Task` wraps it in `spawn_blocking`).
+fn resolve(f: &Fixture, row: Uuid) -> Result<Box<ResolvedPlacement>, String> {
+    resolve_placement(&f.snxlib, "ICs", signex_library::RowId(row)).map(Box::new)
+}
+
+/// Feed a worker result back as the completion message, targeting `sheet`.
+fn complete(
+    app: &mut Signex,
+    f: &Fixture,
+    sheet: &str,
+    result: Result<Box<ResolvedPlacement>, String>,
+) {
+    let _ = app.update(Message::Library(LibraryMessage::LibraryComponentResolved {
+        target_sheet: PathBuf::from(sheet),
         library_path: f.snxlib.clone(),
-        table: "ICs".into(),
-        row_id: signex_library::RowId(f.row_id),
+        result,
     }));
+}
+
+/// Worker + completion against the sheet `app_with_library` made active.
+fn place(app: &mut Signex, f: &Fixture) {
+    complete(app, f, "place-364.snxsch", resolve(f, f.row_id));
 }
 
 fn doc(app: &Signex) -> &SchematicSheet {
@@ -255,20 +273,51 @@ fn one_undo_removes_the_placement_and_its_new_lib_symbol() {
 }
 
 #[test]
-fn failures_reach_the_user_and_leave_the_sheet_alone() {
+fn the_picker_message_does_no_io_in_update() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    let _task = app.update(Message::Library(LibraryMessage::PlaceLibraryComponent {
+        library_path: f.snxlib.clone(),
+        table: "ICs".into(),
+        row_id: signex_library::RowId(f.row_id),
+    }));
+
+    // Nothing was read or placed synchronously: the work is in the Task.
+    assert!(doc(&app).symbols.is_empty());
+    assert!(doc(&app).lib_symbols.is_empty());
+    assert!(app.document_state.error_notice.is_none());
+}
+
+#[test]
+fn worker_failures_reach_the_user_and_leave_the_sheet_alone() {
     let f = fixture();
     let mut app = app_with_library(&f);
 
-    // Unknown row.
-    let _ = app.update(Message::Library(LibraryMessage::PlaceLibraryComponent {
-        library_path: f.snxlib.clone(),
-        table: "ICs".into(),
-        row_id: signex_library::RowId(Uuid::now_v7()),
-    }));
-    assert!(app.document_state.error_notice.is_some(), "bad row");
+    let bad_row = resolve(&f, Uuid::now_v7());
+    assert!(bad_row.is_err());
+    complete(&mut app, &f, "place-364.snxsch", bad_row);
+    assert_eq!(
+        app.document_state
+            .error_notice
+            .as_ref()
+            .map(|n| n.title.as_str()),
+        Some("Place Failed")
+    );
+    assert!(doc(&app).symbols.is_empty());
     app.document_state.error_notice = None;
 
-    // Library that is not open.
+    let missing = resolve_placement(
+        &PathBuf::from("nowhere.snxlib"),
+        "ICs",
+        signex_library::RowId(f.row_id),
+    );
+    assert!(missing.is_err());
+}
+
+#[test]
+fn picker_refuses_a_closed_library_or_missing_sheet_up_front() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
     let _ = app.update(Message::Library(LibraryMessage::PlaceLibraryComponent {
         library_path: PathBuf::from("nowhere.snxlib"),
         table: "ICs".into(),
@@ -277,9 +326,31 @@ fn failures_reach_the_user_and_leave_the_sheet_alone() {
     assert!(app.document_state.error_notice.is_some(), "closed library");
     app.document_state.error_notice = None;
 
-    // No active sheet.
     app.document_state.clear_active_engine();
-    place(&mut app, &f);
+    let _ = app.update(Message::Library(LibraryMessage::PlaceLibraryComponent {
+        library_path: f.snxlib.clone(),
+        table: "ICs".into(),
+        row_id: signex_library::RowId(f.row_id),
+    }));
     assert!(app.document_state.error_notice.is_some(), "no sheet");
     assert!(app.library.picker.is_none());
+}
+
+#[test]
+fn a_changed_sheet_or_closed_library_is_reported_not_placed() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    let resolved = resolve(&f, f.row_id);
+
+    // The sheet the gesture started on is not the active one any more.
+    complete(&mut app, &f, "other-sheet.snxsch", resolved.clone());
+    assert!(app.document_state.error_notice.is_some(), "wrong sheet");
+    assert!(doc(&app).symbols.is_empty());
+    app.document_state.error_notice = None;
+
+    // The library was unmounted while the worker ran.
+    app.library.open_libraries.clear();
+    complete(&mut app, &f, "place-364.snxsch", resolved);
+    assert!(app.document_state.error_notice.is_some(), "closed library");
+    assert!(doc(&app).symbols.is_empty());
 }
