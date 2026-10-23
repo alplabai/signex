@@ -73,24 +73,6 @@ fn polled(app: &mut Signex, outcome: PollOutcome) {
     );
 }
 
-/// #827: a pass that times out (a hung `stat` on a dead mount) clears the
-/// in-flight flag, is reported once rather than every tick, and the report
-/// resets once a pass completes again.
-#[test]
-fn a_timed_out_poll_is_reported_once_and_recovers() {
-    let (mut app, _t) = Signex::new();
-    app.library.external_poll_in_flight = true;
-    polled(&mut app, PollOutcome::TimedOut);
-    assert!(!app.library.external_poll_in_flight);
-    assert!(app.library.external_poll_stall_reported);
-
-    polled(&mut app, PollOutcome::TimedOut);
-    assert!(app.library.external_poll_stall_reported, "still stalled");
-
-    polled(&mut app, PollOutcome::Changed(Vec::new()));
-    assert!(!app.library.external_poll_stall_reported, "recovered");
-}
-
 /// #827: a tick while a timed-out pass's `stat` thread is still running
 /// starts no second pass.
 #[test]
@@ -111,38 +93,95 @@ fn no_new_poll_starts_behind_a_hung_stat() {
     );
 }
 
-/// #827: a poll result computed before an in-app write re-stamped the
-/// library is stale; delivering it refreshes nothing and changes no stamp.
-/// A class edit marks the library as edited by the app, and the refresh the
-/// poll then triggers clears that mark.
-#[test]
-fn stale_and_own_edit_poll_results_are_not_external_edits() {
-    let scale = Scale::new("own", SYMBOLS, FOOTPRINTS);
+/// How many Messages-panel entries contain every one of `needles`.
+fn logged(needles: &[&str]) -> usize {
+    drop(signex_app::diagnostics::init_logging());
+    signex_app::diagnostics::recent_entries()
+        .iter()
+        .filter(|e| needles.iter().all(|n| e.message.contains(n)))
+        .count()
+}
+
+fn mounted(name: &'static str) -> (tempfile::TempDir, std::path::PathBuf, Signex) {
     let tmp = tempfile::tempdir().expect("tempdir");
-    let snxlib = generate_library(tmp.path(), "own", &scale).expect("generate_library");
+    let snxlib = generate_library(tmp.path(), name, &Scale::new(name, SYMBOLS, FOOTPRINTS))
+        .expect("generate_library");
     let (mut app, _t) = Signex::new();
     signex_app::library::commands::open_library(&mut app.library, snxlib.clone()).expect("open");
+    (tmp, snxlib, app)
+}
 
-    // The file changes; the poll sees it; then the app refreshes on its own
-    // before the result arrives.
+/// #827: a stalled pass is reported once across repeated timeouts, and
+/// "resumed" once when a pass completes again.
+#[test]
+fn a_timed_out_poll_is_reported_once_and_recovers() {
+    let stalls = || logged(&["took longer than"]);
+    let resumes = || logged(&["external-edit checks resumed"]);
+    let (stalls_before, resumes_before) = (stalls(), resumes());
+    let (mut app, _t) = Signex::new();
+    app.library.external_poll_in_flight = true;
+
+    polled(&mut app, PollOutcome::TimedOut);
+    polled(&mut app, PollOutcome::TimedOut);
+    assert!(!app.library.external_poll_in_flight);
+    assert_eq!(stalls() - stalls_before, 1, "one warning for two timeouts");
+
+    polled(&mut app, PollOutcome::Changed(Vec::new()));
+    assert_eq!(resumes() - resumes_before, 1);
+}
+
+/// Positive control: a real external edit is refreshed and reported once.
+#[test]
+fn an_external_edit_is_reported_in_the_messages_panel() {
+    let (_t, snxlib, mut app) = mounted("extpoll-real");
+    let before = logged(&["extpoll-real changed on disk; reloaded"]);
+    append_component(&snxlib, SYMBOLS).expect("append_component");
+    let changed = libraries_changed(&app.library.watched_libraries());
+    polled(&mut app, PollOutcome::Changed(changed));
+    assert_eq!(
+        logged(&["extpoll-real changed on disk; reloaded"]) - before,
+        1
+    );
+}
+
+/// #827 item 1: a result computed before an in-app refresh re-stamped the
+/// library is stale, and reports nothing.
+#[test]
+fn a_stale_poll_result_is_not_reported_as_an_external_edit() {
+    let (_t, snxlib, mut app) = mounted("extpoll-stale");
     append_component(&snxlib, SYMBOLS).expect("append_component");
     let changed = libraries_changed(&app.library.watched_libraries());
     assert_eq!(changed.len(), 1);
     app.library.refresh_components(&snxlib).expect("refresh");
-    let stamp = app.library.library_at(&snxlib).unwrap().observed_stamp;
-    polled(&mut app, PollOutcome::Changed(changed.clone()));
-    assert_eq!(
-        app.library.library_at(&snxlib).unwrap().observed_stamp,
-        stamp
-    );
 
-    // A class edit leaves the stamp stale but flags it as the app's own.
+    polled(&mut app, PollOutcome::Changed(changed));
+    assert_eq!(logged(&["extpoll-stale changed on disk"]), 0);
+}
+
+/// #827 item 1: the refresh after the app's own class write is silent, but
+/// an external edit made after it is still reported.
+#[test]
+fn the_apps_own_class_write_is_silent_but_a_later_external_edit_is_not() {
+    let (_t, snxlib, mut app) = mounted("extpoll-own");
+    // Stand-in for the class write: the file changes, then `refresh_classes`
+    // runs, as the class-edit dispatch does.
+    append_component(&snxlib, SYMBOLS).expect("append_component");
     app.library.refresh_classes(&snxlib);
-    assert!(app.library.library_at(&snxlib).unwrap().own_edit_unstamped);
-    app.library.library_at_mut(&snxlib).unwrap().observed_stamp = None;
     let changed = libraries_changed(&app.library.watched_libraries());
     polled(&mut app, PollOutcome::Changed(changed));
-    let lib = app.library.library_at(&snxlib).unwrap();
-    assert!(!lib.own_edit_unstamped, "the refresh clears the mark");
-    assert!(lib.observed_stamp.is_some());
+    assert_eq!(
+        logged(&["extpoll-own changed on disk"]),
+        0,
+        "own write is silent"
+    );
+
+    app.library.refresh_classes(&snxlib);
+    append_component(&snxlib, SYMBOLS + 1).expect("append_component");
+    let changed = libraries_changed(&app.library.watched_libraries());
+    polled(&mut app, PollOutcome::Changed(changed));
+    assert_eq!(
+        logged(&["extpoll-own changed on disk; reloaded"]),
+        1,
+        "an edit after the own write is external"
+    );
 }

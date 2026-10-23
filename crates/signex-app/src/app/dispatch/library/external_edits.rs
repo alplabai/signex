@@ -49,6 +49,12 @@ impl Signex {
                 }
                 return Task::none();
             }
+            external_poll::PollOutcome::Failed(reason) => {
+                crate::diagnostics::log_warning(format!(
+                    "[library] checking mounted libraries for external edits failed: {reason}"
+                ));
+                return Task::none();
+            }
             external_poll::PollOutcome::Changed(changed) => changed,
         };
         if std::mem::take(&mut self.library.external_poll_stall_reported) {
@@ -65,7 +71,10 @@ impl Signex {
                 continue;
             }
             let name = lib.display_name.clone();
-            let own_edit = lib.own_edit_unstamped;
+            // Quiet only when the file is exactly what the app's own class
+            // write left; any later external edit changes the stamp and is
+            // reported as usual.
+            let own_edit = lib.own_edit_stamp == Some(*stamp);
             refreshed = true;
             match self.library.refresh_components(path) {
                 Ok(()) if own_edit => {}
