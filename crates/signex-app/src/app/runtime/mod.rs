@@ -274,6 +274,22 @@ impl Signex {
 mod tests {
     use super::*;
 
+    /// #682 — bootstrap seeds the PCB canvas from the loaded grid state, so
+    /// a saved grid-off (or a non-default size) holds before any update.
+    #[test]
+    fn bootstrap_seeds_pcb_canvas_grid_from_ui_state() {
+        let (app, _t) = Signex::new();
+
+        assert_eq!(
+            app.interaction_state.pcb_canvas.grid_visible,
+            app.ui_state.grid_visible
+        );
+        assert_eq!(
+            app.interaction_state.pcb_canvas.visible_grid_mm,
+            app.ui_state.visible_grid_mm as f64
+        );
+    }
+
     /// #682 — the PCB canvas used to keep its own grid fields that nothing
     /// ever wrote after construction, so the Grid Toggle and Visible Grid
     /// Size never reached it. `finish_update` now hands them over.
