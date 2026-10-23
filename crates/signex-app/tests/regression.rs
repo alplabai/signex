@@ -124,6 +124,8 @@ mod start_screen;
 
 #[path = "regression/dead_schematic_controls.rs"]
 mod dead_schematic_controls;
+#[path = "regression/reload_and_switch_state.rs"]
+mod reload_and_switch_state;
 #[path = "regression/save_as_by_document_kind.rs"]
 mod save_as_by_document_kind;
 #[path = "regression/stable_addressing.rs"]

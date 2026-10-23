@@ -579,6 +579,15 @@ impl FootprintEditorState {
         self.last_edit_key = None;
     }
 
+    /// Forget which field was last edited, so the next edit opens a new
+    /// undo step. Call when the edit target changes without an edit
+    /// (switching the active footprint): the key is `(field, active_idx)`,
+    /// so leaving footprint A and coming back would otherwise match it
+    /// and merge two separate edits of A.
+    pub(crate) fn clear_edit_coalescing(&mut self) {
+        self.last_edit_key = None;
+    }
+
     /// True when the footprint and pad list equal `snap`, i.e. the edit
     /// since `snap` was taken changed nothing that history restores.
     pub(crate) fn is_unchanged_since(&self, snap: &FootprintHistorySnapshot) -> bool {

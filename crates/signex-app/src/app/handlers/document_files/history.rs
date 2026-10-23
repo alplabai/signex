@@ -240,6 +240,13 @@ impl Signex {
                     Ok(file) if !file.symbols.is_empty() => {
                         let state = crate::app::SymbolEditorState::new(p.clone(), file);
                         self.document_state.symbol_editors.insert(p.clone(), state);
+                        // The reloaded editor is clean, so the stale
+                        // dirty marker must go or quit asks about a
+                        // file that matches disk.
+                        self.document_state.dirty_paths.remove(&p);
+                        if let Some(tab) = self.document_state.tabs.get_mut(active_idx) {
+                            tab.dirty = false;
+                        }
                     }
                     Ok(_) => {
                         crate::diagnostics::log_warning(format!(
