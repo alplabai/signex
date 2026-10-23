@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use signex_net::{ConnectedPoints, SheetConnectivity, best_net_name_of};
+use signex_net::{ConnectedPoints, SheetConnectivity, best_net_name_of, pt_key};
 use signex_types::schematic::SchematicSheet;
 use signex_types::schematic::{LabelType, PinDirection, Point, SymbolTransform};
 use uuid::Uuid;
@@ -400,12 +400,6 @@ impl ErcContext {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/// MD-6: see `rules::key` — the 1 µm bucket, the single "same point" metric so
-/// context + rule projections agree on net membership (D5.5).
-fn pt_key(p: &Point) -> (i64, i64) {
-    ((p.x * 1000.0).round() as i64, (p.y * 1000.0).round() as i64)
-}
 
 // ---------------------------------------------------------------------------
 // Net summaries for the DSL

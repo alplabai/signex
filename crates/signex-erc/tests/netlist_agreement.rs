@@ -146,5 +146,65 @@ fn erc_reports_the_touching_pins_naming_both() {
         .collect();
     assert_eq!(touch.len(), 1, "{touch:?}");
     assert!(touch[0].message.contains("C1.1"), "{}", touch[0].message);
-    assert!(touch[0].message.contains("#PWR3.1"), "{}", touch[0].message);
+    assert!(
+        touch[0].message.contains("GND power port"),
+        "{}",
+        touch[0].message
+    );
+    assert!(
+        touch[0]
+            .message
+            .contains("connect with a wire or move the port"),
+        "{}",
+        touch[0].message
+    );
+}
+
+/// GND and VCC rails, each wired to a load, plus a GND port and a VCC port
+/// whose tips sit on one wireless point.
+fn touching_rails() -> SchematicSheet {
+    let mut s = SchematicSheet {
+        paper_size: "A4".to_string(),
+        ..Default::default()
+    };
+    for (id, dir) in [
+        ("LOAD", PinDirection::PowerInput),
+        ("P", PinDirection::PowerInput),
+    ] {
+        s.lib_symbols.insert(id.to_string(), lib(id, dir));
+    }
+    s.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+    s.wires.push(wire(pt(0.0, 20.0), pt(10.0, 20.0)));
+    place(&mut s, "U1", "LOAD", pt(0.0, 0.0), "");
+    place(&mut s, "#PWR1", "P", pt(10.0, 0.0), "GND");
+    place(&mut s, "U2", "LOAD", pt(0.0, 20.0), "");
+    place(&mut s, "#PWR2", "P", pt(10.0, 20.0), "VCC");
+    place(&mut s, "#PWR3", "P", pt(50.0, 50.0), "GND");
+    place(&mut s, "#PWR4", "P", pt(50.0, 50.0), "VCC");
+    s
+}
+
+#[test]
+fn touching_gnd_and_vcc_ports_stay_two_nets_in_both_models() {
+    let sheet = touching_rails();
+    let netlist = build_netlist(&sheet);
+    let ctx = ErcContext::from_snapshot(&sheet);
+
+    assert_eq!(netlist.nets.len(), 2, "{netlist:?}");
+    assert_eq!(ctx.nets.len(), 2, "{:?}", ctx.nets);
+    for name in ["GND", "VCC"] {
+        assert!(netlist.nets.iter().any(|n| n.name == name), "{name}");
+        assert!(ctx.nets.iter().any(|n| n.name == name), "{name}");
+    }
+}
+
+#[test]
+fn erc_reports_the_touching_gnd_and_vcc_ports_as_a_short() {
+    let diags = signex_erc::engine::run_all(&ErcContext::from_snapshot(&touching_rails()));
+    let shorts: Vec<_> = diags
+        .iter()
+        .filter(|d| d.rule_kind == signex_erc::RuleKind::PowerPortShort)
+        .collect();
+    assert_eq!(shorts.len(), 1, "{shorts:?}");
+    assert!(shorts[0].message.contains("GND") && shorts[0].message.contains("VCC"));
 }

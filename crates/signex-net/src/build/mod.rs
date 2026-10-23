@@ -325,6 +325,7 @@ impl SheetConnectivity {
     /// label — the same name-bucket rule the cross-sheet stitcher applies, so a
     /// single sheet and a one-sheet project agree (issue #675). A port taps the
     /// net at its pin tip exactly like a component pin: no interior anchoring.
+    /// Different-value ports that only touch never join (ADR-0002 D5.1).
     ///
     /// Call after [`merge_named_labels`](Self::merge_named_labels); read every
     /// root only after this returns.
@@ -334,6 +335,8 @@ impl SheetConnectivity {
         labels: impl IntoIterator<Item = (Point, LabelType, &'a str)>,
         segments: &[(Point, Point)],
     ) {
+        let labels: Vec<(Point, LabelType, &'a str)> = labels.into_iter().collect();
+        let label_points: Vec<Point> = labels.iter().map(|(p, _, _)| *p).collect();
         let mut name_root: HashMap<&'a str, Key> = HashMap::new();
         for (pos, kind, text) in labels {
             if text.is_empty() || !matches!(kind, LabelType::Global | LabelType::Power) {
@@ -347,11 +350,15 @@ impl SheetConnectivity {
                 }
             }
         }
+        let ports: Vec<(Point, &'a str)> =
+            ports.into_iter().filter(|(_, v)| !v.is_empty()).collect();
+        let conflicted = self.touching_port_conflicts(&ports, &label_points, segments);
         for (pos, value) in ports {
-            if value.is_empty() {
+            let key = pt_key(&pos);
+            if conflicted.contains(&key) {
                 continue;
             }
-            let root = self.root_of(&pos);
+            let root = uf_find(&mut self.parent, key);
             match name_root.get(value) {
                 Some(&existing) => uf_union(&mut self.parent, root, existing),
                 None => {
@@ -359,6 +366,38 @@ impl SheetConnectivity {
                 }
             }
         }
+    }
+
+    /// Tip keys where different-value power ports merely touch, with nothing
+    /// electrical (wire endpoint, junction, label) to connect them. Pin-to-pin
+    /// contact is not a connection (ADR-0002 D5.1), so such a tip must not be
+    /// glued into any net by the shared union-find key — that would short two
+    /// rails. `signex-erc` reports the touch as `PowerPortShort`.
+    fn touching_port_conflicts(
+        &self,
+        ports: &[(Point, &str)],
+        label_points: &[Point],
+        segments: &[(Point, Point)],
+    ) -> HashSet<Key> {
+        let mut linked: HashSet<Key> = HashSet::new();
+        for (k, v) in &self.parent {
+            if k != v {
+                linked.insert(*k);
+                linked.insert(*v);
+            }
+        }
+        linked.extend(label_points.iter().map(pt_key));
+        linked.extend(segments.iter().flat_map(|(a, b)| [pt_key(a), pt_key(b)]));
+
+        let mut values_at: HashMap<Key, HashSet<&str>> = HashMap::new();
+        for (pos, value) in ports {
+            values_at.entry(pt_key(pos)).or_default().insert(value);
+        }
+        values_at
+            .into_iter()
+            .filter(|(key, values)| values.len() > 1 && !linked.contains(key))
+            .map(|(key, _)| key)
+            .collect()
     }
 }
 

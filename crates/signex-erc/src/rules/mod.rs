@@ -597,32 +597,47 @@ pub(crate) fn missing_power_flag(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 // Rule: PowerPortShort
 // ---------------------------------------------------------------------------
 
+/// A port's pin tips — where it connects — falling back to its origin when
+/// the projection carries no pins.
+fn port_tips(symbol: &crate::context::ErcSymbol) -> Vec<Point> {
+    if symbol.pins.is_empty() {
+        vec![symbol.position]
+    } else {
+        symbol.pins.iter().map(|p| p.world_pos).collect()
+    }
+}
+
 pub(crate) fn power_port_short(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
-    let power: Vec<&crate::context::ErcSymbol> = ctx
+    let power: Vec<(&crate::context::ErcSymbol, Vec<Point>)> = ctx
         .symbols
         .iter()
         .filter(|s| s.is_power && !s.value.is_empty())
+        .map(|s| (s, port_tips(s)))
         .collect();
 
-    for (i, a) in power.iter().enumerate() {
-        for b in &power[i + 1..] {
+    for (i, (a, a_tips)) in power.iter().enumerate() {
+        for (b, b_tips) in &power[i + 1..] {
             if a.value == b.value {
                 continue;
             }
-            if same(&a.position, &b.position) {
-                out.push(
-                    Diagnostic::new(
-                        RuleKind::PowerPortShort,
-                        format!(
-                            "Power ports '{}' and '{}' are at the same point",
-                            a.value, b.value,
-                        ),
-                        a.position,
-                    )
-                    .with_primary(sel(a.uuid, SelectedKind::Symbol))
-                    .with_peer(sel(b.uuid, SelectedKind::Symbol)),
-                );
-            }
+            let shared = a_tips
+                .iter()
+                .find(|ta| b_tips.iter().any(|tb| pt_key(ta) == pt_key(tb)));
+            let Some(tip) = shared else {
+                continue;
+            };
+            out.push(
+                Diagnostic::new(
+                    RuleKind::PowerPortShort,
+                    format!(
+                        "Power ports '{}' and '{}' share a pin tip",
+                        a.value, b.value,
+                    ),
+                    *tip,
+                )
+                .with_primary(sel(a.uuid, SelectedKind::Symbol))
+                .with_peer(sel(b.uuid, SelectedKind::Symbol)),
+            );
         }
     }
 }

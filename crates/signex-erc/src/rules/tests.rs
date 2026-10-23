@@ -601,3 +601,94 @@ fn missing_power_flag_still_fires_on_a_bare_net_beside_a_merged_pair() {
         "a name merge elsewhere must not suppress a bare port's net: {out:?}"
     );
 }
+
+/// A power port whose origin is `origin` and whose single pin tip is `tip`.
+fn power_port_with_tip(value: &str, origin: Point, tip: Point) -> ErcSymbol {
+    let mut port = power_port(value, origin);
+    port.uuid = Uuid::new_v4();
+    port.pins = vec![ErcPin {
+        world_pos: tip,
+        number: "1".into(),
+        electrical_type: PinDirection::PowerInput,
+        required: true,
+        connected: false,
+    }];
+    port
+}
+
+#[test]
+fn power_port_short_fires_when_tips_meet_though_origins_differ() {
+    let tip = Point::new(10.0, 10.0);
+    let c = ctx(
+        vec![],
+        vec![],
+        vec![],
+        vec![
+            power_port_with_tip("GND", Point::new(0.0, 0.0), tip),
+            power_port_with_tip("VCC", Point::new(20.0, 20.0), tip),
+        ],
+    );
+    let mut out = Vec::new();
+    power_port_short(&c, &mut out);
+    assert_eq!(out.len(), 1, "{out:?}");
+}
+
+#[test]
+fn power_port_short_ignores_same_origin_when_tips_differ() {
+    let origin = Point::new(5.0, 5.0);
+    let c = ctx(
+        vec![],
+        vec![],
+        vec![],
+        vec![
+            power_port_with_tip("GND", origin, Point::new(5.0, 6.0)),
+            power_port_with_tip("VCC", origin, Point::new(5.0, 9.0)),
+        ],
+    );
+    let mut out = Vec::new();
+    power_port_short(&c, &mut out);
+    assert!(out.is_empty(), "{out:?}");
+}
+
+#[test]
+fn stacked_same_value_power_ports_are_not_reported_as_touching() {
+    let tip = Point::new(10.0, 10.0);
+    let c = ctx(
+        vec![],
+        vec![],
+        vec![],
+        vec![
+            power_port_with_tip("GND", tip, tip),
+            power_port_with_tip("GND", tip, tip),
+        ],
+    );
+    let mut out = Vec::new();
+    pins_touch_not_connected::pins_touch_not_connected(&c, &mut out);
+    assert!(out.is_empty(), "{out:?}");
+}
+
+#[test]
+fn touching_power_port_is_named_by_value_with_port_advice() {
+    let tip = Point::new(10.0, 10.0);
+    let mut part = symbol_with_pin("R1", tip, false);
+    part.uuid = Uuid::new_v4();
+    let c = ctx(
+        vec![],
+        vec![],
+        vec![],
+        vec![part, power_port_with_tip("GND", tip, tip)],
+    );
+    let mut out = Vec::new();
+    pins_touch_not_connected::pins_touch_not_connected(&c, &mut out);
+    assert_eq!(out.len(), 1, "{out:?}");
+    assert!(
+        out[0].message.contains("GND power port"),
+        "{}",
+        out[0].message
+    );
+    assert!(
+        out[0].message.contains("move the port"),
+        "{}",
+        out[0].message
+    );
+}
