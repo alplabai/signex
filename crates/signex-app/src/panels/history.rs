@@ -31,6 +31,10 @@ pub struct HistoryPanelState {
     /// no active file or the active tab has no history-trackable
     /// resource (e.g. a future ComponentEditor tab).
     pub active_path: Option<std::path::PathBuf>,
+    /// The active tab's path when the target was last resolved. Lets the
+    /// idle-cursor-move fast path detect a tab switch without walking the
+    /// filesystem for a `.git/`.
+    pub source_key: Option<std::path::PathBuf>,
     /// Whether the most-recent load is still in flight.
     pub loading: bool,
     /// Loaded entries from the most-recent successful load.
