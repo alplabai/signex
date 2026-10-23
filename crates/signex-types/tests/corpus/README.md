@@ -56,7 +56,7 @@ extras are entirely default, because it does not round-trip today
 `in_bom = false`, `on_board = false`, so a plain symbol drops out of the BOM
 and off the board after one save/reload; fix is a manual
 `impl Default for SymbolExtras` with `unit` 1, `in_bom` and `on_board` true;
-bug not yet filed upstream, add the issue number here once it is).
+tracked as #789, fixed by its own PR, which also adds the bare-symbol fixture).
 Every symbol fixture therefore carries a non-default `footprint`.
 
 ## Intentional format change
