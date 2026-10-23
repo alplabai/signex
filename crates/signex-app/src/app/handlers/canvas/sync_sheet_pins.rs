@@ -46,6 +46,7 @@ impl crate::app::Signex {
         // A child with no ports must still be reconciled: that is what drops
         // the auto-generated pins its deleted labels left behind.
         let exposes_no_ports = ports.is_empty();
+        let names_before = self.pin_names_for(&filename);
         let changed = self.apply_engine_command(
             signex_engine::Command::ReconcileChildSheetPins {
                 child_filename: filename.clone(),
@@ -65,11 +66,54 @@ impl crate::app::Signex {
                 }
             ));
         } else if changed {
-            crate::diagnostics::log_info(format!("Sync Sheet Pins: updated pins for '{filename}'"));
+            crate::diagnostics::log_info(format!(
+                "Sync Sheet Pins: updated pins for '{filename}'{}",
+                pin_change_summary(&names_before, &self.pin_names_for(&filename))
+            ));
         } else {
             crate::diagnostics::log_info(format!(
                 "Sync Sheet Pins: pins for '{filename}' already match its labels"
             ));
         }
+    }
+
+    /// Every sheet pin name on the active sheet's symbols of `filename`.
+    fn pin_names_for(&self, filename: &str) -> Vec<String> {
+        let Some(engine) = self.document_state.active_engine() else {
+            return Vec::new();
+        };
+        engine
+            .document()
+            .child_sheets
+            .iter()
+            .filter(|symbol| symbol.filename == filename)
+            .flat_map(|symbol| symbol.pins.iter().map(|pin| pin.name.clone()))
+            .collect()
+    }
+}
+
+/// `: added A, B; removed C` for the pins that differ, or empty when only a
+/// pin's non-name fields changed.
+fn pin_change_summary(before: &[String], after: &[String]) -> String {
+    let list = |names: Vec<&String>| {
+        names
+            .iter()
+            .map(|n| n.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let added = list(after.iter().filter(|n| !before.contains(n)).collect());
+    let removed = list(before.iter().filter(|n| !after.contains(n)).collect());
+    let mut parts = Vec::new();
+    if !added.is_empty() {
+        parts.push(format!("added {added}"));
+    }
+    if !removed.is_empty() {
+        parts.push(format!("removed {removed}"));
+    }
+    if parts.is_empty() {
+        String::new()
+    } else {
+        format!(": {}", parts.join("; "))
     }
 }

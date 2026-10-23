@@ -7,6 +7,7 @@ use crate::test_support::test_sheet;
 
 fn label(text: &str, label_type: LabelType, shape: &str) -> Label {
     Label {
+        unknown_columns: Default::default(),
         uuid: uuid::Uuid::new_v4(),
         text: text.to_string(),
         position: Point::new(10.0, 10.0),

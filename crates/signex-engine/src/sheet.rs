@@ -185,64 +185,46 @@ fn same_sheet_pin(lhs: &SheetPin, rhs: &SheetPin) -> bool {
         && lhs.user_moved == rhs.user_moved
 }
 
+/// Reconcile `child`'s pins with `ports` without ever moving an existing pin.
+///
+/// A pin that matches a port (by the shared trimmed port name) keeps its
+/// position, rotation, direction, uuid and `auto_generated` flag, so wires
+/// attached to it keep their nets and a hand-added pin stays hand-added. Only
+/// a port with no pin gets a new one, in the first edge slot no surviving pin
+/// occupies. Auto-generated pins whose port is gone are dropped; hand-added
+/// pins with no port are kept.
 pub(crate) fn reconcile_child_sheet_pins(child: &mut ChildSheet, ports: &[SheetPort]) -> bool {
     let before = child.pins.clone();
     let mut existing = std::mem::take(&mut child.pins);
-    let mut next_pins = Vec::new();
-    let mut left_slot = 0usize;
-    let mut right_slot = 0usize;
+    let mut matched = Vec::new();
+    let mut unmatched_ports = Vec::new();
 
     for port in ports {
-        let direction = normalize_sheet_pin_direction(&port.direction).to_string();
-        let existing_idx = existing.iter().position(|pin| pin.name == port.name);
-
-        if let Some(idx) = existing_idx {
-            let mut pin = existing.swap_remove(idx);
-            pin.direction = direction.clone();
-            pin.auto_generated = true;
-            if !pin.user_moved {
-                let slot = if direction == "output" {
-                    let slot = right_slot;
-                    right_slot += 1;
-                    slot
-                } else {
-                    let slot = left_slot;
-                    left_slot += 1;
-                    slot
-                };
-                let (x, y, rotation) = pin_anchor_for_direction(child, &direction, slot);
-                pin.position.x = x;
-                pin.position.y = y;
-                pin.rotation = rotation;
-            }
-            next_pins.push(pin);
-        } else {
-            let slot = if direction == "output" {
-                let slot = right_slot;
-                right_slot += 1;
-                slot
-            } else {
-                let slot = left_slot;
-                left_slot += 1;
-                slot
-            };
-            let (x, y, rotation) = pin_anchor_for_direction(child, &direction, slot);
-            next_pins.push(SheetPin {
-                uuid: uuid::Uuid::new_v4(),
-                name: port.name.clone(),
-                direction,
-                position: signex_types::schematic::Point::new(x, y),
-                rotation,
-                auto_generated: true,
-                user_moved: false,
-            });
+        match existing
+            .iter()
+            .position(|pin| normalize_port_name(&pin.name) == Some(port.name.as_str()))
+        {
+            Some(idx) => matched.push(existing.remove(idx)),
+            None => unmatched_ports.push(port),
         }
     }
 
-    for pin in existing {
-        if !pin.auto_generated {
-            next_pins.push(pin);
-        }
+    // Surviving pins: matched ones plus hand-added ones with no port.
+    let mut next_pins = matched;
+    next_pins.extend(existing.into_iter().filter(|pin| !pin.auto_generated));
+
+    for port in unmatched_ports {
+        let direction = normalize_sheet_pin_direction(&port.direction).to_string();
+        let (x, y, rotation) = free_pin_anchor(child, &direction, &next_pins);
+        next_pins.push(SheetPin {
+            uuid: uuid::Uuid::new_v4(),
+            name: port.name.clone(),
+            direction,
+            position: signex_types::schematic::Point::new(x, y),
+            rotation,
+            auto_generated: true,
+            user_moved: false,
+        });
     }
 
     child.pins = next_pins;
@@ -254,6 +236,23 @@ pub(crate) fn reconcile_child_sheet_pins(child: &mut ChildSheet, ports: &[SheetP
             .any(|(lhs, rhs)| !same_sheet_pin(lhs, rhs))
 }
 
+/// The first edge slot for `direction` that no pin in `taken` sits on.
+fn free_pin_anchor(child: &ChildSheet, direction: &str, taken: &[SheetPin]) -> (f64, f64, f64) {
+    let mut anchor = pin_anchor_for_direction(child, direction, 0);
+    // One more slot than there are pins always has a free one; the cap also
+    // stops a clamped (full) edge from looping forever.
+    for slot in 0..=taken.len() {
+        anchor = pin_anchor_for_direction(child, direction, slot);
+        let occupied = taken.iter().any(|pin| {
+            (pin.position.x - anchor.0).abs() < 1e-6 && (pin.position.y - anchor.1).abs() < 1e-6
+        });
+        if !occupied {
+            break;
+        }
+    }
+    anchor
+}
+
 // Keep the unused import silent — SchematicSheet is referenced via super.
 #[expect(
     unused_imports,
@@ -261,5 +260,7 @@ pub(crate) fn reconcile_child_sheet_pins(child: &mut ChildSheet, ports: &[SheetP
 )]
 use SchematicSheet as _;
 
+#[cfg(test)]
+mod reconcile_tests;
 #[cfg(test)]
 mod tests;

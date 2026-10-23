@@ -321,7 +321,7 @@ mod tests {
             .unwrap();
         assert_eq!(pin.position, Point::new(25.0, 33.0));
         assert_eq!(pin.rotation, 90.0);
-        assert_eq!(pin.direction, "output");
+        assert_eq!(pin.direction, "input", "reconcile never rewrites a pin");
     }
 
     #[test]

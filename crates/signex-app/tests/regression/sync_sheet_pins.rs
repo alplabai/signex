@@ -42,6 +42,7 @@ fn empty_sheet() -> SchematicSheet {
 
 fn label(text: &str, label_type: LabelType, shape: &str) -> Label {
     Label {
+        unknown_columns: Default::default(),
         uuid: uuid::Uuid::new_v4(),
         text: text.to_string(),
         position: Point::new(10.0, 10.0),
@@ -406,4 +407,48 @@ fn sync_clears_the_bad_hier_sheet_pin_drift_on_the_next_erc_run() {
             .any(|m| m.contains("'OLD_AUTO'") || m.contains("label 'SDA'")),
         "the synced drift is gone, got {after:?}"
     );
+}
+
+#[test]
+fn resync_after_a_label_is_added_keeps_pins_in_place_and_reports_the_change() {
+    setup_logger();
+    let mut child = empty_sheet();
+    child.labels = vec![
+        label("B", LabelType::Hierarchical, ""),
+        label("C", LabelType::Hierarchical, ""),
+    ];
+    let mut f = fixture(Some(child.clone()));
+    sync(&mut f.app);
+    let before = pins_of(&f);
+    let b = named(&before, "B").expect("B").clone();
+    let c = named(&before, "C").expect("C").clone();
+
+    child.labels.push(label("A", LabelType::Hierarchical, ""));
+    write_sheet(&f.child_path, child);
+    sync(&mut f.app);
+
+    let after = pins_of(&f);
+    assert_eq!(named(&after, "B").expect("B").position, b.position);
+    assert_eq!(named(&after, "C").expect("C").position, c.position);
+    assert!(named(&after, "A").is_some_and(|p| p.auto_generated));
+    assert!(
+        panel_has(&f.app, "added A"),
+        "the Messages panel names the added pin"
+    );
+}
+
+#[test]
+fn hand_added_pin_matching_a_label_stays_put_and_hand_added() {
+    let mut child = empty_sheet();
+    child.labels = vec![label("MANUAL", LabelType::Hierarchical, "")];
+    let mut f = fixture(Some(child));
+    let manual = named(&pins_of(&f), "MANUAL").expect("MANUAL").clone();
+
+    sync(&mut f.app);
+
+    let pins = pins_of(&f);
+    let after = named(&pins, "MANUAL").expect("MANUAL");
+    assert_eq!(after.uuid, manual.uuid);
+    assert_eq!(after.position, manual.position);
+    assert!(!after.auto_generated);
 }
