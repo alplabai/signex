@@ -108,6 +108,23 @@ fn label_with_text(text: &str) -> Label {
 }
 
 #[test]
+fn non_finite_rotation_fails_the_write_instead_of_saving_an_unloadable_file() {
+    for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        let mut sheet = empty_sheet();
+        let mut sym = sample_symbol();
+        sym.rotation = bad;
+        sheet.symbols.push(sym);
+        match SnxSchematic::new(sheet).write_string() {
+            Err(FormatError::TsvFieldWrite { field, row, .. }) => {
+                assert_eq!(field, "rotation");
+                assert_eq!(row, 1);
+            }
+            other => panic!("rotation={bad}: expected TsvFieldWrite, got {other:?}"),
+        }
+    }
+}
+
+#[test]
 fn snxsch_survives_backslash_and_quote_in_label_text() {
     // Backslash + trailing quote in a label used to produce a file
     // that `SnxSchematic::parse` could never reopen.
