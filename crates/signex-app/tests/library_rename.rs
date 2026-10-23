@@ -6,6 +6,14 @@
 //! in a `Task` in the app, which a test cannot drive, so each test plays
 //! the task's part (`finish_rename`) and feeds the completion message.
 
+// Test scaffolding discards the `iced::Task` that `update` returns and the
+// already-installed error from `init_logging`; `[lints]` is package-scoped,
+// so each integration-test crate root carries its own allow.
+#![expect(
+    clippy::let_underscore_must_use,
+    reason = "integration tests discard Results/Tasks with `let _ = ...`; test scaffolding, not production"
+)]
+
 mod support;
 
 use std::fs;
@@ -22,10 +30,6 @@ use tempfile::TempDir;
 
 use support::{Scale, generate_library};
 
-#[expect(
-    clippy::let_underscore_must_use,
-    reason = "integration tests discard the returned `iced::Task` — test scaffolding, not production"
-)]
 fn send(app: &mut Signex, msg: Message) {
     let _ = app.update(msg);
 }
@@ -316,8 +320,10 @@ fn a_failed_project_save_reverts_the_entry_and_the_mount() {
     let mut f = fixture();
     let renamed = f.alpha.with_file_name("alpha2.snxlib");
     submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
-    // The .snxprj cannot be written: its directory does not exist.
-    f.app.document_state.projects[0].path = f._tmp.path().join("gone").join("proj.snxprj");
+    // The .snxprj cannot be written: a directory sits where the file should be.
+    let blocked = f._tmp.path().join("blocked.snxprj");
+    fs::create_dir(&blocked).expect("blocker dir");
+    f.app.document_state.projects[0].path = blocked;
 
     finish_rename(&mut f, &renamed);
 
@@ -349,4 +355,35 @@ fn shared_libraries_are_still_not_renameable_from_the_tree() {
         dialog.error.is_some(),
         "Shared/Global semantics are untouched (#657)"
     );
+}
+
+#[test]
+fn an_open_browser_tab_and_its_state_follow_the_rename() {
+    use signex_app::library::LibraryBrowserState;
+
+    let mut f = fixture();
+    let renamed = f.alpha.with_file_name("alpha2.snxlib");
+    f.app
+        .library
+        .library_browsers
+        .insert(f.alpha.clone(), LibraryBrowserState::new(f.alpha.clone()));
+    f.app.document_state.tabs.push(TabInfo {
+        title: "alpha".into(),
+        path: f.alpha.clone(),
+        cached_document: None,
+        dirty: false,
+        project_id: Some(f.project_id),
+        kind: TabKind::LibraryBrowser(f.alpha.clone()),
+    });
+
+    submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+    finish_rename(&mut f, &renamed);
+
+    let tab = &f.app.document_state.tabs[0];
+    assert_eq!(tab.path, renamed);
+    assert_eq!(tab.title, "alpha2");
+    assert!(matches!(&tab.kind, TabKind::LibraryBrowser(p) if *p == renamed));
+    let browsers = &f.app.library.library_browsers;
+    assert!(!browsers.contains_key(&f.alpha));
+    assert_eq!(browsers[&renamed].library_path, renamed);
 }

@@ -603,8 +603,10 @@ pub struct LibraryCreateOptionsState {
 
 mod methods;
 mod preview;
+mod relocate;
 #[cfg(test)]
 mod tests;
 
 pub use methods::*;
 pub use preview::*;
+pub use relocate::rebase_path;

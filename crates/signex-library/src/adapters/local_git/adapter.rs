@@ -27,6 +27,13 @@ impl LibraryAdapter for LocalGitAdapter {
         Some(&self.file_path)
     }
 
+    fn relocate_library_file(&mut self, new_file: &Path) -> Result<(), LibraryError> {
+        Self::validate_file_path(new_file)?;
+        self.root_dir = parent_dir(new_file)?;
+        self.file_path = new_file.to_path_buf();
+        Ok(())
+    }
+
     // ── Tables ─────────────────────────────────────────────────────────────
 
     fn list_tables(&self) -> Result<Vec<String>, LibraryError> {

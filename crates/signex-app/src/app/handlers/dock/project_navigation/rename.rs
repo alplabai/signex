@@ -85,12 +85,6 @@ impl Signex {
             self.set_rename_error(&msg);
             return iced::Task::none();
         }
-        if self.is_project_library_path(&state) {
-            self.set_rename_error(
-                "Libraries are referenced by path and cannot be renamed from the project tree.",
-            );
-            return iced::Task::none();
-        }
         let parent = match state.target_path.parent() {
             Some(p) => p,
             None => {
@@ -107,6 +101,11 @@ impl Signex {
         if new_path.exists() {
             self.set_rename_error("A file with that name already exists.");
             return iced::Task::none();
+        }
+        // A project library moves its entry, mount and open documents
+        // together once the file rename lands (#739).
+        if self.project_library_kind(&state).is_some() {
+            return self.begin_library_rename(&state, new_path);
         }
 
         // Find every parent sheet that references this file BEFORE it
@@ -188,24 +187,6 @@ impl Signex {
         iced::Task::none()
     }
 
-    /// True when the dialog target is one of its owning project's
-    /// `libraries` entries (matched relative to the project dir or absolute).
-    fn is_project_library_path(&self, state: &crate::app::RenameDialogState) -> bool {
-        let Some(loaded) = state
-            .tree_path
-            .first()
-            .and_then(|&idx| self.document_state.projects.get(idx))
-        else {
-            return false;
-        };
-        let dir = std::path::Path::new(&loaded.data.dir);
-        loaded
-            .data
-            .libraries
-            .iter()
-            .any(|e| dir.join(&e.path) == state.target_path || e.path == state.target_path)
-    }
-
     /// Move every path-keyed record of an open document from `old_path`
     /// to `new_path` after its file was renamed on disk: tab, engine map
     /// and the engine's own save target, active path, dirty marker, the
@@ -279,7 +260,7 @@ impl Signex {
         }
     }
 
-    fn set_rename_error(&mut self, msg: &str) {
+    pub(super) fn set_rename_error(&mut self, msg: &str) {
         if let Some(d) = self.ui_state.rename_dialog.as_mut() {
             d.error = Some(msg.to_string());
         }

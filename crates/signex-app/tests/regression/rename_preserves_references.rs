@@ -236,7 +236,7 @@ fn renaming_the_pcb_repoints_the_projects_pcb_file() {
 }
 
 #[test]
-fn a_project_library_cannot_be_renamed_from_the_tree() {
+fn a_project_library_rename_changes_nothing_until_the_file_task_lands() {
     use signex_types::project::{LibraryEntry, LibraryEntryKind};
     let mut f = fixture();
     let lib = f.prj.with_file_name("parts.snxlib");
@@ -252,15 +252,16 @@ fn a_project_library_cannot_be_renamed_from_the_tree() {
 
     submit_rename(&mut f.app, &lib, "other.snxlib");
 
-    let dialog = f
-        .app
-        .ui_state
-        .rename_dialog
-        .as_ref()
-        .expect("dialog stays open");
-    assert!(dialog.error.is_some());
+    // Accepted (#739): the dialog closes and the `fs::rename` runs in a
+    // `Task`. Until it reports back the library and the project are as
+    // they were; `tests/library_rename.rs` covers the completion.
+    assert!(f.app.ui_state.rename_dialog.is_none());
     assert!(lib.exists());
     assert!(f.app.document_state.dirty_paths.is_empty());
+    assert_eq!(
+        f.app.document_state.projects[0].data.libraries[0].path,
+        PathBuf::from("parts.snxlib")
+    );
 }
 
 #[test]

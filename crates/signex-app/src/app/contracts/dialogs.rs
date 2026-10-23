@@ -140,6 +140,13 @@ pub enum RenameMsg {
         new_path: std::path::PathBuf,
         result: Result<(), String>,
     },
+    /// The compensating rename (back to `old_path`) after a library rename
+    /// could not be applied to the project finished.
+    LibraryRenameRolledBack {
+        old_path: std::path::PathBuf,
+        new_path: std::path::PathBuf,
+        result: Result<(), String>,
+    },
 }
 
 /// Remove-from-project modal message family (ADR-0001 D3). Namespaced
