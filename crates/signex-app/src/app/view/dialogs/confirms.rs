@@ -95,6 +95,24 @@ impl Signex {
                 .into()
             };
 
+        let mut prompt = column![
+            text(format!(
+                "Please choose how to remove file \"{}\"",
+                st.display_name
+            ))
+            .size(11)
+            .color(text_muted),
+        ]
+        .spacing(4);
+        // Library names can repeat across folders; the full path says which
+        // one is affected. Sheets and PCBs get no extra line.
+        if st.display_name.ends_with(".snxlib") {
+            prompt = prompt.push(
+                text(st.target_path.display().to_string())
+                    .size(10)
+                    .color(text_muted),
+            );
+        }
         let exclude_card = option_card(
             "Exclude from project",
             if st.is_outside_project {
@@ -126,15 +144,7 @@ impl Signex {
         let dialog = container(
             column![
                 header,
-                container(
-                    text(format!(
-                        "Please choose how to remove file \"{}\"",
-                        st.display_name
-                    ))
-                    .size(11)
-                    .color(text_muted)
-                )
-                .padding([14, 14]),
+                container(prompt).padding([14, 14]),
                 container(remove_options).padding([0, 14]),
                 container(row![
                     Space::new().width(Length::Fill),

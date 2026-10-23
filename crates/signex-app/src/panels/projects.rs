@@ -123,6 +123,9 @@ pub struct LibraryNodeInfo {
 
 // ─── Projects Panel (TreeView) ────────────────────────────────
 
+/// Label of the project-tree branch that holds one row per library.
+pub const LIBRARIES_BRANCH_LABEL: &str = "Libraries";
+
 /// Build the project tree from panel context data. Produces one root
 /// per loaded project so multi-project workspaces show all their
 /// projects side by side. Single-project users see the same shape as
@@ -268,7 +271,7 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
     }
     if !lib_children.is_empty() {
         children.push(TreeNode::branch(
-            "Libraries".to_string(),
+            LIBRARIES_BRANCH_LABEL.to_string(),
             TreeIcon::Library,
             lib_children,
         ));

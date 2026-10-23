@@ -1,8 +1,6 @@
 //! Remove-from-project / delete-file flow for the project-navigation dock.
 //!
-//! Extracted verbatim from the project-navigation dock handlers
-//! (`handlers/dock/project_navigation`); pure code motion, zero
-//! behaviour change.
+//! Library rows are targeted and pruned by resolved path, never by file name.
 
 use super::*;
 use crate::app::state::scope::{CaseFold, path_is_under, path_key_with};
@@ -10,6 +8,9 @@ use crate::app::state::scope::{CaseFold, path_is_under, path_key_with};
 impl Signex {
     pub(super) fn open_remove_dialog(&mut self, tree_path: Vec<usize>) {
         let Some(target_path) = self.tree_path_to_file_path(&tree_path) else {
+            crate::diagnostics::log_warning(format!(
+                "Remove from project: no file resolved for tree row {tree_path:?}"
+            ));
             return;
         };
         let display_name = target_path
@@ -223,20 +224,20 @@ impl Signex {
                 loaded.data.pcb_file = None;
                 mutated = true;
             }
-            // F23 — also prune library entries. Library file_name on
-            // the entry is the `.snxlib` filename for both
-            // ProjectLocal (relative path stored on the entry) and
-            // Shared (absolute path stored), so the same file_name
-            // match works for both kinds.
+            // F23 — also prune library entries, by resolved path: two
+            // libraries can share a file name.
             let lib_before = loaded.data.libraries.len();
-            loaded.data.libraries.retain(|entry| {
-                entry
-                    .path
-                    .file_name()
-                    .and_then(|s| s.to_str())
-                    .map(|n| n != filename)
-                    .unwrap_or(true)
-            });
+            let resolved: Vec<std::path::PathBuf> = loaded
+                .data
+                .libraries
+                .iter()
+                .map(|entry| loaded.data.resolve_library_path(entry))
+                .collect();
+            let mut resolved = resolved.iter();
+            loaded
+                .data
+                .libraries
+                .retain(|_| resolved.next() != Some(&state.target_path));
             if loaded.data.libraries.len() != lib_before {
                 mutated = true;
             }
@@ -245,13 +246,9 @@ impl Signex {
             // materialise ran (rare but possible if materialise failed
             // and the entry stayed pending).
             let pending_before = loaded.pending_libraries.len();
-            loaded.pending_libraries.retain(|_, spec| {
-                spec.lib_path
-                    .file_name()
-                    .and_then(|s| s.to_str())
-                    .map(|n| n != filename)
-                    .unwrap_or(true)
-            });
+            loaded
+                .pending_libraries
+                .retain(|_, spec| spec.lib_path != state.target_path);
             if loaded.pending_libraries.len() != pending_before {
                 mutated = true;
             }

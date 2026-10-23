@@ -119,6 +119,9 @@ mod rename_preserves_references;
 #[path = "regression/rename_save_as_rekey.rs"]
 mod rename_save_as_rekey;
 
+#[path = "regression/library_row_identity.rs"]
+mod library_row_identity;
+
 #[path = "regression/deleted_sheet_not_resaved.rs"]
 mod deleted_sheet_not_resaved;
 #[path = "regression/library_components_panel_actions.rs"]
