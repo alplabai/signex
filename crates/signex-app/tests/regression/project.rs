@@ -66,6 +66,7 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
         active_variant: None,
         libraries: Vec::new(),
         enable_git: false,
+        unknown: Default::default(),
     };
     app.document_state.projects.push(LoadedProject {
         id,
@@ -262,6 +263,7 @@ fn register_shared_library(app: &mut Signex) -> (TempDir, PathBuf, PathBuf) {
             path: lib_dir.clone(),
             kind: signex_types::project::LibraryEntryKind::Shared,
             library_id: None,
+            unknown: Default::default(),
         });
     (shared, lib_dir, inner)
 }
@@ -338,6 +340,7 @@ fn remove_delete_choice_refuses_shared_library_inside_project_folder() {
             path: lib_dir.clone(),
             kind: signex_types::project::LibraryEntryKind::Shared,
             library_id: None,
+            unknown: Default::default(),
         });
 
     arm_remove_dialog(&mut app, &lib_dir);
@@ -422,6 +425,7 @@ fn remove_dialog_flags_shared_library_inside_project_folder() {
             path: lib_dir.clone(),
             kind: signex_types::project::LibraryEntryKind::Shared,
             library_id: None,
+            unknown: Default::default(),
         });
 
     open_remove_dialog_for_label(&mut app, "Vendored.snxlib");
@@ -442,6 +446,7 @@ fn remove_dialog_does_not_flag_project_local_library() {
             path: PathBuf::from("Local.snxlib"),
             kind: signex_types::project::LibraryEntryKind::ProjectLocal,
             library_id: None,
+            unknown: Default::default(),
         });
 
     open_remove_dialog_for_label(&mut app, "Local.snxlib");
@@ -671,6 +676,7 @@ fn project_options_modal_opens_with_metadata_then_closes() {
             symbols_count: 3,
             wires_count: 5,
             labels_count: 2,
+            unknown: Default::default(),
         });
     }
 
@@ -816,6 +822,7 @@ fn loaded_project_data_round_trips_via_write_then_parse() {
         active_variant: Some("Production".into()),
         libraries: Vec::new(),
         enable_git: false,
+        unknown: Default::default(),
     };
 
     signex_types::project::write_project(&path, &data).expect("write");

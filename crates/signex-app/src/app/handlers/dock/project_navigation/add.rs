@@ -324,6 +324,7 @@ impl Signex {
                     symbols_count: 0,
                     wires_count: 0,
                     labels_count: 0,
+                    unknown: Default::default(),
                 });
                 if loaded.data.schematic_root.is_none() {
                     loaded.data.schematic_root =
@@ -361,6 +362,7 @@ impl Signex {
                         path: entry_path,
                         kind: signex_types::project::LibraryEntryKind::ProjectLocal,
                         library_id: None,
+                        unknown: Default::default(),
                     });
                 true
             }
