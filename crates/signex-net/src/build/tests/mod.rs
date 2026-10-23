@@ -1,6 +1,7 @@
 //! Tests for single-sheet netlist building.
 use super::*;
 
+mod pin_contact_and_power;
 mod wire_order;
 use signex_types::schematic::{
     Junction, Label, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Symbol, Wire,
@@ -99,6 +100,7 @@ fn add_lib(sheet: &mut SchematicSheet, lib_id: &str, pins: Vec<LibPin>) {
 /// `(origin.x + lx, origin.y - ly)`.
 fn place(sheet: &mut SchematicSheet, reference: &str, lib_id: &str, origin: Point) {
     sheet.symbols.push(Symbol {
+        uuid: Uuid::new_v4(),
         lib_id: lib_id.to_string(),
         reference: reference.to_string(),
         position: origin,

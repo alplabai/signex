@@ -93,6 +93,10 @@ signex-app = { path = ".", features = ["test-prefs-redirect"] }
 wiremock = "0.6"
 signex-library = { workspace = true, features = ["test-identity"] }
 git2 = { workspace = true }
+# Drives an `iced::Task` to completion without the iced runtime, so a
+# regression test can observe what a `Task` really does (dock_layout_persist).
+iced_runtime = "0.14"
+futures = "0.3"
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1"

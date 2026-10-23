@@ -140,7 +140,7 @@ pub struct UiState {
     /// Draft mirror of [`Self::symbol_pin_selection`].
     pub preferences_draft_symbol_pin_selection: crate::render_config::PinSelectionMode,
     /// Keyboard Shortcuts pane — editable working copy of the shortcut
-    /// profile set. Seeded from [`keymap_profiles`] each time the
+    /// profile set. Seeded from [`Self::keymap_profiles`] each time the
     /// Preferences window opens (and on Discard), mutated through the
     /// [`crate::keymap::KeymapEditorModel`] API as the user edits, and
     /// committed back to `keymap_profiles` + recompiled into

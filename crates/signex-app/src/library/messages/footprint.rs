@@ -342,7 +342,7 @@ pub enum FootprintEditorMsg {
     AlignPads(crate::library::editor::footprint::state::AlignOp),
 
     /// #370 — Active-bar Align ▸ "Align…". Opens the per-axis Align
-    /// dialog ([`FootprintEditorState::align_modal`]). Composes the
+    /// dialog ([`FootprintEditorState::align_modal`](crate::library::editor::footprint::state::FootprintEditorState::align_modal)). Composes the
     /// existing [`AlignOp`](crate::library::editor::footprint::state::AlignOp)
     /// variants; adds no new geometry.
     AlignOpen,

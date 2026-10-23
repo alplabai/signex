@@ -190,6 +190,8 @@ fn blank_open_library(snxlib: &Path, adapter: &LocalGitAdapter) -> OpenLibrary {
         cached_symbols: Vec::new(),
         cached_footprints: Vec::new(),
         cached_sims: Vec::new(),
+        cached_classes: Vec::new(),
+        observed_stamp: None,
         display: LibraryDisplaySettings::default(),
     }
 }
@@ -212,9 +214,11 @@ fn write_project(dir: &Path, name: &str, libs: &[PathBuf]) -> PathBuf {
                 path: p.clone(),
                 kind: LibraryEntryKind::Shared,
                 library_id: None,
+                unknown: Default::default(),
             })
             .collect(),
         enable_git: false,
+        unknown: Default::default(),
     };
     signex_types::project::write_project(&path, &data).expect("write_project");
     path
