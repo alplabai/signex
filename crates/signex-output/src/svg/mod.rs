@@ -187,6 +187,7 @@ mod tests {
     fn svg_document_is_emitted() {
         let mut sheet = empty_sheet_snapshot();
         sheet.schematic.wires.push(Wire {
+            unknown_columns: Default::default(),
             uuid: Uuid::new_v4(),
             start: Point::new(0.0, 0.0),
             end: Point::new(25.0, 20.0),

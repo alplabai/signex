@@ -214,6 +214,8 @@ pub enum MenuMessage {
     /// Altium's Tools ▸ Document Options entry. No-op when not on
     /// a SchLib tab.
     ToolsDocumentOptions,
+    /// Tools -> Up Hierarchy: open the sheet that references the focused one.
+    AscendToParentSheet,
 }
 
 /// Context passed into `view` so each menu leaf can decide whether to

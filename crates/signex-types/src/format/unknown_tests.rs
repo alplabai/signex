@@ -145,8 +145,9 @@ const PAD_UUID: &str = "0192a8c0-0011-7000-8000-000000000001";
 
 /// A board with one all-default footprint and pad, and no stackup, nets
 /// or board extras, so every section can be injected from scratch.
-fn plain_board() -> PcbBoard {
+pub(super) fn plain_board() -> PcbBoard {
     let pad = Pad {
+        unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::parse_str(PAD_UUID).unwrap(),
         number: "1".into(),
@@ -163,6 +164,7 @@ fn plain_board() -> PcbBoard {
         roundrect_ratio: 0.25,
     };
     let footprint = Footprint {
+        unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::parse_str(FP_UUID).unwrap(),
         reference: "U1".into(),

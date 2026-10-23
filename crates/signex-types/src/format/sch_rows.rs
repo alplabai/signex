@@ -12,6 +12,7 @@
 use super::extras::{JunctionExtras, SymbolExtras};
 use super::tsv::{format_f64, parse_f64, parse_i64, parse_uuid};
 use super::units::{mm_to_nm, nm_to_mm};
+use super::unknown_columns::impl_unknown_columns_accessors;
 use super::*;
 use crate::schematic::{HAlign, Junction, Label, LabelType, Point, Symbol, VAlign, Wire};
 use uuid::Uuid;
@@ -34,6 +35,7 @@ pub struct SchComponentRow {
     pub rotation: f64,
     pub value: String,
     pub mpn: String,
+    pub unknown_columns: UnknownColumns,
 }
 
 impl SnxTable for SchComponentRow {
@@ -56,6 +58,8 @@ impl SnxTable for SchComponentRow {
         ]
     }
 
+    impl_unknown_columns_accessors!();
+
     fn from_row(values: &[&str], block: &str, row: usize) -> Result<Self, FormatError> {
         Ok(SchComponentRow {
             uuid: parse_uuid(values[0], block, row, "uuid")?,
@@ -66,6 +70,7 @@ impl SnxTable for SchComponentRow {
             rotation: parse_f64(values[5], block, row, "rotation")?,
             value: values[6].to_string(),
             mpn: values[7].to_string(),
+            unknown_columns: UnknownColumns::default(),
         })
     }
 }
@@ -80,6 +85,7 @@ pub struct SchWireRow {
     pub end_x: i64,
     pub end_y: i64,
     pub stroke_width: f64,
+    pub unknown_columns: UnknownColumns,
 }
 
 impl SnxTable for SchWireRow {
@@ -107,6 +113,8 @@ impl SnxTable for SchWireRow {
         ]
     }
 
+    impl_unknown_columns_accessors!();
+
     fn from_row(values: &[&str], block: &str, row: usize) -> Result<Self, FormatError> {
         Ok(SchWireRow {
             uuid: parse_uuid(values[0], block, row, "uuid")?,
@@ -116,6 +124,7 @@ impl SnxTable for SchWireRow {
             end_x: parse_i64(values[4], block, row, "end_x")?,
             end_y: parse_i64(values[5], block, row, "end_y")?,
             stroke_width: parse_f64(values[6], block, row, "stroke_width")?,
+            unknown_columns: UnknownColumns::default(),
         })
     }
 }
@@ -127,6 +136,7 @@ pub struct SchJunctionRow {
     pub pos_x: i64,
     pub pos_y: i64,
     pub diameter: f64,
+    pub unknown_columns: UnknownColumns,
 }
 
 impl SnxTable for SchJunctionRow {
@@ -143,12 +153,15 @@ impl SnxTable for SchJunctionRow {
         ]
     }
 
+    impl_unknown_columns_accessors!();
+
     fn from_row(values: &[&str], block: &str, row: usize) -> Result<Self, FormatError> {
         Ok(SchJunctionRow {
             uuid: parse_uuid(values[0], block, row, "uuid")?,
             pos_x: parse_i64(values[1], block, row, "pos_x")?,
             pos_y: parse_i64(values[2], block, row, "pos_y")?,
             diameter: parse_f64(values[3], block, row, "diameter")?,
+            unknown_columns: UnknownColumns::default(),
         })
     }
 }
@@ -166,6 +179,7 @@ pub struct SchLabelRow {
     pub font_size: f64,
     pub justify: String,
     pub justify_v: String,
+    pub unknown_columns: UnknownColumns,
 }
 
 impl SnxTable for SchLabelRow {
@@ -199,6 +213,8 @@ impl SnxTable for SchLabelRow {
         ]
     }
 
+    impl_unknown_columns_accessors!();
+
     fn from_row(values: &[&str], block: &str, row: usize) -> Result<Self, FormatError> {
         Ok(SchLabelRow {
             uuid: parse_uuid(values[0], block, row, "uuid")?,
@@ -211,6 +227,7 @@ impl SnxTable for SchLabelRow {
             font_size: parse_f64(values[7], block, row, "font_size")?,
             justify: values[8].to_string(),
             justify_v: values[9].to_string(),
+            unknown_columns: UnknownColumns::default(),
         })
     }
 }
@@ -283,6 +300,7 @@ pub(in crate::format) fn symbol_to_row(s: &Symbol) -> SchComponentRow {
         rotation: s.rotation,
         value: s.value.clone(),
         mpn: s.fields.get("MPN").cloned().unwrap_or_default(),
+        unknown_columns: s.unknown_columns.clone(),
     }
 }
 
@@ -331,6 +349,7 @@ pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtra
         library_version: String::new(),
         instances: extras.instances,
         unknown: extras.unknown,
+        unknown_columns: row.unknown_columns,
     }
 }
 
@@ -343,6 +362,7 @@ pub(in crate::format) fn wire_to_row(w: &Wire) -> SchWireRow {
         end_x: mm_to_nm(w.end.x),
         end_y: mm_to_nm(w.end.y),
         stroke_width: w.stroke_width,
+        unknown_columns: w.unknown_columns.clone(),
     }
 }
 
@@ -358,6 +378,7 @@ pub(in crate::format) fn row_to_wire(row: SchWireRow) -> Wire {
             y: nm_to_mm(row.end_y),
         },
         stroke_width: row.stroke_width,
+        unknown_columns: row.unknown_columns,
     }
 }
 
@@ -367,6 +388,7 @@ pub(in crate::format) fn junction_to_row(j: &Junction) -> SchJunctionRow {
         pos_x: mm_to_nm(j.position.x),
         pos_y: mm_to_nm(j.position.y),
         diameter: j.diameter,
+        unknown_columns: j.unknown_columns.clone(),
     }
 }
 
@@ -379,6 +401,7 @@ pub(in crate::format) fn row_to_junction(row: SchJunctionRow, extra: JunctionExt
         },
         diameter: row.diameter,
         minted: extra.minted,
+        unknown_columns: row.unknown_columns,
     }
 }
 
@@ -394,6 +417,7 @@ pub(in crate::format) fn label_to_row(l: &Label) -> SchLabelRow {
         font_size: l.font_size,
         justify: halign_str(l.justify).to_string(),
         justify_v: valign_str(l.justify_v).to_string(),
+        unknown_columns: l.unknown_columns.clone(),
     }
 }
 
@@ -411,5 +435,6 @@ pub(in crate::format) fn row_to_label(row: SchLabelRow) -> Label {
         font_size: row.font_size,
         justify: parse_halign(&row.justify),
         justify_v: parse_valign(&row.justify_v),
+        unknown_columns: row.unknown_columns,
     }
 }

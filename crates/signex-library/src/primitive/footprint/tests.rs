@@ -59,6 +59,7 @@ fn footprint_json_roundtrip_with_body3d() {
         updated: Utc::now(),
         schema_version: 2,
         sketch: None,
+        load_repairs: Vec::new(),
         pours: Vec::new(),
         keepouts: Vec::new(),
         cutouts: Vec::new(),

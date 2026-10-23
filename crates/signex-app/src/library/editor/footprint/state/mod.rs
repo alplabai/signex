@@ -22,6 +22,7 @@
 //! - [`snap_options`] — `SnapOptions`, `GridDef`, `Guide*`, `SnapSubTab`,
 //!   `SnappingMode`, `GridDisplay`.
 
+pub mod conflict;
 pub mod context_menu;
 pub mod mode;
 pub mod pad;
@@ -167,6 +168,8 @@ pub struct FootprintEditorState {
     pub last_solve: Option<signex_sketch::solver::FullSolveOutput>,
     /// Last solve's audit / over-constraint warnings.
     pub solve_warnings: Vec<String>,
+    /// Constraints the last rejected edit conflicted with (painted red).
+    pub conflict: conflict::ConflictHighlight,
     /// v0.22 Phase E3+E4 → v0.23 — `Some(id)` when the user is hovering
     /// a specific row in the Conflicts list.
     pub conflicts_row_hovered: Option<signex_sketch::id::ConstraintId>,
@@ -303,6 +306,7 @@ impl FootprintEditorState {
             sketch_solver: signex_sketch::solver::Solver::default(),
             last_solve: None,
             solve_warnings: Vec::new(),
+            conflict: conflict::ConflictHighlight::default(),
             conflicts_row_hovered: None,
             active_tool: SketchTool::default(),
             tool_pending: ToolPending::default(),

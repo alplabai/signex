@@ -365,6 +365,7 @@ fn junction_is_honoured(point: signex_types::schematic::Point, document: &Schema
 
 fn junction_at(point: signex_types::schematic::Point) -> signex_types::schematic::Junction {
     signex_types::schematic::Junction {
+        unknown_columns: Default::default(),
         uuid: uuid::Uuid::new_v4(),
         position: point,
         diameter: 0.0,

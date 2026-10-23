@@ -147,8 +147,12 @@ impl Signex {
         }
     }
 
-    pub(crate) fn handle_active_document_save_as_requested(&mut self, path: PathBuf) {
-        if let Err(error) = self.save_active_document_as(path) {
+    pub(crate) fn handle_active_document_save_as_requested(
+        &mut self,
+        from_path: PathBuf,
+        to_path: PathBuf,
+    ) {
+        if let Err(error) = self.save_active_document_as(&from_path, to_path) {
             crate::diagnostics::log_error("Failed to save active document as", &error);
         }
     }

@@ -30,6 +30,7 @@ impl Signex {
                 self.interaction_state.pending_port = None;
                 self.interaction_state.active_canvas_mut().ghost_label =
                     Some(signex_types::schematic::Label {
+                        unknown_columns: Default::default(),
                         uuid: uuid::Uuid::new_v4(),
                         text: "NET".to_string(),
                         position: signex_types::schematic::Point::new(0.0, 0.0),

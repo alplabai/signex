@@ -28,6 +28,10 @@ impl Signex {
                 Some(self.show_panel(crate::panels::PanelKind::Messages))
             }
             MenuMessage::OpenSignalPanel => Some(self.show_panel(crate::panels::PanelKind::Signal)),
+            MenuMessage::AscendToParentSheet => {
+                self.ascend_to_parent_sheet();
+                Some(Task::none())
+            }
             MenuMessage::OpenPreferences => {
                 Some(self.update(Message::Preferences(PreferencesMsg::Open)))
             }

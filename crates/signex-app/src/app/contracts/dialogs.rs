@@ -275,7 +275,15 @@ pub enum FileMsg {
         result: Result<Box<signex_types::pcb::PcbBoard>, String>,
     },
     Save,
-    SaveAs(PathBuf),
+    /// User picked a destination from the schematic Save As dialog.
+    /// `from_path` is the tab the dialog was opened for; the dialog is
+    /// not modal, so the active tab may have changed by the time it
+    /// returns and the handler refuses rather than write the wrong
+    /// document to `to_path`.
+    SaveAs {
+        from_path: PathBuf,
+        to_path: PathBuf,
+    },
     /// User picked a destination from the Save-As dialog spawned the
     /// first time a freshly-minted `.snxsym` / `.snxfpt` editor tab is
     /// saved (the in-memory tab opened by `Add New ▸ Symbol` /

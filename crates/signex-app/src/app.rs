@@ -27,6 +27,7 @@ mod pcb_dirty_adapter;
 pub(crate) mod project_sheets;
 mod runtime;
 mod selection_request;
+pub(crate) mod sheet_hierarchy;
 mod state;
 pub(crate) mod view;
 
@@ -42,9 +43,9 @@ pub use contracts::{
     TextEditState, TrackItem, UiMsg, VersionControlScope, WindowMsg,
 };
 pub use documents::{
-    ComponentEditorTab, DrawMode, FootprintEditorState, GraphicFillPicker, LocalColorPicker,
-    LocalColorSlot, SchematicTabSession, SymbolEditorState, SymbolViewRequest, TabDocument,
-    TabInfo, TabKind, Tool,
+    ComponentEditorTab, DrawMode, FootprintEditorState, FootprintHistorySnapshot,
+    GraphicFillPicker, LocalColorPicker, LocalColorSlot, SchematicTabSession, SymbolEditorState,
+    SymbolViewRequest, TabDocument, TabInfo, TabKind, Tool,
 };
 pub use state::{
     DocumentState, InteractionState, KeymapRecorderState, LoadedProject, ProjectId, Signex, UiState,

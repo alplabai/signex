@@ -96,6 +96,12 @@ impl Signex {
 
     pub(crate) fn close_tab_now(&mut self, idx: usize) -> Task<Message> {
         if idx >= self.document_state.tabs.len() {
+            tracing::warn!(
+                target: "signex::tabs",
+                idx,
+                len = self.document_state.tabs.len(),
+                "close tab: index out of range, ignored",
+            );
             return Task::none();
         }
         let closing_path = self.document_state.tabs[idx].path.clone();
@@ -177,9 +183,11 @@ impl Signex {
             self.library.library_browsers.remove(p);
         }
         self.document_state.tabs.remove(idx);
-        if self.document_state.active_tab >= self.document_state.tabs.len()
-            && self.document_state.active_tab > 0
-        {
+        // A tab left of the active one shifted it down a slot: follow it
+        // so focus stays on the same document.
+        // Removing the tail while active also clamps one slot down.
+        let active = self.document_state.active_tab;
+        if active > 0 && (idx < active || active >= self.document_state.tabs.len()) {
             self.document_state.active_tab -= 1;
         }
         self.sync_active_tab();
@@ -210,10 +218,9 @@ impl Signex {
                 // each `close_tab_now(i)` removes a tab without
                 // shifting the indices of tabs we haven't visited
                 // yet. The kept tab's index does shift as tabs
-                // below it close, but `close_tab_now`'s active-tab
-                // adjuster (`if active_tab >= len ... -= 1`) tracks
-                // the live position correctly without us needing
-                // to thread the kept path through this loop.
+                // below it close, but `close_tab_now` re-points
+                // `active_tab` at the same document after each
+                // removal, so no kept path is threaded through.
                 let mut indices: Vec<usize> = (0..self.document_state.tabs.len())
                     .filter(|&i| i != keep_idx)
                     .collect();

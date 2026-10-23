@@ -199,7 +199,10 @@ fn save_as_onto_another_open_sheet_is_refused() {
     let b_uuid = open_sheet(&mut app, &b, true);
     activate(&mut app, 0);
 
-    let _ = app.update(Message::File(FileMsg::SaveAs(b.clone())));
+    let _ = app.update(Message::File(FileMsg::SaveAs {
+        from_path: a.clone(),
+        to_path: b.clone(),
+    }));
 
     let engines = &app.document_state.engines;
     assert_eq!(engines.get(&a).expect("A kept").document().uuid, a_uuid);
@@ -222,7 +225,10 @@ fn save_as_drops_the_old_path_from_dirty_paths() {
     open_sheet(&mut app, &a, true);
     activate(&mut app, 0);
 
-    let _ = app.update(Message::File(FileMsg::SaveAs(c.clone())));
+    let _ = app.update(Message::File(FileMsg::SaveAs {
+        from_path: a.clone(),
+        to_path: c.clone(),
+    }));
 
     assert!(c.exists(), "Save As must write the new file");
     assert!(app.document_state.engines.contains_key(&c));

@@ -23,8 +23,12 @@ use signex_library::lifecycle::LifecycleState;
 use signex_library::manufacturer::ManufacturerPart;
 use signex_library::param::ParamMap;
 use signex_library::primitive::{
-    PinDirection, PrimitiveKind, PrimitiveRef, SimKind, SimModel, Symbol, SymbolPin,
+    Footprint, PinDirection, PrimitiveKind, PrimitiveRef, SimKind, SimModel, Symbol, SymbolPin,
 };
+use signex_sketch::SketchData;
+use signex_sketch::entity::{Entity, EntityKind};
+use signex_sketch::id::SketchEntityId;
+use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 use uuid::Uuid;
 use wiremock::matchers::{body_partial_json, header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -60,6 +64,81 @@ where
 }
 
 // ── Primitive CRUD over HTTP ─────────────────────────────────────────────
+
+/// A footprint whose sketch holds an arc about (2, 3) with start (7, 3) and an
+/// end point at (2, 10): off the radius-5 circle, as an older file stored it.
+/// Returns the footprint plus the ids of the centre and end points.
+fn off_circle_footprint() -> (Footprint, SketchEntityId, SketchEntityId) {
+    let plane = Plane {
+        id: PlaneId::new(),
+        kind: PlaneKind::BoardTop,
+    };
+    let pid = plane.id;
+    let mut sketch = SketchData::default();
+    sketch.planes.push(plane);
+    let mut point = |x, y| {
+        let id = SketchEntityId::new();
+        sketch
+            .entities
+            .push(Entity::new(id, pid, EntityKind::Point { x, y }));
+        id
+    };
+    let (c, s, e) = (point(2.0, 3.0), point(7.0, 3.0), point(2.0, 10.0));
+    sketch.entities.push(Entity::new(
+        SketchEntityId::new(),
+        pid,
+        EntityKind::Arc {
+            center: c,
+            start: s,
+            end: e,
+            sweep_ccw: true,
+        },
+    ));
+    let mut fp = Footprint::empty("arc");
+    fp.uuid = Uuid::now_v7();
+    fp.sketch = Some(sketch);
+    (fp, c, e)
+}
+
+#[test]
+fn get_footprint_repairs_an_off_circle_arc_end_stored_remotely() {
+    let (fp, c, e) = off_circle_footprint();
+    let uuid = fp.uuid;
+    let body = serde_json::to_value(&fp).unwrap();
+    let path_str = format!("/footprints/{uuid}");
+
+    with_mock_server(
+        move |server| {
+            let path_for_mock = path_str.clone();
+            let body = body.clone();
+            Box::pin(async move {
+                Mock::given(method("GET"))
+                    .and(path(path_for_mock.as_str()))
+                    .respond_with(ResponseTemplate::new(200).set_body_json(body))
+                    .expect(1)
+                    .mount(server)
+                    .await;
+            })
+        },
+        move |adapter| {
+            let got = adapter.get_footprint(uuid).expect("get_footprint");
+            let sketch = got.sketch.expect("sketch survives");
+            let at = |id| {
+                sketch
+                    .entities
+                    .iter()
+                    .find_map(|en| match en.kind {
+                        EntityKind::Point { x, y } if en.id == id => Some((x, y)),
+                        _ => None,
+                    })
+                    .expect("point")
+            };
+            let (cx, cy) = at(c);
+            let (ex, ey) = at(e);
+            assert!(((ex - cx).hypot(ey - cy) - 5.0).abs() < 1e-9);
+        },
+    );
+}
 
 fn fixture_symbol() -> Symbol {
     let mut s = Symbol::empty("OPAMP-DUAL-8");
