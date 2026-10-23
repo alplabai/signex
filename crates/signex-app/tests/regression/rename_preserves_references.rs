@@ -15,15 +15,7 @@ use tempfile::TempDir;
 fn sheet(children: &[&str]) -> SchematicSheet {
     SchematicSheet {
         uuid: uuid::Uuid::new_v4(),
-        version: 0,
-        generator: String::new(),
-        generator_version: String::new(),
         paper_size: "A4".to_string(),
-        root_sheet_page: "1".to_string(),
-        symbols: Vec::new(),
-        wires: Vec::new(),
-        junctions: Vec::new(),
-        labels: Vec::new(),
         child_sheets: children
             .iter()
             .map(|f| ChildSheet {
@@ -41,15 +33,7 @@ fn sheet(children: &[&str]) -> SchematicSheet {
                 instances: Vec::new(),
             })
             .collect(),
-        no_connects: Vec::new(),
-        text_notes: Vec::new(),
-        buses: Vec::new(),
-        bus_entries: Vec::new(),
-        drawings: Vec::new(),
-        no_erc_directives: Vec::new(),
-        title_block: HashMap::new(),
-        lib_symbols: HashMap::new(),
-        unknown: Default::default(),
+        ..Default::default()
     }
 }
 
@@ -397,7 +381,7 @@ fn a_malformed_project_sheet_is_reported_in_the_notice_and_the_messages_panel() 
 
 #[test]
 fn closing_the_project_after_a_rename_keeps_the_prompt_and_strands_no_engine() {
-    use signex_app::app::{ContextMenuMsg, ProjectCloseChoice, ProjectMsg, ProjectTreeAction};
+    use signex_app::app::{ProjectCloseChoice, ProjectMsg};
 
     let mut f = fixture();
     submit_rename(&mut f.app, &f.child, "renamed.snxsch");
@@ -406,11 +390,7 @@ fn closing_the_project_after_a_rename_keeps_the_prompt_and_strands_no_engine() {
         "precondition: a tab-less dirty parent engine"
     );
 
-    let _ = f
-        .app
-        .update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-            ProjectTreeAction::CloseProject(vec![0]),
-        )));
+    crate::close_support::close_first_project(&mut f.app);
     let modal = f
         .app
         .ui_state
