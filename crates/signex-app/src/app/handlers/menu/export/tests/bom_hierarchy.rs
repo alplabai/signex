@@ -98,3 +98,25 @@ fn a_flat_projects_bom_is_unchanged() {
         "golden: the flat BOM must equal the pages-only BOM"
     );
 }
+
+#[test]
+fn a_loose_documents_bom_keeps_every_unowned_open_tab() {
+    // Two unrelated loose sheets, X focused: the BOM keeps the PDF's page
+    // scope (both), not just X's hierarchy.
+    let mut app = app_workspace("/w/bl", &["a.snxsch"]);
+    let x = PathBuf::from("/w/loose").join("x.snxsch");
+    let y = PathBuf::from("/w/loose").join("y.snxsch");
+    open_with(
+        &mut app.document_state,
+        &x,
+        sheet_with_net("R_X", "NX", &[]),
+    );
+    open_with(
+        &mut app.document_state,
+        &y,
+        sheet_with_net("R_Y", "NY", &[]),
+    );
+    app.document_state.active_path = Some(x);
+
+    assert_eq!(listed(&bom_of(&app)), ["R_X", "R_Y"]);
+}

@@ -30,11 +30,18 @@ fn build_export_context(
 
 /// The BOM's context: like [`build_export_context`] but carrying the project
 /// hierarchy (`netlist_sheets` + placement counts), so a BOM counts every part
-/// on every child sheet once per placement (#730).
+/// on every child sheet once per placement (#730). A loose document keeps the
+/// exported page scope (every unowned open tab), like the PDF: the hierarchy
+/// is dropped so the BOM does not narrow to the active sheet's subtree.
 fn build_bom_export_context(
     document_state: &crate::app::state::DocumentState,
 ) -> Option<ExportContext> {
-    build_export_scope(document_state).map(|(ctx, _issues)| ctx)
+    let (mut ctx, _issues) = build_export_scope(document_state)?;
+    if document_state.active_document_project().is_none() {
+        ctx.netlist_sheets.clear();
+        ctx.netlist_sheet_placements.clear();
+    }
+    Some(ctx)
 }
 
 /// Everything that went wrong while deriving the export's netlist.
