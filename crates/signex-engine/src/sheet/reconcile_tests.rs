@@ -9,9 +9,14 @@ use signex_types::schematic::{
     PinShapeStyle, Point, SchematicSheet, SheetPin, Symbol, VAlign, Wire,
 };
 
-use super::reconcile_child_sheet_pins;
+use super::{SlotBlockers, reconcile_child_sheet_pins as reconcile_with};
 use crate::command::SheetPort;
 use crate::test_support::test_sheet;
+
+/// Reconcile with nothing on the parent sheet to avoid.
+fn reconcile_child_sheet_pins(child: &mut ChildSheet, ports: &[SheetPort]) -> bool {
+    reconcile_with(child, ports, &SlotBlockers::default())
+}
 
 fn port(name: &str, direction: &str) -> SheetPort {
     SheetPort {
@@ -275,4 +280,108 @@ fn wired_pins_keep_their_nets_when_a_label_is_added_and_synced() {
     assert!(share_a_net(&parent, &child, "RPB", "RCB"), "B kept its net");
     assert!(share_a_net(&parent, &child, "RPC", "RCC"), "C kept its net");
     assert!(!share_a_net(&parent, &child, "RPB", "RCC"));
+}
+
+// ---- a freed or full slot must not capture a neighbour's net ----------------
+
+/// Reconcile the symbol at `parent.child_sheets[0]` as the app does: blockers
+/// come from the parent sheet's own wires, labels and junctions.
+fn sync(parent: &mut SchematicSheet, ports: &[SheetPort]) {
+    let blockers = SlotBlockers::of_sheet(parent);
+    reconcile_with(&mut parent.child_sheets[0], ports, &blockers);
+}
+
+/// A parent sheet whose symbol was synced to `{A, B}` and whose pin A has a
+/// wire ending on it.
+fn parent_with_wired_a() -> (SchematicSheet, Point) {
+    let mut parent = test_sheet();
+    let mut symbol = symbol_with(Vec::new());
+    reconcile_child_sheet_pins(&mut symbol, &[port("A", ""), port("B", "")]);
+    let a = pin_at(&symbol, "A").position;
+    parent.wires.push(Wire {
+        start: a,
+        end: Point::new(a.x - 5.0, a.y),
+        ..Default::default()
+    });
+    parent.child_sheets.push(symbol);
+    (parent, a)
+}
+
+#[test]
+fn a_pin_added_as_another_is_dropped_avoids_the_dropped_pins_wire() {
+    let (mut parent, a) = parent_with_wired_a();
+
+    sync(&mut parent, &[port("B", ""), port("Z", "")]);
+
+    assert_ne!(pin_at(&parent.child_sheets[0], "Z").position, a);
+}
+
+#[test]
+fn a_pin_added_after_a_drop_in_an_earlier_sync_avoids_the_dangling_wire() {
+    let (mut parent, a) = parent_with_wired_a();
+    sync(&mut parent, &[port("B", "")]);
+    assert!(parent.child_sheets[0].pins.iter().all(|p| p.name != "A"));
+
+    sync(&mut parent, &[port("B", ""), port("Z", "")]);
+
+    assert_ne!(pin_at(&parent.child_sheets[0], "Z").position, a);
+}
+
+#[test]
+fn a_dropped_pins_wire_does_not_join_the_new_pins_net() {
+    let mut child = test_sheet();
+    child.lib_symbols.insert("R".to_string(), lib_resistor());
+    child.wires.push(Wire {
+        start: Point::new(0.0, 0.0),
+        end: Point::new(10.0, 0.0),
+        ..Default::default()
+    });
+    child
+        .labels
+        .push(hierarchical_label("Z", Point::new(0.0, 0.0)));
+    place(&mut child, "RCZ", Point::new(10.0, 0.0));
+
+    let (mut parent, a) = parent_with_wired_a();
+    parent.lib_symbols.insert("R".to_string(), lib_resistor());
+    place(&mut parent, "RPA", Point::new(a.x - 5.0, a.y));
+    assert!(!share_a_net(&parent, &child, "RPA", "RCZ"), "precondition");
+
+    // The child lost A and gained Z.
+    sync(&mut parent, &[port("Z", "")]);
+
+    assert!(!share_a_net(&parent, &child, "RPA", "RCZ"));
+}
+
+#[test]
+fn a_slot_under_a_wire_interior_or_label_is_not_free() {
+    let mut parent = test_sheet();
+    parent.child_sheets.push(symbol_with(Vec::new()));
+    // A wire passing through slot 0 and a label anchored on slot 1.
+    parent.wires.push(Wire {
+        start: Point::new(95.0, 102.54),
+        end: Point::new(105.0, 102.54),
+        ..Default::default()
+    });
+    parent
+        .labels
+        .push(hierarchical_label("X", Point::new(100.0, 105.08)));
+
+    sync(&mut parent, &[port("Z", "")]);
+
+    let z = pin_at(&parent.child_sheets[0], "Z").position;
+    assert!((z.y - 107.62).abs() < 1e-6, "Z lands on slot 2, got {z:?}");
+}
+
+#[test]
+fn a_full_edge_places_no_pin_instead_of_stacking() {
+    // 6 mm tall: only two distinct slots (102.54 and the clamped 103.46).
+    let mut symbol = symbol_with(Vec::new());
+    symbol.size = (30.0, 6.0);
+
+    reconcile_child_sheet_pins(&mut symbol, &[port("A", ""), port("B", ""), port("C", "")]);
+
+    let mut names: Vec<_> = symbol.pins.iter().map(|p| p.name.as_str()).collect();
+    names.sort();
+    assert_eq!(names, ["A", "B"], "C has no free slot and is left unplaced");
+    assert_ne!(pin_at(&symbol, "A").position, pin_at(&symbol, "B").position);
 }

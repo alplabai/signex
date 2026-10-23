@@ -588,7 +588,11 @@ mod tests {
             name: "SDA".to_string(),
             direction: "input".to_string(),
         }];
-        let changed = crate::sheet::reconcile_child_sheet_pins(&mut child, &ports);
+        let changed = crate::sheet::reconcile_child_sheet_pins(
+            &mut child,
+            &ports,
+            &crate::sheet::SlotBlockers::default(),
+        );
 
         assert!(changed);
         assert_eq!(child.pins.len(), 1);

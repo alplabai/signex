@@ -362,13 +362,14 @@ impl Engine {
                 ports,
             } => {
                 let mut changed = false;
+                let blockers = sheet::SlotBlockers::of_sheet(&self.document);
                 for child in self
                     .document
                     .child_sheets
                     .iter_mut()
                     .filter(|child| child.filename == child_filename)
                 {
-                    changed |= sheet::reconcile_child_sheet_pins(child, &ports);
+                    changed |= sheet::reconcile_child_sheet_pins(child, &ports, &blockers);
                 }
 
                 if !changed {

@@ -46,6 +46,7 @@ impl crate::app::Signex {
         // A child with no ports must still be reconciled: that is what drops
         // the auto-generated pins its deleted labels left behind.
         let exposes_no_ports = ports.is_empty();
+        let port_names: Vec<String> = ports.iter().map(|p| p.name.clone()).collect();
         let names_before = self.pin_names_for(&filename);
         let changed = self.apply_engine_command(
             signex_engine::Command::ReconcileChildSheetPins {
@@ -55,6 +56,20 @@ impl crate::app::Signex {
             true,
             true,
         );
+        // The engine leaves a port unplaced when the symbol's edge has no free
+        // slot (stacking pins on one point would short their nets).
+        let after = self.pin_names_for(&filename);
+        let unplaced: Vec<&str> = port_names
+            .iter()
+            .filter(|name| !after.contains(name))
+            .map(String::as_str)
+            .collect();
+        if !unplaced.is_empty() {
+            crate::diagnostics::log_warning(format!(
+                "Sync Sheet Pins: no free slot on '{filename}' for {}; enlarge the sheet                  symbol or move the wires on its edge, then sync again",
+                unplaced.join(", ")
+            ));
+        }
         if exposes_no_ports {
             crate::diagnostics::log_warning(format!(
                 "Sync Sheet Pins: '{filename}' has no hierarchical or global labels, \
