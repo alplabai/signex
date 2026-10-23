@@ -13,7 +13,7 @@ use std::future::Future;
 
 use serde_json::json;
 use signex_library::distributor::{DistributorAdapter, DistributorSource};
-use signex_library::distributors::digikey::{DigiKeyAdapter, DigiKeyAuth};
+use signex_library::distributors::digikey::{DigiKeyAdapter, DigiKeyAuth, DigiKeyAuthError};
 use signex_library::distributors::keyring::KeyringStore;
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -213,4 +213,117 @@ fn live_lookup_smoke() {
     .unwrap();
     let adapter = DigiKeyAdapter::new(auth, None);
     let _ = adapter.lookup_by_mpn("RC0805FR-0710KL").expect("network");
+}
+
+/// Mount a token endpoint that answers every code exchange with a refresh
+/// token, so the only thing under test is whether the client stores it.
+fn mount_code_exchange(server: &MockServer) -> std::pin::Pin<Box<dyn Future<Output = ()> + '_>> {
+    Box::pin(async move {
+        Mock::given(method("POST"))
+            .and(path("/oauth/token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "access_token": "access-tok",
+                "refresh_token": "refresh-tok",
+                "token_type": "Bearer",
+                "expires_in": 3600
+            })))
+            .mount(server)
+            .await;
+    })
+}
+
+fn code_exchange_auth(base: &str) -> DigiKeyAuth {
+    DigiKeyAuth::with_endpoints(
+        "client-id",
+        "client-secret",
+        "http://localhost/cb",
+        &format!("{base}/oauth/authorize"),
+        &format!("{base}/oauth/token"),
+    )
+    .unwrap()
+}
+
+/// #834: the token exchange is a network round trip, so a cancel can land
+/// while it is in flight. The veto is asked after the endpoint answers and
+/// before the refresh token is written; a "no" must store nothing.
+#[test]
+fn cancel_during_code_exchange_stores_no_refresh_token() {
+    with_mock_server(mount_code_exchange, |base| {
+        let auth = code_exchange_auth(&base);
+        let (_url, csrf, verifier) = auth.start_authorization();
+        let stored = std::cell::RefCell::new(Vec::<String>::new());
+
+        let result = auth.exchange_code_into(
+            "the-code",
+            verifier,
+            csrf.secret(),
+            &csrf,
+            &|| false,
+            &|refresh| {
+                stored.borrow_mut().push(refresh.to_string());
+                Ok(())
+            },
+        );
+
+        assert!(matches!(result, Err(DigiKeyAuthError::Cancelled)));
+        assert!(
+            stored.borrow().is_empty(),
+            "a cancelled flow stored a token"
+        );
+    });
+}
+
+/// Positive control for the test above: with the veto granting, the same
+/// exchange does store the refresh token, so the empty store above is the
+/// guard's doing and not a broken mock.
+#[test]
+fn uncancelled_code_exchange_stores_the_refresh_token() {
+    with_mock_server(mount_code_exchange, |base| {
+        let auth = code_exchange_auth(&base);
+        let (_url, csrf, verifier) = auth.start_authorization();
+        let stored = std::cell::RefCell::new(Vec::<String>::new());
+
+        let access = auth
+            .exchange_code_into(
+                "the-code",
+                verifier,
+                csrf.secret(),
+                &csrf,
+                &|| true,
+                &|refresh| {
+                    stored.borrow_mut().push(refresh.to_string());
+                    Ok(())
+                },
+            )
+            .expect("exchange succeeds");
+
+        assert_eq!(access, "access-tok");
+        assert_eq!(*stored.borrow(), vec!["refresh-tok".to_string()]);
+    });
+}
+
+/// A forged redirect carrying the wrong `state` is refused before any
+/// request goes out and before anything is stored.
+#[test]
+fn mismatched_state_is_refused_without_storing() {
+    with_mock_server(mount_code_exchange, |base| {
+        let auth = code_exchange_auth(&base);
+        let (_url, csrf, verifier) = auth.start_authorization();
+        let stored = std::cell::RefCell::new(0usize);
+
+        let result = auth.exchange_code_into(
+            "the-code",
+            verifier,
+            "not-the-issued-state",
+            &csrf,
+            &|| true,
+            &|_| {
+                *stored.borrow_mut() += 1;
+                Ok(())
+            },
+        );
+
+        assert!(matches!(result, Err(DigiKeyAuthError::Request(m)) if m.contains("CSRF")));
+        assert_eq!(*stored.borrow(), 0);
+    });
 }
