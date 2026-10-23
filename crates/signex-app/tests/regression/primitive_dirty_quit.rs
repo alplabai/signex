@@ -19,7 +19,7 @@ use signex_library::{
     ComponentClass, ComponentRow, DatasheetRef, Footprint, FootprintFile, InternalPn,
     LifecycleState, ManufacturerPart, ParamMap, PlmReserved, PrimitiveRef, RowId,
 };
-use signex_types::project::ProjectData;
+use signex_types::project::{LibraryEntry, LibraryEntryKind, ProjectData};
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
@@ -107,28 +107,38 @@ fn quit_save_all_writes_the_edited_footprint() {
     assert!(!app.document_state.footprint_editors[&path].dirty);
 }
 
-/// An app with one loaded project rooted at `dir` (project id 0).
-fn app_with_open_project(dir: &Path) -> Signex {
-    let prj = dir.join("p.snxprj");
+/// Load a project rooted at `dir` mounting the project-local `lib.snxlib`.
+fn push_project(app: &mut Signex, dir: &Path, name: &str) {
+    std::fs::create_dir_all(dir).unwrap();
+    let prj = dir.join(format!("{name}.snxprj"));
     std::fs::write(&prj, b"{}").unwrap();
-    let (mut app, _t) = Signex::new();
     let id = app.document_state.mint_project_id();
     app.document_state.projects.push(LoadedProject {
         id,
         path: prj,
         data: ProjectData {
-            name: "p".into(),
+            name: name.into(),
             dir: dir.to_string_lossy().into_owned(),
             schematic_root: None,
             pcb_file: None,
             sheets: Vec::new(),
             variant_definitions: Vec::new(),
             active_variant: None,
-            libraries: Vec::new(),
+            libraries: vec![LibraryEntry {
+                path: PathBuf::from("lib.snxlib"),
+                kind: LibraryEntryKind::ProjectLocal,
+                library_id: None,
+            }],
             enable_git: false,
         },
         pending_libraries: std::collections::HashMap::new(),
     });
+}
+
+/// An app with one loaded project `p` rooted at `dir` (project id 0).
+fn app_with_open_project(dir: &Path) -> Signex {
+    let (mut app, _t) = Signex::new();
+    push_project(&mut app, dir, "p");
     app
 }
 
@@ -279,4 +289,40 @@ fn project_close_save_all_keeps_the_project_when_a_row_cannot_be_saved() {
     assert_eq!(app.document_state.projects.len(), 1, "project stays open");
     assert!(app.document_state.error_notice.is_some());
     assert!(app.library.editors.values().all(|s| s.dirty));
+}
+
+#[test]
+fn project_close_keeps_a_preview_row_of_a_project_nested_in_its_folder() {
+    // B lives inside A's folder and mounts its own `lib.snxlib`. A row dirty in
+    // B's library sits under A's directory but is B's: closing A must not offer
+    // it to Discard All.
+    let tmp = TempDir::new().unwrap();
+    let mut app = app_with_open_project(tmp.path());
+    push_project(&mut app, &tmp.path().join("sub"), "b");
+    let mut app = preview_edit_in(app, tmp.path().join("sub").join("lib.snxlib"));
+
+    crate::close_support::close_first_project(&mut app);
+
+    assert!(
+        app.ui_state.project_close_confirm.is_none(),
+        "the nested project's row is not A's to save or discard",
+    );
+    assert_eq!(app.document_state.projects.len(), 1, "A closes, B stays");
+    assert!(app.library.editors.values().all(|s| s.dirty), "row kept");
+}
+
+#[test]
+fn project_close_keeps_a_listed_library_row_that_sits_inside_another_projects_folder() {
+    // A lists `sub/lib.snxlib`, but B is open at `sub`: the library is inside
+    // another open project's directory, so the row is not provably A's alone.
+    let tmp = TempDir::new().unwrap();
+    let mut app = app_with_open_project(tmp.path());
+    app.document_state.projects[0].data.libraries[0].path = PathBuf::from("sub/lib.snxlib");
+    push_project(&mut app, &tmp.path().join("sub"), "b");
+    let mut app = preview_edit_in(app, tmp.path().join("sub").join("lib.snxlib"));
+
+    crate::close_support::close_first_project(&mut app);
+
+    assert!(app.ui_state.project_close_confirm.is_none());
+    assert!(app.library.editors.values().all(|s| s.dirty), "row kept");
 }

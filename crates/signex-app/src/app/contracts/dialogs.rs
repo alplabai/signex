@@ -311,7 +311,7 @@ pub enum ProjectMsg {
     /// died, which refuses the close rather than guessing ownership.
     CloseRefsResolved {
         project_id: crate::app::ProjectId,
-        result: Result<crate::app::state::sheet_refs::SheetRefs, String>,
+        result: Result<Box<crate::app::state::sheet_refs::SheetRefs>, String>,
     },
     /// User choice (Save All / Discard All / Cancel) on the app-quit
     /// confirmation modal, shown when the user tries to exit Signex

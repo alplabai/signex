@@ -1000,3 +1000,168 @@ fn a_project_opened_while_the_resolve_runs_triggers_a_fresh_resolve() {
     );
     assert!(app.ui_state.project_close_confirm.is_none());
 }
+
+/// An engine at `path` whose sheet references `child` (unsaved, in memory).
+fn engine_referencing(path: &Path, child: &str) -> signex_engine::Engine {
+    let mut sheet = empty_sheet();
+    sheet
+        .child_sheets
+        .push(signex_types::schematic::ChildSheet {
+            uuid: uuid::Uuid::nil(),
+            name: String::new(),
+            filename: child.to_string(),
+            position: signex_types::schematic::Point::new(0.0, 0.0),
+            size: (0.0, 0.0),
+            stroke_width: 0.0,
+            fill: signex_types::schematic::FillType::None,
+            stroke_color: None,
+            fill_color: None,
+            fields_autoplaced: false,
+            pins: Vec::new(),
+            instances: Vec::new(),
+        });
+    let mut engine = signex_engine::Engine::new(sheet).expect("engine");
+    engine.set_path(Some(path.to_path_buf()));
+    engine
+}
+
+/// A lists `listed` (dirty in A's folder); B's root reaches the same file
+/// through `reference`. Returns `(app, a_sheet, listed_path)`.
+fn identity_fixture(
+    tmp: &TempDir,
+    listed: &str,
+    reference: &dyn Fn(&Path) -> String,
+) -> (Signex, PathBuf, PathBuf) {
+    let (a_dir, b_dir) = two_project_dirs(tmp);
+    let shared = a_dir.join(listed);
+    write_sheet_with_child(&shared, "nothing.snxsch");
+    write_sheet_with_child(&b_dir.join("b.snxsch"), &reference(&shared));
+    let (mut app, _task) = Signex::new();
+    let a = add_project(&mut app, &a_dir.join("A.snxprj"), "a.snxsch");
+    list_sheet(&mut app, 0, listed);
+    add_project(&mut app, &b_dir.join("B.snxprj"), "b.snxsch");
+    let a_sheet = a_dir.join("a.snxsch");
+    open_dirty_sheet(&mut app, &a_sheet, a);
+    open_dirty_sheet(&mut app, &shared, a);
+    (app, a_sheet, shared)
+}
+
+#[test]
+fn a_case_variant_reference_to_the_same_file_keeps_it_for_the_sibling() {
+    let tmp = TempDir::new().expect("tempdir");
+    // Only meaningful where `s.snxsch` and `S.snxsch` are one file.
+    std::fs::write(tmp.path().join("Probe.tmp"), b"x").expect("probe");
+    if !tmp.path().join("probe.tmp").exists() {
+        eprintln!("case-sensitive volume: the case-variant file identity cannot occur here");
+        return;
+    }
+    let (app, a_sheet, shared) =
+        identity_fixture(&tmp, "S.snxsch", &|_| "../A/s.snxsch".to_string());
+    assert_discard_all_keeps_the_kept_sheet(app, &a_sheet, &shared);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_reference_through_a_symlinked_directory_keeps_the_file_for_the_sibling() {
+    let tmp = TempDir::new().expect("tempdir");
+    let (a_dir, _) = two_project_dirs(&tmp);
+    std::os::unix::fs::symlink(&a_dir, tmp.path().join("Alink")).expect("symlink");
+    let (app, a_sheet, shared) =
+        identity_fixture(&tmp, "s.snxsch", &|_| "../Alink/s.snxsch".to_string());
+    assert_discard_all_keeps_the_kept_sheet(app, &a_sheet, &shared);
+}
+
+/// A lists `../c.snxsch` (dirty); B's saved `b.snxsch` lists it as a child.
+/// Returns `(app, a_sheet, c, b_path)`.
+fn saved_reference_fixture(tmp: &TempDir) -> (Signex, PathBuf, PathBuf, PathBuf) {
+    let (a_dir, b_dir) = two_project_dirs(tmp);
+    let c = tmp.path().join("c.snxsch");
+    let b_path = b_dir.join("b.snxsch");
+    write_sheet_with_child(&b_path, "../c.snxsch");
+    let (mut app, _task) = Signex::new();
+    let a = add_project(&mut app, &a_dir.join("A.snxprj"), "a.snxsch");
+    list_sheet(&mut app, 0, "../c.snxsch");
+    add_project(&mut app, &b_dir.join("B.snxprj"), "b.snxsch");
+    let a_sheet = a_dir.join("a.snxsch");
+    open_dirty_sheet(&mut app, &a_sheet, a);
+    open_dirty_sheet(&mut app, &c, a);
+    (app, a_sheet, c, b_path)
+}
+
+#[test]
+fn an_open_unsaved_sheet_that_dropped_a_reference_still_reaches_it_through_its_saved_file() {
+    let tmp = TempDir::new().expect("tempdir");
+    let (mut app, a_sheet, c, b_path) = saved_reference_fixture(&tmp);
+    // B's open copy dropped the reference; its saved file still lists `c`.
+    let mut engine = signex_engine::Engine::new(empty_sheet()).expect("engine");
+    engine.set_path(Some(b_path.clone()));
+    app.document_state.engines.insert(b_path, engine);
+
+    assert_discard_all_keeps_the_kept_sheet(app, &a_sheet, &c);
+}
+
+#[test]
+fn an_engine_edit_made_while_the_resolve_ran_is_seen_at_completion() {
+    let tmp = TempDir::new().expect("tempdir");
+    let (a_dir, b_dir) = two_project_dirs(&tmp);
+    let c = tmp.path().join("c.snxsch");
+    let b_path = b_dir.join("b.snxsch");
+    let (mut app, _task) = Signex::new();
+    let a = add_project(&mut app, &a_dir.join("A.snxprj"), "a.snxsch");
+    list_sheet(&mut app, 0, "../c.snxsch");
+    add_project(&mut app, &b_dir.join("B.snxprj"), "b.snxsch");
+    let a_sheet = a_dir.join("a.snxsch");
+    open_dirty_sheet(&mut app, &a_sheet, a);
+    open_dirty_sheet(&mut app, &c, a);
+    let mut quiet = signex_engine::Engine::new(empty_sheet()).expect("engine");
+    quiet.set_path(Some(b_path.clone()));
+    app.document_state.engines.insert(b_path.clone(), quiet);
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+        ProjectTreeAction::CloseProject(vec![0]),
+    )));
+    let result = app.resolve_sheet_refs_blocking();
+    // The gap: B's open sheet now references `c`.
+    let edited = engine_referencing(&b_path, "../c.snxsch");
+    app.document_state.engines.insert(b_path, edited);
+
+    let project_id = app.document_state.projects[0].id;
+    let _ = app.update(Message::Project(ProjectMsg::CloseRefsResolved {
+        project_id,
+        result,
+    }));
+
+    let modal = app.ui_state.project_close_confirm.as_ref().expect("prompt");
+    assert_eq!(modal.dirty_paths, vec![a_sheet]);
+    assert_eq!(modal.kept_paths, vec![c], "the gap edit makes `c` B's too");
+}
+
+#[test]
+fn an_engine_edit_made_while_the_modal_is_up_re_prompts_instead_of_discarding() {
+    let tmp = TempDir::new().expect("tempdir");
+    let (mut app, a_sheet, c, b_path) = saved_reference_fixture(&tmp);
+    // Nothing on disk references `c` this time: only the edit below will.
+    write_sheet_with_child(&b_path, "unrelated.snxsch");
+    close_first_project(&mut app);
+    let first = app.ui_state.project_close_confirm.as_ref().expect("prompt");
+    assert!(first.dirty_paths.contains(&c), "c is A's alone so far");
+
+    let edited = engine_referencing(&b_path, "../c.snxsch");
+    app.document_state.engines.insert(b_path, edited);
+    let _ = app.update(Message::Project(ProjectMsg::CloseConfirm(
+        ProjectCloseChoice::DiscardAll,
+    )));
+
+    assert!(
+        app.document_state.dirty_paths.contains(&c),
+        "c is not discarded"
+    );
+    assert!(app.document_state.engines.contains_key(&c));
+    assert_eq!(app.document_state.projects.len(), 2, "A is still open");
+    let modal = app
+        .ui_state
+        .project_close_confirm
+        .as_ref()
+        .expect("re-prompt");
+    assert_eq!(modal.dirty_paths, vec![a_sheet]);
+    assert_eq!(modal.kept_paths, vec![c]);
+}

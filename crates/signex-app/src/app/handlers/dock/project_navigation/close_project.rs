@@ -43,9 +43,11 @@ impl Signex {
         let inputs = self.document_state.sheet_ref_inputs();
         Task::perform(
             async move {
-                tokio::task::spawn_blocking(move || inputs.resolve(CaseFold::host_default()))
-                    .await
-                    .map_err(|e| format!("sheet-reference worker failed: {e}"))
+                tokio::task::spawn_blocking(move || {
+                    Box::new(inputs.resolve(CaseFold::host_default()))
+                })
+                .await
+                .map_err(|e| format!("sheet-reference worker failed: {e}"))
             },
             move |result| Message::Project(ProjectMsg::CloseRefsResolved { project_id, result }),
         )
@@ -55,16 +57,12 @@ impl Signex {
     /// thread. The body the task runs off-thread, exposed so a regression
     /// test can complete the task without an async runtime.
     #[doc(hidden)]
-    pub fn resolve_sheet_refs_blocking(&self) -> Result<SheetRefs, String> {
-        Ok(self
-            .document_state
-            .sheet_ref_inputs()
-            .resolve(CaseFold::host_default()))
-    }
-
-    /// The ids of every open project, in list order.
-    fn open_project_ids(&self) -> Vec<ProjectId> {
-        self.document_state.projects.iter().map(|p| p.id).collect()
+    pub fn resolve_sheet_refs_blocking(&self) -> Result<Box<SheetRefs>, String> {
+        Ok(Box::new(
+            self.document_state
+                .sheet_ref_inputs()
+                .resolve(CaseFold::host_default()),
+        ))
     }
 
     /// The Close Project gate, run once the sheet references are resolved:
@@ -78,10 +76,10 @@ impl Signex {
     pub(crate) fn handle_close_refs_resolved(
         &mut self,
         project_id: ProjectId,
-        result: Result<SheetRefs, String>,
+        result: Result<Box<SheetRefs>, String>,
     ) -> Task<Message> {
         let sheet_refs = match result {
-            Ok(refs) => refs,
+            Ok(refs) => *refs,
             Err(reason) => {
                 crate::diagnostics::log_error(
                     "Close Project cancelled: child-sheet ownership could not be resolved",
@@ -99,34 +97,34 @@ impl Signex {
         else {
             return Task::none();
         };
-        if !sheet_refs.is_current_for(&self.open_project_ids()) {
-            return self.spawn_close_refs_resolve(project_id);
-        }
         // The gate reads `dirty_paths`; do not rely on every edit site
         // having refreshed the panel context since its last footprint edit.
         self.sync_footprint_dirty_paths();
+        // Engines are re-read here (no IO), so an edit made while the Task ran
+        // is seen. Evidence that no longer describes the workspace is read
+        // again instead of acted on.
+        if !self.document_state.refs_are_current(&sheet_refs) {
+            return self.spawn_close_refs_resolve(project_id);
+        }
         let Some(project) = self.document_state.projects.get(project_idx) else {
             return Task::none();
         };
-        let project_dir = project.dir().to_path_buf();
         let project_name = project.data.name.clone();
         // The project's dirty paths, split into the ones it saves / discards
         // and the ones another open project claims. Primitive editors live
         // under `<project>/<lib>.snxlib/symbols|footprints/<file>`, so the
         // scan walks ancestors rather than the immediate parent, and the
         // project's own `.snxprj` sits at the root and is picked up too.
-        let scan = self.document_state.close_scan(&sheet_refs, project_idx);
+        // Component Preview rows are keyed by row, not file, so they are
+        // not in `dirty_paths`; the scan places them too (#666): a row is
+        // the project's only when its library is the project's own.
+        let scan = self.current_close_scan(project_idx, &sheet_refs);
         if let Some(line) = scan.warning(&project_name) {
             crate::diagnostics::log_warning(line);
             self.refresh_panel_ctx();
         }
 
-        // Component Preview rows are keyed by row, not file, so they are
-        // not in `dirty_paths`; ask the library for the ones whose
-        // library sits inside this project (#666).
-        let dirty_rows = self.library.dirty_editors_under(&project_dir);
-
-        if !scan.mine.is_empty() || !dirty_rows.is_empty() {
+        if !scan.mine.is_empty() || !scan.mine_rows.is_empty() {
             if let Some(reason) = sheet_refs.discard_blocked_reason() {
                 crate::diagnostics::log_warning(format!(
                     "Close Project '{project_name}': {reason}"
@@ -137,7 +135,7 @@ impl Signex {
                 project_id,
                 project_name,
                 dirty_paths: scan.mine,
-                dirty_rows,
+                dirty_rows: scan.mine_rows,
                 kept_paths: scan.kept,
                 sheet_refs,
             });
@@ -145,6 +143,17 @@ impl Signex {
         }
 
         self.execute_close_project(project_id, &sheet_refs, &scan.kept)
+    }
+
+    /// The closing project's dirty documents split by the strict rule, from
+    /// the engines and library editors as they are now.
+    fn current_close_scan(
+        &self,
+        project_idx: usize,
+        sheet_refs: &SheetRefs,
+    ) -> crate::app::state::sheet_refs::CloseScan {
+        self.document_state
+            .close_scan(sheet_refs, project_idx, &self.library.dirty_editors())
     }
 
     /// Inner close-project flow that actually drops tabs + the
@@ -383,12 +392,35 @@ impl Signex {
         // A project opened since the references were read has disk-only
         // children nobody resolved; read again and re-prompt rather than act
         // on stale ownership.
-        if !state.sheet_refs.is_current_for(&self.open_project_ids()) {
+        self.sync_footprint_dirty_paths();
+        if !self.document_state.refs_are_current(&state.sheet_refs) {
             crate::diagnostics::log_warning(format!(
                 "Close Project '{}': the open projects changed, so the sheet references were re-read; confirm again",
                 state.project_name
             ));
             return self.spawn_close_refs_resolve(state.project_id);
+        }
+        // An edit since the prompt (an engine reference, a new dirty
+        // document) can move a document between `mine` and `kept`. Never act
+        // on the stale lists: run the gate again so the user sees the new ones.
+        if let Some(idx) = self
+            .document_state
+            .projects
+            .iter()
+            .position(|p| p.id == state.project_id)
+        {
+            let scan = self.current_close_scan(idx, &state.sheet_refs);
+            if scan.mine != state.dirty_paths
+                || scan.kept != state.kept_paths
+                || scan.mine_rows != state.dirty_rows
+            {
+                crate::diagnostics::log_warning(format!(
+                    "Close Project '{}': the unsaved documents changed since the prompt; review the list and confirm again",
+                    state.project_name
+                ));
+                return self
+                    .handle_close_refs_resolved(state.project_id, Ok(Box::new(state.sheet_refs)));
+            }
         }
         if choice == ProjectCloseChoice::DiscardAll
             && let Some(reason) = state.sheet_refs.discard_blocked_reason()

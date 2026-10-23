@@ -167,6 +167,72 @@ pub(crate) fn path_is_under(path: &Path, root: &Path, fold: CaseFold) -> bool {
     Path::new(&path_key).starts_with(Path::new(&root_key))
 }
 
+/// Comparison keys for ownership: the lexical [`path_key_with`] key of the
+/// NORMALISED path, replaced by the key of its real (canonical) spelling when
+/// the off-thread resolve could find one.
+///
+/// Two spellings of one file (a case variant on a case-insensitive volume, a
+/// path through a symlinked directory) have different lexical keys but the
+/// same real path, so ownership compares file identity, not path text. `real`
+/// is filled by the resolve Task (it is disk IO); a path it never saw falls
+/// back to the lexical key.
+///
+/// A sheet's children are resolved against its REAL directory
+/// ([`KeyMap::child_dir`]), so every spelling of a sheet yields the same
+/// child paths and the same keys below it.
+#[derive(Debug, Clone)]
+pub(crate) struct KeyMap {
+    pub(crate) fold: CaseFold,
+    /// Lexical key of a normalised path -> its real path.
+    pub(crate) real: HashMap<String, PathBuf>,
+}
+
+impl Default for KeyMap {
+    fn default() -> Self {
+        Self::lexical(CaseFold::host_default())
+    }
+}
+
+impl KeyMap {
+    /// A map with no real paths: every key is lexical.
+    pub(crate) fn lexical(fold: CaseFold) -> Self {
+        Self {
+            fold,
+            real: HashMap::new(),
+        }
+    }
+
+    /// The lexical key of `path`, normalised first.
+    pub(crate) fn lexical_key(&self, path: &Path) -> String {
+        path_key_with(&normalize_clamped(path), self.fold)
+    }
+
+    /// The ownership key of `path`.
+    pub(crate) fn key(&self, path: &Path) -> String {
+        match self.real.get(&self.lexical_key(path)) {
+            Some(real) => path_key_with(real, self.fold),
+            None => self.lexical_key(path),
+        }
+    }
+
+    /// The directory `path`'s child references resolve against: the real
+    /// directory when the resolve found one, else the lexical parent.
+    pub(crate) fn child_dir(&self, path: &Path) -> PathBuf {
+        let real = self.real.get(&self.lexical_key(path));
+        let dir = real
+            .map(PathBuf::as_path)
+            .unwrap_or(path)
+            .parent()
+            .unwrap_or_else(|| Path::new(""));
+        dir.to_path_buf()
+    }
+
+    /// True when the resolve Task has already keyed `path`.
+    pub(crate) fn knows(&self, path: &Path) -> bool {
+        self.real.contains_key(&self.lexical_key(path))
+    }
+}
+
 /// Comparison keys of every sheet `project` reaches: the sheets it lists plus
 /// every child reachable through `by_key`'s references, on normalized paths.
 ///
@@ -181,7 +247,7 @@ pub(crate) fn path_is_under(path: &Path, root: &Path, fold: CaseFold) -> bool {
 fn reachable_keys(
     project: &LoadedProject,
     by_key: &HashMap<String, &Vec<String>>,
-    fold: CaseFold,
+    keys: &KeyMap,
 ) -> HashSet<String> {
     let dir = project.dir();
     let mut pending: Vec<PathBuf> = project
@@ -192,18 +258,18 @@ fn reachable_keys(
         .collect();
     let mut reached: HashSet<String> = HashSet::new();
     while let Some(path) = pending.pop() {
-        let key = path_key_with(&path, fold);
+        let key = keys.key(&path);
         if !reached.insert(key.clone()) {
             continue;
         }
         let Some(children) = by_key.get(&key) else {
             continue;
         };
-        let parent_dir = path.parent().unwrap_or_else(|| Path::new(""));
+        let parent_dir = keys.child_dir(&path);
         pending.extend(
             children
                 .iter()
-                .filter_map(|c| ownership_reference(parent_dir, c)),
+                .filter_map(|c| ownership_reference(&parent_dir, c)),
         );
     }
     reached
@@ -211,13 +277,13 @@ fn reachable_keys(
 
 /// Loaded child references keyed on the NORMALISED path, so a sheet opened
 /// through a raw `../b.snxsch` spelling is found by the walk's lookups.
-pub(crate) fn refs_by_key(
-    loaded: &HashMap<PathBuf, Vec<String>>,
-    fold: CaseFold,
-) -> HashMap<String, &Vec<String>> {
+pub(crate) fn refs_by_key<'a>(
+    loaded: &'a HashMap<PathBuf, Vec<String>>,
+    keys: &KeyMap,
+) -> HashMap<String, &'a Vec<String>> {
     loaded
         .iter()
-        .map(|(path, refs)| (path_key_with(&normalize_clamped(path), fold), refs))
+        .map(|(path, refs)| (keys.key(path), refs))
         .collect()
 }
 
@@ -229,28 +295,44 @@ pub(crate) fn refs_by_key(
 /// nothing.
 pub(crate) struct ReachSets {
     per_project: Vec<HashSet<String>>,
-    fold: CaseFold,
+    keys: KeyMap,
 }
 
 impl ReachSets {
+    /// Lexical keys under `fold`; no disk was consulted.
+    #[cfg(test)]
     pub(crate) fn new(
         projects: &[LoadedProject],
         loaded: &HashMap<PathBuf, Vec<String>>,
         fold: CaseFold,
     ) -> Self {
-        let by_key = refs_by_key(loaded, fold);
+        Self::with_keys(projects, loaded, &KeyMap::lexical(fold))
+    }
+
+    /// Keys through `keys`, so file identity (not path text) decides.
+    pub(crate) fn with_keys(
+        projects: &[LoadedProject],
+        loaded: &HashMap<PathBuf, Vec<String>>,
+        keys: &KeyMap,
+    ) -> Self {
+        let by_key = refs_by_key(loaded, keys);
         Self {
             per_project: projects
                 .iter()
-                .map(|p| reachable_keys(p, &by_key, fold))
+                .map(|p| reachable_keys(p, &by_key, keys))
                 .collect(),
-            fold,
+            keys: keys.clone(),
         }
+    }
+
+    /// Every key some open project reaches.
+    pub(crate) fn all_keys(&self) -> impl Iterator<Item = &String> {
+        self.per_project.iter().flatten()
     }
 
     /// True when `projects[project]` reaches `path`.
     pub(crate) fn reached_by(&self, project: usize, path: &Path) -> bool {
-        let key = path_key_with(path, self.fold);
+        let key = self.keys.key(path);
         self.per_project
             .get(project)
             .is_some_and(|set| set.contains(&key))
@@ -259,7 +341,7 @@ impl ReachSets {
     /// True when any open project other than `projects[closing]` reaches
     /// `path`.
     pub(crate) fn reached_by_other(&self, closing: usize, path: &Path) -> bool {
-        let key = path_key_with(path, self.fold);
+        let key = self.keys.key(path);
         self.per_project
             .iter()
             .enumerate()
