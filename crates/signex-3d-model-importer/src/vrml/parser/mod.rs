@@ -430,6 +430,21 @@ mod tests {
         assert_eq!(parse_src(&src).len(), 1);
     }
 
+    /// #781: `#` and brackets inside strings no longer swallow the next shape,
+    /// and a string spelling a keyword is not read as one.
+    #[test]
+    fn quoted_strings_do_not_desync_the_parse() {
+        for info in [
+            r#"WorldInfo { title "Part #1" }"#,
+            r#"WorldInfo { info [ "a [v1" ] }"#,
+            r#"WorldInfo { info [ "}" "]" "{" ] }"#,
+            r#"WorldInfo { title "USE x" info [ "Shape" ] }"#,
+        ] {
+            let src = format!("{info} {TRI}");
+            assert_eq!(parse_src(&src).len(), 1, "{info}");
+        }
+    }
+
     #[test]
     fn eof_inside_block_still_errors() {
         let (tokens, lines) = tokenize("Foo { a [ 1 2 ]");
