@@ -552,11 +552,14 @@ impl Signex {
     /// Actually close the main window. In `iced::daemon` this fires a
     /// `Closed` event → `SecondaryWindowClosed(main)` → `iced::exit()`,
     /// so all shutdown bookkeeping stays on the existing path.
-    fn close_main_window_now(&self) -> Task<Message> {
-        match self.ui_state.main_window_id {
+    fn close_main_window_now(&mut self) -> Task<Message> {
+        // Flush a debounced dock-layout write first so the last layout is
+        // never lost to the quit (#692).
+        let close = match self.ui_state.main_window_id {
             Some(id) => iced::window::close(id),
             None => iced::exit(),
-        }
+        };
+        self.flush_dock_layout_then(close)
     }
 
     /// Resolve the user's Save All / Discard All / Cancel choice on the

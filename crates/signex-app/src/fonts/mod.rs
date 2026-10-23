@@ -844,7 +844,7 @@ mod recent;
 /// The one read-modify-write every preference writer in this module
 /// tree goes through (#594). Imported here rather than re-exported —
 /// the sibling modules pick it up through their own `use super::*;`.
-use prefs_file::update_prefs_json;
+use prefs_file::{try_update_prefs_json, update_prefs_json};
 
 /// The prefs file's health probe and its one in-app recovery (#602).
 /// Re-exported because the app shell owns the reporting: `Signex::new`

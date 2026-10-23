@@ -68,6 +68,7 @@ impl Signex {
             Message::Rename(msg) => self.dispatch_rename_message(msg),
             Message::Remove(msg) => self.dispatch_remove_message(msg),
             Message::Window(msg) => self.dispatch_window_message(msg),
+            Message::DockLayout(msg) => self.dispatch_dock_layout_message(msg),
             Message::MoveSelection(msg) => self.dispatch_move_selection_message(msg),
             Message::NetColor(msg) => self.dispatch_net_color_message(msg),
             Message::ParameterManager(msg) => self.dispatch_parameter_manager_message(msg),
@@ -294,8 +295,9 @@ impl Signex {
             WindowMsg::SecondaryWindowClosed(id) => {
                 // Main window closed → terminate the process.
                 if self.ui_state.main_window_id == Some(id) {
-                    return iced::exit();
+                    return self.flush_dock_layout_then(iced::exit());
                 }
+                let mut layout_persist = Task::none();
                 // Drop the entry and dismiss the backing modal state so
                 // closing the OS window fully exits the modal instead of
                 // reattaching a phantom copy to the main window on the
@@ -370,7 +372,7 @@ impl Signex {
                         // job — no detached copy is left to focus.
                         WindowKind::DetachedPanel(kind) => {
                             self.document_state.dock.show_panel(kind);
-                            crate::fonts::write_dock_layout(&self.document_state.dock);
+                            layout_persist = self.persist_dock_layout_soon();
                         }
                         // The Component Preview lives as a tab in the
                         // main window; its state outlasts the
@@ -385,7 +387,7 @@ impl Signex {
                         WindowKind::ComponentEditor { .. } => {}
                     }
                 }
-                Task::none()
+                layout_persist
             }
             WindowMsg::DetachModal(modal) => self.handle_detach_modal(modal),
             WindowMsg::DetachedModalOpened { modal, id } => {

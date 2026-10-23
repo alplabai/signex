@@ -193,6 +193,35 @@ pub(super) fn update_prefs_json(
     }
 }
 
+/// [`update_prefs_json`] for callers that report the failure themselves.
+///
+/// The dock-layout writer runs on a background task and must hand the
+/// outcome back to `update` so the Messages panel and the retry logic see
+/// it (#692), so this returns the failure instead of logging it. The
+/// refusal rule is identical: a file that cannot be loaded is left
+/// byte-identical and reported as an error.
+pub(super) fn try_update_prefs_json(
+    path: &Path,
+    context: &str,
+    mutator: impl FnOnce(&mut serde_json::Map<String, serde_json::Value>),
+) -> Result<(), String> {
+    let mut prefs = load_for_update(path).map_err(|error| {
+        format!(
+            "{} {error}; it was left as it is, so no other setting was lost ({context} not saved)",
+            path.display()
+        )
+    })?;
+    mutator(&mut prefs);
+    let serialized = serde_json::to_string_pretty(&serde_json::Value::Object(prefs))
+        .map_err(|error| format!("{context} could not be serialised: {error}"))?;
+    signex_types::atomic_io::atomic_write(path, serialized.as_bytes()).map_err(|error| {
+        format!(
+            "writing {} failed ({context} not saved): {error}",
+            path.display()
+        )
+    })
+}
+
 /// The resolved `prefs.json` path, for UI that has to *name* the file.
 ///
 /// [`super::prefs_path`] is private to `fonts` and this is its child
