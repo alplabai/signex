@@ -242,6 +242,13 @@ impl Signex {
             None => return Some(Task::none()),
         };
 
+        // Pin the export to the document the user is looking at right now;
+        // the save dialog outlives any tab switch (#833).
+        let Some(source) = self.document_state.active_path.clone() else {
+            crate::diagnostics::log_warning("PDF export: no active document to export");
+            return Some(Task::none());
+        };
+
         // Modal stays open across Export — the user might want to
         // tweak settings + re-export to a different filename without
         // re-opening Print Preview from scratch. We stash the options
@@ -261,9 +268,12 @@ impl Signex {
                     .await
                     .map(|file| file.path().to_path_buf())
             },
-            |path| {
+            move |path| {
                 if let Some(path) = path {
-                    Message::Export(ExportMsg::PdfFinished(Ok(path)))
+                    Message::Export(ExportMsg::PdfFinished {
+                        source,
+                        result: Ok(path),
+                    })
                 } else {
                     Message::Noop
                 }

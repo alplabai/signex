@@ -202,8 +202,14 @@ pub enum ExportMsg {
     /// `document_state.preview` with the rasterized pages plus every
     /// PDF setting in one modal.
     PdfOpenDialog,
-    /// Completion of PDF export — carries either the saved path or error.
-    PdfFinished(Result<std::path::PathBuf, String>),
+    /// Completion of PDF export — carries either the saved path or error,
+    /// plus the document the export was started from. The OS save dialog is
+    /// non-modal, so the active tab can change before it returns; `source`
+    /// pins the export to the document the user asked for (#833).
+    PdfFinished {
+        source: std::path::PathBuf,
+        result: Result<std::path::PathBuf, String>,
+    },
     /// Completion of netlist export — carries either the saved path or error.
     NetlistFinished(Result<std::path::PathBuf, String>),
     /// User invoked File → Export → Bill of Materials… — open the
@@ -323,11 +329,11 @@ pub enum ProjectMsg {
     /// Dismiss the Project Options metadata modal.
     CloseOptions,
     /// Result of the `Add Existing to Project…` file picker. Carries
-    /// the owning project's index plus the user's picks (`None` on
+    /// the owning project's id plus the user's picks (`None` on
     /// cancel, otherwise one or more paths from `pick_files`) so the
     /// handler can copy each into the project directory in turn.
     AddExistingFilePicked {
-        project_idx: usize,
+        project_id: crate::app::state::ProjectId,
         paths: Option<Vec<std::path::PathBuf>>,
     },
     /// Result of the `Add New ▸ Schematic` Save-As dialog. `None`
@@ -335,7 +341,7 @@ pub enum ProjectMsg {
     /// a blank `.snxsch`, registers it on the project, and marks
     /// the .snxprj dirty.
     AddNewSchematicPicked {
-        project_idx: usize,
+        project_id: crate::app::state::ProjectId,
         path: Option<std::path::PathBuf>,
     },
     /// v0.23 — Async project-git commit completed. The dispatcher

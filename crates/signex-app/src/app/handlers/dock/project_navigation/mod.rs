@@ -3,6 +3,8 @@ use iced::Task;
 use super::super::super::*;
 
 mod add;
+#[cfg(test)]
+mod add_tests;
 mod close_project;
 mod open_document;
 mod project_actions;

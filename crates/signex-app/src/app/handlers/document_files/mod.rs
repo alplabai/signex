@@ -5,6 +5,8 @@ use std::path::PathBuf;
 use super::super::*;
 
 mod git;
+#[cfg(test)]
+mod git_tests;
 mod history;
 mod open;
 mod recent;

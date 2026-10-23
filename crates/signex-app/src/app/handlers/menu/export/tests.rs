@@ -707,7 +707,10 @@ fn pdf_export_proceeds_and_warns_once_per_user_action() {
     let mut app = app_with_missing_child(&marker);
     let out = std::env::temp_dir().join(format!("signex-partial-{}.pdf", Uuid::new_v4()));
 
-    let _ = app.handle_export_pdf_finished(Ok(out.clone()));
+    let _ = app.handle_export_pdf_finished(
+        app.document_state.active_path.clone().expect("active path"),
+        Ok(out.clone()),
+    );
 
     assert!(
         app.document_state.error_notice.is_none(),
@@ -929,3 +932,33 @@ fn uncovered_pdf_characters_reach_the_messages_panel() {
 }
 
 mod protel_hierarchy;
+
+/// Append a second loaded project (`listed` sheets under `dir`) to `app`.
+pub(crate) fn add_project(app: &mut Signex, dir: &str, listed: &[&str]) {
+    let id = app.document_state.mint_project_id();
+    app.document_state.projects.push(LoadedProject {
+        id,
+        path: PathBuf::from(dir).join("Other.snxprj"),
+        data: ProjectData {
+            name: "Other".to_string(),
+            dir: dir.to_string(),
+            schematic_root: listed.first().map(|f| (*f).to_string()),
+            pcb_file: None,
+            sheets: listed
+                .iter()
+                .map(|f| SheetEntry {
+                    name: (*f).to_string(),
+                    filename: (*f).to_string(),
+                    symbols_count: 0,
+                    wires_count: 0,
+                    labels_count: 0,
+                })
+                .collect(),
+            variant_definitions: Vec::new(),
+            active_variant: None,
+            libraries: Vec::new(),
+            enable_git: false,
+        },
+        pending_libraries: std::collections::HashMap::new(),
+    });
+}
