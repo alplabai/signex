@@ -225,33 +225,15 @@ mod tests {
     use super::*;
     use crate::{Exporter, NetlistExporter, NetlistFormat, NetlistOptions, SheetSnapshot};
     use signex_types::net::{Net, NetId, Terminal};
-    use signex_types::schematic::{Point, SchematicSheet, Symbol};
+    use signex_types::schematic::{SchematicSheet, Symbol};
     use uuid::Uuid;
 
     fn sheet(symbols: Vec<Symbol>) -> SheetSnapshot {
         SheetSnapshot {
             path: "a.snxsch".into(),
             schematic: SchematicSheet {
-                uuid: Uuid::nil(),
-                version: 0,
-                generator: String::new(),
-                generator_version: String::new(),
-                paper_size: String::new(),
-                root_sheet_page: "1".into(),
                 symbols,
-                wires: vec![],
-                junctions: vec![],
-                labels: vec![],
-                child_sheets: vec![],
-                no_connects: vec![],
-                text_notes: vec![],
-                buses: vec![],
-                bus_entries: vec![],
-                drawings: vec![],
-                no_erc_directives: vec![],
-                title_block: Default::default(),
-                lib_symbols: Default::default(),
-                unknown: Default::default(),
+                ..Default::default()
             },
             sheet_name: "a".into(),
             sheet_number: 1,
@@ -261,36 +243,12 @@ mod tests {
 
     fn symbol(reference: &str, value: &str, footprint: &str, is_power: bool) -> Symbol {
         Symbol {
-            uuid: Uuid::nil(),
             lib_id: "Device:X".to_string(),
             reference: reference.to_string(),
             value: value.to_string(),
             footprint: footprint.to_string(),
-            datasheet: String::new(),
-            position: Point::new(0.0, 0.0),
-            rotation: 0.0,
-            mirror_x: false,
-            mirror_y: false,
-            unit: 1,
             is_power,
-            ref_text: None,
-            val_text: None,
-            fields_autoplaced: false,
-            fields_user_placed: false,
-            dnp: false,
-            in_bom: true,
-            on_board: true,
-            exclude_from_sim: false,
-            locked: false,
-            fields: Default::default(),
-            custom_properties: Vec::new(),
-            pin_uuids: Default::default(),
-            instances: Vec::new(),
-            library_id: None,
-            row_id: None,
-            library_version: String::new(),
-            unknown: Default::default(),
-            unknown_columns: Default::default(),
+            ..Default::default()
         }
     }
 

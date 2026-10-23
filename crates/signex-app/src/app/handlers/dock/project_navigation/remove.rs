@@ -277,7 +277,6 @@ impl Signex {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
     use std::path::{Path, PathBuf};
 
     use crate::app::state::scope::CaseFold;
@@ -286,25 +285,8 @@ mod tests {
     fn sheet() -> signex_types::schematic::SchematicSheet {
         signex_types::schematic::SchematicSheet {
             uuid: uuid::Uuid::new_v4(),
-            version: 0,
-            generator: String::new(),
-            generator_version: String::new(),
             paper_size: "A4".to_string(),
-            root_sheet_page: "1".to_string(),
-            symbols: Vec::new(),
-            wires: Vec::new(),
-            junctions: Vec::new(),
-            labels: Vec::new(),
-            child_sheets: Vec::new(),
-            no_connects: Vec::new(),
-            text_notes: Vec::new(),
-            buses: Vec::new(),
-            bus_entries: Vec::new(),
-            drawings: Vec::new(),
-            no_erc_directives: Vec::new(),
-            title_block: HashMap::new(),
-            lib_symbols: HashMap::new(),
-            unknown: Default::default(),
+            ..Default::default()
         }
     }
 
