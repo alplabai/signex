@@ -41,7 +41,7 @@ impl Signex {
         {
             return format!(
                 "{} — Signex",
-                crate::app::handlers::erc::detached_modal_title(*modal)
+                crate::app::view::detached_title::detached_modal_title(*modal)
             );
         }
         let version = env!("CARGO_PKG_VERSION");

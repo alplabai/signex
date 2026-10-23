@@ -512,6 +512,32 @@ impl Signex {
         }
     }
 
+    /// True while any drag that a global mouse-move / button-release must
+    /// drive is in flight. The subscription listens for `DragEnd` only
+    /// while this holds, so every drag that a release has to end has to be
+    /// counted here — a release outside the widget that started it is
+    /// otherwise never delivered.
+    pub fn is_pointer_drag_active(&self) -> bool {
+        self.interaction_state.dragging.is_some()
+            || self.document_state.dock.tab_drag.is_some()
+            || self.ui_state.modal_dragging.is_some()
+            || self.ui_state.tab_dragging.is_some()
+            || self
+                .document_state
+                .dock
+                .floating
+                .iter()
+                .any(|fp| fp.dragging)
+            // A BOM column resize, docked or detached: its handle is 4 px
+            // wide, so the release usually lands elsewhere and only the
+            // global `DragEnd` can end it.
+            || self
+                .document_state
+                .bom_preview
+                .as_ref()
+                .is_some_and(|preview| preview.column_resize.is_some())
+    }
+
     pub fn subscription(&self) -> Subscription<Message> {
         // A pure transport, nothing more (#557 phase 1). It filters and
         // forwards; which app-level consumer owns the key is decided in
@@ -543,16 +569,7 @@ impl Signex {
         // Mouse events for drag-to-resize/floating-drag.
         // Subscribing to cursor move only while dragging avoids per-frame
         // app updates when idle, which noticeably hurts smoothness on macOS.
-        let drag_active = self.interaction_state.dragging.is_some()
-            || self.document_state.dock.tab_drag.is_some()
-            || self.ui_state.modal_dragging.is_some()
-            || self.ui_state.tab_dragging.is_some()
-            || self
-                .document_state
-                .dock
-                .floating
-                .iter()
-                .any(|fp| fp.dragging);
+        let drag_active = self.is_pointer_drag_active();
         let modal_drag_active = self.ui_state.modal_dragging.is_some();
         let mouse_sub = if modal_drag_active {
             // Modal drag takes priority — release ends the modal drag
