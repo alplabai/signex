@@ -3,15 +3,13 @@ use signex_erc::{RuleKind, Severity, Violation};
 use signex_types::schematic::Point;
 
 fn violation(rule: RuleKind, severity: Severity, msg: &str, x: f64) -> Violation {
-    Violation {
-        rule_id: signex_erc::RuleId::builtin(rule),
+    Violation::new(
+        signex_erc::RuleId::builtin(rule),
         rule,
         severity,
-        message: msg.to_string(),
-        location: Point { x, y: 2.0 },
-        primary: None,
-        peer: None,
-    }
+        msg,
+        Point { x, y: 2.0 },
+    )
 }
 
 fn app_with_erc() -> Signex {

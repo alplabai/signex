@@ -39,66 +39,25 @@ use signex_app::app::{EditMsg, Message, MoveSelectionMsg, Signex};
 use signex_types::schematic::{
     NoConnect, Point, SchematicSheet, SelectedItem, SelectedKind, Symbol,
 };
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 fn symbol(uuid: uuid::Uuid, reference: &str, x: f64) -> Symbol {
     Symbol {
-        unknown_columns: Default::default(),
-        unknown: Default::default(),
         uuid,
         lib_id: "Device:R".to_string(),
         reference: reference.to_string(),
         value: "10k".to_string(),
-        footprint: String::new(),
-        datasheet: String::new(),
         position: Point::new(x, 0.0),
-        rotation: 0.0,
-        mirror_x: false,
-        mirror_y: false,
-        unit: 1,
-        is_power: false,
-        ref_text: None,
-        val_text: None,
-        fields_autoplaced: false,
-        fields_user_placed: false,
-        dnp: false,
-        in_bom: true,
-        on_board: true,
-        exclude_from_sim: false,
-        locked: false,
-        fields: HashMap::new(),
-        custom_properties: Vec::new(),
-        pin_uuids: HashMap::new(),
-        instances: Vec::new(),
-        library_id: None,
-        row_id: None,
-        library_version: String::new(),
+        ..Default::default()
     }
 }
 
 fn sheet_with(symbols: Vec<Symbol>) -> SchematicSheet {
     SchematicSheet {
-        unknown: Default::default(),
         uuid: uuid::Uuid::new_v4(),
-        version: 0,
-        generator: String::new(),
-        generator_version: String::new(),
         paper_size: "A4".to_string(),
-        root_sheet_page: "1".to_string(),
         symbols,
-        wires: Vec::new(),
-        junctions: Vec::new(),
-        labels: Vec::new(),
-        child_sheets: Vec::new(),
-        no_connects: Vec::new(),
-        text_notes: Vec::new(),
-        buses: Vec::new(),
-        bus_entries: Vec::new(),
-        drawings: Vec::new(),
-        no_erc_directives: Vec::new(),
-        title_block: HashMap::new(),
-        lib_symbols: HashMap::new(),
+        ..Default::default()
     }
 }
 

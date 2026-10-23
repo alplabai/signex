@@ -116,6 +116,7 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ### Changed
 
+- **Test fixtures build core types from defaults (#749)** — `SchematicSheet`, `Symbol`, `Wire` and `Junction` gain a `Default` (equal to a deserialized minimal manifest, pinned by a test) and `signex_erc::Violation` gains `Violation::new`, so tests write only the fields they care about and adding a field no longer breaks every test in every open PR. Production literals stay exhaustive on purpose.
 - **The god-file cap is now 1200 lines**, up from 1000. It still counts physical lines, comments included. Long explanations belong in `docs/` with a one-line pointer in the code (CONTRIBUTING.md, "Code Style"), so a documented file is not forced into a split it does not need.
 - **GPU glyph atlas now trims each frame**, and GPU text prep/draw failures log once instead of being swallowed silently.
 - **Removed the dead `SCHEMATIC_GPU_RENDER` flag** — it gated no live path (the schematic GPU adapter is compiled and tested but not yet mounted).
