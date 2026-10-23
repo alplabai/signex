@@ -75,9 +75,54 @@ const METHOD_ACCESS: &[(&str, &str, &[TargetKind])] = &[
 pub fn validate(rules: &[RuleAst]) -> Vec<DslError> {
     let mut errors = Vec::new();
     for rule in rules {
+        errors.extend(unsupported_features(rule));
         validate_expr(&rule.id, rule.target, &rule.when, &mut errors);
     }
     errors
+}
+
+/// Constructs the parser accepts but nothing enforces yet (#835):
+/// `apply_to` (no sheet name or tags reach `ErcContext`), any `scope` other
+/// than the per-sheet run the engine actually does, and `sheet.tagged()`
+/// (always false). Shared with the compiler so `compile()` alone rejects
+/// them too.
+pub(crate) fn unsupported_features(rule: &RuleAst) -> Vec<DslError> {
+    let mut features = Vec::new();
+    if !matches!(rule.applicability, ApplicabilityAst::All) {
+        features.push("`apply_to`".to_owned());
+    }
+    let scope = match rule.scope {
+        ScopeKind::Sheet => None,
+        ScopeKind::Local => Some("local"),
+        ScopeKind::Hierarchical => Some("hierarchical"),
+        ScopeKind::Global => Some("global"),
+    };
+    if let Some(scope) = scope {
+        features.push(format!("`scope {scope}`"));
+    }
+    if uses_sheet_tagged(&rule.when) {
+        features.push("`sheet.tagged(...)`".to_owned());
+    }
+    features
+        .into_iter()
+        .map(|feature| DslError::Unsupported {
+            rule: rule.id.clone(),
+            feature,
+        })
+        .collect()
+}
+
+fn uses_sheet_tagged(expr: &ExprAst) -> bool {
+    let is_tagged = |field: &FieldExprAst| {
+        matches!(field, FieldExprAst::MethodCall { object, method, .. }
+            if object == "sheet" && method == "tagged")
+    };
+    match expr {
+        ExprAst::And(a, b) | ExprAst::Or(a, b) => uses_sheet_tagged(a) || uses_sheet_tagged(b),
+        ExprAst::Not(e) => uses_sheet_tagged(e),
+        ExprAst::HelperCall { .. } => false,
+        ExprAst::FieldCmp { field, .. } | ExprAst::FieldMatches { field, .. } => is_tagged(field),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -200,6 +245,70 @@ fn validate_field(
                 }
                 _ => {}
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{compile, parse, parse_validate_compile};
+
+    fn errors_of(src: &str) -> Vec<String> {
+        match parse_validate_compile(src) {
+            Ok(_) => Vec::new(),
+            Err(errors) => errors.iter().map(ToString::to_string).collect(),
+        }
+    }
+
+    /// #835: scoping the engine cannot enforce is rejected, not ignored.
+    #[test]
+    fn unenforced_scoping_is_rejected() {
+        for (src, feature) in [
+            (
+                r#"rule r apply_to sheets tagged "power" on net when has_driver() then error "x""#,
+                "`apply_to`",
+            ),
+            (
+                r#"rule r apply_to sheets named "top" on net when has_driver() then error "x""#,
+                "`apply_to`",
+            ),
+            (
+                r#"rule r on net scope global when has_driver() then error "x""#,
+                "`scope global`",
+            ),
+            (
+                r#"rule r on net scope hierarchical when has_driver() then error "x""#,
+                "`scope hierarchical`",
+            ),
+            (
+                r#"rule r on net scope local when has_driver() then error "x""#,
+                "`scope local`",
+            ),
+            (
+                r#"rule r on sheet when not sheet.tagged("a") == true then error "x""#,
+                "`sheet.tagged(...)`",
+            ),
+        ] {
+            let errors = errors_of(src);
+            assert!(
+                errors
+                    .iter()
+                    .any(|e| e.contains(feature) && e.contains("not supported yet")),
+                "{src}: {errors:?}"
+            );
+            // `compile()` alone, without the validator, rejects it too.
+            assert!(compile(&parse(src).unwrap()).is_err(), "{src}");
+        }
+    }
+
+    /// The default and an explicit `scope sheet` are what the engine does.
+    #[test]
+    fn per_sheet_scope_still_compiles() {
+        for src in [
+            r#"rule r on net when has_driver() then error "x""#,
+            r#"rule r on net scope sheet when has_driver() then error "x""#,
+        ] {
+            assert!(errors_of(src).is_empty(), "{src}: {:?}", errors_of(src));
         }
     }
 }

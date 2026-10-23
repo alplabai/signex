@@ -171,8 +171,9 @@ impl Signex {
                 Some(eval_fns)
             }
             Err(errors) => {
+                // Warning, not info: the user's rules are not running.
                 for error in errors {
-                    crate::diagnostics::log_info(format!("ERC DSL: {error}"));
+                    crate::diagnostics::log_warning(format!("ERC DSL: {error}"));
                 }
                 None
             }

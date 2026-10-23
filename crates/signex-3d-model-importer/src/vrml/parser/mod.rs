@@ -21,6 +21,8 @@ enum Node {
         color: [f32; 4],
         positions: Vec<[f32; 3]>,
         indices: Vec<i32>, // VRML uses -1 as face separator
+        /// 1-based source line of the `Shape` keyword, for warnings.
+        line: usize,
     },
     Group {
         children: Vec<Node>,
@@ -177,42 +179,35 @@ impl Transform {
         line: usize,
         warnings: &mut Vec<ParseWarning>,
     ) -> Transform {
-        let mut finite = |v: &[f32], name: &str| {
-            let ok = v.iter().all(|x| x.is_finite());
-            if !ok {
-                ParseWarning::push(
-                    warnings,
-                    Some(line),
-                    format!("non-finite Transform {name} {v:?}; using identity"),
-                );
+        /// `v` when every component is finite, else `identity` and a warning.
+        fn finite<const N: usize>(
+            v: [f32; N],
+            identity: [f32; N],
+            name: &str,
+            line: usize,
+            warnings: &mut Vec<ParseWarning>,
+        ) -> [f32; N] {
+            if v.iter().all(|x| x.is_finite()) {
+                return v;
             }
-            ok
-        };
-        let translation = if finite(&translation, "translation") {
-            translation
-        } else {
-            [0.0; 3]
-        };
-        let rotation = if finite(&rotation, "rotation") {
-            rotation
-        } else {
-            [0.0, 0.0, 1.0, 0.0]
-        };
-        let scale = if finite(&scale, "scale") {
-            scale
-        } else {
-            [1.0; 3]
-        };
-        let center = if finite(&center, "center") {
-            center
-        } else {
-            [0.0; 3]
-        };
-        let scale_orientation = if finite(&scale_orientation, "scaleOrientation") {
-            scale_orientation
-        } else {
-            [0.0, 0.0, 1.0, 0.0]
-        };
+            ParseWarning::push(
+                warnings,
+                Some(line),
+                format!("non-finite Transform {name} {v:?}; using identity"),
+            );
+            identity
+        }
+        let translation = finite(translation, [0.0; 3], "translation", line, warnings);
+        let rotation = finite(rotation, [0.0, 0.0, 1.0, 0.0], "rotation", line, warnings);
+        let scale = finite(scale, [1.0; 3], "scale", line, warnings);
+        let center = finite(center, [0.0; 3], "center", line, warnings);
+        let scale_orientation = finite(
+            scale_orientation,
+            [0.0, 0.0, 1.0, 0.0],
+            "scaleOrientation",
+            line,
+            warnings,
+        );
         let inv_sr = Transform::rotation([
             scale_orientation[0],
             scale_orientation[1],
@@ -253,13 +248,14 @@ fn collect_meshes(
             color,
             positions,
             indices,
+            line,
         } => {
             let (mesh, dropped) = build_mesh(positions, indices, *color, parent_transform);
             if dropped > 0 {
                 // One finding per shape, not per triangle.
                 ParseWarning::push(
                     warnings,
-                    None,
+                    Some(*line),
                     format!(
                         "transform overflowed to a non-finite vertex; {dropped} triangle(s) dropped"
                     ),
@@ -647,7 +643,7 @@ mod tests {
                 format!(
                     "Transform {{ scale 1e30 1e30 1e30 children [ Transform {{ scale 1e30 1 1 children [ {TRI} ] }} ] }}"
                 ),
-                None,
+                Some(1),
                 "1 triangle(s) dropped",
             ),
             (

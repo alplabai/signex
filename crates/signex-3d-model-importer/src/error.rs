@@ -41,7 +41,7 @@ pub enum ModelImportError {
     CacheFailed { reason: String },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum ImportWarning {
     TextureMissing {
         uri: String,
