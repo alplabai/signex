@@ -3,8 +3,8 @@
 
 use std::path::PathBuf;
 
-use signex_library::FootprintFile;
 use signex_library::primitive::footprint::Footprint;
+use signex_library::{FootprintFile, LoadRepair};
 use signex_sketch::SketchData;
 use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
 use signex_sketch::entity::{Entity, EntityKind};
@@ -101,7 +101,7 @@ fn a_rejected_edit_leaves_undo_redo_and_dirty_untouched() {
 #[test]
 fn opening_a_footprint_the_loader_repaired_marks_it_dirty_and_clears_the_record() {
     let mut fp = Footprint::empty("repaired");
-    fp.load_repairs = vec![SketchEntityId::new()];
+    fp.load_repairs = vec![LoadRepair::ArcEndMoved(SketchEntityId::new())];
 
     let editor = Editor::new(
         PathBuf::from("repaired.snxfpt"),
@@ -140,4 +140,18 @@ fn a_kept_edit_records_history_clears_redo_and_marks_dirty() {
     assert_eq!(editor.history.len(), 1);
     assert!(editor.redo.is_empty());
     assert!(editor.dirty);
+}
+
+#[test]
+fn opening_a_footprint_with_only_dangling_removals_marks_it_dirty() {
+    let mut fp = Footprint::empty("healed");
+    fp.load_repairs = vec![LoadRepair::DanglingRemoved(3)];
+
+    let editor = Editor::new(
+        PathBuf::from("healed.snxfpt"),
+        FootprintFile::from_footprint(fp),
+    );
+
+    assert!(editor.dirty, "a save must persist the heal");
+    assert!(editor.file.footprints[0].load_repairs.is_empty());
 }

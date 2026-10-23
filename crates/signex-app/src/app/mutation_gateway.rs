@@ -89,9 +89,22 @@ impl Signex {
         clear_overlay_cache: bool,
         update_selection_info: bool,
     ) -> bool {
+        self.apply_engine_command_checked(command, clear_overlay_cache, update_selection_info)
+            .0
+    }
+
+    /// [`Self::apply_engine_command`] that also says whether the engine
+    /// rejected the command, for callers that report on the outcome.
+    pub(crate) fn apply_engine_command_checked(
+        &mut self,
+        command: signex_engine::Command,
+        clear_overlay_cache: bool,
+        update_selection_info: bool,
+    ) -> (bool, bool) {
         let Some(engine) = self.document_state.active_engine_mut() else {
-            return false;
+            return (false, true);
         };
+        let mut failed = false;
 
         let invalidation = match engine.execute(command) {
             Ok(result) if result.changed => result
@@ -102,11 +115,17 @@ impl Signex {
             Err(error) => {
                 let error = anyhow::Error::new(error);
                 crate::diagnostics::log_error("Engine command failed", &error);
+                failed = true;
                 crate::schematic_runtime::RenderInvalidation::NONE
             }
         };
 
-        self.finish_schematic_mutation(invalidation, clear_overlay_cache, update_selection_info)
+        let changed = self.finish_schematic_mutation(
+            invalidation,
+            clear_overlay_cache,
+            update_selection_info,
+        );
+        (changed, failed)
     }
 
     /// Mark the active document as having unsaved edits, without running a

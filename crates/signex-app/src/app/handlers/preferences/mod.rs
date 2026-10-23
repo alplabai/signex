@@ -53,9 +53,6 @@ impl Signex {
     fn seed_preferences_drafts_from_live(&mut self) {
         self.ui_state.preferences_draft_theme = self.ui_state.theme_id;
         self.ui_state.preferences_draft_font = self.ui_state.ui_font_name.clone();
-        self.ui_state.preferences_draft_power_port_style = self.ui_state.power_port_style;
-        self.ui_state.preferences_draft_label_style = self.ui_state.label_style;
-        self.ui_state.preferences_draft_multisheet_style = self.ui_state.multisheet_style;
         self.ui_state.preferences_draft_component_classes = self.ui_state.component_classes.clone();
         self.ui_state.preferences_draft_grid_style = self.ui_state.grid_style;
         self.ui_state.preferences_draft_pcb_gpu_render = self.ui_state.pcb_gpu_render;
@@ -207,9 +204,6 @@ impl Signex {
                 }
                 self.ui_state.theme_id = self.ui_state.preferences_draft_theme;
                 self.ui_state.ui_font_name = self.ui_state.preferences_draft_font.clone();
-                self.ui_state.power_port_style = self.ui_state.preferences_draft_power_port_style;
-                self.ui_state.label_style = self.ui_state.preferences_draft_label_style;
-                self.ui_state.multisheet_style = self.ui_state.preferences_draft_multisheet_style;
                 self.ui_state.grid_style = self.ui_state.preferences_draft_grid_style;
                 self.ui_state.pcb_gpu_render = self.ui_state.preferences_draft_pcb_gpu_render;
                 // #629 — the three Symbol Editor settings commit here like
@@ -231,9 +225,6 @@ impl Signex {
                 // saved and rendered styles can't diverge (same rule as
                 // the PCB GPU flag above).
                 crate::fonts::write_ui_font_pref(&self.ui_state.ui_font_name);
-                crate::fonts::write_power_port_style_pref(self.ui_state.power_port_style);
-                crate::fonts::write_label_style_pref(self.ui_state.label_style);
-                crate::fonts::write_multisheet_style_pref(self.ui_state.multisheet_style);
                 crate::fonts::write_grid_style_pref(self.ui_state.grid_style);
                 crate::fonts::write_pcb_gpu_render_pref(self.ui_state.pcb_gpu_render);
                 crate::fonts::write_theme_pref(self.ui_state.theme_id);
@@ -378,32 +369,6 @@ impl Signex {
             }
             PrefMsg::DraftFont(name) => {
                 self.ui_state.preferences_draft_font = name;
-                self.recompute_preferences_dirty();
-            }
-            // #630 — these three settings persist and round-trip, but no
-            // draw path consults them: the old `render_config` setters
-            // wrote to a struct nothing read. The content-cache clear is
-            // kept so the preview repaints if a renderer ever starts
-            // honouring them.
-            PrefMsg::DraftPowerPortStyle(style) => {
-                self.ui_state.preferences_draft_power_port_style = style;
-                self.interaction_state
-                    .active_canvas_mut()
-                    .clear_content_cache();
-                self.recompute_preferences_dirty();
-            }
-            PrefMsg::DraftLabelStyle(style) => {
-                self.ui_state.preferences_draft_label_style = style;
-                self.interaction_state
-                    .active_canvas_mut()
-                    .clear_content_cache();
-                self.recompute_preferences_dirty();
-            }
-            PrefMsg::DraftMultisheetStyle(style) => {
-                self.ui_state.preferences_draft_multisheet_style = style;
-                self.interaction_state
-                    .active_canvas_mut()
-                    .clear_content_cache();
                 self.recompute_preferences_dirty();
             }
             PrefMsg::DraftGridStyle(style) => {

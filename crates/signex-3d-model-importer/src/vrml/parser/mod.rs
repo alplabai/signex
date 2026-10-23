@@ -511,10 +511,21 @@ mod tests {
             r#"WorldInfo { info [ "a [v1" ] }"#,
             r#"WorldInfo { info [ "}" "]" "{" ] }"#,
             r#"WorldInfo { title "USE x" info [ "Shape" ] }"#,
+            // A string glued to the word before it still starts a string.
+            r#"WorldInfo { title"Part #1" }"#,
         ] {
             let src = format!("{info} {TRI}");
             assert_eq!(parse_src(&src).len(), 1, "{info}");
         }
+    }
+
+    /// A quoted value in a field the parser walks one by one (through
+    /// `skip_field_value`) keeps its quotes, so `"USE"` never reads as the
+    /// `USE` keyword and the shape still imports.
+    #[test]
+    fn a_quoted_keyword_in_a_node_field_is_just_a_string() {
+        let src = "Shape { foo \"USE\" geometry IndexedFaceSet { coord Coordinate { point [ 0 0 0, 1 0 0, 0 1 0 ] } coordIndex [ 0 1 2 -1 ] } }";
+        assert_eq!(parse_src(src).len(), 1);
     }
 
     #[test]

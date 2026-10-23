@@ -254,29 +254,37 @@ mod tests {
         assert!(cache.invalidate("..", "anything").is_err());
     }
 
-    /// Captures `tracing` output from the current thread into a buffer.
-    #[derive(Clone, Default)]
-    struct Captured(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+    /// Counts `warn!` events emitted on the current thread while `f` runs.
+    /// A tiny hand-written subscriber, so the crate needs no
+    /// `tracing-subscriber` dev-dependency (#830 review).
+    fn warnings(f: impl FnOnce()) -> usize {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use tracing::span::{Attributes, Id, Record};
+        use tracing::{Event, Level, Metadata, Subscriber};
 
-    impl std::io::Write for Captured {
-        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            self.0.lock().unwrap().extend_from_slice(buf);
-            Ok(buf.len())
+        struct Count(Arc<AtomicUsize>);
+        impl Subscriber for Count {
+            fn enabled(&self, _: &Metadata<'_>) -> bool {
+                true
+            }
+            fn new_span(&self, _: &Attributes<'_>) -> Id {
+                Id::from_u64(1)
+            }
+            fn record(&self, _: &Id, _: &Record<'_>) {}
+            fn record_follows_from(&self, _: &Id, _: &Id) {}
+            fn event(&self, event: &Event<'_>) {
+                if *event.metadata().level() == Level::WARN {
+                    self.0.fetch_add(1, Ordering::SeqCst);
+                }
+            }
+            fn enter(&self, _: &Id) {}
+            fn exit(&self, _: &Id) {}
         }
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-    }
 
-    fn logged(f: impl FnOnce()) -> String {
-        let buf = Captured::default();
-        let sink = buf.clone();
-        let subscriber = tracing_subscriber::fmt()
-            .with_writer(move || sink.clone())
-            .with_ansi(false)
-            .finish();
-        tracing::subscriber::with_default(subscriber, f);
-        String::from_utf8(buf.0.lock().unwrap().clone()).unwrap()
+        let count = Arc::new(AtomicUsize::new(0));
+        tracing::subscriber::with_default(Count(count.clone()), f);
+        count.load(Ordering::SeqCst)
     }
 
     /// #806: a corrupt entry is a miss, and the read failure is logged
@@ -290,11 +298,9 @@ mod tests {
         std::fs::write(&path, b"{").unwrap();
 
         let mut hit = Some(part("sentinel"));
-        let log = logged(|| hit = cache.get_or_warn("lcsc", "R1", DEFAULT_TTL));
+        let warned = warnings(|| hit = cache.get_or_warn("lcsc", "R1", DEFAULT_TTL));
         assert!(hit.is_none());
-        assert!(log.contains("WARN"), "{log}");
-        assert!(log.contains("distributor cache read failed"), "{log}");
-        assert!(log.contains("R1"), "{log}");
+        assert_eq!(warned, 1);
     }
 
     /// An absent entry is an ordinary miss: no warning.
@@ -303,9 +309,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let cache = DistributorCache::with_root(dir.path()).unwrap();
         let mut miss = Some(part("sentinel"));
-        let log = logged(|| miss = cache.get_or_warn("lcsc", "R1", DEFAULT_TTL));
+        let warned = warnings(|| miss = cache.get_or_warn("lcsc", "R1", DEFAULT_TTL));
         assert!(miss.is_none());
-        assert!(log.is_empty(), "{log}");
+        assert_eq!(warned, 0);
 
         cache.put("lcsc", &part("R1")).unwrap();
         let hit = cache.get_or_warn("lcsc", "R1", DEFAULT_TTL).unwrap();
