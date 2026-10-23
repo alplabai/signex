@@ -1044,6 +1044,45 @@ fn new_project_over_existing_non_empty_snxprj_is_refused() {
     );
 }
 
+#[test]
+fn new_project_opens_the_project_and_returns_the_open_task() {
+    // #693 — File ▸ New Project must open the project it just created
+    // and hand the open Task(s) back to the runtime. The project-open
+    // Task carries the cold `.snxlib` mount preparations and must be
+    // propagated, never dropped; the schematic tab's read+parse Task
+    // rides alongside it.
+    let tmp = TempDir::new().expect("tempdir");
+    let prj_path = tmp.path().join("Fresh.snxprj");
+    let sch_path = tmp.path().join("Fresh.snxsch");
+
+    let (mut app, _t) = Signex::new();
+    let task = app.update(Message::File(FileMsg::NewProject(Some(prj_path.clone()))));
+
+    assert!(
+        app.document_state.error_notice.is_none(),
+        "creating a project in an empty directory must not raise an error notice"
+    );
+    assert!(prj_path.exists() && sch_path.exists(), "files not created");
+    let project = app
+        .document_state
+        .projects
+        .iter()
+        .find(|p| p.path == prj_path)
+        .expect("the new project must be loaded into the workspace");
+    assert_eq!(app.document_state.active_project, Some(project.id));
+    // The blank project carries no libraries yet, so its mount Task is
+    // empty; the schematic read+parse Task is the one unit that must
+    // reach the runtime.
+    assert!(
+        task.units() >= 1,
+        "the schematic open Task must be returned to the runtime"
+    );
+    assert!(
+        app.document_state.pending_opens.contains(&sch_path),
+        "the companion schematic must be recorded as opening"
+    );
+}
+
 // ─────────────────────────────────────────────────────────────────
 // v0.13.0 — footprint editor gated off for release
 //
