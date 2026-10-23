@@ -55,12 +55,20 @@ impl<'a> Parser<'a> {
         // already dropped. Nothing to skip here.
     }
 
-    /// Parse zero or more top-level or child nodes until we hit RBrace / EOF.
+    /// Parse top-level nodes until EOF. A stray `}` is warned about and
+    /// skipped so the rest of the file still parses.
     pub(super) fn parse_node_list(&mut self) -> Result<Vec<Node>, ParseError> {
         let mut nodes = Vec::new();
         loop {
             match self.peek() {
-                None | Some(Token::RBrace) => break,
+                None => break,
+                Some(Token::RBrace) => {
+                    log::warn!(
+                        "VRML: unmatched '}}' at line {}; skipped",
+                        self.current_line()
+                    );
+                    self.next();
+                }
                 _ => {
                     if let Some(node) = self.parse_node()? {
                         nodes.push(node);
@@ -521,21 +529,30 @@ impl<'a> Parser<'a> {
         if !matches!(self.next(), Some(Token::LBrace | Token::LBracket)) {
             return Ok(());
         }
-        // Every opener ('{' or '[') is balanced by its own closer ('}' or ']'),
-        // so nested lists inside a node body close correctly (#689).
-        let mut depth = 1usize;
+        // Each opener ('{' or '[') pushes its own closer, so nested lists inside
+        // a node body close correctly (#689). A closer that does not match the
+        // innermost opener is warned about and skipped, never counted.
+        let mut expected = vec![self.tokens[self.pos - 1].closer()];
         loop {
-            match self.next() {
+            match self.next().cloned() {
                 None => {
                     return Err(ParseError::UnexpectedEof {
                         line: self.current_line(),
                     });
                 }
-                Some(Token::LBrace | Token::LBracket) => depth += 1,
-                Some(Token::RBrace | Token::RBracket) => {
-                    depth -= 1;
-                    if depth == 0 {
-                        break;
+                Some(t @ (Token::LBrace | Token::LBracket)) => expected.push(t.closer()),
+                Some(t @ (Token::RBrace | Token::RBracket)) => {
+                    if t == expected[expected.len() - 1] {
+                        expected.pop();
+                        if expected.is_empty() {
+                            break;
+                        }
+                    } else {
+                        log::warn!(
+                            "VRML: mismatched closer {:?} at line {}; skipped",
+                            t,
+                            self.lines.get(self.pos - 1).copied().unwrap_or(0)
+                        );
                     }
                 }
                 _ => {}

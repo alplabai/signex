@@ -64,7 +64,7 @@ pub enum ParseError {
 
 #[derive(Debug, Clone)]
 struct Transform {
-    /// column-major 4×4 matrix (row-major layout for simplicity)
+    /// 4×4 matrix stored row-major (`m[row][col]`), applied to column vectors.
     m: [[f32; 4]; 4],
 }
 
@@ -109,6 +109,7 @@ impl Transform {
     fn rotation(r: [f32; 4]) -> Self {
         let len = (r[0] * r[0] + r[1] * r[1] + r[2] * r[2]).sqrt();
         if len == 0.0 {
+            log::debug!("VRML: zero-length rotation axis; using identity");
             return Self::identity();
         }
         let (x, y, z) = (r[0] / len, r[1] / len, r[2] / len);
@@ -132,7 +133,19 @@ impl Transform {
         Transform { m }
     }
 
+    /// True when the linear part flips handedness (negative determinant),
+    /// which reverses triangle winding.
+    fn is_mirroring(&self) -> bool {
+        let m = &self.m;
+        let det = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+            - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+            + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+        det < 0.0
+    }
+
     /// VRML97 Transform node matrix: P' = T * C * R * SR * S * -SR * -C * P.
+    /// A field holding a non-finite value (`inf` / `NaN` parse as f32) is
+    /// warned about and replaced by its identity value.
     fn from_fields(
         translation: [f32; 3],
         rotation: [f32; 4],
@@ -140,6 +153,19 @@ impl Transform {
         center: [f32; 3],
         scale_orientation: [f32; 4],
     ) -> Transform {
+        fn finite<const N: usize>(v: [f32; N], identity: [f32; N], name: &str) -> [f32; N] {
+            if v.iter().all(|x| x.is_finite()) {
+                v
+            } else {
+                log::warn!("VRML: non-finite Transform {name} {v:?}; using identity");
+                identity
+            }
+        }
+        let translation = finite(translation, [0.0; 3], "translation");
+        let rotation = finite(rotation, [0.0, 0.0, 1.0, 0.0], "rotation");
+        let scale = finite(scale, [1.0; 3], "scale");
+        let center = finite(center, [0.0; 3], "center");
+        let scale_orientation = finite(scale_orientation, [0.0, 0.0, 1.0, 0.0], "scaleOrientation");
         let inv_sr = Transform::rotation([
             scale_orientation[0],
             scale_orientation[1],
@@ -229,9 +255,14 @@ fn fan_triangulate(
     if face.len() < 3 {
         return;
     }
+    // A mirroring transform reverses winding; swap two corners to compensate.
+    let mirrored = xf.is_mirroring();
     let base = face[0];
     for pair in face[1..].windows(2) {
-        let corners = [base, pair[0], pair[1]];
+        let mut corners = [base, pair[0], pair[1]];
+        if mirrored {
+            corners.swap(1, 2);
+        }
         if corners.iter().any(|&vi| vi >= positions.len()) {
             continue;
         }
@@ -366,6 +397,69 @@ mod tests {
     fn unknown_node_with_list_does_not_eat_following_shape() {
         let src = format!("NavigationInfo {{ type [ \"EXAMINE\" ] }} {TRI}");
         assert_eq!(parse_src(&src).len(), 1);
+    }
+
+    #[test]
+    fn stray_closer_inside_block_is_skipped() {
+        let src = format!("Foo {{ a [ 1 2 }} b ] }} {TRI}");
+        assert_eq!(parse_src(&src).len(), 1);
+    }
+
+    #[test]
+    fn stray_top_level_brace_keeps_following_shape() {
+        let src = format!("}} {TRI}");
+        assert_eq!(parse_src(&src).len(), 1);
+    }
+
+    #[test]
+    fn eof_inside_block_still_errors() {
+        let (tokens, lines) = tokenize("Foo { a [ 1 2 ]");
+        assert!(matches!(
+            parse(&tokens, &lines),
+            Err(ParseError::UnexpectedEof { .. })
+        ));
+    }
+
+    #[test]
+    fn non_finite_transform_field_falls_back_to_identity() {
+        let src =
+            format!("Transform {{ rotation 0 0 1 NaN translation inf 0 0 children [ {TRI} ] }}");
+        let v = first_vertices(&parse_src(&src));
+        assert!(v.iter().all(|x| x.is_finite()), "{v:?}");
+        assert_close(&v, &[0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0]);
+    }
+
+    #[test]
+    fn mirroring_scale_keeps_triangle_winding() {
+        // scale -1 1 1: points become (0,0,0), (-1,0,0), (0,1,0); original
+        // order would now be clockwise, so corners 1 and 2 are swapped.
+        let src = format!("Transform {{ scale -1 1 1 children [ {TRI} ] }}");
+        assert_close(
+            &first_vertices(&parse_src(&src)),
+            &[0.0, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, 0.0, 0.0],
+        );
+    }
+
+    #[test]
+    fn scale_orientation_with_non_uniform_scale() {
+        // SR 90 deg about Z, scale 2 1 1: the stretch runs along world Y.
+        // (0,1,0): -SR -> (1,0,0); S -> (2,0,0); SR -> (0,2,0).
+        // (1,0,0): -SR -> (0,-1,0); S -> (0,-1,0); SR -> (1,0,0).
+        let src = format!(
+            "Transform {{ scaleOrientation 0 0 1 1.5707964 scale 2 1 1 children [ {TRI} ] }}"
+        );
+        assert_close(
+            &first_vertices(&parse_src(&src)),
+            &[0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 2.0, 0.0],
+        );
+    }
+
+    #[test]
+    fn def_use_and_texture_fields_are_skipped_whole() {
+        let src = "Shape { appearance Appearance { texture ImageTexture { url [ \"a.png\" ] } material Material { diffuseColor 0.2 0.4 0.6 } } geometry IndexedFaceSet { color DEF c Color { color [ 1 0 0 ] } normal USE n coord Coordinate { point [ 0 0 0, 1 0 0, 0 1 0 ] } coordIndex [ 0 1 2 -1 ] } }";
+        let meshes = parse_src(src);
+        assert_eq!(meshes.len(), 1);
+        assert_eq!(meshes[0].indices.len(), 3);
     }
 
     #[test]

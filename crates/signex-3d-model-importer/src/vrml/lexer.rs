@@ -9,6 +9,18 @@ pub enum Token {
     Comma,
 }
 
+impl Token {
+    /// The closing token matching an opener (`{` -> `}`, `[` -> `]`).
+    /// Only meaningful for `LBrace` / `LBracket`.
+    pub(crate) fn closer(&self) -> Token {
+        if *self == Token::LBrace {
+            Token::RBrace
+        } else {
+            Token::RBracket
+        }
+    }
+}
+
 /// Tokenize a VRML97 file into a flat token stream.
 /// Comments (`# ... \n`) are stripped. Returns (tokens, line_offsets)
 /// where `line_offsets[i]` is the 1-based source line for token `i`.
