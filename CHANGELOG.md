@@ -27,7 +27,7 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 - **`PlaceChildSheet` engine command** — adds a hierarchical sheet symbol to the schematic as one undoable step and marks `CHILD_SHEETS` dirty so the project netlist cache invalidates. A blank `filename` is rejected with `EngineError::EmptyChildSheetFilename`; an empty `name` is allowed. Engine only — the Place Sheet canvas tool is separate (#357).
 ### Added — schematic placement
 
-- **Place Sheet tool** (#358) — toolbar **Sheet** (and the `draw_hierarchical_sheet` command, `S` in the classic preset) places a hierarchical sheet symbol with two clicks on opposite corners, with a rubber-band preview; Esc or `CancelDrawing` cancels and returns to Select, and an edge under 5.08 mm places nothing (a warning reaches the Messages panel). The sheet gets the first unused `sheetN` as both name and file (`sheetN.snxsch`, unused in the parent and the project), editable in Properties; the child file is not created on disk. One undo step removes it.
+- **Place Sheet tool** (#358) — toolbar **Sheet** (and the `draw_hierarchical_sheet` command, `S` in the classic preset) places a hierarchical sheet symbol with two clicks on opposite corners, with a rubber-band preview; Esc or `CancelDrawing` cancels and returns to Select, and an edge under 5.08 mm places nothing (a warning reaches the Messages panel). The sheet gets the first unused `sheetN` as both name and file (`sheetN.snxsch`, unused in the parent and the project); renaming it from Properties is not yet possible, and the child file is not created on disk. One undo step removes it.
 
 ### Added — start screen
 
