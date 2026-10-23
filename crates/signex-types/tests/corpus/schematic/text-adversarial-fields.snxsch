@@ -1,0 +1,84 @@
+format = "snxsch/1"
+schematic_id = "00000000-0000-0000-0000-000000000000"
+version = 1
+generator = "signex-test"
+generator_version = "0.9"
+paper_size = "A4"
+root_sheet_page = "1"
+
+
+[sheets.components]
+content = """
+uuid                                  ref       library        pos_x     pos_y     rotation  value         mpn
+0192a8c0-0000-7001-8000-000000000001  "R""1""\"  device.snxsym  25400000  25400000  0         "1/4"" \\\\ -"  "tab\\tmpn"
+"""
+
+[sheets.wires]
+content = """
+uuid  net  start_x  start_y  end_x  end_y  stroke_width
+"""
+
+[sheets.junctions]
+content = """
+uuid  pos_x  pos_y  diameter
+"""
+
+[sheets.labels]
+content = """
+uuid  text  pos_x  pos_y  rotation  kind  shape  font_size  justify  justify_v
+"""
+
+[extras.symbols.0192a8c0-0000-7001-8000-000000000001]
+footprint = 'C:\fp\x.snxfpt'
+datasheet = ""
+mirror_x = false
+mirror_y = false
+unit = 1
+is_power = false
+fields_autoplaced = false
+fields_user_placed = false
+dnp = false
+in_bom = true
+on_board = true
+exclude_from_sim = false
+locked = false
+custom_properties = []
+instances = []
+
+[extras.symbols.0192a8c0-0000-7001-8000-000000000001.fields]
+Dash = "-"
+MPN = "tab\tmpn"
+Note = '''
+multi
+line "q" \'''
+
+[extras.symbols.0192a8c0-0000-7001-8000-000000000001.pin_uuids]
+
+[extras.sheet]
+child_sheets = []
+no_connects = []
+buses = []
+bus_entries = []
+drawings = []
+no_erc_directives = []
+
+[[extras.sheet.text_notes]]
+uuid = "0192a8c0-0000-7005-8000-000000000001"
+text = '''
+note "q"\	-
+line2'''
+rotation = 0.0
+font_size = 1.27
+justify_h = "left"
+justify_v = "top"
+
+[extras.sheet.text_notes.position]
+x = 5.0
+y = 5.0
+
+[extras.sheet.title_block]
+title = '''
+Quote " back\ tab	 nl
+ -'''
+
+[extras.sheet.lib_symbols]
