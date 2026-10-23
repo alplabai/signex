@@ -48,6 +48,58 @@ pub struct DatabaseAdapter {
     client: reqwest::blocking::Client,
 }
 
+/// Manifest `auth` prefix that names an OS-keychain item instead of a token.
+const KEYCHAIN_SIGIL: &str = "@signex-keychain:";
+
+/// Refuse to send a bearer token over cleartext HTTP to a non-loopback host.
+/// Loopback http (local dev server) and any https URL pass.
+fn check_transport_security(base_url: &str, has_token: bool) -> Result<(), LibraryError> {
+    if !has_token {
+        return Ok(());
+    }
+    let url = url::Url::parse(base_url)
+        .map_err(|e| LibraryError::Backend(format!("invalid library server url: {e}")))?;
+    let loopback = match url.host() {
+        Some(url::Host::Domain(d)) => d.eq_ignore_ascii_case("localhost"),
+        Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
+        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
+        None => false,
+    };
+    if url.scheme() == "https" || (url.scheme() == "http" && loopback) {
+        Ok(())
+    } else {
+        Err(LibraryError::Backend(format!(
+            "refusing to send the bearer token to `{}://{}{}` over cleartext HTTP; \
+             use https:// (or a loopback address for local development)",
+            url.scheme(),
+            url.host_str().unwrap_or("?"),
+            url.port().map(|p| format!(":{p}")).unwrap_or_default(),
+        )))
+    }
+}
+
+/// Whether a redirect hop may be followed: reqwest only strips
+/// `Authorization` when host or port changes, so an `https` -> `http`
+/// downgrade on the same host:port would resend the bearer token in
+/// cleartext. Apply the same transport rule to every hop.
+fn redirect_hop_allowed(target: &url::Url, has_token: bool) -> bool {
+    check_transport_security(target.as_str(), has_token).is_ok()
+}
+
+/// Redirect policy for the library client: at most 5 hops, each of which
+/// must satisfy [`redirect_hop_allowed`].
+fn redirect_policy(has_token: bool) -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(move |attempt| {
+        if attempt.previous().len() >= 5 {
+            attempt.error("too many redirects")
+        } else if redirect_hop_allowed(attempt.url(), has_token) {
+            attempt.follow()
+        } else {
+            attempt.error("refusing redirect to a cleartext non-loopback url")
+        }
+    })
+}
+
 impl DatabaseAdapter {
     /// Construct from a manifest. The manifest's `auth` field is treated as
     /// the bearer token; the holder is derived from it.
@@ -62,9 +114,17 @@ impl DatabaseAdapter {
                 )));
             }
         };
+        if auth.starts_with(KEYCHAIN_SIGIL) {
+            return Err(LibraryError::Backend(format!(
+                "library auth `{KEYCHAIN_SIGIL}...` is not resolved by the database adapter yet; \
+             refusing to send the sigil as a bearer token"
+            )));
+        }
+        check_transport_security(&base_url, !auth.is_empty())?;
         let client = reqwest::blocking::Client::builder()
             .connect_timeout(HTTP_CONNECT_TIMEOUT)
             .timeout(HTTP_REQUEST_TIMEOUT)
+            .redirect(redirect_policy(!auth.is_empty()))
             .build()
             .map_err(|e| LibraryError::Backend(format!("reqwest client: {e}")))?;
         let token = if auth.is_empty() { None } else { Some(auth) };
@@ -111,11 +171,13 @@ impl DatabaseAdapter {
     ) -> Result<Self, LibraryError> {
         let base_url = url.into().trim_end_matches('/').to_string();
         let token = token.into();
+        check_transport_security(&base_url, !token.is_empty())?;
         let token = if token.is_empty() { None } else { Some(token) };
         let holder = holder.into();
         let client = reqwest::blocking::Client::builder()
             .connect_timeout(HTTP_CONNECT_TIMEOUT)
             .timeout(HTTP_REQUEST_TIMEOUT)
+            .redirect(redirect_policy(token.is_some()))
             .build()
             .map_err(|e| LibraryError::Backend(format!("reqwest client: {e}")))?;
         // We don't have a real Manifest here — fabricate the minimal one
@@ -578,6 +640,92 @@ fn synthesize_legacy_manifest(snx: SnxlibManifest) -> Manifest {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn token_over_cleartext_non_loopback_is_refused() {
+        assert!(DatabaseAdapter::with_token("http://lib.example.com", "t", "h").is_err());
+        assert!(DatabaseAdapter::with_token("http://10.0.0.5:3535", "t", "h").is_err());
+        assert!(DatabaseAdapter::with_token("https://lib.example.com", "t", "h").is_ok());
+        assert!(DatabaseAdapter::with_token("http://127.0.0.1:3535", "t", "h").is_ok());
+        assert!(DatabaseAdapter::with_token("http://localhost:3535", "t", "h").is_ok());
+        assert!(DatabaseAdapter::with_token("http://[::1]:3535", "t", "h").is_ok());
+        // No credential, nothing to leak.
+        assert!(DatabaseAdapter::with_token("http://lib.example.com", "", "h").is_ok());
+    }
+
+    #[test]
+    fn keychain_sigil_is_rejected_with_the_sigil_error() {
+        let manifest = Manifest {
+            library: LibraryMeta {
+                name: "remote".into(),
+                library_id: Uuid::nil(),
+                description: None,
+            },
+            mode: LibraryMode::Database {
+                url: "https://lib.example.com".into(),
+                auth: "@signex-keychain:x".into(),
+            },
+            workflow: Default::default(),
+            users: Default::default(),
+            tables: Vec::new(),
+        };
+        let err = DatabaseAdapter::new(manifest)
+            .err()
+            .expect("sigil must be refused");
+        assert!(err.to_string().contains("not resolved"), "{err}");
+    }
+
+    #[test]
+    fn redirect_downgrade_to_cleartext_is_refused() {
+        let u = |s: &str| url::Url::parse(s).unwrap();
+        assert!(!redirect_hop_allowed(
+            &u("http://lib.example.com:8443/x"),
+            true
+        ));
+        assert!(redirect_hop_allowed(
+            &u("https://lib.example.com:8443/x"),
+            true
+        ));
+        assert!(redirect_hop_allowed(&u("http://127.0.0.1:3535/x"), true));
+    }
+
+    #[test]
+    fn tokenless_client_may_follow_same_origin_cleartext_redirect() {
+        let u = url::Url::parse("http://lib.example.com/tables/").unwrap();
+        assert!(redirect_hop_allowed(&u, false));
+        assert!(!redirect_hop_allowed(&u, true));
+    }
+
+    #[test]
+    fn refusal_error_does_not_leak_userinfo() {
+        let err =
+            DatabaseAdapter::with_token("http://alice:hunter2@lib.example.com:8080", "t", "h")
+                .err()
+                .expect("must refuse");
+        let msg = err.to_string();
+        assert!(!msg.contains("hunter2") && !msg.contains("alice"), "{msg}");
+        assert!(msg.contains("http://lib.example.com:8080"), "{msg}");
+    }
+
+    #[test]
+    fn keychain_sigil_reported_before_transport_error() {
+        let manifest = Manifest {
+            library: LibraryMeta {
+                name: "remote".into(),
+                library_id: Uuid::nil(),
+                description: None,
+            },
+            mode: LibraryMode::Database {
+                url: "http://lib.example.com".into(),
+                auth: "@signex-keychain:x".into(),
+            },
+            workflow: Default::default(),
+            users: Default::default(),
+            tables: Vec::new(),
+        };
+        let err = DatabaseAdapter::new(manifest).err().expect("refused");
+        assert!(err.to_string().contains("not resolved"), "{err}");
+    }
 
     use crate::library_file::{FORMAT_TOKEN, LibrarySection};
     use crate::manifest::{UsersConfig, WorkflowConfig};
