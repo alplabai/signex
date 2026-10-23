@@ -40,17 +40,17 @@ impl SnxTable for PcbFootprintRow {
         ]
     }
 
-    fn to_row(&self) -> Vec<String> {
-        vec![
+    fn to_row(&self) -> Result<Vec<String>, FormatError> {
+        Ok(vec![
             self.uuid.to_string(),
             self.ref_des.clone(),
             self.library.clone(),
             self.pos_x.to_string(),
             self.pos_y.to_string(),
-            format_f64(self.rotation),
+            format_f64("rotation", self.rotation)?,
             self.layer.clone(),
             self.value.clone(),
-        ]
+        ])
     }
 
     impl_unknown_columns_accessors!();
@@ -112,8 +112,8 @@ impl SnxTable for PcbPadRow {
         ]
     }
 
-    fn to_row(&self) -> Vec<String> {
-        vec![
+    fn to_row(&self) -> Result<Vec<String>, FormatError> {
+        Ok(vec![
             self.uuid.to_string(),
             self.footprint_ref.clone(),
             self.pin.clone(),
@@ -127,8 +127,8 @@ impl SnxTable for PcbPadRow {
             self.drill.to_string(),
             self.net_number.to_string(),
             self.net_name.clone(),
-            format_f64(self.roundrect_ratio),
-        ]
+            format_f64("roundrect_ratio", self.roundrect_ratio)?,
+        ])
     }
 
     impl_unknown_columns_accessors!();
@@ -182,8 +182,8 @@ impl SnxTable for PcbTrackRow {
         ]
     }
 
-    fn to_row(&self) -> Vec<String> {
-        vec![
+    fn to_row(&self) -> Result<Vec<String>, FormatError> {
+        Ok(vec![
             self.uuid.to_string(),
             self.net.to_string(),
             self.layer.clone(),
@@ -192,7 +192,7 @@ impl SnxTable for PcbTrackRow {
             self.start_y.to_string(),
             self.end_x.to_string(),
             self.end_y.to_string(),
-        ]
+        ])
     }
 
     impl_unknown_columns_accessors!();
@@ -240,8 +240,8 @@ impl SnxTable for PcbViaRow {
         ]
     }
 
-    fn to_row(&self) -> Vec<String> {
-        vec![
+    fn to_row(&self) -> Result<Vec<String>, FormatError> {
+        Ok(vec![
             self.uuid.to_string(),
             self.net.to_string(),
             self.pos_x.to_string(),
@@ -250,7 +250,7 @@ impl SnxTable for PcbViaRow {
             self.diameter.to_string(),
             self.layers.clone(),
             self.via_type.clone(),
-        ]
+        ])
     }
 
     impl_unknown_columns_accessors!();
