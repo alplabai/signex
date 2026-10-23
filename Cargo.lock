@@ -5330,6 +5330,7 @@ dependencies = [
  "iced",
  "iced_aw",
  "image",
+ "libc",
  "log",
  "num-traits",
  "rfd",

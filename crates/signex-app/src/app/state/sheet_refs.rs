@@ -18,10 +18,9 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
+use super::reference_policy::{Share, is_refused, path_is_refused, share_of};
 use super::scope::{CaseFold, KeyMap, ReachSets, path_key_with};
-use super::sheet_read::{
-    WalkLimits, is_remote_or_device, path_is_remote_or_device, read_child_refs,
-};
+use super::sheet_read::{WalkLimits, read_child_refs};
 use super::volume_case::{IgnoresCase, VolumeCase};
 use super::{DocumentState, ProjectId, scope};
 use crate::app::project_sheets::{normalize_clamped, ownership_reference};
@@ -125,6 +124,9 @@ pub(crate) struct SheetRefInputs {
     /// Other paths ownership compares later (dirty documents, project files,
     /// library files), so they are keyed by file identity too.
     extra: Vec<PathBuf>,
+    /// UNC shares the open projects sit on: a reference on one of them is
+    /// followed, any other network or device name is refused.
+    trusted: Vec<Share>,
 }
 
 /// The real spelling of `path`, remembered in `keys`. Disk IO.
@@ -231,6 +233,7 @@ impl SheetRefInputs {
             roots,
             projects,
             extra,
+            trusted,
         } = self;
         let mut keys = KeyMap::lexical(fold);
         let mut volume = VolumeCase::new(ignores_case);
@@ -248,10 +251,12 @@ impl SheetRefInputs {
         let mut pending: Vec<PathBuf> = Vec::new();
         let mut truncated = false;
         for root in &roots {
-            if path_is_remote_or_device(root) {
+            if path_is_refused(root, &trusted) {
                 refuse_remote(&mut unreadable, &root.to_string_lossy());
-                // Keyed lexically only: canonicalising it is the IO refused.
-                walked.insert(keys.lexical_key(root));
+                // Never canonicalised (that is the IO refused), so the key the
+                // staleness check computes is the one recorded by `identity_key`
+                // if anything else keyed this path, the lexical one if not.
+                walked.insert(keys.key(root));
             } else {
                 pending.push(normalize_clamped(root));
             }
@@ -286,9 +291,9 @@ impl SheetRefInputs {
                 let Some(next) = ownership_reference(&dir, child) else {
                     continue;
                 };
-                if is_remote_or_device(child) {
+                if is_refused(child, &trusted) {
                     refuse_remote(&mut unreadable, child);
-                    walked.insert(keys.lexical_key(&next));
+                    walked.insert(keys.key(&next));
                 } else {
                     pending.push(next);
                 }
@@ -399,6 +404,11 @@ impl DocumentState {
                 .collect(),
             projects: self.projects.iter().map(|p| p.id).collect(),
             extra,
+            trusted: self
+                .projects
+                .iter()
+                .filter_map(|p| share_of(&p.path))
+                .collect(),
         }
     }
 
@@ -639,6 +649,7 @@ mod tests {
             roots: vec![root.clone()],
             projects: Vec::new(),
             extra: Vec::new(),
+            trusted: Vec::new(),
         };
 
         let resolved = inputs.resolve(CaseFold::Preserve, |_| false);
@@ -663,6 +674,7 @@ mod tests {
             roots: vec![root],
             projects: Vec::new(),
             extra: Vec::new(),
+            trusted: Vec::new(),
         };
 
         let resolved = inputs.resolve(CaseFold::Fold, |_| false);
@@ -694,6 +706,7 @@ mod tests {
             roots: vec![root],
             projects: Vec::new(),
             extra: Vec::new(),
+            trusted: Vec::new(),
         };
 
         let resolved = inputs.resolve(CaseFold::Preserve, |_| false);
@@ -724,6 +737,7 @@ mod tests {
             roots: vec![root],
             projects: Vec::new(),
             extra: Vec::new(),
+            trusted: Vec::new(),
         };
 
         let resolved = inputs.resolve(CaseFold::Preserve, |_| false);
@@ -751,6 +765,7 @@ mod tests {
             roots: vec![root.clone()],
             projects: Vec::new(),
             extra: Vec::new(),
+            trusted: Vec::new(),
         };
 
         let resolved = inputs.resolve(CaseFold::Preserve, |_| false);
@@ -859,6 +874,35 @@ mod tests {
         assert_eq!(scan.kept.len(), 1, "{:?}", scan.kept);
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn a_refused_reference_the_resolve_also_keyed_is_current_on_the_next_check() {
+        // `//host/share/..` is refused as a network name on every host, but
+        // on Unix it is also a real local file whose canonical spelling
+        // differs (here through a symlink). The staleness check must find
+        // the refused entry under the same key it computes for it.
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let base = tmp.path().canonicalize().expect("canonical tmp");
+        std::fs::create_dir_all(base.join("real")).expect("mkdir real");
+        std::os::unix::fs::symlink(base.join("real"), base.join("link")).expect("symlink");
+        let a_dir = base.join("A");
+        std::fs::create_dir_all(&a_dir).expect("mkdir A");
+        let other = base.join("link").join("y.snxsch");
+        let reference = format!("/{}", other.display());
+        write_sheet(&a_dir.join("a.snxsch"), &[reference.as_str()]);
+        let (mut app, _task) = crate::app::Signex::new();
+        let docs = &mut app.document_state;
+        docs.projects.push(loaded_project(1, &a_dir, "a.snxsch"));
+        docs.dirty_paths.insert(other);
+
+        let refs = docs
+            .sheet_ref_inputs()
+            .resolve(CaseFold::Preserve, |_| false);
+
+        assert_eq!(refs.unreadable.len(), 1, "{:?}", refs.unreadable);
+        assert_eq!(docs.stale_causes(&refs), Vec::new(), "re-resolve loop");
+    }
+
     /// Resolve a walk whose only root is `root`.
     fn resolve_root(root: &Path, limits: WalkLimits) -> SheetRefs {
         SheetRefInputs {
@@ -866,6 +910,7 @@ mod tests {
             roots: vec![root.to_path_buf()],
             projects: Vec::new(),
             extra: Vec::new(),
+            trusted: Vec::new(),
         }
         .resolve_within(CaseFold::Preserve, |_| false, limits)
     }
@@ -919,6 +964,68 @@ mod tests {
 
         assert_eq!(resolved.unreadable.len(), 2, "{:?}", resolved.unreadable);
         assert_discard_blocked_by(&resolved, "network or device");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_double_slash_rooted_project_is_walked_not_refused_on_unix() {
+        // `//` is UNC to the text classifier on every host, so the project's
+        // own share is trusted and its sheets are read; another share is not.
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let base = tmp.path().canonicalize().expect("canonical tmp");
+        write_sheet(
+            &base.join("x.snxsch"),
+            &["y.snxsch", "//elsewhere/share/z.snxsch"],
+        );
+        write_sheet(&base.join("y.snxsch"), &[]);
+        let root = PathBuf::from(format!("/{}", base.join("x.snxsch").display()));
+        let trusted: Vec<Share> = share_of(&root).into_iter().collect();
+        assert_eq!(trusted.len(), 1, "{root:?} names a share");
+
+        let resolved = SheetRefInputs {
+            loaded: HashMap::new(),
+            roots: vec![root],
+            projects: Vec::new(),
+            extra: Vec::new(),
+            trusted,
+        }
+        .resolve(CaseFold::Preserve, |_| false);
+
+        assert_eq!(resolved.unreadable.len(), 1, "{:?}", resolved.unreadable);
+        assert_eq!(
+            resolved.unreadable[0].path,
+            PathBuf::from("//elsewhere/share/z.snxsch")
+        );
+        assert!(resolved.disk.contains_key(&base.join("y.snxsch")));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_unc_project_on_its_own_share_is_walked_on_windows() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let local = tmp.path().join("x.snxsch");
+        write_sheet(&local, &[]);
+        // The administrative share of the drive the temp dir is on.
+        let text = local.to_string_lossy().into_owned();
+        let (drive, rest) = text.split_at(2);
+        let root = PathBuf::from(format!(r"\\localhost\{}${rest}", &drive[..1]));
+        if std::fs::metadata(&root).is_err() {
+            eprintln!("skipped: no administrative share for {root:?}");
+            return;
+        }
+        let trusted: Vec<Share> = share_of(&root).into_iter().collect();
+
+        let resolved = SheetRefInputs {
+            loaded: HashMap::new(),
+            roots: vec![root],
+            projects: Vec::new(),
+            extra: Vec::new(),
+            trusted,
+        }
+        .resolve(CaseFold::Fold, |_| true);
+
+        assert!(resolved.unreadable.is_empty(), "{:?}", resolved.unreadable);
+        assert_eq!(resolved.disk.len(), 1, "{:?}", resolved.disk.keys());
     }
 
     #[cfg(unix)]
@@ -1041,6 +1148,7 @@ mod tests {
             roots: vec![root.clone()],
             projects: Vec::new(),
             extra: Vec::new(),
+            trusted: Vec::new(),
         };
 
         let resolved = inputs.resolve(CaseFold::Preserve, |_| false);

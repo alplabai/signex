@@ -7,6 +7,7 @@ use crate::dock::DockArea;
 use super::TabInfo;
 
 mod interaction;
+mod reference_policy;
 pub(crate) mod scope;
 mod sheet_read;
 pub(crate) mod sheet_refs;

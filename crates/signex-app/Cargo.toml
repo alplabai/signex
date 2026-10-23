@@ -97,6 +97,13 @@ git2 = { workspace = true }
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1"
 
+[target.'cfg(unix)'.dependencies]
+# O_NONBLOCK for opening an untrusted sheet file (`app/state/sheet_read.rs`):
+# a FIFO swapped in after the regular-file check must not hang the open.
+# Already in the dependency graph (tokio, winit and git2 pull it); only
+# the constant is used, no `unsafe`.
+libc = "0.2"
+
 [target.'cfg(windows)'.dependencies]
 # DwmSetWindowAttribute for DWMWA_WINDOW_CORNER_PREFERENCE — used by
 # `src/chrome.rs` to restore Windows 11 rounded corners on the borderless

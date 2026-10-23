@@ -8,7 +8,7 @@
 //! (#756) switches Discard All off: the safe side.
 //!
 //! Local `../` and absolute references are NOT refused: ownership needs them
-//! (#741).
+//! (#741). Which network names are refused is [`super::reference_policy`].
 
 use std::io::Read;
 use std::path::Path;
@@ -36,52 +36,38 @@ impl Default for WalkLimits {
     }
 }
 
-/// True when `reference` names a network share, a device namespace or a
-/// verbatim path: UNC (`\\host\share`, `//host/share`), `\\.\` and `\\?\`
-/// forms, NT `\??\`, or any non-drive Windows prefix.
-///
-/// Decided on the text, so it answers the same on every host: a UNC name is
-/// refused on Linux too, where it would only be an odd file name, instead of
-/// depending on the platform the sheet is opened on. Opening such a path on
-/// Windows sends the user's NTLM credentials to the named host.
-pub(crate) fn is_remote_or_device(reference: &str) -> bool {
-    let text = reference.trim();
-    let is_separator = |c: char| matches!(c, '/' | '\\');
-    let mut chars = text.chars();
-    if let (Some(a), Some(b)) = (chars.next(), chars.next())
-        && is_separator(a)
-        && is_separator(b)
+/// Open `path` for reading; on Unix with `O_NONBLOCK`, so a FIFO or device
+/// swapped in after the metadata check cannot hang the open.
+fn open_nonblocking(path: &Path) -> std::io::Result<std::fs::File> {
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
     {
-        return true;
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NONBLOCK);
     }
-    if text.starts_with("\\??\\") || text.starts_with("/??/") {
-        return true;
-    }
-    use std::path::{Component, Prefix};
-    matches!(
-        Path::new(text).components().next(),
-        Some(Component::Prefix(p)) if !matches!(p.kind(), Prefix::Disk(_))
-    )
-}
-
-/// [`is_remote_or_device`] for a path that has not been normalised yet.
-pub(crate) fn path_is_remote_or_device(path: &Path) -> bool {
-    is_remote_or_device(&path.to_string_lossy())
+    options.open(path)
 }
 
 /// `child_sheets` filenames of the sheet at `path`. A missing file has none;
 /// a file that is not a regular file, is larger than `max_bytes`, or cannot be
 /// read or parsed returns why.
 pub(crate) fn read_child_refs(path: &Path, max_bytes: u64) -> Result<Vec<String>, String> {
-    let meta = match std::fs::metadata(path) {
-        Ok(meta) => meta,
+    match std::fs::metadata(path) {
+        Ok(meta) if meta.is_file() => {}
+        Ok(_) => return Err("is not a regular file".to_string()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(e) => return Err(format!("could not be read: {e}")),
-    };
-    if !meta.is_file() {
-        return Err("is not a regular file".to_string());
     }
-    let file = std::fs::File::open(path).map_err(|e| format!("could not be read: {e}"))?;
+    // The path may have been swapped for a FIFO since the check above, and
+    // opening a FIFO that has no writer blocks forever: open without
+    // blocking, then decide on the handle that was actually opened.
+    let file = open_nonblocking(path).map_err(|e| format!("could not be read: {e}"))?;
+    match file.metadata() {
+        Ok(meta) if meta.is_file() => {}
+        Ok(_) => return Err("is not a regular file".to_string()),
+        Err(e) => return Err(format!("could not be read: {e}")),
+    }
     // One byte past the limit tells an oversized file from one that fits
     // exactly; the metadata length alone could be stale or a lie.
     let mut text = String::new();
@@ -106,37 +92,6 @@ pub(crate) fn read_child_refs(path: &Path, max_bytes: u64) -> Result<Vec<String>
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn network_device_and_verbatim_references_are_refused_on_every_host() {
-        for reference in [
-            r"\\attacker\share\x.snxsch",
-            "//attacker/share/x.snxsch",
-            r"\\.\COM1",
-            r"\\?\C:\x.snxsch",
-            r"\\?\UNC\attacker\share\x.snxsch",
-            r"\??\C:\x.snxsch",
-            r"/\attacker\share",
-            "  \\\\padded\\share  ",
-        ] {
-            assert!(is_remote_or_device(reference), "{reference}");
-        }
-    }
-
-    #[test]
-    fn local_relative_and_absolute_references_are_followed() {
-        for reference in [
-            "child.snxsch",
-            "../other/x.snxsch",
-            "/work/x.snxsch",
-            "./x.snxsch",
-            r"C:\work\x.snxsch",
-            "C:/work/x.snxsch",
-            "/dev/zero",
-        ] {
-            assert!(!is_remote_or_device(reference), "{reference}");
-        }
-    }
 
     #[test]
     fn an_oversized_sheet_is_unreadable_and_one_at_the_limit_is_read() {
@@ -176,6 +131,23 @@ mod tests {
         let err = read_child_refs(Path::new("/dev/zero"), MAX_SHEET_BYTES).expect_err("device");
 
         assert!(err.contains("not a regular file"), "{err}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn opening_a_fifo_with_no_writer_does_not_block_and_is_not_a_file() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let fifo = tmp.path().join("pipe.snxsch");
+        let made = std::process::Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .expect("mkfifo runs");
+        assert!(made.success());
+
+        // A plain `File::open` here blocks until a writer appears.
+        let file = open_nonblocking(&fifo).expect("opens without a writer");
+
+        assert!(!file.metadata().expect("handle metadata").is_file());
     }
 
     #[cfg(unix)]
