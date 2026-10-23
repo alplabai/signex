@@ -386,6 +386,39 @@ fn empty_pcb_board() -> signex_types::pcb::PcbBoard {
     }
 }
 
+/// #862 review: a point hovered in an undocked window belongs to that
+/// window's document, so `Home` in the main window must not centre the main
+/// view on it. The undocked event swaps `active_path` but not `active_tab`,
+/// so keying the cursor on the active tab alone would let it through.
+#[test]
+fn a_point_hovered_in_an_undocked_window_does_not_centre_the_main_view() {
+    let (mut app, _path) = app_with(vec![symbol(uuid::Uuid::new_v4(), "R1", 0.0)]);
+    app.interaction_state.active_canvas().set_viewport(VIEWPORT);
+    let other = add_second_sheet(&mut app);
+    let window_id = iced::window::Id::unique();
+    let _ = app.update(Message::Window(WindowMsg::UndockedTabOpened {
+        path: other,
+        id: window_id,
+    }));
+    let _ = app.update(Message::CanvasEventInWindow {
+        window_id,
+        event: CanvasEvent::CursorAt {
+            x: 50.0,
+            y: 30.0,
+            zoom_pct: 100.0,
+        },
+    });
+    let before = app.interaction_state.active_canvas().live_camera();
+
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::CenterAtCursor));
+
+    assert_eq!(
+        app.interaction_state.active_canvas().live_camera(),
+        before,
+        "the main view must not move to a point from the undocked window"
+    );
+}
+
 /// #525 review: `Home` typed in an undocked sheet's window centres that
 /// window's view on its own cursor point, and leaves the main window alone.
 /// The plain `CanvasEvent` the command resolves to always targets the main
