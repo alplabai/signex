@@ -4,9 +4,7 @@
 //! Left side: tree of settings categories.
 //! Right side: settings panel for the selected category.
 
-use crate::render_config::{
-    GridStyle, LabelStyle, MultisheetStyle, PinSelectionMode, PowerPortStyle,
-};
+use crate::render_config::{GridStyle, PinSelectionMode};
 use iced::widget::{Column, Space, button, column, container, row, scrollable, svg, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use signex_types::theme::ThemeId;
@@ -110,12 +108,6 @@ pub enum PrefMsg {
     DraftTheme(ThemeId),
     /// Update the draft UI font (not applied until Save).
     DraftFont(String),
-    /// Update draft power port drawing style (applies as live preview).
-    DraftPowerPortStyle(PowerPortStyle),
-    /// Update draft global/hier label drawing style (applies as live preview).
-    DraftLabelStyle(LabelStyle),
-    /// Update draft hierarchical-sheet drawing style (applies as live preview).
-    DraftMultisheetStyle(MultisheetStyle),
     /// Update draft visible-grid render style (applies as live preview).
     DraftGridStyle(GridStyle),
     /// Toggle the experimental PCB GPU render. Applies as live preview,
@@ -267,9 +259,6 @@ pub struct PrefsView<'a> {
     pub draft_theme: ThemeId,
     pub saved_theme: ThemeId,
     pub draft_font: &'a str,
-    pub draft_power_port_style: PowerPortStyle,
-    pub draft_label_style: LabelStyle,
-    pub draft_multisheet_style: MultisheetStyle,
     pub draft_grid_style: GridStyle,
     pub draft_pcb_gpu_render: bool,
     pub draft_symbol_grid_size_mm: f32,
