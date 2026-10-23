@@ -414,11 +414,16 @@ impl LocalGitAdapter {
     }
 
     fn refuse_if_skipped_file_mentions(&self, uuid: Uuid) -> Result<(), LibraryError> {
-        let needle = uuid.to_string();
+        let hyphenated = uuid.hyphenated().to_string();
+        let simple = uuid.simple().to_string();
         for p in self.symbol_file_problems() {
+            // A file we cannot read may hold this symbol, so treat it as a match.
             let mentions = fs::read(&p.path)
-                .map(|bytes| String::from_utf8_lossy(&bytes).contains(&needle))
-                .unwrap_or(false);
+                .map(|bytes| {
+                    let text = String::from_utf8_lossy(&bytes).to_lowercase();
+                    text.contains(&hyphenated) || text.contains(&simple)
+                })
+                .unwrap_or(true);
             if mentions {
                 return Err(LibraryError::Backend(format!(
                     "symbol {uuid} appears in unreadable symbol file {} ({}); \

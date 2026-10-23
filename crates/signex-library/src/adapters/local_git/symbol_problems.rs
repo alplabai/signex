@@ -26,7 +26,7 @@ impl SymbolFileProblem {
     pub(super) fn new(path: PathBuf, error: &str) -> Self {
         let one_line = error.split_whitespace().collect::<Vec<_>>().join(" ");
         let error = if one_line.chars().count() > MAX_ERROR_CHARS {
-            let cut: String = one_line.chars().take(MAX_ERROR_CHARS).collect();
+            let cut: String = one_line.chars().take(MAX_ERROR_CHARS - 1).collect();
             format!("{cut}…")
         } else {
             one_line
@@ -106,6 +106,6 @@ mod tests {
         let long = format!("line one\n  line two\n{}", "x".repeat(900));
         let p = problem("a.snxsym", &long);
         assert!(!p.error.contains('\n'));
-        assert!(p.error.chars().count() <= MAX_ERROR_CHARS + 1);
+        assert!(p.error.chars().count() <= MAX_ERROR_CHARS);
     }
 }

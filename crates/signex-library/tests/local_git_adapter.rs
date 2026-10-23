@@ -763,6 +763,29 @@ fn save_refuses_when_unreadable_file_may_hold_the_symbol() {
     assert_eq!(std::fs::read(&bad_path).unwrap(), bad_bytes);
 }
 
+#[test]
+fn save_refuses_when_unreadable_file_holds_the_uuid_in_another_spelling() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "ForkCase", false);
+    let symbols_dir = file.parent().unwrap().join("symbols");
+    std::fs::create_dir_all(&symbols_dir).unwrap();
+    let sym = fixture_symbol("Y");
+    let spellings = [
+        sym.uuid.hyphenated().to_string().to_uppercase(),
+        sym.uuid.simple().to_string(),
+    ];
+    for (i, spelled) in spellings.iter().enumerate() {
+        let bad_path = symbols_dir.join(format!("y{i}.snxsym"));
+        let bad_bytes = format!("format = \"newer/9\"\nuuid = \"{spelled}\"\n").into_bytes();
+        std::fs::write(&bad_path, &bad_bytes).unwrap();
+
+        let err = adapter.save_symbol(sym.clone(), "add Y").unwrap_err();
+        assert!(err.to_string().contains(&format!("y{i}.snxsym")), "{err}");
+        assert_eq!(std::fs::read(&bad_path).unwrap(), bad_bytes);
+        std::fs::remove_file(&bad_path).unwrap();
+    }
+}
+
 // ── Row CRUD ──────────────────────────────────────────────────────────────
 
 /// Build a fixture row with a given internal PN and class. The `lib_id`
