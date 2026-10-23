@@ -272,8 +272,16 @@ impl CanvasSlot {
         self.camera_mut().zoom_at(centre, notch, bounds)
     }
 
-    /// Fit the camera to show the schematic content.
-    pub fn fit_to_paper(&mut self) {
+    /// Recentre the view on world point `(x, y)` without changing zoom
+    /// (View > Center View At Cursor, #525).
+    pub fn center_on_world(&self, x: f32, y: f32) {
+        let bounds = self.viewport.get();
+        self.camera_mut().center_on(iced::Point::new(x, y), bounds);
+    }
+
+    /// Fit the camera to the extents of the sheet's objects (symbols, wires,
+    /// labels, ...) plus a 10 mm margin.
+    pub fn fit_to_content(&mut self) {
         if let Some(snapshot) = self.active_snapshot()
             && let Some(bounds) = snapshot.content_bounds()
         {
@@ -738,6 +746,8 @@ pub enum CanvasEvent {
     },
     CursorMoved,
     FitAll,
+    /// Recentre on the last reported cursor position, keeping the zoom.
+    CenterAtCursor,
     /// Left-click at world coordinates — triggers hit-testing or tool action.
     Clicked {
         world_x: f64,

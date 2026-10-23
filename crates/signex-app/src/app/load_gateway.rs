@@ -393,7 +393,7 @@ impl Signex {
         &mut self,
         schematic: Option<SchematicSheet>,
         clear_bg_cache: bool,
-        fit_to_paper: bool,
+        fit_to_content: bool,
         refresh_panel_ctx: bool,
     ) {
         if let Some(schematic) = schematic {
@@ -404,8 +404,8 @@ impl Signex {
         }
         self.sync_canvas_from_visible_schematic(crate::schematic_runtime::RenderInvalidation::FULL);
 
-        if fit_to_paper {
-            self.interaction_state.active_canvas_mut().fit_to_paper();
+        if fit_to_content {
+            self.interaction_state.active_canvas_mut().fit_to_content();
         }
         if clear_bg_cache {
             self.interaction_state.active_canvas_mut().clear_bg_cache();

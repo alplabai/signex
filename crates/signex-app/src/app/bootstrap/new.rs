@@ -180,6 +180,7 @@ impl Signex {
                 snap_enabled: crate::fonts::read_snap_enabled_pref(),
                 cursor_x: 0.0,
                 cursor_y: 0.0,
+                cursor_document: None,
                 zoom: 100.0,
                 grid_size_mm,
                 visible_grid_mm: 1.27,
