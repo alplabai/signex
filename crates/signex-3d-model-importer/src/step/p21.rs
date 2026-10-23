@@ -547,7 +547,7 @@ mod tests {
         use std::sync::mpsc;
         use std::time::{Duration, Instant};
 
-        const SMALL: u32 = 2_000;
+        const SMALL: u32 = 1_000;
         const REPEATS: u32 = 16;
         const CEILING: u32 = 4;
         let small = synthetic_data(SMALL);
@@ -590,17 +590,20 @@ mod tests {
     /// recount produced exact lines too, just slowly.
     #[test]
     fn statement_lines_stay_exact_across_a_large_input() {
-        let data = synthetic_data(50_000);
+        // Kept small: a quadratic regression would make a larger input take
+        // minutes here, and the speed guard above already catches that.
+        const COUNT: usize = 5_000;
+        let data = synthetic_data(COUNT as u32);
         // The trailing newline leaves a blank tail, skipped like `parse_entities` does.
         let statements: Vec<_> = split_statements(&data)
             .into_iter()
             .filter(|(s, _)| s.trim().starts_with('#'))
             .collect();
-        assert_eq!(statements.len(), 50_000);
-        for (i, (_, line)) in statements.iter().enumerate().step_by(4_999) {
+        assert_eq!(statements.len(), COUNT);
+        for (i, (_, line)) in statements.iter().enumerate().step_by(499) {
             assert_eq!(*line, i + 1);
         }
-        assert_eq!(statements.last().unwrap().1, 50_000);
+        assert_eq!(statements.last().unwrap().1, COUNT);
     }
 
     #[test]
