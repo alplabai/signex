@@ -315,6 +315,11 @@ pub struct Zone {
     pub layer: String,
     #[serde(default)]
     pub outline: Vec<Point>,
+    /// Cut-outs inside `outline` (keep-out islands): each entry is a closed
+    /// polygon the zone does not fill (#818). Not written when empty, so a
+    /// zone without holes keeps its exact pre-#818 bytes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub holes: Vec<Vec<Point>>,
     #[serde(default)]
     pub priority: u32,
     #[serde(default)]
