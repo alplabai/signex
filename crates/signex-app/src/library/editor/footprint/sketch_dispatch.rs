@@ -327,16 +327,22 @@ fn apply_edit_inner(footprint: &mut Footprint, edit: SketchEdit) {
     match edit {
         SketchEdit::AddEntity(e) => sketch.entities.push(*e),
         SketchEdit::DeleteEntity(id) => {
-            sketch.entities.retain(|e| e.id != id);
-            // Drop dangling constraint refs — coarse rule, drop any
-            // constraint that mentions the deleted ID via the kind's
-            // payload. Most kinds carry one or two SketchEntityIds;
-            // we use Debug to stringify for a simple text search.
-            // This is intentionally simple for v0.13; Phase 6 wires
-            // a structured constraint-rewrite pass.
-            sketch
-                .constraints
-                .retain(|c| !format!("{:?}", c.kind).contains(&id.to_string()));
+            // Structural cascade: lines/arcs/circles built on the entity
+            // and every constraint naming a removed entity go with it, in
+            // this one mutation (one undo step).
+            let removed = sketch.remove_entity_cascade(id);
+            if removed.entities.len() > 1 || !removed.constraints.is_empty() {
+                crate::diagnostics::log_info(format!(
+                    "Deleting a sketch entity also removed {} dependent entit{} and {} constraint(s)",
+                    removed.entities.len().saturating_sub(1),
+                    if removed.entities.len() == 2 {
+                        "y"
+                    } else {
+                        "ies"
+                    },
+                    removed.constraints.len()
+                ));
+            }
         }
         SketchEdit::MovePoint { id, dx, dy } => {
             for ent in sketch.entities.iter_mut() {

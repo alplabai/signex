@@ -184,6 +184,20 @@ fn run_lm(
 ) -> Result<SolveResult, Box<LmFailure>> {
     let started = Instant::now();
     let packed = pack(sketch);
+    let dangling = sketch.dangling_refs();
+    if !dangling.is_empty() {
+        tracing::error!(
+            target: "signex::sketch",
+            missing = dangling.len(),
+            "sketch references entities that do not exist; solve refused"
+        );
+        return Err(Box::new(LmFailure {
+            error: SolveError::DanglingReference(dangling),
+            state: packed.vector,
+            index: packed.index,
+            stalled: false,
+        }));
+    }
     let mut state = packed.vector.clone();
     if perturb {
         let extent = state.iter().fold(1.0_f64, |m, v| m.max(v.abs()));
