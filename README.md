@@ -71,7 +71,8 @@ formats one-way. Run it once against your project; open the resulting
 - Advanced shape tools — Line, Rectangle, Circle, Arc (3-click), Polygon
   (click-by-click), editable drawing Properties with live preview
 - Copy/paste, undo/redo (100 levels), save to the native `.snxsch` /
-  `.snxprj` format (TOML envelope + TSV bulk blocks, line-diffable in git)
+  `.snxprj` formats (`.snxsch`: TOML envelope + TSV bulk blocks, line-diffable
+  in git; `.snxprj`: JSON, see [why](docs/architecture/snxprj-format.md))
 - 7 built-in themes with customizable theme editor
 - Altium-style docking panels with drag-to-undock/dock
 - Active Bar — 13-button floating toolbar with dropdown menus
@@ -182,7 +183,7 @@ signex/
 
 **Design principles:**
 
-- **Native `.snx*` formats first.** `.snxsch` / `.snxpcb` / `.snxprj` are the canonical format (TOML envelope + TSV bulk blocks, line-diffable, ~5× smaller than JSON). One-way KiCad → Signex import is an optional, independently-distributed companion tool.
+- **Native `.snx*` formats first.** `.snxsch` / `.snxpcb` / `.snxprj` are the canonical formats (TOML envelope + TSV bulk blocks, line-diffable, ~5× smaller than JSON; the `.snxprj` project file is the one JSON exception, see [docs/architecture/snxprj-format.md](docs/architecture/snxprj-format.md)). One-way KiCad → Signex import is an optional, independently-distributed companion tool.
 - **Elm architecture (MVU).** iced's `state → view → Message → update` cycle; `view` is pure, `update` is the only mutation site and never blocks — all IO returns as a `Task`. No process-global mutable state.
 - **Domain logic in domain crates.** Types and engines below `signex-app` carry zero `iced`/`wgpu` deps (Cargo-enforced); connectivity is derived once in `signex-net` and read everywhere else, never re-derived.
 - **Multi-window by default.** Built on `iced::daemon`; every undocked tab gets its own engine + canvas keyed by window id, so two schematics can be edited in parallel without cross-talk.

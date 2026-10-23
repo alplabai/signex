@@ -18,6 +18,10 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
+### Changed — docs
+
+- **Why `.snxprj` is JSON (#384)** — new `docs/architecture/snxprj-format.md` records the history (JSON persistence landed after the v0.9 TOML+TSV cutover, with no recorded reason), the constraints that hold today, and the open gaps (unknown keys are dropped on save, no format token). The README no longer describes `.snxprj` as TOML+TSV, and the `format/mod.rs` and `ProjectData` docs now state the reason and link the new page.
+
 ### Added
 
 - **Unknown TSV columns are preserved (#315)** — a `.snxsch` / `.snxpcb` bulk block with a column this build does not know no longer fails to load with a header mismatch; columns resolve by name, the extra cells stay attached to their row through an edit, and they are re-emitted after the known columns (in their original relative order) on save. A missing known column and a repeated column name still error. A block may carry at most 256 foreign columns, each name at most 256 bytes; a file over either cap fails to load, and a save fails (before any byte is written, the previous file stays intact) on the same caps or when a foreign column repeats a known column name, each with an error naming the offending column.
