@@ -324,7 +324,7 @@ mod tests {
     fn lookup_by_url_rejects_lookalike_host_offline() {
         // Dot-anchored host check returns before any network call.
         let a = LcscAdapter::with_base_url("http://unused.invalid", None);
-        let url = Url::parse("https://evillcsc.com/x").unwrap();
+        let url = Url::parse("https://evillcsc.com/product-detail/X_C17414.html").unwrap();
         assert!(a.lookup_by_url(&url).unwrap().is_none());
     }
 }
