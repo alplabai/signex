@@ -290,7 +290,13 @@ impl Signex {
                     .interaction_state
                     .project_tree_context_menu
                     .as_ref()
-                    .and_then(|m| m.path.clone())
+                    .and_then(|m| m.key.as_deref())
+                    .and_then(|key| {
+                        signex_widgets::tree_view::resolve_path(
+                            self.document_state.panel_ctx.project_tree.as_slice(),
+                            key,
+                        )
+                    })
                     .unwrap_or_default();
                 add_new_entries(tid, target)
             }

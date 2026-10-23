@@ -37,6 +37,10 @@ impl Signex {
         self.document_state.panel_ctx.grid_size_mm = self.ui_state.grid_size_mm;
         self.document_state.panel_ctx.visible_grid_mm = self.ui_state.visible_grid_mm;
         self.document_state.panel_ctx.snap_hotspots = self.ui_state.snap_hotspots;
+        self.interaction_state.pcb_canvas.set_grid(
+            self.ui_state.grid_visible,
+            self.ui_state.visible_grid_mm as f64,
+        );
         self.sync_diagnostics_panel_ctx();
 
         // Re-resolve the History panel's active path; on change, bump
@@ -211,6 +215,22 @@ impl Signex {
         }
     }
 
+    /// UI chrome tokens for a given theme id. `Custom` reads the loaded
+    /// custom theme and falls back to Signex when none is loaded — the
+    /// token twin of [`Self::canvas_colors_for`], so a panel refresh
+    /// cannot reset a Custom theme to defaults (#110).
+    pub(crate) fn tokens_for(&self, id: ThemeId) -> signex_types::theme::ThemeTokens {
+        if id == ThemeId::Custom {
+            self.ui_state
+                .custom_theme
+                .as_ref()
+                .map(|custom_theme| custom_theme.tokens)
+                .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::Signex))
+        } else {
+            signex_types::theme::theme_tokens(id)
+        }
+    }
+
     /// Settings the schematic canvas renders with, read fresh from app
     /// state on every frame (#631).
     ///
@@ -269,6 +289,40 @@ impl Signex {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// #682 — bootstrap seeds the PCB canvas from the loaded grid state, so
+    /// a saved grid-off (or a non-default size) holds before any update.
+    #[test]
+    fn bootstrap_seeds_pcb_canvas_grid_from_ui_state() {
+        let (app, _t) = Signex::new();
+
+        assert_eq!(
+            app.interaction_state.pcb_canvas.grid_visible,
+            app.ui_state.grid_visible
+        );
+        assert_eq!(
+            app.interaction_state.pcb_canvas.visible_grid_mm,
+            app.ui_state.visible_grid_mm as f64
+        );
+    }
+
+    /// #682 — the PCB canvas used to keep its own grid fields that nothing
+    /// ever wrote after construction, so the Grid Toggle and Visible Grid
+    /// Size never reached it. `finish_update` now hands them over.
+    #[test]
+    fn pcb_canvas_follows_grid_toggle_and_visible_size() {
+        let (mut app, _t) = Signex::new();
+        app.ui_state.grid_visible = false;
+        app.ui_state.visible_grid_mm = 5.08;
+
+        let _ = app.finish_update();
+
+        assert!(!app.interaction_state.pcb_canvas.grid_visible);
+        assert_eq!(
+            app.interaction_state.pcb_canvas.visible_grid_mm,
+            5.08_f32 as f64
+        );
+    }
 
     /// #631 — the canvas used to own copies of these settings, written by
     /// whichever handler changed them. Most of those sites wrote
