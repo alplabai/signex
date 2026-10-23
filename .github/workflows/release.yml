@@ -34,12 +34,18 @@ jobs:
     name: Test (workspace)
     needs: verify-version
     runs-on: ubuntu-latest
+    # Read-only: dependency build.rs scripts run here and must not hold a
+    # write token.
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v5
         with:
           submodules: false
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
       - uses: Swatinem/rust-cache@v2
+      # apt list + toolchain pin mirror ci.yml's `test · workspace` job; keep in sync.
       - name: Install Linux dependencies
         run: |
           sudo grep -rlZ 'packages.microsoft.com' /etc/apt/sources.list.d/ 2>/dev/null \

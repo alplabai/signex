@@ -23,6 +23,25 @@ fn is_loopback_bind(bind: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// HI-1 + persistence policy: a non-loopback bind requires both an API token
+/// and a persistent database URL. Loopback dev mode needs neither.
+fn check_bind_policy(bind: &str, token_set: bool, db_url_set: bool) -> anyhow::Result<()> {
+    if is_loopback_bind(bind) {
+        return Ok(());
+    }
+    if !token_set {
+        anyhow::bail!(
+            "refusing to bind to non-loopback address `{bind}` without `{API_TOKEN_ENV}` set;              set the env var or bind to 127.0.0.1 / [::1]"
+        );
+    }
+    if !db_url_set {
+        anyhow::bail!(
+            "refusing to bind to non-loopback address `{bind}` with ephemeral in-memory storage;              set `{DATABASE_URL_ENV}` to a persistent database (postgres:// or sqlite://<file>)"
+        );
+    }
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -38,12 +57,6 @@ async fn main() -> anyhow::Result<()> {
     let token_set = std::env::var(API_TOKEN_ENV)
         .map(|t| !t.is_empty())
         .unwrap_or(false);
-    if !is_loopback_bind(&bind) && !token_set {
-        anyhow::bail!(
-            "refusing to bind to non-loopback address `{bind}` without `{API_TOKEN_ENV}` set; \
-             set the env var or bind to 127.0.0.1 / [::1]"
-        );
-    }
 
     // Persistent storage. Without `SIGNEX_DATABASE_URL` the server falls
     // back to an ephemeral in-memory SQLite that loses every row on
@@ -52,12 +65,7 @@ async fn main() -> anyhow::Result<()> {
     let db_url = std::env::var(DATABASE_URL_ENV)
         .ok()
         .filter(|s| !s.is_empty());
-    if !is_loopback_bind(&bind) && db_url.is_none() {
-        anyhow::bail!(
-            "refusing to bind to non-loopback address `{bind}` with ephemeral in-memory storage; \
-             set `{DATABASE_URL_ENV}` to a persistent database (postgres:// or sqlite://<file>)"
-        );
-    }
+    check_bind_policy(&bind, token_set, db_url.is_some())?;
 
     let listener = tokio::net::TcpListener::bind(&bind).await?;
     tracing::info!(
@@ -98,7 +106,7 @@ async fn main() -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::is_loopback_bind;
+    use super::{check_bind_policy, is_loopback_bind};
 
     #[test]
     fn loopback_binds_are_accepted() {
@@ -120,5 +128,26 @@ mod tests {
         ] {
             assert!(!is_loopback_bind(b), "{b:?} must not count as loopback");
         }
+    }
+
+    #[test]
+    fn bind_policy_covers_all_combinations() {
+        let public = "0.0.0.0:3535";
+        let loopback = "127.0.0.1:3535";
+        // loopback: always allowed
+        for (t, d) in [(false, false), (true, false), (false, true), (true, true)] {
+            assert!(check_bind_policy(loopback, t, d).is_ok());
+        }
+        // non-loopback: needs token AND db url
+        let no_token = check_bind_policy(public, false, true)
+            .unwrap_err()
+            .to_string();
+        assert!(no_token.contains("without"), "{no_token}");
+        let no_db = check_bind_policy(public, true, false)
+            .unwrap_err()
+            .to_string();
+        assert!(no_db.contains("ephemeral"), "{no_db}");
+        assert!(check_bind_policy(public, false, false).is_err());
+        assert!(check_bind_policy(public, true, true).is_ok());
     }
 }

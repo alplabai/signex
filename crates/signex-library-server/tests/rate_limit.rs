@@ -2,7 +2,7 @@
 //! `oneshot` tests never exercise it. Serve over a real socket and assert
 //! that a burst past the limit is answered with 429.
 
-use signex_library_server::{router, with_rate_limit};
+use signex_library_server::{RATE_LIMIT_BURST_SIZE, router, with_rate_limit};
 use std::net::SocketAddr;
 
 #[tokio::test]
@@ -19,16 +19,27 @@ async fn burst_beyond_limit_is_rejected_with_429() {
         .unwrap();
     });
 
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .no_proxy() // loopback requests must not detour via HTTP_PROXY
+        .build()
+        .unwrap();
     let url = format!("http://{addr}/health");
+    // Fire well past the burst back-to-back (refill is 1/s, so a few extra
+    // tokens may trickle in on a slow machine; only the first BURST are
+    // guaranteed 200 and the request right after the burst is rejected).
+    let burst = RATE_LIMIT_BURST_SIZE as usize;
     let mut statuses = Vec::new();
-    // Burst size is 30 and refills 1/s; 60 back-to-back requests must trip it.
-    for _ in 0..60 {
+    for _ in 0..burst + 1 {
         statuses.push(client.get(&url).send().await.unwrap().status().as_u16());
     }
-    assert_eq!(statuses[0], 200, "first request is within the burst");
     assert!(
-        statuses.contains(&429),
-        "no 429 after 60 rapid requests: {statuses:?}"
+        statuses[..burst].iter().all(|s| *s == 200),
+        "first {burst} requests must be within the burst: {statuses:?}"
+    );
+    assert_eq!(
+        statuses[burst],
+        429,
+        "request {} must be rejected",
+        burst + 1
     );
 }
