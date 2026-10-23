@@ -99,7 +99,7 @@ impl Signex {
         };
         // The gate reads `dirty_paths`; do not rely on every edit site
         // having refreshed the panel context since its last footprint edit.
-        self.sync_footprint_dirty_paths();
+        self.sync_editor_dirty_paths();
         // Engines are re-read here (no IO), so an edit made while the Task ran
         // is seen. Evidence that no longer describes the workspace is read
         // again instead of acted on.
@@ -392,7 +392,7 @@ impl Signex {
         // A project opened since the references were read has disk-only
         // children nobody resolved; read again and re-prompt rather than act
         // on stale ownership.
-        self.sync_footprint_dirty_paths();
+        self.sync_editor_dirty_paths();
         if !self.document_state.refs_are_current(&state.sheet_refs) {
             crate::diagnostics::log_warning(format!(
                 "Close Project '{}': the open projects changed, so the sheet references were re-read; confirm again",
