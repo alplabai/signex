@@ -1501,7 +1501,10 @@ fn rename_dialog_follows_its_project_when_another_is_opened_before_it() {
     let _ = app.update(Message::Rename(RenameMsg::Submit));
 
     assert!(tmp.path().join("Renamed.snxprj").exists());
-    assert!(!old_prj.exists(), "the dialog's own project file was renamed");
+    assert!(
+        !old_prj.exists(),
+        "the dialog's own project file was renamed"
+    );
     assert!(other_prj.exists(), "the other project must be untouched");
     assert_eq!(app.document_state.projects[0].path, other_prj);
     assert_eq!(app.document_state.projects[1].data.name, "Renamed");
