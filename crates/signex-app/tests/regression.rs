@@ -143,5 +143,7 @@ mod stable_addressing;
 #[path = "regression/symbol_undo_steps.rs"]
 mod symbol_undo_steps;
 
+#[path = "regression/schematic_field_drag.rs"]
+mod schematic_field_drag;
 #[path = "regression/surface_failures.rs"]
 mod surface_failures;
