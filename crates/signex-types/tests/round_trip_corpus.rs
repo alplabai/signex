@@ -18,7 +18,7 @@ use signex_types::format::{SnxPcb, SnxSchematic};
 /// Lower bound on the number of discovered fixtures. Raise it when the
 /// corpus grows; the guard exists so deleting a fixture can never pass
 /// silently.
-const MIN_CORPUS_FILES: usize = 7;
+const MIN_CORPUS_FILES: usize = 40;
 
 const BLESS_ENV: &str = "SIGNEX_BLESS_CORPUS";
 

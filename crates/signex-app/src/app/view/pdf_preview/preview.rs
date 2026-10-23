@@ -142,19 +142,8 @@ impl Signex {
             iced::widget::Space::new().height(0).into()
         };
 
-        let fit_to_page = matches!(
-            preview.pdf_options.scale,
-            signex_output::PdfScale::FitToPage
-        );
         let toggles_row = row![
             text("Output").size(11).color(text_muted),
-            row![
-                checkbox(fit_to_page)
-                    .on_toggle(|v| Message::PrintPreview(PrintPreviewMsg::SetFitToPage(v))),
-                text("Fit to Page").size(11).color(text_c),
-            ]
-            .spacing(6)
-            .align_y(iced::Alignment::Center),
             row![
                 checkbox(preview.pdf_options.include_title_block)
                     .on_toggle(|v| Message::PrintPreview(PrintPreviewMsg::SetIncludeTitleBlock(v))),
@@ -166,47 +155,21 @@ impl Signex {
         .spacing(12)
         .align_y(iced::Alignment::Center);
 
-        let page_size_label = match &preview.pdf_options.page_size {
-            signex_output::PageSize::IsoA0 => "ISO A0",
-            signex_output::PageSize::IsoA1 => "ISO A1",
-            signex_output::PageSize::IsoA2 => "ISO A2",
-            signex_output::PageSize::IsoA3 => "ISO A3",
-            signex_output::PageSize::IsoA4 => "ISO A4",
-            signex_output::PageSize::IsoA5 => "ISO A5",
-            signex_output::PageSize::AnsiA => "ANSI A",
-            signex_output::PageSize::AnsiB => "ANSI B",
-            signex_output::PageSize::AnsiC => "ANSI C",
-            signex_output::PageSize::AnsiD => "ANSI D",
-            signex_output::PageSize::AnsiE => "ANSI E",
-            signex_output::PageSize::UsLetter => "US Letter",
-            signex_output::PageSize::UsLegal => "US Legal",
-            signex_output::PageSize::Custom { .. } => "Custom",
-        };
-        let orientation_label = match preview.pdf_options.orientation {
-            signex_output::Orientation::Portrait => "Portrait",
-            signex_output::Orientation::Landscape => "Landscape",
-        };
-        let summary_row = row![
-            text("Sheet").size(11).color(text_muted),
-            text(format!("{} • {}", page_size_label, orientation_label))
-                .size(11)
-                .color(text_c),
-        ]
-        .spacing(8)
-        .align_y(iced::Alignment::Center);
-
         let toolbar = container(
-            row![
-                summary_row,
-                Space::new().width(16),
-                colour_controls,
-                Space::new().width(12),
-                range_controls,
-                specific_page_input,
-                Space::new().width(Length::Fill),
-                toggles_row,
+            column![
+                row![
+                    colour_controls,
+                    Space::new().width(12),
+                    range_controls,
+                    specific_page_input,
+                    Space::new().width(Length::Fill),
+                    toggles_row,
+                ]
+                .align_y(iced::Alignment::Center),
+                self.view_pdf_page_controls(preview),
+                self.view_pdf_page_setup_notice(preview),
             ]
-            .align_y(iced::Alignment::Center),
+            .spacing(6),
         )
         .padding([8, 14]);
 

@@ -1,0 +1,132 @@
+format = "snxsch/1"
+schematic_id = "00000000-0000-0000-0000-000000000000"
+version = 1
+generator = "signex-test"
+generator_version = "0.9"
+paper_size = "A4"
+root_sheet_page = "1"
+
+
+[sheets.components]
+content = """
+uuid  ref  library  pos_x  pos_y  rotation  value  mpn
+"""
+
+[sheets.wires]
+content = """
+uuid  net  start_x  start_y  end_x  end_y  stroke_width
+"""
+
+[sheets.junctions]
+content = """
+uuid  pos_x  pos_y  diameter
+"""
+
+[sheets.labels]
+content = """
+uuid  text  pos_x  pos_y  rotation  kind  shape  font_size  justify  justify_v
+"""
+
+[extras.sheet]
+child_sheets = []
+no_connects = []
+text_notes = []
+buses = []
+bus_entries = []
+no_erc_directives = []
+
+[[extras.sheet.drawings]]
+type = "line"
+uuid = "0192a8c0-0000-700b-8000-000000000001"
+width = 0.2
+
+[extras.sheet.drawings.start]
+x = 0.0
+y = 0.0
+
+[extras.sheet.drawings.end]
+x = 10.0
+y = 10.0
+
+[[extras.sheet.drawings]]
+type = "rect"
+uuid = "0192a8c0-0000-700b-8000-000000000002"
+width = 0.1
+fill = "background"
+
+[extras.sheet.drawings.start]
+x = 20.0
+y = 0.0
+
+[extras.sheet.drawings.end]
+x = 40.0
+y = 10.0
+
+[extras.sheet.drawings.stroke_color]
+r = 255
+g = 128
+b = 0
+a = 200
+
+[[extras.sheet.drawings]]
+type = "circle"
+uuid = "0192a8c0-0000-700b-8000-000000000003"
+radius = 5.0
+width = 0.0
+fill = "outline"
+
+[extras.sheet.drawings.center]
+x = 60.0
+y = 5.0
+
+[[extras.sheet.drawings]]
+type = "arc"
+uuid = "0192a8c0-0000-700b-8000-000000000004"
+width = 0.15
+fill = "none"
+
+[extras.sheet.drawings.start]
+x = 70.0
+y = 0.0
+
+[extras.sheet.drawings.mid]
+x = 75.0
+y = 5.0
+
+[extras.sheet.drawings.end]
+x = 70.0
+y = 10.0
+
+[extras.sheet.drawings.stroke_color]
+r = 255
+g = 128
+b = 0
+a = 200
+
+[[extras.sheet.drawings]]
+type = "polyline"
+uuid = "0192a8c0-0000-700b-8000-000000000005"
+width = 0.25
+fill = "none"
+
+[[extras.sheet.drawings.points]]
+x = 80.0
+y = 0.0
+
+[[extras.sheet.drawings.points]]
+x = 85.0
+y = 10.0
+
+[[extras.sheet.drawings.points]]
+x = 90.0
+y = 0.0
+
+[extras.sheet.drawings.stroke_color]
+r = 0
+g = 0
+b = 0
+a = 255
+
+[extras.sheet.title_block]
+
+[extras.sheet.lib_symbols]

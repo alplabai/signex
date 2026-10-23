@@ -437,7 +437,7 @@ impl Signex {
                     })
                     .unwrap_or_default()
             },
-            tokens: signex_types::theme::theme_tokens(self.ui_state.theme_id),
+            tokens: self.tokens_for(self.ui_state.theme_id),
             theme_id: self.ui_state.theme_id,
             unit: self.ui_state.unit,
             grid_visible: self.ui_state.grid_visible,

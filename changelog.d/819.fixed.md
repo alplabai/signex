@@ -1,0 +1,1 @@
+- **`.snxpcb` save no longer drops board setup when the stackup has no layers (#817)** — the `[stackup]` block is now written whenever `setup` is set, so grid, clearance and via defaults survive a save/load of a board with an empty layer list.
