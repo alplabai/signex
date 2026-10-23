@@ -171,8 +171,8 @@ impl LocalGitProjectAdapter {
     /// Commit an externally-edited file (user opened the file in a
     /// text editor and saved). Wraps [`commit_path`] with a
     /// reasonable default message when the caller doesn't have
-    /// context. `None` means the file matched HEAD and nothing was
-    /// committed.
+    /// context. `None` means the staged tree matched HEAD's and nothing
+    /// was committed.
     pub fn commit_external_change(
         &self,
         abs_path: &Path,
