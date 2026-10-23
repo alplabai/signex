@@ -143,12 +143,14 @@ fn read_buffer_payload(
             reason: format!("buffers[{index}] {reason}"),
         }
     })?;
-    std::fs::read(&buffer_path).map_err(|err| ModelImportError::GltfParseFailed {
-        path: source_path.to_path_buf(),
-        reason: format!(
-            "buffers[{index}] missing external resource {:?}: {err}",
-            buffer_path
-        ),
+    crate::read::read_capped(&buffer_path, crate::read::MAX_READ_BYTES).map_err(|err| {
+        ModelImportError::GltfParseFailed {
+            path: source_path.to_path_buf(),
+            reason: format!(
+                "buffers[{index}] missing external resource {:?}: {err}",
+                buffer_path
+            ),
+        }
     })
 }
 
@@ -220,7 +222,7 @@ fn embed_image_uris(
                 reason: format!("images[{index}] {reason}"),
             }
         })?;
-        match std::fs::read(&image_path) {
+        match crate::read::read_capped(&image_path, crate::read::MAX_READ_BYTES) {
             Ok(bytes) => {
                 let mime = guess_mime_type(&image_path);
                 let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
@@ -240,8 +242,13 @@ fn embed_image_uris(
 /// resolved, lands outside the canonical `base_dir`. A resource that does not
 /// exist is returned as-is so the caller reports it as missing, not as an
 /// escape.
-fn resolve_external_uri(base_dir: &Path, uri: &str) -> Result<PathBuf, String> {
-    let reject = |why: &str| Err(format!("uri {uri:?} rejected: {why}"));
+fn resolve_external_uri(base_dir: &Path, raw_uri: &str) -> Result<PathBuf, String> {
+    let reject = |why: &str| Err(format!("uri {raw_uri:?} rejected: {why}"));
+    // Decode first so `%2e%2e` or `%3A` cannot slip past the checks below (#708).
+    let Some(decoded) = percent_decode(raw_uri) else {
+        return reject("is not valid UTF-8 once percent-decoded");
+    };
+    let uri = decoded.as_str();
 
     if uri.contains('\0') {
         return reject("contains a NUL byte");
@@ -276,6 +283,27 @@ fn resolve_external_uri(base_dir: &Path, uri: &str) -> Result<PathBuf, String> {
         return reject("resolves outside the model directory");
     }
     Ok(canonical)
+}
+
+/// Decode `%XX` escapes. A `%` not followed by two hex digits stays literal.
+/// `None` when the decoded bytes are not UTF-8.
+fn percent_decode(uri: &str) -> Option<String> {
+    let bytes = uri.as_bytes();
+    let hex = |i: usize| bytes.get(i).and_then(|&b| (b as char).to_digit(16));
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%'
+            && let (Some(h), Some(l)) = (hex(i + 1), hex(i + 2))
+        {
+            out.push((h * 16 + l) as u8);
+            i += 3;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8(out).ok()
 }
 
 /// Directory external resources resolve against. A bare relative path such as
@@ -358,6 +386,19 @@ mod tests {
     fn decode_data_uri_non_base64_is_none() {
         let uri = "data:text/plain,abc";
         assert!(decode_data_uri(uri).is_none());
+    }
+
+    #[test]
+    fn percent_escapes_decode_before_the_traversal_check() {
+        let base = Path::new(".");
+        let ok = resolve_external_uri(base, "my%20tex.png").unwrap();
+        assert!(ok.ends_with("my tex.png"));
+        assert!(resolve_external_uri(base, "%2e%2e/secret.bin").is_err());
+        assert!(resolve_external_uri(base, "%2E%2E%2Fsecret.bin").is_err());
+        assert!(resolve_external_uri(base, "C%3A/x").is_err());
+        assert!(resolve_external_uri(base, "a%00b").is_err());
+        assert!(resolve_external_uri(base, "%ff").is_err());
+        assert!(resolve_external_uri(base, "100%").is_ok());
     }
 
     #[test]

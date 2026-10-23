@@ -67,6 +67,10 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 - **Release version guard** — the release workflow now runs `scripts/check_release_version.sh` before any build and fails unless the tag, `[workspace.package] version` in `Cargo.toml`, and a dated (not `unreleased`) `## [X.Y.Z]` CHANGELOG section all agree, printing all three values on a mismatch (#343).
 
+### Fixed — 3D importer
+
+- **STEP and glTF import hardening (#708)** — digits and `#` inside a STEP name string no longer move a vertex or abort the import; a `FACE_BOUND` hole is no longer fan-filled as a solid face (it is skipped and reported, not cut); every model, buffer and texture read refuses a non-regular file or one over 256 MiB before allocating; glTF URIs are percent-decoded before the traversal check (`my%20tex.png` resolves, `%2e%2e/` is rejected); a corrupt `.glb` source is rejected instead of cached.
+
 ### Fixed — ERC
 
 - **ERC DSL pin kinds (#676)** — `pin.kind == / !=` accepts the same pin-kind spellings as `has_pin_kind` (`power_in`, `tristate`, `open_collector`, …), so a rule written with one of them now fires. An unknown pin-kind literal in either form is now a validation error instead of a rule that silently never fires; as with other DSL errors, the rule file is refused and the error is logged.

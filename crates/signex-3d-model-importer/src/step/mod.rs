@@ -7,7 +7,7 @@ pub use p21::StepMeshResult;
 
 /// Parse a STEP/P21 source file and convert supported planar faces to meshes.
 pub fn load(path: &PathBuf) -> Result<StepMeshResult, ModelImportError> {
-    let source = std::fs::read_to_string(path).map_err(|e| ModelImportError::IoFailed {
+    let source = crate::read::read_text_capped(path).map_err(|e| ModelImportError::IoFailed {
         path: path.clone(),
         message: e.to_string(),
     })?;
