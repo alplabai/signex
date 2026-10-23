@@ -84,7 +84,7 @@ fn a_sketch_with_a_dangling_ref_returns_a_typed_error_then_heals() {
 
     // Deleting anything recovers the sketch: the orphaned line goes too.
     let removed = s.data.remove_entity_cascade(b);
-    assert!(removed.entities.contains(&line));
+    assert!(removed.repaired_entities.contains(&line));
     assert!(s.data.dangling_refs().is_empty());
     Solver::default()
         .solve(&s.data, &ResolvedParams::new())

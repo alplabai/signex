@@ -32,18 +32,39 @@ pub struct Removed {
     pub entities: Vec<SketchEntityId>,
     pub constraints: Vec<ConstraintId>,
     pub arrays: Vec<ArrayId>,
+    /// Entities, constraints and arrays that were already orphaned
+    /// (dangling) before the delete and were stripped alongside it. Not
+    /// counted in the three lists above.
+    pub repaired: usize,
+    /// The entities among [`Self::repaired`].
+    pub repaired_entities: Vec<SketchEntityId>,
 }
 
 impl SketchData {
     /// Remove `id` and everything that cannot exist without it: each
     /// line, arc or circle that names it as an endpoint or centre, and
-    /// each constraint and array that names any removed entity. The sketch never
-    /// holds a dangling reference afterwards: a sketch that already had
-    /// some (see [`Self::dangling_refs`]) is healed by the same pass, so
-    /// a delete is also the way out of a corrupt file.
+    /// each constraint and array that names any removed entity.
+    ///
+    /// Only the references this type owns are walked (entity endpoints,
+    /// constraints, arrays). Entity ids kept inside attribute payloads
+    /// (`PadAttr.owned`, sketch-profile and custom-paste sources) are not.
+    /// Anything already dangling in those walked places is stripped first
+    /// and counted in [`Removed::repaired`], so a delete is also the way
+    /// out of a corrupt file.
     pub fn remove_entity_cascade(&mut self, id: SketchEntityId) -> Removed {
         let mut removed = Removed::default();
-        let mut doomed: HashSet<SketchEntityId> = HashSet::from([id]);
+        let mut orphans = Removed::default();
+        self.sweep(&mut HashSet::new(), &mut orphans);
+        removed.repaired =
+            orphans.entities.len() + orphans.constraints.len() + orphans.arrays.len();
+        removed.repaired_entities = orphans.entities;
+        self.sweep(&mut HashSet::from([id]), &mut removed);
+        removed
+    }
+
+    /// Remove every entity in `doomed` or naming a gone id, then repeat
+    /// for whatever that orphaned, until nothing more goes.
+    fn sweep(&mut self, doomed: &mut HashSet<SketchEntityId>, removed: &mut Removed) {
         loop {
             let before = removed.entities.len() + removed.constraints.len() + removed.arrays.len();
             let known: HashSet<SketchEntityId> = self.entities.iter().map(|e| e.id).collect();
@@ -70,15 +91,15 @@ impl SketchData {
                 !gone
             });
             if removed.entities.len() + removed.constraints.len() + removed.arrays.len() == before {
-                return removed;
+                return;
             }
             doomed.extend(removed.entities.iter().copied());
         }
     }
 
-    /// Every entity id that an entity or constraint names but the sketch
-    /// does not contain, sorted and de-duplicated. Empty for a
-    /// well-formed sketch.
+    /// Every entity id that an entity, constraint or array names but the
+    /// sketch does not contain, sorted and de-duplicated. Empty for a
+    /// well-formed sketch. Ids inside attribute payloads are not checked.
     pub fn dangling_refs(&self) -> Vec<SketchEntityId> {
         let known: HashSet<SketchEntityId> = self.entities.iter().map(|e| e.id).collect();
         let mut missing: Vec<SketchEntityId> = self

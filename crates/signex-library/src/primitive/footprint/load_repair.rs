@@ -3,7 +3,7 @@
 //! Applied explicitly at each load site (the TOML container, the database
 //! adapter, the library server's row read) rather than hidden in a serde
 //! hook. The repair reports what it moved in [`Footprint::load_repairs`]; it
-//! never logs, so previews, mounts and history reads stay quiet. The editor
+//! logs only when it strips dangling references (a `warn`). The editor
 //! that opens the footprint reports it once and marks itself dirty.
 
 use signex_sketch::id::SketchEntityId;
@@ -23,6 +23,22 @@ impl Footprint {
         };
         let adjusted: Vec<SketchEntityId> = snap_arc_ends_onto_circles(sketch);
         self.load_repairs.extend(adjusted);
+
+        // A stored sketch may name entities that no longer exist (saved
+        // by a build that did not cascade deletes). Strip them so the
+        // solver does not refuse the whole sketch.
+        let missing = sketch.dangling_refs();
+        if let Some(first) = missing.first().copied() {
+            let removed = sketch.remove_entity_cascade(first);
+            tracing::warn!(
+                target: "signex::sketch",
+                footprint = %self.name,
+                missing = missing.len(),
+                removed = removed.repaired,
+                "removed dangling references from a stored footprint sketch"
+            );
+            self.load_repairs.extend(removed.repaired_entities);
+        }
     }
 }
 
@@ -77,6 +93,38 @@ mod tests {
             .expect("parse")
             .footprints
             .remove(0)
+    }
+
+    #[test]
+    fn dangling_references_are_stripped_on_load_and_the_sketch_solves() {
+        let (mut fp, [c, s, e]) = off_circle_footprint();
+        let sketch = fp.sketch.as_mut().expect("sketch");
+        // Orphan the arc by deleting its centre behind the sketch's back.
+        sketch.entities.retain(|en| en.id != c);
+        sketch
+            .constraints
+            .push(signex_sketch::constraint::Constraint {
+                id: signex_sketch::id::ConstraintId::new(),
+                kind: signex_sketch::constraint::ConstraintKind::Fixed { point: c },
+            });
+        assert!(!sketch.dangling_refs().is_empty());
+
+        fp.repair_stored_sketch();
+
+        let sketch = fp.sketch.expect("sketch");
+        assert!(sketch.dangling_refs().is_empty());
+        assert!(sketch.constraints.is_empty());
+        assert!(
+            sketch
+                .entities
+                .iter()
+                .all(|en| en.id != e || matches!(en.kind, EntityKind::Point { .. }))
+        );
+        assert!(sketch.entities.iter().any(|en| en.id == s));
+        assert!(!fp.load_repairs.is_empty(), "the removed arc is reported");
+        Solver::default()
+            .solve(&sketch, &ResolvedParams::new())
+            .expect("a healed sketch solves");
     }
 
     #[test]

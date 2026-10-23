@@ -339,6 +339,12 @@ fn apply_edit_inner(footprint: &mut Footprint, edit: SketchEdit) {
                     removed.arrays.len()
                 ));
             }
+            if removed.repaired > 0 {
+                crate::diagnostics::log_warning(format!(
+                    "Repaired {} dangling sketch reference(s) left by an earlier edit",
+                    removed.repaired
+                ));
+            }
         }
         SketchEdit::MovePoint { id, dx, dy } => {
             for ent in sketch.entities.iter_mut() {
