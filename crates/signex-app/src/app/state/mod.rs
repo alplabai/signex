@@ -215,6 +215,22 @@ impl ErrorNotice {
         }
     }
 
+    /// A History restore did not happen.
+    pub fn restore(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Restore Failed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
+    /// A new project or document could not be created.
+    pub fn create(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Create Failed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
     /// The requested action has no backing flow yet.
     pub fn unavailable(detail: impl Into<String>) -> Self {
         Self {

@@ -803,8 +803,14 @@ impl Signex {
             .document_state
             .project_for_path(&synthetic_path)
             .map(|p| p.id);
-        // A dirty draft parked by a tab close wins over the stored row.
-        if !self.library.editors.contains_key(&address) {
+        // A dirty draft parked by a tab close wins over the stored row; a
+        // clean parked editor is stale and is replaced.
+        if !self
+            .library
+            .editors
+            .get(&address)
+            .is_some_and(|editor| editor.dirty)
+        {
             let preview = ComponentPreviewState::from_row(library_path.clone(), table.clone(), row);
             self.library.editors.insert(address.clone(), preview);
         }

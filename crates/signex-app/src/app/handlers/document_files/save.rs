@@ -138,9 +138,13 @@ impl Signex {
     /// would believe Ctrl+S worked (#110).
     pub(crate) fn report_save_failure(&mut self, context: &str, error: &anyhow::Error) {
         crate::diagnostics::log_error(context, error);
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(format!(
-            "{context}: {error:#}"
-        )));
+        // The first failure of a save sequence is the one that explains it;
+        // a follow-up write (e.g. the project file) must not replace it.
+        if self.document_state.error_notice.is_none() {
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(format!(
+                "{context}: {error:#}"
+            )));
+        }
     }
 
     /// Save the loaded project whose `.snxprj` sits at `path`. Thin

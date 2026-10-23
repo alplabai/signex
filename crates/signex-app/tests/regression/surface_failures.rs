@@ -182,3 +182,225 @@ fn panel_refresh_keeps_the_custom_theme_tokens() {
 
     assert_eq!(app.document_state.panel_ctx.tokens, custom);
 }
+
+// ---- parked-draft integrity ------------------------------------------------
+
+use signex_app::app::{EditMsg, ProjectCloseChoice, ProjectMsg, SymbolEditorState, WindowMsg};
+use signex_app::library::messages::CloseLibraryChoice;
+use signex_library::{Symbol, SymbolFile};
+use std::path::Path;
+
+fn write_symbol(path: &Path, name: &str) {
+    let text = SymbolFile::from_symbol(Symbol::empty(name))
+        .to_toml_string()
+        .expect("serialise symbol");
+    std::fs::write(path, text).unwrap();
+}
+
+/// A symbol tab for `path` with an editor holding the on-disk content.
+fn open_symbol_tab(app: &mut Signex, path: &Path) {
+    let file = SymbolFile::from_symbol(Symbol::empty("disk"));
+    app.document_state.symbol_editors.insert(
+        path.to_path_buf(),
+        SymbolEditorState::new(path.to_path_buf(), file),
+    );
+    app.document_state.tabs.push(TabInfo {
+        title: "sym".into(),
+        path: path.to_path_buf(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: TabKind::SymbolEditor(path.to_path_buf()),
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+}
+
+fn draft_name(app: &Signex, path: &Path) -> String {
+    app.document_state.symbol_editors[path]
+        .primitive()
+        .name
+        .clone()
+}
+
+fn reopen(app: &mut Signex, path: &Path) {
+    let _ = app.update(Message::File(FileMsg::Opened(Some(path.to_path_buf()))));
+}
+
+#[test]
+fn reopening_a_closed_dirty_symbol_tab_restores_the_draft_not_the_disk_copy() {
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("s.snxsym");
+    write_symbol(&path, "disk");
+    let (mut app, _t) = Signex::new();
+    open_symbol_tab(&mut app, &path);
+    let editor = app.document_state.symbol_editors.get_mut(&path).unwrap();
+    editor.primitive_mut().name = "draft".into();
+    editor.dirty = true;
+
+    close_tab(&mut app, 0);
+    reopen(&mut app, &path);
+
+    assert_eq!(app.document_state.tabs.len(), 1);
+    assert_eq!(draft_name(&app, &path), "draft");
+}
+
+#[test]
+fn a_parked_draft_is_reachable_even_when_its_file_is_gone() {
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("gone.snxsym");
+    write_symbol(&path, "disk");
+    let (mut app, _t) = Signex::new();
+    open_symbol_tab(&mut app, &path);
+    app.document_state
+        .symbol_editors
+        .get_mut(&path)
+        .unwrap()
+        .dirty = true;
+    close_tab(&mut app, 0);
+    std::fs::remove_file(&path).unwrap();
+
+    reopen(&mut app, &path);
+
+    assert_eq!(app.document_state.tabs.len(), 1, "the draft reopens");
+    assert!(app.document_state.error_notice.is_none());
+}
+
+#[test]
+fn a_saved_parked_editor_is_replaced_by_the_changed_disk_file_on_reopen() {
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("stale.snxsym");
+    write_symbol(&path, "disk");
+    let (mut app, _t) = Signex::new();
+    open_symbol_tab(&mut app, &path);
+    let editor = app.document_state.symbol_editors.get_mut(&path).unwrap();
+    editor.primitive_mut().name = "draft".into();
+    editor.dirty = true;
+    close_tab(&mut app, 0);
+    // Save All saved it (editor stays, now clean) and another tool then
+    // rewrote the file.
+    app.document_state
+        .symbol_editors
+        .get_mut(&path)
+        .unwrap()
+        .dirty = false;
+    app.document_state.dirty_paths.remove(&path);
+    write_symbol(&path, "external");
+
+    reopen(&mut app, &path);
+
+    assert_eq!(draft_name(&app, &path), "external");
+}
+
+#[test]
+fn closing_a_symbol_tab_dirtied_by_undo_after_a_save_parks_the_draft() {
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("undo.snxsym");
+    write_symbol(&path, "disk");
+    let (mut app, _t) = Signex::new();
+    open_symbol_tab(&mut app, &path);
+    let editor = app.document_state.symbol_editors.get_mut(&path).unwrap();
+    let snapshot = editor.primitive().clone();
+    editor.undo_snapshots.push(snapshot);
+    editor.primitive_mut().name = "edited".into();
+    editor.dirty = true;
+    app.document_state.dirty_paths.insert(path.clone());
+    let _ = app.update(Message::File(FileMsg::Save));
+    assert!(!app.document_state.dirty_paths.contains(&path));
+
+    // Undo marks the editor dirty without touching `dirty_paths`.
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    assert!(app.document_state.symbol_editors[&path].dirty);
+    close_tab(&mut app, 0);
+
+    assert!(app.document_state.symbol_editors.contains_key(&path));
+    assert!(app.document_state.dirty_paths.contains(&path));
+}
+
+#[test]
+fn close_library_save_all_with_a_failing_row_keeps_the_library_and_drafts() {
+    let mut app = app_with_preview_edit();
+    let address = app.library.editors.keys().next().cloned().unwrap();
+
+    let _ = app.update(Message::Library(LibraryMessage::ConfirmCloseLibrary {
+        library_path: address.library_path.clone(),
+        dirty_editors: vec![address.clone()],
+    }));
+    let _ = app.update(Message::Library(LibraryMessage::CloseLibraryConfirm(
+        CloseLibraryChoice::SaveAll,
+    )));
+
+    assert!(app.library.editors[&address].dirty, "the draft survives");
+    let notice = app.document_state.error_notice.as_ref().expect("a card");
+    assert_eq!(notice.title, "Save Failed");
+}
+
+#[test]
+fn a_parked_footprint_draft_is_written_by_quit_save_all() {
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("parked.snxfpt");
+    let (mut app, _t) = Signex::new();
+    open_footprint_editor(&mut app, &path);
+    edit_description_via_panel(&mut app);
+    close_tab(&mut app, 0);
+
+    let _ = app.update(Message::Window(WindowMsg::CloseMainWindow));
+    let _ = app.update(Message::Project(ProjectMsg::AppQuitConfirm(
+        ProjectCloseChoice::SaveAll,
+    )));
+
+    let written = std::fs::read_to_string(&path).expect("Save All writes the parked draft");
+    assert!(written.contains("edited"));
+}
+
+#[test]
+fn switching_tabs_disarms_a_pending_history_restore() {
+    let tmp = TempDir::new().unwrap();
+    let (a, b) = (tmp.path().join("a.snxfpt"), tmp.path().join("b.snxfpt"));
+    let (mut app, _t) = Signex::new();
+    open_footprint_editor(&mut app, &a);
+    open_footprint_editor(&mut app, &b);
+    edit_description_via_panel(&mut app);
+    restore_clicked(&mut app);
+    assert!(app.document_state.history.pending_restore.is_some());
+
+    app.document_state.active_tab = 0;
+    edit_description_via_panel(&mut app);
+
+    assert!(app.document_state.history.pending_restore.is_none());
+}
+
+#[test]
+fn close_all_and_close_all_others_park_dirty_drafts() {
+    let tmp = TempDir::new().unwrap();
+    let (a, b, c) = (
+        tmp.path().join("a.snxfpt"),
+        tmp.path().join("b.snxfpt"),
+        tmp.path().join("c.snxfpt"),
+    );
+    let (mut app, _t) = Signex::new();
+    open_footprint_editor(&mut app, &a);
+    open_footprint_editor(&mut app, &b);
+    open_footprint_editor(&mut app, &c);
+    for p in [&a, &b, &c] {
+        app.document_state
+            .footprint_editors
+            .get_mut(p)
+            .unwrap()
+            .dirty = true;
+    }
+
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
+        TabContextAction::CloseAllOthers(0),
+    )));
+    assert_eq!(app.document_state.tabs.len(), 1);
+    assert!(app.document_state.footprint_editors.contains_key(&b));
+    assert!(app.document_state.footprint_editors.contains_key(&c));
+
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
+        TabContextAction::CloseAll,
+    )));
+    assert!(app.document_state.tabs.is_empty());
+    for p in [&a, &b, &c] {
+        assert!(app.document_state.footprint_editors.contains_key(p));
+    }
+}

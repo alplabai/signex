@@ -110,6 +110,9 @@ impl Signex {
     }
 
     fn close_tab(&mut self, idx: usize, park_dirty: bool) -> Task<Message> {
+        // Footprint edits reach `dirty_paths` lazily; settle that before
+        // deciding whether a draft is dirty.
+        self.sync_footprint_dirty_paths();
         if idx >= self.document_state.tabs.len() {
             tracing::warn!(
                 target: "signex::tabs",
@@ -164,10 +167,10 @@ impl Signex {
             self.document_state.active_path = None;
         }
 
-        // Drop the editor state when the tab is a Component Preview.
-        // The library subsystem has no dirty-park mechanism yet, so
-        // closing the tab discards the draft (matches the
-        // window-close behaviour).
+        // Drop the editor state when the tab is a Component Preview,
+        // unless the user asked to close a dirty one: that draft is parked
+        // (it stays in `library.editors`, where Save All / Close Library
+        // find it).
         if let crate::app::TabKind::ComponentEditor(ref ce) = closing_kind {
             let address = crate::library::state::EditorAddress::new(
                 ce.library_path.clone(),
@@ -185,23 +188,21 @@ impl Signex {
             }
         }
         // Standalone primitive editor tabs — drop the per-tab editor
-        // state on close. Same shape as Component Preview cleanup
-        // (no dirty-park yet, so closing discards the in-flight draft).
-        // The draft goes with the editor, so its dirty marker must go
-        // too: a stale `dirty_paths` entry with no editor behind it
-        // would make quit's Save All fail on a file nobody can save.
-        // A parked dirty draft keeps both its editor and its dirty marker.
-        if let crate::app::TabKind::SymbolEditor(ref p) = closing_kind
-            && !(park_dirty && self.document_state.dirty_paths.contains(p))
+        // state on close, unless the user asked to close a dirty one: that
+        // draft is parked with its dirty marker, so Save All can still
+        // write it. A dropped draft takes its marker with it: a stale
+        // `dirty_paths` entry with no editor behind it would make quit's
+        // Save All fail on a file nobody can save.
+        if let crate::app::TabKind::SymbolEditor(ref p)
+        | crate::app::TabKind::FootprintEditor(ref p) = closing_kind
         {
-            self.document_state.symbol_editors.remove(p);
-            self.document_state.dirty_paths.remove(p);
-        }
-        if let crate::app::TabKind::FootprintEditor(ref p) = closing_kind
-            && !(park_dirty && self.document_state.dirty_paths.contains(p))
-        {
-            self.document_state.footprint_editors.remove(p);
-            self.document_state.dirty_paths.remove(p);
+            if park_dirty && self.primitive_draft_is_dirty(p) {
+                self.document_state.dirty_paths.insert(p.clone());
+            } else {
+                self.document_state.symbol_editors.remove(p);
+                self.document_state.footprint_editors.remove(p);
+                self.document_state.dirty_paths.remove(p);
+            }
         }
         // Library Browser tabs — drop the per-browser state on close.
         // The library itself stays mounted; only the tab-scoped UI

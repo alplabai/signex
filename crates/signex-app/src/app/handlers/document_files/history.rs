@@ -12,6 +12,7 @@ impl Signex {
     /// message; nothing destructive runs (the working tree changes
     /// only on a successful blob read + atomic write).
     pub(crate) fn handle_history_restore_clicked(&mut self, sha: &str) {
+        self.sync_footprint_dirty_paths();
         let active = match self.document_state.tabs.get(self.document_state.active_tab) {
             Some(t) => t,
             None => return,
@@ -24,7 +25,7 @@ impl Signex {
         // Restoring replaces the in-memory document and its undo stack, so
         // unsaved edits would be gone for good: ask first (#110). The first
         // click arms the row's confirmation, the second one restores.
-        if self.document_state.dirty_paths.contains(&full_path)
+        if self.primitive_draft_is_dirty(&full_path)
             && self.document_state.history.pending_restore.as_deref() != Some(sha)
         {
             self.document_state.history.pending_restore = Some(sha.to_owned());
@@ -94,7 +95,7 @@ impl Signex {
     /// so the click is not silently ignored (#110).
     fn report_restore_failure(&mut self, message: String) {
         crate::diagnostics::log_warning(format!("[git] restore: {message}"));
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(message));
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::restore(message));
     }
 
     /// v0.22 — Re-parse the active tab's on-disk file and replace

@@ -52,7 +52,7 @@ impl Signex {
             Ok(task) => task,
             Err(error) => {
                 crate::diagnostics::log_error("Failed to create new project", &error);
-                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(
+                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::create(
                     format!("Failed to create new project: {error:#}"),
                 ));
                 iced::Task::none()
