@@ -286,30 +286,43 @@ impl Signex {
     ) -> anyhow::Result<()> {
         // The maps are keyed by the exact spelling a document was opened
         // under, while callers (the Exclude prompt) match under `fold`.
-        // Resolve to the held spelling so both agree on what "the same
-        // file" means, then clear every dirty marker that folds to it.
-        let held = self.held_spelling(path, fold);
-        self.save_held_path(&held)?;
-        let key = path_key_with(&held, fold);
+        // Save EVERY held spelling that folds to `path`: two documents held
+        // under different-case spellings of one sheet each carry their own
+        // edits, and saving only one would then clear both markers and drop
+        // the other's work with no further prompt. A failure on any variant
+        // returns before the folded markers are cleared, so an unsaved
+        // variant stays dirty and the caller reports it.
+        for held in self.held_spellings(path, fold) {
+            self.save_held_path(&held)?;
+        }
+        let key = path_key_with(path, fold);
         self.document_state
             .dirty_paths
             .retain(|p| path_key_with(p, fold) != key);
         Ok(())
     }
 
-    /// The spelling an engine / editor / project is held under that matches
-    /// `path` under `fold`, or `path` itself when nothing is held for it.
-    fn held_spelling(&self, path: &std::path::Path, fold: CaseFold) -> std::path::PathBuf {
+    /// Every spelling an engine / editor / project is held under that matches
+    /// `path` under `fold` (sorted, so the save order is deterministic), or
+    /// `path` itself when nothing is held for it.
+    fn held_spellings(&self, path: &std::path::Path, fold: CaseFold) -> Vec<std::path::PathBuf> {
         let key = path_key_with(path, fold);
         let doc = &self.document_state;
-        doc.engines
+        let mut held: Vec<std::path::PathBuf> = doc
+            .engines
             .keys()
             .chain(doc.symbol_editors.keys())
             .chain(doc.footprint_editors.keys())
             .chain(doc.projects.iter().map(|p| &p.path))
-            .find(|held| path_key_with(held, fold) == key)
+            .filter(|held| path_key_with(held, fold) == key)
             .cloned()
-            .unwrap_or_else(|| path.to_path_buf())
+            .collect();
+        held.sort();
+        held.dedup();
+        if held.is_empty() {
+            held.push(path.to_path_buf());
+        }
+        held
     }
 
     /// The save legs of [`Self::try_save_dirty_path`], for a path already
@@ -702,6 +715,34 @@ mod tests {
 
         assert!(result.is_ok(), "case-variant save failed: {result:?}");
         assert!(held.exists(), "the held spelling must be the one written");
+        assert!(app.document_state.dirty_paths.is_empty());
+    }
+
+    #[test]
+    fn save_writes_every_held_case_variant_of_one_path() {
+        // Two editors held under different-case spellings of one file each
+        // carry their own edits; both must be saved, not just the first
+        // spelling a HashMap iteration happens to yield.
+        let dir = tempfile::tempdir().unwrap();
+        let upper = dir.path().join("Lib.snxsym");
+        let lower = dir.path().join("lib.snxsym");
+        let mut app = app_with_dirty_symbol(&upper);
+        let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("Sym2"));
+        app.document_state
+            .symbol_editors
+            .insert(lower.clone(), SymbolEditorState::new(lower.clone(), file));
+        app.document_state.dirty_paths.insert(lower.clone());
+        for editor in app.document_state.symbol_editors.values_mut() {
+            editor.dirty = true;
+        }
+
+        let result = app.try_save_dirty_path_with(&upper, CaseFold::Fold);
+
+        assert!(result.is_ok(), "variant save failed: {result:?}");
+        assert!(
+            app.document_state.symbol_editors.values().all(|e| !e.dirty),
+            "every held variant must have been saved",
+        );
         assert!(app.document_state.dirty_paths.is_empty());
     }
 

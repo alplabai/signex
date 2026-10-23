@@ -49,7 +49,7 @@ const PROMPT_NAMES_SHOWN: usize = 3;
 impl Signex {
     /// Dirty documents at or under `target`, sorted. Pure: callers that need
     /// a footprint draft's flag folded into `dirty_paths` run
-    /// `sync_footprint_dirty_paths` first.
+    /// `sync_editor_dirty_paths` first.
     pub(crate) fn unsaved_documents(&self, target: &std::path::Path) -> Vec<std::path::PathBuf> {
         let fold = CaseFold::host_default();
         let doc = &self.document_state;
@@ -183,7 +183,7 @@ impl Signex {
             self.ui_state.remove_dialog = Some(state);
             return iced::Task::none();
         }
-        self.sync_footprint_dirty_paths();
+        self.sync_editor_dirty_paths();
         let docs = self.unsaved_documents(&state.target_path);
         match choice {
             ExcludeDirtyChoice::Save => {

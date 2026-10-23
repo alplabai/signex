@@ -170,7 +170,7 @@ impl Signex {
         // its Save / Discard / Cancel stage.
         if choice == RemoveChoice::ExcludeFromProject {
             // A footprint draft only reaches `dirty_paths` on a sync.
-            self.sync_footprint_dirty_paths();
+            self.sync_editor_dirty_paths();
             if let Some(dialog) = self.ui_state.remove_dialog.clone()
                 && self.has_unsaved_edits(&dialog.target_path)
             {

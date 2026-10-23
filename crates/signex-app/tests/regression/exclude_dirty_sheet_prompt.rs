@@ -58,11 +58,13 @@ fn add_named_project(app: &mut Signex, dir: &Path, file: &str, sheet: &str) -> P
                 symbols_count: 0,
                 wires_count: 0,
                 labels_count: 0,
+                unknown: Default::default(),
             }],
             variant_definitions: Vec::new(),
             active_variant: None,
             libraries: Vec::new(),
             enable_git: false,
+            unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
     });
@@ -374,6 +376,7 @@ fn discard_is_refused_for_a_library_two_open_projects_list() {
         path,
         kind,
         library_id: None,
+        unknown: Default::default(),
     };
     app.document_state.projects[0].data.libraries.push(entry(
         PathBuf::from("Lib.snxlib"),
@@ -414,6 +417,7 @@ fn discard_is_refused_for_a_library_another_project_lists_through_dotdot() {
         path,
         kind,
         library_id: None,
+        unknown: Default::default(),
     };
     app.document_state.projects[0].data.libraries.push(entry(
         PathBuf::from("Lib.snxlib"),
