@@ -9,7 +9,7 @@
 
 use super::*;
 use crate::app::RemoveDialogState;
-use crate::app::state::scope::{CaseFold, path_is_under, path_key_with};
+use crate::app::state::scope::{CaseFold, KeyMap, path_is_under, path_key_with};
 
 /// Why the unsaved-edits prompt withholds Discard.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,12 +78,14 @@ impl Signex {
 
     /// Does another open project list a `.snxlib` that is `path`, lies under
     /// it, or contains it? The ownership walk only sees sheets, so library
-    /// entries are checked here, each resolved
-    /// against its own project's directory and compared under the prompt's
-    /// case rule (`path_is_under` is component-wise, so `Lib.snxlib/.` and
-    /// a trailing separator normalise away).
+    /// entries are checked here, each resolved against its own project's
+    /// directory. Both sides are normalised lexically (`..` and `.` folded,
+    /// no IO) and compared under the prompt's case rule, so `b/../Lib.snxlib`
+    /// and `Lib.snxlib` are one library.
     fn library_listed_by_other_project(&self, owner: usize, path: &std::path::Path) -> bool {
         let fold = CaseFold::host_default();
+        let keys = KeyMap::lexical(fold);
+        let target = std::path::PathBuf::from(keys.lexical_key(path));
         self.document_state
             .projects
             .iter()
@@ -95,7 +97,8 @@ impl Signex {
                     .iter()
                     .map(|entry| p.data.resolve_library_path(entry))
             })
-            .any(|lib| path_is_under(&lib, path, fold) || path_is_under(path, &lib, fold))
+            .map(|lib| std::path::PathBuf::from(keys.lexical_key(&lib)))
+            .any(|lib| lib.starts_with(&target) || target.starts_with(&lib))
     }
 
     /// Why Discard is withheld for this modal, if it is: another open project

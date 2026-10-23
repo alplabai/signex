@@ -398,6 +398,46 @@ fn discard_is_refused_for_a_library_two_open_projects_list() {
     assert_eq!(std::fs::read(&fp).unwrap(), ORIGINAL);
 }
 
+#[test]
+fn discard_is_refused_for_a_library_another_project_lists_through_dotdot() {
+    let _ = signex_app::diagnostics::init_logging();
+    let (mut app, tmp, lib, fp) = library_fixture();
+    // B lives in `b/` and reaches the same `.snxlib` as `../Lib.snxlib`, a
+    // spelling that only matches A's entry once `..` is folded away.
+    let dir_b = tmp.path().join("b");
+    std::fs::create_dir(&dir_b).expect("mkdir b");
+    let b = add_named_project(&mut app, &dir_b, "B.snxprj", "Y.snxsch");
+    // B's sheet is loaded, so its walk is complete and the only thing that
+    // can withhold Discard is the shared library, not "not loaded".
+    open_sheet(&mut app, &dir_b.join("Y.snxsch"), b, false);
+    let entry = |path: PathBuf, kind| signex_types::project::LibraryEntry {
+        path,
+        kind,
+        library_id: None,
+    };
+    app.document_state.projects[0].data.libraries.push(entry(
+        PathBuf::from("Lib.snxlib"),
+        signex_types::project::LibraryEntryKind::ProjectLocal,
+    ));
+    app.document_state.projects[1].data.libraries.push(entry(
+        PathBuf::from("../Lib.snxlib"),
+        signex_types::project::LibraryEntryKind::ProjectLocal,
+    ));
+    exclude(&mut app, &lib);
+    assert!(app.ui_state.remove_dialog.is_some(), "prompt expected");
+
+    choose(&mut app, ExcludeDirtyChoice::Discard);
+
+    assert!(
+        app.document_state.footprint_editors.contains_key(&fp),
+        "B's draft must survive"
+    );
+    assert!(app.document_state.dirty_paths.contains(&fp));
+    assert!(app.ui_state.remove_dialog.is_some());
+    assert!(diagnostics_mention(&app, "also uses it"));
+    assert_eq!(std::fs::read(&fp).unwrap(), ORIGINAL);
+}
+
 /// Project A (dirty `X.snxsch`) plus project B in its own directory, listing
 /// `Y.snxsch`. When `load_other` is set B's sheet has an engine, so its walk
 /// is fully known; otherwise B's references cannot be read without disk IO.
