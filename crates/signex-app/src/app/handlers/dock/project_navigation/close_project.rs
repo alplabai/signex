@@ -683,6 +683,7 @@ mod tests {
                 active_variant: None,
                 libraries: Vec::new(),
                 enable_git: false,
+                unknown: Default::default(),
             },
             pending_libraries: std::collections::HashMap::new(),
         });
