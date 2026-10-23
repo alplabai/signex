@@ -539,29 +539,31 @@ impl Signex {
 
     pub(super) fn sch_library_delete_symbol(&mut self, idx: usize) -> bool {
         let Some(editor) = self.active_symbol_editor_mut() else {
-            tracing::warn!(
-                target: "signex::library",
-                idx,
-                "SCH Library: delete fired without an active Symbol editor"
+            crate::diagnostics::log_warning(
+                "SCH Library: delete fired without an active Symbol editor",
             );
             return true;
         };
         if editor.file.symbols.len() <= 1 {
-            tracing::warn!(
-                target: "signex::library",
-                "SCH Library: refusing to delete the last symbol in the file"
-            );
+            crate::diagnostics::log_warning(format!(
+                "{}: refused to delete the last symbol in the file",
+                editor.path.display()
+            ));
             return true;
         }
         if idx >= editor.file.symbols.len() {
-            tracing::warn!(
-                target: "signex::library",
-                idx,
-                len = editor.file.symbols.len(),
-                "SCH Library: delete index out of range"
-            );
+            crate::diagnostics::log_warning(format!(
+                "{}: symbol delete index {idx} is out of range ({} symbols)",
+                editor.path.display(),
+                editor.file.symbols.len()
+            ));
             return true;
         }
+        // The delete is its own undo step (#760): snapshot the whole
+        // container first so Undo restores the deleted symbol and leaves
+        // the previous edit alone.
+        let snapshot = editor.snapshot();
+        editor.commit_history(snapshot);
         editor.file.symbols.remove(idx);
         editor.file.updated = chrono::Utc::now();
         // A sibling before the active one shifted it down a slot: follow

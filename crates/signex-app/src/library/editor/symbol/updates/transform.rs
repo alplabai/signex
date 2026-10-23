@@ -42,7 +42,7 @@ pub(super) fn apply_symbol_transform(editor: &mut SymEditor, msg: SymbolEditorMs
             // destroyed the user's redo stack.
             let selected = editor.selected.clone();
             if crate::library::editor::symbol::state::selected_is_alignable(&selected) {
-                let snapshot = editor.primitive().clone();
+                let snapshot = editor.snapshot();
                 let changed = crate::library::editor::symbol::state::align_selected_to_grid(
                     editor.primitive_mut(),
                     &selected,
@@ -168,7 +168,7 @@ mod tests {
         let mut editor =
             SymbolEditorState::new(PathBuf::from("t.snxsym"), SymbolFile::from_symbol(sym));
         editor.selected = Some(SymbolSelection::Pin(idx));
-        editor.redo_snapshots.push(editor.primitive().clone());
+        editor.redo_snapshots.push(editor.snapshot());
 
         apply_symbol_transform(&mut editor, SymbolEditorMsg::AlignSelectedToGrid);
 
@@ -204,7 +204,7 @@ mod tests {
     fn align_selected_to_grid_with_all_selection_on_empty_symbol_stays_clean() {
         let mut editor = new_editor();
         editor.selected = Some(SymbolSelection::All);
-        editor.redo_snapshots.push(editor.primitive().clone());
+        editor.redo_snapshots.push(editor.snapshot());
 
         apply_symbol_transform(&mut editor, SymbolEditorMsg::AlignSelectedToGrid);
 
@@ -258,7 +258,7 @@ mod tests {
         let mut editor =
             SymbolEditorState::new(PathBuf::from("t.snxsym"), SymbolFile::from_symbol(sym));
         editor.selected = Some(SymbolSelection::Pin(idx));
-        editor.redo_snapshots.push(editor.primitive().clone());
+        editor.redo_snapshots.push(editor.snapshot());
 
         apply_symbol_transform(&mut editor, SymbolEditorMsg::AlignSelectedToGrid);
 

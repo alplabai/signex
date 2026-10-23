@@ -29,6 +29,7 @@ mod runtime;
 mod selection_request;
 pub(crate) mod sheet_hierarchy;
 mod state;
+mod symbol_history;
 pub(crate) mod view;
 
 pub use contracts::{
@@ -50,6 +51,7 @@ pub use documents::{
 pub use state::{
     DocumentState, InteractionState, KeymapRecorderState, LoadedProject, ProjectId, Signex, UiState,
 };
+pub use symbol_history::SymbolHistorySnapshot;
 
 // Re-exported so modal dialogs outside `state` can reference the type.
 pub use state::AnnotateOrder;

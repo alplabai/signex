@@ -38,7 +38,7 @@ type SymEditor = crate::app::SymbolEditorState;
 /// Push a full snapshot onto the undo stack; clear the redo stack.
 /// Capped at 100 entries — oldest entry is evicted when the cap is hit.
 fn push_undo(editor: &mut SymEditor) {
-    let snapshot = editor.primitive().clone();
+    let snapshot = editor.snapshot();
     push_undo_snapshot(editor, snapshot);
 }
 
@@ -51,12 +51,8 @@ fn push_undo(editor: &mut SymEditor) {
 /// something changed. Doing the two independently (push now, maybe pop
 /// the snapshot back off later) still leaves the redo stack cleared on
 /// a no-op, which is the bug this split exists to prevent.
-fn push_undo_snapshot(editor: &mut SymEditor, snapshot: signex_library::Symbol) {
-    editor.undo_snapshots.push(snapshot);
-    if editor.undo_snapshots.len() > 100 {
-        editor.undo_snapshots.remove(0);
-    }
-    editor.redo_snapshots.clear();
+fn push_undo_snapshot(editor: &mut SymEditor, snapshot: crate::app::SymbolHistorySnapshot) {
+    editor.commit_history(snapshot);
 }
 
 /// Record the first event of a drag gesture.
