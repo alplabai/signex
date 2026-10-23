@@ -95,7 +95,15 @@ impl PageSetupInputs {
         self.rejections.iter().any(|(f, _)| *f == field)
     }
 
+    /// Record an automatic adjustment: shown in the modal and written to the
+    /// Messages panel, so a value the user did not type never changes unseen.
+    fn note(&mut self, message: String) {
+        crate::diagnostics::log_info(format!("PDF page setup: {message}"));
+        self.info = Some(message);
+    }
+
     fn reject(&mut self, field: PageField, message: String) {
+        crate::diagnostics::log_warning(format!("PDF page setup: {message}"));
         self.clear_rejection(field);
         self.rejections.push((field, message));
         self.info = None;
@@ -159,17 +167,25 @@ impl super::PreviewState {
         let before = self.pdf_options.margins;
         self.pdf_options.margins = before.fitted_to_page(w, h);
         let mut refitted = false;
+        let mut changes = Vec::new();
         for edge in MarginEdge::ALL {
             let mm = self.pdf_options.margins.edge_mm(edge);
             if (mm - before.edge_mm(edge)).abs() > 1e-9 {
                 refitted = true;
+                changes.push(format!(
+                    "{edge} {} -> {} mm",
+                    format_mm(before.edge_mm(edge)),
+                    format_mm(mm)
+                ));
                 self.page_setup.set_margin_text(edge, format_mm(mm));
                 self.page_setup.clear_rejection(PageField::Margin(edge));
             }
         }
         if refitted {
-            self.page_setup.info =
-                Some("Margins were reduced to fit the new page size.".to_string());
+            self.page_setup.note(format!(
+                "Margins were reduced to fit the new page size ({}).",
+                changes.join(", ")
+            ));
         }
     }
 
@@ -259,8 +275,8 @@ impl super::PreviewState {
                 if update.clamped {
                     let mm = format_mm(update.margins.edge_mm(edge));
                     self.page_setup.set_margin_text(edge, mm.clone());
-                    self.page_setup.info =
-                        Some(format!("{edge} margin limited to {mm} mm to fit the page."));
+                    self.page_setup
+                        .note(format!("{edge} margin limited to {mm} mm to fit the page."));
                 }
                 true
             }
@@ -268,12 +284,17 @@ impl super::PreviewState {
     }
 
     pub fn apply_scale_mode(&mut self, mode: PdfScaleMode) -> bool {
+        let mut fallback_note = None;
         self.pdf_options.scale = match mode {
             PdfScaleMode::FitToPage => PdfScale::FitToPage,
             PdfScaleMode::OneToOne => PdfScale::OneToOne,
             PdfScaleMode::Percent => match parse_percent(&self.page_setup.percent) {
                 Ok(percent) => PdfScale::Percent(percent),
                 Err(_) => {
+                    fallback_note = Some(format!(
+                        "Scale text \"{}\" is not a valid percentage; reset to 100%.",
+                        self.page_setup.percent
+                    ));
                     self.page_setup.percent = "100".to_string();
                     PdfScale::Percent(100.0)
                 }
@@ -282,6 +303,9 @@ impl super::PreviewState {
         // The percent field is either reset to a good value or hidden.
         self.page_setup.clear_rejection(PageField::Percent);
         self.page_setup.info = None;
+        if let Some(message) = fallback_note {
+            self.page_setup.note(message);
+        }
         true
     }
 

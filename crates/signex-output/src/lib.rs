@@ -36,7 +36,9 @@ pub use pdf::{
     PageSizeKind, PdfExporter, PdfOptions, PdfOutput, PdfScale, PdfScaleMode, SchematicPalette,
     parse_custom_edge_mm, parse_mm, parse_percent,
 };
-pub use preview::{PreviewOptions, PreviewPage, PreviewRasterizer};
+pub use preview::{
+    MAX_PREVIEW_EDGE_PX, PreviewOptions, PreviewPage, PreviewRasterizer, preview_raster_size,
+};
 pub use substitution::{SubstitutionContext, resolve};
 pub use template::{Template, TemplateError, TemplateId, TitleBlockField};
 

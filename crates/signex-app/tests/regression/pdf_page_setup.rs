@@ -306,3 +306,98 @@ fn custom_page_edges_have_a_lower_bound_so_margins_cannot_collapse() {
         "{m:?}"
     );
 }
+
+fn logged(marker: &str) -> bool {
+    signex_app::diagnostics::recent_entries()
+        .iter()
+        .any(|e| e.message.contains(marker))
+}
+
+#[test]
+fn automatic_changes_reach_the_messages_panel() {
+    let _ = signex_app::diagnostics::init_logging();
+    let mut app = app_with_sheet("A4");
+
+    // Margin clamp.
+    send(
+        &mut app,
+        PrintPreviewMsg::SetMargin(MarginEdge::Left, "5000".into()),
+    );
+    assert!(logged("Left margin limited to"));
+
+    // Page-change refit.
+    send(&mut app, PrintPreviewMsg::SetPageSize(PageSize::IsoA0));
+    send(
+        &mut app,
+        PrintPreviewMsg::SetMargin(MarginEdge::Top, "300".into()),
+    );
+    send(&mut app, PrintPreviewMsg::SetPageSize(PageSize::IsoA5));
+    assert!(logged("Margins were reduced to fit the new page size"));
+
+    // Rejected input.
+    send(
+        &mut app,
+        PrintPreviewMsg::SetMargin(MarginEdge::Bottom, "zzq".into()),
+    );
+    assert!(logged("Bottom margin"));
+
+    // Percent fallback.
+    send(
+        &mut app,
+        PrintPreviewMsg::SetScaleMode(PdfScaleMode::Percent),
+    );
+    send(&mut app, PrintPreviewMsg::SetScalePercent("qqx".into()));
+    send(
+        &mut app,
+        PrintPreviewMsg::SetScaleMode(PdfScaleMode::OneToOne),
+    );
+    send(
+        &mut app,
+        PrintPreviewMsg::SetScaleMode(PdfScaleMode::Percent),
+    );
+    assert!(logged("Scale text \"qqx\" is not a valid percentage"));
+    assert_eq!(preview(&app).pdf_options.scale, PdfScale::Percent(100.0));
+    assert!(preview(&app).page_setup.notice().is_some());
+}
+
+#[test]
+fn a_huge_custom_page_previews_within_the_pixel_cap() {
+    let _ = signex_app::diagnostics::init_logging();
+    let mut app = app_with_sheet("A4");
+    send(
+        &mut app,
+        PrintPreviewMsg::SetPageSize(PageSize::Custom {
+            width_mm: 100.0,
+            height_mm: 100.0,
+        }),
+    );
+    send(&mut app, PrintPreviewMsg::SetCustomWidth("5080".into()));
+    send(&mut app, PrintPreviewMsg::SetCustomHeight("5080".into()));
+    let page = &preview(&app).pages[0];
+    assert!(
+        page.width_px <= signex_output::MAX_PREVIEW_EDGE_PX,
+        "{}x{}",
+        page.width_px,
+        page.height_px
+    );
+    assert!(page.height_px <= signex_output::MAX_PREVIEW_EDGE_PX);
+    assert!(logged("reduced resolution"));
+}
+
+#[test]
+fn a_portrait_suffixed_sheet_seeds_a_consistent_custom_orientation() {
+    let app = app_with_sheet("Tabloid portrait");
+    let o = preview(&app).pdf_options.clone();
+    if let PageSize::Custom {
+        width_mm,
+        height_mm,
+    } = o.page_size
+    {
+        let expect = if width_mm >= height_mm {
+            Orientation::Landscape
+        } else {
+            Orientation::Portrait
+        };
+        assert_eq!(o.orientation, expect);
+    }
+}

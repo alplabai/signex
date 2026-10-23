@@ -519,6 +519,7 @@ fn wire_ctx() -> ExportContext {
         start: Point::new(0.0, 0.0),
         end: Point::new(50.0, 20.0),
         stroke_width: 0.15,
+        unknown_columns: Default::default(),
     });
     let mut ctx = sample_ctx(1);
     ctx.sheets[0].schematic = sheet;
