@@ -5,6 +5,9 @@
 //! behaviour change.
 
 use super::*;
+use crate::app::state::ProjectId;
+use crate::app::state::scope::CaseFold;
+use crate::app::state::sheet_refs::SheetRefs;
 
 impl Signex {
     /// Close every tab backed by the project whose root is at
@@ -18,78 +21,175 @@ impl Signex {
     /// immediately. The modal's choice handler
     /// (`handle_project_close_confirm`) calls back into this method
     /// once the user picks Save All or Discard All.
+    ///
+    /// Attributing a sibling project's child sheets reads sheet files, so
+    /// this only starts that read on a worker thread; the gate itself runs
+    /// in [`handle_close_refs_resolved`](Self::handle_close_refs_resolved)
+    /// when the result comes back.
     pub(super) fn close_project_at_tree_path(&mut self, tree_path: &[usize]) -> Task<Message> {
-        // The gate reads `dirty_paths`; do not rely on every edit site
-        // having refreshed the panel context since its last footprint edit.
-        self.sync_footprint_dirty_paths();
         let Some(&project_idx) = tree_path.first() else {
             return Task::none();
         };
+        let Some(project_id) = self.document_state.projects.get(project_idx).map(|p| p.id) else {
+            return Task::none();
+        };
+        self.spawn_close_refs_resolve(project_id)
+    }
+
+    /// Start the off-thread child-sheet read for closing `project_id`. Used by
+    /// the click and again when the open-project set changed under a result
+    /// already in hand (a project opened meanwhile has unresolved children).
+    fn spawn_close_refs_resolve(&self, project_id: ProjectId) -> Task<Message> {
+        let inputs = self.document_state.sheet_ref_inputs();
+        Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || {
+                    Box::new(inputs.resolve(CaseFold::host_default()))
+                })
+                .await
+                .map_err(|e| format!("sheet-reference worker failed: {e}"))
+            },
+            move |result| Message::Project(ProjectMsg::CloseRefsResolved { project_id, result }),
+        )
+    }
+
+    /// Everything the Close Project task reads, resolved on the calling
+    /// thread. The body the task runs off-thread, exposed so a regression
+    /// test can complete the task without an async runtime.
+    #[doc(hidden)]
+    pub fn resolve_sheet_refs_blocking(&self) -> Result<Box<SheetRefs>, String> {
+        Ok(Box::new(
+            self.document_state
+                .sheet_ref_inputs()
+                .resolve(CaseFold::host_default()),
+        ))
+    }
+
+    /// The Close Project gate, run once the sheet references are resolved:
+    /// open the confirm modal when the project owns unsaved work, otherwise
+    /// close it.
+    ///
+    /// Every dirty document of the project ends up in exactly one place: the
+    /// modal's save / discard list, or the kept list (another open project
+    /// claims it) which the modal and the Messages panel name and which stays
+    /// open when the project closes.
+    pub(crate) fn handle_close_refs_resolved(
+        &mut self,
+        project_id: ProjectId,
+        result: Result<Box<SheetRefs>, String>,
+    ) -> Task<Message> {
+        let sheet_refs = match result {
+            Ok(refs) => *refs,
+            Err(reason) => {
+                crate::diagnostics::log_error(
+                    "Close Project cancelled: child-sheet ownership could not be resolved",
+                    &anyhow::anyhow!(reason),
+                );
+                self.refresh_panel_ctx();
+                return Task::none();
+            }
+        };
+        let Some(project_idx) = self
+            .document_state
+            .projects
+            .iter()
+            .position(|p| p.id == project_id)
+        else {
+            return Task::none();
+        };
+        // The gate reads `dirty_paths`; do not rely on every edit site
+        // having refreshed the panel context since its last footprint edit.
+        self.sync_footprint_dirty_paths();
+        // Engines are re-read here (no IO), so an edit made while the Task ran
+        // is seen. Evidence that no longer describes the workspace is read
+        // again instead of acted on.
+        if !self.document_state.refs_are_current(&sheet_refs) {
+            return self.spawn_close_refs_resolve(project_id);
+        }
         let Some(project) = self.document_state.projects.get(project_idx) else {
             return Task::none();
         };
-        let project_dir = project.path.parent().map(|p| p.to_path_buf());
-        // Collect dirty paths inside this project's directory tree.
-        // `dirty_paths` is project-scoped by ancestor check —
-        // primitive editors live under `<project>/<lib>.snxlib/
-        // symbols|footprints/<file>` so the immediate parent dir is
-        // never the project dir itself; a strict `parent() == dir`
-        // check would miss every nested primitive draft (which is
-        // why Add New ▸ Symbol drafts weren't surfacing in the
-        // close-project prompt). Walk ancestors instead. The
-        // project's own `.snxprj` file (when added to dirty_paths
-        // by the auto-attach-library flow) sits exactly at the
-        // project root and is also picked up here.
-        let dirty: Vec<std::path::PathBuf> = if let Some(dir) = project_dir.as_deref() {
-            let mut v: Vec<std::path::PathBuf> = self
-                .document_state
-                .dirty_paths
-                .iter()
-                .filter(|p| {
-                    p.starts_with(dir)
-                        && !self.document_state.claimed_by_other_project(project_idx, p)
-                })
-                .cloned()
-                .collect();
-            v.sort();
-            v
-        } else {
-            Vec::new()
-        };
-
+        let project_name = project.data.name.clone();
+        // The project's dirty paths, split into the ones it saves / discards
+        // and the ones another open project claims. Primitive editors live
+        // under `<project>/<lib>.snxlib/symbols|footprints/<file>`, so the
+        // scan walks ancestors rather than the immediate parent, and the
+        // project's own `.snxprj` sits at the root and is picked up too.
         // Component Preview rows are keyed by row, not file, so they are
-        // not in `dirty_paths`; ask the library for the ones whose
-        // library sits inside this project (#666).
-        let dirty_rows = project_dir
-            .as_deref()
-            .map(|dir| self.library.dirty_editors_under(dir))
-            .unwrap_or_default();
+        // not in `dirty_paths`; the scan places them too (#666): a row is
+        // the project's only when its library is the project's own.
+        let scan = self.current_close_scan(project_idx, &sheet_refs);
+        if let Some(line) = scan.warning(&project_name) {
+            crate::diagnostics::log_warning(line);
+            self.refresh_panel_ctx();
+        }
 
-        if !dirty.is_empty() || !dirty_rows.is_empty() {
+        if !scan.mine.is_empty() || !scan.mine_rows.is_empty() {
+            if let Some(reason) = sheet_refs.discard_blocked_reason() {
+                crate::diagnostics::log_warning(format!(
+                    "Close Project '{project_name}': {reason}"
+                ));
+                self.refresh_panel_ctx();
+            }
             self.ui_state.project_close_confirm = Some(crate::app::ProjectCloseConfirmState {
-                tree_path: tree_path.to_vec(),
-                project_name: project.data.name.clone(),
-                dirty_paths: dirty,
-                dirty_rows,
+                project_id,
+                project_name,
+                dirty_paths: scan.mine,
+                dirty_rows: scan.mine_rows,
+                kept_paths: scan.kept,
+                sheet_refs,
             });
             return Task::none();
         }
 
-        self.execute_close_project_at_tree_path(tree_path)
+        self.execute_close_project(project_id, &sheet_refs, &scan.kept)
+    }
+
+    /// The closing project's dirty documents split by the strict rule, from
+    /// the engines and library editors as they are now.
+    fn current_close_scan(
+        &self,
+        project_idx: usize,
+        sheet_refs: &SheetRefs,
+    ) -> crate::app::state::sheet_refs::CloseScan {
+        self.document_state
+            .close_scan(sheet_refs, project_idx, &self.library.dirty_editors())
     }
 
     /// Inner close-project flow that actually drops tabs + the
     /// project entry. Called either directly (clean project) or via
     /// the project-close confirm modal once the user picks Save All
     /// or Discard All. Trusts that `dirty_paths` for this project is
-    /// already empty (callers ensure this).
-    fn execute_close_project_at_tree_path(&mut self, tree_path: &[usize]) -> Task<Message> {
-        let Some(&project_idx) = tree_path.first() else {
+    /// already empty apart from `kept` (callers ensure this).
+    ///
+    /// `kept` are dirty documents another open project claims: their tabs
+    /// stay open (re-homed to no project) and their engines are never swept.
+    fn execute_close_project(
+        &mut self,
+        project_id: ProjectId,
+        sheet_refs: &SheetRefs,
+        kept: &[std::path::PathBuf],
+    ) -> Task<Message> {
+        let Some(project_idx) = self
+            .document_state
+            .projects
+            .iter()
+            .position(|p| p.id == project_id)
+        else {
+            crate::diagnostics::log_warning(
+                "Close Project cancelled: the project is no longer open",
+            );
+            self.refresh_panel_ctx();
             return Task::none();
         };
-        let Some(target_id) = self.document_state.projects.get(project_idx).map(|p| p.id) else {
-            return Task::none();
-        };
+        let target_id = project_id;
+
+        // A kept document's tab outlives the project it was opened under.
+        for tab in &mut self.document_state.tabs {
+            if tab.project_id == Some(target_id) && kept.contains(&tab.path) {
+                tab.project_id = None;
+            }
+        }
 
         // Collect tab indices owned by this project, highest first —
         // `close_tab_now` removes by index, so descending order keeps
@@ -113,17 +213,17 @@ impl Signex {
         // pruned `dirty_paths` for the project, so this loop just
         // sweeps the engine map for any path under this project's
         // directory.
-        if let Some(project) = self.document_state.projects.get(project_idx)
-            && let Some(dir) = project.path.parent()
-        {
-            let dir = dir.to_path_buf();
+        if let Some(project) = self.document_state.projects.get(project_idx) {
+            let dir = project.dir().to_path_buf();
+            let reach = self.document_state.reach_sets(sheet_refs);
             let sweep: Vec<std::path::PathBuf> = self
                 .document_state
                 .engines
                 .keys()
                 .filter(|p| {
-                    p.parent() == Some(&dir)
-                        && !self.document_state.claimed_by_other_project(project_idx, p)
+                    (p.parent() == Some(&dir) || reach.reached_by(project_idx, p))
+                        && !reach.reached_by_other(project_idx, p)
+                        && !kept.contains(p)
                 })
                 .cloned()
                 .collect();
@@ -271,6 +371,70 @@ impl Signex {
         let Some(state) = self.ui_state.project_close_confirm.take() else {
             return Task::none();
         };
+        if choice == ProjectCloseChoice::Cancel {
+            return Task::none();
+        }
+        // Look the project up again by id: the list may have shifted while
+        // the modal was up.
+        if !self
+            .document_state
+            .projects
+            .iter()
+            .any(|p| p.id == state.project_id)
+        {
+            crate::diagnostics::log_warning(format!(
+                "Close Project '{}' aborted: the project is no longer open",
+                state.project_name
+            ));
+            self.refresh_panel_ctx();
+            return Task::none();
+        }
+        // A project opened since the references were read has disk-only
+        // children nobody resolved; read again and re-prompt rather than act
+        // on stale ownership.
+        self.sync_footprint_dirty_paths();
+        if !self.document_state.refs_are_current(&state.sheet_refs) {
+            crate::diagnostics::log_warning(format!(
+                "Close Project '{}': the open projects changed, so the sheet references were re-read; confirm again",
+                state.project_name
+            ));
+            return self.spawn_close_refs_resolve(state.project_id);
+        }
+        // An edit since the prompt (an engine reference, a new dirty
+        // document) can move a document between `mine` and `kept`. Never act
+        // on the stale lists: run the gate again so the user sees the new ones.
+        if let Some(idx) = self
+            .document_state
+            .projects
+            .iter()
+            .position(|p| p.id == state.project_id)
+        {
+            let scan = self.current_close_scan(idx, &state.sheet_refs);
+            if scan.mine != state.dirty_paths
+                || scan.kept != state.kept_paths
+                || scan.mine_rows != state.dirty_rows
+            {
+                crate::diagnostics::log_warning(format!(
+                    "Close Project '{}': the unsaved documents changed since the prompt; review the list and confirm again",
+                    state.project_name
+                ));
+                return self
+                    .handle_close_refs_resolved(state.project_id, Ok(Box::new(state.sheet_refs)));
+            }
+        }
+        if choice == ProjectCloseChoice::DiscardAll
+            && let Some(reason) = state.sheet_refs.discard_blocked_reason()
+        {
+            // The dialog does not offer Discard All here; a forced message is
+            // refused, logged, and the modal stays up for Save All / Cancel.
+            crate::diagnostics::log_warning(format!(
+                "Close Project '{}': Discard All refused. {reason}",
+                state.project_name
+            ));
+            self.ui_state.project_close_confirm = Some(state);
+            self.refresh_panel_ctx();
+            return Task::none();
+        }
         match choice {
             ProjectCloseChoice::Cancel => Task::none(),
             ProjectCloseChoice::SaveAll => {
@@ -283,7 +447,7 @@ impl Signex {
                 let failed = self.save_all_dirty("Save All", &state.dirty_paths, &state.dirty_rows);
                 // Drop dirty dots for the paths that DID save (the engine
                 // leg clears markers but doesn't refresh; the full-success
-                // close path refreshes via `execute_close_project_at_tree_path`,
+                // close path refreshes via `execute_close_project`,
                 // but the partial-failure path below would otherwise leave
                 // stale red dots on already-saved sheets).
                 self.refresh_panel_ctx();
@@ -296,12 +460,12 @@ impl Signex {
                         )));
                     return Task::none();
                 }
-                self.execute_close_project_at_tree_path(&state.tree_path)
+                self.execute_close_project(state.project_id, &state.sheet_refs, &state.kept_paths)
             }
             ProjectCloseChoice::DiscardAll => {
                 // Drop dirty engines + clear the dirty flags. The
                 // engines map is also swept by
-                // `execute_close_project_at_tree_path` afterwards,
+                // `execute_close_project` afterwards,
                 // but doing it here too keeps the flow symmetric
                 // with SaveAll (after this match the project's
                 // dirty_paths entries are gone either way).
@@ -324,7 +488,11 @@ impl Signex {
                 for address in &state.dirty_rows {
                     tasks.push(self.close_component_preview(address));
                 }
-                tasks.push(self.execute_close_project_at_tree_path(&state.tree_path));
+                tasks.push(self.execute_close_project(
+                    state.project_id,
+                    &state.sheet_refs,
+                    &state.kept_paths,
+                ));
                 Task::batch(tasks)
             }
         }
@@ -545,17 +713,21 @@ mod tests {
     }
 
     #[test]
-    fn project_close_gate_sees_a_dirty_footprint_without_a_panel_refresh() {
+    fn project_close_gate_keeps_a_dirty_footprint_without_a_panel_refresh() {
         let dir = tempfile::tempdir().unwrap();
         let (mut app, path) = app_with_unsynced_dirty_footprint(dir.path());
 
-        let _ = app.close_project_at_tree_path(&[0]);
+        let project_id = app.document_state.projects[0].id;
+        let task = app.close_project_at_tree_path(&[0]);
+        assert_eq!(task.units(), 1, "the disk read must run off-thread");
+        let result = app.resolve_sheet_refs_blocking();
+        let _ = app.handle_close_refs_resolved(project_id, result);
 
-        let modal = app
-            .ui_state
-            .project_close_confirm
-            .as_ref()
-            .expect("project close must prompt");
-        assert!(modal.dirty_paths.contains(&path));
+        // The draft is not reached by any sheet walk, so it is kept (no
+        // prompt, editor stays open) rather than discarded. It only gets that
+        // far when the gate saw it despite the missing panel refresh.
+        assert!(app.ui_state.project_close_confirm.is_none());
+        assert!(app.document_state.dirty_paths.contains(&path));
+        assert!(app.document_state.footprint_editors.contains_key(&path));
     }
 }

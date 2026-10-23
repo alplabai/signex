@@ -163,7 +163,7 @@ fn view_pinned_input<'a>(
     let summary: Element<'a, LibraryMessage> = match datasheet {
         Some(DatasheetRef::HashPinned { hash, filename }) => {
             let short_hash = if hash.len() > 12 {
-                format!("{}…", &hash[..12])
+                format!("{}…", crate::text_trunc::prefix_within_bytes(hash, 12))
             } else {
                 hash.clone()
             };

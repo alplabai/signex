@@ -126,8 +126,29 @@ main     ← stable releases only (protected, requires PR + approval)
 3. Make your changes
 4. Ensure `cargo test --workspace` and
    `cargo clippy --workspace --all-targets --all-features` pass
-5. Commit with a descriptive message: `feat: add measure tool (Ctrl+M)`
-6. Push and open a PR against `trunk`
+5. For a user-visible change, add a changelog fragment (see below)
+6. Commit with a descriptive message: `feat: add measure tool (Ctrl+M)`
+7. Push and open a PR against `trunk`
+
+### Changelog fragments
+
+Do **not** edit `CHANGELOG.md` in a PR: every merge would make every other open
+PR conflict on it. Add `changelog.d/<number>.<section>.md` instead (`<number>` =
+PR or issue number; `<section>` = `added`, `changed`, `deprecated`, `removed`,
+`fixed` or `security`), holding just the bullet(s) in the existing
+`CHANGELOG.md` style. Use `<number>.<section>.2.md` for a second fragment of the
+same section. Naming rule and examples: [`changelog.d/README.md`](changelog.d/README.md).
+
+Check yours with `bash scripts/changelog_assemble.sh --check`. The CI job
+`changelog · fragments` warns when a PR into `trunk` edits `CHANGELOG.md`
+directly (it becomes an error after a transition window; same-repo release PRs
+— head branch `chore/release-*` or `release/*` — are exempt) and warns when a
+`feat`/`fix` PR has no fragment. At release time the maintainer runs
+`scripts/changelog_assemble.sh --version X.Y.Z --date YYYY-MM-DD`, which folds
+the fragments in and opens the dated section `release.yml` extracts. The
+release PR then still adds by hand the headline, the install block and the
+closing `[Full changelog](…compare/v<prev>...v<this>)` line that the Format
+section of `CHANGELOG.md` requires.
 
 ### Commit Messages
 
