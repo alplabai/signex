@@ -46,8 +46,9 @@ impl Signex {
             CanvasEvent::CursorAt { x, y, zoom_pct } => {
                 self.ui_state.cursor_x = x as f64;
                 self.ui_state.cursor_y = y as f64;
-                if self.ui_state.cursor_document != self.document_state.active_path {
-                    self.ui_state.cursor_document = self.document_state.active_path.clone();
+                if self.ui_state.cursor_document.as_deref() != self.cursor_document_now() {
+                    self.ui_state.cursor_document =
+                        self.cursor_document_now().map(std::path::Path::to_path_buf);
                 }
                 self.ui_state.zoom = zoom_pct;
                 // Hover detection: fast hit-test against the active
@@ -195,7 +196,7 @@ impl Signex {
                 // It means nothing in another document (a tab switched with
                 // the keyboard, another window), nor before the first hover.
                 if self.ui_state.cursor_document.is_none()
-                    || self.ui_state.cursor_document != self.document_state.active_path
+                    || self.ui_state.cursor_document.as_deref() != self.cursor_document_now()
                 {
                     return Task::none();
                 }
@@ -373,6 +374,19 @@ impl Signex {
         } else {
             false
         }
+    }
+
+    /// The document a reported cursor point belongs to: the active schematic,
+    /// else the active tab (a PCB has no `active_path`). `active_path` comes
+    /// first because an undocked window's event swaps it but not
+    /// `active_tab`.
+    fn cursor_document_now(&self) -> Option<&std::path::Path> {
+        self.document_state.active_path.as_deref().or_else(|| {
+            self.document_state
+                .tabs
+                .get(self.document_state.active_tab)
+                .map(|tab| tab.path.as_path())
+        })
     }
 
     /// Redraw the active schematic or PCB canvas after its camera moved.

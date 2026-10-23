@@ -4,7 +4,7 @@
 //! "All Off" (were placeholders that closed the dialog).
 
 use iced::{Point as ScreenPoint, Rectangle};
-use signex_app::app::{AnnotateMsg, Message, Signex, UiMsg, WindowMsg};
+use signex_app::app::{AnnotateMsg, FileMsg, Message, Signex, UiMsg, WindowMsg};
 use signex_app::canvas::CanvasEvent;
 use signex_app::keymap::ShortcutTrigger;
 use signex_app::menu_bar::MenuMessage;
@@ -339,6 +339,51 @@ fn center_view_at_cursor_ignores_a_point_from_another_document() {
         before,
         "a point from another sheet must not move this one"
     );
+}
+
+/// #862 review: a PCB tab has no `active_path`, so the cursor point is keyed
+/// on the active tab there. Center View At Cursor recentres a board too.
+#[test]
+fn center_view_at_cursor_recentres_a_pcb() {
+    let (mut app, _t) = Signex::new();
+    let _ = app.update(Message::File(FileMsg::PcbOpenFinished {
+        path: PathBuf::from("/tmp/does-not-matter/board.snxpcb"),
+        title: "board".to_string(),
+        result: Ok(Box::new(empty_pcb_board())),
+    }));
+    app.interaction_state.pcb_canvas.set_viewport(VIEWPORT);
+    let (_, _, s0) = app.interaction_state.pcb_canvas.live_camera();
+    cursor_at(&mut app, 50.0, 30.0);
+
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::CenterAtCursor));
+
+    let camera = app.interaction_state.pcb_canvas.live_camera();
+    assert!((camera.2 - s0).abs() < 1e-6, "zoom must not change");
+    let centre = view_centre(camera);
+    assert!(
+        (centre.0 - 50.0).abs() < 1e-3 && (centre.1 - 30.0).abs() < 1e-3,
+        "the board view must centre on the cursor point, got {centre:?}"
+    );
+}
+
+fn empty_pcb_board() -> signex_types::pcb::PcbBoard {
+    signex_types::pcb::PcbBoard {
+        unknown: Default::default(),
+        uuid: uuid::Uuid::new_v4(),
+        version: 1,
+        generator: "signex-test".into(),
+        thickness: 1.6,
+        outline: vec![],
+        layers: vec![],
+        setup: None,
+        nets: vec![],
+        footprints: vec![],
+        segments: vec![],
+        vias: vec![],
+        zones: vec![],
+        graphics: vec![],
+        texts: vec![],
+    }
 }
 
 /// #525 review: `Home` typed in an undocked sheet's window centres that

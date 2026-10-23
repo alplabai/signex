@@ -73,7 +73,11 @@ impl Signex {
 
         if let Some(command) = lookup.command.as_ref() {
             self.ui_state.keymap_pending_sequence.clear();
-            return Some(self.dispatch_command_in_window(command, window));
+            return Some(self.dispatch_command(
+                command,
+                crate::app::command::CommandArgs::none(),
+                window,
+            ));
         }
         if lookup.matched {
             self.ui_state.keymap_pending_sequence.clear();
