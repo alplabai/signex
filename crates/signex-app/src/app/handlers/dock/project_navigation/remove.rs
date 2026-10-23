@@ -277,7 +277,6 @@ impl Signex {
 
 #[cfg(test)]
 mod tests {
-
     use std::path::{Path, PathBuf};
 
     use crate::app::state::scope::CaseFold;

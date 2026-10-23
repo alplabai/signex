@@ -156,7 +156,8 @@ pub struct Violation {
 }
 
 impl Violation {
-    /// A violation with no `primary` / `peer` object attached.
+    /// A violation with no `primary` / `peer` object attached. For a `user::`
+    /// rule `rule` is only a placeholder; `rule_id` carries identity.
     pub fn new(
         rule_id: RuleId,
         rule: RuleKind,

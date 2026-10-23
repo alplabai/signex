@@ -728,7 +728,8 @@ fn default_unit() -> u32 {
 }
 
 /// Blank symbol at the origin with a nil uuid; serde defaults elsewhere
-/// (`unit` 1, `in_bom` and `on_board` true).
+/// (`unit` 1, `in_bom` and `on_board` true). For fixtures and partial
+/// literals; production code builds symbols exhaustively and mints real uuids.
 impl Default for Symbol {
     fn default() -> Self {
         Self {

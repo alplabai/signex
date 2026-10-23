@@ -279,7 +279,9 @@ fn default_root_sheet_page() -> String {
 }
 
 /// An empty sheet with a nil uuid; every other field equals its serde default
-/// (pinned by `default_equals_deserialized_empty_manifest`).
+/// (pinned by `sheet_default_equals_deserialized_empty_manifest`).
+/// For fixtures and partial literals; production code builds sheets
+/// exhaustively and mints real uuids.
 impl Default for SchematicSheet {
     fn default() -> Self {
         Self {
@@ -307,7 +309,8 @@ impl Default for SchematicSheet {
     }
 }
 
-/// Zero-length wire at the origin with a nil uuid.
+/// Zero-length wire at the origin with a nil uuid. For fixtures and partial
+/// literals; production code builds wires exhaustively and mints real uuids.
 impl Default for Wire {
     fn default() -> Self {
         Self {
@@ -320,7 +323,8 @@ impl Default for Wire {
     }
 }
 
-/// Junction at the origin with a nil uuid.
+/// Junction at the origin with a nil uuid. For fixtures and partial literals;
+/// production code builds junctions exhaustively and mints real uuids.
 impl Default for Junction {
     fn default() -> Self {
         Self {

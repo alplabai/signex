@@ -189,7 +189,6 @@ fn page_size_reflected_in_media_box() {
 #[test]
 fn exports_schematic_content() {
     use signex_types::schematic::{Label, LabelType, Point, Symbol, Wire};
-
     use uuid::Uuid;
 
     let mut sheet = empty_sheet();
