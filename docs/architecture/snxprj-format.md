@@ -47,20 +47,18 @@ These are why leaving it as JSON is defensible now, not why it was chosen:
 
 ## Known gaps (open questions)
 
-- **No forward compatibility.** New fields use `#[serde(default)]`, which
-  handles *old file, new Signex*. The reverse direction loses data:
-  `ProjectData` has no `deny_unknown_fields`, no `flatten` catch-all and no
-  extras bag, so a key written by a newer Signex is dropped on load and absent
-  on the next save, with no error or warning. `.snxsch` and `.snxpcb` preserve unknown
-  keys and unknown TSV columns (#312, #313, #314, #315); `.snxprj` is
-  excluded from that work, and `.snxlib`, `.snxsym` and `.snxfpt` carry a
-  format token but no unknown-key preservation either. **Current position:
-  `.snxprj` accepts unknown-key loss. This is an unreviewed gap, not a
-  deliberate trade-off.** Giving it an unknown-key bag and a version token
-  is tracked in #788.
-- **No format/version manifest.** The TOML envelope gives the other five a
-  `format` token that lets an older build refuse a newer file. `.snxprj` has
-  none, so an older build cannot tell that it is about to drop fields.
+- **Unknown keys and the version token (#788, fixed).** `ProjectData`,
+  `SheetEntry` and `LibraryEntry` each carry a `#[serde(flatten)]` bag
+  (`project::UnknownJson`, raw `serde_json::Value`s, so `null` survives) that
+  is written back on save. Every save stamps `"format": "snxprj/1"`. A file
+  with no token predates it and loads as version 1. A file with any other
+  token (a newer `snxprj/2`, or garbage) is refused with
+  `ProjectError::UnsupportedFormat` and is never rewritten: a newer version may
+  change the meaning of existing keys, which the bag cannot preserve, so
+  opening read-write would risk silent degradation. This matches the
+  `.snxsch` / `.snxpcb` behaviour on a mismatched `format` token.
+  `.snxlib`, `.snxsym` and `.snxfpt` still carry a token but no unknown-key
+  preservation.
 - **Should `.snxprj` be TOML?** Undecided. Moving it would give it the
   envelope, the version token and the unknown-key machinery for free, at the
   cost of a breaking file-format change and a migration path for existing

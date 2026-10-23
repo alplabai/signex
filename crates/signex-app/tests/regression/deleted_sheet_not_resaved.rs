@@ -38,11 +38,13 @@ fn add_project(app: &mut Signex, prj_path: &Path, sheet: &str) -> ProjectId {
                 symbols_count: 0,
                 wires_count: 0,
                 labels_count: 0,
+                unknown: Default::default(),
             }],
             variant_definitions: Vec::new(),
             active_variant: None,
             libraries: Vec::new(),
             enable_git: false,
+            unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
     });
@@ -60,6 +62,7 @@ fn list_sheet(app: &mut Signex, idx: usize, filename: &str) {
             symbols_count: 0,
             wires_count: 0,
             labels_count: 0,
+            unknown: Default::default(),
         });
 }
 
@@ -738,6 +741,7 @@ fn a_library_draft_and_a_tab_only_file_under_the_closing_projects_folder_are_kep
             path: PathBuf::from("lib.snxlib"),
             kind: signex_types::project::LibraryEntryKind::ProjectLocal,
             library_id: None,
+            unknown: Default::default(),
         });
     let a_sheet = a_dir.join("a.snxsch");
     let tab_only = a_dir.join("stray.snxsch");

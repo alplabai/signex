@@ -128,8 +128,10 @@ fn push_project(app: &mut Signex, dir: &Path, name: &str) {
                 path: PathBuf::from("lib.snxlib"),
                 kind: LibraryEntryKind::ProjectLocal,
                 library_id: None,
+                unknown: Default::default(),
             }],
             enable_git: false,
+            unknown: Default::default(),
         },
         pending_libraries: std::collections::HashMap::new(),
     });

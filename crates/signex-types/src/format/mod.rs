@@ -15,8 +15,8 @@
 //! itself to document formats and left the project file alone; JSON
 //! persistence for it landed afterwards (0222a07c) with no recorded reason
 //! to prefer JSON. It is a small flat pointer record with no bulk rows, so
-//! the TSV blocks would add nothing, but it also has no format token and
-//! drops unknown keys on save. See `docs/architecture/snxprj-format.md`.
+//! the TSV blocks would add nothing. It carries a `snxprj/1` format token
+//! and preserves unknown keys (#788). See `docs/architecture/snxprj-format.md`.
 //!
 //! These types are the canonical Signex schema. Standard I/O — when it
 //! returns via the `signex-standard-import` companion repo (GPL-3.0) —
