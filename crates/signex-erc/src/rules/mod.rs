@@ -8,6 +8,8 @@
 
 mod ambiguous_label_anchor;
 pub(crate) use ambiguous_label_anchor::ambiguous_label_anchor;
+mod pins_touch_not_connected;
+pub(crate) use pins_touch_not_connected::pins_touch_not_connected;
 
 use std::collections::HashMap;
 

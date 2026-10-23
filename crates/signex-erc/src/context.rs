@@ -54,9 +54,12 @@ impl PaperSize {
 // ---------------------------------------------------------------------------
 
 /// A single pin instance in world-space, ready for rule evaluation.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct ErcPin {
     pub world_pos: Point,
+    /// Pin number (falls back to the name when the library pin has none) —
+    /// the `pin` half of a `designator.pin` label in diagnostics.
+    pub number: String,
     pub electrical_type: PinDirection,
     /// `false` for `Unclassified` and `DoNotConnect` pin types — those may be
     /// left unconnected by design. DSL: `pin.required == true`.
@@ -320,9 +323,9 @@ impl ErcContext {
             .collect();
 
         // --- Step 2: symbols with pre-computed pin connectivity -----------
-        // Project every pin to world space first: the connectivity gate needs
-        // ALL pin tips at once, because a pin touching another symbol's pin
-        // tip-to-tip is connected with no wire at all (issue #675).
+        // Pins are projected first, then gated below. Pin-to-pin contact is not
+        // a connection (ADR-0002 D5.1); the `PinsTouchNotConnected` rule
+        // reports it instead.
         let mut symbols: Vec<ErcSymbol> = snapshot
             .symbols
             .iter()
@@ -336,6 +339,11 @@ impl ErcContext {
                         let world = SymbolTransform::from_symbol(sym).apply(lp.pin.position);
                         ErcPin {
                             world_pos: Point::new(world.x, world.y),
+                            number: if lp.pin.number.is_empty() {
+                                lp.pin.name.clone()
+                            } else {
+                                lp.pin.number.clone()
+                            },
                             electrical_type: lp.pin.direction,
                             required: !matches!(
                                 lp.pin.direction,
@@ -365,11 +373,6 @@ impl ErcContext {
         gate.add_anchors(junctions.iter().map(|j| j.position));
         gate.add_anchors(labels.iter().map(|l| l.position));
         gate.add_anchors(no_connects.iter().map(|nc| nc.position));
-        gate.add_pin_tips(
-            symbols
-                .iter()
-                .flat_map(|s| s.pins.iter().map(|p| (p.world_pos, s.uuid))),
-        );
         for pin in symbols.iter_mut().flat_map(|s| s.pins.iter_mut()) {
             pin.connected = gate.contains(&pin.world_pos);
         }
@@ -562,6 +565,7 @@ mod tests {
     fn pin(pos: Point, dir: PinDirection) -> ErcPin {
         ErcPin {
             world_pos: pos,
+            number: "1".into(),
             electrical_type: dir,
             required: true,
             connected: true,

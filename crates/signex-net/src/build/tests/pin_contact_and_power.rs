@@ -1,6 +1,6 @@
-//! Issue #675 — the two connectivity cases the single-sheet derivation used to
-//! miss: same-value power ports joining by name, and pins that touch tip to tip
-//! with no wire between them.
+//! Issue #675 — same-value power ports joining by name, and the pin-to-pin
+//! policy (ADR-0002 D5.1): pins that touch tip to tip with no wire between them
+//! are NOT connected.
 
 use super::*;
 
@@ -56,7 +56,7 @@ fn different_value_power_ports_stay_separate() {
 }
 
 #[test]
-fn power_port_dropped_on_a_component_pin_connects_tip_to_tip() {
+fn power_port_dropped_on_a_component_pin_does_not_connect_without_a_wire() {
     let mut sheet = empty_sheet();
     add_one_pin(&mut sheet, "C", PinDirection::Passive);
     add_one_pin(&mut sheet, "GND", PinDirection::PowerInput);
@@ -65,26 +65,23 @@ fn power_port_dropped_on_a_component_pin_connects_tip_to_tip() {
 
     let netlist = build_netlist(&sheet);
 
-    let gnd = net_named(&netlist, "GND").expect("GND net exists with no wire");
     assert!(
-        gnd.terminals
+        netlist
+            .nets
             .iter()
-            .any(|t| t.reference == "C1" && t.pin == "1"),
-        "C1.1 must sit on GND: {gnd:?}"
+            .all(|n| n.terminals.iter().all(|t| t.reference != "C1")),
+        "pin-to-pin contact is not a connection: {netlist:?}"
     );
 }
 
 #[test]
-fn two_parts_butted_together_share_a_net() {
+fn two_parts_butted_together_form_no_net() {
     let mut sheet = empty_sheet();
     add_one_pin(&mut sheet, "R", PinDirection::Passive);
     place(&mut sheet, "R1", "R", pt(5.0, 5.0));
     place(&mut sheet, "R2", "R", pt(5.0, 5.0));
 
-    let netlist = build_netlist(&sheet);
-
-    assert_eq!(netlist.nets.len(), 1, "{netlist:?}");
-    assert_eq!(netlist.nets[0].terminals.len(), 2);
+    assert!(build_netlist(&sheet).nets.is_empty());
 }
 
 #[test]

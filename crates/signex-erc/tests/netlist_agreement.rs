@@ -2,7 +2,8 @@
 //!
 //! One shared fixture is run through both the authoritative netlist and the
 //! ERC context; they must agree on how many nets exist, what the supply net is
-//! called, and which pins count as connected.
+//! called, and which pins count as connected. Pin-to-pin contact is not a
+//! connection in either (D5.1); ERC reports it as `PinsTouchNotConnected`.
 
 use signex_erc::ErcContext;
 use signex_net::build_netlist;
@@ -75,7 +76,7 @@ fn wire(a: Point, b: Point) -> Wire {
 
 /// Wire A: source pin + GND port. Wire B: load pin + GND port (disjoint from A,
 /// joined only by the shared port name). Plus a capacitor pin dropped straight
-/// onto a third GND port, no wire.
+/// onto a third GND port, no wire — touching, not connected.
 fn fixture() -> SchematicSheet {
     let mut s = SchematicSheet {
         paper_size: "A4".to_string(),
@@ -106,8 +107,8 @@ fn erc_and_netlist_agree_on_net_count_and_supply_name() {
     let netlist = build_netlist(&sheet);
     let ctx = ErcContext::from_snapshot(&sheet);
 
-    // The wired GND rail and the tip-to-tip C1/#PWR3 pair are two physical
-    // islands joined only by the shared port name: one net.
+    // Wires A and B are two physical islands joined only by the shared port
+    // name: one net. The C1/#PWR3 tip-to-tip contact adds nothing to it.
     assert_eq!(netlist.nets.len(), 1, "{netlist:?}");
     assert_eq!(netlist.nets[0].name, "GND");
     assert_eq!(ctx.nets.len(), netlist.nets.len(), "{:?}", ctx.nets);
@@ -122,11 +123,28 @@ fn erc_sees_the_driver_on_the_merged_supply_net() {
 }
 
 #[test]
-fn erc_marks_tip_to_tip_pins_connected() {
-    let ctx = ErcContext::from_snapshot(&fixture());
+fn erc_and_netlist_agree_that_tip_to_tip_pins_are_not_connected() {
+    let sheet = fixture();
+    let ctx = ErcContext::from_snapshot(&sheet);
     let c1 = ctx.symbols.iter().find(|s| s.reference == "C1").unwrap();
+    assert!(c1.pins.iter().all(|p| !p.connected), "C1.1 only touches");
     assert!(
-        c1.pins.iter().all(|p| p.connected),
-        "C1.1 touches the GND port tip"
+        build_netlist(&sheet)
+            .nets
+            .iter()
+            .all(|n| n.terminals.iter().all(|t| t.reference != "C1")),
+        "the netlist has no C1 terminal either"
     );
+}
+
+#[test]
+fn erc_reports_the_touching_pins_naming_both() {
+    let diags = signex_erc::engine::run_all(&ErcContext::from_snapshot(&fixture()));
+    let touch: Vec<_> = diags
+        .iter()
+        .filter(|d| d.rule_kind == signex_erc::RuleKind::PinsTouchNotConnected)
+        .collect();
+    assert_eq!(touch.len(), 1, "{touch:?}");
+    assert!(touch[0].message.contains("C1.1"), "{}", touch[0].message);
+    assert!(touch[0].message.contains("#PWR3.1"), "{}", touch[0].message);
 }

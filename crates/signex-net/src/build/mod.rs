@@ -102,28 +102,8 @@ pub(crate) fn anchor_point(parent: &mut HashMap<Key, Key>, pk: Key, segments: &[
     }
 }
 
-/// Every placed pin tip on the sheet as `(world position, owning symbol)`,
-/// honouring the unit filter (unit 0 = common to all units, otherwise the
-/// placed unit only).
-fn pin_tips(sheet: &SchematicSheet) -> Vec<(Point, Uuid)> {
-    let mut tips = Vec::new();
-    for sym in &sheet.symbols {
-        let Some(lib_sym) = sheet.lib_symbols.get(&sym.lib_id) else {
-            continue;
-        };
-        let xform = SymbolTransform::from_symbol(sym);
-        for lp in &lib_sym.pins {
-            if lp.unit != 0 && lp.unit != sym.unit {
-                continue;
-            }
-            tips.push((xform.apply(lp.pin.position), sym.uuid));
-        }
-    }
-    tips
-}
-
 /// The connectivity gate for `sheet`: wire endpoints, junctions, labels,
-/// no-connects and pin-to-pin contact. A pin is a terminal only if its
+/// and no-connects. A pin is a terminal only if its
 /// world-space tip is in this set — see [`ConnectedPoints`].
 fn connected_points(sheet: &SchematicSheet) -> ConnectedPoints {
     let mut gate = ConnectedPoints::new();
@@ -131,7 +111,6 @@ fn connected_points(sheet: &SchematicSheet) -> ConnectedPoints {
     gate.add_anchors(sheet.junctions.iter().map(|j| j.position));
     gate.add_anchors(sheet.labels.iter().map(|l| l.position));
     gate.add_anchors(sheet.no_connects.iter().map(|nc| nc.position));
-    gate.add_pin_tips(pin_tips(sheet));
     gate
 }
 
@@ -483,7 +462,7 @@ pub(crate) fn collect_net_labels<'a>(
 
 /// Project every connected component pin to world space and group it as a
 /// [`Terminal`] under its net root. A pin counts only if something lands on its
-/// tip (wire/label/no-connect/another symbol's pin) — see [`ConnectedPoints`]. `parent` must
+/// tip (wire/junction/label/no-connect) — see [`ConnectedPoints`]. `parent` must
 /// already be fully merged ([`merged_sheet_parent`]).
 pub(crate) fn collect_terminals(
     sheet: &SchematicSheet,
