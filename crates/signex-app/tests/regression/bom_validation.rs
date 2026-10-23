@@ -6,42 +6,17 @@
 use signex_app::app::{BomPreviewMsg, ExportMsg, Message, Signex};
 use signex_app::menu_bar::MenuMessage;
 use signex_output::BomRule;
-use signex_types::schematic::{Point, SchematicSheet, Symbol};
-use std::collections::HashMap;
+use signex_types::schematic::{SchematicSheet, Symbol};
 use std::path::PathBuf;
 
 fn symbol(reference: &str, footprint: &str) -> Symbol {
     Symbol {
-        unknown_columns: Default::default(),
         uuid: uuid::Uuid::new_v4(),
         lib_id: "Device:R".to_string(),
         reference: reference.to_string(),
         value: "10k".to_string(),
         footprint: footprint.to_string(),
-        datasheet: String::new(),
-        position: Point::new(0.0, 0.0),
-        rotation: 0.0,
-        mirror_x: false,
-        mirror_y: false,
-        unit: 1,
-        is_power: false,
-        ref_text: None,
-        val_text: None,
-        fields_autoplaced: false,
-        fields_user_placed: false,
-        dnp: false,
-        in_bom: true,
-        on_board: true,
-        exclude_from_sim: false,
-        locked: false,
-        fields: HashMap::new(),
-        custom_properties: Vec::new(),
-        pin_uuids: HashMap::new(),
-        instances: Vec::new(),
-        library_id: None,
-        row_id: None,
-        library_version: String::new(),
-        unknown: Default::default(),
+        ..Default::default()
     }
 }
 
@@ -50,25 +25,9 @@ fn symbol(reference: &str, footprint: &str) -> Symbol {
 fn app_with_faulty_bom() -> Signex {
     let sheet = SchematicSheet {
         uuid: uuid::Uuid::new_v4(),
-        version: 0,
-        generator: String::new(),
-        generator_version: String::new(),
         paper_size: "A4".to_string(),
-        root_sheet_page: "1".to_string(),
         symbols: vec![symbol("R1", ""), symbol("R1", "R_0603")],
-        wires: Vec::new(),
-        junctions: Vec::new(),
-        labels: Vec::new(),
-        child_sheets: Vec::new(),
-        no_connects: Vec::new(),
-        text_notes: Vec::new(),
-        buses: Vec::new(),
-        bus_entries: Vec::new(),
-        drawings: Vec::new(),
-        no_erc_directives: Vec::new(),
-        title_block: HashMap::new(),
-        lib_symbols: HashMap::new(),
-        unknown: Default::default(),
+        ..Default::default()
     };
     let path = PathBuf::from("bom-validation.snxsch");
     let engine = signex_engine::Engine::new(sheet).expect("engine");

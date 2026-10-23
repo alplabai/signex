@@ -278,6 +278,65 @@ fn default_root_sheet_page() -> String {
     "1".to_string()
 }
 
+/// An empty sheet with a nil uuid; every other field equals its serde default
+/// (pinned by `sheet_default_equals_deserialized_empty_manifest`).
+/// For fixtures and partial literals; production code builds sheets
+/// exhaustively and mints real uuids.
+impl Default for SchematicSheet {
+    fn default() -> Self {
+        Self {
+            uuid: Uuid::nil(),
+            version: 0,
+            generator: String::new(),
+            generator_version: String::new(),
+            paper_size: String::new(),
+            root_sheet_page: default_root_sheet_page(),
+            symbols: Vec::new(),
+            wires: Vec::new(),
+            junctions: Vec::new(),
+            labels: Vec::new(),
+            child_sheets: Vec::new(),
+            no_connects: Vec::new(),
+            text_notes: Vec::new(),
+            buses: Vec::new(),
+            bus_entries: Vec::new(),
+            drawings: Vec::new(),
+            no_erc_directives: Vec::new(),
+            title_block: HashMap::new(),
+            lib_symbols: HashMap::new(),
+            unknown: SheetUnknown::default(),
+        }
+    }
+}
+
+/// Zero-length wire at the origin with a nil uuid. For fixtures and partial
+/// literals; production code builds wires exhaustively and mints real uuids.
+impl Default for Wire {
+    fn default() -> Self {
+        Self {
+            uuid: Uuid::nil(),
+            start: Point::default(),
+            end: Point::default(),
+            stroke_width: 0.0,
+            unknown_columns: UnknownColumns::default(),
+        }
+    }
+}
+
+/// Junction at the origin with a nil uuid. For fixtures and partial literals;
+/// production code builds junctions exhaustively and mints real uuids.
+impl Default for Junction {
+    fn default() -> Self {
+        Self {
+            uuid: Uuid::nil(),
+            position: Point::default(),
+            diameter: 0.0,
+            minted: false,
+            unknown_columns: UnknownColumns::default(),
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Selection -- identifies what the user has selected on the canvas
 // ---------------------------------------------------------------------------

@@ -8,6 +8,7 @@ use super::TabInfo;
 
 mod interaction;
 pub(crate) mod scope;
+pub(crate) mod sheet_refs;
 mod ui;
 
 pub use interaction::InteractionState;
@@ -745,18 +746,6 @@ impl DocumentState {
             .collect();
         paths.sort();
         paths
-    }
-
-    /// Whether `path` belongs to an open project other than
-    /// `projects[closing]` (see [`scope::claimed_by_other_project`]).
-    pub(crate) fn claimed_by_other_project(&self, closing: usize, path: &std::path::Path) -> bool {
-        scope::claimed_by_other_project(
-            &self.projects,
-            &self.child_sheet_refs(),
-            closing,
-            path,
-            scope::CaseFold::host_default(),
-        )
     }
 
     /// `sheet path → the `filename` strings it references as child sheets`,

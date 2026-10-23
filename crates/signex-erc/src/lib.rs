@@ -156,6 +156,26 @@ pub struct Violation {
 }
 
 impl Violation {
+    /// A violation with no `primary` / `peer` object attached. For a `user::`
+    /// rule `rule` is only a placeholder; `rule_id` carries identity.
+    pub fn new(
+        rule_id: RuleId,
+        rule: RuleKind,
+        severity: Severity,
+        message: impl Into<String>,
+        location: Point,
+    ) -> Self {
+        Self {
+            rule_id,
+            rule,
+            severity,
+            message: message.into(),
+            location,
+            primary: None,
+            peer: None,
+        }
+    }
+
     /// The built-in rule that produced this violation, or `None` for a DSL
     /// (`user::`) rule.
     pub fn builtin_kind(&self) -> Option<RuleKind> {
