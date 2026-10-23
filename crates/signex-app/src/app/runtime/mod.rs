@@ -89,6 +89,8 @@ impl Signex {
         }
 
         self.sync_visible_document_from_active_tab();
+        // A half-placed two-click shape belongs to the tab it was started in.
+        self.clear_shape_anchors();
         // ERC results are cached per-sheet. On tab switch, repoint the visible
         // list/markers at the newly active sheet instead of dropping results.
         let active_path = self

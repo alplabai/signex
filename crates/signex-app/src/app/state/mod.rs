@@ -798,16 +798,12 @@ impl DocumentState {
         let Some(project) = self.active_document_project() else {
             return self.active_engine().into_iter().collect();
         };
-        let id = project.id;
-        let refs = self.child_sheet_refs();
-        self.engines
-            .iter()
-            .filter(|(path, _)| {
-                scope::project_owning_sheet(&self.projects, &refs, path)
-                    .is_some_and(|owner| owner.id == id)
-            })
-            .map(|(_, engine)| engine)
-            .collect()
+        scope::engines_in_project(
+            &self.projects,
+            &self.child_sheet_refs(),
+            &self.engines,
+            project.id,
+        )
     }
 
     pub fn active_engine(&self) -> Option<&signex_engine::Engine> {

@@ -10,11 +10,12 @@ use super::super::super::*;
 impl Signex {
     /// Handle one canvas click while `Tool::Sheet` is active.
     ///
-    /// First click arms the ghost rectangle at the snapped corner. The
+    /// The caller has already snapped the point. First click arms the ghost
+    /// rectangle at that corner. The
     /// second commits, or drops the gesture with a warning when the drag is
     /// under the minimum size. No file is created on disk.
     pub(super) fn place_sheet_click(&mut self, world_x: f64, world_y: f64) {
-        let corner = self.snapped_world_point(world_x, world_y);
+        let corner = Point::new(world_x, world_y);
         let Some(anchor) = self.interaction_state.shape_anchor.take() else {
             self.interaction_state.shape_anchor = Some(corner);
             self.interaction_state.active_canvas_mut().shape_anchor =
@@ -41,15 +42,6 @@ impl Signex {
                 "Sheet not placed: each edge must be at least {} mm",
                 signex_engine::MIN_CHILD_SHEET_EDGE_MM
             )),
-        }
-    }
-
-    fn snapped_world_point(&self, x: f64, y: f64) -> Point {
-        let grid = self.ui_state.grid_size_mm as f64;
-        if self.ui_state.snap_enabled && grid > 0.0 {
-            Point::new((x / grid).round() * grid, (y / grid).round() * grid)
-        } else {
-            Point::new(x, y)
         }
     }
 

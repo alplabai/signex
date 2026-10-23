@@ -452,6 +452,9 @@ impl Signex {
                 self.finish_update()
             }
             ToolMessage::SelectTool(tool) => {
+                if self.interaction_state.current_tool != tool {
+                    self.clear_shape_anchors();
+                }
                 self.interaction_state.current_tool = tool;
                 // Re-label the floating cursor tag so the user sees which
                 // placement mode they're in. Altium shows the tool name near

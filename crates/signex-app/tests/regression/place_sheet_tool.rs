@@ -1,11 +1,14 @@
 //! #358 — the Place Sheet tool, driven through the real message path
 //! (`SelectTool`, `CanvasEvent::Clicked`, Esc, Undo).
 
-use signex_app::app::{EditMsg, LoadedProject, Message, Signex, TabInfo, TabKind, Tool};
+use signex_app::active_bar::{ActiveBarAction, ActiveBarMsg};
+use signex_app::app::{
+    EditMsg, LoadedProject, Message, MoveSelectionMsg, Signex, TabInfo, TabKind, Tool,
+};
 use signex_app::canvas::CanvasEvent;
 use signex_app::toolbar::ToolMessage;
 use signex_types::project::{ProjectData, SheetEntry};
-use signex_types::schematic::SchematicSheet;
+use signex_types::schematic::{SchematicSheet, SelectedKind};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tempfile::TempDir;
@@ -192,12 +195,14 @@ fn defaults_are_unique_in_the_parent_and_the_project() {
                     symbols_count: 0,
                     wires_count: 0,
                     labels_count: 0,
+                    unknown: Default::default(),
                 })
                 .collect(),
             variant_definitions: Vec::new(),
             active_variant: None,
             libraries: Vec::new(),
             enable_git: false,
+            unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
     });
@@ -247,12 +252,14 @@ fn defaults_are_unique_across_parents_of_one_project() {
                     symbols_count: 0,
                     wires_count: 0,
                     labels_count: 0,
+                    unknown: Default::default(),
                 })
                 .collect(),
             variant_definitions: Vec::new(),
             active_variant: None,
             libraries: Vec::new(),
             enable_git: false,
+            unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
     });
@@ -267,4 +274,101 @@ fn defaults_are_unique_across_parents_of_one_project() {
     app.document_state.active_path = Some(other);
     drag(&mut app, (0.0, 0.0), (20.0, 20.0));
     assert_eq!(sheets(&app)[0].filename, "sheet2.snxsch");
+}
+
+/// Switch to the Sheet tool the way the user does: through `SelectTool`.
+fn pick_sheet_tool(app: &mut Signex) {
+    let _ = app.update(Message::Tool(ToolMessage::SelectTool(Tool::Sheet)));
+}
+
+#[test]
+fn a_leftover_line_anchor_does_not_turn_the_first_sheet_click_into_a_commit() {
+    let tmp = TempDir::new().expect("tempdir");
+    let mut app = app_with_sheet_tool(tmp.path().join("root.snxsch"));
+    let _ = app.update(Message::Tool(ToolMessage::SelectTool(Tool::Line)));
+    // The Line tool re-arms at its last endpoint.
+    click(&mut app, 0.0, 0.0);
+    click(&mut app, 20.0, 0.0);
+    pick_sheet_tool(&mut app);
+
+    click(&mut app, 60.0, 40.0);
+    assert!(
+        sheets(&app).is_empty(),
+        "the first Sheet click must only arm a corner"
+    );
+    click(&mut app, 100.0, 80.0);
+    let placed = sheets(&app);
+    assert_eq!(placed.len(), 1);
+    assert_eq!((placed[0].position.x, placed[0].position.y), (60.0, 40.0));
+}
+
+#[test]
+fn a_half_placed_sheet_corner_does_not_follow_the_user_to_another_tab() {
+    let tmp = TempDir::new().expect("tempdir");
+    let root = tmp.path().join("root.snxsch");
+    let other = tmp.path().join("other.snxsch");
+    let mut app = app_with_sheet_tool(root);
+    app.document_state.engines.insert(
+        other.clone(),
+        signex_engine::Engine::new(empty_sheet()).expect("engine"),
+    );
+    app.document_state.tabs.push(TabInfo {
+        title: "other".to_string(),
+        path: other,
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: TabKind::Schematic,
+    });
+    let window_id = iced::window::Id::unique();
+    app.ui_state.main_window_id = Some(window_id);
+
+    click(&mut app, 10.0, 10.0);
+    let _ = app.update(Message::Tab {
+        window_id,
+        msg: signex_app::tab_bar::TabMessage::Select(1),
+    });
+    assert_eq!(app.document_state.active_tab, 1);
+
+    click(&mut app, 60.0, 60.0);
+    assert!(
+        sheets(&app).is_empty(),
+        "a corner armed in tab A must not complete in tab B"
+    );
+}
+
+#[test]
+fn the_active_bar_sheet_symbol_entry_arms_the_sheet_tool() {
+    let tmp = TempDir::new().expect("tempdir");
+    let mut app = app_with_sheet_tool(tmp.path().join("root.snxsch"));
+    let _ = app.update(Message::Tool(ToolMessage::SelectTool(Tool::Select)));
+
+    let _ = app.update(Message::ActiveBar(ActiveBarMsg::Action(
+        ActiveBarAction::PlaceSheetSymbol,
+    )));
+    assert_eq!(app.interaction_state.current_tool, Tool::Sheet);
+}
+
+#[test]
+fn a_placed_sheet_is_selectable_by_its_edge_and_movable() {
+    let tmp = TempDir::new().expect("tempdir");
+    let mut app = app_with_sheet_tool(tmp.path().join("root.snxsch"));
+    drag(&mut app, (10.0, 10.0), (50.0, 40.0));
+    let placed = sheets(&app);
+    assert_eq!(placed.len(), 1);
+
+    let _ = app.update(Message::Tool(ToolMessage::SelectTool(Tool::Select)));
+    click(&mut app, 10.0, 25.0); // on the left edge
+    let selected = app.interaction_state.active_canvas().selected.clone();
+    assert!(
+        selected
+            .iter()
+            .any(|i| i.kind == SelectedKind::ChildSheet && i.uuid == placed[0].uuid),
+        "a click on the sheet edge must select the ChildSheet, got {selected:?}"
+    );
+
+    app.ui_state.move_selection.dx = "5".to_string();
+    app.ui_state.move_selection.dy = "0".to_string();
+    let _ = app.update(Message::MoveSelection(MoveSelectionMsg::Apply));
+    assert_eq!(sheets(&app)[0].position.x, 15.0);
 }
