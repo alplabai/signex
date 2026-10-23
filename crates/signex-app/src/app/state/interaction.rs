@@ -93,7 +93,7 @@ pub struct InteractionState {
     /// Iced's `button` widget consumes mouse events before iced 0.14
     /// surfaces a built-in `on_double_click` for them, so we time the
     /// clicks ourselves at the app layer.
-    pub last_tree_click: Option<(Vec<usize>, std::time::Instant)>,
+    pub last_tree_click: Option<(signex_widgets::tree_view::TreeKey, std::time::Instant)>,
     pub active_bar_menu: Option<crate::active_bar::ActiveBarMenu>,
     pub selection_filters: std::collections::HashSet<crate::active_bar::SelectionFilter>,
     /// User-defined custom filter presets (capped at
