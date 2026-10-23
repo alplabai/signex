@@ -65,6 +65,7 @@ impl Default for LibraryState {
             external_poll_in_flight: false,
             external_poll_stat_running: Default::default(),
             external_poll_stall_reported: false,
+            external_poll_failure_reported: false,
         }
     }
 }
