@@ -1,4 +1,4 @@
-use signex_3d_model_importer::{ModelImportRequest, SourceFormat, import_model};
+use signex_3d_model_importer::{ImportWarning, ModelImportRequest, SourceFormat, import_model};
 
 fn write_tier0_wrl(path: &std::path::Path) {
     std::fs::write(
@@ -130,6 +130,46 @@ fn import_tier0_vrml_produces_glb() {
     assert_eq!(result.metadata.source_format, SourceFormat::Vrml);
     assert_eq!(result.metadata.mesh_count, 1);
     assert!(result.metadata.byte_len > 0);
+}
+
+/// #805: a VRML recovery reaches `ModelImportResult.warnings`, and a clean
+/// file reports none.
+#[test]
+fn import_vrml_reports_geometry_altering_recoveries() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let cache = dir.path().join("cache");
+    let clean = dir.path().join("clean.wrl");
+    write_tier0_wrl(&clean);
+    let result = import_model(ModelImportRequest {
+        model_id: "clean".into(),
+        source_path: clean,
+        cache_dir: cache.clone(),
+        converter_version: "0.1.0",
+    })
+    .expect("import failed");
+    assert!(result.warnings.is_empty(), "{:?}", result.warnings);
+
+    let stray = dir.path().join("stray.wrl");
+    std::fs::write(
+        &stray,
+        b"#VRML V2.0 utf8\n}\nShape { geometry IndexedFaceSet { coord Coordinate { point [ 0 0 0, 1 0 0, 0 1 0 ] } coordIndex [ 0 1 2 -1 ] } }\n",
+    )
+    .expect("write fixture");
+    let result = import_model(ModelImportRequest {
+        model_id: "stray".into(),
+        source_path: stray,
+        cache_dir: cache,
+        converter_version: "0.1.0",
+    })
+    .expect("import failed");
+    assert_eq!(result.metadata.mesh_count, 1);
+    match result.warnings.as_slice() {
+        [ImportWarning::GeometryAltered { line, reason }] => {
+            assert_eq!(*line, Some(2));
+            assert!(reason.contains("unmatched"), "{reason}");
+        }
+        other => panic!("expected one GeometryAltered warning, got {other:?}"),
+    }
 }
 
 #[test]

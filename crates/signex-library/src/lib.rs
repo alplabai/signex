@@ -86,7 +86,7 @@ pub use templates::{ParamKind, ParamSlot, ParameterTemplate, TemplateRegistry, T
 pub use where_used::{UseSite, WhereUsedIndex};
 
 #[cfg(feature = "local-git")]
-pub use adapters::local_git::LocalGitAdapter;
+pub use adapters::local_git::{DiskStamp, LocalGitAdapter};
 
 /// Project-level "Enable Version Control" helper. Runs
 /// `git2::Repository::init` at `project_dir`, optionally writes a
@@ -129,22 +129,26 @@ pub fn enable_project_version_control(
 *.stp filter=lfs diff=lfs merge=lfs -text\n\
 *.wrl filter=lfs diff=lfs merge=lfs -text\n\
 *.iges filter=lfs diff=lfs merge=lfs -text\n";
-        std::fs::write(project_dir.join(".gitattributes"), attributes)
-            .map_err(|e| LibraryError::Backend(format!("write .gitattributes: {e}")))?;
+        signex_types::atomic_io::atomic_write(
+            &project_dir.join(".gitattributes"),
+            attributes.as_bytes(),
+        )
+        .map_err(|e| LibraryError::Backend(format!("write .gitattributes: {e}")))?;
         wrote_lfs_attributes = true;
     }
 
     let mut wrote_gitignore = false;
     if let Some(body) = gitignore {
-        std::fs::write(project_dir.join(".gitignore"), body).map_err(|e| {
-            // Roll back the `.gitattributes` we just wrote so a
-            // failed init never leaves an orphan LFS-tracking file
-            // behind.
-            if wrote_lfs_attributes {
-                let _ = std::fs::remove_file(project_dir.join(".gitattributes"));
-            }
-            LibraryError::Backend(format!("write .gitignore: {e}"))
-        })?;
+        signex_types::atomic_io::atomic_write(&project_dir.join(".gitignore"), body.as_bytes())
+            .map_err(|e| {
+                // Roll back the `.gitattributes` we just wrote so a
+                // failed init never leaves an orphan LFS-tracking file
+                // behind.
+                if wrote_lfs_attributes {
+                    let _ = std::fs::remove_file(project_dir.join(".gitattributes"));
+                }
+                LibraryError::Backend(format!("write .gitignore: {e}"))
+            })?;
         wrote_gitignore = true;
     }
 

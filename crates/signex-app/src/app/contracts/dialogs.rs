@@ -65,6 +65,9 @@ pub enum AnnotateMsg {
     /// inside the Annotate dialog. Locked symbols keep their current
     /// designator even under Reset & Renumber.
     ToggleLock(uuid::Uuid),
+    /// Lock (`true`, "All Off") or unlock (`false`, "All On") every symbol
+    /// the dialog lists.
+    SetAllLocked(bool),
 }
 
 /// ERC dialog message family (ADR-0001 D3). Namespaced under
@@ -153,8 +156,8 @@ pub enum ContextMenuMsg {
     Close,
     Action(ContextAction),
     /// Right-click landed on a specific tree node — open the per-node
-    /// context menu at `last_mouse_pos`. `path = None` → background menu.
-    ShowProjectTree(Option<Vec<usize>>),
+    /// context menu at `last_mouse_pos`. `key = None` → background menu.
+    ShowProjectTree(Option<signex_widgets::tree_view::TreeKey>),
     /// Dismiss the Projects-panel tree context menu.
     CloseProjectTree,
     /// Menu item picked — route the action.
@@ -338,14 +341,15 @@ pub enum ProjectMsg {
     /// v0.23 — Async project-git commit completed. The dispatcher
     /// removes the `(project_root, rel_path)` entry from
     /// `inflight_git_commits` and logs success/failure. `result.Ok`
-    /// carries the formatted commit OID; `result.Err` carries the
+    /// carries the formatted commit OID, or `None` when the file matched
+    /// HEAD and no commit was made (#149); `result.Err` carries the
     /// error string. Best-effort — a failure here doesn't roll back
     /// the on-disk save (data is already on disk; this just means git
     /// didn't capture it).
     GitCommitDone {
         project_root: std::path::PathBuf,
         rel_path: std::path::PathBuf,
-        result: Result<String, String>,
+        result: Result<Option<String>, String>,
     },
 }
 

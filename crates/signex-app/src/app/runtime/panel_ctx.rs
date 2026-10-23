@@ -89,7 +89,7 @@ impl Signex {
     pub(crate) fn refresh_panel_ctx(&mut self) {
         // The dirty dots below read `dirty_paths`; make sure footprint
         // edits are in it first (#666).
-        self.sync_footprint_dirty_paths();
+        self.sync_editor_dirty_paths();
         let previous_navigator = std::mem::take(&mut self.document_state.panel_ctx.navigator);
         let navigator = self.next_navigator_model(previous_navigator);
         // Build per-project panel info from every loaded project in the
@@ -439,7 +439,7 @@ impl Signex {
                     })
                     .unwrap_or_default()
             },
-            tokens: signex_types::theme::theme_tokens(self.ui_state.theme_id),
+            tokens: self.tokens_for(self.ui_state.theme_id),
             theme_id: self.ui_state.theme_id,
             unit: self.ui_state.unit,
             grid_visible: self.ui_state.grid_visible,

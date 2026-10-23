@@ -68,6 +68,39 @@ impl Signex {
             return Ok(Task::none());
         }
 
+        // A dirty draft parked by a tab close wins over the disk copy, and
+        // is reachable even if the file has since vanished or broke. A
+        // parked editor that is clean is stale and is replaced below.
+        if self.primitive_draft_is_dirty(&path) {
+            let parked_kind = if self.document_state.symbol_editors.contains_key(&path) {
+                Some(crate::app::TabKind::SymbolEditor(path.clone()))
+            } else if self.document_state.footprint_editors.contains_key(&path) {
+                Some(crate::app::TabKind::FootprintEditor(path.clone()))
+            } else {
+                None
+            };
+            if let Some(kind) = parked_kind {
+                let title = path
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
+                self.park_active_schematic_session();
+                self.document_state.tabs.push(crate::app::TabInfo {
+                    title,
+                    path: path.clone(),
+                    cached_document: None,
+                    dirty: true,
+                    project_id,
+                    kind,
+                });
+                self.document_state.active_tab = self.document_state.tabs.len() - 1;
+                self.document_state.active_path = None;
+                self.refresh_panel_ctx();
+                return Ok(Task::none());
+            }
+        }
+
         // Dispatch on extension. `.snxsym` → Symbol; `.snxfpt` →
         // Footprint. Anything else is rejected with a tracing warn so
         // a stray dispatch from the project tree doesn't push a

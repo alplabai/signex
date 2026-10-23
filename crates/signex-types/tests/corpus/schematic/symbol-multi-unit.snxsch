@@ -1,0 +1,94 @@
+format = "snxsch/1"
+schematic_id = "00000000-0000-0000-0000-000000000000"
+version = 1
+generator = "signex-test"
+generator_version = "0.9"
+paper_size = "A4"
+root_sheet_page = "1"
+
+
+[sheets.components]
+content = """
+uuid                                  ref  library      pos_x     pos_y     rotation  value  mpn
+0192a8c0-0000-7001-8000-000000000001  U2   opa2.snxsym  25400000  50800000  0         10k    ""
+0192a8c0-0000-7001-8000-000000000002  U2   opa2.snxsym  50800000  50800000  0         10k    ""
+0192a8c0-0000-7001-8000-000000000003  U2   opa2.snxsym  76200000  50800000  0         10k    ""
+"""
+
+[sheets.wires]
+content = """
+uuid  net  start_x  start_y  end_x  end_y  stroke_width
+"""
+
+[sheets.junctions]
+content = """
+uuid  pos_x  pos_y  diameter
+"""
+
+[sheets.labels]
+content = """
+uuid  text  pos_x  pos_y  rotation  kind  shape  font_size  justify  justify_v
+"""
+
+[extras.symbols.0192a8c0-0000-7001-8000-000000000001]
+footprint = "R_0603.snxfpt"
+datasheet = ""
+mirror_x = false
+mirror_y = false
+unit = 1
+is_power = false
+fields_autoplaced = false
+fields_user_placed = false
+dnp = false
+in_bom = true
+on_board = true
+exclude_from_sim = false
+locked = false
+custom_properties = []
+instances = []
+
+[extras.symbols.0192a8c0-0000-7001-8000-000000000001.fields]
+
+[extras.symbols.0192a8c0-0000-7001-8000-000000000001.pin_uuids]
+
+[extras.symbols.0192a8c0-0000-7001-8000-000000000002]
+footprint = "R_0603.snxfpt"
+datasheet = ""
+mirror_x = false
+mirror_y = false
+unit = 2
+is_power = false
+fields_autoplaced = false
+fields_user_placed = false
+dnp = false
+in_bom = true
+on_board = true
+exclude_from_sim = false
+locked = false
+custom_properties = []
+instances = []
+
+[extras.symbols.0192a8c0-0000-7001-8000-000000000002.fields]
+
+[extras.symbols.0192a8c0-0000-7001-8000-000000000002.pin_uuids]
+
+[extras.symbols.0192a8c0-0000-7001-8000-000000000003]
+footprint = "R_0603.snxfpt"
+datasheet = ""
+mirror_x = false
+mirror_y = false
+unit = 3
+is_power = false
+fields_autoplaced = false
+fields_user_placed = false
+dnp = false
+in_bom = true
+on_board = true
+exclude_from_sim = false
+locked = false
+custom_properties = []
+instances = []
+
+[extras.symbols.0192a8c0-0000-7001-8000-000000000003.fields]
+
+[extras.symbols.0192a8c0-0000-7001-8000-000000000003.pin_uuids]

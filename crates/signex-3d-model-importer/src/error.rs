@@ -46,6 +46,11 @@ pub enum ImportWarning {
     TextureMissing {
         uri: String,
     },
+    /// The texture exists but was refused or failed to read.
+    TextureUnreadable {
+        uri: String,
+        reason: String,
+    },
     EmptyPrimitive {
         mesh_index: usize,
         primitive_index: usize,
@@ -55,5 +60,13 @@ pub enum ImportWarning {
     },
     UnsupportedGltfExtension {
         name: String,
+    },
+    /// The source was malformed in a way the importer recovered from, but
+    /// the imported geometry differs from what the file describes: input
+    /// skipped, a field replaced, or triangles or nodes dropped (#805).
+    GeometryAltered {
+        /// 1-based source line, when the finding has one.
+        line: Option<usize>,
+        reason: String,
     },
 }

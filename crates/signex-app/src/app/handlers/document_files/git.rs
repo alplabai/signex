@@ -11,7 +11,7 @@ impl Signex {
     /// Walks `document_state.projects` looking for the project whose
     /// `data.dir` is a prefix of `file_path`. If found AND
     /// `data.enable_git == true`, opens
-    /// [`LocalGitProjectAdapter`] and runs `commit_path`.
+    /// [`signex_library::adapters::local_git::project::LocalGitProjectAdapter`] and runs `commit_path`.
     ///
     /// Failure is best-effort: logged + surfaced as a non-modal
     /// status warning, never blocks the save. The user's data is on
@@ -111,7 +111,7 @@ impl Signex {
                             })?;
                             adapter
                                 .commit_path(&rel_path, &message)
-                                .map(|oid| oid.to_string())
+                                .map(|oid| oid.map(|oid| oid.to_string()))
                                 .map_err(|e| {
                                     format!(
                                         "commit_path({}) failed: {e}",
@@ -141,17 +141,22 @@ impl Signex {
         &mut self,
         project_root: std::path::PathBuf,
         rel_path: std::path::PathBuf,
-        result: Result<String, String>,
+        result: Result<Option<String>, String>,
     ) {
         self.document_state
             .inflight_git_commits
             .remove(&(project_root.clone(), rel_path.clone()));
         match result {
-            Ok(oid) => crate::diagnostics::log_info(format!(
+            Ok(Some(oid)) => crate::diagnostics::log_info(format!(
                 "[git] committed {} in {} ({})",
                 rel_path.display(),
                 project_root.display(),
                 oid
+            )),
+            Ok(None) => crate::diagnostics::log_info(format!(
+                "[git] {} unchanged in {}; nothing to commit",
+                rel_path.display(),
+                project_root.display(),
             )),
             Err(e) => crate::diagnostics::log_warning(format!("[git] {e}")),
         }
