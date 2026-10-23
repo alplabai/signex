@@ -52,6 +52,9 @@ impl Signex {
             Ok(task) => task,
             Err(error) => {
                 crate::diagnostics::log_error("Failed to create new project", &error);
+                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::create(
+                    format!("Failed to create new project: {error:#}"),
+                ));
                 iced::Task::none()
             }
         }
@@ -141,7 +144,7 @@ impl Signex {
         match self.save_active_document() {
             Ok(task) => task,
             Err(error) => {
-                crate::diagnostics::log_error("Failed to save active document", &error);
+                self.report_save_failure("Failed to save active document", &error);
                 iced::Task::none()
             }
         }
@@ -153,7 +156,7 @@ impl Signex {
         to_path: PathBuf,
     ) {
         if let Err(error) = self.save_active_document_as(&from_path, to_path) {
-            crate::diagnostics::log_error("Failed to save active document as", &error);
+            self.report_save_failure("Failed to save active document as", &error);
         }
     }
 

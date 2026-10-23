@@ -91,6 +91,14 @@ pub struct SheetEntry {
 // Project data
 // ---------------------------------------------------------------------------
 
+/// The in-memory form of a `.snxprj` file, persisted as pretty JSON (the
+/// only native format that is not TOML+TSV; rationale and open questions in
+/// `docs/architecture/snxprj-format.md`).
+///
+/// Forward compatibility is one-directional: `#[serde(default)]` lets an old
+/// file load in a new build, but a key written by a newer build is dropped
+/// on load and missing from the next save. There is no unknown-key bag and
+/// no format/version token (tracked in #788).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectData {
     pub name: String,
