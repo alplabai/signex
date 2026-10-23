@@ -27,25 +27,47 @@ enum Node {
     },
 }
 
+/// A recoverable finding that changed the imported geometry: input the
+/// parser skipped, a field it replaced, or triangles it dropped (#805).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParseWarning {
+    /// 1-based source line, when the finding has one.
+    pub line: Option<usize>,
+    pub reason: String,
+}
+
+impl ParseWarning {
+    /// Log the finding and record it, so it reaches both the log and the
+    /// caller's `ModelImportResult.warnings`.
+    fn push(out: &mut Vec<ParseWarning>, line: Option<usize>, reason: String) {
+        match line {
+            Some(line) => log::warn!("VRML: {reason} (line {line})"),
+            None => log::warn!("VRML: {reason}"),
+        }
+        out.push(ParseWarning { line, reason });
+    }
+}
+
 /// Parse a VRML97 source into a flat list of meshes.
 ///
 /// # Errors
 ///
-/// Returns `(meshes, warnings)` on success; panics are converted to
-/// `VrmlParseError` by the caller layer in `vrml/mod.rs`.
+/// Returns `(meshes, warnings)` on success; `ParseError`s are mapped to
+/// `ModelImportError` by the caller layer in `vrml/mod.rs`.
 pub fn parse(
     tokens: &[super::lexer::Token],
     line_offsets: &[usize],
-) -> Result<Vec<VrmlMesh>, ParseError> {
+) -> Result<(Vec<VrmlMesh>, Vec<ParseWarning>), ParseError> {
     let mut parser = Parser::new(tokens, line_offsets);
     parser.skip_vrml_header();
     let nodes = parser.parse_node_list()?;
+    let mut warnings = parser.warnings;
     let mut meshes = Vec::new();
     let identity = Transform::identity();
     for node in &nodes {
-        collect_meshes(node, &identity, &mut meshes);
+        collect_meshes(node, &identity, &mut meshes, &mut warnings);
     }
-    Ok(meshes)
+    Ok((meshes, warnings))
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -152,20 +174,45 @@ impl Transform {
         scale: [f32; 3],
         center: [f32; 3],
         scale_orientation: [f32; 4],
+        line: usize,
+        warnings: &mut Vec<ParseWarning>,
     ) -> Transform {
-        fn finite<const N: usize>(v: [f32; N], identity: [f32; N], name: &str) -> [f32; N] {
-            if v.iter().all(|x| x.is_finite()) {
-                v
-            } else {
-                log::warn!("VRML: non-finite Transform {name} {v:?}; using identity");
-                identity
+        let mut finite = |v: &[f32], name: &str| {
+            let ok = v.iter().all(|x| x.is_finite());
+            if !ok {
+                ParseWarning::push(
+                    warnings,
+                    Some(line),
+                    format!("non-finite Transform {name} {v:?}; using identity"),
+                );
             }
-        }
-        let translation = finite(translation, [0.0; 3], "translation");
-        let rotation = finite(rotation, [0.0, 0.0, 1.0, 0.0], "rotation");
-        let scale = finite(scale, [1.0; 3], "scale");
-        let center = finite(center, [0.0; 3], "center");
-        let scale_orientation = finite(scale_orientation, [0.0, 0.0, 1.0, 0.0], "scaleOrientation");
+            ok
+        };
+        let translation = if finite(&translation, "translation") {
+            translation
+        } else {
+            [0.0; 3]
+        };
+        let rotation = if finite(&rotation, "rotation") {
+            rotation
+        } else {
+            [0.0, 0.0, 1.0, 0.0]
+        };
+        let scale = if finite(&scale, "scale") {
+            scale
+        } else {
+            [1.0; 3]
+        };
+        let center = if finite(&center, "center") {
+            center
+        } else {
+            [0.0; 3]
+        };
+        let scale_orientation = if finite(&scale_orientation, "scaleOrientation") {
+            scale_orientation
+        } else {
+            [0.0, 0.0, 1.0, 0.0]
+        };
         let inv_sr = Transform::rotation([
             scale_orientation[0],
             scale_orientation[1],
@@ -184,17 +231,22 @@ impl Transform {
 
 // ─── Mesh collection ──────────────────────────────────────────────────────────
 
-fn collect_meshes(node: &Node, parent_transform: &Transform, out: &mut Vec<VrmlMesh>) {
+fn collect_meshes(
+    node: &Node,
+    parent_transform: &Transform,
+    out: &mut Vec<VrmlMesh>,
+    warnings: &mut Vec<ParseWarning>,
+) {
     match node {
         Node::Transform { local, children } => {
             let xf = parent_transform.mul(local);
             for child in children {
-                collect_meshes(child, &xf, out);
+                collect_meshes(child, &xf, out, warnings);
             }
         }
         Node::Group { children } => {
             for child in children {
-                collect_meshes(child, parent_transform, out);
+                collect_meshes(child, parent_transform, out, warnings);
             }
         }
         Node::Shape {
@@ -202,7 +254,17 @@ fn collect_meshes(node: &Node, parent_transform: &Transform, out: &mut Vec<VrmlM
             positions,
             indices,
         } => {
-            let mesh = build_mesh(positions, indices, *color, parent_transform);
+            let (mesh, dropped) = build_mesh(positions, indices, *color, parent_transform);
+            if dropped > 0 {
+                // One finding per shape, not per triangle.
+                ParseWarning::push(
+                    warnings,
+                    None,
+                    format!(
+                        "transform overflowed to a non-finite vertex; {dropped} triangle(s) dropped"
+                    ),
+                );
+            }
             if !mesh.indices.is_empty() {
                 out.push(mesh);
             }
@@ -210,13 +272,16 @@ fn collect_meshes(node: &Node, parent_transform: &Transform, out: &mut Vec<VrmlM
     }
 }
 
-/// Convert an IndexedFaceSet (positions + face-separated indices) to a triangle mesh.
+/// Convert an IndexedFaceSet (positions + face-separated indices) to a
+/// triangle mesh. Also returns how many triangles a non-finite transform
+/// dropped.
 fn build_mesh(
     positions: &[[f32; 3]],
     face_indices: &[i32],
     color: [f32; 4],
     xf: &Transform,
-) -> VrmlMesh {
+) -> (VrmlMesh, usize) {
+    let mut dropped = 0;
     let mut out_positions: Vec<f32> = Vec::new();
     let mut out_indices: Vec<u32> = Vec::new();
     let mut face: Vec<usize> = Vec::new();
@@ -232,6 +297,7 @@ fn build_mesh(
                 mirrored,
                 &mut out_positions,
                 &mut out_indices,
+                &mut dropped,
             );
             face.clear();
         } else if idx >= 0 {
@@ -247,19 +313,24 @@ fn build_mesh(
         mirrored,
         &mut out_positions,
         &mut out_indices,
+        &mut dropped,
     );
 
     debug_assert_eq!(out_indices.len() % 3, 0);
-    VrmlMesh {
-        positions: out_positions,
-        indices: out_indices,
-        color,
-    }
+    (
+        VrmlMesh {
+            positions: out_positions,
+            indices: out_indices,
+            color,
+        },
+        dropped,
+    )
 }
 
 /// Fan-triangulate one polygon. A triangle is emitted only when all three of
 /// its corners are in range, so the index buffer is always a whole number of
 /// triangles; a face with a bad index loses just the triangles that use it (#147).
+/// A triangle a non-finite transform would corrupt is dropped and counted.
 fn fan_triangulate(
     face: &[usize],
     positions: &[[f32; 3]],
@@ -267,6 +338,7 @@ fn fan_triangulate(
     mirrored: bool,
     out_positions: &mut Vec<f32>,
     out_indices: &mut Vec<u32>,
+    dropped: &mut usize,
 ) {
     if face.len() < 3 {
         return;
@@ -283,7 +355,7 @@ fn fan_triangulate(
         }
         let points = corners.map(|vi| xf.apply_point(positions[vi]));
         if points.iter().flatten().any(|v| !v.is_finite()) {
-            log::warn!("VRML: transform overflowed to a non-finite vertex; triangle dropped");
+            *dropped += 1;
             continue;
         }
         for p in points {
@@ -304,7 +376,7 @@ mod tests {
 
     fn parse_src(src: &str) -> Vec<VrmlMesh> {
         let (tokens, lines) = tokenize(src);
-        parse(&tokens, &lines).expect("parse failed")
+        parse(&tokens, &lines).expect("parse failed").0
     }
 
     #[test]
@@ -522,6 +594,58 @@ mod tests {
             "Transform {{ scale 1e30 1e30 1e30 children [ Transform {{ scale 1e30 1 1 children [ {TRI} ] }} ] }}"
         );
         assert!(parse_src(&src).is_empty());
+    }
+
+    fn warnings_of(src: &str) -> Vec<ParseWarning> {
+        let (tokens, lines) = tokenize(src);
+        parse(&tokens, &lines).expect("parse failed").1
+    }
+
+    /// #805: every recovery that changes the geometry is returned, with its
+    /// source line where it has one.
+    #[test]
+    fn geometry_altering_recoveries_are_returned_as_warnings() {
+        let cases: [(String, Option<usize>, &str); 6] = [
+            (format!("}}\n{TRI}"), Some(1), "unmatched '}' skipped"),
+            (
+                format!("Foo {{\n v [ 1 2 ] ] }} {TRI}"),
+                Some(2),
+                "mismatched closer ']' skipped",
+            ),
+            (
+                format!("Transform {{ translation inf 0 0 children [ {TRI} ] }}"),
+                Some(1),
+                "non-finite Transform translation",
+            ),
+            (
+                format!(
+                    "Transform {{ scale 1e30 1e30 1e30 children [ Transform {{ scale 1e30 1 1 children [ {TRI} ] }} ] }}"
+                ),
+                None,
+                "1 triangle(s) dropped",
+            ),
+            (
+                "Shape { geometry IndexedFaceSet { coord USE co coordIndex [ 0 1 2 -1 ] } }".into(),
+                Some(1),
+                "USE co is not resolved",
+            ),
+            (
+                format!("Group {{ children [ USE part {TRI} ] }}"),
+                Some(1),
+                "USE part is not resolved",
+            ),
+        ];
+        for (src, line, reason) in cases {
+            let w = warnings_of(&src);
+            assert_eq!(w.len(), 1, "{src}: {w:?}");
+            assert_eq!(w[0].line, line, "{src}");
+            assert!(w[0].reason.contains(reason), "{src}: {w:?}");
+        }
+    }
+
+    #[test]
+    fn clean_source_has_no_warnings() {
+        assert!(warnings_of(&format!("Transform {{ children [ {TRI} ] }}")).is_empty());
     }
 
     #[test]

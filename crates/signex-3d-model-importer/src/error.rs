@@ -61,4 +61,12 @@ pub enum ImportWarning {
     UnsupportedGltfExtension {
         name: String,
     },
+    /// The source was malformed in a way the importer recovered from, but
+    /// the imported geometry differs from what the file describes: input
+    /// skipped, a field replaced, or triangles or nodes dropped (#805).
+    GeometryAltered {
+        /// 1-based source line, when the finding has one.
+        line: Option<usize>,
+        reason: String,
+    },
 }

@@ -11,6 +11,8 @@ pub(super) struct Parser<'a> {
     lines: &'a [usize],
     pos: usize,
     depth: usize,
+    /// Recoverable findings, returned alongside the meshes (#805).
+    pub(super) warnings: Vec<ParseWarning>,
 }
 
 impl<'a> Parser<'a> {
@@ -20,6 +22,7 @@ impl<'a> Parser<'a> {
             lines,
             pos: 0,
             depth: 0,
+            warnings: Vec::new(),
         }
     }
 
@@ -59,7 +62,11 @@ impl<'a> Parser<'a> {
             word = self.expect_word()?;
         } else if word == "USE" {
             let name = self.expect_word()?;
-            log::warn!("VRML: USE {name} at line {line} is not resolved; node dropped");
+            ParseWarning::push(
+                &mut self.warnings,
+                Some(line),
+                format!("USE {name} is not resolved; node dropped"),
+            );
         }
         Ok(word)
     }
@@ -79,9 +86,11 @@ impl<'a> Parser<'a> {
             match self.peek() {
                 None => break,
                 Some(Token::RBrace) => {
-                    log::warn!(
-                        "VRML: unmatched '}}' at line {}; skipped",
-                        self.current_line()
+                    let line = self.current_line();
+                    ParseWarning::push(
+                        &mut self.warnings,
+                        Some(line),
+                        "unmatched '}' skipped".to_owned(),
                     );
                     self.next();
                 }
@@ -125,8 +134,15 @@ impl<'a> Parser<'a> {
                 Ok(node)
             }
             "USE" => {
-                let _name = self.expect_word()?;
-                // In E1 we skip USE nodes (geometry approximation acceptable).
+                let line = self.current_line();
+                let name = self.expect_word()?;
+                // USE is not resolved yet (#591): the node is dropped, and the
+                // caller is told so.
+                ParseWarning::push(
+                    &mut self.warnings,
+                    Some(line),
+                    format!("USE {name} is not resolved; node dropped"),
+                );
                 Ok(None)
             }
             "Transform" => self.parse_transform().map(Some),
@@ -143,6 +159,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_transform(&mut self) -> Result<Node, ParseError> {
+        let line = self.current_line();
         self.expect_lbrace()?;
         let mut translation = [0.0f32; 3];
         let mut rotation = [0.0f32, 0.0, 1.0, 0.0];
@@ -191,7 +208,15 @@ impl<'a> Parser<'a> {
             }
         }
         Ok(Node::Transform {
-            local: Transform::from_fields(translation, rotation, scale, center, scale_orientation),
+            local: Transform::from_fields(
+                translation,
+                rotation,
+                scale,
+                center,
+                scale_orientation,
+                line,
+                &mut self.warnings,
+            ),
             children,
         })
     }
@@ -564,10 +589,12 @@ impl<'a> Parser<'a> {
                             break;
                         }
                     } else {
-                        log::warn!(
-                            "VRML: mismatched closer {:?} at line {}; skipped",
-                            t,
-                            self.lines.get(self.pos - 1).copied().unwrap_or(0)
+                        let line = self.lines.get(self.pos - 1).copied().unwrap_or(0);
+                        let closer = if t == Token::RBrace { '}' } else { ']' };
+                        ParseWarning::push(
+                            &mut self.warnings,
+                            Some(line),
+                            format!("mismatched closer '{closer}' skipped"),
                         );
                     }
                 }
