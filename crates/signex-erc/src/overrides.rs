@@ -91,15 +91,13 @@ mod tests {
     }
 
     fn dsl_violation(placeholder: RuleKind, severity: Severity) -> Violation {
-        Violation {
-            rule_id: crate::RuleId::user("my_rule"),
-            rule: placeholder,
+        Violation::new(
+            crate::RuleId::user("my_rule"),
+            placeholder,
             severity,
-            message: "user rule".into(),
-            location: signex_types::schematic::Point::new(0.0, 0.0),
-            primary: None,
-            peer: None,
-        }
+            "user rule",
+            signex_types::schematic::Point::new(0.0, 0.0),
+        )
     }
 
     #[test]

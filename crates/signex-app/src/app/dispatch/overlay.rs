@@ -81,6 +81,9 @@ impl Signex {
     pub(crate) fn dispatch_project_message(&mut self, msg: ProjectMsg) -> Task<Message> {
         match msg {
             ProjectMsg::CloseConfirm(choice) => self.handle_project_close_confirm(choice),
+            ProjectMsg::CloseRefsResolved { project_id, result } => {
+                self.handle_close_refs_resolved(project_id, result)
+            }
             ProjectMsg::AppQuitConfirm(choice) => self.handle_app_quit_confirm(choice),
             ProjectMsg::CloseOptions => {
                 self.ui_state.project_options = None;
@@ -340,6 +343,15 @@ impl Signex {
                     self.ui_state.annotate_locked.remove(&uuid);
                 } else {
                     self.ui_state.annotate_locked.insert(uuid);
+                }
+                Task::none()
+            }
+            AnnotateMsg::SetAllLocked(lock) => {
+                if lock {
+                    let uuids = self.annotate_preview_uuids();
+                    self.ui_state.annotate_locked.extend(uuids);
+                } else {
+                    self.ui_state.annotate_locked.clear();
                 }
                 Task::none()
             }

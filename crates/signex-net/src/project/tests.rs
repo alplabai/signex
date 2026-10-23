@@ -12,46 +12,23 @@ fn pt(x: f64, y: f64) -> Point {
 
 fn empty_sheet() -> SchematicSheet {
     SchematicSheet {
-        unknown: Default::default(),
-        uuid: Uuid::nil(),
-        version: 0,
-        generator: String::new(),
-        generator_version: String::new(),
         paper_size: "A4".to_string(),
-        root_sheet_page: "1".to_string(),
-        symbols: Vec::new(),
-        wires: Vec::new(),
-        junctions: Vec::new(),
-        labels: Vec::new(),
-        child_sheets: Vec::new(),
-        no_connects: Vec::new(),
-        text_notes: Vec::new(),
-        buses: Vec::new(),
-        bus_entries: Vec::new(),
-        drawings: Vec::new(),
-        no_erc_directives: Vec::new(),
-        title_block: HashMap::new(),
-        lib_symbols: HashMap::new(),
+        ..Default::default()
     }
 }
 
 fn wire(a: Point, b: Point) -> Wire {
     Wire {
-        unknown_columns: Default::default(),
-        uuid: Uuid::nil(),
         start: a,
         end: b,
-        stroke_width: 0.0,
+        ..Default::default()
     }
 }
 
 fn junction(pos: Point) -> Junction {
     Junction {
-        unknown_columns: Default::default(),
-        uuid: Uuid::nil(),
         position: pos,
-        diameter: 0.0,
-        minted: false,
+        ..Default::default()
     }
 }
 
@@ -117,36 +94,10 @@ fn add_lib(sheet: &mut SchematicSheet, lib_id: &str) {
 
 fn place(sheet: &mut SchematicSheet, reference: &str, lib_id: &str, origin: Point) {
     sheet.symbols.push(Symbol {
-        unknown_columns: Default::default(),
-        unknown: Default::default(),
-        uuid: Uuid::nil(),
         lib_id: lib_id.to_string(),
         reference: reference.to_string(),
-        value: String::new(),
-        footprint: String::new(),
-        datasheet: String::new(),
         position: origin,
-        rotation: 0.0,
-        mirror_x: false,
-        mirror_y: false,
-        unit: 1,
-        is_power: false,
-        ref_text: None,
-        val_text: None,
-        fields_autoplaced: false,
-        fields_user_placed: false,
-        dnp: false,
-        in_bom: true,
-        on_board: true,
-        exclude_from_sim: false,
-        locked: false,
-        fields: HashMap::new(),
-        custom_properties: Vec::new(),
-        pin_uuids: HashMap::new(),
-        instances: Vec::new(),
-        library_id: None,
-        row_id: None,
-        library_version: String::new(),
+        ..Default::default()
     });
 }
 
@@ -451,11 +402,10 @@ fn membership_aggregates_across_sheet_occurrences() {
 
     let mut root = empty_sheet();
     root.wires.push(Wire {
-        unknown_columns: Default::default(),
         uuid: rw,
         start: pt(0.0, 0.0),
         end: pt(10.0, 0.0),
-        stroke_width: 0.0,
+        ..Default::default()
     });
     root.labels
         .push(label("NET5V", pt(0.0, 0.0), LabelType::Global));
@@ -466,11 +416,10 @@ fn membership_aggregates_across_sheet_occurrences() {
 
     let mut child = empty_sheet();
     child.wires.push(Wire {
-        unknown_columns: Default::default(),
         uuid: cw,
         start: pt(0.0, 0.0),
         end: pt(10.0, 0.0),
-        stroke_width: 0.0,
+        ..Default::default()
     });
     child
         .labels
