@@ -729,6 +729,8 @@ fn default_unit() -> u32 {
 
 // ---------------------------------------------------------------------------
 // Wiring primitives
+mod field_style;
+pub use field_style::field_effective_style;
 mod sheet;
 pub use sheet::*;
 

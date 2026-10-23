@@ -14,7 +14,7 @@ use signex_renderer::schematic::{
 use signex_renderer::theme::ResolvedTheme;
 use signex_types::schematic::{
     Aabb, FillType, HAlign, Label, LabelType, Point, SchDrawing, SchematicSheet, SelectedItem,
-    SelectedKind, Symbol, TextNote, TextProp, VAlign, circumcircle,
+    SelectedKind, Symbol, TextNote, TextProp, VAlign, circumcircle, field_effective_style,
 };
 use signex_types::theme::{CanvasColors, Color as ThemeColor};
 use std::collections::{HashMap, HashSet};
@@ -413,14 +413,14 @@ fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
         if let Some(ref_text) = symbol.ref_text.as_ref() {
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolRefField),
-                bbox: text_prop_aabb(&symbol.reference, ref_text),
+                bbox: text_prop_aabb(&symbol.reference, ref_text, symbol),
                 anchor: ref_text.position,
             });
         }
         if let Some(val_text) = symbol.val_text.as_ref() {
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolValField),
-                bbox: text_prop_aabb(&symbol.value, val_text),
+                bbox: text_prop_aabb(&symbol.value, val_text, symbol),
                 anchor: val_text.position,
             });
         }
@@ -587,16 +587,33 @@ fn symbol_body_aabb(symbol: &Symbol) -> Aabb {
     )
 }
 
-fn text_prop_aabb(text: &str, prop: &TextProp) -> Aabb {
+fn text_prop_aabb(text: &str, prop: &TextProp, symbol: &Symbol) -> Aabb {
     let chars = text.chars().count().max(1) as f64;
     let h = prop
         .font_size
         .max(signex_types::schematic::SCHEMATIC_TEXT_MM);
     let w = h * 0.6 * chars;
+    let (rot, h_align, v_align) = field_effective_style(prop, symbol);
+    // An effective 90/270 rotation lays the glyph run out vertically.
+    let (w, h) = if (rot.rem_euclid(180.0) - 90.0).abs() < 1.0 {
+        (h, w)
+    } else {
+        (w, h)
+    };
     // `prop.position` is stored in world coordinates (drag and the engine
     // translate it directly), so it must not go through the symbol transform.
     let (x, y) = (prop.position.x, prop.position.y);
-    Aabb::new(x - w * 0.5, y - h * 0.5, x + w * 0.5, y + h * 0.5)
+    let (x0, x1) = match h_align {
+        HAlign::Left => (x, x + w),
+        HAlign::Center => (x - w * 0.5, x + w * 0.5),
+        HAlign::Right => (x - w, x),
+    };
+    let (y0, y1) = match v_align {
+        VAlign::Top => (y, y + h),
+        VAlign::Center => (y - h * 0.5, y + h * 0.5),
+        VAlign::Bottom => (y - h, y),
+    };
+    Aabb::new(x0, y0, x1, y1)
 }
 
 fn note_aabb(note: &TextNote) -> Aabb {

@@ -509,6 +509,9 @@ pub(super) fn field_text_input(
         if prop.hidden {
             return None;
         }
+        // Rotation/justification are stored relative to the symbol; resolve
+        // them exactly as the SVG exporter does.
+        let (rot_deg, h_align, v_align) = field_effective_style(prop, symbol);
         return Some(TextInput {
             content: content.to_owned(),
             position: [prop.position.x as f32, prop.position.y as f32],
@@ -516,9 +519,9 @@ pub(super) fn field_text_input(
             color,
             bold: false,
             italic: false,
-            rotation_rad: prop.rotation.to_radians() as f32,
-            h_align: prop.justify_h,
-            v_align: prop.justify_v,
+            rotation_rad: rot_deg.to_radians() as f32,
+            h_align,
+            v_align,
         });
     }
     let (dy, v_align) = match slot {
