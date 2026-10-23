@@ -13,7 +13,6 @@
 
 use signex_erc::{RuleKind, Violation};
 use signex_types::schematic::{HAlign, Label, LabelType, Point, SchematicSheet, VAlign, Wire};
-use std::collections::HashMap;
 use uuid::Uuid;
 
 fn pt(x: f64, y: f64) -> Point {
@@ -22,36 +21,19 @@ fn pt(x: f64, y: f64) -> Point {
 
 fn sheet(wires: Vec<Wire>, labels: Vec<Label>) -> SchematicSheet {
     SchematicSheet {
-        unknown: Default::default(),
-        uuid: Uuid::nil(),
-        version: 0,
-        generator: String::new(),
-        generator_version: String::new(),
         paper_size: "A4".to_string(),
-        root_sheet_page: "1".to_string(),
-        symbols: Vec::new(),
         wires,
-        junctions: Vec::new(),
         labels,
-        child_sheets: Vec::new(),
-        no_connects: Vec::new(),
-        text_notes: Vec::new(),
-        buses: Vec::new(),
-        bus_entries: Vec::new(),
-        drawings: Vec::new(),
-        no_erc_directives: Vec::new(),
-        title_block: HashMap::new(),
-        lib_symbols: HashMap::new(),
+        ..Default::default()
     }
 }
 
 fn wire(a: Point, b: Point) -> Wire {
     Wire {
-        unknown_columns: Default::default(),
         uuid: Uuid::new_v4(),
         start: a,
         end: b,
-        stroke_width: 0.0,
+        ..Default::default()
     }
 }
 

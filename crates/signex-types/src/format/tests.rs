@@ -20,26 +20,11 @@ fn assert_btree_map<K, V>(_: &BTreeMap<K, V>) {}
 
 pub(super) fn empty_sheet() -> SchematicSheet {
     SchematicSheet {
-        unknown: Default::default(),
-        uuid: Uuid::nil(),
         version: 1,
         generator: "signex-test".into(),
         generator_version: "0.9".into(),
         paper_size: "A4".into(),
-        root_sheet_page: "1".into(),
-        symbols: vec![],
-        wires: vec![],
-        junctions: vec![],
-        labels: vec![],
-        child_sheets: vec![],
-        no_connects: vec![],
-        text_notes: vec![],
-        buses: vec![],
-        bus_entries: vec![],
-        drawings: vec![],
-        no_erc_directives: vec![],
-        title_block: Default::default(),
-        lib_symbols: Default::default(),
+        ..Default::default()
     }
 }
 
@@ -227,46 +212,22 @@ fn snxpcb_includes_tsv_blocks_substring() {
 
 pub(super) fn sample_symbol() -> Symbol {
     Symbol {
-        unknown_columns: Default::default(),
-        unknown: Default::default(),
         uuid: Uuid::parse_str("0192a8c0-0001-7000-8000-000000000001").unwrap(),
         lib_id: "lm2596.snxsym".to_string(),
         reference: "U1".to_string(),
         value: "LM2596".to_string(),
         footprint: "TO-263.snxfpt".to_string(),
-        datasheet: String::new(),
         position: SchPoint { x: 50.8, y: 25.4 },
-        rotation: 0.0,
-        mirror_x: false,
-        mirror_y: false,
-        unit: 1,
-        is_power: false,
-        ref_text: None,
-        val_text: None,
-        fields_autoplaced: false,
-        fields_user_placed: false,
-        dnp: false,
-        in_bom: true,
-        on_board: true,
-        exclude_from_sim: false,
-        locked: false,
-        fields: Default::default(),
-        custom_properties: Vec::new(),
-        pin_uuids: Default::default(),
-        library_id: None,
-        row_id: None,
-        library_version: String::new(),
-        instances: Vec::new(),
+        ..Default::default()
     }
 }
 
 fn sample_wire(sx: f64, sy: f64, ex: f64, ey: f64) -> Wire {
     Wire {
-        unknown_columns: Default::default(),
         uuid: Uuid::new_v4(),
         start: SchPoint { x: sx, y: sy },
         end: SchPoint { x: ex, y: ey },
-        stroke_width: 0.0,
+        ..Default::default()
     }
 }
 
@@ -314,11 +275,11 @@ fn snxsch_round_trip_with_data() {
     sheet.wires.push(sample_wire(10.0, 20.0, 30.0, 20.0));
     sheet.wires.push(sample_wire(30.0, 20.0, 30.0, 40.0));
     sheet.junctions.push(Junction {
-        unknown_columns: Default::default(),
         uuid: Uuid::parse_str("0192a8c0-0002-7000-8000-000000000001").unwrap(),
         position: SchPoint { x: 30.0, y: 20.0 },
         diameter: 0.5,
         minted: true,
+        ..Default::default()
     });
     sheet.labels.push(Label {
         unknown_columns: Default::default(),
@@ -380,11 +341,10 @@ fn snxsch_round_trip_with_data() {
 fn snxsch_without_junction_extras_defaults_to_user_placed() {
     let mut sheet = empty_sheet();
     sheet.junctions.push(Junction {
-        unknown_columns: Default::default(),
         uuid: Uuid::parse_str("0192a8c0-0002-7000-8000-000000000002").unwrap(),
         position: SchPoint { x: 5.0, y: 0.0 },
-        diameter: 0.0,
         minted: true,
+        ..Default::default()
     });
 
     let full = SnxSchematic::new(sheet).write_string().expect("serialise");

@@ -1231,13 +1231,8 @@ fn fixture_schematic_with_symbol_and_child_sheet()
     let sheet_uuid = uuid::Uuid::new_v4();
 
     let sheet = SchematicSheet {
-        unknown: Default::default(),
         uuid: uuid::Uuid::new_v4(),
-        version: 0,
-        generator: String::new(),
-        generator_version: String::new(),
         paper_size: "A4".to_string(),
-        root_sheet_page: "1".to_string(),
         symbols: vec![Symbol {
             unknown_columns: Default::default(),
             unknown: Default::default(),
@@ -1270,9 +1265,6 @@ fn fixture_schematic_with_symbol_and_child_sheet()
             row_id: None,
             library_version: String::new(),
         }],
-        wires: Vec::new(),
-        junctions: Vec::new(),
-        labels: Vec::new(),
         child_sheets: vec![ChildSheet {
             uuid: sheet_uuid,
             name: "Power".to_string(),
@@ -1287,14 +1279,7 @@ fn fixture_schematic_with_symbol_and_child_sheet()
             pins: Vec::new(),
             instances: Vec::new(),
         }],
-        no_connects: Vec::new(),
-        text_notes: Vec::new(),
-        buses: Vec::new(),
-        bus_entries: Vec::new(),
-        drawings: Vec::new(),
-        no_erc_directives: Vec::new(),
-        title_block: HashMap::new(),
-        lib_symbols: HashMap::new(),
+        ..Default::default()
     };
 
     let path = PathBuf::from("cut-gating.snxsch");
