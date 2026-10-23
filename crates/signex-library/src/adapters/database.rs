@@ -48,6 +48,33 @@ pub struct DatabaseAdapter {
     client: reqwest::blocking::Client,
 }
 
+/// Manifest `auth` prefix that names an OS-keychain item instead of a token.
+const KEYCHAIN_SIGIL: &str = "@signex-keychain:";
+
+/// Refuse to send a bearer token over cleartext HTTP to a non-loopback host.
+/// Loopback http (local dev server) and any https URL pass.
+fn check_transport_security(base_url: &str, has_token: bool) -> Result<(), LibraryError> {
+    if !has_token {
+        return Ok(());
+    }
+    let url = url::Url::parse(base_url)
+        .map_err(|e| LibraryError::Backend(format!("invalid library server url: {e}")))?;
+    let loopback = match url.host() {
+        Some(url::Host::Domain(d)) => d.eq_ignore_ascii_case("localhost"),
+        Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
+        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
+        None => false,
+    };
+    if url.scheme() == "https" || (url.scheme() == "http" && loopback) {
+        Ok(())
+    } else {
+        Err(LibraryError::Backend(format!(
+            "refusing to send the bearer token to `{base_url}` over cleartext HTTP; \
+             use https:// (or a loopback address for local development)"
+        )))
+    }
+}
+
 impl DatabaseAdapter {
     /// Construct from a manifest. The manifest's `auth` field is treated as
     /// the bearer token; the holder is derived from it.
@@ -62,6 +89,13 @@ impl DatabaseAdapter {
                 )));
             }
         };
+        check_transport_security(&base_url, !auth.is_empty())?;
+        if auth.starts_with(KEYCHAIN_SIGIL) {
+            return Err(LibraryError::Backend(format!(
+                "library auth `{KEYCHAIN_SIGIL}...` is not resolved by the database adapter yet; \
+             refusing to send the sigil as a bearer token"
+            )));
+        }
         let client = reqwest::blocking::Client::builder()
             .connect_timeout(HTTP_CONNECT_TIMEOUT)
             .timeout(HTTP_REQUEST_TIMEOUT)
@@ -111,6 +145,7 @@ impl DatabaseAdapter {
     ) -> Result<Self, LibraryError> {
         let base_url = url.into().trim_end_matches('/').to_string();
         let token = token.into();
+        check_transport_security(&base_url, !token.is_empty())?;
         let token = if token.is_empty() { None } else { Some(token) };
         let holder = holder.into();
         let client = reqwest::blocking::Client::builder()
@@ -578,6 +613,18 @@ fn synthesize_legacy_manifest(snx: SnxlibManifest) -> Manifest {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn token_over_cleartext_non_loopback_is_refused() {
+        assert!(DatabaseAdapter::with_token("http://lib.example.com", "t", "h").is_err());
+        assert!(DatabaseAdapter::with_token("http://10.0.0.5:3535", "t", "h").is_err());
+        assert!(DatabaseAdapter::with_token("https://lib.example.com", "t", "h").is_ok());
+        assert!(DatabaseAdapter::with_token("http://127.0.0.1:3535", "t", "h").is_ok());
+        assert!(DatabaseAdapter::with_token("http://localhost:3535", "t", "h").is_ok());
+        assert!(DatabaseAdapter::with_token("http://[::1]:3535", "t", "h").is_ok());
+        // No credential, nothing to leak.
+        assert!(DatabaseAdapter::with_token("http://lib.example.com", "", "h").is_ok());
+    }
 
     use crate::library_file::{FORMAT_TOKEN, LibrarySection};
     use crate::manifest::{UsersConfig, WorkflowConfig};

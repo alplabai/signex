@@ -164,7 +164,7 @@ impl DistributorAdapter for MouserAdapter {
 
     fn lookup_by_url(&self, url: &Url) -> Result<Option<DistributorPart>, DistributorError> {
         let host = url.host_str().unwrap_or("");
-        if !host.ends_with("mouser.com") {
+        if !super::host_in_domain(host, "mouser.com") {
             return Ok(None);
         }
         // Mouser product pages have the part number in either the path or

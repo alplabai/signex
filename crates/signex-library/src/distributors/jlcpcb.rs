@@ -109,7 +109,7 @@ impl DistributorAdapter for JlcpcbAdapter {
 
     fn lookup_by_url(&self, url: &Url) -> Result<Option<DistributorPart>, DistributorError> {
         let host = url.host_str().unwrap_or("");
-        if !host.ends_with("jlcpcb.com") {
+        if !super::host_in_domain(host, "jlcpcb.com") {
             return Ok(None);
         }
         // JLCPCB part URLs include the LCSC code as a query param `partno=Cxxxx`

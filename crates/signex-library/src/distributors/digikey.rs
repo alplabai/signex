@@ -388,7 +388,7 @@ impl DistributorAdapter for DigiKeyAdapter {
 
     fn lookup_by_url(&self, url: &Url) -> Result<Option<DistributorPart>, DistributorError> {
         let host = url.host_str().unwrap_or("");
-        if !host.ends_with("digikey.com") {
+        if !super::host_in_domain(host, "digikey.com") {
             return Ok(None);
         }
         let from_query = url

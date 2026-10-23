@@ -140,7 +140,7 @@ impl DistributorAdapter for LcscAdapter {
         //   https://www.lcsc.com/product-detail/Resistors_YAGEO-RC0805FR-0710KL_C17414.html
         // We extract the trailing `_C<digits>` slug and search by it.
         let host = url.host_str().unwrap_or("");
-        if !host.ends_with("lcsc.com") {
+        if !super::host_in_domain(host, "lcsc.com") {
             return Ok(None);
         }
         let path = url.path();
