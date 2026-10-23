@@ -72,6 +72,11 @@ pub struct ExportContext {
     /// terminals back to symbols (the Protel component blocks) must walk this
     /// set, not [`Self::sheets`]. A sheet placed several times appears once.
     pub netlist_sheets: Vec<SchematicSheet>,
+    /// How many times each entry of [`Self::netlist_sheets`] is placed in the
+    /// hierarchy (parallel, same order). Empty means "not derived": every
+    /// sheet counts once. The BOM multiplies a sheet's parts by this; the
+    /// netlist ignores it, since its topology is already per-occurrence.
+    pub netlist_sheet_placements: Vec<usize>,
 }
 
 #[derive(Debug, Clone)]

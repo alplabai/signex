@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use signex_bom::{BomComponent, BomContext, BomEngineOptions, build_table, validate_table};
+use signex_types::schematic::{SchematicSheet, Symbol};
 use thiserror::Error;
 
 use crate::{ExportContext, Exporter};
@@ -201,57 +202,19 @@ fn engine_options_from_opts(opts: &BomOptions) -> BomEngineOptions {
 fn build_bom_context(ctx: &ExportContext, opts: &BomOptions) -> BomContext {
     let mut components = Vec::new();
 
-    for sheet_snap in &ctx.sheets {
-        for sym in &sheet_snap.schematic.symbols {
-            if sym.reference.starts_with("#PWR") || sym.is_power {
-                continue;
-            }
-
-            let name = sym
-                .fields
-                .get("Name")
-                .cloned()
-                .filter(|value| !value.trim().is_empty())
-                .unwrap_or_else(|| sym.value.clone());
-            let description = sym.fields.get("Description").cloned().unwrap_or_default();
-            let lib_ref = sym
-                .fields
-                .get("LibRef")
-                .or_else(|| sym.fields.get("Part Number"))
-                .cloned()
-                .filter(|value| !value.trim().is_empty())
-                .unwrap_or_else(|| sym.lib_id.clone());
-
-            let variant_fitted = resolve_active_variant_fitted(sym, opts.active_variant.as_deref());
-            let base_fitted = resolve_base_variant_fitted(sym);
-
-            let mut custom = sym
-                .fields
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect::<BTreeMap<_, _>>();
-            custom.remove("Name");
-            custom.remove("Description");
-            custom.remove("LibRef");
-            // Fit-state fields feed `variant_fitted`/`base_fitted`, not the
-            // part's identity. Drop whatever the resolvers recognise so a
-            // variant override cannot split otherwise identical parts.
-            custom.retain(|key, _| !is_fit_state_field(key));
-
-            components.push(BomComponent {
-                reference: sym.reference.clone(),
-                name,
-                value: sym.value.clone(),
-                footprint: sym.footprint.clone(),
-                lib_ref,
-                description,
-                dnp: sym.dnp,
-                in_bom: sym.in_bom,
-                on_board: sym.on_board,
-                variant_fitted,
-                base_fitted,
-                custom,
-            });
+    for (sheet, placements) in bom_sheets(ctx) {
+        let sheet_parts: Vec<BomComponent> = sheet
+            .symbols
+            .iter()
+            .filter(|sym| !(sym.reference.starts_with("#PWR") || sym.is_power))
+            .map(|sym| bom_component(sym, opts))
+            .collect();
+        // A sheet placed N times contributes N copies of each part. Per-
+        // instance designators do not exist yet (the netlist reports
+        // `SharedReferenceAcrossInstances` for the same reason), so every copy
+        // carries the sheet's own designator.
+        for _ in 0..placements {
+            components.extend(sheet_parts.iter().cloned());
         }
     }
 
@@ -262,6 +225,73 @@ fn build_bom_context(ctx: &ExportContext, opts: &BomOptions) -> BomContext {
             revision: ctx.metadata.revision.clone(),
             date: ctx.metadata.date.clone(),
         },
+    }
+}
+
+/// The sheets a BOM is built from, each with its placement count. When the
+/// app derived the project hierarchy (`netlist_sheets`) that is every sheet
+/// the netlist uses -- including hierarchical children that are not printed
+/// pages -- weighted by how often it is placed. Otherwise (a caller with no
+/// hierarchy, or a loose document) it is the exported pages, once each.
+fn bom_sheets(ctx: &ExportContext) -> Vec<(&SchematicSheet, usize)> {
+    if ctx.netlist_sheets.is_empty() {
+        return ctx.sheets.iter().map(|s| (&s.schematic, 1)).collect();
+    }
+    ctx.netlist_sheets
+        .iter()
+        .enumerate()
+        .map(|(i, sheet)| {
+            let placements = ctx.netlist_sheet_placements.get(i).copied().unwrap_or(1);
+            (sheet, placements)
+        })
+        .collect()
+}
+
+fn bom_component(sym: &Symbol, opts: &BomOptions) -> BomComponent {
+    let name = sym
+        .fields
+        .get("Name")
+        .cloned()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| sym.value.clone());
+    let description = sym.fields.get("Description").cloned().unwrap_or_default();
+    let lib_ref = sym
+        .fields
+        .get("LibRef")
+        .or_else(|| sym.fields.get("Part Number"))
+        .cloned()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| sym.lib_id.clone());
+
+    let variant_fitted = resolve_active_variant_fitted(sym, opts.active_variant.as_deref());
+    let base_fitted = resolve_base_variant_fitted(sym);
+
+    let mut custom = sym
+        .fields
+        .iter()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect::<BTreeMap<_, _>>();
+    custom.remove("Name");
+    custom.remove("Description");
+    custom.remove("LibRef");
+    // Fit-state fields feed `variant_fitted`/`base_fitted`, not the
+    // part's identity. Drop whatever the resolvers recognise so a
+    // variant override cannot split otherwise identical parts.
+    custom.retain(|key, _| !is_fit_state_field(key));
+
+    BomComponent {
+        reference: sym.reference.clone(),
+        name,
+        value: sym.value.clone(),
+        footprint: sym.footprint.clone(),
+        lib_ref,
+        description,
+        dnp: sym.dnp,
+        in_bom: sym.in_bom,
+        on_board: sym.on_board,
+        variant_fitted,
+        base_fitted,
+        custom,
     }
 }
 
@@ -625,6 +655,7 @@ mod tests {
             metadata: ProjectMetadata::default(),
             netlist: None,
             netlist_sheets: Vec::new(),
+            netlist_sheet_placements: Vec::new(),
         }
     }
 
@@ -1021,6 +1052,7 @@ mod tests {
             metadata: ProjectMetadata::default(),
             netlist: None,
             netlist_sheets: Vec::new(),
+            netlist_sheet_placements: Vec::new(),
         }
     }
 
@@ -1155,5 +1187,37 @@ mod tests {
             part_with_fields("R2", &[("Tolerance", "5%")]),
         ]);
         assert_eq!(rollup(&ctx, &BomOptions::default()).rows.len(), 2);
+    }
+
+    #[test]
+    fn hierarchy_sheets_are_counted_once_per_placement_and_skip_power() {
+        let mut ctx = export_ctx(vec![part_with_fields("R1", &[])]);
+        let mut child = ctx.sheets[0].schematic.clone();
+        child.symbols = vec![part_with_fields("C1", &[])];
+        let mut power = part_with_fields("#PWR01", &[]);
+        power.is_power = true;
+        child.symbols.push(power);
+        ctx.netlist_sheets = vec![ctx.sheets[0].schematic.clone(), child];
+        ctx.netlist_sheet_placements = vec![1, 3];
+
+        let table = rollup(&ctx, &BomOptions::default());
+        let mut refs: Vec<_> = table
+            .rows
+            .iter()
+            .flat_map(|r| r.references.clone())
+            .collect();
+        refs.sort();
+        assert_eq!(refs, ["C1", "C1", "C1", "R1"]);
+
+        // No hierarchy derived: the exported pages count once, as before.
+        ctx.netlist_sheets.clear();
+        ctx.netlist_sheet_placements.clear();
+        let table = rollup(&ctx, &BomOptions::default());
+        let refs: Vec<_> = table
+            .rows
+            .iter()
+            .flat_map(|r| r.references.clone())
+            .collect();
+        assert_eq!(refs, ["R1"]);
     }
 }

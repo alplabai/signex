@@ -957,4 +957,41 @@ fn same_filename_children_of_different_parents_stitch_from_their_own_files() {
     );
 }
 
+// Placement counts follow the occurrence tree the netlist is built from: a
+// child placed twice counts twice, and so does a grandchild under it (#730).
+#[test]
+fn sheet_placements_count_every_occurrence_of_a_nested_child() {
+    let mut root = empty_sheet();
+    root.child_sheets.push(child_sheet("A", "mid.sch", vec![]));
+    root.child_sheets.push(child_sheet("B", "mid.sch", vec![]));
+    let mut mid = empty_sheet();
+    mid.child_sheets.push(child_sheet("L", "leaf.sch", vec![]));
+    let mut sheets: HashMap<SheetKey, SchematicSheet> = HashMap::new();
+    sheets.insert(SheetKey::new("root"), root);
+    sheets.insert(SheetKey::new("mid.sch"), mid);
+    sheets.insert(SheetKey::new("leaf.sch"), empty_sheet());
+    let resolved: HashMap<SheetKey, HashMap<String, SheetKey>> = sheets
+        .iter()
+        .map(|(key, sheet)| {
+            let submap = sheet
+                .child_sheets
+                .iter()
+                .map(|cs| (cs.filename.clone(), SheetKey::new(cs.filename.clone())))
+                .collect();
+            (key.clone(), submap)
+        })
+        .collect();
+    let roots = [ProjectRoot {
+        key: SheetKey::new("root"),
+    }];
+    let counts = sheet_placements(&ProjectGraph {
+        sheets: &sheets,
+        resolved: &resolved,
+        roots: &roots,
+    });
+    assert_eq!(counts[&SheetKey::new("root")], 1);
+    assert_eq!(counts[&SheetKey::new("mid.sch")], 2);
+    assert_eq!(counts[&SheetKey::new("leaf.sch")], 2);
+}
+
 mod multi_root;

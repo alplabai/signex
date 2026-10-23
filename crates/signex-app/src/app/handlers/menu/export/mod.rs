@@ -28,6 +28,15 @@ fn build_export_context(
     build_page_scope(document_state).map(|(ctx, _issues)| ctx)
 }
 
+/// The BOM's context: like [`build_export_context`] but carrying the project
+/// hierarchy (`netlist_sheets` + placement counts), so a BOM counts every part
+/// on every child sheet once per placement (#730).
+fn build_bom_export_context(
+    document_state: &crate::app::state::DocumentState,
+) -> Option<ExportContext> {
+    build_export_scope(document_state).map(|(ctx, _issues)| ctx)
+}
+
 /// Everything that went wrong while deriving the export's netlist.
 #[derive(Default)]
 pub(crate) struct ExportIssues {
@@ -303,7 +312,7 @@ fn build_export_scope(
 }
 
 /// [`build_export_scope`] without `ExportContext::netlist_sheets`, for the
-/// paths that never read it (PDF, BOM, print preview). Skips the per-sheet
+/// paths that never read it (PDF, print preview). Skips the per-sheet
 /// copy that only the Protel netlist needs.
 fn build_page_scope(
     document_state: &crate::app::state::DocumentState,
@@ -355,6 +364,7 @@ fn build_scope(
     let mut issues = ExportIssues::default();
     let set = sheet_set;
     let mut netlist_sheets: Vec<signex_types::schematic::SchematicSheet> = Vec::new();
+    let mut netlist_sheet_placements: Vec<usize> = Vec::new();
     let netlist = set.root.clone().and_then(|root_path| {
         // A declared page that exists and was read but that nothing
         // hierarchically references is stitched in below as its own
@@ -416,8 +426,20 @@ fn build_scope(
         // key order so the output is deterministic: hierarchical children are
         // not printed pages, yet their parts sit in the netlist's terminals.
         if with_netlist_sheets {
+            // Placement counts come from the same occurrence walk the netlist
+            // just used, so the BOM multiplies a child by how often it is
+            // placed (#730). A sheet the walk never reaches counts zero.
+            let counts = signex_net::sheet_placements(&signex_net::ProjectGraph {
+                sheets: &graph.sheets,
+                resolved: &graph.resolved,
+                roots: &roots,
+            });
             let mut keyed: Vec<_> = graph.sheets.into_iter().collect();
             keyed.sort_by(|a, b| a.0.cmp(&b.0));
+            netlist_sheet_placements = keyed
+                .iter()
+                .map(|(key, _)| counts.get(key).copied().unwrap_or(0))
+                .collect();
             netlist_sheets = keyed.into_iter().map(|(_, sheet)| sheet).collect();
         }
         let mut stitch = result.issues;
@@ -432,6 +454,7 @@ fn build_scope(
             metadata,
             netlist,
             netlist_sheets,
+            netlist_sheet_placements,
         },
         issues,
     ))

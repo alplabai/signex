@@ -971,3 +971,5 @@ fn uncovered_pdf_characters_reach_the_messages_panel() {
 }
 
 mod protel_hierarchy;
+
+mod bom_hierarchy;

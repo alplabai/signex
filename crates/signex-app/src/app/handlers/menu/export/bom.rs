@@ -105,7 +105,7 @@ impl Signex {
         };
         preview.options.rule_options.set_enabled(rule, enabled);
         let opts = preview.options.clone();
-        let Some(ctx) = super::build_export_context(&self.document_state) else {
+        let Some(ctx) = super::build_bom_export_context(&self.document_state) else {
             return;
         };
         if let Some(preview) = self.document_state.bom_preview.as_mut() {
@@ -280,7 +280,7 @@ impl Signex {
         &self,
         opts: &BomOptions,
     ) -> Option<(signex_output::BomTable, signex_output::BomValidationReport)> {
-        let ctx = super::build_export_context(&self.document_state)?;
+        let ctx = super::build_bom_export_context(&self.document_state)?;
         Some(signex_output::bom::rollup_with_validation(&ctx, opts))
     }
 
@@ -316,7 +316,7 @@ impl Signex {
             }
         };
 
-        let (ctx, issues) = match super::build_page_scope(&self.document_state) {
+        let (ctx, issues) = match super::build_export_scope(&self.document_state) {
             Some(c) => c,
             None => {
                 self.document_state.pending_bom_options = None;

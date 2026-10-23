@@ -244,30 +244,7 @@ pub fn build_project_netlist(graph: &ProjectGraph) -> ProjectNetlist {
     // references whom. `order_roots` is what puts the two in that order (#540);
     // the caller's order is kept as the tiebreak, so a flat project is walked
     // exactly as handed.
-    let mut occs: Vec<Occ> = Vec::new();
-    let mut edges: Vec<(usize, usize, usize)> = Vec::new(); // (parent occ, cs index, child occ)
-    let mut path: Vec<SheetKey> = Vec::new();
-    let mut visited: HashSet<SheetKey> = HashSet::new();
-    for key in root_order::order_roots(graph) {
-        if visited.contains(&key) {
-            continue;
-        }
-        let Some(sheet) = graph.sheets.get(&key) else {
-            continue;
-        };
-        path.clear();
-        visit(
-            graph,
-            &key,
-            sheet,
-            Vec::new(),
-            &mut path,
-            &mut occs,
-            &mut edges,
-            &mut visited,
-            &mut issues,
-        );
-    }
+    let (occs, edges) = walk_occurrences(graph, &mut issues);
 
     detect_shared_references(&occs, &mut issues);
 
@@ -601,6 +578,55 @@ fn visit<'a>(
 
     path.pop();
     my_id
+}
+
+/// Walk every root of `graph` and return the occurrence tree (pre-order) and
+/// its `(parent occ, child_sheets index, child occ)` edges. Shared by the
+/// netlist and [`sheet_placements`] so both count the same hierarchy. See the
+/// traversal notes in [`build_project_netlist`] for the multi-root rules.
+fn walk_occurrences<'a>(
+    graph: &ProjectGraph<'a>,
+    issues: &mut Vec<StitchIssue>,
+) -> (Vec<Occ<'a>>, Vec<(usize, usize, usize)>) {
+    let mut occs: Vec<Occ> = Vec::new();
+    let mut edges: Vec<(usize, usize, usize)> = Vec::new();
+    let mut path: Vec<SheetKey> = Vec::new();
+    let mut visited: HashSet<SheetKey> = HashSet::new();
+    for key in root_order::order_roots(graph) {
+        if visited.contains(&key) {
+            continue;
+        }
+        let Some(sheet) = graph.sheets.get(&key) else {
+            continue;
+        };
+        path.clear();
+        visit(
+            graph,
+            &key,
+            sheet,
+            Vec::new(),
+            &mut path,
+            &mut occs,
+            &mut edges,
+            &mut visited,
+            issues,
+        );
+    }
+    (occs, edges)
+}
+
+/// How many times each sheet is placed in the project hierarchy: a root counts
+/// once, a child once per `ChildSheet` that resolves to it. This is the same
+/// occurrence expansion the netlist uses, so a consumer that multiplies a
+/// sheet's parts by this count agrees with the netlist's topology. Sheets the
+/// walk never reaches are absent.
+pub fn sheet_placements(graph: &ProjectGraph) -> std::collections::BTreeMap<SheetKey, usize> {
+    let (occs, _) = walk_occurrences(graph, &mut Vec::new());
+    let mut counts = std::collections::BTreeMap::new();
+    for occ in &occs {
+        *counts.entry(occ.key.clone()).or_insert(0) += 1;
+    }
+    counts
 }
 
 /// Union `node` into the level-2 class of `name`, seeding the bucket the first
