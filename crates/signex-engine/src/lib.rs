@@ -6,6 +6,7 @@ mod annotation;
 mod history;
 mod selection;
 mod sheet;
+mod sheet_placement;
 mod transform;
 
 mod exec;
@@ -23,6 +24,10 @@ pub use error::EngineError;
 use history::HistoryEntry;
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
 pub use selection::{ClipboardSelection, SelectionAnchor, SelectionDetails, partition_cuttable};
+pub use sheet_placement::{
+    DEFAULT_CHILD_SHEET_STROKE_MM, MIN_CHILD_SHEET_EDGE_MM, child_sheet_from_corners,
+    unused_sheet_stem,
+};
 use signex_types::schematic::SchematicSheet;
 
 const JUNCTION_TOLERANCE_MM: f64 = 0.01;

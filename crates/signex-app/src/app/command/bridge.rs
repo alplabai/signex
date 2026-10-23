@@ -68,6 +68,7 @@ fn resolve(command: &AppCommandId) -> Option<Message> {
         "cut" => Message::Edit(EditMsg::Cut),
         "delete_selection" | "remove_last_vertex" => Message::Edit(EditMsg::DeleteSelected),
         "draw_graphic_line" => Message::Tool(ToolMessage::SelectTool(Tool::Line)),
+        "draw_hierarchical_sheet" => Message::Tool(ToolMessage::SelectTool(Tool::Sheet)),
         "duplicate" => Message::Edit(EditMsg::Duplicate),
         // Docking the Properties panel IS how this app shows the
         // selection's properties: the status bar's
@@ -338,7 +339,7 @@ mod tests {
         "autoplace_fields", "break_wire", "center_on_cursor", "clear_net_highlighting",
         "close_active_document", "copy_attributes_or_add_vertex", "cycle_fast_grid",
         "cycle_snap_grid_backward", "cycle_wiring_mode", "drag_keep_connections",
-        "draw_hierarchical_sheet", "edit_footprint_field",
+        "edit_footprint_field",
         "edit_library_symbol", "edit_object_properties", "edit_reference_designator",
         "edit_selected_symbol_in_symbol_editor",
         "edit_text_in_place", "edit_value", "fast_grid_1", "fast_grid_2", "find_next",

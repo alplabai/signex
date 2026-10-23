@@ -445,6 +445,9 @@ impl Signex {
                     self.interaction_state.active_canvas_mut().drawing_mode = false;
                     self.interaction_state.current_tool = Tool::Select;
                     self.interaction_state.active_canvas_mut().tool_preview = None;
+                } else if self.interaction_state.current_tool == Tool::Sheet {
+                    // Drops the half-placed corner and the ghost, back to Select.
+                    return self.update(Message::Tool(ToolMessage::SelectTool(Tool::Select)));
                 }
                 self.finish_update()
             }
@@ -464,6 +467,7 @@ impl Signex {
                     Tool::Line => Some("Line".to_string()),
                     Tool::Rectangle => Some("Rectangle".to_string()),
                     Tool::Circle => Some("Circle".to_string()),
+                    Tool::Sheet => Some("Sheet".to_string()),
                     _ => None,
                 };
                 // Clear every cursor-following ghost so a leftover from a

@@ -1,0 +1,198 @@
+//! #358 — the Place Sheet tool, driven through the real message path
+//! (`SelectTool`, `CanvasEvent::Clicked`, Esc, Undo).
+
+use signex_app::app::{EditMsg, LoadedProject, Message, Signex, TabInfo, TabKind, Tool};
+use signex_app::canvas::CanvasEvent;
+use signex_app::toolbar::ToolMessage;
+use signex_types::project::{ProjectData, SheetEntry};
+use signex_types::schematic::SchematicSheet;
+use std::collections::HashMap;
+use std::path::PathBuf;
+use tempfile::TempDir;
+
+fn empty_sheet() -> SchematicSheet {
+    SchematicSheet {
+        uuid: uuid::Uuid::new_v4(),
+        version: 0,
+        generator: String::new(),
+        generator_version: String::new(),
+        paper_size: "A4".to_string(),
+        root_sheet_page: "1".to_string(),
+        symbols: Vec::new(),
+        wires: Vec::new(),
+        junctions: Vec::new(),
+        labels: Vec::new(),
+        child_sheets: Vec::new(),
+        no_connects: Vec::new(),
+        text_notes: Vec::new(),
+        buses: Vec::new(),
+        bus_entries: Vec::new(),
+        drawings: Vec::new(),
+        no_erc_directives: Vec::new(),
+        title_block: HashMap::new(),
+        lib_symbols: HashMap::new(),
+        unknown: Default::default(),
+    }
+}
+
+/// An app with one active loose schematic and the Place Sheet tool armed.
+fn app_with_sheet_tool(path: PathBuf) -> Signex {
+    let (mut app, _task) = Signex::new();
+    app.ui_state.first_run_tour_open = false;
+    app.ui_state.snap_enabled = false;
+    let engine = signex_engine::Engine::new(empty_sheet()).expect("engine");
+    app.document_state.engines.insert(path.clone(), engine);
+    app.document_state.tabs.push(TabInfo {
+        title: "root".to_string(),
+        path: path.clone(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: TabKind::Schematic,
+    });
+    app.document_state.active_tab = 0;
+    app.document_state.active_path = Some(path);
+    let _ = app.update(Message::Tool(ToolMessage::SelectTool(Tool::Sheet)));
+    app
+}
+
+fn click(app: &mut Signex, x: f64, y: f64) {
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::Clicked {
+        world_x: x,
+        world_y: y,
+    }));
+}
+
+fn drag(app: &mut Signex, from: (f64, f64), to: (f64, f64)) {
+    click(app, from.0, from.1);
+    click(app, to.0, to.1);
+}
+
+fn sheets(app: &Signex) -> Vec<signex_types::schematic::ChildSheet> {
+    app.document_state
+        .active_engine()
+        .expect("engine")
+        .document()
+        .child_sheets
+        .clone()
+}
+
+#[test]
+fn drag_places_a_sheet_with_the_dragged_rect_and_generated_names() {
+    let tmp = TempDir::new().expect("tempdir");
+    let path = tmp.path().join("root.snxsch");
+    let mut app = app_with_sheet_tool(path.clone());
+
+    // Opposite corner first: the rect must still be normalised.
+    drag(&mut app, (60.0, 50.0), (20.0, 10.0));
+
+    let placed = sheets(&app);
+    assert_eq!(placed.len(), 1);
+    let s = &placed[0];
+    assert_eq!((s.position.x, s.position.y), (20.0, 10.0));
+    assert_eq!(s.size, (40.0, 40.0));
+    assert_eq!(s.name, "sheet1");
+    assert_eq!(s.filename, "sheet1.snxsch");
+    assert!(s.pins.is_empty());
+    assert!(app.document_state.dirty_paths.contains(&path));
+    assert!(
+        !tmp.path().join("sheet1.snxsch").exists(),
+        "placing must not create the child file"
+    );
+}
+
+#[test]
+fn tiny_or_zero_area_drag_is_rejected_and_the_tool_stays_armed() {
+    let tmp = TempDir::new().expect("tempdir");
+    let path = tmp.path().join("root.snxsch");
+    let mut app = app_with_sheet_tool(path.clone());
+
+    drag(&mut app, (10.0, 10.0), (10.0, 10.0));
+    drag(&mut app, (10.0, 10.0), (11.0, 40.0));
+
+    assert!(sheets(&app).is_empty());
+    assert!(!app.document_state.dirty_paths.contains(&path));
+    assert_eq!(app.interaction_state.current_tool, Tool::Sheet);
+    assert!(app.interaction_state.shape_anchor.is_none());
+}
+
+#[test]
+fn escape_mid_drag_cancels_and_returns_to_select() {
+    let tmp = TempDir::new().expect("tempdir");
+    let mut app = app_with_sheet_tool(tmp.path().join("root.snxsch"));
+
+    click(&mut app, 10.0, 10.0);
+    assert!(app.interaction_state.shape_anchor.is_some());
+    let _ = app.update(Message::EscapePressed { window: None });
+
+    assert_eq!(app.interaction_state.current_tool, Tool::Select);
+    assert!(app.interaction_state.shape_anchor.is_none());
+    click(&mut app, 50.0, 50.0);
+    assert!(sheets(&app).is_empty(), "no partial sheet after Esc");
+}
+
+#[test]
+fn cancel_drawing_mid_drag_also_cancels() {
+    let tmp = TempDir::new().expect("tempdir");
+    let mut app = app_with_sheet_tool(tmp.path().join("root.snxsch"));
+
+    click(&mut app, 10.0, 10.0);
+    let _ = app.update(Message::Tool(ToolMessage::CancelDrawing));
+
+    assert_eq!(app.interaction_state.current_tool, Tool::Select);
+    assert!(app.interaction_state.shape_anchor.is_none());
+}
+
+#[test]
+fn undo_removes_the_placed_sheet() {
+    let tmp = TempDir::new().expect("tempdir");
+    let mut app = app_with_sheet_tool(tmp.path().join("root.snxsch"));
+
+    drag(&mut app, (10.0, 10.0), (40.0, 40.0));
+    assert_eq!(sheets(&app).len(), 1);
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+
+    assert!(sheets(&app).is_empty());
+}
+
+#[test]
+fn defaults_are_unique_in_the_parent_and_the_project() {
+    let tmp = TempDir::new().expect("tempdir");
+    let path = tmp.path().join("root.snxsch");
+    let mut app = app_with_sheet_tool(path.clone());
+
+    // The project already lists sheet1.snxsch, so the first default is sheet2.
+    let id = app.document_state.mint_project_id();
+    app.document_state.projects.push(LoadedProject {
+        id,
+        path: tmp.path().join("P.snxprj"),
+        data: ProjectData {
+            name: "P".to_string(),
+            dir: tmp.path().to_string_lossy().into_owned(),
+            schematic_root: Some("root.snxsch".to_string()),
+            pcb_file: None,
+            sheets: ["root.snxsch", "sheet1.snxsch"]
+                .iter()
+                .map(|f| SheetEntry {
+                    name: (*f).to_string(),
+                    filename: (*f).to_string(),
+                    symbols_count: 0,
+                    wires_count: 0,
+                    labels_count: 0,
+                })
+                .collect(),
+            variant_definitions: Vec::new(),
+            active_variant: None,
+            libraries: Vec::new(),
+            enable_git: false,
+        },
+        pending_libraries: HashMap::new(),
+    });
+    app.document_state.tabs[0].project_id = Some(id);
+
+    drag(&mut app, (0.0, 0.0), (20.0, 20.0));
+    drag(&mut app, (30.0, 0.0), (50.0, 20.0));
+
+    let names: Vec<String> = sheets(&app).into_iter().map(|s| s.filename).collect();
+    assert_eq!(names, ["sheet2.snxsch", "sheet3.snxsch"]);
+}

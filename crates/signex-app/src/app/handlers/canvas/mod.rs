@@ -6,6 +6,7 @@ use super::super::*;
 mod clicked;
 mod double_clicked;
 mod layout_drag;
+mod sheet_tool;
 #[cfg(test)]
 mod tests;
 
