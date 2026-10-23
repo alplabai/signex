@@ -8,8 +8,10 @@ use super::TabInfo;
 
 mod interaction;
 pub(crate) mod scope;
+mod sheet_read;
 pub(crate) mod sheet_refs;
 mod ui;
+pub(crate) mod volume_case;
 
 pub use interaction::InteractionState;
 pub use ui::UiState;
