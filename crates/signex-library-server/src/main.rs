@@ -95,3 +95,30 @@ async fn main() -> anyhow::Result<()> {
     .await?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::is_loopback_bind;
+
+    #[test]
+    fn loopback_binds_are_accepted() {
+        for b in ["127.0.0.1:3535", "127.5.5.5:80", "[::1]:3535"] {
+            assert!(is_loopback_bind(b), "{b} should be loopback");
+        }
+    }
+
+    #[test]
+    fn non_loopback_or_unparseable_binds_are_rejected() {
+        for b in [
+            "0.0.0.0:3535",
+            "[::]:3535",
+            "192.168.1.10:3535",
+            "[fe80::1%lo0]:3535",
+            "localhost:3535",
+            "127.0.0.1",
+            "",
+        ] {
+            assert!(!is_loopback_bind(b), "{b:?} must not count as loopback");
+        }
+    }
+}
