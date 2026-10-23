@@ -344,10 +344,12 @@ impl LocalGitAdapter {
     pub(super) fn scan_symbol_files(&self) -> Result<Vec<(PathBuf, SymbolFile)>, LibraryError> {
         let dir = self.primitive_dir(PrimitiveKind::Symbol);
         if !dir.exists() {
+            self.record_symbol_problems(&[]);
             return Ok(Vec::new());
         }
         let suffix = format!(".{SYMBOL_EXT}");
         let mut out: Vec<(PathBuf, SymbolFile)> = Vec::new();
+        let mut problems: Vec<SymbolFileProblem> = Vec::new();
         for entry in walkdir::WalkDir::new(&dir)
             .min_depth(1)
             .max_depth(1)
@@ -364,17 +366,88 @@ impl LocalGitAdapter {
             if !name.ends_with(&suffix) {
                 continue;
             }
-            let bytes = fs::read(path)?;
-            // TOML-only (alpha policy, no legacy JSON support — pre-v0.18.4
-            // libraries must be regenerated). `from_bytes` decodes UTF-8 and
-            // hands off to `from_toml_str`; the format-token check inside
-            // surfaces `UnsupportedFormat` for any drift.
-            let file = SymbolFile::from_bytes(&bytes)
-                .map_err(|e| LibraryError::Backend(format!("read symbol file {name}: {e}")))?;
-            out.push((path.to_path_buf(), file));
+            // #690 — a container that cannot be read or parsed affects only
+            // itself: skip it, never rewrite it, and record it so it is
+            // reported (see `symbol_file_problems`).
+            let parsed = fs::read(path)
+                .map_err(|e| e.to_string())
+                // TOML-only (alpha policy, no legacy JSON support —
+                // pre-v0.18.4 libraries must be regenerated). `from_bytes`
+                // decodes UTF-8 and hands off to `from_toml_str`; the
+                // format-token check inside surfaces `UnsupportedFormat`
+                // for any drift.
+                .and_then(|bytes| SymbolFile::from_bytes(&bytes).map_err(|e| e.to_string()));
+            match parsed {
+                Ok(file) => out.push((path.to_path_buf(), file)),
+                Err(error) => problems.push(SymbolFileProblem::new(path.to_path_buf(), &error)),
+            }
         }
         out.sort_by(|a, b| a.0.cmp(&b.0));
+        self.record_symbol_problems(&problems);
         Ok(out)
+    }
+
+    /// Containers the most recent symbol scan skipped because they could not
+    /// be read or parsed. Empty when every `.snxsym` is healthy.
+    pub fn symbol_file_problems(&self) -> Vec<SymbolFileProblem> {
+        self.symbol_problems
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .current()
+    }
+
+    /// Update the ledger and log each newly seen problem once. The app's
+    /// logger routes `tracing::warn!` into the Messages panel.
+    fn record_symbol_problems(&self, found: &[SymbolFileProblem]) {
+        let fresh = self
+            .symbol_problems
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .observe(found);
+        for p in fresh {
+            tracing::warn!(
+                "Skipped unreadable symbol file {} (left untouched): {}",
+                p.path.display(),
+                p.error
+            );
+        }
+    }
+
+    fn refuse_if_skipped_file_mentions(&self, uuid: Uuid) -> Result<(), LibraryError> {
+        let needle = uuid.to_string();
+        for p in self.symbol_file_problems() {
+            let mentions = fs::read(&p.path)
+                .map(|bytes| String::from_utf8_lossy(&bytes).contains(&needle))
+                .unwrap_or(false);
+            if mentions {
+                return Err(LibraryError::Backend(format!(
+                    "symbol {uuid} appears in unreadable symbol file {} ({}); \
+                     not saving a second copy",
+                    p.path.display(),
+                    p.error
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    /// Error for a symbol lookup that found nothing while some containers
+    /// were skipped: the symbol may live in one of them, so "not found"
+    /// would be a guess.
+    pub(super) fn symbol_lookup_undetermined(&self, uuid: Uuid) -> Option<LibraryError> {
+        let problems = self.symbol_file_problems();
+        if problems.is_empty() {
+            return None;
+        }
+        let names: Vec<String> = problems
+            .iter()
+            .map(|p| p.path.display().to_string())
+            .collect();
+        Some(LibraryError::Backend(format!(
+            "symbol {uuid} not found; {} symbol file(s) could not be read: {}",
+            problems.len(),
+            names.join(", ")
+        )))
     }
 
     pub(super) fn save_symbol_in_container(
@@ -403,6 +476,10 @@ impl LocalGitAdapter {
                 path
             }
             None => {
+                // A skipped container whose text mentions this uuid may
+                // already hold the symbol; writing a second copy elsewhere
+                // would fork it. Refuse that one case, name the file.
+                self.refuse_if_skipped_file_mentions(sym.uuid)?;
                 let file = SymbolFile::from_symbol(sym.clone());
                 let path = self.fresh_symbol_file_path(&dir, &file)?;
                 // v0.18.4 — emit TOML envelope.

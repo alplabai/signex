@@ -28,6 +28,9 @@
 //! the legacy schema in favour of user-defined columns.
 
 pub mod project;
+mod symbol_problems;
+
+pub use symbol_problems::SymbolFileProblem;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -105,6 +108,8 @@ pub struct LocalGitAdapter {
     /// libgit2's responsibility; this only addresses the in-process
     /// race that `RwLock<LibraryFile>` does NOT cover.)
     git_lock: Mutex<()>,
+    /// `.snxsym` containers the last symbol scan could not read (#690).
+    symbol_problems: Mutex<symbol_problems::SymbolProblemLedger>,
 }
 
 impl LocalGitAdapter {
@@ -200,6 +205,7 @@ impl LocalGitAdapter {
             library_file: RwLock::new(library_file),
             manifest_synth,
             git_lock: Mutex::new(()),
+            symbol_problems: Mutex::default(),
         })
     }
 
@@ -236,6 +242,7 @@ impl LocalGitAdapter {
             library_file: RwLock::new(library_file),
             manifest_synth,
             git_lock: Mutex::new(()),
+            symbol_problems: Mutex::default(),
         })
     }
 
@@ -322,6 +329,7 @@ impl LocalGitAdapter {
             library_file: RwLock::new(library_file),
             manifest_synth,
             git_lock: Mutex::new(()),
+            symbol_problems: Mutex::default(),
         })
     }
 
