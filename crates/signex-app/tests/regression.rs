@@ -139,5 +139,7 @@ mod stable_addressing;
 #[path = "regression/symbol_undo_steps.rs"]
 mod symbol_undo_steps;
 
+#[path = "regression/library_place_symbol.rs"]
+mod library_place_symbol;
 #[path = "regression/surface_failures.rs"]
 mod surface_failures;
