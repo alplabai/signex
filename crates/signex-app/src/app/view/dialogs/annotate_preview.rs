@@ -137,6 +137,14 @@ impl super::super::super::Signex {
         out
     }
 
+    /// Symbols the Annotate dialog lists — what All On / All Off act on.
+    pub(crate) fn annotate_preview_uuids(&self) -> Vec<uuid::Uuid> {
+        self.preview_project_annotations()
+            .into_iter()
+            .map(|e| e.uuid)
+            .collect()
+    }
+
     /// The proposed `(current, new)` reference designators Annotate would hand
     /// out across the project. One row per symbol so the user sees the whole
     /// project; rows where `current == proposed` are "no change".
