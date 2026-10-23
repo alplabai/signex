@@ -70,6 +70,7 @@ fn fixture() -> Fixture {
         symbols_count: 0,
         wires_count: 0,
         labels_count: 0,
+        unknown: Default::default(),
     };
     let (mut app, _task) = Signex::new();
     let id = app.document_state.mint_project_id();
@@ -86,6 +87,7 @@ fn fixture() -> Fixture {
             active_variant: None,
             libraries: Vec::new(),
             enable_git: false,
+            unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
     });
@@ -232,6 +234,7 @@ fn a_project_library_cannot_be_renamed_from_the_tree() {
             path: PathBuf::from("parts.snxlib"),
             kind: LibraryEntryKind::ProjectLocal,
             library_id: None,
+            unknown: Default::default(),
         });
 
     submit_rename(&mut f.app, &lib, "other.snxlib");

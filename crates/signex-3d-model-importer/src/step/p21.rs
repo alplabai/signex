@@ -42,7 +42,8 @@ pub fn parse_to_meshes(source: &str) -> Result<StepMeshResult, ParseError> {
     let mut edge_loops: HashMap<u32, Vec<u32>> = HashMap::new();
     let mut oriented_edges: HashMap<u32, u32> = HashMap::new();
     let mut edge_curves: HashMap<u32, (u32, u32)> = HashMap::new();
-    let mut face_bounds: HashMap<u32, u32> = HashMap::new();
+    // bound id -> (loop id, is FACE_OUTER_BOUND)
+    let mut face_bounds: HashMap<u32, (u32, bool)> = HashMap::new();
     let mut advanced_faces: HashMap<u32, Vec<u32>> = HashMap::new();
     let mut unsupported_entities: Vec<String> = Vec::new();
 
@@ -76,7 +77,7 @@ pub fn parse_to_meshes(source: &str) -> Result<StepMeshResult, ParseError> {
             }
             "FACE_OUTER_BOUND" | "FACE_BOUND" => {
                 if let Some(loop_ref) = first_ref(&entity.params) {
-                    face_bounds.insert(id, loop_ref);
+                    face_bounds.insert(id, (loop_ref, entity.kind == "FACE_OUTER_BOUND"));
                 }
             }
             "ADVANCED_FACE" => {
@@ -87,7 +88,10 @@ pub fn parse_to_meshes(source: &str) -> Result<StepMeshResult, ParseError> {
             }
             other => {
                 // Keep an abbreviated list for diagnostics/warnings.
-                if unsupported_entities.len() < 24 {
+                // One entry per entity type, so a repeated type cannot fill the cap.
+                if unsupported_entities.len() < 24
+                    && !unsupported_entities.iter().any(|e| e == other)
+                {
                     unsupported_entities.push(other.to_owned());
                 }
             }
@@ -96,26 +100,42 @@ pub fn parse_to_meshes(source: &str) -> Result<StepMeshResult, ParseError> {
 
     let mut meshes = Vec::<VrmlMesh>::new();
 
+    let loop_points_of = |loop_id: u32| -> Vec<[f32; 3]> {
+        if let Some(vertex_refs) = poly_loops.get(&loop_id) {
+            resolve_poly_loop_points(vertex_refs, &vertex_to_point, &points)
+        } else if let Some(edge_refs) = edge_loops.get(&loop_id) {
+            resolve_edge_loop_points(
+                edge_refs,
+                &oriented_edges,
+                &edge_curves,
+                &vertex_to_point,
+                &points,
+            )
+        } else {
+            Vec::new()
+        }
+    };
+
+    let mut holes_skipped = 0usize;
     for bound_refs in advanced_faces.values() {
-        for bound_ref in bound_refs {
-            let Some(loop_id) = face_bounds.get(bound_ref).copied() else {
-                continue;
-            };
-
-            let loop_points = if let Some(vertex_refs) = poly_loops.get(&loop_id) {
-                resolve_poly_loop_points(vertex_refs, &vertex_to_point, &points)
-            } else if let Some(edge_refs) = edge_loops.get(&loop_id) {
-                resolve_edge_loop_points(
-                    edge_refs,
-                    &oriented_edges,
-                    &edge_curves,
-                    &vertex_to_point,
-                    &points,
-                )
-            } else {
-                Vec::new()
-            };
-
+        // The face outline is its FACE_OUTER_BOUND, or, when none is marked
+        // (legal STEP), the loop with the largest area. Every other bound is a
+        // hole. Holes are not cut: that needs a real polygon-with-holes
+        // triangulation, and the outline's fan still covers the opening. They
+        // are only left out of the mesh as extra solid faces, and counted (#708).
+        let mut loops: Vec<(Vec<[f32; 3]>, bool)> = bound_refs
+            .iter()
+            .filter_map(|r| face_bounds.get(r))
+            .map(|&(loop_id, is_outer)| (loop_points_of(loop_id), is_outer))
+            .collect();
+        holes_skipped += loops.len().saturating_sub(1);
+        let outline = match loops.iter().position(|l| l.1) {
+            Some(i) => Some(i),
+            None => (0..loops.len())
+                .max_by(|&i, &j| loop_area(&loops[i].0).total_cmp(&loop_area(&loops[j].0))),
+        };
+        if let Some(i) = outline {
+            let loop_points = loops.swap_remove(i).0;
             if loop_points.len() >= 3 {
                 let mesh = triangulate_polygon(&loop_points);
                 if !mesh.indices.is_empty() {
@@ -123,6 +143,10 @@ pub fn parse_to_meshes(source: &str) -> Result<StepMeshResult, ParseError> {
                 }
             }
         }
+    }
+    if holes_skipped > 0 {
+        // Outside the shared 24-entry cap, which real files fill first.
+        unsupported_entities.push(format!("FACE_BOUND (hole not cut) x{holes_skipped}"));
     }
 
     if meshes.is_empty() {
@@ -133,6 +157,19 @@ pub fn parse_to_meshes(source: &str) -> Result<StepMeshResult, ParseError> {
         meshes,
         unsupported_entities,
     })
+}
+
+/// Area of a closed 3D loop (Newell), so the biggest loop of a face can be
+/// told from its holes in any plane.
+fn loop_area(points: &[[f32; 3]]) -> f32 {
+    let mut n = [0f32; 3];
+    for (i, a) in points.iter().enumerate() {
+        let b = &points[(i + 1) % points.len()];
+        n[0] += (a[1] - b[1]) * (a[2] + b[2]);
+        n[1] += (a[2] - b[2]) * (a[0] + b[0]);
+        n[2] += (a[0] - b[0]) * (a[1] + b[1]);
+    }
+    (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt() / 2.0
 }
 
 fn extract_data_section(source: &str) -> Option<&str> {
@@ -270,7 +307,25 @@ fn parse_cartesian_point(entity: &Entity) -> Result<[f32; 3], ParseError> {
     Ok([nums[0], nums[1], nums[2]])
 }
 
+/// Blank out every `'...'` string literal (`''` is an escaped quote and stays
+/// inside the literal), so digits and `#` in a name are never read as data.
+fn strip_strings(params: &str) -> String {
+    let mut out = String::with_capacity(params.len());
+    let mut in_quote = false;
+    for ch in params.chars() {
+        if ch == '\'' {
+            in_quote = !in_quote;
+            out.push(' ');
+        } else if !in_quote {
+            out.push(ch);
+        }
+    }
+    out
+}
+
 fn parse_numbers(params: &str, line: usize) -> Result<Vec<f32>, ParseError> {
+    let params = strip_strings(params);
+    let params = params.as_str();
     let mut out = Vec::new();
     let mut token = String::new();
 
@@ -307,6 +362,8 @@ fn parse_numbers(params: &str, line: usize) -> Result<Vec<f32>, ParseError> {
 }
 
 fn parse_refs(params: &str) -> Vec<u32> {
+    let params = strip_strings(params);
+    let params = params.as_str();
     let bytes = params.as_bytes();
     let mut refs = Vec::<u32>::new();
     let mut i = 0usize;
@@ -533,6 +590,93 @@ END-ISO-10303-21;
         let result = parse_to_meshes(src).expect("parse");
         assert_eq!(result.meshes.len(), 1);
         assert_eq!(result.meshes[0].indices.len(), 3);
+    }
+
+    #[test]
+    fn digits_and_hashes_in_names_are_not_data() {
+        let src = r#"
+DATA;
+#1 = CARTESIAN_POINT('P7 #99',(1.,2.,3.));
+#2 = CARTESIAN_POINT('D1',(4.,5.,6.));
+#3 = CARTESIAN_POINT('it''s 9',(7.,8.,9.));
+ENDSEC;
+"#;
+        let entities = parse_entities(extract_data_section(src).unwrap()).unwrap();
+        assert_eq!(parse_cartesian_point(&entities[&1]).unwrap(), [1., 2., 3.]);
+        assert_eq!(parse_cartesian_point(&entities[&2]).unwrap(), [4., 5., 6.]);
+        assert_eq!(parse_cartesian_point(&entities[&3]).unwrap(), [7., 8., 9.]);
+        assert_eq!(parse_refs("'a #5',(#7)"), vec![7]);
+    }
+
+    #[test]
+    fn face_bound_hole_is_not_fan_filled() {
+        let src = r#"
+DATA;
+#1 = CARTESIAN_POINT('',(0.,0.,0.));
+#2 = CARTESIAN_POINT('',(4.,0.,0.));
+#3 = CARTESIAN_POINT('',(0.,4.,0.));
+#4 = CARTESIAN_POINT('',(1.,1.,0.));
+#5 = CARTESIAN_POINT('',(2.,1.,0.));
+#6 = CARTESIAN_POINT('',(1.,2.,0.));
+#20 = POLY_LOOP('',(#1,#2,#3));
+#21 = POLY_LOOP('',(#4,#5,#6));
+#22 = FACE_BOUND('',#21,.T.);
+#23 = FACE_OUTER_BOUND('',#20,.T.);
+#30 = ADVANCED_FACE('',(#22,#23),#999,.T.);
+ENDSEC;
+"#;
+        let result = parse_to_meshes(src).expect("parse");
+        assert_eq!(result.meshes.len(), 1, "only the outer loop is filled");
+        assert_eq!(result.meshes[0].positions[4], 0.0);
+        assert_eq!(result.meshes[0].positions[3], 4.0);
+        assert!(
+            result
+                .unsupported_entities
+                .iter()
+                .any(|e| e.contains("hole"))
+        );
+    }
+
+    const TRIANGLES: &str = "#1 = CARTESIAN_POINT('',(0.,0.,0.));
+#2 = CARTESIAN_POINT('',(4.,0.,0.));
+#3 = CARTESIAN_POINT('',(0.,4.,0.));
+#4 = CARTESIAN_POINT('',(1.,1.,0.));
+#5 = CARTESIAN_POINT('',(2.,1.,0.));
+#6 = CARTESIAN_POINT('',(1.,2.,0.));
+#20 = POLY_LOOP('',(#1,#2,#3));
+#21 = POLY_LOOP('',(#4,#5,#6));";
+
+    #[test]
+    fn all_face_bound_face_keeps_the_largest_loop_as_outline() {
+        // No FACE_OUTER_BOUND, hole listed first.
+        let src = format!(
+            "DATA;\n{TRIANGLES}\n#22 = FACE_BOUND('',#21,.T.);\n\
+             #23 = FACE_BOUND('',#20,.T.);\n#30 = ADVANCED_FACE('',(#22,#23),#999,.T.);\nENDSEC;"
+        );
+        let result = parse_to_meshes(&src).expect("parse");
+        assert_eq!(result.meshes.len(), 1);
+        assert_eq!(
+            result.meshes[0].positions[3], 4.0,
+            "outer loop, not the hole"
+        );
+    }
+
+    #[test]
+    fn hole_warning_survives_a_full_unsupported_entity_list() {
+        let noise: String = (100..140)
+            .map(|i| format!("#{i} = FANCY_THING_{i}('');\n"))
+            .collect();
+        let src = format!(
+            "DATA;\n{TRIANGLES}\n{noise}#22 = FACE_BOUND('',#21,.T.);\n\
+             #23 = FACE_OUTER_BOUND('',#20,.T.);\n#30 = ADVANCED_FACE('',(#22,#23),#999,.T.);\nENDSEC;"
+        );
+        let result = parse_to_meshes(&src).expect("parse");
+        assert!(
+            result
+                .unsupported_entities
+                .iter()
+                .any(|e| e.contains("hole"))
+        );
     }
 
     #[test]

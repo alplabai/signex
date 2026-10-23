@@ -424,6 +424,7 @@ impl Signex {
             path: entry_path,
             kind: entry_kind,
             library_id: None,
+            unknown: Default::default(),
         });
         let project_path = loaded.path.clone();
         self.document_state.dirty_paths.insert(project_path);

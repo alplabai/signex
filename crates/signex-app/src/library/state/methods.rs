@@ -62,6 +62,7 @@ impl Default for LibraryState {
             global_libraries: Vec::new(),
             components_panel: ComponentsPanelState::default(),
             pending_mounts: HashMap::new(),
+            external_poll_in_flight: false,
         }
     }
 }
@@ -145,6 +146,8 @@ impl LibraryState {
             cached_symbols: Vec::new(),
             cached_footprints: Vec::new(),
             cached_sims: Vec::new(),
+            cached_classes: Vec::new(),
+            observed_stamp: None,
             display: LibraryDisplaySettings::default(),
         };
         if let Some(adapter) = self.set.get(library_id)
@@ -206,6 +209,7 @@ impl LibraryState {
             .set
             .get(library_id)
             .ok_or_else(|| LibraryError::NotFound(root.display().to_string()))?;
+        let stamp = signex_library::DiskStamp::of(root).ok();
         let names = adapter.list_tables()?;
         let mut tables: HashMap<String, Vec<ComponentRow>> = HashMap::new();
         let mut summaries: Vec<ComponentSummary> = Vec::new();
@@ -240,9 +244,12 @@ impl LibraryState {
         let symbols = adapter.list_symbols();
         let footprints = adapter.list_footprints();
         let sims = adapter.list_sims();
+        let classes = adapter.library_classes();
         if let Some(lib) = self.library_at_mut(root) {
             lib.tables = tables;
             lib.cached_components = summaries;
+            lib.cached_classes = classes;
+            lib.observed_stamp = stamp;
             // A failed listing keeps the previous cache and warns —
             // blanking it here would render a mounted library as
             // empty. See `apply_primitive_listing`.
@@ -261,6 +268,32 @@ impl LibraryState {
             apply_primitive_listing(&mut lib.cached_sims, sims, &lib.display_name, "sims");
         }
         Ok(())
+    }
+
+    /// Each open library with the stamp its caches were filled under — the
+    /// input of the external-edit poll.
+    pub fn watched_libraries(&self) -> Vec<super::super::external_poll::WatchedLibrary> {
+        self.open_libraries
+            .iter()
+            .map(|lib| (lib.root.clone(), lib.observed_stamp))
+            .collect()
+    }
+
+    /// Re-read only the class registry of the library at `root`, after a
+    /// class mutation. Leaves `observed_stamp` alone on purpose: the file
+    /// changed, the table caches were not refreshed with it, and the next
+    /// external-edit poll must still notice that.
+    pub fn refresh_classes(&mut self, root: &Path) {
+        let Some(classes) = self
+            .library_at(root)
+            .and_then(|lib| self.set.get(lib.library_id))
+            .map(|adapter| adapter.library_classes())
+        else {
+            return;
+        };
+        if let Some(lib) = self.library_at_mut(root) {
+            lib.cached_classes = classes;
+        }
     }
 
     /// Aggregate every open library's cached components — used by the
@@ -413,6 +446,16 @@ pub struct OpenLibrary {
     pub cached_symbols: Vec<PrimitiveSummary>,
     pub cached_footprints: Vec<PrimitiveSummary>,
     pub cached_sims: Vec<PrimitiveSummary>,
+    /// The class registry as `view` shows it. `view` must not call
+    /// `LibraryAdapter::library_classes` (it `stat`s the file and may
+    /// re-parse it); `update` refreshes this on mount, after a class
+    /// mutation and when the external-edit poll sees the file change.
+    pub cached_classes: Vec<signex_library::ClassEntry>,
+    /// Stamp of the `.snxlib` taken just before the caches above were
+    /// last filled. The external-edit poll compares the file against it
+    /// and refreshes the caches when they differ. `None` = unknown, which
+    /// the poll treats as "refresh on the next tick".
+    pub observed_stamp: Option<signex_library::DiskStamp>,
     /// Per-library canvas display settings — Altium "Document
     /// Options" parity. Shared across every `.snxsym` /
     /// `.snxfpt` tab opened from this `.snxlib` (so a user
@@ -483,6 +526,9 @@ impl OpenLibrary {
     /// caller; partial table loads on per-table read errors are
     /// tolerated and merely warn through `tracing`.
     pub fn reload_tables(&mut self, adapter: &dyn LibraryAdapter) -> Result<(), LibraryError> {
+        // Stamp before reading: a write racing the read then costs one
+        // extra refresh on the next poll, never a missed one.
+        let stamp = signex_library::DiskStamp::of(&self.root).ok();
         let names = adapter.list_tables()?;
         let mut tables: HashMap<String, Vec<ComponentRow>> = HashMap::new();
         let mut summaries: Vec<ComponentSummary> = Vec::new();
@@ -513,6 +559,8 @@ impl OpenLibrary {
         }
         self.tables = tables;
         self.cached_components = summaries;
+        self.cached_classes = adapter.library_classes();
+        self.observed_stamp = stamp;
         self.reload_primitives(adapter);
         Ok(())
     }

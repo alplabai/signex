@@ -117,7 +117,7 @@ pub fn view<'a>(
     // pane = filters/search + grid + actions + preview. Mirrors a DB
     // browser so users can scan their library inventory at a glance
     // and pivot between tables without horizontal scrolling.
-    let table_sidebar = view_table_sidebar(library_path, library_state, lib, browser, tokens);
+    let table_sidebar = view_table_sidebar(library_path, lib, browser, tokens);
     let header = view_header(library_path, lib, browser, tokens);
 
     // Body — left grid, right preview pane.

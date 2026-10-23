@@ -266,7 +266,7 @@ impl LocalGitAdapter {
         let text = lf.write()?;
         // HI-6: atomic write — never half-write the manifest.
         signex_types::atomic_io::atomic_write(&self.file_path, text.as_bytes())?;
-        Ok(())
+        self.note_own_write(&text)
     }
 
     /// Mutate the in-memory `library_file`, persist it, and commit the
@@ -307,6 +307,9 @@ impl LocalGitAdapter {
             .library_file
             .write()
             .map_err(|_| LibraryError::Backend("library_file write lock poisoned".into()))?;
+        // An external edit must be merged in, not overwritten by a stale
+        // copy; an unreadable file refuses the edit (see `disk_sync`).
+        self.reload_if_stale(&mut guard, super::disk_sync::Verify::Content)?;
         if !f(&mut guard)? {
             return Ok(());
         }
@@ -320,6 +323,7 @@ impl LocalGitAdapter {
     /// Returns an empty vec for unknown tables (matches the old
     /// `tables/<name>.tsv` "missing file = empty" semantics).
     pub(super) fn snapshot_table(&self, name: &str) -> Result<Vec<ComponentRow>, LibraryError> {
+        self.refresh_for_read();
         let guard = self
             .library_file
             .read()

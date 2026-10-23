@@ -195,3 +195,68 @@ fn truncated_and_garbage_inputs_error_without_panicking() {
         assert!(import(&models, name).is_err(), "{name} should error");
     }
 }
+
+#[test]
+fn percent_encoded_buffer_name_resolves_and_encoded_traversal_is_rejected() {
+    let (_tmp, models) = fixture();
+    std::fs::write(models.join("my geo.bin"), [0u8; 4]).unwrap();
+    std::fs::write(models.join("m.gltf"), gltf_with_buffer("my%20geo.bin")).unwrap();
+    import(&models, "m.gltf").expect("percent-encoded name imports");
+    std::fs::remove_dir_all(models.join("cache")).unwrap();
+
+    expect_gltf_rejection(&models, &gltf_with_buffer("%2e%2e/secret.bin"));
+    expect_gltf_rejection(&models, &gltf_with_buffer("%2E%2E%5Csecret.bin"));
+}
+
+#[test]
+fn corrupt_glb_source_is_rejected_not_cached() {
+    let (_tmp, models) = fixture();
+    std::fs::write(models.join("bad.glb"), b"not a glb at all").unwrap();
+    assert!(matches!(
+        import(&models, "bad.glb"),
+        Err(ModelImportError::GltfParseFailed { .. })
+    ));
+    assert!(
+        !models.join("cache").exists()
+            || std::fs::read_dir(models.join("cache"))
+                .unwrap()
+                .next()
+                .is_none()
+    );
+
+    // A real GLB (produced by converting a glTF) still passes through.
+    let gltf = gltf_with_buffer("data:application/octet-stream;base64,AAECAw==");
+    std::fs::write(models.join("m.gltf"), gltf).unwrap();
+    let good = import(&models, "m.gltf").unwrap();
+    std::fs::copy(&good.glb_path, models.join("ok.glb")).unwrap();
+    import(&models, "ok.glb").expect("valid glb passes through");
+}
+
+/// A FIFO with no writer would block a plain `open`/`read` forever.
+#[cfg(unix)]
+#[test]
+fn fifo_named_like_a_model_is_a_typed_error_not_a_hang() {
+    let (_tmp, models) = fixture();
+    let fifo = models.join("pipe.stp");
+    assert!(
+        std::process::Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert!(matches!(
+        import(&models, "pipe.stp"),
+        Err(ModelImportError::IoFailed { .. })
+    ));
+}
+
+#[test]
+fn directory_named_like_a_model_is_a_typed_error() {
+    let (_tmp, models) = fixture();
+    std::fs::create_dir(models.join("dir.stp")).unwrap();
+    assert!(matches!(
+        import(&models, "dir.stp"),
+        Err(ModelImportError::IoFailed { .. })
+    ));
+}

@@ -103,16 +103,18 @@ pub struct SelectionFilterCustomState {
 }
 
 /// State for the Projects-panel tree-view right-click menu. The menu's
-/// action set is computed from `path` (leaf vs branch vs empty) at render
+/// action set is computed from `key` (leaf vs branch vs empty) at render
 /// time, so we only need to store the anchor coordinates + the clicked
-/// path (or `None` for the background menu).
+/// row's stable key (or `None` for the background menu). A key, not an
+/// index path: the tree can be rebuilt while the menu is open, and a stale
+/// index would aim the picked action at a different node.
 #[derive(Debug, Clone)]
 pub struct ProjectTreeContextMenuState {
     pub x: f32,
     pub y: f32,
-    /// `Some(path)` = right-click on a specific node; `None` = right-click
+    /// `Some(key)` = right-click on a specific node; `None` = right-click
     /// in empty tree area, offering only the generic actions.
-    pub path: Option<Vec<usize>>,
+    pub key: Option<signex_widgets::tree_view::TreeKey>,
 }
 
 /// State for the "Close Project — Unsaved Edits" confirmation modal.

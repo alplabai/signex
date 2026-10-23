@@ -8,11 +8,15 @@
 
 mod ambiguous_label_anchor;
 pub(crate) use ambiguous_label_anchor::ambiguous_label_anchor;
+mod pins_touch_not_connected;
+pub(crate) use pins_touch_not_connected::pins_touch_not_connected;
 
 use std::collections::HashMap;
 
 use signex_net::{SheetConnectivity, point_on_segment, pt_key};
-use signex_types::schematic::{LabelType, Point, SelectedKind};
+use signex_types::schematic::{
+    LabelType, PartKey, Point, SelectedKind, group_into_parts, normalized_lib_id,
+};
 
 use crate::context::ErcContext;
 use crate::diagnostic::{Diagnostic, LocationSpace};
@@ -77,8 +81,8 @@ pub(crate) fn unused_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
         }
         for pin in &symbol.pins {
             // `ErcPin.connected` is already the shared, junction-aware
-            // connectivity gate (`context::point_is_connected`, mirroring
-            // `signex_net`'s) — trust it instead of re-deriving an
+            // connectivity gate (`signex_net::ConnectedPoints`, the
+            // same gate `build_netlist` uses) — trust it instead of re-deriving an
             // endpoint-only, bus-gated approximation here (issue #388, D5.4).
             if pin.connected {
                 continue;
@@ -113,22 +117,46 @@ pub(crate) fn duplicate_ref_designator(ctx: &ErcContext, out: &mut Vec<Diagnosti
         }
         by_ref.entry(r).or_default().push(symbol);
     }
-    for (reference, dupes) in by_ref {
-        if dupes.len() < 2 {
+    for (reference, symbols) in by_ref {
+        // Units of one multi-unit part share a designator legitimately; only
+        // distinct parts holding the same designator are a duplicate (#691).
+        let parts = group_into_parts(symbols.iter().map(|s| PartKey {
+            reference: s.reference.trim(),
+            lib_id: normalized_lib_id(&s.lib_id),
+            unit: s.unit,
+        }));
+        if parts.len() < 2 {
             continue;
         }
-        for (idx, sym) in dupes.iter().enumerate() {
-            let peer = dupes.get((idx + 1) % dupes.len()).copied();
-            let mut d = Diagnostic::new(
-                RuleKind::DuplicateRefDesignator,
-                format!("Reference '{reference}' is used by {} symbols", dupes.len()),
-                sym.position,
-            )
-            .with_primary(sel(sym.uuid, SelectedKind::Symbol));
-            if let Some(p) = peer {
-                d = d.with_peer(sel(p.uuid, SelectedKind::Symbol));
+        // Units that carry one designator but come from different library
+        // symbols are far more likely a wrong symbol pick than two parts that
+        // collided, so say so.
+        let first_lib = normalized_lib_id(&symbols[0].lib_id);
+        let hint = if symbols
+            .iter()
+            .any(|s| normalized_lib_id(&s.lib_id) != first_lib)
+        {
+            format!("; units of {reference} come from different library symbols")
+        } else {
+            String::new()
+        };
+        for (part_idx, part) in parts.iter().enumerate() {
+            let peer = &symbols[parts[(part_idx + 1) % parts.len()][0]];
+            for &member in part {
+                let sym = symbols[member];
+                out.push(
+                    Diagnostic::new(
+                        RuleKind::DuplicateRefDesignator,
+                        format!(
+                            "Reference '{reference}' is used by {} parts{hint}",
+                            parts.len()
+                        ),
+                        sym.position,
+                    )
+                    .with_primary(sel(sym.uuid, SelectedKind::Symbol))
+                    .with_peer(sel(peer.uuid, SelectedKind::Symbol)),
+                );
             }
-            out.push(d);
         }
     }
 }
@@ -562,16 +590,19 @@ pub(crate) fn missing_power_flag(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
         if name.is_empty() {
             continue;
         }
-        // Power-port symbols carry a single connection point at their
-        // position (no separate pin geometry). Look up the net root for that
-        // point — unanchored, like any other pin: a port only taps a wire
-        // interior through an explicit junction (`point_is_connected`'s
-        // rule), never by proximity alone.
-        let port_root = conn.root_of(&symbol.position);
+        // A port connects at its pin tips, not at its origin — the same points
+        // `build_netlist` names the net from (issue #675). Look each tip up
+        // unanchored, like any other pin: a port only taps a wire interior
+        // through an explicit junction, never by proximity alone. A port
+        // projected with no pins falls back to its origin.
+        let tips: Vec<Point> = if symbol.pins.is_empty() {
+            vec![symbol.position]
+        } else {
+            symbol.pins.iter().map(|p| p.world_pos).collect()
+        };
         let same_net_label = label_nets
             .get(name)
-            .map(|nets| nets.contains(&port_root))
-            .unwrap_or(false);
+            .is_some_and(|nets| tips.iter().any(|tip| nets.contains(&conn.root_of(tip))));
         if same_net_label {
             continue;
         }
@@ -592,32 +623,47 @@ pub(crate) fn missing_power_flag(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 // Rule: PowerPortShort
 // ---------------------------------------------------------------------------
 
+/// A port's pin tips — where it connects — falling back to its origin when
+/// the projection carries no pins.
+fn port_tips(symbol: &crate::context::ErcSymbol) -> Vec<Point> {
+    if symbol.pins.is_empty() {
+        vec![symbol.position]
+    } else {
+        symbol.pins.iter().map(|p| p.world_pos).collect()
+    }
+}
+
 pub(crate) fn power_port_short(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
-    let power: Vec<&crate::context::ErcSymbol> = ctx
+    let power: Vec<(&crate::context::ErcSymbol, Vec<Point>)> = ctx
         .symbols
         .iter()
         .filter(|s| s.is_power && !s.value.is_empty())
+        .map(|s| (s, port_tips(s)))
         .collect();
 
-    for (i, a) in power.iter().enumerate() {
-        for b in &power[i + 1..] {
+    for (i, (a, a_tips)) in power.iter().enumerate() {
+        for (b, b_tips) in &power[i + 1..] {
             if a.value == b.value {
                 continue;
             }
-            if same(&a.position, &b.position) {
-                out.push(
-                    Diagnostic::new(
-                        RuleKind::PowerPortShort,
-                        format!(
-                            "Power ports '{}' and '{}' are at the same point",
-                            a.value, b.value,
-                        ),
-                        a.position,
-                    )
-                    .with_primary(sel(a.uuid, SelectedKind::Symbol))
-                    .with_peer(sel(b.uuid, SelectedKind::Symbol)),
-                );
-            }
+            let shared = a_tips
+                .iter()
+                .find(|ta| b_tips.iter().any(|tb| pt_key(ta) == pt_key(tb)));
+            let Some(tip) = shared else {
+                continue;
+            };
+            out.push(
+                Diagnostic::new(
+                    RuleKind::PowerPortShort,
+                    format!(
+                        "Power ports '{}' and '{}' share a pin tip",
+                        a.value, b.value,
+                    ),
+                    *tip,
+                )
+                .with_primary(sel(a.uuid, SelectedKind::Symbol))
+                .with_peer(sel(b.uuid, SelectedKind::Symbol)),
+            );
         }
     }
 }

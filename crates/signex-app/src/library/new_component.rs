@@ -164,19 +164,22 @@ pub fn view<'a>(
     let table_picks: Vec<TablePick> = nc
         .library_idx
         .and_then(|i| state.open_libraries.get(i))
-        .and_then(|lib| state.set.get(lib.library_id))
-        .map(|adapter| {
-            let mut names: Vec<String> = Vec::new();
-            if let Ok(actual) = adapter.list_tables() {
-                names.extend(actual);
-            }
-            for cfg in adapter.manifest().tables() {
-                if !names.iter().any(|n| n == &cfg.name) {
-                    names.push(cfg.name.clone());
+        .map(|lib| {
+            // Table names come from the cache (`reload_tables` filled it
+            // from `list_tables`); `view` must not touch the adapter's
+            // file-backed reads. `manifest()` is an in-memory borrow.
+            let mut names: Vec<String> = lib.tables.keys().cloned().collect();
+            names.sort();
+            if let Some(adapter) = state.set.get(lib.library_id) {
+                let manifest = adapter.manifest();
+                for cfg in manifest.tables() {
+                    if !names.iter().any(|n| n == &cfg.name) {
+                        names.push(cfg.name.clone());
+                    }
                 }
-            }
-            if names.is_empty() {
-                names.push(adapter.manifest().table_for_class(nc.class.as_str()));
+                if names.is_empty() {
+                    names.push(manifest.table_for_class(nc.class.as_str()));
+                }
             }
             names.into_iter().map(|name| TablePick { name }).collect()
         })

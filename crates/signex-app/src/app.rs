@@ -49,7 +49,8 @@ pub use documents::{
     SymbolViewRequest, TabDocument, TabInfo, TabKind, Tool,
 };
 pub use state::{
-    DocumentState, InteractionState, KeymapRecorderState, LoadedProject, ProjectId, Signex, UiState,
+    DocumentState, InteractionState, KeymapRecorderState, LoadedProject, PageSetupInputs,
+    PreviewState, ProjectId, Signex, UiState,
 };
 pub use symbol_history::SymbolHistorySnapshot;
 

@@ -510,6 +510,11 @@ impl Signex {
                 self.handle_history_restore_clicked(sha);
                 true
             }
+            PanelMsg::HistoryRestoreCancelled => {
+                self.document_state.history.pending_restore = None;
+                self.document_state.panel_ctx.history = self.document_state.history.clone();
+                true
+            }
             PanelMsg::FpEditorHoverOverConstraint { constraint } => {
                 self.handle_fp_editor_hover_over_constraint(constraint)
             }
