@@ -50,7 +50,7 @@ pub enum EditorMsg {
     /// Save the current row to the table — calls
     /// `adapter.update_row(&table, &row, "edit message")`.
     SaveDraft,
-    /// Same as [`SaveDraft`] for the Component Preview surface — kept
+    /// Same as [`Self::SaveDraft`] for the Component Preview surface — kept
     /// distinct so future Commit semantics (lifecycle promotion etc.)
     /// can layer in without renaming the SaveDraft message.
     Commit,
@@ -92,7 +92,7 @@ pub enum EditorMsg {
     /// Toolbar — drop every entry in `Revision::pin_map_overrides`.
     /// Equivalent to `PinMapAutoMatchByNumber` for the v0.9 algorithm.
     PinMapClearOverrides,
-    /// Click "[Override]" on a row — expands the inline editor for
+    /// Click "\[Override\]" on a row — expands the inline editor for
     /// that pin's row. Carries the symbol pin number.
     PinMapOpenOverrideEdit(String),
     /// Live edit of the override pad-number text input. The dispatcher

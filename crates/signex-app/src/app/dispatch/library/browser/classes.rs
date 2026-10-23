@@ -117,6 +117,7 @@ impl Signex {
             }
             return Task::none();
         }
+        self.library.refresh_classes(&library_path);
         if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
             s.adding_class = None;
             s.class_error = None;
@@ -150,6 +151,7 @@ impl Signex {
                 s.class_error = Some(error.to_string());
             }
         }
+        self.library.refresh_classes(&library_path);
         Task::none()
     }
 
@@ -271,6 +273,7 @@ impl Signex {
             }
             return Task::none();
         }
+        self.library.refresh_classes(&library_path);
         if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
             s.renaming_class = None;
             s.class_error = None;

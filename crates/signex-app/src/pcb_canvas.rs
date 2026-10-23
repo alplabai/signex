@@ -204,7 +204,7 @@ impl PcbCanvas {
     /// Build the scene for GPU rendering: the same geometry as the CPU path.
     /// Overlay primitives (active-layer zone highlight, selection highlight)
     /// stay in their own `Scene::overlay_*` fields rather than folding into
-    /// the base buckets — [`crate::scene_shader::ScenePrimitive::draw`]
+    /// the base buckets — `ScenePrimitive::draw` (in `crate::scene_shader`)
     /// composites them in a dedicated pass *after* every base bucket, so they
     /// always render on top, matching the CPU `draw_scene` overlay pass.
     /// Returns `None` when no board snapshot is loaded.

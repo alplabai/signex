@@ -1,12 +1,12 @@
 //! Git history panel — right-dock surface that follows the active
-//! tab. Reuses [`signex_widgets::history_pane`] to render the
+//! tab. Reuses [`signex_widgets::history_pane()`] to render the
 //! actual cards. State is kept minimal: an active path resolved
 //! from the active tab + the last loaded vec of entries + a
 //! "loading" generation counter to discard stale async results.
 //!
 //! Phase 0 (this module) wires the read-only view; the load path
 //! is driven by `signex_app`'s dispatcher via
-//! [`crate::app::HistoryLoad`] (a `Message::HistoryLoaded` variant
+//! [`crate::app::Message::HistoryLoaded`] (a `Message` variant
 //! threads each result back to the panel context with a generation
 //! token, so a tab switch in flight discards any pending result).
 
@@ -82,7 +82,7 @@ pub enum HistoryRenderMode {
 }
 
 /// Render the History panel. Delegates row rendering to
-/// [`signex_widgets::history_pane`]; layers on the "no active
+/// [`signex_widgets::history_pane()`]; layers on the "no active
 /// file" / "not in a git repo" / "loading" header + the working-
 /// tree pseudo-card.
 pub fn view_history<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {

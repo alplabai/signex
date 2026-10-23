@@ -121,11 +121,11 @@ impl Signex {
         // `.snxprj` parse, no heavy IO) — only the schematic tab's
         // read+parse below is async, via `open_document_path`'s
         // `snxsch` branch.
-        let _project_task = self.open_document_path(project_path.to_path_buf())?;
+        let project_task = self.open_document_path(project_path.to_path_buf())?;
         let schematic_task = if sch_path.exists() {
             // Best-effort: surface the schematic tab so the new project
-            // lands the user on a drawable canvas. Errors here just
-            // leave them on the Welcome view.
+            // lands the user on a drawable canvas. A failure is logged
+            // to the Messages panel and leaves them on the Welcome view.
             match self.open_document_path(sch_path) {
                 Ok(task) => task,
                 Err(error) => {
@@ -137,7 +137,9 @@ impl Signex {
             iced::Task::none()
         };
         self.refresh_panel_ctx();
-        Ok(schematic_task)
+        // Both Tasks go back to the runtime: the project's library
+        // mounts must never be dropped (see `open_document_path`).
+        Ok(iced::Task::batch([project_task, schematic_task]))
     }
 
     pub(crate) fn handle_active_document_save_requested(&mut self) -> iced::Task<Message> {

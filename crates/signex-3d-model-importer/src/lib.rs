@@ -113,8 +113,15 @@ pub fn import_model(request: ModelImportRequest) -> Result<ModelImportResult, Mo
     // Cache miss: convert
     let (glb_bytes, warnings, mesh_count, primitive_count) = match format {
         SourceFormat::Vrml => {
-            let meshes = vrml::load(source_path)?;
+            let (meshes, parse_warnings) = vrml::load(source_path)?;
             let mesh_count = meshes.len();
+            let warnings = parse_warnings
+                .into_iter()
+                .map(|w| ImportWarning::GeometryAltered {
+                    line: w.line,
+                    reason: w.reason,
+                })
+                .collect();
             let (json, bin) = normalize::meshes_to_gltf(
                 &meshes,
                 "vrml",
@@ -122,7 +129,7 @@ pub fn import_model(request: ModelImportRequest) -> Result<ModelImportResult, Mo
                 request.converter_version,
             );
             let glb = glb::writer::write_glb(&json, &bin)?;
-            (glb, vec![], mesh_count, mesh_count)
+            (glb, warnings, mesh_count, mesh_count)
         }
         SourceFormat::Step => {
             let result = step::load(source_path)?;

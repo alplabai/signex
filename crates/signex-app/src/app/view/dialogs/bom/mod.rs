@@ -12,7 +12,7 @@ use iced::widget::{Space, column, container, row, text};
 use iced::{Element, Length};
 
 use super::widgets::{
-    close_x_button, detached_header, draggable_header, primary_button_themed, wrap_modal,
+    close_x_button, draggable_header, os_title_bar_slot, primary_button_themed, wrap_modal,
 };
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 
@@ -77,10 +77,7 @@ impl Signex {
                 self.interaction_state.last_mouse_pos,
             )
         } else {
-            detached_header(
-                header_content,
-                super::super::super::state::ModalId::BomPreview,
-            )
+            os_title_bar_slot()
         };
 
         let body = self.bom_table();
