@@ -4,8 +4,8 @@
 //! index pointing at the next document / primitive.
 
 use signex_app::app::{
-    ContextMenuMsg, FootprintEditorState, LoadedProject, Message, ProjectTreeAction, Signex,
-    SymbolEditorState, TabContextAction, TabInfo, TabKind,
+    ContextMenuMsg, FootprintEditorState, LoadedProject, Message, Signex, SymbolEditorState,
+    TabContextAction, TabInfo, TabKind,
 };
 use signex_app::dock::DockMessage;
 use signex_app::panels::PanelMsg;
@@ -126,9 +126,7 @@ fn close_project_with_interleaved_tabs_keeps_the_active_document() {
     push_tab(&mut app, Path::new("p1b.snxfpt"), Some(ids[0]));
     app.document_state.active_tab = 1;
 
-    let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-        ProjectTreeAction::CloseProject(vec![0]),
-    )));
+    crate::close_support::close_first_project(&mut app);
 
     assert_eq!(app.document_state.tabs.len(), 2);
     assert_eq!(active_path(&app), PathBuf::from("p2a.snxfpt"));

@@ -531,7 +531,7 @@ mod tests {
     use super::*;
     use crate::{ProjectMetadata, SheetSnapshot};
     use signex_types::property::SchematicProperty;
-    use signex_types::schematic::{Point, SchematicSheet, Symbol};
+    use signex_types::schematic::{SchematicSheet, Symbol};
     use uuid::Uuid;
 
     /// The fit override `BomComponent::is_fitted` applies: the active
@@ -543,36 +543,12 @@ mod tests {
 
     fn test_symbol() -> Symbol {
         Symbol {
-            unknown_columns: Default::default(),
-            unknown: Default::default(),
             uuid: Uuid::new_v4(),
             lib_id: "Device:R".to_string(),
             reference: "R1".to_string(),
             value: "10k".to_string(),
             footprint: "R_0603".to_string(),
-            datasheet: String::new(),
-            position: Point { x: 0.0, y: 0.0 },
-            rotation: 0.0,
-            mirror_x: false,
-            mirror_y: false,
-            unit: 1,
-            is_power: false,
-            ref_text: None,
-            val_text: None,
-            fields_autoplaced: false,
-            fields_user_placed: false,
-            dnp: false,
-            in_bom: true,
-            on_board: true,
-            exclude_from_sim: false,
-            locked: false,
-            fields: std::collections::HashMap::new(),
-            custom_properties: Vec::new(),
-            pin_uuids: std::collections::HashMap::new(),
-            instances: Vec::new(),
-            library_id: None,
-            row_id: None,
-            library_version: String::new(),
+            ..Default::default()
         }
     }
 
@@ -597,26 +573,9 @@ mod tests {
             sheets: vec![SheetSnapshot {
                 path: "variant.snxsch".into(),
                 schematic: SchematicSheet {
-                    uuid: Uuid::nil(),
-                    version: 0,
-                    generator: String::new(),
-                    generator_version: String::new(),
                     paper_size: "A4".to_string(),
-                    root_sheet_page: "1".to_string(),
                     symbols: vec![symbol],
-                    wires: vec![],
-                    junctions: vec![],
-                    labels: vec![],
-                    child_sheets: vec![],
-                    no_connects: vec![],
-                    text_notes: vec![],
-                    buses: vec![],
-                    bus_entries: vec![],
-                    drawings: vec![],
-                    no_erc_directives: vec![],
-                    title_block: Default::default(),
-                    lib_symbols: Default::default(),
-                    unknown: Default::default(),
+                    ..Default::default()
                 },
                 sheet_name: "Main".to_string(),
                 sheet_number: 1,
@@ -990,25 +949,9 @@ mod tests {
         use signex_types::schematic::SchematicSheet;
         let schematic = SchematicSheet {
             uuid: Uuid::new_v4(),
-            version: 0,
-            generator: String::new(),
-            generator_version: String::new(),
             paper_size: "A4".to_string(),
-            root_sheet_page: "1".to_string(),
             symbols,
-            wires: Vec::new(),
-            junctions: Vec::new(),
-            labels: Vec::new(),
-            child_sheets: Vec::new(),
-            no_connects: Vec::new(),
-            text_notes: Vec::new(),
-            buses: Vec::new(),
-            bus_entries: Vec::new(),
-            drawings: Vec::new(),
-            no_erc_directives: Vec::new(),
-            title_block: std::collections::HashMap::new(),
-            lib_symbols: std::collections::HashMap::new(),
-            unknown: Default::default(),
+            ..Default::default()
         };
         ExportContext {
             sheets: vec![SheetSnapshot {
