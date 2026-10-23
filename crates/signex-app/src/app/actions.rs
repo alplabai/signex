@@ -292,6 +292,18 @@ impl Signex {
         }
     }
 
+    /// Snap a world-space point to the grid when snapping is on and the grid
+    /// size is positive; otherwise return it unchanged. The one snap rule
+    /// every canvas click path shares.
+    pub(crate) fn snap_to_grid(&self, x: f64, y: f64) -> (f64, f64) {
+        let g = f64::from(self.ui_state.grid_size_mm);
+        if self.ui_state.snap_enabled && g > 0.0 {
+            ((x / g).round() * g, (y / g).round() * g)
+        } else {
+            (x, y)
+        }
+    }
+
     pub(crate) fn align_selected(&mut self, action: &crate::active_bar::ActiveBarAction) {
         use crate::active_bar::ActiveBarAction;
 

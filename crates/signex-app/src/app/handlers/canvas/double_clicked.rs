@@ -44,13 +44,7 @@ impl Signex {
         // DoubleClicked into the same commit path as Clicked.
         // Shape commits snap to the grid exactly like the single-click
         // path (`handle_canvas_clicked`); hit-testing keeps the raw cursor.
-        let (snapped_x, snapped_y) =
-            if self.ui_state.snap_enabled && self.ui_state.grid_size_mm > 0.0 {
-                let gs = self.ui_state.grid_size_mm as f64;
-                ((world_x / gs).round() * gs, (world_y / gs).round() * gs)
-            } else {
-                (world_x, world_y)
-            };
+        let (snapped_x, snapped_y) = self.snap_to_grid(world_x, world_y);
         match self.interaction_state.current_tool {
             Tool::Line => {
                 let p = signex_types::schematic::Point::new(snapped_x, snapped_y);

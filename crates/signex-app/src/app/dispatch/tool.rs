@@ -450,7 +450,10 @@ impl Signex {
             }
             ToolMessage::SelectTool(tool) => {
                 // Buffers belong to the tool that started them (#102).
-                self.clear_drawing_buffers();
+                // Re-selecting the active tool mid-gesture keeps the gesture.
+                if tool != self.interaction_state.current_tool {
+                    self.clear_drawing_buffers();
+                }
                 self.interaction_state.current_tool = tool;
                 // Re-label the floating cursor tag so the user sees which
                 // placement mode they're in. Altium shows the tool name near

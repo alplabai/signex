@@ -12,6 +12,7 @@
 
 use signex_app::app::{Message, Signex, TabInfo, TabKind, Tool};
 use signex_app::canvas::CanvasEvent;
+use signex_app::menu_bar::MenuMessage;
 use signex_app::tab_bar::TabMessage;
 use signex_app::toolbar::ToolMessage;
 use signex_types::schematic::{Point, SchDrawing, SchematicSheet, SelectedItem, SelectedKind};
@@ -102,6 +103,10 @@ fn selection_does_not_carry_to_another_schematic_tab() {
         uuid::Uuid::new_v4(),
         SelectedKind::Symbol,
     )];
+    // The panel mirror of that selection (what a Properties edit reads).
+    app.document_state.panel_ctx.selection_count = 1;
+    app.document_state.panel_ctx.selected_uuid = Some(uuid::Uuid::new_v4());
+    app.document_state.panel_ctx.selected_kind = Some(SelectedKind::Symbol);
 
     let _ = app.update(Message::Tab {
         window_id: window,
@@ -113,6 +118,32 @@ fn selection_does_not_carry_to_another_schematic_tab() {
         app.interaction_state.active_canvas().selected.is_empty(),
         "a selection picked in tab A must not survive into tab B"
     );
+    let ctx = &app.document_state.panel_ctx;
+    assert_eq!(ctx.selection_count, 0);
+    assert!(ctx.selected_uuid.is_none() && ctx.selected_kind.is_none());
+}
+
+#[test]
+fn menu_place_wire_drops_a_half_placed_shape() {
+    let (mut app, _task) = Signex::new();
+    app.interaction_state.current_tool = Tool::Line;
+    app.interaction_state.shape_anchor = Some(Point::new(1.0, 1.0));
+
+    let _ = app.update(Message::Menu(MenuMessage::PlaceWire));
+
+    assert_eq!(app.interaction_state.current_tool, Tool::Wire);
+    assert!(app.interaction_state.shape_anchor.is_none());
+}
+
+#[test]
+fn reselecting_the_active_tool_keeps_the_gesture() {
+    let (mut app, _task) = Signex::new();
+    app.interaction_state.current_tool = Tool::Line;
+    app.interaction_state.shape_anchor = Some(Point::new(1.0, 1.0));
+
+    let _ = app.update(Message::Tool(ToolMessage::SelectTool(Tool::Line)));
+
+    assert!(app.interaction_state.shape_anchor.is_some());
 }
 
 #[test]

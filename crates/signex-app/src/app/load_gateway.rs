@@ -313,6 +313,8 @@ impl Signex {
             if self.activate_active_schematic_session() {
                 if previous_path != self.document_state.active_path {
                     self.interaction_state.active_canvas_mut().selected.clear();
+                    // Also resets the mirrored panel_ctx selection fields.
+                    self.update_selection_info();
                 }
                 self.apply_loaded_schematic(None, true, false, false);
             }
