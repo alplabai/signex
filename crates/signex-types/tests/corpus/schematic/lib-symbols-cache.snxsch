@@ -1,0 +1,292 @@
+format = "snxsch/1"
+schematic_id = "00000000-0000-0000-0000-000000000000"
+version = 1
+generator = "signex-test"
+generator_version = "0.9"
+paper_size = "A4"
+root_sheet_page = "1"
+
+
+[sheets.components]
+content = """
+uuid                                  ref  library  pos_x     pos_y     rotation  value  mpn
+0192a8c0-0000-7001-8000-000000000001  U1   opa2     50800000  50800000  0         10k    ""
+"""
+
+[sheets.wires]
+content = """
+uuid  net  start_x  start_y  end_x  end_y  stroke_width
+"""
+
+[sheets.junctions]
+content = """
+uuid  pos_x  pos_y  diameter
+"""
+
+[sheets.labels]
+content = """
+uuid  text  pos_x  pos_y  rotation  kind  shape  font_size  justify  justify_v
+"""
+
+[extras.symbols.0192a8c0-0000-7001-8000-000000000001]
+footprint = "R_0603.snxfpt"
+datasheet = ""
+mirror_x = false
+mirror_y = false
+unit = 1
+is_power = false
+fields_autoplaced = false
+fields_user_placed = false
+dnp = false
+in_bom = true
+on_board = true
+exclude_from_sim = false
+locked = false
+custom_properties = []
+instances = []
+
+[extras.symbols.0192a8c0-0000-7001-8000-000000000001.fields]
+
+[extras.symbols.0192a8c0-0000-7001-8000-000000000001.pin_uuids]
+
+[extras.sheet]
+child_sheets = []
+no_connects = []
+text_notes = []
+buses = []
+bus_entries = []
+drawings = []
+no_erc_directives = []
+
+[extras.sheet.title_block]
+
+[extras.sheet.lib_symbols.opa2]
+id = "opa2"
+reference = "U"
+value = "opa2"
+footprint = "SOIC-8.snxfpt"
+datasheet = "https://example.com/ds.pdf"
+description = "cache entry"
+keywords = "opamp dual"
+fp_filters = "SOIC*"
+in_bom = true
+on_board = true
+in_pos_files = false
+duplicate_pin_numbers_are_jumpers = true
+show_pin_numbers = false
+show_pin_names = true
+pin_name_offset = 0.508
+
+[[extras.sheet.lib_symbols.opa2.graphics]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols.opa2.graphics.graphic]
+type = "polyline"
+width = 0.254
+fill = "none"
+
+[[extras.sheet.lib_symbols.opa2.graphics.graphic.points]]
+x = 0.0
+y = 0.0
+
+[[extras.sheet.lib_symbols.opa2.graphics.graphic.points]]
+x = 2.54
+y = 0.0
+
+[[extras.sheet.lib_symbols.opa2.graphics.graphic.points]]
+x = 2.54
+y = 2.54
+
+[[extras.sheet.lib_symbols.opa2.graphics]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols.opa2.graphics.graphic]
+type = "rectangle"
+width = 0.254
+fill = "background"
+
+[extras.sheet.lib_symbols.opa2.graphics.graphic.start]
+x = -5.08
+y = -5.08
+
+[extras.sheet.lib_symbols.opa2.graphics.graphic.end]
+x = 5.08
+y = 5.08
+
+[[extras.sheet.lib_symbols.opa2.graphics]]
+unit = 1
+body_style = 1
+
+[extras.sheet.lib_symbols.opa2.graphics.graphic]
+type = "circle"
+radius = 1.27
+width = 0.0
+fill = "outline"
+
+[extras.sheet.lib_symbols.opa2.graphics.graphic.center]
+x = 0.0
+y = 0.0
+
+[[extras.sheet.lib_symbols.opa2.graphics]]
+unit = 2
+body_style = 1
+
+[extras.sheet.lib_symbols.opa2.graphics.graphic]
+type = "arc"
+width = 0.15
+fill = "none"
+
+[extras.sheet.lib_symbols.opa2.graphics.graphic.start]
+x = 1.0
+y = 0.0
+
+[extras.sheet.lib_symbols.opa2.graphics.graphic.mid]
+x = 0.0
+y = 1.0
+
+[extras.sheet.lib_symbols.opa2.graphics.graphic.end]
+x = -1.0
+y = 0.0
+
+[[extras.sheet.lib_symbols.opa2.graphics]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols.opa2.graphics.graphic]
+type = "text"
+text = "OPA"
+rotation = 90.0
+font_size = 1.27
+bold = true
+italic = true
+justify_h = "right"
+justify_v = "top"
+
+[extras.sheet.lib_symbols.opa2.graphics.graphic.position]
+x = 0.0
+y = -3.0
+
+[[extras.sheet.lib_symbols.opa2.graphics]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols.opa2.graphics.graphic]
+type = "text_box"
+text = "box"
+rotation = 0.0
+font_size = 1.0
+bold = false
+italic = true
+width = 0.1
+fill = "background"
+
+[extras.sheet.lib_symbols.opa2.graphics.graphic.position]
+x = 0.0
+y = 3.0
+
+[extras.sheet.lib_symbols.opa2.graphics.graphic.size]
+x = 5.0
+y = 2.0
+
+[[extras.sheet.lib_symbols.opa2.graphics]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols.opa2.graphics.graphic]
+type = "bezier"
+width = 0.2
+fill = "none"
+
+[[extras.sheet.lib_symbols.opa2.graphics.graphic.points]]
+x = 0.0
+y = 0.0
+
+[[extras.sheet.lib_symbols.opa2.graphics.graphic.points]]
+x = 1.0
+y = 2.0
+
+[[extras.sheet.lib_symbols.opa2.graphics.graphic.points]]
+x = 2.0
+y = 2.0
+
+[[extras.sheet.lib_symbols.opa2.graphics.graphic.points]]
+x = 3.0
+y = 0.0
+
+[[extras.sheet.lib_symbols.opa2.pins]]
+unit = 1
+body_style = 1
+
+[extras.sheet.lib_symbols.opa2.pins.pin]
+direction = "input"
+shape_style = "plain"
+rotation = 0.0
+length = 2.54
+name = "1"
+number = "1"
+visible = true
+name_visible = true
+number_visible = true
+
+[extras.sheet.lib_symbols.opa2.pins.pin.position]
+x = -7.62
+y = 2.54
+
+[[extras.sheet.lib_symbols.opa2.pins]]
+unit = 1
+body_style = 1
+
+[extras.sheet.lib_symbols.opa2.pins.pin]
+direction = "output"
+shape_style = "inverted_bubble"
+rotation = 180.0
+length = 2.54
+name = "2"
+number = "2"
+visible = true
+name_visible = true
+number_visible = true
+
+[extras.sheet.lib_symbols.opa2.pins.pin.position]
+x = 7.62
+y = 0.0
+
+[[extras.sheet.lib_symbols.opa2.pins]]
+unit = 2
+body_style = 1
+
+[extras.sheet.lib_symbols.opa2.pins.pin]
+direction = "power_input"
+shape_style = "clock_triangle"
+rotation = 270.0
+length = 2.54
+name = "8"
+number = "8"
+visible = true
+name_visible = true
+number_visible = true
+
+[extras.sheet.lib_symbols.opa2.pins.pin.position]
+x = 0.0
+y = 7.62
+
+[[extras.sheet.lib_symbols.opa2.pins]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols.opa2.pins.pin]
+direction = "bidirectional"
+shape_style = "schmitt"
+rotation = 90.0
+length = 2.54
+name = "3"
+number = "3"
+visible = true
+name_visible = true
+number_visible = true
+
+[extras.sheet.lib_symbols.opa2.pins.pin.position]
+x = 0.0
+y = -7.62

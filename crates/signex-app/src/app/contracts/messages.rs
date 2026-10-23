@@ -351,8 +351,20 @@ pub enum PrintPreviewMsg {
     SetPageRangeSpecific,
     /// User edited the specific page input in preview.
     SetSpecificPageInput(String),
-    /// User toggled "Fit to Page" in the unified PDF preview modal.
-    SetFitToPage(bool),
+    /// User picked a page size (a named size, or `Custom`).
+    SetPageSize(signex_output::PageSize),
+    /// User picked portrait or landscape.
+    SetOrientation(signex_output::Orientation),
+    /// User edited the Custom page width (mm).
+    SetCustomWidth(String),
+    /// User edited the Custom page height (mm).
+    SetCustomHeight(String),
+    /// User edited one margin (mm).
+    SetMargin(signex_output::MarginEdge, String),
+    /// User picked Fit to Page / 1:1 / Percent.
+    SetScaleMode(signex_output::PdfScaleMode),
+    /// User edited the scale percentage.
+    SetScalePercent(String),
     /// User toggled "Include Title Block" in the unified PDF preview modal.
     SetIncludeTitleBlock(bool),
     /// Mouse wheel scrolled over the preview image. Carries the
