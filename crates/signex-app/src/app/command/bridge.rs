@@ -107,6 +107,7 @@ fn resolve(command: &AppCommandId) -> Option<Message> {
         "open_preferences" | "open_schematic_preferences" => {
             Message::Preferences(PreferencesMsg::Open)
         }
+        "open_pcb_trace_calculator" => Message::Overlay(OverlayMsg::OpenPcbTraceCalculator),
         "paste" => Message::Edit(EditMsg::Paste),
         "paste_special" | "smart_paste" => Message::Edit(EditMsg::SmartPaste),
         "place_bus" => Message::Tool(ToolMessage::SelectTool(Tool::Bus)),

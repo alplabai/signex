@@ -51,6 +51,22 @@ impl Signex {
                 self.ui_state.passive_calculator_open = false;
                 Task::none()
             }
+            OverlayMsg::OpenPcbTraceCalculator => {
+                // Re-invoking while open is a no-op; a real open starts a
+                // new session, so its failures are logged afresh.
+                if !self.ui_state.pcb_trace_calculator_open {
+                    self.ui_state.pcb_trace_calculator.forget_reported_failure();
+                }
+                self.ui_state.pcb_trace_calculator_open = true;
+                Task::none()
+            }
+            OverlayMsg::ClosePcbTraceCalculator => {
+                self.ui_state.pcb_trace_calculator_open = false;
+                Task::none()
+            }
+            OverlayMsg::PcbTraceCalculatorEdited(message) => {
+                self.handle_pcb_trace_calculator_edited(message)
+            }
             OverlayMsg::DismissErrorNotice => {
                 // Inlined rather than a handler in `menu/export`, which
                 // is where it used to live: the card is not export-only

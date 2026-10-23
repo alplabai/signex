@@ -439,6 +439,12 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
                 MenuMessage::OpenPassiveCalculator,
                 mc,
             ),
+            leaf(
+                &cmd_label("open_pcb_trace_calculator", "PCB Trace Calculator..."),
+                None,
+                MenuMessage::OpenPcbTraceCalculator,
+                mc,
+            ),
             separator(mc),
             leaf(
                 &cmd_label("open_preferences", "Preferences..."),

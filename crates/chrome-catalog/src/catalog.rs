@@ -4,6 +4,7 @@ use iced::widget::{column, container, scrollable};
 use iced::{Background, Element, Length, Theme};
 use signex_types::theme::{ThemeId, ThemeTokens, theme_tokens};
 use signex_widgets::passive_calculator::{CalculatorControl, CalculatorMessage};
+use signex_widgets::trace_calculator::{TraceCalculatorControl, TraceCalculatorMessage};
 
 use crate::{bom_modal, modal_card, project_tree, section, tabs, theme, theme_picker};
 
@@ -19,12 +20,14 @@ struct Catalog {
     theme: ThemeId,
     tokens: ThemeTokens,
     passive_calculator: CalculatorControl,
+    trace_calculator: TraceCalculatorControl,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) enum Message {
     SelectTheme(ThemeId),
     PassiveCalculator(CalculatorMessage),
+    TraceCalculator(TraceCalculatorMessage),
 }
 
 impl Catalog {
@@ -33,6 +36,7 @@ impl Catalog {
             theme: ThemeId::Signex,
             tokens: theme_tokens(ThemeId::Signex),
             passive_calculator: CalculatorControl::default(),
+            trace_calculator: TraceCalculatorControl::default(),
         }
     }
 
@@ -43,6 +47,11 @@ impl Catalog {
                 self.tokens = theme_tokens(theme_id);
             }
             Message::PassiveCalculator(message) => self.passive_calculator.update(message),
+            Message::TraceCalculator(message) => {
+                // The failure it returns is for the app's log window; the
+                // catalog has none, and the control draws it anyway.
+                let _shown_in_control = self.trace_calculator.update(message);
+            }
         }
     }
 
@@ -88,6 +97,13 @@ impl Catalog {
                 self.passive_calculator
                     .view(tokens)
                     .map(Message::PassiveCalculator),
+            ),
+            section::view(
+                "PCB trace calculator control",
+                tokens,
+                self.trace_calculator
+                    .view(tokens)
+                    .map(Message::TraceCalculator),
             ),
         ]
         .spacing(20)

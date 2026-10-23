@@ -73,6 +73,7 @@ shrink.
 | `open_document` | Open document | file | `Ctrl+O` | `Ctrl+O` |
 | `open_grid_picker` | Open grid picker | view | — | — |
 | `open_grid_properties` | Open grid properties | view | — | — |
+| `open_pcb_trace_calculator` | Open PCB trace calculator | tools | — | — |
 | `open_preferences` | Open preferences | preferences | `Ctrl+,` | `Ctrl+,` |
 | `open_schematic_preferences` | Open schematic preferences | preferences | `T P` | — |
 | `paste` | Paste | edit | `Ctrl+V` | `Ctrl+V` |

@@ -38,6 +38,9 @@ impl Signex {
             MenuMessage::OpenPassiveCalculator => {
                 Some(self.update(Message::Overlay(OverlayMsg::OpenPassiveCalculator)))
             }
+            MenuMessage::OpenPcbTraceCalculator => {
+                Some(self.update(Message::Overlay(OverlayMsg::OpenPcbTraceCalculator)))
+            }
             MenuMessage::OpenKeyboardShortcuts => {
                 // Single-flag toggle — opening the modal is enough; the
                 // close path goes through

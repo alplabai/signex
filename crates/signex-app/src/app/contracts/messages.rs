@@ -154,6 +154,16 @@ pub enum OverlayMsg {
     /// Close the Tools > Passive Network Calculator modal - fired by
     /// the close chrome X.
     ClosePassiveCalculator,
+    /// Open the Tools > PCB Trace Calculator modal — fired by the Tools
+    /// menu entry and the command registry. Re-invoking while it is
+    /// already open is a no-op.
+    OpenPcbTraceCalculator,
+    /// Close the Tools > PCB Trace Calculator modal — fired by the close
+    /// chrome X and by Esc.
+    ClosePcbTraceCalculator,
+    /// A field or unit in the PCB Trace Calculator was edited. Carries the
+    /// control's own message; a failure the edit produced is logged.
+    PcbTraceCalculatorEdited(signex_widgets::trace_calculator::TraceCalculatorMessage),
     /// Dismiss the first-run tour card and persist the flag so it
     /// never reappears. Fired by the card's ✕ button, by Esc, and by
     /// the first canvas interaction after launch.

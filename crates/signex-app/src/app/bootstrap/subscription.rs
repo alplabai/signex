@@ -37,6 +37,7 @@ struct OpenOverlays {
     enable_vc_open: bool,
     library_create_options_open: bool,
     passive_calculator_open: bool,
+    pcb_trace_calculator_open: bool,
     // #514 — the rest of the Esc ladder. Each closes exactly one gap that
     // used to fall through to the `Tool::Select` reset behind the modal.
     annotate_reset_confirm_open: bool,
@@ -228,6 +229,9 @@ impl OpenOverlays {
             OverlayId::PassiveCalculator => self
                 .passive_calculator_open
                 .then(|| Message::Overlay(OverlayMsg::ClosePassiveCalculator)),
+            OverlayId::PcbTraceCalculator => self
+                .pcb_trace_calculator_open
+                .then(|| Message::Overlay(OverlayMsg::ClosePcbTraceCalculator)),
             OverlayId::FirstRunTour => self
                 .first_run_tour_open
                 .then(|| Message::Overlay(OverlayMsg::DismissFirstRunTour)),
@@ -458,6 +462,7 @@ impl Signex {
             enable_vc_open: self.ui_state.enable_version_control.is_some(),
             library_create_options_open: self.library.create_options.is_some(),
             passive_calculator_open: self.ui_state.passive_calculator_open,
+            pcb_trace_calculator_open: self.ui_state.pcb_trace_calculator_open,
             annotate_reset_confirm_open: self.ui_state.annotate_reset_confirm
                 && !modal_detached(crate::app::state::ModalId::AnnotateResetConfirm),
             app_quit_confirm_open: self.ui_state.app_quit_confirm.is_some(),
@@ -686,12 +691,26 @@ impl Signex {
             Subscription::none()
         };
 
+        // Frames only while the calculator's fade is running; idle otherwise.
+        let trace_calculator_fade = if self.ui_state.pcb_trace_calculator_open
+            && self.ui_state.pcb_trace_calculator.is_animating()
+        {
+            iced::window::frames().map(|at| {
+                Message::Overlay(OverlayMsg::PcbTraceCalculatorEdited(
+                    signex_widgets::trace_calculator::TraceCalculatorMessage::FrameArrived(at),
+                ))
+            })
+        } else {
+            Subscription::none()
+        };
+
         // External `.snxlib` edits (#531): a slow timer whose handler stats
         // the mounted files off-thread; `view` only reads the caches.
         let library_poll =
             crate::library::external_poll::subscription(&self.library).map(Message::Library);
 
         Subscription::batch([
+            trace_calculator_fade,
             kbd,
             mouse_sub,
             window_close,
@@ -843,6 +862,16 @@ mod tests {
         assert!(matches!(
             only(|o| o.passive_calculator_open = true),
             Some(Message::Overlay(OverlayMsg::ClosePassiveCalculator))
+        ));
+    }
+
+    /// The PCB trace calculator is an in-app modal like the passive one, so
+    /// Esc must close it rather than fall through to the tool reset.
+    #[test]
+    fn pcb_trace_calculator_claims_escape() {
+        assert!(matches!(
+            only(|o| o.pcb_trace_calculator_open = true),
+            Some(Message::Overlay(OverlayMsg::ClosePcbTraceCalculator))
         ));
     }
 
@@ -1422,6 +1451,7 @@ mod tests {
             enable_vc_open,
             library_create_options_open,
             passive_calculator_open,
+            pcb_trace_calculator_open,
             annotate_reset_confirm_open,
             app_quit_confirm_open,
             project_close_confirm_open,
@@ -1463,6 +1493,9 @@ mod tests {
             }),
             ("passive_calculator_open", |o| {
                 o.passive_calculator_open = true
+            }),
+            ("pcb_trace_calculator_open", |o| {
+                o.pcb_trace_calculator_open = true
             }),
             ("annotate_reset_confirm_open", |o| {
                 o.annotate_reset_confirm_open = true

@@ -82,6 +82,20 @@ mod tests {
         assert_eq!(app.ui_state.visible_grid_mm, 2.54);
     }
 
+    /// The PCB trace calculator is reachable through the registry (and so
+    /// from the palette), not only from its menu item.
+    #[test]
+    fn open_pcb_trace_calculator_command_opens_the_modal() {
+        let (mut app, _task) = Signex::new();
+        assert!(!app.ui_state.pcb_trace_calculator_open);
+
+        let command = AppCommandId::new("open_pcb_trace_calculator").unwrap();
+        let task = app.dispatch_command(&command, CommandArgs::none());
+
+        assert!(app.ui_state.pcb_trace_calculator_open);
+        assert_eq!(task.units(), 0, "an overlay, so no OS window task");
+    }
+
     /// An id with no catalog entry at all is untrusted input, not a
     /// programmer error — it must resolve to a no-op, never panic.
     #[test]

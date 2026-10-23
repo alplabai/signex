@@ -112,6 +112,21 @@ impl Signex {
         ))
     }
 
+    /// Tools > PCB Trace Calculator modal.
+    pub(in crate::app::view) fn pcb_trace_calculator_overlay(
+        &self,
+    ) -> Option<Element<'_, Message>> {
+        let ui = &self.ui_state;
+        if !ui.pcb_trace_calculator_open {
+            return None;
+        }
+        Some(crate::pcb_trace_calculator_modal::view(
+            &self.document_state.panel_ctx.tokens,
+            ui.theme_id,
+            &ui.pcb_trace_calculator,
+        ))
+    }
+
     /// First-run onboarding tour overlay.
     pub(in crate::app::view) fn first_run_tour_overlay(&self) -> Option<Element<'_, Message>> {
         if !self.ui_state.first_run_tour_open {

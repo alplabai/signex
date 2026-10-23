@@ -9,6 +9,7 @@ pub(crate) mod input;
 mod keymap;
 pub(crate) mod library;
 mod overlay;
+mod pcb_trace_calculator;
 mod text_edit;
 mod tool;
 mod ui;

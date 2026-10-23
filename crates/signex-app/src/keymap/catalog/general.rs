@@ -496,6 +496,16 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "open_pcb_trace_calculator",
+        category: "tools",
+        label: "Open PCB trace calculator",
+        menu_label: Some("PCB Trace Calculator..."),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "open_preferences",
         category: "preferences",
         label: "Open preferences",

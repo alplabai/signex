@@ -383,6 +383,10 @@ pub struct UiState {
     pub passive_calculator: signex_widgets::passive_calculator::CalculatorControl,
     /// Whether the Tools > Passive Network Calculator modal is open.
     pub passive_calculator_open: bool,
+    /// PCB trace calculator state, owned here for the same reason.
+    pub pcb_trace_calculator: signex_widgets::trace_calculator::TraceCalculatorControl,
+    /// Whether the Tools > PCB Trace Calculator modal is open.
+    pub pcb_trace_calculator_open: bool,
     /// Command palette state — query / dropdown open flag / selected
     /// row. The chrome-strip search bar is the always-rendered input;
     /// `open` gates the dropdown overlay only.

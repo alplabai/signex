@@ -485,6 +485,11 @@
     "category": "view"
   },
   {
+    "id": "open_pcb_trace_calculator",
+    "group": "General",
+    "category": "tools"
+  },
+  {
     "id": "open_preferences",
     "group": "General",
     "category": "preferences"
