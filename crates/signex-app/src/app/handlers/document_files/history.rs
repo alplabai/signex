@@ -12,7 +12,7 @@ impl Signex {
     /// message; nothing destructive runs (the working tree changes
     /// only on a successful blob read + atomic write).
     pub(crate) fn handle_history_restore_clicked(&mut self, sha: &str) {
-        self.sync_footprint_dirty_paths();
+        self.sync_editor_dirty_paths();
         let active = match self.document_state.tabs.get(self.document_state.active_tab) {
             Some(t) => t,
             None => return,

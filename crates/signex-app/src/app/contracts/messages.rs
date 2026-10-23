@@ -68,11 +68,6 @@ pub enum WindowMsg {
         kind: crate::panels::PanelKind,
         id: iced::window::Id,
     },
-    /// User pressed on the borderless modal's header — start an OS-level
-    /// window drag for the window hosting this modal. Lets the user move
-    /// the detached modal even though `decorations: false` removed the
-    /// native title bar.
-    StartDetachedWindowDrag(crate::app::state::ModalId),
     /// User pressed on empty chrome (menu-bar row outside buttons) — start
     /// an OS-level window drag for the main borderless window. The chrome
     /// is the replacement for the OS title bar.
@@ -82,15 +77,6 @@ pub enum WindowMsg {
     /// direction. Replaces the WS_THICKFRAME edges we lose when
     /// decorations are disabled.
     StartMainWindowResize(iced::window::Direction),
-    /// User pressed one of the 6 px edge strips around a borderless
-    /// detached modal window — ask the OS to start a resize drag in
-    /// that direction. Same trick as the main window; without this
-    /// the modals couldn't be resized because `decorations: false`
-    /// strips the OS chrome.
-    StartDetachedModalResize {
-        modal: crate::app::state::ModalId,
-        direction: iced::window::Direction,
-    },
     /// Custom min/max/close buttons in the borderless main-window chrome.
     MinimizeMainWindow,
     ToggleMaximizeMainWindow,

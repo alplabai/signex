@@ -358,7 +358,7 @@ impl std::fmt::Display for NumberingSchemeKindUi {
     }
 }
 
-/// v0.23 — Field discriminator for [`PanelMsg::FpEditorEditArrayParam`].
+/// v0.23 — Field discriminator for [`PanelMsg::FpEditorEditArrayParam`](crate::panels::PanelMsg::FpEditorEditArrayParam).
 /// Each variant maps to a single text-input on one [`ArrayKindSummary`]
 /// branch; the handler uses the variant to disambiguate the target
 /// field when mutating the array in place.

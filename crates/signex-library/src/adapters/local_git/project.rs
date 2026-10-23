@@ -90,12 +90,18 @@ impl LocalGitProjectAdapter {
 
     /// Commit a single file with the supplied message. `rel_path` is
     /// relative to the project root and uses forward slashes.
-    /// Returns the commit OID on success.
+    /// Returns the commit OID on success, or `None` when the staged tree
+    /// matches HEAD's (an unchanged save), in which case no commit is
+    /// made (#149).
     ///
     /// Uses an unborn-HEAD-tolerant parent-commit lookup so the very
     /// first commit on a fresh `git init` succeeds without the
     /// caller needing to handle that edge case.
-    pub fn commit_path(&self, rel_path: &Path, message: &str) -> Result<git2::Oid, LibraryError> {
+    pub fn commit_path(
+        &self,
+        rel_path: &Path,
+        message: &str,
+    ) -> Result<Option<git2::Oid>, LibraryError> {
         // v0.23 — reject obviously dangerous `rel_path`. Internal
         // callers strip-prefix from absolute paths so this guards
         // against future callers that forget. Both absolute paths
@@ -147,6 +153,9 @@ impl LocalGitProjectAdapter {
             Err(e) if e.code() == git2::ErrorCode::UnbornBranch => None,
             Err(e) => return Err(LibraryError::Backend(format!("git head: {e}"))),
         };
+        if parent.as_ref().is_some_and(|p| p.tree_id() == tree_oid) {
+            return Ok(None);
+        }
         let parents: Vec<&git2::Commit> = parent.as_ref().map(|c| vec![c]).unwrap_or_default();
         let final_message = if message.is_empty() {
             format!("save {}", rel_path.display())
@@ -156,18 +165,19 @@ impl LocalGitProjectAdapter {
         let oid = repo
             .commit(Some("HEAD"), &sig, &sig, &final_message, &tree, &parents)
             .map_err(|e| LibraryError::Backend(format!("git commit: {e}")))?;
-        Ok(oid)
+        Ok(Some(oid))
     }
 
     /// Commit an externally-edited file (user opened the file in a
     /// text editor and saved). Wraps [`commit_path`] with a
     /// reasonable default message when the caller doesn't have
-    /// context.
+    /// context. `None` means the file matched HEAD and nothing was
+    /// committed.
     pub fn commit_external_change(
         &self,
         abs_path: &Path,
         message: &str,
-    ) -> Result<git2::Oid, LibraryError> {
+    ) -> Result<Option<git2::Oid>, LibraryError> {
         let rel = abs_path.strip_prefix(&self.project_root).map_err(|_| {
             LibraryError::Backend(format!(
                 "commit_external_change: {} is not under {}",

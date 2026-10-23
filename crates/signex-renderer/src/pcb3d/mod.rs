@@ -204,6 +204,10 @@ pub enum RuntimeModelBridgeWarning {
     UnsupportedGltfExtension {
         name: String,
     },
+    GeometryAltered {
+        line: Option<usize>,
+        reason: String,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq)]
