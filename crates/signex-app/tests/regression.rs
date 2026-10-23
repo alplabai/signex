@@ -122,3 +122,5 @@ mod library_delete_undo;
 mod save_as_by_document_kind;
 #[path = "regression/stable_addressing.rs"]
 mod stable_addressing;
+#[path = "regression/symbol_undo_steps.rs"]
+mod symbol_undo_steps;

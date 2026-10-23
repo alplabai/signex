@@ -20,8 +20,8 @@ impl Signex {
     /// once the user picks Save All or Discard All.
     pub(super) fn close_project_at_tree_path(&mut self, tree_path: &[usize]) -> Task<Message> {
         // The gate reads `dirty_paths`; do not rely on every edit site
-        // having refreshed the panel context since its last footprint edit.
-        self.sync_footprint_dirty_paths();
+        // having refreshed the panel context since its last editor edit.
+        self.sync_editor_dirty_paths();
         let Some(&project_idx) = tree_path.first() else {
             return Task::none();
         };
@@ -360,8 +360,8 @@ impl Signex {
     /// `SecondaryWindowClosed`.
     pub(crate) fn handle_app_quit_requested(&mut self) -> Task<Message> {
         // Same hardening as `close_project_at_tree_path`: the quit gate
-        // must see footprint edits even if no panel refresh ran after them.
-        self.sync_footprint_dirty_paths();
+        // must see footprint and symbol edits even if no panel refresh ran after them.
+        self.sync_editor_dirty_paths();
         // Guard against a second close request stacking a duplicate
         // modal while the first is still up.
         if self.ui_state.app_quit_confirm.is_some() {
