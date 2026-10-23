@@ -4,10 +4,11 @@ pub mod parser;
 use std::path::PathBuf;
 
 use crate::error::ModelImportError;
-pub use parser::VrmlMesh;
+pub use parser::{ParseWarning, VrmlMesh};
 
-/// Parse a VRML97 source file and return the flat mesh list.
-pub fn load(path: &PathBuf) -> Result<Vec<VrmlMesh>, ModelImportError> {
+/// Parse a VRML97 source file and return the flat mesh list, plus the
+/// recoverable findings that changed the geometry on the way (#805).
+pub fn load(path: &PathBuf) -> Result<(Vec<VrmlMesh>, Vec<ParseWarning>), ModelImportError> {
     let source = std::fs::read_to_string(path).map_err(|e| ModelImportError::IoFailed {
         path: path.clone(),
         message: e.to_string(),

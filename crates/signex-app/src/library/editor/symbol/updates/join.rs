@@ -250,8 +250,7 @@ mod tests {
             "exactly one undo snapshot for the whole composite op"
         );
 
-        let snapshot = editor.undo_snapshots.pop().unwrap();
-        *editor.primitive_mut() = snapshot;
+        assert!(editor.undo());
         assert_eq!(
             editor.primitive().graphics.len(),
             4,

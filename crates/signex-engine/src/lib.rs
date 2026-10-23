@@ -15,6 +15,7 @@ pub(crate) mod test_support;
 
 use std::path::{Path, PathBuf};
 
+pub use annotation::AnnotateScope;
 pub use command::{
     AnnotateMode, Command, CommandKind, MirrorAxis, ReorderDirection, SheetPort, SymbolTextField,
     TextTarget,
@@ -23,6 +24,7 @@ pub use error::EngineError;
 use history::HistoryEntry;
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
 pub use selection::{ClipboardSelection, SelectionAnchor, SelectionDetails, partition_cuttable};
+pub use sheet::{exposed_sheet_ports, ports_for_pin_sync, unplaced_sheet_ports};
 use signex_types::schematic::SchematicSheet;
 
 const JUNCTION_TOLERANCE_MM: f64 = 0.01;
@@ -320,7 +322,7 @@ mod tests {
             .unwrap();
         assert_eq!(pin.position, Point::new(25.0, 33.0));
         assert_eq!(pin.rotation, 90.0);
-        assert_eq!(pin.direction, "output");
+        assert_eq!(pin.direction, "input", "reconcile never rewrites a pin");
     }
 
     #[test]
@@ -586,7 +588,11 @@ mod tests {
             name: "SDA".to_string(),
             direction: "input".to_string(),
         }];
-        let changed = crate::sheet::reconcile_child_sheet_pins(&mut child, &ports);
+        let changed = crate::sheet::reconcile_child_sheet_pins(
+            &mut child,
+            &ports,
+            &signex_net::SheetPinContacts::default(),
+        );
 
         assert!(changed);
         assert_eq!(child.pins.len(), 1);

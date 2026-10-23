@@ -70,8 +70,8 @@ pub use param::{ParamMap, ParamValue};
 pub use primitive::{
     Body3D, BodyShape, CHAIN_ARC_SAMPLES, CHAIN_ENDPOINT_EPSILON_MM, ChainError, ChainSegment,
     ComponentType, Drill, Footprint, FootprintFile, FootprintFileError, FpGraphic, FpGraphicKind,
-    LayerId, Pad, PadKind, PadShape, PinDirection, PinOrientation, PinSymbolKind, Polygon,
-    PrimitiveKind, PrimitiveRef, SimKind, SimModel, StepAttachment, Symbol, SymbolFile,
+    LayerId, LoadRepair, Pad, PadKind, PadShape, PinDirection, PinOrientation, PinSymbolKind,
+    Polygon, PrimitiveKind, PrimitiveRef, SimKind, SimModel, StepAttachment, Symbol, SymbolFile,
     SymbolGraphic, SymbolGraphicKind, SymbolPin, chain_into_closed_contour,
     normalize_arc_endpoints_deg,
 };
@@ -85,7 +85,7 @@ pub use templates::{ParamKind, ParamSlot, ParameterTemplate, TemplateRegistry, T
 pub use where_used::{UseSite, WhereUsedIndex};
 
 #[cfg(feature = "local-git")]
-pub use adapters::local_git::LocalGitAdapter;
+pub use adapters::local_git::{DiskStamp, LocalGitAdapter};
 
 /// Project-level "Enable Version Control" helper. Runs
 /// `git2::Repository::init` at `project_dir`, optionally writes a

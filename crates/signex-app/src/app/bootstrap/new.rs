@@ -57,6 +57,10 @@ impl Signex {
         };
         // Silence unused-mut when read_dock_layout returns Some.
         let _ = &mut dock;
+        let dock_layout_sync = crate::dock::DockLayoutSync::new(
+            std::sync::Arc::new(crate::fonts::PrefsDockLayoutStore::user_prefs()),
+            crate::dock::DockLayoutSnapshot::capture(&dock),
+        );
 
         let sch_canvas = CanvasSlot::new();
         let mut pcb_canvas = crate::pcb_canvas::PcbCanvas::new();
@@ -285,6 +289,7 @@ impl Signex {
             },
             document_state: DocumentState {
                 dock,
+                dock_layout_sync,
                 tabs: vec![],
                 active_tab: 0,
                 engines: std::collections::HashMap::new(),

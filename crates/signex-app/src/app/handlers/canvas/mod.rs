@@ -6,6 +6,7 @@ use super::super::*;
 mod clicked;
 mod double_clicked;
 mod layout_drag;
+mod sync_sheet_pins;
 #[cfg(test)]
 mod tests;
 
@@ -338,26 +339,27 @@ impl Signex {
         }
     }
 
-    pub(crate) fn open_selected_child_sheet(&mut self) -> bool {
-        let Some(snapshot) = self.active_render_snapshot() else {
-            return false;
-        };
-
-        let filename = self
-            .interaction_state
+    /// File reference of the first selected sheet symbol on the active sheet.
+    pub(crate) fn selected_child_sheet_filename(&self) -> Option<String> {
+        // Read the engine document (the source of truth) rather than the
+        // render snapshot, which is only a derived copy.
+        let document = self.document_state.active_engine()?.document();
+        self.interaction_state
             .active_canvas()
             .selected
             .iter()
             .find(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet)
             .and_then(|item| {
-                snapshot
+                document
                     .child_sheets
                     .iter()
                     .find(|sheet| sheet.uuid == item.uuid)
                     .map(|sheet| sheet.filename.clone())
-            });
+            })
+    }
 
-        if let Some(filename) = filename {
+    pub(crate) fn open_selected_child_sheet(&mut self) -> bool {
+        if let Some(filename) = self.selected_child_sheet_filename() {
             self.open_or_focus_child_sheet(filename.as_str());
             true
         } else {
