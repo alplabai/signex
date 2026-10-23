@@ -4,7 +4,7 @@
 //! "All Off" (were placeholders that closed the dialog).
 
 use iced::{Point as ScreenPoint, Rectangle};
-use signex_app::app::{AnnotateMsg, Message, Signex};
+use signex_app::app::{AnnotateMsg, Message, Signex, UiMsg};
 use signex_app::menu_bar::MenuMessage;
 use signex_types::schematic::{Point, SchematicSheet, Symbol};
 use std::collections::HashMap;
@@ -113,6 +113,17 @@ fn cycle_grid_steps_snap_and_linked_visible_grid_through_the_presets() {
     let _ = app.update(Message::Menu(MenuMessage::CycleGrid));
     assert_eq!(app.ui_state.grid_size_mm, 0.635);
     assert_eq!(app.ui_state.visible_grid_mm, 0.635);
+}
+
+#[test]
+fn ui_grid_cycle_message_steps_the_grid_like_the_menu_item() {
+    let (mut app, _t) = Signex::new();
+    app.ui_state.grid_size_mm = 2.54;
+    app.ui_state.visible_grid_mm = 2.54;
+
+    let _ = app.update(Message::Ui(UiMsg::GridCycle));
+    assert_eq!(app.ui_state.grid_size_mm, 5.08);
+    assert_eq!(app.ui_state.visible_grid_mm, 5.08);
 }
 
 #[test]

@@ -90,7 +90,7 @@ pub struct CanvasSlot {
     /// Pending fit target to transfer to CanvasState.
     /// Uses Cell so canvas::Program::update (&self) can consume it.
     pub pending_fit: std::cell::Cell<Option<Rectangle>>,
-    /// Bounds of the canvas as last drawn — lets menu zoom (which has no
+    /// Bounds of the canvas as of the last canvas event — lets menu zoom (which has no
     /// cursor and no event bounds) find the view centre.
     viewport: std::cell::Cell<Rectangle>,
     /// Wire-in-progress points for rubber-band preview.
@@ -257,7 +257,7 @@ impl CanvasSlot {
         self.render_cache = render_cache;
     }
 
-    /// Record the canvas bounds (done on every draw; public so tests can
+    /// Record the canvas bounds (done on every canvas event; public so tests can
     /// stand in for a drawn frame).
     pub fn set_viewport(&self, bounds: Rectangle) {
         self.viewport.set(bounds);
@@ -384,6 +384,8 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
+        // Remember the bounds so menu zoom (no cursor) can find the view centre.
+        self.viewport.set(bounds);
         // Consume any pending fit-to-content before dispatching the event.
         if let Some(action) = self.update_pending_fit(bounds) {
             return Some(action);
@@ -434,7 +436,6 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
-        self.viewport.set(bounds);
         let mut layers = Vec::with_capacity(4);
 
         // Layer 1: background (grid + paper)

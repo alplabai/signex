@@ -52,7 +52,7 @@ pub struct PcbCanvas {
     /// drift out of sync.
     camera: std::cell::RefCell<Camera>,
     pub pending_fit: std::cell::Cell<Option<Rectangle>>,
-    /// Bounds as last drawn — the view centre for menu zoom.
+    /// Bounds as of the last canvas event — the view centre for menu zoom.
     viewport: std::cell::Cell<Rectangle>,
     pub grid_visible: bool,
     /// Effective (live) PCB GPU-render flag. When true, `draw` skips the CPU
@@ -118,7 +118,7 @@ impl PcbCanvas {
         *self.scene_generation.get_mut() += 1;
     }
 
-    /// Record the canvas bounds (done on every draw; public so tests can
+    /// Record the canvas bounds (done on every canvas event; public so tests can
     /// stand in for a drawn frame).
     pub fn set_viewport(&self, bounds: Rectangle) {
         self.viewport.set(bounds);
@@ -456,6 +456,8 @@ impl canvas::Program<Message> for PcbCanvas {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
+        // Remember the bounds so menu zoom (no cursor) can find the view centre.
+        self.viewport.set(bounds);
         if let Some(target) = self.pending_fit.take() {
             state.pending_fit = Some(target);
         }
@@ -543,7 +545,6 @@ impl canvas::Program<Message> for PcbCanvas {
         bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
-        self.viewport.set(bounds);
         // Single read of the sole camera home; both the background/grid cache
         // and the content cache below project from this one value.
         let camera = self.camera.borrow();

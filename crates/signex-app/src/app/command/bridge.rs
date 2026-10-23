@@ -62,6 +62,7 @@ fn resolve(command: &AppCommandId) -> Option<Message> {
         | "zoom_to_fit" => Message::CanvasEvent(CanvasEvent::FitAll),
         "copy" => Message::Edit(EditMsg::Copy),
         "cycle_selection_mode" => Message::CycleSelectionMode,
+        "next_grid" => Message::Ui(UiMsg::GridCycle),
         "cycle_snap_grid_forward" | "open_grid_picker" => Message::Ui(UiMsg::GridPickerOpen),
         "cycle_unit" => Message::Ui(UiMsg::UnitCycled),
         "cycle_wire_bus_graphic_mode" => Message::Tool(ToolMessage::CycleDrawMode),
@@ -313,10 +314,9 @@ mod tests {
     ///   `place_global_label`, `place_hierarchical_label`,
     ///   `repeat_last_item`, `rubber_stamp_copy`). A feature, not an arm.
     ///   This is most of what is left. It also covers ids whose obvious
-    ///   target turns out to be a STUB: `next_grid` looks wirable to
-    ///   `Ui(GridCycle)`, but that handler only calls `clear_bg_cache()`
-    ///   and cycles nothing, so the arm would trade a logged warning for
-    ///   a silent no-op. Read the handler body, not just its existence.
+    ///   target turns out to be a STUB, where an arm would trade a logged
+    ///   warning for a silent no-op. Read the handler body, not just its
+    ///   existence.
     /// - **needs an argument** — the target `Message` carries data this
     ///   entry point cannot supply. `select_expand_connection` wants
     ///   `SelectionRequest::SelectConnected { world_x, world_y }`, and a
@@ -345,7 +345,7 @@ mod tests {
         "find_previous", "find_similar_objects", "highlight_net_under_cursor",
         "highlight_related_net_objects", "import_graphics", "leave_sheet", "measure_distance",
         "move_object", "navigate_up_hierarchy", "next_document_tab",
-        "next_grid", "next_highlighted_net_item", "next_sheet", "open_datasheet",
+        "next_highlighted_net_item", "next_sheet", "open_datasheet",
         "place_design_block",
         "place_global_label", "place_hierarchical_label", "place_junction",
         "place_power_symbol",
