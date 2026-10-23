@@ -119,10 +119,10 @@ mod library_git_recovery;
 #[path = "regression/start_screen.rs"]
 mod start_screen;
 
-#[path = "regression/idle_cursor_move.rs"]
-mod idle_cursor_move;
 #[path = "regression/dead_schematic_controls.rs"]
 mod dead_schematic_controls;
+#[path = "regression/idle_cursor_move.rs"]
+mod idle_cursor_move;
 #[path = "regression/save_as_by_document_kind.rs"]
 mod save_as_by_document_kind;
 #[path = "regression/stable_addressing.rs"]
