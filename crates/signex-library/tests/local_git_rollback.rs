@@ -1,7 +1,8 @@
 //! Issue #831 — a failed encode or write must leave the in-memory
 //! `LibraryFile` and the `.snxlib` on disk untouched. A failed git commit
-//! must NOT roll the edit back: it is kept (memory == disk), a warning is
-//! surfaced, and the next successful commit includes it.
+//! must NOT roll the edit back: it is kept (memory == disk) and logged. Until
+//! the next library commit the git index holds exactly HEAD's `.snxlib`, so a
+//! commit through any other path never stores the uncommitted edit.
 
 #![cfg(feature = "local-git")]
 
@@ -133,71 +134,26 @@ fn head_blob(root: &Path, rel: &str) -> Option<git2::Oid> {
     tree.get_path(Path::new(rel)).ok().map(|e| e.id())
 }
 
-/// The index must hold either the last committed content or the content
-/// on disk — never a third state (a rolled-back edit).
-fn assert_index_agrees_with_disk(root: &Path, file: &Path) {
+/// Policy: an uncommitted library edit lives on disk and in memory only.
+/// The on-disk index never stages it, so a commit through ANY other path
+/// stores HEAD's `.snxlib`; only the next library commit (which re-adds the
+/// file) picks the edit up.
+fn assert_index_is_head(root: &Path, file: &Path) {
     let rel = file.file_name().unwrap().to_str().unwrap();
-    let disk =
-        git2::Oid::hash_object(git2::ObjectType::Blob, &std::fs::read(file).unwrap()).unwrap();
-    let staged = index_blob(root, rel);
-    assert!(
-        staged == Some(disk) || staged == head_blob(root, rel),
-        "index stages content that is neither HEAD nor disk"
-    );
-}
-
-#[test]
-fn failed_commit_keeps_the_edit_and_warns() {
-    let dir = tempfile::tempdir().unwrap();
-    let (file, _, adapter) = init(&dir);
-    let root = dir.path().join("Rb");
-    adapter.add_library_class(class("res"), "add res").unwrap();
-
-    let head = root.join(".git").join("HEAD");
-    let good_head = std::fs::read(&head).unwrap();
-    std::fs::write(&head, b"garbage\n").unwrap();
-    adapter
-        .add_library_class(class("cap"), "add cap")
-        .expect("a commit failure must not reject the edit");
     assert_eq!(
-        disk_classes(&file),
-        vec!["res", "cap"],
-        "edit stays on disk"
+        index_blob(root, rel),
+        head_blob(root, rel),
+        "index must hold exactly HEAD's .snxlib while an edit is uncommitted"
     );
-    assert_eq!(memory_classes(&adapter), disk_classes(&file));
-    let warnings = adapter.take_commit_warnings();
-    assert_eq!(warnings.len(), 1);
-    assert!(warnings[0].starts_with("saved, but the git commit failed:"));
-    assert!(warnings[0].ends_with("it will be included in the next commit"));
-    assert_index_agrees_with_disk(&root, &file);
-
-    std::fs::write(&head, good_head).unwrap();
-    adapter.add_library_class(class("ind"), "add ind").unwrap();
-    assert!(adapter.take_commit_warnings().is_empty());
-    assert_eq!(disk_classes(&file), vec!["res", "cap", "ind"]);
 }
 
-#[test]
-fn index_lock_keeps_edit_and_next_commit_includes_both() {
-    let dir = tempfile::tempdir().unwrap();
-    let (file, _, adapter) = init(&dir);
-    let root = dir.path().join("Rb");
-    adapter.add_library_class(class("res"), "add res").unwrap();
+fn head_oid(root: &Path) -> git2::Oid {
+    let repo = git2::Repository::open(root).unwrap();
+    repo.head().unwrap().peel_to_commit().unwrap().id()
+}
 
-    let lock = root.join(".git").join("index.lock");
-    std::fs::write(&lock, b"").unwrap();
-    adapter.add_library_class(class("cap"), "add cap").unwrap();
-    assert_eq!(disk_classes(&file), vec!["res", "cap"]);
-    assert_eq!(memory_classes(&adapter), disk_classes(&file));
-    assert_eq!(adapter.take_commit_warnings().len(), 1);
-    assert_index_agrees_with_disk(&root, &file);
-
-    std::fs::remove_file(&lock).unwrap();
-    adapter.add_library_class(class("ind"), "add ind").unwrap();
-    assert!(adapter.take_commit_warnings().is_empty());
-    assert_eq!(memory_classes(&adapter), disk_classes(&file));
-    // HEAD's `.snxlib` carries both the held-back and the new edit.
-    let repo = git2::Repository::open(&root).unwrap();
+fn head_classes(root: &Path) -> Vec<String> {
+    let repo = git2::Repository::open(root).unwrap();
     let tree = repo
         .head()
         .unwrap()
@@ -208,14 +164,117 @@ fn index_lock_keeps_edit_and_next_commit_includes_both() {
     let blob = repo
         .find_blob(tree.get_path(Path::new("Rb.snxlib")).unwrap().id())
         .unwrap();
-    let committed = LibraryFile::parse(std::str::from_utf8(blob.content()).unwrap()).unwrap();
-    let keys: Vec<_> = committed
-        .manifest
-        .classes
-        .into_iter()
-        .map(|c| c.key)
-        .collect();
-    assert_eq!(keys, vec!["res", "cap", "ind"]);
+    let lf = LibraryFile::parse(std::str::from_utf8(blob.content()).unwrap()).unwrap();
+    lf.manifest.classes.into_iter().map(|c| c.key).collect()
+}
+
+fn head_message(root: &Path) -> String {
+    let repo = git2::Repository::open(root).unwrap();
+    let commit = repo.head().unwrap().peel_to_commit().unwrap();
+    commit.message().unwrap().to_string()
+}
+
+/// Make the next `repo.commit` fail AFTER the index was staged: a lock file
+/// on the branch ref. Returns the lock path; remove it to repair.
+fn lock_branch_ref(root: &Path) -> PathBuf {
+    let head = std::fs::read_to_string(root.join(".git").join("HEAD")).unwrap();
+    let branch_ref = head.trim().strip_prefix("ref: ").unwrap().to_string();
+    let lock = root.join(".git").join(format!("{branch_ref}.lock"));
+    std::fs::write(&lock, b"").unwrap();
+    lock
+}
+
+/// Commit an unrelated file through the adapter's generic commit path.
+fn commit_other_file(adapter: &LocalGitAdapter, root: &Path, msg: &str) {
+    let other = root.join("notes.txt");
+    std::fs::write(&other, msg).unwrap();
+    adapter.commit_external_change(&other, msg).unwrap();
+}
+
+#[test]
+fn late_commit_failure_keeps_edit_unstaged_and_other_commits_exclude_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, _, adapter) = init(&dir);
+    let root = dir.path().join("Rb");
+    adapter.add_library_class(class("res"), "add res").unwrap();
+    let head_before = head_oid(&root);
+
+    let lock = lock_branch_ref(&root);
+    adapter
+        .add_library_class(class("cap"), "add cap")
+        .expect("a commit failure must not reject the edit");
+    assert_eq!(disk_classes(&file), vec!["res", "cap"]);
+    assert_eq!(memory_classes(&adapter), disk_classes(&file));
+    std::fs::remove_file(&lock).unwrap();
+    assert_eq!(head_oid(&root), head_before, "HEAD must not move");
+    assert_index_is_head(&root, &file);
+
+    // Another path's commit must not sweep the library edit in.
+    commit_other_file(&adapter, &root, "unrelated");
+    assert_eq!(head_message(&root).trim(), "unrelated");
+    assert_eq!(head_classes(&root), vec!["res"]);
+
+    // The next library commit stores the current disk content.
+    adapter.add_library_class(class("ind"), "add ind").unwrap();
+    assert_eq!(head_classes(&root), vec!["res", "cap", "ind"]);
+}
+
+#[test]
+fn corrupt_head_keeps_edit_and_next_library_commit_includes_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, _, adapter) = init(&dir);
+    let root = dir.path().join("Rb");
+    adapter.add_library_class(class("res"), "add res").unwrap();
+    let head_before = head_oid(&root);
+
+    let head = root.join(".git").join("HEAD");
+    let good_head = std::fs::read(&head).unwrap();
+    std::fs::write(&head, b"garbage\n").unwrap();
+    adapter
+        .add_library_class(class("cap"), "add cap")
+        .expect("a commit failure must not reject the edit");
+    assert_eq!(disk_classes(&file), vec!["res", "cap"]);
+    assert_eq!(memory_classes(&adapter), disk_classes(&file));
+
+    std::fs::write(&head, good_head).unwrap();
+    assert_eq!(head_oid(&root), head_before);
+    assert_index_is_head(&root, &file);
+    commit_other_file(&adapter, &root, "unrelated");
+    assert_eq!(head_classes(&root), vec!["res"]);
+    adapter.add_library_class(class("ind"), "add ind").unwrap();
+    assert_eq!(head_classes(&root), vec!["res", "cap", "ind"]);
+}
+
+#[test]
+fn two_failures_in_a_row_never_store_a_stale_snxlib() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, _, adapter) = init(&dir);
+    let root = dir.path().join("Rb");
+    adapter.add_library_class(class("res"), "add res").unwrap();
+
+    // Failure 1: late (branch ref locked after staging).
+    let ref_lock = lock_branch_ref(&root);
+    adapter.add_library_class(class("cap"), "add cap").unwrap();
+    std::fs::remove_file(&ref_lock).unwrap();
+    assert_index_is_head(&root, &file);
+
+    // Failure 2: early (index.lock).
+    let lock = root.join(".git").join("index.lock");
+    std::fs::write(&lock, b"").unwrap();
+    adapter.add_library_class(class("ind"), "add ind").unwrap();
+    std::fs::remove_file(&lock).unwrap();
+    assert_eq!(disk_classes(&file), vec!["res", "cap", "ind"]);
+    assert_eq!(memory_classes(&adapter), disk_classes(&file));
+    assert_index_is_head(&root, &file);
+
+    // A commit through another path: HEAD's .snxlib is still the last
+    // committed one, never an intermediate.
+    commit_other_file(&adapter, &root, "unrelated");
+    assert_eq!(head_classes(&root), vec!["res"]);
+
+    adapter.add_library_class(class("x"), "add x").unwrap();
+    assert_eq!(head_classes(&root), vec!["res", "cap", "ind", "x"]);
+    assert_eq!(head_message(&root).trim(), "add x");
 }
 
 #[test]

@@ -215,6 +215,19 @@ impl LocalGitAdapter {
         let sig = git2::Signature::now(&sig_name, &sig_email)
             .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
 
+        // Resolve the parent commit FIRST, before the index is touched. An
+        // unborn HEAD (fresh repo, no commits yet) is the only legitimate
+        // "no parent" case — every other error (corrupt ref, locked ref)
+        // propagates so we don't silently produce an orphan commit on a
+        // broken repo, and nothing has been staged yet when it does.
+        let parent = match repo.head() {
+            Ok(h) => h
+                .peel_to_commit()
+                .map_err(|e| LibraryError::Backend(format!("git peel to commit: {e}")))
+                .map(Some)?,
+            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => None,
+            Err(e) => return Err(LibraryError::Backend(format!("git head: {e}"))),
+        };
         let mut index = repo
             .index()
             .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
@@ -224,34 +237,25 @@ impl LocalGitAdapter {
         index
             .write()
             .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
-        let tree_oid = index
-            .write_tree()
-            .map_err(|e| LibraryError::Backend(format!("git write tree: {e}")))?;
-        let tree = repo
-            .find_tree(tree_oid)
-            .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
-
-        // Resolve the parent commit. An unborn HEAD (fresh repo, no commits
-        // yet) is the only legitimate "no parent" case — every other error
-        // (corrupt ref, locked ref) propagates so we don't silently produce
-        // an orphan commit on a broken repo.
-        let parent = match repo.head() {
-            Ok(h) => h
-                .peel_to_commit()
-                .map_err(|e| LibraryError::Backend(format!("git peel to commit: {e}")))
-                .map(Some)?,
-            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => None,
-            Err(e) => return Err(LibraryError::Backend(format!("git head: {e}"))),
-        };
-        let parents: Vec<&git2::Commit> = parent.as_ref().map(|c| vec![c]).unwrap_or_default();
         let commit_message = if message.is_empty() {
             fallback_message.to_string()
         } else {
             message.to_string()
         };
-        repo.commit(Some("HEAD"), &sig, &sig, &commit_message, &tree, &parents)
-            .map_err(|e| LibraryError::Backend(format!("git commit: {e}")))?;
-        Ok(())
+        let committed = commit_staged_index(&repo, &mut index, &sig, &commit_message, &parent);
+        if committed.is_err() {
+            // The commit failed after `rel_path` reached the on-disk index.
+            // Put HEAD's version back so a later commit through ANY path
+            // stores HEAD's content for this file, never an orphaned edit.
+            if let Err(e) = restore_index_entry(&mut index, rel_path, parent.as_ref()) {
+                tracing::error!(
+                    target: "signex::library",
+                    path = rel_path,
+                    "could not unstage {rel_path} after a failed commit: {e}"
+                );
+            }
+        }
+        committed
     }
 
     // ── Table helpers ──────────────────────────────────────────────────────
@@ -298,6 +302,9 @@ impl LocalGitAdapter {
             .library_file
             .write()
             .map_err(|_| LibraryError::Backend("library_file write lock poisoned".into()))?;
+        // Resolve the manifest path before any write: nothing after the
+        // atomic write below may return an error.
+        let rel = self.snxlib_rel_path()?;
         // #831: edit a clone. An encode or write failure discards it, so
         // memory and the `.snxlib` on disk stay exactly as they were.
         let mut candidate = guard.clone();
@@ -306,46 +313,33 @@ impl LocalGitAdapter {
         }
         // Encode once; the same bytes are written below.
         let text = candidate.write()?;
-        // TODO(#822): route this write through `note_own_write` once it lands.
+        // TODO(#822): route this write through `note_own_write` once it lands,
+        // and run `reload_if_stale` before `guard.clone()` above so the edit
+        // is applied to the freshest on-disk content.
         // HI-6: atomic write — never half-write the manifest.
         signex_types::atomic_io::atomic_write(&self.file_path, text.as_bytes())?;
         // Disk now holds the edit, so memory takes it too. A failed commit
         // below must not undo it: memory == disk is the invariant.
         *guard = candidate;
-        let rel = self.snxlib_rel_path()?;
         if let Err(commit_err) = self.commit_path(&rel, message, fallback) {
             self.record_commit_warning(&commit_err);
         }
         Ok(())
     }
 
-    /// The edit is saved but its commit failed. Nothing is rolled back
-    /// (`add_path` restages the whole file, so the next successful commit
-    /// includes this edit); surface it to the Messages panel via the log
-    /// bridge and keep it for [`Self::take_commit_warnings`].
+    /// The edit is saved but its commit failed. Nothing is rolled back on
+    /// disk or in memory; `commit_path` has already put HEAD's `.snxlib`
+    /// back in the index. Other commit paths only stage their own file, so
+    /// the edit is picked up by the next library commit, which re-adds the
+    /// `.snxlib` from disk. Surface it to the Messages panel via the log
+    /// bridge.
     fn record_commit_warning(&self, commit_err: &LibraryError) {
-        let text = format!(
-            "saved, but the git commit failed: {commit_err}; it will be included in the next commit"
-        );
         tracing::warn!(
             target: "signex::library",
             path = %self.file_path.display(),
-            "{text}"
+            "saved, but the git commit failed: {commit_err}; \
+             it will be included in the next library commit"
         );
-        self.commit_warnings
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .push(text);
-    }
-
-    /// Drain the warnings from edits that were saved but not committed.
-    pub fn take_commit_warnings(&self) -> Vec<String> {
-        std::mem::take(
-            &mut *self
-                .commit_warnings
-                .lock()
-                .unwrap_or_else(|e| e.into_inner()),
-        )
     }
 
     /// Read the table named `table` as a snapshot of [`ComponentRow`]s,
@@ -601,4 +595,55 @@ fn primitive_name_in_envelope(
             )))
         }
     }
+}
+
+/// Write the tree for the staged `index` and commit it on `HEAD`.
+fn commit_staged_index(
+    repo: &git2::Repository,
+    index: &mut git2::Index,
+    sig: &git2::Signature<'_>,
+    message: &str,
+    parent: &Option<git2::Commit<'_>>,
+) -> Result<(), LibraryError> {
+    let tree_oid = index
+        .write_tree()
+        .map_err(|e| LibraryError::Backend(format!("git write tree: {e}")))?;
+    let tree = repo
+        .find_tree(tree_oid)
+        .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
+    let parents: Vec<&git2::Commit> = parent.iter().collect();
+    repo.commit(Some("HEAD"), sig, sig, message, &tree, &parents)
+        .map_err(|e| LibraryError::Backend(format!("git commit: {e}")))?;
+    Ok(())
+}
+
+/// Reset the index entry for `rel_path` to HEAD's blob, or drop it when HEAD
+/// has none, then persist the index.
+fn restore_index_entry(
+    index: &mut git2::Index,
+    rel_path: &str,
+    parent: Option<&git2::Commit<'_>>,
+) -> Result<(), git2::Error> {
+    let head_entry = match parent {
+        Some(commit) => commit.tree()?.get_path(Path::new(rel_path)).ok(),
+        None => None,
+    };
+    match head_entry {
+        Some(entry) => index.add(&git2::IndexEntry {
+            ctime: git2::IndexTime::new(0, 0),
+            mtime: git2::IndexTime::new(0, 0),
+            dev: 0,
+            ino: 0,
+            mode: entry.filemode() as u32,
+            uid: 0,
+            gid: 0,
+            file_size: 0,
+            id: entry.id(),
+            flags: 0,
+            flags_extended: 0,
+            path: rel_path.as_bytes().to_vec(),
+        })?,
+        None => index.remove_path(Path::new(rel_path))?,
+    }
+    index.write()
 }
