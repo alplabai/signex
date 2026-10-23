@@ -11,7 +11,7 @@ use super::{
     SettingsMsg,
 };
 
-/// Top-level library message — folded into [`Message::Library`].
+/// Top-level library message — folded into [`Message::Library`](crate::app::Message::Library).
 #[derive(Debug, Clone)]
 pub enum LibraryMessage {
     /// File ▸ Library ▸ Open Library… — runs `rfd::AsyncFileDialog`

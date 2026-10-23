@@ -59,7 +59,7 @@ pub struct InteractionState {
     pub grid_picker: Option<crate::app::GridPickerState>,
     /// Document-tab right-click menu state. Anchored at the right-click
     /// coordinates inside the tab strip; carries the index of the
-    /// clicked tab so per-tab actions ("Close [filename]") resolve
+    /// clicked tab so per-tab actions ("Close \[filename\]") resolve
     /// against the correct entry. Mutually exclusive with
     /// `context_menu` and `project_tree_context_menu` — opening one
     /// dismisses the others.
