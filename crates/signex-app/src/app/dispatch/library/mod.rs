@@ -53,12 +53,27 @@ use recovery::{
 };
 
 impl Signex {
-    /// Every library arm may queue a git commit (`commit_save_to_project_git`)
-    /// or log a diagnostic; `finish_update` drains the queue and republishes
-    /// the Messages panel, so run it after any of them rather than relying on
-    /// an unrelated later message to do it (#111).
+    /// Library arms that can queue a git commit (a primitive Save) or log a
+    /// diagnostic run `finish_update` so the queue drains and the Messages
+    /// panel republishes in the same frame (#111). Per-event traffic
+    /// (editor cursor / drag ticks, search keystrokes, non-Save primitive
+    /// edits) cannot queue a commit, so it only does the cheap diagnostics
+    /// republish instead of the full `finish_update`.
     pub(crate) fn dispatch_library_message(&mut self, msg: LibraryMessage) -> Task<Message> {
+        let per_event = matches!(
+            &msg,
+            LibraryMessage::EditorEvent { .. }
+                | LibraryMessage::BrowserSearchChanged { .. }
+                | LibraryMessage::PrimitiveEditorEvent {
+                    msg: PrimitiveEdit::Symbol(_) | PrimitiveEdit::Footprint(_),
+                    ..
+                }
+        );
         let task = self.route_library_message(msg);
+        if per_event {
+            self.sync_diagnostics_panel_ctx();
+            return task;
+        }
         Task::batch([task, self.finish_update()])
     }
 

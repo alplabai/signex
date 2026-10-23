@@ -32,12 +32,16 @@ impl Signex {
             // Idle cursor move (the subscription forwards every one): only
             // the cached position changes, so skip the drag handlers and
             // `finish_update`'s per-event work (#111).
-            // The drain + diagnostics republish stay as a cheap safety net
-            // (no-ops when nothing is queued).
+            // Dispatchers that skip `finish_update` leave the panel_ctx
+            // mirrors / History dirty bit stale; the cheap (IO-free)
+            // repair stays here, along with the drain + diagnostics
+            // republish safety net (no-ops when nothing is queued).
             Message::Ui(UiMsg::DragMove(x, y)) if !self.is_layout_drag_active() => {
                 self.interaction_state.last_mouse_pos = (x, y);
+                self.sync_panel_ctx_mirrors();
                 self.sync_diagnostics_panel_ctx();
-                self.drain_pending_git_commits()
+                let history = self.refresh_history_panel_cheap();
+                Task::batch([history, self.drain_pending_git_commits()])
             }
             Message::Ui(msg) => self.dispatch_ui_message(msg),
             // Canvas events keep their own top-level variants (hot path,

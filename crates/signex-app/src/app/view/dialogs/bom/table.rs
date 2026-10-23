@@ -451,7 +451,7 @@ mod tests {
         );
     }
 
-    /// Descending sort reverses the comparison, not the slice, so rows with
+    /// Pins behaviour (not a bug repro): descending sort reverses the comparison, not the slice, so rows with
     /// equal keys keep rollup order in both directions (and the cached
     /// lowercase key makes "Alpha"/"alpha" equal).
     #[test]

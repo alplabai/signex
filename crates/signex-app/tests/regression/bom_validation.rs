@@ -130,3 +130,25 @@ fn export_with_issues_still_writes_and_reports_the_summary() {
     assert!(notice.detail.contains("1 error, 1 warning"), "{notice:?}");
     std::fs::remove_dir_all(&dir).expect("cleanup");
 }
+
+/// #111 — a BOM column resize counts as an active layout drag, so a cursor
+/// move gets the drag branch and a release (`UiMsg::DragEnd`) clears it.
+#[test]
+fn drag_end_clears_a_bom_column_resize() {
+    let mut app = app_with_faulty_bom();
+    let _ = app.update(Message::Menu(MenuMessage::ExportBom));
+    let _ = app.update(Message::BomPreview(BomPreviewMsg::ColumnResizeStart(0)));
+    let resizing = |app: &Signex| {
+        app.document_state
+            .bom_preview
+            .as_ref()
+            .is_some_and(|p| p.column_resize.is_some())
+    };
+    assert!(resizing(&app));
+    assert!(app.is_layout_drag_active());
+
+    let _ = app.update(Message::Ui(signex_app::app::UiMsg::DragEnd));
+
+    assert!(!resizing(&app));
+    assert!(!app.is_layout_drag_active());
+}

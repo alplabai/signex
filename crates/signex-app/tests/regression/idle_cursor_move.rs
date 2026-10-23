@@ -2,10 +2,15 @@
 //! (plus the cheap git-drain / diagnostics safety net); an active layout
 //! drag still runs the full drag handling. Handlers that queue a commit or
 //! log an error must not depend on a later idle move to flush them.
+//!
+//! Note: the guard tests below (`only_records_the_position`, `active_panel_drag_still_resizes`,
+//! the drain / diagnostics tests) pin behaviour that must keep holding; the
+//! mirror and history-dirty tests are the ones that reproduce the review bug.
 
 use signex_app::app::{DragTarget, FootprintEditorState, LoadedProject, Message, Signex, UiMsg};
 use signex_app::diagnostics;
 use signex_app::library::messages::{LibraryMessage, PrimitiveEdit};
+use signex_app::menu_bar::MenuMessage;
 use signex_library::{Footprint, FootprintFile};
 use signex_types::project::ProjectData;
 use std::path::Path;
@@ -27,15 +32,29 @@ fn has_diagnostic(app: &Signex, needle: &str) -> bool {
 fn idle_cursor_move_only_records_the_position() {
     let (mut app, _t) = Signex::new();
     assert!(!app.is_layout_drag_active());
-    // `finish_update` mirrors `ui_state.grid_size_mm` into the panel
-    // context; an idle move must not run it, so the sentinel survives.
-    let sentinel = app.ui_state.grid_size_mm + 1.0;
-    app.document_state.panel_ctx.grid_size_mm = sentinel;
-
     idle_move(&mut app);
-
     assert_eq!(app.interaction_state.last_mouse_pos, (12.0, 34.0));
-    assert_eq!(app.document_state.panel_ctx.grid_size_mm, sentinel);
+}
+
+#[test]
+fn idle_cursor_move_repairs_panel_ctx_mirrors_left_stale_by_other_dispatchers() {
+    let (mut app, _t) = Signex::new();
+    let _ = app.update(Message::Menu(MenuMessage::ToggleGrid));
+    idle_move(&mut app);
+    assert_eq!(
+        app.document_state.panel_ctx.grid_visible,
+        app.ui_state.grid_visible
+    );
+}
+
+#[test]
+fn idle_cursor_move_refreshes_the_history_dirty_bit() {
+    let (mut app, _t) = Signex::new();
+    let p = std::path::PathBuf::from("history-dirty.snxsch");
+    app.document_state.history.active_path = Some(p.clone());
+    app.document_state.dirty_paths.insert(p);
+    idle_move(&mut app);
+    assert!(app.document_state.panel_ctx.history.dirty);
 }
 
 #[test]
