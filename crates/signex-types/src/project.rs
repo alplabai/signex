@@ -98,7 +98,7 @@ pub struct SheetEntry {
 /// Forward compatibility is one-directional: `#[serde(default)]` lets an old
 /// file load in a new build, but a key written by a newer build is dropped
 /// on load and missing from the next save. There is no unknown-key bag and
-/// no format/version token.
+/// no format/version token (tracked in #788).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectData {
     pub name: String,

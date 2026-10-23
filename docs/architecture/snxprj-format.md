@@ -51,11 +51,13 @@ These are why leaving it as JSON is defensible now, not why it was chosen:
   handles *old file, new Signex*. The reverse direction loses data:
   `ProjectData` has no `deny_unknown_fields`, no `flatten` catch-all and no
   extras bag, so a key written by a newer Signex is dropped on load and absent
-  on the next save, with no error or warning. The TOML formats preserve
-  unknown keys and unknown TSV columns (#312, #313, #314, #315); `.snxprj` is
-  excluded from that work. **Current position: `.snxprj` accepts unknown-key
-  loss. This is an unreviewed gap, not a deliberate trade-off.** Giving it an
-  unknown-key bag is a follow-up, not part of this document.
+  on the next save, with no error or warning. `.snxsch` and `.snxpcb` preserve unknown
+  keys and unknown TSV columns (#312, #313, #314, #315); `.snxprj` is
+  excluded from that work, and `.snxlib`, `.snxsym` and `.snxfpt` carry a
+  format token but no unknown-key preservation either. **Current position:
+  `.snxprj` accepts unknown-key loss. This is an unreviewed gap, not a
+  deliberate trade-off.** Giving it an unknown-key bag and a version token
+  is tracked in #788.
 - **No format/version manifest.** The TOML envelope gives the other five a
   `format` token that lets an older build refuse a newer file. `.snxprj` has
   none, so an older build cannot tell that it is about to drop fields.
