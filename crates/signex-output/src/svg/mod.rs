@@ -156,26 +156,8 @@ mod tests {
         SheetSnapshot {
             path: PathBuf::from("test.standard_sch"),
             schematic: SchematicSheet {
-                unknown: Default::default(),
-                uuid: Uuid::nil(),
-                version: 0,
-                generator: String::new(),
-                generator_version: String::new(),
                 paper_size: "A4".to_string(),
-                root_sheet_page: "1".to_string(),
-                symbols: vec![],
-                wires: vec![],
-                junctions: vec![],
-                labels: vec![],
-                child_sheets: vec![],
-                no_connects: vec![],
-                text_notes: vec![],
-                buses: vec![],
-                bus_entries: vec![],
-                drawings: vec![],
-                no_erc_directives: vec![],
-                title_block: Default::default(),
-                lib_symbols: Default::default(),
+                ..Default::default()
             },
             sheet_name: "Sheet1".to_string(),
             sheet_number: 1,
@@ -187,11 +169,10 @@ mod tests {
     fn svg_document_is_emitted() {
         let mut sheet = empty_sheet_snapshot();
         sheet.schematic.wires.push(Wire {
-            unknown_columns: Default::default(),
             uuid: Uuid::new_v4(),
-            start: Point::new(0.0, 0.0),
             end: Point::new(25.0, 20.0),
             stroke_width: 0.15,
+            ..Default::default()
         });
         let opts = PdfOptions::default();
         let (w_mm, h_mm) = opts.page_size.dimensions_mm(opts.orientation);

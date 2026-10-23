@@ -415,36 +415,12 @@ mod tests {
         let uuid = uuid::Uuid::new_v4();
         let mut sheet = test_sheet();
         sheet.symbols.push(signex_types::schematic::Symbol {
-            unknown_columns: Default::default(),
             uuid,
             lib_id: "Device:R".to_string(),
             reference: "R1".to_string(),
             value: "10k".to_string(),
-            footprint: String::new(),
-            datasheet: String::new(),
             position: signex_types::schematic::Point::new(0.0, 0.0),
-            rotation: 0.0,
-            mirror_x: false,
-            mirror_y: false,
-            unit: 1,
-            is_power: false,
-            ref_text: None,
-            val_text: None,
-            fields_autoplaced: false,
-            fields_user_placed: false,
-            dnp: false,
-            in_bom: true,
-            on_board: true,
-            exclude_from_sim: false,
-            locked: false,
-            fields: Default::default(),
-            custom_properties: Vec::new(),
-            pin_uuids: Default::default(),
-            instances: Vec::new(),
-            library_id: None,
-            row_id: None,
-            library_version: String::new(),
-            unknown: Default::default(),
+            ..Default::default()
         });
         (Engine::new(sheet).unwrap(), uuid)
     }

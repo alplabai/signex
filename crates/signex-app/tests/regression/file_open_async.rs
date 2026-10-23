@@ -23,26 +23,12 @@ use tempfile::TempDir;
 /// `signex_types::format::tests::empty_sheet`.
 fn empty_schematic_sheet() -> signex_types::schematic::SchematicSheet {
     signex_types::schematic::SchematicSheet {
-        unknown: Default::default(),
         uuid: uuid::Uuid::new_v4(),
         version: 1,
         generator: "signex-test".into(),
         generator_version: "0.9".into(),
         paper_size: "A4".into(),
-        root_sheet_page: "1".into(),
-        symbols: vec![],
-        wires: vec![],
-        junctions: vec![],
-        labels: vec![],
-        child_sheets: vec![],
-        no_connects: vec![],
-        text_notes: vec![],
-        buses: vec![],
-        bus_entries: vec![],
-        drawings: vec![],
-        no_erc_directives: vec![],
-        title_block: Default::default(),
-        lib_symbols: Default::default(),
+        ..Default::default()
     }
 }
 

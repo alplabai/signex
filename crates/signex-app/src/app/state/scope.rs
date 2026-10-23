@@ -20,6 +20,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use super::LoadedProject;
+use crate::app::project_sheets::{normalize_clamped, ownership_reference};
 
 /// How [`path_key_with`] treats case (and, with it, the separator) when it
 /// builds a comparison key.
@@ -166,54 +167,186 @@ pub(crate) fn path_is_under(path: &Path, root: &Path, fold: CaseFold) -> bool {
     Path::new(&path_key).starts_with(Path::new(&root_key))
 }
 
-/// True when `path` belongs to an open project other than `projects[closing]`:
-/// another project's own `.snxprj`, a sheet another project lists or reaches
-/// through its child-sheet graph, or anything under a project nested inside
-/// the closing one's directory. A directory-ancestor test alone cannot tell
-/// projects in the same or nested directories apart.
+/// Comparison keys for ownership: the lexical [`path_key_with`] key of the
+/// NORMALISED path, replaced by the key of its real (canonical) spelling when
+/// the off-thread resolve could find one.
 ///
-/// A sheet the closing project owns is never claimed by directory nesting,
-/// but a sheet listed by several projects counts as claimed by the others so
-/// closing one never discards a document another still has open.
-pub(crate) fn claimed_by_other_project(
-    projects: &[LoadedProject],
-    loaded: &HashMap<PathBuf, Vec<String>>,
-    closing: usize,
-    path: &Path,
-    fold: CaseFold,
-) -> bool {
-    let Some(mine) = projects.get(closing) else {
-        return false;
-    };
-    let key = path_key_with(path, fold);
-    let lists = |p: &LoadedProject| {
-        let dir = p.dir();
-        p.data
-            .sheets
-            .iter()
-            .any(|s| path_key_with(&dir.join(&s.filename), fold) == key)
-    };
-    let other_lists = projects
-        .iter()
-        .enumerate()
-        .any(|(i, p)| i != closing && lists(p));
-    let owner = project_owning_sheet_with(projects, loaded, path, fold);
-    let owned_by_closing = lists(mine) || owner.is_some_and(|o| o.id == mine.id);
-    let owned_by_other = other_lists || owner.is_some_and(|o| o.id != mine.id);
-    if owned_by_other {
-        return true;
+/// Two spellings of one file (a case variant on a case-insensitive volume, a
+/// path through a symlinked directory) have different lexical keys but the
+/// same real path, so ownership compares file identity, not path text. `real`
+/// is filled by the resolve Task (it is disk IO); a path it never saw falls
+/// back to the lexical key.
+///
+/// A sheet's children are resolved against its REAL directory
+/// ([`KeyMap::child_dir`]), so every spelling of a sheet yields the same
+/// child paths and the same keys below it.
+#[derive(Debug, Clone)]
+pub(crate) struct KeyMap {
+    pub(crate) fold: CaseFold,
+    /// Lexical key of a normalised path -> its real path.
+    pub(crate) real: HashMap<String, PathBuf>,
+}
+
+impl Default for KeyMap {
+    fn default() -> Self {
+        Self::lexical(CaseFold::host_default())
     }
-    projects.iter().enumerate().any(|(i, other)| {
-        if i == closing {
-            return false;
+}
+
+impl KeyMap {
+    /// A map with no real paths: every key is lexical.
+    pub(crate) fn lexical(fold: CaseFold) -> Self {
+        Self {
+            fold,
+            real: HashMap::new(),
         }
-        let other_dir = other.dir();
-        path_key_with(&other.path, fold) == key
-            || (!owned_by_closing
-                && path_key_with(other_dir, fold) != path_key_with(mine.dir(), fold)
-                && path_is_under(other_dir, mine.dir(), fold)
-                && path_is_under(path, other_dir, fold))
-    })
+    }
+
+    /// The lexical key of `path`, normalised first.
+    pub(crate) fn lexical_key(&self, path: &Path) -> String {
+        path_key_with(&normalize_clamped(path), self.fold)
+    }
+
+    /// The ownership key of `path`.
+    pub(crate) fn key(&self, path: &Path) -> String {
+        match self.real.get(&self.lexical_key(path)) {
+            Some(real) => path_key_with(real, self.fold),
+            None => self.lexical_key(path),
+        }
+    }
+
+    /// The directory `path`'s child references resolve against: the real
+    /// directory when the resolve found one, else the lexical parent.
+    pub(crate) fn child_dir(&self, path: &Path) -> PathBuf {
+        let real = self.real.get(&self.lexical_key(path));
+        let dir = real
+            .map(PathBuf::as_path)
+            .unwrap_or(path)
+            .parent()
+            .unwrap_or_else(|| Path::new(""));
+        dir.to_path_buf()
+    }
+
+    /// True when the resolve Task has already keyed `path`.
+    pub(crate) fn knows(&self, path: &Path) -> bool {
+        self.real.contains_key(&self.lexical_key(path))
+    }
+}
+
+/// Comparison keys of every sheet `project` reaches: the sheets it lists plus
+/// every child reachable through `by_key`'s references, on normalized paths.
+///
+/// A sheet shared by two projects is in BOTH sets — unlike
+/// [`project_owning_sheet_with`], which keeps one parent per child and so
+/// names a single owner.
+///
+/// Every reference is followed, absolute and `../` alike, through the one
+/// ownership rule ([`ownership_reference`]); containment applies only to
+/// opening a file in the editor. `..` is clamped at the filesystem root and
+/// each key is visited once, so a loop or a `/../..` chain terminates.
+fn reachable_keys(
+    project: &LoadedProject,
+    by_key: &HashMap<String, &Vec<String>>,
+    keys: &KeyMap,
+) -> HashSet<String> {
+    let dir = project.dir();
+    let mut pending: Vec<PathBuf> = project
+        .data
+        .sheets
+        .iter()
+        .map(|s| normalize_clamped(&dir.join(&s.filename)))
+        .collect();
+    let mut reached: HashSet<String> = HashSet::new();
+    while let Some(path) = pending.pop() {
+        let key = keys.key(&path);
+        if !reached.insert(key.clone()) {
+            continue;
+        }
+        let Some(children) = by_key.get(&key) else {
+            continue;
+        };
+        let parent_dir = keys.child_dir(&path);
+        pending.extend(
+            children
+                .iter()
+                .filter_map(|c| ownership_reference(&parent_dir, c)),
+        );
+    }
+    reached
+}
+
+/// Loaded child references keyed on the NORMALISED path, so a sheet opened
+/// through a raw `../b.snxsch` spelling is found by the walk's lookups.
+pub(crate) fn refs_by_key<'a>(
+    loaded: &'a HashMap<PathBuf, Vec<String>>,
+    keys: &KeyMap,
+) -> HashMap<String, &'a Vec<String>> {
+    loaded
+        .iter()
+        .map(|(path, refs)| (keys.key(path), refs))
+        .collect()
+}
+
+/// What every open project's ownership walk reaches, computed once per close.
+///
+/// A file is reached by a project when the project lists it or follows a
+/// reference to it. That is the only evidence of ownership the close flow
+/// accepts: where a file sits, which tab shows it or a library mount proves
+/// nothing.
+pub(crate) struct ReachSets {
+    per_project: Vec<HashSet<String>>,
+    keys: KeyMap,
+}
+
+impl ReachSets {
+    /// Lexical keys under `fold`; no disk was consulted.
+    #[cfg(test)]
+    pub(crate) fn new(
+        projects: &[LoadedProject],
+        loaded: &HashMap<PathBuf, Vec<String>>,
+        fold: CaseFold,
+    ) -> Self {
+        Self::with_keys(projects, loaded, &KeyMap::lexical(fold))
+    }
+
+    /// Keys through `keys`, so file identity (not path text) decides.
+    pub(crate) fn with_keys(
+        projects: &[LoadedProject],
+        loaded: &HashMap<PathBuf, Vec<String>>,
+        keys: &KeyMap,
+    ) -> Self {
+        let by_key = refs_by_key(loaded, keys);
+        Self {
+            per_project: projects
+                .iter()
+                .map(|p| reachable_keys(p, &by_key, keys))
+                .collect(),
+            keys: keys.clone(),
+        }
+    }
+
+    /// Every key some open project reaches.
+    pub(crate) fn all_keys(&self) -> impl Iterator<Item = &String> {
+        self.per_project.iter().flatten()
+    }
+
+    /// True when `projects[project]` reaches `path`.
+    pub(crate) fn reached_by(&self, project: usize, path: &Path) -> bool {
+        let key = self.keys.key(path);
+        self.per_project
+            .get(project)
+            .is_some_and(|set| set.contains(&key))
+    }
+
+    /// True when any open project other than `projects[closing]` reaches
+    /// `path`.
+    pub(crate) fn reached_by_other(&self, closing: usize, path: &Path) -> bool {
+        let key = self.keys.key(path);
+        self.per_project
+            .iter()
+            .enumerate()
+            .any(|(i, set)| i != closing && set.contains(&key))
+    }
 }
 
 #[cfg(test)]
@@ -478,29 +611,30 @@ mod tests {
         p
     }
 
-    fn claimed(
+    /// Is `path` reached by a project other than A (index 0)?
+    fn other_reaches(
         projects: &[LoadedProject],
         open: &HashMap<PathBuf, Vec<String>>,
         path: &str,
         fold: CaseFold,
     ) -> bool {
-        claimed_by_other_project(projects, open, 0, &PathBuf::from(native(path)), fold)
+        ReachSets::new(projects, open, fold).reached_by_other(0, &PathBuf::from(native(path)))
     }
 
     #[test]
-    fn child_sheet_of_a_same_directory_project_is_claimed() {
+    fn child_sheet_of_a_same_directory_project_is_reached_by_the_other() {
         let projects = vec![
             project_at(1, "/w/A.snxprj", &["a.snxsch"]),
             project_at(2, "/w/B.snxprj", &["b.snxsch"]),
         ];
         let open = loaded(&[("/w/b.snxsch", &["b_child.snxsch"])]);
-        assert!(claimed(
+        assert!(other_reaches(
             &projects,
             &open,
             "/w/b_child.snxsch",
             CaseFold::Preserve
         ));
-        assert!(!claimed(
+        assert!(!other_reaches(
             &projects,
             &open,
             "/w/a.snxsch",
@@ -509,14 +643,143 @@ mod tests {
     }
 
     #[test]
-    fn other_projects_sheet_is_claimed_across_case_on_a_folding_host() {
+    fn a_child_shared_by_two_projects_outside_both_directories_is_reached_by_both() {
+        let projects = vec![
+            project_at(1, "/w/A/A.snxprj", &["a.snxsch"]),
+            project_at(2, "/w/B/B.snxprj", &["b.snxsch"]),
+        ];
+        let shared = native("/w/shared/s.snxsch");
+        let open = loaded(&[
+            ("/w/A/a.snxsch", &[shared.as_str()]),
+            ("/w/B/b.snxsch", &[shared.as_str()]),
+        ]);
+        let reach = ReachSets::new(&projects, &open, CaseFold::Preserve);
+        let s = PathBuf::from(&shared);
+        assert!(reach.reached_by(0, &s));
+        assert!(reach.reached_by_other(0, &s));
+    }
+
+    #[test]
+    fn a_dotdot_cycle_in_the_references_terminates() {
+        let projects = vec![project_at(1, "/w/A/A.snxprj", &["a.snxsch"])];
+        let open = loaded(&[("/w/A/a.snxsch", &["../A/a.snxsch"])]);
+        let reach = ReachSets::new(&projects, &open, CaseFold::Preserve);
+        assert!(reach.reached_by(0, &PathBuf::from(native("/w/A/a.snxsch"))));
+    }
+
+    #[test]
+    fn a_child_reached_through_an_escaping_reference_is_reached_by_the_other() {
+        // B's sheet reaches `../A/s.snxsch`, which references `g.snxsch`.
+        let projects = vec![
+            project_at(1, "/w/A/A.snxprj", &["a.snxsch"]),
+            project_at(2, "/w/B/B.snxprj", &["b.snxsch"]),
+        ];
+        let open = loaded(&[
+            ("/w/B/b.snxsch", &["../A/s.snxsch"]),
+            ("/w/A/s.snxsch", &["g.snxsch"]),
+        ]);
+        assert!(other_reaches(
+            &projects,
+            &open,
+            "/w/A/g.snxsch",
+            CaseFold::Preserve
+        ));
+    }
+
+    #[test]
+    fn a_child_reached_through_an_absolute_reference_is_reached_by_the_other() {
+        let projects = vec![
+            project_at(1, "/w/A/A.snxprj", &["a.snxsch"]),
+            project_at(2, "/w/B/B.snxprj", &["b.snxsch"]),
+        ];
+        let s = native("/w/A/s.snxsch");
+        let open = loaded(&[
+            ("/w/B/b.snxsch", &[s.as_str()]),
+            ("/w/A/s.snxsch", &["g.snxsch"]),
+        ]);
+        assert!(other_reaches(
+            &projects,
+            &open,
+            "/w/A/g.snxsch",
+            CaseFold::Preserve
+        ));
+    }
+
+    #[test]
+    fn a_chain_of_parent_references_past_the_root_terminates_and_is_followed() {
+        let projects = vec![
+            project_at(1, "/w/A/A.snxprj", &["a.snxsch"]),
+            project_at(2, "/w/B/B.snxprj", &["b.snxsch"]),
+        ];
+        // `/../..` clamps to `/`: the first reference folds onto b itself, the
+        // second lands on `/w/x.snxsch`.
+        let open = loaded(&[(
+            "/w/B/b.snxsch",
+            &["/../../w/B/b.snxsch", "../../../../../w/x.snxsch"],
+        )]);
+        assert!(other_reaches(
+            &projects,
+            &open,
+            "/w/x.snxsch",
+            CaseFold::Preserve
+        ));
+    }
+
+    #[test]
+    fn an_engine_loaded_through_a_raw_dotdot_path_is_found_by_the_walk() {
+        // B lists `../b.snxsch`; its engine was opened under the RAW spelling
+        // `/w/B/../b.snxsch` and holds a child `c`. The walk normalises its
+        // lookups, so the loaded map must be keyed the same way.
+        let projects = vec![
+            project_at(1, "/w/A/A.snxprj", &["a.snxsch"]),
+            project_at(2, "/w/B/B.snxprj", &["../b.snxsch"]),
+        ];
+        let open = loaded(&[("/w/B/../b.snxsch", &["c.snxsch"])]);
+        assert!(other_reaches(
+            &projects,
+            &open,
+            "/w/c.snxsch",
+            CaseFold::Preserve
+        ));
+    }
+
+    #[test]
+    fn a_nested_projects_unreached_file_is_reached_by_nobody() {
+        // Where a file sits proves nothing: a draft under a nested project's
+        // folder is reached by no project.
+        let projects = vec![
+            project_at(1, "/w/A/A.snxprj", &["a.snxsch"]),
+            project_at(2, "/w/A/N/N.snxprj", &["n.snxsch"]),
+        ];
+        let reach = ReachSets::new(&projects, &HashMap::new(), CaseFold::Preserve);
+        let draft = PathBuf::from(native("/w/A/N/draft.snxsch"));
+        assert!(!reach.reached_by(0, &draft));
+        assert!(!reach.reached_by_other(0, &draft));
+    }
+
+    #[test]
+    fn normalize_clamped_stops_at_the_root_but_keeps_a_relative_head() {
+        assert_eq!(
+            normalize_clamped(Path::new(&native("/../../x"))),
+            PathBuf::from(native("/x"))
+        );
+        assert_eq!(normalize_clamped(Path::new("../x")), PathBuf::from("../x"));
+    }
+
+    #[test]
+    fn other_projects_sheet_is_reached_across_case_on_a_folding_host() {
         let projects = vec![
             project_at(1, "/w/A.snxprj", &["a.snxsch"]),
             project_at(2, "/w/B.snxprj", &["B.snxsch"]),
         ];
         let open = HashMap::new();
-        assert!(claimed(&projects, &open, "/w/b.snxsch", CaseFold::Fold));
-        assert!(!claimed(
+        assert!(other_reaches(
+            &projects,
+            &open,
+            "/w/b.snxsch",
+            CaseFold::Fold
+        ));
+        assert!(!other_reaches(
             &projects,
             &open,
             "/w/b.snxsch",
@@ -525,37 +788,14 @@ mod tests {
     }
 
     #[test]
-    fn a_nested_project_does_not_override_the_closing_projects_own_listing() {
-        let listed = native("sub/x.snxsch");
-        let projects = vec![
-            project_at(1, "/w/A.snxprj", &[listed.as_str()]),
-            project_at(2, "/w/sub/B.snxprj", &["b.snxsch"]),
-        ];
-        let open = HashMap::new();
-        assert!(!claimed(
-            &projects,
-            &open,
-            "/w/sub/x.snxsch",
-            CaseFold::Preserve
-        ));
-        assert!(claimed(
-            &projects,
-            &open,
-            "/w/sub/other.snxsch",
-            CaseFold::Preserve
-        ));
-    }
-
-    #[test]
-    fn a_sheet_listed_by_two_projects_is_claimed_by_the_other() {
+    fn a_sheet_listed_by_two_projects_is_reached_by_the_other() {
         let projects = vec![
             project_at(1, "/w/A.snxprj", &["shared.snxsch"]),
             project_at(2, "/w/B.snxprj", &["shared.snxsch"]),
         ];
-        let open = HashMap::new();
-        assert!(claimed(
+        assert!(other_reaches(
             &projects,
-            &open,
+            &HashMap::new(),
             "/w/shared.snxsch",
             CaseFold::Preserve
         ));
