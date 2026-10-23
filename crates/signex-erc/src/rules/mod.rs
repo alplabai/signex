@@ -8,6 +8,8 @@
 
 mod ambiguous_label_anchor;
 pub(crate) use ambiguous_label_anchor::ambiguous_label_anchor;
+mod pin_type_conflict;
+pub(crate) use pin_type_conflict::pin_type_conflict;
 
 use std::collections::HashMap;
 

@@ -152,6 +152,18 @@ pub struct ErcSheetPin {
 // ErcNet  (derived — not directly from the snapshot)
 // ---------------------------------------------------------------------------
 
+/// A pin on an [`ErcNet`], with enough identity to point a diagnostic at it.
+#[derive(Debug, Clone)]
+pub struct ErcNetPin {
+    /// The symbol that owns the pin.
+    pub symbol: Uuid,
+    /// That symbol's reference designator, for messages.
+    pub reference: String,
+    /// World-space position of the pin tip.
+    pub position: Point,
+    pub direction: PinDirection,
+}
+
 /// A logical net: the set of pins and labels connected by wires/junctions.
 /// Derived during projection via union-find over wire endpoints.
 #[derive(Debug, Clone)]
@@ -163,7 +175,11 @@ pub struct ErcNet {
     /// DSL: `net.class == "i2c"`.
     pub class: String,
     /// Electrical types of every pin on this net. DSL: `has_pin_kind(...)`.
+    /// Always the `direction` of each entry of [`ErcNet::pins`], in order.
     pub pin_types: Vec<PinDirection>,
+    /// The same pins with the symbol and position that make a finding on one
+    /// of them locatable.
+    pub pins: Vec<ErcNetPin>,
     /// `true` if any pin is Output / PowerOutput / ThreeStatable /
     /// OpenDrainLow / OpenDrainHigh. DSL: `has_driver()`.
     pub has_driver: bool,
@@ -470,7 +486,7 @@ fn summarize_nets(
 
     // Group connected (non-no-connect) pins by net root.
     // No-connect pins are skipped — they're isolated by design.
-    let mut net_pins: HashMap<(i64, i64), Vec<PinDirection>> = HashMap::new();
+    let mut net_pins: HashMap<(i64, i64), Vec<ErcNetPin>> = HashMap::new();
     for sym in symbols {
         for pin in &sym.pins {
             // Only wire- or label-connected pins belong to a logical net.
@@ -482,7 +498,12 @@ fn summarize_nets(
             // re-probing, so we include everything that's "connected" — the
             // no-connect case creates a small singleton net that harms nothing.
             let root = conn.root_of(&pin.world_pos);
-            net_pins.entry(root).or_default().push(pin.electrical_type);
+            net_pins.entry(root).or_default().push(ErcNetPin {
+                symbol: sym.uuid,
+                reference: sym.reference.clone(),
+                position: pin.world_pos,
+                direction: pin.electrical_type,
+            });
         }
     }
 
@@ -523,13 +544,15 @@ fn summarize_nets(
                 .map(|i| name[..i].to_ascii_lowercase())
                 .unwrap_or_else(|| name.to_ascii_lowercase());
 
-            let has_driver = pins.iter().any(|t| DRIVING.contains(t));
-            let has_pullup = pins.contains(&PinDirection::Passive);
+            let pin_types: Vec<PinDirection> = pins.iter().map(|p| p.direction).collect();
+            let has_driver = pin_types.iter().any(|t| DRIVING.contains(t));
+            let has_pullup = pin_types.contains(&PinDirection::Passive);
 
             ErcNet {
                 name,
                 class,
-                pin_types: pins.to_vec(),
+                pin_types,
+                pins: pins.to_vec(),
                 has_driver,
                 has_pullup,
             }

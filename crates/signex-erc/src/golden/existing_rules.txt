@@ -1,0 +1,23 @@
+AmbiguousLabelAnchor|builtin::ambiguous_label_anchor|Warning|Label 'X' sits where 2 wires cross with no junction — its net was picked by tiebreak, not by geometry|5,0|ThisSheet|Some(Label)|None
+AmbiguousLabelAnchor|builtin::dangling_wire_endpoint|Warning|Wire endpoint is not connected|0,0|ThisSheet|Some(Wire)|None
+AmbiguousLabelAnchor|builtin::dangling_wire_endpoint|Warning|Wire endpoint is not connected|10,0|ThisSheet|Some(Wire)|None
+AmbiguousLabelAnchor|builtin::dangling_wire_endpoint|Warning|Wire endpoint is not connected|5,-5|ThisSheet|Some(Wire)|None
+AmbiguousLabelAnchor|builtin::dangling_wire_endpoint|Warning|Wire endpoint is not connected|5,5|ThisSheet|Some(Wire)|None
+BadHierSheetPin|builtin::bad_hierarchical_sheet_pin|Error|Duplicate sheet pin 'P' on sheet 'Dup'|1,1|ThisSheet|Some(SheetPin)|Some(SheetPin)
+BadHierSheetPin|builtin::bad_hierarchical_sheet_pin|Warning|Hierarchical sheet 'Bare' has no pins — the child schematic can't be wired in|50,0|ThisSheet|Some(ChildSheet)|None
+BusBitWidthMismatch|builtin::bus_bit-width_mismatch|Error|<hash-order dependent>|NaN,NaN|ThisSheet|Some(Label)|Some(Label)
+DanglingWire|builtin::dangling_wire_endpoint|Warning|Wire endpoint is not connected|0,0|ThisSheet|Some(Wire)|None
+DanglingWire|builtin::dangling_wire_endpoint|Warning|Wire endpoint is not connected|10,0|ThisSheet|Some(Wire)|None
+DuplicateRefDesignator|builtin::duplicate_reference_designator|Error|Reference 'R1' is used by 2 symbols|10,10|ThisSheet|Some(Symbol)|Some(Symbol)
+DuplicateRefDesignator|builtin::duplicate_reference_designator|Error|Reference 'R1' is used by 2 symbols|20,10|ThisSheet|Some(Symbol)|Some(Symbol)
+HierPortDisconnected|builtin::hierarchical_port_disconnected|Warning|Global port 'SIG' is not on a wire|10,10|ThisSheet|Some(Label)|None
+MissingPowerFlag|builtin::missing_power_flag|Info|Power port '+3V3' is not cross-referenced by a same-net label — add a PWR_FLAG if this is a source net|10,10|ThisSheet|Some(Symbol)|None
+NetLabelConflict|builtin::net_label_conflict|Warning|Net label conflict: 'A' and 'B' on the same net|0,0|ThisSheet|Some(Label)|Some(Label)
+OrphanLabel|builtin::orphan_label|Warning|Label 'N' is not on a wire|5,5|ThisSheet|Some(Label)|None
+PowerPortShort|builtin::duplicate_reference_designator|Error|Reference '#PWR01' is used by 2 symbols|10,10|ThisSheet|Some(Symbol)|Some(Symbol)
+PowerPortShort|builtin::duplicate_reference_designator|Error|Reference '#PWR01' is used by 2 symbols|10,10|ThisSheet|Some(Symbol)|Some(Symbol)
+PowerPortShort|builtin::missing_power_flag|Info|Power port '+3V3' is not cross-referenced by a same-net label — add a PWR_FLAG if this is a source net|10,10|ThisSheet|Some(Symbol)|None
+PowerPortShort|builtin::missing_power_flag|Info|Power port '+5V' is not cross-referenced by a same-net label — add a PWR_FLAG if this is a source net|10,10|ThisSheet|Some(Symbol)|None
+PowerPortShort|builtin::power_port_short|Error|Power ports '+3V3' and '+5V' are at the same point|10,10|ThisSheet|Some(Symbol)|Some(Symbol)
+SymbolOutsideSheet|builtin::symbol_outside_sheet_boundary|Info|Symbol 'U1' sits outside the 297×210 mm sheet|-5,-5|ThisSheet|Some(Symbol)|None
+UnusedPin|builtin::unused_pin|Warning|Pin on U1 is not connected|10,10|ThisSheet|Some(Symbol)|None
