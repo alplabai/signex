@@ -6,7 +6,15 @@
 //! `/tables` + `/rows` row tier, the primitive
 //! (`/symbols` / `/footprints` / `/sims`) routes, and the advisory
 //! `/rows/:row_id/locks` endpoint — is gated behind a bearer-token
-//! check sourced from the `SIGNEX_API_TOKEN` env var.
+//! check sourced from the `SIGNEX_API_TOKEN` env var (compared in constant time).
+//!
+//! ## Transport security
+//!
+//! The server speaks plain HTTP and has no TLS stack. Anything beyond
+//! loopback MUST sit behind a TLS-terminating reverse proxy. Behind a proxy
+//! the per-IP rate limiter sees the proxy's address, so all clients share
+//! one bucket. The client refuses to send its token over `http://` to a
+//! non-loopback host, including via a redirect.
 //!
 //! ## DBLib row model
 //!
@@ -31,12 +39,18 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::{Json, Router, http::HeaderValue, routing::get};
+use axum::{
+    Json, Router,
+    extract::Request,
+    http::{HeaderValue, StatusCode, header::AUTHORIZATION},
+    middleware::{self, Next},
+    response::IntoResponse,
+    routing::get,
+};
 use serde_json::json;
 use tower_governor::{GovernorLayer, governor::GovernorConfigBuilder};
 use tower_http::cors::CorsLayer;
 use tower_http::limit::RequestBodyLimitLayer;
-use tower_http::validate_request::ValidateRequestHeaderLayer;
 
 pub mod db;
 pub mod locks;
@@ -131,14 +145,17 @@ pub fn router_with_state(state: AppState) -> Router {
 
     match std::env::var(API_TOKEN_ENV) {
         Ok(token) if !token.is_empty() => {
-            // tower-http 0.6 marks `bearer` as "too basic" but it's the
-            // documented escape hatch for env-var-driven static tokens.
-            // Once OIDC lands we'll replace it with a custom validator.
-            #[expect(
-                deprecated,
-                reason = "tower-http 0.6 marks `bearer` as too basic, but it is the documented escape hatch for env-var-driven static tokens until OIDC lands"
-            )]
-            let layer = ValidateRequestHeaderLayer::bearer(&token);
+            let token: Arc<str> = Arc::from(token);
+            let layer = middleware::from_fn(move |req: Request, next: Next| {
+                let token = Arc::clone(&token);
+                async move {
+                    if bearer_matches(req.headers().get(AUTHORIZATION), &token) {
+                        next.run(req).await
+                    } else {
+                        StatusCode::UNAUTHORIZED.into_response()
+                    }
+                }
+            });
             protected = protected.layer(layer);
         }
         _ => {
@@ -197,6 +214,17 @@ pub fn with_rate_limit(router: Router) -> Router {
     })
 }
 
+/// Constant-time check of an `Authorization: Bearer <token>` header against
+/// the configured token. The length is not secret; the bytes are compared
+/// without early exit.
+fn bearer_matches(header: Option<&HeaderValue>, token: &str) -> bool {
+    use subtle::ConstantTimeEq;
+    let Some(presented) = header.and_then(|h| h.as_bytes().strip_prefix(b"Bearer ")) else {
+        return false;
+    };
+    presented.ct_eq(token.as_bytes()).into()
+}
+
 pub async fn health() -> Json<serde_json::Value> {
     Json(json!({ "status": "ok" }))
 }
@@ -206,4 +234,29 @@ pub async fn version() -> Json<serde_json::Value> {
         "name": "signex-library-server",
         "version": env!("CARGO_PKG_VERSION"),
     }))
+}
+
+#[cfg(test)]
+mod auth_tests {
+    use super::*;
+
+    #[test]
+    fn bearer_matches_only_exact_token() {
+        let ok = HeaderValue::from_static("Bearer s3cret");
+        assert!(bearer_matches(Some(&ok), "s3cret"));
+        assert!(!bearer_matches(Some(&ok), "s3cre"));
+        assert!(!bearer_matches(
+            Some(&HeaderValue::from_static("Bearer s3cre")),
+            "s3cret"
+        ));
+        assert!(!bearer_matches(
+            Some(&HeaderValue::from_static("s3cret")),
+            "s3cret"
+        ));
+        assert!(!bearer_matches(
+            Some(&HeaderValue::from_static("Basic s3cret")),
+            "s3cret"
+        ));
+        assert!(!bearer_matches(None, "s3cret"));
+    }
 }
