@@ -129,5 +129,7 @@ mod save_as_by_document_kind;
 #[path = "regression/stable_addressing.rs"]
 mod stable_addressing;
 
+#[path = "regression/schematic_field_drag.rs"]
+mod schematic_field_drag;
 #[path = "regression/surface_failures.rs"]
 mod surface_failures;

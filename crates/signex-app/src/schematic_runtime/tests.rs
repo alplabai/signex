@@ -306,3 +306,80 @@ fn long_text_stays_visible_while_anchor_is_just_offscreen() {
     let far = iced::Point::new(-2000.0, 300.0);
     assert!(!text_anchor_visible(far, bounds, 22.0, &flag, 48.0));
 }
+
+fn ref_field_hit(rotation: f64, h: HAlign, v: VAlign, hidden: bool, x: f64, y: f64) -> bool {
+    let prop = TextProp {
+        position: Point::new(70.0, 30.0),
+        rotation,
+        font_size: 2.0,
+        justify_h: h,
+        justify_v: v,
+        hidden,
+    };
+    let mut symbol = field_symbol(Some(prop));
+    symbol.rotation = 0.0;
+    let uuid = symbol.uuid;
+    let mut sheet = empty_snapshot();
+    sheet.symbols.push(symbol);
+    hit_test::hit_test(&sheet, x, y) == Some(SelectedItem::new(uuid, SelectedKind::SymbolRefField))
+}
+
+#[test]
+fn rotated_right_justified_field_hit_box_follows_rotated_text() {
+    // Drawn at x in [69,71], y in [27.6,30.0].
+    assert!(ref_field_hit(
+        90.0,
+        HAlign::Right,
+        VAlign::Center,
+        false,
+        70.6,
+        27.8
+    ));
+}
+
+#[test]
+fn rotated_270_field_hit_box_follows_rotated_text() {
+    // 270 draws at 90 with the vertical alignment folded: Top -> Bottom.
+    // Drawn at x in [70,72], y in [27.6,30.0].
+    assert!(ref_field_hit(
+        270.0,
+        HAlign::Right,
+        VAlign::Top,
+        false,
+        71.0,
+        28.0
+    ));
+}
+
+#[test]
+fn rotated_left_justified_field_hit_box_follows_rotated_text() {
+    // Drawn at x in [69,71], y in [30.0,32.4].
+    assert!(ref_field_hit(
+        90.0,
+        HAlign::Left,
+        VAlign::Center,
+        false,
+        70.5,
+        31.0
+    ));
+}
+
+#[test]
+fn hidden_field_has_no_hit_box() {
+    assert!(ref_field_hit(
+        0.0,
+        HAlign::Center,
+        VAlign::Center,
+        false,
+        70.0,
+        30.0
+    ));
+    assert!(!ref_field_hit(
+        0.0,
+        HAlign::Center,
+        VAlign::Center,
+        true,
+        70.0,
+        30.0
+    ));
+}

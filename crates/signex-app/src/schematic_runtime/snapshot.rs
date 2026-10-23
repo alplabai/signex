@@ -1,6 +1,6 @@
 use super::*;
 
-pub(super) fn build_renderer_snapshot(
+pub fn build_renderer_snapshot(
     snapshot: &SchematicRenderSnapshot,
     transform: &ScreenTransform,
     colors: &CanvasColors,
