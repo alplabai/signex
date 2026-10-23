@@ -316,7 +316,7 @@ impl Signex {
             }
         };
 
-        let (ctx, issues) = match super::build_export_scope(&self.document_state) {
+        let (ctx, issues) = match super::build_page_scope(&self.document_state) {
             Some(c) => c,
             None => {
                 self.document_state.pending_bom_options = None;

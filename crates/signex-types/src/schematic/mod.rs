@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::format::UnknownFields;
+use crate::format::{UnknownColumns, UnknownFields};
 use crate::property::SchematicProperty;
 
 // ---------------------------------------------------------------------------
@@ -717,6 +717,10 @@ pub struct Symbol {
     /// every file written by this build.
     #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]
     pub unknown: UnknownFields,
+    /// TSV columns this build does not recognise, kept per row so a
+    /// save re-emits them (see [`UnknownColumns`]).
+    #[serde(default, skip_serializing_if = "UnknownColumns::is_empty")]
+    pub unknown_columns: UnknownColumns,
 }
 
 fn default_unit() -> u32 {

@@ -21,6 +21,8 @@
 // production signal.
 #![cfg_attr(test, allow(clippy::let_underscore_must_use))]
 
+pub mod about;
+pub mod about_modal;
 pub mod active_bar;
 pub mod app;
 pub mod canvas;
@@ -44,6 +46,7 @@ pub mod panels;
 pub mod passive_calculator_modal;
 pub mod pcb_canvas;
 pub mod preferences;
+pub mod recent_projects;
 pub mod render_config;
 pub mod renderer_scene_canvas;
 pub mod scene_shader;

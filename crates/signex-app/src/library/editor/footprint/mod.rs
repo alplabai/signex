@@ -19,6 +19,9 @@ pub mod move_by_modal;
 pub mod pad_to_sketch;
 pub mod pads_active_bar;
 pub mod preview3d;
+mod sketch_conflict;
+#[cfg(test)]
+mod sketch_conflict_tests;
 pub mod sketch_dispatch;
 #[cfg(test)]
 mod sketch_dispatch_tests;

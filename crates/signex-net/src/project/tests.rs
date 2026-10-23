@@ -37,6 +37,7 @@ fn empty_sheet() -> SchematicSheet {
 
 fn wire(a: Point, b: Point) -> Wire {
     Wire {
+        unknown_columns: Default::default(),
         uuid: Uuid::nil(),
         start: a,
         end: b,
@@ -46,6 +47,7 @@ fn wire(a: Point, b: Point) -> Wire {
 
 fn junction(pos: Point) -> Junction {
     Junction {
+        unknown_columns: Default::default(),
         uuid: Uuid::nil(),
         position: pos,
         diameter: 0.0,
@@ -55,6 +57,7 @@ fn junction(pos: Point) -> Junction {
 
 fn label(text: &str, pos: Point, ty: LabelType) -> Label {
     Label {
+        unknown_columns: Default::default(),
         uuid: Uuid::nil(),
         text: text.to_string(),
         position: pos,
@@ -114,6 +117,7 @@ fn add_lib(sheet: &mut SchematicSheet, lib_id: &str) {
 
 fn place(sheet: &mut SchematicSheet, reference: &str, lib_id: &str, origin: Point) {
     sheet.symbols.push(Symbol {
+        unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::nil(),
         lib_id: lib_id.to_string(),
@@ -447,6 +451,7 @@ fn membership_aggregates_across_sheet_occurrences() {
 
     let mut root = empty_sheet();
     root.wires.push(Wire {
+        unknown_columns: Default::default(),
         uuid: rw,
         start: pt(0.0, 0.0),
         end: pt(10.0, 0.0),
@@ -461,6 +466,7 @@ fn membership_aggregates_across_sheet_occurrences() {
 
     let mut child = empty_sheet();
     child.wires.push(Wire {
+        unknown_columns: Default::default(),
         uuid: cw,
         start: pt(0.0, 0.0),
         end: pt(10.0, 0.0),

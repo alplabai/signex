@@ -35,6 +35,7 @@ fn empty_sheet() -> SchematicSheet {
 fn ctx_with_one_sheet() -> ExportContext {
     let mut sheet = empty_sheet();
     sheet.symbols.push(Symbol {
+        unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: uuid::Uuid::nil(),
         lib_id: "Device:R".to_string(),
@@ -66,6 +67,7 @@ fn ctx_with_one_sheet() -> ExportContext {
         library_version: String::new(),
     });
     sheet.labels.push(Label {
+        unknown_columns: Default::default(),
         uuid: uuid::Uuid::nil(),
         text: "VCC".to_string(),
         position: Point::new(20.0, 20.0),
@@ -86,6 +88,7 @@ fn ctx_with_one_sheet() -> ExportContext {
         }],
         metadata: ProjectMetadata::default(),
         netlist: None,
+        netlist_sheets: Vec::new(),
     }
 }
 
@@ -239,6 +242,7 @@ fn bookmark_zoom_clamps_out_of_range() {
 fn pin_bookmarks_skipped_when_subtoggle_off() {
     let mut sheet = empty_sheet();
     let mut sym = Symbol {
+        unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: uuid::Uuid::nil(),
         lib_id: "Device:R".to_string(),
@@ -283,6 +287,7 @@ fn pin_bookmarks_skipped_when_subtoggle_off() {
         }],
         metadata: ProjectMetadata::default(),
         netlist: None,
+        netlist_sheets: Vec::new(),
     };
 
     let opts = PdfOptions {
@@ -316,6 +321,7 @@ fn multi_sheet_bookmarks_have_independent_groups() {
         for i in 0..3 {
             let mut sheet = empty_sheet();
             sheet.symbols.push(Symbol {
+                unknown_columns: Default::default(),
                 unknown: Default::default(),
                 uuid: uuid::Uuid::nil(),
                 lib_id: "Device:R".to_string(),
@@ -358,6 +364,7 @@ fn multi_sheet_bookmarks_have_independent_groups() {
             sheets,
             metadata: ProjectMetadata::default(),
             netlist: None,
+            netlist_sheets: Vec::new(),
         }
     };
     let opts = PdfOptions {

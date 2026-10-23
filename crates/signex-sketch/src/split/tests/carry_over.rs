@@ -224,9 +224,12 @@ fn horizontal_constraint_duplicates_onto_both_halves() {
 }
 
 #[test]
-fn equal_length_constraint_repoints_to_one_half_only() {
+fn equal_length_constraint_on_retired_line_is_dropped_not_repointed() {
+    // L = 10 mm and M = 10 mm, split at t = 0.3: line_a is 3 mm, so
+    // re-pointing EqualLength to it would assert 3 == 10 and reshape the
+    // sketch on the next solve. Neither half carries the relation.
     let (mut sketch, line, ..) = line_sketch((0.0, 0.0), (10.0, 0.0));
-    let (other_sketch, other_line, _, _) = line_sketch((0.0, 5.0), (3.0, 5.0));
+    let (other_sketch, other_line, _, _) = line_sketch((0.0, 5.0), (10.0, 5.0));
     sketch.entities.extend(other_sketch.entities);
     let original_cid = ConstraintId::new();
     sketch.constraints.push(Constraint {
@@ -237,36 +240,44 @@ fn equal_length_constraint_repoints_to_one_half_only() {
         },
     });
 
-    let result = split_line(&mut sketch, line, 0.5).unwrap();
+    let result = split_line(&mut sketch, line, 0.3).unwrap();
 
-    let matches: Vec<&Constraint> = sketch
-        .constraints
-        .iter()
-        .filter(|c| matches!(c.kind, ConstraintKind::EqualLength { .. }))
-        .collect();
-    assert_eq!(matches.len(), 1, "EqualLength must not duplicate");
-    match matches[0].kind {
-        ConstraintKind::EqualLength { l1, l2 } => {
-            assert_eq!(l1, result.line_a, "must repoint to line_a, not line_b");
-            assert_eq!(
-                l2, other_line,
-                "the untouched partner line must be unchanged"
-            );
-        }
-        _ => unreachable!(),
-    }
+    assert!(
+        sketch.constraints.iter().all(|c| c.id != original_cid),
+        "EqualLength on the retired line must not survive"
+    );
     assert_eq!(
-        matches[0].id, original_cid,
-        "id is preserved for the single surviving copy"
+        result.dropped_constraints,
+        vec![original_cid],
+        "the dropped id must be reported to the caller"
     );
     assert!(sketch.constraints.iter().all(|c| !references_line(c, line)));
-    assert!(
-        sketch
-            .constraints
-            .iter()
-            .all(|c| !references_line(c, result.line_b)),
-        "EqualLength must not have been duplicated onto line_b"
-    );
+}
+
+#[test]
+fn unrelated_equal_length_constraint_survives_untouched() {
+    let (mut sketch, line, ..) = line_sketch((0.0, 0.0), (10.0, 0.0));
+    let (other_sketch, other_line, _, _) = line_sketch((0.0, 5.0), (10.0, 5.0));
+    let (third_sketch, third_line, _, _) = line_sketch((0.0, 9.0), (10.0, 9.0));
+    sketch.entities.extend(other_sketch.entities);
+    sketch.entities.extend(third_sketch.entities);
+    let cid = ConstraintId::new();
+    sketch.constraints.push(Constraint {
+        id: cid,
+        kind: ConstraintKind::EqualLength {
+            l1: other_line,
+            l2: third_line,
+        },
+    });
+
+    let result = split_line(&mut sketch, line, 0.3).unwrap();
+
+    assert!(result.dropped_constraints.is_empty());
+    assert!(matches!(
+        sketch.constraints.as_slice(),
+        [Constraint { id, kind: ConstraintKind::EqualLength { l1, l2 } }]
+            if *id == cid && *l1 == other_line && *l2 == third_line
+    ));
 }
 
 #[test]

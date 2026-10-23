@@ -29,7 +29,7 @@ pub mod rule;
 mod rules;
 
 pub use context::ErcContext;
-pub use diagnostic::Diagnostic;
+pub use diagnostic::{Diagnostic, LocationSpace};
 pub use overrides::apply_overrides;
 pub use rule::{AnalysisScope, Applicability, RuleDefinition, RuleId, RuleTarget};
 

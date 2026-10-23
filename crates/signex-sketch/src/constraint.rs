@@ -119,6 +119,30 @@ pub enum ConstraintKind {
 }
 
 impl ConstraintKind {
+    /// Every entity this constraint names, in field order.
+    pub fn entity_refs(&self) -> Vec<SketchEntityId> {
+        use ConstraintKind::*;
+        match self {
+            Coincident { p1, p2 } | DistancePtPt { p1, p2, .. } => vec![*p1, *p2],
+            PointOnLine { point, line }
+            | DistancePtLine { point, line, .. }
+            | Midpoint { point, line } => vec![*point, *line],
+            PointOnArc { point, arc } => vec![*point, *arc],
+            DistancePtCircle { point, circle, .. } => vec![*point, *circle],
+            Horizontal { line } | Vertical { line } => vec![*line],
+            Parallel { l1, l2 }
+            | Perpendicular { l1, l2 }
+            | Angle { l1, l2, .. }
+            | EqualLength { l1, l2 } => vec![*l1, *l2],
+            EqualRadius { e1, e2 } => vec![*e1, *e2],
+            TangentLineArc { line, arc } => vec![*line, *arc],
+            TangentArcArc { a1, a2, .. } => vec![*a1, *a2],
+            SymmetricAboutLine { p1, p2, line } => vec![*p1, *p2, *line],
+            SymmetricAboutPoint { p1, p2, center } => vec![*p1, *p2, *center],
+            Fixed { point } => vec![*point],
+        }
+    }
+
     /// Number of scalar residuals this constraint contributes.
     pub fn residual_count(&self) -> usize {
         use ConstraintKind::*;

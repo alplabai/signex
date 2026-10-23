@@ -3,6 +3,7 @@ use super::*;
 mod footprint_ctx;
 mod footprint_summaries;
 mod history;
+mod navigator_ctx;
 mod panel_ctx;
 mod primitive_dirty;
 mod symbol_ctx;

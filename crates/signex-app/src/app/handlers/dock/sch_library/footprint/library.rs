@@ -83,26 +83,44 @@ impl Signex {
                 let last = editor.file.footprints.len();
                 if last > 1 && *idx < last {
                     editor.file.footprints.remove(*idx);
-                    // Clamp `active_idx` so the canvas keeps
-                    // pointing at a valid sibling.
-                    if editor.active_idx >= editor.file.footprints.len() {
+                    editor.file.updated = chrono::Utc::now();
+                    // A sibling before the active one shifted it down a
+                    // slot: follow it. Otherwise clamp into range.
+                    let active_moved = *idx <= editor.active_idx;
+                    if *idx < editor.active_idx {
+                        editor.active_idx -= 1;
+                    } else if editor.active_idx >= editor.file.footprints.len() {
                         editor.active_idx = editor.file.footprints.len().saturating_sub(1);
                     }
-                    // Re-derive canvas-side state from the
-                    // (possibly different) active primitive.
-                    editor.state =
-                        crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
-                            editor.primitive(),
-                        );
+                    // Re-derive canvas-side state only when the active
+                    // primitive actually changed.
+                    if active_moved {
+                        editor.state =
+                            crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
+                                editor.primitive(),
+                            );
+                    }
                     editor.panel_selected_idx = None;
                     editor.canvas_cache.clear();
                     editor.dirty = true;
                     self.document_state.dirty_paths.insert(path.clone());
+                    if let Some(tab) = self.document_state.tabs.iter_mut().find(|t| t.path == path)
+                    {
+                        tab.dirty = true;
+                    }
                 } else if last == 1 {
                     tracing::warn!(
                         target: "signex::library",
                         path = %path.display(),
                         "Footprint Library: refused to delete the last footprint in the envelope",
+                    );
+                } else if last > 1 {
+                    tracing::warn!(
+                        target: "signex::library",
+                        path = %path.display(),
+                        idx = *idx,
+                        len = last,
+                        "Footprint Library: delete index out of range",
                     );
                 }
             }

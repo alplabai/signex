@@ -12,6 +12,7 @@ use std::path::PathBuf;
 
 fn symbol(reference: &str, footprint: &str) -> Symbol {
     Symbol {
+        unknown_columns: Default::default(),
         uuid: uuid::Uuid::new_v4(),
         lib_id: "Device:R".to_string(),
         reference: reference.to_string(),

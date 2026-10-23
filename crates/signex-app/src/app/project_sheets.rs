@@ -252,7 +252,14 @@ fn walk(
         };
         let dir = path.parent().unwrap_or_else(|| Path::new("")).to_path_buf();
         for child in &sheet.child_sheets {
-            queue.push(dir.join(&child.filename));
+            // The same resolver the netlist uses: a `..`-spelled reference
+            // names the file it really names (so a cycle written through `..`
+            // revisits an already-visited key instead of minting a new path
+            // each lap), and a reference escaping the sheet's folder is not
+            // loaded (#463).
+            if let Some(resolved) = resolve_child_reference(&dir, &child.filename) {
+                queue.push(resolved);
+            }
         }
         loaded.insert(key);
         set.sheets.insert(path, sheet);
@@ -565,7 +572,7 @@ pub(crate) fn resolve_child_reference(parent_dir: &Path, child_filename: &str) -
 /// path to exist). A `..` with nothing left to pop is kept as a literal `..`
 /// component, so a reference that escapes its root still fails the caller's
 /// `starts_with(root)` check instead of silently collapsing onto the root.
-fn lexically_normalize(path: &Path) -> PathBuf {
+pub(crate) fn lexically_normalize(path: &Path) -> PathBuf {
     let mut out = PathBuf::new();
     for component in path.components() {
         match component {

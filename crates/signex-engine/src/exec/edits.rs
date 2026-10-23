@@ -415,6 +415,7 @@ mod tests {
         let uuid = uuid::Uuid::new_v4();
         let mut sheet = test_sheet();
         sheet.symbols.push(signex_types::schematic::Symbol {
+            unknown_columns: Default::default(),
             uuid,
             lib_id: "Device:R".to_string(),
             reference: "R1".to_string(),

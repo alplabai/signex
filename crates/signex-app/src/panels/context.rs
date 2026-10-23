@@ -11,7 +11,6 @@ pub struct PanelContext {
     pub wire_count: usize,
     pub label_count: usize,
     pub junction_count: usize,
-    pub child_sheets: Vec<String>,
     pub has_schematic: bool,
     pub has_pcb: bool,
     pub paper_size: String,
@@ -75,6 +74,8 @@ pub struct PanelContext {
     /// the row highlight independently of which document is active.
     /// Set on `TreeMsg::Select`, cleared when the tree resets.
     pub project_tree_selected: Option<Vec<usize>>,
+    /// Navigator panel: the whole project sheet hierarchy plus its click state.
+    pub navigator: NavigatorModel,
     /// F15 — detail for the row currently selected in the active
     /// Library Browser tab. `Some` when (a) the active tab is a
     /// `LibraryBrowser(path)` AND (b) `library_browsers[path]

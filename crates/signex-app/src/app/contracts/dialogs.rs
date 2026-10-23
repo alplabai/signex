@@ -214,8 +214,8 @@ pub enum ExportMsg {
     /// The ERC report write completed — carries the path or the IO error.
     ErcReportWritten(Result<std::path::PathBuf, String>),
     /// #431 — user clicked "Export anyway (incomplete)" on the
-    /// netlist-incomplete prompt. Writes the partial `.net` with an INCOMPLETE
-    /// header comment listing the omitted pages, then clears the prompt.
+    /// netlist-incomplete prompt. Writes the partial `.net` (a clean file, no
+    /// header) and logs the omitted pages as a warning, then clears the prompt.
     NetlistExportAnyway,
     /// #431 — user clicked "Cancel" on the netlist-incomplete prompt (or
     /// clicked outside it). Writes nothing and clears the prompt.
@@ -275,7 +275,15 @@ pub enum FileMsg {
         result: Result<Box<signex_types::pcb::PcbBoard>, String>,
     },
     Save,
-    SaveAs(PathBuf),
+    /// User picked a destination from the schematic Save As dialog.
+    /// `from_path` is the tab the dialog was opened for; the dialog is
+    /// not modal, so the active tab may have changed by the time it
+    /// returns and the handler refuses rather than write the wrong
+    /// document to `to_path`.
+    SaveAs {
+        from_path: PathBuf,
+        to_path: PathBuf,
+    },
     /// User picked a destination from the Save-As dialog spawned the
     /// first time a freshly-minted `.snxsym` / `.snxfpt` editor tab is
     /// saved (the in-memory tab opened by `Add New ▸ Symbol` /
