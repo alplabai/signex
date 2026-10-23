@@ -244,6 +244,10 @@ fn an_open_footprint_editor_saves_and_commits_through_the_renamed_library() {
         f.app.document_state.footprint_editors.contains_key(&fpt),
         "the editor must survive the rename"
     );
+    assert!(
+        f.app.library.set.contains_path(&renamed),
+        "the adapter that commits the editor's save must follow the renamed library"
+    );
     send(
         &mut f.app,
         Message::Library(LibraryMessage::PrimitiveEditorEvent {
