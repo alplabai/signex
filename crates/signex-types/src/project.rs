@@ -149,6 +149,9 @@ impl ProjectData {
 }
 
 #[cfg(test)]
+mod unknown_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
