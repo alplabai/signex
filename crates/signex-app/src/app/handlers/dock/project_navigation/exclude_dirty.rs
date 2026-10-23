@@ -50,7 +50,33 @@ impl Signex {
     /// #756 replaces that helper with walk-based reach sets, so whichever of
     /// the two lands second only has to adapt this function.
     fn shared_with_other_project(&self, owner: Option<usize>, path: &std::path::Path) -> bool {
-        owner.is_some_and(|idx| self.document_state.claimed_by_other_project(idx, path))
+        let Some(idx) = owner else {
+            return false;
+        };
+        self.document_state.claimed_by_other_project(idx, path)
+            || self.library_listed_by_other_project(idx, path)
+    }
+
+    /// Does another open project list a `.snxlib` that is `path`, lies under
+    /// it, or contains it? `claimed_by_other_project` only sees sheets and
+    /// project files, so library entries are checked here, each resolved
+    /// against its own project's directory and compared under the prompt's
+    /// case rule (`path_is_under` is component-wise, so `Lib.snxlib/.` and
+    /// a trailing separator normalise away).
+    fn library_listed_by_other_project(&self, owner: usize, path: &std::path::Path) -> bool {
+        let fold = CaseFold::host_default();
+        self.document_state
+            .projects
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i != owner)
+            .flat_map(|(_, p)| {
+                p.data
+                    .libraries
+                    .iter()
+                    .map(|entry| p.data.resolve_library_path(entry))
+            })
+            .any(|lib| path_is_under(&lib, path, fold) || path_is_under(path, &lib, fold))
     }
 
     /// Is Discard withheld for this modal: does another open project use the

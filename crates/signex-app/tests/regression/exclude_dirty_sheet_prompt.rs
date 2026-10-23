@@ -362,3 +362,38 @@ fn discarding_a_library_drops_every_draft_under_it() {
     assert!(app.document_state.dirty_paths.is_empty());
     assert!(app.ui_state.remove_dialog.is_none());
 }
+
+#[test]
+fn discard_is_refused_for_a_library_two_open_projects_list() {
+    let _ = signex_app::diagnostics::init_logging();
+    let (mut app, tmp, lib, fp) = library_fixture();
+    // `library_fixture` opened project A; add B, and let both list the one
+    // `.snxlib` (A relative, B by an un-normalised absolute spelling).
+    add_named_project(&mut app, tmp.path(), "B.snxprj", "Y.snxsch");
+    let entry = |path: PathBuf, kind| signex_types::project::LibraryEntry {
+        path,
+        kind,
+        library_id: None,
+    };
+    app.document_state.projects[0].data.libraries.push(entry(
+        PathBuf::from("Lib.snxlib"),
+        signex_types::project::LibraryEntryKind::ProjectLocal,
+    ));
+    app.document_state.projects[1].data.libraries.push(entry(
+        lib.join("."),
+        signex_types::project::LibraryEntryKind::Shared,
+    ));
+    exclude(&mut app, &lib);
+    assert!(app.ui_state.remove_dialog.is_some(), "prompt expected");
+
+    choose(&mut app, ExcludeDirtyChoice::Discard);
+
+    assert!(
+        app.document_state.footprint_editors.contains_key(&fp),
+        "B's draft must survive"
+    );
+    assert!(app.document_state.dirty_paths.contains(&fp));
+    assert!(app.ui_state.remove_dialog.is_some());
+    assert!(diagnostics_mention(&app, "another open project"));
+    assert_eq!(std::fs::read(&fp).unwrap(), ORIGINAL);
+}
