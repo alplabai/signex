@@ -13,6 +13,9 @@ mod exec;
 #[cfg(test)]
 pub(crate) mod test_support;
 
+#[cfg(test)]
+mod annotation_tests;
+
 use std::path::{Path, PathBuf};
 
 pub use annotation::AnnotateScope;
