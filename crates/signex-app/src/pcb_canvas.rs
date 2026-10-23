@@ -52,6 +52,8 @@ pub struct PcbCanvas {
     /// drift out of sync.
     camera: std::cell::RefCell<Camera>,
     pub pending_fit: std::cell::Cell<Option<Rectangle>>,
+    /// Bounds as last drawn — the view centre for menu zoom.
+    viewport: std::cell::Cell<Rectangle>,
     pub grid_visible: bool,
     /// Effective (live) PCB GPU-render flag. When true, `draw` skips the CPU
     /// content tessellation (a `shader` stacked above draws it on the GPU) and
@@ -83,6 +85,7 @@ impl PcbCanvas {
             scene_generation: std::cell::Cell::new(0),
             camera: std::cell::RefCell::new(Camera::default()),
             pending_fit: std::cell::Cell::new(None),
+            viewport: std::cell::Cell::new(Rectangle::with_size(iced::Size::ZERO)),
             grid_visible: true,
             gpu_render: false,
             theme_bg: crate::render_config::to_iced(&colors.background),
@@ -113,6 +116,21 @@ impl PcbCanvas {
         // GPU scene shares this content-changed signal (theme + geometry).
         *self.scene_cache.get_mut() = None;
         *self.scene_generation.get_mut() += 1;
+    }
+
+    /// Record the canvas bounds (done on every draw; public so tests can
+    /// stand in for a drawn frame).
+    pub fn set_viewport(&self, bounds: Rectangle) {
+        self.viewport.set(bounds);
+    }
+
+    /// Zoom one wheel notch about the view centre (View > Zoom In/Out).
+    /// Returns whether the camera changed (false at the zoom limits).
+    pub fn zoom_about_centre(&self, zoom_in: bool) -> bool {
+        let bounds = self.viewport.get();
+        let centre = iced::Point::new(bounds.width / 2.0, bounds.height / 2.0);
+        let notch = if zoom_in { 1.0 } else { -1.0 };
+        self.camera.borrow_mut().zoom_at(centre, notch, bounds)
     }
 
     pub fn fit_to_board(&mut self) {
@@ -525,6 +543,7 @@ impl canvas::Program<Message> for PcbCanvas {
         bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
+        self.viewport.set(bounds);
         // Single read of the sole camera home; both the background/grid cache
         // and the content cache below project from this one value.
         let camera = self.camera.borrow();

@@ -65,6 +65,9 @@ pub enum AnnotateMsg {
     /// inside the Annotate dialog. Locked symbols keep their current
     /// designator even under Reset & Renumber.
     ToggleLock(uuid::Uuid),
+    /// Lock (`true`, "All Off") or unlock (`false`, "All On") every symbol
+    /// the dialog lists.
+    SetAllLocked(bool),
 }
 
 /// ERC dialog message family (ADR-0001 D3). Namespaced under

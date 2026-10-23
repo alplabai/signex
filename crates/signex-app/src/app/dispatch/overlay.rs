@@ -343,6 +343,15 @@ impl Signex {
                 }
                 Task::none()
             }
+            AnnotateMsg::SetAllLocked(lock) => {
+                if lock {
+                    let uuids = self.annotate_preview_uuids();
+                    self.ui_state.annotate_locked.extend(uuids);
+                } else {
+                    self.ui_state.annotate_locked.clear();
+                }
+                Task::none()
+            }
         }
     }
 
