@@ -262,9 +262,11 @@ fn project_referencing(dir: &Path, libs: &[PathBuf]) -> ProjectData {
                 path: p.clone(),
                 kind: LibraryEntryKind::Shared,
                 library_id: None,
+                unknown: Default::default(),
             })
             .collect(),
         enable_git: false,
+        unknown: Default::default(),
     }
 }
 

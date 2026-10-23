@@ -543,6 +543,7 @@ impl Signex {
                 path: stored_path,
                 kind,
                 library_id,
+                unknown: Default::default(),
             });
 
         // Mark the `.snxprj` dirty so the project tree's red dot lights
