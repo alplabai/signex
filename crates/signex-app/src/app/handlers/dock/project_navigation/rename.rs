@@ -59,6 +59,10 @@ impl Signex {
             return iced::Task::none();
         };
         if !self.repoint_dialog_tree_path(state.project_id, &mut state.tree_path) {
+            crate::diagnostics::log_warning(format!(
+                "Rename of {} cancelled: its project was closed while the dialog was open.",
+                state.target_path.display()
+            ));
             self.set_rename_error("The project was closed while this dialog was open.");
             return iced::Task::none();
         }

@@ -1489,8 +1489,13 @@ fn insert_other_project(app: &mut Signex, index: usize) -> (TempDir, PathBuf) {
 fn rename_dialog_follows_its_project_when_another_is_opened_before_it() {
     let (mut app, tmp, old_prj) = fixture_project_with_companions("Mine");
     let mine = app.document_state.projects[0].id;
-    arm_project_rename(&mut app, &old_prj, "Renamed");
-    app.ui_state.rename_dialog.as_mut().unwrap().project_id = Some(mine);
+    // Opened through the real tree action, so the id capture is exercised.
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+        ProjectTreeAction::OpenProjectRenameDialog(vec![0]),
+    )));
+    let dialog = app.ui_state.rename_dialog.as_mut().expect("dialog opened");
+    assert_eq!(dialog.project_id, Some(mine));
+    dialog.buffer = "Renamed".to_string();
     let (_other_tmp, other_prj) = insert_other_project(&mut app, 0);
 
     let _ = app.update(Message::Rename(RenameMsg::Submit));
@@ -1501,26 +1506,69 @@ fn rename_dialog_follows_its_project_when_another_is_opened_before_it() {
     assert_eq!(app.document_state.projects[1].data.name, "Renamed");
 }
 
+fn add_sheet_entry(app: &mut Signex, project: usize, filename: &str) {
+    app.document_state.projects[project]
+        .data
+        .sheets
+        .push(SheetEntry {
+            name: filename.trim_end_matches(".snxsch").into(),
+            filename: filename.into(),
+            symbols_count: 0,
+            wires_count: 0,
+            labels_count: 0,
+            unknown: Default::default(),
+        });
+}
+
+fn has_sheet(app: &Signex, project: usize, filename: &str) -> bool {
+    app.document_state.projects[project]
+        .data
+        .sheets
+        .iter()
+        .any(|s| s.filename == filename)
+}
+
+/// The harm #855 prevents is in-memory: a stale `tree_path[0]` made Remove
+/// prune a same-named sheet from the wrong project and mark that project
+/// dirty, so its next save dropped a sheet the user never touched. Here a
+/// project is opened ahead of the dialog's own while it is open.
+#[test]
+fn remove_dialog_follows_its_project_when_another_is_opened_before_it() {
+    let (mut app, _tmp, _prj) = fixture_project_with_companions("Mine");
+    add_sheet_entry(&mut app, 0, "Shared.snxsch");
+    open_remove_dialog_for_label(&mut app, "Shared.snxsch");
+    let (_other_tmp, other_prj) = insert_other_project(&mut app, 0);
+    add_sheet_entry(&mut app, 0, "Shared.snxsch");
+
+    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
+        RemoveChoice::ExcludeFromProject,
+    )));
+
+    assert!(has_sheet(&app, 0, "Shared.snxsch"), "Other keeps its sheet");
+    assert!(!app.document_state.dirty_paths.contains(&other_prj));
+    assert!(
+        !has_sheet(&app, 1, "Shared.snxsch"),
+        "Mine's sheet is removed"
+    );
+}
+
 /// Closing the dialog's project while it is open cancels the Remove instead
 /// of applying it to whichever project now sits at that index.
 #[test]
 fn remove_dialog_is_cancelled_when_its_project_was_closed() {
-    let (mut app, tmp, _prj) = fixture_project_with_companions("Mine");
-    let sch = tmp.path().join("Mine.snxsch");
-    let mine = app.document_state.projects[0].id;
-    arm_remove_dialog(&mut app, &sch);
-    app.ui_state.remove_dialog.as_mut().unwrap().project_id = Some(mine);
-    let (_other_tmp, _other) = insert_other_project(&mut app, 1);
+    let (mut app, _tmp, _prj) = fixture_project_with_companions("Mine");
+    add_sheet_entry(&mut app, 0, "Shared.snxsch");
+    open_remove_dialog_for_label(&mut app, "Shared.snxsch");
+    let (_other_tmp, other_prj) = insert_other_project(&mut app, 1);
+    add_sheet_entry(&mut app, 1, "Shared.snxsch");
     app.document_state.projects.remove(0);
 
     let _ = app.update(Message::Remove(RemoveMsg::Confirm(
-        RemoveChoice::DeleteFile,
+        RemoveChoice::ExcludeFromProject,
     )));
 
-    assert!(
-        sch.exists(),
-        "nothing may be deleted once the project is gone"
-    );
+    assert!(has_sheet(&app, 0, "Shared.snxsch"), "Other keeps its sheet");
+    assert!(!app.document_state.dirty_paths.contains(&other_prj));
     assert!(app.ui_state.remove_dialog.is_none());
 }
 
