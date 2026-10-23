@@ -11,9 +11,10 @@
 //! ## Transport security
 //!
 //! The server speaks plain HTTP and has no TLS stack. Anything beyond
-//! loopback MUST sit behind a TLS-terminating reverse proxy. Behind a proxy the per-IP rate limiter sees the proxy's
-//! address, so all clients share one bucket. The client refuses to send its
-//! token over `http://` to a non-loopback host.
+//! loopback MUST sit behind a TLS-terminating reverse proxy. Behind a proxy
+//! the per-IP rate limiter sees the proxy's address, so all clients share
+//! one bucket. The client refuses to send its token over `http://` to a
+//! non-loopback host, including via a redirect.
 //!
 //! ## DBLib row model
 //!

@@ -247,4 +247,12 @@ mod tests {
         let url = Url::parse("https://example.com/parts/C123").unwrap();
         assert!(a.lookup_by_url(&url).unwrap().is_none());
     }
+
+    #[test]
+    fn lookup_by_url_rejects_lookalike_host_offline() {
+        // Dot-anchored host check returns before any network call.
+        let a = JlcpcbAdapter::with_base_url("http://unused.invalid", None);
+        let url = Url::parse("https://eviljlcpcb.com/x").unwrap();
+        assert!(a.lookup_by_url(&url).unwrap().is_none());
+    }
 }

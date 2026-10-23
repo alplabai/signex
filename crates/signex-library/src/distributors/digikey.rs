@@ -544,4 +544,12 @@ mod tests {
         assert!(q.contains_key("code_challenge"));
         assert!(q.contains_key("state"));
     }
+
+    #[test]
+    fn lookup_by_url_rejects_lookalike_host_offline() {
+        // Dot-anchored host check returns before any network call.
+        let a = DigiKeyAdapter::with_access_token("http://unused.invalid", "tok", None);
+        let url = Url::parse("https://evildigikey.com/x").unwrap();
+        assert!(a.lookup_by_url(&url).unwrap().is_none());
+    }
 }

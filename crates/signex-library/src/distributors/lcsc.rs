@@ -319,4 +319,12 @@ mod tests {
         assert_eq!(a.name(), "LCSC");
         assert_eq!(a.source(), DistributorSource::Lcsc);
     }
+
+    #[test]
+    fn lookup_by_url_rejects_lookalike_host_offline() {
+        // Dot-anchored host check returns before any network call.
+        let a = LcscAdapter::with_base_url("http://unused.invalid", None);
+        let url = Url::parse("https://evillcsc.com/x").unwrap();
+        assert!(a.lookup_by_url(&url).unwrap().is_none());
+    }
 }

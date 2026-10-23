@@ -330,4 +330,12 @@ mod tests {
             other => panic!("expected Auth, got {other:?}"),
         }
     }
+
+    #[test]
+    fn lookup_by_url_rejects_lookalike_host_offline() {
+        // Dot-anchored host check returns before any network call.
+        let a = MouserAdapter::with_api_key("http://unused.invalid", "key", None);
+        let url = Url::parse("https://evilmouser.com/x").unwrap();
+        assert!(a.lookup_by_url(&url).unwrap().is_none());
+    }
 }

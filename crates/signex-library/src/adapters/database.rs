@@ -75,6 +75,28 @@ fn check_transport_security(base_url: &str, has_token: bool) -> Result<(), Libra
     }
 }
 
+/// Whether a redirect hop may be followed: reqwest only strips
+/// `Authorization` when host or port changes, so an `https` -> `http`
+/// downgrade on the same host:port would resend the bearer token in
+/// cleartext. Apply the same transport rule to every hop.
+fn redirect_hop_allowed(target: &url::Url) -> bool {
+    check_transport_security(target.as_str(), true).is_ok()
+}
+
+/// Redirect policy for the library client: at most 5 hops, each of which
+/// must satisfy [`redirect_hop_allowed`].
+fn redirect_policy() -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(|attempt| {
+        if attempt.previous().len() >= 5 {
+            attempt.error("too many redirects")
+        } else if redirect_hop_allowed(attempt.url()) {
+            attempt.follow()
+        } else {
+            attempt.error("refusing redirect to a cleartext non-loopback url")
+        }
+    })
+}
+
 impl DatabaseAdapter {
     /// Construct from a manifest. The manifest's `auth` field is treated as
     /// the bearer token; the holder is derived from it.
@@ -99,6 +121,7 @@ impl DatabaseAdapter {
         let client = reqwest::blocking::Client::builder()
             .connect_timeout(HTTP_CONNECT_TIMEOUT)
             .timeout(HTTP_REQUEST_TIMEOUT)
+            .redirect(redirect_policy())
             .build()
             .map_err(|e| LibraryError::Backend(format!("reqwest client: {e}")))?;
         let token = if auth.is_empty() { None } else { Some(auth) };
@@ -151,6 +174,7 @@ impl DatabaseAdapter {
         let client = reqwest::blocking::Client::builder()
             .connect_timeout(HTTP_CONNECT_TIMEOUT)
             .timeout(HTTP_REQUEST_TIMEOUT)
+            .redirect(redirect_policy())
             .build()
             .map_err(|e| LibraryError::Backend(format!("reqwest client: {e}")))?;
         // We don't have a real Manifest here — fabricate the minimal one
@@ -624,6 +648,36 @@ mod tests {
         assert!(DatabaseAdapter::with_token("http://[::1]:3535", "t", "h").is_ok());
         // No credential, nothing to leak.
         assert!(DatabaseAdapter::with_token("http://lib.example.com", "", "h").is_ok());
+    }
+
+    #[test]
+    fn keychain_sigil_is_rejected_with_the_sigil_error() {
+        let manifest = Manifest {
+            library: LibraryMeta {
+                name: "remote".into(),
+                library_id: Uuid::nil(),
+                description: None,
+            },
+            mode: LibraryMode::Database {
+                url: "https://lib.example.com".into(),
+                auth: "@signex-keychain:x".into(),
+            },
+            workflow: Default::default(),
+            users: Default::default(),
+            tables: Vec::new(),
+        };
+        let err = DatabaseAdapter::new(manifest)
+            .err()
+            .expect("sigil must be refused");
+        assert!(err.to_string().contains("not resolved"), "{err}");
+    }
+
+    #[test]
+    fn redirect_downgrade_to_cleartext_is_refused() {
+        let u = |s: &str| url::Url::parse(s).unwrap();
+        assert!(!redirect_hop_allowed(&u("http://lib.example.com:8443/x")));
+        assert!(redirect_hop_allowed(&u("https://lib.example.com:8443/x")));
+        assert!(redirect_hop_allowed(&u("http://127.0.0.1:3535/x")));
     }
 
     use crate::library_file::{FORMAT_TOKEN, LibrarySection};
