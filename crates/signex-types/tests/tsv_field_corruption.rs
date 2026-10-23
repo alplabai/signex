@@ -60,11 +60,22 @@ fn junction_bad_cells_are_reported() {
     let ok = [UUID, "1", "2", "0.5"];
     assert!(SchJunctionRow::from_row(&ok, "junctions", 0).is_ok());
     for (col, field) in [(0, "uuid"), (1, "pos_x"), (2, "pos_y"), (3, "diameter")] {
-        let mut cells = ok;
-        cells[col] = "zzz";
-        match SchJunctionRow::from_row(&cells, "junctions", 0) {
-            Err(FormatError::TsvFieldParse { field: got, .. }) => assert_eq!(got, field),
-            other => panic!("{field}: expected TsvFieldParse, got {other:?}"),
+        for bad in ["zzz", "abc", "1.2.3"] {
+            let mut cells = ok;
+            cells[col] = bad;
+            match SchJunctionRow::from_row(&cells, "junctions", 0) {
+                Err(FormatError::TsvFieldParse {
+                    block,
+                    row,
+                    field: got,
+                    ..
+                }) => {
+                    assert_eq!(block, "junctions");
+                    assert_eq!(row, 0);
+                    assert_eq!(got, field);
+                }
+                other => panic!("{field}={bad:?}: expected TsvFieldParse, got {other:?}"),
+            }
         }
     }
 }
