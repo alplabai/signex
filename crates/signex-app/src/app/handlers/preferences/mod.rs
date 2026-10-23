@@ -150,9 +150,7 @@ impl Signex {
         // Revert the render inputs used for schematic live preview.
         self.document_state.panel_ctx.tokens = self.tokens_for(self.ui_state.theme_id);
         // #630 — the schematic grid style previewed live, so push the
-        // committed value back to every window's canvas. Power port /
-        // label / multisheet style have no draw-path reader at all, so
-        // restoring their draft fields above is the whole revert.
+        // committed value back to every window's canvas.
         // #629 — the symbol grid style is the only one of the three
         // Symbol Editor settings with a live preview, so it is the only
         // one to push back. Grid size and pin selection reach the editor

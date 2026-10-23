@@ -129,7 +129,8 @@ fn migration_leaves_garbage_json_untouched() {
     signex_app::fonts::migrate_legacy_prefs(&canonical, &legacy);
 
     // Migration is best-effort; broken JSON returns early and leaves
-    // the file alone (vs. e.g. emptying it).
+    // the file alone (vs. e.g. emptying it). Only proves the F1 copy is
+    // skipped for unparseable input; nothing else is migrated any more.
     let after = fs::read(&canonical).unwrap();
     assert_eq!(
         after, original,

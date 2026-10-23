@@ -317,7 +317,10 @@ pub struct Zone {
     pub outline: Vec<Point>,
     /// Cut-outs inside `outline` (keep-out islands): each entry is a closed
     /// polygon the zone does not fill (#818). Not written when empty, so a
-    /// zone without holes keeps its exact pre-#818 bytes.
+    /// zone without holes keeps its exact pre-#818 bytes. A hole with fewer
+    /// than 3 vertices is malformed and consumers must skip it, as the
+    /// renderer skips an outline with `len() < 3`; the parser does not
+    /// validate this.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub holes: Vec<Vec<Point>>,
     #[serde(default)]

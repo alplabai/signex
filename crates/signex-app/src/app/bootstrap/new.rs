@@ -455,9 +455,8 @@ impl Signex {
             crate::panels::components_panel::global_prefs::load_and_mount_all(&mut app.library);
         // #630 — seed the two render surfaces that consume a grid style
         // from the saved preferences. Everything else the old
-        // `render_config` global carried (canvas font/size/style, power
-        // port / label / multisheet style) had no reader in any draw
-        // path, so there is nothing left to seed.
+        // `render_config` global carried (canvas font/size/style) had no
+        // reader in any draw path, so there is nothing left to seed.
         app.document_state.panel_ctx.symbol_grid_style = app.ui_state.symbol_grid_style;
 
         // Multi-window (Phase 1): open the main OS window here. Phase 2

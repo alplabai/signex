@@ -260,7 +260,7 @@ fn a_corrupt_cache_entry_falls_through_to_the_live_lookup_and_warns() {
             let warned = count_warnings(|| parts = adapter.lookup_by_mpn(mpn).unwrap());
             assert_eq!(parts.len(), 1, "the live result is returned");
             assert_eq!(parts[0].mpn, mpn);
-            assert!(warned >= 1, "the corrupt entry must be logged");
+            assert_eq!(warned, 1, "the corrupt entry must be logged once");
         },
     );
 }
