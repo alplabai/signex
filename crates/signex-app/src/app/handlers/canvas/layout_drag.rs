@@ -14,6 +14,33 @@ impl Signex {
         };
     }
 
+    /// True while any pointer-driven drag that `handle_layout_drag_moved` or
+    /// the auto-detach checks act on is in flight (panel splitter, modal,
+    /// document tab, dock tab, floating panel, BOM column resize, PDF pan).
+    /// When false a cursor move only needs to refresh `last_mouse_pos`.
+    pub fn is_layout_drag_active(&self) -> bool {
+        self.interaction_state.dragging.is_some()
+            || self.ui_state.modal_dragging.is_some()
+            || self.ui_state.tab_dragging.is_some()
+            || self.document_state.dock.tab_drag.is_some()
+            || self
+                .document_state
+                .dock
+                .floating
+                .iter()
+                .any(|fp| fp.dragging)
+            || self
+                .document_state
+                .bom_preview
+                .as_ref()
+                .is_some_and(|p| p.column_resize.is_some())
+            || self
+                .document_state
+                .preview
+                .as_ref()
+                .is_some_and(|p| p.panning.is_some())
+    }
+
     pub(crate) fn handle_layout_drag_moved(&mut self, x: f32, y: f32) {
         self.interaction_state.last_mouse_pos = (x, y);
         // BOM column-resize drag: while a header's resize handle is

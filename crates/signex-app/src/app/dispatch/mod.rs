@@ -29,6 +29,13 @@ impl Signex {
             }
             Message::Dock(msg) => self.handle_dock_message(msg),
             Message::Selection(request) => self.handle_selection_request(request),
+            // Idle cursor move (the subscription forwards every one): only
+            // the cached position changes, so skip the drag handlers and
+            // `finish_update`'s per-event work (#111).
+            Message::Ui(UiMsg::DragMove(x, y)) if !self.is_layout_drag_active() => {
+                self.interaction_state.last_mouse_pos = (x, y);
+                Task::none()
+            }
             Message::Ui(msg) => self.dispatch_ui_message(msg),
             // Canvas events keep their own top-level variants (hot path,
             // many emit sites). Both dismiss the first-run tour card on
