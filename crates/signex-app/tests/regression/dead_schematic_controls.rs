@@ -127,6 +127,16 @@ fn ui_grid_cycle_message_steps_the_grid_like_the_menu_item() {
 }
 
 #[test]
+fn cycle_grid_from_a_non_preset_size_lands_on_the_first_preset() {
+    let (mut app, _t) = Signex::new();
+    app.ui_state.grid_size_mm = 0.5;
+    app.ui_state.visible_grid_mm = 0.5;
+
+    let _ = app.update(Message::Menu(MenuMessage::CycleGrid));
+    assert_eq!(app.ui_state.grid_size_mm, 0.635);
+}
+
+#[test]
 fn cycle_grid_leaves_a_deliberately_different_visible_grid_alone() {
     let (mut app, _t) = Signex::new();
     app.ui_state.grid_size_mm = 1.27;

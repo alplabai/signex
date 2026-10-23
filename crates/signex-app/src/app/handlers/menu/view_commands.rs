@@ -18,7 +18,7 @@ impl Signex {
         let i = sizes
             .iter()
             .position(|s| (s - current).abs() < f32::EPSILON)
-            .unwrap_or(0);
+            .unwrap_or(sizes.len() - 1);
         let next = sizes[(i + 1) % sizes.len()];
         let linked = (self.ui_state.visible_grid_mm - current).abs() < f32::EPSILON;
         let mut tasks =

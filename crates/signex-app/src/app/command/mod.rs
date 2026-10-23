@@ -67,7 +67,7 @@ mod tests {
         assert_eq!(app.ui_state.selection_mode, SelectionMode::Inside);
     }
 
-    /// #791 — the `G` key's `next_grid` command steps the grid through the
+    /// #791 — the `next_grid` command (the `N` key in the Classic profile) steps the grid through the
     /// same presets as View > Cycle Grid Size.
     #[test]
     fn next_grid_command_steps_the_grid() {
