@@ -180,3 +180,34 @@ fn the_preview_omits_tabs_the_action_refuses_to_touch() {
         "precondition: the action really does leave the loose tab untouched"
     );
 }
+
+#[test]
+fn the_preview_honours_locks_like_the_action() {
+    use signex_types::schematic::Symbol;
+    let unit = |unit: u32, y: f64| Symbol {
+        uuid: Uuid::new_v4(),
+        lib_id: "Amplifier:LM358".to_string(),
+        reference: "U?".to_string(),
+        unit,
+        position: signex_types::schematic::Point::new(0.0, y),
+        ..Default::default()
+    };
+    let (locked, sibling) = (unit(1, 0.0), unit(2, 10.0));
+    let locked_uuid = locked.uuid;
+    let dir = std::env::temp_dir().join(format!("signex-preview-lock-{}", Uuid::new_v4()));
+    let mut app = app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"]);
+    let root = dir.join("a_root.snxsch");
+    let mut sheet = sheet_with_net("R?", "ROOT_NET", &[]);
+    sheet.symbols = vec![locked, sibling];
+    open_with(&mut app.document_state, &root, sheet);
+    app.document_state.active_path = Some(root);
+    app.ui_state.annotate_locked.insert(locked_uuid);
+
+    let proposed: Vec<String> = app
+        .preview_project_annotations()
+        .into_iter()
+        .filter(|e| e.sheet == "a_root")
+        .map(|e| e.proposed)
+        .collect();
+    assert_eq!(proposed, ["U?", "U?"]);
+}

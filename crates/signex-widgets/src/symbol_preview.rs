@@ -5,12 +5,76 @@
 
 use iced::widget::canvas::{self, Cache, Geometry, Path, Stroke, Text};
 use iced::{Color, Element, Length, Point, Rectangle, Size, Theme};
-use signex_types::schematic::{Graphic, LibSymbol};
+use signex_types::schematic::{Graphic, LibSymbol, circumcircle};
 
 /// Canvas program that draws a LibSymbol preview.
 pub struct SymbolPreview {
     symbol: LibSymbol,
+    /// Unit drawn; items tagged unit `0` are common to every unit.
+    unit: u32,
+    /// Body style drawn; items tagged body style `0` are common to all.
+    body_style: u32,
     cache: Cache,
+}
+
+/// Segments used to flatten an arc or a cubic Bezier into a polyline.
+const CURVE_SEGMENTS: usize = 32;
+
+/// Whether an item tagged `(unit, body_style)` belongs to the shown
+/// `(shown_unit, shown_body_style)`. Tag `0` means "common to all".
+fn is_shown(unit: u32, body_style: u32, shown_unit: u32, shown_body_style: u32) -> bool {
+    (unit == 0 || unit == shown_unit) && (body_style == 0 || body_style == shown_body_style)
+}
+
+/// Points along the circular arc that runs from `start` through `mid` to
+/// `end`, in the input's own space. Collinear points have no circle, so the
+/// three points are returned as a polyline.
+fn arc_points(start: (f64, f64), mid: (f64, f64), end: (f64, f64)) -> Vec<(f64, f64)> {
+    use std::f64::consts::TAU;
+
+    let point = |(x, y): (f64, f64)| signex_types::schematic::Point { x, y };
+    let Some((ox, oy, radius)) = circumcircle(point(start), point(mid), point(end)) else {
+        return vec![start, mid, end];
+    };
+    let ((ax, ay), (bx, by), (cx, cy)) = (start, mid, end);
+
+    let angle = |x: f64, y: f64| (y - oy).atan2(x - ox);
+    let a_start = angle(ax, ay);
+    let ccw = |to: f64| (to - a_start).rem_euclid(TAU);
+    let to_mid = ccw(angle(bx, by));
+    let to_end = ccw(angle(cx, cy));
+    // `mid` lies on the arc: counter-clockwise when reached before `end`.
+    let sweep = if to_mid <= to_end {
+        to_end
+    } else {
+        to_end - TAU
+    };
+
+    (0..=CURVE_SEGMENTS)
+        .map(|i| {
+            let a = a_start + sweep * (i as f64 / CURVE_SEGMENTS as f64);
+            (ox + radius * a.cos(), oy + radius * a.sin())
+        })
+        .collect()
+}
+
+/// Points along the cubic Bezier `start, cp1, cp2, end`. Any other control
+/// point count is returned unchanged as a polyline.
+fn bezier_points(points: &[(f64, f64)]) -> Vec<(f64, f64)> {
+    let [p0, p1, p2, p3] = points else {
+        return points.to_vec();
+    };
+    (0..=CURVE_SEGMENTS)
+        .map(|i| {
+            let t = i as f64 / CURVE_SEGMENTS as f64;
+            let u = 1.0 - t;
+            let w = [u * u * u, 3.0 * u * u * t, 3.0 * u * t * t, t * t * t];
+            (
+                w[0] * p0.0 + w[1] * p1.0 + w[2] * p2.0 + w[3] * p3.0,
+                w[0] * p0.1 + w[1] * p1.1 + w[2] * p2.1 + w[3] * p3.1,
+            )
+        })
+        .collect()
 }
 
 /// Direction vector for a pin's stub in **library space** (Y-up): the pin
@@ -51,8 +115,21 @@ impl SymbolPreview {
     pub fn new(symbol: LibSymbol) -> Self {
         Self {
             symbol,
+            unit: 1,
+            body_style: 1,
             cache: Cache::new(),
         }
+    }
+
+    /// Draw `unit` / `body_style` instead of the default unit 1, body style 1.
+    pub fn with_unit(mut self, unit: u32, body_style: u32) -> Self {
+        self.unit = unit;
+        self.body_style = body_style;
+        self
+    }
+
+    fn shows(&self, unit: u32, body_style: u32) -> bool {
+        is_shown(unit, body_style, self.unit, self.body_style)
     }
 
     /// Compute the bounding box of all graphics + pins.
@@ -77,7 +154,12 @@ impl SymbolPreview {
             }
         };
 
-        for g in &self.symbol.graphics {
+        for g in self
+            .symbol
+            .graphics
+            .iter()
+            .filter(|g| self.shows(g.unit, g.body_style))
+        {
             match &g.graphic {
                 Graphic::Rectangle { start, end, .. } => {
                     expand(start.x, start.y);
@@ -95,23 +177,29 @@ impl SymbolPreview {
                 Graphic::Arc {
                     start, mid, end, ..
                 } => {
-                    expand(start.x, start.y);
-                    expand(mid.x, mid.y);
-                    expand(end.x, end.y);
+                    for (x, y) in arc_points((start.x, start.y), (mid.x, mid.y), (end.x, end.y)) {
+                        expand(x, y);
+                    }
                 }
                 Graphic::Text { position, .. } => {
                     expand(position.x, position.y);
                 }
                 Graphic::Bezier { points, .. } => {
-                    for p in points {
-                        expand(p.x, p.y);
+                    let pts: Vec<(f64, f64)> = points.iter().map(|p| (p.x, p.y)).collect();
+                    for (x, y) in bezier_points(&pts) {
+                        expand(x, y);
                     }
                 }
                 Graphic::TextBox { .. } => {}
             }
         }
 
-        for lib_pin in &self.symbol.pins {
+        for lib_pin in self
+            .symbol
+            .pins
+            .iter()
+            .filter(|p| self.shows(p.unit, p.body_style))
+        {
             let pin = &lib_pin.pin;
             expand(pin.position.x, pin.position.y);
             // Pin extends by length in the pin's direction, in the same
@@ -178,7 +266,12 @@ impl canvas::Program<(), Theme> for SymbolPreview {
             let text_color = Color::from_rgb(0.60, 0.60, 0.65);
 
             // Draw graphics
-            for g in &self.symbol.graphics {
+            for g in self
+                .symbol
+                .graphics
+                .iter()
+                .filter(|g| self.shows(g.unit, g.body_style))
+            {
                 match &g.graphic {
                     Graphic::Rectangle { start, end, .. } => {
                         let p1 = tx(start.x, start.y);
@@ -218,40 +311,24 @@ impl canvas::Program<(), Theme> for SymbolPreview {
                     Graphic::Arc {
                         start, mid, end, ..
                     } => {
-                        // Approximate arc as polyline through 3 points
-                        let p1 = tx(start.x, start.y);
-                        let p2 = tx(mid.x, mid.y);
-                        let p3 = tx(end.x, end.y);
-                        let path = Path::new(|b| {
-                            b.move_to(p1);
-                            b.quadratic_curve_to(p2, p3);
-                        });
-                        frame.stroke(
-                            &path,
-                            Stroke::default().with_color(body_color).with_width(1.5),
-                        );
+                        let pts = arc_points((start.x, start.y), (mid.x, mid.y), (end.x, end.y));
+                        stroke_polyline(frame, &pts, &tx, body_color);
                     }
                     Graphic::Bezier { points, .. } => {
-                        if points.len() >= 2 {
-                            let path = Path::new(|b| {
-                                let p0 = tx(points[0].x, points[0].y);
-                                b.move_to(p0);
-                                for pt in &points[1..] {
-                                    b.line_to(tx(pt.x, pt.y));
-                                }
-                            });
-                            frame.stroke(
-                                &path,
-                                Stroke::default().with_color(body_color).with_width(1.5),
-                            );
-                        }
+                        let ctrl: Vec<(f64, f64)> = points.iter().map(|p| (p.x, p.y)).collect();
+                        stroke_polyline(frame, &bezier_points(&ctrl), &tx, body_color);
                     }
                     Graphic::Text { .. } | Graphic::TextBox { .. } => {}
                 }
             }
 
             // Draw pins
-            for lib_pin in &self.symbol.pins {
+            for lib_pin in self
+                .symbol
+                .pins
+                .iter()
+                .filter(|p| self.shows(p.unit, p.body_style))
+            {
                 let pin = &lib_pin.pin;
                 let origin = tx(pin.position.x, pin.position.y);
                 // Compute the tip in library space, then run it through the
@@ -308,6 +385,28 @@ impl canvas::Program<(), Theme> for SymbolPreview {
     }
 }
 
+/// Stroke `pts` (library space) as one open polyline in the body colour.
+fn stroke_polyline(
+    frame: &mut canvas::Frame,
+    pts: &[(f64, f64)],
+    tx: &impl Fn(f64, f64) -> Point,
+    color: Color,
+) {
+    let Some(((x0, y0), rest)) = pts.split_first() else {
+        return;
+    };
+    if rest.is_empty() {
+        return;
+    }
+    let path = Path::new(|b| {
+        b.move_to(tx(*x0, *y0));
+        for (x, y) in rest {
+            b.line_to(tx(*x, *y));
+        }
+    });
+    frame.stroke(&path, Stroke::default().with_color(color).with_width(1.5));
+}
+
 /// Create a symbol preview element.
 pub fn symbol_preview(symbol: LibSymbol, height: f32) -> Element<'static, ()> {
     iced::widget::canvas(SymbolPreview::new(symbol))
@@ -319,7 +418,9 @@ pub fn symbol_preview(symbol: LibSymbol, height: f32) -> Element<'static, ()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use signex_types::schematic::{LibPin, Pin, PinDirection, PinShapeStyle, Point as LibPoint};
+    use signex_types::schematic::{
+        LibGraphic, LibPin, Pin, PinDirection, PinShapeStyle, Point as LibPoint,
+    };
 
     fn up_down_pin(rotation: f64) -> Pin {
         Pin {
@@ -460,5 +561,88 @@ mod tests {
             mid_y > 0.0,
             "Up pin's tip must pull the bbox toward +y in library space, got mid_y={mid_y}"
         );
+    }
+
+    fn near(a: (f64, f64), b: (f64, f64)) -> bool {
+        (a.0 - b.0).abs() < 1e-9 && (a.1 - b.1).abs() < 1e-9
+    }
+
+    #[test]
+    fn semicircle_arc_peaks_at_the_mid_point_not_halfway() {
+        let pts = arc_points((-1.0, 0.0), (0.0, 1.0), (1.0, 0.0));
+        assert!(near(pts[0], (-1.0, 0.0)));
+        assert!(near(*pts.last().unwrap(), (1.0, 0.0)));
+        let peak = pts.iter().map(|p| p.1).fold(f64::MIN, f64::max);
+        assert!((peak - 1.0).abs() < 1e-9, "apex must reach y=1, got {peak}");
+        assert!(
+            pts.iter().all(|p| (p.0.hypot(p.1) - 1.0).abs() < 1e-9),
+            "every sample must sit on the unit circle"
+        );
+    }
+
+    #[test]
+    fn clockwise_arc_goes_through_mid_the_other_way() {
+        // start (1,0) -> mid (0,-1) -> end (-1,0): lower semicircle.
+        let pts = arc_points((1.0, 0.0), (0.0, -1.0), (-1.0, 0.0));
+        let trough = pts.iter().map(|p| p.1).fold(f64::MAX, f64::min);
+        assert!((trough + 1.0).abs() < 1e-9, "got {trough}");
+        assert!(pts.iter().all(|p| p.1 <= 1e-9), "must stay below the axis");
+    }
+
+    #[test]
+    fn collinear_arc_falls_back_to_a_polyline() {
+        let pts = arc_points((0.0, 0.0), (1.0, 0.0), (2.0, 0.0));
+        assert_eq!(pts, vec![(0.0, 0.0), (1.0, 0.0), (2.0, 0.0)]);
+    }
+
+    #[test]
+    fn bezier_is_flattened_through_a_curve_not_its_control_polygon() {
+        let ctrl = [(0.0, 0.0), (0.0, 3.0), (3.0, 3.0), (3.0, 0.0)];
+        let pts = bezier_points(&ctrl);
+        assert!(pts.len() > ctrl.len());
+        assert!(near(pts[0], ctrl[0]));
+        assert!(near(*pts.last().unwrap(), ctrl[3]));
+        // The curve's apex is 0.75 * 3, well below the control point at y=3.
+        let peak = pts.iter().map(|p| p.1).fold(f64::MIN, f64::max);
+        assert!((peak - 2.25).abs() < 1e-9, "got {peak}");
+    }
+
+    #[test]
+    fn item_filter_keeps_the_shown_unit_and_common_items_only() {
+        assert!(is_shown(1, 1, 1, 1));
+        assert!(!is_shown(2, 1, 1, 1), "another unit's item is hidden");
+        assert!(!is_shown(1, 2, 1, 1), "another body style is hidden");
+        assert!(is_shown(0, 1, 2, 1), "unit 0 is common to every unit");
+        assert!(is_shown(1, 0, 1, 2), "body style 0 is common to all");
+    }
+
+    #[test]
+    fn bounds_ignore_pins_and_graphics_of_other_units() {
+        let mut symbol = symbol_with_pin(0.0);
+        symbol.pins.push(LibPin {
+            unit: 2,
+            body_style: 1,
+            pin: Pin {
+                position: LibPoint { x: 500.0, y: 500.0 },
+                ..up_down_pin(0.0)
+            },
+        });
+        symbol.graphics.push(LibGraphic {
+            unit: 2,
+            body_style: 1,
+            graphic: Graphic::Circle {
+                center: LibPoint {
+                    x: -500.0,
+                    y: -500.0,
+                },
+                radius: 10.0,
+                width: 0.0,
+                fill: Default::default(),
+            },
+        });
+        let unit1 = SymbolPreview::new(symbol.clone()).bounds();
+        assert!(unit1.2 < 100.0 && unit1.0 > -100.0, "unit 1 box: {unit1:?}");
+        let unit2 = SymbolPreview::new(symbol).with_unit(2, 1).bounds();
+        assert!(unit2.2 > 400.0 && unit2.0 < -400.0, "unit 2 box: {unit2:?}");
     }
 }

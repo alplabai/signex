@@ -65,6 +65,8 @@ fn open_library_total_rows_sums_tables() {
         cached_symbols: Vec::new(),
         cached_footprints: Vec::new(),
         cached_sims: Vec::new(),
+        cached_classes: Vec::new(),
+        observed_stamp: None,
         display: LibraryDisplaySettings::default(),
     };
     assert_eq!(lib.total_rows(), 0);
@@ -235,6 +237,8 @@ fn library_with_cached_primitives(root: &Path, library_id: Uuid) -> OpenLibrary 
         cached_symbols: vec![cached_summary("R_0805")],
         cached_footprints: vec![cached_summary("SOIC-8")],
         cached_sims: vec![cached_summary("BC547.lib")],
+        cached_classes: Vec::new(),
+        observed_stamp: None,
         display: LibraryDisplaySettings::default(),
     }
 }
