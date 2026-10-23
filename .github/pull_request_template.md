@@ -68,5 +68,7 @@ Hard CI gates (must pass to merge):
 
 Advisory (surfaced by CI, not blocking — please still keep them clean):
 
+- [ ] The issue was claimed before work started, and no other open PR covers
+      it ([Claiming an issue](../CONTRIBUTING.md#claiming-an-issue))
 - [ ] New code has tests where appropriate
 - [ ] Milestone is set on this PR
