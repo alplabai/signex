@@ -318,3 +318,85 @@ fn the_real_store_writes_the_dock_and_keeps_other_settings() {
     assert_eq!(prefs["dock"]["left"]["collapsed"], true);
     assert_eq!(prefs["dock"]["right"]["collapsed"], false);
 }
+
+/// Mutating the dock without going through `persist_dock_layout_soon`
+/// (floating-layout and drag paths) must still reach disk on quit.
+#[test]
+fn quit_writes_a_dock_change_that_never_armed_the_save_timer() {
+    let (mut app, recorder) = app_with_recorder();
+    app.document_state
+        .dock
+        .update(DockMessage::ToggleCollapse(PanelPosition::Left));
+    assert_eq!(recorder.count(), 0);
+
+    let quit = app.update(Message::Window(WindowMsg::CloseMainWindow));
+    let _ = run(quit);
+
+    assert_eq!(recorder.count(), 1, "quit must capture the live layout");
+    assert!(recorder.writes.lock().unwrap()[0].1.left.collapsed);
+}
+
+/// After a failed write the disk is stale; quit retries even though no
+/// further dock message arrived.
+#[test]
+fn quit_retries_after_a_failed_write() {
+    let _ = diagnostics::init_logging();
+    let (mut app, recorder) = app_with_recorder();
+    *recorder.fail_with.lock().unwrap() = Some("dock_layout_persist retry marker 41c9".into());
+    let change = app.update(Message::Dock(DockMessage::ToggleCollapse(
+        PanelPosition::Left,
+    )));
+    let elapsed = dock_layout_messages(run(change));
+    let saved = dock_layout_messages(run(app.update(Message::DockLayout(elapsed[0].clone()))));
+    let _ = app.update(Message::DockLayout(saved[0].clone()));
+    assert_eq!(recorder.count(), 1);
+
+    *recorder.fail_with.lock().unwrap() = None;
+    let quit = app.update(Message::Window(WindowMsg::CloseMainWindow));
+    let _ = run(quit);
+
+    assert_eq!(recorder.count(), 2, "quit must retry the failed write");
+}
+
+/// A malformed `prefs.json` is refused and reported once, not once per
+/// dock write (#602 latch), and the file is left byte-identical.
+#[test]
+fn a_malformed_prefs_file_is_reported_once_across_repeated_dock_writes() {
+    let _ = diagnostics::init_logging();
+    let dir = tempfile::Builder::new()
+        .prefix("dock-latch-7f3a-")
+        .tempdir()
+        .unwrap();
+    let path = dir.path().join("prefs.json");
+    let broken = br#"{"theme": "signex""#;
+    std::fs::write(&path, broken).unwrap();
+    let refusals = || {
+        diagnostics::recent_entries()
+            .into_iter()
+            .filter(|entry| entry.message.contains("dock-latch-7f3a-"))
+            .count()
+    };
+    let (mut app, _boot) = Signex::new();
+    app.document_state.dock_layout_sync = DockLayoutSync::new(
+        Arc::new(signex_app::fonts::PrefsDockLayoutStore::at(path.clone())),
+        DockLayoutSnapshot::capture(&app.document_state.dock),
+    );
+
+    for region in [
+        PanelPosition::Left,
+        PanelPosition::Right,
+        PanelPosition::Bottom,
+    ] {
+        let change = app.update(Message::Dock(DockMessage::ToggleCollapse(region)));
+        let elapsed = dock_layout_messages(run(change));
+        let saved = dock_layout_messages(run(app.update(Message::DockLayout(elapsed[0].clone()))));
+        assert!(matches!(saved.as_slice(), [DockLayoutMsg::Saved(Ok(()))]));
+    }
+
+    let reports = refusals();
+    assert_eq!(
+        reports, 1,
+        "one report for the refused file, not one per write"
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), broken);
+}

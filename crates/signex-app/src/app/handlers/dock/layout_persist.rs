@@ -56,7 +56,12 @@ impl Signex {
     /// Write any pending layout now and wait for a write that is already
     /// running, then run `next` (the quit path).
     pub(crate) fn flush_dock_layout_then(&mut self, next: Task<Message>) -> Task<Message> {
+        // Capture first: some dock mutations never reach
+        // `persist_dock_layout_soon`, and after a failed write the disk is
+        // stale; observing here covers both (a no-op when already current).
+        let current = DockLayoutSnapshot::capture(&self.document_state.dock);
         let sync = &mut self.document_state.dock_layout_sync;
+        let _ = sync.observe(current);
         let barrier = sync.barrier();
         let pending = sync.flush().map(write_dock_layout_task);
         let drained = Task::perform(

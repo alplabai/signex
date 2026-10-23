@@ -38,8 +38,6 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
-use super::write_pref_atomic;
-
 /// Why an existing `prefs.json` could not be loaded for an in-place
 /// update. Each variant is a state the old chain silently turned into
 /// an empty file; `Display` names what the user has to fix.
@@ -123,6 +121,11 @@ static PREFS_IO: Mutex<()> = Mutex::new(());
 
 /// Take [`PREFS_IO`], recovering a poisoned lock: it guards no data, so a
 /// panicked writer leaves nothing half-updated.
+///
+/// Lock order: the lock is not re-entrant, and `prefs_path()`'s first
+/// initialisation takes it too (via `migrate_legacy_prefs`). Evaluate
+/// `prefs_path()` BEFORE taking this lock and never call it while holding
+/// the guard, or the first caller deadlocks on itself.
 pub(super) fn prefs_io_lock() -> std::sync::MutexGuard<'static, ()> {
     PREFS_IO
         .lock()
@@ -162,9 +165,10 @@ fn report_refusal(path: &Path, context: &str, error: &PrefsLoadError) {
         path = %path.display(),
         context = context,
         error = %error,
-        "preferences were not saved: the existing preferences file could not be loaded, \
-         and it was left exactly as it is rather than overwritten, so no other setting \
-         was lost — repair or delete the file to start saving preferences again"
+        "preferences were not saved: the existing preferences file {} could not be \
+         loaded, and it was left exactly as it is rather than overwritten, so no other \
+         setting was lost — repair or delete the file to start saving preferences again",
+        path.display()
     );
 }
 
@@ -179,55 +183,51 @@ fn forget_refusal(path: &Path) {
 /// touching the file at all (#594).
 ///
 /// `context` is the preference key being written; it rides through to
-/// `write_pref_atomic` and into the refusal report so a failure names
+/// the write-failure log and into the refusal report so a failure names
 /// which knob the user was turning. Creates the parent dir if missing.
 pub(super) fn update_prefs_json(
     path: &Path,
     context: &str,
     mutator: impl FnOnce(&mut serde_json::Map<String, serde_json::Value>),
 ) {
-    let _io = prefs_io_lock();
-    let mut prefs = match load_for_update(path) {
-        Ok(prefs) => prefs,
-        Err(error) => {
-            report_refusal(path, context, &error);
-            return;
-        }
-    };
-    forget_refusal(path);
-    mutator(&mut prefs);
-    match serde_json::to_string_pretty(&serde_json::Value::Object(prefs)) {
-        Ok(serialized) => write_pref_atomic(path, serialized.as_bytes(), context),
-        Err(error) => tracing::error!(
+    if let Err(reason) = try_update_prefs_json(path, context, mutator) {
+        tracing::error!(
             target: "signex::prefs",
             path = %path.display(),
             context = context,
-            error = %error,
-            "preferences were not saved: the new value could not be serialised to JSON; \
-             the existing file was left unchanged so no other setting was lost"
-        ),
+            error = %reason,
+            "a preference was not saved: the change will be gone at the next launch — \
+             the setting itself is still applied for this session"
+        );
     }
 }
 
-/// [`update_prefs_json`] for callers that report the failure themselves.
+/// [`update_prefs_json`] for callers that report a write failure themselves.
 ///
 /// The dock-layout writer runs on a background task and must hand the
 /// outcome back to `update` so the Messages panel and the retry logic see
-/// it (#692), so this returns the failure instead of logging it. The
-/// refusal rule is identical: a file that cannot be loaded is left
-/// byte-identical and reported as an error.
+/// it (#692), so a serialise or write failure is returned instead of
+/// logged.
+///
+/// A file that cannot be loaded is a *refusal*, not a failure: it is left
+/// byte-identical, reported once through the #602 latch, and `Ok(())` is
+/// returned. Retrying cannot fix it and returning `Err` would make a caller
+/// that retries on every change (the dock, on hover) post one error per
+/// attempt. A clean load clears the latch so a later break reports again.
 pub(super) fn try_update_prefs_json(
     path: &Path,
     context: &str,
     mutator: impl FnOnce(&mut serde_json::Map<String, serde_json::Value>),
 ) -> Result<(), String> {
     let _io = prefs_io_lock();
-    let mut prefs = load_for_update(path).map_err(|error| {
-        format!(
-            "{} {error}; it was left as it is, so no other setting was lost ({context} not saved)",
-            path.display()
-        )
-    })?;
+    let mut prefs = match load_for_update(path) {
+        Ok(prefs) => prefs,
+        Err(error) => {
+            report_refusal(path, context, &error);
+            return Ok(());
+        }
+    };
+    forget_refusal(path);
     mutator(&mut prefs);
     let serialized = serde_json::to_string_pretty(&serde_json::Value::Object(prefs))
         .map_err(|error| format!("{context} could not be serialised: {error}"))?;

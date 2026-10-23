@@ -63,7 +63,7 @@ impl DockArea {
     ///
     /// The guard spans the whole dock, not just `position` (#641).
     /// Per-region dedupe let one kind be docked up to three times, and
-    /// `fonts::write_dock_layout` then persisted the duplicates. The
+    /// `PrefsDockLayoutStore` then persisted the duplicates. The
     /// same global guard is what de-duplicates a `prefs.json` written
     /// before this fix: `fonts::read_dock_layout` replays a saved
     /// layout through here region by region, so the second and third
