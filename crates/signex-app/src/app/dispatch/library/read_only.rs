@@ -23,6 +23,9 @@ impl Signex {
             .library_at(library_path)
             .map(|lib| lib.display_name.clone())
             .unwrap_or_else(|| library_path.display().to_string());
+        crate::diagnostics::log_warning(format!(
+            "[library] write refused: {name} is mounted read-only"
+        ));
         self.document_state.error_notice = Some(crate::app::state::ErrorNotice::read_only(&name));
         true
     }

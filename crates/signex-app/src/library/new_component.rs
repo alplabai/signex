@@ -131,6 +131,9 @@ pub fn view<'a>(
         .open_libraries
         .iter()
         .enumerate()
+        // A read-only library (the stock library) cannot take a new
+        // component, so it is not offered as a target.
+        .filter(|(_, lib)| !state.is_read_only(&lib.root))
         .map(|(i, lib)| LibraryPick {
             idx: i,
             label: lib.display_name.clone(),

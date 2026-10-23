@@ -18,7 +18,7 @@ use signex_library::lifecycle::LifecycleState;
 use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig};
 use signex_library::manufacturer::ManufacturerPart;
 use signex_library::param::ParamMap;
-use signex_library::primitive::{PrimitiveRef, SimKind, SimModel, Symbol};
+use signex_library::primitive::{Footprint, PrimitiveRef, SimKind, SimModel, Symbol};
 use uuid::Uuid;
 
 fn seeded_library(dir: &Path) -> (PathBuf, Uuid, RowId) {
@@ -182,6 +182,10 @@ fn every_write_entry_point_is_refused_and_disk_is_untouched() {
     assert_read_only("try_lock", a.try_lock(row_id, FieldSet::Symbol));
     assert_read_only("release_lock", a.release_lock(row_id, FieldSet::Symbol));
     assert_read_only("save_symbol", a.save_symbol(Symbol::empty("X"), "m"));
+    assert_read_only(
+        "save_footprint",
+        a.save_footprint(Footprint::empty("X"), "m"),
+    );
     assert_read_only("save_sim", a.save_sim(sim, "m"));
     assert_read_only(
         "commit_external_change",

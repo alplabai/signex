@@ -131,11 +131,16 @@ impl LibraryState {
     /// Display name of the read-only library whose directory contains
     /// `path`, or `None` when `path` is outside every read-only mount.
     pub fn read_only_library_name_containing(&self, path: &Path) -> Option<String> {
+        // Compared on resolved paths: a symlinked, differently cased or
+        // `..` spelling of a file inside the mount must not slip past.
+        let path = resolved_path(path);
         self.open_libraries
             .iter()
             .find(|lib| {
                 self.is_read_only(&lib.root)
-                    && lib.root_dir().is_some_and(|dir| path.starts_with(dir))
+                    && lib
+                        .root_dir()
+                        .is_some_and(|dir| path.starts_with(resolved_path(dir)))
             })
             .map(|lib| lib.display_name.clone())
     }
@@ -595,5 +600,44 @@ impl std::fmt::Debug for OpenLibrary {
             .field("tables_len", &self.tables.len())
             .field("total_rows", &self.total_rows())
             .finish()
+    }
+}
+
+/// `path` with symlinks, `..` and case differences resolved. A path
+/// that does not exist yet (a save target) resolves through its deepest
+/// existing ancestor, with the remaining components appended after
+/// folding `.` and `..` lexically.
+pub(crate) fn resolved_path(path: &Path) -> PathBuf {
+    if let Ok(real) = path.canonicalize() {
+        return real;
+    }
+    let mut missing: Vec<std::ffi::OsString> = Vec::new();
+    let mut base = path.to_path_buf();
+    loop {
+        if let Ok(real) = base.canonicalize() {
+            let mut out = real;
+            for part in missing.iter().rev() {
+                if part == ".." {
+                    out.pop();
+                } else if part != "." {
+                    out.push(part);
+                }
+            }
+            return out;
+        }
+        match (base.file_name(), base.parent()) {
+            (Some(name), Some(parent)) => {
+                missing.push(name.to_os_string());
+                base = parent.to_path_buf();
+            }
+            _ => {
+                if base.file_name().is_none() && base.ends_with("..") {
+                    missing.push("..".into());
+                    base = base.parent().map(Path::to_path_buf).unwrap_or_default();
+                    continue;
+                }
+                return path.to_path_buf();
+            }
+        }
     }
 }
