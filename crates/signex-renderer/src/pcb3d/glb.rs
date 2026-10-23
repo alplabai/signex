@@ -84,7 +84,8 @@ pub fn ingest_runtime_model_with_bridge(
 
 fn map_import_warning(warning: ModelImportWarning) -> RuntimeModelBridgeWarning {
     match warning {
-        ModelImportWarning::TextureMissing { uri } => {
+        ModelImportWarning::TextureMissing { uri }
+        | ModelImportWarning::TextureUnreadable { uri, .. } => {
             RuntimeModelBridgeWarning::TextureMissing { uri }
         }
         ModelImportWarning::EmptyPrimitive {

@@ -1,0 +1,63 @@
+format = "snxpcb/1"
+pcb_id = "00000000-0000-0000-0000-000000000000"
+version = 1
+generator = "signex-test"
+thickness = 1.6
+
+
+[[nets.entries]]
+number = 1
+name = "VCC"
+
+[[nets.entries]]
+number = 2
+name = "GND"
+
+[footprints]
+content = """
+uuid                                  ref  library              pos_x     pos_y     rotation   layer      value
+0192a8c0-0000-7000-8000-000000001001  R1   generic-0603.snxfpt  50123457  26000000  0.1234567  TopCopper  10k
+"""
+
+[pads]
+content = """
+uuid  footprint_ref  pin  pos_x  pos_y  size_x  size_y  pad_type  shape  layers  drill  net_number  net_name  roundrect_ratio
+"""
+
+[tracks]
+content = """
+uuid                                  net  layer      width   start_x  start_y   end_x     end_y
+0192a8c0-0000-7000-8000-000000003001  1    TopCopper  250000  1234567  -2345679  33333333  66666667
+"""
+
+[vias]
+content = """
+uuid                                  net  pos_x  pos_y    drill   diameter  layers                  via_type
+0192a8c0-0000-7000-8000-000000004001  1    -1     7000001  300000  600000    TopCopper,BottomCopper  through
+"""
+
+[extras.footprints.0192a8c0-0000-7000-8000-000000001001]
+footprint_id = "generic-0603.snxfpt"
+locked = false
+graphics = []
+properties = []
+
+[extras.board]
+graphics = []
+texts = []
+
+[[extras.board.outline]]
+x = 0.0000004
+y = 0.0000006
+
+[[extras.board.outline]]
+x = 100.1234567
+y = 0.0
+
+[[extras.board.outline]]
+x = 100.1234567
+y = 80.9876543
+
+[[extras.board.outline]]
+x = -12.3456789
+y = 80.9876543

@@ -406,6 +406,9 @@ pub enum PanelMsg {
     HistoryRestoreClicked {
         sha: String,
     },
+    /// Cancel on the History panel's "Discard unsaved edits and restore"
+    /// confirmation row.
+    HistoryRestoreCancelled,
     /// v0.22 Phase E3+E4 polish — Hover state for the Properties
     /// panel's "Conflicts (worst first)" list. `true` on row
     /// `on_enter`, `false` on `on_exit`. The handler flips

@@ -70,6 +70,7 @@ fn fixture() -> Fixture {
         symbols_count: 0,
         wires_count: 0,
         labels_count: 0,
+        unknown: Default::default(),
     };
     let (mut app, _task) = Signex::new();
     let id = app.document_state.mint_project_id();
@@ -86,6 +87,7 @@ fn fixture() -> Fixture {
             active_variant: None,
             libraries: Vec::new(),
             enable_git: false,
+            unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
     });
@@ -232,6 +234,7 @@ fn a_project_library_rename_repoints_the_entry_in_memory_and_in_the_saved_projec
             path: PathBuf::from("parts.snxlib"),
             kind: LibraryEntryKind::ProjectLocal,
             library_id: None,
+            unknown: Default::default(),
         });
     // The user's last save lists the library.
     signex_types::project::write_project(&f.prj, &f.app.document_state.projects[0].data)

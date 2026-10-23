@@ -769,6 +769,8 @@ impl Default for Symbol {
 
 // ---------------------------------------------------------------------------
 // Wiring primitives
+mod parts;
+pub use parts::*;
 mod sheet;
 pub use sheet::*;
 

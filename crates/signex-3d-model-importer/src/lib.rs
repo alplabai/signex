@@ -3,6 +3,7 @@ pub mod error;
 pub mod glb;
 pub mod gltf;
 pub mod normalize;
+pub mod read;
 pub mod step;
 pub mod vrml;
 
@@ -153,10 +154,19 @@ pub fn import_model(request: ModelImportRequest) -> Result<ModelImportResult, Mo
         }
         SourceFormat::Glb => {
             // GLB pass-through: copy as-is
-            let bytes = std::fs::read(source_path).map_err(|e| ModelImportError::IoFailed {
-                path: source_path.clone(),
-                message: e.to_string(),
+            let bytes = read::read_capped(source_path, read::MAX_READ_BYTES).map_err(|e| {
+                ModelImportError::IoFailed {
+                    path: source_path.clone(),
+                    message: e.to_string(),
+                }
             })?;
+            // A corrupt source would otherwise be cached and then always miss.
+            if !cache::is_valid_glb(&bytes) {
+                return Err(ModelImportError::GltfParseFailed {
+                    path: source_path.clone(),
+                    reason: "not a well-formed GLB (header, length or chunks)".to_owned(),
+                });
+            }
             (bytes, vec![], 0, 0)
         }
     };

@@ -495,6 +495,9 @@ pub struct LibraryState {
     /// concurrent mounts of *different* libraries are both legitimate,
     /// so a single counter would cancel the wrong one.
     pub pending_mounts: HashMap<PathBuf, super::mount::MountIntent>,
+    /// An external-edit `stat` pass is running off-thread (#531); a tick
+    /// that lands meanwhile is dropped rather than stacked behind it.
+    pub external_poll_in_flight: bool,
 }
 
 /// Three mount sources surfaced as collapsible sections inside the
