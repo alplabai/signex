@@ -29,10 +29,16 @@ mod embed;
 mod font;
 pub(crate) mod layout;
 mod page;
+mod page_setup;
 pub mod palette;
 mod subset;
 mod surface;
 
+pub use page_setup::{
+    MAX_PAGE_EDGE_MM, MAX_SCALE_PERCENT, MIN_CUSTOM_EDGE_MM, MIN_PRINTABLE_MM, MarginEdge,
+    MarginUpdate, PageSetupError, PageSizeKind, PdfScaleMode, parse_custom_edge_mm, parse_mm,
+    parse_percent,
+};
 pub use palette::SchematicPalette;
 
 use crate::svg::{
