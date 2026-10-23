@@ -184,6 +184,20 @@ impl Signex {
             return Task::none();
         };
 
+        // Two pending entries for one path would share a tree key, so the
+        // tree could expand or select the wrong row (#855).
+        if loaded
+            .pending_libraries
+            .values()
+            .any(|spec| spec.lib_path == lib_path)
+        {
+            crate::diagnostics::log_warning(format!(
+                "Library {} is already waiting to be created; save the project to create it.",
+                lib_path.display()
+            ));
+            return Task::none();
+        }
+
         match crate::library::commands::register_pending_library(
             lib_path.clone(),
             enable_git,

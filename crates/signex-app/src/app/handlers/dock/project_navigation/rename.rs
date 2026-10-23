@@ -16,9 +16,11 @@ impl Signex {
             .and_then(|s| s.to_str())
             .unwrap_or("")
             .to_string();
+        let project_id = self.project_id_at_tree_path(&tree_path);
         self.ui_state.rename_dialog = Some(crate::app::RenameDialogState {
             target_path,
             tree_path,
+            project_id,
             buffer: filename,
             error: None,
             is_project_rename: false,
@@ -45,6 +47,7 @@ impl Signex {
         self.ui_state.rename_dialog = Some(crate::app::RenameDialogState {
             target_path,
             tree_path,
+            project_id: Some(project.id),
             buffer: stem,
             error: None,
             is_project_rename: true,
@@ -52,9 +55,13 @@ impl Signex {
     }
 
     pub(crate) fn handle_rename_submit(&mut self) -> iced::Task<Message> {
-        let Some(state) = self.ui_state.rename_dialog.clone() else {
+        let Some(mut state) = self.ui_state.rename_dialog.clone() else {
             return iced::Task::none();
         };
+        if !self.repoint_dialog_tree_path(state.project_id, &mut state.tree_path) {
+            self.set_rename_error("The project was closed while this dialog was open.");
+            return iced::Task::none();
+        }
 
         if state.is_project_rename {
             return self.handle_project_rename_submit(&state);
