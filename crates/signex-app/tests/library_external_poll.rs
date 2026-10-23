@@ -37,8 +37,12 @@ fn poll_reports_an_external_edit_once_and_the_refresh_shows_it() {
     // Another process adds a component behind the mounted adapter's back.
     append_component(&snxlib, SYMBOLS).expect("append_component");
 
+    let changed: Vec<_> = libraries_changed(&state.watched_libraries())
+        .into_iter()
+        .map(|(path, _stamp)| path)
+        .collect();
     assert_eq!(
-        libraries_changed(&state.watched_libraries()),
+        changed,
         std::slice::from_ref(&snxlib),
         "the poll must name the library whose file changed"
     );
@@ -54,5 +58,130 @@ fn poll_reports_an_external_edit_once_and_the_refresh_shows_it() {
     assert!(
         libraries_changed(&state.watched_libraries()).is_empty(),
         "the refresh re-stamped the cache, so the same edit is not reported twice"
+    );
+}
+
+use signex_app::app::{Message, Signex};
+use signex_app::library::external_poll::PollOutcome;
+use signex_app::library::messages::LibraryMessage;
+
+fn polled(app: &mut Signex, outcome: PollOutcome) {
+    drop(
+        app.update(Message::Library(LibraryMessage::ExternalEditsPolled(
+            outcome,
+        ))),
+    );
+}
+
+/// #827: a tick while a timed-out pass's `stat` thread is still running
+/// starts no second pass.
+#[test]
+fn no_new_poll_starts_behind_a_hung_stat() {
+    let scale = Scale::new("hung", SYMBOLS, FOOTPRINTS);
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let snxlib = generate_library(tmp.path(), "hung", &scale).expect("generate_library");
+    let (mut app, _t) = Signex::new();
+    signex_app::library::commands::open_library(&mut app.library, snxlib).expect("open");
+    app.library
+        .external_poll_stat_running
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+
+    drop(app.update(Message::Library(LibraryMessage::ExternalEditsPollTicked)));
+    assert!(
+        !app.library.external_poll_in_flight,
+        "the tick must be dropped"
+    );
+}
+
+/// How many Messages-panel entries contain every one of `needles`.
+fn logged(needles: &[&str]) -> usize {
+    drop(signex_app::diagnostics::init_logging());
+    signex_app::diagnostics::recent_entries()
+        .iter()
+        .filter(|e| needles.iter().all(|n| e.message.contains(n)))
+        .count()
+}
+
+fn mounted(name: &'static str) -> (tempfile::TempDir, std::path::PathBuf, Signex) {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let snxlib = generate_library(tmp.path(), name, &Scale::new(name, SYMBOLS, FOOTPRINTS))
+        .expect("generate_library");
+    let (mut app, _t) = Signex::new();
+    signex_app::library::commands::open_library(&mut app.library, snxlib.clone()).expect("open");
+    (tmp, snxlib, app)
+}
+
+/// #827: a stalled pass is reported once across repeated timeouts, and
+/// "resumed" once when a pass completes again.
+#[test]
+fn a_timed_out_poll_is_reported_once_and_recovers() {
+    let stalls = || logged(&["took longer than"]);
+    let resumes = || logged(&["external-edit checks resumed"]);
+    let (stalls_before, resumes_before) = (stalls(), resumes());
+    let (mut app, _t) = Signex::new();
+    app.library.external_poll_in_flight = true;
+
+    polled(&mut app, PollOutcome::TimedOut);
+    polled(&mut app, PollOutcome::TimedOut);
+    assert!(!app.library.external_poll_in_flight);
+    assert_eq!(stalls() - stalls_before, 1, "one warning for two timeouts");
+
+    polled(&mut app, PollOutcome::Changed(Vec::new()));
+    assert_eq!(resumes() - resumes_before, 1);
+}
+
+/// Positive control: a real external edit is refreshed and reported once.
+#[test]
+fn an_external_edit_is_reported_in_the_messages_panel() {
+    let (_t, snxlib, mut app) = mounted("extpoll-real");
+    let before = logged(&["extpoll-real changed on disk; reloaded"]);
+    append_component(&snxlib, SYMBOLS).expect("append_component");
+    let changed = libraries_changed(&app.library.watched_libraries());
+    polled(&mut app, PollOutcome::Changed(changed));
+    assert_eq!(
+        logged(&["extpoll-real changed on disk; reloaded"]) - before,
+        1
+    );
+}
+
+/// #827 item 1: a result computed before an in-app refresh re-stamped the
+/// library is stale, and reports nothing.
+#[test]
+fn a_stale_poll_result_is_not_reported_as_an_external_edit() {
+    let (_t, snxlib, mut app) = mounted("extpoll-stale");
+    append_component(&snxlib, SYMBOLS).expect("append_component");
+    let changed = libraries_changed(&app.library.watched_libraries());
+    assert_eq!(changed.len(), 1);
+    app.library.refresh_components(&snxlib).expect("refresh");
+
+    polled(&mut app, PollOutcome::Changed(changed));
+    assert_eq!(logged(&["extpoll-stale changed on disk"]), 0);
+}
+
+/// #827 item 1: the refresh after the app's own class write is silent, but
+/// an external edit made after it is still reported.
+#[test]
+fn the_apps_own_class_write_is_silent_but_a_later_external_edit_is_not() {
+    let (_t, snxlib, mut app) = mounted("extpoll-own");
+    // Stand-in for the class write: the file changes, then `refresh_classes`
+    // runs, as the class-edit dispatch does.
+    append_component(&snxlib, SYMBOLS).expect("append_component");
+    app.library.refresh_classes(&snxlib);
+    let changed = libraries_changed(&app.library.watched_libraries());
+    polled(&mut app, PollOutcome::Changed(changed));
+    assert_eq!(
+        logged(&["extpoll-own changed on disk"]),
+        0,
+        "own write is silent"
+    );
+
+    app.library.refresh_classes(&snxlib);
+    append_component(&snxlib, SYMBOLS + 1).expect("append_component");
+    let changed = libraries_changed(&app.library.watched_libraries());
+    polled(&mut app, PollOutcome::Changed(changed));
+    assert_eq!(
+        logged(&["extpoll-own changed on disk; reloaded"]),
+        1,
+        "an edit after the own write is external"
     );
 }

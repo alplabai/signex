@@ -348,3 +348,61 @@ fn import_missing_source_returns_error() {
         Err(signex_3d_model_importer::ModelImportError::SourceNotFound { .. })
     ));
 }
+
+fn write_stray_brace_wrl(path: &std::path::Path) {
+    std::fs::write(
+        path,
+        b"#VRML V2.0 utf8\n}\nShape { geometry IndexedFaceSet { coord Coordinate { point [ 0 0 0, 1 0 0, 0 1 0 ] } coordIndex [ 0 1 2 -1 ] } }\n",
+    )
+    .expect("write fixture");
+}
+
+fn import(
+    src: &std::path::Path,
+    cache: &std::path::Path,
+) -> signex_3d_model_importer::ModelImportResult {
+    import_model(ModelImportRequest {
+        model_id: "m".into(),
+        source_path: src.to_path_buf(),
+        cache_dir: cache.to_path_buf(),
+        converter_version: "0.1.0",
+    })
+    .expect("import failed")
+}
+
+/// #871: a cache hit reports the warnings the conversion produced, so a
+/// repaired model keeps saying so on every later import.
+#[test]
+fn a_cache_hit_keeps_the_conversion_warnings() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let src = dir.path().join("stray.wrl");
+    let cache = dir.path().join("cache");
+    write_stray_brace_wrl(&src);
+
+    let first = import(&src, &cache);
+    assert!(!first.cache_hit);
+    assert_eq!(first.warnings.len(), 1);
+
+    let second = import(&src, &cache);
+    assert!(second.cache_hit);
+    assert_eq!(second.warnings, first.warnings);
+}
+
+/// A cached GLB without a warnings sidecar (written before #871) is a miss:
+/// the model is converted again and its warnings come back.
+#[test]
+fn a_glb_without_a_warnings_sidecar_is_converted_again() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let src = dir.path().join("stray.wrl");
+    let cache = dir.path().join("cache");
+    write_stray_brace_wrl(&src);
+    let first = import(&src, &cache);
+    std::fs::remove_file(signex_3d_model_importer::cache::warnings_path(
+        &first.glb_path,
+    ))
+    .expect("remove sidecar");
+
+    let again = import(&src, &cache);
+    assert!(!again.cache_hit, "no sidecar, no hit");
+    assert_eq!(again.warnings, first.warnings);
+}

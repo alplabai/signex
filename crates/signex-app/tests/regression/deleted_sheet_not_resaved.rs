@@ -96,6 +96,7 @@ fn deleting_a_dirty_sheet_is_not_resurrected_by_save_all_on_quit() {
     open_dirty_sheet(&mut app, &sheet, id);
 
     app.ui_state.remove_dialog = Some(RemoveDialogState {
+        project_id: None,
         target_path: sheet.clone(),
         tree_path: vec![0, 0],
         display_name: "X.snxsch".to_string(),
@@ -195,6 +196,7 @@ fn closing_a_clean_project_keeps_a_sibling_projects_clean_engine() {
 
 fn delete_file(app: &mut Signex, target: &Path) {
     app.ui_state.remove_dialog = Some(RemoveDialogState {
+        project_id: None,
         target_path: target.to_path_buf(),
         tree_path: vec![0, 0],
         display_name: target.file_name().unwrap().to_string_lossy().into_owned(),

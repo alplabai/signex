@@ -82,6 +82,7 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
 /// Open the rename modal targeting a project root.
 fn arm_project_rename(app: &mut Signex, target: &Path, new_stem: &str) {
     app.ui_state.rename_dialog = Some(RenameDialogState {
+        project_id: None,
         target_path: target.to_path_buf(),
         tree_path: vec![0],
         buffer: new_stem.to_string(),
@@ -93,6 +94,7 @@ fn arm_project_rename(app: &mut Signex, target: &Path, new_stem: &str) {
 /// Open the remove modal for a tree leaf.
 fn arm_remove_dialog(app: &mut Signex, target: &Path) {
     app.ui_state.remove_dialog = Some(RemoveDialogState {
+        project_id: None,
         target_path: target.to_path_buf(),
         tree_path: vec![0, 0],
         display_name: target
@@ -1446,4 +1448,149 @@ fn save_all_writes_dirty_snxprj_and_clears_dirty_marker() {
     let reloaded = signex_types::project::parse_project(&prj_path)
         .expect("saved .snxprj must parse back as valid project JSON");
     assert_eq!(reloaded.name, "SaveAllProj");
+}
+
+// ─────────────────────────────────────────────────────────────────
+// #855 — dialogs resolve their project by id; no duplicate pending libs
+// ─────────────────────────────────────────────────────────────────
+
+/// A second loaded project in its own tempdir, inserted at `index`.
+fn insert_other_project(app: &mut Signex, index: usize) -> (TempDir, PathBuf) {
+    let tmp = TempDir::new().expect("tempdir");
+    let prj = tmp.path().join("Other.snxprj");
+    fs::write(&prj, b"{}").expect("write .snxprj");
+    let id = app.document_state.mint_project_id();
+    app.document_state.projects.insert(
+        index,
+        LoadedProject {
+            id,
+            path: prj.clone(),
+            data: ProjectData {
+                name: "Other".to_string(),
+                dir: tmp.path().to_string_lossy().into_owned(),
+                schematic_root: None,
+                pcb_file: None,
+                sheets: Vec::new(),
+                variant_definitions: Vec::new(),
+                active_variant: None,
+                libraries: Vec::new(),
+                enable_git: false,
+                unknown: Default::default(),
+            },
+            pending_libraries: std::collections::HashMap::new(),
+        },
+    );
+    (tmp, prj)
+}
+
+/// A project opened ahead of the dialog's own project shifts every index.
+/// The rename must still land on the project the dialog was opened for.
+#[test]
+fn rename_dialog_follows_its_project_when_another_is_opened_before_it() {
+    let (mut app, tmp, old_prj) = fixture_project_with_companions("Mine");
+    let mine = app.document_state.projects[0].id;
+    // Opened through the real tree action, so the id capture is exercised.
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+        ProjectTreeAction::OpenProjectRenameDialog(vec![0]),
+    )));
+    let dialog = app.ui_state.rename_dialog.as_mut().expect("dialog opened");
+    assert_eq!(dialog.project_id, Some(mine));
+    dialog.buffer = "Renamed".to_string();
+    let (_other_tmp, other_prj) = insert_other_project(&mut app, 0);
+
+    let _ = app.update(Message::Rename(RenameMsg::Submit));
+
+    assert!(tmp.path().join("Renamed.snxprj").exists());
+    assert!(
+        !old_prj.exists(),
+        "the dialog's own project file was renamed"
+    );
+    assert!(other_prj.exists(), "the other project must be untouched");
+    assert_eq!(app.document_state.projects[0].path, other_prj);
+    assert_eq!(app.document_state.projects[1].data.name, "Renamed");
+}
+
+fn add_sheet_entry(app: &mut Signex, project: usize, filename: &str) {
+    app.document_state.projects[project]
+        .data
+        .sheets
+        .push(SheetEntry {
+            name: filename.trim_end_matches(".snxsch").into(),
+            filename: filename.into(),
+            symbols_count: 0,
+            wires_count: 0,
+            labels_count: 0,
+            unknown: Default::default(),
+        });
+}
+
+fn has_sheet(app: &Signex, project: usize, filename: &str) -> bool {
+    app.document_state.projects[project]
+        .data
+        .sheets
+        .iter()
+        .any(|s| s.filename == filename)
+}
+
+/// The harm #855 prevents is in-memory: a stale `tree_path[0]` made Remove
+/// prune a same-named sheet from the wrong project and mark that project
+/// dirty, so its next save dropped a sheet the user never touched. Here a
+/// project is opened ahead of the dialog's own while it is open.
+#[test]
+fn remove_dialog_follows_its_project_when_another_is_opened_before_it() {
+    let (mut app, _tmp, _prj) = fixture_project_with_companions("Mine");
+    add_sheet_entry(&mut app, 0, "Shared.snxsch");
+    open_remove_dialog_for_label(&mut app, "Shared.snxsch");
+    let (_other_tmp, other_prj) = insert_other_project(&mut app, 0);
+    add_sheet_entry(&mut app, 0, "Shared.snxsch");
+
+    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
+        RemoveChoice::ExcludeFromProject,
+    )));
+
+    assert!(has_sheet(&app, 0, "Shared.snxsch"), "Other keeps its sheet");
+    assert!(!app.document_state.dirty_paths.contains(&other_prj));
+    assert!(
+        !has_sheet(&app, 1, "Shared.snxsch"),
+        "Mine's sheet is removed"
+    );
+}
+
+/// Closing the dialog's project while it is open cancels the Remove instead
+/// of applying it to whichever project now sits at that index.
+#[test]
+fn remove_dialog_is_cancelled_when_its_project_was_closed() {
+    let (mut app, _tmp, _prj) = fixture_project_with_companions("Mine");
+    add_sheet_entry(&mut app, 0, "Shared.snxsch");
+    open_remove_dialog_for_label(&mut app, "Shared.snxsch");
+    let (_other_tmp, other_prj) = insert_other_project(&mut app, 1);
+    add_sheet_entry(&mut app, 1, "Shared.snxsch");
+    app.document_state.projects.remove(0);
+
+    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
+        RemoveChoice::ExcludeFromProject,
+    )));
+
+    assert!(has_sheet(&app, 0, "Shared.snxsch"), "Other keeps its sheet");
+    assert!(!app.document_state.dirty_paths.contains(&other_prj));
+    assert!(app.ui_state.remove_dialog.is_none());
+}
+
+/// Registering the same pending library path twice keeps one entry, so two
+/// tree rows can never share a key.
+#[test]
+fn a_pending_library_path_is_registered_only_once() {
+    use signex_app::library::messages::LibraryMessage;
+    let (mut app, tmp, prj) = fixture_project_with_companions("Mine");
+    let lib = tmp.path().join("Parts.snxlib");
+    for _ in 0..2 {
+        let _ = app.update(Message::Library(LibraryMessage::CreateLibraryAtPath {
+            project_path: prj.clone(),
+            lib_path: lib.clone(),
+        }));
+        let _ = app.update(Message::Library(
+            LibraryMessage::LibraryCreateOptionsConfirm,
+        ));
+    }
+    assert_eq!(app.document_state.projects[0].pending_libraries.len(), 1);
 }

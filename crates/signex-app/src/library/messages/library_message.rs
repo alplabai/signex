@@ -513,7 +513,7 @@ pub enum LibraryMessage {
     /// The external-edit poll timer fired (#531). The handler starts the
     /// off-thread `stat` of every mounted `.snxlib`.
     ExternalEditsPollTicked,
-    /// The `stat` pass finished; carries the libraries whose file no
-    /// longer matches the stamp their caches were filled under.
-    ExternalEditsPolled(Vec<PathBuf>),
+    /// The `stat` pass finished, or timed out (#827); see
+    /// [`crate::library::external_poll::PollOutcome`].
+    ExternalEditsPolled(crate::library::external_poll::PollOutcome),
 }
