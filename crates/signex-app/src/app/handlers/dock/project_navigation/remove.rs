@@ -159,22 +159,42 @@ impl Signex {
         }
     }
 
-    pub(crate) fn handle_exclude_dirty_choice(
-        &mut self,
-        _choice: crate::app::ExcludeDirtyChoice,
-    ) -> iced::Task<Message> {
-        iced::Task::none()
-    }
-
     pub(crate) fn handle_remove_confirm(
         &mut self,
         choice: crate::app::RemoveChoice,
     ) -> iced::Task<Message> {
         use crate::app::RemoveChoice;
 
+        // Excluding a sheet that still has unsaved edits asks first (#738):
+        // the modal stays open and moves to its Save / Discard / Cancel stage.
+        if choice == RemoveChoice::ExcludeFromProject
+            && let Some(target) = self
+                .ui_state
+                .remove_dialog
+                .as_ref()
+                .map(|d| d.target_path.clone())
+            && self.has_unsaved_edits(&target)
+        {
+            if let Some(dialog) = self.ui_state.remove_dialog.as_mut() {
+                dialog.unsaved_prompt = true;
+            }
+            return iced::Task::none();
+        }
+
         let Some(state) = self.ui_state.remove_dialog.take() else {
             return iced::Task::none();
         };
+        self.apply_remove(&state, choice)
+    }
+
+    /// Carry out a confirmed Remove: close the file's tabs, delete it from
+    /// disk for `DeleteFile`, and drop it from the owning project.
+    pub(super) fn apply_remove(
+        &mut self,
+        state: &crate::app::RemoveDialogState,
+        choice: crate::app::RemoveChoice,
+    ) -> iced::Task<Message> {
+        use crate::app::RemoveChoice;
 
         // Close any tab backed by this file before we touch disk or
         // drop it from the project's in-memory list — otherwise the
@@ -190,7 +210,7 @@ impl Signex {
             //   3. Orphan entry (file/dir missing on disk) → no-op,
             //      Exclude semantic falls through naturally so the
             //      LibraryEntry / SheetEntry is still pruned below.
-            self.delete_project_owned_target(&state);
+            self.delete_project_owned_target(state);
             // Orphan target: silently fall through. The user's intent
             // ("get this row out of the project") is satisfied by the
             // in-memory entry pruning below.

@@ -4,6 +4,7 @@ use super::super::super::*;
 
 mod add;
 mod close_project;
+mod exclude_dirty;
 mod open_document;
 mod project_actions;
 mod remove;

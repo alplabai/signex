@@ -218,8 +218,10 @@ fn a_clean_sheet_is_excluded_without_a_prompt() {
 fn a_failed_save_keeps_the_prompt_and_does_not_exclude() {
     let _ = signex_app::diagnostics::init_logging();
     let tmp = TempDir::new().expect("tempdir");
-    // The sheet's directory does not exist, so the atomic write must fail.
-    let sheet = tmp.path().join("missing-dir").join("X.snxsch");
+    // The sheet's "directory" is a regular file, so the atomic write must fail.
+    let blocker = tmp.path().join("blocker");
+    std::fs::write(&blocker, b"not a directory").expect("write blocker");
+    let sheet = blocker.join("X.snxsch");
     let (mut app, _task) = Signex::new();
     let id = add_project(&mut app, tmp.path(), "X.snxsch");
     open_sheet(&mut app, &sheet, id, true);

@@ -175,7 +175,7 @@ impl Signex {
     /// and project savers clear their own; the engine leg clears them
     /// here. Returns the failure reason so the caller can tell the user
     /// WHY a file couldn't be saved instead of only naming it.
-    fn try_save_dirty_path(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
+    pub(super) fn try_save_dirty_path(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
         use anyhow::Context as _;
         if let Some(engine) = self.document_state.engines.get_mut(path) {
             engine
