@@ -134,3 +134,80 @@ impl Engine {
         Ok(true)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::test_sheet;
+    use signex_types::schematic::{Point, Symbol};
+    use std::collections::HashMap;
+
+    fn unit(reference: &str, lib_id: &str, unit: u32, y: f64) -> Symbol {
+        Symbol {
+            uuid: uuid::Uuid::new_v4(),
+            lib_id: lib_id.to_string(),
+            reference: reference.to_string(),
+            unit,
+            position: Point::new(0.0, y),
+            ..Default::default()
+        }
+    }
+
+    fn annotated(mode: AnnotateMode, symbols: Vec<Symbol>) -> Vec<String> {
+        let mut document = test_sheet();
+        document.symbols = symbols;
+        let mut engine = Engine::new(document).unwrap();
+        let mut seed = HashMap::new();
+        engine.annotate_with_seed(mode, &mut seed).unwrap();
+        engine
+            .document
+            .symbols
+            .iter()
+            .map(|s| s.reference.clone())
+            .collect()
+    }
+
+    #[test]
+    fn units_of_one_part_get_one_designator() {
+        let refs = annotated(
+            AnnotateMode::ResetAndRenumber,
+            vec![
+                unit("U?", "Amplifier:LM358", 1, 0.0),
+                unit("U?", "Amplifier:LM358", 2, 10.0),
+            ],
+        );
+        assert_eq!(refs, ["U1", "U1"]);
+    }
+
+    #[test]
+    fn two_multi_unit_parts_get_two_designators() {
+        let refs = annotated(
+            AnnotateMode::ResetAndRenumber,
+            vec![
+                unit("U?", "Amplifier:LM358", 1, 0.0),
+                unit("U?", "Amplifier:LM358", 2, 10.0),
+                unit("U?", "Amplifier:LM358", 1, 20.0),
+                unit("U?", "Amplifier:LM358", 2, 30.0),
+            ],
+        );
+        assert_eq!(refs, ["U1", "U1", "U2", "U2"]);
+    }
+
+    #[test]
+    fn reset_never_renumbers_units_of_a_part_apart() {
+        // Annotated state: U5 (units 1+2) and U7 (units 1+2), interleaved on
+        // the sheet. A reset pass must keep each part's units together.
+        let refs = annotated(
+            AnnotateMode::ResetAndRenumber,
+            vec![
+                unit("U5", "Amplifier:LM358", 1, 0.0),
+                unit("U7", "Amplifier:LM358", 1, 10.0),
+                unit("U5", "Amplifier:LM358", 2, 20.0),
+                unit("U7", "Amplifier:LM358", 2, 30.0),
+            ],
+        );
+        assert_eq!(refs[0], refs[2]);
+        assert_eq!(refs[1], refs[3]);
+        assert_ne!(refs[0], refs[1]);
+    }
+}

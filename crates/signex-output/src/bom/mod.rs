@@ -587,6 +587,61 @@ mod tests {
         }
     }
 
+    fn unit_of(reference: &str, lib_id: &str, unit: u32) -> Symbol {
+        Symbol {
+            lib_id: lib_id.to_string(),
+            reference: reference.to_string(),
+            unit,
+            ..test_symbol()
+        }
+    }
+
+    fn context_with(symbols: Vec<Symbol>) -> ExportContext {
+        let mut ctx = base_dnp_variant_context(false);
+        ctx.sheets[0].schematic.symbols = symbols;
+        ctx
+    }
+
+    #[test]
+    fn units_of_one_part_are_one_row_with_quantity_one() {
+        let ctx = context_with(vec![
+            unit_of("U1", "Amplifier:LM358", 1),
+            unit_of("U1", "Amplifier:LM358", 2),
+        ]);
+        let table = rollup(&ctx, &BomOptions::default());
+        assert_eq!(table.rows.len(), 1);
+        assert_eq!(table.rows[0].qty, 1);
+        assert_eq!(table.rows[0].references, vec!["U1"]);
+    }
+
+    #[test]
+    fn units_of_one_part_do_not_raise_duplicate_designator() {
+        let ctx = context_with(vec![
+            unit_of("U1", "Amplifier:LM358", 1),
+            unit_of("U1", "Amplifier:LM358", 2),
+        ]);
+        let (_, report) = rollup_with_validation(&ctx, &BomOptions::default());
+        assert!(
+            !report
+                .issues
+                .iter()
+                .any(|i| i.rule == BomRule::DuplicateDesignator)
+        );
+    }
+
+    #[test]
+    fn two_parts_of_the_same_kind_stay_two_parts() {
+        let ctx = context_with(vec![
+            unit_of("U1", "Amplifier:LM358", 1),
+            unit_of("U1", "Amplifier:LM358", 2),
+            unit_of("U2", "Amplifier:LM358", 1),
+            unit_of("U2", "Amplifier:LM358", 2),
+        ]);
+        let table = rollup(&ctx, &BomOptions::default());
+        let qty: u32 = table.rows.iter().map(|r| r.qty).sum();
+        assert_eq!(qty, 2);
+    }
+
     #[test]
     fn variant_fitted_base_dnp_is_included_in_rollup_and_csv() -> Result<(), BomError> {
         for property_override in [false, true] {
