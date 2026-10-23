@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use signex_net::SheetConnectivity;
+use signex_net::{ConnectedPoints, SheetConnectivity, best_net_name_of};
 use signex_types::schematic::SchematicSheet;
 use signex_types::schematic::{LabelType, PinDirection, Point, SymbolTransform};
 use uuid::Uuid;
@@ -320,7 +320,10 @@ impl ErcContext {
             .collect();
 
         // --- Step 2: symbols with pre-computed pin connectivity -----------
-        let symbols: Vec<ErcSymbol> = snapshot
+        // Project every pin to world space first: the connectivity gate needs
+        // ALL pin tips at once, because a pin touching another symbol's pin
+        // tip-to-tip is connected with no wire at all (issue #675).
+        let mut symbols: Vec<ErcSymbol> = snapshot
             .symbols
             .iter()
             .filter_map(|sym| {
@@ -330,25 +333,15 @@ impl ErcContext {
                     .iter()
                     .filter(|lp| lp.unit == 0 || lp.unit == sym.unit)
                     .map(|lp| {
-                        let _world = SymbolTransform::from_symbol(sym).apply(lp.pin.position);
-                        let (wx, wy) = (_world.x, _world.y);
-                        let world_pos = Point::new(wx, wy);
-                        let connected = point_is_connected(
-                            &world_pos,
-                            &wires,
-                            &junctions,
-                            &labels,
-                            &no_connects,
-                        );
-                        let required = !matches!(
-                            lp.pin.direction,
-                            PinDirection::Unclassified | PinDirection::DoNotConnect
-                        );
+                        let world = SymbolTransform::from_symbol(sym).apply(lp.pin.position);
                         ErcPin {
-                            world_pos,
+                            world_pos: Point::new(world.x, world.y),
                             electrical_type: lp.pin.direction,
-                            required,
-                            connected,
+                            required: !matches!(
+                                lp.pin.direction,
+                                PinDirection::Unclassified | PinDirection::DoNotConnect
+                            ),
+                            connected: false,
                         }
                     })
                     .collect();
@@ -364,6 +357,22 @@ impl ErcContext {
                 })
             })
             .collect();
+
+        // The one shared gate (`signex_net::ConnectedPoints`) — the same
+        // definition `build_netlist` uses to decide which pins are terminals.
+        let mut gate = ConnectedPoints::new();
+        gate.add_anchors(wires.iter().flat_map(|w| [w.start, w.end]));
+        gate.add_anchors(junctions.iter().map(|j| j.position));
+        gate.add_anchors(labels.iter().map(|l| l.position));
+        gate.add_anchors(no_connects.iter().map(|nc| nc.position));
+        gate.add_pin_tips(
+            symbols
+                .iter()
+                .flat_map(|s| s.pins.iter().map(|p| (p.world_pos, s.uuid))),
+        );
+        for pin in symbols.iter_mut().flat_map(|s| s.pins.iter_mut()) {
+            pin.connected = gate.contains(&pin.world_pos);
+        }
 
         // --- Step 3: derive logical nets ----------------------------------
         let nets = summarize_nets(&wires, &labels, &junctions, &symbols);
@@ -393,28 +402,6 @@ impl ErcContext {
 /// context + rule projections agree on net membership (D5.5).
 fn pt_key(p: &Point) -> (i64, i64) {
     ((p.x * 1000.0).round() as i64, (p.y * 1000.0).round() as i64)
-}
-
-/// True when a wire endpoint, junction, label, or no-connect sits at `pos`,
-/// compared in the 1 µm key space — the same "same point" definition the
-/// union-find uses, so the gate and the net partition never disagree (D5.5).
-/// Junctions count: a pin may tap a wire mid-span where a junction sits (D5.3).
-/// Buses do not: a bundle is never unioned, so gating on a bus endpoint minted
-/// a one-terminal phantom net and a spurious unconnected-pin warning (D5.4).
-fn point_is_connected(
-    pos: &Point,
-    wires: &[ErcWire],
-    junctions: &[ErcJunction],
-    labels: &[ErcLabel],
-    no_connects: &[ErcNoConnect],
-) -> bool {
-    let k = pt_key(pos);
-    wires
-        .iter()
-        .any(|w| pt_key(&w.start) == k || pt_key(&w.end) == k)
-        || junctions.iter().any(|j| pt_key(&j.position) == k)
-        || labels.iter().any(|l| pt_key(&l.position) == k)
-        || no_connects.iter().any(|nc| pt_key(&nc.position) == k)
 }
 
 // ---------------------------------------------------------------------------
@@ -461,6 +448,23 @@ fn summarize_nets(
         &segments,
     );
 
+    // Power-port symbols are implicit global name carriers: same-value ports
+    // are ONE net, and a port joins a same-name Global/Power label — the
+    // stitcher's name-bucket rule, applied by the same shared method
+    // `build_netlist` calls (issue #675).
+    let power_pins: Vec<(Point, &str)> = symbols
+        .iter()
+        .filter(|s| s.is_power && !s.value.is_empty())
+        .flat_map(|s| s.pins.iter().map(|p| (p.world_pos, s.value.as_str())))
+        .collect();
+    conn.merge_power_ports(
+        power_pins.iter().copied(),
+        labels
+            .iter()
+            .map(|l| (l.position, l.label_type, l.text.as_str())),
+        &segments,
+    );
+
     // Group labels by net root.
     let mut net_labels: HashMap<(i64, i64), Vec<&ErcLabel>> = HashMap::new();
     for lbl in labels {
@@ -486,6 +490,12 @@ fn summarize_nets(
         }
     }
 
+    // Power-port values by net root: they name the net like a `Power` label.
+    let mut net_power: HashMap<(i64, i64), Vec<&str>> = HashMap::new();
+    for (pos, value) in &power_pins {
+        net_power.entry(conn.root_of(pos)).or_default().push(*value);
+    }
+
     // All unique roots that have at least one label OR pin.
     let mut all_roots: std::collections::HashSet<(i64, i64)> = std::collections::HashSet::new();
     all_roots.extend(net_labels.keys().copied());
@@ -505,18 +515,14 @@ fn summarize_nets(
             let lbls = net_labels.get(&root).map(Vec::as_slice).unwrap_or(&[]);
             let pins = net_pins.get(&root).map(Vec::as_slice).unwrap_or(&[]);
 
-            // Highest-priority label name: Global > Power > Hierarchical > Net.
-            let name = lbls
-                .iter()
-                .filter(|l| !l.text.is_empty())
-                .max_by_key(|l| match l.label_type {
-                    LabelType::Global => 3u8,
-                    LabelType::Power => 2,
-                    LabelType::Hierarchical => 1,
-                    LabelType::Net => 0,
-                })
-                .map(|l| l.text.clone())
-                .unwrap_or_default();
+            // Highest-priority name — the netlist's own rule, shared.
+            let power_values = net_power.get(&root).map(Vec::as_slice).unwrap_or(&[]);
+            let name = best_net_name_of(
+                lbls.iter().map(|l| (l.label_type, l.text.as_str())),
+                power_values,
+            )
+            .map(|(_, text)| text)
+            .unwrap_or_default();
 
             let class = name
                 .find('_')
@@ -580,22 +586,19 @@ mod tests {
         // connected. D5.4: buses no longer gate, so a point that is only on a
         // bus (off every wire/junction/label) is not connected — no phantom net
         // or spurious unconnected-pin warning.
-        let wires = vec![wire(pt(0.0, 0.0), pt(10.0, 0.0))];
-        let junctions = vec![ErcJunction {
-            position: pt(5.0, 0.0),
-        }];
-        let labels: Vec<ErcLabel> = Vec::new();
-        let no_connects: Vec<ErcNoConnect> = Vec::new();
+        let mut gate = ConnectedPoints::new();
+        gate.add_anchors([pt(0.0, 0.0), pt(10.0, 0.0)]);
+        gate.add_anchors([pt(5.0, 0.0)]);
         assert!(
-            point_is_connected(&pt(5.0, 0.0), &wires, &junctions, &labels, &no_connects),
+            gate.contains(&pt(5.0, 0.0)),
             "pin on a mid-wire junction is connected"
         );
         assert!(
-            point_is_connected(&pt(0.0, 0.0), &wires, &junctions, &labels, &no_connects),
+            gate.contains(&pt(0.0, 0.0)),
             "pin on a wire endpoint is connected"
         );
         assert!(
-            !point_is_connected(&pt(7.0, 3.0), &wires, &junctions, &labels, &no_connects),
+            !gate.contains(&pt(7.0, 3.0)),
             "a point off every wire/junction/label is not connected"
         );
     }

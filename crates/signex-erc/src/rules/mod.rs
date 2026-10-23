@@ -77,8 +77,8 @@ pub(crate) fn unused_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
         }
         for pin in &symbol.pins {
             // `ErcPin.connected` is already the shared, junction-aware
-            // connectivity gate (`context::point_is_connected`, mirroring
-            // `signex_net`'s) — trust it instead of re-deriving an
+            // connectivity gate (`signex_net::ConnectedPoints`, the
+            // same gate `build_netlist` uses) — trust it instead of re-deriving an
             // endpoint-only, bus-gated approximation here (issue #388, D5.4).
             if pin.connected {
                 continue;
@@ -562,16 +562,19 @@ pub(crate) fn missing_power_flag(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
         if name.is_empty() {
             continue;
         }
-        // Power-port symbols carry a single connection point at their
-        // position (no separate pin geometry). Look up the net root for that
-        // point — unanchored, like any other pin: a port only taps a wire
-        // interior through an explicit junction (`point_is_connected`'s
-        // rule), never by proximity alone.
-        let port_root = conn.root_of(&symbol.position);
+        // A port connects at its pin tips, not at its origin — the same points
+        // `build_netlist` names the net from (issue #675). Look each tip up
+        // unanchored, like any other pin: a port only taps a wire interior
+        // through an explicit junction, never by proximity alone. A port
+        // projected with no pins falls back to its origin.
+        let tips: Vec<Point> = if symbol.pins.is_empty() {
+            vec![symbol.position]
+        } else {
+            symbol.pins.iter().map(|p| p.world_pos).collect()
+        };
         let same_net_label = label_nets
             .get(name)
-            .map(|nets| nets.contains(&port_root))
-            .unwrap_or(false);
+            .is_some_and(|nets| tips.iter().any(|tip| nets.contains(&conn.root_of(tip))));
         if same_net_label {
             continue;
         }

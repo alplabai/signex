@@ -22,6 +22,9 @@ use signex_types::net::{Net, NetId, Netlist, Terminal};
 use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, SymbolTransform};
 use uuid::Uuid;
 
+mod gate;
+pub use gate::ConnectedPoints;
+
 use crate::uf::{Key, find as uf_find, union as uf_union};
 
 /// 1 µm integer bucket — the union-find key space and the single definition of
@@ -99,26 +102,37 @@ pub(crate) fn anchor_point(parent: &mut HashMap<Key, Key>, pk: Key, segments: &[
     }
 }
 
-/// True when a wire endpoint, junction, label, or no-connect marker sits at
-/// `pos`, compared in the 1 µm key space — the *same* "same point" definition
-/// the union-find uses, so the connectivity gate and the net partition can
-/// never disagree (D5.5). A pin is a terminal only if something lands on its
-/// world-space tip.
-///
-/// Junctions count: a pin may tap a wire mid-span where a junction sits (D5.3).
-/// Buses do **not**: a bus is a member bundle, not a single net, and the
-/// union-find never merges buses, so gating on a bus endpoint used to mint a
-/// one-terminal phantom net (D5.4). Direct bus-pin connectivity (through bus
-/// entries) is deliberately out of scope here.
-fn point_is_connected(pos: &Point, sheet: &SchematicSheet) -> bool {
-    let k = pt_key(pos);
-    sheet
-        .wires
-        .iter()
-        .any(|w| pt_key(&w.start) == k || pt_key(&w.end) == k)
-        || sheet.junctions.iter().any(|j| pt_key(&j.position) == k)
-        || sheet.labels.iter().any(|l| pt_key(&l.position) == k)
-        || sheet.no_connects.iter().any(|nc| pt_key(&nc.position) == k)
+/// Every placed pin tip on the sheet as `(world position, owning symbol)`,
+/// honouring the unit filter (unit 0 = common to all units, otherwise the
+/// placed unit only).
+fn pin_tips(sheet: &SchematicSheet) -> Vec<(Point, Uuid)> {
+    let mut tips = Vec::new();
+    for sym in &sheet.symbols {
+        let Some(lib_sym) = sheet.lib_symbols.get(&sym.lib_id) else {
+            continue;
+        };
+        let xform = SymbolTransform::from_symbol(sym);
+        for lp in &lib_sym.pins {
+            if lp.unit != 0 && lp.unit != sym.unit {
+                continue;
+            }
+            tips.push((xform.apply(lp.pin.position), sym.uuid));
+        }
+    }
+    tips
+}
+
+/// The connectivity gate for `sheet`: wire endpoints, junctions, labels,
+/// no-connects and pin-to-pin contact. A pin is a terminal only if its
+/// world-space tip is in this set — see [`ConnectedPoints`].
+fn connected_points(sheet: &SchematicSheet) -> ConnectedPoints {
+    let mut gate = ConnectedPoints::new();
+    gate.add_anchors(sheet.wires.iter().flat_map(|w| [w.start, w.end]));
+    gate.add_anchors(sheet.junctions.iter().map(|j| j.position));
+    gate.add_anchors(sheet.labels.iter().map(|l| l.position));
+    gate.add_anchors(sheet.no_connects.iter().map(|nc| nc.position));
+    gate.add_pin_tips(pin_tips(sheet));
+    gate
 }
 
 /// Selection priority of a label kind for naming a net: `Global > Power >
@@ -138,15 +152,21 @@ pub(crate) fn label_priority(kind: LabelType) -> u8 {
 /// the last candidate in (label-document order, then power-carrier order),
 /// matching the previous `max_by_key` tie-break — so label-only nets keep their
 /// exact names and the single-sheet equivalence gate holds.
-pub(crate) fn best_net_name(labels: &[&Label], power_values: &[&str]) -> Option<(u8, String)> {
+///
+/// Takes plain `(kind, text)` pairs so `signex-erc`, which holds its own label
+/// snapshot type, names a net with this exact rule instead of a second copy.
+pub fn best_net_name_of<'a>(
+    labels: impl IntoIterator<Item = (LabelType, &'a str)>,
+    power_values: &[&str],
+) -> Option<(u8, String)> {
     let mut best: Option<(u8, String)> = None;
-    for l in labels {
-        if l.text.is_empty() {
+    for (kind, text) in labels {
+        if text.is_empty() {
             continue;
         }
-        let p = label_priority(l.label_type);
+        let p = label_priority(kind);
         if best.as_ref().is_none_or(|(bp, _)| p >= *bp) {
-            best = Some((p, l.text.clone()));
+            best = Some((p, text.to_string()));
         }
     }
     for v in power_values {
@@ -160,17 +180,17 @@ pub(crate) fn best_net_name(labels: &[&Label], power_values: &[&str]) -> Option<
     best
 }
 
-/// For each power-port symbol (`is_power && !value.is_empty()`) on the sheet,
-/// the net root each connected pin lands on, tagged with the port's `value`
-/// (its global net name). Power ports are implicit global name carriers — ERC
-/// already reads them so, while `build_netlist` used to ignore them; cross-sheet
-/// supply rails and same-sheet power-only nets both depend on this. `parent`
-/// must already be fully merged ([`merged_sheet_parent`]).
-pub(crate) fn power_name_carriers(
-    sheet: &SchematicSheet,
-    parent: &mut HashMap<Key, Key>,
-) -> Vec<(Key, String)> {
-    let mut carriers = Vec::new();
+pub(crate) fn best_net_name(labels: &[&Label], power_values: &[&str]) -> Option<(u8, String)> {
+    best_net_name_of(
+        labels.iter().map(|l| (l.label_type, l.text.as_str())),
+        power_values,
+    )
+}
+
+/// Every pin of every power-port symbol (`is_power && !value.is_empty()`) as
+/// `(world tip, port value)` — the port's global net name.
+fn power_port_pins(sheet: &SchematicSheet) -> Vec<(Point, &str)> {
+    let mut ports = Vec::new();
     for sym in &sheet.symbols {
         if !sym.is_power || sym.value.is_empty() {
             continue;
@@ -183,12 +203,26 @@ pub(crate) fn power_name_carriers(
             if lp.unit != 0 && lp.unit != sym.unit {
                 continue;
             }
-            let world_pos = xform.apply(lp.pin.position);
-            let root = uf_find(parent, pt_key(&world_pos));
-            carriers.push((root, sym.value.clone()));
+            ports.push((xform.apply(lp.pin.position), sym.value.as_str()));
         }
     }
-    carriers
+    ports
+}
+
+/// For each power-port symbol (`is_power && !value.is_empty()`) on the sheet,
+/// the net root each connected pin lands on, tagged with the port's `value`
+/// (its global net name). Power ports are implicit global name carriers — ERC
+/// already reads them so, while `build_netlist` used to ignore them; cross-sheet
+/// supply rails and same-sheet power-only nets both depend on this. `parent`
+/// must already be fully merged ([`merged_sheet_parent`]).
+pub(crate) fn power_name_carriers(
+    sheet: &SchematicSheet,
+    parent: &mut HashMap<Key, Key>,
+) -> Vec<(Key, String)> {
+    power_port_pins(sheet)
+        .into_iter()
+        .map(|(tip, value)| (uf_find(parent, pt_key(&tip)), value.to_string()))
+        .collect()
 }
 
 /// The electrical connectivity of a single sheet: a union-find over wire
@@ -306,6 +340,47 @@ impl SheetConnectivity {
             }
         }
     }
+
+    /// Join nets by power-port name: every power-port pin carrying the same
+    /// value is one net, and a port also joins a same-name `Global` / `Power`
+    /// label — the same name-bucket rule the cross-sheet stitcher applies, so a
+    /// single sheet and a one-sheet project agree (issue #675). A port taps the
+    /// net at its pin tip exactly like a component pin: no interior anchoring.
+    ///
+    /// Call after [`merge_named_labels`](Self::merge_named_labels); read every
+    /// root only after this returns.
+    pub fn merge_power_ports<'a>(
+        &mut self,
+        ports: impl IntoIterator<Item = (Point, &'a str)>,
+        labels: impl IntoIterator<Item = (Point, LabelType, &'a str)>,
+        segments: &[(Point, Point)],
+    ) {
+        let mut name_root: HashMap<&'a str, Key> = HashMap::new();
+        for (pos, kind, text) in labels {
+            if text.is_empty() || !matches!(kind, LabelType::Global | LabelType::Power) {
+                continue;
+            }
+            let root = self.root_of_anchored(&pos, segments);
+            match name_root.get(text) {
+                Some(&existing) => uf_union(&mut self.parent, root, existing),
+                None => {
+                    name_root.insert(text, root);
+                }
+            }
+        }
+        for (pos, value) in ports {
+            if value.is_empty() {
+                continue;
+            }
+            let root = self.root_of(&pos);
+            match name_root.get(value) {
+                Some(&existing) => uf_union(&mut self.parent, root, existing),
+                None => {
+                    name_root.insert(value, root);
+                }
+            }
+        }
+    }
 }
 
 /// The wire and junction uuids the net-colour flood should paint when the
@@ -380,6 +455,14 @@ fn merged_connectivity(sheet: &SchematicSheet) -> SheetConnectivity {
             .map(|l| (l.position, l.label_type, l.text.as_str())),
         &segments,
     );
+    conn.merge_power_ports(
+        power_port_pins(sheet),
+        sheet
+            .labels
+            .iter()
+            .map(|l| (l.position, l.label_type, l.text.as_str())),
+        &segments,
+    );
     conn
 }
 
@@ -400,12 +483,13 @@ pub(crate) fn collect_net_labels<'a>(
 
 /// Project every connected component pin to world space and group it as a
 /// [`Terminal`] under its net root. A pin counts only if something lands on its
-/// tip (wire/bus/label/no-connect) — see [`point_is_connected`]. `parent` must
+/// tip (wire/label/no-connect/another symbol's pin) — see [`ConnectedPoints`]. `parent` must
 /// already be fully merged ([`merged_sheet_parent`]).
 pub(crate) fn collect_terminals(
     sheet: &SchematicSheet,
     parent: &mut HashMap<Key, Key>,
 ) -> HashMap<Key, Vec<Terminal>> {
+    let gate = connected_points(sheet);
     let mut net_terms: HashMap<Key, Vec<Terminal>> = HashMap::new();
     for sym in &sheet.symbols {
         let Some(lib_sym) = sheet.lib_symbols.get(&sym.lib_id) else {
@@ -418,7 +502,7 @@ pub(crate) fn collect_terminals(
                 continue;
             }
             let world_pos = xform.apply(lp.pin.position);
-            if !point_is_connected(&world_pos, sheet) {
+            if !gate.contains(&world_pos) {
                 continue;
             }
             // Pin id: prefer the pin number when present, else fall back to its name.

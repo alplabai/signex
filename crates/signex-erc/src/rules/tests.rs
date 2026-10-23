@@ -86,7 +86,7 @@ fn global_label(text: &str, pos: Point) -> ErcLabel {
 }
 
 /// A non-power symbol with a single pin, its `connected` flag set
-/// exactly as `context::point_is_connected` would compute it — these
+/// exactly as `signex_net::ConnectedPoints` would compute it — these
 /// tests build `ErcContext` by hand (below the projection step), so the
 /// flag is the fixture's job here.
 fn symbol_with_pin(reference: &str, world_pos: Point, connected: bool) -> ErcSymbol {
@@ -156,6 +156,34 @@ fn missing_power_flag_honors_a_t_junction() {
 }
 
 #[test]
+fn missing_power_flag_reads_the_port_net_at_its_pin_tip() {
+    // Issue #675: the port's origin is NOT its connection point. Here the
+    // symbol origin sits off every wire while its pin tip lands on the wire
+    // that carries the same-name label — the net `build_netlist` assigns the
+    // port. Looking up the origin hands the port a singleton root and
+    // false-flags it.
+    let mut port = power_port("+3V3", pt(100.0, 100.0));
+    port.pins.push(ErcPin {
+        world_pos: pt(10.0, 0.0),
+        electrical_type: PinDirection::PowerInput,
+        required: true,
+        connected: true,
+    });
+    let c = ctx(
+        vec![wire(pt(0.0, 0.0), pt(10.0, 0.0))],
+        Vec::new(),
+        vec![power_label("+3V3", pt(0.0, 0.0))],
+        vec![port],
+    );
+    let mut out = Vec::new();
+    missing_power_flag(&c, &mut out);
+    assert!(
+        out.is_empty(),
+        "port pin tip is on the labelled net: {out:?}"
+    );
+}
+
+#[test]
 fn missing_power_flag_fires_when_no_same_net_label() {
     // Same port, but the +3V3 label sits on a disjoint wire with nothing
     // tying it to the port's net → not cross-referenced → flagged.
@@ -186,7 +214,7 @@ fn missing_power_flag_fires_when_no_same_net_label() {
 fn unused_pin_trusts_a_through_junction_tap() {
     // A single wire (0,0)-(10,0) with a junction dot mid-span at (5,0) — a
     // pin tapping exactly there is connected (D5.3), the same as
-    // `context::point_is_connected` computes. The old `unused_pin` never
+    // `signex_net::ConnectedPoints` computes. The old `unused_pin` never
     // consulted junctions at all when re-deriving connectivity, so it
     // would have false-flagged this pin.
     let c = ctx(
