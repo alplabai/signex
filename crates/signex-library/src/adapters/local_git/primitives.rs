@@ -307,12 +307,37 @@ impl LocalGitAdapter {
             .library_file
             .write()
             .map_err(|_| LibraryError::Backend("library_file write lock poisoned".into()))?;
-        if !f(&mut guard)? {
+        // #831: edit a clone and swap it in only once disk (and the
+        // commit) agree. A failed encode, write or commit leaves both the
+        // in-memory file and the `.snxlib` on disk exactly as they were.
+        let mut candidate = guard.clone();
+        if !f(&mut candidate)? {
             return Ok(());
         }
-        self.persist_library_file(&guard)?;
+        let previous = guard.write()?;
+        self.persist_library_file(&candidate)?;
         let rel = self.snxlib_rel_path()?;
-        self.commit_path(&rel, message, fallback)
+        if let Err(commit_err) = self.commit_path(&rel, message, fallback) {
+            return Err(self.restore_after_failed_commit(&previous, commit_err));
+        }
+        *guard = candidate;
+        Ok(())
+    }
+
+    /// Put the previous `.snxlib` text back after a failed commit so disk
+    /// does not run ahead of the (unchanged) in-memory file. If the
+    /// restore itself fails, both failures are reported.
+    fn restore_after_failed_commit(
+        &self,
+        previous: &str,
+        commit_err: LibraryError,
+    ) -> LibraryError {
+        match signex_types::atomic_io::atomic_write(&self.file_path, previous.as_bytes()) {
+            Ok(()) => commit_err,
+            Err(restore_err) => LibraryError::Backend(format!(
+                "{commit_err}; additionally restoring the previous .snxlib failed: {restore_err}"
+            )),
+        }
     }
 
     /// Read the table named `table` as a snapshot of [`ComponentRow`]s,

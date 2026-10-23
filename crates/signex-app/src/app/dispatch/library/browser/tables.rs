@@ -62,6 +62,12 @@ impl Signex {
         if let Err(error) =
             adapter.delete_empty_table(&table, &format!("delete empty table {table}"))
         {
+            tracing::error!(
+                target: "signex::library",
+                path = %library_path.display(),
+                error = %error,
+                "delete table failed; library left unchanged"
+            );
             if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
                 s.delete_error = Some(error.to_string());
             }
@@ -167,6 +173,12 @@ impl Signex {
             &new_trimmed,
             &format!("rename table {old_name} → {new_trimmed}"),
         ) {
+            tracing::error!(
+                target: "signex::library",
+                path = %library_path.display(),
+                error = %error,
+                "rename table failed; library left unchanged"
+            );
             if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
                 s.rename_error = Some(error.to_string());
             }
@@ -223,6 +235,12 @@ impl Signex {
         if let Err(error) =
             adapter.create_empty_table(&trimmed, &format!("create empty table {trimmed}"))
         {
+            tracing::error!(
+                target: "signex::library",
+                path = %library_path.display(),
+                error = %error,
+                "create table failed; library left unchanged"
+            );
             if let Some(s) = self.library.library_browsers.get_mut(&library_path)
                 && let Some(d) = s.adding_table.as_mut()
             {
