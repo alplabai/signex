@@ -265,3 +265,94 @@ fn same_length_same_mtime_external_edit_is_not_overwritten_by_a_mutation() {
         "stale row resurrected: {rows:?}"
     );
 }
+
+/// Hold the write lock of the library at `file` from this thread, as another
+/// Signex process would while it writes (#832).
+fn hold_write_lock(file: &Path) -> std::fs::File {
+    let lock = signex_library::write_lock_path(file.parent().unwrap(), file);
+    let handle = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(lock)
+        .unwrap();
+    handle.lock().unwrap();
+    handle
+}
+
+/// #832: a mutation waits while another process is between its reload and
+/// its write, and then applies on top of what that process wrote.
+#[test]
+fn a_mutation_waits_for_another_process_holding_the_write_lock() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, mounted, lib) = mounted_library(dir.path());
+    mounted.insert_row("R", row("R-1", lib), "seed").unwrap();
+
+    let held = hold_write_lock(&file);
+    let release = std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        drop(held);
+    });
+    let started = std::time::Instant::now();
+    mounted.insert_row("R", row("R-2", lib), "after").unwrap();
+    let waited = started.elapsed();
+    release.join().unwrap();
+
+    assert!(
+        waited >= std::time::Duration::from_millis(250),
+        "the write must wait for the lock, took {waited:?}"
+    );
+    assert_eq!(pns(&mounted, "R"), ["R-1", "R-2"]);
+}
+
+/// #832: a lock held past the wait refuses the edit with a reason, and the
+/// file is left exactly as the other process has it.
+#[test]
+fn a_mutation_is_refused_while_another_process_keeps_the_write_lock() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, mounted, lib) = mounted_library(dir.path());
+    mounted.insert_row("R", row("R-1", lib), "seed").unwrap();
+    let before = std::fs::read(&file).unwrap();
+
+    let _held = hold_write_lock(&file);
+    let err = mounted
+        .insert_row("R", row("R-2", lib), "blocked")
+        .expect_err("refused while the lock is held");
+
+    assert!(
+        err.to_string().contains("another Signex process"),
+        "unexpected error: {err}"
+    );
+    assert_eq!(std::fs::read(&file).unwrap(), before, "file untouched");
+}
+
+/// #832: two processes inserting at the same time keep every row; neither
+/// write drops the other's.
+#[test]
+fn concurrent_writers_on_one_library_lose_no_rows() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, mounted, lib) = mounted_library(dir.path());
+    mounted.insert_row("R", row("R-0", lib), "seed").unwrap();
+    drop(mounted);
+
+    let writers: Vec<_> = ["A", "B"]
+        .into_iter()
+        .map(|who| {
+            let file = file.clone();
+            std::thread::spawn(move || {
+                let adapter = LocalGitAdapter::open(&file).unwrap();
+                for i in 0..10 {
+                    adapter
+                        .insert_row("R", row(&format!("{who}-{i}"), lib), "concurrent")
+                        .unwrap();
+                }
+            })
+        })
+        .collect();
+    for writer in writers {
+        writer.join().unwrap();
+    }
+
+    let check = LocalGitAdapter::open(&file).unwrap();
+    assert_eq!(pns(&check, "R").len(), 21, "{:?}", pns(&check, "R"));
+}

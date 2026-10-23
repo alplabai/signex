@@ -386,8 +386,10 @@ impl LocalGitAdapter {
 mod adapter;
 mod disk_sync;
 pub use disk_sync::DiskStamp;
+pub use write_lock::{WRITE_LOCK_WAIT, write_lock_path};
 mod helpers;
 mod primitives;
+mod write_lock;
 
 use helpers::*;
 
