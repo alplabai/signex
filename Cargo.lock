@@ -5330,6 +5330,7 @@ dependencies = [
  "git2",
  "iced",
  "iced_aw",
+ "iced_runtime",
  "image",
  "log",
  "num-traits",

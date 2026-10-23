@@ -255,17 +255,22 @@ fn cancelled_outcome() -> Outcome {
     Outcome::Cancelled
 }
 
-/// Undo a token a cancelled flow stored anyway.
+/// Delete the DigiKey refresh token from the OS credential store. Blocking:
+/// call it from `spawn_blocking`, never from `update`.
+pub fn remove_stored_token() -> Result<(), String> {
+    signex_library::distributors::digikey::DigiKeyAuth::remove_stored_refresh_token()
+        .map_err(|e| e.to_string())
+}
+
+/// Report the outcome of removing a token a cancelled flow stored anyway.
 ///
 /// Cancel can land after the persist veto granted and the refresh token was
 /// written; the flow's `Connected` result is then dropped as stale, and
 /// nothing else would ever show the user that a valid token sits in the
 /// keyring. Best effort: a failed delete is reported with the manual remedy.
 /// Neither the token nor the authorization code is ever logged.
-pub fn discard_token_of_cancelled_flow<E: std::fmt::Display>(
-    delete: impl FnOnce() -> Result<(), E>,
-) {
-    match delete() {
+pub fn log_stale_token_removal(result: Result<(), String>) {
+    match result {
         Ok(()) => tracing::info!(
             target: "signex::distributor",
             distributor = "digikey",
@@ -276,7 +281,7 @@ pub fn discard_token_of_cancelled_flow<E: std::fmt::Display>(
             distributor = "digikey",
             error = %error,
             "a cancelled DigiKey OAuth flow stored a token and it could not be removed; \
-             disconnect the DigiKey account manually to delete it"
+             remove the `signex-distributor-digikey` / `refresh` entry from the OS credential store"
         ),
     }
 }
@@ -299,8 +304,8 @@ fn fail_and_log(reason: String) -> Outcome {
 /// re-checked after accept, before the exchange, and (through
 /// `may_persist`) immediately before the token is stored.
 ///
-/// Returns `None` when the connection sent nothing within `io_timeout` — an
-/// idle speculative connection such as a browser preconnect — so the caller
+/// Returns `None` when the connection sent nothing — it timed out after
+/// `io_timeout` or the peer closed it, as a browser preconnect does — so the caller
 /// keeps accepting instead of ending the flow.
 fn handle_callback<E>(
     mut stream: std::net::TcpStream,
@@ -324,12 +329,10 @@ where
     }
 
     let req_line = read_first_line(&mut stream);
-    if let Err(e) = &req_line
-        && is_idle_timeout(e)
-    {
+    if is_idle_read(&req_line) {
         stream
             .shutdown(std::net::Shutdown::Both)
-            .ignore("idle speculative connection; abandoned either way");
+            .ignore("idle or closed speculative connection; abandoned either way");
         tracing::debug!(
             target: "signex::distributor",
             distributor = "digikey",
@@ -340,13 +343,18 @@ where
     Some(finish_callback(stream, cancel, req_line, exchange))
 }
 
-/// A read that produced no bytes before the socket timeout. Unix reports
-/// `WouldBlock`, Windows `TimedOut`.
-fn is_idle_timeout(e: &std::io::Error) -> bool {
-    matches!(
-        e.kind(),
-        std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock
-    )
+/// A read that produced no request: it timed out (Unix reports `WouldBlock`,
+/// Windows `TimedOut`) or the peer closed without sending a byte (`Ok(0)`,
+/// which `read_first_line` yields as an empty line). Both are a speculative
+/// preconnect, not a redirect.
+fn is_idle_read(req_line: &Result<String, std::io::Error>) -> bool {
+    match req_line {
+        Ok(line) => line.is_empty(),
+        Err(e) => matches!(
+            e.kind(),
+            std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock
+        ),
+    }
 }
 
 fn finish_callback<E>(
@@ -813,10 +821,11 @@ mod tests {
     }
 
     /// #834 review: Cancel lands after `may_persist` granted and the token
-    /// was stored. The result is then stale and dropped, so the stale path
-    /// must remove the token — no secret may remain.
+    /// was stored. The flow still reports `Connected`; the handler's stale
+    /// branch (tested in `dispatch/library/settings_tests.rs`) is what
+    /// removes the token.
     #[test]
-    fn cancel_after_persist_leaves_no_secret_once_the_stale_result_is_discarded() {
+    fn cancel_after_persist_still_reports_connected_for_the_stale_path() {
         let cancel = CancelHandle::new();
         let stream = accepted_stream_with(GOOD_REQUEST);
         let keyring = std::cell::RefCell::new(None::<String>);
@@ -836,18 +845,36 @@ mod tests {
         .expect("a redirect is a final outcome");
         assert!(matches!(outcome, Outcome::Connected { .. }));
         assert!(keyring.borrow().is_some(), "precondition: token was stored");
-
-        discard_token_of_cancelled_flow(|| -> Result<(), String> {
-            *keyring.borrow_mut() = None;
-            Ok(())
-        });
-
-        assert!(keyring.borrow().is_none(), "a stored token survived");
     }
 
+    /// A preconnect the browser closed before sending anything reads as
+    /// `Ok(0)`; it is idle like a timeout, and the real redirect that
+    /// follows still completes the flow.
     #[test]
-    fn a_failed_discard_does_not_panic() {
-        discard_token_of_cancelled_flow(|| Err::<(), _>("backend locked"));
+    fn a_connection_closed_without_a_request_is_skipped_and_the_next_one_connects() {
+        let cancel = CancelHandle::new();
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let closed_client = std::net::TcpStream::connect(addr).expect("connect");
+        let (closed, _) = listener.accept().expect("accept");
+        drop(closed_client);
+
+        let closed_step = handle_callback(closed, &cancel, Duration::from_secs(5), |_, _, _| {
+            panic!("a closed connection must not exchange")
+        });
+        assert!(
+            closed_step.is_none(),
+            "a closed preconnect must not end the flow, got {closed_step:?}"
+        );
+
+        let real = accepted_stream_with(GOOD_REQUEST);
+        let step = handle_callback(real, &cancel, Duration::from_secs(5), |_, _, _| {
+            Ok("access".into())
+        });
+        assert!(
+            matches!(step, Some(Outcome::Connected { .. })),
+            "got {step:?}"
+        );
     }
 
     /// A browser preconnect that never sends is skipped, and the real

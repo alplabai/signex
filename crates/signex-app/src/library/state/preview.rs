@@ -244,6 +244,10 @@ pub struct DistributorSettings {
     /// reconnect could let the first worker's eventual outcome
     /// overwrite the second flow's credentials.
     pub digikey_flow_generation: u64,
+    /// Deletes the stored DigiKey refresh token. A field, not a hard-wired
+    /// call, so a test can observe the request without touching the OS
+    /// credential store.
+    pub digikey_token_remover: fn() -> Result<(), String>,
     pub mouser_api_key_buf: String,
     pub mouser_status: Option<String>,
     pub mouser_in_flight: bool,
@@ -262,6 +266,7 @@ impl Default for DistributorSettings {
             digikey_in_flight: false,
             digikey_cancel: None,
             digikey_flow_generation: 0,
+            digikey_token_remover: crate::library::settings::digikey_oauth::remove_stored_token,
             mouser_api_key_buf: String::new(),
             mouser_status: None,
             mouser_in_flight: false,

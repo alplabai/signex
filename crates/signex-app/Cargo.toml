@@ -91,6 +91,7 @@ test-prefs-redirect = []
 [dev-dependencies]
 signex-app = { path = ".", features = ["test-prefs-redirect"] }
 wiremock = "0.6"
+iced_runtime = "0.14"
 signex-library = { workspace = true, features = ["test-identity"] }
 git2 = { workspace = true }
 

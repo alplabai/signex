@@ -44,6 +44,8 @@ mod primitive_picker;
 mod recovery;
 mod registration;
 mod settings;
+#[cfg(test)]
+mod settings_tests;
 mod updates;
 
 use recovery::{

@@ -104,9 +104,21 @@ impl Signex {
                     // A Connected result from a cancelled flow means the
                     // token was stored before the cancel landed; nobody
                     // will see it, so take it back out of the keyring.
+                    // The keyring delete is blocking IO (D-Bus and an
+                    // unlock prompt on Linux), so it runs off `update`.
                     if connected_label.is_some() {
-                        digikey_oauth::discard_token_of_cancelled_flow(
-                            signex_library::distributors::digikey::DigiKeyAuth::remove_stored_refresh_token,
+                        let remove = self.library.settings.digikey_token_remover;
+                        return Task::perform(
+                            async move {
+                                tokio::task::spawn_blocking(remove)
+                                    .await
+                                    .unwrap_or_else(|e| Err(format!("worker thread panicked: {e}")))
+                            },
+                            |result| {
+                                Message::Library(LibraryMessage::Settings(
+                                    SettingsMsg::DigiKeyStaleTokenRemoved(result),
+                                ))
+                            },
                         );
                     }
                     return Task::none();
@@ -126,6 +138,9 @@ impl Signex {
                         self.library.settings.digikey_status = Some("Cancelled".to_string());
                     }
                 }
+            }
+            SettingsMsg::DigiKeyStaleTokenRemoved(result) => {
+                digikey_oauth::log_stale_token_removal(result);
             }
             SettingsMsg::MouserApiKeyChanged(s) => {
                 self.library.settings.mouser_api_key_buf = s;
