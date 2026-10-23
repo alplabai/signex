@@ -23,6 +23,7 @@ impl Signex {
             tree_path,
             display_name,
             is_outside_project,
+            unsaved_prompt: false,
         });
     }
 
@@ -156,6 +157,13 @@ impl Signex {
                 deleted.display()
             ));
         }
+    }
+
+    pub(crate) fn handle_exclude_dirty_choice(
+        &mut self,
+        _choice: crate::app::ExcludeDirtyChoice,
+    ) -> iced::Task<Message> {
+        iced::Task::none()
     }
 
     pub(crate) fn handle_remove_confirm(
