@@ -115,7 +115,7 @@ impl Signex {
     /// Close the tabs of the file being removed. A delete also closes tabs
     /// of anything under it (a `.snxlib` directory's editors); an exclude
     /// only closes the file's own tabs.
-    fn close_tabs_of_removed(
+    pub(super) fn close_tabs_of_removed(
         &mut self,
         target: &std::path::Path,
         include_descendants: bool,
@@ -165,20 +165,28 @@ impl Signex {
     ) -> iced::Task<Message> {
         use crate::app::RemoveChoice;
 
-        // Excluding a sheet that still has unsaved edits asks first (#738):
-        // the modal stays open and moves to its Save / Discard / Cancel stage.
-        if choice == RemoveChoice::ExcludeFromProject
-            && let Some(target) = self
-                .ui_state
-                .remove_dialog
-                .as_ref()
-                .map(|d| d.target_path.clone())
-            && self.has_unsaved_edits(&target)
-        {
-            if let Some(dialog) = self.ui_state.remove_dialog.as_mut() {
-                dialog.unsaved_prompt = true;
+        // Excluding a document (or a library / folder holding documents) with
+        // unsaved edits asks first (#738): the modal stays open and moves to
+        // its Save / Discard / Cancel stage.
+        if choice == RemoveChoice::ExcludeFromProject {
+            // A footprint draft only reaches `dirty_paths` on a sync.
+            self.sync_footprint_dirty_paths();
+            if let Some(dialog) = self.ui_state.remove_dialog.clone()
+                && self.has_unsaved_edits(&dialog.target_path)
+            {
+                if self.discard_blocked_by_other_project(&dialog) {
+                    crate::diagnostics::log_warning(format!(
+                        "{} has unsaved edits and another open project also uses it: \
+                         Discard is not offered, only Save or Cancel.",
+                        dialog.display_name
+                    ));
+                    self.refresh_panel_ctx();
+                }
+                if let Some(dialog) = self.ui_state.remove_dialog.as_mut() {
+                    dialog.unsaved_prompt = true;
+                }
+                return iced::Task::none();
             }
-            return iced::Task::none();
         }
 
         let Some(state) = self.ui_state.remove_dialog.take() else {

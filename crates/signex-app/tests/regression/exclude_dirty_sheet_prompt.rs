@@ -39,10 +39,14 @@ fn empty_sheet() -> SchematicSheet {
 }
 
 fn add_project(app: &mut Signex, dir: &Path, sheet: &str) -> ProjectId {
+    add_named_project(app, dir, "P.snxprj", sheet)
+}
+
+fn add_named_project(app: &mut Signex, dir: &Path, file: &str, sheet: &str) -> ProjectId {
     let id = app.document_state.mint_project_id();
     app.document_state.projects.push(LoadedProject {
         id,
-        path: dir.join("P.snxprj"),
+        path: dir.join(file),
         data: ProjectData {
             name: "P".to_string(),
             dir: dir.to_string_lossy().into_owned(),
@@ -244,4 +248,117 @@ fn a_failed_save_keeps_the_prompt_and_does_not_exclude() {
             .any(|e| e.message.contains("X.snxsch")),
         "the failure must reach the Messages panel",
     );
+}
+
+/// Two open projects (A at index 0, B at index 1) both list the same
+/// `X.snxsch`, and X is dirty.
+fn shared_fixture() -> (Signex, TempDir, PathBuf) {
+    let tmp = TempDir::new().expect("tempdir");
+    let sheet = tmp.path().join("X.snxsch");
+    std::fs::write(&sheet, ORIGINAL).expect("write sheet");
+    let (mut app, _task) = Signex::new();
+    let a = add_named_project(&mut app, tmp.path(), "A.snxprj", "X.snxsch");
+    add_named_project(&mut app, tmp.path(), "B.snxprj", "X.snxsch");
+    open_sheet(&mut app, &sheet, a, true);
+    (app, tmp, sheet)
+}
+
+fn diagnostics_mention(app: &Signex, needle: &str) -> bool {
+    app.document_state
+        .panel_ctx
+        .diagnostics
+        .iter()
+        .any(|e| e.message.contains(needle))
+}
+
+#[test]
+fn discard_is_refused_while_another_open_project_shares_the_sheet() {
+    let _ = signex_app::diagnostics::init_logging();
+    let (mut app, _tmp, sheet) = shared_fixture();
+    exclude(&mut app, &sheet);
+    assert!(app.ui_state.remove_dialog.is_some(), "prompt expected");
+
+    choose(&mut app, ExcludeDirtyChoice::Discard);
+
+    assert!(
+        app.document_state.engines.contains_key(&sheet),
+        "B's edits must survive"
+    );
+    assert!(app.document_state.dirty_paths.contains(&sheet));
+    assert!(project_lists_sheet(&app), "A must not be excluded either");
+    assert!(
+        app.ui_state.remove_dialog.is_some(),
+        "the prompt stays open so the user can Save or Cancel",
+    );
+    assert!(
+        diagnostics_mention(&app, "another open project"),
+        "the refusal must reach the Messages panel",
+    );
+    assert_eq!(std::fs::read(&sheet).unwrap(), ORIGINAL);
+}
+
+#[test]
+fn save_still_works_for_a_sheet_shared_with_another_project() {
+    let (mut app, _tmp, sheet) = shared_fixture();
+    exclude(&mut app, &sheet);
+
+    choose(&mut app, ExcludeDirtyChoice::Save);
+
+    assert_ne!(std::fs::read(&sheet).unwrap(), ORIGINAL, "Save must write");
+    assert!(app.ui_state.remove_dialog.is_none());
+    assert!(!project_lists_sheet(&app));
+}
+
+/// A project with a `Lib.snxlib` holding a dirty footprint draft whose
+/// `dirty_paths` marker was never synced (only the editor flag is set).
+fn library_fixture() -> (Signex, TempDir, PathBuf, PathBuf) {
+    let tmp = TempDir::new().expect("tempdir");
+    let lib = tmp.path().join("Lib.snxlib");
+    let fp = lib.join("footprints").join("g.snxfpt");
+    std::fs::create_dir_all(fp.parent().unwrap()).expect("mkdir");
+    std::fs::write(&fp, ORIGINAL).expect("write footprint");
+    let (mut app, _task) = Signex::new();
+    add_project(&mut app, tmp.path(), "X.snxsch");
+    let file =
+        signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("fp"));
+    let mut editor = signex_app::app::FootprintEditorState::new(fp.clone(), file);
+    editor.dirty = true;
+    app.document_state
+        .footprint_editors
+        .insert(fp.clone(), editor);
+    (app, tmp, lib, fp)
+}
+
+#[test]
+fn excluding_a_library_with_a_dirty_draft_prompts_and_save_writes_it() {
+    let (mut app, _tmp, lib, fp) = library_fixture();
+
+    exclude(&mut app, &lib);
+
+    let dialog = app
+        .ui_state
+        .remove_dialog
+        .as_ref()
+        .expect("prompt expected");
+    assert!(dialog.unsaved_prompt);
+
+    choose(&mut app, ExcludeDirtyChoice::Save);
+
+    assert_ne!(std::fs::read(&fp).unwrap(), ORIGINAL, "Save must write it");
+    assert!(app.ui_state.remove_dialog.is_none());
+    assert!(!app.document_state.dirty_paths.contains(&fp));
+}
+
+#[test]
+fn discarding_a_library_drops_every_draft_under_it() {
+    let _ = signex_app::diagnostics::init_logging();
+    let (mut app, _tmp, lib, fp) = library_fixture();
+    exclude(&mut app, &lib);
+
+    choose(&mut app, ExcludeDirtyChoice::Discard);
+
+    assert_eq!(std::fs::read(&fp).unwrap(), ORIGINAL, "must not write");
+    assert!(app.document_state.footprint_editors.is_empty());
+    assert!(app.document_state.dirty_paths.is_empty());
+    assert!(app.ui_state.remove_dialog.is_none());
 }

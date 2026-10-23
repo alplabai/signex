@@ -5,6 +5,7 @@
 //! behaviour change.
 
 use super::*;
+use crate::app::state::scope::{CaseFold, path_key_with};
 
 impl Signex {
     /// Close every tab backed by the project whose root is at
@@ -176,6 +177,45 @@ impl Signex {
     /// here. Returns the failure reason so the caller can tell the user
     /// WHY a file couldn't be saved instead of only naming it.
     pub(super) fn try_save_dirty_path(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
+        self.try_save_dirty_path_with(path, CaseFold::host_default())
+    }
+
+    pub(super) fn try_save_dirty_path_with(
+        &mut self,
+        path: &std::path::Path,
+        fold: CaseFold,
+    ) -> anyhow::Result<()> {
+        // The maps are keyed by the exact spelling a document was opened
+        // under, while callers (the Exclude prompt) match under `fold`.
+        // Resolve to the held spelling so both agree on what "the same
+        // file" means, then clear every dirty marker that folds to it.
+        let held = self.held_spelling(path, fold);
+        self.save_held_path(&held)?;
+        let key = path_key_with(&held, fold);
+        self.document_state
+            .dirty_paths
+            .retain(|p| path_key_with(p, fold) != key);
+        Ok(())
+    }
+
+    /// The spelling an engine / editor / project is held under that matches
+    /// `path` under `fold`, or `path` itself when nothing is held for it.
+    fn held_spelling(&self, path: &std::path::Path, fold: CaseFold) -> std::path::PathBuf {
+        let key = path_key_with(path, fold);
+        let doc = &self.document_state;
+        doc.engines
+            .keys()
+            .chain(doc.symbol_editors.keys())
+            .chain(doc.footprint_editors.keys())
+            .chain(doc.projects.iter().map(|p| &p.path))
+            .find(|held| path_key_with(held, fold) == key)
+            .cloned()
+            .unwrap_or_else(|| path.to_path_buf())
+    }
+
+    /// The save legs of [`Self::try_save_dirty_path`], for a path already
+    /// spelled the way the document is held.
+    fn save_held_path(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
         use anyhow::Context as _;
         if let Some(engine) = self.document_state.engines.get_mut(path) {
             engine
@@ -441,6 +481,7 @@ impl Signex {
 mod tests {
     use std::path::PathBuf;
 
+    use crate::app::state::scope::CaseFold;
     use crate::app::{Signex, SymbolEditorState};
 
     /// Build a minimal app carrying one dirty, open symbol-library
@@ -478,6 +519,20 @@ mod tests {
             !app.document_state.dirty_paths.contains(&path),
             "dirty marker must clear once the symbol is saved",
         );
+    }
+
+    #[test]
+    fn save_finds_a_document_held_under_a_case_variant_spelling() {
+        let dir = tempfile::tempdir().unwrap();
+        let held = dir.path().join("SymbolLibrary5.snxsym");
+        let mut app = app_with_dirty_symbol(&held);
+        let variant = dir.path().join("symbollibrary5.SNXSYM");
+
+        let result = app.try_save_dirty_path_with(&variant, CaseFold::Fold);
+
+        assert!(result.is_ok(), "case-variant save failed: {result:?}");
+        assert!(held.exists(), "the held spelling must be the one written");
+        assert!(app.document_state.dirty_paths.is_empty());
     }
 
     #[test]

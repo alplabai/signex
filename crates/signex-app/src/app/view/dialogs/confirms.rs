@@ -62,7 +62,8 @@ impl Signex {
         );
 
         if st.unsaved_prompt {
-            return Self::exclude_dirty_card(&st.display_name, header, tokens);
+            let (body, can_discard) = self.exclude_dirty_prompt(st);
+            return Self::exclude_dirty_card(body, can_discard, header, tokens);
         }
 
         let option_card =
@@ -165,55 +166,47 @@ impl Signex {
     /// Unsaved-edits stage of the Remove modal (#738): Save / Discard / Cancel.
     /// Cancel is `RemoveMsg::Close`, the same message Esc resolves to.
     fn exclude_dirty_card<'a>(
-        display_name: &str,
+        body: String,
+        can_discard: bool,
         header: Element<'a, Message>,
         tokens: &signex_types::theme::ThemeTokens,
     ) -> Element<'a, Message> {
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
+        // Discard is withheld when another open project shares the target.
+        let mut buttons = row![
+            Space::new().width(Length::Fill),
+            secondary_button(
+                "Cancel",
+                Message::Remove(RemoveMsg::Close),
+                text_c,
+                border_c
+            ),
+        ]
+        .align_y(iced::Alignment::Center);
+        if can_discard {
+            buttons = buttons.push(Space::new().width(8)).push(secondary_button(
+                "Discard",
+                Message::Remove(RemoveMsg::ExcludeDirty(
+                    crate::app::ExcludeDirtyChoice::Discard,
+                )),
+                text_c,
+                border_c,
+            ));
+        }
+        buttons = buttons.push(Space::new().width(8)).push(primary_button(
+            "Save",
+            Some(Message::Remove(RemoveMsg::ExcludeDirty(
+                crate::app::ExcludeDirtyChoice::Save,
+            ))),
+            border_c,
+        ));
         container(
             column![
                 header,
-                container(
-                    text(format!(
-                        "\"{display_name}\" has unsaved edits. Save them before excluding it \
-                         from the project?"
-                    ))
-                    .size(11)
-                    .color(text_muted)
-                )
-                .padding([14, 14]),
-                container(
-                    row![
-                        Space::new().width(Length::Fill),
-                        secondary_button(
-                            "Cancel",
-                            Message::Remove(RemoveMsg::Close),
-                            text_c,
-                            border_c
-                        ),
-                        Space::new().width(8),
-                        secondary_button(
-                            "Discard",
-                            Message::Remove(RemoveMsg::ExcludeDirty(
-                                crate::app::ExcludeDirtyChoice::Discard,
-                            )),
-                            text_c,
-                            border_c,
-                        ),
-                        Space::new().width(8),
-                        primary_button(
-                            "Save",
-                            Some(Message::Remove(RemoveMsg::ExcludeDirty(
-                                crate::app::ExcludeDirtyChoice::Save,
-                            ))),
-                            border_c,
-                        ),
-                    ]
-                    .align_y(iced::Alignment::Center),
-                )
-                .padding([14, 14]),
+                container(text(body).size(11).color(text_muted)).padding([14, 14]),
+                container(buttons).padding([14, 14]),
             ]
             .width(560),
         )
