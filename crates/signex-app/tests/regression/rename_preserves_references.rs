@@ -236,7 +236,7 @@ fn renaming_the_pcb_repoints_the_projects_pcb_file() {
 }
 
 #[test]
-fn a_project_library_rename_repoints_the_entry_and_dirties_the_project() {
+fn a_project_library_rename_repoints_the_entry_in_memory_and_in_the_saved_project() {
     use signex_types::project::{LibraryEntry, LibraryEntryKind};
     let mut f = fixture();
     let lib = f.prj.with_file_name("parts.snxlib");
@@ -249,15 +249,20 @@ fn a_project_library_rename_repoints_the_entry_and_dirties_the_project() {
             kind: LibraryEntryKind::ProjectLocal,
             library_id: None,
         });
+    // The user's last save lists the library.
+    signex_types::project::write_project(&f.prj, &f.app.document_state.projects[0].data)
+        .expect("write prj");
 
     submit_rename(&mut f.app, &lib, "other.snxlib");
 
     // Accepted (#739): the file moves and the entry follows in the same
-    // update; the project is dirty (unsaved), not written.
+    // update, in memory and in the saved project, so nothing is left dirty.
     assert!(f.app.ui_state.rename_dialog.is_none());
     assert!(!lib.exists());
     assert!(f.prj.with_file_name("other.snxlib").exists());
-    assert!(f.app.document_state.dirty_paths.contains(&f.prj));
+    assert!(!f.app.document_state.dirty_paths.contains(&f.prj));
+    let saved = signex_types::project::parse_project(&f.prj).expect("saved project");
+    assert_eq!(saved.libraries[0].path, PathBuf::from("other.snxlib"));
     assert_eq!(
         f.app.document_state.projects[0].data.libraries[0].path,
         PathBuf::from("other.snxlib")

@@ -241,9 +241,6 @@ impl LocalGitAdapter {
         index
             .add_path(Path::new(rel_path))
             .map_err(|e| LibraryError::Backend(format!("git add: {e}")))?;
-        index
-            .write()
-            .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
         let tree_oid = index
             .write_tree()
             .map_err(|e| LibraryError::Backend(format!("git write tree: {e}")))?;
@@ -271,6 +268,12 @@ impl LocalGitAdapter {
         };
         repo.commit(Some("HEAD"), &sig, &sig, &commit_message, &tree, &parents)
             .map_err(|e| LibraryError::Backend(format!("git commit: {e}")))?;
+        // The on-disk index is written only once the commit has landed: a
+        // failed commit leaves it as it was, so a later ordinary write can
+        // never commit a staged change that did not happen.
+        index
+            .write()
+            .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
         Ok(())
     }
 

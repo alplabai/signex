@@ -5,8 +5,12 @@
 //! project's `LibraryEntry`, the mounted adapter, and every open tab, editor
 //! map and dirty marker move together, so no write can land between the file
 //! moving and the mount following it. The `.snxprj` is marked dirty, not
-//! written: nothing reaches disk without an explicit save, and Close Project
-//! and quit prompt for the unsaved path.
+//! flushed: the one library entry of the on-disk `.snxprj` is re-pointed in
+//! the same update (so a Discard, quit or crash cannot leave the project
+//! listing a file that no longer exists), but every other unsaved project edit
+//! stays in memory and the project stays dirty for it. A project that was
+//! never saved has no file to patch, so it is marked dirty and the Messages
+//! panel says it needs saving.
 //!
 //! Only project-local libraries are renameable here. Shared and Global
 //! libraries live outside the project and stay refused (#657).
@@ -14,7 +18,7 @@
 use super::*;
 use crate::app::state::ErrorNotice;
 use crate::library::state::rebase_path;
-use signex_types::project::LibraryEntryKind;
+use signex_types::project::{LibraryEntryKind, LibraryRetarget, retarget_library_entry};
 use std::path::{Path, PathBuf};
 
 const NOT_PROJECT_LOCAL: &str = "Only libraries stored inside the project can be renamed from the \
@@ -79,18 +83,26 @@ impl Signex {
         }
         self.ui_state.rename_dialog = None;
         match self.apply_library_rename(project, &old_path, &new_path) {
-            Ok(()) => {
+            Ok(outcome) => {
                 // The Messages panel clips a record at 160 characters, so
                 // the instruction goes first and only file names follow.
                 let file_name = |p: &Path| {
                     p.file_name()
                         .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
                 };
-                crate::diagnostics::log_warning(format!(
-                    "Save the project to keep the new path of library {} (renamed to {}).",
-                    file_name(&old_path),
-                    file_name(&new_path)
-                ));
+                if outcome == LibraryRetarget::Patched {
+                    crate::diagnostics::log_info(format!(
+                        "Library {} renamed to {}; the saved project now lists the new name.",
+                        file_name(&old_path),
+                        file_name(&new_path)
+                    ));
+                } else {
+                    crate::diagnostics::log_warning(format!(
+                        "Save the project to keep the new path of library {} (renamed to {}).",
+                        file_name(&old_path),
+                        file_name(&new_path)
+                    ));
+                }
                 self.refresh_panel_ctx();
             }
             Err(reason) => self.undo_library_file_rename(&old_path, &new_path, &reason),
@@ -190,15 +202,16 @@ impl Signex {
         self.document_state.error_notice = Some(ErrorNotice::rename_failed(detail));
     }
 
-    /// Re-point the mounted library, the project entry and every open
-    /// document at `new_path` (the file is already there). All-or-nothing:
-    /// an `Err` leaves every in-memory key on `old_path`.
+    /// Re-point the saved `.snxprj` entry, the mounted library, the project
+    /// entry and every open document at `new_path` (the file is already
+    /// there). All-or-nothing: an `Err` leaves every in-memory key on
+    /// `old_path` and the `.snxprj` on disk as it was.
     fn apply_library_rename(
         &mut self,
         project: crate::app::ProjectId,
         old_path: &Path,
         new_path: &Path,
-    ) -> Result<(), String> {
+    ) -> Result<LibraryRetarget, String> {
         let new_name = new_path
             .file_name()
             .ok_or_else(|| "the new library path has no file name".to_string())?;
@@ -222,21 +235,38 @@ impl Signex {
             (loaded.path.clone(), entry_idx)
         };
 
-        self.library
-            .relocate_library(old_path, new_path)
-            .map_err(|e| format!("the mounted library could not follow the rename: {e}"))?;
+        let outcome = retarget_library_entry(&project_path, old_path, new_name).map_err(|e| {
+            format!("the project file could not be updated ({e}); nothing was changed")
+        })?;
+        if let Err(e) = self.library.relocate_library(old_path, new_path) {
+            let mut reason = format!("the mounted library could not follow the rename: {e}");
+            if outcome == LibraryRetarget::Patched {
+                let old_name = old_path.file_name().unwrap_or_default();
+                if let Err(back) = retarget_library_entry(&project_path, new_path, old_name) {
+                    reason.push_str(&format!(
+                        "; the project file {} still lists {}: {back}",
+                        project_path.display(),
+                        new_path.display()
+                    ));
+                }
+            }
+            return Err(reason);
+        }
 
         {
             let entry = &mut self.document_state.projects[project_idx].data.libraries[entry_idx];
             entry.path = entry.path.with_file_name(new_name);
         }
-        // In memory only: the project is marked dirty so Close Project and
-        // quit prompt for it, and the user's explicit save writes the new
-        // path. Nothing but the rename itself reaches disk here.
-        self.document_state.dirty_paths.insert(project_path);
+        // A saved project was patched on disk and needs nothing more (its
+        // other unsaved edits keep their own dirty flag). Without a saved
+        // entry to patch, the project is marked dirty so Close Project and
+        // quit prompt for the new path.
+        if outcome != LibraryRetarget::Patched {
+            self.document_state.dirty_paths.insert(project_path);
+        }
 
         self.rekey_library_documents(old_path, new_path);
-        Ok(())
+        Ok(outcome)
     }
 
     /// Move every open tab, dirty marker and undocked window that lives at

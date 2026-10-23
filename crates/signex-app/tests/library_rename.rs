@@ -26,7 +26,9 @@ use signex_app::app::{
 use signex_app::diagnostics;
 use signex_app::library::messages::{LibraryMessage, PrimitiveEdit};
 use signex_app::library::mount::prepare_mount;
-use signex_types::project::{LibraryEntry, LibraryEntryKind, ProjectData, parse_project};
+use signex_types::project::{
+    LibraryEntry, LibraryEntryKind, ProjectData, parse_project, write_project,
+};
 use tempfile::TempDir;
 
 use support::{Scale, generate_library};
@@ -59,24 +61,26 @@ fn fixture() -> Fixture {
     let alpha = generate_library(&dir, "alpha", &Scale::new("alpha", 2, 2)).expect("alpha");
     let beta = generate_library(&dir, "beta", &Scale::new("beta", 2, 2)).expect("beta");
     let prj = dir.join("proj.snxprj");
-    fs::write(&prj, b"{}").expect("write prj");
+    let data = ProjectData {
+        name: "proj".to_string(),
+        dir: dir.to_string_lossy().into_owned(),
+        schematic_root: None,
+        pcb_file: None,
+        sheets: Vec::new(),
+        variant_definitions: Vec::new(),
+        active_variant: None,
+        libraries: vec![entry("alpha/alpha.snxlib"), entry("beta/beta.snxlib")],
+        enable_git: false,
+    };
+    // The user's last save: the project exists on disk.
+    write_project(&prj, &data).expect("write prj");
 
     let (mut app, _task) = Signex::new();
     let project_id = app.document_state.mint_project_id();
     app.document_state.projects.push(LoadedProject {
         id: project_id,
         path: prj.clone(),
-        data: ProjectData {
-            name: "proj".to_string(),
-            dir: dir.to_string_lossy().into_owned(),
-            schematic_root: None,
-            pcb_file: None,
-            sheets: Vec::new(),
-            variant_definitions: Vec::new(),
-            active_variant: None,
-            libraries: vec![entry("alpha/alpha.snxlib"), entry("beta/beta.snxlib")],
-            enable_git: false,
-        },
+        data,
         pending_libraries: Default::default(),
     });
     app.document_state.active_project = Some(project_id);
@@ -92,6 +96,13 @@ fn fixture() -> Fixture {
         alpha,
         beta,
     }
+}
+
+/// A project that was never saved: loaded in memory, no `.snxprj` on disk.
+fn unsaved_fixture() -> Fixture {
+    let f = fixture();
+    fs::remove_file(&f.prj).expect("remove prj");
+    f
 }
 
 fn submit_rename(app: &mut Signex, target: &Path, new_name: &str) {
@@ -117,7 +128,7 @@ fn entry_paths(app: &Signex) -> Vec<PathBuf> {
 #[test]
 fn rename_repoints_the_entry_marks_it_unsaved_and_keeps_the_library_mounted() {
     let _ = diagnostics::init_logging();
-    let mut f = fixture();
+    let mut f = unsaved_fixture();
     let renamed = f.alpha.with_file_name("alpha2.snxlib");
 
     submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
@@ -139,14 +150,9 @@ fn rename_repoints_the_entry_marks_it_unsaved_and_keeps_the_library_mounted() {
             PathBuf::from("beta/beta.snxlib")
         ]
     );
-    // Nothing is written without an explicit save: the file on disk still
-    // lists the old path, and the project is marked dirty so Save / Close /
-    // quit see it.
-    assert_eq!(
-        fs::read(&f.prj).unwrap(),
-        b"{}",
-        "the rename must not save the project"
-    );
+    // A never-saved project has no file to patch: none is created, and the
+    // project is marked dirty so Save / Close / quit see it.
+    assert!(!f.prj.exists(), "the rename must not save the project");
     assert!(f.app.document_state.dirty_paths.contains(&f.prj));
     assert!(
         f.app
@@ -344,7 +350,7 @@ fn a_destination_that_appeared_is_never_overwritten() {
 fn closing_the_project_after_a_library_rename_prompts_for_the_unsaved_path() {
     use signex_app::app::{ContextMenuMsg, ProjectTreeAction};
 
-    let mut f = fixture();
+    let mut f = unsaved_fixture();
     submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
 
     send(
@@ -551,10 +557,181 @@ fn rename_does_not_flush_unsaved_project_state() {
         "unsaved New Library written to disk by a rename"
     );
     assert_eq!(
-        fs::read(&f.prj).unwrap(),
-        b"{}",
-        "the project file must not be rewritten"
+        disk_library_paths(&f.prj).len(),
+        2,
+        "the pending library must not reach the saved project"
     );
     assert!(f.app.document_state.dirty_paths.contains(&f.prj));
     assert_eq!(f.app.document_state.projects[0].pending_libraries.len(), 1);
+}
+
+// ───────────── the saved project follows the rename ─────────────
+
+fn disk_library_paths(prj: &Path) -> Vec<PathBuf> {
+    parse_project(prj)
+        .expect("project parses")
+        .libraries
+        .iter()
+        .map(|e| e.path.clone())
+        .collect()
+}
+
+/// After a rename, Discard / Quit / a crash leave only the disk behind. The
+/// saved project must already list the renamed library, relative, and mount.
+#[test]
+fn a_saved_project_lists_the_renamed_library_so_reopening_mounts_it() {
+    let mut f = fixture();
+    submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    let on_disk = parse_project(&f.prj).unwrap();
+    assert_eq!(
+        disk_library_paths(&f.prj),
+        vec![
+            PathBuf::from("alpha/alpha2.snxlib"),
+            PathBuf::from("beta/beta.snxlib")
+        ]
+    );
+    let resolved = on_disk.resolve_library_path(&on_disk.libraries[0]);
+    assert!(
+        prepare_mount(&resolved).is_ok(),
+        "reopen after Discard cannot mount the renamed library"
+    );
+    assert!(
+        !f.app.document_state.dirty_paths.contains(&f.prj),
+        "memory and disk agree, so the project is not left dirty"
+    );
+}
+
+/// The patch touches one entry. Other unsaved edits stay in memory, on disk
+/// nothing of them appears, and the project stays dirty for them.
+#[test]
+fn the_project_patch_does_not_flush_other_unsaved_edits() {
+    let mut f = fixture();
+    f.app.document_state.projects[0]
+        .data
+        .variant_definitions
+        .push("Unsaved".into());
+    f.app.document_state.dirty_paths.insert(f.prj.clone());
+    submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    let on_disk = parse_project(&f.prj).unwrap();
+    assert!(
+        on_disk.variant_definitions.is_empty(),
+        "an unsaved edit was written by the rename"
+    );
+    assert_eq!(
+        disk_library_paths(&f.prj)[0],
+        PathBuf::from("alpha/alpha2.snxlib")
+    );
+    assert!(f.app.document_state.dirty_paths.contains(&f.prj));
+    assert_eq!(
+        f.app.document_state.projects[0].data.variant_definitions,
+        vec!["Unsaved".to_string()]
+    );
+}
+
+/// No `.snxprj` on disk yet: nothing to patch, so none is created; the
+/// project stays dirty and the Messages panel says it needs saving.
+#[test]
+fn a_never_saved_project_is_not_created_by_the_rename() {
+    let mut f = unsaved_fixture();
+    submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    assert!(!f.prj.exists(), "the rename created the project file");
+    assert!(f.app.document_state.dirty_paths.contains(&f.prj));
+    assert!(
+        f.app
+            .document_state
+            .panel_ctx
+            .diagnostics
+            .iter()
+            .any(|d| d.message.contains("Save the project to keep the new path"))
+    );
+}
+
+/// The project file cannot be written (read-only folder): the file is moved
+/// back and every key stays on the old path.
+#[cfg(unix)]
+#[test]
+fn a_failed_project_patch_rolls_the_rename_back() {
+    use std::os::unix::fs::PermissionsExt;
+    let _ = diagnostics::init_logging();
+    let mut f = fixture();
+    let dir = f.prj.parent().unwrap().to_path_buf();
+    let renamed = f.alpha.with_file_name("alpha2.snxlib");
+    fs::set_permissions(&dir, fs::Permissions::from_mode(0o555)).unwrap();
+    submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+    fs::set_permissions(&dir, fs::Permissions::from_mode(0o755)).unwrap();
+
+    assert!(f.alpha.exists() && !renamed.exists(), "file not moved back");
+    assert_eq!(entry_paths(&f.app)[0], PathBuf::from("alpha/alpha.snxlib"));
+    assert_eq!(
+        disk_library_paths(&f.prj)[0],
+        PathBuf::from("alpha/alpha.snxlib")
+    );
+    assert!(f.app.library.library_at(&f.alpha).is_some());
+    assert!(!f.app.library.set.contains_path(&renamed));
+    assert!(f.app.document_state.error_notice.is_some());
+}
+
+fn lock_branch(dir: &Path) -> PathBuf {
+    let repo = git2::Repository::open(dir).unwrap();
+    let head = repo.head().unwrap();
+    let lock = dir
+        .join(".git")
+        .join(format!("{}.lock", head.name().unwrap()));
+    fs::write(&lock, b"").unwrap();
+    lock
+}
+
+/// A commit that fails (locked branch ref) leaves HEAD and the index exactly
+/// as before, so the next ordinary row write commits only the row.
+#[test]
+fn a_failed_rename_commit_leaves_the_index_and_head_untouched() {
+    let _ = diagnostics::init_logging();
+    let mut f = fixture();
+    let dir = f.alpha.parent().unwrap().to_path_buf();
+    let renamed = f.alpha.with_file_name("alpha2.snxlib");
+    let repo = git2::Repository::open(&dir).unwrap();
+    let head_before = repo.head().unwrap().peel_to_commit().unwrap().id();
+    let lock = lock_branch(&dir);
+
+    submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    assert!(f.alpha.exists() && !renamed.exists());
+    assert!(f.app.library.library_at(&f.alpha).is_some());
+    assert_eq!(
+        disk_library_paths(&f.prj)[0],
+        PathBuf::from("alpha/alpha.snxlib"),
+        "the project patch must be undone with the rename"
+    );
+    fs::remove_file(lock).unwrap();
+    let idx = repo.index().unwrap();
+    assert!(idx.get_path(Path::new("alpha2.snxlib"), 0).is_none());
+    assert!(idx.get_path(Path::new("alpha.snxlib"), 0).is_some());
+    assert_eq!(
+        repo.head().unwrap().peel_to_commit().unwrap().id(),
+        head_before
+    );
+
+    adapter_write(&f.app, &f.alpha, "after_fail");
+    let tree = repo.head().unwrap().peel_to_tree().unwrap();
+    assert!(tree.get_name("alpha.snxlib").is_some());
+    assert!(
+        tree.get_name("alpha2.snxlib").is_none(),
+        "phantom alpha2.snxlib committed from a stale index"
+    );
+}
+
+/// A library without a repository renames cleanly.
+#[test]
+fn a_library_without_a_repository_renames_cleanly() {
+    let mut f = fixture();
+    fs::remove_dir_all(f.alpha.parent().unwrap().join(".git")).unwrap();
+    let renamed = f.alpha.with_file_name("alpha2.snxlib");
+    submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+    assert!(renamed.exists() && !f.alpha.exists());
+    assert!(f.app.library.library_at(&renamed).is_some());
+    adapter_write(&f.app, &renamed, "ng");
+    assert!(!f.alpha.exists());
 }
