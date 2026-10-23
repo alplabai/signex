@@ -98,7 +98,7 @@ impl Signex {
             return Task::none();
         };
         // The gate reads `dirty_paths`; do not rely on every edit site
-        // having refreshed the panel context since its last footprint edit.
+        // having refreshed the panel context since its last editor edit.
         self.sync_editor_dirty_paths();
         // Engines are re-read here (no IO), so an edit made while the Task ran
         // is seen. Evidence that no longer describes the workspace is read

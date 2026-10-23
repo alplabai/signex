@@ -15,10 +15,9 @@ use super::*;
 impl Signex {
     /// Does the symbol/footprint draft at `path` hold unsaved edits?
     ///
-    /// Reads the editors themselves as well as `dirty_paths`: symbol
-    /// undo/redo flip `editor.dirty` without touching `dirty_paths`, and
-    /// footprint and symbol edits only reach it through `sync_editor_dirty_paths`,
-    /// so `dirty_paths` alone can lag a real edit (#110).
+    /// Reads the editors themselves as well as `dirty_paths`: editor edits
+    /// only reach it through `sync_editor_dirty_paths`, so `dirty_paths`
+    /// alone can lag a real edit (#110).
     pub(crate) fn primitive_draft_is_dirty(&self, path: &std::path::Path) -> bool {
         self.document_state.dirty_paths.contains(path)
             || self

@@ -307,9 +307,11 @@ fn closing_a_symbol_tab_dirtied_by_undo_after_a_save_parks_the_draft() {
     let _ = app.update(Message::File(FileMsg::Save));
     assert!(!app.document_state.dirty_paths.contains(&path));
 
-    // Undo marks the editor dirty without touching `dirty_paths`.
+    // Undo re-dirties the editor; the panel refresh mirrors it into
+    // `dirty_paths` (#760).
     let _ = app.update(Message::Edit(EditMsg::Undo));
     assert!(app.document_state.symbol_editors[&path].dirty);
+    assert!(app.document_state.dirty_paths.contains(&path));
     close_tab(&mut app, 0);
 
     assert!(app.document_state.symbol_editors.contains_key(&path));
