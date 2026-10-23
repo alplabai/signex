@@ -102,12 +102,6 @@ impl Signex {
         if !sheet_refs.is_current_for(&self.open_project_ids()) {
             return self.spawn_close_refs_resolve(project_id);
         }
-        for sheet in &sheet_refs.unreadable {
-            crate::diagnostics::log_warning(sheet.warning());
-        }
-        if !sheet_refs.unreadable.is_empty() {
-            self.refresh_panel_ctx();
-        }
         // The gate reads `dirty_paths`; do not rely on every edit site
         // having refreshed the panel context since its last footprint edit.
         self.sync_footprint_dirty_paths();
@@ -133,6 +127,12 @@ impl Signex {
         let dirty_rows = self.library.dirty_editors_under(&project_dir);
 
         if !scan.mine.is_empty() || !dirty_rows.is_empty() {
+            if let Some(reason) = sheet_refs.discard_blocked_reason() {
+                crate::diagnostics::log_warning(format!(
+                    "Close Project '{project_name}': {reason}"
+                ));
+                self.refresh_panel_ctx();
+            }
             self.ui_state.project_close_confirm = Some(crate::app::ProjectCloseConfirmState {
                 project_id,
                 project_name,
@@ -206,18 +206,15 @@ impl Signex {
         // directory.
         if let Some(project) = self.document_state.projects.get(project_idx) {
             let dir = project.dir().to_path_buf();
+            let reach = self.document_state.reach_sets(sheet_refs);
             let sweep: Vec<std::path::PathBuf> = self
                 .document_state
                 .engines
                 .keys()
                 .filter(|p| {
-                    (p.parent() == Some(&dir)
-                        || self
-                            .document_state
-                            .owned_by_project(sheet_refs, project_idx, p))
-                        && !self
-                            .document_state
-                            .claimed_by_other_project(sheet_refs, project_idx, p)
+                    (p.parent() == Some(&dir) || reach.reached_by(project_idx, p))
+                        && !reach.reached_by_other(project_idx, p)
+                        && !kept.contains(p)
                 })
                 .cloned()
                 .collect();
@@ -392,6 +389,19 @@ impl Signex {
                 state.project_name
             ));
             return self.spawn_close_refs_resolve(state.project_id);
+        }
+        if choice == ProjectCloseChoice::DiscardAll
+            && let Some(reason) = state.sheet_refs.discard_blocked_reason()
+        {
+            // The dialog does not offer Discard All here; a forced message is
+            // refused, logged, and the modal stays up for Save All / Cancel.
+            crate::diagnostics::log_warning(format!(
+                "Close Project '{}': Discard All refused. {reason}",
+                state.project_name
+            ));
+            self.ui_state.project_close_confirm = Some(state);
+            self.refresh_panel_ctx();
+            return Task::none();
         }
         match choice {
             ProjectCloseChoice::Cancel => Task::none(),
@@ -671,7 +681,7 @@ mod tests {
     }
 
     #[test]
-    fn project_close_gate_sees_a_dirty_footprint_without_a_panel_refresh() {
+    fn project_close_gate_keeps_a_dirty_footprint_without_a_panel_refresh() {
         let dir = tempfile::tempdir().unwrap();
         let (mut app, path) = app_with_unsynced_dirty_footprint(dir.path());
 
@@ -681,11 +691,11 @@ mod tests {
         let result = app.resolve_sheet_refs_blocking();
         let _ = app.handle_close_refs_resolved(project_id, result);
 
-        let modal = app
-            .ui_state
-            .project_close_confirm
-            .as_ref()
-            .expect("project close must prompt");
-        assert!(modal.dirty_paths.contains(&path));
+        // The draft is not reached by any sheet walk, so it is kept (no
+        // prompt, editor stays open) rather than discarded. It only gets that
+        // far when the gate saw it despite the missing panel refresh.
+        assert!(app.ui_state.project_close_confirm.is_none());
+        assert!(app.document_state.dirty_paths.contains(&path));
+        assert!(app.document_state.footprint_editors.contains_key(&path));
     }
 }

@@ -168,27 +168,21 @@ pub(crate) fn path_is_under(path: &Path, root: &Path, fold: CaseFold) -> bool {
 }
 
 /// Comparison keys of every sheet `project` reaches: the sheets it lists plus
-/// every child reachable through `loaded`'s references, on normalized paths.
+/// every child reachable through `by_key`'s references, on normalized paths.
 ///
 /// A sheet shared by two projects is in BOTH sets — unlike
 /// [`project_owning_sheet_with`], which keeps one parent per child and so
-/// names a single owner. Ownership questions that must not miss a sibling
-/// ask this instead.
+/// names a single owner.
 ///
 /// Every reference is followed, absolute and `../` alike, through the one
 /// ownership rule ([`ownership_reference`]); containment applies only to
-/// opening a file in the editor. Claiming too much is the safe direction,
-/// so this never refuses an escape. `..` is clamped at the filesystem root and
+/// opening a file in the editor. `..` is clamped at the filesystem root and
 /// each key is visited once, so a loop or a `/../..` chain terminates.
 fn reachable_keys(
     project: &LoadedProject,
-    loaded: &HashMap<PathBuf, Vec<String>>,
+    by_key: &HashMap<String, &Vec<String>>,
     fold: CaseFold,
 ) -> HashSet<String> {
-    let by_key: HashMap<String, &Vec<String>> = loaded
-        .iter()
-        .map(|(path, refs)| (path_key_with(path, fold), refs))
-        .collect();
     let dir = project.dir();
     let mut pending: Vec<PathBuf> = project
         .data
@@ -215,114 +209,62 @@ fn reachable_keys(
     reached
 }
 
-/// True when `projects[closing]` owns `path`: it lists the sheet or reaches it
-/// through the child-sheet graph, wherever the file sits on disk.
-pub(crate) fn owned_by_project(
-    projects: &[LoadedProject],
+/// Loaded child references keyed on the NORMALISED path, so a sheet opened
+/// through a raw `../b.snxsch` spelling is found by the walk's lookups.
+pub(crate) fn refs_by_key(
     loaded: &HashMap<PathBuf, Vec<String>>,
-    closing: usize,
-    path: &Path,
     fold: CaseFold,
-) -> bool {
-    projects
-        .get(closing)
-        .is_some_and(|mine| reachable_keys(mine, loaded, fold).contains(&path_key_with(path, fold)))
-}
-
-/// The `.snxlib` FILE paths `project` mounts, as comparison keys. Only the
-/// library path itself counts, never its folder: a `.snxprj` is file content,
-/// so an entry of `.` or `..` would otherwise "own" a whole directory.
-/// An entry that resolves to, or contains, any open project's directory is
-/// ignored.
-fn library_file_keys(
-    project: &LoadedProject,
-    projects: &[LoadedProject],
-    fold: CaseFold,
-) -> HashSet<String> {
-    project
-        .data
-        .libraries
+) -> HashMap<String, &Vec<String>> {
+    loaded
         .iter()
-        .map(|l| normalize_clamped(&project.dir().join(&l.path)))
-        .filter(|lib| !projects.iter().any(|p| path_is_under(p.dir(), lib, fold)))
-        .map(|lib| path_key_with(&lib, fold))
+        .map(|(path, refs)| (path_key_with(&normalize_clamped(path), fold), refs))
         .collect()
 }
 
-/// Claim precedence. A claim by another project (its walk reaches the file,
-/// or the file is its `.snxprj` or sits under a project nested in the closing
-/// one's directory) ALWAYS wins; the closing project's own proof only lifts a
-/// file out of the fail-closed claim of an unreadable sibling sheet.
-fn is_claimed(
-    reached_by_other: bool,
-    in_other_project: bool,
-    under_unreadable_sibling: bool,
-    proven_by_closing: bool,
-) -> bool {
-    reached_by_other || in_other_project || (under_unreadable_sibling && !proven_by_closing)
+/// What every open project's ownership walk reaches, computed once per close.
+///
+/// A file is reached by a project when the project lists it or follows a
+/// reference to it. That is the only evidence of ownership the close flow
+/// accepts: where a file sits, which tab shows it or a library mount proves
+/// nothing.
+pub(crate) struct ReachSets {
+    per_project: Vec<HashSet<String>>,
+    fold: CaseFold,
 }
 
-/// True when `path` belongs to an open project other than `projects[closing]`:
-/// another project's own `.snxprj`, a sheet ANY other project lists or reaches
-/// through its child-sheet graph, or anything under a project nested inside
-/// the closing one's directory. A directory-ancestor test alone cannot tell
-/// projects in the same or nested directories apart.
-///
-/// `unreadable` are sheets that exist but could not be read or parsed, so
-/// their children are unknown. Fail closed: when another project reaches such
-/// a sheet, everything under its directory counts as claimed unless the
-/// closing project proves the file is its own: its reachable set, its
-/// `.snxprj` or one of its `.snxlib` files. Where a file sits, which tab shows
-/// it, or a library folder is NOT proof (see [`is_claimed`] for precedence).
-pub(crate) fn claimed_by_other_project(
-    projects: &[LoadedProject],
-    loaded: &HashMap<PathBuf, Vec<String>>,
-    unreadable: &[PathBuf],
-    closing: usize,
-    path: &Path,
-    fold: CaseFold,
-) -> bool {
-    let Some(mine) = projects.get(closing) else {
-        return false;
-    };
-    let key = path_key_with(path, fold);
-    let reach: Vec<HashSet<String>> = projects
-        .iter()
-        .map(|p| reachable_keys(p, loaded, fold))
-        .collect();
-    let others = || {
-        reach
+impl ReachSets {
+    pub(crate) fn new(
+        projects: &[LoadedProject],
+        loaded: &HashMap<PathBuf, Vec<String>>,
+        fold: CaseFold,
+    ) -> Self {
+        let by_key = refs_by_key(loaded, fold);
+        Self {
+            per_project: projects
+                .iter()
+                .map(|p| reachable_keys(p, &by_key, fold))
+                .collect(),
+            fold,
+        }
+    }
+
+    /// True when `projects[project]` reaches `path`.
+    pub(crate) fn reached_by(&self, project: usize, path: &Path) -> bool {
+        let key = path_key_with(path, self.fold);
+        self.per_project
+            .get(project)
+            .is_some_and(|set| set.contains(&key))
+    }
+
+    /// True when any open project other than `projects[closing]` reaches
+    /// `path`.
+    pub(crate) fn reached_by_other(&self, closing: usize, path: &Path) -> bool {
+        let key = path_key_with(path, self.fold);
+        self.per_project
             .iter()
             .enumerate()
-            .filter(move |(i, _)| *i != closing)
-            .map(|(_, r)| r)
-    };
-    let reached_by_other = others().any(|r| r.contains(&key));
-    let in_other_project = projects.iter().enumerate().any(|(i, other)| {
-        if i == closing {
-            return false;
-        }
-        let other_dir = other.dir();
-        path_key_with(&other.path, fold) == key
-            || (path_key_with(other_dir, fold) != path_key_with(mine.dir(), fold)
-                && path_is_under(other_dir, mine.dir(), fold)
-                && path_is_under(path, other_dir, fold))
-    });
-    let under_unreadable_sibling = unreadable.iter().any(|sheet| {
-        others().any(|r| r.contains(&path_key_with(sheet, fold)))
-            && sheet
-                .parent()
-                .is_some_and(|dir| path_is_under(path, dir, fold))
-    });
-    let proven_by_closing = reach[closing].contains(&key)
-        || path_key_with(&mine.path, fold) == key
-        || library_file_keys(mine, projects, fold).contains(&key);
-    is_claimed(
-        reached_by_other,
-        in_other_project,
-        under_unreadable_sibling,
-        proven_by_closing,
-    )
+            .any(|(i, set)| i != closing && set.contains(&key))
+    }
 }
 
 #[cfg(test)]
@@ -587,29 +529,30 @@ mod tests {
         p
     }
 
-    fn claimed(
+    /// Is `path` reached by a project other than A (index 0)?
+    fn other_reaches(
         projects: &[LoadedProject],
         open: &HashMap<PathBuf, Vec<String>>,
         path: &str,
         fold: CaseFold,
     ) -> bool {
-        claimed_by_other_project(projects, open, &[], 0, &PathBuf::from(native(path)), fold)
+        ReachSets::new(projects, open, fold).reached_by_other(0, &PathBuf::from(native(path)))
     }
 
     #[test]
-    fn child_sheet_of_a_same_directory_project_is_claimed() {
+    fn child_sheet_of_a_same_directory_project_is_reached_by_the_other() {
         let projects = vec![
             project_at(1, "/w/A.snxprj", &["a.snxsch"]),
             project_at(2, "/w/B.snxprj", &["b.snxsch"]),
         ];
         let open = loaded(&[("/w/b.snxsch", &["b_child.snxsch"])]);
-        assert!(claimed(
+        assert!(other_reaches(
             &projects,
             &open,
             "/w/b_child.snxsch",
             CaseFold::Preserve
         ));
-        assert!(!claimed(
+        assert!(!other_reaches(
             &projects,
             &open,
             "/w/a.snxsch",
@@ -618,10 +561,7 @@ mod tests {
     }
 
     #[test]
-    fn a_child_shared_by_two_projects_outside_both_directories_is_claimed() {
-        // #741 review: `parent_of` keeps only the first parent, so a child
-        // referenced by A's and B's roots used to resolve to A alone and be
-        // offered for A's Discard All although B's link reaches it too.
+    fn a_child_shared_by_two_projects_outside_both_directories_is_reached_by_both() {
         let projects = vec![
             project_at(1, "/w/A/A.snxprj", &["a.snxsch"]),
             project_at(2, "/w/B/B.snxprj", &["b.snxsch"]),
@@ -631,54 +571,23 @@ mod tests {
             ("/w/A/a.snxsch", &[shared.as_str()]),
             ("/w/B/b.snxsch", &[shared.as_str()]),
         ]);
-        assert!(claimed(
-            &projects,
-            &open,
-            "/w/shared/s.snxsch",
-            CaseFold::Preserve
-        ));
+        let reach = ReachSets::new(&projects, &open, CaseFold::Preserve);
+        let s = PathBuf::from(&shared);
+        assert!(reach.reached_by(0, &s));
+        assert!(reach.reached_by_other(0, &s));
     }
 
     #[test]
     fn a_dotdot_cycle_in_the_references_terminates() {
         let projects = vec![project_at(1, "/w/A/A.snxprj", &["a.snxsch"])];
         let open = loaded(&[("/w/A/a.snxsch", &["../A/a.snxsch"])]);
-        assert!(owned_by_project(
-            &projects,
-            &open,
-            0,
-            &PathBuf::from(native("/w/A/a.snxsch")),
-            CaseFold::Preserve
-        ));
+        let reach = ReachSets::new(&projects, &open, CaseFold::Preserve);
+        assert!(reach.reached_by(0, &PathBuf::from(native("/w/A/a.snxsch"))));
     }
 
     #[test]
-    fn everything_under_an_unreadable_sibling_sheet_is_claimed_but_not_the_closing_projects_own() {
-        let projects = vec![
-            project_at(1, "/w/A.snxprj", &["a.snxsch"]),
-            project_at(2, "/w/B.snxprj", &["b.snxsch"]),
-        ];
-        let unreadable = [PathBuf::from(native("/w/b.snxsch"))];
-        let open = HashMap::new();
-        let is_claimed = |path: &str| {
-            claimed_by_other_project(
-                &projects,
-                &open,
-                &unreadable,
-                0,
-                &PathBuf::from(native(path)),
-                CaseFold::Preserve,
-            )
-        };
-        assert!(is_claimed("/w/unknown_child.snxsch"));
-        assert!(!is_claimed("/w/a.snxsch"), "A's own sheet stays A's");
-        assert!(!is_claimed("/w/A.snxprj"), "A's own .snxprj stays A's");
-    }
-
-    #[test]
-    fn a_child_reached_through_an_escaping_reference_is_claimed() {
-        // #741 review: B's sheet reaches `../A/s.snxsch`, which references
-        // `g.snxsch`; closing A must not treat g as A's alone.
+    fn a_child_reached_through_an_escaping_reference_is_reached_by_the_other() {
+        // B's sheet reaches `../A/s.snxsch`, which references `g.snxsch`.
         let projects = vec![
             project_at(1, "/w/A/A.snxprj", &["a.snxsch"]),
             project_at(2, "/w/B/B.snxprj", &["b.snxsch"]),
@@ -687,7 +596,7 @@ mod tests {
             ("/w/B/b.snxsch", &["../A/s.snxsch"]),
             ("/w/A/s.snxsch", &["g.snxsch"]),
         ]);
-        assert!(claimed(
+        assert!(other_reaches(
             &projects,
             &open,
             "/w/A/g.snxsch",
@@ -696,7 +605,7 @@ mod tests {
     }
 
     #[test]
-    fn a_child_reached_through_an_absolute_reference_is_claimed() {
+    fn a_child_reached_through_an_absolute_reference_is_reached_by_the_other() {
         let projects = vec![
             project_at(1, "/w/A/A.snxprj", &["a.snxsch"]),
             project_at(2, "/w/B/B.snxprj", &["b.snxsch"]),
@@ -706,7 +615,7 @@ mod tests {
             ("/w/B/b.snxsch", &[s.as_str()]),
             ("/w/A/s.snxsch", &["g.snxsch"]),
         ]);
-        assert!(claimed(
+        assert!(other_reaches(
             &projects,
             &open,
             "/w/A/g.snxsch",
@@ -726,114 +635,44 @@ mod tests {
             "/w/B/b.snxsch",
             &["/../../w/B/b.snxsch", "../../../../../w/x.snxsch"],
         )]);
-        assert!(claimed(&projects, &open, "/w/x.snxsch", CaseFold::Preserve));
-        assert!(claimed(
+        assert!(other_reaches(
             &projects,
             &open,
-            "/w/B/b.snxsch",
+            "/w/x.snxsch",
             CaseFold::Preserve
         ));
     }
 
     #[test]
-    fn an_unreadable_sheet_above_the_closing_project_keeps_only_proven_files_of_the_closing_one() {
-        // B lists `../b.snxsch`, unreadable, in /w -- above A's /w/A. Only
-        // what is provably A's (reach, `.snxprj`, own `.snxlib` file) is exempt; a file
-        // merely sitting in A's folder may be the unreadable sheet's child.
-        let mut a = project_at(1, "/w/A/A.snxprj", &["a.snxsch"]);
-        a.data.libraries.push(signex_types::project::LibraryEntry {
-            path: PathBuf::from("lib.snxlib"),
-            kind: signex_types::project::LibraryEntryKind::ProjectLocal,
-            library_id: None,
-        });
-        let projects = vec![a, project_at(2, "/w/B/B.snxprj", &["../b.snxsch"])];
-        let unreadable = [PathBuf::from(native("/w/b.snxsch"))];
-        let open = HashMap::new();
-        let is_claimed = |path: &str| {
-            claimed_by_other_project(
-                &projects,
-                &open,
-                &unreadable,
-                0,
-                &PathBuf::from(native(path)),
-                CaseFold::Preserve,
-            )
-        };
-        assert!(!is_claimed("/w/A/a.snxsch"), "A's reachable sheet");
-        assert!(!is_claimed("/w/A/A.snxprj"), "A's project file");
-        assert!(is_claimed("/w/A/stray.snxsch"), "a tab is not proof");
-        assert!(!is_claimed("/w/A/lib.snxlib"), "A's .snxlib file");
-        assert!(
-            is_claimed("/w/A/lib.snxlib/symbols/d.snxsym"),
-            "a library folder is not proof"
-        );
-        assert!(
-            is_claimed("/w/A/g.snxsch"),
-            "no evidence it is A's: fail closed"
-        );
-        assert!(is_claimed("/w/elsewhere.snxsch"), "outside A stays claimed");
-    }
-
-    fn with_library(mut project: LoadedProject, path: &str) -> LoadedProject {
-        project
-            .data
-            .libraries
-            .push(signex_types::project::LibraryEntry {
-                path: PathBuf::from(path),
-                kind: signex_types::project::LibraryEntryKind::ProjectLocal,
-                library_id: None,
-            });
-        project
-    }
-
-    /// Is `path` claimed when A (index 0) closes, with B's `../b.snxsch`
-    /// unreadable?
-    fn claimed_under_corrupt_b(a: LoadedProject, path: &str) -> bool {
-        let projects = vec![a, project_at(2, "/w/B/B.snxprj", &["../b.snxsch"])];
-        let unreadable = [PathBuf::from(native("/w/b.snxsch"))];
-        claimed_by_other_project(
+    fn an_engine_loaded_through_a_raw_dotdot_path_is_found_by_the_walk() {
+        // B lists `../b.snxsch`; its engine was opened under the RAW spelling
+        // `/w/B/../b.snxsch` and holds a child `c`. The walk normalises its
+        // lookups, so the loaded map must be keyed the same way.
+        let projects = vec![
+            project_at(1, "/w/A/A.snxprj", &["a.snxsch"]),
+            project_at(2, "/w/B/B.snxprj", &["../b.snxsch"]),
+        ];
+        let open = loaded(&[("/w/B/../b.snxsch", &["c.snxsch"])]);
+        assert!(other_reaches(
             &projects,
-            &HashMap::new(),
-            &unreadable,
-            0,
-            &PathBuf::from(native(path)),
-            CaseFold::Preserve,
-        )
-    }
-
-    #[test]
-    fn a_library_at_dot_does_not_make_the_whole_directory_the_closing_projects() {
-        let a = with_library(project_at(1, "/w/A/A.snxprj", &["a.snxsch"]), ".");
-        assert!(claimed_under_corrupt_b(a, "/w/A/g.snxsch"));
-    }
-
-    #[test]
-    fn a_library_at_dotdot_does_not_make_the_parent_directory_the_closing_projects() {
-        let a = with_library(project_at(1, "/w/A/A.snxprj", &["a.snxsch"]), "..");
-        assert!(claimed_under_corrupt_b(a, "/w/g.snxsch"));
-    }
-
-    #[test]
-    fn a_library_file_of_the_closing_project_is_proof_but_its_contents_are_not() {
-        let a = with_library(project_at(1, "/w/A/A.snxprj", &["a.snxsch"]), "lib.snxlib");
-        assert!(!claimed_under_corrupt_b(a.clone(), "/w/A/lib.snxlib"));
-        assert!(claimed_under_corrupt_b(a, "/w/A/lib.snxlib/g.snxsch"));
-    }
-
-    #[test]
-    fn a_library_at_dot_does_not_hide_a_nested_projects_unreached_draft() {
-        // N lives inside A's directory; `draft.snxsch` is under N's folder
-        // and reached by nobody. A's library at `.` must not lift it.
-        let a = with_library(project_at(1, "/w/A/A.snxprj", &["a.snxsch"]), ".");
-        let projects = vec![a, project_at(2, "/w/A/N/N.snxprj", &["n.snxsch"])];
-        assert!(claimed_by_other_project(
-            &projects,
-            &HashMap::new(),
-            &[],
-            0,
-            &PathBuf::from(native("/w/A/N/draft.snxsch")),
-            CaseFold::Preserve,
+            &open,
+            "/w/c.snxsch",
+            CaseFold::Preserve
         ));
+    }
+
+    #[test]
+    fn a_nested_projects_unreached_file_is_reached_by_nobody() {
+        // Where a file sits proves nothing: a draft under a nested project's
+        // folder is reached by no project.
+        let projects = vec![
+            project_at(1, "/w/A/A.snxprj", &["a.snxsch"]),
+            project_at(2, "/w/A/N/N.snxprj", &["n.snxsch"]),
+        ];
+        let reach = ReachSets::new(&projects, &HashMap::new(), CaseFold::Preserve);
+        let draft = PathBuf::from(native("/w/A/N/draft.snxsch"));
+        assert!(!reach.reached_by(0, &draft));
+        assert!(!reach.reached_by_other(0, &draft));
     }
 
     #[test]
@@ -846,14 +685,19 @@ mod tests {
     }
 
     #[test]
-    fn other_projects_sheet_is_claimed_across_case_on_a_folding_host() {
+    fn other_projects_sheet_is_reached_across_case_on_a_folding_host() {
         let projects = vec![
             project_at(1, "/w/A.snxprj", &["a.snxsch"]),
             project_at(2, "/w/B.snxprj", &["B.snxsch"]),
         ];
         let open = HashMap::new();
-        assert!(claimed(&projects, &open, "/w/b.snxsch", CaseFold::Fold));
-        assert!(!claimed(
+        assert!(other_reaches(
+            &projects,
+            &open,
+            "/w/b.snxsch",
+            CaseFold::Fold
+        ));
+        assert!(!other_reaches(
             &projects,
             &open,
             "/w/b.snxsch",
@@ -862,39 +706,14 @@ mod tests {
     }
 
     #[test]
-    fn a_nested_project_claim_beats_the_closing_projects_own_listing() {
-        // Precedence: another project's claim beats A's proof. Keeping A's
-        // own listed sheet open is the safe side; discarding it is not.
-        let listed = native("sub/x.snxsch");
-        let projects = vec![
-            project_at(1, "/w/A.snxprj", &[listed.as_str()]),
-            project_at(2, "/w/sub/B.snxprj", &["b.snxsch"]),
-        ];
-        let open = HashMap::new();
-        assert!(claimed(
-            &projects,
-            &open,
-            "/w/sub/x.snxsch",
-            CaseFold::Preserve
-        ));
-        assert!(claimed(
-            &projects,
-            &open,
-            "/w/sub/other.snxsch",
-            CaseFold::Preserve
-        ));
-    }
-
-    #[test]
-    fn a_sheet_listed_by_two_projects_is_claimed_by_the_other() {
+    fn a_sheet_listed_by_two_projects_is_reached_by_the_other() {
         let projects = vec![
             project_at(1, "/w/A.snxprj", &["shared.snxsch"]),
             project_at(2, "/w/B.snxprj", &["shared.snxsch"]),
         ];
-        let open = HashMap::new();
-        assert!(claimed(
+        assert!(other_reaches(
             &projects,
-            &open,
+            &HashMap::new(),
             "/w/shared.snxsch",
             CaseFold::Preserve
         ));

@@ -8,36 +8,43 @@
 //! The disk walk blocks, so it never runs inside `update`: the caller takes a
 //! [`SheetRefInputs`] snapshot, resolves it on a worker thread and gets the
 //! [`SheetRefs`] back as a message.
+//!
+//! Closing project A splits A's dirty documents by one strict rule: `mine` is
+//! what A's own ownership walk reaches (plus A's `.snxprj`) AND no other open
+//! project's walk reaches; every other dirty document associated with A is
+//! `kept`. If any open project has a sheet that cannot be read, ownership is
+//! unknown and Discard All is off.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use super::scope::{self, CaseFold, path_key_with};
+use super::scope::{self, CaseFold, ReachSets, path_key_with};
 use super::{DocumentState, ProjectId};
 use crate::app::project_sheets::{normalize_clamped, ownership_reference};
+
+/// How many file names a single Messages-panel or dialog line spells out
+/// before it falls back to a count.
+const MAX_NAMES_LISTED: usize = 5;
 
 /// A sheet that exists but could not be read or parsed, so its children are
 /// unknown.
 #[derive(Debug, Clone)]
 pub struct UnreadableSheet {
     pub(crate) path: PathBuf,
-    pub(crate) reason: String,
 }
 
-impl UnreadableSheet {
-    /// One-line description for the Messages panel. The panel shortens long
-    /// entries, so the file name and the decision come before the directory.
-    pub(crate) fn warning(&self) -> String {
-        let name = self.path.file_name().map_or_else(
-            || self.path.display().to_string(),
-            |n| n.to_string_lossy().into_owned(),
-        );
-        let dir = self.path.parent().unwrap_or_else(|| Path::new(""));
-        format!(
-            "Close Project: keeping the folder of {name} open, the sheet {} ({})",
-            self.reason,
-            dir.display(),
-        )
+/// `a, b, c (+N more)`: at most [`MAX_NAMES_LISTED`] names, then a count, so a
+/// line stays short however many files there are.
+pub(crate) fn bounded_names(names: &[String]) -> String {
+    let shown = names
+        .iter()
+        .take(MAX_NAMES_LISTED)
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .join(", ");
+    match names.len().saturating_sub(MAX_NAMES_LISTED) {
+        0 => shown,
+        more => format!("{shown} (+{more} more)"),
     }
 }
 
@@ -58,6 +65,25 @@ impl SheetRefs {
         let resolved: HashSet<ProjectId> = self.resolved_for.iter().copied().collect();
         let now: HashSet<ProjectId> = open.iter().copied().collect();
         resolved == now
+    }
+
+    /// Why Discard All is off, or `None` when every sheet could be read. A
+    /// sheet that cannot be read hides its children, so which documents are
+    /// the closing project's alone is unknown and nothing may be discarded.
+    pub fn discard_blocked_reason(&self) -> Option<String> {
+        if self.unreadable.is_empty() {
+            return None;
+        }
+        let names: Vec<String> = self
+            .unreadable
+            .iter()
+            .map(|u| file_label(&u.path))
+            .collect();
+        Some(format!(
+            "Discard All is disabled: {} sheet(s) could not be read ({}), so ownership is unknown",
+            names.len(),
+            bounded_names(&names),
+        ))
     }
 }
 
@@ -88,10 +114,7 @@ impl SheetRefInputs {
             roots,
             projects,
         } = self;
-        let loaded_by_key: HashMap<String, &Vec<String>> = loaded
-            .iter()
-            .map(|(path, refs)| (path_key_with(path, fold), refs))
-            .collect();
+        let loaded_by_key = scope::refs_by_key(&loaded, fold);
         let mut from_disk: HashMap<PathBuf, Vec<String>> = HashMap::new();
         let mut unreadable = Vec::new();
         let mut seen: HashSet<String> = HashSet::new();
@@ -108,11 +131,8 @@ impl SheetRefInputs {
                         from_disk.insert(path.clone(), children.clone());
                         children
                     }
-                    Err(reason) => {
-                        unreadable.push(UnreadableSheet {
-                            path: path.clone(),
-                            reason,
-                        });
+                    Err(_) => {
+                        unreadable.push(UnreadableSheet { path: path.clone() });
                         Vec::new()
                     }
                 },
@@ -132,7 +152,7 @@ impl SheetRefInputs {
 
 /// A closing project's dirty documents, split so none falls through: each
 /// one is either in `mine` (offered to Save All / Discard All) or in `kept`
-/// (another open project claims it, so closing leaves it open and says so).
+/// (never discarded: closing leaves it open and says so).
 #[derive(Debug, Clone, Default)]
 pub(crate) struct CloseScan {
     pub(crate) mine: Vec<PathBuf>,
@@ -140,16 +160,16 @@ pub(crate) struct CloseScan {
 }
 
 impl CloseScan {
-    /// Messages-panel line naming the closing project's kept files.
+    /// Messages-panel line naming the closing project's kept files, bounded.
     pub(crate) fn warning(&self, project_name: &str) -> Option<String> {
         if self.kept.is_empty() {
             return None;
         }
         let names: Vec<String> = self.kept.iter().map(|p| file_label(p)).collect();
         Some(format!(
-            "Close Project '{project_name}': kept {} unsaved document(s) open because another open project uses them: {}",
+            "Close Project '{project_name}': kept {} unsaved document(s) open, not provably this project's alone: {}",
             names.len(),
-            names.join(", "),
+            bounded_names(&names),
         ))
     }
 }
@@ -179,74 +199,49 @@ impl DocumentState {
         }
     }
 
+    /// What every open project's ownership walk reaches, for `sheet_refs`.
+    pub(crate) fn reach_sets(&self, sheet_refs: &SheetRefs) -> ReachSets {
+        ReachSets::new(&self.projects, &sheet_refs.refs, CaseFold::host_default())
+    }
+
     /// Split the dirty documents of `projects[closing]` into [`CloseScan`]'s
-    /// two lists. A dirty path is the project's when it sits in the project
-    /// directory, is reached by the project, or backs one of its tabs; of
-    /// those, the ones another project claims are kept, the rest are its own.
+    /// two lists.
+    ///
+    /// A dirty path is associated with the project when it sits in the
+    /// project directory, backs one of its tabs, is reached by its walk, or is
+    /// its `.snxprj`. It is `mine` only when the project's own walk reaches it
+    /// (or it is the project's `.snxprj`) AND no other open project's walk
+    /// does; everything else associated is `kept`. Location, tabs and library
+    /// mounts are never evidence of ownership.
     pub(crate) fn close_scan(&self, sheet_refs: &SheetRefs, closing: usize) -> CloseScan {
         let Some(project) = self.projects.get(closing) else {
             return CloseScan::default();
         };
+        let fold = CaseFold::host_default();
+        let reach = self.reach_sets(sheet_refs);
+        let project_file = path_key_with(&project.path, fold);
         let mut scan = CloseScan::default();
         for path in &self.dirty_paths {
+            let reached = reach.reached_by(closing, path);
+            let is_project_file = path_key_with(path, fold) == project_file;
             let backs_tab = self
                 .tabs
                 .iter()
                 .any(|t| t.path == *path && t.project_id == Some(project.id));
-            let is_mine = path.starts_with(project.dir())
-                || backs_tab
-                || self.owned_by_project(sheet_refs, closing, path);
-            if !is_mine {
+            let associated =
+                path.starts_with(project.dir()) || backs_tab || reached || is_project_file;
+            if !associated {
                 continue;
             }
-            if self.claimed_by_other_project(sheet_refs, closing, path) {
-                scan.kept.push(path.clone());
-            } else {
+            if (reached || is_project_file) && !reach.reached_by_other(closing, path) {
                 scan.mine.push(path.clone());
+            } else {
+                scan.kept.push(path.clone());
             }
         }
         scan.mine.sort();
         scan.kept.sort();
         scan
-    }
-
-    /// Whether `path` belongs to an open project other than
-    /// `projects[closing]` (see [`scope::claimed_by_other_project`]).
-    pub(crate) fn claimed_by_other_project(
-        &self,
-        sheet_refs: &SheetRefs,
-        closing: usize,
-        path: &Path,
-    ) -> bool {
-        let unreadable: Vec<PathBuf> = sheet_refs
-            .unreadable
-            .iter()
-            .map(|u| u.path.clone())
-            .collect();
-        scope::claimed_by_other_project(
-            &self.projects,
-            &sheet_refs.refs,
-            &unreadable,
-            closing,
-            path,
-            CaseFold::host_default(),
-        )
-    }
-
-    /// Whether `projects[closing]` owns `path` (see [`scope::owned_by_project`]).
-    pub(crate) fn owned_by_project(
-        &self,
-        sheet_refs: &SheetRefs,
-        closing: usize,
-        path: &Path,
-    ) -> bool {
-        scope::owned_by_project(
-            &self.projects,
-            &sheet_refs.refs,
-            closing,
-            path,
-            CaseFold::host_default(),
-        )
     }
 }
 
@@ -322,6 +317,37 @@ mod tests {
             .write_string()
             .expect("serialise sheet");
         std::fs::write(path, text).expect("write sheet");
+    }
+
+    #[test]
+    fn name_lists_are_bounded_to_a_count_plus_the_first_few() {
+        let names: Vec<String> = (0..200).map(|n| format!("s{n}.snxsch")).collect();
+        let line = bounded_names(&names);
+        assert!(line.starts_with("s0.snxsch, s1.snxsch"), "{line}");
+        assert!(line.ends_with("(+195 more)"), "{line}");
+        assert!(line.len() < 100, "{line}");
+        assert_eq!(bounded_names(&names[..2]), "s0.snxsch, s1.snxsch");
+
+        let scan = CloseScan {
+            mine: Vec::new(),
+            kept: names.iter().map(PathBuf::from).collect(),
+        };
+        let warning = scan.warning("P").expect("kept files warn");
+        assert!(warning.contains("kept 200"), "{warning}");
+        assert!(warning.len() < 250, "{warning}");
+
+        let refs = SheetRefs {
+            unreadable: names
+                .iter()
+                .map(|n| UnreadableSheet {
+                    path: PathBuf::from(n),
+                })
+                .collect(),
+            ..SheetRefs::default()
+        };
+        let reason = refs.discard_blocked_reason().expect("blocked");
+        assert!(reason.len() < 250, "{reason}");
+        assert!(SheetRefs::default().discard_blocked_reason().is_none());
     }
 
     #[test]

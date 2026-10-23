@@ -133,7 +133,10 @@ fn app_with_open_project(dir: &Path) -> Signex {
 }
 
 #[test]
-fn project_close_prompts_for_an_edited_footprint_and_discard_clears_it() {
+fn project_close_keeps_an_edited_footprint_draft_it_cannot_prove_is_its_own() {
+    // A footprint draft under the project's folder is reached by no sheet walk,
+    // so it is never the project's to discard: it is kept, its editor and tab
+    // stay open, and the close does not prompt for it.
     let tmp = TempDir::new().unwrap();
     let path = tmp
         .path()
@@ -146,23 +149,14 @@ fn project_close_prompts_for_an_edited_footprint_and_discard_clears_it() {
 
     crate::close_support::close_first_project(&mut app);
 
-    let modal = app
-        .ui_state
-        .project_close_confirm
-        .as_ref()
-        .expect("closing a project with an edited footprint must prompt");
-    assert!(modal.dirty_paths.contains(&path));
-
-    let _ = app.update(Message::Project(ProjectMsg::CloseConfirm(
-        ProjectCloseChoice::DiscardAll,
-    )));
-    assert!(app.document_state.projects.is_empty());
-    assert!(app.document_state.dirty_paths.is_empty());
-    // The discarded draft must be gone, not merely marked clean: a
-    // surviving editor would re-dirty on the next edit and Ctrl+S would
-    // write the discarded content.
-    assert!(!app.document_state.footprint_editors.contains_key(&path));
-    assert!(app.document_state.tabs.iter().all(|t| t.path != path));
+    assert!(
+        app.ui_state.project_close_confirm.is_none(),
+        "nothing is provably the project's, so there is nothing to save or discard",
+    );
+    assert!(app.document_state.projects.is_empty(), "the project closes");
+    assert!(app.document_state.dirty_paths.contains(&path));
+    assert!(app.document_state.footprint_editors.contains_key(&path));
+    assert!(app.document_state.tabs.iter().any(|t| t.path == path));
 }
 
 fn preview_row() -> ComponentRow {
