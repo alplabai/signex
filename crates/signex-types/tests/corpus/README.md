@@ -50,7 +50,13 @@ byte-identically. Filenames name the feature:
 Holes (known, deliberately absent): hierarchical child sheets and
 multi-sheet projects (`.snxprj`, separate task); unknown vendor keys
 (dropped on parse today, blocked on forward-compat work); a symbol whose
-extras are entirely default, because it does not round-trip today.
+extras are entirely default, because it does not round-trip today
+(data loss: the writer omits `[extras.symbols.<uuid>]` for a default
+`SymbolExtras`, and the parser's derived `Default` yields `unit = 0`,
+`in_bom = false`, `on_board = false`, so a plain symbol drops out of the BOM
+and off the board after one save/reload; fix is a manual
+`impl Default for SymbolExtras` with `unit` 1, `in_bom` and `on_board` true;
+bug not yet filed upstream, add the issue number here once it is).
 Every symbol fixture therefore carries a non-default `footprint`.
 
 ## Intentional format change
