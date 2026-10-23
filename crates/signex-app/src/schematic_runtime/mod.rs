@@ -413,14 +413,14 @@ fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
         if let Some(ref_text) = symbol.ref_text.as_ref() {
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolRefField),
-                bbox: text_prop_aabb(symbol, &symbol.reference, ref_text),
+                bbox: text_prop_aabb(&symbol.reference, ref_text),
                 anchor: ref_text.position,
             });
         }
         if let Some(val_text) = symbol.val_text.as_ref() {
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolValField),
-                bbox: text_prop_aabb(symbol, &symbol.value, val_text),
+                bbox: text_prop_aabb(&symbol.value, val_text),
                 anchor: val_text.position,
             });
         }
@@ -587,13 +587,15 @@ fn symbol_body_aabb(symbol: &Symbol) -> Aabb {
     )
 }
 
-fn text_prop_aabb(symbol: &Symbol, text: &str, prop: &TextProp) -> Aabb {
+fn text_prop_aabb(text: &str, prop: &TextProp) -> Aabb {
     let chars = text.chars().count().max(1) as f64;
     let h = prop
         .font_size
         .max(signex_types::schematic::SCHEMATIC_TEXT_MM);
     let w = h * 0.6 * chars;
-    let (x, y) = instance_transform(symbol, &prop.position);
+    // `prop.position` is stored in world coordinates (drag and the engine
+    // translate it directly), so it must not go through the symbol transform.
+    let (x, y) = (prop.position.x, prop.position.y);
     Aabb::new(x - w * 0.5, y - h * 0.5, x + w * 0.5, y + h * 0.5)
 }
 
@@ -721,6 +723,21 @@ fn rect_visible(min: iced::Point, size: iced::Size, bounds: Rectangle) -> bool {
 
 fn point_visible(p: iced::Point, bounds: Rectangle, pad: f32) -> bool {
     p.x >= -pad && p.y >= -pad && p.x <= bounds.width + pad && p.y <= bounds.height + pad
+}
+
+/// Culls text by its extent, not just its anchor: the anchor may sit off
+/// screen while a long label or flag still reaches into view. The reach is the
+/// longest side of the hit box in every direction, which also covers rotation
+/// and one-sided flags.
+fn text_anchor_visible(
+    anchor: iced::Point,
+    bounds: Rectangle,
+    pad: f32,
+    bbox: &Aabb,
+    scale: f32,
+) -> bool {
+    let reach = (bbox.width().max(bbox.height()) as f32) * scale;
+    point_visible(anchor, bounds, pad + reach)
 }
 
 fn resolve_stroke_color(

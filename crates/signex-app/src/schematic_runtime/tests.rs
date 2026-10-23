@@ -94,3 +94,117 @@ fn hit_test_polygon_selects_wire_and_label_by_anchor() {
     assert!(hits.contains(&SelectedItem::new(wire_uuid, SelectedKind::Wire)));
     assert!(hits.contains(&SelectedItem::new(label_uuid, SelectedKind::Label)));
 }
+
+fn field_symbol(ref_text: Option<TextProp>) -> Symbol {
+    Symbol {
+        unknown_columns: Default::default(),
+        unknown: Default::default(),
+        uuid: uuid::Uuid::new_v4(),
+        lib_id: "Device:R".into(),
+        reference: "R1".into(),
+        value: "10k".into(),
+        footprint: String::new(),
+        datasheet: String::new(),
+        position: Point::new(50.0, 50.0),
+        rotation: 90.0,
+        mirror_x: false,
+        mirror_y: false,
+        unit: 1,
+        is_power: false,
+        ref_text,
+        val_text: None,
+        fields_autoplaced: false,
+        fields_user_placed: false,
+        dnp: false,
+        in_bom: true,
+        on_board: true,
+        exclude_from_sim: false,
+        locked: false,
+        fields: HashMap::new(),
+        custom_properties: Vec::new(),
+        pin_uuids: HashMap::new(),
+        instances: Vec::new(),
+        library_id: None,
+        row_id: None,
+        library_version: String::new(),
+    }
+}
+
+#[test]
+fn reference_field_draws_and_hit_tests_at_stored_text_prop() {
+    let prop = TextProp {
+        position: Point::new(70.0, 30.0),
+        rotation: 0.0,
+        font_size: 2.0,
+        justify_h: HAlign::Left,
+        justify_v: VAlign::Top,
+        hidden: false,
+    };
+    let symbol = field_symbol(Some(prop));
+
+    let drawn = snapshot::field_text_input(
+        &symbol,
+        "R1",
+        symbol.ref_text.as_ref(),
+        snapshot::FieldSlot::Reference,
+        [1.0; 4],
+    )
+    .expect("visible field is drawn");
+    assert_eq!(drawn.position, [70.0, 30.0]);
+    assert_eq!(drawn.size_mm, 2.0);
+    assert_eq!(drawn.rotation_rad, 0.0);
+    assert_eq!(drawn.h_align, HAlign::Left);
+
+    let mut snapshot = empty_snapshot();
+    let uuid = symbol.uuid;
+    snapshot.symbols.push(symbol);
+    let hit = hit_test::hit_test(&snapshot, 70.0, 30.0);
+    assert_eq!(
+        hit,
+        Some(SelectedItem::new(uuid, SelectedKind::SymbolRefField))
+    );
+}
+
+#[test]
+fn field_without_text_prop_keeps_default_offset_and_hidden_field_is_skipped() {
+    let symbol = field_symbol(None);
+    let fallback = snapshot::field_text_input(
+        &symbol,
+        "R1",
+        None,
+        snapshot::FieldSlot::Reference,
+        [1.0; 4],
+    )
+    .unwrap();
+    assert_eq!(fallback.position, [50.0, 46.5]);
+
+    let hidden = TextProp {
+        position: Point::new(0.0, 0.0),
+        rotation: 0.0,
+        font_size: 1.27,
+        justify_h: HAlign::Center,
+        justify_v: VAlign::Center,
+        hidden: true,
+    };
+    assert!(
+        snapshot::field_text_input(
+            &symbol,
+            "R1",
+            Some(&hidden),
+            snapshot::FieldSlot::Reference,
+            [1.0; 4],
+        )
+        .is_none()
+    );
+}
+
+#[test]
+fn long_text_stays_visible_while_anchor_is_just_offscreen() {
+    let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0));
+    let anchor = iced::Point::new(-23.0, 300.0);
+    let flag = Aabb::new(-5.0, -1.0, 5.0, 1.0);
+    assert!(!point_visible(anchor, bounds, 22.0));
+    assert!(text_anchor_visible(anchor, bounds, 22.0, &flag, 48.0));
+    let far = iced::Point::new(-2000.0, 300.0);
+    assert!(!text_anchor_visible(far, bounds, 22.0, &flag, 48.0));
+}

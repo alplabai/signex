@@ -141,31 +141,28 @@ pub(super) fn build_renderer_snapshot(
             ),
         });
 
-        if !symbol.reference.is_empty() {
-            reference_value_texts.push(TextInput {
-                content: symbol.reference.clone(),
-                position: [symbol.position.x as f32, (symbol.position.y - 3.5) as f32],
-                size_mm: 1.05,
-                color: to_rgba(stroke_color),
-                bold: false,
-                italic: false,
-                rotation_rad: symbol.rotation.to_radians() as f32,
-                h_align: HAlign::Center,
-                v_align: VAlign::Bottom,
-            });
+        let value_color = focus_color(to_iced(&colors.value), focus_set, symbol.uuid);
+        if !symbol.reference.is_empty()
+            && let Some(text) = field_text_input(
+                symbol,
+                &symbol.reference,
+                symbol.ref_text.as_ref(),
+                FieldSlot::Reference,
+                to_rgba(stroke_color),
+            )
+        {
+            reference_value_texts.push(text);
         }
-        if !symbol.value.is_empty() {
-            reference_value_texts.push(TextInput {
-                content: symbol.value.clone(),
-                position: [symbol.position.x as f32, (symbol.position.y + 3.6) as f32],
-                size_mm: 1.05,
-                color: to_rgba(focus_color(to_iced(&colors.value), focus_set, symbol.uuid)),
-                bold: false,
-                italic: false,
-                rotation_rad: symbol.rotation.to_radians() as f32,
-                h_align: HAlign::Center,
-                v_align: VAlign::Top,
-            });
+        if !symbol.value.is_empty()
+            && let Some(text) = field_text_input(
+                symbol,
+                &symbol.value,
+                symbol.val_text.as_ref(),
+                FieldSlot::Value,
+                to_rgba(value_color),
+            )
+        {
+            reference_value_texts.push(text);
         }
     }
 
@@ -408,7 +405,7 @@ pub(super) fn build_renderer_snapshot(
 
     for label in &snapshot.labels {
         let screen = transform.world_to_screen((label.position.x, label.position.y));
-        if !point_visible(screen, bounds, 22.0) {
+        if !text_anchor_visible(screen, bounds, 22.0, &label_aabb(label), transform.scale) {
             continue;
         }
 
@@ -457,7 +454,7 @@ pub(super) fn build_renderer_snapshot(
 
     for note in &snapshot.text_notes {
         let pos = transform.world_to_screen((note.position.x, note.position.y));
-        if !point_visible(pos, bounds, 28.0) {
+        if !text_anchor_visible(pos, bounds, 28.0, &note_aabb(note), transform.scale) {
             continue;
         }
 
@@ -489,4 +486,54 @@ pub(super) fn build_renderer_snapshot(
         erc_markers: Vec::new(),
         wire_color_overrides: HashMap::new(),
     }
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum FieldSlot {
+    Reference,
+    Value,
+}
+
+/// Text for a symbol's reference/value field. The stored `TextProp` is the
+/// single source (draw and hit-test both read it); the fixed offsets below
+/// apply only to symbols that carry no `TextProp`. A hidden field draws
+/// nothing.
+pub(super) fn field_text_input(
+    symbol: &Symbol,
+    content: &str,
+    prop: Option<&TextProp>,
+    slot: FieldSlot,
+    color: [f32; 4],
+) -> Option<TextInput> {
+    if let Some(prop) = prop {
+        if prop.hidden {
+            return None;
+        }
+        return Some(TextInput {
+            content: content.to_owned(),
+            position: [prop.position.x as f32, prop.position.y as f32],
+            size_mm: prop.font_size as f32,
+            color,
+            bold: false,
+            italic: false,
+            rotation_rad: prop.rotation.to_radians() as f32,
+            h_align: prop.justify_h,
+            v_align: prop.justify_v,
+        });
+    }
+    let (dy, v_align) = match slot {
+        FieldSlot::Reference => (-3.5, VAlign::Bottom),
+        FieldSlot::Value => (3.6, VAlign::Top),
+    };
+    Some(TextInput {
+        content: content.to_owned(),
+        position: [symbol.position.x as f32, (symbol.position.y + dy) as f32],
+        size_mm: 1.05,
+        color,
+        bold: false,
+        italic: false,
+        rotation_rad: symbol.rotation.to_radians() as f32,
+        h_align: HAlign::Center,
+        v_align,
+    })
 }
