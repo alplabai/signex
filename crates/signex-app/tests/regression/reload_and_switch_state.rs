@@ -81,6 +81,17 @@ fn symbol_reload_from_disk_clears_the_dirty_marker_so_quit_does_not_prompt() {
     panel(&mut app, PanelMsg::SymEditorSetSymbolName("edited".into()));
     assert!(app.document_state.dirty_paths.contains(&path));
 
+    // A dirty draft makes Restore a two-click confirm: the first click
+    // only arms it, the second reloads.
+    panel(
+        &mut app,
+        PanelMsg::HistoryRestoreClicked { sha: sha.clone() },
+    );
+    assert_eq!(
+        app.document_state.history.pending_restore.as_deref(),
+        Some(sha.as_str()),
+        "the first click arms the confirm"
+    );
     panel(&mut app, PanelMsg::HistoryRestoreClicked { sha });
 
     let editor = &app.document_state.symbol_editors[&path];
