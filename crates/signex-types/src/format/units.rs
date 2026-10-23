@@ -17,24 +17,24 @@
 const MM_PER_NM: f64 = 1.0e-6;
 const NM_PER_MM: f64 = 1.0e6;
 
-/// HI-12: convert mm → nm without overflow. The unchecked `as i64` cast
-/// would wrap to garbage for boards larger than ~9.2 m (and for any
-/// NaN / Inf input). Real PCBs are < 1 m, so we clamp to `i64::MIN/MAX`
-/// rather than panicking — that surfaces a non-finite value as the
-/// largest representable coordinate, which is visibly wrong instead of
-/// silently corrupt.
-pub(in crate::format) fn mm_to_nm(mm: f64) -> i64 {
+/// A document value that cannot be written to the wire format: NaN,
+/// an infinity, or a length too large for an `i64` nanometre count.
+/// Carries the row field's name; the writer adds the block and row.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NonFiniteField(pub &'static str);
+
+/// Convert mm to nm, refusing values the wire format cannot hold.
+///
+/// A NaN, an infinity, or a length beyond `i64` nanometres (~9.2e12 mm)
+/// fails here instead of being clamped: a clamped coordinate saves
+/// quietly and corrupts the drawing, a refusal fails the save before any
+/// file is touched.
+pub(in crate::format) fn mm_to_nm(mm: f64, field: &'static str) -> Result<i64, NonFiniteField> {
     let scaled = (mm * NM_PER_MM).round();
-    if scaled.is_nan() {
-        return i64::MAX;
+    if !scaled.is_finite() || scaled >= i64::MAX as f64 || scaled <= i64::MIN as f64 {
+        return Err(NonFiniteField(field));
     }
-    if scaled >= i64::MAX as f64 {
-        return i64::MAX;
-    }
-    if scaled <= i64::MIN as f64 {
-        return i64::MIN;
-    }
-    scaled as i64
+    Ok(scaled as i64)
 }
 
 pub(in crate::format) fn nm_to_mm(nm: i64) -> f64 {

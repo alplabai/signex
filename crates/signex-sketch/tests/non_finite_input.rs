@@ -6,7 +6,7 @@ use signex_sketch::SketchError;
 use signex_sketch::constraint::{DimTarget, parse_dimension_input};
 use signex_sketch::expr::eval::{EvalContext, eval};
 use signex_sketch::expr::parse::parse;
-use signex_sketch::expr::{ExprError, MAX_EXPR_DEPTH};
+use signex_sketch::expr::{ExprError, MAX_EXPR_CHAIN, MAX_EXPR_DEPTH, MAX_EXPR_LEN};
 use signex_sketch::solver::residual::{ResolvedParams, resolve_dim};
 use signex_sketch::unit::parse_quantity;
 
@@ -131,4 +131,71 @@ fn nesting_at_the_limit_still_parses() {
 fn overlong_flat_chain_is_rejected() {
     let src = vec!["1"; 100_000].join("+");
     assert!(matches!(parse(&src), Err(ExprError::TooLong { .. })));
+}
+
+#[test]
+fn long_power_chain_is_rejected_not_overflowed() {
+    // `^` is right-associative, so the right-hand side recurses; it must be
+    // bounded by the depth guard like parentheses and unary chains.
+    let src = vec!["1"; MAX_EXPR_LEN / 2].join("^");
+    assert!(src.len() <= MAX_EXPR_LEN);
+    assert!(matches!(parse(&src), Err(ExprError::TooDeep { .. })));
+}
+
+#[test]
+fn power_chain_at_the_limit_still_parses() {
+    let src = vec!["1"; MAX_EXPR_DEPTH / 4].join("^");
+    assert_eq!(eval_str(&src).unwrap(), 1.0);
+}
+
+/// Run `body` on a 1 MiB stack, the smallest main-thread stack on a
+/// supported platform, so a recursion that only fits in a roomy stack
+/// fails here.
+fn on_small_stack(body: impl FnOnce() + Send + 'static) {
+    std::thread::Builder::new()
+        .stack_size(1024 * 1024)
+        .spawn(body)
+        .unwrap()
+        .join()
+        .expect("expression handling overflowed or panicked");
+}
+
+#[test]
+fn chains_at_the_operator_cap_parse_eval_and_drop_without_overflow() {
+    // Left-associative chains build a deep tree in a loop (no parser
+    // recursion), so the operator cap is what bounds eval and `Drop`.
+    on_small_stack(|| {
+        for op in ["+", "-", "*", "/", "&&", "||", "==", "<"] {
+            let src = vec!["1"; MAX_EXPR_CHAIN + 1].join(op);
+            assert!(src.len() <= MAX_EXPR_LEN);
+            let ast = parse(&src).expect("chain at the operator cap parses");
+            let _ = eval(&ast, &EvalContext::default());
+            drop(ast);
+        }
+    });
+}
+
+#[test]
+fn chains_over_the_operator_cap_are_rejected() {
+    for op in ["+", "-", "*", "/", "&&", "||", "==", "<"] {
+        let src = vec!["1"; MAX_EXPR_CHAIN + 2].join(op);
+        assert!(src.len() <= MAX_EXPR_LEN);
+        assert!(
+            matches!(parse(&src), Err(ExprError::TooDeep { .. })),
+            "{op}"
+        );
+    }
+}
+
+#[test]
+fn deepest_accepted_power_and_unary_trees_eval_and_drop_without_overflow() {
+    on_small_stack(|| {
+        let pow = vec!["1"; MAX_EXPR_DEPTH / 2 - 2].join("^");
+        let neg = format!("{}1", "-".repeat(MAX_EXPR_DEPTH - 4));
+        for src in [pow, neg] {
+            let ast = parse(&src).expect("tree below the cap parses");
+            let _ = eval(&ast, &EvalContext::default());
+            drop(ast);
+        }
+    });
 }

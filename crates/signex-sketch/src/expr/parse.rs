@@ -42,7 +42,7 @@
 
 use crate::expr::ExprError;
 use crate::expr::ast::{ArrayIndex, BinOp, ExprNode, UnaryOp};
-use crate::expr::{MAX_EXPR_DEPTH, MAX_EXPR_LEN};
+use crate::expr::{MAX_EXPR_CHAIN, MAX_EXPR_DEPTH, MAX_EXPR_LEN};
 use crate::unit::parse_quantity;
 
 // =========================================================================
@@ -342,6 +342,9 @@ struct Parser<'a> {
     peek: Spanned,
     /// Current recursion depth, bounded by [`MAX_EXPR_DEPTH`].
     depth: usize,
+    /// Left-associative operators consumed so far; bounded by
+    /// [`MAX_EXPR_CHAIN`] because each one adds a tree level.
+    links: usize,
 }
 
 impl<'a> Parser<'a> {
@@ -352,6 +355,7 @@ impl<'a> Parser<'a> {
             lexer,
             peek,
             depth: 0,
+            links: 0,
         })
     }
 
@@ -370,6 +374,22 @@ impl<'a> Parser<'a> {
         let result = body(self);
         self.depth -= 1;
         result
+    }
+
+    /// Consume a left-associative binary operator, failing with
+    /// [`ExprError::TooDeep`] once the expression holds more than
+    /// [`MAX_EXPR_CHAIN`] of them. A flat `1+1+1+...` builds a left-nested
+    /// tree in a loop, so only this count keeps the evaluator and the
+    /// recursive `Drop` of the AST bounded.
+    fn chain_link(&mut self) -> Result<(), ExprError> {
+        if self.links >= MAX_EXPR_CHAIN {
+            return Err(ExprError::TooDeep {
+                max: MAX_EXPR_CHAIN,
+            });
+        }
+        self.links += 1;
+        self.bump()?;
+        Ok(())
     }
 
     /// Consume the current look-ahead and refill from the lexer.
@@ -422,7 +442,7 @@ impl<'a> Parser<'a> {
     fn parse_or(&mut self) -> Result<ExprNode, ExprError> {
         let mut node = self.parse_and()?;
         while matches!(self.peek.tok, Token::OrOr) {
-            self.bump()?;
+            self.chain_link()?;
             let rhs = self.parse_and()?;
             node = ExprNode::Binary(BinOp::Or, Box::new(node), Box::new(rhs));
         }
@@ -432,7 +452,7 @@ impl<'a> Parser<'a> {
     fn parse_and(&mut self) -> Result<ExprNode, ExprError> {
         let mut node = self.parse_equality()?;
         while matches!(self.peek.tok, Token::AndAnd) {
-            self.bump()?;
+            self.chain_link()?;
             let rhs = self.parse_equality()?;
             node = ExprNode::Binary(BinOp::And, Box::new(node), Box::new(rhs));
         }
@@ -449,7 +469,7 @@ impl<'a> Parser<'a> {
                 Token::NotEq => BinOp::Ne,
                 _ => break,
             };
-            self.bump()?;
+            self.chain_link()?;
             let rhs = self.parse_comparison()?;
             node = ExprNode::Binary(op, Box::new(node), Box::new(rhs));
         }
@@ -466,7 +486,7 @@ impl<'a> Parser<'a> {
                 Token::Ge => BinOp::Ge,
                 _ => break,
             };
-            self.bump()?;
+            self.chain_link()?;
             let rhs = self.parse_sum()?;
             node = ExprNode::Binary(op, Box::new(node), Box::new(rhs));
         }
@@ -483,7 +503,7 @@ impl<'a> Parser<'a> {
                 Token::Minus => BinOp::Sub,
                 _ => break,
             };
-            self.bump()?;
+            self.chain_link()?;
             let rhs = self.parse_product()?;
             node = ExprNode::Binary(op, Box::new(node), Box::new(rhs));
         }
@@ -499,7 +519,7 @@ impl<'a> Parser<'a> {
                 Token::Percent => BinOp::Mod,
                 _ => break,
             };
-            self.bump()?;
+            self.chain_link()?;
             let rhs = self.parse_power()?;
             node = ExprNode::Binary(op, Box::new(node), Box::new(rhs));
         }
@@ -513,8 +533,9 @@ impl<'a> Parser<'a> {
             self.bump()?;
             // Recurse into parse_power (not parse_unary) so the
             // right-hand side also folds further `^` operators
-            // right-to-left.
-            let rhs = self.parse_power()?;
+            // right-to-left. The recursion goes through `nested` so a
+            // `1^1^1^...` chain hits the depth cap instead of the stack.
+            let rhs = self.nested(Self::parse_power)?;
             Ok(ExprNode::Binary(BinOp::Pow, Box::new(lhs), Box::new(rhs)))
         } else {
             Ok(lhs)

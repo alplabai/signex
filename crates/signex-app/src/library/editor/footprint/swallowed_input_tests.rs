@@ -408,4 +408,27 @@ mod tests {
             "an empty buffer is the one case the default fallback is for"
         );
     }
+
+    #[test]
+    fn repeated_bake_warnings_are_logged_once_until_the_set_changes() {
+        use super::super::sketch_dispatch::take_unlogged_warnings;
+        let mut logged = Vec::new();
+        let set_a = vec!["array skipped".to_string()];
+
+        assert_eq!(take_unlogged_warnings(&set_a, &mut logged), set_a);
+        // Every later re-solve of the same drag yields the same warning.
+        assert!(take_unlogged_warnings(&set_a, &mut logged).is_empty());
+        assert!(take_unlogged_warnings(&set_a, &mut logged).is_empty());
+
+        // A new warning joins the set: only the new one is logged.
+        let set_b = vec!["array skipped".to_string(), "feature dropped".to_string()];
+        assert_eq!(
+            take_unlogged_warnings(&set_b, &mut logged),
+            vec!["feature dropped".to_string()]
+        );
+
+        // The warning clears and later returns: it is news again.
+        assert!(take_unlogged_warnings(&[], &mut logged).is_empty());
+        assert_eq!(take_unlogged_warnings(&set_a, &mut logged), set_a);
+    }
 }

@@ -24,9 +24,13 @@ use crate::unit::{Unit, UnitError, UnitFamily};
 /// the recursive `Drop` of the AST well inside the thread stack.
 pub const MAX_EXPR_DEPTH: usize = 64;
 
-/// Longest expression source, in bytes, the parser accepts. A flat chain
-/// such as `1+1+1+...` nests one tree level per operator, so the length
-/// cap bounds the evaluator's and `Drop`'s recursion too.
+/// Most left-associative binary operators one expression may hold. A flat
+/// chain such as `1+1+1+...` nests one tree level per operator without any
+/// parser recursion, so this count (not the depth cap) bounds the
+/// evaluator's and `Drop`'s recursion for those trees.
+pub const MAX_EXPR_CHAIN: usize = 256;
+
+/// Longest expression source, in bytes, the parser accepts.
 pub const MAX_EXPR_LEN: usize = 4096;
 
 /// Errors produced by the expression layer (parse + evaluate +
