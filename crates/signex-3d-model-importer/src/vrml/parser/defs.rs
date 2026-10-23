@@ -28,6 +28,23 @@ pub(super) enum Def {
     Coords(Vec<[f32; 3]>),
     Color([f32; 4]),
     Ignored,
+    /// Binding it would have passed [`MAX_USE_EXPANSION`], so nothing was
+    /// kept; a `USE` of it is over budget too.
+    Dropped,
+}
+
+/// A value about to be bound, borrowed so that nothing is copied until the
+/// budget allows it.
+#[derive(Debug, Clone, Copy)]
+pub(super) enum DefRef<'a> {
+    Node(&'a Node),
+    Geometry {
+        positions: &'a [[f32; 3]],
+        indices: &'a [i32],
+    },
+    Coords(&'a [[f32; 3]]),
+    Color([f32; 4]),
+    Ignored,
 }
 
 /// The slot a `USE` appears in, which decides the binding it accepts.
@@ -50,6 +67,8 @@ pub(super) enum UseFailure {
     WrongKind,
     /// Copying it would pass [`MAX_USE_EXPANSION`].
     OverBudget,
+    /// The copy would nest deeper than the parser's depth limit.
+    TooDeep,
 }
 
 impl Def {
@@ -59,16 +78,38 @@ impl Def {
             Def::Geometry { .. } => Some(DefKind::Geometry),
             Def::Coords(_) => Some(DefKind::Coords),
             Def::Color(_) => Some(DefKind::Color),
-            Def::Ignored => None,
+            Def::Ignored | Def::Dropped => None,
+        }
+    }
+}
+
+impl DefRef<'_> {
+    fn weight(&self) -> usize {
+        match self {
+            DefRef::Node(node) => node_weight(node),
+            DefRef::Geometry { positions, indices } => 1 + positions.len() + indices.len(),
+            DefRef::Coords(points) => 1 + points.len(),
+            DefRef::Color(_) | DefRef::Ignored => 1,
         }
     }
 
-    fn weight(&self) -> usize {
+    fn depth(&self) -> usize {
         match self {
-            Def::Node(node) => node_weight(node),
-            Def::Geometry { positions, indices } => 1 + positions.len() + indices.len(),
-            Def::Coords(points) => 1 + points.len(),
-            Def::Color(_) | Def::Ignored => 1,
+            DefRef::Node(node) => node_depth(node),
+            _ => 0,
+        }
+    }
+
+    fn to_def(self) -> Def {
+        match self {
+            DefRef::Node(node) => Def::Node(node.clone()),
+            DefRef::Geometry { positions, indices } => Def::Geometry {
+                positions: positions.to_vec(),
+                indices: indices.to_vec(),
+            },
+            DefRef::Coords(points) => Def::Coords(points.to_vec()),
+            DefRef::Color(color) => Def::Color(color),
+            DefRef::Ignored => Def::Ignored,
         }
     }
 }
@@ -84,33 +125,78 @@ fn node_weight(node: &Node) -> usize {
     }
 }
 
-/// The `DEF` bindings seen so far, and how much `USE` has copied.
+fn node_depth(node: &Node) -> usize {
+    match node {
+        Node::Transform { children, .. } | Node::Group { children } => {
+            1 + children.iter().map(node_depth).max().unwrap_or(0)
+        }
+        Node::Shape { .. } => 1,
+    }
+}
+
+/// A binding, with its size and nesting depth worked out once at `DEF` so a
+/// `USE` checks both in constant time.
+#[derive(Debug)]
+struct Binding {
+    def: Def,
+    weight: usize,
+    depth: usize,
+}
+
+/// The `DEF` bindings seen so far, and how much binding and `USE` have
+/// copied. Both draw on the one budget, so neither a long `DEF a DEF b ...`
+/// chain nor nested instancing can copy more than [`MAX_USE_EXPANSION`].
 #[derive(Debug, Default)]
 pub(super) struct Defs {
-    bound: HashMap<String, Def>,
-    expanded: usize,
+    bound: HashMap<String, Binding>,
+    spent: usize,
 }
 
 impl Defs {
     /// Bind `name`. A later `DEF` of the same name rebinds it, as in VRML.
-    pub(super) fn define(&mut self, name: String, def: Def) {
-        self.bound.insert(name, def);
+    pub(super) fn define(&mut self, name: String, value: DefRef<'_>) {
+        let weight = value.weight();
+        let binding = match self.spent.checked_add(weight) {
+            Some(spent) if spent <= MAX_USE_EXPANSION => {
+                self.spent = spent;
+                Binding {
+                    def: value.to_def(),
+                    weight,
+                    depth: value.depth(),
+                }
+            }
+            _ => Binding {
+                def: Def::Dropped,
+                weight: 0,
+                depth: 0,
+            },
+        };
+        self.bound.insert(name, binding);
     }
 
-    /// A copy of what `name` is bound to, for a `USE` in a `kind` slot.
-    pub(super) fn instance(&mut self, name: &str, kind: DefKind) -> Result<Def, UseFailure> {
-        let def = self.bound.get(name).ok_or(UseFailure::Undefined)?;
-        match def.kind() {
+    /// A copy of what `name` is bound to, for a `USE` in a `kind` slot whose
+    /// copy may nest at most `room` levels deep.
+    pub(super) fn instance(
+        &mut self,
+        name: &str,
+        kind: DefKind,
+        room: usize,
+    ) -> Result<Def, UseFailure> {
+        let binding = self.bound.get(name).ok_or(UseFailure::Undefined)?;
+        match binding.def.kind() {
+            None if matches!(binding.def, Def::Dropped) => return Err(UseFailure::OverBudget),
             None => return Err(UseFailure::Ignored),
             Some(bound) if bound != kind => return Err(UseFailure::WrongKind),
             Some(_) => {}
         }
-        let weight = def.weight();
-        if self.expanded.saturating_add(weight) > MAX_USE_EXPANSION {
-            return Err(UseFailure::OverBudget);
+        if binding.depth > room {
+            return Err(UseFailure::TooDeep);
         }
-        self.expanded += weight;
-        Ok(def.clone())
+        match self.spent.checked_add(binding.weight) {
+            Some(spent) if spent <= MAX_USE_EXPANSION => self.spent = spent,
+            _ => return Err(UseFailure::OverBudget),
+        }
+        Ok(binding.def.clone())
     }
 }
 
@@ -184,6 +270,19 @@ mod tests {
         assert_eq!(meshes.len(), 1);
     }
 
+    /// A `DEF` inside a field the parser skips is bound as ignored, so its
+    /// `USE` is not misreported as having no earlier `DEF`.
+    #[test]
+    fn a_use_of_a_def_in_a_skipped_field_is_quiet() {
+        let src = format!(
+            "Shape {{ appearance Appearance {{ texture DEF tx ImageTexture {{ url \"a.png\" }} }} }} \
+             Shape {{ appearance Appearance {{ texture USE tx }} }} Group {{ children [ USE tx {TRI} ] }}"
+        );
+        let (meshes, warnings) = parse_src(&src);
+        assert_eq!(meshes.len(), 1);
+        assert!(warnings.is_empty(), "{warnings:?}");
+    }
+
     /// A name bound to another kind of node is refused, with a warning.
     #[test]
     fn a_use_in_the_wrong_slot_is_ignored_with_a_warning() {
@@ -215,12 +314,53 @@ mod tests {
         }
         let (meshes, warnings) = parse_src(&src);
         let copied: usize = meshes.iter().map(|m| m.positions.len() / 3).sum();
-        assert!(copied <= 2 * MAX_USE_EXPANSION, "{copied} vertices copied");
+        // Every copy draws on the budget; only the one parsed leaf is extra.
+        assert!(copied <= MAX_USE_EXPANSION + 1000, "{copied} vertices");
+        let over: Vec<_> = warnings
+            .iter()
+            .filter(|w| w.reason.contains("instancing would copy more than"))
+            .collect();
+        assert_eq!(over.len(), 1, "reported once, not per USE: {over:?}");
+    }
+
+    /// A binding is a copy too: a long `DEF a DEF b ...` chain on one large
+    /// node draws on the same budget instead of cloning without bound.
+    #[test]
+    fn a_def_chain_draws_on_the_expansion_budget() {
+        // 250 bindings (under the depth limit) of a 10 000-point shape would
+        // copy 2.5M entries, past the budget.
+        let points: Vec<String> = (0..10_000).map(|i| format!("{i} 0 0")).collect();
+        let defs: String = (0..250).map(|i| format!("DEF x{i} ")).collect();
+        let src = format!(
+            "{defs}Shape {{ geometry IndexedFaceSet {{ coord Coordinate {{ point [ {} ] }} coordIndex [ 0 1 2 -1 ] }} }}\nGroup {{ children [ USE x0 ] }}",
+            points.join(", ")
+        );
+        let (meshes, warnings) = parse_src(&src);
+        // The outermost name, bound last, was refused, so its USE is too.
+        assert_eq!(meshes.len(), 1);
         assert!(
             warnings
                 .iter()
                 .any(|w| w.reason.contains("instancing would copy more than")),
             "{warnings:?}"
         );
+    }
+
+    /// A copy placed deep in the tree must not nest past the parser's depth
+    /// limit, which also bounds the mesh walk's recursion.
+    #[test]
+    fn a_use_that_would_nest_too_deep_is_dropped() {
+        let wrap = |depth: usize, inner: &str| {
+            let mut s = inner.to_string();
+            for _ in 0..depth {
+                s = format!("Group {{ children [ {s} ] }}");
+            }
+            s
+        };
+        let src = format!("DEF deep {}\n{}", wrap(200, TRI), wrap(100, "USE deep"));
+        let (meshes, warnings) = parse_src(&src);
+        assert_eq!(meshes.len(), 1, "the DEF itself imports; the copy does not");
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(warnings[0].reason.contains("nest deeper than"));
     }
 }

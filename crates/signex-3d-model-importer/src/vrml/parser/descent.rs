@@ -1,6 +1,6 @@
 //! Recursive-descent VRML token-stream parser.
 
-use super::defs::{Def, DefKind, Defs, MAX_USE_EXPANSION, UseFailure};
+use super::defs::{Def, DefKind, DefRef, Defs, MAX_USE_EXPANSION, UseFailure};
 use super::*;
 use crate::vrml::lexer::Token;
 
@@ -27,6 +27,9 @@ pub(super) struct Parser<'a> {
     pub(super) warnings: Vec<ParseWarning>,
     /// `DEF` bindings for `USE` to copy (#591).
     defs: Defs,
+    /// The budget and depth refusals are reported once each, not per `USE`.
+    use_budget_reported: bool,
+    use_depth_reported: bool,
 }
 
 impl<'a> Parser<'a> {
@@ -38,6 +41,8 @@ impl<'a> Parser<'a> {
             depth: 0,
             warnings: Vec::new(),
             defs: Defs::default(),
+            use_budget_reported: false,
+            use_depth_reported: false,
         }
     }
 
@@ -91,34 +96,49 @@ impl<'a> Parser<'a> {
     /// why the `USE` was dropped. A `USE` of an ignored node is dropped
     /// quietly, like the node.
     fn instance(&mut self, name: &str, line: usize, kind: DefKind) -> Option<Def> {
-        let reason = match self.defs.instance(name, kind) {
+        // The copy replaces the `USE` node, which sits at `self.depth`.
+        let room = MAX_NODE_DEPTH.saturating_sub(self.depth.saturating_sub(1));
+        let reason = match self.defs.instance(name, kind, room) {
             Ok(def) => return Some(def),
             Err(UseFailure::Ignored) => return None,
+            Err(UseFailure::OverBudget) if self.use_budget_reported => return None,
+            Err(UseFailure::TooDeep) if self.use_depth_reported => return None,
             Err(UseFailure::Undefined) => {
                 format!("USE {name} is not resolved: no earlier DEF {name}; node dropped")
             }
             Err(UseFailure::WrongKind) => {
                 format!("USE {name} names a different kind of node here; ignored")
             }
-            Err(UseFailure::OverBudget) => format!(
-                "USE {name} dropped: instancing would copy more than {MAX_USE_EXPANSION} geometry entries"
-            ),
+            Err(UseFailure::OverBudget) => {
+                self.use_budget_reported = true;
+                format!(
+                    "USE {name} dropped: instancing would copy more than {MAX_USE_EXPANSION} \
+                     geometry entries (later ones dropped too)"
+                )
+            }
+            Err(UseFailure::TooDeep) => {
+                self.use_depth_reported = true;
+                format!(
+                    "USE {name} dropped: the copy would nest deeper than {MAX_NODE_DEPTH} \
+                     levels (later ones dropped too)"
+                )
+            }
         };
         ParseWarning::push(&mut self.warnings, Some(line), reason);
         None
     }
 
     /// Bind `def`'s name, when the node carried one.
-    fn bind(&mut self, def: Option<String>, value: impl FnOnce() -> Def) {
+    fn bind(&mut self, def: Option<String>, value: DefRef<'_>) {
         if let Some(name) = def {
-            self.defs.define(name, value());
+            self.defs.define(name, value);
         }
     }
 
     /// Skip a node the parser does not read, binding its `DEF` name (if
     /// any) as ignored.
     fn skip_field_node(&mut self, def: Option<String>) -> Result<(), ParseError> {
-        self.bind(def, || Def::Ignored);
+        self.bind(def, DefRef::Ignored);
         if let Some(Token::LBrace) = self.peek() {
             self.consume_block()?;
         }
@@ -183,8 +203,8 @@ impl<'a> Parser<'a> {
             "DEF" => {
                 let name = self.expect_word()?;
                 let node = self.parse_node()?;
-                let def = node.clone().map_or(Def::Ignored, Def::Node);
-                self.defs.define(name, def);
+                let value = node.as_ref().map_or(DefRef::Ignored, DefRef::Node);
+                self.defs.define(name, value);
                 Ok(node)
             }
             "USE" => {
@@ -340,10 +360,13 @@ impl<'a> Parser<'a> {
                     FieldNode::Use(_) => {}
                     FieldNode::Typed { word, def } if word == "IndexedFaceSet" => {
                         (positions, indices) = self.parse_indexed_face_set()?;
-                        self.bind(def, || Def::Geometry {
-                            positions: positions.clone(),
-                            indices: indices.clone(),
-                        });
+                        self.bind(
+                            def,
+                            DefRef::Geometry {
+                                positions: &positions,
+                                indices: &indices,
+                            },
+                        );
                     }
                     FieldNode::Typed { def, .. } => self.skip_field_node(def)?,
                 },
@@ -393,7 +416,7 @@ impl<'a> Parser<'a> {
                     FieldNode::Use(_) => {}
                     FieldNode::Typed { word, def } if word == "Material" => {
                         color = self.parse_material_color()?;
-                        self.bind(def, || Def::Color(color));
+                        self.bind(def, DefRef::Color(color));
                     }
                     FieldNode::Typed { def, .. } => self.skip_field_node(def)?,
                 },
@@ -402,7 +425,7 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        self.bind(def, || Def::Color(color));
+        self.bind(def, DefRef::Color(color));
         Ok(color)
     }
 
@@ -464,7 +487,7 @@ impl<'a> Parser<'a> {
                     FieldNode::Use(_) => {}
                     FieldNode::Typed { word, def } if word == "Coordinate" => {
                         positions = self.parse_coordinate_point()?;
-                        self.bind(def, || Def::Coords(positions.clone()));
+                        self.bind(def, DefRef::Coords(&positions));
                     }
                     FieldNode::Typed { def, .. } => self.skip_field_node(def)?,
                 },
@@ -617,7 +640,10 @@ impl<'a> Parser<'a> {
                     return Ok(());
                 }
                 if word == "DEF" {
-                    self.expect_word()?;
+                    // Bound as ignored, so a later `USE` of it is dropped as
+                    // quietly as this field, not reported as undefined (#591).
+                    let name = self.expect_word()?;
+                    self.defs.define(name, DefRef::Ignored);
                     self.expect_word()?;
                 }
                 if let Some(Token::LBrace) = self.peek() {
