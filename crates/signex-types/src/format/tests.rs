@@ -170,6 +170,27 @@ fn snxpcb_round_trip_empty() {
 }
 
 #[test]
+fn snxpcb_keeps_setup_when_stackup_has_no_layers() {
+    let mut board = empty_board();
+    board.setup = Some(crate::pcb::PcbSetup {
+        grid_size: 0.5,
+        clearance: 0.25,
+        trace_width: 0.2,
+        via_diameter: 0.6,
+        via_drill: 0.3,
+        track_min_width: 0.1,
+        via_min_diameter: 0.4,
+        via_min_drill: 0.2,
+    });
+    let s = SnxPcb::new(board).write_string().expect("serialise");
+    let back = SnxPcb::parse(&s).expect("round-trip");
+    assert!(back.board.layers.is_empty());
+    let setup = back.board.setup.expect("setup survives");
+    assert_eq!(setup.grid_size, 0.5);
+    assert_eq!(setup.clearance, 0.25);
+}
+
+#[test]
 fn rejects_wrong_format_version() {
     // Hand-craft a TOML document with an unsupported version token.
     let bad = "format = \"snxsch/99\"\nschematic_id = \"00000000-0000-0000-0000-000000000000\"\n";

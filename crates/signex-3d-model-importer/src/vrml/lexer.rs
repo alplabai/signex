@@ -9,6 +9,18 @@ pub enum Token {
     Comma,
 }
 
+impl Token {
+    /// The closing token matching an opener (`{` -> `}`, `[` -> `]`).
+    /// Only meaningful for `LBrace` / `LBracket`.
+    pub(crate) fn closer(&self) -> Token {
+        if *self == Token::LBrace {
+            Token::RBrace
+        } else {
+            Token::RBracket
+        }
+    }
+}
+
 /// Tokenize a VRML97 file into a flat token stream.
 /// Comments (`# ... \n`) are stripped. Returns (tokens, line_offsets)
 /// where `line_offsets[i]` is the 1-based source line for token `i`.
@@ -33,7 +45,10 @@ pub fn tokenize(source: &str) -> (Vec<Token>, Vec<usize>) {
                     }
                 }
             }
-            ' ' | '\t' | '\r' => {
+            // Every Unicode whitespace (form feed, vertical tab, NBSP, NEL, ...)
+            // must be consumed here: the word arm below stops on whitespace
+            // without advancing, which would otherwise spin forever (#689).
+            _ if ch.is_whitespace() => {
                 chars.next();
             }
             '{' => {
@@ -76,7 +91,11 @@ pub fn tokenize(source: &str) -> (Vec<Token>, Vec<usize>) {
                         _ => break,
                     }
                 }
-                if !word.is_empty() {
+                if word.is_empty() {
+                    // Unreachable today (the arms above own every delimiter and
+                    // whitespace); guarantees progress if an arm is ever removed.
+                    chars.next();
+                } else {
                     tokens.push(Token::Word(word));
                     lines.push(line);
                 }
@@ -125,5 +144,28 @@ mod tests {
             vec![Token::Word("foo".into()), Token::Word("bar".into())]
         );
         assert_eq!(lines, vec![1, 2]);
+    }
+
+    #[test]
+    fn tokenize_treats_unicode_whitespace_as_separator() {
+        use std::sync::mpsc;
+        use std::time::Duration;
+        for ws in ['\u{0c}', '\u{0b}', '\u{a0}', '\u{85}', '\u{2003}'] {
+            let src = format!("Shape{ws}{{{ws}}}");
+            let (tx, rx) = mpsc::channel();
+            // Detached worker: a regression hangs the worker, not the test run.
+            std::thread::spawn(move || {
+                let _ = tx.send(tokenize(&src).0);
+            });
+            let tokens = rx
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap_or_else(|_| panic!("tokenize hung on U+{:04X}", ws as u32));
+            assert_eq!(
+                tokens,
+                vec![Token::Word("Shape".into()), Token::LBrace, Token::RBrace],
+                "U+{:04X}",
+                ws as u32
+            );
+        }
     }
 }

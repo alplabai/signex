@@ -32,7 +32,7 @@ impl Signex {
                         Ok(()) => {
                             crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()))
                         }
-                        Err(e) => crate::diagnostics::log_error("Save failed", &e),
+                        Err(e) => self.report_save_failure("Save failed", &e),
                     }
                     // v0.14.2: also save the active project's
                     // `.snxprj` if it's dirty + refresh panel ctx so
@@ -129,7 +129,21 @@ impl Signex {
             return;
         }
         if let Err(error) = self.persist_project_by_id(project_id) {
-            crate::diagnostics::log_error("Failed to save project file", &error);
+            self.report_save_failure("Failed to save project file", &error);
+        }
+    }
+
+    /// A save failed: log it and raise the Save Failed card. A log line
+    /// alone is invisible, and the dirty marker stays set, so the user
+    /// would believe Ctrl+S worked (#110).
+    pub(crate) fn report_save_failure(&mut self, context: &str, error: &anyhow::Error) {
+        crate::diagnostics::log_error(context, error);
+        // The first failure of a save sequence is the one that explains it;
+        // a follow-up write (e.g. the project file) must not replace it.
+        if self.document_state.error_notice.is_none() {
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(format!(
+                "{context}: {error:#}"
+            )));
         }
     }
 
