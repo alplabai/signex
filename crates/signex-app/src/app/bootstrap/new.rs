@@ -270,7 +270,7 @@ impl Signex {
                 net_colors: std::collections::HashMap::new(),
                 auto_focus: false,
                 annotate_dialog_open: false,
-                annotate_order: crate::app::state::AnnotateOrder::AcrossThenDown,
+                annotate_order: crate::app::state::AnnotateOrder::default(),
                 erc_dialog_open: false,
                 annotate_reset_confirm: false,
                 modal_offsets: std::collections::HashMap::new(),
