@@ -140,7 +140,7 @@ Maintainer: alpCaner <alpcaner92@gmail.com>
 Homepage: https://github.com/alplabai/signex
 Description: AI-first EDA editor
  Signex is an electronics design automation editor with an
- Altium-inspired interaction layer and native `.snx***` file
+ Altium-inspired interaction layer and native .snx* file
  formats.
 CONTROL_EOF
 
