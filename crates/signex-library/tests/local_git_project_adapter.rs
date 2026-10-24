@@ -442,3 +442,47 @@ fn file_history_caps_walker_iterations_for_dos_protection() {
         .unwrap();
     assert!(entries.is_empty());
 }
+
+/// #906: restoring a file inside one of the project's libraries waits for
+/// that library's write lock, so it lands after another process's locked
+/// save instead of being overwritten by it.
+#[test]
+fn restore_at_waits_for_the_write_lock_of_the_library_holding_the_file() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_path_buf();
+    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+    let rel = "Lib/symbols/x.snxsym";
+    write_file(&root, "Lib/Lib.snxlib", "");
+    write_file(&root, rel, "version-A");
+    let oid_a = adapter
+        .commit_path(Path::new(rel), "A")
+        .unwrap()
+        .expect("commit A");
+    write_file(&root, rel, "version-B");
+    adapter.commit_path(Path::new(rel), "B").unwrap();
+
+    let lock = signex_library::write_lock_path(&root.join("Lib/Lib.snxlib"));
+    fs::create_dir_all(lock.parent().unwrap()).unwrap();
+    let held = fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&lock)
+        .unwrap();
+    held.lock().unwrap();
+    let other = root.join(rel);
+    let release = std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        fs::write(&other, "saved by another process").unwrap();
+        drop(held);
+    });
+
+    adapter.restore_at(Path::new(rel), oid_a).unwrap();
+    release.join().unwrap();
+
+    assert_eq!(
+        read_file(&root, rel),
+        "version-A",
+        "the restore must land after the other process's locked save"
+    );
+}

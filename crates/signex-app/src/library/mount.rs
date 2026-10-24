@@ -165,6 +165,7 @@ fn prepare_mount_marked(path: &Path, read_only: bool) -> Result<PreparedMount, S
         cached_sims: Vec::new(),
         cached_classes: Vec::new(),
         observed_stamp: None,
+        own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
     };
     // Same tolerance as the synchronous path: one unreadable table must

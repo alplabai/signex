@@ -14,8 +14,7 @@
 //! shared lock between modules (see `tests/regression.rs`), so driving
 //! Save from here would race that guard. The Save arm's three new commit
 //! lines are therefore NOT covered by a test — they sit directly beneath
-//! the four identical lines for `power_port_style`, `label_style`,
-//! `multisheet_style` and `grid_style`. Closing that gap needs a lock
+//! the identical line for `grid_style`. Closing that gap needs a lock
 //! shared across modules first.
 
 use signex_app::app::{Message, PreferencesMsg, Signex};

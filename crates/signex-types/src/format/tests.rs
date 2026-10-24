@@ -108,6 +108,23 @@ fn label_with_text(text: &str) -> Label {
 }
 
 #[test]
+fn non_finite_rotation_fails_the_write_instead_of_saving_an_unloadable_file() {
+    for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        let mut sheet = empty_sheet();
+        let mut sym = sample_symbol();
+        sym.rotation = bad;
+        sheet.symbols.push(sym);
+        match SnxSchematic::new(sheet).write_string() {
+            Err(FormatError::TsvFieldWrite { field, row, .. }) => {
+                assert_eq!(field, "rotation");
+                assert_eq!(row, 1);
+            }
+            other => panic!("rotation={bad}: expected TsvFieldWrite, got {other:?}"),
+        }
+    }
+}
+
+#[test]
 fn snxsch_survives_backslash_and_quote_in_label_text() {
     // Backslash + trailing quote in a label used to produce a file
     // that `SnxSchematic::parse` could never reopen.
@@ -503,6 +520,11 @@ fn snxpcb_round_trip_with_data() {
             PcbPoint { x: 30.0, y: 40.0 },
             PcbPoint { x: 10.0, y: 40.0 },
         ],
+        holes: vec![vec![
+            PcbPoint { x: 15.0, y: 25.0 },
+            PcbPoint { x: 20.0, y: 25.0 },
+            PcbPoint { x: 20.0, y: 30.0 },
+        ]],
         priority: 0,
         fill_type: String::new(),
         thermal_relief: false,
@@ -510,6 +532,7 @@ fn snxpcb_round_trip_with_data() {
         thermal_width: 0.0,
         clearance: 0.0,
         min_thickness: 0.0,
+        unknown: Default::default(),
     });
 
     let snx = SnxPcb::new(board.clone());
@@ -536,6 +559,38 @@ fn snxpcb_round_trip_with_data() {
     assert_eq!(back.board.zones.len(), 1);
     assert_eq!(back.board.zones[0].net_name, "GND");
     assert_eq!(back.board.zones[0].outline.len(), 4);
+    assert_eq!(back.board.zones[0].holes, board.zones[0].holes);
+}
+
+/// #818: a zone without holes writes no `holes` key, so files saved before
+/// the field existed re-save byte-identically, and they still parse.
+#[test]
+fn zone_without_holes_writes_no_holes_key() {
+    let mut board = empty_board();
+    board.zones.push(Zone {
+        uuid: Uuid::parse_str("0192a8c0-0040-7000-8000-000000000002").unwrap(),
+        net: 0,
+        net_name: String::new(),
+        layer: "TopCopper".into(),
+        outline: vec![
+            PcbPoint { x: 0.0, y: 0.0 },
+            PcbPoint { x: 1.0, y: 0.0 },
+            PcbPoint { x: 1.0, y: 1.0 },
+        ],
+        holes: Vec::new(),
+        priority: 0,
+        fill_type: String::new(),
+        thermal_relief: false,
+        thermal_gap: 0.0,
+        thermal_width: 0.0,
+        clearance: 0.0,
+        min_thickness: 0.0,
+        unknown: Default::default(),
+    });
+    let text = SnxPcb::new(board).write_string().expect("serialise");
+    assert!(!text.contains("holes"), "{text}");
+    let back = SnxPcb::parse(&text).expect("parse");
+    assert!(back.board.zones[0].holes.is_empty());
 }
 
 #[test]

@@ -36,7 +36,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, RwLock};
 
-use serde::{Serialize, de::DeserializeOwned};
 use uuid::Uuid;
 
 use crate::adapter::{HistoryEntry, LibraryAdapter, LibraryError, PrimitiveSummary};
@@ -118,6 +117,8 @@ pub struct LocalGitAdapter {
     /// persistently unreadable or missing file warns once, not on every
     /// read.
     warned_state: Mutex<Option<disk_sync::DiskState>>,
+    /// The "cannot lock on this filesystem" warning was logged (#832).
+    write_lock_warned: std::sync::atomic::AtomicBool,
 }
 
 impl LocalGitAdapter {
@@ -217,6 +218,7 @@ impl LocalGitAdapter {
             symbol_problems: Mutex::default(),
             disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
             warned_state: Mutex::new(None),
+            write_lock_warned: Default::default(),
         })
     }
 
@@ -258,6 +260,7 @@ impl LocalGitAdapter {
             symbol_problems: Mutex::default(),
             disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
             warned_state: Mutex::new(None),
+            write_lock_warned: Default::default(),
         })
     }
 
@@ -303,7 +306,11 @@ impl LocalGitAdapter {
             .index()
             .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
         index
-            .add_all(["."].iter(), git2::IndexAddOption::DEFAULT, None)
+            .add_all(
+                ["."].iter(),
+                git2::IndexAddOption::DEFAULT,
+                Some(&mut skip_write_lock_files),
+            )
             .map_err(|e| LibraryError::Backend(format!("git add all: {e}")))?;
         index
             .write()
@@ -349,6 +356,7 @@ impl LocalGitAdapter {
             symbol_problems: Mutex::default(),
             disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
             warned_state: Mutex::new(None),
+            write_lock_warned: Default::default(),
         })
     }
 
@@ -386,9 +394,19 @@ impl LocalGitAdapter {
 
 mod adapter;
 mod disk_sync;
+/// `add_all` callback: stage everything except a write-lock file (#832).
+pub(crate) fn skip_write_lock_files(path: &Path, _spec: &[u8]) -> i32 {
+    i32::from(is_write_lock_file(path))
+}
+
 pub use disk_sync::DiskStamp;
+pub use write_lock::{
+    WRITE_LOCK_WAIT, enclosing_library_file, is_write_lock_file, rewrite_file_under_library_lock,
+    write_lock_path,
+};
 mod helpers;
 mod primitives;
+mod write_lock;
 
 use helpers::*;
 

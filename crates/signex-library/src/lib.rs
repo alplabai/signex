@@ -34,8 +34,8 @@ pub mod templates;
 pub mod where_used;
 
 pub use adapter::{
-    ComponentSummary, FieldSet, HistoryEntry, LibraryAdapter, LibraryError, LibraryQuery,
-    PrimitiveSummary,
+    ComponentSummary, FieldSet, FileRewrite, HistoryEntry, LibraryAdapter, LibraryError,
+    LibraryQuery, PrimitiveSummary, rewrite_file,
 };
 pub use adapters::library_set::{LibrarySet, UnresolvedRefs};
 pub use adapters::read_only::ReadOnlyAdapter;
@@ -70,11 +70,11 @@ pub use manufacturer::{AlternateStatus, DistributorListing, ManufacturerPart};
 pub use param::{ParamMap, ParamValue};
 pub use primitive::{
     Body3D, BodyShape, CHAIN_ARC_SAMPLES, CHAIN_ENDPOINT_EPSILON_MM, ChainError, ChainSegment,
-    ComponentType, Drill, Footprint, FootprintFile, FootprintFileError, FpGraphic, FpGraphicKind,
-    LayerId, Pad, PadKind, PadShape, PinDirection, PinOrientation, PinSymbolKind, Polygon,
-    PrimitiveKind, PrimitiveRef, SimKind, SimModel, StepAttachment, Symbol, SymbolFile,
-    SymbolGraphic, SymbolGraphicKind, SymbolPin, chain_into_closed_contour,
-    normalize_arc_endpoints_deg,
+    ComponentType, ContainerMerge, Drill, DuplicatedUuid, Footprint, FootprintFile,
+    FootprintFileError, FpGraphic, FpGraphicKind, LayerId, LoadRepair, Pad, PadKind, PadShape,
+    PinDirection, PinOrientation, PinSymbolKind, Polygon, PrimitiveKind, PrimitiveRef, SimKind,
+    SimModel, StepAttachment, Symbol, SymbolFile, SymbolGraphic, SymbolGraphicKind, SymbolPin,
+    chain_into_closed_contour, normalize_arc_endpoints_deg,
 };
 pub use search::{Facet, FacetOp, SearchIndex, SearchQuery};
 #[cfg(feature = "search-tantivy")]
@@ -86,7 +86,10 @@ pub use templates::{ParamKind, ParamSlot, ParameterTemplate, TemplateRegistry, T
 pub use where_used::{UseSite, WhereUsedIndex};
 
 #[cfg(feature = "local-git")]
-pub use adapters::local_git::{DiskStamp, LocalGitAdapter};
+pub use adapters::local_git::{
+    DiskStamp, LocalGitAdapter, WRITE_LOCK_WAIT, enclosing_library_file, is_write_lock_file,
+    rewrite_file_under_library_lock, write_lock_path,
+};
 
 /// Project-level "Enable Version Control" helper. Runs
 /// `git2::Repository::init` at `project_dir`, optionally writes a
@@ -177,7 +180,11 @@ pub fn enable_project_version_control(
         .index()
         .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
     index
-        .add_all(["."].iter(), git2::IndexAddOption::DEFAULT, None)
+        .add_all(
+            ["."].iter(),
+            git2::IndexAddOption::DEFAULT,
+            Some(&mut adapters::local_git::skip_write_lock_files),
+        )
         .map_err(|e| LibraryError::Backend(format!("git add .: {e}")))?;
     index
         .write()

@@ -98,11 +98,14 @@ impl Signex {
 
         // Hydrate persisted search query for this library (per-path,
         // not global) the first time a browser tab opens this session.
-        // Reading the prefs file every open is fine — single-digit
-        // milliseconds and only on user gesture.
-        let persisted_search = crate::fonts::read_library_browser_searches()
-            .remove(&path)
-            .unwrap_or_default();
+        // This session's edits win over the disk: a debounced write may
+        // not have landed yet.
+        let persisted_search = match self.document_state.search_prefs.library_search(&path) {
+            Some(typed) => typed,
+            None => crate::fonts::read_library_browser_searches()
+                .remove(&path)
+                .unwrap_or_default(),
+        };
 
         let entry = self
             .library

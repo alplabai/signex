@@ -378,11 +378,11 @@ impl LibraryAdapter for LocalGitAdapter {
     }
 
     fn get_footprint(&self, uuid: Uuid) -> Result<Footprint, LibraryError> {
-        self.read_primitive::<Footprint>(PrimitiveKind::Footprint, uuid)
+        self.read_footprint(uuid)
     }
 
     fn get_sim(&self, uuid: Uuid) -> Result<SimModel, LibraryError> {
-        self.read_primitive::<SimModel>(PrimitiveKind::Sim, uuid)
+        self.read_sim(uuid)
     }
 
     fn save_symbol(&self, sym: Symbol, message: &str) -> Result<(), LibraryError> {
@@ -402,7 +402,7 @@ impl LibraryAdapter for LocalGitAdapter {
     fn save_footprint(&self, fp: Footprint, message: &str) -> Result<(), LibraryError> {
         let uuid = fp.uuid;
         let new_version = fp.version.clone();
-        self.write_primitive(PrimitiveKind::Footprint, fp.uuid, &fp, message)?;
+        self.write_footprint(&fp, message)?;
         let mode = self.manifest_synth.workflow.mode;
         let _report = crate::cascade::cascade_after_footprint_save(self, uuid, &new_version, mode)?;
         Ok(())
@@ -411,7 +411,7 @@ impl LibraryAdapter for LocalGitAdapter {
     fn save_sim(&self, sm: SimModel, message: &str) -> Result<(), LibraryError> {
         let uuid = sm.uuid;
         let new_version = sm.version.clone();
-        self.write_primitive(PrimitiveKind::Sim, sm.uuid, &sm, message)?;
+        self.write_sim(&sm, message)?;
         let mode = self.manifest_synth.workflow.mode;
         let _report = crate::cascade::cascade_after_sim_save(self, uuid, &new_version, mode)?;
         Ok(())
@@ -443,6 +443,32 @@ impl LibraryAdapter for LocalGitAdapter {
 
     fn root_path(&self) -> Option<PathBuf> {
         Some(self.root_dir.clone())
+    }
+
+    fn rewrite_file_locked(
+        &self,
+        abs_path: &Path,
+        commit_message: &str,
+        rewrite: &mut crate::adapter::FileRewrite<'_>,
+    ) -> Result<bool, LibraryError> {
+        if !abs_path.starts_with(&self.root_dir) {
+            return Err(LibraryError::Backend(format!(
+                "rewrite_file_locked: {} is not under {}",
+                abs_path.display(),
+                self.root_dir.display(),
+            )));
+        }
+        let _write_lock = self.lock_for_write()?;
+        let written = crate::adapter::rewrite_file(abs_path, rewrite)?;
+        if written && let Err(e) = self.commit_external_change(abs_path, commit_message) {
+            tracing::warn!(
+                target: "signex::library",
+                path = %abs_path.display(),
+                error = %e,
+                "save primitive: file written, not committed",
+            );
+        }
+        Ok(written)
     }
 
     fn commit_external_change(&self, abs_path: &Path, message: &str) -> Result<(), LibraryError> {

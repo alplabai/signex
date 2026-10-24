@@ -111,7 +111,7 @@ pub fn tokenize(source: &str) -> (Vec<Token>, Vec<usize>) {
                     match chars.peek() {
                         Some((_, c))
                             if !c.is_whitespace()
-                                && !matches!(*c, '{' | '}' | '[' | ']' | ',' | '#') =>
+                                && !matches!(*c, '{' | '}' | '[' | ']' | ',' | '#' | '"') =>
                         {
                             word.push(*c);
                             chars.next();
