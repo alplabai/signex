@@ -28,11 +28,11 @@ pub use error::EngineError;
 use history::HistoryEntry;
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
 pub use selection::{ClipboardSelection, SelectionAnchor, SelectionDetails, partition_cuttable};
+pub use sheet::{exposed_sheet_ports, ports_for_pin_sync, unplaced_sheet_ports};
 pub use sheet_placement::{
     DEFAULT_CHILD_SHEET_STROKE_MM, MIN_CHILD_SHEET_EDGE_MM, child_sheet_from_corners,
     unused_sheet_stem,
 };
-pub use sheet::{exposed_sheet_ports, ports_for_pin_sync, unplaced_sheet_ports};
 use signex_types::schematic::SchematicSheet;
 
 const JUNCTION_TOLERANCE_MM: f64 = 0.01;
