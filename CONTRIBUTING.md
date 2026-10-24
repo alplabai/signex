@@ -155,6 +155,33 @@ comment) for 7 days may be taken over after asking on the issue.
 issues must run steps 1–2 for each issue before it starts on that issue —
 not once for the whole batch.
 
+### Claiming a review
+
+Reviews are claimed the same way, on the PR, so two reviewers (or two agent
+sessions posting as the same account) don't review the same head twice.
+
+**1. Check it is free.** Read the PR's comments. Skip the PR if it has a
+`Reviewing this` comment that is newer than the latest push and has no
+posted review after it.
+
+```sh
+gh pr view N --json comments,reviews,commits
+```
+
+**2. Claim it** before any review work starts, with the head you are
+reviewing:
+
+```
+Reviewing this (session <name>, head <short-sha>).
+```
+
+Agent sessions that share one GitHub account put their session name there;
+it is the only way to tell them apart.
+
+**3. Release it.** Posting the review releases the claim. If you stop without
+posting, comment `Releasing review (<reason>).` A claim older than 6 hours
+with no review after it may be taken over.
+
 ## Git Workflow
 
 ### Branches
