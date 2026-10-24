@@ -298,8 +298,15 @@ impl Signex {
     }
 
     pub(crate) fn handle_move_selection_apply(&mut self) -> Task<Message> {
-        let dx = move_offset_mm(&self.ui_state.move_selection.dx);
-        let dy = move_offset_mm(&self.ui_state.move_selection.dy);
+        // Classify both axes before acting: a refused axis (`nan` / `inf` /
+        // overflow) must not be read as "0 on that axis" while the other
+        // axis still moves the selection. `parse_field_number` has already
+        // logged the refusal; the dialog stays open so the user can fix it.
+        let dx = move_offset(&self.ui_state.move_selection.dx);
+        let dy = move_offset(&self.ui_state.move_selection.dy);
+        let (Some(dx), Some(dy)) = (dx, dy) else {
+            return Task::none();
+        };
         if dx == 0.0 && dy == 0.0 {
             self.ui_state.move_selection.open = false;
             return Task::none();
@@ -348,11 +355,17 @@ impl Signex {
     }
 }
 
-/// A Move Selection offset typed in the dialog. Text that is not a finite
-/// number moves by nothing (an `inf` offset would send every selected item
-/// to infinity); a refused `nan` / `inf` is reported to the Messages panel.
-fn move_offset_mm(text: &str) -> f64 {
-    crate::numeric_field::parse_field_f64(text).unwrap_or(0.0)
+/// A Move Selection offset typed in the dialog. `None` means refused
+/// (`nan` / `inf` / overflow: an `inf` offset would send every selected item
+/// to infinity) and the whole apply is abandoned. Text that is not a number
+/// at all (empty, `-`) is the user mid-edit and moves by nothing.
+fn move_offset(text: &str) -> Option<f64> {
+    use crate::numeric_field::{FieldNumber, parse_field_number};
+    match parse_field_number(text) {
+        FieldNumber::Number(v) => Some(v),
+        FieldNumber::NotANumber => Some(0.0),
+        FieldNumber::Refused => None,
+    }
 }
 
 /// Window settings for a detached modal.
