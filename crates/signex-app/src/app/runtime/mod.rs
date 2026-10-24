@@ -69,6 +69,7 @@ impl Signex {
     pub(crate) fn finish_update(&mut self) -> Task<Message> {
         self.sync_panel_ctx_mirrors();
         self.sync_diagnostics_panel_ctx();
+        self.refresh_command_palette_if_stale();
 
         // Re-resolve the History panel's active path; on change, bump
         // the generation counter and kick off an async load. Stale
@@ -80,7 +81,10 @@ impl Signex {
         // in the status bar reads from `inflight_git_commits` until
         // each Task::perform completion fires `ProjectGitCommitDone`.
         let commits = self.drain_pending_git_commits();
-        Task::batch([history, commits])
+        // Reload the Annotate preview if the documents changed under an open
+        // dialog (a no-op while it is closed or already current).
+        let annotate_preview = self.refresh_annotate_preview();
+        Task::batch([history, commits, annotate_preview])
     }
 
     /// Republish the diagnostics ring buffer into the Messages panel.

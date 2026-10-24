@@ -122,3 +122,84 @@ fn a_locked_unannotated_unit_keeps_its_siblings_unannotated() {
     std::fs::remove_dir_all(&dir).ok();
     assert_eq!(refs, ["U?", "U?"]);
 }
+
+/// Rewrite the on-disk child as if a newer Signex had written it, and return
+/// its exact bytes so a test can prove it was left alone.
+fn make_child_newer_minor(dir: &std::path::Path) -> String {
+    let path = dir.join("z_child.snxsch");
+    let text = std::fs::read_to_string(&path).expect("child on disk");
+    let newer = text.replacen("format = \"snxsch/1\"", "format = \"snxsch/1.7\"", 1);
+    assert_ne!(newer, text, "fixture must carry the newer token");
+    std::fs::write(&path, &newer).expect("write newer child");
+    newer
+}
+
+fn notice_detail(app: &Signex) -> String {
+    app.document_state
+        .error_notice
+        .as_ref()
+        .map(|n| n.detail.clone())
+        .unwrap_or_default()
+}
+
+#[test]
+fn annotate_leaves_an_unopened_newer_minor_child_alone_and_names_it() {
+    let (mut app, dir) = project(vec![unit("R?", 1, 0.0)], vec![unit("R1", 1, 0.0)]);
+    let newer = make_child_newer_minor(&dir);
+    let _ = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
+    let (root, on_disk) = (
+        root_refs(&app, &dir),
+        std::fs::read_to_string(dir.join("z_child.snxsch")).expect("child"),
+    );
+    let notice = notice_detail(&app);
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(on_disk, newer, "the newer-minor child is untouched");
+    assert_eq!(root, ["R2"], "the child's R1 still counts as taken");
+    assert!(notice.contains("z_child.snxsch"), "{notice}");
+}
+
+#[test]
+fn reset_duplicates_leaves_an_unopened_newer_minor_child_alone_and_names_it() {
+    let (mut app, dir) = project(vec![unit("R1", 1, 0.0)], vec![unit("R1", 1, 0.0)]);
+    let newer = make_child_newer_minor(&dir);
+    let _ = app.handle_reset_duplicate_designators();
+    let (root, on_disk) = (
+        root_refs(&app, &dir),
+        std::fs::read_to_string(dir.join("z_child.snxsch")).expect("child"),
+    );
+    let notice = notice_detail(&app);
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(on_disk, newer, "the newer-minor child is untouched");
+    assert_eq!(root, ["R?"], "the editable side of the duplicate is reset");
+    assert!(notice.contains("z_child.snxsch"), "{notice}");
+}
+
+#[test]
+fn bulk_passes_do_not_dirty_an_open_newer_minor_sheet() {
+    for reset in [false, true] {
+        let (mut app, dir) = project(vec![unit("R1", 1, 0.0)], vec![unit("R1", 1, 0.0)]);
+        make_child_newer_minor(&dir);
+        let child_path = dir.join("z_child.snxsch");
+        let engine = signex_engine::Engine::open(&child_path).expect("newer minor still loads");
+        app.document_state
+            .engines
+            .insert(child_path.clone(), engine);
+        if reset {
+            let _ = app.handle_reset_duplicate_designators();
+        } else {
+            let _ = app.handle_annotate(signex_engine::AnnotateMode::ResetAndRenumber);
+        }
+        let child_refs: Vec<String> = app.document_state.engines[&child_path]
+            .document()
+            .symbols
+            .iter()
+            .map(|s| s.reference.clone())
+            .collect();
+        let dirty = app.document_state.dirty_paths.contains(&child_path);
+        let notice = notice_detail(&app);
+        std::fs::remove_dir_all(&dir).ok();
+        assert_eq!(child_refs, ["R1"], "reset={reset}");
+        assert!(!dirty, "reset={reset}: read-only sheet must not be dirtied");
+        assert!(notice.contains("z_child.snxsch"), "reset={reset}: {notice}");
+    }
+}
