@@ -13,9 +13,14 @@
 //! first. For redo, a sheet that still has the group in neither stack is
 //! skipped (reopened or history trimmed); one that has the group deeper in its
 //! undo stack but not on its redo stack (edited after the undo) refuses.
-//! Sheets with no live engine (closed and clean, or rewritten on disk by the
-//! run) have no history to move and are skipped; an undo lists them in one
-//! Messages panel line, since they stay annotated.
+//!
+//! A skipped sheet keeps the other half of a split multi-unit part, so every
+//! one is named in a Messages panel warning, in both directions:
+//! - open, but its history no longer holds the run (reopened, or trimmed past
+//!   the history cap);
+//! - closed since the run, so no engine holds its history;
+//! - rewritten on disk by the run with no engine (undo only; it was never
+//!   reverted, so a redo owes it nothing).
 
 use super::*;
 
@@ -105,10 +110,14 @@ impl Signex {
 
         let mut members = Vec::new();
         let mut blocked = Vec::new();
-        let mut not_open = recorded.disk_only.clone();
+        let mut history_gone = Vec::new();
+        let mut closed = Vec::new();
         for path in sheets {
             let Some(engine) = self.document_state.engines.get(&path) else {
-                not_open.push(path);
+                // A redo owes nothing to a sheet the undo did not revert.
+                if direction == StepDirection::Undo || recorded.undone.contains(&path) {
+                    closed.push(path);
+                }
                 continue;
             };
             if direction.top(engine) == Some(group) {
@@ -125,6 +134,8 @@ impl Signex {
             };
             if expected {
                 blocked.push(path);
+            } else if direction == StepDirection::Undo {
+                history_gone.push(path);
             }
         }
         if !blocked.is_empty() {
@@ -142,11 +153,29 @@ impl Signex {
             crate::diagnostics::log_warning(message);
             return false;
         }
-        if direction == StepDirection::Undo && !not_open.is_empty() {
-            not_open.sort();
-            crate::diagnostics::log_info(format!(
+        let verb = match direction {
+            StepDirection::Undo => "undone",
+            StepDirection::Redo => "redone",
+        };
+        if !history_gone.is_empty() {
+            crate::diagnostics::log_warning(format!(
+                "Annotate {verb} on the other sheets but not on {}: its undo history no \
+                 longer holds the annotate (reopened, or trimmed past the history limit), \
+                 so it keeps its annotated designators.",
+                file_names(&history_gone),
+            ));
+        }
+        if !closed.is_empty() {
+            crate::diagnostics::log_warning(format!(
+                "Annotate {verb} on open sheets but not on {}: closed since the annotate, \
+                 so its designators are whatever was last saved.",
+                file_names(&closed),
+            ));
+        }
+        if direction == StepDirection::Undo && !recorded.disk_only.is_empty() {
+            crate::diagnostics::log_warning(format!(
                 "Annotate undone on open sheets; not open, so still annotated on disk: {}",
-                file_names(&not_open),
+                file_names(&recorded.disk_only),
             ));
         }
 

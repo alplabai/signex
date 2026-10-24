@@ -257,8 +257,15 @@ fn reopen_child(p: &mut Project) {
     );
 }
 
+fn warned(text: &str) -> bool {
+    signex_app::diagnostics::recent_entries().iter().any(|e| {
+        e.level == signex_app::diagnostics::DiagnosticLevel::Warning && e.message.contains(text)
+    })
+}
+
 #[test]
 fn redo_works_after_the_other_sheet_was_closed_and_reopened() {
+    let _ = signex_app::diagnostics::init_logging();
     let mut p = project(AnnotateUndo::Project);
     annotate(&mut p.app);
     let (root_after, child_after) = annotated_pair(&p);
@@ -271,6 +278,10 @@ fn redo_works_after_the_other_sheet_was_closed_and_reopened() {
         child_after,
         "the reopened sheet has nothing to undo"
     );
+    assert!(
+        warned("Annotate undone on the other sheets but not on child.snxsch"),
+        "the split must be named, not silent"
+    );
 
     redo(&mut p.app);
     assert_eq!(
@@ -282,6 +293,7 @@ fn redo_works_after_the_other_sheet_was_closed_and_reopened() {
 
 #[test]
 fn undo_and_redo_work_after_the_other_sheet_history_was_trimmed() {
+    let _ = signex_app::diagnostics::init_logging();
     let mut p = project(AnnotateUndo::Project);
     annotate(&mut p.app);
     let (root_after, child_after) = annotated_pair(&p);
@@ -301,6 +313,10 @@ fn undo_and_redo_work_after_the_other_sheet_history_was_trimmed() {
     undo(&mut p.app);
     assert_eq!(refs(&p.app, &p.root), ["U?", "C?"]);
     assert_eq!(refs(&p.app, &p.child), child_after);
+    assert!(
+        warned("Annotate undone on the other sheets but not on child.snxsch"),
+        "the split must be named, not silent"
+    );
 
     redo(&mut p.app);
     assert_eq!(refs(&p.app, &p.root), root_after);
@@ -340,8 +356,24 @@ fn undo_says_which_sheets_stay_annotated_because_they_are_not_open() {
     assert!(
         signex_app::diagnostics::recent_entries()
             .iter()
-            .any(|e| e.message.contains(
-                "Annotate undone on open sheets; not open, so still annotated on disk: child.snxsch"
-            )),
+            .any(|e| e.level == signex_app::diagnostics::DiagnosticLevel::Warning
+                && e.message.contains(
+                    "Annotate undone on open sheets but not on child.snxsch: closed since the annotate"
+                )),
     );
+}
+
+#[test]
+fn redo_names_a_sheet_closed_after_the_undo() {
+    let _ = signex_app::diagnostics::init_logging();
+    let mut p = project(AnnotateUndo::Project);
+    annotate(&mut p.app);
+    undo(&mut p.app);
+    p.app.document_state.engines.remove(&p.child);
+
+    redo(&mut p.app);
+
+    assert!(warned(
+        "Annotate redone on open sheets but not on child.snxsch: closed since the annotate"
+    ));
 }
