@@ -315,6 +315,41 @@ mod tests {
         );
     }
 
+    /// #895 review: a prototype instance used as a field value (here the
+    /// geometry and the material) is reported too, not silently dropped.
+    #[test]
+    fn a_prototype_instance_in_a_field_is_reported() {
+        let src = "PROTO G [ ] { IndexedFaceSet { coord Coordinate { point [ 0 0 0, 1 0 0, 0 1 0 ] } coordIndex [ 0 1 2 -1 ] } } \
+                   PROTO M [ ] { Material { diffuseColor 1 0 0 } } \
+                   Shape { appearance Appearance { material M { } } geometry G { } }";
+        let (_, warnings) = parse_src(src);
+        let reasons: Vec<&str> = warnings.iter().map(|w| w.reason.as_str()).collect();
+        assert_eq!(
+            reasons,
+            [
+                "instances of prototype M are not imported",
+                "instances of prototype G are not imported"
+            ]
+        );
+    }
+
+    /// #895 review: a `PROTO` statement among a node's fields is skipped
+    /// whole, so it does not close the node early and lose its transform.
+    #[test]
+    fn a_proto_among_node_fields_does_not_close_the_node() {
+        let src = format!(
+            "Transform {{ translation 2 0 0 PROTO Q [ field SFFloat a 1 ] {{ Shape {{ }} }} children [ {TRI} ] }}"
+        );
+        let (meshes, warnings) = parse_src(&src);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(meshes.len(), 1);
+        assert_eq!(
+            min_x(&meshes[0]),
+            2.0,
+            "the child keeps the Transform's translation"
+        );
+    }
+
     /// A name bound to another kind of node is refused, with a warning.
     #[test]
     fn a_use_in_the_wrong_slot_is_ignored_with_a_warning() {

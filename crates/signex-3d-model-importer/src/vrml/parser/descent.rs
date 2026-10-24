@@ -29,11 +29,11 @@ pub(super) struct Parser<'a> {
     defs: Defs,
     /// The budget and depth refusals are reported once each, not per `USE`.
     use_budget_reported: bool,
+    use_depth_reported: bool,
     /// Prototype names declared so far; an instance of one is not imported
     /// and is reported once per name (#887).
     protos: std::collections::HashSet<String>,
     reported_protos: std::collections::HashSet<String>,
-    use_depth_reported: bool,
 }
 
 impl<'a> Parser<'a> {
@@ -142,8 +142,9 @@ impl<'a> Parser<'a> {
     }
 
     /// Skip a node the parser does not read, binding its `DEF` name (if
-    /// any) as ignored.
-    fn skip_field_node(&mut self, def: Option<String>) -> Result<(), ParseError> {
+    /// any) as ignored, and reporting it if it is a prototype instance.
+    fn skip_field_node(&mut self, word: &str, def: Option<String>) -> Result<(), ParseError> {
+        self.note_proto_instance(word);
         self.bind(def, DefRef::Ignored);
         if let Some(Token::LBrace) = self.peek() {
             self.consume_block()?;
@@ -229,14 +230,7 @@ impl<'a> Parser<'a> {
             "Group" | "Collision" | "Anchor" => self.parse_group().map(Some),
             "Shape" => self.parse_shape().map(Some),
             _ => {
-                if self.protos.contains(&keyword) && self.reported_protos.insert(keyword.clone()) {
-                    let line = self.current_line();
-                    ParseWarning::push(
-                        &mut self.warnings,
-                        Some(line),
-                        format!("instances of prototype {keyword} are not imported"),
-                    );
-                }
+                self.note_proto_instance(&keyword);
                 // Unknown node type: consume its body if it has one.
                 if let Some(Token::LBrace) = self.peek() {
                     self.consume_block()?;
@@ -262,11 +256,42 @@ impl<'a> Parser<'a> {
                 self.consume_block()?;
             }
         } else {
-            // The URL: one string, or a list of them.
-            self.skip_field_value()?;
+            // The URL: one string, or a list of them. Anything else is a
+            // malformed declaration; leave it for the caller to parse.
+            match self.peek() {
+                Some(Token::LBracket) => self.consume_block()?,
+                Some(Token::Word(w)) if w.starts_with('"') => {
+                    self.next();
+                }
+                _ => {}
+            }
         }
         self.protos.insert(name);
         Ok(())
+    }
+
+    /// Report the first instance of each declared prototype, which is not
+    /// imported, in node position and in a node-valued field alike.
+    fn note_proto_instance(&mut self, word: &str) {
+        if self.protos.contains(word) && self.reported_protos.insert(word.to_owned()) {
+            let line = self.current_line();
+            ParseWarning::push(
+                &mut self.warnings,
+                Some(line),
+                format!("instances of prototype {word} are not imported"),
+            );
+        }
+    }
+
+    /// Skip the value of a field the parser does not read. A `PROTO` or
+    /// `EXTERNPROTO` statement may also stand among a node's fields; it is
+    /// skipped whole, or its body would close the enclosing node early.
+    fn skip_unknown_field(&mut self, field: &str) -> Result<(), ParseError> {
+        if field == "PROTO" || field == "EXTERNPROTO" {
+            self.skip_proto_declaration(field)
+        } else {
+            self.skip_field_value()
+        }
     }
 
     fn parse_transform(&mut self) -> Result<Node, ParseError> {
@@ -313,9 +338,7 @@ impl<'a> Parser<'a> {
                 "children" => {
                     children = self.parse_children_list()?;
                 }
-                _ => {
-                    self.skip_field_value()?;
-                }
+                _ => self.skip_unknown_field(&field)?,
             }
         }
         Ok(Node::Transform {
@@ -361,9 +384,7 @@ impl<'a> Parser<'a> {
                 "children" => {
                     children = self.parse_children_list()?;
                 }
-                _ => {
-                    self.skip_field_value()?;
-                }
+                _ => self.skip_unknown_field(&field)?,
             }
         }
         Ok(Node::Group { children })
@@ -409,11 +430,9 @@ impl<'a> Parser<'a> {
                             },
                         );
                     }
-                    FieldNode::Typed { def, .. } => self.skip_field_node(def)?,
+                    FieldNode::Typed { word, def } => self.skip_field_node(&word, def)?,
                 },
-                _ => {
-                    self.skip_field_value()?;
-                }
+                _ => self.skip_unknown_field(&field)?,
             }
         }
         Ok(Node::Shape {
@@ -431,8 +450,8 @@ impl<'a> Parser<'a> {
             FieldNode::Use(Some(Def::Color(color))) => return Ok(color),
             FieldNode::Use(_) => return Ok(DEFAULT_COLOR),
             FieldNode::Typed { word, def } if word == "Appearance" => def,
-            FieldNode::Typed { def, .. } => {
-                self.skip_field_node(def)?;
+            FieldNode::Typed { word, def } => {
+                self.skip_field_node(&word, def)?;
                 return Ok(DEFAULT_COLOR);
             }
         };
@@ -459,11 +478,9 @@ impl<'a> Parser<'a> {
                         color = self.parse_material_color()?;
                         self.bind(def, DefRef::Color(color));
                     }
-                    FieldNode::Typed { def, .. } => self.skip_field_node(def)?,
+                    FieldNode::Typed { word, def } => self.skip_field_node(&word, def)?,
                 },
-                _ => {
-                    self.skip_field_value()?;
-                }
+                _ => self.skip_unknown_field(&field)?,
             }
         }
         self.bind(def, DefRef::Color(color));
@@ -496,9 +513,7 @@ impl<'a> Parser<'a> {
                     let t = self.parse_f32()?;
                     color[3] = 1.0 - t;
                 }
-                _ => {
-                    self.skip_field_value()?;
-                }
+                _ => self.skip_unknown_field(&field)?,
             }
         }
         Ok(color)
@@ -530,14 +545,12 @@ impl<'a> Parser<'a> {
                         positions = self.parse_coordinate_point()?;
                         self.bind(def, DefRef::Coords(&positions));
                     }
-                    FieldNode::Typed { def, .. } => self.skip_field_node(def)?,
+                    FieldNode::Typed { word, def } => self.skip_field_node(&word, def)?,
                 },
                 "coordIndex" => {
                     indices = self.parse_int_array()?;
                 }
-                _ => {
-                    self.skip_field_value()?;
-                }
+                _ => self.skip_unknown_field(&field)?,
             }
         }
         Ok((positions, indices))
