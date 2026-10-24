@@ -244,6 +244,10 @@ pub struct SymbolEditorState {
     /// works against `file.symbols[active_idx]`; access via
     /// [`primitive`](Self::primitive) / [`primitive_mut`](Self::primitive_mut).
     pub file: signex_library::SymbolFile,
+    /// The container as this editor last loaded or saved it. A save
+    /// writes only the symbols that differ from it, so another window's
+    /// saves to the other symbols of the file survive (#902).
+    pub baseline: signex_library::SymbolFile,
     /// Which symbol within the file is currently being edited. The
     /// SCH-Library left-dock panel will eventually drive this index;
     /// for now it always lands on the first symbol.
@@ -350,6 +354,7 @@ impl SymbolEditorState {
     pub fn new(path: PathBuf, file: signex_library::SymbolFile) -> Self {
         let mut state = Self {
             path,
+            baseline: file.clone(),
             file,
             active_idx: 0,
             active_part: 1,
@@ -433,6 +438,10 @@ pub struct FootprintEditorState {
     /// via [`primitive`](Self::primitive) /
     /// [`primitive_mut`](Self::primitive_mut).
     pub file: signex_library::FootprintFile,
+    /// The container as this editor last loaded or saved it; see
+    /// [`SymbolEditorState::baseline`] (#902). Taken before the load
+    /// repairs are cleared, so a repaired footprint counts as changed.
+    pub baseline: signex_library::FootprintFile,
     /// Which footprint within the file is currently being edited.
     /// The Footprint Library left-dock panel + canvas tab strip
     /// drive this; defaults to the first footprint.
@@ -516,6 +525,7 @@ impl FootprintEditorState {
 
     fn build(path: PathBuf, mut file: signex_library::FootprintFile, log_repairs: bool) -> Self {
         let active_idx = 0;
+        let baseline = file.clone();
         let repaired = Self::take_load_repairs(&path, &mut file, log_repairs);
         let state = crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
             &file.footprints[active_idx],
@@ -523,6 +533,7 @@ impl FootprintEditorState {
         Self {
             path,
             file,
+            baseline,
             active_idx,
             panel_selected_idx: None,
             state,

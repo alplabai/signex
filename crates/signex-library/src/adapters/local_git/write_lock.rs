@@ -22,7 +22,7 @@
 
 use std::fs::{self, File, OpenOptions, TryLockError};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -86,52 +86,75 @@ impl LocalGitAdapter {
     /// edit goes ahead unlocked, as before #832, with a one-time warning,
     /// rather than leaving the library read-only.
     pub(super) fn lock_for_write(&self) -> Result<Option<WriteLock>, LibraryError> {
-        let path = write_lock_path(&self.file_path);
-        let file = match open_lock_file(&path) {
-            Ok(file) => file,
-            Err(e) => return Ok(self.unlocked(&path, &e)),
-        };
-        let deadline = Instant::now() + WRITE_LOCK_WAIT;
-        loop {
-            match file.try_lock() {
-                Ok(()) => {
-                    // A sidecar from before version control was enabled is no
-                    // longer the lock anyone takes.
-                    if path != sidecar_path(&self.file_path) {
-                        drop(fs::remove_file(sidecar_path(&self.file_path)));
-                    }
-                    return Ok(Some(WriteLock { _file: file }));
-                }
-                Err(TryLockError::WouldBlock) if Instant::now() < deadline => {
-                    thread::sleep(RETRY_EVERY);
-                }
-                Err(TryLockError::WouldBlock) => {
-                    return Err(LibraryError::Backend(format!(
-                        "{} is being written by another Signex process (lock {} held for over \
-                         {} s); the edit was not saved",
-                        self.file_path.display(),
-                        path.display(),
-                        WRITE_LOCK_WAIT.as_secs()
-                    )));
-                }
-                Err(TryLockError::Error(e)) => return Ok(self.unlocked(&path, &e)),
-            }
-        }
+        acquire(&self.file_path, &self.write_lock_warned)
     }
+}
 
-    fn unlocked(&self, path: &Path, error: &std::io::Error) -> Option<WriteLock> {
-        if !self.write_lock_warned.swap(true, Ordering::Relaxed) {
-            tracing::warn!(
-                target: "signex::library",
-                library = %self.file_path.display(),
-                lock = %path.display(),
-                error = %error,
-                "cannot lock the library for writing on this filesystem; edits are saved \
-                 without protection against another Signex process writing at the same time"
-            );
+/// Rewrite `abs_path`, a file of the library at `library_file`, under that
+/// library's write lock, for a caller that has no [`LocalGitAdapter`] open on
+/// it: a primitive file opened on its own (#902). See
+/// [`crate::adapter::LibraryAdapter::rewrite_file_locked`].
+pub fn rewrite_file_under_library_lock(
+    library_file: &Path,
+    abs_path: &Path,
+    rewrite: &mut crate::adapter::FileRewrite<'_>,
+) -> Result<bool, LibraryError> {
+    static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    let _write_lock = acquire(library_file, &WARNED)?;
+    crate::adapter::rewrite_file(abs_path, rewrite)
+}
+
+fn acquire(file_path: &Path, warned: &AtomicBool) -> Result<Option<WriteLock>, LibraryError> {
+    let path = write_lock_path(file_path);
+    let file = match open_lock_file(&path) {
+        Ok(file) => file,
+        Err(e) => return Ok(unlocked(file_path, &path, &e, warned)),
+    };
+    let deadline = Instant::now() + WRITE_LOCK_WAIT;
+    loop {
+        match file.try_lock() {
+            Ok(()) => {
+                // A sidecar from before version control was enabled is no
+                // longer the lock anyone takes.
+                if path != sidecar_path(file_path) {
+                    drop(fs::remove_file(sidecar_path(file_path)));
+                }
+                return Ok(Some(WriteLock { _file: file }));
+            }
+            Err(TryLockError::WouldBlock) if Instant::now() < deadline => {
+                thread::sleep(RETRY_EVERY);
+            }
+            Err(TryLockError::WouldBlock) => {
+                return Err(LibraryError::Backend(format!(
+                    "{} is being written by another Signex process (lock {} held for over \
+                     {} s); the edit was not saved",
+                    file_path.display(),
+                    path.display(),
+                    WRITE_LOCK_WAIT.as_secs()
+                )));
+            }
+            Err(TryLockError::Error(e)) => return Ok(unlocked(file_path, &path, &e, warned)),
         }
-        None
     }
+}
+
+fn unlocked(
+    file_path: &Path,
+    path: &Path,
+    error: &std::io::Error,
+    warned: &AtomicBool,
+) -> Option<WriteLock> {
+    if !warned.swap(true, Ordering::Relaxed) {
+        tracing::warn!(
+            target: "signex::library",
+            library = %file_path.display(),
+            lock = %path.display(),
+            error = %error,
+            "cannot lock the library for writing on this filesystem; edits are saved \
+             without protection against another Signex process writing at the same time"
+        );
+    }
+    None
 }
 
 fn open_lock_file(path: &Path) -> std::io::Result<File> {

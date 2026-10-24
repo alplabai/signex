@@ -215,3 +215,81 @@ fn a_stale_git_index_lock_does_not_block_or_fail_the_save() {
     let head = repo.head().unwrap().peel_to_commit().unwrap();
     assert!(String::from_utf8_lossy(head.message_bytes()).starts_with("add R"));
 }
+
+/// Hold the write lock of the library at `file` from this thread, as another
+/// Signex process would while it writes.
+fn hold_write_lock(file: &Path) -> std::fs::File {
+    let lock = signex_library::write_lock_path(file);
+    std::fs::create_dir_all(lock.parent().unwrap()).unwrap();
+    let handle = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(lock)
+        .unwrap();
+    handle.lock().unwrap();
+    handle
+}
+
+/// #902: the app editor's save reads, merges and writes its container under
+/// the library write lock. While another process holds it, the read waits,
+/// so it sees what that process wrote.
+#[test]
+fn rewriting_a_library_file_reads_it_only_after_another_process_releases_the_lock() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = versioned_library(dir.path());
+    let adapter = LocalGitAdapter::open(&file).unwrap();
+    let target = file.parent().unwrap().join("symbols").join("pair.snxsym");
+    std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+    std::fs::write(&target, b"before").unwrap();
+
+    let held = hold_write_lock(&file);
+    let other = target.clone();
+    let release = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(300));
+        std::fs::write(&other, b"written by the other process").unwrap();
+        drop(held);
+    });
+    let mut seen = Vec::new();
+    let written = adapter
+        .rewrite_file_locked(&target, "merge pair", &mut |current| {
+            seen = current.unwrap_or_default().to_vec();
+            Ok(Some(b"merged".to_vec()))
+        })
+        .unwrap();
+    release.join().unwrap();
+
+    assert!(written);
+    assert_eq!(seen, b"written by the other process");
+    assert_eq!(std::fs::read(&target).unwrap(), b"merged");
+    // #904 review: committed before the lock was released, so another
+    // process cannot replace the file while git reads it.
+    let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
+    let head = repo.head().unwrap().peel_to_commit().unwrap();
+    assert_eq!(head.summary().unwrap(), Some("merge pair"));
+    let blob = head
+        .tree()
+        .unwrap()
+        .get_path(Path::new("symbols/pair.snxsym"))
+        .unwrap()
+        .to_object(&repo)
+        .unwrap()
+        .peel_to_blob()
+        .unwrap();
+    assert_eq!(blob.content(), b"merged");
+}
+
+#[test]
+fn rewriting_a_file_outside_the_library_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = versioned_library(dir.path());
+    let adapter = LocalGitAdapter::open(&file).unwrap();
+    let outside = dir.path().join("elsewhere.snxsym");
+
+    let error = adapter
+        .rewrite_file_locked(&outside, "x", &mut |_| Ok(Some(b"x".to_vec())))
+        .unwrap_err();
+
+    assert!(error.to_string().contains("is not under"), "got {error}");
+    assert!(!outside.exists());
+}
