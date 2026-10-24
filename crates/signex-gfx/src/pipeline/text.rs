@@ -219,20 +219,21 @@ fn cosmic_align(h_align: TextHAlign) -> cryoglyph::cosmic_text::Align {
 /// typeface *and* different advance widths, so anything sized from a glyph
 /// estimate came out wrong too.
 ///
-/// `italic` is deliberately not mapped. The canvas family ships no italic
-/// face, and cosmic-text 0.15's `Attrs::matches` requires an exact style
-/// match, so asking for one skips the canvas family entirely and lands on
-/// some system italic — a different typeface, and different from the CPU
-/// replay, which draws the same item upright. Map it once an italic face is
-/// bundled, on both sides together.
+/// `italic` maps to `Style::Italic`. cosmic-text 0.15's `Attrs::matches`
+/// keeps only faces whose style equals the request, so this relies on the
+/// app bundling an italic face of the canvas family; without one the
+/// request leaves the family for some system italic (#654). The CPU replay
+/// (`renderer_scene_canvas::canvas_font`) maps the same two flags, so both
+/// paths pick the same face.
 fn attrs_for_item(item: &TextItem, family: &'static str) -> cryoglyph::Attrs<'static> {
-    let attrs = cryoglyph::Attrs::new().family(cryoglyph::Family::Name(family));
-
+    let mut attrs = cryoglyph::Attrs::new().family(cryoglyph::Family::Name(family));
     if item.bold {
-        attrs.weight(cryoglyph::Weight::BOLD)
-    } else {
-        attrs
+        attrs = attrs.weight(cryoglyph::Weight::BOLD);
     }
+    if item.italic {
+        attrs = attrs.style(cryoglyph::Style::Italic);
+    }
+    attrs
 }
 
 fn to_glyphon_color(color: [f32; 4]) -> cryoglyph::Color {
@@ -536,9 +537,7 @@ mod tests {
         );
 
         assert_eq!(attrs.weight, cryoglyph::Weight::BOLD);
-        // Upright on purpose: no italic canvas face is bundled, and an exact
-        // style match would otherwise leave the canvas family (#645).
-        assert_eq!(attrs.style, cryoglyph::Style::Normal);
+        assert_eq!(attrs.style, cryoglyph::Style::Italic);
         assert_eq!(color.r(), 64);
         assert_eq!(color.g(), 128);
         assert_eq!(color.b(), 191);
@@ -578,6 +577,48 @@ mod tests {
         let anchored = anchored_top_left_px(&item, [100.0, 50.0], [20.0, 10.0]);
         assert!((anchored[0] - 110.0).abs() < 0.0001);
         assert!((anchored[1] - 30.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn an_italic_item_shapes_with_the_italic_canvas_face() {
+        let mut fs = cryoglyph::FontSystem::new_with_fonts(
+            [
+                include_bytes!("../../tests/fonts/Iosevka-Regular.ttf").as_slice(),
+                include_bytes!("../../tests/fonts/Iosevka-Italic.ttf").as_slice(),
+            ]
+            .map(|font| cryoglyph::fontdb::Source::Binary(std::sync::Arc::new(font))),
+        );
+        let face_of = |fs: &mut cryoglyph::FontSystem, italic: bool| {
+            let item = TextItem {
+                content: "NET_A".to_string(),
+                position: [0.0, 0.0],
+                size_mm: 1.0,
+                color: [1.0; 4],
+                bold: false,
+                italic,
+                rotation: 0.0,
+                h_align: TextHAlign::Left,
+                v_align: TextVAlign::Top,
+            };
+            let attrs = attrs_for_item(&item, "Iosevka");
+            let metrics = cryoglyph::Metrics::new(20.0, 24.0);
+            let buffer = shaped_buffer(fs, &item, metrics, &attrs, [800.0, 600.0]);
+            let font_id = buffer.layout_runs().next().expect("one run").glyphs[0].font_id;
+            let face = fs.db().face(font_id).expect("shaped face");
+            (face.post_script_name.clone(), face.style)
+        };
+
+        assert_eq!(
+            face_of(&mut fs, true),
+            (
+                "Iosevka-Italic".to_string(),
+                cryoglyph::fontdb::Style::Italic
+            )
+        );
+        assert_eq!(
+            face_of(&mut fs, false),
+            ("Iosevka".to_string(), cryoglyph::fontdb::Style::Normal)
+        );
     }
 
     fn test_font_system() -> cryoglyph::FontSystem {
