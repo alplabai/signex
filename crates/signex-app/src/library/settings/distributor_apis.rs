@@ -29,7 +29,7 @@ pub fn view<'a>(
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
-    let hover = crate::styles::ti(tokens.hover);
+    let hover_bg = crate::styles::tokens::hover_overlay(tokens);
 
     let section_title = |title: &'static str| -> Element<'_, LibraryMessage> {
         text(title).size(11).color(muted).into()
@@ -56,13 +56,13 @@ pub fn view<'a>(
         digikey_actions = digikey_actions.push(secondary_btn(
             "Cancel",
             LibraryMessage::Settings(SettingsMsg::DigiKeyCancel),
-            text_c,
-            border,
+            tokens,
         ));
     } else {
         digikey_actions = digikey_actions.push(primary_btn(
             "Connect via OAuth",
             LibraryMessage::Settings(SettingsMsg::DigiKeyConnect),
+            tokens,
         ));
     }
     let digikey_section = column![
@@ -104,7 +104,11 @@ pub fn view<'a>(
                 .padding([4, 8])
                 .size(12),
             Space::new().width(8),
-            primary_btn("Test", LibraryMessage::Settings(SettingsMsg::MouserTest)),
+            primary_btn(
+                "Test",
+                LibraryMessage::Settings(SettingsMsg::MouserTest),
+                tokens
+            ),
         ]
         .align_y(iced::Alignment::Center),
         Space::new().height(4),
@@ -130,35 +134,13 @@ pub fn view<'a>(
         let down_enabled = i + 1 < len;
         let mut up_btn = button(container(text("▲").size(10).color(text_c)).padding([1, 6]))
             .padding(0)
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.04,
-                ))),
-                text_color: text_c,
-                border: Border {
-                    width: 1.0,
-                    radius: 2.0.into(),
-                    color: border,
-                },
-                ..iced::widget::button::Style::default()
-            });
+            .style(crate::styles::outline_button(tokens));
         if up_enabled {
             up_btn = up_btn.on_press(LibraryMessage::Settings(SettingsMsg::PreferenceUp(*src)));
         }
         let mut down_btn = button(container(text("▼").size(10).color(text_c)).padding([1, 6]))
             .padding(0)
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.04,
-                ))),
-                text_color: text_c,
-                border: Border {
-                    width: 1.0,
-                    radius: 2.0.into(),
-                    color: border,
-                },
-                ..iced::widget::button::Style::default()
-            });
+            .style(crate::styles::outline_button(tokens));
         if down_enabled {
             down_btn =
                 down_btn.on_press(LibraryMessage::Settings(SettingsMsg::PreferenceDown(*src)));
@@ -175,9 +157,7 @@ pub fn view<'a>(
         .padding([3, 6])
         .align_y(iced::Alignment::Center);
         let bg_row = container(row_widget).style(move |_: &Theme| iced::widget::container::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                hover.r, hover.g, hover.b, 0.06,
-            ))),
+            background: Some(iced::Background::Color(hover_bg)),
             border: Border {
                 width: 1.0,
                 radius: 3.0.into(),
@@ -201,7 +181,7 @@ pub fn view<'a>(
         order_col = order_col.push(
             text(format!("Could not save the order: {error}"))
                 .size(10)
-                .color(iced::Color::from_rgb(0.90, 0.40, 0.40)),
+                .color(crate::styles::tokens::danger(tokens)),
         );
     }
 
@@ -244,43 +224,26 @@ fn divider(color: iced::Color) -> Element<'static, LibraryMessage> {
         .into()
 }
 
-fn primary_btn<'a>(label: &'a str, message: LibraryMessage) -> Element<'a, LibraryMessage> {
-    button(container(text(label.to_string()).size(11).color(iced::Color::WHITE)).padding([4, 12]))
+fn primary_btn<'a>(
+    label: &'a str,
+    message: LibraryMessage,
+    tokens: &ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    let on_accent = crate::styles::tokens::on_accent(tokens);
+    button(container(text(label.to_string()).size(11).color(on_accent)).padding([4, 12]))
         .on_press(message)
-        .style(|_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgb(
-                0.00, 0.47, 0.84,
-            ))),
-            text_color: iced::Color::WHITE,
-            border: Border {
-                width: 0.0,
-                radius: 3.0.into(),
-                ..Border::default()
-            },
-            ..iced::widget::button::Style::default()
-        })
+        .style(crate::styles::accent_button(tokens))
         .into()
 }
 
 fn secondary_btn<'a>(
     label: &'a str,
     message: LibraryMessage,
-    text_c: iced::Color,
-    border: iced::Color,
+    tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
+    let text_c = crate::styles::ti(tokens.text);
     button(container(text(label.to_string()).size(11).color(text_c)).padding([4, 12]))
         .on_press(message)
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.04,
-            ))),
-            text_color: text_c,
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
-            },
-            ..iced::widget::button::Style::default()
-        })
+        .style(crate::styles::outline_button(tokens))
         .into()
 }
