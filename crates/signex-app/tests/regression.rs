@@ -109,6 +109,9 @@ mod startup_open;
 #[path = "regression/history_load_failure.rs"]
 mod history_load_failure;
 
+#[path = "regression/history_reload_repair.rs"]
+mod history_reload_repair;
+
 #[path = "regression/library_browser_cell_commit.rs"]
 mod library_browser_cell_commit;
 

@@ -501,9 +501,22 @@ impl FootprintEditorState {
     /// user opened. The editor opens on the first footprint in the
     /// file. The caller is responsible for confirming the file is
     /// non-empty before this call.
-    pub fn new(path: PathBuf, mut file: signex_library::FootprintFile) -> Self {
+    pub fn new(path: PathBuf, file: signex_library::FootprintFile) -> Self {
+        Self::build(path, file, true)
+    }
+
+    /// Rebuild the editor from a file re-read off disk (a History restore).
+    /// Behaves like [`Self::new`] except the load repairs are not logged
+    /// again: the user was already told when the file was opened.
+    /// `dirty` is still `true` when
+    /// something was repaired, so the caller must mirror it into the tab.
+    pub fn reloaded(path: PathBuf, file: signex_library::FootprintFile) -> Self {
+        Self::build(path, file, false)
+    }
+
+    fn build(path: PathBuf, mut file: signex_library::FootprintFile, log_repairs: bool) -> Self {
         let active_idx = 0;
-        let repaired = Self::take_load_repairs(&path, &mut file);
+        let repaired = Self::take_load_repairs(&path, &mut file, log_repairs);
         let state = crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
             &file.footprints[active_idx],
         );
@@ -526,9 +539,13 @@ impl FootprintEditorState {
     /// Report, once, what the loader repaired (the Messages panel names it)
     /// and clear the transient record so history snapshots never carry it.
     /// Returns whether anything was repaired. Opening a footprint into an
-    /// editor is the only place this logs; previews, mounts and history
-    /// reads stay quiet.
-    fn take_load_repairs(path: &std::path::Path, file: &mut signex_library::FootprintFile) -> bool {
+    /// editor ([`Self::new`]) is the only place this logs; previews, mounts,
+    /// history reads and [`Self::reloaded`] pass `log_repairs = false`.
+    fn take_load_repairs(
+        path: &std::path::Path,
+        file: &mut signex_library::FootprintFile,
+        log_repairs: bool,
+    ) -> bool {
         use signex_library::LoadRepair;
         let mut moved: Vec<String> = Vec::new();
         let mut removed = 0usize;
@@ -540,7 +557,7 @@ impl FootprintEditorState {
                 }
             }
         }
-        if !moved.is_empty() {
+        if log_repairs && !moved.is_empty() {
             crate::diagnostics::log_warning(format!(
                 "{}: moved the end point of {} arc(s) onto its circle (centre and start \
                  unchanged); save the file to keep the repair: {}",
@@ -549,7 +566,7 @@ impl FootprintEditorState {
                 moved.join(", ")
             ));
         }
-        if removed > 0 {
+        if log_repairs && removed > 0 {
             crate::diagnostics::log_warning(format!(
                 "{}: removed {removed} dangling sketch reference(s) (entities/constraints/arrays); \
                  save the file to keep the repair",
