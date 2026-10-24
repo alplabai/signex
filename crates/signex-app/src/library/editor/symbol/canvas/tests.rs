@@ -587,3 +587,258 @@ fn a_pending_fit_does_not_swallow_the_event_that_triggers_the_measurement() {
         "the release still committed the drag gesture"
     );
 }
+
+// ── Designator / value fields (#170) ─────────────────────────────
+
+/// Body rectangle with an explicitly placed designator, so the field
+/// tests do not depend on the default-placement rule.
+fn body_with_designator_at(pos: [f64; 2]) -> Symbol {
+    let mut s = Symbol::empty("T");
+    s.graphics.push(rectangle([0.0, -5.08], [10.16, 5.08]));
+    s.designator_pos = Some(pos);
+    s
+}
+
+#[test]
+fn pressing_the_designator_text_selects_the_reference_field() {
+    let mut rig = Rig::new(body_with_designator_at([0.0, 7.62]));
+
+    rig.press((0.5, 7.0));
+
+    assert_eq!(
+        rig.editor.selected,
+        Some(state::SymbolSelection::Field(state::FieldKey::Reference))
+    );
+}
+
+#[test]
+fn an_untouched_symbol_has_pressable_fields_at_the_default_placement() {
+    let mut s = Symbol::empty("T");
+    s.graphics.push(rectangle([0.0, -5.08], [10.16, 5.08]));
+    let mut rig = Rig::new(s);
+
+    // Designator above the top-left of the body, value below the
+    // bottom-left (the text hangs down from its anchor).
+    rig.press((0.5, 6.4));
+    assert_eq!(
+        rig.editor.selected,
+        Some(state::SymbolSelection::Field(state::FieldKey::Reference))
+    );
+    rig.release((0.5, 6.4));
+    rig.press((0.5, -5.6));
+    assert_eq!(
+        rig.editor.selected,
+        Some(state::SymbolSelection::Field(state::FieldKey::Value))
+    );
+}
+
+#[test]
+fn dragging_the_designator_moves_it_by_the_snapped_delta_and_stores_the_position() {
+    let mut rig = Rig::new(body_with_designator_at([0.0, 7.62]));
+    assert_eq!(rig.editor.primitive().designator_pos, Some([0.0, 7.62]));
+
+    rig.drag((0.5, 7.0), (3.04, 7.0));
+
+    let pos = rig.editor.primitive().designator_pos.expect("stored");
+    assert!(
+        (pos[0] - 2.54).abs() < 1e-9 && (pos[1] - 7.62).abs() < 1e-9,
+        "expected [2.54, 7.62], got {pos:?}"
+    );
+    assert!(rig.editor.dirty);
+    assert_eq!(rig.editor.undo_snapshots.len(), 1, "one drag, one undo");
+    assert_eq!(rig.editor.primitive().comment_pos, None, "value untouched");
+}
+
+#[test]
+fn undo_restores_the_designator_position_before_the_drag() {
+    let mut rig = Rig::new(body_with_designator_at([0.0, 7.62]));
+    rig.drag((0.5, 7.0), (3.04, 7.0));
+    assert_ne!(rig.editor.primitive().designator_pos, Some([0.0, 7.62]));
+
+    apply_symbol_primitive_edit(
+        &mut rig.editor,
+        crate::library::messages::SymbolEditorMsg::Undo,
+    );
+
+    assert_eq!(rig.editor.primitive().designator_pos, Some([0.0, 7.62]));
+}
+
+#[test]
+fn the_designators_filter_pill_gates_picking_the_designator() {
+    let mut rig = Rig::new(body_with_designator_at([0.0, 7.62]));
+    rig.editor.selection_filter.designators = false;
+
+    rig.press((0.5, 7.0));
+    assert_eq!(rig.editor.selected, None, "filtered-out fields are inert");
+    rig.release((0.5, 7.0));
+
+    rig.editor.selection_filter.designators = true;
+    rig.press((0.5, 7.0));
+    assert_eq!(
+        rig.editor.selected,
+        Some(state::SymbolSelection::Field(state::FieldKey::Reference))
+    );
+}
+
+#[test]
+fn a_pin_under_the_designator_wins_the_press() {
+    let mut s = body_with_designator_at([0.0, 7.62]);
+    // Tip sits inside the designator's text box.
+    s.pins.push(pin("1", 0.5, 7.0, PinOrientation::Left));
+    let mut rig = Rig::new(s);
+
+    rig.press((0.5, 7.0));
+
+    assert_eq!(rig.editor.selected, Some(state::SymbolSelection::Pin(0)));
+}
+
+/// The renderer snapshot the canvas would draw for the rig's symbol.
+fn snapshot_of(rig: &Rig) -> (SymbolCanvas<'_>, RendererSnapshot) {
+    let editor = &rig.editor;
+    let canvas = SymbolCanvas::new(
+        editor.primitive(),
+        editor.selected.clone(),
+        editor.tool,
+        &editor.polygon_vertices,
+        editor.active_part,
+        false,
+        &editor.camera,
+        1.27,
+        true,
+        crate::render_config::GridStyle::default(),
+        true,
+        Color::WHITE,
+        Color::from_rgb(0.2, 0.4, 0.9),
+        Color::BLACK,
+        Color::BLACK,
+        Color::BLACK,
+    );
+    let snapshot = canvas.build_symbol_renderer_snapshot(&editor.selected, 1.0);
+    (canvas, snapshot)
+}
+
+fn body_only() -> Symbol {
+    let mut s = Symbol::empty("T");
+    s.graphics.push(rectangle([0.0, -5.08], [10.16, 5.08]));
+    s
+}
+
+#[test]
+fn the_snapshot_draws_both_fields_with_their_text_and_default_positions() {
+    let mut rig = Rig::new(body_only());
+    let (canvas, snap) = snapshot_of(&rig);
+    let texts = &snap.reference_value_texts;
+    assert_eq!(texts.len(), 2, "designator + value are drawn");
+    assert_eq!(texts[0].content, "U?");
+    assert_eq!(texts[0].position, [0.0, 5.08 + 0.5 + 1.27]);
+    assert_eq!(texts[1].content, "*");
+    assert_eq!(texts[1].position, [0.0, -5.08 - 0.5]);
+    assert_eq!(texts[0].color, to_rgba(canvas.text_color), "unselected");
+
+    // An empty comment falls back to the placeholder.
+    rig.editor.primitive_mut().comment.clear();
+    let (_, snap) = snapshot_of(&rig);
+    assert_eq!(snap.reference_value_texts[1].content, "Value");
+}
+
+#[test]
+fn the_snapshot_highlights_a_selected_field_and_all() {
+    let mut rig = Rig::new(body_only());
+    rig.editor.selected = Some(state::SymbolSelection::Field(state::FieldKey::Reference));
+    let (canvas, snap) = snapshot_of(&rig);
+    let sel = to_rgba(canvas.selected_color);
+    assert_eq!(snap.reference_value_texts[0].color, sel);
+    assert_ne!(
+        snap.reference_value_texts[1].color, sel,
+        "value stays plain"
+    );
+
+    rig.editor.selected = Some(state::SymbolSelection::All);
+    let (_, snap) = snapshot_of(&rig);
+    assert!(snap.reference_value_texts.iter().all(|t| t.color == sel));
+}
+
+#[test]
+fn a_click_that_does_not_move_a_default_field_changes_nothing() {
+    let mut rig = Rig::new(body_only());
+
+    // Press on the default designator, jitter within one snap step.
+    rig.press((0.5, 6.4));
+    rig.moved((0.3, 6.4));
+    rig.release((0.3, 6.4));
+
+    assert_eq!(
+        rig.editor.selected,
+        Some(state::SymbolSelection::Field(state::FieldKey::Reference))
+    );
+    assert_eq!(rig.editor.primitive().designator_pos, None);
+    assert!(!rig.editor.dirty, "nothing moved, nothing to save");
+    assert!(rig.editor.undo_snapshots.is_empty());
+}
+
+#[test]
+fn a_designator_inside_the_body_wins_over_the_graphic_under_it() {
+    let mut s = body_only();
+    s.designator_pos = Some([1.0, 3.0]);
+    let mut rig = Rig::new(s);
+
+    rig.press((1.5, 2.4));
+
+    assert_eq!(
+        rig.editor.selected,
+        Some(state::SymbolSelection::Field(state::FieldKey::Reference))
+    );
+}
+
+/// Body with a pin, one stored designator and a default-placed value.
+fn body_with_pin_and_fields() -> Symbol {
+    let mut s = body_only();
+    s.pins.push(pin("1", 0.0, 0.0, PinOrientation::Left));
+    s.designator_pos = Some([0.0, 7.62]);
+    s
+}
+
+/// Drag the pin by (2.54, 0) and check both fields travelled with it.
+fn assert_whole_body_drag_moves_both_fields(rig: &mut Rig) {
+    let value_before = state::field_pos(rig.editor.primitive(), state::FieldKey::Value, 1);
+    rig.drag((0.0, 0.0), (2.54, 0.0));
+    let sym = rig.editor.primitive();
+    assert_eq!(sym.pins[0].position, [2.54, 0.0], "the body moved");
+    assert_eq!(sym.designator_pos, Some([2.54, 7.62]), "stored field");
+    let value_after = state::field_pos(sym, state::FieldKey::Value, 1);
+    assert_eq!(
+        value_after,
+        [value_before[0] + 2.54, value_before[1]],
+        "default field"
+    );
+}
+
+#[test]
+fn an_all_selection_drag_moves_stored_and_default_fields_together() {
+    let mut rig = Rig::new(body_with_pin_and_fields());
+    rig.editor.selected = Some(state::SymbolSelection::All);
+    assert_whole_body_drag_moves_both_fields(&mut rig);
+}
+
+#[test]
+fn a_box_over_the_whole_body_moves_the_fields_with_it() {
+    let mut rig = Rig::new(body_with_pin_and_fields());
+    // With every pill on a full-body box collapses to `All`; a pill that
+    // matches nothing here keeps it a `Multiple` covering the whole body.
+    rig.editor.selection_filter.texts = false;
+    rig.press((-6.0, -9.0));
+    rig.moved((14.0, 6.0));
+    rig.release((14.0, 6.0));
+    assert!(matches!(
+        rig.editor.selected,
+        Some(state::SymbolSelection::Multiple { .. })
+    ));
+    assert_whole_body_drag_moves_both_fields(&mut rig);
+}
+
+#[test]
+fn a_partial_selection_drag_leaves_the_fields_alone() {
+    let mut rig = Rig::new(body_with_pin_and_fields());
+    rig.drag((0.0, 0.0), (2.54, 0.0));
+    assert_eq!(rig.editor.primitive().designator_pos, Some([0.0, 7.62]));
+}
