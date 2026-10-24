@@ -130,6 +130,7 @@ fn ctx(
         child_sheets: Vec::new(),
         nets: Vec::new(),
         children: HashMap::new(),
+        key: None,
     }
 }
 

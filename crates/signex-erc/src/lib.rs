@@ -220,21 +220,26 @@ pub fn run_with_dsl(snapshot: &SchematicSheet, dsl_rules: &[engine::EvalFn]) -> 
 }
 
 /// Run ERC for a schematic in the context of a whole project. Cross-sheet
-/// rules consult `resolved` — THIS sheet's own `ChildSheet.filename ->
-/// SheetKey` submap — resolved through the shared `sheets` table. Pass an
-/// empty `resolved` map for top-only runs.
+/// rules consult `resolutions` — the per-parent `ChildSheet.filename ->
+/// SheetKey` submaps, outer-keyed by the parent's `SheetKey` (the shape of
+/// `signex_net::ProjectGraph::resolved`) — resolved through the shared
+/// `sheets` table, recursively, so grandchildren are seen too. `own_key` is
+/// `snapshot`'s key; pass `None` (or empty `resolutions`) for top-only runs.
 ///
-/// `resolved` must be the caller's per-parent submap for `snapshot`, not a
-/// single project-wide map: keying it that way is what stops two parents in
-/// different directories that reference a child by the same filename string
-/// from resolving to the wrong file (#466), and is what keeps this in step
-/// with `signex_net::build_project_netlist`, which takes the same shape.
+/// Per-parent submaps, not one project-wide filename map, are what stop two
+/// parents in different directories that reference a child by the same
+/// filename string from resolving to the wrong file (#466), and keep this in
+/// step with `signex_net::build_project_netlist`.
 pub fn run_with_project(
     snapshot: &SchematicSheet,
-    resolved: &std::collections::HashMap<String, signex_net::SheetKey>,
+    own_key: Option<&signex_net::SheetKey>,
+    resolutions: &std::collections::HashMap<
+        signex_net::SheetKey,
+        std::collections::HashMap<String, signex_net::SheetKey>,
+    >,
     sheets: &std::collections::HashMap<signex_net::SheetKey, SchematicSheet>,
 ) -> Vec<Violation> {
-    let ctx = ErcContext::from_snapshot_with_children(snapshot, resolved, sheets);
+    let ctx = ErcContext::from_snapshot_with_children(snapshot, own_key, resolutions, sheets);
     engine::run_all(&ctx)
         .into_iter()
         .map(Violation::from)
@@ -242,14 +247,18 @@ pub fn run_with_project(
 }
 
 /// Run project-scoped ERC with built-in rules plus caller-provided DSL rules.
-/// See [`run_with_project`] for what `resolved` / `sheets` must be.
+/// See [`run_with_project`] for what `own_key` / `resolutions` / `sheets` must be.
 pub fn run_with_project_and_dsl(
     snapshot: &SchematicSheet,
-    resolved: &std::collections::HashMap<String, signex_net::SheetKey>,
+    own_key: Option<&signex_net::SheetKey>,
+    resolutions: &std::collections::HashMap<
+        signex_net::SheetKey,
+        std::collections::HashMap<String, signex_net::SheetKey>,
+    >,
     sheets: &std::collections::HashMap<signex_net::SheetKey, SchematicSheet>,
     dsl_rules: &[engine::EvalFn],
 ) -> Vec<Violation> {
-    let ctx = ErcContext::from_snapshot_with_children(snapshot, resolved, sheets);
+    let ctx = ErcContext::from_snapshot_with_children(snapshot, own_key, resolutions, sheets);
     engine::run_all_with_dsl(&ctx, dsl_rules)
         .into_iter()
         .map(Violation::from)

@@ -88,26 +88,26 @@ impl Signex {
             snapshots_by_path.entry(path).or_insert(sheet);
         }
 
-        // Second pass: run ERC with each sheet's own resolution submap so
+        // Second pass: run ERC with the per-parent resolution table so
         // BadHierSheetPin can cross-check each sheet symbol against the
         // actual child schematic — the same file the netlist stitcher
-        // resolved for that same reference.
-        let empty_resolved: std::collections::HashMap<String, signex_net::SheetKey> =
-            std::collections::HashMap::new();
+        // resolved for that same reference — and cross-sheet rules can walk
+        // the whole subtree.
         for (path, snapshot) in &snapshots_by_path {
             let key = crate::app::project_sheets::sheet_key(path, base_dir.as_deref());
-            let resolved = graph.resolved.get(&key).unwrap_or(&empty_resolved);
             let violations = if let Some(eval_fns) = dsl_eval_fns.as_ref() {
                 apply_overrides(signex_erc::run_with_project_and_dsl(
                     snapshot,
-                    resolved,
+                    Some(&key),
+                    &graph.resolved,
                     &graph.sheets,
                     eval_fns,
                 ))
             } else {
                 apply_overrides(signex_erc::run_with_project(
                     snapshot,
-                    resolved,
+                    Some(&key),
+                    &graph.resolved,
                     &graph.sheets,
                 ))
             };
