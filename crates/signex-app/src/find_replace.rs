@@ -1,5 +1,5 @@
 use iced::widget::{Space, button, column, container, row, scrollable, text, text_input};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::{Background, Border, Element, Length, Theme};
 use signex_engine::TextTarget;
 use signex_types::schematic::SelectedItem;
 use signex_types::theme::ThemeTokens;
@@ -216,7 +216,7 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
     .width(Length::Fill)
     .height(Length::Fill)
     .style(|_: &Theme| container::Style {
-        background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 0.5))),
+        background: Some(Background::Color(crate::styles::tokens::scrim(0.5))),
         ..container::Style::default()
     })
     .into()
