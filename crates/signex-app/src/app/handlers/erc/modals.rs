@@ -395,21 +395,21 @@ pub(crate) fn detached_modal_settings(size: iced::Size) -> iced::window::Setting
 
 #[cfg(test)]
 mod tests {
-    use super::{detached_modal_settings, move_offset_mm};
+    use super::{detached_modal_settings, move_offset};
 
     /// #828 -- `inf` / `nan` / an overflow must not become a move offset.
     #[test]
     fn move_offset_refuses_non_finite_text() {
         for bad in ["nan", "NaN", "inf", "-inf", "1e999", "-1e999"] {
-            assert_eq!(move_offset_mm(bad), 0.0, "{bad:?}");
+            assert_eq!(move_offset(bad), None, "{bad:?}");
         }
     }
 
     #[test]
     fn move_offset_reads_ordinary_text() {
-        assert_eq!(move_offset_mm(" 2.5 "), 2.5);
-        assert_eq!(move_offset_mm("-1"), -1.0);
-        assert_eq!(move_offset_mm(""), 0.0);
+        assert_eq!(move_offset(" 2.5 "), Some(2.5));
+        assert_eq!(move_offset("-1"), Some(-1.0));
+        assert_eq!(move_offset(""), Some(0.0));
     }
 
     #[test]
