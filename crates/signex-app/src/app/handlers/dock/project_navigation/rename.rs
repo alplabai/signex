@@ -252,7 +252,23 @@ impl Signex {
                 .dirty_paths
                 .insert(new_path.to_path_buf());
         }
+        self.rekey_page_setup(old_path, new_path);
         self.rekey_undocked_windows(old_path, new_path);
+    }
+
+    /// Carry the remembered PDF page setup (and an open preview's source)
+    /// over to the document's new path.
+    pub(crate) fn rekey_page_setup(
+        &mut self,
+        old_path: &std::path::Path,
+        new_path: &std::path::Path,
+    ) {
+        crate::app::state::rekey_page_setup(
+            &mut self.document_state.page_setup_memory,
+            self.document_state.preview.as_mut(),
+            old_path,
+            new_path,
+        );
     }
 
     /// Point undocked-tab windows at the renamed path so the window keeps
@@ -359,6 +375,7 @@ impl Signex {
         if self.document_state.dirty_paths.remove(&from) {
             self.document_state.dirty_paths.insert(to.clone());
         }
+        self.rekey_page_setup(&from, &to);
 
         self.ui_state.rename_dialog = None;
         self.refresh_panel_ctx();

@@ -123,12 +123,17 @@ impl Signex {
             variants,
             quality: initial_quality,
             raster_generation: 0,
+            // Filed under this document on close, wherever the active tab
+            // has moved to by then.
+            source_path: self.document_state.active_path.clone(),
         };
         // The first render runs in the background like every later one; the
         // modal opens at once with an empty page area.
-        let generation = preview.begin_raster();
+        let (generation, latest) = self.document_state.raster_queue.begin();
+        preview.begin_raster(generation);
         let job = PreviewRasterJob::new(
             generation,
+            latest,
             ctx,
             PreviewOptions {
                 pdf: preview.pdf_options.clone(),
@@ -140,7 +145,7 @@ impl Signex {
         // window so the user can drag it off the app's client area —
         // matches the Annotate / ERC modals.
         Task::batch([
-            job.into_task(),
+            self.launch_raster(job),
             self.handle_detach_modal(crate::app::state::ModalId::PrintPreview),
         ])
     }
@@ -297,25 +302,31 @@ impl Signex {
     }
 
     pub(crate) fn handle_print_preview_close(&mut self) -> iced::Task<Message> {
-        // Keep the page setup for this document so the modal reopens with it.
-        if let (Some(preview), Some(path)) = (
-            self.document_state.preview.as_ref(),
-            self.document_state.active_path.clone(),
-        ) {
+        self.dismiss_print_preview();
+        // Close the detached OS window if the modal was popped out.
+        self.close_detached_modal(crate::app::state::ModalId::PrintPreview)
+    }
+
+    /// The one place the preview ends, whether through the modal's own close
+    /// or the OS window's X (`SecondaryWindowClosed`): remember the page setup
+    /// under the document the preview was opened for, cancel any render still
+    /// running, and drop the state.
+    pub(crate) fn dismiss_print_preview(&mut self) {
+        if let Some(preview) = self.document_state.preview.take()
+            && let Some(path) = preview.source_path.clone()
+        {
             let remembered = crate::app::state::RememberedPageSetup::capture(&preview.pdf_options);
             self.document_state
                 .page_setup_memory
                 .insert(path, remembered);
         }
-        self.document_state.preview = None;
+        self.document_state.raster_queue.supersede_all();
         // Reset the modal's drag offset so the next open re-centres
         // — matches Annotate / ERC close behaviour.
         self.ui_state
             .modal_offsets
             .remove(&crate::app::state::ModalId::PrintPreview);
         self.ui_state.modal_dragging = None;
-        // Close the detached OS window if the modal was popped out.
-        self.close_detached_modal(crate::app::state::ModalId::PrintPreview)
     }
 
     /// Public alias so the dispatcher can poke a re-rasterise after
@@ -329,7 +340,7 @@ impl Signex {
     /// The returned `Task` delivers `PrintPreviewMsg::Rasterized`.
     pub(super) fn rerasterize_print_preview(&mut self) -> Task<Message> {
         match self.preview_raster_job() {
-            Some(job) => job.into_task(),
+            Some(job) => self.launch_raster(job),
             None => Task::none(),
         }
     }
@@ -374,10 +385,11 @@ impl Signex {
         // Altium's "you must pick at least one file" UX. We render
         // a still-valid empty preview so the modal stays usable.
         ctx.sheets.retain(|sheet| file_filter.contains(&sheet.path));
-        let preview = self.document_state.preview.as_mut()?;
         // Taken even when nothing is rendered below: a render still in flight
         // for the superseded sheet set must not land on the placeholder.
-        let generation = preview.begin_raster();
+        let (generation, latest) = self.document_state.raster_queue.begin();
+        let preview = self.document_state.preview.as_mut()?;
+        preview.begin_raster(generation);
         if ctx.sheets.is_empty() {
             // Don't blow up with a "no pages" error in the empty-set
             // case — the user is mid-toggle. Drop the preview pages
@@ -393,6 +405,7 @@ impl Signex {
         log_if_preview_downscaled(&pdf_opts, preview_dpi);
         Some(PreviewRasterJob::new(
             generation,
+            latest,
             ctx,
             PreviewOptions {
                 pdf: pdf_opts,

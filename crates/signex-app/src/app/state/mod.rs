@@ -18,7 +18,9 @@ pub(crate) mod volume_case;
 
 pub use interaction::InteractionState;
 pub use pdf_page_setup::PageSetupInputs;
-pub use pdf_preview_raster::{PageSetupMemory, RasterOutcome, RememberedPageSetup};
+pub use pdf_preview_raster::{
+    PageSetupMemory, RasterOutcome, RasterQueue, RememberedPageSetup, rekey_page_setup,
+};
 pub use ui::UiState;
 
 pub struct Signex {
@@ -477,6 +479,8 @@ pub struct DocumentState {
     /// in the PDF export modal, restored when it reopens for the same
     /// document. Session-only; never written to disk.
     pub page_setup_memory: PageSetupMemory,
+    /// Generation counter and in-flight job of the preview renderer.
+    pub raster_queue: RasterQueue,
     /// Pending BOM options stashed from the BOM preview modal while
     /// the file picker is running. Without this, the user's column /
     /// grouping / variant / include-DNP picks in the preview would
@@ -723,6 +727,10 @@ pub struct PreviewState {
     /// Generation of the newest background rasterisation request; results
     /// tagged with an older one are stale and discarded.
     pub raster_generation: u64,
+    /// The document the preview was opened for, recorded at open. The
+    /// remembered page setup is filed under this, not whichever tab is
+    /// active when the preview closes.
+    pub source_path: Option<PathBuf>,
 }
 
 impl PreviewState {

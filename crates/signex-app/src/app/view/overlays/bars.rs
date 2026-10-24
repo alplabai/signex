@@ -762,6 +762,7 @@ mod tests {
             variants: Vec::new(),
             quality: crate::app::state::PdfQuality::Draft72,
             raster_generation: 0,
+            source_path: None,
         }
     }
 

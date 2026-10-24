@@ -506,3 +506,74 @@ fn page_setup_is_restored_when_the_modal_reopens_for_the_same_document() {
     assert_eq!(memory.len(), 1);
     assert!(!memory.contains_key(&PathBuf::from("other.snxsch")));
 }
+
+/// The generation counter must not restart with each preview: a render left
+/// over from a closed preview would otherwise match the reopened one's.
+#[test]
+fn a_late_result_from_a_closed_preview_cannot_land_on_the_reopened_one() {
+    let mut app = app_with_sheet("A4");
+    let stale_pages = preview(&app).pages.clone();
+    assert!(!stale_pages.is_empty());
+    let first_generation = preview(&app).raster_generation;
+    send(&mut app, PrintPreviewMsg::Close);
+
+    // Reopen, but hold back the new preview's own render.
+    let reopen = app.update(Message::PrintPreview(PrintPreviewMsg::Requested));
+    assert_ne!(preview(&app).raster_generation, first_generation);
+    assert!(preview(&app).pages.is_empty());
+
+    // The old session's result arrives first.
+    let late = Message::PrintPreview(PrintPreviewMsg::Rasterized {
+        generation: first_generation,
+        pages: std::sync::Arc::new(stale_pages),
+    });
+    let follow_up = app.update(late);
+    drive(&mut app, follow_up);
+    assert!(
+        preview(&app).pages.is_empty(),
+        "a previous session's render was shown as this preview"
+    );
+
+    drive(&mut app, reopen);
+    assert!(!preview(&app).pages.is_empty());
+}
+
+/// Closing the preview's OS window is the usual close path; it must keep the
+/// page setup exactly like the modal's own Close.
+#[test]
+fn closing_the_os_window_remembers_the_page_setup() {
+    use signex_app::app::WindowMsg;
+    let mut app = app_with_sheet("A4");
+    // Opening the preview registered its detached OS window.
+    let window = *app
+        .ui_state
+        .windows
+        .keys()
+        .next()
+        .expect("the preview opens as a detached window");
+    send(&mut app, PrintPreviewMsg::SetPageSize(PageSize::IsoA3));
+
+    let closed = app.update(Message::Window(WindowMsg::SecondaryWindowClosed(window)));
+    drop(run(closed));
+    assert!(app.document_state.preview.is_none());
+
+    send(&mut app, PrintPreviewMsg::Requested);
+    assert_eq!(preview(&app).pdf_options.page_size, PageSize::IsoA3);
+}
+
+/// The setup is filed under the document the preview was opened for, not
+/// whichever tab is active when it closes.
+#[test]
+fn page_setup_is_filed_under_the_document_the_preview_was_opened_for() {
+    let mut app = app_with_sheet("A4");
+    let opened_for = PathBuf::from("page-setup.snxsch");
+    let other = PathBuf::from("other.snxsch");
+    send(&mut app, PrintPreviewMsg::SetPageSize(PageSize::IsoA3));
+
+    app.document_state.active_path = Some(other.clone());
+    send(&mut app, PrintPreviewMsg::Close);
+
+    let memory = &app.document_state.page_setup_memory;
+    assert!(memory.contains_key(&opened_for));
+    assert!(!memory.contains_key(&other));
+}
