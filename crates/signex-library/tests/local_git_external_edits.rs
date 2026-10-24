@@ -269,7 +269,8 @@ fn same_length_same_mtime_external_edit_is_not_overwritten_by_a_mutation() {
 /// Hold the write lock of the library at `file` from this thread, as another
 /// Signex process would while it writes (#832).
 fn hold_write_lock(file: &Path) -> std::fs::File {
-    let lock = signex_library::write_lock_path(file.parent().unwrap(), file);
+    let lock = signex_library::write_lock_path(file);
+    std::fs::create_dir_all(lock.parent().unwrap()).unwrap();
     let handle = std::fs::OpenOptions::new()
         .create(true)
         .truncate(false)
@@ -344,6 +345,95 @@ fn concurrent_writers_on_one_library_lose_no_rows() {
                 for i in 0..10 {
                     adapter
                         .insert_row("R", row(&format!("{who}-{i}"), lib), "concurrent")
+                        .unwrap();
+                }
+            })
+        })
+        .collect();
+    for writer in writers {
+        writer.join().unwrap();
+    }
+
+    let check = LocalGitAdapter::open(&file).unwrap();
+    assert_eq!(pns(&check, "R").len(), 21, "{:?}", pns(&check, "R"));
+}
+
+/// #892 review: a library edited before version control has a hidden lock
+/// file next to it; enabling version control must not commit it, and the
+/// lock moves into the git directory from then on.
+#[test]
+fn enabling_version_control_does_not_commit_the_write_lock() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, mounted, lib) = mounted_library(dir.path());
+    mounted.insert_row("R", row("R-1", lib), "seed").unwrap();
+    let library_dir = file.parent().unwrap();
+    assert!(
+        std::fs::read_dir(library_dir)
+            .unwrap()
+            .any(|e| signex_library::is_write_lock_file(&e.unwrap().path())),
+        "precondition: the no-git lock file exists"
+    );
+
+    signex_library::enable_project_version_control(library_dir, false, None).unwrap();
+
+    let repo = git2::Repository::open(library_dir).unwrap();
+    let tree = repo.head().unwrap().peel_to_tree().unwrap();
+    let names: Vec<String> = tree
+        .iter()
+        .filter_map(|e| e.name().ok().map(|n| n.to_string()))
+        .collect();
+    assert!(
+        !names.iter().any(|n| n.ends_with(".signex-writelock")),
+        "the lock file was committed: {names:?}"
+    );
+    assert!(
+        signex_library::write_lock_path(&file).starts_with(repo.path()),
+        "the lock lives in the git directory once version control is on"
+    );
+}
+
+/// #892 review: the same no-lost-rows guarantee with version control on,
+/// where each write also commits under the lock.
+#[test]
+fn concurrent_writers_on_a_versioned_library_lose_no_rows() {
+    let dir = tempfile::tempdir().unwrap();
+    signex_library::git_identity::test_identity::install();
+    let file = dir.path().join("Git").join("Git.snxlib");
+    let library_id = Uuid::now_v7();
+    let manifest = SnxlibManifest {
+        format: FORMAT_TOKEN.into(),
+        library_id,
+        library: LibrarySection {
+            name: "Git".into(),
+            description: None,
+        },
+        mode: LibraryMode::default(),
+        workflow: WorkflowConfig::default(),
+        users: UsersConfig::default(),
+        classes: Vec::new(),
+    };
+    let seed = LocalGitAdapter::init(
+        &file,
+        manifest,
+        LibraryInitOptions {
+            enable_git: true,
+            use_lfs: false,
+        },
+    )
+    .expect("init succeeds");
+    seed.insert_row("R", row("R-0", library_id), "seed")
+        .unwrap();
+    drop(seed);
+
+    let writers: Vec<_> = ["A", "B"]
+        .into_iter()
+        .map(|who| {
+            let file = file.clone();
+            std::thread::spawn(move || {
+                let adapter = LocalGitAdapter::open(&file).unwrap();
+                for i in 0..10 {
+                    adapter
+                        .insert_row("R", row(&format!("{who}-{i}"), library_id), "concurrent")
                         .unwrap();
                 }
             })

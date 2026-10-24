@@ -85,7 +85,9 @@ pub use templates::{ParamKind, ParamSlot, ParameterTemplate, TemplateRegistry, T
 pub use where_used::{UseSite, WhereUsedIndex};
 
 #[cfg(feature = "local-git")]
-pub use adapters::local_git::{DiskStamp, LocalGitAdapter, WRITE_LOCK_WAIT, write_lock_path};
+pub use adapters::local_git::{
+    DiskStamp, LocalGitAdapter, WRITE_LOCK_WAIT, is_write_lock_file, write_lock_path,
+};
 
 /// Project-level "Enable Version Control" helper. Runs
 /// `git2::Repository::init` at `project_dir`, optionally writes a
@@ -176,7 +178,11 @@ pub fn enable_project_version_control(
         .index()
         .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
     index
-        .add_all(["."].iter(), git2::IndexAddOption::DEFAULT, None)
+        .add_all(
+            ["."].iter(),
+            git2::IndexAddOption::DEFAULT,
+            Some(&mut adapters::local_git::skip_write_lock_files),
+        )
         .map_err(|e| LibraryError::Backend(format!("git add .: {e}")))?;
     index
         .write()
