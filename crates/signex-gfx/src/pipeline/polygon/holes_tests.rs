@@ -134,11 +134,12 @@ fn untriangulable_holes_fall_back_to_the_solid_outline() {
     );
 }
 
-/// A hole that reaches the outline breaks the `Zone.holes` invariant
-/// (strictly inside). It must still draw, as the solid outline, rather than
-/// with a wrong partial fill.
+/// Holes that reach the outline break the `Zone.holes` invariant (strictly
+/// inside), and the app drops them before drawing. A direct caller that passes
+/// them anyway still gets the cut-outs, not the solid fallback (#897): two
+/// holes on the same outer edge used to fail the area check.
 #[test]
-fn holes_touching_the_outline_fall_back_to_the_solid_outline() {
+fn holes_touching_the_outline_are_cut_out() {
     let polygon = GpuPolygon {
         vertices: rect(0.0, 0.0, 10.0, 20.0),
         holes: vec![rect(6.0, 4.0, 10.0, 6.0), rect(6.0, 12.0, 10.0, 14.0)],
@@ -147,8 +148,8 @@ fn holes_touching_the_outline_fall_back_to_the_solid_outline() {
     };
     let total = filled_area(&polygon);
     assert!(
-        (total - 200.0).abs() < 1e-3,
-        "expected the solid fill, got {total}"
+        (total - 184.0).abs() < 1e-3,
+        "expected outline minus both holes, got {total}"
     );
 }
 

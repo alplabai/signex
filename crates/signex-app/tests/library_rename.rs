@@ -78,6 +78,8 @@ fn fixture() -> Fixture {
         path: prj.clone(),
         data,
         pending_libraries: Default::default(),
+        case_fold: Default::default(),
+        case_probed: false,
     });
     app.document_state.active_project = Some(project_id);
     app.library
@@ -430,6 +432,8 @@ fn a_library_listed_by_another_open_project_is_refused() {
         path: f.prj.with_file_name("other.snxprj"),
         data: other,
         pending_libraries: Default::default(),
+        case_fold: Default::default(),
+        case_probed: false,
     });
 
     submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
@@ -743,6 +747,71 @@ fn a_failed_project_patch_rolls_the_rename_back() {
     assert!(f.app.library.library_at(&f.alpha).is_some());
     assert!(!f.app.library.set.contains_path(&renamed));
     assert!(f.app.document_state.error_notice.is_some());
+}
+
+/// With project-scoped git on, the patched `.snxprj` is queued for a
+/// follow-up commit named for the rename.
+#[test]
+fn a_git_enabled_project_queues_a_commit_of_the_patched_project_file() {
+    let mut f = fixture();
+    f.app.document_state.projects[0].data.enable_git = true;
+    submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    let key = (
+        f.prj.parent().unwrap().to_path_buf(),
+        PathBuf::from("proj.snxprj"),
+    );
+    assert!(
+        f.app.document_state.inflight_git_commits.contains(&key),
+        "the patched project file was not queued for commit"
+    );
+}
+
+#[test]
+fn a_project_without_git_queues_no_commit() {
+    let mut f = fixture();
+    submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+    assert!(f.app.document_state.inflight_git_commits.is_empty());
+}
+
+/// Duplicate entries for one library all follow, in memory and on disk.
+#[test]
+fn duplicate_entries_for_the_library_are_all_repointed() {
+    let mut f = fixture();
+    let dup = entry("alpha/alpha.snxlib");
+    f.app.document_state.projects[0].data.libraries.push(dup);
+    write_project(&f.prj, &f.app.document_state.projects[0].data).unwrap();
+    submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    let renamed = PathBuf::from("alpha/alpha2.snxlib");
+    assert_eq!(entry_paths(&f.app)[0], renamed);
+    assert_eq!(entry_paths(&f.app)[2], renamed);
+    assert_eq!(disk_library_paths(&f.prj)[0], renamed);
+    assert_eq!(disk_library_paths(&f.prj)[2], renamed);
+}
+
+/// Disk lists the library as Shared while memory has ProjectLocal: the disk
+/// file is left alone, the project is dirty, and the warning says what
+/// Discard and Save will do.
+#[test]
+fn a_shared_disk_entry_gets_an_explicit_warning_and_a_dirty_project() {
+    let mut f = fixture();
+    let mut on_disk = parse_project(&f.prj).unwrap();
+    on_disk.libraries[0].kind = LibraryEntryKind::Shared;
+    on_disk.libraries[0].path = f.alpha.clone();
+    write_project(&f.prj, &on_disk).unwrap();
+    submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    assert_eq!(disk_library_paths(&f.prj)[0], f.alpha);
+    assert!(f.app.document_state.dirty_paths.contains(&f.prj));
+    assert!(
+        f.app
+            .document_state
+            .panel_ctx
+            .diagnostics
+            .iter()
+            .any(|d| d.message.contains("Discard keeps the old name"))
+    );
 }
 
 fn lock_branch(dir: &Path) -> PathBuf {

@@ -77,10 +77,12 @@ impl Signex {
         // `None`: ERC has no single entry point — it reports on every
         // sheet regardless of reachability (see the loop below), so the
         // root-exemption #536 added has nothing to exempt here.
-        let graph = crate::app::project_sheets::project_graph(
+        let fold = project_set.fold;
+        let graph = crate::app::project_sheets::project_graph_with(
             &project_set.sheets,
             base_dir.as_deref(),
             None,
+            fold,
         );
         for issue in &graph.issues {
             crate::diagnostics::log_warning(crate::app::project_sheets::stitch_issue_message(
@@ -101,7 +103,7 @@ impl Signex {
         // resolved for that same reference — and cross-sheet rules can walk
         // the whole subtree.
         for (path, snapshot) in &snapshots_by_path {
-            let key = crate::app::project_sheets::sheet_key(path, base_dir.as_deref());
+            let key = crate::app::project_sheets::sheet_key_with(path, base_dir.as_deref(), fold);
             let violations = if let Some(eval_fns) = dsl_eval_fns.as_ref() {
                 apply_overrides(signex_erc::run_with_project_dsl_and_config(
                     snapshot,

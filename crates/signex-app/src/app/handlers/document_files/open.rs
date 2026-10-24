@@ -314,7 +314,7 @@ impl Signex {
         // hardware that does GB/s), so six libraries are embarrassingly
         // parallel. `request_mount` already recorded each path as pending
         // inside `auto_mount_project_libraries`, so no path spawns twice.
-        let mount_task = iced::Task::batch(outcome.pending.into_iter().map(|library_path| {
+        let mount_tasks = outcome.pending.into_iter().map(|library_path| {
             let completion_path = library_path.clone();
             iced::Task::perform(
                 crate::library::mount::prepare_mount_off_thread(library_path),
@@ -325,7 +325,14 @@ impl Signex {
                     })
                 },
             )
-        }));
+        });
+        // Probe the project's volume once, off-thread (#694); `update` only
+        // stores the answer on the project.
+        let case_probe = crate::app::state::project_case::spawn_case_probe(
+            id,
+            project_path.parent().unwrap_or(project_path).to_path_buf(),
+        );
+        let mount_task = iced::Task::batch(mount_tasks.chain([case_probe]));
         self.document_state
             .projects
             .push(super::super::super::state::LoadedProject {
@@ -333,6 +340,8 @@ impl Signex {
                 path: project_path.to_path_buf(),
                 data,
                 pending_libraries: std::collections::HashMap::new(),
+                case_fold: crate::app::state::scope::CaseFold::host_default(),
+                case_probed: false,
             });
         self.document_state.active_project = Some(id);
         Ok((id, mount_task))
@@ -524,4 +533,27 @@ fn read_and_parse_pcb(path: &std::path::Path) -> Result<signex_types::pcb::PcbBo
                 .map(|pcb| pcb.board)
         })
         .map_err(|err| format!("{err:#}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::app::Signex;
+
+    #[test]
+    fn loading_a_project_starts_its_volume_probe_exactly_once() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let project = dir.path().join("P.snxprj");
+        std::fs::write(&project, b"").expect("write project");
+        let (mut app, _task) = Signex::new();
+
+        let (_id, first) = app.load_or_activate_project(&project).expect("load");
+        let (_id, again) = app.load_or_activate_project(&project).expect("reactivate");
+
+        assert_eq!(first.units(), 1, "the probe is the only task: no libraries");
+        assert_eq!(
+            again.units(),
+            0,
+            "an already loaded project is not probed again"
+        );
+    }
 }
