@@ -1,0 +1,120 @@
+format = "snxsym/v1"
+file_uuid = "253b6003-fa61-4cce-9cb0-6274b768ce2f"
+display_name = "C_Polarized"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols]]
+uuid = "2604013a-f69d-4802-827d-9e5add7d2356"
+name = "C_Polarized"
+anchor = [
+    0.0,
+    0.0,
+]
+pins_tsv = '''
+number	name	electrical	pos_x	pos_y	orientation	length	description	function	pin_package_length	propagation_delay_ns	designator_visible	name_visible	inside_symbol	inside_edge_symbol	outside_edge_symbol	outside_symbol	hidden	locked	part_number
+1	1	Passive	0	3.81	Down	2.54					true	false	None	None	None	None	false	false	1
+2	2	Passive	0	-3.81	Up	2.54					true	false	None	None	None	None	false	false	1
+'''
+designator = "C?"
+comment = "*"
+description = "Polarised capacitor; pin 1 is the positive plate."
+component_type = "Standard"
+mirrored = false
+version = "0.0.1"
+released = false
+part_count = 1
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    0.0,
+    1.27,
+]
+to = [
+    0.0,
+    0.508,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    -1.524,
+    0.508,
+]
+to = [
+    1.524,
+    0.508,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    -1.524,
+    -0.508,
+]
+to = [
+    1.524,
+    -0.508,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    0.0,
+    -0.508,
+]
+to = [
+    0.0,
+    -1.27,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    -2.286,
+    1.016,
+]
+to = [
+    -1.524,
+    1.016,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    -1.905,
+    1.397,
+]
+to = [
+    -1.905,
+    0.635,
+]
+
+[symbols.schematic_params]
