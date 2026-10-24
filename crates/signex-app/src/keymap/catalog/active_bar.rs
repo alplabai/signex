@@ -89,8 +89,8 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
     CommandMetadata {
         id: "rotate_selection",
         category: "modify",
-        label: "Rotate selection",
-        menu_label: Some("Rotate Selection"),
+        label: "Rotate selection counter-clockwise",
+        menu_label: Some("Rotate Selection Counter-Clockwise"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::MUTATES,
@@ -99,7 +99,7 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
     CommandMetadata {
         id: "rotate_selection_cw",
         category: "modify",
-        label: "Rotate selection c w",
+        label: "Rotate selection clockwise",
         menu_label: Some("Rotate Selection Clockwise"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresSelection,

@@ -184,10 +184,9 @@ impl Signex {
         }
     }
 
-    /// Rotate the selected symbol by 90 degrees. `Symbol::rotation` is
-    /// counter-clockwise positive on screen (`SymbolTransform::apply`
-    /// negates the angle after the y-up to y-down flip), so clockwise
-    /// is the negative delta.
+    /// Rotate the selected symbol by 90 degrees on screen. The engine's
+    /// `RotateSelection` delta is counter-clockwise on screen for every
+    /// symbol (it compensates for mirroring), so clockwise is -90.
     pub(crate) fn handle_selection_rotate_requested(&mut self, clockwise: bool) {
         if let Some(engine) = self.document_state.active_engine()
             && engine.selection_is_single_symbol(&self.interaction_state.active_canvas().selected)
