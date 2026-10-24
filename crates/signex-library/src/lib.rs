@@ -12,6 +12,7 @@ pub mod adapters;
 pub mod ai_stub;
 pub mod cascade;
 pub mod component;
+pub mod dangling;
 pub mod diff;
 pub mod distributor;
 #[cfg(feature = "distributors-community")]
@@ -45,6 +46,7 @@ pub use cascade::{
     cascade_after_sim_save, cascade_after_symbol_save, patch_bump,
 };
 pub use component::{ComponentRow, DatasheetRef, PinPadOverride, PlmReserved};
+pub use dangling::{DanglingRef, RefSlot, dangling_row_refs};
 pub use diff::{
     BumpKind, LifecycleDiff, ListDiff, ParameterDiff, PinMapDiff, RowDiff, auto_bump_kind,
     diff_rows,

@@ -7,8 +7,13 @@ use super::*;
 pub(super) const NO_LIBRARY_OPEN: &str =
     "New Component: no library is open. Open a library with a component table first.";
 
-/// Messages-panel text for "New Component" on a library with no table.
-pub(super) const NO_COMPONENT_TABLE: &str = "New Component: the library has no component table. Open a library with a component table first.";
+/// Messages-panel text for "New Component" when the listed library's
+/// adapter is not mounted, so no component table can be resolved.
+fn library_not_loaded(display_name: &str) -> String {
+    format!(
+        "New Component: library \"{display_name}\" is not loaded, so it has no component table to add to."
+    )
+}
 
 impl Signex {
     /// File ▸ Library ▸ New Component… — appends a draft row directly to
@@ -24,6 +29,7 @@ impl Signex {
         let library = &self.library.open_libraries[library_idx];
         let library_path = library.root.clone();
         let library_id = library.library_id;
+        let display_name = library.display_name.clone();
         let class = signex_library::ComponentClass::default();
         let table = self
             .library
@@ -31,7 +37,7 @@ impl Signex {
             .get(library_id)
             .map(|adapter| adapter.manifest().table_for_class(class.as_str()));
         let Some(table) = table else {
-            tracing::warn!(target: "signex::library", "{NO_COMPONENT_TABLE}");
+            tracing::warn!(target: "signex::library", "{}", library_not_loaded(&display_name));
             return Task::none();
         };
         match commands::create_component_row(

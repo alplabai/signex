@@ -494,6 +494,7 @@ impl Signex {
             pre_placement,
             erc_diagnostics,
             erc_focus_index: self.ui_state.erc_focus_global_index,
+            erc_running: self.ui_state.erc_running,
             diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
             diagnostics: crate::diagnostics::recent_entries(),
             selection_filters: self.interaction_state.selection_filters.clone(),

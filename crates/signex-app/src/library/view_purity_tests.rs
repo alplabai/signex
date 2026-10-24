@@ -34,6 +34,7 @@ fn library_views_trigger_no_adapter_call() {
         cached_sims: Vec::new(),
         cached_classes: Vec::new(),
         observed_stamp: None,
+        dangling: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
     });

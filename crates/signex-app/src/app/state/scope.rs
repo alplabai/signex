@@ -40,7 +40,7 @@ pub(crate) use super::case_fold::CaseFold;
 pub(crate) fn path_key_with(path: &Path, fold: CaseFold) -> String {
     let mut key = path.to_string_lossy().into_owned();
     if fold.fold_case {
-        key = key.to_lowercase();
+        key = key.to_ascii_lowercase();
     }
     if fold.backslash_is_separator {
         key = key.replace('\\', "/");
@@ -388,6 +388,20 @@ mod tests {
     use super::*;
     use crate::app::state::ProjectId;
     use signex_types::project::{ProjectData, SheetEntry};
+
+    #[test]
+    fn a_unicode_look_alike_does_not_share_an_identity_key_with_the_real_path() {
+        let real = Path::new("\\\\DESKTOP\\c$\\x.snxsch");
+        let kelvin = Path::new("\\\\DES\u{212A}TOP\\c$\\x.snxsch");
+        assert_ne!(
+            path_key_with(real, CaseFold::FOLD),
+            path_key_with(kelvin, CaseFold::FOLD)
+        );
+        assert_eq!(
+            path_key_with(real, CaseFold::FOLD),
+            path_key_with(Path::new("\\\\desktop\\C$\\X.snxsch"), CaseFold::FOLD)
+        );
+    }
 
     fn project(id: u32, dir: &str, filenames: &[&str]) -> LoadedProject {
         LoadedProject {

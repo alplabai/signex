@@ -94,12 +94,25 @@ impl Signex {
                 Task::none()
             }
             ProjectMsg::AddExistingFilePicked { project_id, paths } => {
-                self.handle_add_existing_file_picked(project_id, paths);
+                self.handle_add_existing_file_picked(project_id, paths)
+            }
+            ProjectMsg::AddExistingFilesCopied {
+                project_id,
+                results,
+            } => {
+                self.handle_add_existing_files_copied(project_id, results);
+                Task::none()
+            }
+            ProjectMsg::AddNewSchematicWritten {
+                project_id,
+                path,
+                result,
+            } => {
+                self.handle_add_new_schematic_written(project_id, path, result);
                 Task::none()
             }
             ProjectMsg::AddNewSchematicPicked { project_id, path } => {
-                self.handle_add_new_schematic_picked(project_id, path);
-                Task::none()
+                self.handle_add_new_schematic_picked(project_id, path)
             }
             ProjectMsg::GitCommitDone {
                 project_root,
@@ -342,8 +355,31 @@ impl Signex {
     /// Annotate dialog family handler (namespaced, ADR-0001 D3).
     pub(crate) fn dispatch_annotate_message(&mut self, msg: AnnotateMsg) -> Task<Message> {
         match msg {
-            AnnotateMsg::Run(mode) => self.handle_annotate(mode),
-            AnnotateMsg::OpenDialog => self.handle_open_annotate_dialog(),
+            AnnotateMsg::Run(_) | AnnotateMsg::SetAllLocked(_)
+                if self.annotate_preview_is_loading() =>
+            {
+                // The dialog's rows are being reloaded; acting now would use
+                // a lock set built from a list that is out of date. The
+                // buttons are disabled meanwhile.
+                Task::none()
+            }
+            AnnotateMsg::Run(mode) => {
+                // The action can rewrite unopened sheets on disk, which the
+                // in-memory fingerprint cannot see: force a reload.
+                let task = self.handle_annotate(mode);
+                self.invalidate_annotate_preview();
+                Task::batch([task, self.refresh_annotate_preview()])
+            }
+            AnnotateMsg::OpenDialog => {
+                // A fresh session always re-reads the project from disk.
+                self.invalidate_annotate_preview();
+                let task = self.handle_open_annotate_dialog();
+                Task::batch([task, self.refresh_annotate_preview()])
+            }
+            AnnotateMsg::PreviewLoaded { generation, result } => {
+                self.handle_annotate_preview_loaded(generation, &result);
+                Task::none()
+            }
             AnnotateMsg::CloseDialog => self.handle_close_annotate_dialog(),
             AnnotateMsg::OrderChanged(order) => self.handle_annotate_order_changed(order),
             AnnotateMsg::OpenResetConfirm => self.handle_open_annotate_reset_confirm(),
@@ -354,6 +390,7 @@ impl Signex {
                 } else {
                     self.ui_state.annotate_locked.insert(uuid);
                 }
+                self.recompute_annotate_entries();
                 Task::none()
             }
             AnnotateMsg::SetAllLocked(lock) => {
@@ -363,6 +400,7 @@ impl Signex {
                 } else {
                     self.ui_state.annotate_locked.clear();
                 }
+                self.recompute_annotate_entries();
                 Task::none()
             }
         }
@@ -384,6 +422,9 @@ impl Signex {
             ErcMsg::OpenDialog => self.handle_open_erc_dialog(),
             ErcMsg::CloseDialog => self.handle_close_erc_dialog(),
             ErcMsg::SeverityChanged(rule, sev) => self.handle_erc_severity_changed(rule, sev),
+            ErcMsg::RunFinished { generation, result } => {
+                self.handle_erc_run_finished(generation, &result)
+            }
             ErcMsg::PinMatrixCellCycled { row, col } => {
                 self.handle_pin_matrix_cell_cycled(row, col)
             }

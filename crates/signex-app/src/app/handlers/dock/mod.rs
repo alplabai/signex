@@ -11,7 +11,7 @@ mod library_browser;
 mod navigator;
 mod panel_controls;
 mod panel_open;
-mod project_navigation;
+pub(crate) mod project_navigation;
 mod property_editor;
 mod sch_library;
 mod search_prefs_persist;

@@ -11,7 +11,7 @@
 use std::path::Path;
 
 use iced::widget::{Space, button, column, container, row, text};
-use iced::{Border, Element, Length, Theme};
+use iced::{Element, Length};
 use sha2::{Digest, Sha256};
 use signex_library::{Footprint, StepAttachment};
 use signex_types::theme::ThemeTokens;
@@ -28,29 +28,23 @@ pub fn view<'a>(
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
     let text_c = theme_ext::text_primary(tokens);
-    let border = theme_ext::border_color(tokens);
 
     let attach_addr = address.clone();
-    let attach_btn =
-        button(container(text("Attach STEP…").size(11).color(iced::Color::WHITE)).padding([4, 12]))
-            .on_press(LibraryMessage::EditorEvent {
-                library_path: attach_addr.library_path,
-                table: attach_addr.table.clone(),
-                row_id: attach_addr.row_id,
-                msg: EditorMsg::StepAttachDialog,
-            })
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgb(
-                    0.00, 0.47, 0.84,
-                ))),
-                text_color: iced::Color::WHITE,
-                border: Border {
-                    width: 0.0,
-                    radius: 3.0.into(),
-                    ..Border::default()
-                },
-                ..iced::widget::button::Style::default()
-            });
+    let attach_btn = button(
+        container(
+            text("Attach STEP…")
+                .size(11)
+                .color(crate::styles::tokens::on_accent(tokens)),
+        )
+        .padding([4, 12]),
+    )
+    .on_press(LibraryMessage::EditorEvent {
+        library_path: attach_addr.library_path,
+        table: attach_addr.table.clone(),
+        row_id: attach_addr.row_id,
+        msg: EditorMsg::StepAttachDialog,
+    })
+    .style(crate::styles::accent_button(tokens));
 
     let body: Element<'a, LibraryMessage> = match fp.step_attachment.as_ref() {
         Some(att) => {
@@ -63,18 +57,7 @@ pub fn view<'a>(
                         row_id: remove_addr.row_id,
                         msg: EditorMsg::StepAttachRemove,
                     })
-                    .style(move |_: &Theme, _| iced::widget::button::Style {
-                        background: Some(iced::Background::Color(iced::Color::from_rgba(
-                            1.0, 1.0, 1.0, 0.04,
-                        ))),
-                        text_color: text_c,
-                        border: Border {
-                            width: 1.0,
-                            radius: 3.0.into(),
-                            color: border,
-                        },
-                        ..iced::widget::button::Style::default()
-                    });
+                    .style(crate::styles::outline_button(tokens));
             column![
                 row![
                     text("STEP attachment").size(13).color(text_c),

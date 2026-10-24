@@ -6,7 +6,9 @@
 
 use super::columns::{ColumnKind, GridColumn, lifecycle_dot_color};
 use super::*;
+use crate::library::dangling::DanglingSweep;
 use iced::widget::column;
+use signex_library::RefSlot;
 
 pub(super) fn view_grid<'a>(
     library_path: &'a std::path::Path,
@@ -14,6 +16,7 @@ pub(super) fn view_grid<'a>(
     rows: &[&'a ComponentRow],
     columns: &[GridColumn],
     browser: &'a LibraryBrowserState,
+    dangling: &DanglingSweep,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
@@ -205,14 +208,22 @@ pub(super) fn view_grid<'a>(
                         );
                         continue;
                     }
+                    // A binding that resolves to nothing (#968) shows in
+                    // the error colour with a warning glyph, so the row
+                    // reads as broken before anyone opens it.
+                    let slot = match c.kind {
+                        ColumnKind::Symbol => RefSlot::Symbol,
+                        _ => RefSlot::Footprint,
+                    };
+                    let (row_value, color) = if dangling.marks_row(r.row_id, slot) {
+                        (format!("⚠ {row_value}"), theme_ext::error_color(tokens))
+                    } else {
+                        (row_value, theme_ext::text_secondary(tokens))
+                    };
                     data_row = data_row.push(
-                        container(
-                            text(row_value)
-                                .size(BROWSER_TEXT_SIZE)
-                                .color(theme_ext::text_secondary(tokens)),
-                        )
-                        .padding([4, 6])
-                        .width(Length::Fixed(c.width)),
+                        container(text(row_value).size(BROWSER_TEXT_SIZE).color(color))
+                            .padding([4, 6])
+                            .width(Length::Fixed(c.width)),
                     );
                     continue;
                 }

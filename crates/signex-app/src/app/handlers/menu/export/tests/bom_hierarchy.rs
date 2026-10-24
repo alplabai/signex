@@ -144,7 +144,11 @@ fn a_loose_documents_written_bom_matches_the_preview() {
     let dir = std::env::temp_dir().join(format!("signex_bom_loose_{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("temp dir");
     let out = dir.join("bom.csv");
-    let _ = app.handle_export_bom_finished(Ok(out.clone()));
+    let _ = app.handle_export_bom_finished(
+        app.document_state.active_path.clone().expect("active"),
+        Default::default(),
+        Ok(out.clone()),
+    );
     let written = std::fs::read_to_string(&out).expect("the BOM was written");
     let _ = std::fs::remove_dir_all(&dir);
 
@@ -170,7 +174,11 @@ fn a_project_whose_hierarchy_cannot_be_derived_says_so_in_bom_terms() {
     app.document_state.active_path = Some(top);
 
     let out = dir.join("bom.csv");
-    let _ = app.handle_export_bom_finished(Ok(out));
+    let _ = app.handle_export_bom_finished(
+        app.document_state.active_path.clone().expect("active"),
+        Default::default(),
+        Ok(out),
+    );
 
     let warned = crate::diagnostics::recent_entries().iter().any(|e| {
         e.level == crate::diagnostics::DiagnosticLevel::Warning

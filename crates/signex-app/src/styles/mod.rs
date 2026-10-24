@@ -8,6 +8,14 @@ use iced::widget::{button, container};
 use iced::{Background, Border, Color, Theme};
 use signex_types::theme::ThemeTokens;
 
+mod buttons;
+pub mod tokens;
+
+pub use buttons::{accent_button, hover_row, outline_button, subtle_button};
+
+#[cfg(test)]
+mod tests;
+
 // ─── Color conversion ─────────────────────────────────────────
 
 /// Convert a signex-types Color to an iced Color.

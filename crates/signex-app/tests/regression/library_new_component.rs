@@ -71,6 +71,22 @@ fn only_row(app: &Signex, root: &std::path::Path) -> (String, ComponentRow) {
     first
 }
 
+/// Every `.snxsym` / `.snxfpt` under the library's `symbols/` and
+/// `footprints/` directories (a missing directory holds none).
+fn minted_primitive_files(root: &std::path::Path) -> Vec<PathBuf> {
+    ["symbols", "footprints"]
+        .iter()
+        .filter_map(|dir| std::fs::read_dir(root.join(dir)).ok())
+        .flatten()
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.extension()
+                .is_some_and(|ext| ext == "snxsym" || ext == "snxfpt")
+        })
+        .collect()
+}
+
 #[test]
 fn new_component_with_no_library_open_says_why() {
     let _ = diagnostics::init_logging();
@@ -106,15 +122,13 @@ fn new_component_on_a_library_without_a_table_says_why() {
         observed_stamp: None,
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
+        dangling: Default::default(),
     });
     let before = diagnostics::newest_entry_id();
 
     let _ = app.update(Message::Library(LibraryMessage::NewComponent));
 
-    let records = records_since(
-        before,
-        "has no component table. Open a library with a component table first",
-    );
+    let records = records_since(before, "library \"Unmounted\" is not loaded");
     assert_eq!(records.len(), 1, "silent no-op: {records:?}");
 }
 
@@ -141,12 +155,10 @@ fn a_new_row_is_unbound_reported_once_and_binding_clears_it() {
     let notes = records_since(before, "has no symbol and no footprint bound");
     assert_eq!(notes.len(), 1, "one Messages-panel note: {notes:?}");
     assert!(notes[0].message.contains("Pick Symbol / Pick Footprint"));
-    assert!(
-        !tmp.path().join("fresh.snxlib").join("symbols").is_dir()
-            || std::fs::read_dir(tmp.path().join("fresh.snxlib").join("symbols"))
-                .map(|d| d.count() == 0)
-                .unwrap_or(true),
-        "creating a row must not mint a symbol file"
+    assert_eq!(
+        minted_primitive_files(tmp.path()),
+        Vec::<PathBuf>::new(),
+        "creating a row must not mint a symbol or footprint file"
     );
 
     // Bind a symbol through the real picker flow.
