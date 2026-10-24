@@ -171,6 +171,7 @@ fn seeded() -> (
     let (adapter, lib) = library(dir.path());
     let rows = [
         row("R-OK", lib, &[("DigiKey", "DK-1")]),
+        row("R-OK2", lib, &[("DigiKey", "DK-3")]),
         row("R-NET", lib, &[("DigiKey", "DK-2")]),
         row("R-NOSKU", lib, &[]),
         row("R-LCSC", lib, &[("LCSC", "C1")]),
@@ -182,6 +183,7 @@ fn seeded() -> (
             match r.internal_pn.as_str() {
                 "R-OK" => "ok",
                 "R-NET" => "net",
+                "R-OK2" => "ok2",
                 "R-NOSKU" => "nosku",
                 "R-LCSC" => "lcsc",
                 _ => "mouser",
@@ -200,6 +202,7 @@ fn refresh_stores_successes_in_one_commit_and_names_every_failure() {
         "DigiKey",
         &[
             ("R-OK", Ok(0.1)),
+            ("R-OK2", Ok(0.2)),
             ("R-NET", Err(DistributorErrorKind::Network)),
         ],
     );
@@ -218,7 +221,7 @@ fn refresh_stores_successes_in_one_commit_and_names_every_failure() {
     };
     let report = refresh_library_pricing(&adapter, &mut resolve, &AtomicBool::new(false)).unwrap();
 
-    assert_eq!(report.store.stored, 1);
+    assert_eq!(report.store.stored, 2);
     assert_eq!(
         commit_count(&adapter),
         before + 1,
@@ -240,11 +243,11 @@ fn refresh_stores_successes_in_one_commit_and_names_every_failure() {
     );
     assert_eq!(
         report.summary(),
-        "Pricing refresh: 1 updated, 4 failed (5 rows)"
+        "Pricing refresh: 2 updated, 4 failed (6 rows)"
     );
 
     let stored = adapter.table_pricing("R").unwrap();
-    assert_eq!(stored.len(), 1, "only the successful row has a price");
+    assert_eq!(stored.len(), 2, "only the successful rows have a price");
     let cached = &stored[&ids["ok"]]["DigiKey"];
     assert_eq!(cached.sku, "DK-1");
     assert_eq!(cached.currency, "USD");
