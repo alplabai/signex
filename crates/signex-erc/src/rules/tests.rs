@@ -783,7 +783,8 @@ fn lib_symbol_ref(reference: &str, lib_id: &str, unit: u32) -> ErcSymbol {
 fn with_child(top: Vec<ErcSymbol>, child: Vec<ErcSymbol>) -> ErcContext {
     let mut c = ctx(Vec::new(), Vec::new(), Vec::new(), top);
     let child = ctx(Vec::new(), Vec::new(), Vec::new(), child);
-    c.children.insert("child.snxsch".into(), child);
+    c.children
+        .insert("child.snxsch".into(), std::sync::Arc::new(child));
     c
 }
 

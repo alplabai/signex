@@ -25,6 +25,7 @@ pub mod engine;
 #[cfg(test)]
 #[cfg(test)]
 mod fixtures;
+mod hierarchy;
 mod overrides;
 pub mod pin_matrix;
 pub mod rule;
@@ -32,6 +33,7 @@ mod rules;
 
 pub use context::ErcContext;
 pub use diagnostic::{Diagnostic, LocationSpace};
+pub use hierarchy::HierarchyMemo;
 pub use overrides::apply_overrides;
 pub use pin_matrix::{ErcConfig, PinAxis, PinMatrix};
 pub use rule::{AnalysisScope, Applicability, RuleDefinition, RuleId, RuleTarget};
@@ -332,6 +334,27 @@ pub fn run_with_project_dsl_and_config(
     config: &ErcConfig,
 ) -> Vec<Violation> {
     let ctx = ErcContext::from_snapshot_with_children(snapshot, own_key, resolutions, sheets);
+    into_violations(engine::run_all_with_dsl_and_config(&ctx, dsl_rules, config))
+}
+
+/// Project-scoped ERC for one sheet, sharing child contexts with every other
+/// sheet run through the same `memo` so each sheet is projected once per ERC
+/// run however many parents reach it (#998). Built-in rules plus `dsl_rules`
+/// (pass `&[]` for none). `memo` must only ever be used with one
+/// `resolutions` / `sheets` pair.
+pub fn run_with_project_memoised(
+    snapshot: &SchematicSheet,
+    own_key: Option<&signex_net::SheetKey>,
+    resolutions: &std::collections::HashMap<
+        signex_net::SheetKey,
+        std::collections::HashMap<String, signex_net::SheetKey>,
+    >,
+    sheets: &std::collections::HashMap<signex_net::SheetKey, SchematicSheet>,
+    dsl_rules: &[engine::EvalFn],
+    config: &ErcConfig,
+    memo: &mut HierarchyMemo,
+) -> Vec<Violation> {
+    let ctx = memo.context_for(snapshot, own_key, resolutions, sheets);
     into_violations(engine::run_all_with_dsl_and_config(&ctx, dsl_rules, config))
 }
 
