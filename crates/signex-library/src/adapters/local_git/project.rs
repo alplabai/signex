@@ -129,43 +129,15 @@ impl LocalGitProjectAdapter {
         let sig = git2::Signature::now(&sig_name, &sig_email)
             .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
 
-        let mut index = repo
-            .index()
-            .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
-        index
-            .add_path(rel_path)
-            .map_err(|e| LibraryError::Backend(format!("git add: {e}")))?;
-        index
-            .write()
-            .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
-        let tree_oid = index
-            .write_tree()
-            .map_err(|e| LibraryError::Backend(format!("git write tree: {e}")))?;
-        let tree = repo
-            .find_tree(tree_oid)
-            .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
-
-        let parent = match repo.head() {
-            Ok(h) => h
-                .peel_to_commit()
-                .map_err(|e| LibraryError::Backend(format!("git peel: {e}")))
-                .map(Some)?,
-            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => None,
-            Err(e) => return Err(LibraryError::Backend(format!("git head: {e}"))),
-        };
-        if parent.as_ref().is_some_and(|p| p.tree_id() == tree_oid) {
-            return Ok(None);
-        }
-        let parents: Vec<&git2::Commit> = parent.as_ref().map(|c| vec![c]).unwrap_or_default();
         let final_message = if message.is_empty() {
             format!("save {}", rel_path.display())
         } else {
             message.to_string()
         };
-        let oid = repo
-            .commit(Some("HEAD"), &sig, &sig, &final_message, &tree, &parents)
-            .map_err(|e| LibraryError::Backend(format!("git commit: {e}")))?;
-        Ok(Some(oid))
+        super::helpers::retry_on_git_lock(repo.path(), || {
+            super::helpers::stage_and_commit(&repo, rel_path, &sig, &final_message)
+        })
+        .map_err(|e| LibraryError::Backend(format!("git commit {}: {e}", rel_path.display())))
     }
 
     /// Commit an externally-edited file (user opened the file in a
