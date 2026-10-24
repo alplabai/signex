@@ -79,8 +79,8 @@ impl SymbolCanvas<'_> {
     }
 
     /// Right/Middle release: end the pan. A **right**-release that did
-    /// not pan opens the context menu (pin → graphic → empty hit
-    /// priority), window-absolute coords, mirroring the footprint
+    /// not pan opens the context menu (the left press's pin → handle → field →
+    /// graphic priority, see `press_target`), window-absolute coords, mirroring the footprint
     /// canvas's `on_secondary_released`. In a placement tool the same
     /// click leaves the tool instead (`CanvasAction::LeaveTool`).
     /// Middle-release never opens the menu. Note: when the matching
@@ -120,17 +120,16 @@ impl SymbolCanvas<'_> {
             // near an unrelated pin and misses an off-grid shape the
             // user right-clicked directly on.
             let (wx, wy) = world_unsnapped(self, cursor_pos.x, cursor_pos.y, bounds);
-            let target = match state::hit_test(
-                self.symbol,
-                wx,
-                wy,
-                self.pick_tolerance_mm(),
-                self.active_part,
-                &self.selection_filter,
-            ) {
-                Some(SymbolSelection::Pin(idx)) => state::SymbolContextTarget::Pin(idx),
-                Some(SymbolSelection::Graphic(idx)) => state::SymbolContextTarget::Graphic(idx),
-                _ => state::SymbolContextTarget::Empty,
+            // Same classification as a left press, so a field over the
+            // body is the field here too, not the graphic under it. A
+            // resize handle belongs to its (already selected) graphic.
+            let target = match self.press_target(wx, wy) {
+                Some(PressTarget::Pin(idx)) => state::SymbolContextTarget::Pin(idx),
+                Some(PressTarget::Handle(idx, _) | PressTarget::Graphic(idx)) => {
+                    state::SymbolContextTarget::Graphic(idx)
+                }
+                Some(PressTarget::Field(key)) => state::SymbolContextTarget::Field(key),
+                None => state::SymbolContextTarget::Empty,
             };
             return Some(
                 canvas::Action::publish(CanvasAction::ShowContextMenu {

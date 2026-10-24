@@ -178,3 +178,7 @@ mod no_erc_directive;
 
 #[path = "regression/click_click_move.rs"]
 mod click_click_move;
+
+// #925 — non-finite grid steps are refused into the Messages panel.
+#[path = "regression/grid_step_refusal.rs"]
+mod grid_step_refusal;
