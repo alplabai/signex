@@ -11,7 +11,7 @@ use crate::library::editor::symbol::canvas::{self as sym_canvas, SymbolCanvas};
 use crate::library::editor::symbol::state as sym_state;
 use crate::library::messages::{
     GraphicHandleMsg, LibraryMessage, PrimitiveEdit, SymbolEditorMsg, SymbolRotatePivotMsg,
-    SymbolSelectionMsg,
+    SymbolSelectionMsg, SymbolToolMsg,
 };
 use crate::library::state::LibraryDisplaySettings;
 use crate::panels::PanelContext;
@@ -363,6 +363,7 @@ pub(crate) fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -
             target: symbol_context_target_to_msg(target),
         },
         CanvasAction::CloseContextMenu => SymbolEditorMsg::CloseContextMenu,
+        CanvasAction::LeaveTool => SymbolEditorMsg::SetTool(SymbolToolMsg::Select),
     }
 }
 
