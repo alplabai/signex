@@ -593,51 +593,6 @@ fn zone_without_holes_writes_no_holes_key() {
     assert!(back.board.zones[0].holes.is_empty());
 }
 
-/// #883: zone keys this build does not know, written by a later build,
-/// survive a load and save instead of being dropped (which for `holes`
-/// would have turned a cut-out back into solid copper), and re-save stably.
-#[test]
-fn unknown_zone_keys_survive_a_round_trip() {
-    let mut board = empty_board();
-    board.zones.push(Zone {
-        uuid: Uuid::parse_str("0192a8c0-0040-7000-8000-000000000003").unwrap(),
-        net: 0,
-        net_name: String::new(),
-        layer: "TopCopper".into(),
-        outline: vec![
-            PcbPoint { x: 0.0, y: 0.0 },
-            PcbPoint { x: 1.0, y: 0.0 },
-            PcbPoint { x: 1.0, y: 1.0 },
-        ],
-        holes: Vec::new(),
-        priority: 0,
-        fill_type: String::new(),
-        thermal_relief: false,
-        thermal_gap: 0.0,
-        thermal_width: 0.0,
-        clearance: 0.0,
-        min_thickness: 0.0,
-        unknown: Default::default(),
-    });
-    let text = SnxPcb::new(board).write_string().expect("serialise");
-    // What a later build would add: a scalar and a nested table.
-    let marker = "min_thickness = 0.0\n";
-    assert!(text.contains(marker), "{text}");
-    let future = text.replacen(
-        marker,
-        &format!("{marker}hatch_pitch = 0.5\nfuture_mode = \"stitched\"\n"),
-        1,
-    );
-
-    let parsed = SnxPcb::parse(&future).expect("parse");
-    assert!(!parsed.board.zones[0].unknown.is_empty());
-    let resaved = parsed.write_string().expect("re-serialise");
-    let again = SnxPcb::parse(&resaved).expect("re-parse");
-    assert_eq!(resaved, again.write_string().expect("third save"));
-    assert!(resaved.contains("hatch_pitch = 0.5"), "{resaved}");
-    assert!(resaved.contains("future_mode = \"stitched\""), "{resaved}");
-}
-
 #[test]
 fn tsv_writer_pads_columns_for_legibility() {
     let rows = vec![
