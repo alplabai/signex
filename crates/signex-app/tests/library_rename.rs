@@ -277,11 +277,16 @@ fn an_open_footprint_editor_saves_and_commits_through_the_renamed_library() {
         "the save must not resurrect the old .snxlib"
     );
     let repo = git2::Repository::open(f.alpha.parent().unwrap()).expect("repo");
-    let head = repo.head().unwrap().peel_to_commit().unwrap();
+    // The version cascade may commit row bumps on top of the save, so look
+    // past those for the save itself.
+    let mut commit = repo.head().unwrap().peel_to_commit().unwrap();
+    while commit.message().unwrap_or("").starts_with("cascade:") {
+        commit = commit.parent(0).expect("a commit below the cascade");
+    }
     assert!(
-        head.message().unwrap_or("").starts_with("save footprint"),
+        commit.message().unwrap_or("").starts_with("save footprint"),
         "the save must commit through the relocated adapter, got {:?}",
-        head.message()
+        commit.message()
     );
 }
 
