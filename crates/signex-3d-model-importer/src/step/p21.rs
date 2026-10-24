@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 
-use super::holes::triangulate_with_holes;
+use super::holes::{MAX_FILE_CUT_VERTICES, face_vertex_count, triangulate_with_holes};
 use crate::vrml::parser::VrmlMesh;
 
 #[derive(Debug)]
@@ -119,14 +119,19 @@ pub fn parse_to_meshes(source: &str) -> Result<StepMeshResult, ParseError> {
 
     // Holes left in the outline fill, per reason.
     let mut holes_not_cut: BTreeMap<String, usize> = BTreeMap::new();
+    // Vertices still allowed through the hole cut for this file.
+    let mut cut_budget = MAX_FILE_CUT_VERTICES;
     for bound_refs in advanced_faces.values() {
+        // A bound listed twice is one loop, not a second hole.
+        let mut seen = std::collections::HashSet::new();
+        let bound_refs: Vec<_> = bound_refs.iter().filter(|r| seen.insert(**r)).collect();
         // The face outline is its FACE_OUTER_BOUND, or, when none is marked
         // (legal STEP), the loop with the largest area. Every other bound is a
         // hole, cut out of the outline by `triangulate_with_holes`. A face
         // that cannot be cut keeps the outline fill and is counted (#708).
         let mut loops: Vec<(Vec<[f32; 3]>, bool)> = bound_refs
             .iter()
-            .filter_map(|r| face_bounds.get(r))
+            .filter_map(|r| face_bounds.get(*r))
             .map(|&(loop_id, is_outer)| (loop_points_of(loop_id), is_outer))
             .collect();
         let outline = match loops.iter().position(|l| l.1) {
@@ -140,9 +145,18 @@ pub fn parse_to_meshes(source: &str) -> Result<StepMeshResult, ParseError> {
             continue;
         }
         let holes: Vec<Vec<[f32; 3]>> = loops.into_iter().map(|l| l.0).collect();
+        let needed = face_vertex_count(&loop_points, &holes);
         let mesh = if holes.is_empty() {
             triangulate_polygon(&loop_points)
+        } else if needed > cut_budget {
+            *holes_not_cut
+                .entry(format!(
+                    "file has more than {MAX_FILE_CUT_VERTICES} vertices to cut"
+                ))
+                .or_default() += holes.len();
+            triangulate_polygon(&loop_points)
         } else {
+            cut_budget -= needed;
             match triangulate_with_holes(&loop_points, &holes) {
                 Ok(mesh) => mesh,
                 Err(reason) => {

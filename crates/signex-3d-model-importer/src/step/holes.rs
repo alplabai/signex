@@ -17,6 +17,18 @@ use crate::vrml::parser::VrmlMesh;
 const PLANAR_TOLERANCE: f64 = 1e-4;
 /// Allowed mismatch between the triangulated area and outline minus holes.
 const AREA_TOLERANCE: f64 = 1e-3;
+/// Most vertices (outline plus holes) one face may have and still be cut.
+/// A STEP file is untrusted input and ear clipping is superlinear, so a
+/// crafted face must not stall the import; a bigger face keeps the outline
+/// fill and says why.
+pub const MAX_FACE_VERTICES: usize = 4096;
+/// Most vertices cut across all faces of one file, for the same reason.
+pub const MAX_FILE_CUT_VERTICES: usize = 65_536;
+
+/// Vertices a face with `outline` and `holes` brings to the cut.
+pub fn face_vertex_count(outline: &[[f32; 3]], holes: &[Vec<[f32; 3]>]) -> usize {
+    outline.len() + holes.iter().map(Vec::len).sum::<usize>()
+}
 
 type V3 = [f64; 3];
 
@@ -77,6 +89,9 @@ pub fn triangulate_with_holes(
     }
     if holes.iter().any(|h| h.len() < 3) {
         return Err("a hole loop has fewer than 3 vertices".to_owned());
+    }
+    if face_vertex_count(outline, holes) > MAX_FACE_VERTICES {
+        return Err(format!("face has more than {MAX_FACE_VERTICES} vertices"));
     }
     let outer: Vec<V3> = outline.iter().map(widen).collect();
     let inner: Vec<Vec<V3>> = holes
@@ -172,4 +187,43 @@ pub fn triangulate_with_holes(
         indices,
         color: [0.65, 0.65, 0.68, 1.0],
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn square(x0: f32, y0: f32, side: f32) -> Vec<[f32; 3]> {
+        vec![
+            [x0, y0, 0.0],
+            [x0 + side, y0, 0.0],
+            [x0 + side, y0 + side, 0.0],
+            [x0, y0 + side, 0.0],
+        ]
+    }
+
+    fn circle(cx: f32, cy: f32, r: f32, n: usize) -> Vec<[f32; 3]> {
+        (0..n)
+            .map(|i| {
+                let a = -(i as f32) * std::f32::consts::TAU / n as f32;
+                [cx + r * a.cos(), cy + r * a.sin(), 0.0]
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_face_within_the_vertex_cap_is_cut() {
+        let hole = circle(5.0, 5.0, 2.0, 64);
+        assert!(triangulate_with_holes(&square(0.0, 0.0, 10.0), &[hole]).is_ok());
+    }
+
+    /// A crafted STEP face must not stall the import in the superlinear ear
+    /// clipper: past the cap the caller keeps the outline fill.
+    #[test]
+    fn a_face_over_the_vertex_cap_is_refused_before_clipping() {
+        let hole = circle(5.0, 5.0, 2.0, MAX_FACE_VERTICES);
+        let err =
+            triangulate_with_holes(&square(0.0, 0.0, 10.0), &[hole]).expect_err("over the cap");
+        assert!(err.contains("more than"), "{err}");
+    }
 }
