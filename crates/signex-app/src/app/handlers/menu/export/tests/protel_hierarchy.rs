@@ -101,7 +101,10 @@ fn a_child_placed_twice_is_refused_and_nothing_is_written() {
     );
 
     let out = std::env::temp_dir().join(format!("signex-protel-twice-{}.NET", Uuid::new_v4()));
-    let _ = app.handle_export_netlist_finished(Ok(out.clone()));
+    let _ = app.handle_export_netlist_finished(
+        app.document_state.active_path.clone().expect("active"),
+        Ok(out.clone()),
+    );
     assert!(!out.exists(), "a refused export must not write a file");
     assert!(app.document_state.error_notice.is_some());
 }
@@ -159,7 +162,10 @@ fn a_child_holding_only_power_ports_placed_twice_is_not_refused() {
         assert_eq!(refusal_of(&app), None, "{leaf_ref}");
 
         let out = std::env::temp_dir().join(format!("signex-protel-pwr-{}.NET", Uuid::new_v4()));
-        let _ = app.handle_export_netlist_finished(Ok(out.clone()));
+        let _ = app.handle_export_netlist_finished(
+            app.document_state.active_path.clone().expect("active"),
+            Ok(out.clone()),
+        );
         assert!(app.document_state.error_notice.is_none(), "{leaf_ref}");
         assert!(out.exists(), "{leaf_ref}: a power-only child still exports");
         std::fs::remove_file(&out).ok();
@@ -181,6 +187,7 @@ fn power_references_are_not_listed_beside_a_real_shared_part() {
         metadata: Default::default(),
         netlist: None,
         netlist_sheets: Vec::new(),
+        netlist_sheet_placements: Vec::new(),
     };
     let refusal = issues.shared_reference_refusal(&ctx).expect("R1 is shared");
     assert!(refusal.contains("R1"), "{refusal}");
@@ -204,7 +211,10 @@ fn a_child_placed_by_two_different_parents_is_refused_and_nothing_is_written() {
     );
 
     let out = std::env::temp_dir().join(format!("signex-protel-parents-{}.NET", Uuid::new_v4()));
-    let _ = app.handle_export_netlist_finished(Ok(out.clone()));
+    let _ = app.handle_export_netlist_finished(
+        app.document_state.active_path.clone().expect("active"),
+        Ok(out.clone()),
+    );
     assert!(!out.exists(), "a refused export must not write a file");
     assert!(app.document_state.error_notice.is_some());
 }

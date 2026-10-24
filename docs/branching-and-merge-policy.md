@@ -49,7 +49,9 @@ as status-check contexts):
 - `test · workspace` — `cargo test --workspace` (headless GPU tests run on
   lavapipe).
 - `deny · licenses + deps` — `cargo deny check licenses` (no GPL transitive
-  deps). `sources` and `advisories` run in the same job but are advisory.
+  deps) and `cargo deny check bans` (the `[bans]` table in `deny.toml`, e.g.
+  the glyphon ban; duplicate versions only warn). `sources` and `advisories`
+  run in the same job but are advisory.
 - `PR-description self-declaration` — the license-compliance block is present
   and does not admit KiCad-derived source.
 - `No GPL-tool-shaped names anywhere in crates/` — the representative licence

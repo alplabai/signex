@@ -85,12 +85,26 @@ pub enum LibraryMessage {
     /// refreshes the cached library file enumeration so the project
     /// tree shows the new node, and opens the file as a primitive
     /// editor tab.
-    AddLibrarySymbolFilePicked(PathBuf),
+    AddLibrarySymbolFilePicked {
+        project_id: crate::app::ProjectId,
+        path: PathBuf,
+    },
     /// F34 — Save-As dialog confirmed for a new footprint library
     /// file (`.snxfpt`). Writes an empty `Footprint` to the picked
     /// path, refreshes the cached library file enumeration, and
     /// opens the file as a primitive editor tab.
-    AddLibraryFootprintFilePicked(PathBuf),
+    AddLibraryFootprintFilePicked {
+        project_id: crate::app::ProjectId,
+        path: PathBuf,
+    },
+    /// The off-thread write behind `AddLibrary{Symbol,Footprint}FilePicked`
+    /// finished; on success the file is registered on `project_id` (the
+    /// project the dialog was opened for) and opened as a primitive tab.
+    AddLibraryFileWritten {
+        project_id: crate::app::ProjectId,
+        path: PathBuf,
+        result: Result<(), String>,
+    },
     /// Dismiss the New Component modal without creating anything.
     CloseNewComponent,
     /// Live-edit of the New Component modal's "Internal PN" field.
@@ -539,6 +553,9 @@ pub struct ResolvedPlacement {
     pub library_version: String,
     pub internal_pn: String,
     pub value: String,
+    /// The symbol is a power port: the placed instance is `is_power` and
+    /// `value` is its net name.
+    pub is_power: bool,
     /// Reference prefix from the library symbol's designator (`U?` -> `U`).
     pub prefix: String,
 }

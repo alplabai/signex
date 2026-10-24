@@ -132,6 +132,7 @@ impl super::super::super::Signex {
         let sheets = self.preview_sheets();
         let mut next = seed_counters(&sheets);
         let locked = &self.ui_state.annotate_locked;
+        let order = self.ui_state.annotate_order;
         // The same project-wide grouping the action builds, so the preview
         // promises one designator per multi-unit part, even one split across
         // sheets, and honours locks the way the pass does (#691).
@@ -139,12 +140,12 @@ impl super::super::super::Signex {
             .iter()
             .map(|(_, sheet)| sheet.symbols.as_slice())
             .collect();
-        let parts = signex_types::schematic::ProjectParts::new(&documents, locked);
+        let parts = signex_types::schematic::ProjectParts::new(&documents, locked, order);
         let mut designator_of_part: std::collections::HashMap<usize, String> =
             std::collections::HashMap::new();
         let mut out = Vec::new();
         for (sheet_ordinal, (title, sheet)) in sheets.iter().enumerate() {
-            for i in signex_types::schematic::annotation_order(&sheet.symbols) {
+            for i in signex_types::schematic::annotation_order(&sheet.symbols, order) {
                 let sym = &sheet.symbols[i];
                 if sym.reference.is_empty() || !is_target(sym) {
                     continue;
