@@ -458,6 +458,9 @@ impl Signex {
                 self.finish_update()
             }
             ToolMessage::SelectTool(tool) => {
+                // An armed Move belongs to the Select tool: any tool pick
+                // (re-selecting Select included) cancels it and any float.
+                self.cancel_move_pick();
                 // Buffers belong to the tool that started them (#102).
                 // Re-selecting the active tool mid-gesture keeps the gesture
                 // on purpose: only a switch to a different tool drops the buffers.

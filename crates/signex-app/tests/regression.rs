@@ -167,3 +167,6 @@ mod surface_failures;
 
 #[path = "regression/no_erc_directive.rs"]
 mod no_erc_directive;
+
+#[path = "regression/click_click_move.rs"]
+mod click_click_move;

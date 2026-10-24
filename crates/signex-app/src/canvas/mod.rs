@@ -7,8 +7,11 @@
 
 mod camera;
 mod draw;
+mod erc_marker;
 pub mod grid;
 mod input;
+mod move_pick;
+mod shape_preview;
 
 use iced::event::Event;
 use iced::mouse;
@@ -16,7 +19,10 @@ use iced::widget::canvas;
 use iced::{Color, Rectangle, Renderer, Theme};
 
 pub use camera::Camera;
+pub use erc_marker::{ErcMarker, ErcMarkerSeverity};
 pub use grid::GridState;
+pub use move_pick::MovePick;
+pub use shape_preview::ShapePreviewKind;
 
 use crate::schematic_runtime::SchematicSheetExt as _;
 
@@ -51,6 +57,8 @@ pub struct CanvasState {
     move_dragging: bool,
     /// Current world position during a move-drag (for preview offset).
     move_current: Option<(f64, f64)>,
+    /// Set while a click-click move floats: the `move_epoch` it started in.
+    move_float: Option<u64>,
     // ─── Double-click detection ───
     /// Timestamp of last left-click (for double-click detection).
     last_click_time: Option<std::time::Instant>,
@@ -140,36 +148,13 @@ pub struct CanvasSlot {
     /// is a reference pick, not a selection. Synced from
     /// `ui_state.reorder_picker.is_some()` at the top of each view().
     pub reorder_picker_armed: bool,
+    /// Armed Active Bar Move / Move Selection; mirrors `ui_state.move_pick`.
+    pub move_pick: Option<MovePick>,
+    /// Bumped to cancel any floating move started under an older value.
+    pub move_epoch: u64,
     /// Two-click shape anchor + which shape is being drawn. Used by
     /// the rubber-band preview for Line / Rectangle / Circle.
     pub shape_anchor: Option<(signex_types::schematic::Point, ShapePreviewKind)>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ShapePreviewKind {
-    Line,
-    Rect,
-    Circle,
-}
-
-/// Canvas-side projection of an ERC violation — just enough to draw
-/// its marker without pulling the full Violation type into the render
-/// crate.
-#[derive(Debug, Clone)]
-pub struct ErcMarker {
-    pub x: f64,
-    pub y: f64,
-    pub severity: ErcMarkerSeverity,
-    /// Uuid of the primary offending item (label, wire, symbol, …).
-    /// Reserved for a future halo/highlight pass; unused today.
-    pub primary_uuid: Option<uuid::Uuid>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ErcMarkerSeverity {
-    Error,
-    Warning,
-    Info,
 }
 
 impl Default for CanvasSlot {
@@ -214,6 +199,8 @@ impl CanvasSlot {
             arc_points: Vec::new(),
             polyline_points: Vec::new(),
             reorder_picker_armed: false,
+            move_pick: None,
+            move_epoch: 0,
             shape_anchor: None,
         }
     }
@@ -327,6 +314,7 @@ pub struct CanvasViewPrefs<'a> {
     pub auto_focus: bool,
     pub draw_mode: crate::app::DrawMode,
     pub wire_color_overrides: &'a std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    pub selection_filters: &'a std::collections::HashSet<crate::active_bar::SelectionFilter>,
 }
 
 /// The schematic `canvas::Program` — a per-frame *view* of the app state,
@@ -457,7 +445,7 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         // "move" visually lifts the originals out of place and places them at
         // the cursor — matches Altium's behavior where the dragged objects
         // travel with the mouse and nothing stays behind at the old location.
-        let drag_offset = if state.move_dragging {
+        let drag_offset = if state.move_dragging && !self.float_is_stale(state) {
             state
                 .move_origin
                 .zip(state.move_current)
@@ -783,6 +771,11 @@ pub enum CanvasEvent {
         dx: f64,
         dy: f64,
     },
+    /// Click-click move picked up at this world point (#271).
+    MovePicked {
+        world_x: f64,
+        world_y: f64,
+    },
 }
 
 #[cfg(test)]
@@ -793,9 +786,10 @@ mod tests {
     /// only touches the camera, so the values here just have to exist —
     /// #631 moved the method onto the borrowing view, which needs both
     /// halves to be constructed.
-    fn test_prefs(
-        overrides: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
-    ) -> CanvasViewPrefs<'_> {
+    pub(super) fn test_prefs<'a>(
+        overrides: &'a std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+        filters: &'a std::collections::HashSet<crate::active_bar::SelectionFilter>,
+    ) -> CanvasViewPrefs<'a> {
         let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
         CanvasViewPrefs {
             grid_visible: true,
@@ -810,6 +804,7 @@ mod tests {
             auto_focus: false,
             draw_mode: crate::app::DrawMode::Ortho90,
             wire_color_overrides: overrides,
+            selection_filters: filters,
         }
     }
 
@@ -852,8 +847,8 @@ mod tests {
         )));
 
         // Act
-        let overrides = std::collections::HashMap::new();
-        let view = SchematicCanvas::new(&canvas, test_prefs(&overrides));
+        let (overrides, filters) = Default::default();
+        let view = SchematicCanvas::new(&canvas, test_prefs(&overrides, &filters));
         let action = view.update_pending_fit(Rectangle::new(
             iced::Point::new(0.0, 0.0),
             iced::Size::new(800.0, 600.0),
@@ -888,8 +883,8 @@ mod tests {
             iced::Point::new(0.0, 0.0),
             iced::Size::new(100.0, 50.0),
         )));
-        let overrides = std::collections::HashMap::new();
-        let view = SchematicCanvas::new(&canvas, test_prefs(&overrides));
+        let (overrides, filters) = Default::default();
+        let view = SchematicCanvas::new(&canvas, test_prefs(&overrides, &filters));
         let _ = view.update_pending_fit(bounds);
         let after_fit = canvas.live_camera();
 

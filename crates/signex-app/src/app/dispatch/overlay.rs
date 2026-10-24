@@ -151,6 +151,7 @@ impl Signex {
                     || self.interaction_state.pending_port.is_some()
                     || self.ui_state.pending_net_color.is_some()
                     || self.ui_state.reorder_picker.is_some()
+                    || self.ui_state.move_pick.is_some()
                     || self.ui_state.lasso_polygon.is_some();
                 if placement_active {
                     self.clear_transient_schematic_tool_state();
@@ -159,6 +160,7 @@ impl Signex {
                     self.ui_state.pending_net_color = None;
                     self.interaction_state.active_canvas_mut().pending_net_color = None;
                     self.ui_state.reorder_picker = None;
+                    self.ui_state.move_pick = None;
                     self.interaction_state
                         .active_canvas_mut()
                         .clear_overlay_cache();
