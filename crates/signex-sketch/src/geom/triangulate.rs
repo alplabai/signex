@@ -195,6 +195,12 @@ pub fn ear_clip_with_holes(
     if holes.is_empty() {
         return (outer.to_vec(), ear_clip(outer));
     }
+    // A NaN or infinite coordinate has no place in the bridging or the
+    // spatial indexes; there is no polygon to fill, so produce no triangles.
+    let finite = |p: &Point2| p.x.is_finite() && p.y.is_finite();
+    if !outer.iter().all(finite) || !holes.iter().flatten().all(finite) {
+        return (Vec::new(), Vec::new());
+    }
     // Normalise outer to CCW so the hole-bridge math has a
     // consistent winding to fight against.
     let outer_area = signed_area(outer);
@@ -234,6 +240,25 @@ mod tests {
 
     fn p(x: f64, y: f64) -> Point2 {
         Point2::new(x, y)
+    }
+
+    #[test]
+    fn non_finite_coordinates_give_no_triangles() {
+        let square = vec![p(0.0, 0.0), p(10.0, 0.0), p(10.0, 10.0), p(0.0, 10.0)];
+        let hole = vec![p(4.0, 4.0), p(4.0, 6.0), p(6.0, 6.0), p(6.0, 4.0)];
+        for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let mut in_hole = hole.clone();
+            in_hole[1].y = bad;
+            assert!(ear_clip_with_holes(&square, &[in_hole]).1.is_empty());
+            let mut in_outer = square.clone();
+            in_outer[2].x = bad;
+            assert!(
+                ear_clip_with_holes(&in_outer, std::slice::from_ref(&hole))
+                    .1
+                    .is_empty()
+            );
+        }
+        assert!(!ear_clip_with_holes(&square, &[hole]).1.is_empty());
     }
 
     #[test]

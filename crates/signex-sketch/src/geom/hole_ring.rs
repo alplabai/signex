@@ -97,19 +97,63 @@ impl HoleRing {
         self.grid.index(self.grid.column(p.x), self.grid.row(p.y))
     }
 
+    /// Add edge `a`-`b` to the cells the segment passes through, row by row,
+    /// not to every cell of its bounding box: a long diagonal over a dense
+    /// grid would otherwise land in a number of cells that grows with the
+    /// whole grid.
     fn register_edge(&mut self, a: VertexId, b: VertexId) {
         let (pa, pb) = (self.point(a), self.point(b));
-        let (c0, c1) = (
-            self.grid.column(pa.x.min(pb.x)),
-            self.grid.column(pa.x.max(pb.x)),
-        );
         let (r0, r1) = (self.grid.row(pa.y.min(pb.y)), self.grid.row(pa.y.max(pb.y)));
         for row in r0..=r1 {
+            let (c0, c1) = self.columns_in_row(pa, pb, row);
             for column in c0..=c1 {
                 let at = self.grid.index(column, row);
                 self.cells[at].edges.push((a, b));
             }
         }
+    }
+
+    /// The columns segment `pa`-`pb` covers within row `row`, widened a hair
+    /// on every side so a hit that rounds across a cell boundary is still in
+    /// a registered cell. Falls back to the segment's whole column range when
+    /// the arithmetic is not finite.
+    fn columns_in_row(&self, pa: Point2, pb: Point2, row: usize) -> (usize, usize) {
+        let (min_x, max_x) = (pa.x.min(pb.x), pa.x.max(pb.x));
+        let whole = (self.grid.column(min_x), self.grid.column(max_x));
+        let (lo, hi) = self.grid.row_span(row);
+        let pad_y = self.grid.cell_height() * 1e-6;
+        let y0 = (lo - pad_y).max(pa.y.min(pb.y));
+        let y1 = (hi + pad_y).min(pa.y.max(pb.y));
+        if y0 > y1 {
+            return whole;
+        }
+        let x_at = |y: f64| {
+            if pa.y == pb.y {
+                pa.x
+            } else {
+                pa.x + (y - pa.y) * (pb.x - pa.x) / (pb.y - pa.y)
+            }
+        };
+        let (x0, x1) = if pa.y == pb.y {
+            (min_x, max_x)
+        } else {
+            (x_at(y0), x_at(y1))
+        };
+        let pad_x =
+            self.grid.cell_width() * 1e-6 + 8.0 * f64::EPSILON * min_x.abs().max(max_x.abs());
+        let (from, to) = (x0.min(x1) - pad_x, x0.max(x1) + pad_x);
+        if !(from.is_finite() && to.is_finite()) {
+            return whole;
+        }
+        let from = self.grid.column(from.max(min_x));
+        let to = self.grid.column(to.min(max_x));
+        (from.min(to), from.max(to))
+    }
+
+    /// How many (cell, edge) entries the cells hold, stale ones included.
+    #[cfg(test)]
+    fn edge_registrations(&self) -> usize {
+        self.cells.iter().map(|c| c.edges.len()).sum()
     }
 
     pub(super) fn point(&self, v: VertexId) -> Point2 {
@@ -305,6 +349,37 @@ mod tests {
 
     fn p(x: f64, y: f64) -> Point2 {
         Point2::new(x, y)
+    }
+
+    /// Long diagonal edges over a dense grid register in the cells they cross,
+    /// a count that follows their length, not in every cell of their bounding
+    /// box.
+    #[test]
+    fn long_diagonals_register_only_where_they_pass() {
+        // 20 edges, each running corner to corner of the box, then a
+        // serpentine of 20 000 nearby points.
+        let mut outer = Vec::new();
+        for k in 0..10 {
+            outer.push(p(0.0, k as f64));
+            outer.push(p(1000.0, 100.0 - k as f64));
+        }
+        let field = 20_000;
+        for k in 0..field {
+            let (row, col) = (k / 200, k % 200);
+            let col = if row % 2 == 0 { col } else { 199 - col };
+            outer.push(p(3.0 + col as f64 * 4.9, 1.0 + row as f64 * 0.9));
+        }
+        let bounds = Aabb::from_points(&outer).unwrap();
+        let ring = HoleRing::new(&outer, bounds, outer.len());
+        let (cells, edges) = (ring.grid.cell_count(), outer.len());
+        let registered = ring.edge_registrations();
+        // Bounding boxes would put thousands of entries per diagonal.
+        let allowed = 3 * edges + 20 * 600;
+        assert!(20 * cells > allowed, "the test must be able to tell");
+        assert!(
+            registered < allowed,
+            "{registered} registrations for {edges} edges over {cells} cells"
+        );
     }
 
     /// Splicing holes at the same few vertices over and over, which nests the

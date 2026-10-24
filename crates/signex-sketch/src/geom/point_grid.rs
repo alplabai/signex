@@ -11,6 +11,9 @@
 use super::Point2;
 use super::aabb_index::{Aabb, AabbIndex};
 
+/// The most cells a grid is given, however many items it indexes.
+const MAX_CELLS: f64 = (1 << 22) as f64;
+
 /// A `nx` x `ny` lattice of equal cells over some bounds, about one cell per
 /// four expected items, with the cell count divided between the axes so cells
 /// are close to square whatever the bounds' aspect ratio.
@@ -33,9 +36,24 @@ impl CellGrid {
         }
     }
 
+    /// A grid over `bounds` for about `items` points. Bounds that are not
+    /// finite (a NaN or infinite coordinate) get a single cell: every point
+    /// clamps into it, so queries stay correct, just unindexed. The cell
+    /// count is capped, and each axis has at least one cell.
     pub(super) fn new(bounds: Aabb, items: usize) -> Self {
         let (w, h) = (bounds.max.x - bounds.min.x, bounds.max.y - bounds.min.y);
-        let target = (items as f64 / 4.0).ceil().max(1.0);
+        let single = |min: Point2| Self {
+            min,
+            cell_w: 1.0,
+            cell_h: 1.0,
+            nx: 1,
+            ny: 1,
+        };
+        if !(w.is_finite() && h.is_finite() && bounds.min.x.is_finite() && bounds.min.y.is_finite())
+        {
+            return single(Point2::new(0.0, 0.0));
+        }
+        let target = (items as f64 / 4.0).ceil().clamp(1.0, MAX_CELLS);
         let (nx, ny) = if w <= 0.0 && h <= 0.0 {
             (1.0, 1.0)
         } else if h <= 0.0 {
@@ -46,6 +64,9 @@ impl CellGrid {
             let nx = (target * w / h).sqrt().round().clamp(1.0, target);
             (nx, (target / nx).ceil().max(1.0))
         };
+        if !(nx >= 1.0 && ny >= 1.0 && nx * ny <= 2.0 * MAX_CELLS) {
+            return single(bounds.min);
+        }
         Self {
             min: bounds.min,
             cell_w: (w / nx).max(f64::MIN_POSITIVE),
@@ -71,6 +92,30 @@ impl CellGrid {
     /// The row holding `y`, clamped onto the grid.
     pub(super) fn row(&self, y: f64) -> usize {
         (((y - self.min.y) / self.cell_h).floor().max(0.0) as usize).min(self.ny.saturating_sub(1))
+    }
+
+    /// The y range row `row` covers; the first and last rows reach to infinity
+    /// because points outside the bounds clamp onto them.
+    pub(super) fn row_span(&self, row: usize) -> (f64, f64) {
+        let lo = if row == 0 {
+            f64::NEG_INFINITY
+        } else {
+            self.min.y + row as f64 * self.cell_h
+        };
+        let hi = if row + 1 >= self.ny {
+            f64::INFINITY
+        } else {
+            self.min.y + (row + 1) as f64 * self.cell_h
+        };
+        (lo, hi)
+    }
+
+    pub(super) fn cell_width(&self) -> f64 {
+        self.cell_w
+    }
+
+    pub(super) fn cell_height(&self) -> f64 {
+        self.cell_h
     }
 
     pub(super) fn index(&self, column: usize, row: usize) -> usize {
@@ -154,6 +199,56 @@ mod tests {
     }
 
     /// Box queries on a strip return exactly the points inside the box.
+    /// Non-finite or degenerate bounds still build a valid grid whose queries
+    /// match a scan.
+    #[test]
+    fn odd_bounds_build_a_valid_grid() {
+        let nan = f64::NAN;
+        let inf = f64::INFINITY;
+        let pt = |x, y| Point2::new(x, y);
+        let cases = [
+            Aabb::new(pt(0.0, 0.0), pt(nan, 5.0)),
+            Aabb::new(pt(nan, nan), pt(nan, nan)),
+            Aabb::new(pt(0.0, 0.0), pt(inf, 5.0)),
+            Aabb::new(pt(-inf, 0.0), pt(inf, inf)),
+            Aabb::new(pt(0.0, 0.0), pt(0.0, 5.0)),
+            Aabb::new(pt(0.0, 0.0), pt(5.0, 0.0)),
+            Aabb::new(pt(1.0, 1.0), pt(1.0, 1.0)),
+            Aabb::new(pt(0.0, 0.0), pt(1e300, 1e-300)),
+        ];
+        for bounds in cases {
+            let grid = CellGrid::new(bounds, 4000);
+            assert!(grid.nx >= 1 && grid.ny >= 1, "{bounds:?}");
+            assert!(grid.cell_count() <= 2 << 22, "{bounds:?}");
+        }
+        let points: Vec<(Point2, usize)> = [
+            pt(0.0, 0.0),
+            pt(1.0, 2.0),
+            pt(nan, 1.0),
+            pt(3.0, inf),
+            pt(-inf, 0.5),
+            pt(4.0, 4.0),
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(i, p)| (p, i))
+        .collect();
+        let grid = PointGrid::new(points.clone());
+        let region = Aabb::new(pt(-1.0, -1.0), pt(5.0, 5.0));
+        let mut got: Vec<usize> = grid.query(region).copied().collect();
+        let mut want: Vec<usize> = points
+            .iter()
+            .filter(|(p, _)| Aabb::new(*p, *p).overlaps(region))
+            .map(|&(_, i)| i)
+            .collect();
+        got.sort_unstable();
+        want.sort_unstable();
+        assert_eq!(got, want);
+        let strip = Aabb::new(pt(0.0, 0.0), pt(1000.0, 0.0));
+        let strip_grid = CellGrid::new(strip, 4000);
+        assert_eq!((strip_grid.nx, strip_grid.ny), (1000, 1));
+    }
+
     #[test]
     fn strip_queries_match_a_scan() {
         let points: Vec<(Point2, usize)> = (0..3000)
