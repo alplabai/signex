@@ -298,20 +298,8 @@ impl Signex {
     }
 
     pub(crate) fn handle_move_selection_apply(&mut self) -> Task<Message> {
-        let dx = self
-            .ui_state
-            .move_selection
-            .dx
-            .trim()
-            .parse::<f64>()
-            .unwrap_or(0.0);
-        let dy = self
-            .ui_state
-            .move_selection
-            .dy
-            .trim()
-            .parse::<f64>()
-            .unwrap_or(0.0);
+        let dx = move_offset_mm(&self.ui_state.move_selection.dx);
+        let dy = move_offset_mm(&self.ui_state.move_selection.dy);
         if dx == 0.0 && dy == 0.0 {
             self.ui_state.move_selection.open = false;
             return Task::none();
@@ -360,6 +348,13 @@ impl Signex {
     }
 }
 
+/// A Move Selection offset typed in the dialog. Text that is not a finite
+/// number moves by nothing (an `inf` offset would send every selected item
+/// to infinity); a refused `nan` / `inf` is reported to the Messages panel.
+fn move_offset_mm(text: &str) -> f64 {
+    crate::numeric_field::parse_field_f64(text).unwrap_or(0.0)
+}
+
 /// Window settings for a detached modal.
 ///
 /// The level is `Normal` and the window keeps the OS decorations. A
@@ -387,7 +382,22 @@ pub(crate) fn detached_modal_settings(size: iced::Size) -> iced::window::Setting
 
 #[cfg(test)]
 mod tests {
-    use super::detached_modal_settings;
+    use super::{detached_modal_settings, move_offset_mm};
+
+    /// #828 -- `inf` / `nan` / an overflow must not become a move offset.
+    #[test]
+    fn move_offset_refuses_non_finite_text() {
+        for bad in ["nan", "NaN", "inf", "-inf", "1e999", "-1e999"] {
+            assert_eq!(move_offset_mm(bad), 0.0, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn move_offset_reads_ordinary_text() {
+        assert_eq!(move_offset_mm(" 2.5 "), 2.5);
+        assert_eq!(move_offset_mm("-1"), -1.0);
+        assert_eq!(move_offset_mm(""), 0.0);
+    }
 
     #[test]
     fn detached_modal_is_not_always_on_top() {
