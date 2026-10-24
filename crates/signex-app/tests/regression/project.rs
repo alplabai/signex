@@ -530,7 +530,7 @@ fn add_existing_same_file_twice_is_silently_skipped() {
 
     // First add — succeeds, sheet appears.
     let _ = app.update(Message::Project(ProjectMsg::AddExistingFilePicked {
-        project_idx: 0,
+        project_id: app.document_state.projects[0].id,
         paths: Some(vec![new_sheet.clone()]),
     }));
     assert_eq!(
@@ -541,7 +541,7 @@ fn add_existing_same_file_twice_is_silently_skipped() {
 
     // Second add — silent no-op, list size unchanged.
     let _ = app.update(Message::Project(ProjectMsg::AddExistingFilePicked {
-        project_idx: 0,
+        project_id: app.document_state.projects[0].id,
         paths: Some(vec![new_sheet.clone()]),
     }));
     assert_eq!(
@@ -562,7 +562,7 @@ fn add_existing_with_external_path_copies_into_project_dir() {
     fs::write(&external_sheet, b"external sheet bytes").unwrap();
 
     let _ = app.update(Message::Project(ProjectMsg::AddExistingFilePicked {
-        project_idx: 0,
+        project_id: app.document_state.projects[0].id,
         paths: Some(vec![external_sheet.clone()]),
     }));
 
@@ -618,7 +618,7 @@ fn add_new_schematic_writes_blank_snxsch_marks_project_dirty_no_tab_open() {
     assert!(!new_sheet.exists());
 
     let _ = app.update(Message::Project(ProjectMsg::AddNewSchematicPicked {
-        project_idx: 0,
+        project_id: app.document_state.projects[0].id,
         path: Some(new_sheet.clone()),
     }));
 
@@ -647,7 +647,7 @@ fn add_new_schematic_cancelled_picker_is_a_clean_noop() {
     let (mut app, _tmp, prj_path) = fixture_project_with_companions("November");
 
     let _ = app.update(Message::Project(ProjectMsg::AddNewSchematicPicked {
-        project_idx: 0,
+        project_id: app.document_state.projects[0].id,
         path: None, // user cancelled the Save-As dialog
     }));
 

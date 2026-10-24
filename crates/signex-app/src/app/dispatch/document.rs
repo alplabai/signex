@@ -38,10 +38,12 @@ impl Signex {
                 Task::batch([task, self.finish_update()])
             }
             EditMsg::Undo => {
+                self.cancel_move_pick();
                 self.handle_undo_requested();
                 self.finish_update()
             }
             EditMsg::Redo => {
+                self.cancel_move_pick();
                 self.handle_redo_requested();
                 self.finish_update()
             }
@@ -146,8 +148,8 @@ impl Signex {
     /// `app/handlers/menu/export.rs`.
     pub(crate) fn dispatch_export_message(&mut self, msg: ExportMsg) -> Task<Message> {
         match msg {
-            ExportMsg::PdfFinished(result) => {
-                let task = self.handle_export_pdf_finished(result);
+            ExportMsg::PdfFinished { source, result } => {
+                let task = self.handle_export_pdf_finished(source, result);
                 iced::Task::batch([task, self.finish_update()])
             }
             ExportMsg::NetlistFinished(result) => {

@@ -104,6 +104,9 @@ pub(super) fn bake_grid(
     }
     let nx = nx as usize;
     let ny = ny as usize;
+    if !super::within_instance_cap("grid", source, nx.checked_mul(ny), warnings) {
+        return Ok(());
+    }
 
     for j in 0..ny {
         for i in 0..nx {

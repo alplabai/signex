@@ -10,6 +10,8 @@ mod page_setup;
 mod pdf_netlist;
 mod print_preview;
 #[cfg(test)]
+mod source_tests;
+#[cfg(test)]
 pub(crate) mod tests;
 
 /// Assemble the export context, discarding the stitch issues — for the
@@ -310,6 +312,26 @@ fn build_page_scope(
     document_state: &crate::app::state::DocumentState,
 ) -> Option<(ExportContext, ExportIssues)> {
     build_scope(document_state, false)
+}
+
+/// [`build_page_scope`] for an explicit source document rather than the active
+/// tab — the PDF completion path, where the OS dialog may have outlived the tab
+/// the export was started from (#833). `None` when `source` is no longer open.
+///
+/// The scope machinery resolves ownership and the netlist root off
+/// `active_path`, so the source is made active for the one synchronous build
+/// and the real active path is put straight back — nothing awaits in between.
+fn build_page_scope_for_source(
+    document_state: &mut crate::app::state::DocumentState,
+    source: &std::path::Path,
+) -> Option<(ExportContext, ExportIssues)> {
+    if !document_state.engines.contains_key(source) {
+        return None;
+    }
+    let previous = document_state.active_path.replace(source.to_path_buf());
+    let scope = build_page_scope(document_state);
+    document_state.active_path = previous;
+    scope
 }
 
 fn build_scope(

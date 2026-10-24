@@ -544,9 +544,9 @@ pub fn selected_is_deletable(selected: &Option<SymbolSelection>) -> bool {
 /// this selection. Unlike [`selected_is_deletable`], `All` IS eligible
 /// here — aligning to grid never destroys data the way a whole-symbol
 /// Delete would, so there's no accidental-wipe concern to guard
-/// against. Only `None`/`Field` are true no-ops (a field has no
-/// canvas position of its own yet). Callers gate the undo snapshot on
-/// this so a no-op Align To Grid press stays clean, mirroring how
+/// against. Only `None`/`Field` are true no-ops (Align To Grid is not
+/// implemented for fields yet). Callers gate the undo snapshot on this so
+/// a no-op Align To Grid press stays clean, mirroring how
 /// [`selected_is_deletable`] gates Delete.
 pub fn selected_is_alignable(selected: &Option<SymbolSelection>) -> bool {
     !matches!(selected, None | Some(SymbolSelection::Field(_)))
@@ -579,6 +579,7 @@ fn next_pin_number(sym: &Symbol) -> String {
 }
 
 mod context_menu;
+mod fields;
 mod hit_test;
 mod movement;
 mod rotation;
@@ -586,6 +587,7 @@ mod rotation;
 mod tests;
 
 pub use context_menu::*;
+pub use fields::*;
 pub use hit_test::*;
 pub use movement::*;
 pub use rotation::*;

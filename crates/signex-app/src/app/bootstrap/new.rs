@@ -83,6 +83,7 @@ impl Signex {
         let symbol_grid_size_mm = crate::fonts::read_symbol_grid_size_mm_pref();
         let symbol_grid_style = crate::fonts::read_symbol_grid_style_pref();
         let symbol_pin_selection = crate::fonts::read_symbol_pin_selection_pref();
+        let zoom_step_percent = crate::fonts::read_zoom_step_percent_pref();
         // Default to the 50-mil Altium grid; user-set value overrides
         // through the prefs file (UX §1.5 — last-used grid persists).
         let grid_size_mm =
@@ -223,6 +224,8 @@ impl Signex {
                 preferences_draft_grid_style: crate::fonts::read_grid_style_pref(),
                 pcb_gpu_render,
                 preferences_draft_pcb_gpu_render: pcb_gpu_render,
+                zoom_step_percent,
+                preferences_draft_zoom_step_percent: zoom_step_percent,
                 symbol_grid_size_mm,
                 preferences_draft_symbol_grid_size_mm: symbol_grid_size_mm,
                 symbol_grid_style,
@@ -277,6 +280,7 @@ impl Signex {
                 net_color_palette_open: false,
                 parameter_manager_open: false,
                 reorder_picker: None,
+                move_pick: None,
                 pin_matrix_overrides: crate::fonts::read_pin_matrix_overrides(),
                 annotate_locked: std::collections::HashSet::new(),
                 selection_mode: crate::schematic_runtime::hit_test::SelectionMode::default(),
@@ -395,6 +399,7 @@ impl Signex {
                 bom_preview: None,
                 pending_git_commits: Vec::new(),
                 inflight_git_commits: std::collections::HashSet::new(),
+                active_git_repos: std::collections::HashSet::new(),
                 pending_opens: std::collections::HashSet::new(),
             },
             interaction_state: InteractionState {

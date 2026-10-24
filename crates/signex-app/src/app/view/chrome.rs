@@ -250,6 +250,7 @@ impl Signex {
                 draft_symbol_grid_size_mm: ui.preferences_draft_symbol_grid_size_mm,
                 draft_symbol_grid_style: ui.preferences_draft_symbol_grid_style,
                 draft_symbol_pin_selection: ui.preferences_draft_symbol_pin_selection,
+                draft_zoom_step_percent: ui.preferences_draft_zoom_step_percent,
                 custom_name: ui.custom_theme.as_ref().map(|c| c.name.as_str()),
                 theme_status: &ui.preferences_theme_status,
                 dirty: ui.preferences_dirty,
@@ -463,5 +464,37 @@ impl Signex {
             .interaction(interaction)
             .on_press(Message::Ui(UiMsg::DragStart(target)))
             .into()
+    }
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use super::*;
+    use crate::layout_probe::{find, lay_out_texts, natural};
+
+    const RESET: &str = "Start a fresh preferences file";
+
+    /// #623: the #602 banner's one action, laid out in the detached
+    /// Preferences window at its opening size (900 × 620). Before #604 the
+    /// text column measured against the whole width first and left the
+    /// button a ~37 px sliver, its label wrapped onto five lines; every
+    /// gate passed, because nothing laid the tree out.
+    #[test]
+    fn the_preferences_file_reset_button_shows_its_label_on_one_line() {
+        let (mut app, _task) = Signex::new();
+        app.ui_state.prefs_load_error = Some("could not be read as JSON".into());
+
+        let texts = lay_out_texts(app.view_preferences_body(), iced::Size::new(900.0, 620.0));
+
+        let label = find(&texts, RESET).bounds;
+        let one_line = natural::<()>(iced::widget::text(RESET).size(11).into(), RESET);
+        assert!(
+            label.height <= one_line.height + 0.5,
+            "the button label wraps: {label:?}, one line is {one_line:?}"
+        );
+        assert!(
+            label.width + 0.5 >= one_line.width,
+            "the button is narrower than its label: {label:?}, natural {one_line:?}"
+        );
     }
 }

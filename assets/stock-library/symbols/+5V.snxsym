@@ -1,0 +1,41 @@
+format = "snxsym/v1"
+file_uuid = "f1d0ec04-e9ea-40f4-ac6d-07848c8e7004"
+display_name = "+5V"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols]]
+uuid = "e4ef583f-8d7b-4f10-a9c7-d879f9e11482"
+name = "+5V"
+anchor = [
+    0.0,
+    0.0,
+]
+pins_tsv = '''
+number	name	electrical	pos_x	pos_y	orientation	length	description	function	pin_package_length	propagation_delay_ns	designator_visible	name_visible	inside_symbol	inside_edge_symbol	outside_edge_symbol	outside_symbol	hidden	locked	part_number
+1	+5V	Power	0	0	Up	1.27					false	false	None	None	None	None	false	false	1
+'''
+designator = "#PWR?"
+comment = "+5V"
+description = "+5V supply power port (circle)."
+component_type = "Standard"
+mirrored = false
+version = "0.0.1"
+released = false
+part_count = 1
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "circle"
+center = [
+    0.0,
+    1.905,
+]
+radius = 0.635
+
+[symbols.schematic_params]

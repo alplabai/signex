@@ -136,6 +136,7 @@ impl Engine {
             | Command::PlaceBus { .. }
             | Command::PlaceLabel { .. }
             | Command::PlaceSymbol { .. }
+            | Command::RegisterLibSymbol { .. }
             | Command::PlaceChildSheet { .. }
             | Command::PlaceWireSegment { .. }
             | Command::PlaceJunction { .. }

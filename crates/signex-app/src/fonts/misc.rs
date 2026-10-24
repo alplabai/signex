@@ -131,3 +131,32 @@ impl crate::persist::DebouncedStore<crate::persist::SearchPrefsChange> for Prefs
         })
     }
 }
+
+// ──────────────────────────────────────────────────────────────────────────
+// Wheel-zoom speed (percent per notch)
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Read the wheel-zoom speed, in percent per notch. Defaults to 10 (a
+/// x1.10 notch) when the key is missing or not a number; a number outside
+/// 5..=50 is clamped into range.
+pub fn read_zoom_step_percent_pref() -> u8 {
+    read_zoom_step_percent_pref_at(&prefs_path())
+}
+
+pub fn read_zoom_step_percent_pref_at(path: &Path) -> u8 {
+    read_prefs_json(path)
+        .and_then(|json| json["zoom_step_percent"].as_f64())
+        .filter(|v| v.is_finite())
+        .map(|v| crate::canvas::Camera::clamp_zoom_step_percent(v.round() as i64))
+        .unwrap_or(crate::canvas::Camera::ZOOM_STEP_PERCENT_DEFAULT)
+}
+
+pub fn write_zoom_step_percent_pref(percent: u8) {
+    write_zoom_step_percent_pref_at(&prefs_path(), percent)
+}
+
+pub fn write_zoom_step_percent_pref_at(path: &Path, percent: u8) {
+    update_prefs_json(path, "zoom_step_percent", |prefs| {
+        prefs.insert("zoom_step_percent".to_string(), serde_json::json!(percent));
+    })
+}

@@ -347,7 +347,7 @@ mod tests {
         "edit_text_in_place", "edit_value", "fast_grid_1", "fast_grid_2", "find_next",
         "find_previous", "find_similar_objects", "highlight_net_under_cursor",
         "highlight_related_net_objects", "import_graphics", "leave_sheet", "measure_distance",
-        "move_object", "navigate_up_hierarchy", "next_document_tab",
+        "navigate_up_hierarchy", "next_document_tab",
         "next_highlighted_net_item", "next_sheet", "open_datasheet",
         "place_design_block",
         "place_global_label", "place_hierarchical_label", "place_junction",
@@ -451,6 +451,19 @@ mod tests {
         assert!(matches!(
             resolve("center_view_at_cursor"),
             Message::CanvasEvent(CanvasEvent::CenterAtCursor)
+        ));
+    }
+
+    /// #271 — `move_object` (Altium's `M M`) resolves to the interactive
+    /// Move, not to Move Selection or an unmapped no-op.
+    #[test]
+    fn move_object_resolves_to_the_interactive_move_action() {
+        let command = AppCommandId::new("move_object").expect("a catalog id is valid");
+        assert!(matches!(
+            core_to_message(&command),
+            Some(Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+                crate::active_bar::ActiveBarAction::Move
+            )))
         ));
     }
 

@@ -22,10 +22,14 @@ pub enum StockKind {
     Fiducial1mm,
 }
 
+/// Identity of the stock library itself. Designs reference stock
+/// primitives by `PrimitiveRef { library_id, uuid }`, so like the rows
+/// below this is a published contract: never regenerate or edit it.
+pub const STOCK_LIBRARY_ID: &str = "019df45d-af5e-7a00-8c3b-dd3bf89b40ae";
+
 /// Pinned identity of one stock `.snxfpt` file.
 pub struct StockIds {
     pub kind: StockKind,
-    pub file_name: &'static str,
     file_uuid: &'static str,
     footprint_uuid: &'static str,
     plane: &'static str,
@@ -38,6 +42,13 @@ fn parse(id: &str) -> Uuid {
 }
 
 impl StockIds {
+    /// On-disk name: `LocalGitAdapter` finds a footprint at
+    /// `footprints/<footprint uuid>.snxfpt`, so the library lists and
+    /// loads it only under that name.
+    pub fn file_name(&self) -> String {
+        format!("{}.snxfpt", self.footprint_uuid)
+    }
+
     pub fn file_uuid(&self) -> Uuid {
         parse(self.file_uuid)
     }
@@ -69,7 +80,6 @@ impl StockIds {
 pub const STOCK_IDS: &[StockIds] = &[
     StockIds {
         kind: StockKind::Soic8,
-        file_name: "SOIC-8.snxfpt",
         file_uuid: "019df45d-af5f-7bb0-914a-26cc90477b10",
         footprint_uuid: "019df45d-af5f-7bb0-914a-26b538180e51",
         plane: "e09fba70-a152-4bdf-a5b9-63e910b7feb9",
@@ -86,7 +96,6 @@ pub const STOCK_IDS: &[StockIds] = &[
     },
     StockIds {
         kind: StockKind::Qfn16,
-        file_name: "QFN-16.snxfpt",
         file_uuid: "019df45d-af61-7612-8d18-c80e4c879451",
         footprint_uuid: "019df45d-af61-7612-8d18-c7f4c67e4b0e",
         plane: "820e5c14-38a5-480a-9098-08579b42ef2d",
@@ -111,7 +120,6 @@ pub const STOCK_IDS: &[StockIds] = &[
     },
     StockIds {
         kind: StockKind::R0805,
-        file_name: "R0805.snxfpt",
         file_uuid: "019df45d-af64-7bb2-b787-add74d246d40",
         footprint_uuid: "019df45d-af63-7823-b5c3-01594028ccef",
         plane: "cdbf6963-91f5-44b7-9f96-a2e01a046265",
@@ -122,7 +130,6 @@ pub const STOCK_IDS: &[StockIds] = &[
     },
     StockIds {
         kind: StockKind::MountingHole3p2,
-        file_name: "MountingHole-3.2mm.snxfpt",
         file_uuid: "019df45d-af65-71a1-b568-29e703608649",
         footprint_uuid: "019df45d-af65-71a1-b568-29d0a5242184",
         plane: "6287d9cd-d2d8-4190-bd2e-46de49a389ac",
@@ -130,10 +137,127 @@ pub const STOCK_IDS: &[StockIds] = &[
     },
     StockIds {
         kind: StockKind::Fiducial1mm,
-        file_name: "Fiducial-1mm.snxfpt",
         file_uuid: "019df45d-af66-75c0-b9cf-2bbf173b0066",
         footprint_uuid: "019df45d-af66-75c0-b9cf-2ba7e253d69c",
         plane: "7c74fab9-10b4-4550-aad0-cec6d5b2c3e9",
         entities: &["4373d9fb-b5a8-49e6-adc7-5f6307803a36"],
     },
 ];
+
+/// Pinned identity of one stock symbol: `(symbol name, file uuid,
+/// symbol uuid)`. Each stock `.snxsym` holds a single symbol and is
+/// written to `symbols/<name>.snxsym`. Like the footprint rows these
+/// are a published contract: never regenerate or edit them, only
+/// append rows with freshly minted ids.
+pub const STOCK_SYMBOL_IDS: &[(&str, &str, &str)] = &[
+    (
+        "R",
+        "57854c3b-c51b-403d-b488-5953c9567113",
+        "bf88a609-74df-4453-a656-d68ef86e421d",
+    ),
+    (
+        "C",
+        "ca480ad0-f6a0-4798-a8e8-41d46082dbc0",
+        "9b489446-5f4e-4f4f-a166-85c076b4ff18",
+    ),
+    (
+        "C_Polarized",
+        "253b6003-fa61-4cce-9cb0-6274b768ce2f",
+        "2604013a-f69d-4802-827d-9e5add7d2356",
+    ),
+    (
+        "L",
+        "3a3a79ea-de2d-4995-9dd1-736030c60c4c",
+        "53e23353-f544-4652-8123-b8666f5986b9",
+    ),
+    (
+        "Ferrite",
+        "e288a70a-095b-4259-944f-4f63a9f33a7d",
+        "9b67ea2f-57cc-464f-b39b-80a1508c1ca9",
+    ),
+    (
+        "Fuse",
+        "6e84840e-a540-4cc1-a686-512202445150",
+        "018d4323-4516-4c9d-8b60-fbc6662e7848",
+    ),
+    (
+        "D",
+        "cdca28d0-3cf7-4d61-b32b-d4f6a47db3f2",
+        "1288921b-aa3c-46a2-8ef7-31d1f7ec5834",
+    ),
+    (
+        "D_Schottky",
+        "86ed58c6-db77-432b-85b1-09065d17e744",
+        "3b71eb69-67e4-434a-9b74-ded23c704b68",
+    ),
+    (
+        "D_Zener",
+        "f1a4c0a6-bf5d-4636-8866-c8d88aeb9fad",
+        "a23b688f-74d9-40b5-93c4-6d48114992bc",
+    ),
+    (
+        "LED",
+        "d50383cb-013d-4fc4-9874-6e6196548032",
+        "c2368f96-f502-4125-94e5-029eaa698ede",
+    ),
+    (
+        "Q_NPN",
+        "8c48665d-b41e-433b-9edd-54b86ed4dfd4",
+        "3aa4c65d-91dc-46f4-b1cd-bd010bce921d",
+    ),
+    (
+        "Q_PNP",
+        "5f2a25c6-f838-4446-8922-057c4109daa3",
+        "0cbf07b0-c162-4567-9e9a-78c089e24d52",
+    ),
+    (
+        "Q_NMOS",
+        "246539ea-07cb-4232-a434-c64d22674dd9",
+        "2a530743-7082-424f-bfad-ba7f0e1e858e",
+    ),
+    (
+        "Q_PMOS",
+        "11898e98-1cf7-4f6c-b0c7-c88853622bf7",
+        "e7e9f067-7a54-43a3-bafb-87a4cfa17d79",
+    ),
+    (
+        "Crystal",
+        "d96f20fe-43e6-47e8-ba6f-f87041760138",
+        "60f53907-9a68-4b5e-a5a2-24b258a0901a",
+    ),
+    (
+        "GND",
+        "1e63f24a-321a-4496-b4f9-3b32e1af6565",
+        "95fe9d07-40cb-4756-903f-e722b9b3df63",
+    ),
+    (
+        "VCC",
+        "67ed41b2-79ca-401b-a8c4-d1ff9c6cffc2",
+        "a320b61f-58ec-4ffb-b2f1-cf36c00ed9d6",
+    ),
+    (
+        "+3V3",
+        "e58c46cd-6870-4bfb-9278-eef1afa95d0b",
+        "1908711d-a1cf-4cdd-9420-8bdf894680c1",
+    ),
+    (
+        "+5V",
+        "f1d0ec04-e9ea-40f4-ac6d-07848c8e7004",
+        "e4ef583f-8d7b-4f10-a9c7-d879f9e11482",
+    ),
+    (
+        "IC_Generic",
+        "b606f296-15d0-4d79-8481-59c4edca9985",
+        "15fc3bcf-6b70-413d-89a0-36e9d5ab5319",
+    ),
+];
+
+/// Look up the pinned `(file uuid, symbol uuid)` of the symbol called
+/// `name`. A builder without a row is a programming error.
+pub fn symbol_ids(name: &str) -> (Uuid, Uuid) {
+    let (_, file, symbol) = STOCK_SYMBOL_IDS
+        .iter()
+        .find(|(n, _, _)| *n == name)
+        .unwrap_or_else(|| panic!("no pinned id row for stock symbol {name}"));
+    (parse(file), parse(symbol))
+}

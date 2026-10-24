@@ -19,7 +19,7 @@ pub(super) fn apply_symbol_camera(editor: &mut SymEditor, msg: SymbolEditorMsg) 
             };
             if editor
                 .camera
-                .zoom_at(iced::Point::new(sx, sy), delta, viewport)
+                .zoom_at(iced::Point::new(sx, sy), delta, editor.zoom_step, viewport)
             {
                 editor.canvas_cache.clear();
             }
