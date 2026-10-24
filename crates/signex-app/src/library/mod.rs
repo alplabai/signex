@@ -26,7 +26,6 @@ pub mod editor;
 pub mod external_poll;
 pub mod messages;
 pub mod mount;
-pub mod new_component;
 pub mod panel;
 pub mod picker;
 pub mod place;

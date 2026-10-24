@@ -48,7 +48,6 @@ impl Default for LibraryState {
             settings,
             expanded: Vec::new(),
             panel_search: String::new(),
-            new_component: None,
             close_library_confirm: None,
             template_registry: Arc::new(TemplateRegistry::new_with_builtins()),
             library_browsers: HashMap::new(),

@@ -34,7 +34,6 @@ fn rebase_picker_target(target: &mut PrimitivePickerTarget, old: &Path, new: &Pa
         PrimitivePickerTarget::PreviewRow(address)
         | PrimitivePickerTarget::EditRowModal(address)
         | PrimitivePickerTarget::BrowserRow(address) => rebase_address(address, old, new),
-        PrimitivePickerTarget::NewComponentForm => {}
     }
 }
 

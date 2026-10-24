@@ -177,6 +177,21 @@ pub struct ComponentRow {
 }
 
 impl ComponentRow {
+    /// True when the row has no usable symbol binding. A new row starts
+    /// with the nil-UUID sentinel because creating a component never
+    /// mints a primitive file; the user binds one with Pick Symbol.
+    pub fn is_symbol_unbound(&self) -> bool {
+        self.symbol_ref.uuid.is_nil()
+    }
+
+    /// True when the row has no usable footprint binding (`None` or the
+    /// nil-UUID sentinel).
+    pub fn is_footprint_unbound(&self) -> bool {
+        self.footprint_ref
+            .as_ref()
+            .is_none_or(|fp| fp.uuid.is_nil())
+    }
+
     /// Recompute and store the content hash from the canonical view.
     ///
     /// Returns `LibraryError::Backend` when the row contains a non-finite
@@ -291,6 +306,21 @@ mod tests {
         let json = serde_json::to_string(&p).unwrap();
         let back: PlmReserved = serde_json::from_str(&json).unwrap();
         assert_eq!(p, back);
+    }
+
+    #[test]
+    fn nil_and_missing_refs_are_unbound_and_real_refs_are_bound() {
+        let mut row = fixture_row();
+        assert!(!row.is_symbol_unbound());
+        assert!(!row.is_footprint_unbound());
+
+        row.symbol_ref = PrimitiveRef::new(row.symbol_ref.library_id, Uuid::nil());
+        row.footprint_ref = None;
+        assert!(row.is_symbol_unbound());
+        assert!(row.is_footprint_unbound());
+
+        row.footprint_ref = Some(PrimitiveRef::new(Uuid::new_v4(), Uuid::nil()));
+        assert!(row.is_footprint_unbound(), "nil footprint uuid is unbound");
     }
 
     /// Verifies that `RowId` wraps cleanly around the row's `row_id` field —

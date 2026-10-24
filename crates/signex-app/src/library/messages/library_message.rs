@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use signex_library::{ComponentClass, PrimitiveKind, RowId, UseSite};
+use signex_library::{PrimitiveKind, RowId, UseSite};
 
 use super::super::state::{EditorAddress, PrimitivePickerTarget};
 use super::{
@@ -91,37 +91,6 @@ pub enum LibraryMessage {
     /// path, refreshes the cached library file enumeration, and
     /// opens the file as a primitive editor tab.
     AddLibraryFootprintFilePicked(PathBuf),
-    /// Dismiss the New Component modal without creating anything.
-    CloseNewComponent,
-    /// Live-edit of the New Component modal's "Internal PN" field.
-    NewComponentSetInternalPn(String),
-    /// User picked a target library in the modal — index into
-    /// `LibraryState.open_libraries`.
-    NewComponentSetLibrary(usize),
-    /// User picked a class in the modal pick_list.
-    NewComponentSetClass(ComponentClass),
-    /// User picked a target table (filename stem) in the modal
-    /// pick_list. Rows live inside category tables, so the modal
-    /// needs the user to pick a destination table — populated from
-    /// `manifest().tables()` plus the default `<class>s` slot when
-    /// the manifest declares no overrides.
-    NewComponentSetTable(String),
-    /// User picked the "+ New Table…" sentinel in the Table dropdown
-    /// (or hit the "+ New Table" button) — opens the inline create
-    /// form on `NewComponentState.creating_table`.
-    NewComponentBeginCreateTable,
-    /// Live-edit of the new-table name field.
-    NewComponentSetNewTableName(String),
-    /// Cancel the inline create-table form without writing anything.
-    NewComponentCancelCreateTable,
-    /// Confirm — calls `create_empty_table` on the active library's
-    /// adapter, refreshes the components cache, switches the modal's
-    /// `table` selection to the freshly-minted name.
-    NewComponentConfirmCreateTable,
-    /// Toggle the Advanced ▾ disclosure on the New Component modal —
-    /// shows / hides the Table picker + `+ New Table…` so the basic
-    /// form stays clean for first-time users.
-    NewComponentToggleAdvanced,
     /// Library Browser tab strip → "+ Add Table". Flips the
     /// browser into add-table mode where the strip's right edge
     /// shows a name input + Confirm/Cancel.
@@ -225,11 +194,6 @@ pub enum LibraryMessage {
     BrowserConfirmRenameClass {
         library_path: PathBuf,
     },
-    /// Live-edit of the modal's "Category" field.
-    NewComponentSetCategory(String),
-    /// Submit the New Component modal — creates the draft, persists,
-    /// opens the editor on the new component.
-    NewComponentSubmit,
     // ─────────────────────────────────────────────────────────────────
     /// Toggle the Library left-dock panel's library tree node at
     /// `path` (path relative to the open libraries list).

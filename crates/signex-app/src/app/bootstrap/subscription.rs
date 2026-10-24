@@ -275,7 +275,7 @@ impl OpenOverlays {
             // allows through), and the Edit Component Details modal is
             // gated dead behind `EDIT_MODAL_ENABLED = false` — it needs a
             // rung the day it is re-enabled, not before.
-            OverlayId::NewComponent | OverlayId::EditRowModal => None,
+            OverlayId::EditRowModal => None,
             // The one rung carrying owned data, and the reason the ladder
             // moved out of the subscription in part 1: this Cancel is
             // addressed to ONE library, and a `PathBuf` could not ride
