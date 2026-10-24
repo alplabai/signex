@@ -187,3 +187,7 @@ mod click_click_move;
 // #925 — non-finite grid steps are refused into the Messages panel.
 #[path = "regression/grid_step_refusal.rs"]
 mod grid_step_refusal;
+
+// #961 — the Annotate dialog's order of processing drives the numbering.
+#[path = "regression/annotate_order.rs"]
+mod annotate_order;
