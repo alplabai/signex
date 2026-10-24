@@ -432,13 +432,31 @@ impl Signex {
     }
 }
 
-/// Create `path`'s parent directory and write `text` atomically. Runs on a
+/// Create `path`'s parent directory and write `text` atomically, refusing an existing `path`. Runs on a
 /// blocking worker, never in `update`.
 fn write_library_file(path: &std::path::Path, text: &str) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|e| format!("create {} failed: {e}", parent.display()))?;
     }
-    signex_types::atomic_io::atomic_write(path, text.as_bytes())
-        .map_err(|e| format!("write {} failed: {e}", path.display()))
+    // No-clobber: a new library must never replace an existing file.
+    crate::app::handlers::dock::project_navigation::add_io::create_noclobber(path, |f| {
+        std::io::Write::write_all(f, text.as_bytes())
+    })
+    .map_err(|e| format!("write {} failed: {e}", path.display()))
+}
+
+#[cfg(test)]
+mod write_library_file_tests {
+    use super::write_library_file;
+
+    #[test]
+    fn creating_over_an_existing_library_is_refused_and_leaves_it_untouched() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("new").join("lib.snxsym");
+        write_library_file(&p, "first").unwrap();
+        let err = write_library_file(&p, "second").unwrap_err();
+        assert!(err.contains("already exists"), "{err}");
+        assert_eq!(std::fs::read_to_string(&p).unwrap(), "first");
+    }
 }

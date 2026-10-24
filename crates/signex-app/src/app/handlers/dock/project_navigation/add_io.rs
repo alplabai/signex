@@ -72,7 +72,7 @@ impl crate::app::Signex {
 /// step (`persist_noclobber` fails if `dest` exists), so two overlapping
 /// writers can never truncate each other's file, and a failed `fill` drops
 /// the temp, leaving no partial `dest`.
-fn create_noclobber(
+pub(crate) fn create_noclobber(
     dest: &Path,
     fill: impl FnOnce(&mut std::fs::File) -> std::io::Result<()>,
 ) -> Result<(), String> {
