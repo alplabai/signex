@@ -132,12 +132,11 @@ impl LocalGitProjectAdapter {
         let mut index = repo
             .index()
             .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
-        index
-            .add_path(rel_path)
-            .map_err(|e| LibraryError::Backend(format!("git add: {e}")))?;
-        index
-            .write()
-            .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
+        super::helpers::retry_on_git_lock(|| {
+            index.add_path(rel_path)?;
+            index.write()
+        })
+        .map_err(|e| LibraryError::Backend(format!("git add: {e}")))?;
         let tree_oid = index
             .write_tree()
             .map_err(|e| LibraryError::Backend(format!("git write tree: {e}")))?;
@@ -162,9 +161,10 @@ impl LocalGitProjectAdapter {
         } else {
             message.to_string()
         };
-        let oid = repo
-            .commit(Some("HEAD"), &sig, &sig, &final_message, &tree, &parents)
-            .map_err(|e| LibraryError::Backend(format!("git commit: {e}")))?;
+        let oid = super::helpers::retry_on_git_lock(|| {
+            repo.commit(Some("HEAD"), &sig, &sig, &final_message, &tree, &parents)
+        })
+        .map_err(|e| LibraryError::Backend(format!("git commit: {e}")))?;
         Ok(Some(oid))
     }
 

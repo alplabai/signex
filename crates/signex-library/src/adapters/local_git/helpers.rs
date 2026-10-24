@@ -4,6 +4,31 @@ use super::*;
 
 // ── Free helpers ───────────────────────────────────────────────────────────
 
+/// How long a git write waits for another process's `.git/index.lock` (or
+/// ref lock) to go away before giving up (#893).
+const GIT_LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Run a git write, retrying while another process holds the index or a
+/// ref lock. Another Signex instance committing to the same repository
+/// (another library in a project-scope repo, or the project itself) holds
+/// `.git/index.lock` for the length of one commit; without the retry the
+/// second save fails with `git add` / `git commit` despite no conflict.
+pub(super) fn retry_on_git_lock<T>(
+    mut op: impl FnMut() -> Result<T, git2::Error>,
+) -> Result<T, git2::Error> {
+    let deadline = std::time::Instant::now() + GIT_LOCK_WAIT;
+    loop {
+        match op() {
+            Err(e)
+                if e.code() == git2::ErrorCode::Locked && std::time::Instant::now() < deadline =>
+            {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            other => return other,
+        }
+    }
+}
+
 /// Project a `git2::Commit` onto the trait-level [`HistoryEntry`].
 ///
 /// Diff-stat fields (`additions`, `deletions`, `files_changed`) stay
