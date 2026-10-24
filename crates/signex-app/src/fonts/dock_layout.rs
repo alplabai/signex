@@ -2,34 +2,46 @@
 
 use super::*;
 
-/// Persist the list of dock panels per region + their active index
-/// so the next session reopens with the same layout.
-pub fn write_dock_layout(dock: &crate::dock::DockArea) {
-    fn region_to_json(
-        dock: &crate::dock::DockArea,
-        pos: crate::dock::PanelPosition,
-    ) -> serde_json::Value {
-        let kinds: Vec<&str> = dock
-            .panel_kinds(pos)
-            .iter()
-            .map(|k| panel_kind_key(*k))
-            .collect();
-        serde_json::json!({
-            "panels": kinds,
-            "collapsed": dock.is_collapsed(pos),
-        })
+/// Writes the dock layout into `prefs.json`. The production
+/// [`crate::dock::DockLayoutStore`]; it runs on a background thread via
+/// `Task`, never inside `update` (#692).
+pub struct PrefsDockLayoutStore {
+    path: std::path::PathBuf,
+}
+
+impl PrefsDockLayoutStore {
+    /// The store for the user's real `prefs.json`.
+    pub fn user_prefs() -> Self {
+        Self::at(prefs_path())
     }
 
-    update_prefs_json(&prefs_path(), "dock", |prefs| {
-        prefs.insert(
-            "dock".to_string(),
+    /// The store for an explicit prefs file (tests).
+    pub fn at(path: std::path::PathBuf) -> Self {
+        Self { path }
+    }
+}
+
+impl crate::dock::DockLayoutStore for PrefsDockLayoutStore {
+    fn write(&self, layout: &crate::dock::DockLayoutSnapshot) -> Result<(), String> {
+        fn region_to_json(region: &crate::dock::RegionLayout) -> serde_json::Value {
+            let kinds: Vec<&str> = region.panels.iter().map(|k| panel_kind_key(*k)).collect();
             serde_json::json!({
-                "left":   region_to_json(dock, crate::dock::PanelPosition::Left),
-                "right":  region_to_json(dock, crate::dock::PanelPosition::Right),
-                "bottom": region_to_json(dock, crate::dock::PanelPosition::Bottom),
-            }),
-        );
-    })
+                "panels": kinds,
+                "collapsed": region.collapsed,
+            })
+        }
+
+        try_update_prefs_json(&self.path, "dock", |prefs| {
+            prefs.insert(
+                "dock".to_string(),
+                serde_json::json!({
+                    "left":   region_to_json(&layout.left),
+                    "right":  region_to_json(&layout.right),
+                    "bottom": region_to_json(&layout.bottom),
+                }),
+            );
+        })
+    }
 }
 
 /// Rebuild a DockArea from persisted JSON. Returns None when no saved

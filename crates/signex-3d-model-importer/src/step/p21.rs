@@ -42,7 +42,8 @@ pub fn parse_to_meshes(source: &str) -> Result<StepMeshResult, ParseError> {
     let mut edge_loops: HashMap<u32, Vec<u32>> = HashMap::new();
     let mut oriented_edges: HashMap<u32, u32> = HashMap::new();
     let mut edge_curves: HashMap<u32, (u32, u32)> = HashMap::new();
-    let mut face_bounds: HashMap<u32, u32> = HashMap::new();
+    // bound id -> (loop id, is FACE_OUTER_BOUND)
+    let mut face_bounds: HashMap<u32, (u32, bool)> = HashMap::new();
     let mut advanced_faces: HashMap<u32, Vec<u32>> = HashMap::new();
     let mut unsupported_entities: Vec<String> = Vec::new();
 
@@ -76,7 +77,7 @@ pub fn parse_to_meshes(source: &str) -> Result<StepMeshResult, ParseError> {
             }
             "FACE_OUTER_BOUND" | "FACE_BOUND" => {
                 if let Some(loop_ref) = first_ref(&entity.params) {
-                    face_bounds.insert(id, loop_ref);
+                    face_bounds.insert(id, (loop_ref, entity.kind == "FACE_OUTER_BOUND"));
                 }
             }
             "ADVANCED_FACE" => {
@@ -87,7 +88,10 @@ pub fn parse_to_meshes(source: &str) -> Result<StepMeshResult, ParseError> {
             }
             other => {
                 // Keep an abbreviated list for diagnostics/warnings.
-                if unsupported_entities.len() < 24 {
+                // One entry per entity type, so a repeated type cannot fill the cap.
+                if unsupported_entities.len() < 24
+                    && !unsupported_entities.iter().any(|e| e == other)
+                {
                     unsupported_entities.push(other.to_owned());
                 }
             }
@@ -96,26 +100,42 @@ pub fn parse_to_meshes(source: &str) -> Result<StepMeshResult, ParseError> {
 
     let mut meshes = Vec::<VrmlMesh>::new();
 
+    let loop_points_of = |loop_id: u32| -> Vec<[f32; 3]> {
+        if let Some(vertex_refs) = poly_loops.get(&loop_id) {
+            resolve_poly_loop_points(vertex_refs, &vertex_to_point, &points)
+        } else if let Some(edge_refs) = edge_loops.get(&loop_id) {
+            resolve_edge_loop_points(
+                edge_refs,
+                &oriented_edges,
+                &edge_curves,
+                &vertex_to_point,
+                &points,
+            )
+        } else {
+            Vec::new()
+        }
+    };
+
+    let mut holes_skipped = 0usize;
     for bound_refs in advanced_faces.values() {
-        for bound_ref in bound_refs {
-            let Some(loop_id) = face_bounds.get(bound_ref).copied() else {
-                continue;
-            };
-
-            let loop_points = if let Some(vertex_refs) = poly_loops.get(&loop_id) {
-                resolve_poly_loop_points(vertex_refs, &vertex_to_point, &points)
-            } else if let Some(edge_refs) = edge_loops.get(&loop_id) {
-                resolve_edge_loop_points(
-                    edge_refs,
-                    &oriented_edges,
-                    &edge_curves,
-                    &vertex_to_point,
-                    &points,
-                )
-            } else {
-                Vec::new()
-            };
-
+        // The face outline is its FACE_OUTER_BOUND, or, when none is marked
+        // (legal STEP), the loop with the largest area. Every other bound is a
+        // hole. Holes are not cut: that needs a real polygon-with-holes
+        // triangulation, and the outline's fan still covers the opening. They
+        // are only left out of the mesh as extra solid faces, and counted (#708).
+        let mut loops: Vec<(Vec<[f32; 3]>, bool)> = bound_refs
+            .iter()
+            .filter_map(|r| face_bounds.get(r))
+            .map(|&(loop_id, is_outer)| (loop_points_of(loop_id), is_outer))
+            .collect();
+        holes_skipped += loops.len().saturating_sub(1);
+        let outline = match loops.iter().position(|l| l.1) {
+            Some(i) => Some(i),
+            None => (0..loops.len())
+                .max_by(|&i, &j| loop_area(&loops[i].0).total_cmp(&loop_area(&loops[j].0))),
+        };
+        if let Some(i) = outline {
+            let loop_points = loops.swap_remove(i).0;
             if loop_points.len() >= 3 {
                 let mesh = triangulate_polygon(&loop_points);
                 if !mesh.indices.is_empty() {
@@ -123,6 +143,10 @@ pub fn parse_to_meshes(source: &str) -> Result<StepMeshResult, ParseError> {
                 }
             }
         }
+    }
+    if holes_skipped > 0 {
+        // Outside the shared 24-entry cap, which real files fill first.
+        unsupported_entities.push(format!("FACE_BOUND (hole not cut) x{holes_skipped}"));
     }
 
     if meshes.is_empty() {
@@ -133,6 +157,19 @@ pub fn parse_to_meshes(source: &str) -> Result<StepMeshResult, ParseError> {
         meshes,
         unsupported_entities,
     })
+}
+
+/// Area of a closed 3D loop (Newell), so the biggest loop of a face can be
+/// told from its holes in any plane.
+fn loop_area(points: &[[f32; 3]]) -> f32 {
+    let mut n = [0f32; 3];
+    for (i, a) in points.iter().enumerate() {
+        let b = &points[(i + 1) % points.len()];
+        n[0] += (a[1] - b[1]) * (a[2] + b[2]);
+        n[1] += (a[2] - b[2]) * (a[0] + b[0]);
+        n[2] += (a[0] - b[0]) * (a[1] + b[1]);
+    }
+    (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt() / 2.0
 }
 
 fn extract_data_section(source: &str) -> Option<&str> {
@@ -270,7 +307,25 @@ fn parse_cartesian_point(entity: &Entity) -> Result<[f32; 3], ParseError> {
     Ok([nums[0], nums[1], nums[2]])
 }
 
+/// Blank out every `'...'` string literal (`''` is an escaped quote and stays
+/// inside the literal), so digits and `#` in a name are never read as data.
+fn strip_strings(params: &str) -> String {
+    let mut out = String::with_capacity(params.len());
+    let mut in_quote = false;
+    for ch in params.chars() {
+        if ch == '\'' {
+            in_quote = !in_quote;
+            out.push(' ');
+        } else if !in_quote {
+            out.push(ch);
+        }
+    }
+    out
+}
+
 fn parse_numbers(params: &str, line: usize) -> Result<Vec<f32>, ParseError> {
+    let params = strip_strings(params);
+    let params = params.as_str();
     let mut out = Vec::new();
     let mut token = String::new();
 
@@ -307,6 +362,8 @@ fn parse_numbers(params: &str, line: usize) -> Result<Vec<f32>, ParseError> {
 }
 
 fn parse_refs(params: &str) -> Vec<u32> {
+    let params = strip_strings(params);
+    let params = params.as_str();
     let bytes = params.as_bytes();
     let mut refs = Vec::<u32>::new();
     let mut i = 0usize;
@@ -474,29 +531,82 @@ mod tests {
         data
     }
 
-    fn best_parse_time(data: &str, expected: usize) -> std::time::Duration {
-        (0..3)
-            .map(|_| {
-                let started = std::time::Instant::now();
-                let entities = parse_entities(data).expect("parse");
-                assert_eq!(entities.len(), expected);
-                started.elapsed()
-            })
-            .min()
-            .unwrap()
-    }
-
     #[test]
     fn many_entities_parse_in_linear_time() {
-        // The old per-statement newline recount was O(n^2). Compare a 20k and
-        // an 80k run instead of an absolute budget: 4x the input costs ~4x
-        // when linear and ~16x when quadratic, so a 10x ceiling separates
-        // them with slack for scheduler noise (best of three per size).
-        let small = best_parse_time(&synthetic_data(20_000), 20_000);
-        let large = best_parse_time(&synthetic_data(80_000), 80_000);
-        let floor = std::time::Duration::from_millis(1);
-        let ratio = large.as_secs_f64() / small.max(floor).as_secs_f64();
-        assert!(ratio < 10.0, "parse scaled {ratio:.1}x for 4x input");
+        // Guards the #112 fix (the old per-statement newline recount was
+        // O(n^2)) without trusting wall-clock ratios of runs of very
+        // different length (#851). Both samples cover the same amount of
+        // input: 16 back-to-back parses of SMALL statements against one parse
+        // of 16 x SMALL. Linear code makes the two take about as long;
+        // quadratic makes the single large parse ~16x slower. A 4x ceiling
+        // separates them, and load lands on both samples alike.
+        //
+        // The large parse runs on its own thread with a deadline of 4x the
+        // small sample, so a quadratic regression fails in seconds instead of
+        // hanging the suite. Three attempts; one quiet attempt passes.
+        use std::sync::mpsc;
+        use std::time::{Duration, Instant};
+
+        const SMALL: u32 = 1_000;
+        const REPEATS: u32 = 16;
+        const CEILING: u32 = 4;
+        let small = synthetic_data(SMALL);
+        let large = std::sync::Arc::new(synthetic_data(SMALL * REPEATS));
+
+        let mut ratios = Vec::new();
+        for _ in 0..3 {
+            let started = Instant::now();
+            for _ in 0..REPEATS {
+                assert_eq!(parse_entities(&small).expect("parse").len(), SMALL as usize);
+            }
+            let small_total = started.elapsed().max(Duration::from_millis(1));
+
+            let (tx, rx) = mpsc::channel();
+            let data = std::sync::Arc::clone(&large);
+            // Detached on purpose: past the deadline nothing waits for it.
+            // It runs on beside the next attempt, which only slows the
+            // already-failing regression case, and ends with the test binary.
+            std::thread::spawn(move || {
+                let started = Instant::now();
+                let parsed = parse_entities(&data).expect("parse").len();
+                let _ = tx.send((parsed, started.elapsed()));
+            });
+            match rx.recv_timeout(small_total * CEILING) {
+                Ok((parsed, large_time)) => {
+                    assert_eq!(parsed, (SMALL * REPEATS) as usize);
+                    let ratio = large_time.as_secs_f64() / small_total.as_secs_f64();
+                    if ratio < f64::from(CEILING) {
+                        return;
+                    }
+                    ratios.push(format!("{ratio:.1}x"));
+                }
+                Err(_) => ratios.push(format!(">{CEILING}x (deadline)")),
+            }
+        }
+        panic!(
+            "one parse of 16x the input took over {CEILING}x as long as 16 small parses: {ratios:?}"
+        );
+    }
+
+    /// Carried-forward line numbers stay exact across a large input. This is
+    /// a correctness check, not a guard on #112's speed: the old quadratic
+    /// recount produced exact lines too, just slowly.
+    #[test]
+    fn statement_lines_stay_exact_across_a_large_input() {
+        // Kept small: a quadratic regression would make a larger input take
+        // minutes here, and the speed guard above already catches that.
+        const COUNT: usize = 5_000;
+        let data = synthetic_data(COUNT as u32);
+        // The trailing newline leaves a blank tail, skipped like `parse_entities` does.
+        let statements: Vec<_> = split_statements(&data)
+            .into_iter()
+            .filter(|(s, _)| s.trim().starts_with('#'))
+            .collect();
+        assert_eq!(statements.len(), COUNT);
+        for (i, (_, line)) in statements.iter().enumerate().step_by(499) {
+            assert_eq!(*line, i + 1);
+        }
+        assert_eq!(statements.last().unwrap().1, COUNT);
     }
 
     #[test]
@@ -533,6 +643,93 @@ END-ISO-10303-21;
         let result = parse_to_meshes(src).expect("parse");
         assert_eq!(result.meshes.len(), 1);
         assert_eq!(result.meshes[0].indices.len(), 3);
+    }
+
+    #[test]
+    fn digits_and_hashes_in_names_are_not_data() {
+        let src = r#"
+DATA;
+#1 = CARTESIAN_POINT('P7 #99',(1.,2.,3.));
+#2 = CARTESIAN_POINT('D1',(4.,5.,6.));
+#3 = CARTESIAN_POINT('it''s 9',(7.,8.,9.));
+ENDSEC;
+"#;
+        let entities = parse_entities(extract_data_section(src).unwrap()).unwrap();
+        assert_eq!(parse_cartesian_point(&entities[&1]).unwrap(), [1., 2., 3.]);
+        assert_eq!(parse_cartesian_point(&entities[&2]).unwrap(), [4., 5., 6.]);
+        assert_eq!(parse_cartesian_point(&entities[&3]).unwrap(), [7., 8., 9.]);
+        assert_eq!(parse_refs("'a #5',(#7)"), vec![7]);
+    }
+
+    #[test]
+    fn face_bound_hole_is_not_fan_filled() {
+        let src = r#"
+DATA;
+#1 = CARTESIAN_POINT('',(0.,0.,0.));
+#2 = CARTESIAN_POINT('',(4.,0.,0.));
+#3 = CARTESIAN_POINT('',(0.,4.,0.));
+#4 = CARTESIAN_POINT('',(1.,1.,0.));
+#5 = CARTESIAN_POINT('',(2.,1.,0.));
+#6 = CARTESIAN_POINT('',(1.,2.,0.));
+#20 = POLY_LOOP('',(#1,#2,#3));
+#21 = POLY_LOOP('',(#4,#5,#6));
+#22 = FACE_BOUND('',#21,.T.);
+#23 = FACE_OUTER_BOUND('',#20,.T.);
+#30 = ADVANCED_FACE('',(#22,#23),#999,.T.);
+ENDSEC;
+"#;
+        let result = parse_to_meshes(src).expect("parse");
+        assert_eq!(result.meshes.len(), 1, "only the outer loop is filled");
+        assert_eq!(result.meshes[0].positions[4], 0.0);
+        assert_eq!(result.meshes[0].positions[3], 4.0);
+        assert!(
+            result
+                .unsupported_entities
+                .iter()
+                .any(|e| e.contains("hole"))
+        );
+    }
+
+    const TRIANGLES: &str = "#1 = CARTESIAN_POINT('',(0.,0.,0.));
+#2 = CARTESIAN_POINT('',(4.,0.,0.));
+#3 = CARTESIAN_POINT('',(0.,4.,0.));
+#4 = CARTESIAN_POINT('',(1.,1.,0.));
+#5 = CARTESIAN_POINT('',(2.,1.,0.));
+#6 = CARTESIAN_POINT('',(1.,2.,0.));
+#20 = POLY_LOOP('',(#1,#2,#3));
+#21 = POLY_LOOP('',(#4,#5,#6));";
+
+    #[test]
+    fn all_face_bound_face_keeps_the_largest_loop_as_outline() {
+        // No FACE_OUTER_BOUND, hole listed first.
+        let src = format!(
+            "DATA;\n{TRIANGLES}\n#22 = FACE_BOUND('',#21,.T.);\n\
+             #23 = FACE_BOUND('',#20,.T.);\n#30 = ADVANCED_FACE('',(#22,#23),#999,.T.);\nENDSEC;"
+        );
+        let result = parse_to_meshes(&src).expect("parse");
+        assert_eq!(result.meshes.len(), 1);
+        assert_eq!(
+            result.meshes[0].positions[3], 4.0,
+            "outer loop, not the hole"
+        );
+    }
+
+    #[test]
+    fn hole_warning_survives_a_full_unsupported_entity_list() {
+        let noise: String = (100..140)
+            .map(|i| format!("#{i} = FANCY_THING_{i}('');\n"))
+            .collect();
+        let src = format!(
+            "DATA;\n{TRIANGLES}\n{noise}#22 = FACE_BOUND('',#21,.T.);\n\
+             #23 = FACE_OUTER_BOUND('',#20,.T.);\n#30 = ADVANCED_FACE('',(#22,#23),#999,.T.);\nENDSEC;"
+        );
+        let result = parse_to_meshes(&src).expect("parse");
+        assert!(
+            result
+                .unsupported_entities
+                .iter()
+                .any(|e| e.contains("hole"))
+        );
     }
 
     #[test]

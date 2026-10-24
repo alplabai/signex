@@ -98,11 +98,14 @@ impl Signex {
 
         // Hydrate persisted search query for this library (per-path,
         // not global) the first time a browser tab opens this session.
-        // Reading the prefs file every open is fine — single-digit
-        // milliseconds and only on user gesture.
-        let persisted_search = crate::fonts::read_library_browser_searches()
-            .remove(&path)
-            .unwrap_or_default();
+        // This session's edits win over the disk: a debounced write may
+        // not have landed yet.
+        let persisted_search = match self.document_state.search_prefs.library_search(&path) {
+            Some(typed) => typed,
+            None => crate::fonts::read_library_browser_searches()
+                .remove(&path)
+                .unwrap_or_default(),
+        };
 
         let entry = self
             .library
@@ -803,8 +806,17 @@ impl Signex {
             .document_state
             .project_for_path(&synthetic_path)
             .map(|p| p.id);
-        let preview = ComponentPreviewState::from_row(library_path.clone(), table.clone(), row);
-        self.library.editors.insert(address.clone(), preview);
+        // A dirty draft parked by a tab close wins over the stored row; a
+        // clean parked editor is stale and is replaced.
+        if !self
+            .library
+            .editors
+            .get(&address)
+            .is_some_and(|editor| editor.dirty)
+        {
+            let preview = ComponentPreviewState::from_row(library_path.clone(), table.clone(), row);
+            self.library.editors.insert(address.clone(), preview);
+        }
         self.park_active_schematic_session();
         self.document_state.tabs.push(crate::app::TabInfo {
             title,

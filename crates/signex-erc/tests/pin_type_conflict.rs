@@ -207,3 +207,35 @@ fn a_conflict_off_the_shared_net_is_not_reported() {
 
     assert!(conflicts(signex_erc::run(&sheet)).is_empty());
 }
+
+#[test]
+fn two_pins_of_one_symbol_on_one_net_do_not_conflict() {
+    // An LDO with two PowerOutput VOUT pins strapped together: one driver.
+    let mut sheet = SchematicSheet {
+        paper_size: "A4".to_string(),
+        ..Default::default()
+    };
+    let mut lib = lib_with_one_pin("lib_U1", PinDirection::PowerOutput);
+    let mut second = lib.pins[0].clone();
+    second.pin.position = Point::new(10.0, 0.0);
+    second.pin.number = "2".to_string();
+    lib.pins.push(second);
+    sheet.lib_symbols.insert("lib_U1".to_string(), lib);
+    sheet.wires.push(Wire {
+        uuid: Uuid::new_v4(),
+        start: Point::new(0.0, 0.0),
+        end: Point::new(10.0, 0.0),
+        ..Default::default()
+    });
+    sheet.symbols.push(Symbol {
+        uuid: Uuid::new_v4(),
+        lib_id: "lib_U1".to_string(),
+        reference: "U1".to_string(),
+        position: Point::new(0.0, 0.0),
+        ..Default::default()
+    });
+
+    let found = conflicts(signex_erc::run(&sheet));
+
+    assert!(found.is_empty(), "{found:?}");
+}

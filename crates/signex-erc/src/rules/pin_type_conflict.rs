@@ -4,6 +4,8 @@
 //! matrix ([`crate::pin_matrix`]) marks as a conflict is reported once, at the
 //! severity of that matrix cell. `Off` cells emit nothing.
 //!
+//! Pins of the same symbol never conflict with each other.
+//!
 //! Each finding is located at the first pin of the pair, with `primary` and
 //! `peer` set to the two owning symbols — the same two-object shape
 //! `duplicate_ref_designator` uses. How the 14 `PinDirection` variants fold
@@ -38,6 +40,11 @@ fn conflicts_on_net(net: &ErcNet, matrix: &PinMatrix, out: &mut Vec<Diagnostic>)
             continue;
         };
         for b in &net.pins[i + 1..] {
+            // Two pins of one part sharing a net (an LDO's paired VOUT pins,
+            // a buck converter's several SW pins) are one driver, not two.
+            if a.symbol == b.symbol {
+                continue;
+            }
             let Some(axis_b) = PinAxis::of(b.direction) else {
                 continue;
             };

@@ -457,6 +457,7 @@ mod tests {
     #[test]
     fn polygon_stroke_predicate_needs_only_a_colour() {
         let base = GpuPolygon {
+            holes: Vec::new(),
             vertices: vec![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]],
             fill_color: [0.2, 0.2, 0.8, 1.0],
             stroke_color: None,
@@ -465,6 +466,7 @@ mod tests {
         assert!(!base.is_stroked(), "a width with no colour draws nothing");
 
         let coloured_zero_width = GpuPolygon {
+            holes: Vec::new(),
             stroke_color: Some([1.0; 4]),
             stroke_width: 0.0,
             ..base.clone()
@@ -474,6 +476,7 @@ mod tests {
         assert!(coloured_zero_width.is_stroked());
 
         let stroked = GpuPolygon {
+            holes: Vec::new(),
             stroke_color: Some([1.0; 4]),
             stroke_width: 0.1,
             ..base

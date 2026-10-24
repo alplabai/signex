@@ -5310,6 +5310,7 @@ name = "signex-3d-model-importer"
 version = "0.15.0"
 dependencies = [
  "base64",
+ "log",
  "serde",
  "serde_json",
  "sha2",
@@ -5326,10 +5327,14 @@ dependencies = [
  "chrono",
  "dirs",
  "fontdb",
+ "futures",
  "git2",
  "iced",
  "iced_aw",
+ "iced_runtime",
+ "iced_tiny_skia",
  "image",
+ "libc",
  "log",
  "num-traits",
  "rfd",
@@ -5389,8 +5394,10 @@ name = "signex-engine"
 version = "0.15.0"
 dependencies = [
  "anyhow",
+ "signex-erc",
  "signex-net",
  "signex-types",
+ "tempfile",
  "thiserror 2.0.18",
  "uuid",
 ]
@@ -5479,6 +5486,7 @@ dependencies = [
  "signex-library",
  "signex-sketch",
  "sqlx",
+ "subtle",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",

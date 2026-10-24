@@ -10,7 +10,8 @@ use iced::widget::{Space, button, column, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
 use super::widgets::{
-    close_x_button, detached_header, draggable_header, primary_button, secondary_button, wrap_modal,
+    close_x_button, draggable_header, os_title_bar_slot, primary_button, secondary_button,
+    wrap_modal,
 };
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 
@@ -58,10 +59,7 @@ impl Signex {
                 self.interaction_state.last_mouse_pos,
             )
         } else {
-            detached_header(
-                header_content,
-                super::super::super::state::ModalId::ErcDialog,
-            )
+            os_title_bar_slot()
         };
 
         // Per-rule severity grid: one row per built-in rule × 4 severities.

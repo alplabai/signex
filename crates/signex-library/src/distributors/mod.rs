@@ -22,3 +22,25 @@ pub use jlcpcb::JlcpcbAdapter;
 pub use keyring::{KeyringError, KeyringStore};
 pub use lcsc::LcscAdapter;
 pub use mouser::MouserAdapter;
+
+/// Dot-anchored domain match: `host` is `domain` itself or a subdomain of it.
+/// A bare `ends_with` would also accept `evildigikey.com`.
+pub(crate) fn host_in_domain(host: &str, domain: &str) -> bool {
+    host == domain
+        || host
+            .strip_suffix(domain)
+            .is_some_and(|rest| rest.ends_with('.'))
+}
+
+#[cfg(test)]
+mod host_tests {
+    use super::host_in_domain;
+
+    #[test]
+    fn host_match_is_dot_anchored() {
+        assert!(host_in_domain("digikey.com", "digikey.com"));
+        assert!(host_in_domain("www.digikey.com", "digikey.com"));
+        assert!(!host_in_domain("evildigikey.com", "digikey.com"));
+        assert!(!host_in_domain("digikey.com.evil.io", "digikey.com"));
+    }
+}

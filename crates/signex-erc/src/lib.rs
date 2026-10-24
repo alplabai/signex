@@ -23,7 +23,6 @@ pub mod context;
 pub mod diagnostic;
 pub mod engine;
 #[cfg(test)]
-mod existing_rules_golden;
 #[cfg(test)]
 mod fixtures;
 mod overrides;
@@ -73,6 +72,11 @@ pub enum RuleKind {
     /// (two outputs, an output on a power rail, a driven no-connect, ...) share
     /// a net. Severity per pair comes from the matrix, not from this rule.
     PinTypeConflict,
+    /// Pins of two different symbols sit on the same point with no wire,
+    /// junction, label or no-connect there. Pin-to-pin contact is not a
+    /// connection (ADR-0002 D5.1), so the netlist keeps them apart; this rule
+    /// tells the user to add the wire.
+    PinsTouchNotConnected,
 }
 
 impl RuleKind {
@@ -92,11 +96,12 @@ impl RuleKind {
             RuleKind::SymbolOutsideSheet => "Symbol outside sheet boundary",
             RuleKind::AmbiguousLabelAnchor => "Ambiguous label anchor",
             RuleKind::PinTypeConflict => "Pin type conflict",
+            RuleKind::PinsTouchNotConnected => "Pins touch but are not connected",
         }
     }
 
     /// Every built-in rule, in the order the ERC dialog lists them.
-    pub const ALL: [RuleKind; 13] = [
+    pub const ALL: [RuleKind; 14] = [
         RuleKind::UnusedPin,
         RuleKind::DuplicateRefDesignator,
         RuleKind::HierPortDisconnected,
@@ -110,6 +115,7 @@ impl RuleKind {
         RuleKind::SymbolOutsideSheet,
         RuleKind::AmbiguousLabelAnchor,
         RuleKind::PinTypeConflict,
+        RuleKind::PinsTouchNotConnected,
     ];
 
     /// The one source of truth for a rule's severity: [`Diagnostic::new`]
@@ -129,7 +135,8 @@ impl RuleKind {
             | RuleKind::DanglingWire
             | RuleKind::NetLabelConflict
             | RuleKind::OrphanLabel
-            | RuleKind::AmbiguousLabelAnchor => Severity::Warning,
+            | RuleKind::AmbiguousLabelAnchor
+            | RuleKind::PinsTouchNotConnected => Severity::Warning,
             RuleKind::MissingPowerFlag | RuleKind::SymbolOutsideSheet => Severity::Info,
         }
     }

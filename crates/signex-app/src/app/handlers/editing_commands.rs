@@ -22,15 +22,8 @@ impl Signex {
             && let Some(path) = active_tab.kind.as_symbol_editor().cloned()
         {
             if let Some(editor) = self.document_state.symbol_editors.get_mut(&path)
-                && let Some(snapshot) = editor.undo_snapshots.pop()
+                && editor.undo()
             {
-                let current = editor.primitive().clone();
-                editor.redo_snapshots.push(current);
-                *editor.primitive_mut() = snapshot;
-                editor.mid_drag = false;
-                editor.selected = None;
-                editor.dirty = true;
-                editor.canvas_cache.clear();
                 self.refresh_panel_ctx();
             }
             return;
@@ -74,15 +67,8 @@ impl Signex {
             && let Some(path) = active_tab.kind.as_symbol_editor().cloned()
         {
             if let Some(editor) = self.document_state.symbol_editors.get_mut(&path)
-                && let Some(snapshot) = editor.redo_snapshots.pop()
+                && editor.redo()
             {
-                let current = editor.primitive().clone();
-                editor.undo_snapshots.push(current);
-                *editor.primitive_mut() = snapshot;
-                editor.mid_drag = false;
-                editor.selected = None;
-                editor.dirty = true;
-                editor.canvas_cache.clear();
                 self.refresh_panel_ctx();
             }
             return;

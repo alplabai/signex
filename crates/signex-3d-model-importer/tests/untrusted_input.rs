@@ -156,6 +156,60 @@ fn deeply_nested_def_chain_is_bounded() {
     ));
 }
 
+const TRI: &str = "Shape { geometry IndexedFaceSet { coord Coordinate { point [ 0 0 0, 1 0 0, 0 1 0 ] } coordIndex [ 0 1 2 -1 ] } }";
+
+fn warned(result: &signex_3d_model_importer::ModelImportResult, needle: &str) -> bool {
+    result
+        .warnings
+        .iter()
+        .any(|w| format!("{w:?}").contains(needle))
+}
+
+/// #885 review: each `USE` pastes its bound subtree at the current depth,
+/// so 40 levels of `DEF dk` + 250 nested transforms around `USE d(k-1)`
+/// would build a tree far past the parser's depth limit and overflow the
+/// stack in the mesh walk. The copy is refused instead.
+#[test]
+fn use_cannot_nest_a_copy_past_the_depth_limit() {
+    let (_tmp, models) = fixture();
+    let mut src = format!("#VRML V2.0 utf8\nDEF d0 {TRI}\n");
+    for k in 1..=40 {
+        src.push_str(&format!("DEF d{k} "));
+        src.push_str(&"Transform { children [ ".repeat(250));
+        src.push_str(&format!("USE d{} ", k - 1));
+        src.push_str(&"] } ".repeat(250));
+        src.push('\n');
+    }
+    src.push_str("USE d40\n");
+    std::fs::write(models.join("deep_use.wrl"), src).unwrap();
+    let result = import(&models, "deep_use.wrl").expect("imports with warnings");
+    assert!(warned(&result, "nest deeper than"), "{:?}", result.warnings);
+}
+
+/// #885 review: the copy each `DEF` keeps is charged to the same budget, so
+/// nested `DEF`d wrappers around one large subtree cannot each hold a full
+/// copy without bound.
+#[test]
+fn def_copies_draw_on_the_expansion_budget() {
+    let (_tmp, models) = fixture();
+    let points: Vec<String> = (0..1000).map(|i| format!("{i} 0 0")).collect();
+    let mut inner = format!("Group {{ children [ {} ] }}", "USE l0 ".repeat(1990));
+    for w in 0..30 {
+        inner = format!("DEF w{w} Group {{ children [ {inner} ] }}");
+    }
+    let src = format!(
+        "#VRML V2.0 utf8\nDEF l0 Shape {{ geometry IndexedFaceSet {{ coord Coordinate {{ point [ {} ] }} coordIndex [ 0 1 2 -1 ] }} }}\n{inner}\n",
+        points.join(", ")
+    );
+    std::fs::write(models.join("def_copies.wrl"), src).unwrap();
+    let result = import(&models, "def_copies.wrl").expect("imports with warnings");
+    assert!(
+        warned(&result, "instancing would copy more than"),
+        "{:?}",
+        result.warnings
+    );
+}
+
 #[test]
 fn moderately_nested_vrml_still_imports() {
     let (_tmp, models) = fixture();
@@ -194,4 +248,69 @@ fn truncated_and_garbage_inputs_error_without_panicking() {
         std::fs::write(models.join(name), bytes).unwrap();
         assert!(import(&models, name).is_err(), "{name} should error");
     }
+}
+
+#[test]
+fn percent_encoded_buffer_name_resolves_and_encoded_traversal_is_rejected() {
+    let (_tmp, models) = fixture();
+    std::fs::write(models.join("my geo.bin"), [0u8; 4]).unwrap();
+    std::fs::write(models.join("m.gltf"), gltf_with_buffer("my%20geo.bin")).unwrap();
+    import(&models, "m.gltf").expect("percent-encoded name imports");
+    std::fs::remove_dir_all(models.join("cache")).unwrap();
+
+    expect_gltf_rejection(&models, &gltf_with_buffer("%2e%2e/secret.bin"));
+    expect_gltf_rejection(&models, &gltf_with_buffer("%2E%2E%5Csecret.bin"));
+}
+
+#[test]
+fn corrupt_glb_source_is_rejected_not_cached() {
+    let (_tmp, models) = fixture();
+    std::fs::write(models.join("bad.glb"), b"not a glb at all").unwrap();
+    assert!(matches!(
+        import(&models, "bad.glb"),
+        Err(ModelImportError::GltfParseFailed { .. })
+    ));
+    assert!(
+        !models.join("cache").exists()
+            || std::fs::read_dir(models.join("cache"))
+                .unwrap()
+                .next()
+                .is_none()
+    );
+
+    // A real GLB (produced by converting a glTF) still passes through.
+    let gltf = gltf_with_buffer("data:application/octet-stream;base64,AAECAw==");
+    std::fs::write(models.join("m.gltf"), gltf).unwrap();
+    let good = import(&models, "m.gltf").unwrap();
+    std::fs::copy(&good.glb_path, models.join("ok.glb")).unwrap();
+    import(&models, "ok.glb").expect("valid glb passes through");
+}
+
+/// A FIFO with no writer would block a plain `open`/`read` forever.
+#[cfg(unix)]
+#[test]
+fn fifo_named_like_a_model_is_a_typed_error_not_a_hang() {
+    let (_tmp, models) = fixture();
+    let fifo = models.join("pipe.stp");
+    assert!(
+        std::process::Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert!(matches!(
+        import(&models, "pipe.stp"),
+        Err(ModelImportError::IoFailed { .. })
+    ));
+}
+
+#[test]
+fn directory_named_like_a_model_is_a_typed_error() {
+    let (_tmp, models) = fixture();
+    std::fs::create_dir(models.join("dir.stp")).unwrap();
+    assert!(matches!(
+        import(&models, "dir.stp"),
+        Err(ModelImportError::IoFailed { .. })
+    ));
 }

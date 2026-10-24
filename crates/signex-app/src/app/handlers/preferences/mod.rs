@@ -53,9 +53,6 @@ impl Signex {
     fn seed_preferences_drafts_from_live(&mut self) {
         self.ui_state.preferences_draft_theme = self.ui_state.theme_id;
         self.ui_state.preferences_draft_font = self.ui_state.ui_font_name.clone();
-        self.ui_state.preferences_draft_power_port_style = self.ui_state.power_port_style;
-        self.ui_state.preferences_draft_label_style = self.ui_state.label_style;
-        self.ui_state.preferences_draft_multisheet_style = self.ui_state.multisheet_style;
         self.ui_state.preferences_draft_component_classes = self.ui_state.component_classes.clone();
         self.ui_state.preferences_draft_grid_style = self.ui_state.grid_style;
         self.ui_state.preferences_draft_pcb_gpu_render = self.ui_state.pcb_gpu_render;
@@ -149,22 +146,11 @@ impl Signex {
         // Revert the live-preview GPU flag to the saved value; the content
         // cache clear below repaints the PCB canvas so a discarded toggle
         // takes no effect.
-        self.interaction_state.pcb_canvas.gpu_render = self.ui_state.pcb_gpu_render;
+        self.set_pcb_gpu_render(self.ui_state.pcb_gpu_render);
         // Revert the render inputs used for schematic live preview.
-        let tokens = if self.ui_state.theme_id == ThemeId::Custom {
-            self.ui_state
-                .custom_theme
-                .as_ref()
-                .map(|c| c.tokens)
-                .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::Signex))
-        } else {
-            signex_types::theme::theme_tokens(self.ui_state.theme_id)
-        };
-        self.document_state.panel_ctx.tokens = tokens;
+        self.document_state.panel_ctx.tokens = self.tokens_for(self.ui_state.theme_id);
         // #630 — the schematic grid style previewed live, so push the
-        // committed value back to every window's canvas. Power port /
-        // label / multisheet style have no draw-path reader at all, so
-        // restoring their draft fields above is the whole revert.
+        // committed value back to every window's canvas.
         // #629 — the symbol grid style is the only one of the three
         // Symbol Editor settings with a live preview, so it is the only
         // one to push back. Grid size and pin selection reach the editor
@@ -176,7 +162,16 @@ impl Signex {
         // clear them again here. `set_grid_style` already dropped every
         // schematic bg cache, so only the PCB one is left to invalidate.
         self.update_canvas_theme();
-        self.interaction_state.pcb_canvas.clear_bg_cache();
+        for canvas in self.interaction_state.all_pcb_canvases_mut() {
+            canvas.clear_bg_cache();
+        }
+    }
+
+    /// Set the effective PCB GPU-render flag on every PCB canvas (#494).
+    fn set_pcb_gpu_render(&mut self, enabled: bool) {
+        for canvas in self.interaction_state.all_pcb_canvases_mut() {
+            canvas.gpu_render = enabled;
+        }
     }
 
     pub(crate) fn handle_preferences_message(
@@ -216,9 +211,6 @@ impl Signex {
                 }
                 self.ui_state.theme_id = self.ui_state.preferences_draft_theme;
                 self.ui_state.ui_font_name = self.ui_state.preferences_draft_font.clone();
-                self.ui_state.power_port_style = self.ui_state.preferences_draft_power_port_style;
-                self.ui_state.label_style = self.ui_state.preferences_draft_label_style;
-                self.ui_state.multisheet_style = self.ui_state.preferences_draft_multisheet_style;
                 self.ui_state.grid_style = self.ui_state.preferences_draft_grid_style;
                 self.ui_state.pcb_gpu_render = self.ui_state.preferences_draft_pcb_gpu_render;
                 // #629 — the three Symbol Editor settings commit here like
@@ -231,27 +223,15 @@ impl Signex {
                     self.ui_state.preferences_draft_symbol_pin_selection;
                 // The live-preview already pushed the draft into the widget;
                 // re-assert it so the saved and effective flags can't diverge.
-                self.interaction_state.pcb_canvas.gpu_render = self.ui_state.pcb_gpu_render;
+                self.set_pcb_gpu_render(self.ui_state.pcb_gpu_render);
                 self.update_canvas_theme();
-                let tokens = if self.ui_state.theme_id == ThemeId::Custom {
-                    self.ui_state
-                        .custom_theme
-                        .as_ref()
-                        .map(|c| c.tokens)
-                        .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::Signex))
-                } else {
-                    signex_types::theme::theme_tokens(self.ui_state.theme_id)
-                };
-                self.document_state.panel_ctx.tokens = tokens;
+                self.document_state.panel_ctx.tokens = self.tokens_for(self.ui_state.theme_id);
                 self.document_state.panel_ctx.ui_font_name = self.ui_state.ui_font_name.clone();
                 // The live preview already pushed the draft onto the
                 // canvases; re-assert from the committed value so the
                 // saved and rendered styles can't diverge (same rule as
                 // the PCB GPU flag above).
                 crate::fonts::write_ui_font_pref(&self.ui_state.ui_font_name);
-                crate::fonts::write_power_port_style_pref(self.ui_state.power_port_style);
-                crate::fonts::write_label_style_pref(self.ui_state.label_style);
-                crate::fonts::write_multisheet_style_pref(self.ui_state.multisheet_style);
                 crate::fonts::write_grid_style_pref(self.ui_state.grid_style);
                 crate::fonts::write_pcb_gpu_render_pref(self.ui_state.pcb_gpu_render);
                 crate::fonts::write_theme_pref(self.ui_state.theme_id);
@@ -398,32 +378,6 @@ impl Signex {
                 self.ui_state.preferences_draft_font = name;
                 self.recompute_preferences_dirty();
             }
-            // #630 — these three settings persist and round-trip, but no
-            // draw path consults them: the old `render_config` setters
-            // wrote to a struct nothing read. The content-cache clear is
-            // kept so the preview repaints if a renderer ever starts
-            // honouring them.
-            PrefMsg::DraftPowerPortStyle(style) => {
-                self.ui_state.preferences_draft_power_port_style = style;
-                self.interaction_state
-                    .active_canvas_mut()
-                    .clear_content_cache();
-                self.recompute_preferences_dirty();
-            }
-            PrefMsg::DraftLabelStyle(style) => {
-                self.ui_state.preferences_draft_label_style = style;
-                self.interaction_state
-                    .active_canvas_mut()
-                    .clear_content_cache();
-                self.recompute_preferences_dirty();
-            }
-            PrefMsg::DraftMultisheetStyle(style) => {
-                self.ui_state.preferences_draft_multisheet_style = style;
-                self.interaction_state
-                    .active_canvas_mut()
-                    .clear_content_cache();
-                self.recompute_preferences_dirty();
-            }
             PrefMsg::DraftGridStyle(style) => {
                 self.ui_state.preferences_draft_grid_style = style;
                 // Live preview — `set_grid_style` also drops the bg cache
@@ -435,9 +389,11 @@ impl Signex {
                 // Live preview: push the draft into the widget's effective flag
                 // and repaint the PCB canvas so the toggle shows immediately.
                 // Persisted only on Save; reverted on Discard.
-                self.interaction_state.pcb_canvas.gpu_render = enabled;
-                self.interaction_state.pcb_canvas.clear_content_cache();
-                self.interaction_state.pcb_canvas.clear_bg_cache();
+                for canvas in self.interaction_state.all_pcb_canvases_mut() {
+                    canvas.gpu_render = enabled;
+                    canvas.clear_content_cache();
+                    canvas.clear_bg_cache();
+                }
                 self.recompute_preferences_dirty();
             }
             // #629 — these three used to call `write_*_pref` right here,

@@ -91,6 +91,10 @@ impl Signex {
                 let task = self.handle_new_project_file(path);
                 Task::batch([task, self.finish_update()])
             }
+            FileMsg::SampleProjectUnpacked(result) => {
+                let task = self.handle_sample_project_unpacked(result);
+                Task::batch([task, self.finish_update()])
+            }
             FileMsg::Save => {
                 let task = self.handle_active_document_save_requested();
                 iced::Task::batch([task, self.finish_update()])
@@ -321,8 +325,32 @@ impl Signex {
                 self.handle_print_preview_set_specific_page_input(value);
                 self.finish_update()
             }
-            PrintPreviewMsg::SetFitToPage(fit) => {
-                self.handle_print_preview_set_fit_to_page(fit);
+            PrintPreviewMsg::SetPageSize(size) => {
+                self.handle_print_preview_set_page_size(size);
+                self.finish_update()
+            }
+            PrintPreviewMsg::SetOrientation(orientation) => {
+                self.handle_print_preview_set_orientation(orientation);
+                self.finish_update()
+            }
+            PrintPreviewMsg::SetCustomWidth(text) => {
+                self.handle_print_preview_set_custom_dimension(true, text);
+                self.finish_update()
+            }
+            PrintPreviewMsg::SetCustomHeight(text) => {
+                self.handle_print_preview_set_custom_dimension(false, text);
+                self.finish_update()
+            }
+            PrintPreviewMsg::SetMargin(edge, text) => {
+                self.handle_print_preview_set_margin(edge, text);
+                self.finish_update()
+            }
+            PrintPreviewMsg::SetScaleMode(mode) => {
+                self.handle_print_preview_set_scale_mode(mode);
+                self.finish_update()
+            }
+            PrintPreviewMsg::SetScalePercent(text) => {
+                self.handle_print_preview_set_scale_percent(text);
                 self.finish_update()
             }
             PrintPreviewMsg::SetIncludeTitleBlock(include) => {
@@ -371,13 +399,20 @@ impl Signex {
                 self.handle_print_preview_set_variant(v);
                 self.finish_update()
             }
-            // Visual toggles (No-ERC Markers, Notes) — affect what
+            // Visual toggles (No-ERC Markers, No-Connect Markers, Notes) — affect what
             // the SVG renderer emits, so we mutate `pdf_options`
             // directly and trigger a rerasterize so the Preview tab
             // reflects the change immediately.
             PrintPreviewMsg::SetIncludeNoErcMarkers(v) => {
                 if let Some(p) = self.document_state.preview.as_mut() {
                     p.pdf_options.include_no_erc_markers = v;
+                }
+                self.handle_print_preview_rerender();
+                self.finish_update()
+            }
+            PrintPreviewMsg::SetIncludeNoConnectMarkers(v) => {
+                if let Some(p) = self.document_state.preview.as_mut() {
+                    p.pdf_options.include_no_connect_markers = v;
                 }
                 self.handle_print_preview_rerender();
                 self.finish_update()

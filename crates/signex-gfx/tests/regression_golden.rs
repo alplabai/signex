@@ -249,12 +249,14 @@ fn build_upload_fixture_scene() -> Scene {
     });
 
     scene.polygons.push(GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[0.0, 0.0], [1.0, 0.0], [0.5, 1.0]],
         fill_color: [0.2, 0.2, 0.8, 1.0],
         stroke_color: None,
         stroke_width: 0.0,
     });
     scene.polygons.push(GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[150.0, 150.0], [151.0, 150.0], [150.5, 151.0]],
         fill_color: [1.0, 0.0, 0.0, 1.0],
         stroke_color: None,
@@ -315,12 +317,14 @@ fn build_upload_fixture_scene() -> Scene {
     });
 
     scene.overlay_polygons.push(GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[2.0, 2.0], [3.0, 2.0], [2.5, 3.0]],
         fill_color: [0.4, 0.6, 1.0, 0.3],
         stroke_color: Some([0.4, 0.6, 1.0, 1.0]),
         stroke_width: 0.1,
     });
     scene.overlay_polygons.push(GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[190.0, 190.0], [191.0, 190.0], [190.5, 191.0]],
         fill_color: [1.0, 0.0, 0.0, 1.0],
         stroke_color: None,
@@ -358,12 +362,14 @@ fn build_upload_fixture_scene() -> Scene {
     });
 
     scene.erc_marker_polygons.push(GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[4.8, 4.7], [5.2, 4.7], [5.0, 5.2]],
         fill_color: [0.95, 0.35, 0.35, 0.3],
         stroke_color: Some([0.95, 0.35, 0.35, 1.0]),
         stroke_width: 0.1,
     });
     scene.erc_marker_polygons.push(GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[220.0, 220.0], [221.0, 220.0], [220.5, 221.0]],
         fill_color: [1.0, 0.0, 0.0, 1.0],
         stroke_color: None,

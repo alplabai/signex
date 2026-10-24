@@ -275,6 +275,77 @@ fn equivalence_gate_root_only() {
     place(&mut d, "R1", "R", pt(10.0, 0.0));
     place_power(&mut d, "#PWR01", "PWR", "GND", pt(0.0, 0.0));
     assert_equiv(&d);
+
+    // (e) GND and VCC ports touching tip to tip, no anchor: stays two rails.
+    assert_equiv(&touching_rails(false));
+
+    // (f) the same touch with a junction under it: an anchor, so one net.
+    assert_equiv(&touching_rails(true));
+}
+
+/// A GND rail and a VCC rail, each wired to a resistor, plus a GND port and a
+/// VCC port whose tips share the wireless point `(50, 50)`; `with_junction`
+/// puts a junction there.
+fn touching_rails(with_junction: bool) -> SchematicSheet {
+    let mut s = empty_sheet();
+    add_lib(&mut s, "R");
+    add_lib(&mut s, "PWR");
+    s.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+    s.wires.push(wire(pt(0.0, 20.0), pt(10.0, 20.0)));
+    place(&mut s, "R1", "R", pt(0.0, 0.0));
+    place_power(&mut s, "#PWR1", "PWR", "GND", pt(10.0, 0.0));
+    place(&mut s, "R2", "R", pt(0.0, 20.0));
+    place_power(&mut s, "#PWR2", "PWR", "VCC", pt(10.0, 20.0));
+    place_power(&mut s, "#PWR3", "PWR", "GND", pt(50.0, 50.0));
+    place_power(&mut s, "#PWR4", "PWR", "VCC", pt(50.0, 50.0));
+    if with_junction {
+        s.junctions.push(junction(pt(50.0, 50.0)));
+    }
+    s
+}
+
+#[test]
+fn touching_gnd_and_vcc_ports_stay_two_rails_in_a_project_on_one_sheet() {
+    let p = stitch(&touching_rails(false), "root", &HashMap::new());
+    assert_eq!(p.netlist.nets.len(), 2, "{:?}", p.netlist);
+    let mut got = names(&p.netlist);
+    got.sort_unstable();
+    assert_eq!(got, ["GND", "VCC"]);
+}
+
+#[test]
+fn touching_gnd_and_vcc_ports_stay_two_rails_across_sheets() {
+    // The contact-only pair lives on the root; the child wires its own GND and
+    // VCC. The root's touch must not bridge the two global names.
+    let mut root = touching_rails(false);
+    root.child_sheets
+        .push(child_sheet("A", "a.sch", Vec::new()));
+
+    let mut child = empty_sheet();
+    add_lib(&mut child, "R");
+    add_lib(&mut child, "PWR");
+    child.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+    child.wires.push(wire(pt(0.0, 20.0), pt(10.0, 20.0)));
+    place(&mut child, "R3", "R", pt(0.0, 0.0));
+    place_power(&mut child, "#PWR5", "PWR", "GND", pt(10.0, 0.0));
+    place(&mut child, "R4", "R", pt(0.0, 20.0));
+    place_power(&mut child, "#PWR6", "PWR", "VCC", pt(10.0, 20.0));
+
+    let mut map = HashMap::new();
+    map.insert("a.sch".to_string(), child);
+    let p = stitch(&root, "root", &map);
+
+    assert_eq!(p.netlist.nets.len(), 2, "{:?}", p.netlist);
+    let gnd = p.netlist.nets.iter().find(|n| n.name == "GND").unwrap();
+    let vcc = p.netlist.nets.iter().find(|n| n.name == "VCC").unwrap();
+    let refs = |n: &Net| {
+        n.terminals
+            .iter()
+            .map(|t| t.reference.clone())
+            .collect::<Vec<_>>()
+    };
+    assert!(refs(gnd).contains(&"R3".to_string()) && !refs(gnd).contains(&"R4".to_string()));
+    assert!(refs(vcc).contains(&"R4".to_string()) && !refs(vcc).contains(&"R3".to_string()));
 }
 
 /// Library whose single pin sits at `local` (for the rotated-symbol case).
@@ -362,6 +433,31 @@ fn unmatched_sheet_pin_stays_local() {
     let (root, map) = parent_child("BUS", pt(0.0, 0.0), "OTHER", LabelType::Hierarchical);
     let p = stitch(&root, "root", &map);
     assert_eq!(p.netlist.nets.len(), 2, "unbound pin keeps nets separate");
+}
+
+// A padded label or pin name is the same port as its trimmed spelling: the
+// stitcher shares `Label::port_name` / `normalize_port_name` with the engine's
+// port collector and the ERC hierarchy rule (#359).
+#[test]
+fn padded_child_label_binds_the_trimmed_sheet_pin() {
+    let (root, map) = parent_child("CLK", pt(0.0, 0.0), " CLK ", LabelType::Hierarchical);
+    let p = stitch(&root, "root", &map);
+    assert_eq!(p.netlist.nets.len(), 1, "padded label still binds");
+    assert_eq!(p.netlist.nets[0].terminals.len(), 2);
+}
+
+#[test]
+fn padded_sheet_pin_binds_the_trimmed_child_label() {
+    let (root, map) = parent_child("  CLK", pt(0.0, 0.0), "CLK", LabelType::Global);
+    let p = stitch(&root, "root", &map);
+    assert_eq!(p.netlist.nets.len(), 1, "padded pin still binds");
+}
+
+#[test]
+fn blank_port_names_never_bind() {
+    let (root, map) = parent_child("   ", pt(0.0, 0.0), "  ", LabelType::Hierarchical);
+    let p = stitch(&root, "root", &map);
+    assert_eq!(p.netlist.nets.len(), 2, "blank names are not ports");
 }
 
 // 3 ── Global name spans sheets; power-port symbol + Power label merge.
@@ -907,3 +1003,37 @@ fn same_filename_children_of_different_parents_stitch_from_their_own_files() {
 }
 
 mod multi_root;
+
+/// #537: duplicate-uuid detection covers the whole project graph, so a
+/// declared page outside the root's hierarchy that copies the root's uuid is
+/// reported, as is a child that copies it.
+#[test]
+fn a_duplicate_sheet_uuid_is_reported_anywhere_in_the_project_graph() {
+    // `empty_sheet` has the nil uuid, which the check skips; give it a real one.
+    let mut root = empty_sheet();
+    root.uuid = uuid::Uuid::new_v4();
+    let mut page = empty_sheet();
+    page.uuid = root.uuid;
+    let children: HashMap<String, SchematicSheet> = [("page.snxsch".to_string(), page)].into();
+
+    let p = stitch_pages(&root, "root.snxsch", &children, &["page.snxsch"]);
+    let dups: Vec<_> = p
+        .issues
+        .iter()
+        .filter(|i| matches!(i, StitchIssue::DuplicateSheetUuid { .. }))
+        .collect();
+    assert_eq!(dups.len(), 1, "{:?}", p.issues);
+
+    // Distinct uuids: nothing to report.
+    let mut other = empty_sheet();
+    other.uuid = uuid::Uuid::new_v4();
+    let children: HashMap<String, SchematicSheet> = [("page.snxsch".to_string(), other)].into();
+    let p = stitch_pages(&root, "root.snxsch", &children, &["page.snxsch"]);
+    assert!(
+        !p.issues
+            .iter()
+            .any(|i| matches!(i, StitchIssue::DuplicateSheetUuid { .. })),
+        "{:?}",
+        p.issues
+    );
+}

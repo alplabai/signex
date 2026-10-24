@@ -25,6 +25,11 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 ### Added — schematic engine
 
 - **`PlaceChildSheet` engine command** — adds a hierarchical sheet symbol to the schematic as one undoable step and marks `CHILD_SHEETS` dirty so the project netlist cache invalidates. A blank `filename` is rejected with `EngineError::EmptyChildSheetFilename`; an empty `name` is allowed. Engine only — the Place Sheet canvas tool is separate (#357).
+
+### Added — schematic placement
+
+- **Place Sheet tool** (#358) — toolbar **Sheet** (and the `draw_hierarchical_sheet` command, `S` in the classic preset, the Active Bar dropdown and the canvas context menu **Place > Sheet Symbol**) places a hierarchical sheet symbol with two clicks on opposite corners, with a rubber-band preview; Esc or `CancelDrawing` cancels and returns to Select, and an edge under 5.08 mm places nothing (a warning reaches the Messages panel). The sheet gets the first unused `sheetN` as both name and file (`sheetN.snxsch`, unused in the parent and the project); renaming it from Properties is not yet possible, and the child file is not created on disk. One undo step removes it.
+
 ### Added — start screen
 
 - **Actionable start screen** — with nothing loaded, the empty centre region now shows the product name and version with **New Project**, **Open Project…** and **Keyboard Shortcuts (F1)** buttons, all dispatching existing menu messages and styled from `ThemeTokens`. A loaded project with no document selected keeps its own quieter hint. Open Sample Project and recent projects are left out until those features land (#331).
@@ -39,6 +44,7 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 ### Added — native-format test corpus
 
 - **Fixture-corpus round-trip harness** — `signex-types/tests/round_trip_corpus.rs` walks the checked-in `.snxsch` / `.snxpcb` goldens under `tests/corpus/` and asserts each parses, and re-saves byte-identically (which also implies a second parse -> write -> parse hop is stable); every failing fixture is listed with its path and first differing line. `SIGNEX_BLESS_CORPUS=1` rewrites fixtures for an intentional format change, and a `MIN_CORPUS_FILES` guard stops the corpus shrinking silently (#334).
+- **`.snxsch` schematic feature-matrix fixtures** — 33 new goldens under `tests/corpus/schematic/` cover symbol flags, extras-only data, multi-unit and mirrored symbols, rotations, wires and the T-junction, buses, every `LabelType`, no-connect and no-ERC markers, text notes, drawing primitives, `title_block`, `lib_symbols`, adversarial text and nanometre rounding; `MIN_CORPUS_FILES` is now 39 and the corpus README lists the matrix (#335).
 
 ### Added — PCB GPU shader render (experimental, default-off)
 
@@ -62,6 +68,7 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 - **BOM validation in the export modal** — a new Rules tab lists the four `signex-bom` rules as toggles and the live issues (by severity, naming each designator); the footer shows the error/warning count next to Export. The report re-validates on every grouping / variant / DNP / rule change, and an export with issues still writes the file and reports the summary (#355).
 ### Added — PDF export
 
+- **Page setup in the PDF export modal (#353)** — page size (all named sizes plus `Custom` width/height in mm), orientation, the four margins in mm and scale (Fit to Page / 1:1 / Percent) are now editable and re-rasterise the preview; the exported MediaBox follows the selection. Empty, non-numeric, zero or negative input is rejected with a message and the last good value is kept; margins are limited to fit the page. A Custom page edge must be at least 10 mm; a Custom page takes its orientation from its width and height (the orientation picker is not offered for it). Shrinking the page refits the margins and says so, and each field keeps its own rejection notice until its text is fixed. Opening the modal still pre-selects the sheet's own paper and orientation. Page setup lasts only while the modal is open and is re-seeded from the sheet each time it opens. Automatic adjustments (margin limit, refit, Percent reset to 100%) and rejected input are also written to the Messages panel. The on-screen preview of a very large Custom page is drawn at a reduced resolution (longest side capped at 4096 px); the exported PDF is unaffected.
 - **Roboto/Iosevka embedded as Type0 fonts (#352)** — exported PDFs now carry the bundled TTFs as `Identity-H` Type0/CIDFontType2 fonts with a `/W` widths array, a `/FontFile2` stream subset to the glyphs actually used, and a `/ToUnicode` CMap, instead of referencing Helvetica/Courier. `µ`, `°`, `±`, Turkish letters and Greek render in the intended typeface and extract/copy back as the original text; the ASCII-mangling `sanitize_pdf_text` workaround is gone. Characters no bundled face covers (e.g. CJK) draw as `.notdef`.
 ### Added — release workflow
 

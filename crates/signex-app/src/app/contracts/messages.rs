@@ -68,11 +68,6 @@ pub enum WindowMsg {
         kind: crate::panels::PanelKind,
         id: iced::window::Id,
     },
-    /// User pressed on the borderless modal's header — start an OS-level
-    /// window drag for the window hosting this modal. Lets the user move
-    /// the detached modal even though `decorations: false` removed the
-    /// native title bar.
-    StartDetachedWindowDrag(crate::app::state::ModalId),
     /// User pressed on empty chrome (menu-bar row outside buttons) — start
     /// an OS-level window drag for the main borderless window. The chrome
     /// is the replacement for the OS title bar.
@@ -82,15 +77,6 @@ pub enum WindowMsg {
     /// direction. Replaces the WS_THICKFRAME edges we lose when
     /// decorations are disabled.
     StartMainWindowResize(iced::window::Direction),
-    /// User pressed one of the 6 px edge strips around a borderless
-    /// detached modal window — ask the OS to start a resize drag in
-    /// that direction. Same trick as the main window; without this
-    /// the modals couldn't be resized because `decorations: false`
-    /// strips the OS chrome.
-    StartDetachedModalResize {
-        modal: crate::app::state::ModalId,
-        direction: iced::window::Direction,
-    },
     /// Custom min/max/close buttons in the borderless main-window chrome.
     MinimizeMainWindow,
     ToggleMaximizeMainWindow,
@@ -351,8 +337,20 @@ pub enum PrintPreviewMsg {
     SetPageRangeSpecific,
     /// User edited the specific page input in preview.
     SetSpecificPageInput(String),
-    /// User toggled "Fit to Page" in the unified PDF preview modal.
-    SetFitToPage(bool),
+    /// User picked a page size (a named size, or `Custom`).
+    SetPageSize(signex_output::PageSize),
+    /// User picked portrait or landscape.
+    SetOrientation(signex_output::Orientation),
+    /// User edited the Custom page width (mm).
+    SetCustomWidth(String),
+    /// User edited the Custom page height (mm).
+    SetCustomHeight(String),
+    /// User edited one margin (mm).
+    SetMargin(signex_output::MarginEdge, String),
+    /// User picked Fit to Page / 1:1 / Percent.
+    SetScaleMode(signex_output::PdfScaleMode),
+    /// User edited the scale percentage.
+    SetScalePercent(String),
     /// User toggled "Include Title Block" in the unified PDF preview modal.
     SetIncludeTitleBlock(bool),
     /// Mouse wheel scrolled over the preview image. Carries the
@@ -390,6 +388,7 @@ pub enum PrintPreviewMsg {
     SetPhysicalSheetNumber(bool),
     SetPhysicalDocumentNumber(bool),
     SetIncludeNoErcMarkers(bool),
+    SetIncludeNoConnectMarkers(bool),
     SetIncludeParameterSets(bool),
     SetIncludeProbes(bool),
     SetIncludeBlankets(bool),

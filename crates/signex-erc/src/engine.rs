@@ -36,6 +36,7 @@ pub fn run_all_with_config(ctx: &ErcContext, config: &ErcConfig) -> Vec<Diagnost
     rules::symbol_outside_sheet(ctx, &mut out);
     rules::ambiguous_label_anchor(ctx, &mut out);
     rules::pin_type_conflict(ctx, &config.pin_matrix, &mut out);
+    rules::pins_touch_not_connected(ctx, &mut out);
     drop_suppressed(ctx, &mut out);
     out
 }

@@ -7,11 +7,16 @@ use crate::dock::DockArea;
 use super::TabInfo;
 
 mod interaction;
+mod pdf_page_setup;
+mod reference_policy;
 pub(crate) mod scope;
+mod sheet_read;
 pub(crate) mod sheet_refs;
 mod ui;
+pub(crate) mod volume_case;
 
 pub use interaction::InteractionState;
+pub use pdf_page_setup::PageSetupInputs;
 pub use ui::UiState;
 
 pub struct Signex {
@@ -215,6 +220,22 @@ impl ErrorNotice {
         }
     }
 
+    /// A History restore did not happen.
+    pub fn restore(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Restore Failed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
+    /// A new project or document could not be created.
+    pub fn create(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Create Failed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
     /// The requested action has no backing flow yet.
     pub fn unavailable(detail: impl Into<String>) -> Self {
         Self {
@@ -359,6 +380,12 @@ pub struct NetlistIncompletePrompt {
 
 pub struct DocumentState {
     pub dock: DockArea,
+    /// Change detection + debounce for persisting `dock` (#692). The
+    /// write itself runs as a `Task`; see `handlers/dock/layout_persist.rs`.
+    pub dock_layout_sync: crate::dock::DockLayoutSync,
+    /// The Components filter + Library Browser queries and the debounce
+    /// that persists them (#859); see `handlers/dock/search_prefs_persist.rs`.
+    pub search_prefs: crate::persist::SearchPrefsSync,
     pub tabs: Vec<TabInfo>,
     pub active_tab: usize,
     /// All live schematic engines keyed by their on-disk path. Every
@@ -671,6 +698,9 @@ pub struct PreviewState {
     /// `pdf_options.dpi` at export time; the preview always rasterises
     /// at 96 DPI for speed.
     pub quality: PdfQuality,
+    /// Typed text of the page-setup fields (custom size, margins, percent)
+    /// plus the reason the last edit was rejected or clamped.
+    pub page_setup: PageSetupInputs,
 }
 
 impl PreviewState {
@@ -764,6 +794,22 @@ impl DocumentState {
                 (path.clone(), refs)
             })
             .collect()
+    }
+
+    /// Every open engine that belongs to the same project as the active
+    /// document, the active one included. A loose active document yields only
+    /// itself. Used where a name must be unique across the whole hierarchy
+    /// (a project-wide default such as a new child sheet's `sheetN`).
+    pub fn engines_in_active_document_project(&self) -> Vec<&signex_engine::Engine> {
+        let Some(project) = self.active_document_project() else {
+            return self.active_engine().into_iter().collect();
+        };
+        scope::engines_in_project(
+            &self.projects,
+            &self.child_sheet_refs(),
+            &self.engines,
+            project.id,
+        )
     }
 
     pub fn active_engine(&self) -> Option<&signex_engine::Engine> {

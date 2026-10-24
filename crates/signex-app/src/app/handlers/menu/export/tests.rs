@@ -178,12 +178,14 @@ pub(crate) fn app_workspace(dir: &str, listed: &[&str]) -> Signex {
                     symbols_count: 0,
                     wires_count: 0,
                     labels_count: 0,
+                    unknown: Default::default(),
                 })
                 .collect(),
             variant_definitions: Vec::new(),
             active_variant: None,
             libraries: Vec::new(),
             enable_git: false,
+            unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
     });
