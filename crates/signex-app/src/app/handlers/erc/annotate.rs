@@ -51,7 +51,7 @@ impl Signex {
     /// parking, the title-bar count and Save-All read, and a bare
     /// `tab.dirty = true` never propagates into it (#585). Shared by Annotate
     /// and Reset Duplicate Designators so the two cannot drift (#669).
-    fn mark_cached_sheet_dirty(&mut self, path: &std::path::Path) {
+    pub(in crate::app) fn mark_cached_sheet_dirty(&mut self, path: &std::path::Path) {
         if let Some(tab) = self.document_state.tabs.iter_mut().find(|t| t.path == path) {
             tab.dirty = true;
         }
@@ -138,13 +138,23 @@ impl Signex {
                         .unwrap_or(&[])
                 })
                 .collect();
-            signex_types::schematic::ProjectParts::new(&documents, &locked)
+            signex_types::schematic::ProjectParts::new(
+                &documents,
+                &locked,
+                self.ui_state.annotate_order,
+            )
         };
         let mut assigned: std::collections::HashMap<usize, String> =
             std::collections::HashMap::new();
         let mut any_active_changed = false;
         let mut any_cached_changed = false;
         let mut disk_touched = 0usize;
+        // One project-wide undo step per run, unless the preference asks for
+        // one per sheet. Which sheets it touched is filled in below.
+        let undo_group = (self.ui_state.annotate_undo
+            == crate::annotate_undo::AnnotateUndo::Project)
+            .then(|| self.mint_undo_group());
+        let mut touched_sheets = crate::app::UndoGroupSheets::default();
         for (path, why) in &project_set.unreadable {
             crate::diagnostics::log_info(format!("Annotate: sheet '{}' {why}", path.display()));
         }
@@ -153,6 +163,8 @@ impl Signex {
                 parts: &parts,
                 sheet,
                 locked: &locked,
+                undo_group,
+                order: self.ui_state.annotate_order,
             };
             if active_path.as_deref() == Some(path.as_path()) {
                 // The active engine — run through the raw engine method (not
@@ -163,7 +175,10 @@ impl Signex {
                     engine.annotate_in_project(mode, &mut next_by_prefix, scope, &mut assigned)
                 });
                 match outcome {
-                    Some(Ok(true)) => any_active_changed = true,
+                    Some(Ok(true)) => {
+                        any_active_changed = true;
+                        touched_sheets.live.push(path.clone());
+                    }
                     Some(Err(error)) => {
                         let error = anyhow::Error::new(error);
                         crate::diagnostics::log_error(
@@ -188,6 +203,7 @@ impl Signex {
                     Some(Ok(true)) => {
                         self.mark_cached_sheet_dirty(path);
                         any_cached_changed = true;
+                        touched_sheets.live.push(path.clone());
                     }
                     Some(Err(error)) => {
                         let error = anyhow::Error::new(error);
@@ -216,7 +232,11 @@ impl Signex {
                 &mut assigned,
             ) {
                 disk_touched += 1;
+                touched_sheets.disk_only.push(path.clone());
             }
+        }
+        if let Some(group) = undo_group {
+            self.set_undo_group_sheets(group, touched_sheets);
         }
         if disk_touched > 0 {
             crate::diagnostics::log_info(format!(

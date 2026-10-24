@@ -90,6 +90,8 @@ fn fixture() -> Fixture {
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
+        case_fold: Default::default(),
+        case_probed: false,
     });
     app.document_state.active_project = Some(id);
     Fixture {

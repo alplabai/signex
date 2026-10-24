@@ -241,6 +241,7 @@ mod tests {
             sheets: Vec::new(),
             metadata: Default::default(),
             netlist: None,
+            netlist_sheet_placements: Vec::new(),
             netlist_sheets: vec![sheet],
         };
         let names = HashMap::from([("L:S".to_string(), "Passives/R".to_string())]);

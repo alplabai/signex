@@ -2,6 +2,7 @@
 # Checked by scripts/check_arch_guard.sh. Add a line to add an edge.
 chrome-catalog -> signex-types
 chrome-catalog -> signex-widgets
+signex-3d-model-importer -> signex-sketch
 signex-3d-model-importer -> signex-types
 signex-app -> signex-bake
 signex-app -> signex-engine

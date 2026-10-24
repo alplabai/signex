@@ -38,8 +38,8 @@ pub use context_menu::{
 };
 pub use mode::{EditorMode, FpActiveBarMenu, PadStackTab};
 pub use pad::{
-    AlignOp, CourtyardRect, EditorPad, NextPadDefaults, PadPassthrough, PadSide, PadStackUi,
-    ShapeParamMap,
+    AlignOp, CourtyardRect, DEFAULT_THROUGH_HOLE_DRILL_MM, EditorPad, NextPadDefaults,
+    PadPassthrough, PadSide, PadStackUi, ShapeParamMap,
 };
 pub use placement::{PlaceArcPending, PlacementInput, PlacementInputKind};
 pub use selection_filter::{FpSelectionMode, SelectionFilter, SelectionFilterKind};

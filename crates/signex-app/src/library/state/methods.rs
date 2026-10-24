@@ -61,6 +61,7 @@ impl Default for LibraryState {
             skipped_updates_for: std::collections::HashSet::new(),
             installed_libraries: Vec::new(),
             global_libraries: Vec::new(),
+            stock_library: None,
             components_panel: ComponentsPanelState::default(),
             pending_mounts: HashMap::new(),
             external_poll_in_flight: false,
@@ -390,6 +391,9 @@ impl LibraryState {
     ) -> ComponentsMountSource {
         if project_paths.iter().any(|p| p == path) {
             return ComponentsMountSource::Project;
+        }
+        if self.stock_library.as_deref() == Some(path) {
+            return ComponentsMountSource::Stock;
         }
         if self.installed_libraries.iter().any(|p| p == path) {
             return ComponentsMountSource::Installed;

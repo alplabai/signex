@@ -151,12 +151,15 @@ impl Signex {
             ));
             return;
         };
-        let (_, failed) = self.apply_engine_command_checked(
+        let outcome = self.apply_engine_command_checked(
             signex_engine::Command::ReplaceLibSymbol { lib_symbol: fresh },
             true,
             true,
         );
-        if failed {
+        if matches!(
+            outcome,
+            crate::app::mutation_gateway::CommandOutcome::Failed
+        ) {
             // The engine error (which pins block the update) is already in
             // the Messages panel via the gateway; the drift row stays.
             return;

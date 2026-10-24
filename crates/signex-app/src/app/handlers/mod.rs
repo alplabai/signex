@@ -11,4 +11,5 @@ pub mod library_drift;
 pub mod library_place;
 pub mod menu;
 pub mod preferences;
+pub mod project_case;
 pub mod selection_workflow;
