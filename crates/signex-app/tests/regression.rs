@@ -215,3 +215,6 @@ mod grid_step_refusal;
 // #961 — the Annotate dialog's order of processing drives the numbering.
 #[path = "regression/annotate_order.rs"]
 mod annotate_order;
+
+#[path = "regression/rotate_direction.rs"]
+mod rotate_direction;

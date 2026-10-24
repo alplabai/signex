@@ -455,8 +455,10 @@ pub enum EditMsg {
     Undo,
     /// Redo the most recently undone edit.
     Redo,
-    /// Rotate the current selection.
-    RotateSelected,
+    /// Rotate the current selection 90 degrees clockwise on screen.
+    RotateSelectedClockwise,
+    /// Rotate the current selection 90 degrees counter-clockwise on screen.
+    RotateSelectedCounterclockwise,
     /// Mirror the current selection about the X axis.
     MirrorSelectedX,
     /// Mirror the current selection about the Y axis.
