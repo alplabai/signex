@@ -167,6 +167,12 @@ pub struct Violation {
     pub severity: Severity,
     pub message: String,
     pub location: Point,
+    /// Coordinate space of `location`. Only [`LocationSpace::ThisSheet`] may
+    /// be drawn or panned to on the sheet the violation is filed under.
+    pub location_space: LocationSpace,
+    /// For [`LocationSpace::ChildSheet`]: the `ChildSheet.filename` of the
+    /// sheet that owns `location`.
+    pub child_sheet: Option<String>,
     /// The primary object the violation refers to.
     pub primary: Option<SelectedItem>,
     /// Optional peer — the "other" object in two-object rules.
@@ -189,9 +195,19 @@ impl Violation {
             severity,
             message: message.into(),
             location,
+            location_space: LocationSpace::ThisSheet,
+            child_sheet: None,
             primary: None,
             peer: None,
         }
+    }
+
+    /// Re-file this violation under the child sheet that owns its location:
+    /// the point is now in that sheet's own coordinates.
+    pub fn into_child_sheet_space(mut self) -> Self {
+        self.location_space = LocationSpace::ThisSheet;
+        self.child_sheet = None;
+        self
     }
 
     /// The built-in rule that produced this violation, or `None` for a DSL

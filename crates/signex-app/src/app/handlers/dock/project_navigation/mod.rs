@@ -3,6 +3,7 @@ use iced::Task;
 use super::super::super::*;
 
 mod add;
+pub(crate) mod add_io;
 #[cfg(test)]
 mod add_tests;
 mod close_project;

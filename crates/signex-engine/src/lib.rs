@@ -6,6 +6,7 @@ mod annotation;
 mod history;
 mod selection;
 mod sheet;
+mod sheet_identity;
 mod sheet_placement;
 mod transform;
 
@@ -17,6 +18,9 @@ pub(crate) mod test_support;
 #[cfg(test)]
 mod annotation_tests;
 
+#[cfg(test)]
+mod sheet_identity_tests;
+
 use std::path::{Path, PathBuf};
 
 pub use annotation::AnnotateScope;
@@ -26,6 +30,7 @@ pub use command::{
 };
 pub use error::EngineError;
 use history::HistoryEntry;
+pub use history::UndoGroupId;
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
 pub use selection::{ClipboardSelection, SelectionAnchor, SelectionDetails, partition_cuttable};
 pub use sheet::{
@@ -152,6 +157,7 @@ impl Engine {
             | Command::ReorderObjects { .. }
             | Command::ReconcileChildSheetPins { .. }
             | Command::RenameChildSheetFile { .. }
+            | Command::ModifyChildSheet { .. }
             | Command::SetPaperSize { .. } => self.exec_structure(before, cmd),
         }
     }

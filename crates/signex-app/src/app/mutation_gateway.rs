@@ -13,7 +13,7 @@ pub(crate) enum CommandOutcome {
 }
 
 impl Signex {
-    fn render_invalidation_for_patch(
+    pub(super) fn render_invalidation_for_patch(
         patch: signex_engine::DocumentPatch,
     ) -> crate::schematic_runtime::RenderInvalidation {
         use crate::schematic_runtime::RenderInvalidation;
@@ -135,10 +135,26 @@ impl Signex {
         clear_overlay_cache: bool,
         update_selection_info: bool,
     ) -> CommandOutcome {
+        self.apply_engine_command_reporting(command, clear_overlay_cache, update_selection_info)
+            .0
+    }
+
+    /// [`Self::apply_engine_command_checked`] that also hands back the
+    /// engine's refusal text, for callers that must show the user why an
+    /// edit did not happen. `None` means the engine accepted the command.
+    pub(crate) fn apply_engine_command_reporting(
+        &mut self,
+        command: signex_engine::Command,
+        clear_overlay_cache: bool,
+        update_selection_info: bool,
+    ) -> (CommandOutcome, Option<String>) {
         let Some(engine) = self.document_state.active_engine_mut() else {
-            return CommandOutcome::Failed;
+            return (
+                CommandOutcome::Failed,
+                Some("There is no active schematic.".to_string()),
+            );
         };
-        let mut failed = false;
+        let mut failed = None;
 
         let invalidation = match engine.execute(command) {
             Ok(result) if result.changed => result
@@ -147,9 +163,9 @@ impl Signex {
                 .unwrap_or(crate::schematic_runtime::RenderInvalidation::NONE),
             Ok(_) => crate::schematic_runtime::RenderInvalidation::NONE,
             Err(error) => {
+                failed = Some(error.to_string());
                 let error = anyhow::Error::new(error);
                 crate::diagnostics::log_error("Engine command failed", &error);
-                failed = true;
                 crate::schematic_runtime::RenderInvalidation::NONE
             }
         };
@@ -159,13 +175,14 @@ impl Signex {
             clear_overlay_cache,
             update_selection_info,
         );
-        if failed {
+        let outcome = if failed.is_some() {
             CommandOutcome::Failed
         } else if changed {
             CommandOutcome::Changed
         } else {
             CommandOutcome::Unchanged
-        }
+        };
+        (outcome, failed)
     }
 
     /// Mark the active document as having unsaved edits, without running a
@@ -199,6 +216,17 @@ impl Signex {
     /// also makes the `Engine::can_undo` the Edit menu reads
     /// (`app/view/mod.rs`) agree with what Undo will actually do.
     pub(crate) fn apply_engine_undo(&mut self, update_selection_info: bool) -> bool {
+        if let Some(group) = self
+            .document_state
+            .active_engine()
+            .and_then(|engine| engine.next_undo_group())
+        {
+            return self.apply_grouped_step(
+                group,
+                super::undo_groups::StepDirection::Undo,
+                update_selection_info,
+            );
+        }
         let invalidation = if let Some(engine) = self.document_state.active_engine_mut() {
             match engine.undo() {
                 Ok(Some(patch_pair)) => Self::render_invalidation_for_patch(patch_pair.document),
@@ -219,6 +247,17 @@ impl Signex {
     /// Redo one step of the **active** engine's own history. Mirror of
     /// [`Signex::apply_engine_undo`].
     pub(crate) fn apply_engine_redo(&mut self, update_selection_info: bool) -> bool {
+        if let Some(group) = self
+            .document_state
+            .active_engine()
+            .and_then(|engine| engine.next_redo_group())
+        {
+            return self.apply_grouped_step(
+                group,
+                super::undo_groups::StepDirection::Redo,
+                update_selection_info,
+            );
+        }
         let invalidation = if let Some(engine) = self.document_state.active_engine_mut() {
             match engine.redo() {
                 Ok(Some(patch_pair)) => Self::render_invalidation_for_patch(patch_pair.document),
@@ -236,7 +275,7 @@ impl Signex {
         self.finish_schematic_mutation(invalidation, true, update_selection_info)
     }
 
-    fn finish_schematic_mutation(
+    pub(super) fn finish_schematic_mutation(
         &mut self,
         invalidation: crate::schematic_runtime::RenderInvalidation,
         clear_overlay_cache: bool,

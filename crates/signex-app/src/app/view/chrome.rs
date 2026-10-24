@@ -247,6 +247,7 @@ impl Signex {
                 draft_font: &ui.preferences_draft_font,
                 draft_grid_style: ui.preferences_draft_grid_style,
                 draft_pcb_gpu_render: ui.preferences_draft_pcb_gpu_render,
+                draft_annotate_undo: ui.preferences_draft_annotate_undo,
                 draft_symbol_grid_size_mm: ui.preferences_draft_symbol_grid_size_mm,
                 draft_symbol_grid_style: ui.preferences_draft_symbol_grid_style,
                 draft_symbol_pin_selection: ui.preferences_draft_symbol_pin_selection,
