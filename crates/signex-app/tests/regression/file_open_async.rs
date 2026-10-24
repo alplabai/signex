@@ -318,3 +318,59 @@ fn pcb_open_finished_err_opens_no_tab_and_does_not_panic() {
         "a failed async PCB parse must not open a tab either"
     );
 }
+
+/// #897: opening a board whose zone has a hole that will be drawn as solid
+/// copper (here one lying outside the zone outline) says so once in the
+/// Messages panel, instead of the cut-out silently not appearing.
+#[test]
+fn opening_a_board_with_an_unusable_zone_hole_warns_once() {
+    use signex_types::pcb::{Point, Zone};
+    drop(signex_app::diagnostics::init_logging());
+    let dir = TempDir::with_prefix("zone-hole-warning-").unwrap();
+    let path = dir.path().join("board.snxpcb");
+    let marker = dir.path().display().to_string();
+    let rect = |x0: f64, y0: f64, x1: f64, y1: f64| {
+        vec![
+            Point { x: x0, y: y0 },
+            Point { x: x1, y: y0 },
+            Point { x: x1, y: y1 },
+            Point { x: x0, y: y1 },
+        ]
+    };
+    let mut board = empty_pcb_board();
+    board.zones.push(Zone {
+        uuid: uuid::Uuid::new_v4(),
+        net: 0,
+        net_name: String::new(),
+        layer: "TopCopper".into(),
+        outline: rect(0.0, 0.0, 10.0, 10.0),
+        holes: vec![rect(1.0, 1.0, 2.0, 2.0), rect(20.0, 20.0, 22.0, 22.0)],
+        priority: 0,
+        fill_type: String::new(),
+        thermal_relief: false,
+        thermal_gap: 0.0,
+        thermal_width: 0.0,
+        clearance: 0.0,
+        min_thickness: 0.0,
+        unknown: Default::default(),
+    });
+    let warnings = || {
+        signex_app::diagnostics::recent_entries()
+            .iter()
+            .filter(|e| {
+                e.message.contains(&marker)
+                    && e.message
+                        .contains("hole 1 is not strictly inside the outline")
+            })
+            .count()
+    };
+
+    let (mut app, _t) = Signex::new();
+    let _ = app.update(Message::File(FileMsg::PcbOpenFinished {
+        path,
+        title: "board".to_string(),
+        result: Ok(Box::new(board)),
+    }));
+
+    assert_eq!(warnings(), 1);
+}

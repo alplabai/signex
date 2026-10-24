@@ -5,6 +5,7 @@ use crate::dock::DockMessage;
 use super::super::*;
 
 mod floating_layout;
+mod layout_persist;
 mod library_browser;
 mod navigator;
 mod panel_controls;
@@ -12,6 +13,7 @@ mod panel_open;
 mod project_navigation;
 mod property_editor;
 mod sch_library;
+mod search_prefs_persist;
 
 impl Signex {
     pub(crate) fn handle_dock_message(&mut self, msg: DockMessage) -> Task<Message> {
@@ -53,9 +55,9 @@ impl Signex {
         }
 
         self.document_state.dock.update(msg);
-        // Persist the new layout so it survives restart. Cheap: one
-        // JSON round-trip on the prefs file per dock mutation.
-        crate::fonts::write_dock_layout(&self.document_state.dock);
-        self.finish_update()
+        // Persist the layout so it survives restart — only when it really
+        // changed, debounced, and off the UI thread (#692).
+        let persist = self.persist_dock_layout_soon();
+        Task::batch([persist, self.finish_update()])
     }
 }

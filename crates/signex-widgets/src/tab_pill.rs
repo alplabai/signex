@@ -50,11 +50,12 @@ pub struct TabPillStyle {
     pub border: Color,
     pub accent: Color,
     pub is_active: bool,
-    /// Draw the right edge. Set `false` for every tab except the
-    /// last one in a row so adjacent tabs share their L/R borders
-    /// (left of tab N+1 acts as the divider). Without this, every
-    /// pair of adjacent tabs shows a 2-px-wide black band where
-    /// their R+L borders stack.
+    /// `false` for every tab except the last one in a row, so adjacent
+    /// tabs share one divider: the pill's right border is pushed
+    /// [`BORDER_WIDTH`] under the next tab, whose left border paints
+    /// over it. Without this, every pair of adjacent tabs shows a
+    /// 2-px-wide band where their R+L borders stack. Only valid for a
+    /// row with no spacing between the pills.
     pub is_last: bool,
     pub accent_position: AccentPosition,
 }
@@ -62,6 +63,22 @@ pub struct TabPillStyle {
 const TOP_RADIUS: f32 = 4.0;
 const ACCENT_HEIGHT: f32 = 2.0;
 const BORDER_WIDTH: f32 = 1.0;
+
+/// Bounds of the bordered quad for a pill laid out in `bounds`.
+///
+/// A non-last pill extends one border width to the right so its right
+/// border sits exactly under the next pill's left border (which paints
+/// later and covers it), leaving a single 1-px divider.
+fn pill_quad_bounds(bounds: Rectangle, style: &TabPillStyle) -> Rectangle {
+    if style.is_last {
+        bounds
+    } else {
+        Rectangle {
+            width: bounds.width + BORDER_WIDTH,
+            ..bounds
+        }
+    }
+}
 
 pub struct TabPill<'a, Message, Theme = iced::Theme, Renderer = iced::Renderer>
 where
@@ -217,7 +234,7 @@ where
         };
         renderer.fill_quad(
             Quad {
-                bounds,
+                bounds: pill_quad_bounds(bounds, &self.style),
                 border: Border {
                     width: BORDER_WIDTH,
                     radius,
@@ -227,11 +244,6 @@ where
             },
             Background::Color(self.style.fill),
         );
-        // `is_last` kept on the style struct so callers don't have
-        // to drop the field, but unused now (every tab has full
-        // border via the Quad's Border). Adjacent tabs draw a
-        // 2-px-wide divider; fine since `tokens.border` is subtle.
-        let _ = self.style.is_last;
         if self.style.is_active {
             // Accent strip — drawn inside the pill at the edge
             // opposite the rounded corners on the active tab only.
@@ -297,5 +309,45 @@ where
 {
     fn from(w: TabPill<'a, Message, Theme, Renderer>) -> Self {
         Self::new(w)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn style(is_last: bool) -> TabPillStyle {
+        TabPillStyle {
+            fill: Color::BLACK,
+            border: Color::WHITE,
+            accent: Color::WHITE,
+            is_active: false,
+            is_last,
+            accent_position: AccentPosition::Bottom,
+        }
+    }
+
+    fn bounds() -> Rectangle {
+        Rectangle {
+            x: 10.0,
+            y: 0.0,
+            width: 80.0,
+            height: 24.0,
+        }
+    }
+
+    #[test]
+    fn last_tab_quad_matches_its_layout_bounds() {
+        assert_eq!(pill_quad_bounds(bounds(), &style(true)), bounds());
+    }
+
+    #[test]
+    fn non_last_tab_right_border_lands_under_the_next_tab_left_border() {
+        let quad = pill_quad_bounds(bounds(), &style(false));
+        let next_left_border_x = bounds().x + bounds().width;
+        // The quad's right border spans [right - BORDER_WIDTH, right]; it must
+        // be exactly the next tab's left border column, not a second column.
+        assert_eq!(quad.x + quad.width - BORDER_WIDTH, next_left_border_x);
+        assert_eq!(quad.x, bounds().x);
     }
 }

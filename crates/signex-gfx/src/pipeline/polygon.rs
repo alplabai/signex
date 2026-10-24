@@ -65,6 +65,24 @@ pub(crate) fn triangulate_polygons(polygons: &[GpuPolygon]) -> Vec<PolygonVertex
     vertices
 }
 
+/// The fill triangles the GPU path draws for one polygon (holes excluded),
+/// as world-space corner triples. Empty for a contour under 3 vertices. Lets
+/// callers above this crate assert on the real fill geometry. Test-only:
+/// built for this crate's tests and for dependents that enable the
+/// `test-support` feature.
+#[cfg(any(test, feature = "test-support"))]
+pub fn polygon_fill_triangles(polygon: &GpuPolygon) -> Vec<[[f32; 2]; 3]> {
+    if polygon.vertices.len() < 3 {
+        return Vec::new();
+    }
+    let mut vertices = Vec::new();
+    append_fill(&mut vertices, polygon);
+    vertices
+        .chunks_exact(3)
+        .map(|t| [t[0].position, t[1].position, t[2].position])
+        .collect()
+}
+
 /// Ear-clip fill, concave-safe. Assumes `polygon.vertices.len() >= 3`.
 ///
 /// A triangle fan from `points[0]` is exact only for convex contours — a
@@ -79,6 +97,15 @@ pub(crate) fn triangulate_polygons(polygons: &[GpuPolygon]) -> Vec<PolygonVertex
 /// path has no defined behaviour for those either, so a fan is a reasonable
 /// best-effort rather than drawing nothing.
 fn append_fill(vertices: &mut Vec<PolygonVertex>, polygon: &GpuPolygon) {
+    if polygon.holes.iter().any(|hole| hole.len() >= 3) && append_fill_with_holes(vertices, polygon)
+    {
+        return;
+    }
+    append_solid_fill(vertices, polygon);
+}
+
+/// Fill the outer contour alone, ignoring holes.
+fn append_solid_fill(vertices: &mut Vec<PolygonVertex>, polygon: &GpuPolygon) {
     let points = &polygon.vertices;
     let points_2d: Vec<signex_sketch::geom::Point2> = points
         .iter()
@@ -96,6 +123,56 @@ fn append_fill(vertices: &mut Vec<PolygonVertex>, polygon: &GpuPolygon) {
             vertices.push(PolygonVertex::fill(points[idx], polygon.fill_color));
         }
     }
+}
+
+/// Fill for a polygon with cut-outs: each hole is bridged into the outer
+/// contour (`ear_clip_with_holes`) and the merged ring ear-clipped, so the
+/// holes receive no triangles. Holes under 3 vertices are malformed and
+/// skipped. Matches the CPU path, which fills the same subpaths even-odd.
+///
+/// Returns `false`, appending nothing, when the triangles do not add up to
+/// the outline minus the holes (degenerate, overlapping or outline-touching
+/// holes). The caller then fills the solid outline, so a zone is never left
+/// invisible. The area check is a heuristic: on valid input a wrong fill
+/// does not pass it, but a self-intersecting outline with the right total
+/// area could.
+fn append_fill_with_holes(vertices: &mut Vec<PolygonVertex>, polygon: &GpuPolygon) -> bool {
+    use signex_sketch::geom::{Point2, signed_area};
+    let to_2d = |p: &[f32; 2]| Point2::new(p[0] as f64, p[1] as f64);
+    let outer: Vec<_> = polygon.vertices.iter().map(to_2d).collect();
+    let holes: Vec<Vec<_>> = polygon
+        .holes
+        .iter()
+        .filter(|hole| hole.len() >= 3)
+        .map(|hole| hole.iter().map(to_2d).collect())
+        .collect();
+    let (merged, triangles) = signex_sketch::geom::ear_clip_with_holes(&outer, &holes);
+
+    let expected =
+        signed_area(&outer).abs() - holes.iter().map(|h| signed_area(h).abs()).sum::<f64>();
+    let filled: f64 = triangles
+        .iter()
+        .map(|&[a, b, c]| signed_area(&[merged[a], merged[b], merged[c]]).abs())
+        .sum();
+    // A non-finite vertex makes every comparison false, so it would pass the
+    // area check unnoticed; treat it as a failed fill.
+    if triangles.is_empty()
+        || !filled.is_finite()
+        || !expected.is_finite()
+        || (filled - expected).abs() > expected.abs() * 1e-6 + 1e-9
+    {
+        return false;
+    }
+    for [a, b, c] in triangles {
+        for idx in [a, b, c] {
+            let p = merged[idx];
+            vertices.push(PolygonVertex::fill(
+                [p.x as f32, p.y as f32],
+                polygon.fill_color,
+            ));
+        }
+    }
+    true
 }
 
 /// Triangle-fan fill from the first vertex — exact for convex contours only.
@@ -128,12 +205,14 @@ fn append_stroke(vertices: &mut Vec<PolygonVertex>, polygon: &GpuPolygon) {
         .stroke_color
         .expect("is_stroked() guarantees a stroke colour");
 
-    let points = &polygon.vertices;
     let half = polygon.stroke_width.max(0.0) * 0.5;
-    for i in 0..points.len() {
-        let a = points[i];
-        let b = points[(i + 1) % points.len()];
-        append_edge_quad(vertices, a, b, half, stroke_color);
+    let hole_rings = polygon.holes.iter().filter(|hole| hole.len() >= 3);
+    for points in std::iter::once(&polygon.vertices).chain(hole_rings) {
+        for i in 0..points.len() {
+            let a = points[i];
+            let b = points[(i + 1) % points.len()];
+            append_edge_quad(vertices, a, b, half, stroke_color);
+        }
     }
 }
 
@@ -461,6 +540,9 @@ impl PolygonPipeline {
 }
 
 #[cfg(test)]
+mod holes_tests;
+
+#[cfg(test)]
 mod tests {
     use super::triangulate_polygons;
     use crate::primitive::polygon::GpuPolygon;
@@ -485,6 +567,7 @@ mod tests {
     #[test]
     fn triangulates_simple_convex_contour() {
         let polygons = vec![GpuPolygon {
+            holes: Vec::new(),
             vertices: vec![[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]],
             fill_color: [0.3, 0.4, 0.5, 1.0],
             stroke_color: None,
@@ -501,6 +584,7 @@ mod tests {
         // triangles (12 vertices), NOT be passed through as two triangles
         // because its vertex count is divisible by three.
         let polygons = vec![GpuPolygon {
+            holes: Vec::new(),
             vertices: vec![
                 [0.0, 0.0],
                 [2.0, 0.0],
@@ -536,6 +620,7 @@ mod tests {
             [0.0, 2.0],
         ];
         let polygons = vec![GpuPolygon {
+            holes: Vec::new(),
             vertices: l_shape.clone(),
             fill_color: [0.9, 0.2, 0.1, 1.0],
             stroke_color: None,
@@ -568,6 +653,7 @@ mod tests {
         // composites on top.
         let stroke = [0.1, 0.9, 0.3, 1.0];
         let polygons = vec![GpuPolygon {
+            holes: Vec::new(),
             vertices: vec![[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]],
             fill_color: [0.3, 0.4, 0.5, 1.0],
             stroke_color: Some(stroke),
@@ -585,6 +671,7 @@ mod tests {
     #[test]
     fn no_stroke_when_color_is_absent() {
         let polygons = vec![GpuPolygon {
+            holes: Vec::new(),
             vertices: vec![[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]],
             fill_color: [0.3, 0.4, 0.5, 1.0],
             stroke_color: None,
@@ -601,6 +688,7 @@ mod tests {
     #[test]
     fn zero_width_stroke_emits_hairline_quads() {
         let polygons = vec![GpuPolygon {
+            holes: Vec::new(),
             vertices: vec![[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]],
             fill_color: [0.3, 0.4, 0.5, 1.0],
             stroke_color: Some([1.0, 1.0, 1.0, 1.0]),
@@ -617,6 +705,7 @@ mod tests {
     #[test]
     fn stroke_corners_carry_the_edge_normal_and_fills_do_not() {
         let polygons = vec![GpuPolygon {
+            holes: Vec::new(),
             vertices: vec![[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]],
             fill_color: [0.3, 0.4, 0.5, 1.0],
             stroke_color: Some([1.0, 1.0, 1.0, 1.0]),
@@ -641,12 +730,14 @@ mod tests {
     fn skips_degenerate_polygons() {
         let polygons = vec![
             GpuPolygon {
+                holes: Vec::new(),
                 vertices: vec![[0.0, 0.0], [1.0, 0.0]],
                 fill_color: [0.2, 0.2, 0.2, 1.0],
                 stroke_color: None,
                 stroke_width: 0.0,
             },
             GpuPolygon {
+                holes: Vec::new(),
                 vertices: vec![[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]],
                 fill_color: [0.9, 0.2, 0.1, 1.0],
                 stroke_color: None,

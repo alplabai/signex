@@ -636,7 +636,9 @@ impl Signex {
             }
             PanelMsg::SymEditorSelectPin(idx) => self.sym_editor_select_pin(*idx),
             PanelMsg::SymEditorSetPinDescription { pin_idx, value } => {
-                self.sym_editor_mutate_pin(*pin_idx, |pin| pin.description = value.clone())
+                self.sym_editor_mutate_pin(*pin_idx, Some("pin_description"), |pin| {
+                    pin.description = value.clone()
+                })
             }
             PanelMsg::SymEditorSetPinFunctionCsv { pin_idx, value } => {
                 let parsed: Vec<String> = value
@@ -645,25 +647,25 @@ impl Signex {
                     .filter(|s| !s.is_empty())
                     .map(String::from)
                     .collect();
-                self.sym_editor_mutate_pin(*pin_idx, move |pin| {
+                self.sym_editor_mutate_pin(*pin_idx, Some("pin_function"), move |pin| {
                     pin.function = parsed.clone();
                 })
             }
             PanelMsg::SymEditorTogglePinDesignatorVisible(pin_idx) => {
-                self.sym_editor_mutate_pin(*pin_idx, |pin| {
+                self.sym_editor_mutate_pin(*pin_idx, None, |pin| {
                     pin.designator_visible = !pin.designator_visible;
                 })
             }
             PanelMsg::SymEditorTogglePinNameVisible(pin_idx) => {
-                self.sym_editor_mutate_pin(*pin_idx, |pin| {
+                self.sym_editor_mutate_pin(*pin_idx, None, |pin| {
                     pin.name_visible = !pin.name_visible;
                 })
             }
             PanelMsg::SymEditorTogglePinHidden(pin_idx) => {
-                self.sym_editor_mutate_pin(*pin_idx, |pin| pin.hidden = !pin.hidden)
+                self.sym_editor_mutate_pin(*pin_idx, None, |pin| pin.hidden = !pin.hidden)
             }
             PanelMsg::SymEditorTogglePinLocked(pin_idx) => {
-                self.sym_editor_mutate_pin(*pin_idx, |pin| pin.locked = !pin.locked)
+                self.sym_editor_mutate_pin(*pin_idx, None, |pin| pin.locked = !pin.locked)
             }
             PanelMsg::SymEditorSetPinSymbol {
                 pin_idx,
@@ -672,7 +674,7 @@ impl Signex {
             } => {
                 let slot = *slot;
                 let value = *value;
-                self.sym_editor_mutate_pin(*pin_idx, move |pin| match slot {
+                self.sym_editor_mutate_pin(*pin_idx, None, move |pin| match slot {
                     0 => pin.inside_symbol = value,
                     1 => pin.inside_edge_symbol = value,
                     2 => pin.outside_edge_symbol = value,
@@ -681,15 +683,16 @@ impl Signex {
                 })
             }
             PanelMsg::SymEditorSetPinPartNumber { pin_idx, value } => {
-                self.sym_editor_mutate_pin(*pin_idx, |pin| pin.part_number = *value)
+                self.sym_editor_mutate_pin(*pin_idx, None, |pin| pin.part_number = *value)
             }
             PanelMsg::SymEditorSelectGraphic(idx) => self.sym_editor_select_graphic(*idx),
             PanelMsg::SymEditorSelectPart(part) => self.sym_editor_select_part(*part),
-            PanelMsg::SymEditorSetGraphicField { idx, field, value } => {
-                self.sym_editor_mutate_graphic(*idx, |g| apply_graphic_field(g, *field, *value))
-            }
+            PanelMsg::SymEditorSetGraphicField { idx, field, value } => self
+                .sym_editor_mutate_graphic(*idx, Some(("graphic_field", *field as u128)), |g| {
+                    apply_graphic_field(g, *field, *value)
+                }),
             PanelMsg::SymEditorSetGraphicText { idx, value } => {
-                self.sym_editor_mutate_graphic(*idx, |g| {
+                self.sym_editor_mutate_graphic(*idx, Some(("graphic_text", 0)), |g| {
                     if let signex_library::SymbolGraphicKind::Text { content, .. } = &mut g.kind {
                         *content = value.clone();
                     }
@@ -711,19 +714,18 @@ impl Signex {
                 self.sym_editor_set_graphic_fill(*idx, None)
             }
             PanelMsg::SymEditorSetSymbolDesignator(value) => {
-                self.sym_editor_mutate_symbol(|s| s.designator = value.clone())
+                self.sym_editor_mutate_symbol(Some("designator"), |s| s.designator = value.clone())
             }
             PanelMsg::SymEditorSetSymbolComment(value) => {
-                self.sym_editor_mutate_symbol(|s| s.comment = value.clone())
+                self.sym_editor_mutate_symbol(Some("comment"), |s| s.comment = value.clone())
             }
-            PanelMsg::SymEditorSetSymbolDescription(value) => {
-                self.sym_editor_mutate_symbol(|s| s.description = value.clone())
-            }
+            PanelMsg::SymEditorSetSymbolDescription(value) => self
+                .sym_editor_mutate_symbol(Some("description"), |s| s.description = value.clone()),
             PanelMsg::SymEditorSetSymbolType(value) => {
-                self.sym_editor_mutate_symbol(|s| s.component_type = *value)
+                self.sym_editor_mutate_symbol(None, |s| s.component_type = *value)
             }
             PanelMsg::SymEditorToggleSymbolMirrored => {
-                self.sym_editor_mutate_symbol(|s| s.mirrored = !s.mirrored)
+                self.sym_editor_mutate_symbol(None, |s| s.mirrored = !s.mirrored)
             }
             PanelMsg::SymEditorToggleLocalColorPicker(slot) => {
                 self.sym_editor_toggle_local_color_picker(*slot)

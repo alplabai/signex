@@ -1,4 +1,4 @@
-use signex_3d_model_importer::{ModelImportRequest, SourceFormat, import_model};
+use signex_3d_model_importer::{ImportWarning, ModelImportRequest, SourceFormat, import_model};
 
 fn write_tier0_wrl(path: &std::path::Path) {
     std::fs::write(
@@ -130,6 +130,46 @@ fn import_tier0_vrml_produces_glb() {
     assert_eq!(result.metadata.source_format, SourceFormat::Vrml);
     assert_eq!(result.metadata.mesh_count, 1);
     assert!(result.metadata.byte_len > 0);
+}
+
+/// #805: a VRML recovery reaches `ModelImportResult.warnings`, and a clean
+/// file reports none.
+#[test]
+fn import_vrml_reports_geometry_altering_recoveries() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let cache = dir.path().join("cache");
+    let clean = dir.path().join("clean.wrl");
+    write_tier0_wrl(&clean);
+    let result = import_model(ModelImportRequest {
+        model_id: "clean".into(),
+        source_path: clean,
+        cache_dir: cache.clone(),
+        converter_version: "0.1.0",
+    })
+    .expect("import failed");
+    assert!(result.warnings.is_empty(), "{:?}", result.warnings);
+
+    let stray = dir.path().join("stray.wrl");
+    std::fs::write(
+        &stray,
+        b"#VRML V2.0 utf8\n}\nShape { geometry IndexedFaceSet { coord Coordinate { point [ 0 0 0, 1 0 0, 0 1 0 ] } coordIndex [ 0 1 2 -1 ] } }\n",
+    )
+    .expect("write fixture");
+    let result = import_model(ModelImportRequest {
+        model_id: "stray".into(),
+        source_path: stray,
+        cache_dir: cache,
+        converter_version: "0.1.0",
+    })
+    .expect("import failed");
+    assert_eq!(result.metadata.mesh_count, 1);
+    match result.warnings.as_slice() {
+        [ImportWarning::GeometryAltered { line, reason }] => {
+            assert_eq!(*line, Some(2));
+            assert!(reason.contains("unmatched"), "{reason}");
+        }
+        other => panic!("expected one GeometryAltered warning, got {other:?}"),
+    }
 }
 
 #[test]
@@ -307,4 +347,62 @@ fn import_missing_source_returns_error() {
         err,
         Err(signex_3d_model_importer::ModelImportError::SourceNotFound { .. })
     ));
+}
+
+fn write_stray_brace_wrl(path: &std::path::Path) {
+    std::fs::write(
+        path,
+        b"#VRML V2.0 utf8\n}\nShape { geometry IndexedFaceSet { coord Coordinate { point [ 0 0 0, 1 0 0, 0 1 0 ] } coordIndex [ 0 1 2 -1 ] } }\n",
+    )
+    .expect("write fixture");
+}
+
+fn import(
+    src: &std::path::Path,
+    cache: &std::path::Path,
+) -> signex_3d_model_importer::ModelImportResult {
+    import_model(ModelImportRequest {
+        model_id: "m".into(),
+        source_path: src.to_path_buf(),
+        cache_dir: cache.to_path_buf(),
+        converter_version: "0.1.0",
+    })
+    .expect("import failed")
+}
+
+/// #871: a cache hit reports the warnings the conversion produced, so a
+/// repaired model keeps saying so on every later import.
+#[test]
+fn a_cache_hit_keeps_the_conversion_warnings() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let src = dir.path().join("stray.wrl");
+    let cache = dir.path().join("cache");
+    write_stray_brace_wrl(&src);
+
+    let first = import(&src, &cache);
+    assert!(!first.cache_hit);
+    assert_eq!(first.warnings.len(), 1);
+
+    let second = import(&src, &cache);
+    assert!(second.cache_hit);
+    assert_eq!(second.warnings, first.warnings);
+}
+
+/// A cached GLB without a warnings sidecar (written before #871) is a miss:
+/// the model is converted again and its warnings come back.
+#[test]
+fn a_glb_without_a_warnings_sidecar_is_converted_again() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let src = dir.path().join("stray.wrl");
+    let cache = dir.path().join("cache");
+    write_stray_brace_wrl(&src);
+    let first = import(&src, &cache);
+    std::fs::remove_file(signex_3d_model_importer::cache::warnings_path(
+        &first.glb_path,
+    ))
+    .expect("remove sidecar");
+
+    let again = import(&src, &cache);
+    assert!(!again.cache_hit, "no sidecar, no hit");
+    assert_eq!(again.warnings, first.warnings);
 }

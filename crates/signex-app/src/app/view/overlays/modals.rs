@@ -29,9 +29,6 @@ impl Signex {
             draft_theme: ui.preferences_draft_theme,
             saved_theme: ui.theme_id,
             draft_font: &ui.preferences_draft_font,
-            draft_power_port_style: ui.preferences_draft_power_port_style,
-            draft_label_style: ui.preferences_draft_label_style,
-            draft_multisheet_style: ui.preferences_draft_multisheet_style,
             draft_grid_style: ui.preferences_draft_grid_style,
             draft_pcb_gpu_render: ui.preferences_draft_pcb_gpu_render,
             draft_symbol_grid_size_mm: ui.preferences_draft_symbol_grid_size_mm,
@@ -292,14 +289,12 @@ impl Signex {
                 let row_classes: Vec<crate::fonts::ComponentClassEntry> = self
                     .library
                     .library_at(lib_path)
-                    .and_then(|lib| self.library.set.get(lib.library_id))
-                    .map(|adapter| {
-                        adapter
-                            .library_classes()
-                            .into_iter()
+                    .map(|lib| {
+                        lib.cached_classes
+                            .iter()
                             .map(|c| crate::fonts::ComponentClassEntry {
-                                key: c.key,
-                                label: c.label,
+                                key: c.key.clone(),
+                                label: c.label.clone(),
                             })
                             .collect()
                     })

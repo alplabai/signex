@@ -112,7 +112,7 @@ impl Signex {
     fn close_tab(&mut self, idx: usize, park_dirty: bool) -> Task<Message> {
         // Footprint edits reach `dirty_paths` lazily; settle that before
         // deciding whether a draft is dirty.
-        self.sync_footprint_dirty_paths();
+        self.sync_editor_dirty_paths();
         if idx >= self.document_state.tabs.len() {
             tracing::warn!(
                 target: "signex::tabs",

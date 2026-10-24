@@ -178,7 +178,7 @@ impl Signex {
                 self.interaction_state.submenu_unhovered_since = None;
                 Task::none()
             }
-            ContextMenuMsg::ShowProjectTree(path) => {
+            ContextMenuMsg::ShowProjectTree(key) => {
                 // Close any canvas context menu so the two menus never
                 // overlap, then anchor the new menu to `last_mouse_pos`
                 // (iced 0.14 mouse_area does not forward cursor coords
@@ -197,7 +197,7 @@ impl Signex {
                 self.interaction_state.submenu_unhovered_since = None;
                 let (x, y) = self.interaction_state.last_mouse_pos;
                 self.interaction_state.project_tree_context_menu =
-                    Some(crate::app::ProjectTreeContextMenuState { x, y, path });
+                    Some(crate::app::ProjectTreeContextMenuState { x, y, key });
                 Task::none()
             }
             ContextMenuMsg::CloseProjectTree => {
@@ -308,6 +308,13 @@ impl Signex {
                     ContextAction::SmartPaste => self.dispatch_edit_message(EditMsg::SmartPaste),
                     ContextAction::OpenChildSheet => {
                         self.open_selected_child_sheet();
+                        Task::none()
+                    }
+                    ContextAction::SyncSheetPins => {
+                        self.sync_selected_sheet_pins();
+                        // This dispatcher does not run `finish_update`; publish
+                        // the outcome message to the Messages panel now.
+                        self.sync_diagnostics_panel_ctx();
                         Task::none()
                     }
                     ContextAction::Delete => self.dispatch_edit_message(EditMsg::DeleteSelected),

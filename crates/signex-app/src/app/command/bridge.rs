@@ -45,7 +45,7 @@ pub(crate) fn is_dispatchable(command: &AppCommandId) -> bool {
 
 /// The resolution itself. Pure: no logging, no side effects, so both
 /// entry points above are built from one table and cannot drift.
-fn resolve(command: &AppCommandId) -> Option<Message> {
+pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
     use crate::library::editor::footprint::state::EditorMode;
 
     let message = match command.as_str() {
@@ -56,10 +56,12 @@ fn resolve(command: &AppCommandId) -> Option<Message> {
         // No originating window: this Esc was invoked as a command, not
         // typed. `None` resolves as a main-window Esc (#547).
         "cancel_current_tool" => Message::EscapePressed { window: None },
-        "center_view_at_cursor"
-        | "show_all_design_objects"
-        | "zoom_to_all_objects"
-        | "zoom_to_fit" => Message::CanvasEvent(CanvasEvent::FitAll),
+        // Recentres without zooming; it used to share the fit arm below (#525).
+        "center_view_at_cursor" => Message::CanvasEvent(CanvasEvent::CenterAtCursor),
+        // One fit primitive; it frames object extents, as all three labels promise.
+        "show_all_design_objects" | "zoom_to_all_objects" | "zoom_to_fit" => {
+            Message::CanvasEvent(CanvasEvent::FitAll)
+        }
         "copy" => Message::Edit(EditMsg::Copy),
         "cycle_selection_mode" => Message::CycleSelectionMode,
         "next_grid" => Message::Ui(UiMsg::GridCycle),
@@ -69,6 +71,7 @@ fn resolve(command: &AppCommandId) -> Option<Message> {
         "cut" => Message::Edit(EditMsg::Cut),
         "delete_selection" | "remove_last_vertex" => Message::Edit(EditMsg::DeleteSelected),
         "draw_graphic_line" => Message::Tool(ToolMessage::SelectTool(Tool::Line)),
+        "draw_hierarchical_sheet" => Message::Tool(ToolMessage::SelectTool(Tool::Sheet)),
         "duplicate" => Message::Edit(EditMsg::Duplicate),
         // Docking the Properties panel IS how this app shows the
         // selection's properties: the status bar's
@@ -338,7 +341,7 @@ mod tests {
         "autoplace_fields", "break_wire", "center_on_cursor", "clear_net_highlighting",
         "close_active_document", "copy_attributes_or_add_vertex", "cycle_fast_grid",
         "cycle_snap_grid_backward", "cycle_wiring_mode", "drag_keep_connections",
-        "draw_hierarchical_sheet", "edit_footprint_field",
+        "edit_footprint_field",
         "edit_library_symbol", "edit_object_properties", "edit_reference_designator",
         "edit_selected_symbol_in_symbol_editor",
         "edit_text_in_place", "edit_value", "fast_grid_1", "fast_grid_2", "find_next",
@@ -443,6 +446,11 @@ mod tests {
         assert!(matches!(
             resolve("zoom_to_all_objects"),
             Message::CanvasEvent(CanvasEvent::FitAll)
+        ));
+        // #525: centring is not a fit.
+        assert!(matches!(
+            resolve("center_view_at_cursor"),
+            Message::CanvasEvent(CanvasEvent::CenterAtCursor)
         ));
     }
 

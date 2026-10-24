@@ -184,6 +184,25 @@ impl Signex {
             return Task::none();
         };
 
+        // Two pending entries for one path would share a tree key, so the
+        // tree could expand or select the wrong row (#855).
+        // Compared the way the host's filesystem does, so `Parts.snxlib` and
+        // `parts.snxlib` are one library on macOS and Windows.
+        use crate::app::state::scope::{CaseFold, path_key_with};
+        let fold = CaseFold::host_default();
+        let key = path_key_with(&lib_path, fold);
+        if loaded
+            .pending_libraries
+            .values()
+            .any(|spec| path_key_with(&spec.lib_path, fold) == key)
+        {
+            crate::diagnostics::log_warning(format!(
+                "Library {} is already waiting to be created; save the project to create it.",
+                lib_path.display()
+            ));
+            return Task::none();
+        }
+
         match crate::library::commands::register_pending_library(
             lib_path.clone(),
             enable_git,
@@ -424,6 +443,7 @@ impl Signex {
             path: entry_path,
             kind: entry_kind,
             library_id: None,
+            unknown: Default::default(),
         });
         let project_path = loaded.path.clone();
         self.document_state.dirty_paths.insert(project_path);

@@ -201,11 +201,74 @@ impl Signex {
             .set_render_cache(None);
     }
 
+    /// The board shown in `window_id`: the active tab's in the main window,
+    /// the undocked tab's in an undocked one.
+    pub(crate) fn pcb_for_window(&self, window_id: iced::window::Id) -> Option<&PcbBoard> {
+        if self.ui_state.main_window_id == Some(window_id) {
+            return self.active_pcb();
+        }
+        let Some(super::state::WindowKind::UndockedTab { path, .. }) =
+            self.ui_state.windows.get(&window_id)
+        else {
+            return None;
+        };
+        self.document_state
+            .tabs
+            .iter()
+            .find(|tab| &tab.path == path)
+            .and_then(|tab| tab.cached_document.as_ref())
+            .and_then(TabDocument::as_pcb)
+    }
+
+    /// A PCB canvas for an undocked window showing the PCB tab at `path`,
+    /// or `None` when that tab is not a PCB. It starts with the app-wide
+    /// settings the main canvas carries and its own camera, fitted to the
+    /// board.
+    pub(crate) fn new_pcb_canvas_for(
+        &self,
+        path: &std::path::Path,
+    ) -> Option<crate::pcb_canvas::PcbCanvas> {
+        let board = self
+            .document_state
+            .tabs
+            .iter()
+            .find(|tab| tab.path == path)
+            .and_then(|tab| tab.cached_document.as_ref())
+            .and_then(TabDocument::as_pcb)?;
+        let main = &self.interaction_state.pcb_canvas;
+        let mut canvas = crate::pcb_canvas::PcbCanvas::new();
+        canvas.gpu_render = main.gpu_render;
+        canvas.set_theme_colors(main.theme_bg, main.theme_grid);
+        canvas.canvas_colors = main.canvas_colors;
+        canvas.set_grid(main.grid_visible, main.visible_grid_mm);
+        canvas.set_renderer_snapshot(Some(signex_renderer::pcb::PcbSnapshot::from_board(board)));
+        canvas.fit_to_board();
+        Some(canvas)
+    }
+
     pub(crate) fn sync_pcb_canvas_from_visible_board(&mut self) {
         let renderer_snapshot = self
             .active_pcb()
             .map(signex_renderer::pcb::PcbSnapshot::from_board);
 
+        // An undocked window showing the same tab draws the same board
+        // (#494). Its camera stays its own.
+        let active_path = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .map(|tab| tab.path.as_path());
+        for (id, canvas) in &mut self.interaction_state.pcb_canvases {
+            let shows_active = matches!(
+                self.ui_state.windows.get(id),
+                Some(super::state::WindowKind::UndockedTab { path, .. })
+                    if Some(path.as_path()) == active_path
+            );
+            if shows_active {
+                canvas.set_renderer_snapshot(renderer_snapshot.clone());
+                canvas.clear_content_cache();
+            }
+        }
         self.interaction_state
             .pcb_canvas
             .set_renderer_snapshot(renderer_snapshot);
@@ -277,6 +340,7 @@ impl Signex {
     }
 
     pub(crate) fn open_pcb_tab(&mut self, path: PathBuf, title: String, board: PcbBoard) {
+        report_unusable_zone_holes(&path, &board);
         self.park_active_schematic_session();
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
         self.document_state.tabs.push(TabInfo {
@@ -306,7 +370,18 @@ impl Signex {
         let is_pcb = matches!(self.active_tab_cached_document(), Some(TabDocument::Pcb(_)));
 
         if is_schematic {
+            // Selection UUIDs belong to the document they were picked in;
+            // carrying them to another schematic tab leaves ghost
+            // selections that delete/move would target (#102).
+            let previous_path = self.document_state.active_path.clone();
             if self.activate_active_schematic_session() {
+                if previous_path != self.document_state.active_path {
+                    self.interaction_state.active_canvas_mut().selected.clear();
+                    // In-flight drawing buffers belong to the document too.
+                    self.clear_drawing_buffers();
+                    // Also resets the mirrored panel_ctx selection fields.
+                    self.update_selection_info();
+                }
                 self.apply_loaded_schematic(None, true, false, false);
             }
         } else if is_pcb {
@@ -393,7 +468,7 @@ impl Signex {
         &mut self,
         schematic: Option<SchematicSheet>,
         clear_bg_cache: bool,
-        fit_to_paper: bool,
+        fit_to_content: bool,
         refresh_panel_ctx: bool,
     ) {
         if let Some(schematic) = schematic {
@@ -404,8 +479,8 @@ impl Signex {
         }
         self.sync_canvas_from_visible_schematic(crate::schematic_runtime::RenderInvalidation::FULL);
 
-        if fit_to_paper {
-            self.interaction_state.active_canvas_mut().fit_to_paper();
+        if fit_to_content {
+            self.interaction_state.active_canvas_mut().fit_to_content();
         }
         if clear_bg_cache {
             self.interaction_state.active_canvas_mut().clear_bg_cache();
@@ -495,5 +570,44 @@ impl Signex {
         if self.has_active_schematic() {
             self.apply_page_dimensions_to_canvas();
         }
+    }
+}
+
+/// Tell the user, once per open or reload, about zone holes the renderer
+/// will not cut out, naming each zone and why (#897). Both render paths skip
+/// them, so without this the zone would just look solid there.
+pub(crate) fn report_unusable_zone_holes(path: &std::path::Path, board: &PcbBoard) {
+    let zones: Vec<String> = board
+        .zones
+        .iter()
+        .filter_map(|zone| {
+            let problems = zone.hole_problems();
+            if problems.is_empty() {
+                return None;
+            }
+            let holes: Vec<String> = problems
+                .iter()
+                .map(|(i, problem)| format!("hole {i} {}", problem.describe()))
+                .collect();
+            let net = if zone.net_name.is_empty() {
+                format!("net {}", zone.net)
+            } else {
+                zone.net_name.clone()
+            };
+            Some(format!(
+                "zone {net} on {}: {}",
+                zone.layer,
+                holes.join(", ")
+            ))
+        })
+        .collect();
+    if !zones.is_empty() {
+        // Details first: the Messages panel truncates long entries.
+        crate::diagnostics::log_warning(format!(
+            "{}: {}; drawn as solid copper (a hole must be a simple ring strictly inside \
+             its outline, apart from the other holes)",
+            path.display(),
+            zones.join("; ")
+        ));
     }
 }

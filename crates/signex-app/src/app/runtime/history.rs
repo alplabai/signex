@@ -1,6 +1,29 @@
 use super::super::*;
 
 impl Signex {
+    fn history_source_key(&self) -> Option<std::path::PathBuf> {
+        let d = &self.document_state;
+        d.tabs.get(d.active_tab).map(|t| t.path.clone())
+    }
+
+    /// Idle-cursor-move variant of [`Self::refresh_history_panel`]: the
+    /// target walk touches the filesystem, so only run it when the active
+    /// tab changed; otherwise just refresh the dirty bit (#111).
+    pub(in crate::app) fn refresh_history_panel_cheap(&mut self) -> Task<Message> {
+        if self.history_source_key() != self.document_state.history.source_key {
+            return self.refresh_history_panel();
+        }
+        let d = &mut self.document_state;
+        if let Some(p) = &d.history.active_path {
+            let dirty = d.dirty_paths.contains(p);
+            if dirty != d.history.dirty {
+                d.history.dirty = dirty;
+                d.panel_ctx.history = d.history.clone();
+            }
+        }
+        Task::none()
+    }
+
     /// Recompute the History panel's target path from the active tab,
     /// bump the generation counter on change, and return a
     /// `Task::perform` that loads the file's git history off the UI
@@ -9,6 +32,7 @@ impl Signex {
     /// panel automatically. Returns `Task::none()` when the target
     /// hasn't changed since the last refresh.
     pub(super) fn refresh_history_panel(&mut self) -> Task<Message> {
+        self.document_state.history.source_key = self.history_source_key();
         let target = resolve_history_target(self);
 
         // No change → nothing to do. Comparing on the resolved full

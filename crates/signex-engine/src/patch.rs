@@ -42,6 +42,7 @@ impl DocumentPatch {
     pub const DRAWINGS: Self = Self(1 << 9);
     pub const LIB_SYMBOLS: Self = Self(1 << 10);
     pub const PAPER: Self = Self(1 << 11);
+    pub const NO_ERC_DIRECTIVES: Self = Self(1 << 12);
     pub const FULL: Self = Self(u16::MAX);
 
     pub fn contains(self, other: Self) -> bool {
@@ -62,6 +63,7 @@ impl DocumentPatch {
             SelectedKind::BusEntry => Self::BUS_ENTRIES,
             SelectedKind::Junction => Self::JUNCTIONS,
             SelectedKind::NoConnect => Self::NO_CONNECTS,
+            SelectedKind::NoErcDirective => Self::NO_ERC_DIRECTIVES,
             SelectedKind::Label => Self::LABELS,
             SelectedKind::SheetPin => Self::CHILD_SHEETS,
             SelectedKind::TextNote => Self::TEXT_NOTES,

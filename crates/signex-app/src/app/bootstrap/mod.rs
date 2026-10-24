@@ -33,7 +33,17 @@ impl Signex {
     pub(super) const PDF_MODAL_W: f32 = 1180.0;
     pub(super) const PDF_MODAL_H: f32 = 760.0;
 
-    pub fn title(&self, _id: iced::window::Id) -> String {
+    pub fn title(&self, id: iced::window::Id) -> String {
+        // A detached modal is its own OS window with a native title bar:
+        // name it after the dialog so the taskbar / window switcher can
+        // tell it from the main window.
+        if let Some(super::state::WindowKind::DetachedModal(modal)) = self.ui_state.windows.get(&id)
+        {
+            return format!(
+                "{} — Signex",
+                crate::app::view::detached_title::detached_modal_title(*modal)
+            );
+        }
         let version = env!("CARGO_PKG_VERSION");
         let dirty_count = self.document_state.dirty_paths.len();
         if dirty_count == 0 {

@@ -78,11 +78,13 @@ fn renaming_a_dirty_sheet_moves_its_dirty_marker_and_dirties_the_project() {
                 symbols_count: 0,
                 wires_count: 0,
                 labels_count: 0,
+                unknown: Default::default(),
             }],
             variant_definitions: Vec::new(),
             active_variant: None,
             libraries: Vec::new(),
             enable_git: false,
+            unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
     });
@@ -91,6 +93,7 @@ fn renaming_a_dirty_sheet_moves_its_dirty_marker_and_dirties_the_project() {
     activate(&mut app, 0);
 
     app.ui_state.rename_dialog = Some(RenameDialogState {
+        project_id: None,
         target_path: old.clone(),
         tree_path: vec![0],
         buffer: "PSU.snxsch".to_string(),
@@ -142,17 +145,20 @@ fn renaming_a_non_sheet_file_does_not_dirty_the_project() {
                 symbols_count: 0,
                 wires_count: 0,
                 labels_count: 0,
+                unknown: Default::default(),
             }],
             variant_definitions: Vec::new(),
             active_variant: None,
             libraries: Vec::new(),
             enable_git: false,
+            unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
     });
     app.document_state.active_project = Some(id);
 
     app.ui_state.rename_dialog = Some(RenameDialogState {
+        project_id: None,
         target_path: old.clone(),
         tree_path: vec![0],
         buffer: "R0402.snxfpt".to_string(),
