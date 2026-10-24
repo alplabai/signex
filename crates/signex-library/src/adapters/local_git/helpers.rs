@@ -117,7 +117,7 @@ fn tree_without_path(
             }
         }
     }
-    if builder.len() == 0 {
+    if builder.is_empty() {
         return Ok(None);
     }
     builder.write().map(Some)

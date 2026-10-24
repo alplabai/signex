@@ -232,6 +232,9 @@ fn an_open_footprint_editor_saves_and_commits_through_the_renamed_library() {
     let file =
         FootprintFile::from_toml_str(&fs::read_to_string(&fpt).expect("read")).expect("parse");
     let mut editor = FootprintEditorState::new(fpt.clone(), file);
+    // Trunk's saves write nothing for an unchanged footprint (#902), so make
+    // a real edit for the save to commit.
+    editor.file.footprints[0].name.push_str(" edited");
     editor.dirty = true;
     f.app
         .document_state
