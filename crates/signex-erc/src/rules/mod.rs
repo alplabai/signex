@@ -88,6 +88,10 @@ pub(crate) fn unused_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
             if pin.connected {
                 continue;
             }
+            // Do-not-connect / unclassified pins are left open by design.
+            if !pin.required {
+                continue;
+            }
             let reference = if symbol.reference.is_empty() {
                 "(unnamed)"
             } else {
@@ -110,15 +114,28 @@ pub(crate) fn unused_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 // ---------------------------------------------------------------------------
 
 pub(crate) fn duplicate_ref_designator(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
-    let mut by_ref: HashMap<&str, Vec<&crate::context::ErcSymbol>> = HashMap::new();
-    for symbol in &ctx.symbols {
-        let r = symbol.reference.trim();
-        if r.is_empty() || r.ends_with('?') {
-            continue;
+    // Symbols of this sheet (origin `None`) plus every child sheet's
+    // (origin `Some(filename)`), so a designator reused across sheets is a
+    // duplicate too. Children are visited in filename order for stable output.
+    let mut child_names: Vec<&String> = ctx.children.keys().collect();
+    child_names.sort();
+    let mut by_ref: HashMap<&str, Vec<(Option<&str>, &crate::context::ErcSymbol)>> = HashMap::new();
+    let sources = std::iter::once((None, &ctx.symbols)).chain(
+        child_names
+            .into_iter()
+            .map(|n| (Some(n.as_str()), &ctx.children[n].symbols)),
+    );
+    for (origin, symbols) in sources {
+        for symbol in symbols {
+            let r = symbol.reference.trim();
+            if r.is_empty() || r.ends_with('?') {
+                continue;
+            }
+            by_ref.entry(r).or_default().push((origin, symbol));
         }
-        by_ref.entry(r).or_default().push(symbol);
     }
-    for (reference, symbols) in by_ref {
+    for (reference, entries) in by_ref {
+        let symbols: Vec<&crate::context::ErcSymbol> = entries.iter().map(|e| e.1).collect();
         // Units of one multi-unit part share a designator legitimately; only
         // distinct parts holding the same designator are a duplicate (#691).
         let parts = group_into_parts(symbols.iter().map(|s| PartKey {
@@ -127,6 +144,11 @@ pub(crate) fn duplicate_ref_designator(ctx: &ErcContext, out: &mut Vec<Diagnosti
             unit: s.unit,
         }));
         if parts.len() < 2 {
+            continue;
+        }
+        // A clash wholly inside one child sheet belongs to that sheet's own run.
+        let first_origin = entries[0].0;
+        if first_origin.is_some() && entries.iter().all(|e| e.0 == first_origin) {
             continue;
         }
         // Units that carry one designator but come from different library
@@ -142,21 +164,29 @@ pub(crate) fn duplicate_ref_designator(ctx: &ErcContext, out: &mut Vec<Diagnosti
             String::new()
         };
         for (part_idx, part) in parts.iter().enumerate() {
-            let peer = &symbols[parts[(part_idx + 1) % parts.len()][0]];
+            let (peer_origin, peer) = entries[parts[(part_idx + 1) % parts.len()][0]];
             for &member in part {
-                let sym = symbols[member];
-                out.push(
-                    Diagnostic::new(
-                        RuleKind::DuplicateRefDesignator,
-                        format!(
-                            "Reference '{reference}' is used by {} parts{hint}",
-                            parts.len()
-                        ),
-                        sym.position,
-                    )
-                    .with_primary(sel(sym.uuid, SelectedKind::Symbol))
-                    .with_peer(sel(peer.uuid, SelectedKind::Symbol)),
+                let (origin, sym) = entries[member];
+                let mut message = format!(
+                    "Reference '{reference}' is used by {} parts{hint}",
+                    parts.len()
                 );
+                if let Some(sheet) = origin {
+                    message.push_str(&format!("; this one is on sheet '{sheet}'"));
+                }
+                let mut d =
+                    Diagnostic::new(RuleKind::DuplicateRefDesignator, message, sym.position);
+                // Selections only resolve on this sheet; a child symbol's
+                // position lives in the child's own coordinates.
+                if origin.is_none() {
+                    d = d.with_primary(sel(sym.uuid, SelectedKind::Symbol));
+                    if peer_origin.is_none() {
+                        d = d.with_peer(sel(peer.uuid, SelectedKind::Symbol));
+                    }
+                } else {
+                    d = d.in_space(LocationSpace::ChildSheet);
+                }
+                out.push(d);
             }
         }
     }
@@ -264,21 +294,25 @@ pub(crate) fn net_label_conflict(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     );
 
     let mut by_root: HashMap<(i64, i64), Vec<&crate::context::ErcLabel>> = HashMap::new();
-    for lbl in ctx
-        .labels
-        .iter()
-        .filter(|l| matches!(l.label_type, LabelType::Net))
-    {
+    for lbl in ctx.labels.iter().filter(|l| {
+        matches!(
+            l.label_type,
+            LabelType::Net | LabelType::Global | LabelType::Power
+        )
+    }) {
         // `merge_named_labels` already anchored every label, so a plain
         // `root_of` reads the final class.
         let root = conn.root_of(&lbl.position);
         by_root.entry(root).or_default().push(lbl);
     }
 
-    for labels in by_root.values() {
+    for labels in by_root.values_mut() {
         if labels.len() < 2 {
             continue;
         }
+        // Report a Net-vs-Net clash in preference to one involving a
+        // Global/Power name: the Net names are what the netlist drops.
+        labels.sort_by_key(|l| !matches!(l.label_type, LabelType::Net));
         let first = labels[0];
         let Some(conflicting) = labels.iter().find(|l| l.text != first.text) else {
             continue;

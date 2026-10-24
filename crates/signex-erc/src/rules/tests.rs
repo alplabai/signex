@@ -715,3 +715,106 @@ fn a_gnd_vcc_touch_is_one_diagnostic_across_both_port_rules() {
     assert_eq!(out.len(), 1, "{out:?}");
     assert_eq!(out[0].rule_kind, RuleKind::PowerPortShort);
 }
+
+#[test]
+fn net_label_conflict_checks_global_and_power_labels() {
+    let on_wire = |a: ErcLabel, b: ErcLabel| {
+        let c = ctx(
+            vec![wire(pt(0.0, 0.0), pt(10.0, 0.0))],
+            Vec::new(),
+            vec![a, b],
+            Vec::new(),
+        );
+        let mut out = Vec::new();
+        net_label_conflict(&c, &mut out);
+        out.len()
+    };
+    assert_eq!(
+        on_wire(
+            global_label("A", pt(2.0, 0.0)),
+            global_label("B", pt(8.0, 0.0))
+        ),
+        1,
+        "two differently named Global labels on one net conflict"
+    );
+    assert_eq!(
+        on_wire(
+            power_label("VCC", pt(2.0, 0.0)),
+            net_label("SIG", pt(8.0, 0.0))
+        ),
+        1,
+        "a Net label on a Power-named net conflicts"
+    );
+    assert_eq!(
+        on_wire(
+            power_label("VCC", pt(2.0, 0.0)),
+            global_label("VCC", pt(8.0, 0.0))
+        ),
+        0,
+        "the same name through different label types is not a conflict"
+    );
+}
+
+#[test]
+fn unused_pin_skips_pins_not_required() {
+    let mut sym = symbol_with_pin("U1", pt(5.0, 0.0), false);
+    sym.pins[0].required = false;
+    let c = ctx(Vec::new(), Vec::new(), Vec::new(), vec![sym]);
+    let mut out = Vec::new();
+    unused_pin(&c, &mut out);
+    assert!(
+        out.is_empty(),
+        "a do-not-connect pin is not flagged: {out:?}"
+    );
+}
+
+fn lib_symbol_ref(reference: &str, lib_id: &str, unit: u32) -> ErcSymbol {
+    let mut s = symbol_with_pin(reference, pt(0.0, 0.0), true);
+    s.lib_id = lib_id.into();
+    s.unit = unit;
+    s
+}
+
+fn with_child(top: Vec<ErcSymbol>, child: Vec<ErcSymbol>) -> ErcContext {
+    let mut c = ctx(Vec::new(), Vec::new(), Vec::new(), top);
+    let child = ctx(Vec::new(), Vec::new(), Vec::new(), child);
+    c.children.insert("child.snxsch".into(), child);
+    c
+}
+
+#[test]
+fn duplicate_ref_designator_flags_cross_sheet_duplicates() {
+    let c = with_child(
+        vec![lib_symbol_ref("R1", "Device:R", 1)],
+        vec![lib_symbol_ref("R1", "Device:R", 1)],
+    );
+    let mut out = Vec::new();
+    duplicate_ref_designator(&c, &mut out);
+    assert_eq!(out.len(), 2, "{out:?}");
+    assert!(out.iter().any(|d| d.message.contains("child.snxsch")));
+}
+
+#[test]
+fn duplicate_ref_designator_allows_units_of_one_part_across_sheets() {
+    let c = with_child(
+        vec![lib_symbol_ref("U1", "Amp:LM358", 1)],
+        vec![lib_symbol_ref("U1", "Amp:LM358", 2)],
+    );
+    let mut out = Vec::new();
+    duplicate_ref_designator(&c, &mut out);
+    assert!(out.is_empty(), "{out:?}");
+}
+
+#[test]
+fn duplicate_ref_designator_leaves_a_clash_inside_one_child_to_that_child() {
+    let c = with_child(
+        Vec::new(),
+        vec![
+            lib_symbol_ref("R1", "Device:R", 1),
+            lib_symbol_ref("R1", "Device:R", 1),
+        ],
+    );
+    let mut out = Vec::new();
+    duplicate_ref_designator(&c, &mut out);
+    assert!(out.is_empty(), "{out:?}");
+}
