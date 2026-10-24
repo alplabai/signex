@@ -244,6 +244,10 @@ pub struct SymbolEditorState {
     /// works against `file.symbols[active_idx]`; access via
     /// [`primitive`](Self::primitive) / [`primitive_mut`](Self::primitive_mut).
     pub file: signex_library::SymbolFile,
+    /// The container as this editor last loaded or saved it. A save
+    /// writes only the symbols that differ from it, so another window's
+    /// saves to the other symbols of the file survive (#902).
+    pub baseline: signex_library::SymbolFile,
     /// Which symbol within the file is currently being edited. The
     /// SCH-Library left-dock panel will eventually drive this index;
     /// for now it always lands on the first symbol.
@@ -283,14 +287,19 @@ pub struct SymbolEditorState {
     pub active_bar_menu: Option<crate::library::editor::symbol::state::SymActiveBarMenu>,
     /// v0.13 — Pause flag for placement (TAB during Place Pin / etc.).
     pub placement_paused: bool,
-    /// Snapshot stack for undo. Each entry is a full clone of the
-    /// `Symbol` at the moment before a mutation was applied. Max 100
-    /// entries; oldest entries are dropped when the limit is exceeded.
-    pub undo_snapshots: Vec<signex_library::Symbol>,
+    /// Snapshot stack for undo. Each entry is the whole `.snxsym`
+    /// container (symbols shared structurally between entries) at the
+    /// moment before a mutation was applied. Max 100 entries; oldest
+    /// entries are dropped when the limit is exceeded.
+    pub undo_snapshots: Vec<crate::app::SymbolHistorySnapshot>,
     /// Snapshot stack for redo. Cleared whenever a new mutation is
     /// recorded; populated by `SymbolUndo` so the user can step
     /// forward again after undoing.
-    pub redo_snapshots: Vec<signex_library::Symbol>,
+    pub redo_snapshots: Vec<crate::app::SymbolHistorySnapshot>,
+    /// The field the last `record_edit` changed, tagged with the symbol
+    /// it belonged to, so a run of keystrokes in one text input shares
+    /// one undo step. Cleared by every other history push, undo and redo.
+    pub(in crate::app) last_edit_key: Option<(FieldEditKey, usize)>,
     /// Set to `true` on the first `Move`/`MoveAll`/`MoveGraphicHandle`
     /// in a drag sequence so subsequent move events in the same drag do
     /// NOT push additional snapshots (the pre-drag snapshot is already
@@ -345,6 +354,7 @@ impl SymbolEditorState {
     pub fn new(path: PathBuf, file: signex_library::SymbolFile) -> Self {
         let mut state = Self {
             path,
+            baseline: file.clone(),
             file,
             active_idx: 0,
             active_part: 1,
@@ -361,6 +371,7 @@ impl SymbolEditorState {
             placement_paused: false,
             undo_snapshots: Vec::new(),
             redo_snapshots: Vec::new(),
+            last_edit_key: None,
             mid_drag: false,
             graphic_fill_picker: None,
             local_color_picker: None,
@@ -427,6 +438,10 @@ pub struct FootprintEditorState {
     /// via [`primitive`](Self::primitive) /
     /// [`primitive_mut`](Self::primitive_mut).
     pub file: signex_library::FootprintFile,
+    /// The container as this editor last loaded or saved it; see
+    /// [`SymbolEditorState::baseline`] (#902). Taken before the load
+    /// repairs are cleared, so a repaired footprint counts as changed.
+    pub baseline: signex_library::FootprintFile,
     /// Which footprint within the file is currently being edited.
     /// The Footprint Library left-dock panel + canvas tab strip
     /// drive this; defaults to the first footprint.
@@ -458,7 +473,8 @@ pub struct FootprintEditorState {
     /// being edited, those edits share the one snapshot taken before
     /// the first of them, so typing a description is one undo step and
     /// does not push earlier edits out of the depth-capped history.
-    /// Cleared by every other history push, undo and redo.
+    /// Cleared by every other history push, undo and redo, and by a
+    /// sibling switch, add or delete (anything that rewrites `active_idx`).
     last_edit_key: Option<(FieldEditKey, usize)>,
 }
 
@@ -495,15 +511,30 @@ impl FootprintEditorState {
     /// user opened. The editor opens on the first footprint in the
     /// file. The caller is responsible for confirming the file is
     /// non-empty before this call.
-    pub fn new(path: PathBuf, mut file: signex_library::FootprintFile) -> Self {
+    pub fn new(path: PathBuf, file: signex_library::FootprintFile) -> Self {
+        Self::build(path, file, true)
+    }
+
+    /// Rebuild the editor from a file re-read off disk (a History restore).
+    /// Behaves like [`Self::new`] except the load repairs are not logged
+    /// again: the user was already told when the file was opened.
+    /// `dirty` is still `true` when
+    /// something was repaired, so the caller must mirror it into the tab.
+    pub fn reloaded(path: PathBuf, file: signex_library::FootprintFile) -> Self {
+        Self::build(path, file, false)
+    }
+
+    fn build(path: PathBuf, mut file: signex_library::FootprintFile, log_repairs: bool) -> Self {
         let active_idx = 0;
-        let repaired = Self::take_load_repairs(&path, &mut file);
+        let baseline = file.clone();
+        let repaired = Self::take_load_repairs(&path, &mut file, log_repairs);
         let state = crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
             &file.footprints[active_idx],
         );
         Self {
             path,
             file,
+            baseline,
             active_idx,
             panel_selected_idx: None,
             state,
@@ -517,27 +548,44 @@ impl FootprintEditorState {
         }
     }
 
-    /// Report, once, the arcs the loader moved onto their circles (the
-    /// Messages panel names them) and clear the transient record so history
-    /// snapshots never carry it. Returns whether anything was repaired.
-    /// Opening a footprint into an editor is the only place this logs;
-    /// previews, mounts and history reads stay quiet.
-    fn take_load_repairs(path: &std::path::Path, file: &mut signex_library::FootprintFile) -> bool {
+    /// Report, once, what the loader repaired (the Messages panel names it)
+    /// and clear the transient record so history snapshots never carry it.
+    /// Returns whether anything was repaired. Opening a footprint into an
+    /// editor ([`Self::new`]) is the only place this logs; previews, mounts,
+    /// history reads and [`Self::reloaded`] pass `log_repairs = false`.
+    fn take_load_repairs(
+        path: &std::path::Path,
+        file: &mut signex_library::FootprintFile,
+        log_repairs: bool,
+    ) -> bool {
+        use signex_library::LoadRepair;
         let mut moved: Vec<String> = Vec::new();
+        let mut removed = 0usize;
         for footprint in &mut file.footprints {
-            moved.extend(footprint.load_repairs.drain(..).map(|id| id.to_string()));
+            for repair in footprint.load_repairs.drain(..) {
+                match repair {
+                    LoadRepair::ArcEndMoved(id) => moved.push(id.to_string()),
+                    LoadRepair::DanglingRemoved(n) => removed += n,
+                }
+            }
         }
-        if moved.is_empty() {
-            return false;
+        if log_repairs && !moved.is_empty() {
+            crate::diagnostics::log_warning(format!(
+                "{}: moved the end point of {} arc(s) onto its circle (centre and start \
+                 unchanged); save the file to keep the repair: {}",
+                path.display(),
+                moved.len(),
+                moved.join(", ")
+            ));
         }
-        crate::diagnostics::log_warning(format!(
-            "{}: moved the end point of {} arc(s) onto its circle (centre and start \
-             unchanged); save the file to keep the repair: {}",
-            path.display(),
-            moved.len(),
-            moved.join(", ")
-        ));
-        true
+        if log_repairs && removed > 0 {
+            crate::diagnostics::log_warning(format!(
+                "{}: removed {removed} dangling sketch reference(s) (entities/constraints/arrays); \
+                 save the file to keep the repair",
+                path.display(),
+            ));
+        }
+        !moved.is_empty() || removed > 0
     }
 
     /// v0.24 Phase 1 (Track B) — depth cap for `history` / `redo`
@@ -766,6 +814,8 @@ pub enum Tool {
     Component,
     Text,
     NoConnect,
+    /// Generic No-ERC directive (Altium's "Place No ERC").
+    NoErcDirective,
     BusEntry,
     Line,
     Rectangle,
@@ -774,6 +824,8 @@ pub enum Tool {
     Arc,
     /// Click-by-click polyline; Enter / double-click commits.
     Polyline,
+    /// Two-click corner-to-corner hierarchical sheet symbol.
+    Sheet,
 }
 
 impl std::fmt::Display for Tool {
@@ -786,12 +838,14 @@ impl std::fmt::Display for Tool {
             Tool::Component => write!(f, "Place Component"),
             Tool::Text => write!(f, "Place Text"),
             Tool::NoConnect => write!(f, "Place No Connect"),
+            Tool::NoErcDirective => write!(f, "Place No ERC"),
             Tool::BusEntry => write!(f, "Place Bus Entry"),
             Tool::Line => write!(f, "Draw Line"),
             Tool::Rectangle => write!(f, "Draw Rectangle"),
             Tool::Circle => write!(f, "Draw Circle"),
             Tool::Arc => write!(f, "Draw Arc"),
             Tool::Polyline => write!(f, "Draw Polygon"),
+            Tool::Sheet => write!(f, "Place Sheet"),
         }
     }
 }

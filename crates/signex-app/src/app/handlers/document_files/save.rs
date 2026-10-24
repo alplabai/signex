@@ -369,7 +369,7 @@ impl Signex {
         // path) writes the new file, then undo the re-key if the write
         // fails: a tab must never point at a file that does not exist.
         let previous_title = self.retarget_primitive(from_path, to_path, None)?;
-        if let Err(error) = self.save_primitive_tab_at(to_path) {
+        if let Err(error) = self.save_primitive_tab_replacing(to_path) {
             self.retarget_primitive(to_path, from_path, previous_title.clone())
                 .context("roll back Save As re-key")?;
             return Err(error.context(format!(
@@ -543,6 +543,7 @@ impl Signex {
                 path: stored_path,
                 kind,
                 library_id,
+                unknown: Default::default(),
             });
 
         // Mark the `.snxprj` dirty so the project tree's red dot lights

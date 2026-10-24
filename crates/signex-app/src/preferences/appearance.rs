@@ -6,9 +6,7 @@
 
 use super::*;
 use crate::fonts;
-use crate::render_config::{
-    GridStyle, LabelStyle, MultisheetStyle, PinSelectionMode, PowerPortStyle,
-};
+use crate::render_config::{GridStyle, PinSelectionMode};
 use iced::widget::{Space, button, column, container, row, text};
 use iced::{Background, Border, Element, Length, Theme};
 use signex_types::theme::ThemeId;
@@ -17,9 +15,6 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     let PrefsView {
         draft_theme,
         draft_font,
-        draft_power_port_style,
-        draft_label_style,
-        draft_multisheet_style,
         draft_grid_style,
         draft_pcb_gpu_render,
         draft_symbol_grid_size_mm,
@@ -216,85 +211,6 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             iced::widget::checkbox(draft_pcb_gpu_render)
                 .size(16)
                 .on_toggle(PrefMsg::DraftPcbGpuRender),
-        ]
-        .align_y(iced::Alignment::Center),
-    );
-    col = col.push(Space::new().height(20));
-
-    // ── Section: Power Port Symbols ──
-    col = col.push(section_title("Power Ports"));
-    col = col.push(Space::new().height(10));
-    col = col.push(
-        row![
-            column![
-                text("Power Port Style").size(12).style(text_primary),
-                text("Choose how power symbols are rendered on canvas.")
-                    .size(10)
-                    .style(text_muted),
-            ]
-            .spacing(3)
-            .width(200),
-            Space::new().width(Length::Fill),
-            iced::widget::pick_list(
-                [PowerPortStyle::Altium, PowerPortStyle::Standard],
-                Some(draft_power_port_style),
-                PrefMsg::DraftPowerPortStyle,
-            )
-            .text_size(12)
-            .width(200),
-        ]
-        .align_y(iced::Alignment::Center),
-    );
-    col = col.push(Space::new().height(12));
-    col = col.push(
-        text("Restyled mode reshapes pin labels for rendering only. Standard preserves the library symbol's authored appearance.")
-            .size(10)
-            .style(text_muted),
-    );
-    col = col.push(Space::new().height(16));
-    col = col.push(
-        row![
-            column![
-                text("Global/Hier Label Style").size(12).style(text_primary),
-                text("Controls multi-sheet and global label appearance.")
-                    .size(10)
-                    .style(text_muted),
-            ]
-            .spacing(3)
-            .width(200),
-            Space::new().width(Length::Fill),
-            iced::widget::pick_list(
-                [LabelStyle::Standard, LabelStyle::Altium],
-                Some(draft_label_style),
-                PrefMsg::DraftLabelStyle,
-            )
-            .text_size(12)
-            .width(200),
-        ]
-        .align_y(iced::Alignment::Center),
-    );
-    col = col.push(Space::new().height(16));
-    col = col.push(
-        row![
-            column![
-                text("Multisheet Style").size(12).style(text_primary),
-                text(
-                    "Controls hierarchical sheet body fill defaults. \
-                     Per-sheet colours from the source file always win."
-                )
-                .size(10)
-                .style(text_muted),
-            ]
-            .spacing(3)
-            .width(200),
-            Space::new().width(Length::Fill),
-            iced::widget::pick_list(
-                [MultisheetStyle::Standard, MultisheetStyle::Altium],
-                Some(draft_multisheet_style),
-                PrefMsg::DraftMultisheetStyle,
-            )
-            .text_size(12)
-            .width(200),
         ]
         .align_y(iced::Alignment::Center),
     );

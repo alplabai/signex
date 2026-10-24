@@ -998,3 +998,86 @@ fn arc_endpoint_handle_drag_survives_save_reload() {
         "sweep must survive save/reload: {in_session} rad in-session vs {after} rad reloaded"
     );
 }
+
+fn sym_with_graphic(kind: SymbolGraphicKind, fill: Option<[u8; 4]>) -> Symbol {
+    let mut s = Symbol::empty("test");
+    s.graphics.push(signex_library::SymbolGraphic {
+        kind,
+        stroke_width: 0.15,
+        part_number: 0,
+        fill,
+    });
+    s
+}
+
+#[test]
+fn text_hit_box_follows_drawn_extent_right_and_down() {
+    // 11 glyphs at size 1.27 draw right of the anchor and below it
+    // (world y decreasing): x in [0, ~8.4], y in [-1.27, 0].
+    let s = sym_with_graphic(
+        SymbolGraphicKind::Text {
+            position: [0.0, 0.0],
+            content: "VCC_IO_BANK".into(),
+            size: 1.27,
+        },
+        None,
+    );
+    let hit = Some(SymbolSelection::Graphic(0));
+    assert_eq!(hit_test(&s, 3.0, -0.8, 1), hit);
+    assert_eq!(hit_test(&s, 8.0, -1.2, 1), hit);
+    // Up-left of the anchor, beyond the grab tolerance: outside the text.
+    assert_eq!(hit_test(&s, -1.0, 1.0, 1), None);
+    assert_eq!(hit_test(&s, 0.3, 1.0, 1), None);
+    // Past the right edge and below the bottom edge (beyond tolerance).
+    assert_eq!(hit_test(&s, 10.0, -0.5, 1), None);
+    assert_eq!(hit_test(&s, 3.0, -2.0, 1), None);
+}
+
+#[test]
+fn empty_text_is_grabbable_within_tolerance() {
+    let s = sym_with_graphic(
+        SymbolGraphicKind::Text {
+            position: [0.0, 0.0],
+            content: String::new(),
+            size: 1.27,
+        },
+        None,
+    );
+    assert_eq!(hit_test(&s, 0.2, 0.2, 1), Some(SymbolSelection::Graphic(0)));
+}
+
+#[test]
+fn text_marquee_follows_drawn_extent_right_and_down() {
+    // Same word as the click test: draws over x in [0, ~8.4], y in [-1.27, 0].
+    let s = sym_with_graphic(
+        SymbolGraphicKind::Text {
+            position: [0.0, 0.0],
+            content: "VCC_IO_BANK".into(),
+            size: 1.27,
+        },
+        None,
+    );
+    // Window around the word selects it; one covering only the anchor end
+    // does not.
+    assert!(select_in_box(&s, -1.0, 1.0, 9.0, -2.0, BoxSelectKind::Window, 1).is_some());
+    assert!(select_in_box(&s, -1.0, 1.0, 2.0, -2.0, BoxSelectKind::Window, 1).is_none());
+    // Crossing over the empty area up-left of the anchor does not.
+    assert!(select_in_box(&s, -3.0, 3.0, -0.5, 0.5, BoxSelectKind::Crossing, 1).is_none());
+    // Crossing over the word's far end does.
+    assert!(select_in_box(&s, 7.0, -0.5, 12.0, -2.0, BoxSelectKind::Crossing, 1).is_some());
+}
+
+#[test]
+fn filled_circle_accepts_interior_click() {
+    let kind = SymbolGraphicKind::Circle {
+        center: [0.0, 0.0],
+        radius: 5.0,
+    };
+    let filled = sym_with_graphic(kind.clone(), Some([255, 0, 0, 255]));
+    let hollow = sym_with_graphic(kind, None);
+    assert_eq!(
+        hit_test(&filled, 0.0, 0.0, 1),
+        Some(SymbolSelection::Graphic(0))
+    );
+    assert_eq!(hit_test(&hollow, 0.0, 0.0, 1), None);
+}

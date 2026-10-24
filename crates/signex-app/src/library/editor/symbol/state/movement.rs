@@ -303,12 +303,13 @@ fn graphic_fully_inside_box(
                 && center[1] - radius >= ymin
                 && center[1] + radius <= ymax
         }
-        SymbolGraphicKind::Text { position, size, .. } => {
-            let h = size * 0.5;
-            position[0] - h >= xmin
-                && position[0] + h <= xmax
-                && position[1] - h >= ymin
-                && position[1] + h <= ymax
+        SymbolGraphicKind::Text {
+            position,
+            content,
+            size,
+        } => {
+            let (gx0, gx1, gy0, gy1) = super::hit_test::text_bounds(position, content, *size, 0.0);
+            gx0 >= xmin && gx1 <= xmax && gy0 >= ymin && gy1 <= ymax
         }
         SymbolGraphicKind::Polygon { vertices } => match polygon_bbox(vertices) {
             Some((gx0, gy0, gx1, gy1)) => gx0 >= xmin && gx1 <= xmax && gy0 >= ymin && gy1 <= ymax,
@@ -335,12 +336,13 @@ fn graphic_intersects_box(
             let (cx, cy, r) = (center[0], center[1], *radius);
             cx - r <= xmax && cx + r >= xmin && cy - r <= ymax && cy + r >= ymin
         }
-        SymbolGraphicKind::Text { position, size, .. } => {
-            let h = size * 0.5;
-            position[0] - h <= xmax
-                && position[0] + h >= xmin
-                && position[1] - h <= ymax
-                && position[1] + h >= ymin
+        SymbolGraphicKind::Text {
+            position,
+            content,
+            size,
+        } => {
+            let (gx0, gx1, gy0, gy1) = super::hit_test::text_bounds(position, content, *size, 0.0);
+            gx0 <= xmax && gx1 >= xmin && gy0 <= ymax && gy1 >= ymin
         }
         SymbolGraphicKind::Polygon { vertices } => match polygon_bbox(vertices) {
             Some((gx0, gy0, gx1, gy1)) => gx0 <= xmax && gx1 >= xmin && gy0 <= ymax && gy1 >= ymin,

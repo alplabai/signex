@@ -388,7 +388,7 @@ impl DistributorAdapter for DigiKeyAdapter {
 
     fn lookup_by_url(&self, url: &Url) -> Result<Option<DistributorPart>, DistributorError> {
         let host = url.host_str().unwrap_or("");
-        if !host.ends_with("digikey.com") {
+        if !super::host_in_domain(host, "digikey.com") {
             return Ok(None);
         }
         let from_query = url
@@ -413,7 +413,7 @@ impl DistributorAdapter for DigiKeyAdapter {
 
     fn lookup_by_mpn(&self, mpn: &str) -> Result<Vec<DistributorPart>, DistributorError> {
         if let Some(cache) = &self.cache
-            && let Ok(Some(hit)) = cache.get(DIGIKEY_PROVIDER_KEY, mpn, DEFAULT_TTL)
+            && let Some(hit) = cache.get_or_warn(DIGIKEY_PROVIDER_KEY, mpn, DEFAULT_TTL)
         {
             return Ok(vec![hit]);
         }
@@ -543,5 +543,13 @@ mod tests {
         );
         assert!(q.contains_key("code_challenge"));
         assert!(q.contains_key("state"));
+    }
+
+    #[test]
+    fn lookup_by_url_rejects_lookalike_host_offline() {
+        // Dot-anchored host check returns before any network call.
+        let a = DigiKeyAdapter::with_access_token("http://unused.invalid", "tok", None);
+        let url = Url::parse("https://evildigikey.com/x").unwrap();
+        assert!(a.lookup_by_url(&url).unwrap().is_none());
     }
 }

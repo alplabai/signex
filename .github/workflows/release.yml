@@ -28,9 +28,39 @@ jobs:
       - name: Check release version consistency
         run: bash scripts/check_release_version.sh "$GITHUB_REF"
 
+  # Never publish binaries from a SHA whose tests fail (#113): the same
+  # `cargo test --workspace` that gates trunk in ci.yml, run on the tag.
+  test:
+    name: Test (workspace)
+    needs: verify-version
+    runs-on: ubuntu-latest
+    # Read-only: dependency build.rs scripts run here and must not hold a
+    # write token.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
+      - uses: Swatinem/rust-cache@v2
+      # apt list + toolchain pin mirror ci.yml's `test · workspace` job; keep in sync.
+      - name: Install Linux dependencies
+        run: |
+          sudo grep -rlZ 'packages.microsoft.com' /etc/apt/sources.list.d/ 2>/dev/null \
+            | sudo xargs -0 -r rm -f || true
+          sudo apt-get update
+          sudo apt-get install -y \
+            libxkbcommon-dev libwayland-dev libvulkan-dev \
+            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
+            mesa-vulkan-drivers
+      - name: Test
+        run: cargo test --workspace
+
   build:
     name: Build (${{ matrix.target }})
-    needs: verify-version
+    needs: [verify-version, test]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

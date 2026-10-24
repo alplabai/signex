@@ -86,6 +86,15 @@ pub fn recent_entries() -> Vec<DiagnosticEntry> {
         .collect()
 }
 
+/// Id of the most recent entry in the ring, without cloning it.
+pub fn newest_entry_id() -> Option<u64> {
+    entries()
+        .lock()
+        .expect("diagnostics mutex poisoned")
+        .back()
+        .map(|e| e.id)
+}
+
 pub fn configured_level() -> LevelFilter {
     *CONFIGURED_LEVEL.get_or_init(resolve_configured_level)
 }

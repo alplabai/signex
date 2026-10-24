@@ -53,6 +53,7 @@ fn push_project(app: &mut Signex, dir: &Path) {
             active_variant: None,
             libraries: Vec::new(),
             enable_git: false,
+            unknown: Default::default(),
         },
         pending_libraries: std::collections::HashMap::new(),
     });
@@ -69,6 +70,7 @@ fn symbol_reload_from_disk_clears_the_dirty_marker_so_quit_does_not_prompt() {
     let sha = adapter
         .commit_path(Path::new("s.snxsym"), "add symbol")
         .unwrap()
+        .expect("the symbol file changed, so a commit is made")
         .to_string();
 
     let (mut app, _t) = Signex::new();

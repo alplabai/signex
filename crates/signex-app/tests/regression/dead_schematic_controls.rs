@@ -4,7 +4,9 @@
 //! "All Off" (were placeholders that closed the dialog).
 
 use iced::{Point as ScreenPoint, Rectangle};
-use signex_app::app::{AnnotateMsg, Message, Signex, UiMsg};
+use signex_app::app::{AnnotateMsg, FileMsg, Message, Signex, UiMsg, WindowMsg};
+use signex_app::canvas::CanvasEvent;
+use signex_app::keymap::ShortcutTrigger;
 use signex_app::menu_bar::MenuMessage;
 use signex_types::schematic::{Point, SchematicSheet, Symbol};
 use std::collections::HashMap;
@@ -230,4 +232,452 @@ fn annotate_all_on_off_keep_the_dialog_open() {
     assert!(app.ui_state.annotate_dialog_open);
     let _ = app.update(Message::Annotate(AnnotateMsg::SetAllLocked(false)));
     assert!(app.ui_state.annotate_dialog_open);
+}
+
+fn cursor_at(app: &mut Signex, x: f32, y: f32) {
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::CursorAt {
+        x,
+        y,
+        zoom_pct: 100.0,
+    }));
+}
+
+/// The world point at the centre of an 800 x 600 view.
+fn view_centre((ox, oy, scale): (f32, f32, f32)) -> (f32, f32) {
+    ((400.0 - ox) / scale, (300.0 - oy) / scale)
+}
+
+fn add_second_sheet(app: &mut Signex) -> PathBuf {
+    let path = PathBuf::from("dead-controls-other.snxsch");
+    let engine = signex_engine::Engine::new(sheet_with(Vec::new())).expect("engine");
+    app.document_state.engines.insert(path.clone(), engine);
+    app.document_state.tabs.push(signex_app::app::TabInfo {
+        title: "dead-controls-other".to_string(),
+        path: path.clone(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: signex_app::app::TabKind::Schematic,
+    });
+    path
+}
+
+/// #525: Center View At Cursor recentres on the cursor and keeps the zoom.
+/// It used to share the Fit All arm and zoomed out to the whole sheet. It
+/// also cancels a fit still queued from before, which would otherwise land
+/// on the next canvas tick and undo the centring.
+#[test]
+fn center_view_at_cursor_recentres_without_changing_zoom_and_cancels_a_queued_fit() {
+    let (mut app, path) = app_with(vec![symbol(uuid::Uuid::new_v4(), "R1", 0.0)]);
+    let sheet = app.document_state.engines[&path].document().clone();
+    app.interaction_state
+        .active_canvas_mut()
+        .set_render_cache(Some(
+            signex_app::schematic_runtime::SchematicRenderCache::from_sheet(&sheet),
+        ));
+    app.interaction_state.active_canvas().set_viewport(VIEWPORT);
+    let _ = app.update(Message::Menu(MenuMessage::ZoomIn));
+    cursor_at(&mut app, 50.0, 30.0);
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::FitAll));
+    assert!(
+        app.interaction_state
+            .active_canvas()
+            .pending_fit
+            .get()
+            .is_some(),
+        "precondition: a fit is queued"
+    );
+    let (_, _, s0) = app.interaction_state.active_canvas().live_camera();
+
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::CenterAtCursor));
+
+    let camera = app.interaction_state.active_canvas().live_camera();
+    assert!(
+        (camera.2 - s0).abs() < 1e-6,
+        "zoom must not change: {s0} -> {}",
+        camera.2
+    );
+    let centre = view_centre(camera);
+    assert!(
+        (centre.0 - 50.0).abs() < 1e-3 && (centre.1 - 30.0).abs() < 1e-3,
+        "cursor point must land at the view centre, got {centre:?}"
+    );
+    assert!(
+        app.interaction_state
+            .active_canvas()
+            .pending_fit
+            .get()
+            .is_none(),
+        "the queued fit must be cancelled"
+    );
+}
+
+/// #525 review: the cursor point belongs to the document it was reported
+/// over. Before any hover, or once another tab is active, there is no point
+/// to centre on and the view stays put.
+#[test]
+fn center_view_at_cursor_ignores_a_point_from_another_document() {
+    let (mut app, _path) = app_with(vec![symbol(uuid::Uuid::new_v4(), "R1", 0.0)]);
+    app.interaction_state.active_canvas().set_viewport(VIEWPORT);
+    let before = app.interaction_state.active_canvas().live_camera();
+
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::CenterAtCursor));
+    assert_eq!(
+        app.interaction_state.active_canvas().live_camera(),
+        before,
+        "no hover yet: nothing to centre on"
+    );
+
+    cursor_at(&mut app, 50.0, 30.0);
+    let other = add_second_sheet(&mut app);
+    // The tab switch: the point above was reported over the first sheet.
+    app.document_state.active_tab = 1;
+    app.document_state.active_path = Some(other);
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::CenterAtCursor));
+    assert_eq!(
+        app.interaction_state.active_canvas().live_camera(),
+        before,
+        "a point from another sheet must not move this one"
+    );
+}
+
+/// #862 review: a PCB tab has no `active_path`, so the cursor point is keyed
+/// on the active tab there. Center View At Cursor recentres a board too.
+#[test]
+fn center_view_at_cursor_recentres_a_pcb() {
+    let (mut app, _t) = Signex::new();
+    let _ = app.update(Message::File(FileMsg::PcbOpenFinished {
+        path: PathBuf::from("/tmp/does-not-matter/board.snxpcb"),
+        title: "board".to_string(),
+        result: Ok(Box::new(empty_pcb_board())),
+    }));
+    app.interaction_state.pcb_canvas.set_viewport(VIEWPORT);
+    let (_, _, s0) = app.interaction_state.pcb_canvas.live_camera();
+    cursor_at(&mut app, 50.0, 30.0);
+
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::CenterAtCursor));
+
+    let camera = app.interaction_state.pcb_canvas.live_camera();
+    assert!((camera.2 - s0).abs() < 1e-6, "zoom must not change");
+    let centre = view_centre(camera);
+    assert!(
+        (centre.0 - 50.0).abs() < 1e-3 && (centre.1 - 30.0).abs() < 1e-3,
+        "the board view must centre on the cursor point, got {centre:?}"
+    );
+}
+
+/// #494: an undocked PCB tab has its own PCB canvas. Centring the undocked
+/// window's view moves that window's camera and leaves the main window's
+/// alone; with one shared canvas both windows jumped together.
+#[test]
+fn an_undocked_pcb_window_moves_its_own_camera_not_the_main_one() {
+    let (mut app, _t) = Signex::new();
+    let path = PathBuf::from("/tmp/does-not-matter/board.snxpcb");
+    let _ = app.update(Message::File(FileMsg::PcbOpenFinished {
+        path: path.clone(),
+        title: "board".to_string(),
+        result: Ok(Box::new(empty_pcb_board())),
+    }));
+    let window_id = iced::window::Id::unique();
+    let _ = app.update(Message::Window(WindowMsg::UndockedTabOpened {
+        path,
+        id: window_id,
+    }));
+    app.interaction_state.pcb_canvas.set_viewport(VIEWPORT);
+    app.interaction_state
+        .pcb_canvas_for_window(window_id)
+        .set_viewport(VIEWPORT);
+    let main_before = app.interaction_state.pcb_canvas.live_camera();
+    let _ = app.update(Message::CanvasEventInWindow {
+        window_id,
+        event: CanvasEvent::CursorAt {
+            x: 50.0,
+            y: 30.0,
+            zoom_pct: 100.0,
+        },
+    });
+
+    let _ = app.update(Message::CanvasEventInWindow {
+        window_id,
+        event: CanvasEvent::CenterAtCursor,
+    });
+
+    assert_eq!(
+        app.interaction_state.pcb_canvas.live_camera(),
+        main_before,
+        "the main window's board view must not move"
+    );
+    let centre = view_centre(
+        app.interaction_state
+            .pcb_canvas_for_window(window_id)
+            .live_camera(),
+    );
+    assert!(
+        (centre.0 - 50.0).abs() < 1e-3 && (centre.1 - 30.0).abs() < 1e-3,
+        "the undocked board view must centre on its cursor point, got {centre:?}"
+    );
+}
+
+/// #494: the undocked PCB window keeps working after the main window
+/// switches to a schematic. The PCB handlers find the board through the
+/// active tab, so the window's event has to retarget it.
+#[test]
+fn an_undocked_pcb_window_still_centres_while_the_main_window_shows_a_schematic() {
+    let (mut app, sheet) = app_with(vec![symbol(uuid::Uuid::new_v4(), "R1", 0.0)]);
+    let path = PathBuf::from("/tmp/does-not-matter/board.snxpcb");
+    let _ = app.update(Message::File(FileMsg::PcbOpenFinished {
+        path: path.clone(),
+        title: "board".to_string(),
+        result: Ok(Box::new(empty_pcb_board())),
+    }));
+    let window_id = iced::window::Id::unique();
+    let _ = app.update(Message::Window(WindowMsg::UndockedTabOpened {
+        path,
+        id: window_id,
+    }));
+    app.document_state.active_tab = 0;
+    app.document_state.active_path = Some(sheet);
+    app.interaction_state
+        .pcb_canvas_for_window(window_id)
+        .set_viewport(VIEWPORT);
+    let _ = app.update(Message::CanvasEventInWindow {
+        window_id,
+        event: CanvasEvent::CursorAt {
+            x: 50.0,
+            y: 30.0,
+            zoom_pct: 100.0,
+        },
+    });
+
+    let _ = app.update(Message::CanvasEventInWindow {
+        window_id,
+        event: CanvasEvent::CenterAtCursor,
+    });
+
+    let centre = view_centre(
+        app.interaction_state
+            .pcb_canvas_for_window(window_id)
+            .live_camera(),
+    );
+    assert!(
+        (centre.0 - 50.0).abs() < 1e-3 && (centre.1 - 30.0).abs() < 1e-3,
+        "the undocked board view must centre on its cursor point, got {centre:?}"
+    );
+    assert_eq!(app.document_state.active_tab, 0, "the main tab is restored");
+}
+
+/// #903 review: an event queued by an undocked PCB window whose tab has
+/// just been closed is dropped. It used to fall through to the main
+/// window's active board and move that camera.
+#[test]
+fn an_event_from_a_closed_pcb_tabs_window_leaves_the_main_view_alone() {
+    let (mut app, _t) = Signex::new();
+    let path = PathBuf::from("/tmp/does-not-matter/board.snxpcb");
+    let _ = app.update(Message::File(FileMsg::PcbOpenFinished {
+        path: path.clone(),
+        title: "board".to_string(),
+        result: Ok(Box::new(empty_pcb_board())),
+    }));
+    let window_id = iced::window::Id::unique();
+    let _ = app.update(Message::Window(WindowMsg::UndockedTabOpened {
+        path,
+        id: window_id,
+    }));
+    // The main window's board has something to fit to, so a Fit All that
+    // reached it would leave a pending fit.
+    let mut other = empty_pcb_board();
+    other.vias.push(
+        serde_json::from_value(serde_json::json!({
+            "uuid": uuid::Uuid::new_v4(),
+            "position": { "x": 10.0, "y": 10.0 },
+            "diameter": 0.6,
+        }))
+        .expect("via"),
+    );
+    let _ = app.update(Message::File(FileMsg::PcbOpenFinished {
+        path: PathBuf::from("/tmp/does-not-matter/other.snxpcb"),
+        title: "other".to_string(),
+        result: Ok(Box::new(other)),
+    }));
+    app.document_state.tabs.remove(0);
+    app.document_state.active_tab = 0;
+    app.interaction_state.pcb_canvas.set_viewport(VIEWPORT);
+    // Opening the board queued its first fit; take it out of the picture.
+    app.interaction_state.pcb_canvas.pending_fit.set(None);
+    let before = app.interaction_state.pcb_canvas.live_camera();
+
+    let _ = app.update(Message::CanvasEventInWindow {
+        window_id,
+        event: CanvasEvent::FitAll,
+    });
+
+    assert_eq!(
+        app.interaction_state.pcb_canvas.live_camera(),
+        before,
+        "the main window's board view must not move"
+    );
+    assert!(app.interaction_state.pcb_canvas.pending_fit.get().is_none());
+}
+
+/// #494: app-wide settings reach the undocked PCB canvas too, and
+/// reattaching the tab drops it.
+#[test]
+fn an_undocked_pcb_canvas_follows_the_grid_toggle_and_is_dropped_on_reattach() {
+    let (mut app, _t) = Signex::new();
+    let path = PathBuf::from("/tmp/does-not-matter/board.snxpcb");
+    let _ = app.update(Message::File(FileMsg::PcbOpenFinished {
+        path: path.clone(),
+        title: "board".to_string(),
+        result: Ok(Box::new(empty_pcb_board())),
+    }));
+    let window_id = iced::window::Id::unique();
+    let _ = app.update(Message::Window(WindowMsg::UndockedTabOpened {
+        path,
+        id: window_id,
+    }));
+    assert!(app.interaction_state.pcb_canvases.contains_key(&window_id));
+    let visible = app.interaction_state.pcb_canvas.grid_visible;
+
+    let _ = app.update(Message::Ui(UiMsg::GridToggle));
+
+    assert_eq!(app.interaction_state.pcb_canvas.grid_visible, !visible);
+    assert_eq!(
+        app.interaction_state.pcb_canvases[&window_id].grid_visible, !visible,
+        "the undocked board view must follow the grid toggle"
+    );
+
+    let _ = app.update(Message::Window(WindowMsg::ReattachTab(window_id)));
+
+    assert!(
+        !app.interaction_state.pcb_canvases.contains_key(&window_id),
+        "reattaching must drop the window's PCB canvas"
+    );
+}
+
+fn empty_pcb_board() -> signex_types::pcb::PcbBoard {
+    signex_types::pcb::PcbBoard {
+        unknown: Default::default(),
+        uuid: uuid::Uuid::new_v4(),
+        version: 1,
+        generator: "signex-test".into(),
+        thickness: 1.6,
+        outline: vec![],
+        layers: vec![],
+        setup: None,
+        nets: vec![],
+        footprints: vec![],
+        segments: vec![],
+        vias: vec![],
+        zones: vec![],
+        graphics: vec![],
+        texts: vec![],
+    }
+}
+
+/// #862 review: a point hovered in an undocked window belongs to that
+/// window's document, so `Home` in the main window must not centre the main
+/// view on it. The undocked event swaps `active_path` but not `active_tab`,
+/// so keying the cursor on the active tab alone would let it through.
+#[test]
+fn a_point_hovered_in_an_undocked_window_does_not_centre_the_main_view() {
+    let (mut app, _path) = app_with(vec![symbol(uuid::Uuid::new_v4(), "R1", 0.0)]);
+    app.interaction_state.active_canvas().set_viewport(VIEWPORT);
+    let other = add_second_sheet(&mut app);
+    let window_id = iced::window::Id::unique();
+    let _ = app.update(Message::Window(WindowMsg::UndockedTabOpened {
+        path: other,
+        id: window_id,
+    }));
+    let _ = app.update(Message::CanvasEventInWindow {
+        window_id,
+        event: CanvasEvent::CursorAt {
+            x: 50.0,
+            y: 30.0,
+            zoom_pct: 100.0,
+        },
+    });
+    let before = app.interaction_state.active_canvas().live_camera();
+
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::CenterAtCursor));
+
+    assert_eq!(
+        app.interaction_state.active_canvas().live_camera(),
+        before,
+        "the main view must not move to a point from the undocked window"
+    );
+}
+
+/// #525 review: `Home` typed in an undocked sheet's window centres that
+/// window's view on its own cursor point, and leaves the main window alone.
+/// The plain `CanvasEvent` the command resolves to always targets the main
+/// window, so the keystroke has to be routed to the window it came from.
+#[test]
+fn home_in_an_undocked_window_centres_that_window_not_the_main_one() {
+    let (mut app, _path) = app_with(vec![symbol(uuid::Uuid::new_v4(), "R1", 0.0)]);
+    app.interaction_state.active_canvas().set_viewport(VIEWPORT);
+    let other = add_second_sheet(&mut app);
+    let window_id = iced::window::Id::unique();
+    let _ = app.update(Message::Window(WindowMsg::UndockedTabOpened {
+        path: other,
+        id: window_id,
+    }));
+    app.interaction_state.canvases[&window_id].set_viewport(VIEWPORT);
+    let _ = app.update(Message::CanvasEventInWindow {
+        window_id,
+        event: CanvasEvent::CursorAt {
+            x: 50.0,
+            y: 30.0,
+            zoom_pct: 100.0,
+        },
+    });
+    let main_before = app.interaction_state.active_canvas().live_camera();
+
+    let ShortcutTrigger::KeySequence(mut strokes) =
+        ShortcutTrigger::parse("Home").expect("Home parses")
+    else {
+        panic!("Home is a key, not a gesture");
+    };
+    let _ = app.update(Message::Ui(UiMsg::KeymapStroke {
+        window: Some(window_id),
+        stroke: strokes.remove(0),
+    }));
+
+    assert_eq!(
+        app.interaction_state.active_canvas().live_camera(),
+        main_before,
+        "the main window must not move"
+    );
+    let centre = view_centre(app.interaction_state.canvases[&window_id].live_camera());
+    assert!(
+        (centre.0 - 50.0).abs() < 1e-3 && (centre.1 - 30.0).abs() < 1e-3,
+        "the undocked view must centre on its cursor point, got {centre:?}"
+    );
+}
+
+/// #525: Zoom to All Objects frames the objects, not the paper, so parts
+/// bunched in one corner fill the view.
+#[test]
+fn zoom_to_all_objects_frames_object_extents_not_the_paper() {
+    let (mut app, path) = app_with(vec![
+        symbol(uuid::Uuid::new_v4(), "R1", 300.0),
+        symbol(uuid::Uuid::new_v4(), "R2", 320.0),
+    ]);
+    // Stand in for the first draw, which builds the render cache the fit reads.
+    let sheet = app.document_state.engines[&path].document().clone();
+    app.interaction_state
+        .active_canvas_mut()
+        .set_render_cache(Some(
+            signex_app::schematic_runtime::SchematicRenderCache::from_sheet(&sheet),
+        ));
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::FitAll));
+
+    let rect = app
+        .interaction_state
+        .active_canvas()
+        .pending_fit
+        .get()
+        .expect("fit queued");
+    // Object extents plus the 10 mm margin: x 290..330, far smaller than A4.
+    assert!((rect.x - 290.0).abs() < 1e-3, "{rect:?}");
+    assert!((rect.width - 40.0).abs() < 1e-3, "{rect:?}");
 }

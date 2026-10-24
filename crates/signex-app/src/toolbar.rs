@@ -60,6 +60,7 @@ pub fn view(active: Tool) -> Element<'static, ToolMessage> {
         tool_btn("Label (L)", Tool::Label, active),
         tool_btn("Comp (P)", Tool::Component, active),
         tool_btn("Text (T)", Tool::Text, active),
+        tool_btn("Sheet (S)", Tool::Sheet, active),
         sep(),
         tool_btn("Line", Tool::Line, active),
         tool_btn("Rect", Tool::Rectangle, active),

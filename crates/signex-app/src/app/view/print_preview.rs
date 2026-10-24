@@ -230,7 +230,7 @@ impl Signex {
         use crate::app::state::{ModalId, PdfPreviewTab};
         use crate::app::view::dialogs::{
             MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE, close_x_button,
-            detached_header, draggable_header,
+            draggable_header, os_title_bar_slot,
         };
         use iced::widget::{Space, button, column, container, row, text};
         let theme_id = self.ui_state.theme_id;
@@ -271,7 +271,7 @@ impl Signex {
                 self.interaction_state.last_mouse_pos,
             )
         } else {
-            detached_header(header_content, ModalId::PrintPreview)
+            os_title_bar_slot()
         };
 
         // Tab strip — Preview | Settings.

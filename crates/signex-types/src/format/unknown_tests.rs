@@ -340,3 +340,57 @@ fn board_without_unknowns_has_empty_bags_and_unchanged_json() {
     let json = serde_json::to_string(&board).unwrap();
     assert!(!json.contains("\"unknown\""));
 }
+
+/// #883: zone keys this build does not know survive a load and save
+/// instead of being dropped (for `holes` that would have turned a cut-out
+/// back into solid copper). A later build may add a nested table as well as
+/// scalars, so both are covered.
+#[test]
+fn unknown_zone_keys_survive_a_round_trip() {
+    let mut board = plain_board();
+    board.zones.push(crate::pcb::Zone {
+        uuid: uuid::Uuid::parse_str("0192a8c0-0040-7000-8000-000000000003").unwrap(),
+        net: 0,
+        net_name: String::new(),
+        layer: "TopCopper".into(),
+        outline: vec![
+            PcbPoint { x: 0.0, y: 0.0 },
+            PcbPoint { x: 1.0, y: 0.0 },
+            PcbPoint { x: 1.0, y: 1.0 },
+        ],
+        holes: Vec::new(),
+        priority: 0,
+        fill_type: String::new(),
+        thermal_relief: false,
+        thermal_gap: 0.0,
+        thermal_width: 0.0,
+        clearance: 0.0,
+        min_thickness: 0.0,
+        unknown: Default::default(),
+    });
+    let text = save_pcb(&board);
+    let marker = "min_thickness = 0.0\n";
+    assert!(text.contains(marker), "{text}");
+    let future = text.replacen(
+        marker,
+        &format!(
+            "{marker}hatch_pitch = 0.5\nfuture_mode = \"stitched\"\n\n\
+             [zones.future_sub]\nkind = \"hatch\"\nangle = 45\n"
+        ),
+        1,
+    );
+
+    let loaded = load_pcb(&future);
+    let zone = &loaded.zones[0];
+    let keys: Vec<&str> = zone.unknown.keys().map(String::as_str).collect();
+    assert_eq!(keys, ["future_mode", "future_sub", "hatch_pitch"]);
+    assert!(
+        !zone.unknown.contains_key("min_thickness"),
+        "a known key must not be captured as unknown"
+    );
+
+    let resaved = save_pcb(&loaded);
+    let again = load_pcb(&resaved);
+    assert_eq!(again.zones[0].unknown, zone.unknown);
+    assert_eq!(resaved, save_pcb(&again), "re-save is stable");
+}

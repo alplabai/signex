@@ -80,6 +80,12 @@ impl Camera {
         true
     }
 
+    /// Pan so `world` sits at the viewport centre, keeping the zoom (#525).
+    pub fn center_on(&mut self, world: Point, viewport: Rectangle) {
+        self.offset.x = viewport.width / 2.0 - world.x * self.scale;
+        self.offset.y = viewport.height / 2.0 - world.y * self.scale;
+    }
+
     /// Fit a world-space rectangle into the viewport with some padding.
     pub fn fit_rect(&mut self, world_rect: Rectangle, viewport: Rectangle) {
         let padding = 40.0; // screen pixels

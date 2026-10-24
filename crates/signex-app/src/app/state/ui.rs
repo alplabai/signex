@@ -1,7 +1,7 @@
 //! UI-surface state — theme, tool overlays, modal flags, dropdown and
 //! command-palette state. Split from `app/state.rs` as pure code motion.
 
-use crate::render_config::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
+use crate::render_config::GridStyle;
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeId;
 
@@ -17,6 +17,10 @@ pub struct UiState {
     pub snap_enabled: bool,
     pub cursor_x: f64,
     pub cursor_y: f64,
+    /// The document `cursor_x/y` was last reported over. Center View At
+    /// Cursor uses the point only in that document, never in another tab or
+    /// window, and does nothing before the first hover (#525).
+    pub cursor_document: Option<std::path::PathBuf>,
     pub zoom: f64,
     pub grid_size_mm: f32,
     pub visible_grid_mm: f32,
@@ -100,12 +104,6 @@ pub struct UiState {
     /// [`Self::preferences_keymap_status`]; empty renders nothing. Pure
     /// feedback — never part of the dirty predicate.
     pub preferences_theme_status: String,
-    pub power_port_style: PowerPortStyle,
-    pub preferences_draft_power_port_style: PowerPortStyle,
-    pub label_style: LabelStyle,
-    pub preferences_draft_label_style: LabelStyle,
-    pub multisheet_style: MultisheetStyle,
-    pub preferences_draft_multisheet_style: MultisheetStyle,
     pub grid_style: GridStyle,
     pub preferences_draft_grid_style: GridStyle,
     /// Saved PCB GPU-render toggle (experimental). The *effective* live value
@@ -140,7 +138,7 @@ pub struct UiState {
     /// Draft mirror of [`Self::symbol_pin_selection`].
     pub preferences_draft_symbol_pin_selection: crate::render_config::PinSelectionMode,
     /// Keyboard Shortcuts pane — editable working copy of the shortcut
-    /// profile set. Seeded from [`keymap_profiles`] each time the
+    /// profile set. Seeded from [`Self::keymap_profiles`] each time the
     /// Preferences window opens (and on Discard), mutated through the
     /// [`crate::keymap::KeymapEditorModel`] API as the user edits, and
     /// committed back to `keymap_profiles` + recompiled into
@@ -405,9 +403,6 @@ impl UiState {
     pub fn preferences_draft_differs(&self) -> bool {
         self.preferences_draft_theme != self.theme_id
             || self.preferences_draft_font != self.ui_font_name
-            || self.preferences_draft_power_port_style != self.power_port_style
-            || self.preferences_draft_label_style != self.label_style
-            || self.preferences_draft_multisheet_style != self.multisheet_style
             || self.preferences_draft_grid_style != self.grid_style
             || self.preferences_draft_pcb_gpu_render != self.pcb_gpu_render
             || self.preferences_draft_symbol_grid_style != self.symbol_grid_style

@@ -1,12 +1,12 @@
 //! Git history panel — right-dock surface that follows the active
-//! tab. Reuses [`signex_widgets::history_pane`] to render the
+//! tab. Reuses [`signex_widgets::history_pane()`] to render the
 //! actual cards. State is kept minimal: an active path resolved
 //! from the active tab + the last loaded vec of entries + a
 //! "loading" generation counter to discard stale async results.
 //!
 //! Phase 0 (this module) wires the read-only view; the load path
 //! is driven by `signex_app`'s dispatcher via
-//! [`crate::app::HistoryLoad`] (a `Message::HistoryLoaded` variant
+//! [`crate::app::Message::HistoryLoaded`] (a `Message` variant
 //! threads each result back to the panel context with a generation
 //! token, so a tab switch in flight discards any pending result).
 
@@ -31,6 +31,10 @@ pub struct HistoryPanelState {
     /// no active file or the active tab has no history-trackable
     /// resource (e.g. a future ComponentEditor tab).
     pub active_path: Option<std::path::PathBuf>,
+    /// The active tab's path when the target was last resolved. Lets the
+    /// idle-cursor-move fast path detect a tab switch without walking the
+    /// filesystem for a `.git/`.
+    pub source_key: Option<std::path::PathBuf>,
     /// Whether the most-recent load is still in flight.
     pub loading: bool,
     /// Loaded entries from the most-recent successful load.
@@ -82,7 +86,7 @@ pub enum HistoryRenderMode {
 }
 
 /// Render the History panel. Delegates row rendering to
-/// [`signex_widgets::history_pane`]; layers on the "no active
+/// [`signex_widgets::history_pane()`]; layers on the "no active
 /// file" / "not in a git repo" / "loading" header + the working-
 /// tree pseudo-card.
 pub fn view_history<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {

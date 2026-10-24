@@ -12,7 +12,7 @@
 //!
 //! Errors are intentionally swallowed at the boundary because:
 //! - On startup, a missing/corrupt config must not block the app —
-//!   we fall back to [`DistributorSettings::default()`].
+//!   we fall back to [`DistributorSettings::default()`](crate::library::state::DistributorSettings).
 //! - On save, an I/O failure is non-critical — the next save will
 //!   just overwrite. A `tracing::warn!` surfaces the why.
 

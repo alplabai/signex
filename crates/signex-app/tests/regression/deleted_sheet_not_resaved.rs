@@ -38,11 +38,13 @@ fn add_project(app: &mut Signex, prj_path: &Path, sheet: &str) -> ProjectId {
                 symbols_count: 0,
                 wires_count: 0,
                 labels_count: 0,
+                unknown: Default::default(),
             }],
             variant_definitions: Vec::new(),
             active_variant: None,
             libraries: Vec::new(),
             enable_git: false,
+            unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
     });
@@ -60,6 +62,7 @@ fn list_sheet(app: &mut Signex, idx: usize, filename: &str) {
             symbols_count: 0,
             wires_count: 0,
             labels_count: 0,
+            unknown: Default::default(),
         });
 }
 
@@ -93,6 +96,7 @@ fn deleting_a_dirty_sheet_is_not_resurrected_by_save_all_on_quit() {
     open_dirty_sheet(&mut app, &sheet, id);
 
     app.ui_state.remove_dialog = Some(RemoveDialogState {
+        project_id: None,
         target_path: sheet.clone(),
         tree_path: vec![0, 0],
         display_name: "X.snxsch".to_string(),
@@ -192,6 +196,7 @@ fn closing_a_clean_project_keeps_a_sibling_projects_clean_engine() {
 
 fn delete_file(app: &mut Signex, target: &Path) {
     app.ui_state.remove_dialog = Some(RemoveDialogState {
+        project_id: None,
         target_path: target.to_path_buf(),
         tree_path: vec![0, 0],
         display_name: target.file_name().unwrap().to_string_lossy().into_owned(),
@@ -738,6 +743,7 @@ fn a_library_draft_and_a_tab_only_file_under_the_closing_projects_folder_are_kep
             path: PathBuf::from("lib.snxlib"),
             kind: signex_types::project::LibraryEntryKind::ProjectLocal,
             library_id: None,
+            unknown: Default::default(),
         });
     let a_sheet = a_dir.join("a.snxsch");
     let tab_only = a_dir.join("stray.snxsch");

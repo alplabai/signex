@@ -15,8 +15,8 @@
 //! itself to document formats and left the project file alone; JSON
 //! persistence for it landed afterwards (0222a07c) with no recorded reason
 //! to prefer JSON. It is a small flat pointer record with no bulk rows, so
-//! the TSV blocks would add nothing, but it also has no format token and
-//! drops unknown keys on save. See `docs/architecture/snxprj-format.md`.
+//! the TSV blocks would add nothing. It carries a `snxprj/1` format token
+//! and preserves unknown keys (#788). See `docs/architecture/snxprj-format.md`.
 //!
 //! These types are the canonical Signex schema. Standard I/O — when it
 //! returns via the `signex-standard-import` companion repo (GPL-3.0) —
@@ -147,6 +147,15 @@ pub enum FormatError {
         field: String,
         message: String,
     },
+    /// A float cell was non-finite at write time; writing it would produce
+    /// a file the reader rejects. `block`/`row` are filled by `write_tsv_block`.
+    #[error("TSV block {block:?}: row {row} field {field:?} holds non-finite float {value}")]
+    TsvFieldWrite {
+        block: String,
+        row: usize,
+        field: String,
+        value: String,
+    },
     #[error("TSV block {block:?}: TSV body is empty — at minimum a header row is required")]
     TsvEmpty { block: String },
 }
@@ -166,8 +175,9 @@ pub trait SnxTable: Sized {
     fn columns() -> &'static [&'static str];
 
     /// Emit one cell per declared column. Length must equal
-    /// [`SnxTable::columns`]. Empty cells use `""`.
-    fn to_row(&self) -> Vec<String>;
+    /// [`SnxTable::columns`]. Empty cells use `""`. Fails with
+    /// [`FormatError::TsvFieldWrite`] on a non-finite float.
+    fn to_row(&self) -> Result<Vec<String>, FormatError>;
 
     /// Parse a row of the known cells, already ordered as [`SnxTable::columns`].
     /// Implementations report parse failures via [`FormatError::TsvFieldParse`].
