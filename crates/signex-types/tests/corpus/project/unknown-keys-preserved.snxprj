@@ -1,0 +1,35 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "future_top_level": {
+    "nested": [
+      1,
+      2,
+      null
+    ]
+  },
+  "libraries": [
+    {
+      "future_library_key": "kept",
+      "kind": "global",
+      "library_id": null,
+      "path": "/opt/global/passives.snxlib"
+    }
+  ],
+  "name": "unknown-keys-preserved",
+  "pcb_file": null,
+  "schematic_root": "unknown-keys-preserved.snxsch",
+  "sheets": [
+    {
+      "filename": "unknown-keys-preserved.snxsch",
+      "future_sheet_key": true,
+      "labels_count": 0,
+      "name": "unknown-keys-preserved",
+      "symbols_count": 0,
+      "wires_count": 0
+    }
+  ],
+  "variant_definitions": []
+}

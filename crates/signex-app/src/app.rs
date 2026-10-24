@@ -48,6 +48,7 @@ pub use documents::{
     GraphicFillPicker, LocalColorPicker, LocalColorSlot, SchematicTabSession, SymbolEditorState,
     SymbolViewRequest, TabDocument, TabInfo, TabKind, Tool,
 };
+pub(crate) use handlers::selection_workflow::passes_filter;
 pub use state::{
     DocumentState, InteractionState, KeymapRecorderState, LoadedProject, PageSetupInputs,
     PreviewState, ProjectId, Signex, UiState,

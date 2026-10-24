@@ -29,6 +29,7 @@ pub mod mount;
 pub mod new_component;
 pub mod panel;
 pub mod picker;
+pub mod place;
 pub mod primitive_picker;
 pub mod recovery;
 pub mod resolve;

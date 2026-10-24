@@ -3,6 +3,8 @@ use iced::Task;
 use super::super::super::*;
 
 mod add;
+#[cfg(test)]
+mod add_tests;
 mod close_project;
 mod dialog_target;
 mod open_document;
@@ -10,6 +12,7 @@ mod project_actions;
 mod remove;
 mod remove_guard;
 mod rename;
+mod rename_library;
 mod sheet_references;
 mod version_control;
 

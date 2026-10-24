@@ -40,8 +40,11 @@ pub mod icons;
 mod ignore;
 pub mod keyboard_shortcuts_modal;
 pub mod keymap;
+#[cfg(test)]
+pub(crate) mod layout_probe;
 pub mod library;
 pub mod menu_bar;
+mod numeric_field;
 pub mod panels;
 pub mod passive_calculator_modal;
 pub mod pcb_canvas;

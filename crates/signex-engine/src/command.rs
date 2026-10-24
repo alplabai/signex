@@ -1,6 +1,6 @@
 use signex_types::schematic::{
-    Bus, BusEntry, ChildSheet, HAlign, Junction, Label, NoConnect, SchematicSheet, SelectedItem,
-    StrokeColor, Symbol, TextNote, Wire,
+    Bus, BusEntry, ChildSheet, HAlign, Junction, Label, LibSymbol, NoConnect, SchematicSheet,
+    SelectedItem, StrokeColor, Symbol, TextNote, Wire,
 };
 use uuid::Uuid;
 
@@ -50,6 +50,7 @@ pub enum CommandKind {
     PlaceBus,
     PlaceLabel,
     PlaceSymbol,
+    RegisterLibSymbol,
     PlaceChildSheet,
     PlaceJunction,
     PlaceNoConnect,
@@ -160,6 +161,14 @@ pub enum Command {
     },
     PlaceSymbol {
         symbol: Symbol,
+    },
+    /// Add `lib_symbol` to the sheet's `lib_symbols`, keyed by its `id`.
+    /// A no-op when that key is already present — the first definition
+    /// wins, so re-placing a library symbol never duplicates or replaces
+    /// the entry. Run in the same batch as the `PlaceSymbol` that
+    /// references it so one undo removes both.
+    RegisterLibSymbol {
+        lib_symbol: LibSymbol,
     },
     /// Add a hierarchical sheet symbol. Rejected with
     /// [`EngineError::EmptyChildSheetFilename`] when `filename` is blank.
@@ -296,6 +305,7 @@ impl Command {
             Command::PlaceBus { .. } => CommandKind::PlaceBus,
             Command::PlaceLabel { .. } => CommandKind::PlaceLabel,
             Command::PlaceSymbol { .. } => CommandKind::PlaceSymbol,
+            Command::RegisterLibSymbol { .. } => CommandKind::RegisterLibSymbol,
             Command::PlaceChildSheet { .. } => CommandKind::PlaceChildSheet,
             Command::PlaceJunction { .. } => CommandKind::PlaceJunction,
             Command::PlaceNoConnect { .. } => CommandKind::PlaceNoConnect,
