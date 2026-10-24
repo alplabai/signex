@@ -655,8 +655,9 @@ impl canvas::Program<Message> for PcbCanvas {
         let content = self.content_cache.draw(renderer, bounds.size(), |frame| {
             self.content_cache_camera
                 .set((camera.offset.x, camera.offset.y, camera.scale));
-            if let Some(snapshot) = self.active_renderer_snapshot() {
-                let scene = self.build_scene(snapshot);
+            // World-space scene shared with the GPU path: a camera-only
+            // redraw re-projects the cached scene instead of re-tessellating.
+            if let Some(scene) = self.gpu_scene() {
                 draw_scene(frame, &scene, &camera, bounds);
             }
         });

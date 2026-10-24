@@ -317,7 +317,9 @@ impl Signex {
         self.interaction_state
             .active_canvas_mut()
             .clear_content_cache();
-        self.sync_canvas_from_visible_schematic(crate::schematic_runtime::RenderInvalidation::FULL);
+        self.sync_canvas_from_visible_schematic(
+            crate::schematic_runtime::RenderInvalidation::SYMBOLS,
+        );
         self.update_selection_info();
         if any_cached_changed || self.document_state.has_active_engine() {
             self.refresh_panel_ctx();

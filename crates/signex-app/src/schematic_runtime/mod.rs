@@ -132,9 +132,19 @@ impl SchematicRenderCache {
         }
     }
 
-    pub fn update_from_sheet(&mut self, sheet: &SchematicSheet, _invalidation: RenderInvalidation) {
-        self.sheet = Some(sheet.clone());
+    /// Refresh the cached snapshot from `sheet`. Only the collections named by
+    /// `invalidation` are re-cloned; `FULL`, an empty cache, or a different
+    /// document (uuid mismatch) re-clones everything.
+    pub fn update_from_sheet(&mut self, sheet: &SchematicSheet, invalidation: RenderInvalidation) {
         self.preview = None;
+        match self.sheet.as_mut() {
+            Some(cached)
+                if invalidation != RenderInvalidation::FULL && cached.uuid == sheet.uuid =>
+            {
+                copy_invalidated(cached, sheet, invalidation);
+            }
+            _ => self.sheet = Some(sheet.clone()),
+        }
     }
 
     pub fn snapshot(&self) -> &SchematicSheet {
@@ -145,6 +155,56 @@ impl SchematicRenderCache {
 
     pub fn prepared_preview(&self) -> Option<&SchematicSheet> {
         self.preview.as_ref()
+    }
+}
+
+/// Copy the sheet collections selected by `invalidation` from `src` into `dst`.
+fn copy_invalidated(
+    dst: &mut SchematicSheet,
+    src: &SchematicSheet,
+    invalidation: RenderInvalidation,
+) {
+    use RenderInvalidation as R;
+    if invalidation.intersects(R::SYMBOLS) {
+        dst.symbols.clone_from(&src.symbols);
+    }
+    if invalidation.intersects(R::WIRES) {
+        dst.wires.clone_from(&src.wires);
+    }
+    if invalidation.intersects(R::LABELS) {
+        dst.labels.clone_from(&src.labels);
+    }
+    if invalidation.intersects(R::TEXT_NOTES) {
+        dst.text_notes.clone_from(&src.text_notes);
+    }
+    if invalidation.intersects(R::BUSES) {
+        dst.buses.clone_from(&src.buses);
+    }
+    if invalidation.intersects(R::BUS_ENTRIES) {
+        dst.bus_entries.clone_from(&src.bus_entries);
+    }
+    if invalidation.intersects(R::JUNCTIONS) {
+        dst.junctions.clone_from(&src.junctions);
+    }
+    if invalidation.intersects(R::NO_CONNECTS) {
+        dst.no_connects.clone_from(&src.no_connects);
+    }
+    if invalidation.intersects(R::NO_ERC_DIRECTIVES) {
+        dst.no_erc_directives.clone_from(&src.no_erc_directives);
+    }
+    if invalidation.intersects(R::CHILD_SHEETS) {
+        dst.child_sheets.clone_from(&src.child_sheets);
+    }
+    if invalidation.intersects(R::DRAWINGS) {
+        dst.drawings.clone_from(&src.drawings);
+    }
+    if invalidation.intersects(R::LIB_SYMBOLS) {
+        dst.lib_symbols.clone_from(&src.lib_symbols);
+    }
+    if invalidation.intersects(R::PAPER) {
+        dst.paper_size.clone_from(&src.paper_size);
+        dst.title_block.clone_from(&src.title_block);
+        dst.root_sheet_page.clone_from(&src.root_sheet_page);
     }
 }
 
