@@ -26,6 +26,7 @@ pub use command::{
 };
 pub use error::EngineError;
 use history::HistoryEntry;
+pub use history::UndoGroupId;
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
 pub use selection::{ClipboardSelection, SelectionAnchor, SelectionDetails, partition_cuttable};
 pub use sheet::{exposed_sheet_ports, ports_for_pin_sync, unplaced_sheet_ports};

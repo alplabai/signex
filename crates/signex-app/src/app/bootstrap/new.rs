@@ -226,6 +226,8 @@ impl Signex {
                 preferences_draft_pcb_gpu_render: pcb_gpu_render,
                 zoom_step_percent,
                 preferences_draft_zoom_step_percent: zoom_step_percent,
+                annotate_undo: crate::fonts::read_annotate_undo_pref(),
+                preferences_draft_annotate_undo: crate::fonts::read_annotate_undo_pref(),
                 symbol_grid_size_mm,
                 preferences_draft_symbol_grid_size_mm: symbol_grid_size_mm,
                 symbol_grid_style,
@@ -306,6 +308,8 @@ impl Signex {
                 active_project: None,
                 dirty_paths: std::collections::HashSet::new(),
                 next_project_id: 0,
+                next_undo_group: 0,
+                undo_groups: std::collections::HashMap::new(),
                 panel_ctx: crate::panels::PanelContext {
                     projects: Vec::new(),
                     sym_count: 0,
