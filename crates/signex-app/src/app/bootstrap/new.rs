@@ -463,6 +463,9 @@ impl Signex {
         // section is populated from the get-go.
         app.library.global_libraries =
             crate::panels::components_panel::global_prefs::load_and_mount_all(&mut app.library);
+        // #328 — the bundled stock library is mounted every launch, not
+        // user-configured; a missing one warns and leaves the section empty.
+        crate::panels::components_panel::stock::mount_stock(&mut app.library);
         // #630 — seed the two render surfaces that consume a grid style
         // from the saved preferences. Everything else the old
         // `render_config` global carried (canvas font/size/style) had no
