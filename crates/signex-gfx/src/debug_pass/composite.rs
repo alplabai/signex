@@ -118,6 +118,7 @@ async fn run_text_geometry_composite_smoke_pass_with(
 
 pub async fn run_text_geometry_composite_smoke_pass() -> Result<CompositeSmokeReport, String> {
     let polygons = [GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[0.0, 0.0], [4.0, 0.0], [4.0, 4.0], [0.0, 4.0]],
         fill_color: [0.15, 0.25, 0.85, 1.0],
         stroke_color: None,
@@ -284,6 +285,7 @@ pub(super) async fn run_grid_overlay_text_composite_smoke_pass_with(
 pub async fn run_grid_overlay_text_composite_smoke_pass()
 -> Result<OverlayCompositeSmokeReport, String> {
     let polygons = [GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[0.5, 0.5], [4.5, 0.5], [4.5, 4.5], [0.5, 4.5]],
         fill_color: [0.18, 0.22, 0.78, 1.0],
         stroke_color: None,

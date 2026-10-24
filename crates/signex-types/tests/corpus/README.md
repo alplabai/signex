@@ -62,6 +62,11 @@ and off the board after one save/reload; fix is a manual
 tracked as #789, fixed by its own PR, which also adds the bare-symbol fixture).
 Every symbol fixture therefore carries a non-default `footprint`.
 
+Hierarchy sheets: `hierarchy-root-two-children`, `hierarchy-nested-middle`,
+`hierarchy-child-leaf` (hierarchical label `VIN` matching the parent's sheet
+pin) and `hierarchy-repeated-child-instances` (one child file instantiated
+twice, non-empty `instances`, non-default `stroke_color`/`fill_color`).
+
 ## Project files (`.snxprj`)
 
 `project/*.snxprj` are walked by `../round_trip_project_corpus.rs`, which
@@ -69,7 +74,8 @@ loads each with `parse_project`, saves with `write_project`, and requires
 the exact same bytes. `parse_project` rewrites `dir` to the file's real
 location, so fixtures store `"dir": ""` and the harness restores that
 placeholder before comparing. Coverage: `minimal-empty`,
-`hierarchical-three-sheets` (the sheet list for the hierarchy fixtures),
+`two-flat-sheets`, `hierarchical-three-sheets` (the sheet list for the
+hierarchy fixtures: root -> middle -> leaf all resolve in the corpus),
 `full-with-libraries-and-variants`, `unknown-keys-preserved` (unknown keys
 at top level, per sheet and per library, plus the `format` token).
 `MIN_PROJECT_FIXTURES` guards the count. These are not blessable: edit by

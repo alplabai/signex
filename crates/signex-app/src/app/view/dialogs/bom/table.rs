@@ -50,22 +50,31 @@ fn sorted_row_order(
     let Some(sort_col) = columns.get(sort_idx) else {
         return row_order;
     };
-    row_order.sort_by(|&a, &b| {
-        let (ra, rb) = (&rows[a], &rows[b]);
-        let cmp = match sort_col {
-            BomColumn::Qty => ra.qty.cmp(&rb.qty),
-            BomColumn::Designator | BomColumn::Reference => {
-                signex_types::designator::compare_references(
-                    first_reference(ra),
-                    first_reference(rb),
-                )
-            }
-            _ => column_value(sort_col, ra)
-                .to_ascii_lowercase()
-                .cmp(&column_value(sort_col, rb).to_ascii_lowercase()),
-        };
-        if asc { cmp } else { cmp.reverse() }
-    });
+    match sort_col {
+        BomColumn::Qty => row_order.sort_by(|&a, &b| {
+            let cmp = rows[a].qty.cmp(&rows[b].qty);
+            if asc { cmp } else { cmp.reverse() }
+        }),
+        BomColumn::Designator | BomColumn::Reference => row_order.sort_by(|&a, &b| {
+            let cmp = signex_types::designator::compare_references(
+                first_reference(&rows[a]),
+                first_reference(&rows[b]),
+            );
+            if asc { cmp } else { cmp.reverse() }
+        }),
+        // One lowercase key per row (O(n) allocations), not two per
+        // comparison. Stable, like `sort_by`, so ties keep rollup order.
+        _ => {
+            let keys: Vec<String> = rows
+                .iter()
+                .map(|r| column_value(sort_col, r).to_ascii_lowercase())
+                .collect();
+            row_order.sort_by(|&a, &b| {
+                let cmp = keys[a].cmp(&keys[b]);
+                if asc { cmp } else { cmp.reverse() }
+            });
+        }
+    }
     row_order
 }
 
@@ -439,6 +448,29 @@ mod tests {
         assert_eq!(
             sorted_row_order(&rows, &columns, Some((7, true))),
             vec![0, 1]
+        );
+    }
+
+    /// Pins behaviour (not a bug repro): descending sort reverses the comparison, not the slice, so rows with
+    /// equal keys keep rollup order in both directions (and the cached
+    /// lowercase key makes "Alpha"/"alpha" equal).
+    #[test]
+    fn descending_sort_is_stable_for_equal_keys() {
+        let rows = vec![
+            row(&["R1"], 1, "Alpha"),
+            row(&["R2"], 1, "beta"),
+            row(&["R3"], 1, "alpha"),
+            row(&["R4"], 1, "BETA"),
+        ];
+        let columns = vec![BomColumn::Designator, BomColumn::Value];
+
+        assert_eq!(
+            sorted_row_order(&rows, &columns, Some((1, true))),
+            vec![0, 2, 1, 3]
+        );
+        assert_eq!(
+            sorted_row_order(&rows, &columns, Some((1, false))),
+            vec![1, 3, 0, 2]
         );
     }
 }

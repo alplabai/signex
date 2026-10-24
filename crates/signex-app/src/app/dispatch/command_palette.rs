@@ -96,7 +96,7 @@ impl Signex {
                 // `bridge::` rather than the `command::core_to_message`
                 // re-export — #367 (PR #504) makes that re-export private.
                 // Once #504 lands this becomes
-                // `self.dispatch_command(&command, CommandArgs::none())`,
+                // `self.dispatch_command(&command, CommandArgs::none(), None)`,
                 // which is the single funnel the epic is aiming at.
                 match crate::app::command::bridge::core_to_message(&command) {
                     Some(message) => self.dispatch_update(message),

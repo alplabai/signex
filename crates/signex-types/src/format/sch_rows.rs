@@ -45,17 +45,17 @@ impl SnxTable for SchComponentRow {
         ]
     }
 
-    fn to_row(&self) -> Vec<String> {
-        vec![
+    fn to_row(&self) -> Result<Vec<String>, FormatError> {
+        Ok(vec![
             self.uuid.to_string(),
             self.ref_des.clone(),
             self.library.clone(),
             self.pos_x.to_string(),
             self.pos_y.to_string(),
-            format_f64(self.rotation),
+            format_f64("rotation", self.rotation)?,
             self.value.clone(),
             self.mpn.clone(),
-        ]
+        ])
     }
 
     impl_unknown_columns_accessors!();
@@ -101,16 +101,16 @@ impl SnxTable for SchWireRow {
         ]
     }
 
-    fn to_row(&self) -> Vec<String> {
-        vec![
+    fn to_row(&self) -> Result<Vec<String>, FormatError> {
+        Ok(vec![
             self.uuid.to_string(),
             self.net.clone(),
             self.start_x.to_string(),
             self.start_y.to_string(),
             self.end_x.to_string(),
             self.end_y.to_string(),
-            format_f64(self.stroke_width),
-        ]
+            format_f64("stroke_width", self.stroke_width)?,
+        ])
     }
 
     impl_unknown_columns_accessors!();
@@ -144,13 +144,13 @@ impl SnxTable for SchJunctionRow {
         &["uuid", "pos_x", "pos_y", "diameter"]
     }
 
-    fn to_row(&self) -> Vec<String> {
-        vec![
+    fn to_row(&self) -> Result<Vec<String>, FormatError> {
+        Ok(vec![
             self.uuid.to_string(),
             self.pos_x.to_string(),
             self.pos_y.to_string(),
-            format_f64(self.diameter),
-        ]
+            format_f64("diameter", self.diameter)?,
+        ])
     }
 
     impl_unknown_columns_accessors!();
@@ -198,19 +198,19 @@ impl SnxTable for SchLabelRow {
         ]
     }
 
-    fn to_row(&self) -> Vec<String> {
-        vec![
+    fn to_row(&self) -> Result<Vec<String>, FormatError> {
+        Ok(vec![
             self.uuid.to_string(),
             self.text.clone(),
             self.pos_x.to_string(),
             self.pos_y.to_string(),
-            format_f64(self.rotation),
+            format_f64("rotation", self.rotation)?,
             self.kind.clone(),
             self.shape.clone(),
-            format_f64(self.font_size),
+            format_f64("font_size", self.font_size)?,
             self.justify.clone(),
             self.justify_v.clone(),
-        ]
+        ])
     }
 
     impl_unknown_columns_accessors!();

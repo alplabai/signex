@@ -73,7 +73,8 @@ fn commit_path_creates_first_commit_on_unborn_head() {
     write_file(&root, "my.snxprj", "[project]\nname = \"my\"\n");
     let oid = adapter
         .commit_path(Path::new("my.snxprj"), "Initial commit")
-        .unwrap();
+        .unwrap()
+        .expect("first commit");
     assert_ne!(oid.to_string(), "0000000000000000000000000000000000000000");
 
     // History should now have one entry.
@@ -101,6 +102,42 @@ fn commit_path_chains_subsequent_commits() {
     assert_eq!(entries[0].subject, "v3");
     assert_eq!(entries[1].subject, "v2");
     assert_eq!(entries[2].subject, "v1");
+}
+
+/// #149: re-saving identical content makes no commit and returns `None`.
+#[test]
+fn commit_path_skips_unchanged_tree() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_path_buf();
+    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+
+    write_file(&root, "my.snxprj", "v1");
+    let first = adapter.commit_path(Path::new("my.snxprj"), "v1").unwrap();
+    assert!(first.is_some());
+    write_file(&root, "my.snxprj", "v1");
+    assert_eq!(
+        adapter
+            .commit_path(Path::new("my.snxprj"), "again")
+            .unwrap(),
+        None
+    );
+    let head = git2::Repository::open(&root)
+        .unwrap()
+        .head()
+        .unwrap()
+        .target()
+        .unwrap();
+    assert_eq!(Some(head), first, "HEAD must not move on an unchanged save");
+
+    write_file(&root, "my.snxprj", "v2");
+    assert!(
+        adapter
+            .commit_path(Path::new("my.snxprj"), "v2")
+            .unwrap()
+            .is_some()
+    );
+    let entries = adapter.file_history(Path::new("my.snxprj"), 10).unwrap();
+    assert_eq!(entries.len(), 2);
 }
 
 #[test]
@@ -168,7 +205,10 @@ fn restore_at_round_trips_a_prior_version() {
     let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
 
     write_file(&root, "sheet.snxsch", "version-A content");
-    let oid_a = adapter.commit_path(Path::new("sheet.snxsch"), "A").unwrap();
+    let oid_a = adapter
+        .commit_path(Path::new("sheet.snxsch"), "A")
+        .unwrap()
+        .expect("commit A");
     write_file(&root, "sheet.snxsch", "version-B content");
     let _oid_b = adapter.commit_path(Path::new("sheet.snxsch"), "B").unwrap();
 
@@ -222,7 +262,10 @@ fn restore_at_from_sha_round_trips_via_string_oid() {
     let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
 
     write_file(&root, "x.snxsch", "v1");
-    let oid_a = adapter.commit_path(Path::new("x.snxsch"), "v1").unwrap();
+    let oid_a = adapter
+        .commit_path(Path::new("x.snxsch"), "v1")
+        .unwrap()
+        .expect("commit v1");
     write_file(&root, "x.snxsch", "v2");
     adapter.commit_path(Path::new("x.snxsch"), "v2").unwrap();
 
@@ -398,4 +441,48 @@ fn file_history_caps_walker_iterations_for_dos_protection() {
         .file_history(Path::new("untouched.snxsch"), 1)
         .unwrap();
     assert!(entries.is_empty());
+}
+
+/// #906: restoring a file inside one of the project's libraries waits for
+/// that library's write lock, so it lands after another process's locked
+/// save instead of being overwritten by it.
+#[test]
+fn restore_at_waits_for_the_write_lock_of_the_library_holding_the_file() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_path_buf();
+    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+    let rel = "Lib/symbols/x.snxsym";
+    write_file(&root, "Lib/Lib.snxlib", "");
+    write_file(&root, rel, "version-A");
+    let oid_a = adapter
+        .commit_path(Path::new(rel), "A")
+        .unwrap()
+        .expect("commit A");
+    write_file(&root, rel, "version-B");
+    adapter.commit_path(Path::new(rel), "B").unwrap();
+
+    let lock = signex_library::write_lock_path(&root.join("Lib/Lib.snxlib"));
+    fs::create_dir_all(lock.parent().unwrap()).unwrap();
+    let held = fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&lock)
+        .unwrap();
+    held.lock().unwrap();
+    let other = root.join(rel);
+    let release = std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        fs::write(&other, "saved by another process").unwrap();
+        drop(held);
+    });
+
+    adapter.restore_at(Path::new(rel), oid_a).unwrap();
+    release.join().unwrap();
+
+    assert_eq!(
+        read_file(&root, rel),
+        "version-A",
+        "the restore must land after the other process's locked save"
+    );
 }

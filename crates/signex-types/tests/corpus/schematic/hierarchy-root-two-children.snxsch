@@ -38,7 +38,7 @@ no_erc_directives = []
 [[extras.sheet.child_sheets]]
 uuid = "0192a8c0-0000-7010-8000-000000000001"
 name = "Power Stage"
-filename = "power_stage.snxsch"
+filename = "hierarchy-nested-middle.snxsch"
 size = [
     25.4,
     15.24,
@@ -67,7 +67,7 @@ y = 30.479999999999997
 [[extras.sheet.child_sheets]]
 uuid = "0192a8c0-0000-7010-8000-000000000002"
 name = "Sensor Frontend"
-filename = "sensor_frontend.snxsch"
+filename = "hierarchy-child-leaf.snxsch"
 size = [
     25.4,
     15.24,

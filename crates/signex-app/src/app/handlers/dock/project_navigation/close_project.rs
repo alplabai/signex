@@ -7,7 +7,8 @@
 use super::*;
 use crate::app::state::ProjectId;
 use crate::app::state::scope::CaseFold;
-use crate::app::state::sheet_refs::SheetRefs;
+use crate::app::state::sheet_refs::{SheetRefs, StaleRefs};
+use crate::app::state::volume_case::directory_ignores_case;
 
 impl Signex {
     /// Close every tab backed by the project whose root is at
@@ -44,7 +45,7 @@ impl Signex {
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
-                    Box::new(inputs.resolve(CaseFold::host_default()))
+                    Box::new(inputs.resolve(CaseFold::host_default(), directory_ignores_case))
                 })
                 .await
                 .map_err(|e| format!("sheet-reference worker failed: {e}"))
@@ -61,7 +62,7 @@ impl Signex {
         Ok(Box::new(
             self.document_state
                 .sheet_ref_inputs()
-                .resolve(CaseFold::host_default()),
+                .resolve(CaseFold::host_default(), directory_ignores_case),
         ))
     }
 
@@ -98,8 +99,8 @@ impl Signex {
             return Task::none();
         };
         // The gate reads `dirty_paths`; do not rely on every edit site
-        // having refreshed the panel context since its last footprint edit.
-        self.sync_footprint_dirty_paths();
+        // having refreshed the panel context since its last editor edit.
+        self.sync_editor_dirty_paths();
         // Engines are re-read here (no IO), so an edit made while the Task ran
         // is seen. Evidence that no longer describes the workspace is read
         // again instead of acted on.
@@ -392,12 +393,15 @@ impl Signex {
         // A project opened since the references were read has disk-only
         // children nobody resolved; read again and re-prompt rather than act
         // on stale ownership.
-        self.sync_footprint_dirty_paths();
-        if !self.document_state.refs_are_current(&state.sheet_refs) {
+        self.sync_editor_dirty_paths();
+        let stale = self.document_state.stale_causes(&state.sheet_refs);
+        if !stale.is_empty() {
             crate::diagnostics::log_warning(format!(
-                "Close Project '{}': the open projects changed, so the sheet references were re-read; confirm again",
-                state.project_name
+                "Close Project '{}': {}, so the sheet references were re-read; confirm again",
+                state.project_name,
+                StaleRefs::describe_all(&stale),
             ));
+            self.refresh_panel_ctx();
             return self.spawn_close_refs_resolve(state.project_id);
         }
         // An edit since the prompt (an engine reference, a new dirty
@@ -528,8 +532,8 @@ impl Signex {
     /// `SecondaryWindowClosed`.
     pub(crate) fn handle_app_quit_requested(&mut self) -> Task<Message> {
         // Same hardening as `close_project_at_tree_path`: the quit gate
-        // must see footprint edits even if no panel refresh ran after them.
-        self.sync_footprint_dirty_paths();
+        // must see footprint and symbol edits even if no panel refresh ran after them.
+        self.sync_editor_dirty_paths();
         // Guard against a second close request stacking a duplicate
         // modal while the first is still up.
         if self.ui_state.app_quit_confirm.is_some() {
@@ -559,7 +563,7 @@ impl Signex {
             Some(id) => iced::window::close(id),
             None => iced::exit(),
         };
-        self.flush_dock_layout_then(close)
+        self.flush_quit_writes_then(close)
     }
 
     /// Resolve the user's Save All / Discard All / Cancel choice on the
