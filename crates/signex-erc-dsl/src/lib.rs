@@ -99,6 +99,7 @@ mod tests {
                 has_pullup: false,
             }],
             children: HashMap::new(),
+            key: None,
         }
     }
 
