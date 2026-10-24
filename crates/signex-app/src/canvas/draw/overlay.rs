@@ -65,6 +65,7 @@ impl SchematicCanvas<'_> {
             || !self.arc_points.is_empty()
             || !self.polyline_points.is_empty()
             || self.reorder_picker_armed
+            || self.move_pick.is_some()
             || self.shape_anchor.is_some();
         if placement_active {
             let len = 14.0_f32;
