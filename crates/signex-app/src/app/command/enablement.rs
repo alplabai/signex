@@ -174,7 +174,8 @@ impl Signex {
                 (
                     !self.ui_state.net_color_undo.is_empty()
                         || engine.is_some_and(|e| e.can_undo()),
-                    engine.is_some_and(|e| e.can_redo()),
+                    !self.ui_state.net_color_redo.is_empty()
+                        || engine.is_some_and(|e| e.can_redo()),
                 )
             }
         }
@@ -313,7 +314,10 @@ mod tests {
         let (mut app, _task) = Signex::new();
         app.ui_state
             .net_color_undo
-            .push(std::collections::HashMap::new());
+            .push(crate::app::state::NetColorStep {
+                colors: std::collections::HashMap::new(),
+                at: 0,
+            });
         assert!(enabled(&app, "undo"));
     }
 

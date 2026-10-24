@@ -16,6 +16,42 @@ impl Signex {
         }
     }
 
+    fn engine_undo_position(&self) -> usize {
+        self.document_state
+            .active_engine()
+            .map_or(0, |engine| engine.undo_position())
+    }
+
+    /// Record the current overrides as an undoable step, before a
+    /// net-colour change. A new colour action ends the redo branch.
+    pub(crate) fn record_net_color_undo(&mut self) {
+        let at = self.engine_undo_position();
+        self.ui_state
+            .net_color_undo
+            .push(crate::app::state::NetColorStep {
+                colors: self.ui_state.wire_color_overrides.clone(),
+                at,
+            });
+        self.ui_state.net_color_redo.clear();
+    }
+
+    /// Install `step`'s colours, pushing the displaced ones onto the
+    /// opposite stack (`undoing` -> redo stack, else undo stack).
+    fn swap_net_colors(&mut self, step: crate::app::state::NetColorStep, undoing: bool) {
+        let displaced = crate::app::state::NetColorStep {
+            colors: std::mem::replace(&mut self.ui_state.wire_color_overrides, step.colors),
+            at: step.at,
+        };
+        if undoing {
+            self.ui_state.net_color_redo.push(displaced);
+        } else {
+            self.ui_state.net_color_undo.push(displaced);
+        }
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_content_cache();
+    }
+
     pub(crate) fn handle_undo_requested(&mut self) {
         // If the active tab is a symbol editor, delegate undo to it.
         if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
@@ -44,14 +80,18 @@ impl Signex {
         }
 
         // Net-colour floods aren't persisted to the Standard document so
-        // they don't enter the engine's history. Check the app-level
-        // net_color_undo stack first; only fall through to the engine
-        // when no net-colour action is pending.
-        if let Some(prev) = self.ui_state.net_color_undo.pop() {
-            self.ui_state.wire_color_overrides = prev.clone();
-            self.interaction_state
-                .active_canvas_mut()
-                .clear_content_cache();
+        // they don't enter the engine's history. Each colour step is
+        // stamped with the engine's edit-timeline position; it is the
+        // newest action only while no engine edit has landed since.
+        let position = self.engine_undo_position();
+        if self
+            .ui_state
+            .net_color_undo
+            .last()
+            .is_some_and(|step| step.at >= position)
+            && let Some(step) = self.ui_state.net_color_undo.pop()
+        {
+            self.swap_net_colors(step, true);
             return;
         }
         let undone = self.apply_engine_undo(true);
@@ -81,6 +121,19 @@ impl Signex {
             if editor.redo() {
                 self.refresh_panel_ctx();
             }
+            return;
+        }
+        // A colour step undone at `at` came after the `at`-th engine edit
+        // and before the next, so it is redone before that edit.
+        let position = self.engine_undo_position();
+        if self
+            .ui_state
+            .net_color_redo
+            .last()
+            .is_some_and(|step| step.at <= position)
+            && let Some(step) = self.ui_state.net_color_redo.pop()
+        {
+            self.swap_net_colors(step, false);
             return;
         }
         let redone = self.apply_engine_redo(true);
@@ -324,3 +377,6 @@ fn norm_ccw(a: f64, b: f64) -> f64 {
     let d = b - a;
     if d < 0.0 { d + TAU } else { d }
 }
+
+#[cfg(test)]
+mod net_color_undo_order_tests;

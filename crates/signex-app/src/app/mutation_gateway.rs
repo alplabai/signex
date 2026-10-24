@@ -108,8 +108,13 @@ impl Signex {
             }
         };
 
-        if self.finish_schematic_mutation(invalidation, clear_overlay_cache, update_selection_info)
-        {
+        let changed = self.finish_schematic_mutation(
+            invalidation,
+            clear_overlay_cache,
+            update_selection_info,
+        );
+        if changed {
+            self.ui_state.net_color_redo.clear();
             CommandOutcome::Changed
         } else {
             CommandOutcome::Unchanged
@@ -175,6 +180,9 @@ impl Signex {
             clear_overlay_cache,
             update_selection_info,
         );
+        if changed {
+            self.ui_state.net_color_redo.clear();
+        }
         let outcome = if failed.is_some() {
             CommandOutcome::Failed
         } else if changed {

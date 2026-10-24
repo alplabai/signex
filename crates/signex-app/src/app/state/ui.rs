@@ -370,12 +370,16 @@ pub struct UiState {
     /// double-click or a click on the first vertex closes the polygon
     /// and commits the selection. Escape or right-click cancels.
     pub lasso_polygon: Option<Vec<signex_types::schematic::Point>>,
-    /// App-level undo stack for net-color floods. Each entry is the
-    /// full `wire_color_overrides` map captured before an action —
-    /// popping one restores the previous state. This is separate from
-    /// the engine's undo because net colours are render-only and
+    /// App-level undo stack for net-color floods. Each step holds the
+    /// full `wire_color_overrides` map captured before an action plus the
+    /// engine's `undo_position` at that moment, so Ctrl+Z can interleave
+    /// colour steps and engine edits in true chronological order. Separate
+    /// from the engine's history because net colours are render-only and
     /// shouldn't mix with document mutations.
-    pub net_color_undo: Vec<std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>>,
+    pub net_color_undo: Vec<NetColorStep>,
+    /// Redo mirror of [`Self::net_color_undo`]; cleared by any new colour
+    /// action or engine edit.
+    pub net_color_redo: Vec<NetColorStep>,
     /// Custom net-color picker state. When `show = true`, a floating
     /// iced_aw ColorPicker appears anchored to the Active Bar button;
     /// `draft` is the user's pending pick — committed on OK.
@@ -448,4 +452,12 @@ impl UiState {
     pub fn preferences_has_unsaved_changes(&self) -> bool {
         self.preferences_dirty_sticky || self.preferences_draft_differs()
     }
+}
+
+/// One net-colour undo/redo step: the override map to restore, stamped
+/// with the engine edit-timeline position it was recorded at.
+#[derive(Debug, Clone)]
+pub struct NetColorStep {
+    pub colors: std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    pub at: usize,
 }
