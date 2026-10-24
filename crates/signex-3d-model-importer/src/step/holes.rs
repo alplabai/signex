@@ -15,6 +15,10 @@ use crate::vrml::parser::VrmlMesh;
 /// A loop's allowed distance from the face plane, relative to the outline's
 /// bounding-box diagonal.
 const PLANAR_TOLERANCE: f64 = 1e-4;
+/// A hole smaller than this fraction of the outline's area is degenerate.
+/// A circle collapsed to its two end vertices (`[a, b, a]`) has zero area; the
+/// clipper would drop it silently and return the bare outline as a success.
+const MIN_HOLE_AREA_FRACTION: f64 = 1e-9;
 /// Allowed mismatch between the triangulated area and outline minus holes.
 const AREA_TOLERANCE: f64 = 1e-3;
 /// Most vertices (outline plus holes) one face may have and still be cut.
@@ -152,6 +156,14 @@ pub fn triangulate_with_holes(
         holes_2d.push(project(ring, src)?);
     }
 
+    let outer_area = signed_area_2d(&outer_2d).abs();
+    if holes_2d
+        .iter()
+        .any(|h| signed_area_2d(h).abs() <= MIN_HOLE_AREA_FRACTION * outer_area)
+    {
+        return Err("a hole loop has no area".to_owned());
+    }
+
     let (merged, triangles) = signex_sketch::geom::ear_clip_with_holes(&outer_2d, &holes_2d);
     if triangles.is_empty() {
         return Err("triangulation failed".to_owned());
@@ -212,9 +224,44 @@ mod tests {
     }
 
     #[test]
+    fn a_hole_with_no_area_is_refused_not_silently_dropped() {
+        let (a, b) = ([2.0, 5.0, 0.0], [8.0, 5.0, 0.0]);
+        let err = triangulate_with_holes(&square(0.0, 0.0, 10.0), &[vec![a, b, a]])
+            .expect_err("zero-area hole");
+        assert!(err.contains("no area"), "{err}");
+    }
+
+    #[test]
     fn a_face_within_the_vertex_cap_is_cut() {
         let hole = circle(5.0, 5.0, 2.0, 64);
         assert!(triangulate_with_holes(&square(0.0, 0.0, 10.0), &[hole]).is_ok());
+    }
+
+    /// The worst case the cap guards: a concave comb outline at the cap, plus
+    /// a hole. The bound is generous (a regression to a runaway clipper takes
+    /// minutes, not seconds), so it is not a flaky micro-benchmark.
+    #[test]
+    fn a_concave_face_at_the_vertex_cap_is_cut_in_bounded_time() {
+        let teeth = (MAX_FACE_VERTICES - 4 - 4) / 4;
+        let mut outline = vec![[0.0, 0.0, 0.0]];
+        for i in 0..teeth {
+            let x = i as f32 * 2.0;
+            outline.extend([
+                [x + 0.5, 0.0, 0.0],
+                [x + 0.5, 5.0, 0.0],
+                [x + 1.5, 5.0, 0.0],
+                [x + 1.5, 0.0, 0.0],
+            ]);
+        }
+        let end = teeth as f32 * 2.0;
+        outline.extend([[end, 0.0, 0.0], [end, -5.0, 0.0], [0.0, -5.0, 0.0]]);
+        let hole = square(1.0, -4.0, 2.0);
+        assert!(face_vertex_count(&outline, std::slice::from_ref(&hole)) <= MAX_FACE_VERTICES);
+        let start = std::time::Instant::now();
+        let result = triangulate_with_holes(&outline, &[hole]);
+        let took = start.elapsed();
+        assert!(took.as_secs() < 30, "cut took {took:?}");
+        assert!(result.is_ok(), "{result:?}");
     }
 
     /// A crafted STEP face must not stall the import in the superlinear ear

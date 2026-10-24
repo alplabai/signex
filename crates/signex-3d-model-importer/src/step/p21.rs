@@ -43,6 +43,8 @@ pub fn parse_to_meshes(source: &str) -> Result<StepMeshResult, ParseError> {
     let mut edge_loops: HashMap<u32, Vec<u32>> = HashMap::new();
     let mut oriented_edges: HashMap<u32, u32> = HashMap::new();
     let mut edge_curves: HashMap<u32, (u32, u32)> = HashMap::new();
+    // EDGE_CURVE id -> id of the curve geometry it runs along.
+    let mut edge_geometry: HashMap<u32, u32> = HashMap::new();
     // bound id -> (loop id, is FACE_OUTER_BOUND)
     let mut face_bounds: HashMap<u32, (u32, bool)> = HashMap::new();
     let mut advanced_faces: HashMap<u32, Vec<u32>> = HashMap::new();
@@ -74,6 +76,9 @@ pub fn parse_to_meshes(source: &str) -> Result<StepMeshResult, ParseError> {
                 let refs = parse_refs(&entity.params);
                 if refs.len() >= 2 {
                     edge_curves.insert(id, (refs[0], refs[1]));
+                }
+                if let Some(&geometry) = refs.get(2) {
+                    edge_geometry.insert(id, geometry);
                 }
             }
             "FACE_OUTER_BOUND" | "FACE_BOUND" => {
@@ -117,6 +122,24 @@ pub fn parse_to_meshes(source: &str) -> Result<StepMeshResult, ParseError> {
         }
     };
 
+    // A loop built from EDGE_LOOP keeps only each edge's end vertices, which
+    // is exact for a LINE and wrong for anything curved: a circle written as
+    // two half-circle edges collapses to the two-point loop `[a, b, a]`. A
+    // loop is `curved` when any edge runs along something other than a LINE.
+    let loop_is_curved = |loop_id: u32| -> bool {
+        let Some(edge_refs) = edge_loops.get(&loop_id) else {
+            return false;
+        };
+        edge_refs.iter().any(|oriented| {
+            let is_line = oriented_edges
+                .get(oriented)
+                .and_then(|edge| edge_geometry.get(edge))
+                .and_then(|geometry| entities.get(geometry))
+                .is_some_and(|e| e.kind == "LINE");
+            !is_line
+        })
+    };
+
     // Holes left in the outline fill, per reason.
     let mut holes_not_cut: BTreeMap<String, usize> = BTreeMap::new();
     // Vertices still allowed through the hole cut for this file.
@@ -129,10 +152,12 @@ pub fn parse_to_meshes(source: &str) -> Result<StepMeshResult, ParseError> {
         // (legal STEP), the loop with the largest area. Every other bound is a
         // hole, cut out of the outline by `triangulate_with_holes`. A face
         // that cannot be cut keeps the outline fill and is counted (#708).
-        let mut loops: Vec<(Vec<[f32; 3]>, bool)> = bound_refs
+        let mut loops: Vec<(Vec<[f32; 3]>, bool, bool)> = bound_refs
             .iter()
             .filter_map(|r| face_bounds.get(*r))
-            .map(|&(loop_id, is_outer)| (loop_points_of(loop_id), is_outer))
+            .map(|&(loop_id, is_outer)| {
+                (loop_points_of(loop_id), is_outer, loop_is_curved(loop_id))
+            })
             .collect();
         let outline = match loops.iter().position(|l| l.1) {
             Some(i) => Some(i),
@@ -144,9 +169,17 @@ pub fn parse_to_meshes(source: &str) -> Result<StepMeshResult, ParseError> {
         if loop_points.len() < 3 {
             continue;
         }
+        // A curved hole is only known by its end vertices, so cutting it would
+        // cut the wrong shape (or nothing). Keep the outline fill and say so.
+        let curved_holes = loops.iter().filter(|l| l.2).count();
         let holes: Vec<Vec<[f32; 3]>> = loops.into_iter().map(|l| l.0).collect();
         let needed = face_vertex_count(&loop_points, &holes);
         let mesh = if holes.is_empty() {
+            triangulate_polygon(&loop_points)
+        } else if curved_holes > 0 {
+            *holes_not_cut
+                .entry("hole has curved edges".to_owned())
+                .or_default() += holes.len();
             triangulate_polygon(&loop_points)
         } else if needed > cut_budget {
             *holes_not_cut
@@ -862,6 +895,84 @@ ENDSEC;
             assert!(!in_square(c, &HOLE_A) && !in_square(c, &HOLE_B));
         }
         assert!(!has_hole_warning(&result));
+    }
+
+    /// An ADVANCED_FACE whose outline is a 10 x 10 square of LINE edges and
+    /// whose one hole is an EDGE_LOOP written by `hole_entities` (entities
+    /// and the id of the EDGE_LOOP, `#50`). Everything goes through
+    /// EDGE_LOOP / ORIENTED_EDGE / EDGE_CURVE, as real exporters write it.
+    fn edge_face_src(hole_entities: &str) -> String {
+        let mut src = String::from("DATA;\n");
+        let corners = [(0, 0), (10, 0), (10, 10), (0, 10)];
+        for (i, (x, y)) in corners.iter().enumerate() {
+            let n = i + 1;
+            src += &format!("#{n} = CARTESIAN_POINT('',({x}.,{y}.,0.));\n");
+            src += &format!("#{} = VERTEX_POINT('',#{n});\n", 10 + n);
+        }
+        src += "#9 = LINE('',#1,#8);\n";
+        for i in 0..4 {
+            let (a, b) = (11 + i, 11 + (i + 1) % 4);
+            src += &format!("#{} = EDGE_CURVE('',#{a},#{b},#9,.T.);\n", 20 + i);
+            src += &format!("#{} = ORIENTED_EDGE('',*,*,#{},.T.);\n", 30 + i, 20 + i);
+        }
+        src += "#40 = EDGE_LOOP('',(#30,#31,#32,#33));\n";
+        src += "#41 = FACE_OUTER_BOUND('',#40,.T.);\n";
+        src += hole_entities;
+        src += "#51 = FACE_BOUND('',#50,.T.);\n";
+        src += "#300 = ADVANCED_FACE('',(#41,#51),#999,.T.);\nENDSEC;";
+        src
+    }
+
+    #[test]
+    fn edge_loop_square_hole_is_cut() {
+        // Four LINE edges around (4,4)-(6,6).
+        let mut hole = String::new();
+        let pts = [(4, 4), (6, 4), (6, 6), (4, 6)];
+        for (i, (x, y)) in pts.iter().enumerate() {
+            hole += &format!("#{} = CARTESIAN_POINT('',({x}.,{y}.,0.));\n", 60 + i);
+            hole += &format!("#{} = VERTEX_POINT('',#{});\n", 70 + i, 60 + i);
+        }
+        hole += "#79 = LINE('',#60,#8);\n";
+        for i in 0..4 {
+            let (a, b) = (70 + i, 70 + (i + 1) % 4);
+            hole += &format!("#{} = EDGE_CURVE('',#{a},#{b},#79,.T.);\n", 80 + i);
+            hole += &format!("#{} = ORIENTED_EDGE('',*,*,#{},.T.);\n", 90 + i, 80 + i);
+        }
+        hole += "#50 = EDGE_LOOP('',(#90,#91,#92,#93));\n";
+        let result = parse_to_meshes(&edge_face_src(&hole)).expect("parse");
+        let m = &result.meshes[0];
+        assert!((total_area(m) - 96.0).abs() < 1e-4, "{}", total_area(m));
+        assert!(
+            !has_hole_warning(&result),
+            "{:?}",
+            result.unsupported_entities
+        );
+    }
+
+    #[test]
+    fn edge_loop_circle_hole_is_warned_not_silently_filled() {
+        // A circle as two half-circle EDGE_CURVEs a->b and b->a over one
+        // CIRCLE: the loop's end vertices are [a, b, a], zero area.
+        let hole = "#60 = CARTESIAN_POINT('',(4.,5.,0.));\n\
+             #61 = CARTESIAN_POINT('',(6.,5.,0.));\n\
+             #62 = VERTEX_POINT('',#60);\n#63 = VERTEX_POINT('',#61);\n\
+             #64 = CIRCLE('',#999,1.);\n\
+             #65 = EDGE_CURVE('',#62,#63,#64,.T.);\n\
+             #66 = EDGE_CURVE('',#63,#62,#64,.T.);\n\
+             #67 = ORIENTED_EDGE('',*,*,#65,.T.);\n\
+             #68 = ORIENTED_EDGE('',*,*,#66,.T.);\n\
+             #50 = EDGE_LOOP('',(#67,#68));\n";
+        let result = parse_to_meshes(&edge_face_src(hole)).expect("parse");
+        // The outline fill stays, and the lost hole is reported.
+        assert!((total_area(&result.meshes[0]) - 100.0).abs() < 1e-4);
+        assert!(
+            result
+                .unsupported_entities
+                .iter()
+                .any(|e| e.contains("hole not cut: hole has curved edges")),
+            "{:?}",
+            result.unsupported_entities
+        );
     }
 
     #[test]
