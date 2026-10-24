@@ -803,6 +803,8 @@ pub enum Tool {
     Arc,
     /// Click-by-click polyline; Enter / double-click commits.
     Polyline,
+    /// Two-click corner-to-corner hierarchical sheet symbol.
+    Sheet,
 }
 
 impl std::fmt::Display for Tool {
@@ -822,6 +824,7 @@ impl std::fmt::Display for Tool {
             Tool::Circle => write!(f, "Draw Circle"),
             Tool::Arc => write!(f, "Draw Arc"),
             Tool::Polyline => write!(f, "Draw Polygon"),
+            Tool::Sheet => write!(f, "Place Sheet"),
         }
     }
 }

@@ -89,13 +89,17 @@ impl Signex {
             ActiveBarAction::PlaceNoERC => {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::NoErcDirective)));
             }
-            // Sheet-symbol / rounded rect / graphic — all rectangle-dragged
+            // Sheet symbol has its own tool: a hierarchical sheet, not a
+            // plain rectangle.
+            ActiveBarAction::PlaceSheetSymbol => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Sheet)));
+            }
+            // Sheet entry / rounded rect / graphic — rectangle-dragged
             // shapes in Altium. Until each has a bespoke tool, use the
             // rectangle tool so the drag-to-size gesture produces a visible
             // shape. (Text Frame is handled in action_groups so the ghost
             // text preview kicks in.)
-            ActiveBarAction::PlaceSheetSymbol
-            | ActiveBarAction::PlaceSheetEntry
+            ActiveBarAction::PlaceSheetEntry
             | ActiveBarAction::PlaceDeviceSheetSymbol
             | ActiveBarAction::PlaceReuseBlock
             | ActiveBarAction::DrawRoundRectangle

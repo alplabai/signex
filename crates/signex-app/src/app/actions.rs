@@ -10,6 +10,21 @@ impl Signex {
         self.interaction_state.active_canvas_mut().ghost_text = None;
     }
 
+    /// Drop a half-placed two-click shape anchor on the app and on every
+    /// window's canvas, so a leftover corner from one tool or tab can't
+    /// complete as the first click of another.
+    pub(crate) fn clear_shape_anchors(&mut self) {
+        self.interaction_state.shape_anchor = None;
+        let clear = |canvas: &mut crate::canvas::CanvasSlot| {
+            canvas.shape_anchor = None;
+            canvas.clear_overlay_cache();
+        };
+        clear(&mut self.interaction_state.canvas);
+        for canvas in self.interaction_state.canvases.values_mut() {
+            clear(canvas);
+        }
+    }
+
     /// Mirror `ui_state.lasso_polygon` into the canvas widget's copy and
     /// invalidate the overlay cache. Iced's `canvas::Program` only sees
     /// the widget's own state, so the canvas needs its own snapshot; any
