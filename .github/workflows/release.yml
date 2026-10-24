@@ -10,6 +10,15 @@ on:
       # not exist. Keep snapshot tags outside this pattern.
       - "v[0-9]+.[0-9]+.[0-9]+"
       - "v[0-9]+.[0-9]+.[0-9]+-*"   # pre-releases: v1.0.0-rc.1
+  # Dry run: build + sign (+ notarize when the secrets exist) from any branch
+  # and upload the results as workflow artifacts. Never publishes a Release.
+  # See docs/RELEASE_SIGNING.md.
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (build/sign/notarize, upload workflow artifacts, no Release). Must stay true; releases come from tags."
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -18,8 +27,51 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # Single source of the version string for every job below. A tag push uses
+  # the tag; a dry run uses the workspace version so the smoke tests (which
+  # compare `--version` with this string) still pass.
+  version:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+      dry_run: ${{ steps.v.outputs.dry_run }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          submodules: false
+          persist-credentials: false
+      - id: v
+        shell: bash
+        env:
+          DRY_RUN_INPUT: ${{ inputs.dry_run }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            VERSION="${TAG#v}"
+            DRY=false
+          else
+            if [[ "$DRY_RUN_INPUT" != "true" ]]; then
+              echo "::error::workflow_dispatch is dry-run only; publish by pushing a tag"
+              exit 1
+            fi
+            VERSION="$(awk '/^\[workspace.package\]/{f=1;next} f&&/^version *=/{gsub(/"/,"",$3);print $3;exit}' Cargo.toml)"
+            [[ -n "$VERSION" ]] || { echo "::error::cannot read workspace version"; exit 1; }
+            TAG="v$VERSION"
+            DRY=true
+          fi
+          {
+            echo "tag=$TAG"
+            echo "version=$VERSION"
+            echo "dry_run=$DRY"
+          } >> "$GITHUB_OUTPUT"
+
   verify-version:
     name: Verify tag, Cargo.toml and CHANGELOG agree
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -33,6 +85,7 @@ jobs:
   test:
     name: Test (workspace)
     needs: verify-version
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     # Read-only: dependency build.rs scripts run here and must not hold a
     # write token.
@@ -58,18 +111,16 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
+  # Compiles with cargo (so every dependency build.rs runs here) and holds NO
+  # signing material. Windows/macOS legs only hand the unsigned binary to the
+  # package-* jobs below; the Linux leg packages and uploads as before.
   build:
     name: Build (${{ matrix.target }})
-    needs: [verify-version, test]
+    needs: [version, verify-version, test]
+    if: ${{ !cancelled() && needs.version.result == 'success' && (needs.verify-version.result == 'success' || needs.verify-version.result == 'skipped') && (needs.test.result == 'success' || needs.test.result == 'skipped') }}
     runs-on: ${{ matrix.os }}
-    # Signing is gated on secrets: `secrets` cannot be used in a step `if:`,
-    # so surface "is it set" as plain 'true'/'false' strings (no secret value
-    # ever lands in these). Without the secrets every signing step is skipped
-    # and the build is unsigned exactly as before. See docs/RELEASE_SIGNING.md.
-    env:
-      HAS_WIN_CERT: ${{ secrets.WINDOWS_CERT_PFX != '' && secrets.WINDOWS_CERT_PASSWORD != '' }}
-      HAS_MAC_CERT: ${{ secrets.MACOS_CERT_P12 != '' && secrets.MACOS_CERT_PASSWORD != '' }}
-      HAS_MAC_NOTARY: ${{ secrets.APPLE_ID != '' && secrets.APPLE_TEAM_ID != '' && secrets.APPLE_APP_PASSWORD != '' }}
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -113,14 +164,13 @@ jobs:
         with:
           submodules: false
 
-      - name: Extract version from tag
+      - name: Resolve version
         id: version
         shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          TAG: ${{ needs.version.outputs.tag }}
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          # Strip the leading "v" for the installer's internal version
-          # fields; keep the original tag around for release-page naming.
-          VERSION="${TAG#v}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
@@ -149,141 +199,14 @@ jobs:
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }} -p signex-app
 
-      # ─── Windows: InnoSetup installer ────────────────────────────
-      - name: Install InnoSetup
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: choco install innosetup -y --no-progress
-
-      # ─── Windows: Authenticode (gated on WINDOWS_CERT_PFX) ───────
-      - name: Prepare Windows signing
-        if: runner.os == 'Windows' && env.HAS_WIN_CERT == 'true'
-        shell: pwsh
-        env:
-          WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
-        run: |
-          $pfx = Join-Path $env:RUNNER_TEMP 'signex-codesign.pfx'
-          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERT_PFX))
-          $tool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe' |
-            Sort-Object { [version]$_.Directory.Parent.Name } -Descending |
-            Select-Object -First 1
-          if (-not $tool) { throw 'signtool.exe not found in the Windows SDK' }
-          "SIGN_PFX_PATH=$pfx" >> $env:GITHUB_ENV
-          "SIGNTOOL_PATH=$($tool.FullName)" >> $env:GITHUB_ENV
-
-      - name: Sign signex.exe
-        if: runner.os == 'Windows' && env.HAS_WIN_CERT == 'true'
-        shell: pwsh
-        env:
-          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
-        run: ./installer/windows/sign.ps1 "target/${{ matrix.target }}/release/signex.exe"
-
-      - name: Build Windows installer
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $binary = "$PWD\target\${{ matrix.target }}\release\signex.exe"
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
-            "/DVersion=${{ steps.version.outputs.version }}" `
-            "/DArch=${{ matrix.arch }}" `
-            "/DBinary=$binary" `
-            "/Q" `
-            installer\windows\signex.iss
-          # InnoSetup writes the installer alongside the .iss script;
-          # move it to the repo root so upload-artifact can find it.
-          Move-Item installer\windows\signex-setup-${{ matrix.arch_suffix }}-${{ steps.version.outputs.version }}.exe .
-
-      - name: Sign Windows installer
-        if: runner.os == 'Windows' && env.HAS_WIN_CERT == 'true'
-        shell: pwsh
-        env:
-          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
-        run: ./installer/windows/sign.ps1 "signex-setup-${{ matrix.arch_suffix }}-${{ steps.version.outputs.version }}.exe"
-
-      # The portable ZIP copies the exe signed above, so it ships signed.
-      - name: Package Windows portable ZIP (alongside installer)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          mkdir staging | Out-Null
-          Copy-Item "target/${{ matrix.target }}/release/signex.exe" staging/
-          Compress-Archive -Path staging/* -DestinationPath "signex-windows-${{ matrix.arch_suffix }}-${{ steps.version.outputs.version }}.zip"
-
-      # ─── macOS: .app bundle → .dmg ────────────────────────────────
-      # Developer ID signing + notarization are gated on MACOS_CERT_P12;
-      # without it build-dmg.sh keeps its ad-hoc signature.
-      - name: Import macOS signing certificate
-        if: runner.os == 'macOS' && env.HAS_MAC_CERT == 'true'
-        shell: bash
-        env:
-          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
-          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
-          MACOS_SIGN_IDENTITY_SECRET: ${{ secrets.MACOS_SIGN_IDENTITY }}
-        run: |
-          set +x
-          KEYCHAIN="$RUNNER_TEMP/signex-signing.keychain-db"
-          KEYCHAIN_PW="$(uuidgen)"
-          echo "::add-mask::$KEYCHAIN_PW"
-          P12="$RUNNER_TEMP/signex-developer-id.p12"
-          printf '%s' "$MACOS_CERT_P12" | base64 --decode > "$P12"
-          security create-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN"
-          security unlock-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
-          security import "$P12" -k "$KEYCHAIN" -P "$MACOS_CERT_PASSWORD" \
-            -T /usr/bin/codesign -T /usr/bin/security
-          rm -f "$P12"
-          # Let codesign use the key without a UI prompt.
-          security set-key-partition-list -S apple-tool:,apple: -s \
-            -k "$KEYCHAIN_PW" "$KEYCHAIN" > /dev/null
-          # Make it the only keychain codesign searches.
-          security list-keychains -d user -s "$KEYCHAIN"
-          # Identity: explicit MACOS_SIGN_IDENTITY secret, else the first
-          # "Developer ID Application" certificate in the imported .p12
-          # (its SHA-1 hash, which codesign accepts as an identity).
-          IDENTITY="$MACOS_SIGN_IDENTITY_SECRET"
-          if [[ -z "$IDENTITY" ]]; then
-            IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN" \
-              | awk '/Developer ID Application/ {print $2; exit}')"
-          fi
-          if [[ -z "$IDENTITY" ]]; then
-            echo "::error::no 'Developer ID Application' identity found in MACOS_CERT_P12"
-            exit 1
-          fi
-          {
-            echo "MACOS_KEYCHAIN=$KEYCHAIN"
-            echo "MACOS_SIGN_IDENTITY=$IDENTITY"
-          } >> "$GITHUB_ENV"
-
-      - name: Build macOS DMG installer
-        if: runner.os == 'macOS'
-        run: |
-          chmod +x installer/macos/build-dmg.sh
-          ./installer/macos/build-dmg.sh \
-            "target/${{ matrix.target }}/release/signex" \
-            "${{ steps.version.outputs.version }}" \
-            "${{ matrix.arch_suffix }}"
-
-      - name: Notarize and staple macOS DMG
-        if: runner.os == 'macOS' && env.HAS_MAC_CERT == 'true' && env.HAS_MAC_NOTARY == 'true'
-        shell: bash
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
-        run: |
-          set +x
-          DMG="signex-macos-${{ matrix.arch_suffix }}-${{ steps.version.outputs.version }}.dmg"
-          # --wait blocks until Apple returns Accepted/Invalid; a non-zero
-          # exit (Invalid, timeout) fails the leg so nothing publishes.
-          xcrun notarytool submit "$DMG" \
-            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
-            --password "$APPLE_APP_PASSWORD" --wait
-          xcrun stapler staple "$DMG"
-          xcrun stapler validate "$DMG"
-
-      - name: Warn when macOS is signed but not notarized
-        if: runner.os == 'macOS' && env.HAS_MAC_CERT == 'true' && env.HAS_MAC_NOTARY != 'true'
-        run: echo "::warning::Developer ID signed but NOT notarized - APPLE_ID / APPLE_TEAM_ID / APPLE_APP_PASSWORD missing; Gatekeeper will still warn."
+      # ─── Windows / macOS: hand the unsigned binary to package-* ───
+      - name: Upload unsigned binary
+        if: runner.os != 'Linux'
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: unsigned-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/signex${{ runner.os == 'Windows' && '.exe' || '' }}
+          if-no-files-found: error
 
       # ─── Linux: .deb package ──────────────────────────────────────
       - name: Build Linux .deb package
@@ -335,13 +258,130 @@ jobs:
           bash scripts/smoke_release_artifact.sh "$V" \
             "./Signex-${V}-${{ matrix.arch_suffix }}.AppImage" --appimage-extract-and-run
 
+      # ─── Upload all artifacts for this target ─────────────────────
+      - name: Upload artifacts
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: signex-${{ matrix.target }}-${{ steps.version.outputs.version }}
+          path: |
+            signex_${{ steps.version.outputs.version }}_*.deb
+            Signex-${{ steps.version.outputs.version }}-*.AppImage
+            signex-linux-*-${{ steps.version.outputs.version }}.tar.gz
+          if-no-files-found: error
+
+  # ─── Signing jobs ────────────────────────────────────────────────
+  # Isolated from `build`: they run NO cargo and no dependency build scripts,
+  # use only pinned first-party actions (checkout / download- / upload-artifact)
+  # plus the vendor tools (InnoSetup, signtool, codesign, notarytool), and hold
+  # a read-only token. Signing material exists only here, under $RUNNER_TEMP,
+  # and the always() steps delete it. Each secret pair is gated: `secrets`
+  # cannot be used in step `if:`, so the job env turns "is it set" into
+  # 'true'/'false'. With nothing set the packages are built unsigned, as before.
+  package-windows:
+    name: Package + sign (windows ${{ matrix.arch }})
+    needs: [version, build]
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-pc-windows-msvc
+            arch: x64
+            arch_suffix: x86_64
+          - target: aarch64-pc-windows-msvc
+            arch: arm64
+            arch_suffix: aarch64
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      HAS_WIN_CERT: ${{ secrets.WINDOWS_CERT_PFX != '' && secrets.WINDOWS_CERT_PASSWORD != '' }}
+      WIN_PFX_SET: ${{ secrets.WINDOWS_CERT_PFX != '' }}
+      WIN_PW_SET: ${{ secrets.WINDOWS_CERT_PASSWORD != '' }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          submodules: false
+          persist-credentials: false
+
+      - name: Warn on half-configured Windows signing secrets
+        if: env.WIN_PFX_SET != env.WIN_PW_SET
+        shell: bash
+        run: echo "::warning::Only one of WINDOWS_CERT_PFX / WINDOWS_CERT_PASSWORD is set - building UNSIGNED."
+
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: unsigned-${{ matrix.target }}
+          path: bin
+
+      # SIGN_PFX_PATH is exported before anything can fail so the always()
+      # cleanup knows what to delete.
+      - name: Prepare Windows signing
+        if: env.HAS_WIN_CERT == 'true'
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP 'signex-codesign.pfx'
+          "SIGN_PFX_PATH=$pfx" >> $env:GITHUB_ENV
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERT_PFX))
+          $tool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe' |
+            Sort-Object { [version]$_.Directory.Parent.Name } -Descending |
+            Select-Object -First 1
+          if (-not $tool) { throw 'signtool.exe not found in the Windows SDK' }
+          "SIGNTOOL_PATH=$($tool.FullName)" >> $env:GITHUB_ENV
+
+      - name: Sign signex.exe
+        if: env.HAS_WIN_CERT == 'true'
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: ./installer/windows/sign.ps1 bin/signex.exe
+
+      - name: Install InnoSetup
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+
+      # With a certificate, ISCC calls sign.ps1 (the `signex` SignTool in
+      # signex.iss) for the installer AND the uninstaller stub.
+      - name: Build Windows installer
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          $binary = "$PWD\bin\signex.exe"
+          $iscc = @("/DVersion=$env:VERSION", "/DArch=${{ matrix.arch }}", "/DBinary=$binary", "/Q")
+          if ($env:HAS_WIN_CERT -eq 'true') {
+            $iscc += "/DSign=1"
+            $iscc += ('/Ssignex=pwsh -NoProfile -File ' + "$PWD\installer\windows\sign.ps1" + ' $f')
+          }
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" @iscc installer\windows\signex.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed ($LASTEXITCODE)" }
+          Move-Item installer\windows\signex-setup-${{ matrix.arch_suffix }}-$env:VERSION.exe .
+
+      - name: Verify signed installer
+        if: env.HAS_WIN_CERT == 'true'
+        shell: pwsh
+        run: |
+          & $env:SIGNTOOL_PATH verify /pa /v "signex-setup-${{ matrix.arch_suffix }}-$env:VERSION.exe"
+          if ($LASTEXITCODE -ne 0) { throw 'installer signature did not verify' }
+
+      # The ZIP copies the exe signed above, so it ships signed.
+      - name: Package Windows portable ZIP (alongside installer)
+        shell: pwsh
+        run: |
+          mkdir staging | Out-Null
+          Copy-Item bin/signex.exe staging/
+          Compress-Archive -Path staging/* -DestinationPath "signex-windows-${{ matrix.arch_suffix }}-$env:VERSION.zip"
+
       # The aarch64 Windows installer cannot execute on the x64 runner,
       # so only the x64 leg is smoke-tested.
       - name: Smoke-test Windows installer
-        if: runner.os == 'Windows' && matrix.arch == 'x64'
+        if: matrix.arch == 'x64'
         shell: pwsh
         run: |
-          $v = "${{ steps.version.outputs.version }}"
+          $v = $env:VERSION
           $dir = Join-Path $env:RUNNER_TEMP "signex-smoke"
           # Per-user install (PrivilegesRequired=lowest); /DIR pins the
           # location so the check does not depend on {autopf} resolution.
@@ -354,62 +394,179 @@ jobs:
           bash scripts/smoke_release_artifact.sh $v $exe
           if ($LASTEXITCODE -ne 0) { throw "smoke test failed" }
 
-      - name: Smoke-test macOS DMG
-        if: runner.os == 'macOS'
+      # Deletes the fixed path even if "Prepare" died before exporting it.
+      - name: Remove Windows signing certificate
+        if: always()
+        shell: pwsh
+        run: |
+          Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $env:RUNNER_TEMP 'signex-codesign.pfx')
+
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: signex-${{ matrix.target }}-${{ needs.version.outputs.version }}
+          path: |
+            signex-setup-*-${{ needs.version.outputs.version }}.exe
+            signex-windows-*-${{ needs.version.outputs.version }}.zip
+          if-no-files-found: error
+
+  package-macos:
+    name: Package + sign (macOS)
+    needs: [version, build]
+    runs-on: macos-14
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      TARGET: aarch64-apple-darwin
+      ARCH_SUFFIX: aarch64
+      HAS_MAC_CERT: ${{ secrets.MACOS_CERT_P12 != '' && secrets.MACOS_CERT_PASSWORD != '' }}
+      HAS_MAC_NOTARY: ${{ secrets.APPLE_ID != '' && secrets.APPLE_TEAM_ID != '' && secrets.APPLE_APP_PASSWORD != '' }}
+      MAC_P12_SET: ${{ secrets.MACOS_CERT_P12 != '' }}
+      MAC_PW_SET: ${{ secrets.MACOS_CERT_PASSWORD != '' }}
+      APPLE_ANY_SET: ${{ secrets.APPLE_ID != '' || secrets.APPLE_TEAM_ID != '' || secrets.APPLE_APP_PASSWORD != '' }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          submodules: false
+          persist-credentials: false
+
+      - name: Warn on half-configured macOS signing secrets
         shell: bash
         run: |
-          V="${{ steps.version.outputs.version }}"
+          if [[ "$MAC_P12_SET" != "$MAC_PW_SET" ]]; then
+            echo "::warning::Only one of MACOS_CERT_P12 / MACOS_CERT_PASSWORD is set - using the AD-HOC signature."
+          fi
+          if [[ "$APPLE_ANY_SET" == "true" && "$HAS_MAC_NOTARY" != "true" ]]; then
+            echo "::warning::APPLE_ID / APPLE_TEAM_ID / APPLE_APP_PASSWORD only partly set - NOT notarizing."
+          fi
+          if [[ "$HAS_MAC_CERT" == "true" && "$HAS_MAC_NOTARY" != "true" ]]; then
+            echo "::warning::Developer ID signed but NOT notarized; Gatekeeper will still warn."
+          fi
+
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: unsigned-aarch64-apple-darwin
+          path: bin
+
+      # MACOS_KEYCHAIN is exported first so the always() cleanup can delete it
+      # even if the import fails halfway. The unlock timeout is short.
+      - name: Import macOS signing certificate
+        if: env.HAS_MAC_CERT == 'true'
+        shell: bash
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          MACOS_SIGN_IDENTITY_SECRET: ${{ secrets.MACOS_SIGN_IDENTITY }}
+        run: |
+          set +x
+          KEYCHAIN="$RUNNER_TEMP/signex-signing.keychain-db"
+          echo "MACOS_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+          KEYCHAIN_PW="$(uuidgen)"
+          echo "::add-mask::$KEYCHAIN_PW"
+          P12="$RUNNER_TEMP/signex-developer-id.p12"
+          printf '%s' "$MACOS_CERT_P12" | base64 --decode > "$P12"
+          security create-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
+          security set-keychain-settings -lut 900 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
+          # Apple's Developer ID G2 intermediate, committed in the repo so the
+          # chain builds without a network fetch (expires 2031-09-17).
+          security import installer/macos/DeveloperIDG2CA.cer -k "$KEYCHAIN" -T /usr/bin/codesign
+          security import "$P12" -k "$KEYCHAIN" -P "$MACOS_CERT_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          rm -f "$P12"
+          security set-key-partition-list -S apple-tool:,apple: -s \
+            -k "$KEYCHAIN_PW" "$KEYCHAIN" > /dev/null
+          security list-keychains -d user -s "$KEYCHAIN"
+          IDENTITY="$MACOS_SIGN_IDENTITY_SECRET"
+          if [[ -z "$IDENTITY" ]]; then
+            IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN" \
+              | awk '/Developer ID Application/ {print $2; exit}')"
+          fi
+          if [[ -z "$IDENTITY" ]]; then
+            echo "::error::no 'Developer ID Application' identity found in MACOS_CERT_P12"
+            exit 1
+          fi
+          echo "MACOS_SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+
+      - name: Build macOS DMG installer
+        shell: bash
+        run: |
+          chmod +x installer/macos/build-dmg.sh
+          ./installer/macos/build-dmg.sh bin/signex "$VERSION" "$ARCH_SUFFIX"
+
+      # Credentials go into the temp keychain once (store-credentials), then
+      # notarytool reads them via --keychain-profile.
+      - name: Notarize and staple macOS DMG
+        if: env.HAS_MAC_CERT == 'true' && env.HAS_MAC_NOTARY == 'true'
+        shell: bash
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          set +x
+          DMG="signex-macos-${ARCH_SUFFIX}-${VERSION}.dmg"
+          xcrun notarytool store-credentials signex-notary \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" --keychain "$MACOS_KEYCHAIN" > /dev/null
+          RESULT="$RUNNER_TEMP/notary-result.json"
+          xcrun notarytool submit "$DMG" --keychain-profile signex-notary \
+            --keychain "$MACOS_KEYCHAIN" --wait --timeout 30m \
+            --output-format json > "$RESULT" || true
+          STATUS="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("status",""))' "$RESULT" 2>/dev/null || true)"
+          ID="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("id",""))' "$RESULT" 2>/dev/null || true)"
+          echo "notarization status: '${STATUS}' id: '${ID}'"
+          if [[ "$STATUS" != "Accepted" ]]; then
+            if [[ -n "$ID" ]]; then
+              xcrun notarytool log "$ID" --keychain-profile signex-notary \
+                --keychain "$MACOS_KEYCHAIN" || true
+            fi
+            echo "::error::notarization was not Accepted"
+            exit 1
+          fi
+          xcrun stapler staple "$DMG"
+          xcrun stapler validate "$DMG"
+
+      - name: Smoke-test macOS DMG
+        shell: bash
+        run: |
           MNT="$RUNNER_TEMP/signex-dmg"
           hdiutil attach -nobrowse -readonly -mountpoint "$MNT" \
-            "signex-macos-${{ matrix.arch_suffix }}-${V}.dmg"
+            "signex-macos-${ARCH_SUFFIX}-${VERSION}.dmg"
           rc=0
-          bash scripts/smoke_release_artifact.sh "$V" "$MNT/Signex.app/Contents/MacOS/signex" || rc=$?
+          bash scripts/smoke_release_artifact.sh "$VERSION" "$MNT/Signex.app/Contents/MacOS/signex" || rc=$?
           hdiutil detach "$MNT" -force || true
           exit $rc
 
-      # ─── Remove signing material (runs even if a step above failed) ──
-      - name: Remove Windows signing certificate
-        if: always() && runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          if ($env:SIGN_PFX_PATH -and (Test-Path $env:SIGN_PFX_PATH)) {
-            Remove-Item -Force $env:SIGN_PFX_PATH
-          }
-
       - name: Remove macOS signing keychain
-        if: always() && runner.os == 'macOS'
+        if: always()
         shell: bash
         run: |
-          if [[ -n "${MACOS_KEYCHAIN:-}" ]]; then
-            security delete-keychain "$MACOS_KEYCHAIN" || true
-          fi
-          rm -f "$RUNNER_TEMP/signex-developer-id.p12"
+          security delete-keychain "$RUNNER_TEMP/signex-signing.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/signex-signing.keychain-db" "$RUNNER_TEMP/signex-developer-id.p12" "$RUNNER_TEMP/notary-result.json"
 
-      # ─── Upload all artifacts for this target ─────────────────────
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
-          name: signex-${{ matrix.target }}-${{ steps.version.outputs.version }}
-          path: |
-            signex-setup-*-${{ steps.version.outputs.version }}.exe
-            signex-windows-*-${{ steps.version.outputs.version }}.zip
-            signex-macos-*-${{ steps.version.outputs.version }}.dmg
-            signex_${{ steps.version.outputs.version }}_*.deb
-            Signex-${{ steps.version.outputs.version }}-*.AppImage
-            signex-linux-*-${{ steps.version.outputs.version }}.tar.gz
-          if-no-files-found: ignore
+          name: signex-aarch64-apple-darwin-${{ needs.version.outputs.version }}
+          path: signex-macos-*-${{ needs.version.outputs.version }}.dmg
+          if-no-files-found: error
 
+  # Tag pushes only: a workflow_dispatch dry run stops after the package-*
+  # jobs and leaves the signed artifacts on the run page.
   release:
     name: Create Release
-    needs: build
+    needs: [build, package-windows, package-macos]
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
 
+      # `signex-*` only: the intermediate `unsigned-*` binaries must not ship.
       - name: Download all artifacts
         uses: actions/download-artifact@v5
         with:
           path: artifacts
+          pattern: signex-*
           merge-multiple: true
 
       - name: Extract version from tag

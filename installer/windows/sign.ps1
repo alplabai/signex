@@ -2,11 +2,16 @@
 #
 #   installer/windows/sign.ps1 <file> [<file>...]
 #
+# Called directly by release.yml and, via ISCC's /S option, by InnoSetup for
+# the installer and the uninstaller stub (signex.iss, SignTool=signex).
+#
 # Reads (all set by the "Prepare Windows signing" step in release.yml):
 #   SIGNTOOL_PATH  - full path to signtool.exe
 #   SIGN_PFX_PATH  - decoded .pfx on disk (deleted by an always() step)
 #   WINDOWS_CERT_PASSWORD - .pfx password (a masked secret; never echoed)
 #
+# The password goes to signtool as /p (a file-based PFX offers no other way);
+# it is a masked secret and this runs in the isolated package-windows job.
 # SHA-256 file digest + RFC 3161 SHA-256 timestamp, then `signtool verify /pa`.
 # Timestamp servers flake, so each file retries a few times.
 param([Parameter(Mandatory, ValueFromRemainingArguments)][string[]]$Files)
@@ -22,6 +27,11 @@ foreach ($f in $Files) {
         if ($LASTEXITCODE -eq 0) { $signed = $true } else { Start-Sleep -Seconds (5 * $i) }
     }
     if (-not $signed) { throw "signtool sign failed for $f" }
+    # Inno hands over temp files for the uninstaller stub whose extension is
+    # not .exe; verify those best-effort, real .exe/.dll files strictly.
     & $env:SIGNTOOL_PATH verify /pa /v $f
-    if ($LASTEXITCODE -ne 0) { throw "signtool verify /pa failed for $f" }
+    if ($LASTEXITCODE -ne 0) {
+        if ($f -match '\.(exe|dll)"?$') { throw "signtool verify /pa failed for $f" }
+        Write-Warning "signtool verify /pa did not pass for $f (non-.exe temp file)"
+    }
 }

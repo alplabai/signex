@@ -3,12 +3,41 @@
 `.github/workflows/release.yml` signs the Windows and macOS artifacts when the
 repository secrets below exist. With no secrets the build is unchanged:
 unsigned installers on Windows and an ad-hoc signature on macOS. Linux is not
-signed. Release mechanics (tagging, CHANGELOG) are in the
-`cutting-a-signex-release` procedure and `CONTRIBUTING.md`.
+signed. Release mechanics (tagging, CHANGELOG) are in `CONTRIBUTING.md`.
 
-Secrets are never echoed: they are passed through step `env:` only, the
-decoded `.pfx` / `.p12` live under `$RUNNER_TEMP`, and `always()` steps delete
-the `.pfx` and the temporary keychain even when a step fails.
+## Job graph
+
+```
+version -> verify-version (tags only) -> test (tags only) -> build (matrix, cargo, NO signing material)
+build -> package-windows (x64, arm64)  -> release (tags only)
+build -> package-macos                 -> release (tags only)
+```
+
+`build` compiles (every dependency `build.rs` runs there) and only hands the
+unsigned `signex.exe` / `signex` to the `package-*` jobs as `unsigned-*`
+artifacts. The `package-*` jobs hold the secrets, run no cargo, use only
+SHA-pinned `actions/checkout`, `download-artifact` and `upload-artifact`, and
+have `permissions: contents: read`. The `unsigned-*` artifacts are not
+published. Order on Windows is exe -> installer (+ uninstaller) -> ZIP.
+
+Secrets are never echoed: they reach steps through `env:` only, the decoded
+`.pfx` / `.p12` live under `$RUNNER_TEMP` at fixed paths, and `always()` steps
+delete them (and the temporary keychain) even when a step fails. The password
+is visible on signtool's command line (`/p`; a file-based PFX has no
+alternative) and on `notarytool store-credentials --password`; both are masked
+secrets in an isolated job. The macOS keychain auto-locks after 15 minutes.
+If only one secret of a pair is set the workflow emits a `::warning::` and
+builds unsigned (or ad-hoc) rather than failing.
+
+## Dry run
+
+Run the workflow manually: Actions > Release > Run workflow (or
+`gh workflow run release.yml --ref <branch>`), `dry_run` left true. It uses the
+workspace version, skips the tag/CHANGELOG check and the tests, builds, signs,
+notarizes (when the secrets exist), smoke-tests, and uploads the signed
+packages as workflow artifacts (`signex-<target>-<version>`). It never creates
+a Release. Download the artifacts and run the verify commands below. Do this
+before the first tagged release with real secrets.
 
 ## Secrets
 
@@ -49,14 +78,24 @@ app-specific password at appleid.apple.com > Sign-In and Security.
 
 - Windows (`installer/windows/sign.ps1`): `signtool sign /fd SHA256 /tr
   http://timestamp.digicert.com /td SHA256` on `signex.exe` (before the
-  installer and the portable ZIP are built, so both carry the signed exe), then
-  on the InnoSetup installer. Each file is checked with `signtool verify /pa`.
-  signtool comes from the runner's Windows SDK.
-- macOS (`installer/macos/build-dmg.sh` + workflow): the `.p12` is imported into
-  a temporary keychain; the executable and then the `.app` are signed with
+  installer and the portable ZIP are built, so both carry the signed exe).
+  ISCC then signs the installer and the uninstaller stub itself through the
+  `SignTool=signex` / `SignedUninstaller=yes` directives in `signex.iss`
+  (defined only when a certificate exists). The final installer is checked
+  with `signtool verify /pa`; the uninstaller is only exercised after install
+  (`signtool verify /pa` on the installed `unins000.exe`). signtool comes from
+  the runner's Windows SDK.
+- macOS (`installer/macos/build-dmg.sh` + workflow): the `.p12` and Apple's
+  Developer ID G2 intermediate (`installer/macos/DeveloperIDG2CA.cer`, from
+  apple.com/certificateauthority, expires 2031-09-17) are imported into a
+  temporary keychain; the executable and then the `.app` are signed with
   `--options runtime --timestamp` (hardened runtime; inside-out, no `--deep`);
-  the DMG is built and signed; `xcrun notarytool submit --wait` notarizes the
-  DMG; `xcrun stapler staple` attaches the ticket. No entitlements are used
+  the DMG is built and signed (codesign calls retry 3 times); the Apple
+  credentials are stored in the temporary keychain with `notarytool
+  store-credentials` and `notarytool submit --keychain-profile --wait
+  --timeout 30m --output-format json` notarizes the DMG. Anything other than
+  status `Accepted` prints `notarytool log` and fails the job; otherwise
+  `xcrun stapler staple` attaches the ticket. No entitlements are used
   (no JIT or unsigned plugins; wgpu/Metal needs no exception). If a future
   feature needs one, set `MACOS_ENTITLEMENTS` for `build-dmg.sh`.
 
@@ -70,9 +109,10 @@ spctl -a -vv -t open --context context:primary-signature signex-macos-aarch64-<v
 xcrun stapler validate signex-macos-aarch64-<v>.dmg
 ```
 
-## Not verified in CI authoring
+## Not verified at authoring time
 
-The signing path has not run against real certificates; the first tagged
-release after the secrets are added is its first real test (a failed leg means
-no GitHub Release for that tag, and tags cannot be re-used). Consider a
-pre-release tag such as `vX.Y.Z-rc.1` first.
+The signing path has not run against real certificates. Use the dry run above
+first; a failed leg on a real tag means no GitHub Release for that tag, and
+tags cannot be re-used. Specifically untested: signtool discovery on the
+runner, ISCC's `/Ssignex` quoting with `pwsh`, the keychain import, and
+notarytool's JSON output.

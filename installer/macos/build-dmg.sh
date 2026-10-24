@@ -58,6 +58,17 @@ fi
 # isn't at least ad-hoc signed ("Signex is damaged and can't be opened",
 # issue #49). Ad-hoc doesn't vouch for origin, so users still need
 # right-click -> Open on first launch.
+# Apple's timestamp service is occasionally unreachable; retry a few times.
+codesign_retry() {
+    local i
+    for i in 1 2 3; do
+        if codesign "$@"; then return 0; fi
+        echo "codesign attempt $i failed; retrying" >&2
+        sleep $((5 * i))
+    done
+    return 1
+}
+
 SIGN_IDENTITY="${MACOS_SIGN_IDENTITY:-}"
 CODESIGN_ARGS=(--force)
 if [[ -n "$SIGN_IDENTITY" ]]; then
@@ -68,8 +79,8 @@ if [[ -n "$SIGN_IDENTITY" ]]; then
     if [[ -n "${MACOS_ENTITLEMENTS:-}" ]]; then
         CODESIGN_ARGS+=(--entitlements "$MACOS_ENTITLEMENTS")
     fi
-    codesign "${CODESIGN_ARGS[@]}" "$MACOS/signex"
-    codesign "${CODESIGN_ARGS[@]}" "$APP_BUNDLE"
+    codesign_retry "${CODESIGN_ARGS[@]}" "$MACOS/signex"
+    codesign_retry "${CODESIGN_ARGS[@]}" "$APP_BUNDLE"
     codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
 else
     codesign --force --deep --sign - "$APP_BUNDLE"
@@ -99,7 +110,7 @@ if [[ -n "$SIGN_IDENTITY" ]]; then
     if [[ -n "${MACOS_KEYCHAIN:-}" ]]; then
         DMG_SIGN_ARGS+=(--keychain "$MACOS_KEYCHAIN")
     fi
-    codesign "${DMG_SIGN_ARGS[@]}" "$OUTPUT"
+    codesign_retry "${DMG_SIGN_ARGS[@]}" "$OUTPUT"
     codesign --verify --strict --verbose=2 "$OUTPUT"
 fi
 
