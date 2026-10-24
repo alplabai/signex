@@ -7,24 +7,14 @@ impl Signex {
         &mut self,
         msg: &MenuMessage,
     ) -> Option<Task<Message>> {
-        match msg {
-            MenuMessage::PlaceWire => {
-                self.interaction_state.current_tool = Tool::Wire;
-                Some(Task::none())
-            }
-            MenuMessage::PlaceBus => {
-                self.interaction_state.current_tool = Tool::Bus;
-                Some(Task::none())
-            }
-            MenuMessage::PlaceLabel => {
-                self.interaction_state.current_tool = Tool::Label;
-                Some(Task::none())
-            }
-            MenuMessage::PlaceComponent => {
-                self.interaction_state.current_tool = Tool::Component;
-                Some(Task::none())
-            }
-            _ => None,
-        }
+        let tool = match msg {
+            MenuMessage::PlaceWire => Tool::Wire,
+            MenuMessage::PlaceBus => Tool::Bus,
+            MenuMessage::PlaceLabel => Tool::Label,
+            MenuMessage::PlaceComponent => Tool::Component,
+            _ => return None,
+        };
+        // Same path as the toolbar: buffer reset, cursor tag, ghost cleanup.
+        Some(self.update(Message::Tool(ToolMessage::SelectTool(tool))))
     }
 }

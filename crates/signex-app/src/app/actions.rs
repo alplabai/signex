@@ -230,15 +230,7 @@ impl Signex {
         self.ui_state.pending_net_color = None;
         self.ui_state.reorder_picker = None;
         self.ui_state.lasso_polygon = None;
-        let was_drawing = std::mem::take(&mut self.interaction_state.wire_drawing);
-        if was_drawing {
-            self.interaction_state.wire_points.clear();
-        }
-        // Drop any in-flight arc / polyline click buffers.
-        self.interaction_state.arc_points.clear();
-        self.interaction_state.polyline_points.clear();
-        // Drop any two-click shape anchor.
-        self.interaction_state.shape_anchor = None;
+        self.clear_drawing_buffers();
 
         // ── Every window's leftovers ─────────────────────────────────
         //
@@ -256,13 +248,6 @@ impl Signex {
             canvas.pending_net_color = None;
             canvas.reorder_picker_armed = false;
             canvas.lasso_polygon = None;
-            if was_drawing {
-                canvas.wire_preview.clear();
-                canvas.drawing_mode = false;
-            }
-            canvas.arc_points.clear();
-            canvas.polyline_points.clear();
-            canvas.shape_anchor = None;
             // Mirrors `sync_lasso_polygon_to_canvas`, which only ever
             // reaches the main slot.
             canvas.clear_overlay_cache();
@@ -270,6 +255,52 @@ impl Signex {
         clear_canvas(&mut self.interaction_state.canvas);
         for canvas in self.interaction_state.canvases.values_mut() {
             clear_canvas(canvas);
+        }
+    }
+
+    /// Drop every in-flight multi-click drawing buffer: the wire in
+    /// progress, the arc / polyline click lists and the two-click shape
+    /// anchor, on the app-wide session and on every window's canvas.
+    ///
+    /// Shared by [`Self::clear_transient_schematic_tool_state`] and every
+    /// tool switch (#102): a buffer started under one placement tool must
+    /// not survive into the next (a half-drawn wire turning into a
+    /// polyline vertex, a Line anchor becoming a Rectangle corner).
+    pub(crate) fn clear_drawing_buffers(&mut self) {
+        let was_drawing = std::mem::take(&mut self.interaction_state.wire_drawing);
+        if was_drawing {
+            self.interaction_state.wire_points.clear();
+        }
+        self.interaction_state.arc_points.clear();
+        self.interaction_state.polyline_points.clear();
+        self.interaction_state.shape_anchor = None;
+
+        // The main slot plus `canvases` is the full set of windows.
+        let clear_canvas = |canvas: &mut crate::canvas::CanvasSlot| {
+            if was_drawing {
+                canvas.wire_preview.clear();
+                canvas.drawing_mode = false;
+            }
+            canvas.arc_points.clear();
+            canvas.polyline_points.clear();
+            canvas.shape_anchor = None;
+            canvas.clear_overlay_cache();
+        };
+        clear_canvas(&mut self.interaction_state.canvas);
+        for canvas in self.interaction_state.canvases.values_mut() {
+            clear_canvas(canvas);
+        }
+    }
+
+    /// Snap a world-space point to the grid when snapping is on and the grid
+    /// size is positive; otherwise return it unchanged. The one snap rule
+    /// every canvas click path shares.
+    pub(crate) fn snap_to_grid(&self, x: f64, y: f64) -> (f64, f64) {
+        let g = f64::from(self.ui_state.grid_size_mm);
+        if self.ui_state.snap_enabled && g > 0.0 {
+            ((x / g).round() * g, (y / g).round() * g)
+        } else {
+            (x, y)
         }
     }
 

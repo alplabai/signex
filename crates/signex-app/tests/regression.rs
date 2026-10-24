@@ -150,6 +150,8 @@ mod stable_addressing;
 #[path = "regression/symbol_undo_steps.rs"]
 mod symbol_undo_steps;
 
+#[path = "regression/canvas_editing_correctness.rs"]
+mod canvas_editing_correctness;
 #[path = "regression/schematic_field_drag.rs"]
 mod schematic_field_drag;
 #[path = "regression/surface_failures.rs"]

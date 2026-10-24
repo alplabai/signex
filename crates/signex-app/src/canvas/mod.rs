@@ -54,8 +54,9 @@ pub struct CanvasState {
     // ─── Double-click detection ───
     /// Timestamp of last left-click (for double-click detection).
     last_click_time: Option<std::time::Instant>,
-    /// World position of last left-click.
-    last_click_world: Option<(f64, f64)>,
+    /// Screen position of last left-click (double-click distance is compared
+    /// in pixels, so zooming between presses cannot skew it).
+    last_click_screen: Option<(f32, f32)>,
 }
 
 // ─── CanvasSlot (the Program) ────────────────────────────
