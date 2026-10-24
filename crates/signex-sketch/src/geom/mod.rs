@@ -26,6 +26,7 @@ pub mod hull;
 pub mod offset;
 pub mod offset_arc;
 pub mod point;
+mod point_grid;
 pub mod polylabel;
 pub mod predicates;
 pub mod segment;

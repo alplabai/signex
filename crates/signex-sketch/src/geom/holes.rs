@@ -16,6 +16,8 @@
 //! are not supported and can yield an inexact triangulation.
 
 use super::Point2;
+use super::aabb_index::Aabb;
+use super::point_grid::PointGrid;
 use super::predicates::{Sign, orient2d};
 
 /// Bridge every hole into `outer` (CCW) and return the merged ring.
@@ -89,58 +91,41 @@ fn coincident_vertex(ring: &[Point2], m: Point2, around: [Point2; 2]) -> Option<
 /// sharing a stretch of the outline, two holes sharing a stretch of side)
 /// then carry matching vertices on both sides, so the bridged ring's
 /// overlapping boundary pieces cancel pairwise in the clipper instead of
-/// forming T-junctions it cannot resolve. Only ring pairs whose bounding
-/// boxes overlap are compared, so disjoint layouts cost one box test per pair.
+/// forming T-junctions it cannot resolve. Every vertex goes into a
+/// [`PointGrid`], and each edge asks only for the vertices under its own
+/// bounding box, so the cost follows the edges' local neighbourhoods rather
+/// than outline length times hole count.
 fn split_touched_edges(outer: &mut Vec<Point2>, holes: &mut [Vec<Point2>]) {
-    let boxes: Vec<(Point2, Point2)> = std::iter::once(&*outer)
+    let items: Vec<(Point2, usize)> = std::iter::once(&*outer)
         .chain(holes.iter())
-        .map(|r| bounds(r))
+        .enumerate()
+        .flat_map(|(id, ring)| ring.iter().map(move |&q| (q, id)))
         .collect();
-    let rings: Vec<Vec<Point2>> = std::iter::once(outer.clone())
-        .chain(holes.iter().cloned())
-        .collect();
-    for (i, target) in std::iter::once(outer).chain(holes.iter_mut()).enumerate() {
-        let neighbours: Vec<&Vec<Point2>> = (0..rings.len())
-            .filter(|&j| j != i && boxes_touch(boxes[i], boxes[j]))
-            .map(|j| &rings[j])
-            .collect();
-        if neighbours.is_empty() {
-            continue;
-        }
-        *target = with_touching_vertices(target, &neighbours);
+    let grid = PointGrid::new(items.iter().map(|&(q, id)| (q, (id, q))).collect());
+    for (id, ring) in std::iter::once(outer).chain(holes.iter_mut()).enumerate() {
+        *ring = with_touching_vertices(ring, id, &grid);
     }
 }
 
-fn bounds(ring: &[Point2]) -> (Point2, Point2) {
-    ring.iter().fold(
-        (
-            Point2::new(f64::INFINITY, f64::INFINITY),
-            Point2::new(f64::NEG_INFINITY, f64::NEG_INFINITY),
-        ),
-        |(lo, hi), q| {
-            (
-                Point2::new(lo.x.min(q.x), lo.y.min(q.y)),
-                Point2::new(hi.x.max(q.x), hi.y.max(q.y)),
-            )
-        },
-    )
-}
-
-fn boxes_touch(a: (Point2, Point2), b: (Point2, Point2)) -> bool {
-    a.0.x <= b.1.x && b.0.x <= a.1.x && a.0.y <= b.1.y && b.0.y <= a.1.y
-}
-
-/// `ring` with each vertex of `others` that lies in the interior of one of its
-/// edges inserted into that edge, in order along the edge.
-fn with_touching_vertices(ring: &[Point2], others: &[&Vec<Point2>]) -> Vec<Point2> {
+/// `ring` (number `id`) with each vertex of another ring that lies in the
+/// interior of one of its edges inserted into that edge, in order along it.
+fn with_touching_vertices(
+    ring: &[Point2],
+    id: usize,
+    grid: &PointGrid<(usize, Point2)>,
+) -> Vec<Point2> {
     let mut out = Vec::with_capacity(ring.len());
     for (i, &a) in ring.iter().enumerate() {
         let b = ring[(i + 1) % ring.len()];
         out.push(a);
-        let mut on_edge: Vec<Point2> = others
-            .iter()
-            .flat_map(|r| r.iter().copied())
-            .filter(|&q| on_open_segment(a, b, q))
+        let edge_box = Aabb::new(
+            Point2::new(a.x.min(b.x), a.y.min(b.y)),
+            Point2::new(a.x.max(b.x), a.y.max(b.y)),
+        );
+        let mut on_edge: Vec<Point2> = grid
+            .query(edge_box)
+            .filter(|&&(other, q)| other != id && on_open_segment(a, b, q))
+            .map(|&(_, q)| q)
             .collect();
         on_edge.sort_by(|p, q| {
             a.distance_sq(*p)
@@ -229,11 +214,19 @@ fn visible_vertex(ring: &[Point2], m: Point2) -> Option<usize> {
     }
 
     let hit = Point2::new(hit_x, m.y);
+    // A ray passing a few ulp off the endpoint makes the triangle degenerate:
+    // `in_triangle` then accepts every vertex on its line, including ones past
+    // the hit, and the bridge could cross the hole between. Nothing can stand
+    // between `m` and a hit that close to the endpoint, so bridge to it.
+    if orient2d(m, hit, endpoint) == Sign::Zero {
+        return Some(copy);
+    }
+    let x_limit = hit_x.max(endpoint.x);
     let mut chosen = copy;
     let mut best_key = f64::INFINITY;
     for j in 0..n {
         let q = ring[j];
-        if q == endpoint || q.x <= m.x || !in_triangle(q, m, hit, endpoint) {
+        if q == endpoint || q.x <= m.x || q.x > x_limit || !in_triangle(q, m, hit, endpoint) {
             continue;
         }
         let prev = ring[(j + n - 1) % n];

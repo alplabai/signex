@@ -5,18 +5,28 @@
 //! [`super::ear_clip`] rejects. This clipper drops the degenerate vertices and
 //! clips the rest.
 //!
-//! An ear is blocked when a ring vertex that is not one of its corners
-//! - is non-convex and inside the ear triangle (edges included), or
-//! - sits at a corner's coordinates and its ring edges run into the ear (a
-//!   bridged ring touches itself there, so the ear would cover boundary).
+//! An ear is blocked when a vertex that is not one of its corners, and that
+//! is non-convex at the time of the test,
+//! - is inside the ear triangle (edges included), or
+//! - sits at a corner's coordinates and one of its ring edges runs strictly
+//!   into the ear's angle there (a bridged ring touches itself there, so the
+//!   ear would cover boundary).
 //!
-//! Only non-convex vertices can block an ear, and clipping never makes a
-//! convex vertex non-convex, so they are indexed once up front in an
-//! [`AabbIndex`] cells of a coarse grid and each ear queries just the cells
-//! under its bounding box instead of scanning the whole ring.
+//! A vertex that is currently convex never blocks, coincident or not: it can
+//! only touch the ear's boundary, not enter it. Only vertices that were
+//! non-convex when the ring was built can become blockers, because clipping
+//! never turns a convex vertex non-convex, so they are indexed once in a
+//! [`PointGrid`] of [`super::AabbIndex`] cells and each ear queries just the
+//! cells under its bounding box instead of scanning the whole ring.
+//!
+//! The one exception is the forced cut below, which only runs after no ear
+//! passed the test, i.e. on input that is already not a clean partition (the
+//! result is documented as inexact). A vertex that a forced cut turns
+//! non-convex is not added to the index.
 
 use super::Point2;
-use super::aabb_index::{Aabb, AabbIndex};
+use super::aabb_index::Aabb;
+use super::point_grid::PointGrid;
 use super::predicates::{Sign, orient2d};
 
 /// Ear-clip a CCW ring that may contain bridge duplicates, collinear runs
@@ -57,7 +67,7 @@ struct LinkedRing<'a> {
     alive: Vec<bool>,
     count: usize,
     /// Vertices that were non-convex when the ring was built.
-    reflex: ReflexGrid,
+    reflex: PointGrid<usize>,
 }
 
 impl<'a> LinkedRing<'a> {
@@ -69,10 +79,10 @@ impl<'a> LinkedRing<'a> {
             next: (0..n).map(|i| (i + 1) % n.max(1)).collect(),
             alive: vec![true; n],
             count: n,
-            reflex: ReflexGrid::empty(),
+            reflex: PointGrid::empty(),
         };
         let reflex: Vec<usize> = (0..n).filter(|&v| !ring.is_convex(v)).collect();
-        ring.reflex = ReflexGrid::new(pts, &reflex);
+        ring.reflex = PointGrid::new(reflex.into_iter().map(|v| (pts[v], v)).collect());
         ring
     }
 
@@ -156,64 +166,4 @@ impl<'a> LinkedRing<'a> {
 fn in_triangle(p: Point2, [a, b, c]: [Point2; 3]) -> bool {
     let s = [orient2d(a, b, p), orient2d(b, c, p), orient2d(c, a, p)];
     !(s.contains(&Sign::Positive) && s.contains(&Sign::Negative))
-}
-
-/// Non-convex vertices bucketed into a square grid of [`AabbIndex`] cells,
-/// about four vertices per cell, so a query touches only the cells under its
-/// box.
-struct ReflexGrid {
-    min: Point2,
-    cell: f64,
-    side: usize,
-    cells: Vec<AabbIndex<usize>>,
-}
-
-impl ReflexGrid {
-    fn empty() -> Self {
-        Self {
-            min: Point2::new(0.0, 0.0),
-            cell: 1.0,
-            side: 0,
-            cells: Vec::new(),
-        }
-    }
-
-    fn new(pts: &[Point2], members: &[usize]) -> Self {
-        let points: Vec<Point2> = members.iter().map(|&v| pts[v]).collect();
-        let Some(bounds) = Aabb::from_points(&points) else {
-            return Self::empty();
-        };
-        let side = ((members.len() as f64 / 4.0).sqrt().ceil() as usize).max(1);
-        let extent = (bounds.max.x - bounds.min.x).max(bounds.max.y - bounds.min.y);
-        let mut grid = Self {
-            min: bounds.min,
-            cell: (extent / side as f64).max(f64::MIN_POSITIVE),
-            side,
-            cells: vec![AabbIndex::new(); side * side],
-        };
-        for &v in members {
-            let (cx, cy) = grid.locate(pts[v]);
-            grid.cells[cy * side + cx].insert(v, Aabb::new(pts[v], pts[v]));
-        }
-        grid
-    }
-
-    /// The cell column and row holding `p`, clamped onto the grid.
-    fn locate(&self, p: Point2) -> (usize, usize) {
-        let at = |v: f64, lo: f64| {
-            (((v - lo) / self.cell).floor().max(0.0) as usize).min(self.side.saturating_sub(1))
-        };
-        (at(p.x, self.min.x), at(p.y, self.min.y))
-    }
-
-    /// The vertices whose position lies in `region` (inclusive).
-    fn query(&self, region: Aabb) -> impl Iterator<Item = &usize> + '_ {
-        let (x0, y0) = self.locate(region.min);
-        let (x1, y1) = self.locate(region.max);
-        let rows = if self.side == 0 { 0..0 } else { y0..y1 + 1 };
-        rows.flat_map(move |cy| {
-            let cols = if self.side == 0 { 0..0 } else { x0..x1 + 1 };
-            cols.flat_map(move |cx| self.cells[cy * self.side + cx].query_region(region))
-        })
-    }
 }
