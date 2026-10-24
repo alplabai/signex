@@ -71,21 +71,22 @@ table_edges() {
 if [[ "${1:-}" == "--generate" ]]; then
   # Keep the trailing `# ...` note of every edge that is still present, so a
   # regenerate does not drop recorded debt (e.g. `# known debt (#664)`).
-  declare -A notes=()
+  # Bash 3.2 (stock macOS) has no associative arrays, so the notes go
+  # through a tab-separated temp file and awk does the lookup.
+  notes_file="$(mktemp)"
+  trap 'rm -f "$notes_file"' EXIT
   if [[ -f "$EDGES" ]]; then
-    while IFS= read -r line; do
-      [[ "$line" =~ ^[[:space:]]*# || "$line" != *"#"* ]] && continue
-      notes["$(sed 's/[[:space:]]*#.*$//; s/[[:space:]]*$//' <<<"$line")"]="  #${line#*#}"
-    done < "$EDGES"
+    awk '!/^[[:space:]]*#/ && /#/ {
+      i = index($0, "#"); edge = substr($0, 1, i - 1); sub(/[[:space:]]+$/, "", edge)
+      print edge "\t  #" substr($0, i + 1)
+    }' "$EDGES" > "$notes_file"
   fi
   generated="$(current_edges)"
   {
     echo "# Allowed workspace dependency edges (normal deps only)."
     echo "# Checked by scripts/check_arch_guard.sh. Add a line to add an edge."
-    while IFS= read -r edge; do
-      [[ -z "$edge" ]] && continue
-      echo "$edge${notes[$edge]:-}"
-    done <<<"$generated"
+    awk -F'\t' 'FILENAME == ARGV[1] { note[$1] = $2; next } $0 != "" { print $0 note[$0] }' \
+      "$notes_file" - <<<"$generated"
   } > "$EDGES.tmp"
   mv "$EDGES.tmp" "$EDGES"
   echo "Wrote $(table_edges | grep -c .) edges to ${EDGES#"$ROOT"/}"

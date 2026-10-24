@@ -126,9 +126,13 @@ run_case comment_only_table_with_no_edges pass \
 printf '%s\n' '# header' 'signex-net -> signex-types  # why this edge exists' 'signex-erc -> signex-net' \
   > "$TMP/generate.edges"
 printf '{"packages": [%s, %s]}\n' "$TYPES" "$NET_OK" > "$TMP/generate.json"
+# No `|| true`: a --generate that crashes must fail this control, not hide
+# behind a file it never rewrote.
+generate_status=0
 ARCH_GUARD_EDGES="$TMP/generate.edges" ARCH_GUARD_METADATA="$TMP/generate.json" \
-  bash "$GATE" --generate >/dev/null 2>&1 || true
-if grep -qx 'signex-net -> signex-types  # why this edge exists' "$TMP/generate.edges" \
+  bash "$GATE" --generate >/dev/null 2>&1 || generate_status=$?
+if [[ "$generate_status" == 0 ]] \
+  && grep -qx 'signex-net -> signex-types  # why this edge exists' "$TMP/generate.edges" \
   && ! grep -q 'signex-erc -> signex-net' "$TMP/generate.edges"; then
   echo "ok    generate_keeps_notes_and_drops_stale_edges"
 else
