@@ -14,11 +14,13 @@
 //! - [`SimModel`] / [`SimKind`] in [`sim`]
 //! - [`PrimitiveRef`] in [`ref_`]
 
+pub mod container_merge;
 pub mod footprint;
 pub mod ref_;
 pub mod sim;
 pub mod symbol;
 
+pub use container_merge::ContainerMerge;
 pub use footprint::{
     Body3D, BodyShape, Drill, Footprint, FootprintFile, FootprintFileError, FpGraphic,
     FpGraphicKind, LayerId, LoadRepair, Pad, PadKind, PadShape, Polygon, StepAttachment,

@@ -9,6 +9,7 @@ use super::*;
 
 #[cfg(test)]
 mod cache_refresh_tests;
+mod container_save;
 
 impl Signex {
     /// Open a standalone primitive editor tab for the file at `path`.
@@ -430,30 +431,57 @@ impl Signex {
     /// events never reached `SignexLogger`, so a failed primitive save
     /// was invisible in both stderr and the Messages panel.
     pub(crate) fn save_primitive_tab_at(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
-        // Symbol path — write the full multi-symbol container back to
-        // disk so other symbols in the same file are preserved.
+        self.save_primitive_tab(path, container_save::ContainerWrite::Merge)
+    }
+
+    /// Save As: write the editor's container to `path` whole, replacing
+    /// whatever file the user chose to overwrite there.
+    pub(crate) fn save_primitive_tab_replacing(
+        &mut self,
+        path: &std::path::Path,
+    ) -> anyhow::Result<()> {
+        self.save_primitive_tab(path, container_save::ContainerWrite::Replace)
+    }
+
+    fn save_primitive_tab(
+        &mut self,
+        path: &std::path::Path,
+        mode: container_save::ContainerWrite,
+    ) -> anyhow::Result<()> {
+        // Symbol path — merge this editor's changed symbols into the
+        // container on disk, so other symbols in the same file, and other
+        // windows' saves to them, are preserved (#902).
         if let Some(editor) = self.document_state.symbol_editors.get_mut(path) {
-            // Refresh the active symbol's + the file's updated
-            // timestamps so downstream consumers can detect the rewrite.
+            // Stamp the changed symbols so downstream consumers can
+            // detect the rewrite.
             let now = chrono::Utc::now();
-            editor.primitive_mut().updated = now;
-            editor.file.updated = now;
-            // v0.18.4 — emit TOML envelope (mirror of v0.18.2 .snxfpt).
-            let toml_text = match editor.file.to_toml_string() {
-                Ok(s) => s,
-                Err(e) => {
-                    return Err(anyhow::anyhow!(
-                        "serialize symbol library {}: {e}",
-                        path.display()
-                    ));
+            let changed = editor.file.changed_since(&editor.baseline);
+            for symbol in &mut editor.file.symbols {
+                if changed.contains(&symbol.uuid) {
+                    symbol.updated = now;
                 }
-            };
-            if let Err(e) = atomic_write(path, toml_text.as_bytes()) {
-                return Err(anyhow::anyhow!("write .snxsym {}: {e}", path.display()));
             }
+            editor.file.updated = now;
+            let (file, baseline) = (editor.file.clone(), editor.baseline.clone());
             // Capture the symbol name for the commit message before
             // dropping the editor borrow.
             let sym_name = editor.primitive().name.clone();
+            let save = self
+                .save_symbol_container(path, &file, &baseline, now, mode)
+                .map_err(|e| anyhow::anyhow!("write .snxsym {}: {e}", path.display()))?;
+            // A symbol this editor deleted is named from the baseline.
+            let (mut replaced, mut deleted) = (Vec::new(), Vec::new());
+            for uuid in &save.merge.overwritten {
+                match file.get_symbol(*uuid) {
+                    Some(symbol) => replaced.push(symbol.name.clone()),
+                    None => deleted.extend(baseline.get_symbol(*uuid).map(|s| s.name.clone())),
+                }
+            }
+            container_save::report_overwritten(path, &replaced, &deleted);
+            let Some(editor) = self.document_state.symbol_editors.get_mut(path) else {
+                return Ok(());
+            };
+            editor.baseline = file;
             editor.dirty = false;
             // Clear the project-scoped dirty marker if any callers
             // had set it.
@@ -466,7 +494,9 @@ impl Signex {
             // in git history. No-op when the file lives outside any
             // mounted library (lone-file edit) or when the adapter
             // has no version control (database backend).
-            self.commit_external_change_for(path, &format!("save symbol {sym_name}"));
+            if save.written {
+                self.commit_external_change_for(path, &format!("save symbol {sym_name}"));
+            }
             // v0.22 Phase 8.4 extension — also commit into the
             // owning project's git repo (if `enable_git` is on for
             // that project). When both library- and project-scope VC
@@ -500,30 +530,48 @@ impl Signex {
                     state, primitive,
                 );
             }
-            editor.primitive_mut().updated = now;
-            editor.file.updated = now;
-            // v0.18.6 — emit the editor's persisted FootprintFile
-            // directly. `file_uuid` and any multi-footprint siblings
-            // are preserved across saves (mirror of SymbolEditorState).
-            let toml_text = match editor.file.to_toml_string() {
-                Ok(s) => s,
-                Err(e) => {
-                    return Err(anyhow::anyhow!(
-                        "serialize footprint library {}: {e}",
-                        path.display()
-                    ));
+            // Merge only the changed footprints into the file on disk,
+            // as for symbols (#902). `file_uuid` and the other
+            // footprints keep their on-disk versions.
+            let changed = editor.file.changed_since(&editor.baseline);
+            for footprint in &mut editor.file.footprints {
+                if changed.contains(&footprint.uuid) {
+                    footprint.updated = now;
                 }
-            };
-            if let Err(e) = atomic_write(path, toml_text.as_bytes()) {
-                return Err(anyhow::anyhow!("write .snxfpt {}: {e}", path.display()));
             }
+            editor.file.updated = now;
+            let (file, baseline) = (editor.file.clone(), editor.baseline.clone());
             let fp_name = editor.primitive().name.clone();
+            let save = self
+                .save_footprint_container(path, &file, &baseline, now, mode)
+                .map_err(|e| anyhow::anyhow!("write .snxfpt {}: {e}", path.display()))?;
+            let name_in = |container: &signex_library::FootprintFile, uuid: uuid::Uuid| {
+                container
+                    .footprints
+                    .iter()
+                    .find(|f| f.uuid == uuid)
+                    .map(|f| f.name.clone())
+            };
+            let (mut replaced, mut deleted) = (Vec::new(), Vec::new());
+            for uuid in &save.merge.overwritten {
+                match name_in(&file, *uuid) {
+                    Some(name) => replaced.push(name),
+                    None => deleted.extend(name_in(&baseline, *uuid)),
+                }
+            }
+            container_save::report_overwritten(path, &replaced, &deleted);
+            let Some(editor) = self.document_state.footprint_editors.get_mut(path) else {
+                return Ok(());
+            };
+            editor.baseline = file;
             editor.dirty = false;
             self.document_state.dirty_paths.remove(path);
             if let Some(tab) = self.document_state.tabs.iter_mut().find(|t| t.path == path) {
                 tab.dirty = false;
             }
-            self.commit_external_change_for(path, &format!("save footprint {fp_name}"));
+            if save.written {
+                self.commit_external_change_for(path, &format!("save footprint {fp_name}"));
+            }
             // v0.22 Phase 8.4 extension — same as the symbol branch:
             // also commit into the owning project's git repo when
             // its `enable_git` is on. Library + project repos can
@@ -559,15 +607,7 @@ impl Signex {
         // `path`. `lib.root` is the `.snxlib` *file* path now, so we
         // walk against its parent directory (where `symbols/` and
         // `footprints/` actually live).
-        let lib = self
-            .library
-            .open_libraries
-            .iter()
-            .find(|lib| lib.root_dir().map(|d| path.starts_with(d)).unwrap_or(false));
-        let Some(lib) = lib else {
-            return;
-        };
-        let Some(adapter) = self.library.set.get(lib.library_id) else {
+        let Some(adapter) = self.library_adapter_for(path) else {
             return;
         };
         if let Err(e) = adapter.commit_external_change(path, message) {

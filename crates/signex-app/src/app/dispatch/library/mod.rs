@@ -48,9 +48,8 @@ mod settings;
 mod updates;
 
 use recovery::{
-    atomic_write, handle_recovery_broken_binding, handle_recovery_git_missing,
-    handle_recovery_library_missing, handle_recovery_library_missing_locate_result,
-    route_open_error,
+    handle_recovery_broken_binding, handle_recovery_git_missing, handle_recovery_library_missing,
+    handle_recovery_library_missing_locate_result, route_open_error,
 };
 
 impl Signex {

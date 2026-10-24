@@ -445,6 +445,22 @@ impl LibraryAdapter for LocalGitAdapter {
         Some(self.root_dir.clone())
     }
 
+    fn rewrite_file_locked(
+        &self,
+        abs_path: &Path,
+        rewrite: &mut crate::adapter::FileRewrite<'_>,
+    ) -> Result<bool, LibraryError> {
+        if !abs_path.starts_with(&self.root_dir) {
+            return Err(LibraryError::Backend(format!(
+                "rewrite_file_locked: {} is not under {}",
+                abs_path.display(),
+                self.root_dir.display(),
+            )));
+        }
+        let _write_lock = self.lock_for_write()?;
+        crate::adapter::rewrite_file(abs_path, rewrite)
+    }
+
     fn commit_external_change(&self, abs_path: &Path, message: &str) -> Result<(), LibraryError> {
         let rel_path = abs_path
             .strip_prefix(&self.root_dir)

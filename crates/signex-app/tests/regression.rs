@@ -143,6 +143,8 @@ mod dead_schematic_controls;
 mod idle_cursor_move;
 #[path = "regression/library_delete_undo.rs"]
 mod library_delete_undo;
+#[path = "regression/primitive_container_merge.rs"]
+mod primitive_container_merge;
 #[path = "regression/save_as_by_document_kind.rs"]
 mod save_as_by_document_kind;
 #[path = "regression/stable_addressing.rs"]

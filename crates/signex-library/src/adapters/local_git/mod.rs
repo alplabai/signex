@@ -400,7 +400,9 @@ pub(crate) fn skip_write_lock_files(path: &Path, _spec: &[u8]) -> i32 {
 }
 
 pub use disk_sync::DiskStamp;
-pub use write_lock::{WRITE_LOCK_WAIT, is_write_lock_file, write_lock_path};
+pub use write_lock::{
+    WRITE_LOCK_WAIT, is_write_lock_file, rewrite_file_under_library_lock, write_lock_path,
+};
 mod helpers;
 mod primitives;
 mod write_lock;
