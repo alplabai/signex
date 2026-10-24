@@ -111,6 +111,7 @@ impl Signex {
         } else {
             Some(gitignore.as_str())
         };
+        let mut adapter_failed = false;
         match try_init_project_repo(&state.project_dir, state.use_lfs, gitignore_arg) {
             Ok(()) => {
                 // v0.22 Phase 8.6 — for project scope, overwrite the
@@ -132,9 +133,11 @@ impl Signex {
                     // `open_or_init` failures and still flipped the
                     // flag, leaving the project in a mismatch state.
                     // Now any failure logs through diagnostics AND
-                    // skips the flag flip so the user re-runs Enable
-                    // VC after fixing the underlying issue.
+                    // skips the flag flip; `.git` already exists, so
+                    // the user fixes the cause, deletes `.git` and enables
+                    // version control again.
                     let mut adapter_ok = false;
+                    let mut adapter_error: Option<String> = None;
                     match signex_library::adapters::local_git_project::LocalGitProjectAdapter::open_or_init(
                         state.project_dir.clone(),
                     ) {
@@ -153,17 +156,32 @@ impl Signex {
                             Err(e) => {
                                 crate::diagnostics::log_warning(format!(
                                     "[git] write_gitattributes failed: {e} — \
-                                     enable_git left off; re-run Enable VC after fix"
+                                     enable_git left off; fix the cause, delete the project's .git folder, then enable version control again"
                                 ));
+                                adapter_error =
+                                    Some(format!("could not write .gitattributes: {e}"));
                             }
                         },
                         Err(e) => {
                             crate::diagnostics::log_warning(format!(
                                 "[git] open_or_init failed for {}: {e} — \
-                                 enable_git left off; re-run Enable VC after fix",
+                                 enable_git left off; fix the cause, delete the project's .git folder, then enable version control again",
                                 state.project_dir.display()
                             ));
+                            adapter_error = Some(format!("could not open the repository: {e}"));
                         }
+                    }
+                    adapter_failed = adapter_error.is_some();
+                    if let Some(reason) = adapter_error {
+                        // The dialog closes below and `.git` now exists, so it
+                        // cannot be reopened — without this the user sees a
+                        // normal close with auto-commit still off.
+                        self.document_state.error_notice =
+                            Some(crate::app::state::ErrorNotice::version_control(format!(
+                                "The repository at {} was created, but auto-commit is not \
+                                 enabled: {reason}",
+                                state.project_dir.display()
+                            )));
                     }
 
                     // Flip `enable_git = true` on the matching
@@ -195,12 +213,18 @@ impl Signex {
                     crate::app::VersionControlScope::Project => "repository",
                     crate::app::VersionControlScope::Library => "library repository",
                 };
-                crate::diagnostics::log_info(format!(
-                    "[git] initialised {scope_label} at {}",
-                    state.project_dir.display()
-                ));
+                if !adapter_failed {
+                    crate::diagnostics::log_info(format!(
+                        "[git] initialised {scope_label} at {}",
+                        state.project_dir.display()
+                    ));
+                }
             }
             Err(error) => {
+                crate::diagnostics::log_warning(format!(
+                    "[git] enable version control failed at {}: {error}",
+                    state.project_dir.display()
+                ));
                 if let Some(s) = self.ui_state.enable_version_control.as_mut() {
                     s.error = Some(error.to_string());
                 }
@@ -379,3 +403,7 @@ pub(crate) fn build_gitignore_body(items: &[crate::app::TrackItem]) -> String {
         out
     }
 }
+
+#[cfg(test)]
+#[path = "version_control_tests.rs"]
+mod version_control_tests;
