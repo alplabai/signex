@@ -667,3 +667,33 @@ fn a_clean_resync_says_already_match_and_has_no_blank_note() {
     ));
     assert!(!panel_has(&f.app, "Sync Sheet Pins: 'steady.snxsch' has "));
 }
+
+#[test]
+fn syncing_several_files_undoes_and_redoes_as_one_step() {
+    let a = symbol_for("a.snxsch", Vec::new());
+    let mut b = symbol_for("b.snxsch", Vec::new());
+    b.position = Point::new(200.0, 200.0);
+    let ids = [a.uuid, b.uuid];
+    let mut f = fixture_with(None, vec![a, b]);
+    write_child(&f, "a.snxsch", "ALPHA");
+    write_child(&f, "b.snxsch", "BRAVO");
+    select_symbols(&mut f, &ids);
+
+    sync(&mut f.app);
+    assert_eq!(pin_names_of_symbol(&f, ids[0]), vec!["ALPHA".to_string()]);
+    assert_eq!(pin_names_of_symbol(&f, ids[1]), vec!["BRAVO".to_string()]);
+
+    let _ = f.app.update(Message::Edit(EditMsg::Undo));
+    assert!(
+        pin_names_of_symbol(&f, ids[0]).is_empty(),
+        "one undo reverts the first file"
+    );
+    assert!(
+        pin_names_of_symbol(&f, ids[1]).is_empty(),
+        "one undo reverts the second file too"
+    );
+
+    let _ = f.app.update(Message::Edit(EditMsg::Redo));
+    assert_eq!(pin_names_of_symbol(&f, ids[0]), vec!["ALPHA".to_string()]);
+    assert_eq!(pin_names_of_symbol(&f, ids[1]), vec!["BRAVO".to_string()]);
+}

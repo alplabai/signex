@@ -72,16 +72,29 @@ impl Signex {
         clear_overlay_cache: bool,
         update_selection_info: bool,
     ) -> bool {
+        self.apply_engine_commands_checked(commands, clear_overlay_cache, update_selection_info)
+            == CommandOutcome::Changed
+    }
+
+    /// [`Self::apply_engine_commands`] that says whether the batch changed
+    /// the document, left it as it was, or was rejected (and rolled back),
+    /// for callers that report on the outcome.
+    pub(crate) fn apply_engine_commands_checked(
+        &mut self,
+        commands: Vec<signex_engine::Command>,
+        clear_overlay_cache: bool,
+        update_selection_info: bool,
+    ) -> CommandOutcome {
         if commands.is_empty() {
-            return false;
+            return CommandOutcome::Unchanged;
         }
 
         let Some(engine) = self.document_state.active_engine_mut() else {
-            return false;
+            return CommandOutcome::Failed;
         };
 
         // One engine history entry for the whole batch, with the patches
-        // OR-ed together — the grouping the app's marker stack used to
+        // OR-ed together - the grouping the app's marker stack used to
         // encode, now owned by the engine that holds the history.
         let invalidation = match engine.execute_batch(commands) {
             Ok(result) => result
@@ -91,11 +104,16 @@ impl Signex {
             Err(error) => {
                 let error = anyhow::Error::new(error);
                 crate::diagnostics::log_error("Engine command execution failed", &error);
-                return false;
+                return CommandOutcome::Failed;
             }
         };
 
-        self.finish_schematic_mutation(invalidation, clear_overlay_cache, update_selection_info)
+        if self.finish_schematic_mutation(invalidation, clear_overlay_cache, update_selection_info)
+        {
+            CommandOutcome::Changed
+        } else {
+            CommandOutcome::Unchanged
+        }
     }
 
     pub(crate) fn apply_engine_command(
