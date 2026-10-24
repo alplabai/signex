@@ -402,6 +402,7 @@ impl Signex {
                 canvas: sch_canvas,
                 canvases: std::collections::HashMap::new(),
                 pcb_canvas,
+                pcb_canvases: std::collections::HashMap::new(),
                 dragging: None,
                 drag_start_pos: None,
                 drag_start_size: 0.0,

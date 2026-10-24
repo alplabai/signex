@@ -366,6 +366,141 @@ fn center_view_at_cursor_recentres_a_pcb() {
     );
 }
 
+/// #494: an undocked PCB tab has its own PCB canvas. Centring the undocked
+/// window's view moves that window's camera and leaves the main window's
+/// alone; with one shared canvas both windows jumped together.
+#[test]
+fn an_undocked_pcb_window_moves_its_own_camera_not_the_main_one() {
+    let (mut app, _t) = Signex::new();
+    let path = PathBuf::from("/tmp/does-not-matter/board.snxpcb");
+    let _ = app.update(Message::File(FileMsg::PcbOpenFinished {
+        path: path.clone(),
+        title: "board".to_string(),
+        result: Ok(Box::new(empty_pcb_board())),
+    }));
+    let window_id = iced::window::Id::unique();
+    let _ = app.update(Message::Window(WindowMsg::UndockedTabOpened {
+        path,
+        id: window_id,
+    }));
+    app.interaction_state.pcb_canvas.set_viewport(VIEWPORT);
+    app.interaction_state
+        .pcb_canvas_for_window(window_id)
+        .set_viewport(VIEWPORT);
+    let main_before = app.interaction_state.pcb_canvas.live_camera();
+    let _ = app.update(Message::CanvasEventInWindow {
+        window_id,
+        event: CanvasEvent::CursorAt {
+            x: 50.0,
+            y: 30.0,
+            zoom_pct: 100.0,
+        },
+    });
+
+    let _ = app.update(Message::CanvasEventInWindow {
+        window_id,
+        event: CanvasEvent::CenterAtCursor,
+    });
+
+    assert_eq!(
+        app.interaction_state.pcb_canvas.live_camera(),
+        main_before,
+        "the main window's board view must not move"
+    );
+    let centre = view_centre(
+        app.interaction_state
+            .pcb_canvas_for_window(window_id)
+            .live_camera(),
+    );
+    assert!(
+        (centre.0 - 50.0).abs() < 1e-3 && (centre.1 - 30.0).abs() < 1e-3,
+        "the undocked board view must centre on its cursor point, got {centre:?}"
+    );
+}
+
+/// #494: the undocked PCB window keeps working after the main window
+/// switches to a schematic. The PCB handlers find the board through the
+/// active tab, so the window's event has to retarget it.
+#[test]
+fn an_undocked_pcb_window_still_centres_while_the_main_window_shows_a_schematic() {
+    let (mut app, sheet) = app_with(vec![symbol(uuid::Uuid::new_v4(), "R1", 0.0)]);
+    let path = PathBuf::from("/tmp/does-not-matter/board.snxpcb");
+    let _ = app.update(Message::File(FileMsg::PcbOpenFinished {
+        path: path.clone(),
+        title: "board".to_string(),
+        result: Ok(Box::new(empty_pcb_board())),
+    }));
+    let window_id = iced::window::Id::unique();
+    let _ = app.update(Message::Window(WindowMsg::UndockedTabOpened {
+        path,
+        id: window_id,
+    }));
+    app.document_state.active_tab = 0;
+    app.document_state.active_path = Some(sheet);
+    app.interaction_state
+        .pcb_canvas_for_window(window_id)
+        .set_viewport(VIEWPORT);
+    let _ = app.update(Message::CanvasEventInWindow {
+        window_id,
+        event: CanvasEvent::CursorAt {
+            x: 50.0,
+            y: 30.0,
+            zoom_pct: 100.0,
+        },
+    });
+
+    let _ = app.update(Message::CanvasEventInWindow {
+        window_id,
+        event: CanvasEvent::CenterAtCursor,
+    });
+
+    let centre = view_centre(
+        app.interaction_state
+            .pcb_canvas_for_window(window_id)
+            .live_camera(),
+    );
+    assert!(
+        (centre.0 - 50.0).abs() < 1e-3 && (centre.1 - 30.0).abs() < 1e-3,
+        "the undocked board view must centre on its cursor point, got {centre:?}"
+    );
+    assert_eq!(app.document_state.active_tab, 0, "the main tab is restored");
+}
+
+/// #494: app-wide settings reach the undocked PCB canvas too, and
+/// reattaching the tab drops it.
+#[test]
+fn an_undocked_pcb_canvas_follows_the_grid_toggle_and_is_dropped_on_reattach() {
+    let (mut app, _t) = Signex::new();
+    let path = PathBuf::from("/tmp/does-not-matter/board.snxpcb");
+    let _ = app.update(Message::File(FileMsg::PcbOpenFinished {
+        path: path.clone(),
+        title: "board".to_string(),
+        result: Ok(Box::new(empty_pcb_board())),
+    }));
+    let window_id = iced::window::Id::unique();
+    let _ = app.update(Message::Window(WindowMsg::UndockedTabOpened {
+        path,
+        id: window_id,
+    }));
+    assert!(app.interaction_state.pcb_canvases.contains_key(&window_id));
+    let visible = app.interaction_state.pcb_canvas.grid_visible;
+
+    let _ = app.update(Message::Ui(UiMsg::GridToggle));
+
+    assert_eq!(app.interaction_state.pcb_canvas.grid_visible, !visible);
+    assert_eq!(
+        app.interaction_state.pcb_canvases[&window_id].grid_visible, !visible,
+        "the undocked board view must follow the grid toggle"
+    );
+
+    let _ = app.update(Message::Window(WindowMsg::ReattachTab(window_id)));
+
+    assert!(
+        !app.interaction_state.pcb_canvases.contains_key(&window_id),
+        "reattaching must drop the window's PCB canvas"
+    );
+}
+
 fn empty_pcb_board() -> signex_types::pcb::PcbBoard {
     signex_types::pcb::PcbBoard {
         unknown: Default::default(),
