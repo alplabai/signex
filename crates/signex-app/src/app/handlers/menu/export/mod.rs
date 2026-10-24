@@ -399,12 +399,15 @@ fn build_scope(
         let base_dir = project_dir
             .clone()
             .or_else(|| root_path.parent().map(PathBuf::from));
-        let graph = crate::app::project_sheets::project_graph(
+        let fold = set.fold;
+        let graph = crate::app::project_sheets::project_graph_with(
             &set.sheets,
             base_dir.as_deref(),
             Some(&root_path),
+            fold,
         );
-        let root_key = crate::app::project_sheets::sheet_key(&root_path, base_dir.as_deref());
+        let root_key =
+            crate::app::project_sheets::sheet_key_with(&root_path, base_dir.as_deref(), fold);
         if !graph.sheets.contains_key(&root_key) {
             // The root is exempt from losing a SheetKey collision (#536),
             // so reaching here means it was never loaded at all — absent,
@@ -424,8 +427,13 @@ fn build_scope(
         // Root + every declared page its hierarchy never reaches (#430) —
         // a flat multi-page project stitches into one netlist only if each
         // page is named as a root of its own.
-        let roots =
-            crate::app::project_sheets::project_roots(root_key, &set, &graph, base_dir.as_deref());
+        let roots = crate::app::project_sheets::project_roots(
+            root_key,
+            &set,
+            &graph,
+            base_dir.as_deref(),
+            fold,
+        );
         // `build_project_netlist` always produces a netlist and reports what
         // it could not stitch in-band. The issues are returned to the caller
         // rather than acted on here, because severity is a per-deliverable

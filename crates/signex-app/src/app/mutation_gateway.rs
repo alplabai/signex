@@ -329,24 +329,26 @@ impl Signex {
         // (#338): a child sheet in focus must not shrink the netlist to its
         // own subtree. A loose document (or a project with no declared root)
         // roots at the active sheet — see `resolve_netlist_root`.
+        let project = self.document_state.active_document_project();
+        let fold = crate::app::state::project_case::fold_of(project);
+        let project_dir = project.map(|p| p.dir().to_path_buf());
         let set = crate::app::project_sheets::assemble_project_sheets(
             &self.document_state,
             &[],
             &root_path,
+            fold,
         );
-        let project_dir = self
-            .document_state
-            .active_document_project()
-            .map(|p| p.dir().to_path_buf());
         let base_dir = project_dir
             .clone()
             .or_else(|| root_path.parent().map(std::path::PathBuf::from));
-        let graph = crate::app::project_sheets::project_graph(
+        let graph = crate::app::project_sheets::project_graph_with(
             &set.sheets,
             base_dir.as_deref(),
             Some(&root_path),
+            fold,
         );
-        let root_key = crate::app::project_sheets::sheet_key(&root_path, base_dir.as_deref());
+        let root_key =
+            crate::app::project_sheets::sheet_key_with(&root_path, base_dir.as_deref(), fold);
         if !graph.sheets.contains_key(&root_key) {
             // The root sheet is exempt from losing a SheetKey collision
             // (#536), so reaching here means it was never assembled at

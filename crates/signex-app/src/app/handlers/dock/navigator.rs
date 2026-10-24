@@ -88,14 +88,14 @@ impl Signex {
             crate::diagnostics::log_warning("Up Hierarchy: no sheet is focused");
             return;
         };
-        let Some((root, pages)) = self.navigator_project_scope() else {
+        let Some((root, pages, fold)) = self.navigator_project_scope() else {
             crate::diagnostics::log_warning(
                 "Up Hierarchy: the focused sheet is not part of a loaded project",
             );
             return;
         };
-        let set = assemble_project_sheets(&self.document_state, &pages, &root);
-        match parent_sheet(&set.sheets, &active) {
+        let set = assemble_project_sheets(&self.document_state, &pages, &root, fold);
+        match parent_sheet(&set.sheets, &active, fold) {
             Some(parent) => self.open_or_focus_sheet_path(parent),
             None => crate::diagnostics::log_warning(format!(
                 "{} has no parent sheet: it is the project root or no sheet references it",
