@@ -129,6 +129,7 @@ fn a_stroke_floor_draws_a_zero_width_polygon_outline() {
     // Transparent fill, so only the outline can light a pixel. Its bottom
     // edge runs along y = 1.0 mm, the sampled row's pixel boundary.
     let outline = GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[0.0, 1.0], [30.0, 1.0], [30.0, 10.0], [0.0, 10.0]],
         fill_color: [0.0, 0.0, 0.0, 0.0],
         stroke_color: Some([1.0, 1.0, 1.0, 1.0]),
@@ -212,6 +213,7 @@ fn polygon_smoke_pass_runs() {
 #[test]
 fn polygon_smoke_pass_handles_low_and_high_zoom() {
     let polygons = [GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[2.0, 2.0], [8.0, 2.0], [8.0, 8.0], [2.0, 8.0]],
         fill_color: [0.2, 0.7, 0.9, 1.0],
         stroke_color: None,
@@ -231,12 +233,14 @@ fn polygon_smoke_pass_handles_low_and_high_zoom() {
 fn polygon_smoke_pass_ignores_degenerate_geometry() {
     let polygons = [
         GpuPolygon {
+            holes: Vec::new(),
             vertices: vec![[0.0, 0.0], [1.0, 0.0]],
             fill_color: [1.0, 0.0, 0.0, 1.0],
             stroke_color: None,
             stroke_width: 0.0,
         },
         GpuPolygon {
+            holes: Vec::new(),
             vertices: vec![[2.0, 2.0], [8.0, 2.0], [8.0, 8.0], [2.0, 8.0]],
             fill_color: [0.2, 0.7, 0.9, 1.0],
             stroke_color: None,
@@ -433,6 +437,7 @@ fn overlay_compositing_order_places_overlay_between_geometry_and_text() {
 #[test]
 fn grid_overlay_toggles_do_not_change_geometry_draw_work() {
     let polygons = [GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[0.5, 0.5], [4.5, 0.5], [4.5, 4.5], [0.5, 4.5]],
         fill_color: [0.18, 0.22, 0.78, 1.0],
         stroke_color: None,

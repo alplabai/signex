@@ -60,11 +60,18 @@ pub(super) fn zone_from_board_zone(
         .iter()
         .map(|point| point_to_xy(*point))
         .collect();
+    let holes = zone
+        .holes
+        .iter()
+        .filter(|hole| hole.len() >= 3)
+        .map(|hole| hole.iter().map(|point| point_to_xy(*point)).collect())
+        .collect();
     let layer_name = zone.layer.to_ascii_lowercase();
     let layer_rank = layer_ranks.get(&layer_name).copied().unwrap_or(u16::MAX);
 
     Some(ZonePolygonInput {
         vertices,
+        holes,
         rule_area: is_rule_area_zone(zone),
         net: zone.net,
         priority: zone.priority,
@@ -248,6 +255,7 @@ pub(super) fn emit_static_polygons(
         let stroke_width = (pad.size_mm[0].min(pad.size_mm[1]) * 0.08).max(0.02);
 
         scene.top_polygons.push(GpuPolygon {
+            holes: Vec::new(),
             vertices: pad_vertices(pad),
             fill_color,
             stroke_color: Some(stroke_color),
@@ -258,6 +266,7 @@ pub(super) fn emit_static_polygons(
     for zone in &snapshot.zones {
         scene.polygons.push(GpuPolygon {
             vertices: zone.vertices.clone(),
+            holes: zone.holes.clone(),
             fill_color: zone_fill,
             stroke_color: Some(zone_stroke),
             stroke_width: 0.06,
@@ -267,6 +276,7 @@ pub(super) fn emit_static_polygons(
     for rule_area in &snapshot.rule_areas {
         scene.polygons.push(GpuPolygon {
             vertices: rule_area.vertices.clone(),
+            holes: rule_area.holes.clone(),
             fill_color: rule_area_fill,
             stroke_color: Some(rule_area_stroke),
             stroke_width: 0.08,
@@ -421,6 +431,7 @@ pub(super) fn emit_overlays(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene
         let fill_color = with_alpha_mul(stroke_color, 0.28);
 
         scene.overlay_polygons.push(GpuPolygon {
+            holes: Vec::new(),
             vertices: drc_marker_vertices(marker),
             fill_color,
             stroke_color: Some(stroke_color),
