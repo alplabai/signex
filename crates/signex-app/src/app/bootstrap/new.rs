@@ -393,6 +393,7 @@ impl Signex {
                 preview: None,
                 pending_pdf_options: None,
                 pending_pdf_files: None,
+                page_setup_memory: Default::default(),
                 pending_bom_options: None,
                 error_notice: None,
                 netlist_incomplete_prompt: None,

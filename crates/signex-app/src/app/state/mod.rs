@@ -8,6 +8,7 @@ use super::TabInfo;
 
 mod interaction;
 mod pdf_page_setup;
+mod pdf_preview_raster;
 mod reference_policy;
 pub(crate) mod scope;
 mod sheet_read;
@@ -17,6 +18,7 @@ pub(crate) mod volume_case;
 
 pub use interaction::InteractionState;
 pub use pdf_page_setup::PageSetupInputs;
+pub use pdf_preview_raster::{PageSetupMemory, RasterOutcome, RememberedPageSetup};
 pub use ui::UiState;
 
 pub struct Signex {
@@ -471,6 +473,10 @@ pub struct DocumentState {
     /// path was bypassed (legacy direct-export caller); the export
     /// then includes every sheet by default.
     pub pending_pdf_files: Option<std::collections::HashSet<PathBuf>>,
+    /// Page setup (size, orientation, margins, scale) each document last used
+    /// in the PDF export modal, restored when it reopens for the same
+    /// document. Session-only; never written to disk.
+    pub page_setup_memory: PageSetupMemory,
     /// Pending BOM options stashed from the BOM preview modal while
     /// the file picker is running. Without this, the user's column /
     /// grouping / variant / include-DNP picks in the preview would
@@ -714,6 +720,9 @@ pub struct PreviewState {
     /// Typed text of the page-setup fields (custom size, margins, percent)
     /// plus the reason the last edit was rejected or clamped.
     pub page_setup: PageSetupInputs,
+    /// Generation of the newest background rasterisation request; results
+    /// tagged with an older one are stale and discarded.
+    pub raster_generation: u64,
 }
 
 impl PreviewState {
