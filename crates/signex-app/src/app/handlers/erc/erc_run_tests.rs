@@ -51,7 +51,7 @@ fn at_child_coordinate(x: f64, y: f64) -> bool {
 #[test]
 fn a_child_label_finding_draws_no_marker_on_the_parent_canvas() {
     let (mut app, dir) = parent_with_a_far_child_label();
-    let _ = app.handle_run_erc();
+    app.run_erc_blocking();
 
     let top = dir.join("top.snxsch");
     let parent_hit = app
@@ -79,7 +79,7 @@ fn a_child_label_finding_draws_no_marker_on_the_parent_canvas() {
 #[test]
 fn a_child_label_finding_is_filed_and_targeted_on_the_child_sheet() {
     let (mut app, dir) = parent_with_a_far_child_label();
-    let _ = app.handle_run_erc();
+    app.run_erc_blocking();
 
     let child = dir.join("child.snxsch");
     let filed = app.ui_state.erc_violations_by_path.get(&child).map(|v| {

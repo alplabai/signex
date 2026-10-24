@@ -609,7 +609,7 @@ mod tests {
         let (mut app, dir) = app_with_a_child_only_on_disk();
         let child = dir.join("child.snxsch");
 
-        let _ = app.handle_run_erc();
+        app.run_erc_blocking();
 
         let checked: Vec<std::path::PathBuf> = app
             .ui_state

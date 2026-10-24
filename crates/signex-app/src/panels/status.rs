@@ -63,7 +63,14 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     );
     col = col.push(separator(&ctx.tokens));
 
-    if ctx.erc_diagnostics.is_empty() {
+    if ctx.erc_running {
+        col = col.push(
+            text("Running…")
+                .size(10)
+                .color(theme_ext::text_secondary(&ctx.tokens)),
+        );
+    }
+    if ctx.erc_diagnostics.is_empty() && !ctx.erc_running {
         col = col.push(
             text("No ERC diagnostics yet")
                 .size(10)
