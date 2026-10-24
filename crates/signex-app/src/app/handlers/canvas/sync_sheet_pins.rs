@@ -7,15 +7,27 @@
 //! command through the mutation gateway so undo and netlist invalidation work
 //! like any other edit.
 
+use crate::app::mutation_gateway::CommandOutcome;
+
 impl crate::app::Signex {
-    /// Run Sync Sheet Pins for the selected sheet symbol. Every outcome that is
-    /// not a successful change is reported to the Messages panel.
+    /// Run Sync Sheet Pins for every distinct child file referenced by the
+    /// selected sheet symbols, reporting each file separately. Every outcome
+    /// that is not a successful change is reported to the Messages panel.
     pub(crate) fn sync_selected_sheet_pins(&mut self) {
-        let Some(filename) = self.selected_child_sheet_filename() else {
+        let filenames = self.selected_child_sheet_filenames();
+        if filenames.is_empty() {
             crate::diagnostics::log_warning("Sync Sheet Pins: no sheet symbol is selected");
             return;
-        };
-        let Some(path) = self.resolve_child_sheet_path(&filename) else {
+        }
+        for filename in filenames {
+            self.sync_child_file_pins(&filename);
+        }
+    }
+
+    /// Reconcile every sheet symbol of the active sheet that references
+    /// `filename` against that file's ports.
+    fn sync_child_file_pins(&mut self, filename: &str) {
+        let Some(path) = self.resolve_child_sheet_path(filename) else {
             crate::diagnostics::log_warning(format!(
                 "Sync Sheet Pins: sheet symbol references no file ('{filename}')"
             ));
@@ -42,34 +54,34 @@ impl crate::app::Signex {
             crate::diagnostics::log_warning("Sync Sheet Pins: no active schematic to sync");
             return;
         };
-        let ports = signex_engine::ports_for_pin_sync(&child, parent, &filename);
+        let ports = signex_engine::ports_for_pin_sync(&child, parent, filename);
         // A child with no ports must still be reconciled: that is what drops
         // the auto-generated pins its deleted labels left behind.
         let exposes_no_ports = ports.is_empty();
         let reported_ports = ports.clone();
-        let names_before = self.pin_names_for(&filename);
-        let (changed, failed) = self.apply_engine_command_checked(
+        let names_before = self.pin_names_for(filename);
+        let outcome = self.apply_engine_command_checked(
             signex_engine::Command::ReconcileChildSheetPins {
-                child_filename: filename.clone(),
+                child_filename: filename.to_string(),
                 ports,
             },
             true,
             true,
         );
-        if failed {
+        if outcome == CommandOutcome::Failed {
+            crate::diagnostics::log_warning(format!(
+                "Sync Sheet Pins: could not update pins for '{filename}'; see the error above"
+            ));
             return;
         }
-        // The engine leaves a port unplaced when the symbol's edge has no free
-        // slot (stacking pins on one point would short their nets).
-        if let Some(parent) = self.document_state.active_engine().map(|e| e.document()) {
-            for (symbol, names) in
-                signex_engine::unplaced_sheet_ports(parent, &filename, &reported_ports)
-            {
-                crate::diagnostics::log_warning(format!(
-                    "Sync Sheet Pins: no free slot on sheet symbol '{symbol}' ('{filename}') for {}; enlarge the sheet symbol or move the wires on its edge, then sync again",
-                    names.join(", ")
-                ));
-            }
+        let changed = outcome == CommandOutcome::Changed;
+        self.report_unplaced_ports(filename, &reported_ports);
+        let blank_labels = signex_engine::blank_port_label_count(&child);
+        if blank_labels > 0 {
+            crate::diagnostics::log_warning(format!(
+                "Sync Sheet Pins: '{filename}' has {blank_labels} Hierarchical or Global \
+                 label(s) with blank text; they name no port and were ignored"
+            ));
         }
         if exposes_no_ports {
             crate::diagnostics::log_warning(format!(
@@ -84,11 +96,25 @@ impl crate::app::Signex {
         } else if changed {
             crate::diagnostics::log_info(format!(
                 "Sync Sheet Pins: updated pins for '{filename}'{}",
-                pin_change_summary(&names_before, &self.pin_names_for(&filename))
+                pin_change_summary(&names_before, &self.pin_names_for(filename))
             ));
         } else {
             crate::diagnostics::log_info(format!(
                 "Sync Sheet Pins: pins for '{filename}' already match its labels"
+            ));
+        }
+    }
+
+    /// The engine leaves a port unplaced when the symbol's edge has no free
+    /// slot (stacking pins on one point would short their nets).
+    fn report_unplaced_ports(&self, filename: &str, ports: &[signex_engine::SheetPort]) {
+        let Some(parent) = self.document_state.active_engine().map(|e| e.document()) else {
+            return;
+        };
+        for (symbol, names) in signex_engine::unplaced_sheet_ports(parent, filename, ports) {
+            crate::diagnostics::log_warning(format!(
+                "Sync Sheet Pins: no free slot on sheet symbol '{symbol}' ('{filename}') for {}; enlarge the sheet symbol or move the wires on its edge, then sync again",
+                names.join(", ")
             ));
         }
     }
