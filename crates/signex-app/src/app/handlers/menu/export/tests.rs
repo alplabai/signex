@@ -967,5 +967,7 @@ pub(crate) fn add_project(app: &mut Signex, dir: &str, listed: &[&str]) {
             unknown: Default::default(),
         },
         pending_libraries: std::collections::HashMap::new(),
+        case_fold: Default::default(),
+        case_probed: false,
     });
 }
