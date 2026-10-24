@@ -20,16 +20,22 @@ fn apply_primitive_listing(
     listing: Result<Vec<PrimitiveSummary>, LibraryError>,
     library: &str,
     kind: &str,
-) {
+) -> bool {
     match listing {
-        Ok(entries) => *cache = entries,
-        Err(error) => tracing::warn!(
-            target: "signex::library",
-            library = %library,
-            listing = kind,
-            error = %error,
-            "primitive listing failed; previous cache kept"
-        ),
+        Ok(entries) => {
+            *cache = entries;
+            true
+        }
+        Err(error) => {
+            tracing::warn!(
+                target: "signex::library",
+                library = %library,
+                listing = kind,
+                error = %error,
+                "primitive listing failed; previous cache kept"
+            );
+            false
+        }
     }
 }
 
@@ -152,6 +158,7 @@ impl LibraryState {
             cached_sims: Vec::new(),
             cached_classes: Vec::new(),
             observed_stamp: None,
+            dangling: Default::default(),
             own_edit_stamp: None,
             display: LibraryDisplaySettings::default(),
         };
@@ -167,6 +174,7 @@ impl LibraryState {
         }
         self.open_libraries.push(entry);
         self.expanded.push(true);
+        self.sweep_dangling_refs();
         Ok(())
     }
 
@@ -259,20 +267,20 @@ impl LibraryState {
             // A failed listing keeps the previous cache and warns —
             // blanking it here would render a mounted library as
             // empty. See `apply_primitive_listing`.
-            apply_primitive_listing(
-                &mut lib.cached_symbols,
-                symbols,
-                &lib.display_name,
-                "symbols",
-            );
-            apply_primitive_listing(
-                &mut lib.cached_footprints,
-                footprints,
-                &lib.display_name,
-                "footprints",
-            );
-            apply_primitive_listing(&mut lib.cached_sims, sims, &lib.display_name, "sims");
+            let name = lib.display_name.clone();
+            let ok = [
+                apply_primitive_listing(&mut lib.cached_symbols, symbols, &name, "symbols"),
+                apply_primitive_listing(
+                    &mut lib.cached_footprints,
+                    footprints,
+                    &name,
+                    "footprints",
+                ),
+                apply_primitive_listing(&mut lib.cached_sims, sims, &name, "sims"),
+            ];
+            lib.dangling.listings_complete = ok.iter().all(|listed| *listed);
         }
+        self.sweep_dangling_refs();
         Ok(())
     }
 
@@ -480,6 +488,9 @@ pub struct OpenLibrary {
     /// same grid / unit / background colour). In-memory only as
     /// of v0.9; v0.9.x can persist to `library.toml`.
     pub display: LibraryDisplaySettings,
+    /// Rows whose symbol / footprint / sim binding resolves to nothing,
+    /// from the last [`LibraryState::sweep_dangling_refs`].
+    pub dangling: crate::library::dangling::DanglingSweep,
 }
 
 /// Per-library canvas + UI defaults shared across every primitive
@@ -598,19 +609,13 @@ impl OpenLibrary {
         let symbols = adapter.list_symbols();
         let footprints = adapter.list_footprints();
         let sims = adapter.list_sims();
-        apply_primitive_listing(
-            &mut self.cached_symbols,
-            symbols,
-            &self.display_name,
-            "symbols",
-        );
-        apply_primitive_listing(
-            &mut self.cached_footprints,
-            footprints,
-            &self.display_name,
-            "footprints",
-        );
-        apply_primitive_listing(&mut self.cached_sims, sims, &self.display_name, "sims");
+        let name = &self.display_name;
+        let ok = [
+            apply_primitive_listing(&mut self.cached_symbols, symbols, name, "symbols"),
+            apply_primitive_listing(&mut self.cached_footprints, footprints, name, "footprints"),
+            apply_primitive_listing(&mut self.cached_sims, sims, name, "sims"),
+        ];
+        self.dangling.listings_complete = ok.iter().all(|listed| *listed);
     }
 
     /// Total number of rows across every cached table.
