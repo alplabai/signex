@@ -29,6 +29,9 @@ pub(super) struct Env {
     tips: Vec<(Uuid, Key)>,
     selected: HashSet<Uuid>,
     moving: HashSet<Uuid>,
+    /// Where every moving pin's tip was: a joint on one of these is where a
+    /// pin still has to be reconnected, so it cannot slide.
+    old_tips: HashSet<Key>,
 }
 
 /// Everything on an old tip other than the wires attached to it.
@@ -74,6 +77,7 @@ impl Env {
         document: &SchematicSheet,
         selected: HashSet<Uuid>,
         moving: HashSet<Uuid>,
+        old_tips: HashSet<Key>,
     ) -> Self {
         let mut tips = Vec::new();
         for symbol in &document.symbols {
@@ -108,6 +112,7 @@ impl Env {
             tips,
             selected,
             moving,
+            old_tips,
         }
     }
 
@@ -296,7 +301,6 @@ impl Env {
         let single_target = group.iter().all(|m| key(&m.new) == key(&group[0].new));
         let pinned_dot = !probe.junctions.is_empty() && probe.interior;
         let anchored = probe.stationary_pin
-            || probe.wire_ends > 0
             || probe.label
             || (probe.no_connect && !attached.is_empty())
             || pinned_dot
@@ -477,6 +481,9 @@ impl Env {
         horizontal: bool,
     ) -> Option<(Plan, Point)> {
         let kf = key(&fixed);
+        if self.old_tips.contains(&kf) {
+            return None;
+        }
         let probe = self.probe(kf, &[index]);
         if probe.wire_ends != 1
             || probe.interior

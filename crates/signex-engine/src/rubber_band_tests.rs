@@ -429,6 +429,45 @@ fn a_net_label_on_the_dragged_end_keeps_its_net_name() {
     assert_clean(&mut engine, &before);
 }
 
+/// The label stays put, so a wire that shrinks away from it would orphan it.
+#[test]
+fn a_label_on_the_dragged_end_survives_a_shrinking_move() {
+    let mut sheet = test_sheet();
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0));
+    add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
+    add_label(&mut sheet, "VCC", (45.0, 50.0));
+    let mut engine = Engine::new(sheet).expect("engine");
+    let before = net_shape(engine.document());
+    mv(&mut engine, vec![symbol_item(r1)], -7.5, 0.0, true);
+    assert_clean(&mut engine, &before);
+}
+
+/// A joint that a moving pin still has to leave must not slide away.
+#[test]
+fn an_elbow_on_another_moved_pin_does_not_slide() {
+    let mut sheet = test_sheet();
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(40.0, 50.0)); // pins 35, 45
+    add_wire(&mut sheet, (35.0, 50.0), (45.0, 50.0));
+    add_wire(&mut sheet, (45.0, 45.0), (45.0, 50.0));
+    let mut engine = Engine::new(sheet).expect("engine");
+    let before = net_shape(engine.document());
+    mv(&mut engine, vec![symbol_item(r1)], 10.0, -10.0, true);
+    assert_clean(&mut engine, &before);
+}
+
+/// A new path's corner can sit on another moved pin's old tip; wires placed
+/// for the first pin must not be dragged along with the second.
+#[test]
+fn a_new_paths_corner_on_another_moved_tip_is_not_dragged_away() {
+    let mut sheet = test_sheet();
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(60.0, 50.0)); // pins 55, 65
+    add_label(&mut sheet, "SIG", (55.0, 50.0));
+    let mut engine = Engine::new(sheet).expect("engine");
+    let before = net_shape(engine.document());
+    mv(&mut engine, vec![symbol_item(r1)], 10.0, 7.5, true);
+    assert_clean(&mut engine, &before);
+}
+
 #[test]
 fn a_label_on_a_wire_between_moved_symbols_keeps_its_net_name() {
     let (mut engine, r1, r2) = {
@@ -567,6 +606,12 @@ fn only_the_placed_units_pins_drag_wires() {
     let segs = segments(&engine);
     assert!(has(&segs, (55.0, 50.0), (75.0, 50.0)), "{segs:?}");
     assert!(has(&segs, (45.0, 50.0), (45.0, 60.0)), "{segs:?}");
+    assert!(
+        !segs
+            .iter()
+            .any(|s| s.0 == (55.0, 60.0) || s.1 == (55.0, 60.0)),
+        "the unplaced unit's pin must not be dragged: {segs:?}"
+    );
 }
 
 #[test]

@@ -192,7 +192,8 @@ pub fn follow_moved_pins(
         return Follow::default();
     }
     let selected: HashSet<Uuid> = items.iter().map(|item| item.uuid).collect();
-    let mut env = Env::new(document, selected, moving);
+    let old_tips = moves.iter().map(|mv| pt_key(&mv.old)).collect();
+    let mut env = Env::new(document, selected, moving, old_tips);
     let mut out = Follow::default();
 
     let mut by_tip: BTreeMap<Key, Vec<&Move>> = BTreeMap::new();
