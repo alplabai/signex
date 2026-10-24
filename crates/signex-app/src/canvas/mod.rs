@@ -251,6 +251,16 @@ impl CanvasSlot {
         self.viewport.set(bounds);
     }
 
+    /// World-space point (mm) under the centre of the last-recorded canvas
+    /// viewport. Used to drop a part that was picked from a list rather than
+    /// aimed at the canvas.
+    pub fn view_centre_world(&self) -> (f64, f64) {
+        let bounds = self.viewport.get();
+        let centre = iced::Point::new(bounds.width / 2.0, bounds.height / 2.0);
+        let world = self.camera.borrow().screen_to_world(centre, bounds);
+        (f64::from(world.x), f64::from(world.y))
+    }
+
     /// Zoom one wheel notch about the view centre (View > Zoom In/Out).
     /// Returns whether the camera changed (false at the zoom limits).
     pub fn zoom_about_centre(&self, zoom_in: bool) -> bool {

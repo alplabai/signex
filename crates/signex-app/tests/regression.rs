@@ -158,6 +158,9 @@ mod place_sheet_tool;
 #[path = "regression/symbol_undo_steps.rs"]
 mod symbol_undo_steps;
 
+#[path = "regression/library_place_symbol.rs"]
+mod library_place_symbol;
+
 #[path = "regression/canvas_editing_correctness.rs"]
 mod canvas_editing_correctness;
 #[path = "regression/schematic_field_drag.rs"]
