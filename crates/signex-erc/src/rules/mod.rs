@@ -22,7 +22,7 @@ use signex_types::schematic::{
 };
 
 use crate::context::ErcContext;
-use crate::diagnostic::{Diagnostic, LocationSpace};
+use crate::diagnostic::Diagnostic;
 use crate::{RuleKind, Severity, sel};
 
 // ---------------------------------------------------------------------------
@@ -536,7 +536,7 @@ pub(crate) fn bad_hier_sheet_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
                         lbl.position,
                     )
                     .with_severity(Severity::Warning)
-                    .in_space(LocationSpace::ChildSheet)
+                    .in_child_sheet(child.filename.as_str())
                     .with_primary(sel(lbl.uuid, SelectedKind::Label)),
                 );
             }
