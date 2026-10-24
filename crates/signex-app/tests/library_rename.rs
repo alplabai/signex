@@ -78,6 +78,8 @@ fn fixture() -> Fixture {
         path: prj.clone(),
         data,
         pending_libraries: Default::default(),
+        case_fold: Default::default(),
+        case_probed: false,
     });
     app.document_state.active_project = Some(project_id);
     app.library
@@ -430,6 +432,8 @@ fn a_library_listed_by_another_open_project_is_refused() {
         path: f.prj.with_file_name("other.snxprj"),
         data: other,
         pending_libraries: Default::default(),
+        case_fold: Default::default(),
+        case_probed: false,
     });
 
     submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
