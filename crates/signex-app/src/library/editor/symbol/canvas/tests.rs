@@ -106,6 +106,18 @@ impl Rig {
         );
     }
 
+    /// A right press-release at `at` with no motion between.
+    fn right_click(&mut self, at: (f64, f64)) {
+        self.send(
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)),
+            Some(at),
+        );
+        self.send(
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Right)),
+            Some(at),
+        );
+    }
+
     fn escape(&mut self) -> bool {
         self.send(
             Event::Keyboard(keyboard::Event::KeyPressed {
@@ -497,6 +509,62 @@ fn escape_cancels_an_in_flight_rectangle_and_keeps_the_tool() {
     assert!(rig.cstate.rect_from.is_none());
 
     assert!(!rig.escape(), "the second Esc is the ladder's");
+}
+
+#[test]
+fn right_click_backs_out_of_a_placement_tool_in_the_same_two_steps_as_escape() {
+    let mut rig = Rig::new(Symbol::empty("T"));
+    rig.editor.tool = SymbolTool::PlaceRectangle;
+
+    rig.press((0.0, 0.0));
+    rig.right_click((5.0, 5.0));
+    assert!(
+        rig.cstate.rect_from.is_none(),
+        "the first click cancels the gesture"
+    );
+    assert_eq!(rig.editor.tool, SymbolTool::PlaceRectangle);
+    assert!(rig.editor.context_menu.is_none());
+
+    rig.right_click((5.0, 5.0));
+    assert_eq!(
+        rig.editor.tool,
+        SymbolTool::Select,
+        "the next click leaves the tool, like the second Esc"
+    );
+    assert!(
+        rig.editor.context_menu.is_none(),
+        "leaving the tool opens no menu"
+    );
+}
+
+#[test]
+fn a_right_drag_in_a_placement_tool_pans_and_keeps_the_tool() {
+    let mut rig = Rig::new(Symbol::empty("T"));
+    rig.editor.tool = SymbolTool::AddPin;
+    let before = rig.editor.camera.offset;
+
+    rig.send(
+        Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)),
+        Some((0.0, 0.0)),
+    );
+    rig.moved((20.0, 0.0));
+    rig.send(
+        Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Right)),
+        Some((20.0, 0.0)),
+    );
+
+    assert_ne!(rig.editor.camera.offset, before, "the drag panned");
+    assert_eq!(rig.editor.tool, SymbolTool::AddPin);
+}
+
+#[test]
+fn a_right_click_in_the_select_tool_still_opens_the_context_menu() {
+    let mut rig = Rig::new(Symbol::empty("T"));
+
+    rig.right_click((0.0, 0.0));
+
+    assert!(rig.editor.context_menu.is_some());
+    assert_eq!(rig.editor.tool, SymbolTool::Select);
 }
 
 #[test]

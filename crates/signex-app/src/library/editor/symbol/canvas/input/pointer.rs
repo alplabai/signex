@@ -81,8 +81,10 @@ impl SymbolCanvas<'_> {
     /// Right/Middle release: end the pan. A **right**-release that did
     /// not pan opens the context menu (pin → graphic → empty hit
     /// priority), window-absolute coords, mirroring the footprint
-    /// canvas's `on_secondary_released`. Middle-release never opens the
-    /// menu. Note: when the matching press instead cancelled an
+    /// canvas's `on_secondary_released`. In a placement tool the same
+    /// click leaves the tool instead (`CanvasAction::LeaveTool`).
+    /// Middle-release never opens the menu. Note: when the matching
+    /// press instead cancelled an
     /// in-progress Place Polygon / multi-click draw (see
     /// `on_secondary_press`), `state.panning` was never armed, so this
     /// release naturally falls through to a no-op — placement-cancel
@@ -100,11 +102,14 @@ impl SymbolCanvas<'_> {
         state.last_pan_pos = None;
         state.secondary_press_pos = None;
         state.pan_moved = false;
-        if was_panning
-            && !did_pan
-            && *button == mouse::Button::Right
-            && let Some(cursor_pos) = cursor.position_in(bounds)
-        {
+        let right_click = was_panning && !did_pan && *button == mouse::Button::Right;
+        // A placement tool with nothing in flight (the press already
+        // cancelled any gesture): the click leaves the tool, as the
+        // second Esc does, instead of opening the context menu.
+        if right_click && self.tool != SymbolTool::Select {
+            return Some(canvas::Action::publish(CanvasAction::LeaveTool).and_capture());
+        }
+        if right_click && let Some(cursor_pos) = cursor.position_in(bounds) {
             let screen_x = bounds.x + cursor_pos.x;
             let screen_y = bounds.y + cursor_pos.y;
             // Unsnapped, like every other hit-test site (see
