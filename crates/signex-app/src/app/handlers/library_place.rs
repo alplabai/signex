@@ -28,8 +28,10 @@
 //! open the failure says so.
 //!
 //! Drift tracking (embedded primitive slice, content-hash comparison) is
-//! out of scope: only `library_id`, `row_id` and `library_version` are
-//! written onto the placed `Symbol`.
+//! out of scope (follow-up: #912): only `library_id`, `row_id` and
+//! `library_version` are written onto the placed `Symbol`. The one
+//! guard in place: when the sheet already holds a different copy of the
+//! `LibSymbol`, the existing copy is kept and a warning is logged.
 
 use iced::Task;
 use std::path::{Path, PathBuf};
@@ -124,10 +126,11 @@ impl Signex {
             ));
         }
         let (x, y) = self.interaction_state.canvas.view_centre_world();
-        let at = signex_types::schematic::Point::new(snap_mm(x), snap_mm(y));
-        let reference = self.next_library_reference(&resolved.prefix);
+        let at = self.free_drop_point(snap_mm(x), snap_mm(y));
+        let reference = self.next_designator_for_prefix(&resolved.prefix);
         let placed = placed_symbol(&resolved, reference, at);
         let internal_pn = resolved.internal_pn;
+        self.warn_if_sheet_copy_differs(&resolved.lib_symbol, &internal_pn);
         let commands = vec![
             signex_engine::Command::RegisterLibSymbol {
                 lib_symbol: resolved.lib_symbol,
@@ -145,27 +148,52 @@ impl Signex {
         }
     }
 
-    /// TODO(follow-up): duplicates `next_designator_for_prefix`; fold the two
-    /// once `actions.rs` is free of the open PR that edits it.
-    ///
-    /// Next free `<prefix><n>` on the active sheet. Same rule as
-    /// `next_designator_for_prefix` (max existing index + 1), which is
-    /// private to `actions.rs`; read from the engine document directly.
-    fn next_library_reference(&self, prefix: &str) -> String {
-        let max = self
-            .document_state
-            .active_engine()
-            .map(|engine| {
-                engine
-                    .document()
+    /// The view-centre drop, stepped one grid cell down-right while a
+    /// symbol already sits on it, so a repeated drop is visibly a new part.
+    fn free_drop_point(&self, x: f64, y: f64) -> signex_types::schematic::Point {
+        let occupied = |x: f64, y: f64| {
+            self.document_state.active_engine().is_some_and(|e| {
+                e.document()
                     .symbols
                     .iter()
-                    .filter_map(|s| s.reference.trim().strip_prefix(prefix)?.parse::<u32>().ok())
-                    .max()
-                    .unwrap_or(0)
+                    .any(|s| (s.position.x - x).abs() < 1e-6 && (s.position.y - y).abs() < 1e-6)
             })
-            .unwrap_or(0);
-        format!("{prefix}{}", max + 1)
+        };
+        let (mut x, mut y) = (x, y);
+        while occupied(x, y) {
+            x += DROP_GRID_MM;
+            y += DROP_GRID_MM;
+        }
+        signex_types::schematic::Point::new(x, y)
+    }
+
+    /// `RegisterLibSymbol` keeps an existing entry under the same key, so
+    /// a library symbol edited since the first placement is not picked up.
+    /// Say so instead of silently using the stale copy.
+    fn warn_if_sheet_copy_differs(
+        &self,
+        fresh: &signex_types::schematic::LibSymbol,
+        internal_pn: &str,
+    ) {
+        let Some(existing) = self
+            .document_state
+            .active_engine()
+            .and_then(|e| e.document().lib_symbols.get(&fresh.id))
+        else {
+            return;
+        };
+        let differs = match (
+            serde_json::to_string(existing),
+            serde_json::to_string(fresh),
+        ) {
+            (Ok(a), Ok(b)) => a != b,
+            _ => false,
+        };
+        if differs {
+            crate::diagnostics::log_warning(format!(
+                "Library symbol for {internal_pn} changed since it was first placed;                  the sheet keeps its existing copy of {internal_pn}."
+            ));
+        }
     }
 
     fn report_place_failure(&mut self, detail: &str) {

@@ -5,7 +5,9 @@
 //! against a real temp `.snxlib` holding a two-unit symbol: unit 1 owns
 //! pin "1", unit 2 owns pin "2", and pin "3" is Part Zero (shared).
 
-use signex_app::app::{Message, Signex, TabInfo, TabKind};
+use futures::StreamExt;
+use iced::Task;
+use signex_app::app::{EditMsg, Message, Signex, TabInfo, TabKind};
 use signex_app::library::LibraryMessage;
 use signex_app::library::messages::ResolvedPlacement;
 use signex_app::library::place::resolve_placement;
@@ -313,22 +315,42 @@ fn one_undo_removes_the_placement_and_its_new_lib_symbol() {
     place(&mut app, &f);
     place(&mut app, &f);
 
-    let engine = app.document_state.active_engine_mut().expect("engine");
-    engine.undo().expect("undo");
+    let _ = app.update(Message::Edit(EditMsg::Undo));
     // Second placement reused the entry: undoing it keeps the first part.
-    assert_eq!(engine.document().symbols.len(), 1);
-    assert_eq!(engine.document().lib_symbols.len(), 1);
+    assert_eq!(doc(&app).symbols.len(), 1);
+    assert_eq!(doc(&app).lib_symbols.len(), 1);
 
-    engine.undo().expect("undo");
-    assert!(engine.document().symbols.is_empty());
-    assert!(engine.document().lib_symbols.is_empty());
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    assert!(doc(&app).symbols.is_empty());
+    assert!(doc(&app).lib_symbols.is_empty());
+    assert!(
+        app.document_state.tabs[0].dirty,
+        "undo leaves the tab dirty"
+    );
+}
+
+/// Run a task to completion the way the iced runtime would.
+fn run(task: Task<Message>) -> Vec<Message> {
+    let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+        return Vec::new();
+    };
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    runtime.block_on(async {
+        let mut out = Vec::new();
+        while let Some(action) = stream.next().await {
+            if let iced_runtime::Action::Output(message) = action {
+                out.push(message);
+            }
+        }
+        out
+    })
 }
 
 #[test]
-fn the_picker_message_does_no_io_in_update() {
+fn the_picker_message_places_end_to_end_with_no_io_in_update() {
     let f = fixture();
     let mut app = app_with_library(&f);
-    let _task = app.update(Message::Library(LibraryMessage::PlaceLibraryComponent {
+    let task = app.update(Message::Library(LibraryMessage::PlaceLibraryComponent {
         library_path: f.snxlib.clone(),
         table: "ICs".into(),
         row_id: signex_library::RowId(f.row_id),
@@ -338,6 +360,63 @@ fn the_picker_message_does_no_io_in_update() {
     assert!(doc(&app).symbols.is_empty());
     assert!(doc(&app).lib_symbols.is_empty());
     assert!(app.document_state.error_notice.is_none());
+
+    for message in run(task) {
+        assert!(matches!(
+            message,
+            Message::Library(LibraryMessage::LibraryComponentResolved { .. })
+        ));
+        let _ = app.update(message);
+    }
+    assert_eq!(doc(&app).symbols.len(), 1);
+    assert_eq!(doc(&app).lib_symbols.len(), 1);
+    assert_eq!(doc(&app).symbols[0].row_id, Some(f.row_id));
+    assert!(app.document_state.error_notice.is_none());
+}
+
+#[test]
+fn a_repeated_drop_is_offset_from_the_part_already_there() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    place(&mut app, &f);
+    place(&mut app, &f);
+
+    let s = &doc(&app).symbols;
+    assert_ne!(s[0].position, s[1].position);
+    assert_ne!(s[1].position, s[2].position);
+    assert_ne!(s[0].position, s[2].position);
+}
+
+#[test]
+fn replacing_after_the_library_symbol_changed_warns_and_keeps_the_sheet_copy() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    let first = resolve(&f, f.row_id).expect("resolves");
+    let mut edited = first.clone();
+    edited.lib_symbol.pins.clear();
+    complete(&mut app, &f, "place-364.snxsch", Ok(first.clone()));
+    let kept = doc(&app).lib_symbols.values().next().unwrap().pins.len();
+    assert!(kept > 0);
+
+    // Identical content: no warning.
+    assert!(!warned(&mut app, &f, first));
+    // Edited content: warning, sheet still holds the original copy.
+    assert!(warned(&mut app, &f, edited));
+    assert_eq!(
+        doc(&app).lib_symbols.values().next().unwrap().pins.len(),
+        kept
+    );
+}
+
+/// Place `resolved` and report whether the drift warning was logged.
+fn warned(app: &mut Signex, f: &Fixture, resolved: Box<ResolvedPlacement>) -> bool {
+    let _ = signex_app::diagnostics::init_logging();
+    let before = signex_app::diagnostics::newest_entry_id().unwrap_or(0);
+    complete(app, f, "place-364.snxsch", Ok(resolved));
+    signex_app::diagnostics::recent_entries()
+        .iter()
+        .any(|e| e.id > before && e.message.contains("keeps its existing copy of SNX-TWO"))
 }
 
 #[test]

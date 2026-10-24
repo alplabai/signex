@@ -75,7 +75,7 @@ impl Signex {
         ))
     }
 
-    fn next_designator_for_prefix(&self, prefix: &str) -> String {
+    pub(crate) fn next_designator_for_prefix(&self, prefix: &str) -> String {
         let next_index = self
             .active_render_snapshot()
             .map(|snapshot| {
