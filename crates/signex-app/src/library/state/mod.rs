@@ -468,6 +468,9 @@ pub struct LibraryState {
     /// every app start (Stage 9 mount-source 3). The on-disk schema
     /// lives in `panels::components_panel::global_prefs`.
     pub global_libraries: Vec<crate::panels::components_panel::global_prefs::GlobalLibraryEntry>,
+    /// Mounted path of the bundled stock library; `None` when it was not
+    /// found or failed to mount. Set once at bootstrap.
+    pub stock_library: Option<PathBuf>,
     /// Components Panel UI state — collapsed sections + substring
     /// filter. Stage 9 ships the simple substring matcher; the full
     /// search syntax (plan §5) is polish work.
@@ -529,6 +532,9 @@ pub enum ComponentsMountSource {
     /// Persisted across app launches via
     /// `<config_dir>/signex/global_libraries.toml`.
     Global,
+    /// The library bundled with the install; resolved and mounted at
+    /// bootstrap, never recorded in `global_libraries.toml`.
+    Stock,
 }
 
 impl ComponentsMountSource {
@@ -537,6 +543,7 @@ impl ComponentsMountSource {
             Self::Project => "Project",
             Self::Installed => "Installed",
             Self::Global => "Global",
+            Self::Stock => "Stock",
         }
     }
 
@@ -548,6 +555,7 @@ impl ComponentsMountSource {
             Self::Project => "project",
             Self::Installed => "installed",
             Self::Global => "global",
+            Self::Stock => "stock",
         }
     }
 
@@ -557,6 +565,7 @@ impl ComponentsMountSource {
         ComponentsMountSource::Project,
         ComponentsMountSource::Installed,
         ComponentsMountSource::Global,
+        ComponentsMountSource::Stock,
     ];
 }
 
@@ -570,6 +579,7 @@ pub struct ComponentsPanelState {
     pub collapsed_project: bool,
     pub collapsed_installed: bool,
     pub collapsed_global: bool,
+    pub collapsed_stock: bool,
     /// Substring filter applied to mpn / manufacturer / internal_pn
     /// / library name. Empty = show everything. Stage 9 uses a
     /// case-insensitive `contains` match across all three fields;
