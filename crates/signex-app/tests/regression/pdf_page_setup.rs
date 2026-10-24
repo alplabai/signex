@@ -3,6 +3,8 @@
 //! `Set*`) against a real engine; the preview is re-rasterised on every
 //! accepted edit, so the page bitmap's aspect ratio is asserted too.
 
+use futures::StreamExt;
+use iced::Task;
 use signex_app::app::{Message, PrintPreviewMsg, Signex};
 use signex_output::{MarginEdge, Orientation, PageSize, PageSizeKind, PdfScale, PdfScaleMode};
 use signex_types::schematic::SchematicSheet;
@@ -46,16 +48,41 @@ fn app_with_sheet(paper: &str) -> Signex {
     });
     app.document_state.active_tab = 0;
     app.document_state.active_path = Some(path);
-    let _ = app.update(Message::PrintPreview(PrintPreviewMsg::Requested));
-    app.settle_print_preview_raster();
+    send(&mut app, PrintPreviewMsg::Requested);
     app
 }
 
-/// Send `msg`, then let the background rasterisation it started finish, the
-/// way the runtime would.
+/// Run a task to completion the way the iced runtime would, returning the
+/// messages it produced.
+fn run(task: Task<Message>) -> Vec<Message> {
+    let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+        return Vec::new();
+    };
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    runtime.block_on(async {
+        let mut out = Vec::new();
+        while let Some(action) = stream.next().await {
+            if let iced_runtime::Action::Output(message) = action {
+                out.push(message);
+            }
+        }
+        out
+    })
+}
+
+/// Feed every message `task` produces back through `update()`, following
+/// the tasks those updates return, until nothing is left to run.
+fn drive(app: &mut Signex, task: Task<Message>) {
+    for message in run(task) {
+        let follow_up = app.update(message);
+        drive(app, follow_up);
+    }
+}
+
+/// Send `msg` and drive the Task `update()` returns, as the runtime would.
 fn send(app: &mut Signex, msg: PrintPreviewMsg) {
-    let _ = app.update(Message::PrintPreview(msg));
-    app.settle_print_preview_raster();
+    let task = app.update(Message::PrintPreview(msg));
+    drive(app, task);
 }
 
 fn preview(app: &Signex) -> &signex_app::app::PreviewState {
@@ -407,40 +434,45 @@ fn a_portrait_suffixed_sheet_seeds_a_consistent_custom_orientation() {
 }
 
 #[test]
+fn opening_the_modal_and_driving_its_task_fills_the_preview() {
+    let mut app = app_with_sheet("A4");
+    send(&mut app, PrintPreviewMsg::Close);
+    assert!(app.document_state.preview.is_none());
+
+    let task = app.update(Message::PrintPreview(PrintPreviewMsg::Requested));
+    assert!(
+        preview(&app).pages.is_empty(),
+        "update() must not rasterise inline"
+    );
+    drive(&mut app, task);
+    assert!(!preview(&app).pages.is_empty());
+}
+
+#[test]
 fn update_does_not_rasterise_inline_and_discards_a_superseded_result() {
     let mut app = app_with_sheet("A4");
     let before_px = preview(&app).pages[0].width_px;
 
     // update() hands the render to a Task: the page bitmap is unchanged
     // until the Rasterized message comes back.
-    let _ = app.update(Message::PrintPreview(PrintPreviewMsg::SetPageSize(
+    let first = app.update(Message::PrintPreview(PrintPreviewMsg::SetPageSize(
         PageSize::IsoA0,
     )));
     assert_eq!(preview(&app).pages[0].width_px, before_px);
     let stale_generation = preview(&app).raster_generation;
 
     // A second edit supersedes the first request.
-    let _ = app.update(Message::PrintPreview(PrintPreviewMsg::SetPageSize(
+    let second = app.update(Message::PrintPreview(PrintPreviewMsg::SetPageSize(
         PageSize::IsoA5,
     )));
     assert_ne!(preview(&app).raster_generation, stale_generation);
 
-    // The first request's result arrives late and is dropped.
-    let late = vec![signex_output::PreviewPage {
-        page_number: 99,
-        width_px: 1,
-        height_px: 1,
-        rgba: vec![0, 0, 0, 255],
-    }];
-    let _ = app.update(Message::PrintPreview(PrintPreviewMsg::Rasterized {
-        generation: stale_generation,
-        pages: std::sync::Arc::new(late),
-    }));
+    // The first request's real result arrives late and is dropped.
+    drive(&mut app, first);
     assert_eq!(preview(&app).pages[0].width_px, before_px);
 
-    // The current request's result is applied.
-    app.settle_print_preview_raster();
-    assert_ne!(preview(&app).pages[0].page_number, 99);
+    // The current request's real result is applied.
+    drive(&mut app, second);
     let (w, h) = PageSize::IsoA5.dimensions_mm(preview(&app).pdf_options.orientation);
     assert!((first_page_aspect(&app) - w / h).abs() < 0.02);
 }
@@ -460,8 +492,7 @@ fn page_setup_is_restored_when_the_modal_reopens_for_the_same_document() {
     send(&mut app, PrintPreviewMsg::Close);
     assert!(app.document_state.preview.is_none());
 
-    let _ = app.update(Message::PrintPreview(PrintPreviewMsg::Requested));
-    app.settle_print_preview_raster();
+    send(&mut app, PrintPreviewMsg::Requested);
     let opts = &preview(&app).pdf_options;
     assert_eq!(opts.page_size, PageSize::IsoA3);
     assert_eq!(opts.margins.left_mm, 25.0);

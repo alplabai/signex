@@ -61,15 +61,4 @@ impl Signex {
             ));
         }
     }
-
-    /// Run the pending preview rasterisation to completion on this thread
-    /// and apply it. Test support: integration tests cannot await the
-    /// `Task` `update()` returns, so they settle the preview through this.
-    #[doc(hidden)]
-    pub fn settle_print_preview_raster(&mut self) {
-        if let Some(job) = self.preview_raster_job() {
-            let msg = job.run();
-            let _follow_up = self.update(Message::PrintPreview(msg));
-        }
-    }
 }
