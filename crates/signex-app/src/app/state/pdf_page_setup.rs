@@ -12,9 +12,20 @@ use signex_output::{
 };
 
 /// Millimetres as the shortest faithful text (`10`, `215.9`, not `10.000000`).
+///
+/// Two decimals normally. A non-zero value that two decimals would round to
+/// `0` (a margin refitted to a sliver of the page) gets more digits instead,
+/// so the field never claims a margin is zero when it is not.
 pub(crate) fn format_mm(value: f64) -> String {
-    let text = format!("{value:.2}");
-    text.trim_end_matches('0').trim_end_matches('.').to_string()
+    let trim = |text: String| text.trim_end_matches('0').trim_end_matches('.').to_string();
+    let coarse = trim(format!("{value:.2}"));
+    if value == 0.0 || coarse.trim_start_matches('-') != "0" {
+        return coarse;
+    }
+    (3..=9)
+        .map(|digits| trim(format!("{value:.digits$}")))
+        .find(|text| text.trim_start_matches('-') != "0")
+        .unwrap_or_else(|| format!("{value:e}"))
 }
 
 /// A text field of the page setup controls that can hold rejected input.
@@ -88,6 +99,12 @@ impl PageSetupInputs {
             .first()
             .map(|(_, message)| message.as_str())
             .or(self.info.as_deref())
+    }
+
+    /// Whether [`Self::notice`] is an automatic-adjustment note rather than a
+    /// rejection: informational, so the view must not paint it as an error.
+    pub fn notice_is_informational(&self) -> bool {
+        self.rejections.is_empty() && self.info.is_some()
     }
 
     /// Whether `field` currently holds rejected text.
@@ -344,5 +361,28 @@ mod tests {
         assert_eq!(format_mm(215.9), "215.9");
         assert_eq!(format_mm(0.5), "0.5");
         assert_eq!(format_mm(199.000000001), "199");
+    }
+
+    #[test]
+    fn a_non_zero_margin_never_displays_as_zero() {
+        assert_eq!(format_mm(0.0), "0");
+        assert_eq!(format_mm(0.004), "0.004");
+        assert_eq!(format_mm(0.0001), "0.0001");
+        assert_eq!(format_mm(0.000_000_4), "0.0000004");
+        assert_ne!(format_mm(1e-12), "0");
+        // Two decimals are still enough where they were enough.
+        assert_eq!(format_mm(0.01), "0.01");
+        assert_eq!(format_mm(0.126), "0.13");
+    }
+
+    #[test]
+    fn adjustment_notes_are_informational_and_rejections_are_not() {
+        let mut inputs = PageSetupInputs::from_options(&PdfOptions::default());
+        assert!(!inputs.notice_is_informational());
+        inputs.note("Top margin limited to 10 mm.".to_string());
+        assert!(inputs.notice_is_informational());
+        inputs.reject(PageField::Percent, "Scale must be a number.".to_string());
+        assert!(!inputs.notice_is_informational());
+        assert_eq!(inputs.notice(), Some("Scale must be a number."));
     }
 }

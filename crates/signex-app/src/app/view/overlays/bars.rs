@@ -761,6 +761,7 @@ mod tests {
             selected_files: std::collections::HashSet::new(),
             variants: Vec::new(),
             quality: crate::app::state::PdfQuality::Draft72,
+            raster_generation: 0,
         }
     }
 

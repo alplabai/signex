@@ -47,11 +47,15 @@ fn app_with_sheet(paper: &str) -> Signex {
     app.document_state.active_tab = 0;
     app.document_state.active_path = Some(path);
     let _ = app.update(Message::PrintPreview(PrintPreviewMsg::Requested));
+    app.settle_print_preview_raster();
     app
 }
 
+/// Send `msg`, then let the background rasterisation it started finish, the
+/// way the runtime would.
 fn send(app: &mut Signex, msg: PrintPreviewMsg) {
     let _ = app.update(Message::PrintPreview(msg));
+    app.settle_print_preview_raster();
 }
 
 fn preview(app: &Signex) -> &signex_app::app::PreviewState {
@@ -400,4 +404,74 @@ fn a_portrait_suffixed_sheet_seeds_a_consistent_custom_orientation() {
         };
         assert_eq!(o.orientation, expect);
     }
+}
+
+#[test]
+fn update_does_not_rasterise_inline_and_discards_a_superseded_result() {
+    let mut app = app_with_sheet("A4");
+    let before_px = preview(&app).pages[0].width_px;
+
+    // update() hands the render to a Task: the page bitmap is unchanged
+    // until the Rasterized message comes back.
+    let _ = app.update(Message::PrintPreview(PrintPreviewMsg::SetPageSize(
+        PageSize::IsoA0,
+    )));
+    assert_eq!(preview(&app).pages[0].width_px, before_px);
+    let stale_generation = preview(&app).raster_generation;
+
+    // A second edit supersedes the first request.
+    let _ = app.update(Message::PrintPreview(PrintPreviewMsg::SetPageSize(
+        PageSize::IsoA5,
+    )));
+    assert_ne!(preview(&app).raster_generation, stale_generation);
+
+    // The first request's result arrives late and is dropped.
+    let late = vec![signex_output::PreviewPage {
+        page_number: 99,
+        width_px: 1,
+        height_px: 1,
+        rgba: vec![0, 0, 0, 255],
+    }];
+    let _ = app.update(Message::PrintPreview(PrintPreviewMsg::Rasterized {
+        generation: stale_generation,
+        pages: std::sync::Arc::new(late),
+    }));
+    assert_eq!(preview(&app).pages[0].width_px, before_px);
+
+    // The current request's result is applied.
+    app.settle_print_preview_raster();
+    assert_ne!(preview(&app).pages[0].page_number, 99);
+    let (w, h) = PageSize::IsoA5.dimensions_mm(preview(&app).pdf_options.orientation);
+    assert!((first_page_aspect(&app) - w / h).abs() < 0.02);
+}
+
+#[test]
+fn page_setup_is_restored_when_the_modal_reopens_for_the_same_document() {
+    let mut app = app_with_sheet("A4");
+    send(&mut app, PrintPreviewMsg::SetPageSize(PageSize::IsoA3));
+    send(
+        &mut app,
+        PrintPreviewMsg::SetMargin(MarginEdge::Left, "25".into()),
+    );
+    send(
+        &mut app,
+        PrintPreviewMsg::SetScaleMode(PdfScaleMode::OneToOne),
+    );
+    send(&mut app, PrintPreviewMsg::Close);
+    assert!(app.document_state.preview.is_none());
+
+    let _ = app.update(Message::PrintPreview(PrintPreviewMsg::Requested));
+    app.settle_print_preview_raster();
+    let opts = &preview(&app).pdf_options;
+    assert_eq!(opts.page_size, PageSize::IsoA3);
+    assert_eq!(opts.margins.left_mm, 25.0);
+    assert_eq!(opts.scale, PdfScale::OneToOne);
+    assert_eq!(preview(&app).page_setup.margin_text(MarginEdge::Left), "25");
+
+    // The memory is keyed by document: a different path has no entry, so it
+    // would open with its own sheet size.
+    send(&mut app, PrintPreviewMsg::Close);
+    let memory = &app.document_state.page_setup_memory;
+    assert_eq!(memory.len(), 1);
+    assert!(!memory.contains_key(&PathBuf::from("other.snxsch")));
 }
