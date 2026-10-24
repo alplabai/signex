@@ -198,7 +198,9 @@ pub(crate) fn duplicate_ref_designator(ctx: &ErcContext, out: &mut Vec<Diagnosti
                         d = d.with_peer(sel(peer.uuid, SelectedKind::Symbol));
                     }
                 } else {
-                    d = d.in_space(LocationSpace::ChildSheet);
+                    d = d
+                        .in_space(LocationSpace::ChildSheet)
+                        .owned_by(sources[origin].1.key.clone());
                 }
                 out.push(d);
             }

@@ -493,6 +493,9 @@ fn refile_child_sheet_violations(
 /// lowest one). When a sub-sheet is reused under several parents, those
 /// parents still all report the identical finding; keep it once per ERC run,
 /// under the first sheet path in sort order so the result is stable (#998).
+/// Identity is the owning sheet's resolved key, not the display text: two
+/// copied channels with identical file names and positions are distinct
+/// sheets and each keep their own finding.
 fn dedupe_descendant_clashes(
     by_path: &mut std::collections::HashMap<std::path::PathBuf, Vec<signex_erc::Violation>>,
 ) {
@@ -507,12 +510,12 @@ fn dedupe_descendant_clashes(
             v.message.clone(),
             v.location.x.to_bits(),
             v.location.y.to_bits(),
-            v.child_sheet.clone(),
+            v.owner_sheet.clone(),
         )
     };
     // Only findings from earlier sheets count as already reported, so two
     // distinct clashes inside one sheet's own list are never merged.
-    let mut reported: std::collections::HashSet<(String, u64, u64, Option<String>)> =
+    let mut reported: std::collections::HashSet<(String, u64, u64, Option<signex_net::SheetKey>)> =
         std::collections::HashSet::new();
     for path in paths {
         let Some(list) = by_path.get_mut(&path) else {

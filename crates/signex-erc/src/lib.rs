@@ -175,6 +175,10 @@ pub struct Violation {
     /// For [`LocationSpace::ChildSheet`]: the `ChildSheet.filename` of the
     /// sheet that owns `location`.
     pub child_sheet: Option<String>,
+    /// For [`LocationSpace::ChildSheet`]: the resolved identity of the sheet
+    /// that owns `location`, when the finding carries one. Stable across the
+    /// ancestors that all report the same finding.
+    pub owner_sheet: Option<signex_net::SheetKey>,
     /// The primary object the violation refers to.
     pub primary: Option<SelectedItem>,
     /// Optional peer — the "other" object in two-object rules.
@@ -199,6 +203,7 @@ impl Violation {
             location,
             location_space: LocationSpace::ThisSheet,
             child_sheet: None,
+            owner_sheet: None,
             primary: None,
             peer: None,
         }
@@ -209,6 +214,7 @@ impl Violation {
     pub fn into_child_sheet_space(mut self) -> Self {
         self.location_space = LocationSpace::ThisSheet;
         self.child_sheet = None;
+        self.owner_sheet = None;
         self
     }
 
