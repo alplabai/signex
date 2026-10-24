@@ -79,27 +79,54 @@ pub fn group_into_parts<'a>(items: impl IntoIterator<Item = PartKey<'a>>) -> Vec
     parts
 }
 
-/// Symbol indices in annotation order: top to bottom, then left to right,
-/// then by uuid so equal positions stay deterministic. Annotation and its
-/// preview both walk this order, so the number the dialog promises a symbol
-/// is the number the pass assigns it.
-pub fn annotation_order(symbols: &[Symbol]) -> Vec<usize> {
-    let mut order: Vec<usize> = (0..symbols.len()).collect();
-    order.sort_by(|&a, &b| {
-        let (sa, sb) = (&symbols[a], &symbols[b]);
-        sa.position
-            .y
-            .partial_cmp(&sb.position.y)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then(
-                sa.position
-                    .x
-                    .partial_cmp(&sb.position.x)
-                    .unwrap_or(std::cmp::Ordering::Equal),
-            )
-            .then(sa.uuid.cmp(&sb.uuid))
+/// Order in which Annotate visits symbols. Schematic coordinates are y-down
+/// (see `SymbolTransform`): a larger `y` sits lower on screen, so "Up" means
+/// decreasing `y` and "Down" means increasing `y`; "Across" is always
+/// increasing `x` (left to right).
+///
+/// Positions are compared exactly, with no row/column banding: two symbols
+/// share a row (or column) only when their `y` (or `x`) is equal. Symbols with
+/// identical positions fall back to uuid so the result is deterministic.
+/// A multi-unit part is numbered when its first unit in this order is reached,
+/// so the order also picks which unit is the part's anchor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum AnnotateOrder {
+    /// Columns left to right (primary: `x` ascending); inside a column
+    /// bottom to top (secondary: `y` descending).
+    UpThenAcross,
+    /// Columns left to right (primary: `x` ascending); inside a column
+    /// top to bottom (secondary: `y` ascending).
+    DownThenAcross,
+    /// Rows top to bottom (primary: `y` ascending); inside a row left to
+    /// right (secondary: `x` ascending). This is the order Annotate used
+    /// before the setting was honoured, and the dialog default.
+    #[default]
+    AcrossThenDown,
+    /// Rows bottom to top (primary: `y` descending); inside a row left to
+    /// right (secondary: `x` ascending).
+    AcrossThenUp,
+}
+
+/// Symbol indices in annotation order for `order`. Annotation and its preview
+/// both walk this order, so the number the dialog promises a symbol is the
+/// number the pass assigns it.
+pub fn annotation_order(symbols: &[Symbol], order: AnnotateOrder) -> Vec<usize> {
+    use std::cmp::Ordering;
+    let cmp = |a: f64, b: f64| a.partial_cmp(&b).unwrap_or(Ordering::Equal);
+    let mut indices: Vec<usize> = (0..symbols.len()).collect();
+    indices.sort_by(|&a, &b| {
+        let (pa, pb) = (&symbols[a].position, &symbols[b].position);
+        let x = cmp(pa.x, pb.x);
+        let y = cmp(pa.y, pb.y);
+        let by_position = match order {
+            AnnotateOrder::AcrossThenDown => y.then(x),
+            AnnotateOrder::AcrossThenUp => y.reverse().then(x),
+            AnnotateOrder::DownThenAcross => x.then(y),
+            AnnotateOrder::UpThenAcross => x.then(y.reverse()),
+        };
+        by_position.then(symbols[a].uuid.cmp(&symbols[b].uuid))
     });
-    order
+    indices
 }
 
 /// Parts of a whole project, grouped across every sheet before any pass
@@ -124,10 +151,10 @@ pub struct ProjectParts {
 }
 
 impl ProjectParts {
-    pub fn new(sheets: &[&[Symbol]], locked: &HashSet<Uuid>) -> Self {
+    pub fn new(sheets: &[&[Symbol]], locked: &HashSet<Uuid>, order: AnnotateOrder) -> Self {
         let mut eligible: Vec<(usize, usize)> = Vec::new();
         for (sheet, symbols) in sheets.iter().enumerate() {
-            for idx in annotation_order(symbols) {
+            for idx in annotation_order(symbols, order) {
                 let symbol = &symbols[idx];
                 if !symbol.is_power && !symbol.reference.starts_with('#') {
                     eligible.push((sheet, idx));
@@ -264,7 +291,7 @@ mod tests {
     #[test]
     fn project_parts_join_units_across_sheets() {
         let (a, b) = ([placed("U1", "A", 1)], [placed("U1", "A", 2)]);
-        let parts = ProjectParts::new(&[&a, &b], &HashSet::new());
+        let parts = ProjectParts::new(&[&a, &b], &HashSet::new(), AnnotateOrder::default());
         assert_eq!(parts.part(0, 0), parts.part(1, 0));
         assert!(parts.part(0, 0).is_some());
     }
@@ -275,7 +302,7 @@ mod tests {
         power.is_power = true;
         let marker = placed("#FLG01", "flag", 1);
         let sheet = [power, marker];
-        let parts = ProjectParts::new(&[&sheet], &HashSet::new());
+        let parts = ProjectParts::new(&[&sheet], &HashSet::new(), AnnotateOrder::default());
         assert_eq!(parts.part(0, 0), None);
         assert_eq!(parts.part(0, 1), None);
     }
@@ -285,7 +312,7 @@ mod tests {
         let locked_unit = placed("U?", "A", 1);
         let locked = HashSet::from([locked_unit.uuid]);
         let sheet = [locked_unit, placed("U?", "A", 2)];
-        let parts = ProjectParts::new(&[&sheet], &locked);
+        let parts = ProjectParts::new(&[&sheet], &locked, AnnotateOrder::default());
         let part = parts.part(0, 1).unwrap();
         assert_eq!(parts.locked_designator(part), Some("U?"));
     }

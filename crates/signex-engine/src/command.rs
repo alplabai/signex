@@ -1,6 +1,6 @@
 use signex_types::schematic::{
-    Bus, BusEntry, ChildSheet, HAlign, Junction, Label, LibSymbol, NoConnect, SchematicSheet,
-    SelectedItem, StrokeColor, Symbol, TextNote, Wire,
+    AnnotateOrder, Bus, BusEntry, ChildSheet, HAlign, Junction, Label, LibSymbol, NoConnect,
+    SchematicSheet, SelectedItem, StrokeColor, Symbol, TextNote, Wire,
 };
 use uuid::Uuid;
 
@@ -65,6 +65,7 @@ pub enum CommandKind {
     ReorderObjects,
     ReconcileChildSheetPins,
     RenameChildSheetFile,
+    ModifyChildSheet,
     SetPaperSize,
 }
 
@@ -221,6 +222,8 @@ pub enum Command {
     /// deterministic order so re-running produces the same layout.
     AnnotateAll {
         mode: AnnotateMode,
+        /// Visit order; `AnnotateOrder::default()` is rows top to bottom.
+        order: AnnotateOrder,
     },
     /// Absolute positioning of a single symbol. Used by the Properties
     /// panel's future X/Y edit fields and by scripted moves; distinct from
@@ -250,6 +253,16 @@ pub enum Command {
     RenameChildSheetFile {
         from: String,
         to: String,
+    },
+    /// Rename and / or re-point one placed sheet symbol, by `sheet_id`.
+    /// `None` leaves that field untouched. The name must be non-empty and
+    /// the file must keep the `.snxsch` extension; both must stay unique
+    /// among the document's sheet symbols. Only the reference changes —
+    /// no file is created, moved or renamed. Undoable like any other edit.
+    ModifyChildSheet {
+        sheet_id: Uuid,
+        name: Option<String>,
+        filename: Option<String>,
     },
     /// Set the sheet's paper size (a named format like "A4"/"A3" — the
     /// Page Options panel is the producer). Persists through
@@ -320,6 +333,7 @@ impl Command {
             Command::ReorderObjects { .. } => CommandKind::ReorderObjects,
             Command::ReconcileChildSheetPins { .. } => CommandKind::ReconcileChildSheetPins,
             Command::RenameChildSheetFile { .. } => CommandKind::RenameChildSheetFile,
+            Command::ModifyChildSheet { .. } => CommandKind::ModifyChildSheet,
             Command::SetPaperSize { .. } => CommandKind::SetPaperSize,
         }
     }

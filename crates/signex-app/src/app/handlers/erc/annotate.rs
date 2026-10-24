@@ -138,7 +138,11 @@ impl Signex {
                         .unwrap_or(&[])
                 })
                 .collect();
-            signex_types::schematic::ProjectParts::new(&documents, &locked)
+            signex_types::schematic::ProjectParts::new(
+                &documents,
+                &locked,
+                self.ui_state.annotate_order,
+            )
         };
         let mut assigned: std::collections::HashMap<usize, String> =
             std::collections::HashMap::new();
@@ -160,6 +164,7 @@ impl Signex {
                 sheet,
                 locked: &locked,
                 undo_group,
+                order: self.ui_state.annotate_order,
             };
             if active_path.as_deref() == Some(path.as_path()) {
                 // The active engine — run through the raw engine method (not

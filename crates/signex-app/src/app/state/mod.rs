@@ -213,6 +213,15 @@ impl ErrorNotice {
         }
     }
 
+    /// A Properties edit of a placed sheet symbol (name / file) was refused
+    /// and the sheet was left as it was.
+    pub fn sheet_edit(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Sheet Symbol Not Changed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
     /// A rename did not happen, or was undone, and nothing refers to the new name.
     pub fn rename_failed(detail: impl Into<String>) -> Self {
         Self {
@@ -291,19 +300,7 @@ pub enum ModalId {
     SelectionFilterCustom,
 }
 
-/// Order in which symbols are visited during Annotate. Mirrors Altium's
-/// "Order of Processing" drop-down (four variants).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AnnotateOrder {
-    /// Top-to-bottom within each column, left-to-right across columns.
-    UpThenAcross,
-    /// Bottom-to-top within each column, left-to-right across columns.
-    DownThenAcross,
-    /// Left-to-right within each row, top-to-bottom across rows.
-    AcrossThenDown,
-    /// Left-to-right within each row, bottom-to-top across rows.
-    AcrossThenUp,
-}
+pub use signex_types::schematic::AnnotateOrder;
 
 /// Opaque identifier for a loaded project in the workspace. Assigned by
 /// `DocumentState::next_project_id` on load and never reused, so stale
@@ -393,6 +390,19 @@ pub struct NetlistIncompletePrompt {
     pub ctx: signex_output::ExportContext,
 }
 
+/// What the preview modal chose for one PDF export, for the document it was
+/// chosen on. Carried inside `ExportMsg::PdfFinished`, so each Export click
+/// owns its own copy and overlapping exports cannot clobber each other (#852).
+#[derive(Debug, Clone)]
+pub struct PdfExportRequest {
+    /// The document the export was started from.
+    pub source: PathBuf,
+    pub options: signex_output::PdfOptions,
+    /// Sheet paths to include, from the preview's file picker. An empty set
+    /// (after a Clear) means "no files chosen" and the export is rejected.
+    pub files: std::collections::HashSet<PathBuf>,
+}
+
 pub struct DocumentState {
     pub dock: DockArea,
     /// Change detection + debounce for persisting `dock` (#692). The
@@ -474,24 +484,6 @@ pub struct DocumentState {
     /// open. Doubles as the unified PDF Export modal — `File → Export
     /// PDF` and `File → Print Preview` both populate this field.
     pub preview: Option<PreviewState>,
-    /// Pending PDF options stashed from the unified preview modal
-    /// while the file picker is running. Used by
-    /// `handle_export_pdf_finished` to apply user-selected options
-    /// instead of defaults. Cleared after export.
-    pub pending_pdf_options: Option<signex_output::PdfOptions>,
-    /// Companion to `pending_pdf_options` — sheet paths to include in
-    /// the export, copied from the preview's file picker. Empty set
-    /// (after a Clear) means "no files chosen" and the export is
-    /// rejected with a user-visible error. `None` means the preview
-    /// path was bypassed (legacy direct-export caller); the export
-    /// then includes every sheet by default.
-    pub pending_pdf_files: Option<std::collections::HashSet<PathBuf>>,
-    /// Pending BOM options stashed from the BOM preview modal while
-    /// the file picker is running. Without this, the user's column /
-    /// grouping / variant / include-DNP picks in the preview would
-    /// be dropped on export and the actual file would be a default
-    /// 6-column Grouped Base BOM. Cleared after export.
-    pub pending_bom_options: Option<signex_output::BomOptions>,
     /// The app's one user-visible error card. `Some` while it is shown;
     /// cleared by `OverlayMsg::DismissErrorNotice`.
     ///
@@ -565,6 +557,9 @@ pub enum BomSidebarTab {
 /// plus the user-editable options that drive the next rollup. Re-rolled
 /// whenever an option toggle fires.
 pub struct BomPreviewState {
+    /// The document the preview was built for; Export writes this one even if
+    /// the user has switched tabs since (#852).
+    pub source: PathBuf,
     pub options: signex_output::BomOptions,
     pub table: signex_output::BomTable,
     /// Live validation of `table` under `options.rule_options`. Refreshed on
@@ -687,6 +682,9 @@ impl std::fmt::Display for PdfQuality {
 /// the leftovers — UI presentation (active tab, quality enum), the
 /// rasterised pages, and pan/zoom interaction state.
 pub struct PreviewState {
+    /// The document the preview was built for; Export writes this one even if
+    /// the user has switched tabs since (#852).
+    pub source: PathBuf,
     pub pages: Vec<signex_output::PreviewPage>,
     pub page_handles: Vec<iced::widget::image::Handle>,
     pub selected: usize,
@@ -786,6 +784,13 @@ impl DocumentState {
         let Some(path) = self.active_path.as_ref() else {
             return self.active_loaded_project();
         };
+        self.document_project(path)
+    }
+
+    /// Project that owns the document at `path` (the explicit-path form of
+    /// [`active_document_project`](Self::active_document_project), for async
+    /// completions that resolve against the document they started from).
+    pub fn document_project(&self, path: &std::path::Path) -> Option<&LoadedProject> {
         scope::project_owning_sheet(&self.projects, &self.child_sheet_refs(), path)
     }
 
@@ -837,6 +842,28 @@ impl DocumentState {
             return self.active_engine().into_iter().collect();
         };
         scope::engines_in_project(
+            &self.projects,
+            &self.child_sheet_refs(),
+            &self.engines,
+            project.id,
+        )
+    }
+
+    /// [`engines_in_active_document_project`](Self::engines_in_active_document_project)
+    /// with each engine's sheet path, so a reference can be resolved against
+    /// the folder of the sheet that carries it.
+    pub(crate) fn engine_entries_in_active_document_project(
+        &self,
+    ) -> Vec<(&PathBuf, &signex_engine::Engine)> {
+        let Some(project) = self.active_document_project() else {
+            return self
+                .active_path
+                .as_ref()
+                .and_then(|path| self.engines.get_key_value(path))
+                .into_iter()
+                .collect();
+        };
+        scope::engine_entries_in_project(
             &self.projects,
             &self.child_sheet_refs(),
             &self.engines,

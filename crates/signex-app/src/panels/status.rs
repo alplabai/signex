@@ -23,6 +23,9 @@ pub struct ErcDiagnosticEntry {
     pub world_x: f64,
     pub world_y: f64,
     pub select: Option<signex_types::schematic::SelectedItem>,
+    /// False when the point is not in `sheet_path`'s own coordinates (a child
+    /// sheet that was not part of the run): shown, but never panned to.
+    pub locatable: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
