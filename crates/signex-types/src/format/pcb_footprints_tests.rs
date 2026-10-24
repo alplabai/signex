@@ -86,7 +86,7 @@ fn two_orphan_pad_groups_survive_save_and_reload() {
 }
 
 #[test]
-fn duplicate_footprint_uuids_are_refused_on_write_and_fall_back_on_read() {
+fn duplicate_footprint_uuids_are_refused_on_write_and_on_read() {
     let u = "0192a8c0-0010-7000-8000-000000000001";
     let mut board = empty_board();
     board
@@ -105,9 +105,8 @@ uuid ref library pos_x pos_y rotation layer value\n\
 {u} C1 l 0 0 0 TopCopper v\n\"\"\"\n\n[pads]\ncontent = \"\"\"\n{PAD_HEADER}\n{}\n\"\"\"\n",
         pad_line(2001, "C1", 1),
     );
-    let back = SnxPcb::parse(&text).unwrap().board;
-    assert!(back.footprints[0].pads.is_empty());
-    assert_eq!(back.footprints[1].pads.len(), 1, "designator fallback");
+    let err = SnxPcb::parse(&text).unwrap_err().to_string();
+    assert!(err.contains("R1") && err.contains("C1"), "{err}");
 }
 
 #[test]

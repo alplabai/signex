@@ -1,9 +1,8 @@
 //! Footprint/pad reassembly and uniqueness checks for `.snxpcb`.
 //!
 //! `pads.footprint_ref` holds the owning footprint's uuid (1.1) or its
-//! reference designator (1.0). Uuid matching is used only when the uuid is
-//! unique in the file, so a hand-edited file with a duplicated uuid falls
-//! back to the designator instead of merging pads.
+//! reference designator (1.0). A file in which two footprints share a uuid is
+//! refused on load, so pads are never merged onto the wrong footprint.
 
 use std::collections::BTreeMap;
 
@@ -49,7 +48,7 @@ pub(super) fn assemble_footprints(
     pad_rows: Vec<PcbPadRow>,
     footprint_extras: &BTreeMap<String, FootprintExtras>,
     pad_extras: &BTreeMap<String, PadExtras>,
-) -> Vec<Footprint> {
+) -> Result<Vec<Footprint>, FormatError> {
     let mut footprints: Vec<Footprint> = footprint_rows
         .into_iter()
         .map(|row| {
@@ -61,10 +60,7 @@ pub(super) fn assemble_footprints(
         })
         .collect();
 
-    let mut uuid_counts: BTreeMap<Uuid, usize> = BTreeMap::new();
-    for fp in &footprints {
-        *uuid_counts.entry(fp.uuid).or_default() += 1;
-    }
+    check_unique_footprint_uuids(&footprints)?;
 
     for prow in pad_rows {
         let extra = pad_extras
@@ -76,7 +72,6 @@ pub(super) fn assemble_footprints(
             .footprint_ref
             .parse::<Uuid>()
             .ok()
-            .filter(|u| uuid_counts.get(u) == Some(&1))
             .and_then(|u| footprints.iter().position(|f| f.uuid == u));
         let orphan_key = orphan_uuid(&prow.footprint_ref);
         let target = by_uuid
@@ -91,7 +86,6 @@ pub(super) fn assemble_footprints(
         } else {
             // Orphan pad: keep it on a placeholder footprint, one per
             // distinct key, with a stable uuid so a save round-trips them.
-            uuid_counts.insert(orphan_key, 1);
             footprints.push(Footprint {
                 uuid: orphan_key,
                 reference: prow.footprint_ref.clone(),
@@ -111,5 +105,5 @@ pub(super) fn assemble_footprints(
             });
         }
     }
-    footprints
+    Ok(footprints)
 }

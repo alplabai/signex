@@ -112,7 +112,7 @@ pub enum FormatError {
     NewerMinorReadOnly { found: String, current: String },
     #[error(
         "footprints {first:?} and {second:?} share uuid {uuid}; pads are keyed by footprint \
-         uuid, so saving would merge them"
+         uuid, so their pads cannot be told apart"
     )]
     DuplicateFootprintUuid {
         uuid: String,
@@ -736,7 +736,7 @@ impl SnxPcb {
             pad_rows,
             &extras.footprints,
             &extras.pads,
-        );
+        )?;
 
         let segments = track_rows.into_iter().map(row_to_track).collect();
         let vias = via_rows.into_iter().map(row_to_via).collect();
