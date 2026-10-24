@@ -9,43 +9,21 @@ use crate::library_place_symbol::{
 use signex_app::app::{EditMsg, Message, Signex};
 use signex_app::dock::DockMessage;
 use signex_app::library::LibraryMessage;
-use signex_app::library::drift::{MountedLibrary, compute_drift, content_hash};
 use signex_app::panels::PanelMsg;
 use signex_library::primitive::{SymbolFile, SymbolPin};
 use signex_types::schematic::{Point, SelectedItem, SelectedKind, SymbolTransform, Wire};
 use uuid::Uuid;
 
-/// Run the worker half synchronously and feed its report back (the
+/// Request a recheck and run the worker half synchronously through the
+/// same `check_pending` -> job -> report path `finish_update` uses (the
 /// handler also refreshes the Properties selection info).
 fn check_drift(app: &mut Signex) {
-    let libs: Vec<MountedLibrary> = app
-        .library
-        .open_libraries
-        .iter()
-        .map(|l| MountedLibrary {
-            id: l.library_id,
-            path: l.root.clone(),
-            display_name: l.display_name.clone(),
-        })
-        .collect();
-    let sheets: Vec<_> = app
-        .document_state
-        .engines
-        .iter()
-        .map(|(p, e)| {
-            let entries = e
-                .document()
-                .lib_symbols
-                .iter()
-                .map(|(id, s)| (id.clone(), content_hash(s)))
-                .collect();
-            (p.clone(), entries)
-        })
-        .collect();
-    let report = compute_drift(&sheets, &libs);
-    let _ = app.update(Message::Library(LibraryMessage::DriftChecked(Box::new(
-        report,
-    ))));
+    app.library.drift.check_pending = true;
+    if let Some(job) = app.take_drift_job() {
+        let _ = app.update(Message::Library(LibraryMessage::DriftChecked(Box::new(
+            job.run(),
+        ))));
+    }
 }
 
 /// Rewrite the fixture's symbol in place (same uuid) with `edit` applied.
@@ -201,4 +179,64 @@ fn update_is_refused_when_a_connected_pin_would_vanish() {
         .iter()
         .any(|e| e.message.contains("update refused") && e.message.contains("U1 pin 1"));
     assert!(logged, "the refusal must reach the Messages panel");
+}
+
+#[test]
+fn a_placed_symbol_is_not_drift_after_save_and_reopen() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("sheet.snxsch");
+    app.document_state
+        .active_engine_mut()
+        .unwrap()
+        .save_as(&path)
+        .unwrap();
+    // The embedded copy went through the real TOML writer and parser.
+    *app.document_state.active_engine_mut().unwrap() = signex_engine::Engine::open(&path).unwrap();
+    select_first(&mut app);
+    check_drift(&mut app);
+    assert!(!is_drifted(&app), "a round-tripped copy must hash the same");
+}
+
+#[test]
+fn unmounting_the_library_drops_names_and_drift() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    select_first(&mut app);
+    edit_library_symbol(&f, add_pin);
+    check_drift(&mut app);
+    assert!(is_drifted(&app));
+    assert!(info(&app, "Library").is_some());
+
+    app.library.close_library(&f.snxlib);
+    assert!(
+        app.library.drift.check_pending,
+        "closing requests a recheck"
+    );
+    check_drift(&mut app);
+    assert!(!is_drifted(&app));
+    assert!(info(&app, "Library").is_none());
+    assert!(info(&app, "Library Drift").is_none());
+    let lib_id = doc(&app).symbols[0].lib_id.clone();
+    assert_eq!(app.library.drift.display_name(&lib_id), lib_id);
+}
+
+#[test]
+fn a_stale_drift_report_is_dropped() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    app.library.drift.check_pending = true;
+    let old_job = app.take_drift_job().unwrap();
+    let old_report = old_job.run(); // pre-edit: no drift
+    edit_library_symbol(&f, add_pin);
+    check_drift(&mut app); // newer pass: drifted
+    assert!(is_drifted(&app));
+    let _ = app.update(Message::Library(LibraryMessage::DriftChecked(Box::new(
+        old_report,
+    ))));
+    assert!(is_drifted(&app), "the older pass must not overwrite");
 }

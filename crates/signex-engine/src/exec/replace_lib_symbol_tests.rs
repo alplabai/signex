@@ -138,3 +138,61 @@ fn a_connected_pin_that_moves_is_refused() {
             .is_err()
     );
 }
+
+#[test]
+fn a_label_on_a_pin_tip_counts_as_a_connection() {
+    let mut sheet = engine_with_wired_pin_2().document().clone();
+    // Pin "1" tip (7.46, 10) carries only a label, no wire.
+    sheet.labels.push(signex_types::schematic::Label {
+        unknown_columns: Default::default(),
+        uuid: uuid::Uuid::new_v4(),
+        text: "N".to_string(),
+        position: Point::new(7.46, 10.0),
+        rotation: 0.0,
+        label_type: signex_types::schematic::LabelType::Net,
+        shape: String::new(),
+        font_size: 1.27,
+        justify: signex_types::schematic::HAlign::Left,
+        justify_v: signex_types::schematic::VAlign::Bottom,
+    });
+    let mut engine = Engine::new(sheet).unwrap();
+    let fresh = lib_symbol("new", vec![lib_pin("2", 2.54)]);
+    assert!(
+        engine
+            .execute(Command::ReplaceLibSymbol { lib_symbol: fresh })
+            .is_err()
+    );
+}
+
+#[test]
+fn a_new_pin_landing_on_an_existing_connection_is_refused() {
+    let mut engine = engine_with_wired_pin_2();
+    // The wire's far end (20, 10) is a connection no old pin occupied.
+    let fresh = lib_symbol(
+        "new",
+        vec![lib_pin("1", -2.54), lib_pin("2", 2.54), lib_pin("3", 10.0)],
+    );
+    match engine
+        .execute(Command::ReplaceLibSymbol { lib_symbol: fresh })
+        .unwrap_err()
+    {
+        EngineError::LibSymbolPinsConnected { pins, .. } => {
+            assert_eq!(pins, vec!["U1 pin 3".to_string()]);
+        }
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
+fn a_removed_unit_is_refused() {
+    let mut engine = engine_with_wired_pin_2();
+    let mut p = lib_pin("1", -2.54);
+    p.unit = 2;
+    let fresh = lib_symbol("new", vec![p]);
+    assert!(matches!(
+        engine
+            .execute(Command::ReplaceLibSymbol { lib_symbol: fresh })
+            .unwrap_err(),
+        EngineError::LibSymbolUnitRemoved { .. }
+    ));
+}

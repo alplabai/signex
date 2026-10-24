@@ -190,6 +190,8 @@ impl LibraryState {
                 self.expanded.remove(idx);
             }
             self.editors.retain(|key, _| key.library_path != root);
+            // Names, drift rows and Update must not use an unmounted library.
+            self.drift.check_pending = true;
         }
     }
 
@@ -273,6 +275,8 @@ impl LibraryState {
             );
             apply_primitive_listing(&mut lib.cached_sims, sims, &lib.display_name, "sims");
         }
+        // The library's symbols may have changed on disk.
+        self.drift.check_pending = true;
         Ok(())
     }
 

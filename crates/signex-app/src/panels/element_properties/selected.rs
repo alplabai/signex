@@ -56,6 +56,8 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         let position = get("Position");
         let rotation_str = get("Rotation");
         let lib_id = get("Library ID");
+        let library_name = get("Library");
+        let library_drifted = get("Library Drift") == "Yes";
         let rotation_deg = rotation_str
             .trim_end_matches('°')
             .trim()
@@ -188,7 +190,15 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                     },
                     muted,
                 ));
-                c
+                super::library_rows::push_library_rows(
+                    c,
+                    id,
+                    &library_name,
+                    library_drifted,
+                    muted,
+                    input_bg,
+                    input_bdr,
+                )
             },
         ));
 
@@ -380,32 +390,15 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                             input_bg,
                             input_bdr,
                         ));
-                        if !library_name.is_empty() {
-                            c = c.push(form_input_row(
-                                "Library",
-                                &library_name,
-                                muted,
-                                input_bg,
-                                input_bdr,
-                            ));
-                        }
-                        if library_drifted {
-                            c = c.push(
-                                iced::widget::row![
-                                    iced::widget::text("Library: out of date")
-                                        .size(11)
-                                        .color(muted),
-                                    iced::widget::button(
-                                        iced::widget::text("Update from library").size(11)
-                                    )
-                                    .padding([2, 8])
-                                    .on_press(PanelMsg::UpdateSymbolFromLibrary(id)),
-                                ]
-                                .spacing(8)
-                                .padding([2, 8])
-                                .align_y(iced::Alignment::Center),
-                            );
-                        }
+                        c = super::library_rows::push_library_rows(
+                            c,
+                            id,
+                            &library_name,
+                            library_drifted,
+                            muted,
+                            input_bg,
+                            input_bdr,
+                        );
                         c
                     },
                 ));

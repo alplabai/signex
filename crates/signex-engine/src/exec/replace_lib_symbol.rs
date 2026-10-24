@@ -3,7 +3,7 @@
 //! connectivity.
 
 use crate::*;
-use signex_net::{point_on_segment, pt_key};
+use signex_net::{ConnectedPoints, connected_points, point_on_segment, pt_key};
 use signex_types::schematic::{LibPin, LibSymbol, Point, SymbolTransform};
 
 /// A pin's identity across two versions of one symbol: its number, else
@@ -16,32 +16,34 @@ fn pin_key(lp: &LibPin) -> &str {
     }
 }
 
-/// Whether a wire (endpoint or passing through) or a no-connect sits on `at`.
-fn has_connection(doc: &SchematicSheet, at: &Point) -> bool {
+/// Whether anything electrical sits on `at`: the netlist's own connection
+/// set (wire endpoints, junctions, labels, no-connects) or a wire passing
+/// through it.
+fn has_connection(doc: &SchematicSheet, gate: &ConnectedPoints, at: &Point) -> bool {
     let key = pt_key(at);
-    doc.no_connects.iter().any(|n| pt_key(&n.position) == key)
+    gate.contains(at)
         || doc
             .wires
             .iter()
             .any(|w| point_on_segment(key, pt_key(&w.start), pt_key(&w.end)))
 }
 
-/// `"<reference> pin <key>"` for every connected pin of a placed instance
-/// of `fresh.id` that `fresh` no longer has at the same spot.
-fn connected_pins_lost(doc: &SchematicSheet, fresh: &LibSymbol) -> Vec<String> {
+/// `"<reference> pin <key>"` for every pin of a placed instance of
+/// `fresh.id` that would lose its connection (an old connected pin that
+/// `fresh` no longer has at the same spot) or silently gain one (a fresh pin
+/// landing on a connection no old pin occupied).
+fn connected_pins_changed(doc: &SchematicSheet, fresh: &LibSymbol) -> Vec<String> {
     let Some(old) = doc.lib_symbols.get(&fresh.id) else {
         return Vec::new();
     };
+    let gate = connected_points(doc);
     let mut lost = Vec::new();
     for sym in doc.symbols.iter().filter(|s| s.lib_id == fresh.id) {
         let xform = SymbolTransform::from_symbol(sym);
-        for lp in old
-            .pins
-            .iter()
-            .filter(|p| p.unit == 0 || p.unit == sym.unit)
-        {
+        let on_unit = |p: &&LibPin| p.unit == 0 || p.unit == sym.unit;
+        for lp in old.pins.iter().filter(on_unit) {
             let at = xform.apply(lp.pin.position);
-            if !has_connection(doc, &at) {
+            if !has_connection(doc, &gate, &at) {
                 continue;
             }
             let kept = fresh.pins.iter().any(|np| {
@@ -53,8 +55,36 @@ fn connected_pins_lost(doc: &SchematicSheet, fresh: &LibSymbol) -> Vec<String> {
                 lost.push(format!("{} pin {}", sym.reference, pin_key(lp)));
             }
         }
+        for np in fresh.pins.iter().filter(on_unit) {
+            let at = xform.apply(np.pin.position);
+            let was_a_pin = old
+                .pins
+                .iter()
+                .filter(on_unit)
+                .any(|lp| pt_key(&xform.apply(lp.pin.position)) == pt_key(&at));
+            if !was_a_pin && has_connection(doc, &gate, &at) {
+                lost.push(format!("{} pin {}", sym.reference, pin_key(np)));
+            }
+        }
     }
     lost
+}
+
+/// `"<reference> unit <n>"` for every placed instance of `fresh.id` whose
+/// unit has neither pins nor graphics in `fresh` (the unit was removed).
+fn removed_units(doc: &SchematicSheet, fresh: &LibSymbol) -> Vec<String> {
+    doc.symbols
+        .iter()
+        .filter(|s| s.lib_id == fresh.id && s.unit != 0)
+        .filter(|s| {
+            !fresh.pins.iter().any(|p| p.unit == 0 || p.unit == s.unit)
+                && !fresh
+                    .graphics
+                    .iter()
+                    .any(|g| g.unit == 0 || g.unit == s.unit)
+        })
+        .map(|s| format!("{} unit {}", s.reference, s.unit))
+        .collect()
 }
 
 impl Engine {
@@ -63,7 +93,14 @@ impl Engine {
         before: SchematicSheet,
         lib_symbol: LibSymbol,
     ) -> Result<CommandResult, EngineError> {
-        let lost = connected_pins_lost(&self.document, &lib_symbol);
+        let gone = removed_units(&self.document, &lib_symbol);
+        if !gone.is_empty() {
+            return Err(EngineError::LibSymbolUnitRemoved {
+                lib_id: lib_symbol.id,
+                parts: gone,
+            });
+        }
+        let lost = connected_pins_changed(&self.document, &lib_symbol);
         if !lost.is_empty() {
             return Err(EngineError::LibSymbolPinsConnected {
                 lib_id: lib_symbol.id,

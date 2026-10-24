@@ -6,8 +6,9 @@
 //! with the hash of the library's current symbol converted the same way
 //! (`Symbol::to_lib_symbol`). Both sides are computed on demand: no hash is
 //! stored in the `.snxsch`, so there is no format change and old files need
-//! nothing. Embedded copies round-trip exactly (`lib_symbols` is serde
-//! JSON), so an unchanged library never reads as drifted.
+//! nothing. The embedded copies are stored as TOML (`[extras.sheet]`) and
+//! round-trip through save/load, so an unchanged library never reads as
+//! drifted (pinned by a save-and-reopen regression test).
 //!
 //! [`compute_drift`] does the IO and runs in `spawn_blocking`; the
 //! `update`-side half is `app/handlers/library_drift.rs`.
@@ -18,8 +19,9 @@ use std::path::{Path, PathBuf};
 use signex_types::schematic::LibSymbol;
 use uuid::Uuid;
 
-/// Stable content hash of a `LibSymbol` (FNV-1a 64 over its serde JSON,
-/// whose field order is the struct's declaration order). `LibSymbol` has no
+/// Stable content hash of a `LibSymbol` (FNV-1a 64 over the serde JSON of
+/// the in-memory value, whose field order is the struct's declaration
+/// order; the JSON is only a hash input, never stored). `LibSymbol` has no
 /// `PartialEq`, and `std`'s `DefaultHasher` is not stable across releases.
 pub fn content_hash(symbol: &LibSymbol) -> u64 {
     const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
@@ -49,10 +51,32 @@ pub struct DriftReport {
     pub names: HashMap<String, String>,
     /// Failures to surface in the Messages panel.
     pub problems: Vec<String>,
+    /// The [`DriftState::generation`] this pass was started under; a report
+    /// whose generation is no longer current is stale and dropped.
+    pub generation: u64,
 }
 
-/// One sheet's embedded entries: `(sheet path, [(lib_id, content hash)])`.
-pub type SheetEntries = (PathBuf, Vec<(String, u64)>);
+/// One sheet's embedded entries: `(sheet path, [(lib_id, embedded copy)])`.
+/// The copies are cloned on the UI thread and hashed in the worker.
+pub type SheetEntries = (PathBuf, Vec<(String, LibSymbol)>);
+
+/// One requested pass, ready to run off the UI thread.
+#[derive(Debug)]
+pub struct DriftJob {
+    pub generation: u64,
+    pub sheets: Vec<SheetEntries>,
+    pub libs: Vec<MountedLibrary>,
+}
+
+impl DriftJob {
+    /// Do the IO and hashing; the report carries this job's generation.
+    pub fn run(self) -> DriftReport {
+        DriftReport {
+            generation: self.generation,
+            ..compute_drift(&self.sheets, &self.libs)
+        }
+    }
+}
 
 /// Compare every embedded entry with its mounted library's current symbol.
 /// Entries whose library is not mounted are skipped (nothing to compare).
@@ -60,12 +84,14 @@ pub fn compute_drift(sheets: &[SheetEntries], libs: &[MountedLibrary]) -> DriftR
     use signex_library::LibraryAdapter as _;
     use signex_library::adapters::local_git::LocalGitAdapter;
 
+    // One adapter per library per pass (`Err` = open failed, reported once).
+    let mut adapters: HashMap<Uuid, Result<LocalGitAdapter, String>> = HashMap::new();
     let mut report = DriftReport::default();
     // lib_id -> current (symbol, name); None = unreadable, already reported.
     let mut current: HashMap<String, Option<(LibSymbol, String)>> = HashMap::new();
     for (sheet, entries) in sheets {
         let mut drifted = BTreeMap::new();
-        for (lib_id, embedded_hash) in entries {
+        for (lib_id, embedded) in entries {
             let Some((library_id, symbol_id)) = split_lib_id(lib_id) else {
                 continue;
             };
@@ -73,8 +99,11 @@ pub fn compute_drift(sheets: &[SheetEntries], libs: &[MountedLibrary]) -> DriftR
                 continue;
             };
             let entry = current.entry(lib_id.clone()).or_insert_with(|| {
-                let read = LocalGitAdapter::open(&lib.path)
-                    .map_err(|e| e.to_string())
+                let read = adapters
+                    .entry(lib.id)
+                    .or_insert_with(|| LocalGitAdapter::open(&lib.path).map_err(|e| e.to_string()))
+                    .as_ref()
+                    .map_err(Clone::clone)
                     .and_then(|a| a.get_symbol(symbol_id).map_err(|e| e.to_string()));
                 match read {
                     Ok(symbol) => {
@@ -92,7 +121,7 @@ pub fn compute_drift(sheets: &[SheetEntries], libs: &[MountedLibrary]) -> DriftR
             });
             let Some((fresh, name)) = entry else { continue };
             report.names.insert(lib_id.clone(), name.clone());
-            if content_hash(fresh) != *embedded_hash {
+            if content_hash(fresh) != content_hash(embedded) {
                 drifted.insert(lib_id.clone(), fresh.clone());
             }
         }
@@ -137,6 +166,10 @@ pub fn apply_library_names(
 pub struct DriftState {
     /// A recheck is wanted; drained by `finish_update` into a worker task.
     pub check_pending: bool,
+    /// Bumped each time a pass is started (or the mounted set changes with
+    /// nothing to check); only the report carrying the current value is
+    /// stored, so an out-of-order worker result cannot overwrite a newer one.
+    pub generation: u64,
     /// Per sheet: drifted `lib_id` -> the library's current symbol.
     pub drifted: HashMap<PathBuf, BTreeMap<String, LibSymbol>>,
     /// `lib_id` -> `"<Library>/<Symbol>"` where the library is mounted.

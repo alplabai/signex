@@ -17,17 +17,41 @@ use iced::Task;
 
 use super::super::contracts::Message;
 use super::super::state::Signex;
-use crate::library::drift::{
-    DriftReport, MountedLibrary, SheetEntries, compute_drift, content_hash,
-};
+use crate::library::drift::{DriftJob, DriftReport, MountedLibrary, SheetEntries};
 use crate::library::messages::LibraryMessage;
 
 impl Signex {
     /// Start the off-thread drift pass if one was requested.
     pub(crate) fn drain_pending_drift_check(&mut self) -> Task<Message> {
-        if !std::mem::take(&mut self.library.drift.check_pending) {
+        let Some(job) = self.take_drift_job() else {
             return Task::none();
+        };
+        let generation = job.generation;
+        Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || job.run())
+                    .await
+                    .map_err(|e| format!("library drift worker failed: {e}"))
+            },
+            move |result| {
+                let report = result.unwrap_or_else(|problem| DriftReport {
+                    problems: vec![problem],
+                    generation,
+                    ..Default::default()
+                });
+                Message::Library(LibraryMessage::DriftChecked(Box::new(report)))
+            },
+        )
+    }
+
+    /// Consume `check_pending` into a [`DriftJob`] (a new generation), or
+    /// `None` when nothing was requested or no library is mounted (then the
+    /// previous result is cleared and in-flight passes become stale).
+    pub fn take_drift_job(&mut self) -> Option<DriftJob> {
+        if !std::mem::take(&mut self.library.drift.check_pending) {
+            return None;
         }
+        self.library.drift.generation += 1;
         let libs: Vec<MountedLibrary> = self
             .library
             .open_libraries
@@ -41,8 +65,10 @@ impl Signex {
         if libs.is_empty() {
             self.library.drift.drifted.clear();
             self.library.drift.names.clear();
-            return Task::none();
+            self.update_selection_info();
+            return None;
         }
+        // Clone only; hashing and library reads happen in the worker.
         let sheets: Vec<SheetEntries> = self
             .document_state
             .engines
@@ -52,30 +78,23 @@ impl Signex {
                     .document()
                     .lib_symbols
                     .iter()
-                    .map(|(id, sym)| (id.clone(), content_hash(sym)))
+                    .map(|(id, sym)| (id.clone(), sym.clone()))
                     .collect();
                 (path.clone(), entries)
             })
             .collect();
-        Task::perform(
-            async move {
-                tokio::task::spawn_blocking(move || compute_drift(&sheets, &libs))
-                    .await
-                    .map_err(|e| format!("library drift worker failed: {e}"))
-            },
-            |result| match result {
-                Ok(report) => Message::Library(LibraryMessage::DriftChecked(Box::new(report))),
-                Err(problem) => {
-                    Message::Library(LibraryMessage::DriftChecked(Box::new(DriftReport {
-                        problems: vec![problem],
-                        ..Default::default()
-                    })))
-                }
-            },
-        )
+        Some(DriftJob {
+            generation: self.library.drift.generation,
+            sheets,
+            libs,
+        })
     }
 
     pub(crate) fn handle_library_drift_checked(&mut self, report: DriftReport) -> Task<Message> {
+        // A newer pass was started since this one: its result is stale.
+        if report.generation != self.library.drift.generation {
+            return Task::none();
+        }
         for problem in &report.problems {
             crate::diagnostics::log_warning(problem);
         }
