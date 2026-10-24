@@ -28,7 +28,7 @@ pub(super) fn set_number_buf(state: &mut ComponentPreviewState, name: String, bu
 /// that does not parse as `f64`.
 pub(super) fn commit_number(state: &mut ComponentPreviewState, name: String) {
     if let Some(buf) = state.params_edit_buf.get(&name).cloned()
-        && let Ok(value) = buf.trim().parse::<f64>()
+        && let Some(value) = crate::numeric_field::parse_field_f64(&buf)
     {
         state
             .row
@@ -44,10 +44,10 @@ pub(super) fn set_measurement_buf(state: &mut ComponentPreviewState, name: Strin
 }
 
 /// Commit a measurement parameter (value + unit) from its edit buffer,
-/// ignoring a buffer that does not parse as `f64`.
+/// ignoring a buffer that is not a finite number.
 pub(super) fn commit_measurement(state: &mut ComponentPreviewState, name: String, unit: String) {
     if let Some(buf) = state.params_edit_buf.get(&name).cloned()
-        && let Ok(value) = buf.trim().parse::<f64>()
+        && let Some(value) = crate::numeric_field::parse_field_f64(&buf)
     {
         state.row.parameters.insert(
             name,
@@ -89,4 +89,90 @@ pub(super) fn add_custom(state: &mut ComponentPreviewState, name: String, kind: 
     };
     state.row.parameters.insert(trimmed.to_string(), value);
     state.dirty = true;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_library::{
+        ComponentClass, ComponentRow, DatasheetRef, InternalPn, LifecycleState, ManufacturerPart,
+        ParamMap, ParamValue, PlmReserved, PrimitiveRef,
+    };
+    use std::path::PathBuf;
+    use uuid::Uuid;
+
+    const NON_FINITE: [&str; 5] = ["nan", "inf", "-inf", "1e999", "-1e999"];
+
+    fn fixture() -> ComponentPreviewState {
+        let row = ComponentRow {
+            row_id: Uuid::new_v4(),
+            internal_pn: InternalPn::new("TEST_PN"),
+            class: ComponentClass::generic(),
+            datasheet: DatasheetRef::default(),
+            state: LifecycleState::Draft,
+            symbol_ref: PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4()),
+            footprint_ref: None,
+            sim_ref: None,
+            pin_map_overrides: Vec::new(),
+            primary_mpn: ManufacturerPart::draft("Acme", "ACM-001"),
+            alternates: Vec::new(),
+            supply: Vec::new(),
+            parameters: ParamMap::new(),
+            plm: PlmReserved::default(),
+            version: "0.0.1".into(),
+            released: false,
+            symbol_version: String::new(),
+            footprint_version: String::new(),
+            sim_version: String::new(),
+            created: chrono::Utc::now(),
+            updated: chrono::Utc::now(),
+            content_hash: [0u8; 32],
+        };
+        ComponentPreviewState::from_row(PathBuf::from("/tmp/test.snxlib"), "generics".into(), row)
+    }
+
+    /// #828 -- a number cell keeps its stored value when the buffer is
+    /// `nan` / `inf` / an overflow, and a good buffer still commits.
+    #[test]
+    fn commit_number_refuses_non_finite() {
+        for bad in NON_FINITE {
+            let mut state = fixture();
+            state
+                .row
+                .parameters
+                .insert("tcr".into(), ParamValue::Number(5.0));
+            set_number_buf(&mut state, "tcr".into(), bad.into());
+            commit_number(&mut state, "tcr".into());
+            assert_eq!(
+                state.row.parameters.get("tcr"),
+                Some(&ParamValue::Number(5.0)),
+                "{bad:?}"
+            );
+            assert!(!state.dirty, "{bad:?} must not dirty the row");
+        }
+        let mut state = fixture();
+        set_number_buf(&mut state, "tcr".into(), "7.5".into());
+        commit_number(&mut state, "tcr".into());
+        assert_eq!(
+            state.row.parameters.get("tcr"),
+            Some(&ParamValue::Number(7.5))
+        );
+    }
+
+    /// #828 -- same contract for a measurement cell; the unit is untouched.
+    #[test]
+    fn commit_measurement_refuses_non_finite() {
+        let stored = ParamValue::Measurement {
+            value: 12.0,
+            unit: "V".into(),
+        };
+        for bad in NON_FINITE {
+            let mut state = fixture();
+            state.row.parameters.insert("vmax".into(), stored.clone());
+            set_measurement_buf(&mut state, "vmax".into(), bad.into());
+            commit_measurement(&mut state, "vmax".into(), "V".into());
+            assert_eq!(state.row.parameters.get("vmax"), Some(&stored), "{bad:?}");
+            assert!(!state.dirty, "{bad:?} must not dirty the row");
+        }
+    }
 }
