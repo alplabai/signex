@@ -35,3 +35,41 @@ pub fn polygon_path_and_fill(
     }
     (path, fill)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn square(x0: f32, y0: f32, x1: f32, y1: f32) -> Vec<[f32; 2]> {
+        vec![[x0, y0], [x1, y0], [x1, y1], [x0, y1]]
+    }
+
+    fn rule_of(polygon: &GpuPolygon) -> canvas::fill::Rule {
+        let (_, fill) =
+            polygon_path_and_fill(polygon, |[x, y]| Point::new(x, y), iced::Color::BLACK);
+        fill.rule
+    }
+
+    /// A hole needs even-odd to stay empty; a hole-less polygon keeps the
+    /// non-zero default, and a malformed (under 3 vertices) hole is ignored.
+    #[test]
+    fn even_odd_only_when_a_usable_hole_exists() {
+        let plain = GpuPolygon {
+            vertices: square(0.0, 0.0, 10.0, 10.0),
+            ..Default::default()
+        };
+        assert_eq!(rule_of(&plain), canvas::fill::Rule::NonZero);
+
+        let malformed = GpuPolygon {
+            holes: vec![vec![[1.0, 1.0], [2.0, 2.0]]],
+            ..plain.clone()
+        };
+        assert_eq!(rule_of(&malformed), canvas::fill::Rule::NonZero);
+
+        let holed = GpuPolygon {
+            holes: vec![square(2.0, 2.0, 4.0, 4.0)],
+            ..plain
+        };
+        assert_eq!(rule_of(&holed), canvas::fill::Rule::EvenOdd);
+    }
+}

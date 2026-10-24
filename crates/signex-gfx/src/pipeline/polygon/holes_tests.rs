@@ -147,7 +147,26 @@ fn holes_touching_the_outline_fall_back_to_the_solid_outline() {
     };
     let total = filled_area(&polygon);
     assert!(
-        (total - 200.0).abs() < 1e-3 || (total - 184.0).abs() < 1e-3,
-        "either the solid fill or the exact cut-out fill, got {total}"
+        (total - 200.0).abs() < 1e-3,
+        "expected the solid fill, got {total}"
+    );
+}
+
+/// A non-finite hole vertex makes every area comparison false; the fill
+/// must fall back to the solid outline rather than pass the check (#901).
+#[test]
+fn a_non_finite_hole_vertex_falls_back_to_the_solid_outline() {
+    let mut hole = rect(2.0, 2.0, 4.0, 4.0);
+    hole[1][0] = f32::NAN;
+    let polygon = GpuPolygon {
+        vertices: rect(0.0, 0.0, 10.0, 10.0),
+        holes: vec![hole],
+        fill_color: [1.0; 4],
+        ..Default::default()
+    };
+    let total = filled_area(&polygon);
+    assert!(
+        (total - 100.0).abs() < 1e-3,
+        "expected the solid fill, got {total}"
     );
 }

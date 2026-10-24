@@ -67,3 +67,31 @@ fn zone_with_holes_fixture_emits_holes_and_leaves_them_unfilled() {
         );
     }
 }
+
+/// #897: a hole that breaks the `Zone.holes` invariant (here one outside the
+/// outline, and one overlapping the first) never reaches either render path,
+/// so the GPU and CPU fills draw the same zone.
+#[test]
+fn holes_that_break_the_invariant_are_not_emitted() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../signex-types/tests/corpus/pcb/zone-with-holes.snxpcb");
+    let text = std::fs::read_to_string(path).expect("read fixture");
+    let mut board = signex_types::format::SnxPcb::parse(&text)
+        .expect("parse fixture")
+        .board;
+    let p = |x: f64, y: f64| signex_types::pcb::Point { x, y };
+    let zone = &mut board.zones[0];
+    let first = zone.holes[0].clone();
+    // Outside the outline, and overlapping the first hole.
+    zone.holes
+        .push(vec![p(100.0, 100.0), p(110.0, 100.0), p(110.0, 110.0)]);
+    zone.holes
+        .push(first.iter().map(|q| p(q.x + 1.0, q.y + 1.0)).collect());
+
+    let snapshot = PcbSnapshot::from_board(&board);
+    assert_eq!(
+        snapshot.zones[0].holes.len(),
+        2,
+        "only the fixture's two valid holes are drawn"
+    );
+}

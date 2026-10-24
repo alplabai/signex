@@ -60,11 +60,18 @@ pub(super) fn zone_from_board_zone(
         .iter()
         .map(|point| point_to_xy(*point))
         .collect();
+    // Only holes that keep the `Zone.holes` invariant reach either render
+    // path, so the GPU fill and the CPU even-odd fill draw the same zone;
+    // the app reports the rest when the board is opened (#897).
     let holes = zone
-        .holes
-        .iter()
-        .filter(|hole| hole.len() >= 3)
-        .map(|hole| hole.iter().map(|point| point_to_xy(*point)).collect())
+        .usable_holes()
+        .into_iter()
+        .map(|i| {
+            zone.holes[i]
+                .iter()
+                .map(|point| point_to_xy(*point))
+                .collect()
+        })
         .collect();
     let layer_name = zone.layer.to_ascii_lowercase();
     let layer_rank = layer_ranks.get(&layer_name).copied().unwrap_or(u16::MAX);

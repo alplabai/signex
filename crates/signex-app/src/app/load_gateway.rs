@@ -277,6 +277,7 @@ impl Signex {
     }
 
     pub(crate) fn open_pcb_tab(&mut self, path: PathBuf, title: String, board: PcbBoard) {
+        report_unusable_zone_holes(&path, &board);
         self.park_active_schematic_session();
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
         self.document_state.tabs.push(TabInfo {
@@ -506,5 +507,44 @@ impl Signex {
         if self.has_active_schematic() {
             self.apply_page_dimensions_to_canvas();
         }
+    }
+}
+
+/// Tell the user, once per open or reload, about zone holes the renderer
+/// will not cut out, naming each zone and why (#897). Both render paths skip
+/// them, so without this the zone would just look solid there.
+pub(crate) fn report_unusable_zone_holes(path: &std::path::Path, board: &PcbBoard) {
+    let zones: Vec<String> = board
+        .zones
+        .iter()
+        .filter_map(|zone| {
+            let problems = zone.hole_problems();
+            if problems.is_empty() {
+                return None;
+            }
+            let holes: Vec<String> = problems
+                .iter()
+                .map(|(i, problem)| format!("hole {i} {}", problem.describe()))
+                .collect();
+            let net = if zone.net_name.is_empty() {
+                format!("net {}", zone.net)
+            } else {
+                zone.net_name.clone()
+            };
+            Some(format!(
+                "zone {net} on {}: {}",
+                zone.layer,
+                holes.join(", ")
+            ))
+        })
+        .collect();
+    if !zones.is_empty() {
+        // Details first: the Messages panel truncates long entries.
+        crate::diagnostics::log_warning(format!(
+            "{}: {}; drawn as solid copper (a hole must be a simple ring strictly inside \
+             its outline, apart from the other holes)",
+            path.display(),
+            zones.join("; ")
+        ));
     }
 }

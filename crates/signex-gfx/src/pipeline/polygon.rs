@@ -67,8 +67,10 @@ pub(crate) fn triangulate_polygons(polygons: &[GpuPolygon]) -> Vec<PolygonVertex
 
 /// The fill triangles the GPU path draws for one polygon (holes excluded),
 /// as world-space corner triples. Empty for a contour under 3 vertices. Lets
-/// callers above this crate assert on the real fill geometry.
-#[doc(hidden)]
+/// callers above this crate assert on the real fill geometry. Test-only:
+/// built for this crate's tests and for dependents that enable the
+/// `test-support` feature.
+#[cfg(any(test, feature = "test-support"))]
 pub fn polygon_fill_triangles(polygon: &GpuPolygon) -> Vec<[[f32; 2]; 3]> {
     if polygon.vertices.len() < 3 {
         return Vec::new();
@@ -152,7 +154,13 @@ fn append_fill_with_holes(vertices: &mut Vec<PolygonVertex>, polygon: &GpuPolygo
         .iter()
         .map(|&[a, b, c]| signed_area(&[merged[a], merged[b], merged[c]]).abs())
         .sum();
-    if triangles.is_empty() || (filled - expected).abs() > expected.abs() * 1e-6 + 1e-9 {
+    // A non-finite vertex makes every comparison false, so it would pass the
+    // area check unnoticed; treat it as a failed fill.
+    if triangles.is_empty()
+        || !filled.is_finite()
+        || !expected.is_finite()
+        || (filled - expected).abs() > expected.abs() * 1e-6 + 1e-9
+    {
         return false;
     }
     for [a, b, c] in triangles {
