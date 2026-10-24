@@ -9,6 +9,7 @@ use super::*;
 
 #[cfg(test)]
 mod cache_refresh_tests;
+mod cascade;
 mod container_save;
 
 impl Signex {
@@ -486,6 +487,20 @@ impl Signex {
                 }
             }
             container_save::report_overwritten(path, &replaced, &deleted);
+            // Bump the component rows that use the symbols this save
+            // wrote (#832), after the library lock was released.
+            let saved: Vec<_> = save
+                .merge
+                .changed
+                .iter()
+                .filter_map(|uuid| file.get_symbol(*uuid))
+                .map(|s| cascade::SavedPrimitive {
+                    uuid: s.uuid,
+                    name: s.name.clone(),
+                    version: s.version.clone(),
+                })
+                .collect();
+            self.cascade_after_container_save(path, mode, cascade::SavedKind::Symbol, &saved);
             let Some(editor) = self.document_state.symbol_editors.get_mut(path) else {
                 return Ok(());
             };
@@ -570,6 +585,19 @@ impl Signex {
                 }
             }
             container_save::report_overwritten(path, &replaced, &deleted);
+            // As for symbols (#832).
+            let saved: Vec<_> = save
+                .merge
+                .changed
+                .iter()
+                .filter_map(|uuid| file.footprints.iter().find(|f| f.uuid == *uuid))
+                .map(|f| cascade::SavedPrimitive {
+                    uuid: f.uuid,
+                    name: f.name.clone(),
+                    version: f.version.clone(),
+                })
+                .collect();
+            self.cascade_after_container_save(path, mode, cascade::SavedKind::Footprint, &saved);
             let Some(editor) = self.document_state.footprint_editors.get_mut(path) else {
                 return Ok(());
             };
