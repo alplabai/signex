@@ -278,6 +278,9 @@ pub enum ActiveBarAction {
     ToggleSelection,
     // Move/Transform
     Drag,
+    /// Interactive click-click move of one picked object (#271).
+    Move,
+    /// Interactive click-click move of the current selection (#271).
     MoveSelection,
     MoveSelectionXY,
     DragSelection,
@@ -402,7 +405,8 @@ fn action_icon(action: &ActiveBarAction, tid: ThemeId) -> svg::Handle {
         // Move / Transform
         ActiveBarAction::Drag => ic::icon_dd_drag(tid),
         ActiveBarAction::DragSelection => ic::icon_dd_drag_sel(tid),
-        ActiveBarAction::MoveSelection => ic::icon_dd_move(tid),
+        ActiveBarAction::Move => ic::icon_dd_move(tid),
+        ActiveBarAction::MoveSelection => ic::icon_dd_move_sel(tid),
         ActiveBarAction::MoveSelectionXY => ic::icon_dd_move_xy(tid),
         ActiveBarAction::MoveToFront => ic::icon_dd_move_to_front(tid),
         ActiveBarAction::RotateSelection => ic::icon_dd_rotate(tid),
@@ -542,7 +546,7 @@ pub fn view_bar<'a>(
     items.push(btn(
         ic::icon_move(tid),
         false,
-        ActiveBarMsg::Action(ActiveBarAction::MoveSelection),
+        ActiveBarMsg::Action(ActiveBarAction::Move),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Select)),
         "Move / Transform",
     ));

@@ -6,6 +6,7 @@ use super::super::*;
 mod clicked;
 mod double_clicked;
 mod layout_drag;
+mod move_pick;
 mod sheet_tool;
 mod sync_sheet_pins;
 #[cfg(test)]
@@ -168,6 +169,9 @@ impl Signex {
                         true,
                     );
                 }
+            }
+            CanvasEvent::MovePicked { world_x, world_y } => {
+                self.handle_canvas_move_picked(world_x, world_y);
             }
             CanvasEvent::DoubleClicked {
                 world_x,

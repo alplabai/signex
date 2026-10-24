@@ -75,7 +75,7 @@ impl Signex {
         ))
     }
 
-    fn next_designator_for_prefix(&self, prefix: &str) -> String {
+    pub(crate) fn next_designator_for_prefix(&self, prefix: &str) -> String {
         let next_index = self
             .active_render_snapshot()
             .map(|snapshot| {
@@ -244,6 +244,7 @@ impl Signex {
         // Altium-parity "one terminator kills every armed mode".
         self.ui_state.pending_net_color = None;
         self.ui_state.reorder_picker = None;
+        self.ui_state.move_pick = None;
         self.ui_state.lasso_polygon = None;
         self.clear_drawing_buffers();
 
@@ -262,6 +263,8 @@ impl Signex {
             canvas.placement_paused = false;
             canvas.pending_net_color = None;
             canvas.reorder_picker_armed = false;
+            canvas.move_pick = None;
+            canvas.move_epoch += 1;
             canvas.lasso_polygon = None;
             // Mirrors `sync_lasso_polygon_to_canvas`, which only ever
             // reaches the main slot.

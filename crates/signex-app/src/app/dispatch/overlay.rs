@@ -89,22 +89,19 @@ impl Signex {
                 self.ui_state.project_options = None;
                 Task::none()
             }
-            ProjectMsg::AddExistingFilePicked { project_idx, paths } => {
-                self.handle_add_existing_file_picked(project_idx, paths);
+            ProjectMsg::AddExistingFilePicked { project_id, paths } => {
+                self.handle_add_existing_file_picked(project_id, paths);
                 Task::none()
             }
-            ProjectMsg::AddNewSchematicPicked { project_idx, path } => {
-                self.handle_add_new_schematic_picked(project_idx, path);
+            ProjectMsg::AddNewSchematicPicked { project_id, path } => {
+                self.handle_add_new_schematic_picked(project_id, path);
                 Task::none()
             }
             ProjectMsg::GitCommitDone {
                 project_root,
                 rel_path,
                 result,
-            } => {
-                self.handle_project_git_commit_done(project_root, rel_path, result);
-                Task::none()
-            }
+            } => self.handle_project_git_commit_done(project_root, rel_path, result),
         }
     }
 
@@ -151,6 +148,7 @@ impl Signex {
                     || self.interaction_state.pending_port.is_some()
                     || self.ui_state.pending_net_color.is_some()
                     || self.ui_state.reorder_picker.is_some()
+                    || self.ui_state.move_pick.is_some()
                     || self.ui_state.lasso_polygon.is_some();
                 if placement_active {
                     self.clear_transient_schematic_tool_state();
@@ -159,6 +157,7 @@ impl Signex {
                     self.ui_state.pending_net_color = None;
                     self.interaction_state.active_canvas_mut().pending_net_color = None;
                     self.ui_state.reorder_picker = None;
+                    self.ui_state.move_pick = None;
                     self.interaction_state
                         .active_canvas_mut()
                         .clear_overlay_cache();
@@ -382,87 +381,40 @@ impl Signex {
             ErcMsg::CloseDialog => self.handle_close_erc_dialog(),
             ErcMsg::SeverityChanged(rule, sev) => self.handle_erc_severity_changed(rule, sev),
             ErcMsg::PinMatrixCellCycled { row, col } => {
-                use signex_erc::Severity;
-                // Baseline defaults must match the `MATRIX` constant in
-                // `pin_matrix_view` so "clearing" an override drops back
-                // to the same severity the user sees in the UI.
-                const BASELINE: [[Severity; 6]; 6] = [
-                    [
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                    ],
-                    [
-                        Severity::Off,
-                        Severity::Error,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Error,
-                        Severity::Error,
-                    ],
-                    [
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Warning,
-                    ],
-                    [
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Error,
-                    ],
-                    [
-                        Severity::Off,
-                        Severity::Error,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Error,
-                        Severity::Error,
-                    ],
-                    [
-                        Severity::Off,
-                        Severity::Error,
-                        Severity::Warning,
-                        Severity::Error,
-                        Severity::Error,
-                        Severity::Off,
-                    ],
-                ];
-                let key = (row, col);
-                let baseline = BASELINE
-                    .get(row as usize)
-                    .and_then(|r| r.get(col as usize))
-                    .copied()
-                    .unwrap_or(Severity::Off);
-                let current = self
-                    .ui_state
-                    .pin_matrix_overrides
-                    .get(&key)
-                    .copied()
-                    .unwrap_or(baseline);
-                let next = match current {
-                    Severity::Error => Severity::Warning,
-                    Severity::Warning => Severity::Info,
-                    Severity::Info => Severity::Off,
-                    Severity::Off => Severity::Error,
-                };
-                if next == baseline {
-                    self.ui_state.pin_matrix_overrides.remove(&key);
-                } else {
-                    self.ui_state.pin_matrix_overrides.insert(key, next);
-                }
-                crate::fonts::write_pin_matrix_overrides(&self.ui_state.pin_matrix_overrides);
-                Task::none()
+                self.handle_pin_matrix_cell_cycled(row, col)
             }
         }
+    }
+
+    /// Cycle one pin-matrix cell Error -> Warning -> Info -> Off -> Error and
+    /// persist the result. A pair of pin types is unordered, so the mirrored
+    /// cell is written with it: the dialog then never shows two different
+    /// verdicts for the same pair. A value equal to the baseline drops the
+    /// override instead of storing it.
+    fn handle_pin_matrix_cell_cycled(&mut self, row: u8, col: u8) -> Task<Message> {
+        use signex_erc::Severity;
+        use signex_erc::pin_matrix::baseline_cell;
+        let current = self
+            .ui_state
+            .pin_matrix_overrides
+            .get(&(row, col))
+            .copied()
+            .unwrap_or_else(|| baseline_cell(row, col));
+        let next = match current {
+            Severity::Error => Severity::Warning,
+            Severity::Warning => Severity::Info,
+            Severity::Info => Severity::Off,
+            Severity::Off => Severity::Error,
+        };
+        for key in [(row, col), (col, row)] {
+            if next == baseline_cell(key.0, key.1) {
+                self.ui_state.pin_matrix_overrides.remove(&key);
+            } else {
+                self.ui_state.pin_matrix_overrides.insert(key, next);
+            }
+        }
+        crate::fonts::write_pin_matrix_overrides(&self.ui_state.pin_matrix_overrides);
+        Task::none()
     }
 
     /// Preferences modal family handler (namespaced, ADR-0001 D3).

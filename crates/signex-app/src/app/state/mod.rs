@@ -8,9 +8,12 @@ use super::TabInfo;
 
 mod interaction;
 mod pdf_page_setup;
+mod reference_policy;
 pub(crate) mod scope;
+mod sheet_read;
 pub(crate) mod sheet_refs;
 mod ui;
+pub(crate) mod volume_case;
 
 pub use interaction::InteractionState;
 pub use pdf_page_setup::PageSetupInputs;
@@ -213,6 +216,14 @@ impl ErrorNotice {
     pub fn sheet_edit(detail: impl Into<String>) -> Self {
         Self {
             title: "Sheet Symbol Not Changed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
+    /// A rename did not happen, or was undone, and nothing refers to the new name.
+    pub fn rename_failed(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Rename Failed".to_owned(),
             detail: detail.into(),
         }
     }
@@ -509,6 +520,11 @@ pub struct DocumentState {
     /// [`Signex::commit_save_to_project_git`] enqueues the work and
     /// clears on `Message::Project(ProjectMsg::GitCommitDone)`.
     pub inflight_git_commits: std::collections::HashSet<(PathBuf, PathBuf)>,
+    /// #833 — repo roots with a commit currently running. At most one
+    /// commit per repo is in flight; the rest wait in
+    /// `pending_git_commits` so concurrent tasks never race on the
+    /// repo's index lock. Cleared per repo by `GitCommitDone`.
+    pub active_git_repos: std::collections::HashSet<PathBuf>,
     /// #478 review — paths whose async schematic/PCB read+parse
     /// (`open_schematic_file` / `open_pcb_file`) has been spawned but
     /// hasn't completed yet. Without this, firing the same open twice
@@ -725,6 +741,10 @@ impl DocumentState {
 
     pub fn project_by_id(&self, id: ProjectId) -> Option<&LoadedProject> {
         self.projects.iter().find(|p| p.id == id)
+    }
+
+    pub fn project_by_id_mut(&mut self, id: ProjectId) -> Option<&mut LoadedProject> {
+        self.projects.iter_mut().find(|p| p.id == id)
     }
 
     /// Resolve the project that contains a file at this path. Used for

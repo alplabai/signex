@@ -392,3 +392,63 @@ fn erc_severity_override_equal_to_the_default_is_stored_verbatim() {
         "the Preferences chip must keep an override equal to the default"
     );
 }
+
+/// #348 — a pin-matrix cell the user cycles in the ERC dialog reaches the
+/// persisted prefs, survives a restart (a fresh read of the prefs file), and
+/// the matrix rebuilt from that read is what the rule consults: Output/Output
+/// goes Error -> Warning -> Info -> Off, and the mirrored cell moves with it.
+#[test]
+fn pin_matrix_cell_cycle_persists_and_drives_the_rule_matrix() {
+    use signex_app::app::ErcMsg;
+    use signex_erc::{PinAxis, PinMatrix, Severity};
+
+    // Arrange
+    let _serial = serial();
+    let _guard = PrefsPathGuard::capture();
+    let (mut app, _t) = Signex::new();
+    app.ui_state.pin_matrix_overrides.clear();
+    let output_output = |m: &PinMatrix| m.pair_severity(PinAxis::Output, PinAxis::Output);
+    let restart_matrix =
+        || PinMatrix::with_overrides(&signex_app::fonts::read_pin_matrix_overrides());
+
+    // Act + Assert: Error (baseline) -> Warning
+    let _ = app.update(Message::Erc(ErcMsg::PinMatrixCellCycled { row: 1, col: 1 }));
+    assert_eq!(output_output(&restart_matrix()), Severity::Warning);
+
+    // -> Info -> Off
+    let _ = app.update(Message::Erc(ErcMsg::PinMatrixCellCycled { row: 1, col: 1 }));
+    let _ = app.update(Message::Erc(ErcMsg::PinMatrixCellCycled { row: 1, col: 1 }));
+    assert_eq!(output_output(&restart_matrix()), Severity::Off);
+
+    // -> back to the baseline Error, which drops the override entirely.
+    let _ = app.update(Message::Erc(ErcMsg::PinMatrixCellCycled { row: 1, col: 1 }));
+    assert_eq!(output_output(&restart_matrix()), Severity::Error);
+    assert!(signex_app::fonts::read_pin_matrix_overrides().is_empty());
+}
+
+/// #348 — cycling an off-diagonal cell writes its mirror too, so the dialog
+/// never shows two verdicts for one unordered pair.
+#[test]
+fn pin_matrix_cell_cycle_keeps_the_mirror_cell_in_step() {
+    use signex_app::app::ErcMsg;
+    use signex_erc::Severity;
+
+    // Arrange
+    let _serial = serial();
+    let _guard = PrefsPathGuard::capture();
+    let (mut app, _t) = Signex::new();
+    app.ui_state.pin_matrix_overrides.clear();
+
+    // Act: Output (1) x PowerOut (4), baseline Error.
+    let _ = app.update(Message::Erc(ErcMsg::PinMatrixCellCycled { row: 1, col: 4 }));
+
+    // Assert
+    assert_eq!(
+        app.ui_state.pin_matrix_overrides.get(&(1, 4)),
+        Some(&Severity::Warning)
+    );
+    assert_eq!(
+        app.ui_state.pin_matrix_overrides.get(&(4, 1)),
+        Some(&Severity::Warning)
+    );
+}

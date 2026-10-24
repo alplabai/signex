@@ -10,11 +10,10 @@
 //! nudge uses — see `app/dispatch/library.rs`.
 //!
 //! Mounting site: `app/view/mod.rs::collect_overlays`, in the same
-//! block that mounts the footprint active bar + its dropdown overlay,
-//! gated by the `needs_overlay` predicate (`ed.state.move_by_modal
-//! .is_some()`). A modal flag left out of `needs_overlay` renders as a
-//! silent no-op from a non-canvas tab — see
-//! `reference_overlay_predicate_gotcha` in project memory.
+//! block that mounts the footprint active bar + its dropdown overlay.
+//! The builder (`footprint_move_by_overlay`) returns nothing unless
+//! `ed.state.move_by_modal.is_some()`; that guard is the only open
+//! check, so no other flag needs updating.
 
 use std::path::PathBuf;
 

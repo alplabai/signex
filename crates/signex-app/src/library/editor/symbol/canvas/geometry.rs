@@ -105,7 +105,11 @@ pub(super) fn world_unsnapped(
     (world.x as f64, -world.y as f64)
 }
 
-pub(super) fn selection_anchor(symbol: &Symbol, selection: &SymbolSelection) -> Option<(f64, f64)> {
+pub(super) fn selection_anchor(
+    symbol: &Symbol,
+    selection: &SymbolSelection,
+    active_part: u8,
+) -> Option<(f64, f64)> {
     match selection {
         SymbolSelection::Pin(idx) => symbol
             .pins
@@ -127,6 +131,10 @@ pub(super) fn selection_anchor(symbol: &Symbol, selection: &SymbolSelection) -> 
                     }
                 })
         }
-        SymbolSelection::Field(_) | SymbolSelection::All | SymbolSelection::Multiple { .. } => None,
+        SymbolSelection::Field(key) => {
+            let [x, y] = state::field_pos(symbol, *key, active_part);
+            Some((x, y))
+        }
+        SymbolSelection::All | SymbolSelection::Multiple { .. } => None,
     }
 }
