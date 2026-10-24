@@ -59,19 +59,19 @@ pub(super) fn order_preview(
     //   (0,0) tl   (0,1) tr
     //   (1,0) bl   (1,1) br
     let slots = match order {
-        // Column-major, ascending within the column:
-        //  1 3
-        //  2 4
-        AnnotateOrder::UpThenAcross => ("R1", "R3", "R2", "R4"),
-        // Column-major, descending within the column:
+        // Column-major, bottom to top within the column (y decreasing):
         //  2 4
         //  1 3
-        AnnotateOrder::DownThenAcross => ("R2", "R4", "R1", "R3"),
-        // Row-major, descending rows:
+        AnnotateOrder::UpThenAcross => ("R2", "R4", "R1", "R3"),
+        // Column-major, top to bottom within the column (y increasing):
+        //  1 3
+        //  2 4
+        AnnotateOrder::DownThenAcross => ("R1", "R3", "R2", "R4"),
+        // Row-major, top row first (y increasing):
         //  1 2
         //  3 4
         AnnotateOrder::AcrossThenDown => ("R1", "R2", "R3", "R4"),
-        // Row-major, ascending rows:
+        // Row-major, bottom row first (y decreasing):
         //  3 4
         //  1 2
         AnnotateOrder::AcrossThenUp => ("R3", "R4", "R1", "R2"),

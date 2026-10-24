@@ -92,13 +92,13 @@ impl Engine {
                 self.record_history(before, patch_pair);
                 Ok(CommandResult::changed(patch_pair))
             }
-            Command::AnnotateAll { mode } => {
+            Command::AnnotateAll { mode, order } => {
                 // The same part-aware pass the app's annotate runs, so units of
                 // a multi-unit part keep one designator here too (#829). It
                 // snapshots and records its own history, so `before` is unused.
                 drop(before);
                 let changed =
-                    self.annotate_with_seed(mode, &mut std::collections::HashMap::new())?;
+                    self.annotate_with_seed(mode, &mut std::collections::HashMap::new(), order)?;
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::SymbolFieldsUpdated,
                     document: DocumentPatch::SYMBOLS,

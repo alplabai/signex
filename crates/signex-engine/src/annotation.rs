@@ -4,7 +4,7 @@ use crate::patch::{DocumentPatch, PatchPair, SemanticPatch};
 
 use std::collections::{HashMap, HashSet};
 
-use signex_types::schematic::{ProjectParts, Symbol, annotation_order};
+use signex_types::schematic::{AnnotateOrder, ProjectParts, Symbol, annotation_order};
 use uuid::Uuid;
 
 use super::Engine;
@@ -23,6 +23,10 @@ pub struct AnnotateScope<'a> {
     /// When set, the undo entry this sheet records is stamped with the id so
     /// the whole pass undoes and redoes as one step across sheets.
     pub undo_group: Option<UndoGroupId>,
+    /// Order the pass visits this sheet's symbols in. Must match the order
+    /// `parts` was built with, or a part's anchor unit differs from the one
+    /// that is numbered first.
+    pub order: AnnotateOrder,
 }
 
 impl Engine {
@@ -32,14 +36,16 @@ impl Engine {
         &mut self,
         mode: AnnotateMode,
         next_by_prefix: &mut HashMap<String, u32>,
+        order: AnnotateOrder,
     ) -> Result<bool, EngineError> {
         let locked = HashSet::new();
-        let parts = ProjectParts::new(&[&self.document.symbols], &locked);
+        let parts = ProjectParts::new(&[&self.document.symbols], &locked, order);
         let scope = AnnotateScope {
             parts: &parts,
             sheet: 0,
             locked: &locked,
             undo_group: None,
+            order,
         };
         self.annotate_in_project(mode, next_by_prefix, scope, &mut HashMap::new())
     }
@@ -63,11 +69,12 @@ impl Engine {
             sheet,
             locked,
             undo_group,
+            order,
         } = scope;
         let is_designator_target = |sym: &Symbol| -> bool {
             !sym.is_power && !sym.reference.starts_with('#') && !locked.contains(&sym.uuid)
         };
-        let order = annotation_order(&self.document.symbols);
+        let order = annotation_order(&self.document.symbols, order);
         // Set by every phase that rewrites a designator, so each rewrite gets
         // an undo step and a dirty mark (#829).
         let mut changed = false;
@@ -241,7 +248,11 @@ mod tests {
         let mut engine = Engine::new(sheet).unwrap();
         let mut counters = HashMap::new();
 
-        let result = engine.annotate_with_seed(AnnotateMode::Incremental, &mut counters);
+        let result = engine.annotate_with_seed(
+            AnnotateMode::Incremental,
+            &mut counters,
+            AnnotateOrder::default(),
+        );
 
         assert!(
             matches!(result, Err(EngineError::DesignatorOverflow { ref prefix }) if prefix == "R"),
@@ -270,7 +281,11 @@ mod tests {
 
         assert!(
             engine
-                .annotate_with_seed(AnnotateMode::Incremental, &mut counters)
+                .annotate_with_seed(
+                    AnnotateMode::Incremental,
+                    &mut counters,
+                    AnnotateOrder::default()
+                )
                 .unwrap()
         );
         let mut refs: Vec<_> = engine
@@ -288,7 +303,9 @@ mod tests {
         document.symbols = symbols;
         let mut engine = Engine::new(document).unwrap();
         let mut seed = HashMap::new();
-        engine.annotate_with_seed(mode, &mut seed).unwrap();
+        engine
+            .annotate_with_seed(mode, &mut seed, AnnotateOrder::default())
+            .unwrap();
         engine
             .document
             .symbols
@@ -362,7 +379,7 @@ mod tests {
             .iter()
             .map(|e| e.document.symbols.as_slice())
             .collect();
-        let parts = ProjectParts::new(&sheets, locked);
+        let parts = ProjectParts::new(&sheets, locked, AnnotateOrder::default());
         let mut seed = HashMap::new();
         let mut assigned = HashMap::new();
         for (sheet, engine) in engines.iter_mut().enumerate() {
@@ -371,6 +388,7 @@ mod tests {
                 sheet,
                 locked,
                 undo_group: None,
+                order: AnnotateOrder::default(),
             };
             engine
                 .annotate_in_project(mode, &mut seed, scope, &mut assigned)
