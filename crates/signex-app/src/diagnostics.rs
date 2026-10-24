@@ -242,7 +242,7 @@ fn summarize_graphics_record(rendered: &str) -> Option<(String, String)> {
     None
 }
 
-fn diagnostic_code_from_target(target: &str) -> String {
+pub(crate) fn diagnostic_code_from_target(target: &str) -> String {
     let normalized = target
         .split("::")
         .flat_map(|part| part.split(':'))
