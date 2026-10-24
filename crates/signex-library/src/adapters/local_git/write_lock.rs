@@ -104,6 +104,23 @@ pub fn rewrite_file_under_library_lock(
     crate::adapter::rewrite_file(abs_path, rewrite)
 }
 
+/// The `.snxlib` of the library whose directory holds `path`, if any: the
+/// nearest ancestor directory with a `.snxlib` file in it. Reads one
+/// directory per level up to the root.
+pub fn enclosing_library_file(path: &Path) -> Option<PathBuf> {
+    path.ancestors().skip(1).find_map(|dir| {
+        let mut libraries: Vec<PathBuf> = fs::read_dir(dir)
+            .ok()?
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.is_file() && p.extension().is_some_and(|ext| ext == "snxlib"))
+            .collect();
+        // `read_dir` order is unspecified; pick the same one every time.
+        libraries.sort();
+        libraries.into_iter().next()
+    })
+}
+
 fn acquire(file_path: &Path, warned: &AtomicBool) -> Result<Option<WriteLock>, LibraryError> {
     let path = write_lock_path(file_path);
     let file = match open_lock_file(&path) {

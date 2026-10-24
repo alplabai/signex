@@ -250,7 +250,10 @@ impl LocalGitProjectAdapter {
 
     /// Restore `rel_path` to the state captured by `commit_oid`.
     /// Atomic write — staging file + rename, working tree stays
-    /// consistent if the rename fails.
+    /// consistent if the rename fails. A file inside one of the project's
+    /// libraries is written under that library's write lock, so another
+    /// Signex process saving into it cannot interleave with the restore
+    /// (#906).
     ///
     /// Does NOT create a new commit — that's the app layer's call
     /// (it'll observe the dirty file on next save and commit through
@@ -277,8 +280,18 @@ impl LocalGitProjectAdapter {
         let content = blob.content();
 
         let abs = self.project_root.join(rel_path);
-        signex_types::atomic_io::atomic_write(&abs, content)
-            .map_err(|e| LibraryError::Backend(format!("atomic write {}: {e}", abs.display())))?;
+        let library = super::enclosing_library_file(&abs)
+            .filter(|library| library.starts_with(&self.project_root));
+        match library {
+            Some(library) => {
+                super::rewrite_file_under_library_lock(&library, &abs, &mut |_| {
+                    Ok(Some(content.to_vec()))
+                })?;
+            }
+            None => signex_types::atomic_io::atomic_write(&abs, content).map_err(|e| {
+                LibraryError::Backend(format!("atomic write {}: {e}", abs.display()))
+            })?,
+        }
         Ok(())
     }
 

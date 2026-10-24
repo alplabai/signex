@@ -53,7 +53,7 @@ impl Signex {
         }
         // A file opened on its own may still sit in a library another
         // window has mounted; take that library's lock too.
-        match enclosing_library_file(path) {
+        match signex_library::enclosing_library_file(path) {
             Some(library) => {
                 signex_library::rewrite_file_under_library_lock(&library, path, rewrite)
             }
@@ -141,24 +141,6 @@ impl Signex {
         })?;
         Ok(ContainerSave { merge })
     }
-}
-
-/// The `.snxlib` of the library whose directory holds `path`, if any: the
-/// nearest ancestor directory with a `.snxlib` file in it. Reads one
-/// directory per level up to the root, once per save of a file that no
-/// open library holds.
-fn enclosing_library_file(path: &std::path::Path) -> Option<std::path::PathBuf> {
-    path.ancestors().skip(1).find_map(|dir| {
-        let mut libraries: Vec<std::path::PathBuf> = std::fs::read_dir(dir)
-            .ok()?
-            .flatten()
-            .map(|e| e.path())
-            .filter(|p| p.is_file() && p.extension().is_some_and(|ext| ext == "snxlib"))
-            .collect();
-        // `read_dir` order is unspecified; pick the same one every time.
-        libraries.sort();
-        libraries.into_iter().next()
-    })
 }
 
 /// An empty file (created before its first save) has nothing to merge
