@@ -84,18 +84,35 @@ impl Signex {
             ProjectMsg::CloseRefsResolved { project_id, result } => {
                 self.handle_close_refs_resolved(project_id, result)
             }
+            ProjectMsg::CaseProbed {
+                project_id,
+                outcome,
+            } => self.handle_case_probed(project_id, outcome),
             ProjectMsg::AppQuitConfirm(choice) => self.handle_app_quit_confirm(choice),
             ProjectMsg::CloseOptions => {
                 self.ui_state.project_options = None;
                 Task::none()
             }
             ProjectMsg::AddExistingFilePicked { project_id, paths } => {
-                self.handle_add_existing_file_picked(project_id, paths);
+                self.handle_add_existing_file_picked(project_id, paths)
+            }
+            ProjectMsg::AddExistingFilesCopied {
+                project_id,
+                results,
+            } => {
+                self.handle_add_existing_files_copied(project_id, results);
+                Task::none()
+            }
+            ProjectMsg::AddNewSchematicWritten {
+                project_id,
+                path,
+                result,
+            } => {
+                self.handle_add_new_schematic_written(project_id, path, result);
                 Task::none()
             }
             ProjectMsg::AddNewSchematicPicked { project_id, path } => {
-                self.handle_add_new_schematic_picked(project_id, path);
-                Task::none()
+                self.handle_add_new_schematic_picked(project_id, path)
             }
             ProjectMsg::GitCommitDone {
                 project_root,

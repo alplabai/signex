@@ -5,7 +5,7 @@
 
 use signex_app::app::{FileMsg, Message, Signex};
 use signex_app::menu_bar::MenuMessage;
-use signex_app::start_screen::{Action, Surface};
+use signex_app::start_screen::{self, Action, Surface};
 
 fn surface_of(app: &Signex) -> Surface {
     Surface::select(app.document_state.active_project.is_some())
@@ -37,6 +37,10 @@ fn every_action_dispatches_the_existing_menu_message() {
             Action::OpenProject => {
                 matches!(action.message(), Message::Menu(MenuMessage::OpenProject))
             }
+            Action::OpenSampleProject => matches!(
+                action.message(),
+                Message::Menu(MenuMessage::OpenSampleProject)
+            ),
             Action::KeyboardShortcuts => matches!(
                 action.message(),
                 Message::Menu(MenuMessage::OpenKeyboardShortcuts)
@@ -64,4 +68,46 @@ fn new_and_open_actions_reach_their_handlers_without_panicking() {
         let _ = app.update(action.message());
     }
     assert_eq!(surface_of(&app), Surface::Start);
+}
+
+#[test]
+fn open_sample_action_schedules_the_unpack_through_real_update() {
+    let (mut app, _t) = Signex::new();
+    let task = app.update(Action::OpenSampleProject.message());
+    assert_eq!(task.units(), 1, "the sample unpack must be scheduled");
+}
+
+#[test]
+fn a_recent_entry_opens_its_project_through_real_update() {
+    let (mut app, _t) = Signex::new();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let prj = dir.path().join("Recent.snxprj");
+    std::fs::write(&prj, b"").expect("create project");
+    assert!(app.document_state.active_project.is_none());
+
+    let _ = app.update(start_screen::recent_message(&prj));
+
+    assert!(
+        app.document_state.projects.iter().any(|p| p.path == prj),
+        "the recent entry must open the project"
+    );
+}
+
+#[test]
+fn a_vanished_recent_entry_is_handled_like_open_recent() {
+    let (mut app, _t) = Signex::new();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let gone = dir.path().join("Gone.snxprj");
+    app.ui_state.recent_projects =
+        signex_app::recent_projects::RecentProjects::from_paths([gone.clone()]);
+    assert_eq!(
+        start_screen::visible_recent(app.ui_state.recent_projects.entries()).len(),
+        1
+    );
+
+    let _ = app.update(start_screen::recent_message(&gone));
+
+    assert!(app.ui_state.recent_projects.entries().is_empty());
+    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_state.projects.is_empty());
 }

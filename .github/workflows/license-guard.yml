@@ -186,7 +186,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Forbid `\bStandard\b` substring in signex-render / signex-engine
+      - name: Forbid `\bStandard\b` substring in signex-renderer / signex-engine
         run: |
           set -e
           # The v0.10.0 "Standard" rename of KiCad-class names was a
@@ -199,7 +199,17 @@ jobs:
           # `LabelStyle::Standard`, `MultisheetStyle::Standard`) is
           # whitelisted because it serialises to disk and renaming
           # would break user files.
-          MATCHES=$(git grep -nE '\bStandard\b' -- 'crates/signex-render/' 'crates/signex-engine/' || true)
+          # Every scanned path must exist: after a crate rename an empty
+          # path makes `git grep` match nothing and the rule pass vacuously.
+          SCANNED="crates/signex-renderer/ crates/signex-engine/"
+          for dir in $SCANNED; do
+            if [ -z "$(git ls-files -- "$dir" | head -n 1)" ]; then
+              echo "::error::License Guard scans '$dir', which has no tracked files. Update the path."
+              exit 1
+            fi
+          done
+          # shellcheck disable=SC2086
+          MATCHES=$(git grep -nE '\bStandard\b' -- $SCANNED || true)
           if [ -n "$MATCHES" ]; then
             # Whitelist: render-style enum variant declarations + their
             # Display impls. Anything else is a comment-word euphemism
@@ -208,7 +218,7 @@ jobs:
             if [ -n "$FILTERED" ]; then
               echo "$FILTERED"
               echo ""
-              echo "::error::Bare 'Standard' comment-word detected in signex-render / signex-engine."
+              echo "::error::Bare 'Standard' comment-word detected in signex-renderer / signex-engine."
               echo "::error::Source comments must describe behaviour without the v0.10.0 Standard euphemism."
               echo "::error::Reference docs/RENDERING_RULES.md, IEEE-Std-91, or Altium parity instead."
               exit 1

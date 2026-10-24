@@ -4,4 +4,6 @@ mod annotate;
 #[cfg(test)]
 mod annotate_tests;
 mod erc_run;
+#[cfg(test)]
+mod erc_run_tests;
 mod modals;

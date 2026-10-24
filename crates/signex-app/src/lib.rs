@@ -24,6 +24,7 @@
 pub mod about;
 pub mod about_modal;
 pub mod active_bar;
+pub mod annotate_undo;
 pub mod app;
 pub mod canvas;
 pub mod chrome;

@@ -159,12 +159,12 @@ impl Signex {
     /// `app/handlers/menu/export.rs`.
     pub(crate) fn dispatch_export_message(&mut self, msg: ExportMsg) -> Task<Message> {
         match msg {
-            ExportMsg::PdfFinished { source, result } => {
-                let task = self.handle_export_pdf_finished(source, result);
+            ExportMsg::PdfFinished { request, result } => {
+                let task = self.handle_export_pdf_finished(request, result);
                 iced::Task::batch([task, self.finish_update()])
             }
-            ExportMsg::NetlistFinished(result) => {
-                let task = self.handle_export_netlist_finished(result);
+            ExportMsg::NetlistFinished { source, result } => {
+                let task = self.handle_export_netlist_finished(source, result);
                 iced::Task::batch([task, self.finish_update()])
             }
             ExportMsg::PdfOpenDialog => {
@@ -183,8 +183,12 @@ impl Signex {
                 let task = self.handle_bom_preview_open();
                 iced::Task::batch([task, self.finish_update()])
             }
-            ExportMsg::BomFinished(result) => {
-                let task = self.handle_export_bom_finished(result);
+            ExportMsg::BomFinished {
+                source,
+                options,
+                result,
+            } => {
+                let task = self.handle_export_bom_finished(source, *options, result);
                 iced::Task::batch([task, self.finish_update()])
             }
             ExportMsg::ErcReportPathChosen(result) => {

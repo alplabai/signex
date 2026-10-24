@@ -274,6 +274,7 @@ impl SchematicCanvas<'_> {
                     snapshot,
                     &self.selected,
                     &transform,
+                    &self.prefs.canvas_colors,
                 );
                 let erc_overlay: Vec<crate::schematic_runtime::overlay::ErcMarker> = self
                     .erc_markers
@@ -298,6 +299,7 @@ impl SchematicCanvas<'_> {
                     frame,
                     &erc_overlay,
                     &transform,
+                    &self.prefs.canvas_colors,
                 );
             };
             if drag_offset.is_some() {

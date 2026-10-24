@@ -499,35 +499,32 @@ pub(super) fn pad_stack_tab_strip<'a>(
 }
 
 /// v0.20 — pick_list-friendly proxy for `signex_library::PadShape`.
-/// Mirrors Altium's COPPER → Shape dropdown verbatim minus
-/// "Custom Shape" (sketch mode owns freeform geometry):
-///   Round / Rectangular / Octagonal / Rounded Rectangle /
-///   Chamfered Rectangle / Donut.
+/// Mirrors Altium's COPPER → Shape dropdown minus "Custom Shape"
+/// (sketch mode owns freeform geometry):
+///   Round / Rectangular / Rounded Rectangle / Chamfered Rectangle.
 /// Schema-mapping notes:
-///   - Octagonal / Donut have no native variant on
-///     `signex_library::PadShape` yet; both fall back to Round at
-///     bake. Round trip preserves the picker selection across
-///     sessions once we add schema variants in v0.21.
+///   - Octagonal and Donut are deliberately not offered: neither has
+///     a variant on `signex_library::PadShape`, the sketch pad
+///     schema, or the bake path, so choosing one could only be
+///     stored as Round. A picker entry that silently changes on save
+///     is a data-loss trap; add them back only together with a
+///     native schema variant and bake geometry.
 ///   - Chamfered Rectangle uses the existing `Chamfered` variant
 ///     with sensible defaults (25% chamfer, all corners).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum PadShapeChoice {
     Round,
     Rectangular,
-    Octagonal,
     RoundedRectangle,
     ChamferedRectangle,
-    Donut,
 }
 
 impl PadShapeChoice {
     pub(super) const ALL: &'static [PadShapeChoice] = &[
         PadShapeChoice::Round,
         PadShapeChoice::Rectangular,
-        PadShapeChoice::Octagonal,
         PadShapeChoice::RoundedRectangle,
         PadShapeChoice::ChamferedRectangle,
-        PadShapeChoice::Donut,
     ];
 
     pub(super) fn from_lib(s: &signex_library::PadShape) -> Self {
@@ -536,10 +533,10 @@ impl PadShapeChoice {
             signex_library::PadShape::Rect => PadShapeChoice::Rectangular,
             signex_library::PadShape::RoundRect { .. } => PadShapeChoice::RoundedRectangle,
             signex_library::PadShape::Chamfered { .. } => PadShapeChoice::ChamferedRectangle,
-            // Oval / Custom / Octagonal / Donut have no 1:1 schema
-            // home today; collapse to Round so the picker stays
-            // consistent. Custom Shape is intentionally absent — use
-            // sketch mode for freeform geometry.
+            // Oval / Custom have no picker entry; the picker shows
+            // Round for them and only rewrites the pad when the user
+            // actually picks a shape. Custom Shape is intentionally
+            // absent — use sketch mode for freeform geometry.
             _ => PadShapeChoice::Round,
         }
     }
@@ -555,11 +552,6 @@ impl PadShapeChoice {
                 chamfer_ratio: 0.25,
                 corners: ChamferedCorners::all(),
             },
-            // v0.21 schema follow-up: native Octagonal + Donut. Until
-            // then Round is the closest mappable shape (Donut's
-            // hole comes from the drill anyway).
-            PadShapeChoice::Octagonal => signex_library::PadShape::Round,
-            PadShapeChoice::Donut => signex_library::PadShape::Round,
         }
     }
 }
@@ -569,10 +561,8 @@ impl std::fmt::Display for PadShapeChoice {
         f.write_str(match self {
             PadShapeChoice::Round => "Round",
             PadShapeChoice::Rectangular => "Rectangular",
-            PadShapeChoice::Octagonal => "Octagonal",
             PadShapeChoice::RoundedRectangle => "Rounded Rectangle",
             PadShapeChoice::ChamferedRectangle => "Chamfered Rectangle",
-            PadShapeChoice::Donut => "Donut",
         })
     }
 }
@@ -619,5 +609,23 @@ impl std::fmt::Display for ExpansionMode {
             ExpansionMode::Rule => "Rule Expansion",
             ExpansionMode::Manual => "Manual",
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PadShapeChoice;
+
+    /// #964: whatever the shape picker offers must come back as the
+    /// same choice once stored, or the pad changes under the user.
+    #[test]
+    fn every_offered_shape_round_trips_through_the_library_shape() {
+        for choice in PadShapeChoice::ALL {
+            assert_eq!(
+                PadShapeChoice::from_lib(&choice.to_lib()),
+                *choice,
+                "{choice} is stored as a different shape"
+            );
+        }
     }
 }

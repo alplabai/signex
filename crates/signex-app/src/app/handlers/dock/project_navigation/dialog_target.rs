@@ -13,6 +13,38 @@ impl Signex {
         self.document_state.projects.get(idx).map(|p| p.id)
     }
 
+    /// The index of the project that still lists the library `row` names, or
+    /// `None` — after a Messages-panel warning — when the project was closed
+    /// or the library was removed since the menu opened (#742).
+    pub(super) fn resolve_library_row(
+        &self,
+        row: &crate::app::LibraryRowRef,
+        action: &str,
+    ) -> Option<usize> {
+        let found = self
+            .document_state
+            .projects
+            .iter()
+            .position(|p| p.id == row.project_id)
+            .filter(|&i| {
+                let p = &self.document_state.projects[i];
+                p.data
+                    .libraries
+                    .iter()
+                    .any(|e| p.data.resolve_library_path(e) == row.root)
+                    || p.pending_libraries
+                        .values()
+                        .any(|spec| spec.lib_path == row.root)
+            });
+        if found.is_none() {
+            crate::diagnostics::log_warning(format!(
+                "{action} cancelled: library no longer in the project ({}).",
+                row.root.display()
+            ));
+        }
+        found
+    }
+
     /// Re-point a dialog's `tree_path[0]` at the current index of the project
     /// it was opened for, since projects may have been added or removed
     /// meanwhile (#855). Returns `false` when that project is no longer open.

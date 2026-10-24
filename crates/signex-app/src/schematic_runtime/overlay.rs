@@ -18,6 +18,7 @@ pub fn draw_erc_markers(
     frame: &mut canvas::Frame,
     markers: &[ErcMarker],
     transform: &ScreenTransform,
+    colors: &CanvasColors,
 ) {
     if markers.is_empty() {
         return;
@@ -94,9 +95,7 @@ pub fn draw_erc_markers(
     draw_renderer_snapshot(
         frame,
         &snapshot,
-        &ResolvedTheme::from_canvas_colors(signex_types::theme::canvas_colors(
-            signex_types::theme::ThemeId::Signex,
-        )),
+        &ResolvedTheme::from_canvas_colors(*colors),
         DirtyFlags::OVERLAY,
         transform,
     );
