@@ -573,7 +573,9 @@ fn add_existing_with_external_path_copies_into_project_dir() {
 
     // ...the worker copies, then the completion registers the sheet.
     let copied = project_dir.join("ExternalSheet.snxsch");
-    fs::copy(&external_sheet, &copied).unwrap();
+    let landed = Signex::copy_into_project_blocking(external_sheet.clone(), copied.clone())
+        .expect("the worker copies the sheet");
+    assert_eq!(landed, copied);
     add_existing_landed(&mut app, std::slice::from_ref(&copied));
     assert!(
         copied.exists(),
@@ -633,7 +635,10 @@ fn add_new_schematic_writes_blank_snxsch_marks_project_dirty_no_tab_open() {
     assert!(!new_sheet.exists(), "update itself does no IO");
 
     // The worker writes the sheet; the completion registers it.
-    fs::write(&new_sheet, b"blank").unwrap();
+    Signex::write_blank_schematic_blocking(&new_sheet).expect("the worker writes the sheet");
+    let text = fs::read_to_string(&new_sheet).unwrap();
+    signex_types::format::SnxSchematic::parse(&text)
+        .expect("the blank sheet must be a valid .snxsch");
     let _ = app.update(Message::Project(ProjectMsg::AddNewSchematicWritten {
         project_id,
         path: new_sheet.clone(),

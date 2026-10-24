@@ -202,12 +202,14 @@ pub enum ExportMsg {
     /// `document_state.preview` with the rasterized pages plus every
     /// PDF setting in one modal.
     PdfOpenDialog,
-    /// Completion of PDF export — carries either the saved path or error,
-    /// plus the document the export was started from. The OS save dialog is
-    /// non-modal, so the active tab can change before it returns; `source`
-    /// pins the export to the document the user asked for (#833).
+    /// Completion of PDF export — carries the request (source document,
+    /// options and sheet picks) captured at the Export click, plus the saved
+    /// path or a cancel/error. The OS save dialog is non-modal and the preview
+    /// can change before it returns, so nothing is read from shared state
+    /// (#833, #852).
     PdfFinished {
-        source: std::path::PathBuf,
+        // Boxed: the options make this the largest `Message` variant.
+        request: Box<crate::app::state::PdfExportRequest>,
         result: Result<std::path::PathBuf, String>,
     },
     /// Completion of netlist export — carries the document the export was
@@ -221,11 +223,11 @@ pub enum ExportMsg {
     /// BOM preview modal instead of going straight to the file
     /// dialog. Mirrors Print Preview.
     BomRequested,
-    /// Completion of BOM export — carries the document the export was started
-    /// from (captured when the dialog opened, #852) plus either the saved path
-    /// or error.
+    /// Completion of BOM export — carries the document and options captured
+    /// at the Export click (#852) plus either the saved path or a cancel/error.
     BomFinished {
         source: std::path::PathBuf,
+        options: Box<signex_output::BomOptions>,
         result: Result<std::path::PathBuf, String>,
     },
     /// User picked a path for File → Export → ERC Report — format and write.

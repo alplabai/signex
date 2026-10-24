@@ -180,7 +180,7 @@ impl Signex {
         } else {
             path
         };
-        let Some((project_dir, _)) = self.project_dir_and_path(project_id, "Add New") else {
+        let Some((project_dir, _)) = self.project_dir_and_path(project_id, "Add New", &[]) else {
             return iced::Task::none();
         };
         if !path.starts_with(&project_dir) {
@@ -221,7 +221,9 @@ impl Signex {
             crate::diagnostics::log_error("Add New Schematic", &anyhow::anyhow!("{e}"));
             return;
         }
-        let Some((_, project_path)) = self.project_dir_and_path(project_id, "Add New") else {
+        let Some((_, project_path)) =
+            self.project_dir_and_path(project_id, "Add New", std::slice::from_ref(&path))
+        else {
             return;
         };
         if self.register_project_file(project_id, &path) {
@@ -238,7 +240,8 @@ impl Signex {
         let Some(paths) = paths else {
             return iced::Task::none();
         };
-        let Some((project_dir, _)) = self.project_dir_and_path(project_id, "Add Existing") else {
+        let Some((project_dir, _)) = self.project_dir_and_path(project_id, "Add Existing", &[])
+        else {
             return iced::Task::none();
         };
         let plans: Vec<_> = paths
@@ -282,7 +285,9 @@ impl Signex {
                 Err(e) => crate::diagnostics::log_error("Add Existing", &anyhow::anyhow!("{e}")),
             }
         }
-        let Some((_, project_path)) = self.project_dir_and_path(project_id, "Add Existing") else {
+        let Some((_, project_path)) =
+            self.project_dir_and_path(project_id, "Add Existing", &landed)
+        else {
             return;
         };
         let mut any_added = false;
@@ -317,6 +322,7 @@ impl Signex {
         &self,
         project_id: ProjectId,
         action: &str,
+        on_disk: &[std::path::PathBuf],
     ) -> Option<(std::path::PathBuf, std::path::PathBuf)> {
         let resolved = self.document_state.project_by_id(project_id).and_then(|p| {
             p.path
@@ -324,10 +330,23 @@ impl Signex {
                 .map(|dir| (dir.to_path_buf(), p.path.clone()))
         });
         if resolved.is_none() {
-            crate::diagnostics::log_warning(format!(
-                "{action}: the target project ({project_id}) was closed before the dialog \
-                 finished; nothing was added"
-            ));
+            if on_disk.is_empty() {
+                crate::diagnostics::log_warning(format!(
+                    "{action}: the target project ({project_id}) was closed before the dialog \
+                     finished; nothing was added"
+                ));
+            } else {
+                let files = on_disk
+                    .iter()
+                    .map(|p| p.display().to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                crate::diagnostics::log_warning(format!(
+                    "{action}: the target project ({project_id}) was closed before the write \
+                     finished. The file(s) are already on disk but are not in any project: \
+                     {files}. Use Add Existing from inside the project to add them."
+                ));
+            }
         }
         resolved
     }

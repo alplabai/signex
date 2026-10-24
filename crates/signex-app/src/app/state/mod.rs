@@ -386,10 +386,11 @@ pub struct NetlistIncompletePrompt {
     pub ctx: signex_output::ExportContext,
 }
 
-/// A PDF export in flight: what the preview modal chose, for the document it
-/// was chosen on (#852).
+/// What the preview modal chose for one PDF export, for the document it was
+/// chosen on. Carried inside `ExportMsg::PdfFinished`, so each Export click
+/// owns its own copy and overlapping exports cannot clobber each other (#852).
 #[derive(Debug, Clone)]
-pub struct PendingPdfExport {
+pub struct PdfExportRequest {
     /// The document the export was started from.
     pub source: PathBuf,
     pub options: signex_output::PdfOptions,
@@ -471,18 +472,6 @@ pub struct DocumentState {
     /// open. Doubles as the unified PDF Export modal — `File → Export
     /// PDF` and `File → Print Preview` both populate this field.
     pub preview: Option<PreviewState>,
-    /// PDF options + file picks stashed from the unified preview modal while
-    /// the file picker is running, tied to the document they were chosen for.
-    /// `handle_export_pdf_finished` applies them only to a completion with the
-    /// same `source`. `None` means the preview path was bypassed; the export
-    /// then uses defaults and includes every sheet.
-    pub pending_pdf: Option<PendingPdfExport>,
-    /// Pending BOM options stashed from the BOM preview modal while
-    /// the file picker is running. Without this, the user's column /
-    /// grouping / variant / include-DNP picks in the preview would
-    /// be dropped on export and the actual file would be a default
-    /// 6-column Grouped Base BOM. Cleared after export.
-    pub pending_bom_options: Option<signex_output::BomOptions>,
     /// The app's one user-visible error card. `Some` while it is shown;
     /// cleared by `OverlayMsg::DismissErrorNotice`.
     ///
@@ -556,6 +545,9 @@ pub enum BomSidebarTab {
 /// plus the user-editable options that drive the next rollup. Re-rolled
 /// whenever an option toggle fires.
 pub struct BomPreviewState {
+    /// The document the preview was built for; Export writes this one even if
+    /// the user has switched tabs since (#852).
+    pub source: PathBuf,
     pub options: signex_output::BomOptions,
     pub table: signex_output::BomTable,
     /// Live validation of `table` under `options.rule_options`. Refreshed on
@@ -678,6 +670,9 @@ impl std::fmt::Display for PdfQuality {
 /// the leftovers — UI presentation (active tab, quality enum), the
 /// rasterised pages, and pan/zoom interaction state.
 pub struct PreviewState {
+    /// The document the preview was built for; Export writes this one even if
+    /// the user has switched tabs since (#852).
+    pub source: PathBuf,
     pub pages: Vec<signex_output::PreviewPage>,
     pub page_handles: Vec<iced::widget::image::Handle>,
     pub selected: usize,
@@ -778,20 +773,6 @@ impl DocumentState {
             return self.active_loaded_project();
         };
         self.document_project(path)
-    }
-
-    /// Take the pending PDF export if it belongs to `source`; one stashed for
-    /// another document is left for its own completion.
-    pub fn take_pending_pdf_for(&mut self, source: &std::path::Path) -> Option<PendingPdfExport> {
-        if self
-            .pending_pdf
-            .as_ref()
-            .is_some_and(|p| p.source == source)
-        {
-            self.pending_pdf.take()
-        } else {
-            None
-        }
     }
 
     /// Project that owns the document at `path` (the explicit-path form of

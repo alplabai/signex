@@ -21,21 +21,24 @@ impl Signex {
         self.handle_print_preview_requested()
     }
 
-    /// `source` is the document the export was started from, captured when the
-    /// save dialog opened; the scope is built from it, never from whichever tab
-    /// is active now (#833). A source closed in the meantime is refused.
+    /// `request` carries the source document, options and sheet picks
+    /// captured at the Export click; the scope is built from it, never from
+    /// whichever tab is active now (#833). A source closed in the meantime is
+    /// refused. A dismissed save dialog arrives as `Err("cancelled")`.
     pub(crate) fn handle_export_pdf_finished(
         &mut self,
-        source: PathBuf,
+        request: Box<crate::app::state::PdfExportRequest>,
         result: Result<PathBuf, String>,
     ) -> Task<Message> {
+        let crate::app::state::PdfExportRequest {
+            source,
+            options,
+            files,
+        } = *request;
         let save_path = match result {
             Ok(p) => p,
             Err(e) => {
-                // Cancelled — drop pending state so the next open
-                // starts fresh.
-                self.document_state.take_pending_pdf_for(&source);
-                log::info!("PDF export cancelled: {e}");
+                log::info!("PDF export not written: {e}");
                 return Task::none();
             }
         };
@@ -44,7 +47,6 @@ impl Signex {
             match super::build_page_scope_for_source(&self.document_state, &source) {
                 Some(c) => c,
                 None => {
-                    self.document_state.take_pending_pdf_for(&source);
                     let reason = format!(
                         "PDF export refused: the source document {} is no longer open.",
                         source.display()
@@ -61,23 +63,13 @@ impl Signex {
         // blocks, but it degrades *loudly*, once, from this user action.
         super::log_stitch_issues(&source, &ctx, &issues);
 
-        // Use pending options if they were set by the dialog, otherwise fall back to defaults.
-        let (options, files) = match self.document_state.take_pending_pdf_for(&source) {
-            Some(p) => (p.options, Some(p.files)),
-            None => (Default::default(), None),
-        };
-        // Filter sheets to the user's file picks. The preview path
-        // populates `pending_pdf_files`; legacy direct-export
-        // callers (none today) leave it None and get the full
-        // sheet list.
-        if let Some(files) = files {
-            ctx.sheets.retain(|s| files.contains(&s.path));
-            if ctx.sheets.is_empty() {
-                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
-                    "Cannot export PDF: no files selected in the Settings tab.".to_string(),
-                ));
-                return Task::none();
-            }
+        // Filter sheets to the user's file picks from the Settings tab.
+        ctx.sheets.retain(|s| files.contains(&s.path));
+        if ctx.sheets.is_empty() {
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
+                "Cannot export PDF: no files selected in the Settings tab.".to_string(),
+            ));
+            return Task::none();
         }
         // Apply the variant override the user picked in the modal.
         // The PDF renderer reads `active_variant` out of

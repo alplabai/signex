@@ -388,8 +388,6 @@ impl Signex {
                 standard_lib_dir,
                 loaded_lib: std::collections::HashMap::new(),
                 preview: None,
-                pending_pdf: None,
-                pending_bom_options: None,
                 error_notice: None,
                 netlist_incomplete_prompt: None,
                 bom_preview: None,

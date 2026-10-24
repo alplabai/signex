@@ -709,6 +709,21 @@ fn cancel_on_the_incomplete_prompt_writes_nothing() {
     std::fs::remove_file(&out).ok();
 }
 
+/// A PDF request for `source` with default options and every sheet of its
+/// scope picked — what an untouched preview modal would capture.
+pub(super) fn pdf_request_all_sheets(
+    app: &Signex,
+    source: &std::path::Path,
+) -> crate::app::state::PdfExportRequest {
+    let (ctx, _) =
+        super::build_page_scope_for_source(&app.document_state, source).expect("source is open");
+    crate::app::state::PdfExportRequest {
+        source: source.to_path_buf(),
+        options: Default::default(),
+        files: ctx.sheets.iter().map(|s| s.path.clone()).collect(),
+    }
+}
+
 #[test]
 fn pdf_export_proceeds_and_warns_once_per_user_action() {
     // The PDF is human-consumed: printing or reviewing mid-refactor with a
@@ -721,10 +736,9 @@ fn pdf_export_proceeds_and_warns_once_per_user_action() {
     let mut app = app_with_missing_child(&marker);
     let out = std::env::temp_dir().join(format!("signex-partial-{}.pdf", Uuid::new_v4()));
 
-    let _ = app.handle_export_pdf_finished(
-        app.document_state.active_path.clone().expect("active path"),
-        Ok(out.clone()),
-    );
+    let source = app.document_state.active_path.clone().expect("active path");
+    let request = Box::new(pdf_request_all_sheets(&app, &source));
+    let _ = app.handle_export_pdf_finished(request, Ok(out.clone()));
 
     assert!(
         app.document_state.error_notice.is_none(),

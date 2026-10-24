@@ -343,11 +343,9 @@ impl Signex {
         Task::perform(
             {
                 let path = path.clone();
-                async move {
-                    tokio::task::spawn_blocking(move || write_library_file(&path, &text))
-                        .await
-                        .unwrap_or_else(|e| Err(format!("worker thread failed: {e}")))
-                }
+                crate::app::handlers::dock::project_navigation::add_io::on_blocking_pool(
+                    move || write_library_file(&path, &text),
+                )
             },
             move |result| {
                 Message::Library(LibraryMessage::AddLibraryFileWritten {
@@ -395,8 +393,9 @@ impl Signex {
             .position(|p| p.id == project_id);
         let Some(idx) = target_idx else {
             crate::diagnostics::log_warning(format!(
-                "New library file {}: its project ({project_id}) was closed before the dialog \
-                 finished; the file was not added to a project",
+                "New library file {}: its project ({project_id}) was closed before the write \
+                 finished. The file is already on disk but is not in any project; use Add \
+                 Existing from inside the project to add it.",
                 path.display()
             ));
             return;
