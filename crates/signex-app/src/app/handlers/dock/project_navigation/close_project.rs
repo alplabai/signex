@@ -278,6 +278,9 @@ impl Signex {
     /// WHY a file couldn't be saved instead of only naming it.
     fn try_save_dirty_path(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
         use anyhow::Context as _;
+        // A write still running for this sheet could land after the one
+        // below and put older content on disk; let it finish first.
+        self.document_state.document_saves.barrier().wait();
         if let Some(engine) = self.document_state.engines.get_mut(path) {
             engine
                 .save()

@@ -49,6 +49,9 @@ pub struct Engine {
     /// outside that loop, so every other path behaves exactly as before.
     /// See `exec/batch.rs`.
     history_suppressed: bool,
+    /// Bumped by every entry point that can change `document`, so an
+    /// off-thread save can tell whether the document moved on while it ran.
+    revision: u64,
 }
 
 impl Engine {
@@ -66,6 +69,7 @@ impl Engine {
             history: Vec::new(),
             redo_stack: Vec::new(),
             history_suppressed: false,
+            revision: 0,
         })
     }
 
@@ -87,6 +91,7 @@ impl Engine {
             history: Vec::new(),
             redo_stack: Vec::new(),
             history_suppressed: false,
+            revision: 0,
         })
     }
 
@@ -98,11 +103,22 @@ impl Engine {
         self.save_as(&path)
     }
 
-    pub fn save_as(&mut self, path: &Path) -> Result<(), EngineError> {
-        let snx = signex_types::format::SnxSchematic::new(self.document.clone());
-        let content = snx
+    /// The current document encoded as `.snxsch` text: the consistent
+    /// snapshot an off-thread save writes. Pair it with [`Self::revision`].
+    pub fn serialize(&self) -> Result<String, EngineError> {
+        signex_types::format::SnxSchematic::new(self.document.clone())
             .write_string()
-            .map_err(|error| EngineError::SaveFailed(std::io::Error::other(error.to_string())))?;
+            .map_err(|error| EngineError::SaveFailed(std::io::Error::other(error.to_string())))
+    }
+
+    /// Changes whenever the document may have changed (any command, undo,
+    /// redo, annotate or replace). Equal revisions mean an unchanged document.
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    pub fn save_as(&mut self, path: &Path) -> Result<(), EngineError> {
+        let content = self.serialize()?;
         // HI-6: atomic write — a crash mid-save no longer truncates the
         // destination. The user's prior file stays intact until the
         // rename succeeds.
@@ -113,6 +129,7 @@ impl Engine {
     }
 
     pub fn execute(&mut self, cmd: Command) -> Result<CommandResult, EngineError> {
+        self.revision += 1;
         let before = self.document.clone();
 
         match cmd {
@@ -167,6 +184,7 @@ impl Engine {
     }
 
     pub fn set_document(&mut self, document: SchematicSheet) {
+        self.revision += 1;
         self.document = document;
     }
 }

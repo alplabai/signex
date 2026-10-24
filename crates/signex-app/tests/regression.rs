@@ -58,6 +58,8 @@ mod diagnostics_routing;
 
 #[path = "regression/dock_layout_persist.rs"]
 mod dock_layout_persist;
+#[path = "regression/document_save_async.rs"]
+mod document_save_async;
 #[path = "regression/search_prefs_persist.rs"]
 mod search_prefs_persist;
 

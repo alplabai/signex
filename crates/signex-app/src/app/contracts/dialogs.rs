@@ -288,6 +288,12 @@ pub enum FileMsg {
         result: Result<Box<signex_types::pcb::PcbBoard>, String>,
     },
     Save,
+    /// Completion of an off-thread document write (Save / Save As). The
+    /// dirty marker clears only if the document has not changed since the
+    /// snapshot; see `handlers/document_files/save_async.rs`.
+    DocumentSaved(crate::persist::DocumentSaveDone),
+    /// Quit could not confirm that in-flight document writes finished.
+    DocumentSaveWaitFailed(String),
     /// User picked a destination from the schematic Save As dialog.
     /// `from_path` is the tab the dialog was opened for; the dialog is
     /// not modal, so the active tab may have changed by the time it

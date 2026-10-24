@@ -52,6 +52,7 @@ impl Engine {
         scope: AnnotateScope<'_>,
         assigned: &mut HashMap<usize, String>,
     ) -> Result<bool, EngineError> {
+        self.revision += 1;
         let before = self.document.clone();
         let AnnotateScope {
             parts,

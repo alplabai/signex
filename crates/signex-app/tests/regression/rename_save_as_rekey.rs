@@ -214,10 +214,26 @@ fn save_as_drops_the_old_path_from_dirty_paths() {
     open_sheet(&mut app, &a, true);
     activate(&mut app, 0);
 
-    let _ = app.update(Message::File(FileMsg::SaveAs {
+    let write = app.update(Message::File(FileMsg::SaveAs {
         from_path: a.clone(),
         to_path: c.clone(),
     }));
+    // The write runs off the UI thread; deliver its completion to `update`.
+    if let Some(mut stream) = iced_runtime::task::into_stream(write) {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let done = runtime.block_on(async {
+            let mut out = Vec::new();
+            while let Some(action) = futures::StreamExt::next(&mut stream).await {
+                if let iced_runtime::Action::Output(message) = action {
+                    out.push(message);
+                }
+            }
+            out
+        });
+        for message in done {
+            let _ = app.update(message);
+        }
+    }
 
     assert!(c.exists(), "Save As must write the new file");
     assert!(app.document_state.engines.contains_key(&c));

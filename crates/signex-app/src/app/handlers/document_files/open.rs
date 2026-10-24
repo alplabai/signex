@@ -219,9 +219,13 @@ impl Signex {
         &mut self,
         from_path: PathBuf,
         to_path: PathBuf,
-    ) {
-        if let Err(error) = self.save_active_document_as(&from_path, to_path) {
-            self.report_save_failure("Failed to save active document as", &error);
+    ) -> iced::Task<Message> {
+        match self.save_active_document_as(&from_path, to_path) {
+            Ok(task) => task,
+            Err(error) => {
+                self.report_save_failure("Failed to save active document as", &error);
+                iced::Task::none()
+            }
         }
     }
 

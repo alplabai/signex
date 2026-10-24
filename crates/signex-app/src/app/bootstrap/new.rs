@@ -295,6 +295,7 @@ impl Signex {
                 dock,
                 dock_layout_sync,
                 search_prefs,
+                document_saves: crate::persist::DocumentSaves::default(),
                 tabs: vec![],
                 active_tab: 0,
                 engines: std::collections::HashMap::new(),
