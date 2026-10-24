@@ -17,8 +17,9 @@
 
 use super::Point2;
 use super::aabb_index::Aabb;
+use super::hole_ring::{HoleRing, VertexId};
 use super::point_grid::PointGrid;
-use super::predicates::{Sign, orient2d};
+use super::predicates::{DEFAULT_TOL, Sign, orient2d};
 
 /// Bridge every hole into `outer` (CCW) and return the merged ring.
 ///
@@ -27,6 +28,10 @@ use super::predicates::{Sign, orient2d};
 /// a ray from `M` towards +x: any hole not yet bridged lies entirely left of
 /// `M.x`, so it cannot stand between `M` and the ray's first hit, and the
 /// bridge never crosses an unbridged hole.
+///
+/// The ring is a [`HoleRing`]: a linked list with its vertices and edges
+/// indexed by cell, so each bridge reads only what is near its ray and costs
+/// the hole's size to splice, not the growing ring's.
 pub(super) fn merge_holes(mut outer: Vec<Point2>, mut holes: Vec<Vec<Point2>>) -> Vec<Point2> {
     split_touched_edges(&mut outer, &mut holes);
     let max_x = |h: &[Point2]| h.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max);
@@ -35,9 +40,25 @@ pub(super) fn merge_holes(mut outer: Vec<Point2>, mut holes: Vec<Vec<Point2>>) -
             .partial_cmp(&max_x(a))
             .unwrap_or(std::cmp::Ordering::Equal)
     });
-    holes
+    let all: Vec<Point2> = outer
         .iter()
-        .fold(outer, |ring, hole| bridge_hole(&ring, hole))
+        .chain(holes.iter().flatten())
+        .copied()
+        .collect();
+    let Some(bounds) = Aabb::from_points(&all) else {
+        return outer;
+    };
+    if outer.is_empty() {
+        return outer;
+    }
+    // Each hole adds its vertices plus the repeated start and the second
+    // copy of the vertex it joins.
+    let capacity = all.len() + 2 * holes.len();
+    let mut ring = HoleRing::new(&outer, bounds, capacity);
+    for hole in &holes {
+        bridge_hole(&mut ring, hole);
+    }
+    ring.points()
 }
 
 /// Splice `hole` into `ring` with a zero-width bridge from the hole's
@@ -47,7 +68,7 @@ pub(super) fn merge_holes(mut outer: Vec<Point2>, mut holes: Vec<Vec<Point2>>) -
 /// outline, or a hole bridged earlier) needs no ray: the ray would run along
 /// the touched edge and bridge to its far end, laying the hole's boundary over
 /// the ring's. The bridge is then zero length, at that point.
-fn bridge_hole(ring: &[Point2], hole: &[Point2]) -> Vec<Point2> {
+fn bridge_hole(ring: &mut HoleRing, hole: &[Point2]) {
     let mut hole_idx = 0;
     for (i, p) in hole.iter().enumerate().skip(1) {
         let best = hole[hole_idx];
@@ -60,30 +81,22 @@ fn bridge_hole(ring: &[Point2], hole: &[Point2]) -> Vec<Point2> {
         hole[(hole_idx + hole.len() - 1) % hole.len()],
         hole[(hole_idx + 1) % hole.len()],
     ];
-    let ring_idx = coincident_vertex(ring, m, around)
+    let at = coincident_vertex(ring, m, around)
         .or_else(|| visible_vertex(ring, m))
         .unwrap_or_else(|| nearest_vertex(ring, m));
-
-    let mut merged = Vec::with_capacity(ring.len() + hole.len() + 2);
-    merged.extend_from_slice(&ring[..=ring_idx]);
-    merged.extend_from_slice(&hole[hole_idx..]);
-    merged.extend_from_slice(&hole[..=hole_idx]);
-    merged.extend_from_slice(&ring[ring_idx..]);
-    merged
+    ring.splice_hole(at, hole, hole_idx);
 }
 
 /// The ring vertex `m` coincides with, if any: a hole vertex that touches the
 /// ring. `around` are the hole's two neighbours of `m`; among several
 /// coincident ring copies (earlier bridges leave them) the one that opens
 /// towards both is taken.
-fn coincident_vertex(ring: &[Point2], m: Point2, around: [Point2; 2]) -> Option<usize> {
-    let same = |&j: &usize| ring[j] == m;
-    let open_towards = |&j: &usize| around.iter().all(|&q| in_cone(ring, j, q));
-    let n = ring.len();
-    (0..n)
-        .filter(same)
-        .find(open_towards)
-        .or_else(|| (0..n).find(same))
+fn coincident_vertex(ring: &HoleRing, m: Point2, around: [Point2; 2]) -> Option<VertexId> {
+    let same = ring.copies(m);
+    same.iter()
+        .copied()
+        .find(|&j| around.iter().all(|&q| in_cone(ring, j, q)))
+        .or_else(|| same.first().copied())
 }
 
 /// Insert every vertex of one ring that lies in the interior of another
@@ -149,15 +162,72 @@ fn on_open_segment(a: Point2, b: Point2, m: Point2) -> bool {
         && orient2d(a, b, m) == Sign::Zero
 }
 
-fn nearest_vertex(ring: &[Point2], m: Point2) -> usize {
-    let d = |p: Point2| (p.x - m.x).powi(2) + (p.y - m.y).powi(2);
-    (0..ring.len())
-        .min_by(|&a, &b| {
-            d(ring[a])
-                .partial_cmp(&d(ring[b]))
-                .unwrap_or(std::cmp::Ordering::Equal)
+fn nearest_vertex(ring: &HoleRing, m: Point2) -> VertexId {
+    let d = |v: VertexId| {
+        let p = ring.point(v);
+        (p.x - m.x).powi(2) + (p.y - m.y).powi(2)
+    };
+    let mut best = 0;
+    for v in ring.ids() {
+        if d(v).partial_cmp(&d(best)) == Some(std::cmp::Ordering::Less) {
+            best = v;
+        }
+    }
+    best
+}
+
+/// A ray hit candidate, ordered by `(x, vertex hits first, ring position)`.
+#[derive(Clone, Copy)]
+struct RayHit {
+    x: f64,
+    vertex: VertexId,
+    is_vertex: bool,
+    /// Ring position of the edge examined and which of its two checks hit.
+    order: (u64, u8),
+}
+
+impl RayHit {
+    fn beats(&self, other: &RayHit) -> bool {
+        if self.x != other.x {
+            return self.x < other.x;
+        }
+        if self.is_vertex != other.is_vertex {
+            return self.is_vertex;
+        }
+        self.order < other.order
+    }
+}
+
+/// What the +x ray from `m` hits on ring edge `ia`-`ib`: nothing, one point
+/// of the edge, or both endpoints of an edge lying along the ray.
+fn ray_hits(ring: &HoleRing, m: Point2, ia: VertexId, ib: VertexId) -> [Option<RayHit>; 2] {
+    let (a, b) = (ring.point(ia), ring.point(ib));
+    let order = ring.order(ia);
+    let hit = |x: f64, vertex: VertexId, is_vertex: bool, sub: u8| {
+        Some(RayHit {
+            x,
+            vertex,
+            is_vertex,
+            order: (order, sub),
         })
-        .unwrap_or(0)
+    };
+    if (a.y > m.y && b.y > m.y) || (a.y < m.y && b.y < m.y) {
+        return [None, None];
+    }
+    if a.y == b.y {
+        // Edge lying on the ray: its endpoints are vertex hits.
+        return [hit(a.x, ia, true, 0), hit(b.x, ib, true, 1)];
+    }
+    if a.y == m.y {
+        return [hit(a.x, ia, true, 0), None];
+    }
+    if b.y == m.y {
+        return [hit(b.x, ib, true, 1), None];
+    }
+    let t = (m.y - a.y) / (b.y - a.y);
+    let x = a.x + t * (b.x - a.x);
+    let end = if a.x >= b.x { ia } else { ib };
+    [hit(x, end, false, 0), None]
 }
 
 /// The ring position of a vertex visible from `m`: the first ring edge (or
@@ -166,47 +236,31 @@ fn nearest_vertex(ring: &[Point2], m: Point2) -> usize {
 /// endpoint that makes a smaller angle with the ray. Candidates must also
 /// open towards `m` (`in_cone`), which picks the right copy among the
 /// coincident vertices earlier bridges leave behind.
-fn visible_vertex(ring: &[Point2], m: Point2) -> Option<usize> {
-    let n = ring.len();
-    // (hit x, ring position of the endpoint to start from, hit is a vertex)
-    let mut best: Option<(f64, usize, bool)> = None;
-    let mut consider = |x: f64, pos: usize, is_vertex: bool| {
-        let better = match best {
-            None => true,
-            Some((bx, _, bv)) => x < bx || (x == bx && is_vertex && !bv),
-        };
-        if x >= m.x && better {
-            best = Some((x, pos, is_vertex));
+///
+/// Ties go to the vertex first in ring order, as a scan of the whole ring
+/// would find it.
+fn visible_vertex(ring: &HoleRing, m: Point2) -> Option<VertexId> {
+    let mut best: Option<RayHit> = None;
+    ring.scan_ray(m, |ia, ib| {
+        for hit in ray_hits(ring, m, ia, ib).into_iter().flatten() {
+            if hit.x >= m.x && best.as_ref().is_none_or(|b| hit.beats(b)) {
+                best = Some(hit);
+            }
         }
-    };
-    for i in 0..n {
-        let (a, b) = (ring[i], ring[(i + 1) % n]);
-        if (a.y > m.y && b.y > m.y) || (a.y < m.y && b.y < m.y) {
-            continue;
-        }
-        if a.y == b.y {
-            // Edge lying on the ray: its endpoints are vertex hits.
-            consider(a.x, i, true);
-            consider(b.x, (i + 1) % n, true);
-            continue;
-        }
-        let t = (m.y - a.y) / (b.y - a.y);
-        let x = a.x + t * (b.x - a.x);
-        if a.y == m.y {
-            consider(a.x, i, true);
-        } else if b.y == m.y {
-            consider(b.x, (i + 1) % n, true);
-        } else {
-            let pos = if a.x >= b.x { i } else { (i + 1) % n };
-            consider(x, pos, false);
-        }
-    }
-    let (hit_x, pos, is_vertex) = best?;
+        best.map_or(f64::INFINITY, |b| b.x)
+    });
+    let RayHit {
+        x: hit_x,
+        vertex: pos,
+        is_vertex,
+        ..
+    } = best?;
 
     // Prefer a copy of the endpoint's coordinates that opens towards `m`.
-    let endpoint = ring[pos];
-    let copy = (0..n)
-        .filter(|&j| ring[j] == endpoint)
+    let endpoint = ring.point(pos);
+    let copy = ring
+        .copies(endpoint)
+        .into_iter()
         .find(|&j| in_cone(ring, j, m))
         .unwrap_or(pos);
     if is_vertex {
@@ -222,19 +276,25 @@ fn visible_vertex(ring: &[Point2], m: Point2) -> Option<usize> {
         return Some(copy);
     }
     let x_limit = hit_x.max(endpoint.x);
+    let triangle_box = Aabb::new(
+        Point2::new(m.x, m.y.min(endpoint.y) - tolerance_pad(m, hit, endpoint)),
+        Point2::new(
+            x_limit,
+            m.y.max(endpoint.y) + tolerance_pad(m, hit, endpoint),
+        ),
+    );
     let mut chosen = copy;
-    let mut best_key = f64::INFINITY;
-    for j in 0..n {
-        let q = ring[j];
+    let mut best_key = (f64::INFINITY, 0);
+    for j in ring.vertices_in(triangle_box) {
+        let q = ring.point(j);
         if q == endpoint || q.x <= m.x || q.x > x_limit || !in_triangle(q, m, hit, endpoint) {
             continue;
         }
-        let prev = ring[(j + n - 1) % n];
-        let next = ring[(j + 1) % n];
+        let (prev, next) = (ring.point(ring.prev(j)), ring.point(ring.next(j)));
         if orient2d(prev, q, next) == Sign::Positive || !in_cone(ring, j, m) {
             continue;
         }
-        let key = (q.y - m.y).abs() / (q.x - m.x);
+        let key = ((q.y - m.y).abs() / (q.x - m.x), ring.order(j));
         if key < best_key {
             best_key = key;
             chosen = j;
@@ -243,11 +303,32 @@ fn visible_vertex(ring: &[Point2], m: Point2) -> Option<usize> {
     Some(chosen)
 }
 
+/// How far outside a triangle `in_triangle` can still accept a point.
+///
+/// [`orient2d`] reports zero for any point within `tol` of an edge's line,
+/// `tol` being `DEFAULT_TOL` or, past that, a few ulp of the products, so a
+/// point up to `tol / edge length` off a side is not "strictly outside" it. A
+/// zero-length side accepts everything, hence the infinite pad.
+fn tolerance_pad(a: Point2, b: Point2, c: Point2) -> f64 {
+    let shortest = [a.distance_sq(b), b.distance_sq(c), c.distance_sq(a)]
+        .into_iter()
+        .fold(f64::INFINITY, f64::min)
+        .sqrt();
+    if shortest == 0.0 {
+        return f64::INFINITY;
+    }
+    let reach = (b.x - a.x).abs().max((c.x - a.x).abs()) + (b.y - a.y).abs().max((c.y - a.y).abs());
+    DEFAULT_TOL / shortest + 16.0 * f64::EPSILON * reach
+}
+
 /// Whether the segment from ring vertex `j` to `m` leaves `j` into the
 /// ring's interior (the ring is CCW, so the interior is on the left).
-fn in_cone(ring: &[Point2], j: usize, m: Point2) -> bool {
-    let n = ring.len();
-    let (prev, v, next) = (ring[(j + n - 1) % n], ring[j], ring[(j + 1) % n]);
+fn in_cone(ring: &HoleRing, j: VertexId, m: Point2) -> bool {
+    let (prev, v, next) = (
+        ring.point(ring.prev(j)),
+        ring.point(j),
+        ring.point(ring.next(j)),
+    );
     let left_of_in = orient2d(prev, v, m) != Sign::Negative;
     let left_of_out = orient2d(v, next, m) != Sign::Negative;
     if orient2d(prev, v, next) == Sign::Positive {
