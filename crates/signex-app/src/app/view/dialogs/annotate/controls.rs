@@ -67,11 +67,11 @@ pub(super) fn order_preview(
         //  1 3
         //  2 4
         AnnotateOrder::DownThenAcross => ("R1", "R3", "R2", "R4"),
-        // Row-major, descending rows:
+        // Row-major, top row first (y increasing):
         //  1 2
         //  3 4
         AnnotateOrder::AcrossThenDown => ("R1", "R2", "R3", "R4"),
-        // Row-major, ascending rows:
+        // Row-major, bottom row first (y decreasing):
         //  3 4
         //  1 2
         AnnotateOrder::AcrossThenUp => ("R3", "R4", "R1", "R2"),
