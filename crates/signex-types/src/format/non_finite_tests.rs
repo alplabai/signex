@@ -43,7 +43,8 @@ fn parse_f64_rejects_non_finite_values() {
         );
     }
     assert_eq!(parse_f64("1.5", "b", 0, "f").unwrap(), 1.5);
-    assert_eq!(parse_f64("", "b", 0, "f").unwrap(), 0.0);
+    // An empty float cell is corruption, not 0.0 (trunk contract).
+    assert!(parse_f64("", "b", 0, "f").is_err());
 }
 
 #[test]
