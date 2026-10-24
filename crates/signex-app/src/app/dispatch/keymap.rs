@@ -35,7 +35,7 @@ impl Signex {
         let contexts = self.shortcut_contexts(window);
         self.ui_state.keymap_pending_sequence.push(stroke.clone());
 
-        if let Some(task) = self.take_keymap_match(&contexts) {
+        if let Some(task) = self.take_keymap_match(&contexts, window) {
             return task;
         }
 
@@ -45,7 +45,7 @@ impl Signex {
         if self.ui_state.keymap_pending_sequence.len() > 1 {
             self.ui_state.keymap_pending_sequence.clear();
             self.ui_state.keymap_pending_sequence.push(stroke);
-            if let Some(task) = self.take_keymap_match(&contexts) {
+            if let Some(task) = self.take_keymap_match(&contexts, window) {
                 return task;
             }
         }
@@ -61,7 +61,11 @@ impl Signex {
     /// dispatch arm yet (no-op), or is a live prefix of a longer chord
     /// (buffer kept, no-op). Returns `None` on a definite miss so the
     /// caller can apply its restart retry / fall through.
-    fn take_keymap_match(&mut self, contexts: &[ShortcutContext]) -> Option<Task<Message>> {
+    fn take_keymap_match(
+        &mut self,
+        contexts: &[ShortcutContext],
+        window: Option<iced::window::Id>,
+    ) -> Option<Task<Message>> {
         let lookup = self
             .ui_state
             .active_keymap
@@ -69,7 +73,11 @@ impl Signex {
 
         if let Some(command) = lookup.command.as_ref() {
             self.ui_state.keymap_pending_sequence.clear();
-            return Some(self.dispatch_command(command, crate::app::command::CommandArgs::none()));
+            return Some(self.dispatch_command(
+                command,
+                crate::app::command::CommandArgs::none(),
+                window,
+            ));
         }
         if lookup.matched {
             self.ui_state.keymap_pending_sequence.clear();

@@ -199,6 +199,7 @@ pub fn emit_projection_pass(
         let y = proj_min_y + row * tile_h;
 
         scene.overlay_polygons.push(GpuPolygon {
+            holes: Vec::new(),
             vertices: rect_vertices([x, y], tile_w, tile_h),
             fill_color: fill_base,
             stroke_color: Some(stroke_color),

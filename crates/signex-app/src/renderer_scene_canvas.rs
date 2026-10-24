@@ -1,3 +1,4 @@
+use crate::polygon_path::polygon_path_and_fill;
 use iced::advanced::text as advanced_text;
 use iced::alignment;
 use iced::widget::canvas;
@@ -296,21 +297,12 @@ fn draw_polygon_bucket<F>(
             continue;
         }
 
-        let points: Vec<Point> = polygon
-            .vertices
-            .iter()
-            .map(|vertex| world_to_screen(*vertex))
-            .collect();
-
-        let path = canvas::Path::new(|builder| {
-            builder.move_to(points[0]);
-            for point in &points[1..] {
-                builder.line_to(*point);
-            }
-            builder.close();
-        });
-
-        frame.fill(&path, color_from_rgba(polygon.fill_color));
+        let (path, fill) = polygon_path_and_fill(
+            polygon,
+            world_to_screen,
+            color_from_rgba(polygon.fill_color),
+        );
+        frame.fill(&path, fill);
 
         if let Some(stroke_color) = polygon.stroke_color {
             frame.stroke(

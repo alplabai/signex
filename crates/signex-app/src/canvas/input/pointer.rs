@@ -1,5 +1,18 @@
 use super::super::*;
 
+/// Max gap between two presses of a double-click.
+const DOUBLE_CLICK_MS: u128 = 300;
+/// Max cursor travel between the presses, in screen pixels. Screen space,
+/// not world space: a fixed world distance grows with zoom-in and shrinks
+/// with zoom-out, so the same hand wobble would count at one zoom and not
+/// at another (#102).
+const DOUBLE_CLICK_MAX_PX: f32 = 5.0;
+
+/// `dist_px` is the screen-space distance between the two presses.
+fn is_double_click(dt_ms: u128, dist_px: f32) -> bool {
+    dt_ms < DOUBLE_CLICK_MS && dist_px < DOUBLE_CLICK_MAX_PX
+}
+
 impl SchematicCanvas<'_> {
     /// Left-press: select, tool action, start box-select, or start drag-move.
     pub(in crate::canvas) fn update_left_pressed(
@@ -13,16 +26,16 @@ impl SchematicCanvas<'_> {
             let wx = world.x as f64;
             let wy = world.y as f64;
 
-            // Double-click detection (300ms, 3mm threshold)
+            // Double-click detection (300ms, 5px threshold)
             let now = std::time::Instant::now();
             if let (Some(last_time), Some(last_pos)) =
-                (state.last_click_time, state.last_click_world)
+                (state.last_click_time, state.last_click_screen)
             {
                 let dt = now.duration_since(last_time);
-                let dist = ((wx - last_pos.0).powi(2) + (wy - last_pos.1).powi(2)).sqrt();
-                if dt.as_millis() < 300 && dist < 3.0 {
+                let dist = (cursor_pos.x - last_pos.0).hypot(cursor_pos.y - last_pos.1);
+                if is_double_click(dt.as_millis(), dist) {
                     state.last_click_time = None;
-                    state.last_click_world = None;
+                    state.last_click_screen = None;
                     state.select_drag_start = None;
                     state.click_on_selected = false;
                     return Some(canvas::Action::publish(Message::CanvasEvent(
@@ -36,7 +49,7 @@ impl SchematicCanvas<'_> {
                 }
             }
             state.last_click_time = Some(now);
-            state.last_click_world = Some((wx, wy));
+            state.last_click_screen = Some((cursor_pos.x, cursor_pos.y));
 
             // Classify the click target:
             //   - hit an already-selected item  → defer click, prepare drag
@@ -366,5 +379,18 @@ impl SchematicCanvas<'_> {
             )));
         }
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn threshold_is_in_screen_pixels() {
+        assert!(is_double_click(100, 4.0));
+        assert!(!is_double_click(100, 8.0));
+        // Too slow is never a double-click.
+        assert!(!is_double_click(300, 0.0));
     }
 }

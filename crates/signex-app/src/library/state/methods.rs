@@ -63,6 +63,9 @@ impl Default for LibraryState {
             components_panel: ComponentsPanelState::default(),
             pending_mounts: HashMap::new(),
             external_poll_in_flight: false,
+            external_poll_stat_running: Default::default(),
+            external_poll_stall_reported: false,
+            external_poll_failure_reported: false,
         }
     }
 }
@@ -148,6 +151,7 @@ impl LibraryState {
             cached_sims: Vec::new(),
             cached_classes: Vec::new(),
             observed_stamp: None,
+            own_edit_stamp: None,
             display: LibraryDisplaySettings::default(),
         };
         if let Some(adapter) = self.set.get(library_id)
@@ -250,6 +254,7 @@ impl LibraryState {
             lib.cached_components = summaries;
             lib.cached_classes = classes;
             lib.observed_stamp = stamp;
+            lib.own_edit_stamp = None;
             // A failed listing keeps the previous cache and warns —
             // blanking it here would render a mounted library as
             // empty. See `apply_primitive_listing`.
@@ -282,7 +287,9 @@ impl LibraryState {
     /// Re-read only the class registry of the library at `root`, after a
     /// class mutation. Leaves `observed_stamp` alone on purpose: the file
     /// changed, the table caches were not refreshed with it, and the next
-    /// external-edit poll must still notice that.
+    /// external-edit poll must still notice that. It records the stamp the
+    /// write left in `own_edit_stamp`, so that refresh is not reported as an
+    /// external edit (#827).
     pub fn refresh_classes(&mut self, root: &Path) {
         let Some(classes) = self
             .library_at(root)
@@ -293,6 +300,7 @@ impl LibraryState {
         };
         if let Some(lib) = self.library_at_mut(root) {
             lib.cached_classes = classes;
+            lib.own_edit_stamp = signex_library::DiskStamp::of(root).ok();
         }
     }
 
@@ -456,6 +464,11 @@ pub struct OpenLibrary {
     /// and refreshes the caches when they differ. `None` = unknown, which
     /// the poll treats as "refresh on the next tick".
     pub observed_stamp: Option<signex_library::DiskStamp>,
+    /// Stamp of the file right after the app's own class write, which
+    /// [`LibraryState::refresh_classes`] leaves un-re-stamped on purpose. A
+    /// poll that finds exactly this stamp refreshes without reporting an
+    /// external change; any other stamp is a real external edit (#827).
+    pub own_edit_stamp: Option<signex_library::DiskStamp>,
     /// Per-library canvas display settings — Altium "Document
     /// Options" parity. Shared across every `.snxsym` /
     /// `.snxfpt` tab opened from this `.snxlib` (so a user
@@ -561,6 +574,7 @@ impl OpenLibrary {
         self.cached_components = summaries;
         self.cached_classes = adapter.library_classes();
         self.observed_stamp = stamp;
+        self.own_edit_stamp = None;
         self.reload_primitives(adapter);
         Ok(())
     }

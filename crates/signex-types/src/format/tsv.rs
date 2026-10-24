@@ -206,8 +206,16 @@ pub fn write_tsv_block<R: SnxTable>(block: &str, rows: &[R]) -> Result<String, F
     let mut header: Vec<String> = columns.iter().map(|c| (*c).to_string()).collect();
     header.extend(foreign.iter().map(|name| encode_cell(name)));
     all_rows.push(header);
-    for row in rows {
-        let mut cells = row.to_row();
+    for (row_idx, row) in rows.iter().enumerate() {
+        let mut cells = row.to_row().map_err(|e| match e {
+            FormatError::TsvFieldWrite { field, value, .. } => FormatError::TsvFieldWrite {
+                block: block.to_string(),
+                row: row_idx + 1,
+                field,
+                value,
+            },
+            other => other,
+        })?;
         debug_assert_eq!(
             cells.len(),
             columns.len(),
@@ -403,17 +411,25 @@ pub(in crate::format) fn parse_f64(
     row: usize,
     field: &str,
 ) -> Result<f64, FormatError> {
+    // the writer never emits an empty float cell, so an empty cell is corruption,
+    // not "default 0". Non-finite values (`NaN`, `inf`, `infinity`) parse under
+    // `str::parse::<f64>` but are never valid document geometry.
+    let err = |message: String| FormatError::TsvFieldParse {
+        block: block.to_string(),
+        row,
+        field: field.to_string(),
+        message,
+    };
     if value.is_empty() {
-        return Ok(0.0);
+        return Err(err("empty float cell".to_string()));
     }
-    value
+    let parsed: f64 = value
         .parse()
-        .map_err(|e: std::num::ParseFloatError| FormatError::TsvFieldParse {
-            block: block.to_string(),
-            row,
-            field: field.to_string(),
-            message: e.to_string(),
-        })
+        .map_err(|e: std::num::ParseFloatError| err(e.to_string()))?;
+    if !parsed.is_finite() {
+        return Err(err(format!("non-finite float {value:?}")));
+    }
+    Ok(parsed)
 }
 
 pub(in crate::format) fn parse_uuid(
@@ -450,19 +466,26 @@ pub(in crate::format) fn parse_uuid(
 /// Format an `f64` for TSV: trailing zeros stripped to keep diffs
 /// minimal. Whole numbers emit as `0` rather than `0.0`.
 ///
-/// HI-13: the previous `< 1e15` guard was looser than the actual
-/// `i64::MAX as f64` boundary, and the `as i64` cast would wrap on
-/// the gap between them. Use the real cast bound and route non-finite
-/// inputs through `format!("{f}")` (which produces `"NaN"` / `"inf"`
-/// — visible at parse time rather than silently corrupted).
-pub(in crate::format) fn format_f64(f: f64) -> String {
+/// Non-finite values are rejected: `parse_f64` refuses `NaN`/`inf`, so
+/// writing one would save a file that can never be reopened. The error
+/// carries only `field`; `write_tsv_block` fills in block and row.
+/// The `i64` cast is bounded by the real `i64::MAX as f64` limit (HI-13).
+pub(in crate::format) fn format_f64(field: &str, f: f64) -> Result<String, FormatError> {
+    if !f.is_finite() {
+        return Err(FormatError::TsvFieldWrite {
+            block: String::new(),
+            row: 0,
+            field: field.to_string(),
+            value: f.to_string(),
+        });
+    }
     if f == 0.0 {
-        return "0".to_string();
+        return Ok("0".to_string());
     }
-    if f.is_finite() && f.fract() == 0.0 && f.abs() < (i64::MAX as f64) {
-        return format!("{}", f as i64);
+    if f.fract() == 0.0 && f.abs() < (i64::MAX as f64) {
+        return Ok(format!("{}", f as i64));
     }
-    format!("{f}")
+    Ok(format!("{f}"))
 }
 
 // ---------------------------------------------------------------------------

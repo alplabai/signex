@@ -124,6 +124,15 @@ impl SchematicCanvas<'_> {
                             push_pt(nc.position.x, nc.position.y, 1.0);
                         }
                     }
+                    SelectedKind::NoErcDirective => {
+                        if let Some(d) = snapshot
+                            .no_erc_directives
+                            .iter()
+                            .find(|d| d.uuid == item.uuid)
+                        {
+                            push_pt(d.position.x, d.position.y, 1.0);
+                        }
+                    }
                     SelectedKind::TextNote => {
                         if let Some(tn) = snapshot.text_notes.iter().find(|t| t.uuid == item.uuid) {
                             push_pt(tn.position.x, tn.position.y, 6.0);

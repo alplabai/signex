@@ -174,7 +174,7 @@ fn head_message(root: &Path) -> String {
     commit.message().unwrap().to_string()
 }
 
-/// Make the next `repo.commit` fail AFTER the index was staged: a lock file
+/// Make the next `repo.commit` fail AFTER the tree was built: a lock file
 /// on the branch ref. Returns the lock path; remove it to repair.
 fn lock_branch_ref(root: &Path) -> PathBuf {
     let head = std::fs::read_to_string(root.join(".git").join("HEAD")).unwrap();
@@ -258,11 +258,14 @@ fn two_failures_in_a_row_never_store_a_stale_snxlib() {
     std::fs::remove_file(&ref_lock).unwrap();
     assert_index_is_head(&root, &file);
 
-    // Failure 2: early (index.lock).
-    let lock = root.join(".git").join("index.lock");
-    std::fs::write(&lock, b"").unwrap();
+    // Failure 2: early (HEAD unreadable). A held `index.lock` no longer
+    // fails the commit: the commit is built from HEAD's tree and succeeds,
+    // and only the best-effort index refresh waits on the lock.
+    let head = root.join(".git").join("HEAD");
+    let good_head = std::fs::read(&head).unwrap();
+    std::fs::write(&head, b"garbage\n").unwrap();
     adapter.add_library_class(class("ind"), "add ind").unwrap();
-    std::fs::remove_file(&lock).unwrap();
+    std::fs::write(&head, good_head).unwrap();
     assert_eq!(disk_classes(&file), vec!["res", "cap", "ind"]);
     assert_eq!(memory_classes(&adapter), disk_classes(&file));
     assert_index_is_head(&root, &file);

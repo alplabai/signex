@@ -53,6 +53,7 @@ pub enum CommandKind {
     PlaceChildSheet,
     PlaceJunction,
     PlaceNoConnect,
+    PlaceNoErcDirective,
     PlaceBusEntry,
     PlaceTextNote,
     PlaceSchDrawing,
@@ -170,6 +171,11 @@ pub enum Command {
     },
     PlaceNoConnect {
         no_connect: NoConnect,
+    },
+    /// Place a generic No-ERC directive; lands in `no_erc_directives`,
+    /// never `no_connects`.
+    PlaceNoErcDirective {
+        directive: NoConnect,
     },
     PlaceBusEntry {
         bus_entry: BusEntry,
@@ -293,6 +299,7 @@ impl Command {
             Command::PlaceChildSheet { .. } => CommandKind::PlaceChildSheet,
             Command::PlaceJunction { .. } => CommandKind::PlaceJunction,
             Command::PlaceNoConnect { .. } => CommandKind::PlaceNoConnect,
+            Command::PlaceNoErcDirective { .. } => CommandKind::PlaceNoErcDirective,
             Command::PlaceBusEntry { .. } => CommandKind::PlaceBusEntry,
             Command::PlaceTextNote { .. } => CommandKind::PlaceTextNote,
             Command::PlaceSchDrawing { .. } => CommandKind::PlaceSchDrawing,

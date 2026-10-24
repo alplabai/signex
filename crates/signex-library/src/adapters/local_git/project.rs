@@ -129,50 +129,22 @@ impl LocalGitProjectAdapter {
         let sig = git2::Signature::now(&sig_name, &sig_email)
             .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
 
-        let mut index = repo
-            .index()
-            .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
-        index
-            .add_path(rel_path)
-            .map_err(|e| LibraryError::Backend(format!("git add: {e}")))?;
-        index
-            .write()
-            .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
-        let tree_oid = index
-            .write_tree()
-            .map_err(|e| LibraryError::Backend(format!("git write tree: {e}")))?;
-        let tree = repo
-            .find_tree(tree_oid)
-            .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
-
-        let parent = match repo.head() {
-            Ok(h) => h
-                .peel_to_commit()
-                .map_err(|e| LibraryError::Backend(format!("git peel: {e}")))
-                .map(Some)?,
-            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => None,
-            Err(e) => return Err(LibraryError::Backend(format!("git head: {e}"))),
-        };
-        if parent.as_ref().is_some_and(|p| p.tree_id() == tree_oid) {
-            return Ok(None);
-        }
-        let parents: Vec<&git2::Commit> = parent.as_ref().map(|c| vec![c]).unwrap_or_default();
         let final_message = if message.is_empty() {
             format!("save {}", rel_path.display())
         } else {
             message.to_string()
         };
-        let oid = repo
-            .commit(Some("HEAD"), &sig, &sig, &final_message, &tree, &parents)
-            .map_err(|e| LibraryError::Backend(format!("git commit: {e}")))?;
-        Ok(Some(oid))
+        super::helpers::retry_on_git_lock(repo.path(), || {
+            super::helpers::stage_and_commit(&repo, rel_path, &sig, &final_message)
+        })
+        .map_err(|e| LibraryError::Backend(format!("git commit {}: {e}", rel_path.display())))
     }
 
     /// Commit an externally-edited file (user opened the file in a
     /// text editor and saved). Wraps [`commit_path`] with a
     /// reasonable default message when the caller doesn't have
-    /// context. `None` means the file matched HEAD and nothing was
-    /// committed.
+    /// context. `None` means the staged tree matched HEAD's and nothing
+    /// was committed.
     pub fn commit_external_change(
         &self,
         abs_path: &Path,
@@ -278,7 +250,10 @@ impl LocalGitProjectAdapter {
 
     /// Restore `rel_path` to the state captured by `commit_oid`.
     /// Atomic write — staging file + rename, working tree stays
-    /// consistent if the rename fails.
+    /// consistent if the rename fails. A file inside one of the project's
+    /// libraries is written under that library's write lock, so another
+    /// Signex process saving into it cannot interleave with the restore
+    /// (#906).
     ///
     /// Does NOT create a new commit — that's the app layer's call
     /// (it'll observe the dirty file on next save and commit through
@@ -305,8 +280,18 @@ impl LocalGitProjectAdapter {
         let content = blob.content();
 
         let abs = self.project_root.join(rel_path);
-        signex_types::atomic_io::atomic_write(&abs, content)
-            .map_err(|e| LibraryError::Backend(format!("atomic write {}: {e}", abs.display())))?;
+        let library = super::enclosing_library_file(&abs)
+            .filter(|library| library.starts_with(&self.project_root));
+        match library {
+            Some(library) => {
+                super::rewrite_file_under_library_lock(&library, &abs, &mut |_| {
+                    Ok(Some(content.to_vec()))
+                })?;
+            }
+            None => signex_types::atomic_io::atomic_write(&abs, content).map_err(|e| {
+                LibraryError::Backend(format!("atomic write {}: {e}", abs.display()))
+            })?,
+        }
         Ok(())
     }
 

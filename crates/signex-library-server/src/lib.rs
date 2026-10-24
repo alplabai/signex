@@ -81,7 +81,8 @@ pub const MAX_REQUEST_BODY_BYTES: usize = 1 << 20;
 /// map. Read paths (`/tables/*` GET) inherit the same gate; if that
 /// proves too tight in practice, split into per-route configs.
 const RATE_LIMIT_PER_SECOND: u64 = 1; // i.e. 60 req/min/IP, replenished 1/sec
-const RATE_LIMIT_BURST_SIZE: u32 = 30; // accommodate a normal UI burst
+#[doc(hidden)] // exposed so tests/rate_limit.rs asserts the real contract
+pub const RATE_LIMIT_BURST_SIZE: u32 = 30; // accommodate a normal UI burst
 
 /// How often to drop expired entries from the in-memory `LockManager`.
 const LOCK_SWEEP_INTERVAL: Duration = Duration::from_secs(5 * 60);

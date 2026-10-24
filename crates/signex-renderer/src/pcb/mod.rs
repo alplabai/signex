@@ -53,6 +53,8 @@ pub struct PadInput {
 #[derive(Clone, Debug)]
 pub struct ZonePolygonInput {
     pub vertices: Vec<[f32; 2]>,
+    /// Cut-outs inside `vertices`; each has at least 3 vertices.
+    pub holes: Vec<Vec<[f32; 2]>>,
     pub rule_area: bool,
     pub net: u32,
     pub priority: u32,
@@ -259,6 +261,9 @@ impl ViewRenderer for PcbRenderer {
         scene.dirty |= dirty;
     }
 }
+
+#[cfg(test)]
+mod holes_tests;
 
 #[cfg(test)]
 mod tests {
@@ -599,6 +604,7 @@ mod tests {
     fn pcb_zone_sort_prefers_priority_then_connected_net_for_layer_top() {
         let mut zones = vec![
             ZonePolygonInput {
+                holes: Vec::new(),
                 vertices: vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]],
                 rule_area: false,
                 net: 3,
@@ -608,6 +614,7 @@ mod tests {
                 source_order: 2,
             },
             ZonePolygonInput {
+                holes: Vec::new(),
                 vertices: vec![[2.0, 0.0], [3.0, 0.0], [3.0, 1.0]],
                 rule_area: false,
                 net: 0,
@@ -617,6 +624,7 @@ mod tests {
                 source_order: 1,
             },
             ZonePolygonInput {
+                holes: Vec::new(),
                 vertices: vec![[4.0, 0.0], [5.0, 0.0], [5.0, 1.0]],
                 rule_area: false,
                 net: 5,

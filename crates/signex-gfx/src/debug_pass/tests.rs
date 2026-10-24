@@ -13,10 +13,23 @@ use crate::primitive::line::LineSegment;
 use crate::primitive::polygon::GpuPolygon;
 use crate::primitive::text::{TextHAlign, TextItem, TextVAlign};
 
+/// Run one GPU smoke pass at a time (#889). Creating and using wgpu devices
+/// on the software adapter from several test threads at once crashed this
+/// test binary with SIGSEGV (3 runs in 40 here, none in 40 with one test
+/// thread), and the crash aborts every test still to run.
+fn on_gpu<T>(pass: impl std::future::Future<Output = T>) -> T {
+    static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    // A failed assertion inside one pass must not poison the others.
+    let _one_at_a_time = GPU
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    pollster::block_on(pass)
+}
+
 #[test]
 fn line_circle_smoke_pass_runs_for_multiple_scales() {
-    let low_zoom = pollster::block_on(run_line_circle_smoke_pass(8.0)).expect("low zoom pass");
-    let high_zoom = pollster::block_on(run_line_circle_smoke_pass(64.0)).expect("high zoom pass");
+    let low_zoom = on_gpu(run_line_circle_smoke_pass(8.0)).expect("low zoom pass");
+    let high_zoom = on_gpu(run_line_circle_smoke_pass(64.0)).expect("high zoom pass");
 
     assert_eq!(low_zoom.line_instances, 2);
     assert_eq!(low_zoom.circle_instances, 1);
@@ -53,7 +66,7 @@ fn line_wgsl_actually_renders_a_dashed_pattern() {
         _pad: 0,
     };
 
-    let reds = pollster::block_on(run_line_readback_smoke_pass(dashed, 0.0, &sample_points))
+    let reds = on_gpu(run_line_readback_smoke_pass(dashed, 0.0, &sample_points))
         .expect("dash readback pass");
 
     for (x, red) in dash_samples.iter().zip(&reds[..dash_samples.len()]) {
@@ -94,7 +107,7 @@ fn a_stroke_floor_keeps_a_hairline_visible_when_the_cpu_would_clamp_it() {
     // Mid-span, clear of the end caps.
     let samples = [60u32, 64, 68];
 
-    let without_floor = pollster::block_on(run_line_readback_smoke_pass(hairline, 0.0, &samples))
+    let without_floor = on_gpu(run_line_readback_smoke_pass(hairline, 0.0, &samples))
         .expect("hairline readback pass, no floor");
     for (x, red) in samples.iter().zip(&without_floor) {
         assert!(
@@ -108,7 +121,7 @@ fn a_stroke_floor_keeps_a_hairline_visible_when_the_cpu_would_clamp_it() {
     // 2.0 px floor -> 0.5 mm at this zoom -> 2 px on screen. Deliberately far
     // above the real 0.5/0.6 px floors so the assertion is not fighting
     // antialiasing at the one-pixel boundary.
-    let with_floor = pollster::block_on(run_line_readback_smoke_pass(hairline, 2.0, &samples))
+    let with_floor = on_gpu(run_line_readback_smoke_pass(hairline, 2.0, &samples))
         .expect("hairline readback pass, with floor");
     for (x, red) in samples.iter().zip(&with_floor) {
         assert!(
@@ -129,6 +142,7 @@ fn a_stroke_floor_draws_a_zero_width_polygon_outline() {
     // Transparent fill, so only the outline can light a pixel. Its bottom
     // edge runs along y = 1.0 mm, the sampled row's pixel boundary.
     let outline = GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[0.0, 1.0], [30.0, 1.0], [30.0, 10.0], [0.0, 10.0]],
         fill_color: [0.0, 0.0, 0.0, 0.0],
         stroke_color: Some([1.0, 1.0, 1.0, 1.0]),
@@ -137,7 +151,7 @@ fn a_stroke_floor_draws_a_zero_width_polygon_outline() {
     // Mid-edge, clear of the vertical edges at x = 0 and x = 120 px.
     let samples = [60u32, 64, 68];
 
-    let without_floor = pollster::block_on(run_polygon_readback_smoke_pass(
+    let without_floor = on_gpu(run_polygon_readback_smoke_pass(
         outline.clone(),
         0.0,
         &samples,
@@ -148,7 +162,7 @@ fn a_stroke_floor_draws_a_zero_width_polygon_outline() {
         "a zero-width outline with no floor has no area, read {without_floor:?}"
     );
 
-    let with_floor = pollster::block_on(run_polygon_readback_smoke_pass(outline, 2.0, &samples))
+    let with_floor = on_gpu(run_polygon_readback_smoke_pass(outline, 2.0, &samples))
         .expect("outline readback pass, with floor");
     for (x, red) in samples.iter().zip(&with_floor) {
         assert!(
@@ -162,7 +176,7 @@ fn a_stroke_floor_draws_a_zero_width_polygon_outline() {
 
 #[test]
 fn arc_smoke_pass_runs() {
-    let count = pollster::block_on(run_arc_smoke_pass()).expect("arc pass");
+    let count = on_gpu(run_arc_smoke_pass()).expect("arc pass");
     assert_eq!(count, 1);
 }
 
@@ -181,8 +195,7 @@ fn arc_smoke_pass_handles_wraparound_sweep() {
         _pad: [0.0; 3],
     }];
 
-    let count =
-        pollster::block_on(run_arc_smoke_pass_with(8.0, &arcs)).expect("wraparound arc pass");
+    let count = on_gpu(run_arc_smoke_pass_with(8.0, &arcs)).expect("wraparound arc pass");
     assert_eq!(count, 1);
 }
 
@@ -198,30 +211,29 @@ fn arc_smoke_pass_handles_tiny_radius() {
         _pad: [0.0; 3],
     }];
 
-    let count =
-        pollster::block_on(run_arc_smoke_pass_with(64.0, &arcs)).expect("tiny radius arc pass");
+    let count = on_gpu(run_arc_smoke_pass_with(64.0, &arcs)).expect("tiny radius arc pass");
     assert_eq!(count, 1);
 }
 
 #[test]
 fn polygon_smoke_pass_runs() {
-    let vertex_count = pollster::block_on(run_polygon_smoke_pass()).expect("polygon pass");
+    let vertex_count = on_gpu(run_polygon_smoke_pass()).expect("polygon pass");
     assert_eq!(vertex_count, 6);
 }
 
 #[test]
 fn polygon_smoke_pass_handles_low_and_high_zoom() {
     let polygons = [GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[2.0, 2.0], [8.0, 2.0], [8.0, 8.0], [2.0, 8.0]],
         fill_color: [0.2, 0.7, 0.9, 1.0],
         stroke_color: None,
         stroke_width: 0.0,
     }];
 
-    let low_zoom_count =
-        pollster::block_on(run_polygon_smoke_pass_with(8.0, &polygons)).expect("polygon low");
+    let low_zoom_count = on_gpu(run_polygon_smoke_pass_with(8.0, &polygons)).expect("polygon low");
     let high_zoom_count =
-        pollster::block_on(run_polygon_smoke_pass_with(64.0, &polygons)).expect("polygon high");
+        on_gpu(run_polygon_smoke_pass_with(64.0, &polygons)).expect("polygon high");
 
     assert_eq!(low_zoom_count, 6);
     assert_eq!(high_zoom_count, 6);
@@ -231,12 +243,14 @@ fn polygon_smoke_pass_handles_low_and_high_zoom() {
 fn polygon_smoke_pass_ignores_degenerate_geometry() {
     let polygons = [
         GpuPolygon {
+            holes: Vec::new(),
             vertices: vec![[0.0, 0.0], [1.0, 0.0]],
             fill_color: [1.0, 0.0, 0.0, 1.0],
             stroke_color: None,
             stroke_width: 0.0,
         },
         GpuPolygon {
+            holes: Vec::new(),
             vertices: vec![[2.0, 2.0], [8.0, 2.0], [8.0, 8.0], [2.0, 8.0]],
             fill_color: [0.2, 0.7, 0.9, 1.0],
             stroke_color: None,
@@ -244,22 +258,22 @@ fn polygon_smoke_pass_ignores_degenerate_geometry() {
         },
     ];
 
-    let count = pollster::block_on(run_polygon_smoke_pass_with(32.0, &polygons))
-        .expect("polygon degenerate filter");
+    let count =
+        on_gpu(run_polygon_smoke_pass_with(32.0, &polygons)).expect("polygon degenerate filter");
     assert_eq!(count, 6);
 }
 
 #[test]
 fn grid_smoke_pass_runs() {
-    let report = pollster::block_on(run_grid_smoke_pass()).expect("grid pass");
+    let report = on_gpu(run_grid_smoke_pass()).expect("grid pass");
     assert!((0.0..=1.0).contains(&report.minor_lod_alpha));
     assert!((0.0..=1.0).contains(&report.major_lod_alpha));
 }
 
 #[test]
 fn grid_smoke_pass_lod_changes_with_zoom() {
-    let low_zoom = pollster::block_on(run_grid_smoke_pass_with(0.5)).expect("grid low");
-    let high_zoom = pollster::block_on(run_grid_smoke_pass_with(64.0)).expect("grid high");
+    let low_zoom = on_gpu(run_grid_smoke_pass_with(0.5)).expect("grid low");
+    let high_zoom = on_gpu(run_grid_smoke_pass_with(64.0)).expect("grid high");
 
     assert!(high_zoom.minor_lod_alpha > low_zoom.minor_lod_alpha);
     assert!(high_zoom.major_lod_alpha > low_zoom.major_lod_alpha);
@@ -267,7 +281,7 @@ fn grid_smoke_pass_lod_changes_with_zoom() {
 
 #[test]
 fn text_smoke_pass_runs() {
-    let text_count = pollster::block_on(run_text_smoke_pass()).expect("text pass");
+    let text_count = on_gpu(run_text_smoke_pass()).expect("text pass");
     // Two items, one rotated 0.2 rad: only the unrotated one reaches the
     // atlas. A cryoglyph `TextArea` cannot rotate, so staging the other drew
     // it axis-aligned; it is the CPU layer's (`TextItem::is_axis_aligned`).
@@ -314,10 +328,8 @@ fn text_smoke_pass_handles_scale_rotation_and_empty_content() {
         },
     ];
 
-    let low_zoom_count =
-        pollster::block_on(run_text_smoke_pass_with(8.0, &texts)).expect("text pass low");
-    let high_zoom_count =
-        pollster::block_on(run_text_smoke_pass_with(64.0, &texts)).expect("text pass high");
+    let low_zoom_count = on_gpu(run_text_smoke_pass_with(8.0, &texts)).expect("text pass low");
+    let high_zoom_count = on_gpu(run_text_smoke_pass_with(64.0, &texts)).expect("text pass high");
 
     assert_eq!(low_zoom_count, 1);
     assert_eq!(high_zoom_count, 1);
@@ -350,8 +362,7 @@ fn text_smoke_pass_clips_fully_outside_viewport() {
         },
     ];
 
-    let count =
-        pollster::block_on(run_text_smoke_pass_with(32.0, &texts)).expect("text clipping pass");
+    let count = on_gpu(run_text_smoke_pass_with(32.0, &texts)).expect("text clipping pass");
     assert_eq!(count, 1);
 }
 
@@ -393,15 +404,14 @@ fn text_smoke_pass_handles_dense_overlap_cluster() {
         },
     ];
 
-    let count =
-        pollster::block_on(run_text_smoke_pass_with(32.0, &texts)).expect("text overlap pass");
+    let count = on_gpu(run_text_smoke_pass_with(32.0, &texts)).expect("text overlap pass");
     assert_eq!(count, 3);
 }
 
 #[test]
 fn text_compositing_order_places_text_above_geometry() {
-    let report = pollster::block_on(run_text_geometry_composite_smoke_pass())
-        .expect("text geometry composite pass");
+    let report =
+        on_gpu(run_text_geometry_composite_smoke_pass()).expect("text geometry composite pass");
 
     assert_eq!(report.polygon_vertices, 6);
     assert_eq!(report.text_instances, 1);
@@ -413,7 +423,7 @@ fn text_compositing_order_places_text_above_geometry() {
 
 #[test]
 fn overlay_compositing_order_places_overlay_between_geometry_and_text() {
-    let report = pollster::block_on(run_grid_overlay_text_composite_smoke_pass())
+    let report = on_gpu(run_grid_overlay_text_composite_smoke_pass())
         .expect("grid overlay text composite pass");
 
     assert_eq!(report.geometry_vertices, 6);
@@ -433,6 +443,7 @@ fn overlay_compositing_order_places_overlay_between_geometry_and_text() {
 #[test]
 fn grid_overlay_toggles_do_not_change_geometry_draw_work() {
     let polygons = [GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[0.5, 0.5], [4.5, 0.5], [4.5, 4.5], [0.5, 4.5]],
         fill_color: [0.18, 0.22, 0.78, 1.0],
         stroke_color: None,
@@ -458,15 +469,15 @@ fn grid_overlay_toggles_do_not_change_geometry_draw_work() {
         v_align: TextVAlign::Top,
     }];
 
-    let baseline = pollster::block_on(run_grid_overlay_text_composite_smoke_pass_with(
+    let baseline = on_gpu(run_grid_overlay_text_composite_smoke_pass_with(
         32.0, true, true, true, &polygons, &overlays, &texts,
     ))
     .expect("baseline composite pass");
-    let overlay_off = pollster::block_on(run_grid_overlay_text_composite_smoke_pass_with(
+    let overlay_off = on_gpu(run_grid_overlay_text_composite_smoke_pass_with(
         32.0, true, false, true, &polygons, &overlays, &texts,
     ))
     .expect("overlay toggle off pass");
-    let grid_off = pollster::block_on(run_grid_overlay_text_composite_smoke_pass_with(
+    let grid_off = on_gpu(run_grid_overlay_text_composite_smoke_pass_with(
         32.0, false, true, true, &polygons, &overlays, &texts,
     ))
     .expect("grid toggle off pass");
@@ -525,7 +536,7 @@ fn ring_px(deg: f32) -> (u32, u32) {
 /// Reads the red channel at each ring angle, in order.
 fn arc_reds(arc: Arc, angles_deg: &[f32]) -> Vec<u8> {
     let samples: Vec<(u32, u32)> = angles_deg.iter().map(|&a| ring_px(a)).collect();
-    pollster::block_on(run_arc_readback_smoke_pass(arc, &samples)).expect("arc readback pass")
+    on_gpu(run_arc_readback_smoke_pass(arc, &samples)).expect("arc readback pass")
 }
 
 fn assert_lit(arc: Arc, angles_deg: &[f32]) {
@@ -566,7 +577,7 @@ fn a_full_turn_arc_lights_all_four_quadrants() {
     assert_lit(arc, &[45.0, 135.0, 225.0, 315.0]);
     // The ring only: the centre stays dark.
     let centre = (ARC_READBACK_PX / 2, ARC_READBACK_PX / 2);
-    let reds = pollster::block_on(run_arc_readback_smoke_pass(arc, &[centre])).expect("centre");
+    let reds = on_gpu(run_arc_readback_smoke_pass(arc, &[centre])).expect("centre");
     assert!(
         reds[0] < 60,
         "circle interior should be dark, red={}",

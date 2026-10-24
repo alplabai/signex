@@ -179,18 +179,18 @@ impl Signex {
                 && dest < preview.options.columns.len()
             {
                 let col = preview.options.columns.remove(src);
-                // `dest` is an index in the *pre-removal* column list, and
-                // both drag directions deliberately reuse it unchanged
-                // after the `remove(src)` shift:
-                //   - dragging right (src < dest): dest's own index slid
-                //     down to `dest - 1`, so inserting at `dest` drops the
-                //     column immediately *after* the header it was
-                //     released on.
-                //   - dragging left (src > dest): dest kept its index, so
-                //     inserting at `dest` drops the column immediately
-                //     *before* that header.
-                // i.e. the insertion point always sits on the edge the
-                // drag approached from.
+                // The dropped column takes the slot of the header it was
+                // released on, in both directions (#592): `dest` is that
+                // header's index in the pre-removal list, and inserting
+                // the column back at `dest` puts it exactly there.
+                //   - dragging right (src < dest): the columns between
+                //     shift one left, so the target header ends up just
+                //     before the dropped column.
+                //   - dragging left (src > dest): they shift one right, so
+                //     the target header ends up just after it.
+                // (`dest - 1` would instead insert *before* the target when
+                // dragging right, the convention for a drop line drawn
+                // between headers, which this header-drop UI has no use for.)
                 let insert_at = dest.min(preview.options.columns.len());
                 preview.options.columns.insert(insert_at, col);
                 // Sort spec follows the moved column. If the
