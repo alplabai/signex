@@ -12,7 +12,8 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use signex_app::app::{
-    LoadedProject, Message, RenameDialogState, RenameMsg, Signex, TabInfo, TabKind,
+    LoadedProject, Message, RemoveChoice, RemoveDialogState, RemoveMsg, RenameDialogState,
+    RenameMsg, Signex, TabInfo, TabKind,
 };
 use signex_app::dock::DockMessage;
 use signex_app::panels::PanelMsg;
@@ -199,4 +200,33 @@ fn a_history_restore_waits_for_the_in_flight_save_so_the_restored_content_stays(
         app.document_state.dirty_paths.contains(&path),
         "the restored engine is not what the stale snapshot wrote"
     );
+}
+
+#[test]
+fn deleting_a_file_waits_for_its_in_flight_save_and_it_stays_deleted() {
+    let tmp = TempDir::new().unwrap();
+    let path: PathBuf = tmp.path().join("Power.snxsch");
+    std::fs::write(&path, b"on disk").unwrap();
+    let (mut app, entered, proceed) = app_with_gated_sheet(tmp.path(), &path);
+
+    let driver = start_save_released_later(&mut app, &entered, proceed);
+    app.ui_state.remove_dialog = Some(RemoveDialogState {
+        target_path: path.clone(),
+        tree_path: vec![0],
+        project_id: None,
+        display_name: "Power.snxsch".to_string(),
+        is_outside_project: false,
+    });
+    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
+        RemoveChoice::DeleteFile,
+    )));
+    for message in driver.join().unwrap() {
+        let _ = app.update(message);
+    }
+
+    assert!(
+        !path.exists(),
+        "the in-flight write recreated the deleted file"
+    );
+    assert!(!app.document_state.engines.contains_key(&path));
 }

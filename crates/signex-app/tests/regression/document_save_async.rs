@@ -399,3 +399,47 @@ fn closing_the_tab_mid_save_drops_the_parked_engine_once_the_write_lands() {
     assert!(!app.document_state.engines.contains_key(&path));
     assert!(!app.document_state.dirty_paths.contains(&path));
 }
+
+#[test]
+fn a_superseded_plain_save_keeps_the_document_dirty_until_the_newer_job_lands() {
+    let recorder = Arc::new(Recorder::default());
+    let (mut app, path) = app_with_dirty_sheet(recorder.clone());
+
+    let first = app.update(Message::File(FileMsg::Save));
+    let second = app.update(Message::File(FileMsg::Save));
+
+    // The newer job writes first; the older one is then skipped as stale.
+    // Deliver the older completion before the newer one: it must not clear
+    // the marker, only the newer job's completion does.
+    let newer = run(second);
+    let older = run(first);
+    for message in older {
+        let _ = app.update(message);
+    }
+    assert!(is_dirty(&app, &path), "the newer job has not landed yet");
+
+    for message in newer {
+        let _ = app.update(message);
+    }
+    assert_eq!(recorder.contents().len(), 1);
+    assert!(!is_dirty(&app, &path));
+}
+
+#[test]
+fn a_dirty_and_edited_parked_engine_survives_a_mid_save_close() {
+    let recorder = Arc::new(Recorder::default());
+    let (mut app, path) = app_with_dirty_sheet(recorder.clone());
+
+    let task = app.update(Message::File(FileMsg::Save));
+    edit(&mut app, &path, "A3");
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
+        TabContextAction::Close(0),
+    )));
+    complete(&mut app, task);
+
+    assert!(
+        app.document_state.engines.contains_key(&path),
+        "the unsaved edit lives only in the parked engine"
+    );
+    assert!(app.document_state.dirty_paths.contains(&path));
+}

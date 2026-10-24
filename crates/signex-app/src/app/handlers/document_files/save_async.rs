@@ -123,23 +123,25 @@ impl Signex {
         let Some(engine) = self.document_state.engines.get(path) else {
             return;
         };
-        if engine.revision() == revision {
-            self.document_state.dirty_paths.remove(path);
-            for tab in self
-                .document_state
-                .tabs
-                .iter_mut()
-                .filter(|t| t.path == path)
-            {
-                tab.dirty = false;
-            }
-            // The tab closed mid-save and parked the engine because it was
-            // dirty; now it is clean nothing needs it.
-            if !self.document_is_held_open(path) {
-                self.document_state.engines.remove(path);
-            }
+        // A different revision means the engine was replaced (History
+        // restore) or edited; "Save X" would mislabel what is committed.
+        if engine.revision() != revision {
+            return;
         }
-        // The file on disk is what gets committed, edited since or not.
+        self.document_state.dirty_paths.remove(path);
+        for tab in self
+            .document_state
+            .tabs
+            .iter_mut()
+            .filter(|t| t.path == path)
+        {
+            tab.dirty = false;
+        }
+        // The tab closed mid-save and parked the engine because it was
+        // dirty; now it is clean nothing needs it.
+        if !self.document_is_held_open(path) {
+            self.document_state.engines.remove(path);
+        }
         let label = path
             .file_name()
             .map(|f| f.to_string_lossy().into_owned())
