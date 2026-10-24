@@ -1,15 +1,19 @@
 //! Home of the Command Registry (#278). Slice 1 landed the
 //! id→[`crate::app::Message`] bridge (`bridge.rs`). Slice 2 adds the
 //! registry's dispatch entry point ([`Signex::dispatch_command`]) and
-//! its argument type ([`CommandArgs`]); enablement gating (slice 3) and
-//! rewiring menus/palette onto it (slice 4) are still ahead.
+//! its argument type ([`CommandArgs`]). Slice 3 gates it on
+//! [`enablement::is_enabled`], which the menu bar reads too; rewiring
+//! menus/palette onto the registry (slice 4) is still ahead.
 
 pub(crate) mod active_bar;
 mod args;
 pub(crate) mod bridge;
+pub(crate) mod enablement;
 
 pub(crate) use args::CommandArgs;
 use bridge::core_to_message;
+pub(crate) use enablement::CommandContext;
+pub(crate) use enablement::is_enabled;
 
 use iced::Task;
 
@@ -39,12 +43,18 @@ impl Signex {
     /// `window` is the window the command was invoked from, if any. A canvas
     /// event goes to the canvas of the undocked window it was typed in; the
     /// plain [`Message::CanvasEvent`] always targets the main window (#525).
+    ///
+    /// A command [`is_enabled`] says has nothing to act on in that window is
+    /// dropped here, the same rule the menu bar greys its row by (#368).
     pub(crate) fn dispatch_command(
         &mut self,
         command: &crate::keymap::AppCommandId,
         _args: CommandArgs,
         window: Option<iced::window::Id>,
     ) -> Task<Message> {
+        if !is_enabled(command, &self.command_context(window)) {
+            return Task::none();
+        }
         match (core_to_message(command), window) {
             (Some(Message::CanvasEvent(event)), Some(window_id))
                 if self.interaction_state.canvases.contains_key(&window_id) =>

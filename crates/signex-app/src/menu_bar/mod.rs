@@ -227,6 +227,9 @@ pub enum MenuMessage {
 /// schematic is open.
 #[derive(Debug, Clone)]
 pub struct MenuContext {
+    /// The enablement facts for this window; rows keyed on a command id
+    /// grey themselves through [`crate::app::command::is_enabled`] (#368).
+    pub(crate) commands: crate::app::command::CommandContext,
     pub has_schematic: bool,
     pub has_pcb: bool,
     /// Reserved for guarding project-wide items (e.g. multi-sheet
@@ -234,17 +237,6 @@ pub struct MenuContext {
     /// menu entry reads this but the field stays so callers don't
     /// need to update their struct literal when we wire it up.
     pub has_project: bool,
-    pub has_selection: bool,
-    pub can_undo: bool,
-    pub can_redo: bool,
-    /// v0.14.2: `true` when the active tab is a `.snxsym` standalone
-    /// editor. Used by File ▸ Save / Save As to enable themselves
-    /// for primitive editor tabs (the dispatch handler in
-    /// `save_active_document` already supports them; only the menu
-    /// gate was missing).
-    pub has_symbol_editor: bool,
-    /// v0.14.2: same for `.snxfpt` standalone editor tabs.
-    pub has_footprint_editor: bool,
     /// OS scale factor of the window hosting this menu bar. Drives the
     /// wordmark PNG tier picker (1× / 2× / 3×) so the lockup is rendered
     /// at 1:1 with device pixels. Defaults to 1.0 before the main
@@ -260,14 +252,10 @@ pub struct MenuContext {
 impl Default for MenuContext {
     fn default() -> Self {
         Self {
+            commands: Default::default(),
             has_schematic: false,
             has_pcb: false,
             has_project: false,
-            has_selection: false,
-            can_undo: false,
-            can_redo: false,
-            has_symbol_editor: false,
-            has_footprint_editor: false,
             scale_factor: 1.0,
             active_keymap: None,
             recent_projects: Vec::new(),
@@ -372,6 +360,13 @@ pub(crate) fn run_erc_menu_path() -> String {
         "Design ▸ {}",
         cmd_label("run_erc", "Electrical Rules Check")
     )
+}
+
+/// Whether the row for `command_id` is enabled: the same predicate the
+/// keyboard path dispatches by.
+fn enabled(ctx: &MenuContext, command_id: &str) -> bool {
+    crate::keymap::AppCommandId::new(command_id)
+        .is_ok_and(|id| crate::app::command::is_enabled(&id, &ctx.commands))
 }
 
 fn shortcut_for(ctx: &MenuContext, command_id: &str, fallback: &str) -> Option<String> {
