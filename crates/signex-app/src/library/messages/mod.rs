@@ -635,6 +635,9 @@ pub enum SettingsMsg {
         connected_label: Option<String>,
         error: Option<String>,
     },
+    /// Outcome of the background keyring delete of a token that a
+    /// cancelled DigiKey flow stored before the cancel landed.
+    DigiKeyStaleTokenRemoved(Result<(), String>),
     MouserApiKeyChanged(String),
     MouserTest,
     MouserTestResult(Result<(), String>),

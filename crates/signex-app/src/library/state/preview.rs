@@ -236,6 +236,13 @@ pub struct DistributorSettings {
     pub digikey_account_email: Option<String>,
     pub digikey_status: Option<String>,
     pub digikey_in_flight: bool,
+    /// A DigiKey worker (or the keyring delete of a token a cancelled one
+    /// stored) is still outstanding. Unlike `digikey_in_flight` it survives
+    /// Cancel: the keyring has one slot, so a new Connect is refused until
+    /// the previous worker's result - and any stale-token delete it
+    /// triggered - has been processed. That keeps at most one writer
+    /// alive, which is what makes the stale cleanup race-free.
+    pub digikey_worker_busy: bool,
     pub digikey_cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     /// Monotonic counter bumped on every `DigiKeyConnect`. The OAuth
     /// worker carries its generation through the `DigiKeyOAuthResult`
@@ -244,6 +251,10 @@ pub struct DistributorSettings {
     /// reconnect could let the first worker's eventual outcome
     /// overwrite the second flow's credentials.
     pub digikey_flow_generation: u64,
+    /// Deletes the stored DigiKey refresh token. A field, not a hard-wired
+    /// call, so a test can observe the request without touching the OS
+    /// credential store.
+    pub digikey_token_remover: fn() -> Result<(), String>,
     pub mouser_api_key_buf: String,
     pub mouser_status: Option<String>,
     pub mouser_in_flight: bool,
@@ -260,8 +271,10 @@ impl Default for DistributorSettings {
             digikey_account_email: None,
             digikey_status: None,
             digikey_in_flight: false,
+            digikey_worker_busy: false,
             digikey_cancel: None,
             digikey_flow_generation: 0,
+            digikey_token_remover: crate::library::settings::digikey_oauth::remove_stored_token,
             mouser_api_key_buf: String::new(),
             mouser_status: None,
             mouser_in_flight: false,

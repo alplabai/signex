@@ -65,6 +65,8 @@ pub enum DigiKeyAuthError {
     Keyring(String),
     #[error("no refresh token stored")]
     NoRefreshToken,
+    #[error("authorization cancelled before the token was stored")]
+    Cancelled,
 }
 
 impl From<DigiKeyAuthError> for DistributorError {
@@ -76,6 +78,7 @@ impl From<DigiKeyAuthError> for DistributorError {
             DigiKeyAuthError::Config(m)
             | DigiKeyAuthError::Request(m)
             | DigiKeyAuthError::Keyring(m) => DistributorError::Auth(m),
+            DigiKeyAuthError::Cancelled => DistributorError::Auth(e.to_string()),
         }
     }
 }
@@ -188,6 +191,79 @@ impl DigiKeyAuth {
         returned_state: &str,
         expected_state: &CsrfToken,
     ) -> Result<String, DigiKeyAuthError> {
+        self.exchange_code_guarded(code, verifier, returned_state, expected_state, &|| true)
+    }
+
+    /// [`Self::exchange_code`] with a last-moment veto over persisting.
+    ///
+    /// `may_persist` is asked once the token endpoint has answered and
+    /// immediately before the refresh token would be written to the
+    /// keyring. Returning `false` yields [`DigiKeyAuthError::Cancelled`]
+    /// and writes nothing — the exchange is a network round trip, so a
+    /// user can cancel while it is in flight.
+    pub fn exchange_code_guarded(
+        &self,
+        code: &str,
+        verifier: PkceCodeVerifier,
+        returned_state: &str,
+        expected_state: &CsrfToken,
+        may_persist: &dyn Fn() -> bool,
+    ) -> Result<String, DigiKeyAuthError> {
+        self.exchange_code_inner(
+            code,
+            verifier,
+            returned_state,
+            expected_state,
+            may_persist,
+            &|refresh| {
+                self.keyring
+                    .set_secret(refresh)
+                    .map_err(|e| DigiKeyAuthError::Keyring(e.to_string()))
+            },
+        )
+    }
+
+    /// [`Self::exchange_code_guarded`] with the refresh-token sink injected,
+    /// so tests can observe persistence without the OS keyring. Compiled only
+    /// with the `test-support` feature: a caller with this entry point could
+    /// bypass the keyring, so it is not part of the shipped API.
+    #[cfg(feature = "test-support")]
+    pub fn exchange_code_into(
+        &self,
+        code: &str,
+        verifier: PkceCodeVerifier,
+        returned_state: &str,
+        expected_state: &CsrfToken,
+        may_persist: &dyn Fn() -> bool,
+        store_refresh: &dyn Fn(&str) -> Result<(), DigiKeyAuthError>,
+    ) -> Result<String, DigiKeyAuthError> {
+        self.exchange_code_inner(
+            code,
+            verifier,
+            returned_state,
+            expected_state,
+            may_persist,
+            store_refresh,
+        )
+    }
+
+    /// Delete the stored refresh token (idempotent). Used to undo a token a
+    /// cancelled OAuth flow managed to store before the cancel landed.
+    pub fn remove_stored_refresh_token() -> Result<(), DigiKeyAuthError> {
+        KeyringStore::for_provider("digikey", "refresh")
+            .and_then(|k| k.delete())
+            .map_err(|e| DigiKeyAuthError::Keyring(e.to_string()))
+    }
+
+    fn exchange_code_inner(
+        &self,
+        code: &str,
+        verifier: PkceCodeVerifier,
+        returned_state: &str,
+        expected_state: &CsrfToken,
+        may_persist: &dyn Fn() -> bool,
+        store_refresh: &dyn Fn(&str) -> Result<(), DigiKeyAuthError>,
+    ) -> Result<String, DigiKeyAuthError> {
         if returned_state != expected_state.secret() {
             return Err(DigiKeyAuthError::Request(
                 "CSRF state mismatch — refusing to exchange OAuth code".into(),
@@ -200,10 +276,11 @@ impl DigiKeyAuth {
             .set_pkce_verifier(verifier)
             .request(&http)
             .map_err(|e| DigiKeyAuthError::Request(e.to_string()))?;
+        if !may_persist() {
+            return Err(DigiKeyAuthError::Cancelled);
+        }
         if let Some(refresh) = token.refresh_token() {
-            self.keyring
-                .set_secret(refresh.secret())
-                .map_err(|e| DigiKeyAuthError::Keyring(e.to_string()))?;
+            store_refresh(refresh.secret())?;
         }
         Ok(token.access_token().secret().clone())
     }

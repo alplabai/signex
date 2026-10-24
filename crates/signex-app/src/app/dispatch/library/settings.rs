@@ -19,6 +19,20 @@ impl Signex {
                 if self.library.settings.digikey_in_flight {
                     return Task::none();
                 }
+                // The keyring has one slot. A cancelled worker may still
+                // write its token (or the delete of that token may still be
+                // queued), and a second flow writing in between would have
+                // its token removed. Refuse until the old worker is done.
+                if self.library.settings.digikey_worker_busy {
+                    let reason = "the cancelled DigiKey attempt is still winding down;                                   try Connect again in a moment";
+                    tracing::warn!(
+                        target: "signex::distributor",
+                        distributor = "digikey",
+                        "DigiKey Connect was refused: {reason}"
+                    );
+                    self.library.settings.digikey_status = Some(format!("Please wait: {reason}"));
+                    return Task::none();
+                }
                 // Bump the generation BEFORE spawning so the worker
                 // captures the current value. `DigiKeyOAuthResult`
                 // discards messages whose generation is stale — i.e.
@@ -33,6 +47,7 @@ impl Signex {
                     .wrapping_add(1);
                 let generation = self.library.settings.digikey_flow_generation;
                 self.library.settings.digikey_in_flight = true;
+                self.library.settings.digikey_worker_busy = true;
                 self.library.settings.digikey_status = Some("Waiting for browser…".to_string());
                 let cancel_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
                 self.library.settings.digikey_cancel = Some(cancel_flag.clone());
@@ -101,8 +116,33 @@ impl Signex {
                 // Drop stale results from a cancelled flow — see the
                 // comment on `DigiKeyConnect` for why.
                 if generation != self.library.settings.digikey_flow_generation {
+                    // A Connected result from a cancelled flow means the
+                    // token was stored before the cancel landed; nobody
+                    // will see it, so take it back out of the keyring.
+                    // The keyring delete is blocking IO (D-Bus and an
+                    // unlock prompt on Linux), so it runs off `update`.
+                    if connected_label.is_none() {
+                        // Nothing was stored: the worker is finished.
+                        self.library.settings.digikey_worker_busy = false;
+                    } else {
+                        // Stays busy until `DigiKeyStaleTokenRemoved`.
+                        let remove = self.library.settings.digikey_token_remover;
+                        return Task::perform(
+                            async move {
+                                tokio::task::spawn_blocking(remove)
+                                    .await
+                                    .unwrap_or_else(|e| Err(format!("worker thread panicked: {e}")))
+                            },
+                            |result| {
+                                Message::Library(LibraryMessage::Settings(
+                                    SettingsMsg::DigiKeyStaleTokenRemoved(result),
+                                ))
+                            },
+                        );
+                    }
                     return Task::none();
                 }
+                self.library.settings.digikey_worker_busy = false;
                 self.library.settings.digikey_in_flight = false;
                 self.library.settings.digikey_cancel = None;
                 match (connected_label, error) {
@@ -118,6 +158,10 @@ impl Signex {
                         self.library.settings.digikey_status = Some("Cancelled".to_string());
                     }
                 }
+            }
+            SettingsMsg::DigiKeyStaleTokenRemoved(result) => {
+                self.library.settings.digikey_worker_busy = false;
+                digikey_oauth::log_stale_token_removal(result);
             }
             SettingsMsg::MouserApiKeyChanged(s) => {
                 self.library.settings.mouser_api_key_buf = s;
