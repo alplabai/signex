@@ -154,6 +154,8 @@ mod stable_addressing;
 
 #[path = "regression/place_sheet_tool.rs"]
 mod place_sheet_tool;
+#[path = "regression/sheet_symbol_edit.rs"]
+mod sheet_symbol_edit;
 
 #[path = "regression/symbol_undo_steps.rs"]
 mod symbol_undo_steps;

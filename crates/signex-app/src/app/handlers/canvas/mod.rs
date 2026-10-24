@@ -274,7 +274,10 @@ impl Signex {
         crate::fonts::write_unit_pref(self.ui_state.unit);
     }
 
-    fn resolve_child_sheet_path(&self, child_filename: &str) -> Option<std::path::PathBuf> {
+    pub(crate) fn resolve_child_sheet_path(
+        &self,
+        child_filename: &str,
+    ) -> Option<std::path::PathBuf> {
         // #339/#406 — resolve a relative child reference against the directory
         // of the sheet that CARRIES the reference (the active tab's path), not
         // the project directory. This matches `project_graph` / the

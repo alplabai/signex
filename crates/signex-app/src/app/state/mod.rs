@@ -208,6 +208,15 @@ impl ErrorNotice {
         }
     }
 
+    /// A Properties edit of a placed sheet symbol (name / file) was refused
+    /// and the sheet was left as it was.
+    pub fn sheet_edit(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Sheet Symbol Not Changed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
     /// A file could not be opened — unreadable, unparseable, or empty
     /// where it must not be (#532).
     pub fn open(detail: impl Into<String>) -> Self {

@@ -6,8 +6,16 @@ pub enum EngineError {
     MissingPath,
     #[error("command {0:?} is not implemented yet")]
     UnsupportedCommand(CommandKind),
-    #[error("cannot place a child sheet with no target filename")]
+    #[error("a sheet symbol needs a target filename")]
     EmptyChildSheetFilename,
+    #[error("a sheet symbol needs a name")]
+    EmptyChildSheetName,
+    #[error("sheet file '{0}' must end in .snxsch")]
+    InvalidChildSheetFilename(String),
+    #[error("another sheet symbol is already named '{0}'")]
+    DuplicateChildSheetName(String),
+    #[error("another sheet symbol already points at '{0}'")]
+    DuplicateChildSheetFile(String),
     #[error("failed to open schematic: {0}")]
     OpenFailed(#[source] anyhow::Error),
     #[error("failed to save schematic: {0}")]
