@@ -10,12 +10,39 @@
 //! after the run has a newer entry on top, so undoing the group would revert
 //! the run underneath that edit; the step is refused instead, with a Messages
 //! panel line naming the sheets, and nothing changes. Undo that newer edit
-//! first (or run it per sheet). For redo, a sheet whose redo stack no longer
-//! holds the group (it was edited after the undo) refuses the same way.
+//! first. For redo, a sheet that still has the group in neither stack is
+//! skipped (reopened or history trimmed); one that has the group deeper in its
+//! undo stack but not on its redo stack (edited after the undo) refuses.
 //! Sheets with no live engine (closed and clean, or rewritten on disk by the
-//! run) have no history to move and are skipped.
+//! run) have no history to move and are skipped; an undo lists them in one
+//! Messages panel line, since they stay annotated.
 
 use super::*;
+
+/// The sheets one undo group touched.
+#[derive(Debug, Clone, Default)]
+pub struct UndoGroupSheets {
+    /// Sheets whose open engine recorded the group's entry.
+    pub live: Vec<std::path::PathBuf>,
+    /// Sheets rewritten on disk with no engine, so with no history to undo.
+    pub disk_only: Vec<std::path::PathBuf>,
+    /// Sheets the last undo of the group actually reverted. A redo requires
+    /// exactly these, so a sheet the undo skipped (reopened, history trimmed)
+    /// cannot block it, while one edited after the undo still does.
+    pub undone: Vec<std::path::PathBuf>,
+}
+
+fn file_names(paths: &[std::path::PathBuf]) -> String {
+    paths
+        .iter()
+        .map(|path| {
+            path.file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_else(|| path.display().to_string())
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum StepDirection {
@@ -30,24 +57,13 @@ impl StepDirection {
             StepDirection::Redo => engine.next_redo_group(),
         }
     }
-
-    fn verb(self) -> &'static str {
-        match self {
-            StepDirection::Undo => "undo",
-            StepDirection::Redo => "redo",
-        }
-    }
 }
 
 impl Signex {
-    /// Allocate a group id for a project-wide step touching `paths`.
-    pub(super) fn mint_undo_group(
-        &mut self,
-        paths: Vec<std::path::PathBuf>,
-    ) -> signex_engine::UndoGroupId {
-        let id = self.document_state.next_undo_group;
+    /// Allocate a group id for a project-wide step.
+    pub(super) fn mint_undo_group(&mut self) -> signex_engine::UndoGroupId {
+        let id = signex_engine::UndoGroupId::new(self.document_state.next_undo_group);
         self.document_state.next_undo_group += 1;
-        self.document_state.undo_groups.insert(id, paths);
         id
     }
 
@@ -55,12 +71,12 @@ impl Signex {
     pub(super) fn set_undo_group_sheets(
         &mut self,
         group: signex_engine::UndoGroupId,
-        paths: Vec<std::path::PathBuf>,
+        sheets: UndoGroupSheets,
     ) {
-        if paths.is_empty() {
+        if sheets.live.is_empty() && sheets.disk_only.is_empty() {
             self.document_state.undo_groups.remove(&group);
         } else {
-            self.document_state.undo_groups.insert(group, paths);
+            self.document_state.undo_groups.insert(group, sheets);
         }
     }
 
@@ -75,12 +91,13 @@ impl Signex {
         let Some(active_path) = self.document_state.active_path.clone() else {
             return false;
         };
-        let mut sheets = self
+        let recorded = self
             .document_state
             .undo_groups
             .get(&group)
             .cloned()
             .unwrap_or_default();
+        let mut sheets = recorded.live.clone();
         if !sheets.contains(&active_path) {
             sheets.push(active_path.clone());
         }
@@ -88,37 +105,49 @@ impl Signex {
 
         let mut members = Vec::new();
         let mut blocked = Vec::new();
+        let mut not_open = recorded.disk_only.clone();
         for path in sheets {
             let Some(engine) = self.document_state.engines.get(&path) else {
+                not_open.push(path);
                 continue;
             };
             if direction.top(engine) == Some(group) {
                 members.push(path);
-            } else if direction == StepDirection::Undo && !engine.has_undo_group(group) {
-                // The group's entry is gone from this sheet (history trimmed
-                // or reloaded): nothing to revert there. A newer edit on top
-                // of a still-present entry is the blocked case.
-            } else {
+                continue;
+            }
+            let expected = match direction {
+                // Gone from this sheet's undo stack (reopened, or history
+                // trimmed): nothing to revert, and it must not block the
+                // others. A newer edit above a present entry is blocked.
+                StepDirection::Undo => engine.has_undo_group(group),
+                // Only the sheets the undo reverted can owe a redo.
+                StepDirection::Redo => recorded.undone.contains(&path),
+            };
+            if expected {
                 blocked.push(path);
             }
         }
         if !blocked.is_empty() {
-            let names: Vec<String> = blocked
-                .iter()
-                .map(|path| {
-                    path.file_name()
-                        .map(|name| name.to_string_lossy().into_owned())
-                        .unwrap_or_else(|| path.display().to_string())
-                })
-                .collect();
-            crate::diagnostics::log_warning(format!(
-                "Cannot {} the project-wide step: {} was edited since, so reverting \
-                 it would run out of order. Undo that sheet's newer edit first, or \
-                 set Preferences > Annotation > Annotate undo to Per sheet.",
-                direction.verb(),
-                names.join(", "),
-            ));
+            let names = file_names(&blocked);
+            let message = match direction {
+                StepDirection::Undo => format!(
+                    "Cannot undo the project-wide annotate: {names} was edited after it. \
+                     Undo the newer edit on {names} first."
+                ),
+                StepDirection::Redo => format!(
+                    "Cannot redo the project-wide annotate: {names} was edited after the \
+                     undo, so the annotate can't be redone across sheets."
+                ),
+            };
+            crate::diagnostics::log_warning(message);
             return false;
+        }
+        if direction == StepDirection::Undo && !not_open.is_empty() {
+            not_open.sort();
+            crate::diagnostics::log_info(format!(
+                "Annotate undone on open sheets; not open, so still annotated on disk: {}",
+                file_names(&not_open),
+            ));
         }
 
         let mut active_invalidation = None;
@@ -137,11 +166,21 @@ impl Signex {
                 }
                 Ok(Some(_)) => self.mark_cached_sheet_dirty(path),
                 Ok(None) => {}
+                // `Engine::undo` / `redo` return `Err` never today, and the
+                // pre-check above guarantees every member has an entry, so
+                // this arm is unreachable. If either ever starts failing,
+                // the sheets already stepped stay stepped; it is logged.
                 Err(error) => {
+                    debug_assert!(false, "group step failed after the pre-check: {error}");
                     let error = anyhow::Error::new(error);
                     crate::diagnostics::log_error("Engine group step failed", &error);
                 }
             }
+        }
+        if direction == StepDirection::Undo
+            && let Some(record) = self.document_state.undo_groups.get_mut(&group)
+        {
+            record.undone = members;
         }
         match active_invalidation {
             Some(invalidation) => {

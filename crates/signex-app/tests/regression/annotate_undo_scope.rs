@@ -222,10 +222,11 @@ fn one_step_mode_refuses_to_undo_out_of_order_after_an_edit_on_the_other_sheet()
 
     assert_eq!(annotated_pair(&p), after, "nothing reverts out of order");
     assert!(
-        signex_app::diagnostics::recent_entries()
-            .iter()
-            .any(|e| e.message.contains("Cannot undo the project-wide step")
-                && e.message.contains("child.snxsch")),
+        signex_app::diagnostics::recent_entries().iter().any(|e| e
+            .message
+            .contains("Cannot undo the project-wide annotate")
+            && e.message
+                .contains("Undo the newer edit on child.snxsch first")),
         "the refusal is explained in the Messages panel"
     );
 
@@ -235,4 +236,112 @@ fn one_step_mode_refuses_to_undo_out_of_order_after_an_edit_on_the_other_sheet()
     undo(&mut p.app);
     assert_eq!(refs(&p.app, &p.root), ["U?", "C?"]);
     assert_eq!(refs(&p.app, &p.child), ["U?", "R?"]);
+}
+
+fn toggle_dnp(app: &mut Signex, path: &PathBuf, symbol_id: uuid::Uuid, dnp: bool) {
+    app.document_state
+        .engines
+        .get_mut(path)
+        .unwrap()
+        .execute(signex_engine::Command::SetSymbolDnp { symbol_id, dnp })
+        .expect("edit");
+}
+
+/// Replace the child's engine with a fresh one holding the same document, as
+/// closing and reopening the sheet does: the history, and the group, are gone.
+fn reopen_child(p: &mut Project) {
+    let document = p.app.document_state.engines[&p.child].document().clone();
+    p.app.document_state.engines.insert(
+        p.child.clone(),
+        signex_engine::Engine::new(document).expect("engine"),
+    );
+}
+
+#[test]
+fn redo_works_after_the_other_sheet_was_closed_and_reopened() {
+    let mut p = project(AnnotateUndo::Project);
+    annotate(&mut p.app);
+    let (root_after, child_after) = annotated_pair(&p);
+    reopen_child(&mut p);
+
+    undo(&mut p.app);
+    assert_eq!(refs(&p.app, &p.root), ["U?", "C?"]);
+    assert_eq!(
+        refs(&p.app, &p.child),
+        child_after,
+        "the reopened sheet has nothing to undo"
+    );
+
+    redo(&mut p.app);
+    assert_eq!(
+        refs(&p.app, &p.root),
+        root_after,
+        "redo must not be refused forever"
+    );
+}
+
+#[test]
+fn undo_and_redo_work_after_the_other_sheet_history_was_trimmed() {
+    let mut p = project(AnnotateUndo::Project);
+    annotate(&mut p.app);
+    let (root_after, child_after) = annotated_pair(&p);
+    let symbol_id = p.app.document_state.engines[&p.child].document().symbols[1].uuid;
+    // Push the group entry off the end of the 100-entry history cap.
+    for i in 0..100 {
+        toggle_dnp(&mut p.app, &p.child.clone(), symbol_id, i % 2 == 0);
+    }
+    assert!(
+        !p.app.document_state.engines[&p.child].has_undo_group(
+            p.app.document_state.engines[&p.root]
+                .next_undo_group()
+                .unwrap()
+        )
+    );
+
+    undo(&mut p.app);
+    assert_eq!(refs(&p.app, &p.root), ["U?", "C?"]);
+    assert_eq!(refs(&p.app, &p.child), child_after);
+
+    redo(&mut p.app);
+    assert_eq!(refs(&p.app, &p.root), root_after);
+}
+
+#[test]
+fn redo_is_refused_with_its_own_wording_after_an_edit_following_the_undo() {
+    let _ = signex_app::diagnostics::init_logging();
+    let mut p = project(AnnotateUndo::Project);
+    annotate(&mut p.app);
+    undo(&mut p.app);
+    let symbol_id = p.app.document_state.engines[&p.child].document().symbols[1].uuid;
+    toggle_dnp(&mut p.app, &p.child.clone(), symbol_id, true);
+
+    redo(&mut p.app);
+
+    assert_eq!(refs(&p.app, &p.root), ["U?", "C?"], "nothing is redone");
+    assert!(
+        signex_app::diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.message.contains(
+                "Cannot redo the project-wide annotate: child.snxsch was edited after the undo"
+            )),
+    );
+}
+
+#[test]
+fn undo_says_which_sheets_stay_annotated_because_they_are_not_open() {
+    let _ = signex_app::diagnostics::init_logging();
+    let mut p = project(AnnotateUndo::Project);
+    annotate(&mut p.app);
+    p.app.document_state.engines.remove(&p.child);
+
+    undo(&mut p.app);
+
+    assert_eq!(refs(&p.app, &p.root), ["U?", "C?"]);
+    assert!(
+        signex_app::diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.message.contains(
+                "Annotate undone on open sheets; not open, so still annotated on disk: child.snxsch"
+            )),
+    );
 }

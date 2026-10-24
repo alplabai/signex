@@ -205,4 +205,8 @@ fn annotate_undo_draft_marks_dirty_and_discard_restores_it() {
         app.ui_state.preferences_draft_annotate_undo,
         AnnotateUndo::Project
     );
+    assert!(
+        !app.ui_state.preferences_dirty,
+        "discarding leaves nothing unsaved"
+    );
 }

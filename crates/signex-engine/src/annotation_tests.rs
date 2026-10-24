@@ -138,7 +138,7 @@ fn an_annotate_undo_group_is_stamped_and_survives_undo_and_redo() {
         parts: &parts,
         sheet: 0,
         locked: &locked,
-        undo_group: Some(7),
+        undo_group: Some(crate::UndoGroupId::new(7)),
     };
     engine
         .annotate_in_project(
@@ -149,10 +149,10 @@ fn an_annotate_undo_group_is_stamped_and_survives_undo_and_redo() {
         )
         .unwrap();
 
-    assert_eq!(engine.next_undo_group(), Some(7));
+    assert_eq!(engine.next_undo_group(), Some(crate::UndoGroupId::new(7)));
     engine.undo().unwrap();
     assert_eq!(engine.next_undo_group(), None);
-    assert_eq!(engine.next_redo_group(), Some(7));
+    assert_eq!(engine.next_redo_group(), Some(crate::UndoGroupId::new(7)));
     engine.redo().unwrap();
-    assert_eq!(engine.next_undo_group(), Some(7));
+    assert_eq!(engine.next_undo_group(), Some(crate::UndoGroupId::new(7)));
 }

@@ -19,7 +19,14 @@ pub(super) struct HistoryEntry {
 /// Identifies one project-wide undo step (e.g. an annotate run) whose
 /// per-sheet history entries must be undone and redone together. The engine
 /// only stamps and reports it; coordinating sheets is the app's job.
-pub type UndoGroupId = u64;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct UndoGroupId(u64);
+
+impl UndoGroupId {
+    pub const fn new(raw: u64) -> Self {
+        Self(raw)
+    }
+}
 
 impl Engine {
     pub fn can_undo(&self) -> bool {

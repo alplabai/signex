@@ -149,8 +149,8 @@ impl Signex {
         // one per sheet. Which sheets it touched is filled in below.
         let undo_group = (self.ui_state.annotate_undo
             == crate::annotate_undo::AnnotateUndo::Project)
-            .then(|| self.mint_undo_group(Vec::new()));
-        let mut touched_sheets: Vec<std::path::PathBuf> = Vec::new();
+            .then(|| self.mint_undo_group());
+        let mut touched_sheets = crate::app::UndoGroupSheets::default();
         for (path, why) in &project_set.unreadable {
             crate::diagnostics::log_info(format!("Annotate: sheet '{}' {why}", path.display()));
         }
@@ -172,7 +172,7 @@ impl Signex {
                 match outcome {
                     Some(Ok(true)) => {
                         any_active_changed = true;
-                        touched_sheets.push(path.clone());
+                        touched_sheets.live.push(path.clone());
                     }
                     Some(Err(error)) => {
                         let error = anyhow::Error::new(error);
@@ -198,7 +198,7 @@ impl Signex {
                     Some(Ok(true)) => {
                         self.mark_cached_sheet_dirty(path);
                         any_cached_changed = true;
-                        touched_sheets.push(path.clone());
+                        touched_sheets.live.push(path.clone());
                     }
                     Some(Err(error)) => {
                         let error = anyhow::Error::new(error);
@@ -227,6 +227,7 @@ impl Signex {
                 &mut assigned,
             ) {
                 disk_touched += 1;
+                touched_sheets.disk_only.push(path.clone());
             }
         }
         if let Some(group) = undo_group {
