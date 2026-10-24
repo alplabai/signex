@@ -18,7 +18,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use super::reference_policy::{Share, is_refused, path_is_refused, share_of};
+use super::reference_policy::{Share, is_walk_refused, path_is_refused, share_of};
 use super::scope::{CaseFold, KeyMap, ReachSets, path_key_with};
 use super::sheet_read::{WalkLimits, read_child_refs};
 use super::volume_case::{IgnoresCase, VolumeCase};
@@ -190,7 +190,19 @@ fn join_tail(mut base: PathBuf, tail: Vec<&std::ffi::OsStr>, fold: bool) -> Path
 }
 
 /// Record and return the ownership key of `path`.
-fn identity_key(keys: &mut KeyMap, volume: &mut VolumeCase, path: &Path) -> String {
+///
+/// A path the walk would refuse (device, untrusted network name) is keyed
+/// lexically and never canonicalised, so no library or dirty path touches the
+/// network or a device just to be compared.
+fn identity_key(
+    keys: &mut KeyMap,
+    volume: &mut VolumeCase,
+    trusted: &[Share],
+    path: &Path,
+) -> String {
+    if path_is_refused(path, trusted) {
+        return keys.key(path);
+    }
     let lexical = keys.lexical_key(path);
     let real = keys
         .real
@@ -298,11 +310,11 @@ impl SheetRefInputs {
         let mut volume = VolumeCase::new(ignores_case);
         let mut loaded_by_key: HashMap<String, Vec<String>> = HashMap::new();
         for (path, refs) in &loaded {
-            let key = identity_key(&mut keys, &mut volume, path);
+            let key = identity_key(&mut keys, &mut volume, &trusted, path);
             push_unique(loaded_by_key.entry(key).or_default(), refs.iter().cloned());
         }
         for path in &extra {
-            identity_key(&mut keys, &mut volume, path);
+            identity_key(&mut keys, &mut volume, &trusted, path);
         }
         let mut disk: HashMap<PathBuf, Vec<String>> = HashMap::new();
         let mut unreadable = Vec::new();
@@ -322,7 +334,7 @@ impl SheetRefInputs {
             }
         }
         while let Some(path) = pending.pop() {
-            let key = identity_key(&mut keys, &mut volume, &path);
+            let key = identity_key(&mut keys, &mut volume, &trusted, &path);
             if !walked.insert(key.clone()) {
                 continue;
             }
@@ -353,7 +365,7 @@ impl SheetRefInputs {
                 let Some(next) = ownership_reference(&dir, child) else {
                     continue;
                 };
-                if is_refused(child, &trusted) {
+                if is_walk_refused(&dir, child, &next, &trusted) {
                     refusals.refuse(&mut unreadable, child);
                     walked.insert(keys.key(&next));
                 } else {
@@ -1200,6 +1212,24 @@ mod tests {
 
         assert!(resolved.unreadable.is_empty(), "{:?}", resolved.unreadable);
         assert_eq!(resolved.disk.len(), 1, "{:?}", resolved.disk.keys());
+    }
+
+    #[test]
+    fn an_untrusted_network_library_path_is_not_canonicalised() {
+        // `extra` carries `.snxprj` library paths; a refused one is keyed
+        // lexically, so no real spelling is recorded (the canonicalise that
+        // would touch the network never ran).
+        let lib = PathBuf::from(r"\\attacker\share\lib.snxlib");
+        let resolved = SheetRefInputs {
+            loaded: HashMap::new(),
+            roots: Vec::new(),
+            projects: Vec::new(),
+            extra: vec![lib.clone()],
+            trusted: Vec::new(),
+        }
+        .resolve_within(CaseFold::Preserve, |_| false, WalkLimits::default());
+
+        assert!(!resolved.keys.knows(&lib));
     }
 
     #[cfg(unix)]
