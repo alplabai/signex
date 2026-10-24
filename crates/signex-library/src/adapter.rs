@@ -469,14 +469,18 @@ pub trait LibraryAdapter: Send + Sync {
     ///
     /// `rewrite` receives the file's current bytes (`None` when it does not
     /// exist) and returns the bytes to write, or `None` to leave the file as
-    /// it is. Returns whether the file was written. The caller commits it
-    /// afterwards through [`Self::commit_external_change`].
+    /// it is. Returns whether the file was written. A written file is
+    /// committed with `commit_message` before the lock is released, so
+    /// another process cannot replace it while git reads it. A failed
+    /// commit is logged, not returned: the file is already saved, and the
+    /// next commit picks it up.
     ///
-    /// The default has no lock to take and only does the read and write;
-    /// see [`rewrite_file`].
+    /// The default has no lock to take and no version control, and only
+    /// does the read and write; see [`rewrite_file`].
     fn rewrite_file_locked(
         &self,
         abs_path: &std::path::Path,
+        _commit_message: &str,
         rewrite: &mut crate::adapter::FileRewrite<'_>,
     ) -> Result<bool, LibraryError> {
         rewrite_file(abs_path, rewrite)

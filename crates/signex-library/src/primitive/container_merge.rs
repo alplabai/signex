@@ -33,6 +33,17 @@ pub struct ContainerMerge {
     pub overwritten: Vec<Uuid>,
 }
 
+/// Why a container could not be merged: two of its primitives share a
+/// uuid, so a merge keyed by uuid cannot tell them apart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DuplicatedUuid {
+    /// In the editor's copy or the file it loaded: the file had them
+    /// already.
+    InEditorCopy,
+    /// Only in the file on disk now: another writer added them since.
+    OnDisk,
+}
+
 impl ContainerMerge {
     pub fn is_empty(&self) -> bool {
         self.changed.is_empty()
@@ -117,19 +128,19 @@ impl SymbolFile {
     /// Merge this editor copy's changes since `baseline` into `disk`; see
     /// the module docs. `disk`'s file-level fields are kept, except the
     /// display name when this copy renamed the file, and `updated` is set to
-    /// `now` when anything changed. `None` when one of the three holds two
-    /// symbols with the same uuid, which a merge cannot tell apart.
+    /// `now` when anything changed. Refused when two symbols share a uuid,
+    /// which a merge cannot tell apart.
     pub fn merge_into(
         &self,
         baseline: &SymbolFile,
         mut disk: SymbolFile,
         now: DateTime<Utc>,
-    ) -> Option<(SymbolFile, ContainerMerge)> {
-        if [&self.symbols, &baseline.symbols, &disk.symbols]
-            .iter()
-            .any(|items| has_duplicate_uuids(items))
-        {
-            return None;
+    ) -> Result<(SymbolFile, ContainerMerge), DuplicatedUuid> {
+        if has_duplicate_uuids(&self.symbols) || has_duplicate_uuids(&baseline.symbols) {
+            return Err(DuplicatedUuid::InEditorCopy);
+        }
+        if has_duplicate_uuids(&disk.symbols) {
+            return Err(DuplicatedUuid::OnDisk);
         }
         let mut changed = self.changed_since(baseline);
         let renamed = self.display_name != baseline.display_name;
@@ -148,7 +159,7 @@ impl SymbolFile {
         if renamed && changed.is_empty() {
             changed.push(self.file_uuid);
         }
-        Some((
+        Ok((
             disk,
             ContainerMerge {
                 changed,
@@ -176,12 +187,12 @@ impl FootprintFile {
         baseline: &FootprintFile,
         mut disk: FootprintFile,
         now: DateTime<Utc>,
-    ) -> Option<(FootprintFile, ContainerMerge)> {
-        if [&self.footprints, &baseline.footprints, &disk.footprints]
-            .iter()
-            .any(|items| has_duplicate_uuids(items))
-        {
-            return None;
+    ) -> Result<(FootprintFile, ContainerMerge), DuplicatedUuid> {
+        if has_duplicate_uuids(&self.footprints) || has_duplicate_uuids(&baseline.footprints) {
+            return Err(DuplicatedUuid::InEditorCopy);
+        }
+        if has_duplicate_uuids(&disk.footprints) {
+            return Err(DuplicatedUuid::OnDisk);
         }
         let mut changed = self.changed_since(baseline);
         changed.retain(|&uuid| {
@@ -211,7 +222,7 @@ impl FootprintFile {
         if renamed && changed.is_empty() {
             changed.push(self.file_uuid);
         }
-        Some((
+        Ok((
             disk,
             ContainerMerge {
                 changed,
@@ -308,10 +319,19 @@ mod tests {
         let mut editor = baseline.clone();
         editor.symbols[1].description = "second copy".into();
 
-        assert!(
-            editor
-                .merge_into(&baseline, baseline.clone(), Utc::now())
-                .is_none()
+        assert_eq!(
+            editor.merge_into(&baseline, baseline.clone(), Utc::now()),
+            Err(DuplicatedUuid::InEditorCopy)
+        );
+
+        // #904 review: a duplicate only on disk was added by another
+        // writer since; the save is refused rather than overwriting it.
+        let single = container(vec![a.clone()]);
+        let mut disk = container(vec![a.clone(), symbol("B")]);
+        disk.symbols[1].uuid = a.uuid;
+        assert_eq!(
+            single.merge_into(&single, disk, Utc::now()),
+            Err(DuplicatedUuid::OnDisk)
         );
     }
 

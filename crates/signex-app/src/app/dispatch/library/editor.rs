@@ -467,8 +467,16 @@ impl Signex {
             // dropping the editor borrow.
             let sym_name = editor.primitive().name.clone();
             let save = self
-                .save_symbol_container(path, &file, &baseline, now, mode)
-                .map_err(|e| anyhow::anyhow!("write .snxsym {}: {e}", path.display()))?;
+                .save_symbol_container(
+                    path,
+                    &file,
+                    &baseline,
+                    now,
+                    mode,
+                    &format!("save symbol {sym_name}"),
+                )
+                // The reason leads: the Messages panel cuts long lines.
+                .map_err(|e| anyhow::anyhow!("{e} (writing {})", path.display()))?;
             // A symbol this editor deleted is named from the baseline.
             let (mut replaced, mut deleted) = (Vec::new(), Vec::new());
             for uuid in &save.merge.overwritten {
@@ -490,13 +498,8 @@ impl Signex {
             if let Some(tab) = self.document_state.tabs.iter_mut().find(|t| t.path == path) {
                 tab.dirty = false;
             }
-            // Commit through the matching adapter so the edit lands
-            // in git history. No-op when the file lives outside any
-            // mounted library (lone-file edit) or when the adapter
-            // has no version control (database backend).
-            if save.written {
-                self.commit_external_change_for(path, &format!("save symbol {sym_name}"));
-            }
+            // The library commit happened inside the save, under the
+            // library's write lock (#904).
             // v0.22 Phase 8.4 extension — also commit into the
             // owning project's git repo (if `enable_git` is on for
             // that project). When both library- and project-scope VC
@@ -543,8 +546,15 @@ impl Signex {
             let (file, baseline) = (editor.file.clone(), editor.baseline.clone());
             let fp_name = editor.primitive().name.clone();
             let save = self
-                .save_footprint_container(path, &file, &baseline, now, mode)
-                .map_err(|e| anyhow::anyhow!("write .snxfpt {}: {e}", path.display()))?;
+                .save_footprint_container(
+                    path,
+                    &file,
+                    &baseline,
+                    now,
+                    mode,
+                    &format!("save footprint {fp_name}"),
+                )
+                .map_err(|e| anyhow::anyhow!("{e} (writing {})", path.display()))?;
             let name_in = |container: &signex_library::FootprintFile, uuid: uuid::Uuid| {
                 container
                     .footprints
@@ -568,9 +578,6 @@ impl Signex {
             self.document_state.dirty_paths.remove(path);
             if let Some(tab) = self.document_state.tabs.iter_mut().find(|t| t.path == path) {
                 tab.dirty = false;
-            }
-            if save.written {
-                self.commit_external_change_for(path, &format!("save footprint {fp_name}"));
             }
             // v0.22 Phase 8.4 extension — same as the symbol branch:
             // also commit into the owning project's git repo when
@@ -597,29 +604,6 @@ impl Signex {
         Ok(())
     }
 
-    /// Find the open library whose root contains `path`, then ask its
-    /// adapter to stage + commit. Best-effort: silently returns when
-    /// no mounted library covers `path` (lone-file edit) or when the
-    /// commit itself fails (warning is emitted via tracing). Never
-    /// blocks the user — the file write already succeeded.
-    fn commit_external_change_for(&self, path: &std::path::Path, message: &str) {
-        // Find the open library whose working dir is an ancestor of
-        // `path`. `lib.root` is the `.snxlib` *file* path now, so we
-        // walk against its parent directory (where `symbols/` and
-        // `footprints/` actually live).
-        let Some(adapter) = self.library_adapter_for(path) else {
-            return;
-        };
-        if let Err(e) = adapter.commit_external_change(path, message) {
-            tracing::warn!(
-                target: "signex::library",
-                path = %path.display(),
-                error = %e,
-                "save primitive: commit_external_change failed (file written, not committed)",
-            );
-        }
-    }
-
     /// Refresh the matching library's per-kind primitive cache so the
     /// picker modal sees the just-saved primitive without waiting
     /// for the next full `refresh_components` round-trip. No-op when
@@ -633,9 +617,9 @@ impl Signex {
     /// [`OpenLibrary::reload_primitives`] keeps each previous cache on
     /// error and reports the failure to the Messages panel at `warn`.
     fn refresh_primitive_cache_for(&mut self, path: &std::path::Path) {
-        // Same `root_dir()` ancestor walk as
-        // `commit_external_change_for` — `lib.root` is the `.snxlib`
-        // file, the on-disk children sit under its parent dir.
+        // Same `root_dir()` ancestor walk as `library_adapter_for` —
+        // `lib.root` is the `.snxlib` file, the on-disk children sit
+        // under its parent dir.
         let library_id = match self
             .library
             .open_libraries

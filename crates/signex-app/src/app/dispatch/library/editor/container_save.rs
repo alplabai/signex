@@ -22,8 +22,6 @@ pub(crate) enum ContainerWrite {
 
 /// Outcome of a container save.
 pub(super) struct ContainerSave {
-    /// Whether the file was written. `false` when nothing changed.
-    pub written: bool,
     pub merge: ContainerMerge,
 }
 
@@ -46,10 +44,12 @@ impl Signex {
     fn rewrite_primitive_file(
         &self,
         path: &std::path::Path,
+        commit_message: &str,
         rewrite: &mut signex_library::FileRewrite<'_>,
     ) -> Result<bool, LibraryError> {
+        // The adapter commits before it releases the lock.
         if let Some(adapter) = self.library_adapter_for(path) {
-            return adapter.rewrite_file_locked(path, rewrite);
+            return adapter.rewrite_file_locked(path, commit_message, rewrite);
         }
         // A file opened on its own may still sit in a library another
         // window has mounted; take that library's lock too.
@@ -68,9 +68,10 @@ impl Signex {
         baseline: &SymbolFile,
         now: chrono::DateTime<chrono::Utc>,
         mode: ContainerWrite,
+        commit_message: &str,
     ) -> Result<ContainerSave, LibraryError> {
         let mut merge = ContainerMerge::default();
-        let written = self.rewrite_primitive_file(path, &mut |current| {
+        self.rewrite_primitive_file(path, commit_message, &mut |current| {
             let whole = || {
                 (
                     editor.clone(),
@@ -82,7 +83,7 @@ impl Signex {
                     let disk = SymbolFile::from_bytes(bytes).map_err(|e| unreadable_on_disk(&e))?;
                     editor
                         .merge_into(baseline, disk, now)
-                        .unwrap_or_else(|| duplicated_uuids(path, whole()))
+                        .or_else(|duplicate| duplicated_uuids(path, duplicate, whole()))?
                 }
                 _ => whole(),
             };
@@ -97,7 +98,7 @@ impl Signex {
                 .map(|text| Some(text.into_bytes()))
                 .map_err(|e| LibraryError::Backend(format!("serialize symbol library: {e}")))
         })?;
-        Ok(ContainerSave { written, merge })
+        Ok(ContainerSave { merge })
     }
 
     pub(super) fn save_footprint_container(
@@ -107,9 +108,10 @@ impl Signex {
         baseline: &FootprintFile,
         now: chrono::DateTime<chrono::Utc>,
         mode: ContainerWrite,
+        commit_message: &str,
     ) -> Result<ContainerSave, LibraryError> {
         let mut merge = ContainerMerge::default();
-        let written = self.rewrite_primitive_file(path, &mut |current| {
+        self.rewrite_primitive_file(path, commit_message, &mut |current| {
             let whole = || {
                 (
                     editor.clone(),
@@ -122,7 +124,7 @@ impl Signex {
                         FootprintFile::from_bytes(bytes).map_err(|e| unreadable_on_disk(&e))?;
                     editor
                         .merge_into(baseline, disk, now)
-                        .unwrap_or_else(|| duplicated_uuids(path, whole()))
+                        .or_else(|duplicate| duplicated_uuids(path, duplicate, whole()))?
                 }
                 _ => whole(),
             };
@@ -137,19 +139,25 @@ impl Signex {
                 .map(|text| Some(text.into_bytes()))
                 .map_err(|e| LibraryError::Backend(format!("serialize footprint library: {e}")))
         })?;
-        Ok(ContainerSave { written, merge })
+        Ok(ContainerSave { merge })
     }
 }
 
 /// The `.snxlib` of the library whose directory holds `path`, if any: the
-/// nearest ancestor directory with a `.snxlib` file in it.
+/// nearest ancestor directory with a `.snxlib` file in it. Reads one
+/// directory per level up to the root, once per save of a file that no
+/// open library holds.
 fn enclosing_library_file(path: &std::path::Path) -> Option<std::path::PathBuf> {
     path.ancestors().skip(1).find_map(|dir| {
-        std::fs::read_dir(dir)
+        let mut libraries: Vec<std::path::PathBuf> = std::fs::read_dir(dir)
             .ok()?
             .flatten()
             .map(|e| e.path())
-            .find(|p| p.is_file() && p.extension().is_some_and(|ext| ext == "snxlib"))
+            .filter(|p| p.is_file() && p.extension().is_some_and(|ext| ext == "snxlib"))
+            .collect();
+        // `read_dir` order is unspecified; pick the same one every time.
+        libraries.sort();
+        libraries.into_iter().next()
     })
 }
 
@@ -169,17 +177,33 @@ fn whole_file(uuids: impl Iterator<Item = uuid::Uuid>) -> ContainerMerge {
 }
 
 /// A container holding two primitives with one uuid cannot be merged by
-/// uuid. It is written whole, as before #902, and the user is told.
-fn duplicated_uuids<F>(path: &std::path::Path, whole: (F, ContainerMerge)) -> (F, ContainerMerge) {
-    tracing::warn!(
-        target: "signex::library",
-        path = %path.display(),
-        "{} holds two primitives with the same uuid, so this save wrote the editor's whole \
-         copy instead of merging; a change saved to it from another window since it was opened \
-         is lost",
-        path.display(),
-    );
-    whole
+/// uuid. When the file had them already (an old or hand-edited file), it is
+/// written whole, as before #902, and the user is told. When only the file
+/// on disk has them, another writer added them since this editor loaded it,
+/// and writing over it would drop that writer's change, so the save is
+/// refused.
+fn duplicated_uuids<F>(
+    path: &std::path::Path,
+    duplicate: signex_library::DuplicatedUuid,
+    whole: (F, ContainerMerge),
+) -> Result<(F, ContainerMerge), LibraryError> {
+    match duplicate {
+        signex_library::DuplicatedUuid::InEditorCopy => {
+            tracing::warn!(
+                target: "signex::library",
+                path = %path.display(),
+                "saved the whole file, not merged: it holds two primitives with one uuid, so a \
+                 change another window saved to it since it was opened is lost: {}",
+                path.display(),
+            );
+            Ok(whole)
+        }
+        signex_library::DuplicatedUuid::OnDisk => Err(LibraryError::Backend(
+            "the save was refused so the file is not overwritten: another program gave two \
+             of its primitives one uuid since it was opened"
+                .into(),
+        )),
+    }
 }
 
 /// The file on disk no longer parses (another program wrote it). Refuse
@@ -208,10 +232,12 @@ pub(super) fn report_overwritten(path: &std::path::Path, replaced: &[String], de
         if names.is_empty() {
             continue;
         }
+        // The action leads: the Messages panel cuts long lines, and the
+        // path is the long part.
         tracing::warn!(
             target: "signex::library",
             path = %path.display(),
-            "{} also changed on disk since this editor opened {}; this save {done} that change",
+            "this save {done} another window's change to {}: {}",
             names.join(", "),
             path.display(),
         );

@@ -252,7 +252,7 @@ fn rewriting_a_library_file_reads_it_only_after_another_process_releases_the_loc
     });
     let mut seen = Vec::new();
     let written = adapter
-        .rewrite_file_locked(&target, &mut |current| {
+        .rewrite_file_locked(&target, "merge pair", &mut |current| {
             seen = current.unwrap_or_default().to_vec();
             Ok(Some(b"merged".to_vec()))
         })
@@ -262,6 +262,21 @@ fn rewriting_a_library_file_reads_it_only_after_another_process_releases_the_loc
     assert!(written);
     assert_eq!(seen, b"written by the other process");
     assert_eq!(std::fs::read(&target).unwrap(), b"merged");
+    // #904 review: committed before the lock was released, so another
+    // process cannot replace the file while git reads it.
+    let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
+    let head = repo.head().unwrap().peel_to_commit().unwrap();
+    assert_eq!(head.summary().unwrap(), Some("merge pair"));
+    let blob = head
+        .tree()
+        .unwrap()
+        .get_path(Path::new("symbols/pair.snxsym"))
+        .unwrap()
+        .to_object(&repo)
+        .unwrap()
+        .peel_to_blob()
+        .unwrap();
+    assert_eq!(blob.content(), b"merged");
 }
 
 #[test]
@@ -272,7 +287,7 @@ fn rewriting_a_file_outside_the_library_is_refused() {
     let outside = dir.path().join("elsewhere.snxsym");
 
     let error = adapter
-        .rewrite_file_locked(&outside, &mut |_| Ok(Some(b"x".to_vec())))
+        .rewrite_file_locked(&outside, "x", &mut |_| Ok(Some(b"x".to_vec())))
         .unwrap_err();
 
     assert!(error.to_string().contains("is not under"), "got {error}");

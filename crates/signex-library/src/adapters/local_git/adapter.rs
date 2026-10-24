@@ -448,6 +448,7 @@ impl LibraryAdapter for LocalGitAdapter {
     fn rewrite_file_locked(
         &self,
         abs_path: &Path,
+        commit_message: &str,
         rewrite: &mut crate::adapter::FileRewrite<'_>,
     ) -> Result<bool, LibraryError> {
         if !abs_path.starts_with(&self.root_dir) {
@@ -458,7 +459,16 @@ impl LibraryAdapter for LocalGitAdapter {
             )));
         }
         let _write_lock = self.lock_for_write()?;
-        crate::adapter::rewrite_file(abs_path, rewrite)
+        let written = crate::adapter::rewrite_file(abs_path, rewrite)?;
+        if written && let Err(e) = self.commit_external_change(abs_path, commit_message) {
+            tracing::warn!(
+                target: "signex::library",
+                path = %abs_path.display(),
+                error = %e,
+                "save primitive: file written, not committed",
+            );
+        }
+        Ok(written)
     }
 
     fn commit_external_change(&self, abs_path: &Path, message: &str) -> Result<(), LibraryError> {

@@ -49,19 +49,14 @@ fn save(app: &mut Signex) {
     let _ = app.update(Message::File(FileMsg::Save));
 }
 
-/// A Messages-panel line containing every needle and the temp-dir name
-/// (unique per run, so parallel tests cannot satisfy each other).
-fn logged(tmp: &TempDir, needles: &[&str]) -> bool {
-    let marker = tmp
-        .path()
-        .file_name()
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .to_string();
+/// A Messages-panel line containing every needle. The panel cuts long
+/// lines, and the file path comes last (#904 review: on macOS the temp path
+/// alone pushed the reason out), so the needles name what only one test in
+/// this file logs instead of matching the path.
+fn logged(needles: &[&str]) -> bool {
     signex_app::diagnostics::recent_entries()
         .iter()
-        .any(|e| e.message.contains(&marker) && needles.iter().all(|n| e.message.contains(n)))
+        .any(|e| needles.iter().all(|n| e.message.contains(n)))
 }
 
 fn edit_symbol(app: &mut Signex, path: &Path, index: usize, description: &str) {
@@ -132,10 +127,7 @@ fn saving_a_symbol_another_window_also_changed_wins_and_says_so() {
 
     assert_eq!(on_disk(&path).symbols[0].description, "second");
     assert!(
-        logged(
-            &tmp,
-            &["A also changed on disk", "this save replaced that change"]
-        ),
+        logged(&["this save replaced another window's change to A:"]),
         "the Messages panel must name the symbol whose other change was replaced"
     );
 }
@@ -185,7 +177,7 @@ fn a_container_that_no_longer_parses_on_disk_is_not_overwritten() {
     save(&mut window);
 
     assert!(
-        logged(&tmp, &["the save was refused", "no longer parses"]),
+        logged(&["the save was refused", "no longer parses"]),
         "the Messages panel must say the save was refused"
     );
     assert_eq!(std::fs::read(&path).unwrap(), b"not a symbol file");
@@ -218,7 +210,10 @@ fn deletes_from_two_windows_never_leave_the_container_empty() {
     let file = on_disk(&path);
     assert_eq!(file.symbols.len(), 1);
     assert_eq!(file.symbols[0].name, "B");
-    assert!(logged(&tmp, &["the save was refused", "no symbol"]));
+    assert!(logged(&[
+        "the save was refused",
+        "it would leave no symbol"
+    ]));
 }
 
 /// #902 review: deleting a symbol another window has changed since says so.
@@ -238,10 +233,7 @@ fn deleting_a_symbol_another_window_changed_says_so() {
 
     assert_eq!(on_disk(&path).symbols.len(), 1);
     assert!(
-        logged(
-            &tmp,
-            &["A also changed on disk", "this save deleted that change"]
-        ),
+        logged(&["this save deleted another window's change to A:"]),
         "the Messages panel must name the deleted symbol another window had changed"
     );
 }
