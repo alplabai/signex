@@ -399,6 +399,17 @@ impl Signex {
             }
         };
 
+        // A PCB window whose tab has just been closed: a queued event
+        // would otherwise fall through to the main window's active board.
+        let pcb_tab = self
+            .document_state
+            .tabs
+            .iter()
+            .position(|tab| tab.path == target_path);
+        if pcb_tab.is_none() && self.interaction_state.pcb_canvases.contains_key(&window_id) {
+            return iced::Task::none();
+        }
+
         // Swap the per-window canvas into the main slot and retarget
         // `active_path` so the handler's engine + canvas accesses hit
         // the window's tab.
@@ -410,15 +421,15 @@ impl Signex {
         std::mem::swap(&mut self.interaction_state.canvas, &mut swapped_canvas);
         // A PCB window swaps its PCB canvas in the same way, and retargets
         // `active_tab` too: the PCB handlers resolve the board through the
-        // active tab, not `active_path` (#494).
-        // Without a tab to retarget to, the PCB canvas stays where it is,
-        // so the event cannot reach another tab's board through it.
+        // active tab, not `active_path` (#494). The main window's tab is
+        // remembered by path, so it is found again even if the handler
+        // closed or reordered tabs.
         let saved_active_tab = self.document_state.active_tab;
-        let pcb_tab = self
+        let saved_active_tab_path = self
             .document_state
             .tabs
-            .iter()
-            .position(|tab| tab.path == target_path);
+            .get(saved_active_tab)
+            .map(|tab| tab.path.clone());
         let mut swapped_pcb =
             pcb_tab.and_then(|_| self.interaction_state.pcb_canvases.remove(&window_id));
         if let (Some(pcb), Some(index)) = (swapped_pcb.as_mut(), pcb_tab) {
@@ -449,11 +460,12 @@ impl Signex {
         if let Some(mut pcb) = swapped_pcb {
             std::mem::swap(&mut self.interaction_state.pcb_canvas, &mut pcb);
             self.interaction_state.pcb_canvases.insert(window_id, pcb);
-            // A handler that closed tabs may have left the saved index
-            // out of range; keep the handler's own choice then.
-            if saved_active_tab < self.document_state.tabs.len() {
-                self.document_state.active_tab = saved_active_tab;
-            }
+            let tabs = &self.document_state.tabs;
+            self.document_state.active_tab = saved_active_tab_path
+                .and_then(|path| tabs.iter().position(|tab| tab.path == path))
+                // The main window's tab itself was closed: stay at its
+                // position, as closing a tab does.
+                .unwrap_or_else(|| saved_active_tab.min(tabs.len().saturating_sub(1)));
         }
         self.document_state.active_path = saved_active_path;
 
