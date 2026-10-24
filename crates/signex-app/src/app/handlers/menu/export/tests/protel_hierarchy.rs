@@ -101,10 +101,11 @@ fn a_child_placed_twice_is_refused_and_nothing_is_written() {
     );
 
     let out = std::env::temp_dir().join(format!("signex-protel-twice-{}.NET", Uuid::new_v4()));
-    let _ = app.handle_export_netlist_finished(
+    let task = app.handle_export_netlist_finished(
         app.document_state.active_path.clone().expect("active"),
         Ok(out.clone()),
     );
+    crate::app::handlers::menu::export::settle(&mut app, task);
     assert!(!out.exists(), "a refused export must not write a file");
     assert!(app.document_state.error_notice.is_some());
 }
@@ -162,10 +163,11 @@ fn a_child_holding_only_power_ports_placed_twice_is_not_refused() {
         assert_eq!(refusal_of(&app), None, "{leaf_ref}");
 
         let out = std::env::temp_dir().join(format!("signex-protel-pwr-{}.NET", Uuid::new_v4()));
-        let _ = app.handle_export_netlist_finished(
+        let task = app.handle_export_netlist_finished(
             app.document_state.active_path.clone().expect("active"),
             Ok(out.clone()),
         );
+        crate::app::handlers::menu::export::settle(&mut app, task);
         assert!(app.document_state.error_notice.is_none(), "{leaf_ref}");
         assert!(out.exists(), "{leaf_ref}: a power-only child still exports");
         std::fs::remove_file(&out).ok();
@@ -211,10 +213,11 @@ fn a_child_placed_by_two_different_parents_is_refused_and_nothing_is_written() {
     );
 
     let out = std::env::temp_dir().join(format!("signex-protel-parents-{}.NET", Uuid::new_v4()));
-    let _ = app.handle_export_netlist_finished(
+    let task = app.handle_export_netlist_finished(
         app.document_state.active_path.clone().expect("active"),
         Ok(out.clone()),
     );
+    crate::app::handlers::menu::export::settle(&mut app, task);
     assert!(!out.exists(), "a refused export must not write a file");
     assert!(app.document_state.error_notice.is_some());
 }
