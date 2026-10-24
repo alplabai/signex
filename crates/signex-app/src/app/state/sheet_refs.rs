@@ -1227,7 +1227,7 @@ mod tests {
             extra: vec![lib.clone()],
             trusted: Vec::new(),
         }
-        .resolve_within(CaseFold::Preserve, |_| false, WalkLimits::default());
+        .resolve_within(|_| false, WalkLimits::default());
 
         assert!(!resolved.keys.knows(&lib));
     }
