@@ -45,6 +45,22 @@ pub fn exposed_sheet_ports(child: &SchematicSheet) -> Vec<SheetPort> {
         .collect()
 }
 
+/// How many Hierarchical / Global labels of `child` have blank text. They name
+/// no port, so the sync and the netlist ignore them; callers report the count
+/// so the label is not silently dropped.
+pub fn blank_port_label_count(child: &SchematicSheet) -> usize {
+    child
+        .labels
+        .iter()
+        .filter(|label| {
+            matches!(
+                label.label_type,
+                LabelType::Hierarchical | LabelType::Global
+            ) && normalize_port_name(&label.text).is_none()
+        })
+        .count()
+}
+
 /// The ports to hand `Command::ReconcileChildSheetPins` for the sheet symbols
 /// of `parent` that reference `child_filename`.
 ///

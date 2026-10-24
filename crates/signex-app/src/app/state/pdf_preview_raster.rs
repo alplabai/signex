@@ -163,6 +163,7 @@ mod tests {
 
     fn blank() -> PreviewState {
         PreviewState {
+            source: PathBuf::new(),
             pages: Vec::new(),
             page_handles: Vec::new(),
             selected: 0,

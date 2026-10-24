@@ -62,6 +62,7 @@ impl Engine {
             "execute_batch does not nest: the inner batch would consume the outer batch's history entry"
         );
 
+        self.revision = crate::next_revision();
         let before = self.document.clone();
 
         // Everything between here and the reset runs with `record_history`

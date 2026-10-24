@@ -252,23 +252,6 @@ fn sync_never_overwrites_an_existing_pins_direction() {
 }
 
 #[test]
-fn sync_is_undoable() {
-    let mut f = fixture(Some(child_with_labels()));
-    let before = sorted_names(&pins_of(&f));
-
-    sync(&mut f.app);
-    assert_ne!(sorted_names(&pins_of(&f)), before, "the sync changed pins");
-
-    let _ = f.app.update(Message::Edit(EditMsg::Undo));
-
-    assert_eq!(
-        sorted_names(&pins_of(&f)),
-        before,
-        "undo restores the old pins"
-    );
-}
-
-#[test]
 fn sync_marks_the_sheet_dirty_and_rederives_the_netlist() {
     let mut f = fixture(Some(child_with_labels()));
     assert!(f.app.ui_state.project_netlist.is_none(), "precondition");
@@ -340,7 +323,7 @@ fn deleting_the_last_child_label_drops_its_stale_auto_pin_and_the_erc_finding() 
     // The user deletes the only label in the child and saves it.
     write_sheet(&f.child_path, empty_sheet());
     sync(&mut f.app);
-    let _ = f.app.update(Message::Erc(ErcMsg::Run));
+    crate::settle_support::settle(&mut f.app, Message::Erc(ErcMsg::Run));
 
     assert!(
         named(&pins_of(&f), "SDA").is_none(),
@@ -361,7 +344,7 @@ fn padded_label_is_cleared_by_erc_and_synced_under_the_trimmed_name() {
     let mut f = fixture(Some(child));
 
     sync(&mut f.app);
-    let _ = f.app.update(Message::Erc(ErcMsg::Run));
+    crate::settle_support::settle(&mut f.app, Message::Erc(ErcMsg::Run));
 
     let pins = pins_of(&f);
     assert!(
@@ -380,9 +363,12 @@ fn padded_label_is_cleared_by_erc_and_synced_under_the_trimmed_name() {
 }
 
 fn hier_pin_messages(app: &Signex) -> Vec<String> {
+    // Every sheet's list: a finding about a child's label is filed under the
+    // child sheet, where its coordinate lives (#956).
     app.ui_state
-        .erc_violations
-        .iter()
+        .erc_violations_by_path
+        .values()
+        .flatten()
         .filter(|v| v.rule == signex_erc::RuleKind::BadHierSheetPin)
         .map(|v| v.message.clone())
         .collect()
@@ -391,7 +377,7 @@ fn hier_pin_messages(app: &Signex) -> Vec<String> {
 #[test]
 fn sync_clears_the_bad_hier_sheet_pin_drift_on_the_next_erc_run() {
     let mut f = fixture(Some(child_with_labels()));
-    let _ = f.app.update(Message::Erc(ErcMsg::Run));
+    crate::settle_support::settle(&mut f.app, Message::Erc(ErcMsg::Run));
     let drift = hier_pin_messages(&f.app);
     assert!(
         drift.iter().any(|m| m.contains("Sheet pin 'OLD_AUTO'")),
@@ -403,7 +389,7 @@ fn sync_clears_the_bad_hier_sheet_pin_drift_on_the_next_erc_run() {
     );
 
     sync(&mut f.app);
-    let _ = f.app.update(Message::Erc(ErcMsg::Run));
+    crate::settle_support::settle(&mut f.app, Message::Erc(ErcMsg::Run));
 
     let after = hier_pin_messages(&f.app);
     assert!(
@@ -530,4 +516,187 @@ fn only_the_symbol_that_lacks_the_pin_is_reported() {
         &f.app,
         "no free slot on sheet symbol 'RoomyMulti'"
     ));
+}
+
+/// Everything about a pin the sync can change, comparable across undo/redo.
+fn pin_state(pins: &[SheetPin]) -> Vec<(String, String, String, f64, f64, bool, bool)> {
+    let mut state: Vec<_> = pins
+        .iter()
+        .map(|p| {
+            (
+                p.uuid.to_string(),
+                p.name.clone(),
+                p.direction.clone(),
+                p.position.x,
+                p.position.y,
+                p.auto_generated,
+                p.user_moved,
+            )
+        })
+        .collect();
+    state.sort_by(|a, b| a.partial_cmp(b).expect("finite coordinates"));
+    state
+}
+
+#[test]
+fn sync_is_undoable() {
+    let mut f = fixture(Some(child_with_labels()));
+    let before = pin_state(&pins_of(&f));
+
+    sync(&mut f.app);
+    let synced = pin_state(&pins_of(&f));
+    assert_ne!(synced, before, "the sync changed pins");
+
+    let _ = f.app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(pin_state(&pins_of(&f)), before, "undo restores every field");
+
+    let _ = f.app.update(Message::Edit(EditMsg::Redo));
+    assert_eq!(
+        pin_state(&pins_of(&f)),
+        synced,
+        "redo reapplies every field"
+    );
+}
+
+fn select_symbols(f: &mut Fixture, symbols: &[uuid::Uuid]) {
+    f.app.interaction_state.active_canvas_mut().selected = symbols
+        .iter()
+        .map(|id| SelectedItem::new(*id, SelectedKind::ChildSheet))
+        .collect();
+}
+
+fn write_child(f: &Fixture, filename: &str, label_text: &str) {
+    let dir = f.child_path.parent().expect("dir");
+    let mut child = empty_sheet();
+    child.labels = vec![label(label_text, LabelType::Hierarchical, "")];
+    write_sheet(&dir.join(filename), child);
+}
+
+fn pin_names_of_symbol(f: &Fixture, id: uuid::Uuid) -> Vec<String> {
+    let doc = f
+        .app
+        .document_state
+        .active_engine()
+        .expect("engine")
+        .document();
+    let symbol = doc
+        .child_sheets
+        .iter()
+        .find(|c| c.uuid == id)
+        .expect("symbol");
+    sorted_names(&symbol.pins)
+}
+
+#[test]
+fn every_selected_child_file_is_synced_and_reported() {
+    setup_logger();
+    let a = symbol_for("a.snxsch", Vec::new());
+    let mut b = symbol_for("b.snxsch", Vec::new());
+    b.position = Point::new(200.0, 200.0);
+    let mut twin = symbol_for("a.snxsch", Vec::new());
+    twin.position = Point::new(300.0, 300.0);
+    let ids = [a.uuid, b.uuid, twin.uuid];
+    let mut f = fixture_with(None, vec![a, b, twin]);
+    write_child(&f, "a.snxsch", "ALPHA");
+    write_child(&f, "b.snxsch", "BRAVO");
+    select_symbols(&mut f, &ids);
+
+    sync(&mut f.app);
+
+    assert_eq!(pin_names_of_symbol(&f, ids[0]), vec!["ALPHA".to_string()]);
+    assert_eq!(pin_names_of_symbol(&f, ids[1]), vec!["BRAVO".to_string()]);
+    assert_eq!(pin_names_of_symbol(&f, ids[2]), vec!["ALPHA".to_string()]);
+    assert!(panel_has(&f.app, "updated pins for 'a.snxsch'"));
+    assert!(panel_has(&f.app, "updated pins for 'b.snxsch'"));
+}
+
+#[test]
+fn a_missing_file_among_several_selected_does_not_stop_the_others() {
+    setup_logger();
+    let a = symbol_for("gone.snxsch", Vec::new());
+    let mut b = symbol_for("b2.snxsch", Vec::new());
+    b.position = Point::new(200.0, 200.0);
+    let ids = [a.uuid, b.uuid];
+    let mut f = fixture_with(None, vec![a, b]);
+    write_child(&f, "b2.snxsch", "BRAVO2");
+    select_symbols(&mut f, &ids);
+
+    sync(&mut f.app);
+
+    assert!(panel_has(&f.app, "child schematic not found"));
+    assert!(panel_has(&f.app, "updated pins for 'b2.snxsch'"));
+}
+
+#[test]
+fn a_blank_hierarchical_label_is_reported_not_silently_ignored() {
+    setup_logger();
+    let symbol = symbol_for("blank_labels.snxsch", Vec::new());
+    let id = symbol.uuid;
+    let mut f = fixture_with(None, vec![symbol]);
+    let mut child = empty_sheet();
+    child.labels = vec![
+        label("REAL", LabelType::Hierarchical, ""),
+        label("   ", LabelType::Hierarchical, ""),
+        label("", LabelType::Global, ""),
+        label("  ", LabelType::Net, ""),
+    ];
+    write_sheet(&f.child_path.with_file_name("blank_labels.snxsch"), child);
+
+    sync(&mut f.app);
+
+    assert_eq!(pin_names_of_symbol(&f, id), vec!["REAL".to_string()]);
+    assert!(
+        panel_has(
+            &f.app,
+            "Sync Sheet Pins: 'blank_labels.snxsch' has 2 Hierarchical or Global label(s) with blank text"
+        ),
+        "blank port labels (not Net ones) are named in the Messages panel"
+    );
+}
+
+#[test]
+fn a_clean_resync_says_already_match_and_has_no_blank_note() {
+    setup_logger();
+    let symbol = symbol_for("steady.snxsch", Vec::new());
+    let mut f = fixture_with(None, vec![symbol]);
+    write_child(&f, "steady.snxsch", "STEADY");
+    sync(&mut f.app);
+
+    sync(&mut f.app);
+
+    assert!(panel_has(
+        &f.app,
+        "Sync Sheet Pins: pins for 'steady.snxsch' already match its labels"
+    ));
+    assert!(!panel_has(&f.app, "Sync Sheet Pins: 'steady.snxsch' has "));
+}
+
+#[test]
+fn syncing_several_files_undoes_and_redoes_as_one_step() {
+    let a = symbol_for("a.snxsch", Vec::new());
+    let mut b = symbol_for("b.snxsch", Vec::new());
+    b.position = Point::new(200.0, 200.0);
+    let ids = [a.uuid, b.uuid];
+    let mut f = fixture_with(None, vec![a, b]);
+    write_child(&f, "a.snxsch", "ALPHA");
+    write_child(&f, "b.snxsch", "BRAVO");
+    select_symbols(&mut f, &ids);
+
+    sync(&mut f.app);
+    assert_eq!(pin_names_of_symbol(&f, ids[0]), vec!["ALPHA".to_string()]);
+    assert_eq!(pin_names_of_symbol(&f, ids[1]), vec!["BRAVO".to_string()]);
+
+    let _ = f.app.update(Message::Edit(EditMsg::Undo));
+    assert!(
+        pin_names_of_symbol(&f, ids[0]).is_empty(),
+        "one undo reverts the first file"
+    );
+    assert!(
+        pin_names_of_symbol(&f, ids[1]).is_empty(),
+        "one undo reverts the second file too"
+    );
+
+    let _ = f.app.update(Message::Edit(EditMsg::Redo));
+    assert_eq!(pin_names_of_symbol(&f, ids[0]), vec!["ALPHA".to_string()]);
+    assert_eq!(pin_names_of_symbol(&f, ids[1]), vec!["BRAVO".to_string()]);
 }

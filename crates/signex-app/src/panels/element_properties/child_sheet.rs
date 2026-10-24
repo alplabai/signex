@@ -1,13 +1,13 @@
-//! Properties surface for a single hierarchical child sheet — read-only
-//! identity/geometry plus the editable Border/Fill colour swatch rows
-//! and stroke-width row. Moved verbatim from the former single-file
+//! Properties surface for a single hierarchical child sheet — editable
+//! Name / File (commit on Enter), read-only geometry, plus the editable
+//! Border/Fill colour swatch rows and stroke-width row. Moved verbatim from the former single-file
 //! `element_properties` module.
 
 use super::super::*;
 
 /// Properties section for a single hierarchical child sheet.
-/// Shows read-only info (Name / File / Position / Size) plus
-/// editable Border Colour, Fill Colour and Line Width with a
+/// Shows editable Name / File (commit on Enter), read-only Position / Size,
+/// plus editable Border Colour, Fill Colour and Line Width with a
 /// Reset-to-default button. Colour edits open an iced_aw
 /// ColorPicker overlay anchored to a swatch button.
 pub(in crate::panels) fn view_child_sheet_properties<'a>(
@@ -21,8 +21,8 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
     };
 
     let id = child_sheet.uuid;
-    let name = child_sheet.name.clone();
-    let filename = child_sheet.filename.clone();
+    let name = buffered_or(&ctx.child_sheet_name_buf, id, &child_sheet.name);
+    let filename = buffered_or(&ctx.child_sheet_file_buf, id, &child_sheet.filename);
     let position = format!(
         "{:.2}, {:.2}",
         child_sheet.position.x, child_sheet.position.y
@@ -41,7 +41,7 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
 
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
-    // ── Properties (read-only identity / geometry) ──
+    // ── Properties (editable identity, read-only geometry) ──
     col = col.push(collapsible_section(
         "sel_child_sheet_props",
         "Properties",
@@ -50,8 +50,22 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
         border_c,
         move || {
             let mut c = Column::new().spacing(0).width(Length::Fill);
-            c = c.push(prop_kv_row("Name", &name, muted, primary));
-            c = c.push(prop_kv_row("File", &filename, muted, primary));
+            c = c.push(child_sheet_text_row(
+                "Name",
+                &name,
+                border_c,
+                muted,
+                move |s| PanelMsg::ChildSheetNameTyping(id, s),
+                PanelMsg::CommitChildSheetName(id),
+            ));
+            c = c.push(child_sheet_text_row(
+                "File",
+                &filename,
+                border_c,
+                muted,
+                move |s| PanelMsg::ChildSheetFileTyping(id, s),
+                PanelMsg::CommitChildSheetFile(id),
+            ));
             c = c.push(prop_kv_row("Position", &position, muted, primary));
             c = c.push(prop_kv_row("Size", &size, muted, primary));
             c
@@ -233,6 +247,54 @@ fn child_sheet_stroke_width_row<'a>(
         ]
         .spacing(4)
         .align_y(iced::Alignment::Center),
+    )
+    .padding([4, 8])
+    .width(Length::Fill)
+    .into()
+}
+
+/// The in-progress text for sheet `id`, else the live value.
+fn buffered_or(buf: &Option<(uuid::Uuid, String)>, id: uuid::Uuid, live: &str) -> String {
+    match buf {
+        Some((owner, text)) if *owner == id => text.clone(),
+        _ => live.to_string(),
+    }
+}
+
+/// Label | text input row that commits on Enter, so a half-typed value is
+/// never validated (or recorded in undo) keystroke by keystroke.
+fn child_sheet_text_row<'a>(
+    label: &'a str,
+    value: &str,
+    border_c: Color,
+    muted: Color,
+    on_input: impl Fn(String) -> PanelMsg + 'a,
+    on_submit: PanelMsg,
+) -> Element<'a, PanelMsg> {
+    let input = iced::widget::text_input("", value)
+        .size(11)
+        .padding(4)
+        .width(Length::Fill)
+        .on_input(on_input)
+        .on_submit(on_submit)
+        .style(
+            move |_theme: &Theme, _status| iced::widget::text_input::Style {
+                background: Background::Color(Color::from_rgba(0.07, 0.07, 0.08, 1.0)),
+                border: Border {
+                    width: 1.0,
+                    color: border_c,
+                    radius: 2.0.into(),
+                },
+                icon: Color::from_rgba(0.7, 0.7, 0.7, 1.0),
+                placeholder: Color::from_rgba(0.5, 0.5, 0.5, 1.0),
+                value: Color::from_rgb(0.95, 0.95, 0.96),
+                selection: Color::from_rgba(0.24, 0.62, 0.97, 0.4),
+            },
+        );
+    container(
+        row![text(label).size(10).color(muted).width(84), input]
+            .spacing(4)
+            .align_y(iced::Alignment::Center),
     )
     .padding([4, 8])
     .width(Length::Fill)

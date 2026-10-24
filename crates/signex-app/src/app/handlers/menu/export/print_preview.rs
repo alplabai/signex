@@ -27,7 +27,13 @@ impl Signex {
         // here — once. `rerasterize_print_preview` below must stay silent: it
         // fires on every settings toggle and on every keystroke in the
         // specific-page input.
-        super::log_stitch_issues(&self.document_state, &ctx, &issues);
+        // The preview is pinned to the document it is built for; Export
+        // writes this one even after a tab switch (#852).
+        let Some(source) = self.document_state.active_path.clone() else {
+            crate::diagnostics::log_warning("Print preview: no active document");
+            return iced::Task::none();
+        };
+        super::log_stitch_issues(&source, &ctx, &issues);
 
         // Derive page size and orientation from the active schematic document
         // so the preview matches the actual sheet dimensions rather than
@@ -108,6 +114,7 @@ impl Signex {
             sheet_files.iter().map(|(p, _)| p.clone()).collect();
         let page_setup = crate::app::state::PageSetupInputs::from_options(&pdf_opts);
         let mut preview = crate::app::state::PreviewState {
+            source,
             pages: Vec::new(),
             page_handles: Vec::new(),
             selected: 0,
@@ -225,7 +232,7 @@ impl Signex {
         // and drive the OS save-file dialog directly. The intermediate
         // settings-only dialog was removed when PDF Export started
         // opening Print Preview as the unified modal.
-        let (pdf_options, files) = match self.document_state.preview.as_ref() {
+        let (source, pdf_options, files) = match self.document_state.preview.as_ref() {
             Some(preview) => {
                 let mut options = preview.pdf_options.clone();
                 if matches!(options.page_range, PageRange::Specific(_)) {
@@ -257,26 +264,25 @@ impl Signex {
                 // Mapping happens here so the rest of the options
                 // struct can stay authoritative.
                 options.dpi = preview.quality.export_dpi();
-                (options, preview.selected_files.clone())
+                (
+                    preview.source.clone(),
+                    options,
+                    preview.selected_files.clone(),
+                )
             }
             None => return Some(Task::none()),
         };
 
-        // Pin the export to the document the user is looking at right now;
-        // the save dialog outlives any tab switch (#833).
-        let Some(source) = self.document_state.active_path.clone() else {
-            crate::diagnostics::log_warning("PDF export: no active document to export");
-            return Some(Task::none());
-        };
-
-        // Modal stays open across Export — the user might want to
-        // tweak settings + re-export to a different filename without
-        // re-opening Print Preview from scratch. We stash the options
-        // and selected files into pending slots for
-        // `handle_export_pdf_finished` to consume; on cancel the
-        // pending state is dropped and the modal is unaffected.
-        self.document_state.pending_pdf_options = Some(pdf_options);
-        self.document_state.pending_pdf_files = Some(files);
+        // Modal stays open across Export — the user might want to tweak
+        // settings + re-export to a different filename without re-opening
+        // Print Preview. The options, sheet picks and source are captured
+        // here and ride inside `PdfFinished`, so a second Export click while
+        // this save dialog is open gets its own copy (#852).
+        let request = Box::new(crate::app::state::PdfExportRequest {
+            source,
+            options: pdf_options,
+            files,
+        });
 
         Some(Task::perform(
             async {
@@ -289,14 +295,10 @@ impl Signex {
                     .map(|file| file.path().to_path_buf())
             },
             move |path| {
-                if let Some(path) = path {
-                    Message::Export(ExportMsg::PdfFinished {
-                        source,
-                        result: Ok(path),
-                    })
-                } else {
-                    Message::Noop
-                }
+                Message::Export(ExportMsg::PdfFinished {
+                    request,
+                    result: path.ok_or_else(|| "cancelled".to_string()),
+                })
             },
         ))
     }
@@ -349,12 +351,27 @@ impl Signex {
     /// invalidate every earlier one. `None` when no preview is open or the
     /// file picker leaves nothing to render.
     pub(super) fn preview_raster_job(&mut self) -> Option<PreviewRasterJob> {
-        let (pdf_opts, preview_dpi) = {
+        let (pdf_opts, preview_dpi, source) = {
             let preview = self.document_state.preview.as_ref()?;
-            (preview.pdf_options.clone(), preview.quality.preview_dpi())
+            (
+                preview.pdf_options.clone(),
+                preview.quality.preview_dpi(),
+                preview.source.clone(),
+            )
         };
 
-        let mut ctx = super::build_export_context(&self.document_state)?;
+        // Rasterise the document the preview was opened for, not whichever tab
+        // is active now: Export prints `preview.source`, so the two must agree.
+        let mut ctx = match super::build_page_scope_for_source(&self.document_state, &source) {
+            Some((c, _issues)) => c,
+            None => {
+                crate::diagnostics::log_warning(format!(
+                    "Print preview: the source document {} is no longer open",
+                    source.display()
+                ));
+                return None;
+            }
+        };
         // Re-seed the picker from the freshly built context. `sheet_files` was
         // captured once at modal open; if the active document changed while the
         // preview was up, the stale list names paths no longer in `ctx` and the
@@ -384,7 +401,14 @@ impl Signex {
         // empty filter set means "no files selected" — matches
         // Altium's "you must pick at least one file" UX. We render
         // a still-valid empty preview so the modal stays usable.
-        ctx.sheets.retain(|sheet| file_filter.contains(&sheet.path));
+        if !super::isolate_undeclared_current(
+            &mut ctx,
+            &self.document_state,
+            &source,
+            &pdf_opts.page_range,
+        ) {
+            ctx.sheets.retain(|sheet| file_filter.contains(&sheet.path));
+        }
         // Taken even when nothing is rendered below: a render still in flight
         // for the superseded sheet set must not land on the placeholder.
         let (generation, latest) = self.document_state.raster_queue.begin();

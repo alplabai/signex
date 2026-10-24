@@ -27,11 +27,10 @@
 //! libraries (the worker gets an id-to-path map); if that library is not
 //! open the failure says so.
 //!
-//! Drift tracking (embedded primitive slice, content-hash comparison) is
-//! out of scope (follow-up: #912): only `library_id`, `row_id` and
-//! `library_version` are written onto the placed `Symbol`. The one
-//! guard in place: when the sheet already holds a different copy of the
-//! `LibSymbol`, the existing copy is kept and a warning is logged.
+//! Drift (#912) is tracked in `library/drift.rs`. Re-placing keeps the
+//! sheet's existing copy of the `LibSymbol` so existing instances never
+//! change silently; when it differs from the library's, a warning points
+//! at Properties > "Update from library".
 
 use iced::Task;
 use std::path::{Path, PathBuf};
@@ -191,7 +190,7 @@ impl Signex {
         };
         if differs {
             crate::diagnostics::log_warning(format!(
-                "Library symbol for {internal_pn} changed since it was first placed;                  the sheet keeps its existing copy of {internal_pn}."
+                "Library symbol for {internal_pn} changed since it was first placed; the sheet keeps its existing copy. Select a placed {internal_pn} and use \"Update from library\" in Properties to adopt the new one."
             ));
         }
     }
@@ -233,6 +232,7 @@ fn placed_symbol(
         lib_id: resolved.lib_id.clone(),
         reference,
         value: resolved.value.clone(),
+        is_power: resolved.is_power,
         position: at,
         unit: 1,
         ref_text: Some(text_at(-2.54)),

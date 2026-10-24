@@ -25,6 +25,7 @@ use signex_types::theme::ThemeTokens;
 use crate::app::FootprintEditorState;
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::styles::ti;
+use crate::styles::tokens::{self, Overlay};
 
 /// Base font size the whole card derives its spacing/widths from —
 /// no hardcoded pixel constants independent of this.
@@ -44,6 +45,8 @@ pub fn view_move_by_modal<'a>(
     let text_muted = ti(tokens.text_secondary);
     let border_c = ti(tokens.border);
     let toolbar_bg = ti(tokens.toolbar_bg);
+    let input_bg = tokens::overlay(tokens, Overlay::Faint);
+    let selection = tokens::selection_tint(tokens);
 
     // Label / input / card widths derive from the font size rather
     // than magic pixel constants.
@@ -63,6 +66,7 @@ pub fn view_move_by_modal<'a>(
                     msg: PrimitiveEdit::Footprint(FootprintEditorMsg::MoveByCancel),
                 },
                 text_muted,
+                tokens,
             ),
         ]
         .align_y(iced::Alignment::Center),
@@ -92,7 +96,7 @@ pub fn view_move_by_modal<'a>(
             .padding(FONT_SIZE * 0.35)
             .width(input_w)
             .style(move |_: &iced::Theme, _| iced::widget::text_input::Style {
-                background: Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04)),
+                background: Background::Color(input_bg),
                 border: Border {
                     width: 1.0,
                     radius: 2.0.into(),
@@ -101,7 +105,7 @@ pub fn view_move_by_modal<'a>(
                 icon: Color::TRANSPARENT,
                 placeholder: text_muted,
                 value: text_c,
-                selection: Color::from_rgba(0.4, 0.6, 1.0, 0.4),
+                selection,
             })
             .on_input(move |s| LibraryMessage::PrimitiveEditorEvent {
                 path: field_path.clone(),
@@ -144,8 +148,7 @@ pub fn view_move_by_modal<'a>(
                 path: path.clone(),
                 msg: PrimitiveEdit::Footprint(FootprintEditorMsg::MoveByCancel),
             },
-            text_c,
-            border_c,
+            tokens,
         ),
         iced::widget::Space::new().width(FONT_SIZE * 0.6),
         primary_button(
@@ -154,7 +157,7 @@ pub fn view_move_by_modal<'a>(
                 path,
                 msg: PrimitiveEdit::Footprint(FootprintEditorMsg::MoveByConfirm),
             },
-            border_c,
+            tokens,
         ),
     ]
     .align_y(iced::Alignment::Center);
@@ -173,69 +176,50 @@ pub fn view_move_by_modal<'a>(
     Some(card.into())
 }
 
-fn close_x(message: LibraryMessage, text_color: Color) -> Element<'static, LibraryMessage> {
+fn close_x<'a>(
+    message: LibraryMessage,
+    text_color: Color,
+    tokens: &ThemeTokens,
+) -> Element<'a, LibraryMessage> {
     button(text("\u{2715}").size(FONT_SIZE - 1.0).color(text_color))
         .padding(FONT_SIZE * 0.25)
         .on_press(message)
-        .style(move |_: &iced::Theme, _| button::Style {
-            background: Some(Background::Color(Color::TRANSPARENT)),
-            text_color,
-            ..button::Style::default()
-        })
+        .style(crate::styles::subtle_button(tokens))
         .into()
 }
 
 fn secondary_button<'a>(
     label: &str,
     message: LibraryMessage,
-    text_color: Color,
-    border: Color,
+    tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     button(
         container(
             text(label.to_string())
                 .size(FONT_SIZE - 1.0)
-                .color(text_color),
+                .color(ti(tokens.text)),
         )
         .padding([FONT_SIZE * 0.4, FONT_SIZE * 1.1]),
     )
     .on_press(message)
-    .style(move |_: &iced::Theme, _| button::Style {
-        background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04))),
-        border: Border {
-            width: 1.0,
-            radius: 4.0.into(),
-            color: border,
-        },
-        text_color,
-        ..button::Style::default()
-    })
+    .style(crate::styles::outline_button(tokens))
     .into()
 }
 
 fn primary_button<'a>(
     label: &str,
     message: LibraryMessage,
-    border: Color,
+    tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     button(
         container(
             text(label.to_string())
                 .size(FONT_SIZE - 1.0)
-                .color(Color::WHITE),
+                .color(tokens::on_accent(tokens)),
         )
         .padding([FONT_SIZE * 0.4, FONT_SIZE * 1.1]),
     )
     .on_press(message)
-    .style(move |_: &iced::Theme, _| button::Style {
-        background: Some(Background::Color(Color::from_rgba(0.30, 0.55, 0.95, 1.0))),
-        border: Border {
-            width: 1.0,
-            radius: 4.0.into(),
-            color: border,
-        },
-        text_color: Color::WHITE,
-        ..button::Style::default()
-    })
+    .style(crate::styles::accent_button(tokens))
     .into()
 }

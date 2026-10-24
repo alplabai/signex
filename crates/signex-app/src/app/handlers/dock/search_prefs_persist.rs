@@ -54,10 +54,11 @@ impl Signex {
     }
 
     /// Quit path: flush every debounced preference write (dock layout, then
-    /// search boxes), wait for the ones in flight, then run `next`.
+    /// search boxes, then in-flight document saves), wait for the ones in flight, then run `next`.
     pub(crate) fn flush_quit_writes_then(&mut self, next: Task<Message>) -> Task<Message> {
         let search = self.flush_search_prefs_then(next);
-        self.flush_dock_layout_then(search)
+        let documents = self.wait_for_document_saves_then(search);
+        self.flush_dock_layout_then(documents)
     }
 
     /// Write any pending search prefs now and wait for a write that is

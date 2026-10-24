@@ -373,6 +373,29 @@ pub trait LibraryAdapter: Send + Sync {
         ))
     }
 
+    /// Move one row's binding to `kind` onto `new_version` and patch-bump
+    /// the row's own version, re-reading the row at write time so the
+    /// write keeps any other field changed since a caller's snapshot.
+    /// Returns whether the row changed: a row already pinned at
+    /// `new_version` is left alone. The default reads and then updates;
+    /// an adapter with a write lock overrides it to do both under the lock.
+    fn bind_row_primitive_version(
+        &self,
+        table: &str,
+        row_id: RowId,
+        kind: crate::cascade::CascadeKind,
+        new_version: &str,
+        message: &str,
+    ) -> Result<bool, LibraryError> {
+        let mut row = self.read_row(table, row_id)?;
+        if crate::cascade::pinned_version(&row, kind) == new_version {
+            return Ok(false);
+        }
+        crate::cascade::apply_cascade_bump(&mut row, new_version, kind);
+        self.update_row(table, row, message)?;
+        Ok(true)
+    }
+
     // ── Row CRUD ────────────────────────────────────────────────────────
 
     fn read_row(&self, _table: &str, _row_id: RowId) -> Result<ComponentRow, LibraryError> {
@@ -472,6 +495,14 @@ pub trait LibraryAdapter: Send + Sync {
 
     fn list_sims(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
         Ok(Vec::new())
+    }
+
+    /// True when the most recent `list_symbols` succeeded but left some
+    /// symbols out because a container file could not be read or parsed.
+    /// Such a listing says nothing about what is *missing*, so callers
+    /// that report absence must not trust it.
+    fn symbol_listing_is_partial(&self) -> bool {
+        false
     }
 
     /// For local-git, the `.snxlib/` directory; for DB, `None`.
