@@ -114,7 +114,13 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     // symbol-editor branches so when a Library Browser tab is active
     // the panel stays focused on it.
     if let Some(detail) = ctx.library_row_detail.as_ref() {
-        return view_library_row_properties(detail, muted, primary, border_c);
+        return view_library_row_properties(
+            detail,
+            muted,
+            primary,
+            border_c,
+            theme_ext::warning_color(&ctx.tokens),
+        );
     }
 
     // Symbol-editor tab takes precedence — when the user is editing a

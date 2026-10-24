@@ -21,7 +21,6 @@
 //!   stable identity, not the window id.
 //! * `picker` — component picker modal state (used by schematic
 //!   placement; flattens across every open library).
-//! * `new_component` — modal state for the "New Row" flow
 //!   (library + table + class + InternalPN).
 //! * `template_registry` — bundled + per-library parameter templates,
 //!   resolved at component-class lookup time.
@@ -31,9 +30,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use signex_library::{
-    ComponentClass, ComponentRow, ComponentSummary, DistributorSource, Footprint, LibraryAdapter,
-    LibraryError, LibrarySet, LocalGitAdapter, PrimitiveKind, PrimitiveRef, PrimitiveSummary,
-    RowId, SimModel, Symbol, TemplateRegistry, UseSite, WhereUsedIndex,
+    ComponentRow, ComponentSummary, DistributorSource, Footprint, LibraryAdapter, LibraryError,
+    LibrarySet, LocalGitAdapter, PrimitiveKind, PrimitiveSummary, RowId, SimModel, Symbol,
+    TemplateRegistry, UseSite, WhereUsedIndex,
 };
 use signex_types::coord::Unit;
 
@@ -372,9 +371,6 @@ pub enum PrimitivePickerTarget {
     /// The user picks for an open Component Preview tab — apply +
     /// save the row.
     PreviewRow(EditorAddress),
-    /// The user picks while filling out the New Component modal — apply
-    /// to `NewComponentState.symbol_ref` / `.footprint_ref`.
-    NewComponentForm,
     /// The user picks while editing a row in the Library Browser
     /// grid's Edit Component Details modal (Deliverable B).
     EditRowModal(EditorAddress),
@@ -414,8 +410,6 @@ pub struct LibraryState {
     pub expanded: Vec<bool>,
     /// Library left-dock search box buffer.
     pub panel_search: String,
-    /// "New Component" modal state — `None` while closed.
-    pub new_component: Option<NewComponentState>,
     /// "Close Library — Unsaved Drafts" modal state — `None` while closed.
     pub close_library_confirm: Option<CloseLibraryConfirmState>,
     /// Bundled + per-library parameter templates. Reference-counted
