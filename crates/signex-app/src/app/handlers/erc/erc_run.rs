@@ -123,6 +123,8 @@ impl Signex {
             by_path.insert(path.clone(), violations);
         }
 
+        refile_child_sheet_violations(&mut by_path);
+
         let total: usize = by_path.values().map(|v| v.len()).sum();
         crate::diagnostics::log_info(format!(
             "ERC: {} total violations across {} sheet(s)",
@@ -201,8 +203,11 @@ impl Signex {
             .and_then(|p| self.ui_state.erc_violations_by_path.get(p))
             .cloned()
             .unwrap_or_default();
+        // Only a point in THIS sheet's own coordinates may be drawn here; a
+        // child-space or unplaced one would land on empty canvas (#956).
         self.interaction_state.active_canvas_mut().erc_markers = violations
             .iter()
+            .filter(|v| v.location_space == signex_erc::LocationSpace::ThisSheet)
             .map(|v| crate::canvas::ErcMarker {
                 x: v.location.x,
                 y: v.location.y,
@@ -254,6 +259,7 @@ impl Signex {
                         world_x: v.location.x,
                         world_y: v.location.y,
                         select: v.primary,
+                        locatable: v.location_space == signex_erc::LocationSpace::ThisSheet,
                     });
                 }
             }
@@ -292,6 +298,11 @@ impl Signex {
         // rule kind — the engine command path operates on the active
         // engine, and even the non-mutating rules want the canvas to
         // scroll to the offending point.
+        if !target.locatable {
+            // No point on any open sheet to go to: report, don't pan.
+            self.ui_state.erc_focus_global_index = Some(clamped);
+            return Task::none();
+        }
         self.ensure_sheet_open_and_active(&target.sheet_path);
 
         match target.rule_kind {
@@ -342,6 +353,11 @@ impl Signex {
         }
         let clamped = index.min(entries.len() - 1);
         let target = entries[clamped].clone();
+
+        if !target.locatable {
+            self.ui_state.erc_focus_global_index = Some(clamped);
+            return Task::none();
+        }
 
         // Ensure the target sheet is open and active before focusing its point.
         self.ensure_sheet_open_and_active(&target.sheet_path);
@@ -439,5 +455,38 @@ impl Signex {
             .active_canvas_mut()
             .clear_overlay_cache();
         Task::none()
+    }
+}
+
+/// Move every child-space violation (e.g. `BadHierSheetPin` on a child's
+/// hierarchical label) from the parent's list to the child sheet that owns the
+/// coordinate, so its marker and panel entry land on the right canvas (#956).
+/// A child that was not part of the run stays under the parent as a
+/// non-locatable entry: it is reported, never drawn at a foreign coordinate.
+fn refile_child_sheet_violations(
+    by_path: &mut std::collections::HashMap<std::path::PathBuf, Vec<signex_erc::Violation>>,
+) {
+    let ran: std::collections::HashSet<std::path::PathBuf> = by_path.keys().cloned().collect();
+    let mut moved: Vec<(std::path::PathBuf, signex_erc::Violation)> = Vec::new();
+    for (parent, list) in by_path.iter_mut() {
+        let dir = parent.parent().unwrap_or_else(|| std::path::Path::new(""));
+        let (child_space, kept): (Vec<_>, Vec<_>) = std::mem::take(list)
+            .into_iter()
+            .partition(|v| v.location_space == signex_erc::LocationSpace::ChildSheet);
+        *list = kept;
+        for v in child_space {
+            let owner = v
+                .child_sheet
+                .as_deref()
+                .and_then(|name| crate::app::project_sheets::resolve_child_reference(dir, name))
+                .filter(|p| p != parent && ran.contains(p));
+            match owner {
+                Some(child) => moved.push((child, v.into_child_sheet_space())),
+                None => list.push(v),
+            }
+        }
+    }
+    for (child, v) in moved {
+        by_path.entry(child).or_default().push(v);
     }
 }

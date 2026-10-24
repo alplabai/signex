@@ -363,9 +363,12 @@ fn padded_label_is_cleared_by_erc_and_synced_under_the_trimmed_name() {
 }
 
 fn hier_pin_messages(app: &Signex) -> Vec<String> {
+    // Every sheet's list: a finding about a child's label is filed under the
+    // child sheet, where its coordinate lives (#956).
     app.ui_state
-        .erc_violations
-        .iter()
+        .erc_violations_by_path
+        .values()
+        .flatten()
         .filter(|v| v.rule == signex_erc::RuleKind::BadHierSheetPin)
         .map(|v| v.message.clone())
         .collect()
