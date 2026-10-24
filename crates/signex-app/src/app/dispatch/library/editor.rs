@@ -463,17 +463,21 @@ impl Signex {
                 }
             }
             editor.file.updated = now;
-            let (file, baseline) = (editor.file.clone(), editor.baseline.clone());
+            let (mut file, baseline) = (editor.file.clone(), editor.baseline.clone());
             // Capture the symbol name for the commit message before
             // dropping the editor borrow.
             let sym_name = editor.primitive().name.clone();
+            let library = self.save_library(path);
             let save = self
                 .save_symbol_container(
                     path,
                     &file,
                     &baseline,
                     now,
-                    mode,
+                    container_save::SaveOptions {
+                        mode,
+                        bump_versions: library.bumps_versions(mode),
+                    },
                     &format!("save symbol {sym_name}"),
                 )
                 // The reason leads: the Messages panel cuts long lines.
@@ -487,23 +491,22 @@ impl Signex {
                 }
             }
             container_save::report_overwritten(path, &replaced, &deleted);
-            // Bump the component rows that use the symbols this save
-            // wrote (#832), after the library lock was released.
-            let saved: Vec<_> = save
-                .merge
-                .changed
-                .iter()
-                .filter_map(|uuid| file.get_symbol(*uuid))
-                .map(|s| cascade::SavedPrimitive {
-                    uuid: s.uuid,
-                    name: s.name.clone(),
-                    version: s.version.clone(),
-                })
-                .collect();
-            self.cascade_after_container_save(path, mode, cascade::SavedKind::Symbol, &saved);
+            // Carry the versions the save bumped into the editor's copies,
+            // so its next save does not read them as another window's
+            // change, then move the rows that use them onto the new
+            // version (#832), after the library lock was released.
+            cascade::apply_symbol_versions(&mut file, &save.versions);
+            cascade::cascade_after_container_save(
+                &library,
+                mode,
+                cascade::SavedKind::Symbol,
+                &cascade::saved_symbols(&file, &save.merge.changed),
+            );
+            drop(library);
             let Some(editor) = self.document_state.symbol_editors.get_mut(path) else {
                 return Ok(());
             };
+            cascade::apply_symbol_versions(&mut editor.file, &save.versions);
             editor.baseline = file;
             editor.dirty = false;
             // Clear the project-scoped dirty marker if any callers
@@ -558,15 +561,19 @@ impl Signex {
                 }
             }
             editor.file.updated = now;
-            let (file, baseline) = (editor.file.clone(), editor.baseline.clone());
+            let (mut file, baseline) = (editor.file.clone(), editor.baseline.clone());
             let fp_name = editor.primitive().name.clone();
+            let library = self.save_library(path);
             let save = self
                 .save_footprint_container(
                     path,
                     &file,
                     &baseline,
                     now,
-                    mode,
+                    container_save::SaveOptions {
+                        mode,
+                        bump_versions: library.bumps_versions(mode),
+                    },
                     &format!("save footprint {fp_name}"),
                 )
                 .map_err(|e| anyhow::anyhow!("{e} (writing {})", path.display()))?;
@@ -586,21 +593,18 @@ impl Signex {
             }
             container_save::report_overwritten(path, &replaced, &deleted);
             // As for symbols (#832).
-            let saved: Vec<_> = save
-                .merge
-                .changed
-                .iter()
-                .filter_map(|uuid| file.footprints.iter().find(|f| f.uuid == *uuid))
-                .map(|f| cascade::SavedPrimitive {
-                    uuid: f.uuid,
-                    name: f.name.clone(),
-                    version: f.version.clone(),
-                })
-                .collect();
-            self.cascade_after_container_save(path, mode, cascade::SavedKind::Footprint, &saved);
+            cascade::apply_footprint_versions(&mut file, &save.versions);
+            cascade::cascade_after_container_save(
+                &library,
+                mode,
+                cascade::SavedKind::Footprint,
+                &cascade::saved_footprints(&file, &save.merge.changed),
+            );
+            drop(library);
             let Some(editor) = self.document_state.footprint_editors.get_mut(path) else {
                 return Ok(());
             };
+            cascade::apply_footprint_versions(&mut editor.file, &save.versions);
             editor.baseline = file;
             editor.dirty = false;
             self.document_state.dirty_paths.remove(path);
