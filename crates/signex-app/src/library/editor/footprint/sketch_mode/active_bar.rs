@@ -535,6 +535,8 @@ fn build_dimension_input<'a>(
     let muted = theme_ext::text_secondary(tokens);
     let text_c = theme_ext::text_primary(tokens);
     let border = theme_ext::border_color(tokens);
+    let input_bg = crate::styles::tokens::input_bg(tokens);
+    let selection = crate::styles::tokens::selection_tint(tokens);
     let value: String = editor.state.dimension_input.clone();
 
     let input = text_input("0.0", &value)
@@ -542,7 +544,7 @@ fn build_dimension_input<'a>(
         .padding(2)
         .width(Length::Fixed(58.0))
         .style(move |_: &Theme, _| iced::widget::text_input::Style {
-            background: iced::Background::Color(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)),
+            background: iced::Background::Color(input_bg),
             border: Border {
                 width: 1.0,
                 radius: 2.0.into(),
@@ -551,7 +553,7 @@ fn build_dimension_input<'a>(
             icon: iced::Color::TRANSPARENT,
             placeholder: muted,
             value: text_c,
-            selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
+            selection,
         })
         .on_input(move |s| LibraryMessage::PrimitiveEditorEvent {
             path: path.clone(),
