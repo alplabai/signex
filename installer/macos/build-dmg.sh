@@ -6,7 +6,7 @@
 #
 #   <binary_path> — path to the compiled signex binary
 #   <version>     — version string without the leading "v"
-#   <arch>        — "aarch64" or "x86_64"
+#   <arch>        — filename label only ("universal" in CI)
 #
 # Output: signex-macos-<arch>-<version>.dmg in the CWD.
 
