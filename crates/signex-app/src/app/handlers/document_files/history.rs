@@ -66,6 +66,10 @@ impl Signex {
                     return;
                 }
             };
+        // A write still running for this file would land after the restore
+        // and put the pre-restore content back on disk; let it finish first
+        // (same bounded wait as Save All).
+        self.document_state.document_saves.barrier().wait();
         match adapter.restore_at_from_sha(&rel_path, sha) {
             Ok(()) => {
                 self.document_state.dirty_paths.insert(full_path.clone());

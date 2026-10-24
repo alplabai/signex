@@ -18,7 +18,9 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use iced::Task;
-use signex_app::app::{FileMsg, Message, Signex, TabInfo, TabKind, WindowMsg};
+use signex_app::app::{
+    ContextMenuMsg, FileMsg, Message, Signex, TabContextAction, TabInfo, TabKind, WindowMsg,
+};
 use signex_app::diagnostics;
 use signex_app::persist::{DocumentSaves, DocumentSink};
 use signex_types::schematic::SchematicSheet;
@@ -249,4 +251,151 @@ fn quit_waits_for_the_write_in_flight() {
         .expect("quit proceeds once the write finished");
     quitting.join().unwrap();
     saving.join().unwrap();
+}
+
+#[test]
+fn a_replaced_engine_is_not_marked_clean_by_the_old_snapshots_completion() {
+    let recorder = Arc::new(Recorder::default());
+    let (mut app, path) = app_with_dirty_sheet(recorder.clone());
+
+    let task = app.update(Message::File(FileMsg::Save));
+    // A History restore / reload swaps in a brand-new engine.
+    let sheet = SchematicSheet {
+        uuid: uuid::Uuid::new_v4(),
+        paper_size: "A4".to_string(),
+        ..Default::default()
+    };
+    app.document_state
+        .engines
+        .insert(path.clone(), signex_engine::Engine::new(sheet).unwrap());
+    complete(&mut app, task);
+
+    assert!(
+        is_dirty(&app, &path),
+        "the new engine's content is not what the snapshot wrote"
+    );
+}
+
+fn save_as(app: &mut Signex, from: &Path, to: &Path) -> Task<Message> {
+    app.update(Message::File(FileMsg::SaveAs {
+        from_path: from.to_path_buf(),
+        to_path: to.to_path_buf(),
+    }))
+}
+
+#[test]
+fn save_as_rekeys_the_tab_only_after_the_write_succeeded() {
+    let recorder = Arc::new(Recorder::default());
+    let (mut app, path) = app_with_dirty_sheet(recorder.clone());
+    let target = PathBuf::from("document-save-async-new.snxsch");
+
+    let task = save_as(&mut app, &path, &target);
+    assert_eq!(app.document_state.tabs[0].path, path, "old path until done");
+    complete(&mut app, task);
+
+    assert_eq!(app.document_state.tabs[0].path, target);
+    assert!(app.document_state.engines.contains_key(&target));
+    assert!(!app.document_state.engines.contains_key(&path));
+    assert!(!app.document_state.tabs[0].dirty);
+    assert_eq!(recorder.contents().len(), 1);
+}
+
+#[test]
+fn a_failed_save_as_keeps_the_old_path_and_reports() {
+    let _ = diagnostics::init_logging();
+    let recorder = Arc::new(Recorder::default());
+    *recorder.fail_with.lock().unwrap() = Some("save-as disk-full marker 9e2a".to_string());
+    let (mut app, path) = app_with_dirty_sheet(recorder.clone());
+    let target = PathBuf::from("document-save-async-new.snxsch");
+
+    let task = save_as(&mut app, &path, &target);
+    complete(&mut app, task);
+
+    assert_eq!(app.document_state.tabs[0].path, path);
+    assert!(app.document_state.engines.contains_key(&path));
+    assert!(!app.document_state.engines.contains_key(&target));
+    assert!(is_dirty(&app, &path));
+    assert!(app.document_state.error_notice.is_some());
+}
+
+#[test]
+fn save_as_does_not_rekey_when_the_tab_was_switched_mid_write() {
+    let recorder = Arc::new(Recorder::default());
+    let (mut app, path) = app_with_dirty_sheet(recorder.clone());
+    let target = PathBuf::from("document-save-async-new.snxsch");
+
+    let task = save_as(&mut app, &path, &target);
+    app.document_state.tabs.push(TabInfo {
+        title: "other".to_string(),
+        path: PathBuf::from("other.snxsch"),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: TabKind::Schematic,
+    });
+    app.document_state.active_tab = 1;
+    complete(&mut app, task);
+
+    assert_eq!(app.document_state.tabs[0].path, path);
+    assert!(app.document_state.engines.contains_key(&path));
+    assert!(!app.document_state.engines.contains_key(&target));
+    assert!(app.document_state.error_notice.is_some());
+}
+
+#[test]
+fn a_superseded_save_as_neither_rekeys_nor_marks_clean() {
+    let recorder = Arc::new(Recorder::default());
+    let (mut app, path) = app_with_dirty_sheet(recorder);
+    let target = PathBuf::from("document-save-async-new.snxsch");
+    let revision = app.document_state.engines[&path].revision();
+
+    let _ = app.update(Message::File(FileMsg::DocumentSaved(
+        signex_app::persist::DocumentSaveDone {
+            path: target.clone(),
+            revision,
+            save_as_from: Some(path.clone()),
+            result: Ok(signex_app::persist::SaveOutcome::Superseded),
+        },
+    )));
+
+    assert_eq!(app.document_state.tabs[0].path, path);
+    assert!(!app.document_state.engines.contains_key(&target));
+    assert!(is_dirty(&app, &path));
+    assert!(app.document_state.error_notice.is_some());
+}
+
+#[test]
+fn save_as_onto_a_file_with_a_write_in_flight_is_refused() {
+    let _ = diagnostics::init_logging();
+    let recorder = Arc::new(Recorder::default());
+    let (mut app, path) = app_with_dirty_sheet(recorder.clone());
+    let target = PathBuf::from("document-save-async-new.snxsch");
+
+    let first = save_as(&mut app, &path, &target);
+    assert!(app.document_state.document_saves.is_saving(&target));
+    let second = save_as(&mut app, &path, &target);
+    complete(&mut app, second);
+    assert!(recorder.contents().is_empty(), "the refused Save As wrote");
+    assert!(app.document_state.error_notice.is_some());
+    complete(&mut app, first);
+    assert_eq!(recorder.contents().len(), 1);
+}
+
+#[test]
+fn closing_the_tab_mid_save_drops_the_parked_engine_once_the_write_lands() {
+    let recorder = Arc::new(Recorder::default());
+    let (mut app, path) = app_with_dirty_sheet(recorder.clone());
+
+    let task = app.update(Message::File(FileMsg::Save));
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
+        TabContextAction::Close(0),
+    )));
+    assert!(
+        app.document_state.engines.contains_key(&path),
+        "a dirty engine is parked while the write is unconfirmed"
+    );
+    complete(&mut app, task);
+
+    assert!(!app.document_state.engines.contains_key(&path));
+    assert!(!app.document_state.dirty_paths.contains(&path));
 }

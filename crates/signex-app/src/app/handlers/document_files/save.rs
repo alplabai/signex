@@ -277,7 +277,8 @@ impl Signex {
         match self.document_state.tabs.get(self.document_state.active_tab) {
             Some(tab) if matches!(tab.kind, TabKind::Schematic) && tab.path == from_path => {}
             _ => anyhow::bail!(
-                "save as {}: the active tab is no longer the schematic {} (it was                  switched or closed while the dialog was open) — nothing was written",
+                "save as {}: the active tab is no longer the schematic {} (it was \
+                 switched or closed while the dialog was open) — nothing was written",
                 path.display(),
                 from_path.display()
             ),
@@ -285,6 +286,12 @@ impl Signex {
         if self.save_as_target_is_other_open_document(&path) {
             anyhow::bail!(
                 "save as {}: that file is open in another tab or holds unsaved edits from a closed tab",
+                path.display()
+            );
+        }
+        if self.document_state.document_saves.is_saving(&path) {
+            anyhow::bail!(
+                "save as {}: a write to that file is still running; try again once it finishes",
                 path.display()
             );
         }

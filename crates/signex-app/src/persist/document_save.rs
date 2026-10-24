@@ -26,6 +26,16 @@ impl DocumentSink for AtomicFileSink {
     }
 }
 
+/// What a write that did not fail actually did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SaveOutcome {
+    /// This snapshot's bytes are on disk.
+    Written,
+    /// A newer snapshot of the same path was already written; this one was
+    /// skipped, so its bytes are NOT on disk.
+    Superseded,
+}
+
 /// Outcome of one write, carried back to `update`. `revision` is the engine
 /// revision the snapshot was taken at. `save_as_from` is the document's old
 /// path when this was a Save As (the re-key happens only on success).
@@ -34,7 +44,7 @@ pub struct DocumentSaveDone {
     pub path: PathBuf,
     pub revision: u64,
     pub save_as_from: Option<PathBuf>,
-    pub result: Result<(), String>,
+    pub result: Result<SaveOutcome, String>,
 }
 
 #[derive(Default)]
@@ -86,8 +96,8 @@ pub struct DocumentSaveJob {
 impl DocumentSaveJob {
     /// Write the snapshot unless a newer one for the same path already
     /// reached the sink: that one holds more recent content, so this one
-    /// is a successful no-op and can never clobber it.
-    pub fn run(self) -> Result<(), String> {
+    /// reports [`SaveOutcome::Superseded`] and can never clobber it.
+    pub fn run(self) -> Result<SaveOutcome, String> {
         let slot = Arc::clone(
             relock(&self.ledger.newest_written)
                 .entry(self.path.clone())
@@ -95,13 +105,13 @@ impl DocumentSaveJob {
         );
         let mut newest = relock(&slot);
         if self.sequence <= *newest {
-            return Ok(());
+            return Ok(SaveOutcome::Superseded);
         }
         self.sink
             .write(&self.path, &self.bytes)
             .map_err(|error| format!("write {}: {error}", self.path.display()))?;
         *newest = self.sequence;
-        Ok(())
+        Ok(SaveOutcome::Written)
     }
 }
 
@@ -203,8 +213,8 @@ mod tests {
         let mut saves = DocumentSaves::new(recorder.clone());
         let older = saves.begin("a.snxsch".into(), b"old".to_vec());
         let newer = saves.begin("a.snxsch".into(), b"new".to_vec());
-        newer.run().unwrap();
-        older.run().unwrap();
+        assert_eq!(newer.run().unwrap(), SaveOutcome::Written);
+        assert_eq!(older.run().unwrap(), SaveOutcome::Superseded);
         assert_eq!(*relock(&recorder.0), vec![b"new".to_vec()]);
     }
 

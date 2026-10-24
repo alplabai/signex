@@ -13,7 +13,7 @@ use anyhow::{Context, Result};
 use iced::Task;
 
 use crate::app::{FileMsg, Message, Signex, TabKind};
-use crate::persist::DocumentSaveDone;
+use crate::persist::{DocumentSaveDone, SaveOutcome};
 
 impl Signex {
     /// Snapshot the engine behind `save_as_from` (or `target` for a plain
@@ -67,7 +67,18 @@ impl Signex {
             save_as_from,
             result,
         } = done;
-        if let Err(reason) = result {
+        let reason = match result {
+            Ok(SaveOutcome::Written) => None,
+            // A newer snapshot of this path reached disk first; its own
+            // completion decides dirty/git. Nothing of ours landed.
+            Ok(SaveOutcome::Superseded) if save_as_from.is_none() => return Task::none(),
+            Ok(SaveOutcome::Superseded) => Some(format!(
+                "{} was not written: a newer write to it landed first",
+                path.display()
+            )),
+            Err(reason) => Some(reason),
+        };
+        if let Some(reason) = reason {
             let context = if save_as_from.is_some() {
                 "Failed to save active document as"
             } else {
@@ -106,12 +117,13 @@ impl Signex {
 
     fn mark_saved(&mut self, path: &std::path::Path, revision: u64) {
         crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()));
-        let unchanged = self
-            .document_state
-            .engines
-            .get(path)
-            .is_some_and(|engine| engine.revision() == revision);
-        if unchanged {
+        // No engine backs `path` any more (renamed or closed meanwhile): the
+        // bytes landed, but there is nothing to mark clean or to commit
+        // under a name that no longer describes the document.
+        let Some(engine) = self.document_state.engines.get(path) else {
+            return;
+        };
+        if engine.revision() == revision {
             self.document_state.dirty_paths.remove(path);
             for tab in self
                 .document_state
@@ -121,6 +133,11 @@ impl Signex {
             {
                 tab.dirty = false;
             }
+            // The tab closed mid-save and parked the engine because it was
+            // dirty; now it is clean nothing needs it.
+            if !self.document_is_held_open(path) {
+                self.document_state.engines.remove(path);
+            }
         }
         // The file on disk is what gets committed, edited since or not.
         let label = path
@@ -128,6 +145,13 @@ impl Signex {
             .map(|f| f.to_string_lossy().into_owned())
             .unwrap_or_else(|| path.display().to_string());
         self.commit_save_to_project_git(path, &format!("Save {label}"));
+    }
+
+    fn document_is_held_open(&self, path: &std::path::Path) -> bool {
+        self.document_state.tabs.iter().any(|tab| tab.path == path)
+            || self.ui_state.windows.values().any(|kind| {
+                matches!(kind, crate::app::state::WindowKind::UndockedTab { path: p, .. } if p == path)
+            })
     }
 
     /// Save As landed: re-key and retitle the tab, but only if it is still

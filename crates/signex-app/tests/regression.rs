@@ -63,6 +63,9 @@ mod diagnostics_routing;
 mod dock_layout_persist;
 #[path = "regression/document_save_async.rs"]
 mod document_save_async;
+// #859 — rename / History restore wait for an in-flight document write.
+#[path = "regression/document_save_ordering.rs"]
+mod document_save_ordering;
 #[path = "regression/search_prefs_persist.rs"]
 mod search_prefs_persist;
 

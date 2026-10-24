@@ -56,9 +56,17 @@ pub struct Engine {
     /// outside that loop, so every other path behaves exactly as before.
     /// See `exec/batch.rs`.
     history_suppressed: bool,
-    /// Bumped by every entry point that can change `document`, so an
-    /// off-thread save can tell whether the document moved on while it ran.
+    /// Re-drawn from a process-wide counter by every entry point that can
+    /// change `document` (and at construction), so an off-thread save can
+    /// tell whether the document moved on while it ran, even if the engine
+    /// was replaced by a fresh one meanwhile.
     revision: u64,
+}
+
+/// Process-wide revision source: values are never reused across engines.
+pub(crate) fn next_revision() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 impl Engine {
@@ -76,7 +84,7 @@ impl Engine {
             history: Vec::new(),
             redo_stack: Vec::new(),
             history_suppressed: false,
-            revision: 0,
+            revision: crate::next_revision(),
         })
     }
 
@@ -98,7 +106,7 @@ impl Engine {
             history: Vec::new(),
             redo_stack: Vec::new(),
             history_suppressed: false,
-            revision: 0,
+            revision: crate::next_revision(),
         })
     }
 
@@ -119,7 +127,8 @@ impl Engine {
     }
 
     /// Changes whenever the document may have changed (any command, undo,
-    /// redo, annotate or replace). Equal revisions mean an unchanged document.
+    /// redo, annotate or replace). Equal revisions mean an unchanged document;
+    /// revisions are unique across engine instances.
     pub fn revision(&self) -> u64 {
         self.revision
     }
@@ -136,7 +145,7 @@ impl Engine {
     }
 
     pub fn execute(&mut self, cmd: Command) -> Result<CommandResult, EngineError> {
-        self.revision += 1;
+        self.revision = crate::next_revision();
         let before = self.document.clone();
 
         match cmd {
@@ -192,7 +201,7 @@ impl Engine {
     }
 
     pub fn set_document(&mut self, document: SchematicSheet) {
-        self.revision += 1;
+        self.revision = crate::next_revision();
         self.document = document;
     }
 }
@@ -205,6 +214,51 @@ mod tests {
         BusEntry, ChildSheet, FillType, GRID_MM, Label, LabelType, Point, SelectedItem,
         SelectedKind, SheetPin,
     };
+
+    #[test]
+    fn every_mutating_entry_point_moves_the_revision() {
+        use crate::command::AnnotateMode;
+        use signex_types::schematic::AnnotateOrder;
+        let mut engine = Engine::new(test_sheet()).unwrap();
+        let mut last = engine.revision();
+        let mut moved = |engine: &Engine, what: &str| {
+            assert_ne!(engine.revision(), last, "{what} must move the revision");
+            last = engine.revision();
+        };
+        engine
+            .execute(Command::SetPaperSize {
+                paper_size: "A3".into(),
+            })
+            .unwrap();
+        moved(&engine, "execute");
+        engine
+            .execute_batch([Command::SetPaperSize {
+                paper_size: "A2".into(),
+            }])
+            .unwrap();
+        moved(&engine, "execute_batch");
+        engine.undo().unwrap();
+        moved(&engine, "undo");
+        engine.redo().unwrap();
+        moved(&engine, "redo");
+        engine
+            .annotate_with_seed(
+                AnnotateMode::Incremental,
+                &mut Default::default(),
+                AnnotateOrder::UpThenAcross,
+            )
+            .unwrap();
+        moved(&engine, "annotate");
+        engine.set_document(test_sheet());
+        moved(&engine, "set_document");
+    }
+
+    #[test]
+    fn revisions_are_unique_across_engine_instances() {
+        let a = Engine::new(test_sheet()).unwrap();
+        let b = Engine::new(test_sheet()).unwrap();
+        assert_ne!(a.revision(), b.revision());
+    }
 
     #[test]
     fn collect_exposed_sheet_ports_prefers_hierarchical_over_global() {
