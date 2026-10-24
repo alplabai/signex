@@ -112,6 +112,13 @@ Source: "files\snxcfg.ico"; DestDir: "{app}\files"; Flags: ignoreversion
 Source: "files\snxmod.ico"; DestDir: "{app}\files"; Flags: ignoreversion
 #endif
 
+; Stock library (assets/stock-library/**) -> {app}\library\, so the app finds
+; <exe dir>\library\Stock.snxlib. Guarded so a clone without the generated
+; assets still builds. .git and .gitkeep are never shipped.
+#if FileExists("..\..\assets\stock-library\Stock.snxlib")
+Source: "..\..\assets\stock-library\*"; DestDir: "{app}\library"; Excludes: ".git,.gitkeep"; Flags: ignoreversion recursesubdirs createallsubdirs
+#endif
+
 [Icons]
 #if FileExists("signex.ico")
   #define IconOpt "; IconFilename: ""{app}\signex.ico"""
@@ -183,6 +190,10 @@ Root: HKCU; Subkey: "Software\Classes\.snxmod"; ValueType: string; ValueData: "S
 Root: HKCU; Subkey: "Software\Classes\Signex.snxmod"; ValueType: string; ValueData: "Signex SPICE Model"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\Signex.snxmod\DefaultIcon"; ValueType: string; ValueData: "{app}\files\snxmod.ico"
 Root: HKCU; Subkey: "Software\Classes\Signex.snxmod\shell\open\command"; ValueType: string; ValueData: """{app}\signex.exe"" ""%1"""
+
+[UninstallDelete]
+; Leave no orphaned library\ directory behind.
+Type: filesandordirs; Name: "{app}\library"
 
 [Run]
 Filename: "{app}\signex.exe"; Description: "{cm:LaunchProgram,Signex}"; Flags: nowait postinstall skipifsilent
