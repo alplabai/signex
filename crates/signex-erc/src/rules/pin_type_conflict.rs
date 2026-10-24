@@ -24,7 +24,7 @@ use crate::{RuleKind, Severity, sel};
 pub(crate) fn pin_type_conflict(ctx: &ErcContext, matrix: &PinMatrix, out: &mut Vec<Diagnostic>) {
     let first_new = out.len();
     for net in &ctx.nets {
-        conflicts_on_net(net, matrix, out);
+        conflicts_on_net(ctx, net, matrix, out);
     }
     // Nets come out of a hash map; order this rule's findings by where they
     // are so two runs over the same sheet report identically.
@@ -56,24 +56,30 @@ fn badness(severity: Severity) -> u8 {
     }
 }
 
-/// A power flag declares "this rail is driven"; it does not drive it. Power
-/// symbols with the same value are merged into one net (#675), so a flag's
-/// `PowerOutput` pin meeting another `PowerOutput` pin is the flag doing its
-/// job, not two drivers fighting.
+/// A power flag declares "this rail is driven"; it does not drive it, so its
+/// `PowerOutput` pin meeting another `PowerOutput` pin (a regulator output, or
+/// another flag on the same rail) is the flag doing its job, not two drivers
+/// fighting. Flags no longer join nets by value (see `signex_net::is_power_flag`).
 fn is_power_flag_pair(p: &PinPair<'_>) -> bool {
     p.axis_a == PinAxis::PowerOut && p.axis_b == PinAxis::PowerOut && (p.a.is_power || p.b.is_power)
 }
 
-fn conflicts_on_net(net: &ErcNet, matrix: &PinMatrix, out: &mut Vec<Diagnostic>) {
+fn conflicts_on_net(ctx: &ErcContext, net: &ErcNet, matrix: &PinMatrix, out: &mut Vec<Diagnostic>) {
     let mut pairs: Vec<PinPair<'_>> = Vec::new();
     for (i, a) in net.pins.iter().enumerate() {
+        // A No-ERC directive on a pin tip silences that pin's pairs only. The
+        // merged finding sits on one pin, so the engine's positional
+        // suppression would otherwise drop (or keep) the whole net.
+        if ctx.has_no_erc_directive_at(&a.position) {
+            continue;
+        }
         let Some(axis_a) = PinAxis::of(a.direction) else {
             continue;
         };
         for b in &net.pins[i + 1..] {
             // Two pins of one part sharing a net (an LDO's paired VOUT pins,
             // a buck converter's several SW pins) are one driver, not two.
-            if a.symbol == b.symbol {
+            if a.symbol == b.symbol || ctx.has_no_erc_directive_at(&b.position) {
                 continue;
             }
             let Some(axis_b) = PinAxis::of(b.direction) else {

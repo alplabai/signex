@@ -6,8 +6,8 @@ use std::collections::HashMap;
 
 use signex_erc::{ErcConfig, RuleKind, Severity, Violation};
 use signex_types::schematic::{
-    LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point, SchematicSheet, SelectedKind,
-    Symbol, Wire,
+    LibPin, LibSymbol, NoConnect, Pin, PinDirection, PinShapeStyle, Point, SchematicSheet,
+    SelectedKind, Symbol, Wire,
 };
 use uuid::Uuid;
 
@@ -275,7 +275,11 @@ fn sheet_of(parts: &[Part]) -> SchematicSheet {
         ..Default::default()
     };
     for part in parts {
-        let lib_id = format!("lib_{}", part.reference);
+        let lib_id = if part.reference.starts_with("#FLG") {
+            "power:PWR_FLAG".to_string()
+        } else {
+            format!("lib_{}", part.reference)
+        };
         sheet
             .lib_symbols
             .insert(lib_id.clone(), lib_with_one_pin(&lib_id, part.direction));
@@ -377,12 +381,66 @@ fn a_net_reports_its_worst_cell_severity() {
 
 #[test]
 fn two_power_flags_sharing_a_value_do_not_conflict() {
-    // Not wired to each other; #675 merges same-value power symbols into one net.
-    let mut sheet = sheet_of(&[flag("#FLG01", 0.0, "VCC"), flag("#FLG02", 30.0, "VCC")]);
+    let mut sheet = sheet_of(&[flag("#FLG01", 0.0, "PWR"), flag("#FLG02", 10.0, "PWR")]);
     wire(&mut sheet, 0.0, 10.0);
-    wire(&mut sheet, 30.0, 40.0);
 
     assert!(conflicts(signex_erc::run(&sheet)).is_empty());
+}
+
+#[test]
+fn flags_on_different_rails_do_not_merge_the_rails() {
+    // Both flags carry the active bar's value "PWR"; neither names a net, so
+    // the VCC and GND rails stay apart and no flag-vs-flag conflict appears.
+    let mut sheet = sheet_of(&[
+        plain("U1", PinDirection::PowerOutput, 0.0),
+        flag("#FLG01", 10.0, "PWR"),
+        plain("U2", PinDirection::PowerOutput, 100.0),
+        flag("#FLG02", 110.0, "PWR"),
+    ]);
+    wire(&mut sheet, 0.0, 10.0);
+    wire(&mut sheet, 100.0, 110.0);
+
+    assert!(conflicts(signex_erc::run(&sheet)).is_empty());
+    let nets = signex_erc::ErcContext::from_snapshot(&sheet).nets;
+    let rail_of = |reference: &str| {
+        nets.iter()
+            .position(|n| n.pins.iter().any(|p| p.reference == reference))
+    };
+    assert_ne!(rail_of("U1"), rail_of("U2"));
+}
+
+#[test]
+fn a_flag_does_not_hide_a_genuine_second_driver() {
+    let mut sheet = sheet_of(&[
+        plain("U1", PinDirection::PowerOutput, 0.0),
+        plain("U2", PinDirection::PowerOutput, 10.0),
+        flag("#FLG01", 20.0, "PWR"),
+    ]);
+    wire(&mut sheet, 0.0, 10.0);
+    wire(&mut sheet, 10.0, 20.0);
+
+    assert_eq!(conflicts(signex_erc::run(&sheet)).len(), 1);
+}
+
+#[test]
+fn no_erc_on_one_pin_silences_only_its_pairs() {
+    let mut sheet = sheet_of(&[
+        plain("U1", PinDirection::Output, 0.0),
+        plain("U2", PinDirection::Output, 10.0),
+        plain("U3", PinDirection::Output, 20.0),
+    ]);
+    wire(&mut sheet, 0.0, 10.0);
+    wire(&mut sheet, 10.0, 20.0);
+    sheet.no_erc_directives.push(NoConnect {
+        uuid: Uuid::new_v4(),
+        position: Point::new(0.0, 0.0),
+    });
+
+    let found = conflicts(signex_erc::run(&sheet));
+
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(found[0].message.contains("U2") && found[0].message.contains("U3"));
+    assert!(!found[0].message.contains("U1"), "{}", found[0].message);
 }
 
 #[test]

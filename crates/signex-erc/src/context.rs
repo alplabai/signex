@@ -486,7 +486,7 @@ fn summarize_nets(
     // `build_netlist` calls (issue #675).
     let power_pins: Vec<(Point, &str)> = symbols
         .iter()
-        .filter(|s| s.is_power && !s.value.is_empty())
+        .filter(|s| s.is_power && !s.value.is_empty() && !signex_net::is_power_flag(&s.lib_id))
         .flat_map(|s| s.pins.iter().map(|p| (p.world_pos, s.value.as_str())))
         .collect();
     conn.merge_power_ports(
