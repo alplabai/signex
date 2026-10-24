@@ -32,6 +32,15 @@ mkdir -p "$PKG_DIR/usr/share/doc/signex"
 cp "$BINARY_PATH" "$PKG_DIR/usr/bin/signex"
 chmod 755 "$PKG_DIR/usr/bin/signex"
 
+# Stock library -> /usr/share/signex/library (the app resolves it as
+# <exe dir>/../share/signex/library). Skipped on a clone without the assets.
+STOCK_LIB="$(cd "$SCRIPT_DIR/../.." && pwd)/assets/stock-library"
+if [[ -f "$STOCK_LIB/Stock.snxlib" ]]; then
+  mkdir -p "$PKG_DIR/usr/share/signex/library"
+  cp -R "$STOCK_LIB/." "$PKG_DIR/usr/share/signex/library/"
+  find "$PKG_DIR/usr/share/signex/library" \( -name .git -o -name .gitkeep \) -exec rm -rf {} +
+fi
+
 # Signex application icons for desktop launchers. The desktop entry
 # below uses Icon=signex, so hicolor app icons must be installed under
 # the matching basename at each available size.

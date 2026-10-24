@@ -41,6 +41,16 @@ if [[ -f "$SCRIPT_DIR/Signex.icns" ]]; then
     /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string Signex" "$CONTENTS/Info.plist" || true
 fi
 
+# Stock library -> Contents/Resources/library (the app resolves it as
+# <exe dir>/../Resources/library). Skipped on a clone without the assets.
+# Copied before codesign so it is sealed into the bundle.
+STOCK_LIB="$(cd "$SCRIPT_DIR/../.." && pwd)/assets/stock-library"
+if [[ -f "$STOCK_LIB/Stock.snxlib" ]]; then
+    mkdir -p "$RESOURCES/library"
+    cp -R "$STOCK_LIB/." "$RESOURCES/library/"
+    find "$RESOURCES/library" \( -name .git -o -name .gitkeep \) -exec rm -rf {} +
+fi
+
 # Ad-hoc codesign the bundle.
 #
 # Apple Silicon (arm64) macOS refuses to launch any executable that
