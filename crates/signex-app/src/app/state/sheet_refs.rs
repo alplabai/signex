@@ -1244,6 +1244,47 @@ mod tests {
         assert_discard_blocked_by(&resolved, "zero (is not a regular file)");
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn a_windows_device_name_is_refused_unopened_as_root_child_and_extra() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path().join("x.snxsch");
+        write_sheet(
+            &root,
+            &[
+                "nul.snxsch",
+                "aux .snxsch",
+                r"folder\LPT9.snxsch",
+                "COM1.txt",
+            ],
+        );
+        let inputs = SheetRefInputs {
+            loaded: HashMap::new(),
+            roots: vec![root.clone(), tmp.path().join("NUL")],
+            projects: Vec::new(),
+            extra: vec![tmp.path().join("PRN")],
+            trusted: Vec::new(),
+        };
+
+        let resolved = inputs.resolve_within(|_| false, WalkLimits::default());
+
+        // Four children and the NUL root are refused and reported.
+        assert_eq!(resolved.unreadable.len(), 5, "{:?}", resolved.unreadable);
+        assert_discard_blocked_by(&resolved, "network or device");
+        // None was canonicalised: no real path was recorded for a device name.
+        for device in ["nul", "aux", "lpt9", "com1", "prn"] {
+            assert!(
+                resolved
+                    .keys
+                    .real
+                    .keys()
+                    .all(|k| !k.to_lowercase().contains(device)),
+                "{device}: {:?}",
+                resolved.keys.real
+            );
+        }
+    }
+
     #[cfg(unix)]
     #[test]
     fn a_fifo_reference_is_not_opened_and_disables_discard_all() {
