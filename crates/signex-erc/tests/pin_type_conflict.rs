@@ -239,3 +239,159 @@ fn two_pins_of_one_symbol_on_one_net_do_not_conflict() {
 
     assert!(found.is_empty(), "{found:?}");
 }
+
+/// A single-pin symbol whose pin sits at `x`.
+struct Part {
+    reference: &'static str,
+    direction: PinDirection,
+    is_power: bool,
+    value: &'static str,
+    x: f64,
+}
+
+fn plain(reference: &'static str, direction: PinDirection, x: f64) -> Part {
+    Part {
+        reference,
+        direction,
+        is_power: false,
+        value: "",
+        x,
+    }
+}
+
+fn flag(reference: &'static str, x: f64, value: &'static str) -> Part {
+    Part {
+        reference,
+        direction: PinDirection::PowerOutput,
+        is_power: true,
+        value,
+        x,
+    }
+}
+
+fn sheet_of(parts: &[Part]) -> SchematicSheet {
+    let mut sheet = SchematicSheet {
+        paper_size: "A4".to_string(),
+        ..Default::default()
+    };
+    for part in parts {
+        let lib_id = format!("lib_{}", part.reference);
+        sheet
+            .lib_symbols
+            .insert(lib_id.clone(), lib_with_one_pin(&lib_id, part.direction));
+        sheet.symbols.push(Symbol {
+            uuid: Uuid::new_v4(),
+            lib_id,
+            reference: part.reference.to_string(),
+            value: part.value.to_string(),
+            is_power: part.is_power,
+            position: Point::new(part.x, 0.0),
+            ..Default::default()
+        });
+    }
+    sheet
+}
+
+fn wire(sheet: &mut SchematicSheet, from: f64, to: f64) {
+    sheet.wires.push(Wire {
+        uuid: Uuid::new_v4(),
+        start: Point::new(from, 0.0),
+        end: Point::new(to, 0.0),
+        ..Default::default()
+    });
+}
+
+#[test]
+fn a_row_severity_does_not_flatten_a_warning_cell() {
+    let (sheet, _, _) = two_pins_on_one_wire(PinDirection::Output, PinDirection::Output);
+    let found =
+        signex_erc::run_with_config(&sheet, &with_override((OUTPUT, OUTPUT), Severity::Warning));
+    // The row is on (Error is its stored "on" level); the cell's Warning stays.
+    let row_on = HashMap::from([(RuleKind::PinTypeConflict, Severity::Error)]);
+
+    let after = conflicts(signex_erc::apply_overrides(found, &row_on));
+
+    assert_eq!(after.len(), 1);
+    assert_eq!(after[0].severity, Severity::Warning);
+}
+
+#[test]
+fn a_row_set_off_still_silences_the_rule() {
+    let (sheet, _, _) = two_pins_on_one_wire(PinDirection::Output, PinDirection::Output);
+    let row_off = HashMap::from([(RuleKind::PinTypeConflict, Severity::Off)]);
+
+    let after = signex_erc::apply_overrides(signex_erc::run(&sheet), &row_off);
+
+    assert!(conflicts(after).is_empty());
+}
+
+#[test]
+fn the_row_normalizes_any_on_level_to_the_default() {
+    let rule = RuleKind::PinTypeConflict;
+    assert_eq!(rule.normalize_override(Severity::Info), Severity::Error);
+    assert_eq!(rule.normalize_override(Severity::Off), Severity::Off);
+    assert_eq!(
+        RuleKind::UnusedPin.normalize_override(Severity::Info),
+        Severity::Info
+    );
+}
+
+#[test]
+fn three_outputs_on_one_net_yield_one_finding() {
+    let mut sheet = sheet_of(&[
+        plain("U1", PinDirection::Output, 0.0),
+        plain("U2", PinDirection::Output, 10.0),
+        plain("U3", PinDirection::Output, 20.0),
+    ]);
+    wire(&mut sheet, 0.0, 10.0);
+    wire(&mut sheet, 10.0, 20.0);
+
+    let found = conflicts(signex_erc::run(&sheet));
+
+    assert_eq!(found.len(), 1, "{found:?}");
+    for reference in ["U1", "U2", "U3"] {
+        assert!(found[0].message.contains(reference), "{}", found[0].message);
+    }
+}
+
+#[test]
+fn a_net_reports_its_worst_cell_severity() {
+    // Output/Output is lowered to Warning, Output/PowerOut stays Error: the
+    // net's single finding takes the worst of its pairs.
+    let mut sheet = sheet_of(&[
+        plain("U1", PinDirection::Output, 0.0),
+        plain("U2", PinDirection::Output, 10.0),
+        plain("U3", PinDirection::PowerOutput, 20.0),
+    ]);
+    wire(&mut sheet, 0.0, 10.0);
+    wire(&mut sheet, 10.0, 20.0);
+
+    let found = conflicts(signex_erc::run_with_config(
+        &sheet,
+        &with_override((OUTPUT, OUTPUT), Severity::Warning),
+    ));
+
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0].severity, Severity::Error);
+}
+
+#[test]
+fn two_power_flags_sharing_a_value_do_not_conflict() {
+    // Not wired to each other; #675 merges same-value power symbols into one net.
+    let mut sheet = sheet_of(&[flag("#FLG01", 0.0, "VCC"), flag("#FLG02", 30.0, "VCC")]);
+    wire(&mut sheet, 0.0, 10.0);
+    wire(&mut sheet, 30.0, 40.0);
+
+    assert!(conflicts(signex_erc::run(&sheet)).is_empty());
+}
+
+#[test]
+fn two_genuine_power_outputs_are_still_flagged() {
+    let mut sheet = sheet_of(&[
+        plain("U1", PinDirection::PowerOutput, 0.0),
+        plain("U2", PinDirection::PowerOutput, 10.0),
+    ]);
+    wire(&mut sheet, 0.0, 10.0);
+
+    assert_eq!(conflicts(signex_erc::run(&sheet)).len(), 1);
+}
