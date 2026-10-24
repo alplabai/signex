@@ -233,6 +233,7 @@ fn placed_symbol(
         lib_id: resolved.lib_id.clone(),
         reference,
         value: resolved.value.clone(),
+        is_power: resolved.is_power,
         position: at,
         unit: 1,
         ref_text: Some(text_at(-2.54)),

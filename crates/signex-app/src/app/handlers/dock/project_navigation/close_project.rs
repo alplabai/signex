@@ -6,7 +6,6 @@
 
 use super::*;
 use crate::app::state::ProjectId;
-use crate::app::state::scope::CaseFold;
 use crate::app::state::sheet_refs::{SheetRefs, StaleRefs};
 use crate::app::state::volume_case::directory_ignores_case;
 
@@ -45,7 +44,7 @@ impl Signex {
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
-                    Box::new(inputs.resolve(CaseFold::host_default(), directory_ignores_case))
+                    Box::new(inputs.resolve(directory_ignores_case))
                 })
                 .await
                 .map_err(|e| format!("sheet-reference worker failed: {e}"))
@@ -62,7 +61,7 @@ impl Signex {
         Ok(Box::new(
             self.document_state
                 .sheet_ref_inputs()
-                .resolve(CaseFold::host_default(), directory_ignores_case),
+                .resolve(directory_ignores_case),
         ))
     }
 
@@ -693,6 +692,8 @@ mod tests {
                 unknown: Default::default(),
             },
             pending_libraries: std::collections::HashMap::new(),
+            case_fold: Default::default(),
+            case_probed: false,
         });
         let path = dir.join("lib.snxlib").join("footprints").join("g.snxfpt");
         let file =

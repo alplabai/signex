@@ -6,8 +6,10 @@ use crate::dock::DockArea;
 
 use super::TabInfo;
 
+mod case_fold;
 mod interaction;
 mod pdf_page_setup;
+pub(crate) mod project_case;
 mod reference_policy;
 pub(crate) mod scope;
 mod sheet_read;
@@ -211,6 +213,15 @@ impl ErrorNotice {
         }
     }
 
+    /// A Properties edit of a placed sheet symbol (name / file) was refused
+    /// and the sheet was left as it was.
+    pub fn sheet_edit(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Sheet Symbol Not Changed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
     /// A rename did not happen, or was undone, and nothing refers to the new name.
     pub fn rename_failed(detail: impl Into<String>) -> Self {
         Self {
@@ -339,6 +350,11 @@ pub struct LoadedProject {
     /// becomes the eventual `library_id` once materialised.
     pub pending_libraries:
         std::collections::HashMap<uuid::Uuid, crate::library::commands::PendingLibrarySpec>,
+    /// Path-key rules for this project's volume, probed once off-thread
+    /// after load (#694); the host default until the answer arrives.
+    pub case_fold: scope::CaseFold,
+    /// The volume probe has reported; the first answer wins.
+    pub case_probed: bool,
 }
 
 impl LoadedProject {
@@ -452,6 +468,14 @@ pub struct DocumentState {
     /// which we detect by resolving through `projects` and treating None
     /// as "no longer loaded").
     pub next_project_id: u32,
+    /// Monotonic counter minting the raw value of [`signex_engine::UndoGroupId`]s for
+    /// project-wide undo steps (an annotate run under "One step for the whole
+    /// project"). Never reused.
+    pub next_undo_group: u64,
+    /// The sheets each undo group touched. Undo/redo of a
+    /// grouped entry consults this to find the sheets that must move with it.
+    pub undo_groups:
+        std::collections::HashMap<signex_engine::UndoGroupId, crate::app::UndoGroupSheets>,
     pub panel_ctx: crate::panels::PanelContext,
     pub standard_lib_dir: Option<PathBuf>,
     pub loaded_lib: std::collections::HashMap<String, signex_types::schematic::LibSymbol>,
@@ -822,6 +846,28 @@ impl DocumentState {
             return self.active_engine().into_iter().collect();
         };
         scope::engines_in_project(
+            &self.projects,
+            &self.child_sheet_refs(),
+            &self.engines,
+            project.id,
+        )
+    }
+
+    /// [`engines_in_active_document_project`](Self::engines_in_active_document_project)
+    /// with each engine's sheet path, so a reference can be resolved against
+    /// the folder of the sheet that carries it.
+    pub(crate) fn engine_entries_in_active_document_project(
+        &self,
+    ) -> Vec<(&PathBuf, &signex_engine::Engine)> {
+        let Some(project) = self.active_document_project() else {
+            return self
+                .active_path
+                .as_ref()
+                .and_then(|path| self.engines.get_key_value(path))
+                .into_iter()
+                .collect();
+        };
+        scope::engine_entries_in_project(
             &self.projects,
             &self.child_sheet_refs(),
             &self.engines,

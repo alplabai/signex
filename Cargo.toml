@@ -1,5 +1,7 @@
 [workspace]
 resolver = "2"
+# cargo-fuzz crate: standalone (own [workspace]), needs nightly to run.
+exclude = ["fuzz"]
 members = [
     "crates/signex-app",
     "crates/signex-engine",
