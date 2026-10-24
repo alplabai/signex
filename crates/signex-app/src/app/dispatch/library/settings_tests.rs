@@ -80,3 +80,85 @@ fn stale_connected_result_requests_the_token_delete_and_reports_it() {
         ))]
     ));
 }
+
+// #856: the keyring has one slot, so the stale cleanup is only safe while no
+// second writer can exist. The fake keyring below stands in for that slot.
+static FAKE_KEYRING: std::sync::Mutex<Option<&'static str>> = std::sync::Mutex::new(None);
+
+fn clearing_remover() -> Result<(), String> {
+    *FAKE_KEYRING.lock().expect("fake keyring") = None;
+    Ok(())
+}
+
+fn keyring_slot() -> Option<&'static str> {
+    *FAKE_KEYRING.lock().expect("fake keyring")
+}
+
+fn write_keyring(token: &'static str) {
+    *FAKE_KEYRING.lock().expect("fake keyring") = Some(token);
+}
+
+/// Cancelled flow A already wrote its token; the user presses Connect again
+/// before A's stale `Connected` is processed. B must not start, so B can
+/// never write between A's write and A's cleanup, and B's token survives.
+#[test]
+fn a_second_connect_waits_for_the_cancelled_flows_cleanup_so_its_token_survives() {
+    let (mut app, _startup) = Signex::new();
+    app.library.settings.digikey_token_remover = clearing_remover;
+
+    // Flow A starts (its worker task is never run here), then writes.
+    drop(app.handle_library_settings_message(SettingsMsg::DigiKeyConnect));
+    let generation_a = app.library.settings.digikey_flow_generation;
+    write_keyring("token-a");
+    drop(app.handle_library_settings_message(SettingsMsg::DigiKeyCancel));
+
+    // Connect B while A's result is still outstanding: refused, no new flow.
+    let refused = app.handle_library_settings_message(SettingsMsg::DigiKeyConnect);
+    assert!(drain(refused).is_empty());
+    assert!(!app.library.settings.digikey_in_flight);
+    assert!(app.library.settings.digikey_worker_busy);
+    assert!(
+        app.library
+            .settings
+            .digikey_status
+            .as_deref()
+            .is_some_and(|s| s.contains("winding down")),
+        "the refusal must be visible to the user"
+    );
+
+    // A's stale Connected arrives: delete scheduled, B still refused.
+    let cleanup =
+        app.handle_library_settings_message(result_message(generation_a, Some("DigiKey")));
+    drop(app.handle_library_settings_message(SettingsMsg::DigiKeyConnect));
+    assert!(
+        !app.library.settings.digikey_in_flight,
+        "B waits for the delete"
+    );
+    let messages = drain(cleanup);
+    assert_eq!(keyring_slot(), None, "A's token was removed");
+    for message in messages {
+        if let Message::Library(LibraryMessage::Settings(m)) = message {
+            drop(app.handle_library_settings_message(m));
+        }
+    }
+
+    // Only now can B start; its token is written after A's cleanup.
+    drop(app.handle_library_settings_message(SettingsMsg::DigiKeyConnect));
+    assert!(app.library.settings.digikey_in_flight);
+    write_keyring("token-b");
+    let generation_b = app.library.settings.digikey_flow_generation;
+    drop(app.handle_library_settings_message(result_message(generation_b, Some("DigiKey"))));
+    assert_eq!(keyring_slot(), Some("token-b"), "B's token must survive");
+}
+
+/// A cancelled flow whose worker stored nothing frees the slot at once.
+#[test]
+fn a_cancelled_flow_that_stored_nothing_frees_connect() {
+    let (mut app, _startup) = Signex::new();
+    drop(app.handle_library_settings_message(SettingsMsg::DigiKeyConnect));
+    let generation = app.library.settings.digikey_flow_generation;
+    drop(app.handle_library_settings_message(SettingsMsg::DigiKeyCancel));
+    assert!(app.library.settings.digikey_worker_busy);
+    drop(app.handle_library_settings_message(result_message(generation, None)));
+    assert!(!app.library.settings.digikey_worker_busy);
+}
