@@ -283,7 +283,21 @@ pub enum ProjectTreeAction {
     OpenEnableVersionControl(Vec<usize>),
     /// Right-click on a plain-files `.snxlib` node → opens the
     /// Enable Version Control modal scoped to that library directory.
-    OpenLibraryEnableVersionControl(Vec<usize>),
+    OpenLibraryEnableVersionControl(LibraryRowRef),
+    /// Right-click on a library node → Remove from Project. Resolved by
+    /// the library's identity, not its row position (#742).
+    RemoveLibrary(LibraryRowRef),
+}
+
+/// Stable identity of a library row in the project tree: the owning
+/// project's id plus the library's resolved `.snxlib` path. Library menu
+/// actions carry this instead of a row index, so a tree rebuild between
+/// opening the menu and picking an action can never retarget a different
+/// library (#742).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LibraryRowRef {
+    pub project_id: crate::app::state::ProjectId,
+    pub root: std::path::PathBuf,
 }
 
 /// State for the rename modal. Tracks the target file, the live
