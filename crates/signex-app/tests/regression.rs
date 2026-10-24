@@ -150,6 +150,8 @@ mod idle_cursor_move;
 mod library_delete_undo;
 #[path = "regression/primitive_container_merge.rs"]
 mod primitive_container_merge;
+#[path = "regression/primitive_save_cascade.rs"]
+mod primitive_save_cascade;
 #[path = "regression/reload_and_switch_state.rs"]
 mod reload_and_switch_state;
 #[path = "regression/save_as_by_document_kind.rs"]
