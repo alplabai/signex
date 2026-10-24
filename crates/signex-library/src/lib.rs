@@ -86,7 +86,7 @@ pub use where_used::{UseSite, WhereUsedIndex};
 
 #[cfg(feature = "local-git")]
 pub use adapters::local_git::{
-    DiskStamp, LocalGitAdapter, WRITE_LOCK_WAIT, is_write_lock_file,
+    DiskStamp, LocalGitAdapter, WRITE_LOCK_WAIT, enclosing_library_file, is_write_lock_file,
     rewrite_file_under_library_lock, write_lock_path,
 };
 
