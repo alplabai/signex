@@ -524,6 +524,9 @@ pub enum LibraryMessage {
     /// The `stat` pass finished, or timed out (#827); see
     /// [`crate::library::external_poll::PollOutcome`].
     ExternalEditsPolled(crate::library::external_poll::PollOutcome),
+    /// The off-thread drift pass finished (#912): which embedded library
+    /// symbols differ from the mounted libraries' current ones.
+    DriftChecked(Box<crate::library::drift::DriftReport>),
 }
 
 /// What the off-thread read of a library row hands back to `update`:

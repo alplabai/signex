@@ -642,6 +642,8 @@ impl Signex {
         {
             lib.reload_primitives(adapter);
         }
+        // A saved primitive may be the symbol an open sheet embeds (#912).
+        self.library.drift.check_pending = true;
     }
 
     /// Walk the open libraries to find one whose root contains
