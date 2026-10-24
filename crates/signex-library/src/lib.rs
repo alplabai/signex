@@ -26,6 +26,8 @@ pub mod lifecycle;
 pub mod manifest;
 pub mod manufacturer;
 pub mod param;
+pub mod pricing;
+pub mod pricing_refresh;
 pub mod primitive;
 pub mod search;
 #[cfg(feature = "search-tantivy")]
@@ -69,6 +71,14 @@ pub use manifest::{
 };
 pub use manufacturer::{AlternateStatus, DistributorListing, ManufacturerPart};
 pub use param::{ParamMap, ParamValue};
+pub use pricing::{
+    CachedPricing, DroppedUpdate, PricingError, PricingUpdate, RowPricing, StoreOutcome, age_label,
+    distributor_key, format_price,
+};
+pub use pricing_refresh::{
+    ClientUnavailable, FailureKind, PricingRefreshReport, RowFailure, refresh_library_pricing,
+    refresh_pricing_for_rows,
+};
 pub use primitive::{
     Body3D, BodyShape, CHAIN_ARC_SAMPLES, CHAIN_ENDPOINT_EPSILON_MM, ChainError, ChainSegment,
     ComponentType, ContainerMerge, Drill, DuplicatedUuid, Footprint, FootprintFile,

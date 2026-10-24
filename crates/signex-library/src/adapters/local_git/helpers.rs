@@ -320,6 +320,43 @@ pub(super) fn library_row_to_component(row: &LibraryRow) -> Result<ComponentRow,
     record_to_row(&record)
 }
 
+/// Attach one fetched price to its row, or say why the row no longer takes
+/// it. The row must still exist and still list the same SKU for the
+/// distributor the price came from.
+pub(super) fn apply_pricing_update(
+    lf: &mut LibraryFile,
+    update: &crate::pricing::PricingUpdate,
+) -> Result<(), String> {
+    let entry = lf
+        .tables
+        .get_mut(&update.table)
+        .ok_or_else(|| format!("table {} no longer exists", update.table))?;
+    let row_id_text = update.row_id.to_string();
+    let slot = entry
+        .rows
+        .iter()
+        .find(|r| r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == Some(row_id_text.as_str()))
+        .ok_or_else(|| "row was deleted".to_string())?;
+    let row = library_row_to_component(slot).map_err(|e| format!("row unreadable: {e}"))?;
+    let wanted = crate::pricing::distributor_key(&update.distributor);
+    let still_listed = row.supply.iter().any(|l| {
+        crate::pricing::distributor_key(&l.distributor) == wanted
+            && l.sku.trim() == update.pricing.sku
+    });
+    if !still_listed {
+        return Err(format!(
+            "SKU {} is no longer listed for {}",
+            update.pricing.sku, update.distributor
+        ));
+    }
+    entry
+        .pricing
+        .entry(row_id_text)
+        .or_default()
+        .insert(update.distributor.clone(), update.pricing.clone());
+    Ok(())
+}
+
 pub(super) fn synthesize_manifest(snx: &SnxlibManifest) -> Manifest {
     Manifest {
         library: LibraryMeta {

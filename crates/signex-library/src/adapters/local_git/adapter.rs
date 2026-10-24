@@ -263,6 +263,7 @@ impl LibraryAdapter for LocalGitAdapter {
                         columns: legacy_columns(),
                         rows: Vec::new(),
                         column_types: std::collections::BTreeMap::new(),
+                        pricing: Default::default(),
                     },
                 );
                 Ok(())
@@ -320,6 +321,7 @@ impl LibraryAdapter for LocalGitAdapter {
                         columns: legacy_columns(),
                         rows: Vec::new(),
                         column_types: std::collections::BTreeMap::new(),
+                        pricing: Default::default(),
                     });
                 validate_legacy_header(&table_owned, &entry.columns)?;
                 entry.rows.push(lib_row);
@@ -378,11 +380,63 @@ impl LibraryAdapter for LocalGitAdapter {
                         "row {row_id} in table {table_owned}"
                     )));
                 }
+                // A deleted row's cached prices go with it.
+                entry.pricing.remove(&target);
                 Ok(())
             },
             msg,
             &fallback,
         )
+    }
+
+    fn table_pricing(
+        &self,
+        table: &str,
+    ) -> Result<std::collections::BTreeMap<Uuid, crate::pricing::RowPricing>, LibraryError> {
+        self.refresh_for_read();
+        let guard = self
+            .library_file
+            .read()
+            .map_err(|_| LibraryError::Backend("library_file read lock poisoned".into()))?;
+        let Some(entry) = guard.tables.get(table) else {
+            return Ok(Default::default());
+        };
+        Ok(entry
+            .pricing
+            .iter()
+            .filter_map(|(id, p)| Uuid::parse_str(id).ok().map(|id| (id, p.clone())))
+            .collect())
+    }
+
+    fn store_pricing(
+        &self,
+        updates: Vec<crate::pricing::PricingUpdate>,
+        msg: &str,
+    ) -> Result<crate::pricing::StoreOutcome, LibraryError> {
+        let mut outcome = crate::pricing::StoreOutcome::default();
+        let fallback = format!("refresh pricing for {} rows", updates.len());
+        // Every update is checked against the row as it is under the write
+        // lock, after the reload, so a fetch that raced an edit cannot
+        // attach a price to a SKU the row no longer has.
+        self.mutate_library_file_if_changed(
+            |lf| {
+                for update in updates {
+                    match apply_pricing_update(lf, &update) {
+                        Ok(()) => outcome.stored += 1,
+                        Err(reason) => outcome.dropped.push(crate::pricing::DroppedUpdate {
+                            table: update.table,
+                            row_id: update.row_id,
+                            distributor: update.distributor,
+                            reason,
+                        }),
+                    }
+                }
+                Ok(outcome.stored > 0)
+            },
+            msg,
+            &fallback,
+        )?;
+        Ok(outcome)
     }
 
     fn get_symbol(&self, uuid: Uuid) -> Result<Symbol, LibraryError> {
