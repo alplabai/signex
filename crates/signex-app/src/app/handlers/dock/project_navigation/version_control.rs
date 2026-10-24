@@ -46,23 +46,19 @@ impl Signex {
     /// scoped to a single `.snxlib` directory rather than the whole
     /// project tree. The library context-menu only surfaces this when
     /// the library's `root_dir` has no `.git/` already.
-    pub(crate) fn open_library_enable_version_control_dialog(&mut self, tree_path: Vec<usize>) {
-        // Tree path under a project's `Libraries` group is
-        // `[project_idx, libraries_branch_idx, library_idx]` — see
-        // `library_node_path_from_tree` for the canonical lookup.
-        let Some(&project_idx) = tree_path.first() else {
+    pub(crate) fn open_library_enable_version_control_dialog(
+        &mut self,
+        row: crate::app::LibraryRowRef,
+    ) {
+        // Resolved by identity, not row position (#742): a stale row
+        // is refused with a Messages-panel warning.
+        if self
+            .resolve_library_row(&row, "Enable Version Control")
+            .is_none()
+        {
             return;
-        };
-        let Some(&library_idx) = tree_path.get(2) else {
-            return;
-        };
-        let Some(project) = self.document_state.projects.get(project_idx) else {
-            return;
-        };
-        let Some(entry) = project.data.libraries.get(library_idx) else {
-            return;
-        };
-        let library_file_path = project.data.resolve_library_path(entry);
+        }
+        let library_file_path = row.root;
         let Some(root_dir) = library_file_path.parent().map(|p| p.to_path_buf()) else {
             return;
         };

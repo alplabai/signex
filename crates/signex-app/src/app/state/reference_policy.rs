@@ -128,6 +128,52 @@ pub(crate) fn path_is_refused(path: &Path, trusted: &[Share]) -> bool {
     is_refused(&path.to_string_lossy(), trusted)
 }
 
+/// True when `text` names a path on a UNC share whose `..` segments climb
+/// above the share root. The OS clamps such a `..` at the root, but a reader
+/// that resolved it differently could land on another share, so the walk
+/// refuses the reference instead of trusting the clamp.
+fn climbs_above_share(text: &str) -> bool {
+    if !matches!(classify(text), ReferenceKind::Network(Some(_))) {
+        return false;
+    }
+    let mut segments = text.trim().split(is_separator).filter(|s| !s.is_empty());
+    let mut head = segments.next();
+    if head == Some("?") {
+        segments.next(); // the `UNC` marker
+        head = segments.next();
+    }
+    // `head` is the server, the next segment the share.
+    if head.is_none() || segments.next().is_none() {
+        return false;
+    }
+    let mut depth = 0usize;
+    for segment in segments {
+        match segment {
+            "." => {}
+            ".." => match depth.checked_sub(1) {
+                Some(d) => depth = d,
+                None => return true,
+            },
+            _ => depth += 1,
+        }
+    }
+    false
+}
+
+/// True when the walk must not follow `reference` (read from a sheet in
+/// `dir`) or the `normalised` path it resolves to: either spelling is a
+/// device or an untrusted network name, or the join climbs above a share.
+pub(crate) fn is_walk_refused(
+    dir: &Path,
+    reference: &str,
+    normalised: &Path,
+    trusted: &[Share],
+) -> bool {
+    is_refused(reference, trusted)
+        || path_is_refused(normalised, trusted)
+        || climbs_above_share(&dir.join(reference.trim()).to_string_lossy())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -246,5 +292,64 @@ mod tests {
             Path::new("//srv/other/proj/a.snxsch"),
             &trusted
         ));
+    }
+
+    #[test]
+    fn a_dotdot_climbing_above_the_share_root_is_detected() {
+        assert!(climbs_above_share(r"\\srv\share\a\..\..\x"));
+        assert!(climbs_above_share("//srv/share/../x"));
+        assert!(climbs_above_share(r"\\?\UNC\srv\share\..\x"));
+        assert!(!climbs_above_share(r"\\srv\share\a\..\x"));
+        assert!(!climbs_above_share(r"\\srv\share"));
+        assert!(!climbs_above_share("a/../../x"));
+    }
+
+    #[test]
+    fn the_normalised_path_is_classified_too() {
+        let trusted = trusting(r"\\srv\share\proj\p.snxprj");
+        let dir = Path::new("//srv/share/proj");
+        // Raw text looks local; the normalised path is on another share.
+        assert!(is_walk_refused(
+            dir,
+            "a.snxsch",
+            Path::new("//other/share/a.snxsch"),
+            &trusted
+        ));
+        // A `..` inside the share is fine.
+        assert!(!is_walk_refused(
+            dir,
+            "../b/a.snxsch",
+            Path::new("//srv/share/b/a.snxsch"),
+            &trusted
+        ));
+        // A `..` above the share root is refused although clamping would keep
+        // the result on the trusted share.
+        assert!(is_walk_refused(
+            dir,
+            "../../../other/share/x",
+            Path::new("//srv/share/other/share/x"),
+            &trusted
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn unc_dotdot_cannot_escape_to_another_share_on_windows() {
+        let trusted = trusting(r"\\trusted\share\proj\p.snxprj");
+        let dir = Path::new(r"\\trusted\share\proj");
+        for reference in [
+            r"\\trusted\share\..\..\other\share\x",
+            r"..\..\..\other\share\x",
+        ] {
+            let next =
+                crate::app::project_sheets::ownership_reference(dir, reference).expect("non-empty");
+            assert!(
+                is_walk_refused(dir, reference, &next, &trusted),
+                "{reference}"
+            );
+        }
+        let inside = crate::app::project_sheets::ownership_reference(dir, r"..\b\x.snxsch")
+            .expect("non-empty");
+        assert!(!is_walk_refused(dir, r"..\b\x.snxsch", &inside, &trusted));
     }
 }

@@ -67,6 +67,7 @@ fn the_netlist_incomplete_prompt_paints_with_no_editor_tab_active() {
             metadata: signex_output::ProjectMetadata::default(),
             netlist: None,
             netlist_sheets: Vec::new(),
+            netlist_sheet_placements: Vec::new(),
         },
     });
 
