@@ -575,6 +575,10 @@ pub struct BomPreviewState {
     /// `bom::rollup`). Click a header cell to set; click the same one
     /// again to flip direction.
     pub sort: Option<(usize, bool)>,
+    /// Row indexes into `table.rows` in display order under `sort`. Recomputed
+    /// in `update` whenever the rows, columns or sort change, so `view` only
+    /// reads it.
+    pub row_order: Vec<usize>,
     /// In-flight column drag — `Some(from_idx)` while the user is
     /// holding the mouse down on a header cell. The header only
     /// renders the drag highlight once the cursor has moved past
