@@ -623,7 +623,7 @@ mod tests {
         // ParamCommitMeasurement arm in `dispatch::library`.
         if let Some(buf) = buffer.get("voltage_max") {
             let trimmed = buf.trim();
-            if let Ok(v) = trimmed.parse::<f64>() {
+            if let Some(v) = crate::numeric_field::parse_field_f64(trimmed) {
                 params.insert(
                     "voltage_max".into(),
                     ParamValue::Measurement {
@@ -655,7 +655,7 @@ mod tests {
         let mut params = ParamMap::new();
         if let Some(buf) = buffer.get("tcr") {
             let trimmed = buf.trim();
-            if let Ok(v) = trimmed.parse::<f64>() {
+            if let Some(v) = crate::numeric_field::parse_field_f64(trimmed) {
                 params.insert(
                     "tcr".into(),
                     ParamValue::Measurement {
