@@ -30,6 +30,7 @@ pub use command::{
 };
 pub use error::EngineError;
 use history::HistoryEntry;
+pub use history::UndoGroupId;
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
 pub use selection::{ClipboardSelection, SelectionAnchor, SelectionDetails, partition_cuttable};
 pub use sheet::{

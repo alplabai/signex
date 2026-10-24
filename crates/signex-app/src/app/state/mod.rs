@@ -468,6 +468,14 @@ pub struct DocumentState {
     /// which we detect by resolving through `projects` and treating None
     /// as "no longer loaded").
     pub next_project_id: u32,
+    /// Monotonic counter minting the raw value of [`signex_engine::UndoGroupId`]s for
+    /// project-wide undo steps (an annotate run under "One step for the whole
+    /// project"). Never reused.
+    pub next_undo_group: u64,
+    /// The sheets each undo group touched. Undo/redo of a
+    /// grouped entry consults this to find the sheets that must move with it.
+    pub undo_groups:
+        std::collections::HashMap<signex_engine::UndoGroupId, crate::app::UndoGroupSheets>,
     pub panel_ctx: crate::panels::PanelContext,
     pub standard_lib_dir: Option<PathBuf>,
     pub loaded_lib: std::collections::HashMap<String, signex_types::schematic::LibSymbol>,

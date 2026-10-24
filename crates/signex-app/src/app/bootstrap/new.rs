@@ -84,6 +84,7 @@ impl Signex {
         let symbol_grid_style = crate::fonts::read_symbol_grid_style_pref();
         let symbol_pin_selection = crate::fonts::read_symbol_pin_selection_pref();
         let zoom_step_percent = crate::fonts::read_zoom_step_percent_pref();
+        let annotate_undo = crate::fonts::read_annotate_undo_pref();
         // Default to the 50-mil Altium grid; user-set value overrides
         // through the prefs file (UX §1.5 — last-used grid persists).
         let grid_size_mm =
@@ -226,6 +227,8 @@ impl Signex {
                 preferences_draft_pcb_gpu_render: pcb_gpu_render,
                 zoom_step_percent,
                 preferences_draft_zoom_step_percent: zoom_step_percent,
+                annotate_undo,
+                preferences_draft_annotate_undo: annotate_undo,
                 symbol_grid_size_mm,
                 preferences_draft_symbol_grid_size_mm: symbol_grid_size_mm,
                 symbol_grid_style,
@@ -306,6 +309,8 @@ impl Signex {
                 active_project: None,
                 dirty_paths: std::collections::HashSet::new(),
                 next_project_id: 0,
+                next_undo_group: 0,
+                undo_groups: std::collections::HashMap::new(),
                 panel_ctx: crate::panels::PanelContext {
                     projects: Vec::new(),
                     sym_count: 0,

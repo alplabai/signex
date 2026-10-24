@@ -377,3 +377,32 @@ fn prefs_cross_pref_independence() {
     let raw: serde_json::Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
     assert!(raw.get("ui_font").is_none());
 }
+
+#[test]
+fn prefs_annotate_undo_round_trips_and_missing_key_is_one_step() {
+    use signex_app::annotate_undo::AnnotateUndo;
+    let (_tmp, path) = temp_prefs_path();
+    assert_eq!(
+        signex_app::fonts::read_annotate_undo_pref_at(&path),
+        AnnotateUndo::Project,
+        "no file gives the default"
+    );
+
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(&path, br#"{"grid_style":"lines"}"#).unwrap();
+    assert_eq!(
+        signex_app::fonts::read_annotate_undo_pref_at(&path),
+        AnnotateUndo::Project,
+        "an old prefs file without the key gives the default"
+    );
+
+    for &scope in AnnotateUndo::ALL {
+        signex_app::fonts::write_annotate_undo_pref_at(&path, scope);
+        assert_eq!(signex_app::fonts::read_annotate_undo_pref_at(&path), scope);
+    }
+    assert_eq!(
+        signex_app::fonts::read_grid_style_pref_at(&path),
+        GridStyle::Lines,
+        "writing the key keeps the other preferences"
+    );
+}

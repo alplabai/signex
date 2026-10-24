@@ -13,7 +13,7 @@ pub(crate) enum CommandOutcome {
 }
 
 impl Signex {
-    fn render_invalidation_for_patch(
+    pub(super) fn render_invalidation_for_patch(
         patch: signex_engine::DocumentPatch,
     ) -> crate::schematic_runtime::RenderInvalidation {
         use crate::schematic_runtime::RenderInvalidation;
@@ -216,6 +216,17 @@ impl Signex {
     /// also makes the `Engine::can_undo` the Edit menu reads
     /// (`app/view/mod.rs`) agree with what Undo will actually do.
     pub(crate) fn apply_engine_undo(&mut self, update_selection_info: bool) -> bool {
+        if let Some(group) = self
+            .document_state
+            .active_engine()
+            .and_then(|engine| engine.next_undo_group())
+        {
+            return self.apply_grouped_step(
+                group,
+                super::undo_groups::StepDirection::Undo,
+                update_selection_info,
+            );
+        }
         let invalidation = if let Some(engine) = self.document_state.active_engine_mut() {
             match engine.undo() {
                 Ok(Some(patch_pair)) => Self::render_invalidation_for_patch(patch_pair.document),
@@ -236,6 +247,17 @@ impl Signex {
     /// Redo one step of the **active** engine's own history. Mirror of
     /// [`Signex::apply_engine_undo`].
     pub(crate) fn apply_engine_redo(&mut self, update_selection_info: bool) -> bool {
+        if let Some(group) = self
+            .document_state
+            .active_engine()
+            .and_then(|engine| engine.next_redo_group())
+        {
+            return self.apply_grouped_step(
+                group,
+                super::undo_groups::StepDirection::Redo,
+                update_selection_info,
+            );
+        }
         let invalidation = if let Some(engine) = self.document_state.active_engine_mut() {
             match engine.redo() {
                 Ok(Some(patch_pair)) => Self::render_invalidation_for_patch(patch_pair.document),
@@ -253,7 +275,7 @@ impl Signex {
         self.finish_schematic_mutation(invalidation, true, update_selection_info)
     }
 
-    fn finish_schematic_mutation(
+    pub(super) fn finish_schematic_mutation(
         &mut self,
         invalidation: crate::schematic_runtime::RenderInvalidation,
         clear_overlay_cache: bool,

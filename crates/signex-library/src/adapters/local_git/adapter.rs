@@ -461,6 +461,52 @@ impl LibraryAdapter for LocalGitAdapter {
         self.list_primitive_summaries(PrimitiveKind::Sim)
     }
 
+    fn bind_row_primitive_version(
+        &self,
+        table: &str,
+        row_id: RowId,
+        kind: crate::cascade::CascadeKind,
+        new_version: &str,
+        message: &str,
+    ) -> Result<bool, LibraryError> {
+        let table_owned = table.to_string();
+        let target = row_id.as_uuid().to_string();
+        let version = new_version.to_string();
+        let fallback = format!("bind row {row_id} in {table} to v{new_version}");
+        let mut changed = false;
+        // The row is found and rewritten under the write lock, after the
+        // reload, so a field another writer changed since the caller read
+        // the row is kept.
+        self.mutate_library_file_if_changed(
+            |lf| {
+                let entry = lf.tables.get_mut(&table_owned).ok_or_else(|| {
+                    LibraryError::NotFound(format!("table {table_owned} not in library"))
+                })?;
+                validate_legacy_header(&table_owned, &entry.columns)?;
+                let slot = entry
+                    .rows
+                    .iter_mut()
+                    .find(|r| {
+                        r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == Some(target.as_str())
+                    })
+                    .ok_or_else(|| {
+                        LibraryError::NotFound(format!("row {target} in table {table_owned}"))
+                    })?;
+                let mut row = library_row_to_component(slot)?;
+                if crate::cascade::pinned_version(&row, kind) == version {
+                    return Ok(false);
+                }
+                crate::cascade::apply_cascade_bump(&mut row, &version, kind);
+                *slot = component_to_library_row(&row)?;
+                changed = true;
+                Ok(true)
+            },
+            message,
+            &fallback,
+        )?;
+        Ok(changed)
+    }
+
     fn root_path(&self) -> Option<PathBuf> {
         Some(self.root_dir.clone())
     }
