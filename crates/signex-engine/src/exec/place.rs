@@ -44,8 +44,15 @@ impl Engine {
 
                 Ok(CommandResult::changed(patch_pair))
             }
-            Command::MoveSelection { items, dx, dy } => {
+            Command::MoveSelection {
+                items,
+                dx,
+                dy,
+                keep_wires,
+            } => {
                 let mut changed = false;
+                // Pin tips must be read before the symbols move.
+                let tips = keep_wires.then(|| self.moved_pin_tips(&items));
 
                 for item in &items {
                     changed |= self.move_selected_item(item, dx, dy);
@@ -55,9 +62,13 @@ impl Engine {
                     return Ok(CommandResult::unchanged());
                 }
 
+                let mut touched = items;
+                if let Some(tips) = tips {
+                    touched.extend(self.follow_moved_pins(&tips, &touched, dx, dy));
+                }
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::SelectionMoved,
-                    document: self.reconciled_patch(&items),
+                    document: self.reconciled_patch(&touched),
                 };
 
                 self.record_history(before, patch_pair);

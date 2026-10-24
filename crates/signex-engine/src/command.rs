@@ -79,6 +79,11 @@ pub enum Command {
         items: Vec<SelectedItem>,
         dx: f64,
         dy: f64,
+        /// Rubber-band: wire endpoints sitting on a moved symbol's (or child
+        /// sheet's) pins follow them, bending to stay orthogonal, inside
+        /// the same history step. `false` is a plain translate that leaves
+        /// wires where they are (see `transform::rubber_band`).
+        keep_wires: bool,
     },
     RotateSelection {
         items: Vec<SelectedItem>,

@@ -19,6 +19,9 @@ pub(crate) mod test_support;
 mod annotation_tests;
 
 #[cfg(test)]
+mod rubber_band_tests;
+
+#[cfg(test)]
 mod sheet_identity_tests;
 
 use std::path::{Path, PathBuf};
@@ -41,6 +44,7 @@ pub use sheet_placement::{
     unused_sheet_stem,
 };
 use signex_types::schematic::SchematicSheet;
+pub use transform::rubber_band::{follow_moved_pins, moved_pin_tips};
 
 const JUNCTION_TOLERANCE_MM: f64 = 0.01;
 
@@ -529,6 +533,7 @@ mod tests {
                 items: vec![SelectedItem::new(pin_uuid, SelectedKind::SheetPin)],
                 dx: 35.0,
                 dy: -100.0,
+                keep_wires: false,
             })
             .unwrap();
 
@@ -881,6 +886,7 @@ mod tests {
                 }],
                 dx: 0.0,
                 dy: -3.0,
+                keep_wires: false,
             })
             .expect("drag stub");
 
@@ -918,6 +924,7 @@ mod tests {
                 }],
                 dx: 0.0,
                 dy: -8.0,
+                keep_wires: false,
             })
             .expect("drag stub");
 
@@ -983,6 +990,7 @@ mod tests {
                 }],
                 dx: 0.0,
                 dy: -3.0,
+                keep_wires: false,
             })
             .expect("drag stub onto trunk");
         assert_eq!(engine.document().junctions.len(), 1);
@@ -999,6 +1007,7 @@ mod tests {
                 }],
                 dx: 0.0,
                 dy: 20.0,
+                keep_wires: false,
             })
             .expect("drag stub away");
 
@@ -1051,6 +1060,7 @@ mod tests {
                 }],
                 dx: 1.0,
                 dy: 1.0,
+                keep_wires: false,
             })
             .expect("move trunk");
 
