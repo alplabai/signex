@@ -83,6 +83,7 @@ impl Signex {
         let symbol_grid_size_mm = crate::fonts::read_symbol_grid_size_mm_pref();
         let symbol_grid_style = crate::fonts::read_symbol_grid_style_pref();
         let symbol_pin_selection = crate::fonts::read_symbol_pin_selection_pref();
+        let zoom_step_percent = crate::fonts::read_zoom_step_percent_pref();
         // Default to the 50-mil Altium grid; user-set value overrides
         // through the prefs file (UX §1.5 — last-used grid persists).
         let grid_size_mm =
@@ -223,6 +224,8 @@ impl Signex {
                 preferences_draft_grid_style: crate::fonts::read_grid_style_pref(),
                 pcb_gpu_render,
                 preferences_draft_pcb_gpu_render: pcb_gpu_render,
+                zoom_step_percent,
+                preferences_draft_zoom_step_percent: zoom_step_percent,
                 symbol_grid_size_mm,
                 preferences_draft_symbol_grid_size_mm: symbol_grid_size_mm,
                 symbol_grid_style,

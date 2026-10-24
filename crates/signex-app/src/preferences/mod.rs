@@ -117,6 +117,9 @@ pub enum PrefMsg {
     DraftSymbolGridSize(f32),
     /// Update the symbol-editor grid style (applies immediately, persisted).
     DraftSymbolGridStyle(GridStyle),
+    /// Update the wheel-zoom speed (percent per notch, 5..=50) shared by
+    /// every canvas. Persisted on Save.
+    DraftZoomStepPercent(u8),
     /// Update the symbol-editor pin-selection mode (persisted on change).
     DraftSymbolPinSelection(PinSelectionMode),
     /// Open a file picker to import a custom theme JSON.
@@ -264,6 +267,7 @@ pub struct PrefsView<'a> {
     pub draft_symbol_grid_size_mm: f32,
     pub draft_symbol_grid_style: GridStyle,
     pub draft_symbol_pin_selection: PinSelectionMode,
+    pub draft_zoom_step_percent: u8,
     pub custom_name: Option<&'a str>,
     /// Appearance ▸ theme import/export status line. Empty renders nothing.
     pub theme_status: &'a str,

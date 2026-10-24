@@ -135,6 +135,12 @@ pub struct UiState {
     pub preferences_draft_symbol_grid_style: crate::render_config::GridStyle,
     /// Symbol-editor pin-selection mode (pin body only / body + labels).
     pub symbol_pin_selection: crate::render_config::PinSelectionMode,
+    /// Wheel-zoom speed in percent per notch (5..=50, default 10),
+    /// shared by the schematic, PCB, symbol and footprint canvases.
+    pub zoom_step_percent: u8,
+    /// Draft mirror of [`Self::zoom_step_percent`]. Also the *effective*
+    /// value the canvases zoom with (see [`Self::effective_zoom_step`]).
+    pub preferences_draft_zoom_step_percent: u8,
     /// Draft mirror of [`Self::symbol_pin_selection`].
     pub preferences_draft_symbol_pin_selection: crate::render_config::PinSelectionMode,
     /// Keyboard Shortcuts pane — editable working copy of the shortcut
@@ -391,6 +397,13 @@ pub struct UiState {
 }
 
 impl UiState {
+    /// Per-wheel-notch zoom factor every canvas uses. Reads the DRAFT, like
+    /// `grid_style`: it carries the live preview while Preferences is open
+    /// and equals the saved value otherwise (Discard re-seeds the draft).
+    pub fn effective_zoom_step(&self) -> f32 {
+        crate::canvas::Camera::zoom_step_factor(self.preferences_draft_zoom_step_percent)
+    }
+
     /// True when any Preferences draft differs from its saved live value.
     /// Single source of truth so every live-preview `PrefMsg::Draft*` handler
     /// stays consistent as new drafts are added (the old per-handler inline
@@ -415,6 +428,7 @@ impl UiState {
             // here would let a real change read as clean.
             || self.preferences_draft_symbol_grid_size_mm != self.symbol_grid_size_mm
             || self.preferences_draft_symbol_pin_selection != self.symbol_pin_selection
+            || self.preferences_draft_zoom_step_percent != self.zoom_step_percent
             || self.preferences_draft_component_classes != self.component_classes
             || self
                 .preferences_keymap_editor

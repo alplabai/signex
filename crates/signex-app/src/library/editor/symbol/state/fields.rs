@@ -110,7 +110,10 @@ pub fn field_move_is_noop(sym: &Symbol, key: FieldKey, active_part: u8, x: f64, 
 }
 
 /// Shift the explicitly placed fields by `(dx, dy)`. Default-placed
-/// fields already follow the body, so they are left alone.
+/// fields already follow the body, so they are left alone. Callers
+/// shift only on a whole-symbol move (see `move_multiple`): a default
+/// placement follows the ACTIVE unit's extent, while a stored position
+/// is one value shared by every unit.
 pub fn shift_placed_fields(sym: &mut Symbol, dx: f64, dy: f64) {
     for pos in [&mut sym.designator_pos, &mut sym.comment_pos]
         .into_iter()

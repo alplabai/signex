@@ -376,6 +376,7 @@ fn symbol_context_target_to_msg(
         SymbolContextTarget::Empty => SymbolContextTargetMsg::Empty,
         SymbolContextTarget::Pin(idx) => SymbolContextTargetMsg::Pin(idx),
         SymbolContextTarget::Graphic(idx) => SymbolContextTargetMsg::Graphic(idx),
+        SymbolContextTarget::Field(key) => SymbolContextTargetMsg::Field(key),
     }
 }
 

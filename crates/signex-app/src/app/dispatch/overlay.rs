@@ -433,6 +433,9 @@ impl Signex {
         // several actions after it happened is worse than useless: it
         // attaches the message to the wrong action.
         self.sync_diagnostics_panel_ctx();
+        // Same reason: the draft, discard and Save paths change the zoom
+        // speed the PCB / symbol / footprint canvases hold a copy of.
+        self.sync_zoom_step();
         task
     }
 
