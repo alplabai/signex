@@ -155,7 +155,7 @@ impl LocalGitAdapter {
             tables: std::collections::BTreeMap::new(),
         };
         let text = library_file.write()?;
-        fs::write(&file_path, &text)?;
+        signex_types::atomic_io::atomic_write(&file_path, text.as_bytes())?;
         let disk_stamp = disk_sync::DiskStamp::of(&file_path)?;
 
         // Git scaffolding — only when the user opted in. Without

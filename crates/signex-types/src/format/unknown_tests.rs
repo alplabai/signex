@@ -312,10 +312,11 @@ fn pcb_unknowns_survive_editing_an_unrelated_footprint() {
 fn orphan_pad_footprint_gets_an_empty_bag() {
     let mut board = plain_board();
     board.footprints[0].reference = "U1".into();
+    let fp_uuid = board.footprints[0].uuid.to_string();
     let text = save_pcb(&board);
-    // Rename the footprint ref in the footprints block only, so the pad
-    // row's footprint_ref matches nothing.
-    let text = text.replacen("U1", "GONE", 1)
+    // Re-key the footprint in the footprints block only, so the pad
+    // row's footprint_ref (the footprint uuid) matches nothing.
+    let text = text.replacen(&fp_uuid, "0192a8c0-ffff-7000-8000-00000000ffff", 1)
         + &format!(
             "
 [extras.pads.{PAD_UUID}]
