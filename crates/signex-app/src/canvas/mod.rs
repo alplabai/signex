@@ -57,8 +57,8 @@ pub struct CanvasState {
     move_dragging: bool,
     /// Current world position during a move-drag (for preview offset).
     move_current: Option<(f64, f64)>,
-    /// Set while a click-click move floats: the `move_epoch` it started in.
-    move_float: Option<u64>,
+    /// Set while a click-click move floats (see `move_pick::Float`).
+    move_float: Option<move_pick::Float>,
     // ─── Double-click detection ───
     /// Timestamp of last left-click (for double-click detection).
     last_click_time: Option<std::time::Instant>,
@@ -251,13 +251,22 @@ impl CanvasSlot {
         self.viewport.set(bounds);
     }
 
-    /// Zoom one wheel notch about the view centre (View > Zoom In/Out).
-    /// Returns whether the camera changed (false at the zoom limits).
-    pub fn zoom_about_centre(&self, zoom_in: bool) -> bool {
+    /// World-space point (mm) under the centre of the last-recorded canvas
+    /// viewport. Used to drop a part that was picked from a list rather than
+    /// aimed at the canvas.
+    pub fn view_centre_world(&self) -> (f64, f64) {
+        let bounds = self.viewport.get();
+        let centre = iced::Point::new(bounds.width / 2.0, bounds.height / 2.0);
+        let world = self.camera.borrow().screen_to_world(centre, bounds);
+        (f64::from(world.x), f64::from(world.y))
+    }
+
+    /// View > Zoom In/Out: one `step` notch about the centre; false at the limits.
+    pub fn zoom_about_centre(&self, zoom_in: bool, step: f32) -> bool {
         let bounds = self.viewport.get();
         let centre = iced::Point::new(bounds.width / 2.0, bounds.height / 2.0);
         let notch = if zoom_in { 1.0 } else { -1.0 };
-        self.camera_mut().zoom_at(centre, notch, bounds)
+        self.camera_mut().zoom_at(centre, notch, step, bounds)
     }
 
     /// Recentre the view on world point `(x, y)` without changing zoom
@@ -312,6 +321,7 @@ pub struct CanvasViewPrefs<'a> {
     pub visible_grid_mm: f64,
     pub grid_style: crate::render_config::GridStyle,
     pub auto_focus: bool,
+    pub zoom_step: f32,
     pub draw_mode: crate::app::DrawMode,
     pub wire_color_overrides: &'a std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
     pub selection_filters: &'a std::collections::HashSet<crate::active_bar::SelectionFilter>,
@@ -802,6 +812,7 @@ mod tests {
             visible_grid_mm: 1.27,
             grid_style: crate::render_config::GridStyle::Dots,
             auto_focus: false,
+            zoom_step: 1.1,
             draw_mode: crate::app::DrawMode::Ortho90,
             wire_color_overrides: overrides,
             selection_filters: filters,

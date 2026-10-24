@@ -32,7 +32,9 @@ impl SchematicCanvas<'_> {
         };
 
         if let Some(cursor_pos) = cursor.position_in(bounds) {
-            let changed = self.camera_mut().zoom_at(cursor_pos, scroll_y, bounds);
+            let changed =
+                self.camera_mut()
+                    .zoom_at(cursor_pos, scroll_y, self.prefs.zoom_step, bounds);
             if !changed {
                 return None;
             }

@@ -1,0 +1,74 @@
+format = "snxsym/v1"
+file_uuid = "1e63f24a-321a-4496-b4f9-3b32e1af6565"
+display_name = "GND"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols]]
+uuid = "95fe9d07-40cb-4756-903f-e722b9b3df63"
+name = "GND"
+anchor = [
+    0.0,
+    0.0,
+]
+pins_tsv = '''
+number	name	electrical	pos_x	pos_y	orientation	length	description	function	pin_package_length	propagation_delay_ns	designator_visible	name_visible	inside_symbol	inside_edge_symbol	outside_edge_symbol	outside_symbol	hidden	locked	part_number
+1	GND	Power	0	0	Down	1.27					false	false	None	None	None	None	false	false	1
+'''
+designator = "#PWR?"
+comment = "GND"
+description = "Ground power port."
+component_type = "Standard"
+mirrored = false
+version = "0.0.1"
+released = false
+part_count = 1
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    -1.27,
+    -1.27,
+]
+to = [
+    1.27,
+    -1.27,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    -0.762,
+    -1.778,
+]
+to = [
+    0.762,
+    -1.778,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    -0.254,
+    -2.286,
+]
+to = [
+    0.254,
+    -2.286,
+]
+
+[symbols.schematic_params]

@@ -32,6 +32,7 @@ pub(super) fn apply_symbol_context_menu(editor: &mut SymEditor, msg: SymbolEdito
             let want = match target {
                 SymbolContextTarget::Pin(idx) => Some(SymbolSelection::Pin(idx)),
                 SymbolContextTarget::Graphic(idx) => Some(SymbolSelection::Graphic(idx)),
+                SymbolContextTarget::Field(key) => Some(SymbolSelection::Field(key)),
                 SymbolContextTarget::Empty => None,
             };
             if let Some(sel) = want
@@ -59,7 +60,7 @@ pub(super) fn apply_symbol_context_menu(editor: &mut SymEditor, msg: SymbolEdito
     }
 }
 
-/// Whether `target` (a right-clicked pin/graphic) is already part of
+/// Whether `target` (a right-clicked pin/graphic/field) is already part of
 /// `selected` — a lone `Pin`/`Graphic` match, a member of a
 /// `Multiple`'s index lists, or `All` (which covers every pin and
 /// graphic). `Empty` never matches (there's nothing to preserve a
@@ -87,6 +88,7 @@ fn target_in_selection(
             }),
             SymbolContextTarget::Graphic(idx),
         ) => graphic_indices.contains(&idx),
+        (Some(SymbolSelection::Field(sel_key)), SymbolContextTarget::Field(key)) => *sel_key == key,
         _ => false,
     }
 }

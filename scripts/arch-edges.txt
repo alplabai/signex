@@ -1,0 +1,39 @@
+# Allowed workspace dependency edges (normal deps only).
+# Checked by scripts/check_arch_guard.sh. Add a line to add an edge.
+chrome-catalog -> signex-types
+chrome-catalog -> signex-widgets
+signex-3d-model-importer -> signex-types
+signex-app -> signex-bake
+signex-app -> signex-engine
+signex-app -> signex-erc
+signex-app -> signex-erc-dsl
+signex-app -> signex-gfx
+signex-app -> signex-library
+signex-app -> signex-net
+signex-app -> signex-output
+signex-app -> signex-renderer
+signex-app -> signex-sketch
+signex-app -> signex-types
+signex-app -> signex-widgets
+signex-bake -> signex-library
+signex-bake -> signex-sketch
+signex-bake -> signex-types
+signex-bom -> signex-types
+signex-engine -> signex-net
+signex-engine -> signex-types
+signex-erc -> signex-net
+signex-erc -> signex-types
+signex-erc-dsl -> signex-erc
+signex-erc-dsl -> signex-types
+signex-gfx -> signex-sketch  # known debt (#664): rendering should not depend on the sketch solver
+signex-library -> signex-sketch
+signex-library -> signex-types
+signex-library-server -> signex-library
+signex-net -> signex-types
+signex-output -> signex-bom
+signex-output -> signex-types
+signex-renderer -> signex-3d-model-importer
+signex-renderer -> signex-gfx
+signex-renderer -> signex-types
+signex-sketch -> signex-types
+signex-widgets -> signex-types
