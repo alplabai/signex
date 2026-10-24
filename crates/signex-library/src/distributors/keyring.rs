@@ -104,6 +104,25 @@ impl KeyringStore {
 mod tests {
     use super::*;
 
+    /// #976 guard that runs on every CI platform and needs no keychain:
+    /// keyring 3.x silently falls back to its in-memory mock (persistence
+    /// `EntryOnly`) when no backend feature is enabled for the target. The
+    /// real Windows / macOS / Secret Service backends persist until deleted.
+    /// Building the credential builder does no IO.
+    #[test]
+    fn default_backend_is_a_persistent_os_keychain_not_the_mock() {
+        let persistence = ::keyring::default::default_credential_builder().persistence();
+        assert!(
+            matches!(
+                persistence,
+                ::keyring::credential::CredentialPersistence::UntilDelete
+            ),
+            "keyring default backend is not a persistent OS keychain (the in-memory mock \
+             reports EntryOnly); a backend feature is missing for this target in \
+             signex-library/Cargo.toml"
+        );
+    }
+
     #[test]
     fn backend_error_names_reason_and_remedy() {
         let msg = KeyringError::Backend("no D-Bus session".into()).to_string();
