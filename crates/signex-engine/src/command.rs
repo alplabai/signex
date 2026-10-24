@@ -65,6 +65,7 @@ pub enum CommandKind {
     ReorderObjects,
     ReconcileChildSheetPins,
     RenameChildSheetFile,
+    ModifyChildSheet,
     SetPaperSize,
 }
 
@@ -253,6 +254,16 @@ pub enum Command {
         from: String,
         to: String,
     },
+    /// Rename and / or re-point one placed sheet symbol, by `sheet_id`.
+    /// `None` leaves that field untouched. The name must be non-empty and
+    /// the file must keep the `.snxsch` extension; both must stay unique
+    /// among the document's sheet symbols. Only the reference changes —
+    /// no file is created, moved or renamed. Undoable like any other edit.
+    ModifyChildSheet {
+        sheet_id: Uuid,
+        name: Option<String>,
+        filename: Option<String>,
+    },
     /// Set the sheet's paper size (a named format like "A4"/"A3" — the
     /// Page Options panel is the producer). Persists through
     /// `SchematicSheet.paper_size` and is undoable like any other edit.
@@ -322,6 +333,7 @@ impl Command {
             Command::ReorderObjects { .. } => CommandKind::ReorderObjects,
             Command::ReconcileChildSheetPins { .. } => CommandKind::ReconcileChildSheetPins,
             Command::RenameChildSheetFile { .. } => CommandKind::RenameChildSheetFile,
+            Command::ModifyChildSheet { .. } => CommandKind::ModifyChildSheet,
             Command::SetPaperSize { .. } => CommandKind::SetPaperSize,
         }
     }
