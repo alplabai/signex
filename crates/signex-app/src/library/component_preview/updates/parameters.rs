@@ -159,6 +159,21 @@ mod tests {
         );
     }
 
+    /// A buffer that is mid-edit (`12.5e`) is not a number yet: nothing
+    /// commits and the typed text stays in the buffer for the user to fix.
+    #[test]
+    fn commit_number_skips_a_mid_edit_buffer() {
+        let mut state = fixture();
+        set_number_buf(&mut state, "tcr".into(), "12.5e".into());
+        commit_number(&mut state, "tcr".into());
+        assert!(!state.row.parameters.contains_key("tcr"));
+        assert!(!state.dirty);
+        assert_eq!(
+            state.params_edit_buf.get("tcr").map(String::as_str),
+            Some("12.5e")
+        );
+    }
+
     /// #828 -- same contract for a measurement cell; the unit is untouched.
     #[test]
     fn commit_measurement_refuses_non_finite() {
@@ -174,5 +189,15 @@ mod tests {
             assert_eq!(state.row.parameters.get("vmax"), Some(&stored), "{bad:?}");
             assert!(!state.dirty, "{bad:?} must not dirty the row");
         }
+        let mut state = fixture();
+        set_measurement_buf(&mut state, "vmax".into(), "12.5".into());
+        commit_measurement(&mut state, "vmax".into(), "V".into());
+        assert_eq!(
+            state.row.parameters.get("vmax"),
+            Some(&ParamValue::Measurement {
+                value: 12.5,
+                unit: "V".into(),
+            })
+        );
     }
 }
