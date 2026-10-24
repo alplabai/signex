@@ -72,6 +72,7 @@ impl Signex {
             None => "Footprint unbound".to_string(),
         };
 
+        let read_only = self.library.is_read_only(&library_path);
         Some(crate::panels::LibraryRowDetail {
             library_path,
             table,
@@ -81,6 +82,7 @@ impl Signex {
             lifecycle_label: format!("{:?}", row.state),
             symbol_summary,
             footprint_summary,
+            read_only,
         })
     }
 

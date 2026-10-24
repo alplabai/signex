@@ -42,6 +42,7 @@ mod external_edits;
 mod lifecycle;
 mod new_component;
 mod primitive_picker;
+mod read_only;
 mod recovery;
 mod registration;
 mod settings;

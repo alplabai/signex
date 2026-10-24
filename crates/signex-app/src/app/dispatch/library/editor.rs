@@ -448,6 +448,11 @@ impl Signex {
         path: &std::path::Path,
         mode: container_save::ContainerWrite,
     ) -> anyhow::Result<()> {
+        // These editors write the container file themselves, bypassing
+        // the adapter — so the read-only mount is enforced here too.
+        if let Some(error) = self.read_only_write_error(path) {
+            return Err(error);
+        }
         // Symbol path — merge this editor's changed symbols into the
         // container on disk, so other symbols in the same file, and other
         // windows' saves to them, are preserved (#902).

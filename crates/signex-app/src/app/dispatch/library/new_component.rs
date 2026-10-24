@@ -22,7 +22,27 @@ impl Signex {
             });
             return Task::none();
         }
-        let library_idx = 0usize;
+        // The first library that accepts writes; the stock library is
+        // mounted read-only and can never be the target.
+        let Some(library_idx) = self
+            .library
+            .open_libraries
+            .iter()
+            .position(|lib| !self.library.is_read_only(&lib.root))
+        else {
+            self.library.new_component = Some(NewComponentState {
+                library_idx: None,
+                error: Some(
+                    "Every open library is read-only; open or create a writable library first."
+                        .into(),
+                ),
+                ..NewComponentState::default()
+            });
+            crate::diagnostics::log_warning(
+                "[library] New Component refused: every open library is mounted read-only",
+            );
+            return Task::none();
+        };
         let library = &self.library.open_libraries[library_idx];
         let library_path = library.root.clone();
         let library_id = library.library_id;
@@ -84,9 +104,18 @@ impl Signex {
 
     /// User picked a target library in the modal.
     pub(super) fn handle_new_component_set_library(&mut self, idx: usize) -> Task<Message> {
+        let read_only = self
+            .library
+            .open_libraries
+            .get(idx)
+            .is_some_and(|lib| self.library.is_read_only(&lib.root));
         if let Some(nc) = self.library.new_component.as_mut() {
-            nc.library_idx = Some(idx);
-            nc.error = None;
+            if read_only {
+                nc.error = Some("That library is read-only; pick a writable one.".into());
+            } else {
+                nc.library_idx = Some(idx);
+                nc.error = None;
+            }
         }
         Task::none()
     }
@@ -284,6 +313,17 @@ impl Signex {
                 return Task::none();
             }
         };
+        if self.library.is_read_only(&library_path) {
+            let message = "Selected library is read-only; pick a writable one.";
+            crate::diagnostics::log_warning(format!(
+                "[library] New Component refused: {} is mounted read-only",
+                library_path.display()
+            ));
+            if let Some(slot) = self.library.new_component.as_mut() {
+                slot.error = Some(message.into());
+            }
+            return Task::none();
+        }
         let table = match nc.table.clone() {
             Some(t) => t,
             None => {
@@ -322,6 +362,10 @@ impl Signex {
                 }));
             }
             Err(e) => {
+                crate::diagnostics::log_warning(format!(
+                    "[library] New Component failed in {}: {e}",
+                    library_path.display()
+                ));
                 if let Some(slot) = self.library.new_component.as_mut() {
                     slot.error = Some(e.to_string());
                 }

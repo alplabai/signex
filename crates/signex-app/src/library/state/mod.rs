@@ -385,6 +385,20 @@ pub enum PrimitivePickerTarget {
     BrowserRow(EditorAddress),
 }
 
+impl PrimitivePickerTarget {
+    /// Directory of the library whose row this pick writes, or `None`
+    /// for the New Component form, which writes nothing until its own
+    /// Create step.
+    pub fn library_path(&self) -> Option<&std::path::Path> {
+        match self {
+            Self::PreviewRow(a) | Self::EditRowModal(a) | Self::BrowserRow(a) => {
+                Some(a.library_path.as_path())
+            }
+            Self::NewComponentForm => None,
+        }
+    }
+}
+
 /// Top-level Library subsystem state. Stored on
 /// [`crate::app::Signex`] as a single field so the dispatcher can
 /// borrow it independently of the rest of `DocumentState`.

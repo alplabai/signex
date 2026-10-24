@@ -47,6 +47,7 @@ use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
 use crate::adapter::{LibraryAdapter, LibraryError};
+use crate::adapters::read_only::ReadOnlyAdapter;
 use crate::primitive::{Footprint, PrimitiveRef, SimModel, Symbol};
 
 /// Mount key for an adapter inside a [`LibrarySet`].
@@ -109,6 +110,19 @@ impl LibrarySet {
         }
         self.libs.insert(key, lib);
         Ok(())
+    }
+
+    /// Mount a library read-only: every write through the mounted
+    /// adapter fails with [`LibraryError::ReadOnly`] regardless of the
+    /// filesystem's permissions. Same conflict rules as [`Self::mount`].
+    pub fn mount_read_only(&mut self, lib: Box<dyn LibraryAdapter>) -> Result<(), LibraryError> {
+        self.mount(Box::new(ReadOnlyAdapter::new(lib)))
+    }
+
+    /// True when the file-backed mount at `path` is read-only. An
+    /// unmounted path is not read-only (there is nothing to guard).
+    pub fn is_read_only_path(&self, path: &Path) -> bool {
+        self.get_by_path(path).is_some_and(|a| a.is_read_only())
     }
 
     /// Replace whatever adapter is mounted at `lib`'s mount key with

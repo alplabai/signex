@@ -174,6 +174,9 @@ impl Signex {
         library_path: std::path::PathBuf,
         table: Option<String>,
     ) -> Task<Message> {
+        if self.refuse_read_only_write(&library_path) {
+            return Task::none();
+        }
         let library_idx = match self
             .library
             .open_libraries
@@ -285,6 +288,9 @@ impl Signex {
         table: String,
         row_id: RowId,
     ) -> Task<Message> {
+        if self.refuse_read_only_write(&library_path) {
+            return Task::none();
+        }
         let internal_pn = self
             .library
             .library_at(&library_path)
@@ -310,6 +316,9 @@ impl Signex {
         table: String,
         row_id: RowId,
     ) -> Task<Message> {
+        if self.refuse_read_only_write(&library_path) {
+            return Task::none();
+        }
         let library_id = match self.library.library_at(&library_path) {
             Some(lib) => lib.library_id,
             None => {
@@ -382,6 +391,9 @@ impl Signex {
         table: String,
         row_id: RowId,
     ) -> Task<Message> {
+        if self.refuse_read_only_write(&library_path) {
+            return Task::none();
+        }
         let row = self
             .library
             .library_at(&library_path)
@@ -411,6 +423,9 @@ impl Signex {
         library_path: std::path::PathBuf,
         msg: BrowserEditMsg,
     ) -> Task<Message> {
+        if self.refuse_read_only_write(&library_path) {
+            return Task::none();
+        }
         // Some variants need to fire follow-up tasks (open picker,
         // close modal). We collect those into `next` and return them
         // after releasing the borrow.
@@ -612,6 +627,9 @@ impl Signex {
         row_id: RowId,
         column: String,
     ) -> Task<Message> {
+        if self.refuse_read_only_write(&library_path) {
+            return Task::none();
+        }
         // Drop the buffer eagerly — if the save fails we re-insert below.
         let buf = match self
             .library
