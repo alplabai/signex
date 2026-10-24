@@ -104,10 +104,27 @@ impl Signex {
         clear_overlay_cache: bool,
         update_selection_info: bool,
     ) -> (bool, bool) {
+        let (changed, failure) = self.apply_engine_command_reporting(
+            command,
+            clear_overlay_cache,
+            update_selection_info,
+        );
+        (changed, failure.is_some())
+    }
+
+    /// [`Self::apply_engine_command`] that also hands back the engine's
+    /// refusal text, for callers that must show the user why an edit did
+    /// not happen. `None` means the engine accepted the command.
+    pub(crate) fn apply_engine_command_reporting(
+        &mut self,
+        command: signex_engine::Command,
+        clear_overlay_cache: bool,
+        update_selection_info: bool,
+    ) -> (bool, Option<String>) {
         let Some(engine) = self.document_state.active_engine_mut() else {
-            return (false, true);
+            return (false, Some("There is no active schematic.".to_string()));
         };
-        let mut failed = false;
+        let mut failed = None;
 
         let invalidation = match engine.execute(command) {
             Ok(result) if result.changed => result
@@ -116,9 +133,9 @@ impl Signex {
                 .unwrap_or(crate::schematic_runtime::RenderInvalidation::NONE),
             Ok(_) => crate::schematic_runtime::RenderInvalidation::NONE,
             Err(error) => {
+                failed = Some(error.to_string());
                 let error = anyhow::Error::new(error);
                 crate::diagnostics::log_error("Engine command failed", &error);
-                failed = true;
                 crate::schematic_runtime::RenderInvalidation::NONE
             }
         };

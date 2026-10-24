@@ -211,6 +211,15 @@ impl ErrorNotice {
         }
     }
 
+    /// A Properties edit of a placed sheet symbol (name / file) was refused
+    /// and the sheet was left as it was.
+    pub fn sheet_edit(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Sheet Symbol Not Changed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
     /// A rename did not happen, or was undone, and nothing refers to the new name.
     pub fn rename_failed(detail: impl Into<String>) -> Self {
         Self {
@@ -822,6 +831,28 @@ impl DocumentState {
             return self.active_engine().into_iter().collect();
         };
         scope::engines_in_project(
+            &self.projects,
+            &self.child_sheet_refs(),
+            &self.engines,
+            project.id,
+        )
+    }
+
+    /// [`engines_in_active_document_project`](Self::engines_in_active_document_project)
+    /// with each engine's sheet path, so a reference can be resolved against
+    /// the folder of the sheet that carries it.
+    pub(crate) fn engine_entries_in_active_document_project(
+        &self,
+    ) -> Vec<(&PathBuf, &signex_engine::Engine)> {
+        let Some(project) = self.active_document_project() else {
+            return self
+                .active_path
+                .as_ref()
+                .and_then(|path| self.engines.get_key_value(path))
+                .into_iter()
+                .collect();
+        };
+        scope::engine_entries_in_project(
             &self.projects,
             &self.child_sheet_refs(),
             &self.engines,

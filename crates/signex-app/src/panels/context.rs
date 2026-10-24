@@ -125,6 +125,11 @@ pub struct PanelContext {
     /// numeric field. `None` means "show the live value formatted";
     /// `Some(s)` keeps half-typed strings between rerenders.
     pub child_sheet_stroke_width_buf: Option<String>,
+    /// Half-typed Name / File text for the selected sheet symbol, keyed by
+    /// the sheet it belongs to so it never leaks onto another selection.
+    /// Committed (or refused) on Enter; `None` shows the live value.
+    pub child_sheet_name_buf: Option<(uuid::Uuid, String)>,
+    pub child_sheet_file_buf: Option<(uuid::Uuid, String)>,
     /// Component search filter text.
     pub component_filter: String,
     /// Which sections are collapsed (by section name key).
