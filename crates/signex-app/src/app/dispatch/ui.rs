@@ -306,14 +306,15 @@ impl Signex {
                 // single-axis steps in `SnapOptions`; the Y field
                 // exists in the dialog for forward compatibility).
                 let draft = self.ui_state.grid_properties.clone();
+                // NaN / inf are refused with a Messages-panel line, not
+                // dropped silently (#925).
                 let parsed_x = draft
                     .as_ref()
-                    .and_then(|s| s.step_x_mm.trim().parse::<f64>().ok());
+                    .and_then(|s| crate::numeric_field::parse_field_f64(&s.step_x_mm));
                 if let (Some(d), Some(editor)) = (draft, self.active_footprint_editor_mut()) {
                     let opts = &mut editor.state.snap_options;
                     if let Some(step) = parsed_x
                         && step > 0.0
-                        && step.is_finite()
                     {
                         opts.grid_step_mm = step;
                     }
