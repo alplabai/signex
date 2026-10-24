@@ -92,7 +92,10 @@ impl Signex {
             rows.push(field("Footprint", symbol.footprint.clone()));
         }
         if !symbol.lib_id.is_empty() {
-            rows.push(field("Library", symbol.lib_id.clone()));
+            rows.push(field(
+                "Library",
+                self.library.drift.display_name(&symbol.lib_id).to_owned(),
+            ));
         }
 
         let card = container(column(rows).spacing(3))

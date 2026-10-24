@@ -61,7 +61,8 @@ impl Signex {
         // in the status bar reads from `inflight_git_commits` until
         // each Task::perform completion fires `ProjectGitCommitDone`.
         let commits = self.drain_pending_git_commits();
-        Task::batch([history, commits])
+        let drift = self.drain_pending_drift_check();
+        Task::batch([history, commits, drift])
     }
 
     /// Republish the diagnostics ring buffer into the Messages panel.
@@ -180,6 +181,29 @@ impl Signex {
             self.document_state.panel_ctx.selected_uuid = Some(details.selected_uuid);
             self.document_state.panel_ctx.selected_kind = Some(details.selected_kind);
             self.document_state.panel_ctx.selection_info = details.info;
+            // Library name + drift for a placed library symbol (#912).
+            if let Some(lib_id) = self
+                .document_state
+                .panel_ctx
+                .selection_info
+                .iter()
+                .find(|(k, _)| k == "Library ID")
+                .map(|(_, v)| v.clone())
+            {
+                let drift = &self.library.drift;
+                if let Some(name) = drift.names.get(&lib_id) {
+                    self.document_state
+                        .panel_ctx
+                        .selection_info
+                        .push(("Library".into(), name.clone()));
+                }
+                if drift.is_drifted(&path, &lib_id) {
+                    self.document_state
+                        .panel_ctx
+                        .selection_info
+                        .push(("Library Drift".into(), "Yes".into()));
+                }
+            }
             // Cache the live SchDrawing for the Properties preview
             // widget — only when the single selection is a drawing.
             if matches!(

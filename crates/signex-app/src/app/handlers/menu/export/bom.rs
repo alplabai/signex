@@ -280,7 +280,8 @@ impl Signex {
         &self,
         opts: &BomOptions,
     ) -> Option<(signex_output::BomTable, signex_output::BomValidationReport)> {
-        let ctx = super::build_export_context(&self.document_state)?;
+        let mut ctx = super::build_export_context(&self.document_state)?;
+        crate::library::drift::apply_library_names(&mut ctx, &self.library.drift.names);
         Some(signex_output::bom::rollup_with_validation(&ctx, opts))
     }
 
@@ -316,7 +317,7 @@ impl Signex {
             }
         };
 
-        let (ctx, issues) = match super::build_page_scope(&self.document_state) {
+        let (mut ctx, issues) = match super::build_page_scope(&self.document_state) {
             Some(c) => c,
             None => {
                 self.document_state.pending_bom_options = None;
@@ -334,6 +335,7 @@ impl Signex {
         // once, from this user action, exactly like the PDF/netlist
         // deliverables (ADR-0002 D8: degradation is reported, never silent).
         super::log_stitch_issues(&self.document_state, &ctx, &issues);
+        crate::library::drift::apply_library_names(&mut ctx, &self.library.drift.names);
 
         // Honour the user's picks from the BOM preview modal when
         // present. The pending slot is populated by

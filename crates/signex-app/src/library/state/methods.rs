@@ -40,6 +40,7 @@ impl Default for LibraryState {
         // `<config_dir>/signex/distributors.toml`.
         settings.preferred_order = super::super::settings::persistence::load_preferred_order();
         Self {
+            drift: Default::default(),
             set: LibrarySet::new(),
             open_libraries: Vec::new(),
             editors: HashMap::new(),

@@ -302,6 +302,7 @@ impl Signex {
         // mode opens the "Library Updates Available" modal on the
         // next view tick.
         self.scan_library_updates_for_open_schematic(scan_path);
+        self.library.drift.check_pending = true;
     }
 
     /// Reattach a tab to a schematic engine that's already parked in
