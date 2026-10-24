@@ -44,7 +44,7 @@ pub use sheet_placement::{
     unused_sheet_stem,
 };
 use signex_types::schematic::SchematicSheet;
-pub use transform::rubber_band::{follow_moved_pins, moved_pin_tips};
+pub use transform::rubber_band::{Follow, PinTip, follow_moved_pins, moved_pin_tips};
 
 const JUNCTION_TOLERANCE_MM: f64 = 0.01;
 
@@ -76,6 +76,9 @@ pub struct Engine {
     /// Fixed for this engine's lifetime and unique across engines: tells a
     /// reopened sheet from the one an off-thread job started on.
     instance: u64,
+    /// Notices raised by the last commands (rubber-band pins that could
+    /// not be kept connected); the app drains them into the Messages panel.
+    warnings: Vec<String>,
 }
 
 /// Process-wide revision source: values are never reused across engines.
@@ -103,6 +106,7 @@ impl Engine {
             revision: crate::next_revision(),
             base_revision: 0,
             instance: crate::next_revision(),
+            warnings: Vec::new(),
         })
     }
 
@@ -128,7 +132,13 @@ impl Engine {
             revision: crate::next_revision(),
             base_revision: 0,
             instance: crate::next_revision(),
+            warnings: Vec::new(),
         })
+    }
+
+    /// Drain the notices raised since the last call.
+    pub fn take_warnings(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.warnings)
     }
 
     pub fn save(&mut self) -> Result<(), EngineError> {
@@ -243,6 +253,7 @@ impl Engine {
             | Command::UpdateSymbolFields { .. } => self.exec_edits(before, cmd),
             Command::DeleteSelection { .. }
             | Command::MoveSelection { .. }
+            | Command::MoveEach { .. }
             | Command::RotateSelection { .. }
             | Command::MirrorSelection { .. }
             | Command::PlaceBus { .. }

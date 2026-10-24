@@ -34,6 +34,7 @@ pub enum SymbolTextField {
 pub enum CommandKind {
     ReplaceDocument,
     MoveSelection,
+    MoveEach,
     RotateSelection,
     MirrorSelection,
     DeleteSelection,
@@ -83,6 +84,12 @@ pub enum Command {
         /// sheet's) pins follow them, bending to stay orthogonal, inside
         /// the same history step. `false` is a plain translate that leaves
         /// wires where they are (see `transform::rubber_band`).
+        keep_wires: bool,
+    },
+    /// Move each item by its own delta in one history step (align and
+    /// distribute). Rubber-bands like [`Command::MoveSelection`].
+    MoveEach {
+        moves: Vec<(SelectedItem, f64, f64)>,
         keep_wires: bool,
     },
     RotateSelection {
@@ -319,6 +326,7 @@ impl Command {
         match self {
             Command::ReplaceDocument { .. } => CommandKind::ReplaceDocument,
             Command::MoveSelection { .. } => CommandKind::MoveSelection,
+            Command::MoveEach { .. } => CommandKind::MoveEach,
             Command::RotateSelection { .. } => CommandKind::RotateSelection,
             Command::MirrorSelection { .. } => CommandKind::MirrorSelection,
             Command::DeleteSelection { .. } => CommandKind::DeleteSelection,

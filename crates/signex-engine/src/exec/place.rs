@@ -18,6 +18,40 @@ impl Engine {
         patch
     }
 
+    /// Move every item by its own delta; with `keep_wires` the wires on the
+    /// moved pins follow (see `transform::rubber_band`) inside the same
+    /// history entry.
+    fn exec_moves(
+        &mut self,
+        before: SchematicSheet,
+        moves: Vec<(SelectedItem, f64, f64)>,
+        keep_wires: bool,
+    ) -> Result<CommandResult, EngineError> {
+        let mut items: Vec<SelectedItem> = moves.iter().map(|(item, _, _)| item.clone()).collect();
+        // Pin tips must be read before the symbols move.
+        let tips = keep_wires.then(|| crate::moved_pin_tips(&self.document, &items));
+
+        let mut changed = false;
+        for (item, dx, dy) in &moves {
+            changed |= self.move_selected_item(item, *dx, *dy);
+        }
+        if !changed {
+            return Ok(CommandResult::unchanged());
+        }
+
+        if let Some(tips) = tips {
+            let follow = crate::follow_moved_pins(&mut self.document, &tips, &items);
+            items.extend(follow.touched);
+            self.warnings.extend(follow.warnings);
+        }
+        let patch_pair = PatchPair {
+            semantic: SemanticPatch::SelectionMoved,
+            document: self.reconciled_patch(&items),
+        };
+        self.record_history(before, patch_pair);
+        Ok(CommandResult::changed(patch_pair))
+    }
+
     pub(crate) fn exec_place(
         &mut self,
         before: SchematicSheet,
@@ -50,31 +84,10 @@ impl Engine {
                 dy,
                 keep_wires,
             } => {
-                let mut changed = false;
-                // Pin tips must be read before the symbols move.
-                let tips = keep_wires.then(|| self.moved_pin_tips(&items));
-
-                for item in &items {
-                    changed |= self.move_selected_item(item, dx, dy);
-                }
-
-                if !changed {
-                    return Ok(CommandResult::unchanged());
-                }
-
-                let mut touched = items;
-                if let Some(tips) = tips {
-                    touched.extend(self.follow_moved_pins(&tips, &touched, dx, dy));
-                }
-                let patch_pair = PatchPair {
-                    semantic: SemanticPatch::SelectionMoved,
-                    document: self.reconciled_patch(&touched),
-                };
-
-                self.record_history(before, patch_pair);
-
-                Ok(CommandResult::changed(patch_pair))
+                let moves = items.into_iter().map(|item| (item, dx, dy)).collect();
+                self.exec_moves(before, moves, keep_wires)
             }
+            Command::MoveEach { moves, keep_wires } => self.exec_moves(before, moves, keep_wires),
             Command::RotateSelection {
                 items,
                 angle_degrees,

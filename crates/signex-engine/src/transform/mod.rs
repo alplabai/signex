@@ -210,27 +210,6 @@ impl Engine {
         true
     }
 
-    /// Pin tips carried by `items`, read before they move (see
-    /// [`rubber_band`]).
-    pub(super) fn moved_pin_tips(
-        &self,
-        items: &[SelectedItem],
-    ) -> std::collections::HashSet<signex_net::uf::Key> {
-        rubber_band::moved_pin_tips(&self.document, items)
-    }
-
-    /// Drag attached wires along with an already-applied move; returns the
-    /// wires edited or created.
-    pub(super) fn follow_moved_pins(
-        &mut self,
-        tips: &std::collections::HashSet<signex_net::uf::Key>,
-        items: &[SelectedItem],
-        dx: f64,
-        dy: f64,
-    ) -> Vec<SelectedItem> {
-        rubber_band::follow_moved_pins(&mut self.document, tips, items, dx, dy)
-    }
-
     pub(super) fn move_selected_item(&mut self, item: &SelectedItem, dx: f64, dy: f64) -> bool {
         match item.kind {
             SelectedKind::Symbol => self
