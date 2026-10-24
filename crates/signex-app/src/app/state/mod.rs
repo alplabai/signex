@@ -211,6 +211,14 @@ impl ErrorNotice {
         }
     }
 
+    /// A rename did not happen, or was undone, and nothing refers to the new name.
+    pub fn rename_failed(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Rename Failed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
     /// A file could not be opened — unreadable, unparseable, or empty
     /// where it must not be (#532).
     pub fn open(detail: impl Into<String>) -> Self {
