@@ -91,22 +91,22 @@ pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
         snapshots.entry(path).or_insert(sheet);
     }
 
-    let empty_resolved: HashMap<String, signex_net::SheetKey> = HashMap::new();
     let mut by_path: ViolationsByPath = HashMap::new();
     for (path, snapshot) in &snapshots {
         let key = project_sheets::sheet_key_with(path, base_dir.as_deref(), fold);
-        let resolved = graph.resolved.get(&key).unwrap_or(&empty_resolved);
         let raw = match dsl_eval_fns.as_ref() {
             Some(eval_fns) => signex_erc::run_with_project_dsl_and_config(
                 snapshot,
-                resolved,
+                Some(&key),
+                &graph.resolved,
                 &graph.sheets,
                 eval_fns,
                 &inputs.config,
             ),
             None => signex_erc::run_with_project_and_config(
                 snapshot,
-                resolved,
+                Some(&key),
+                &graph.resolved,
                 &graph.sheets,
                 &inputs.config,
             ),

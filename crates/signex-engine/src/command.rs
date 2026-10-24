@@ -1,6 +1,6 @@
 use signex_types::schematic::{
-    Bus, BusEntry, ChildSheet, HAlign, Junction, Label, LibSymbol, NoConnect, SchematicSheet,
-    SelectedItem, StrokeColor, Symbol, TextNote, Wire,
+    AnnotateOrder, Bus, BusEntry, ChildSheet, HAlign, Junction, Label, LibSymbol, NoConnect,
+    SchematicSheet, SelectedItem, StrokeColor, Symbol, TextNote, Wire,
 };
 use uuid::Uuid;
 
@@ -222,6 +222,8 @@ pub enum Command {
     /// deterministic order so re-running produces the same layout.
     AnnotateAll {
         mode: AnnotateMode,
+        /// Visit order; `AnnotateOrder::default()` is rows top to bottom.
+        order: AnnotateOrder,
     },
     /// Absolute positioning of a single symbol. Used by the Properties
     /// panel's future X/Y edit fields and by scripted moves; distinct from

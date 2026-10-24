@@ -83,20 +83,44 @@ pub(crate) fn declared_pages(document_state: &DocumentState) -> Vec<PathBuf> {
 pub(crate) fn assemble_active_project_sheets(
     document_state: &DocumentState,
 ) -> (Vec<PathBuf>, ProjectSheetSet) {
-    let fold = crate::app::state::project_case::fold_of(document_state.active_document_project());
-    let pages = declared_pages(document_state);
-    let Some(active_path) = document_state.active_path.clone() else {
+    let Some(active_path) = document_state.active_path.as_deref() else {
+        let project = document_state.active_document_project();
         return (
-            pages,
+            project_pages(project),
             ProjectSheetSet {
-                fold,
+                fold: crate::app::state::project_case::fold_of(project),
                 ..ProjectSheetSet::empty()
             },
         );
     };
-    let root = resolve_netlist_root(document_state).unwrap_or(active_path);
+    assemble_project_sheets_for(document_state, active_path)
+}
+
+/// [`assemble_active_project_sheets`] for an explicit `source` document rather
+/// than the active tab (#852).
+pub(crate) fn assemble_project_sheets_for(
+    document_state: &DocumentState,
+    source: &Path,
+) -> (Vec<PathBuf>, ProjectSheetSet) {
+    let project = document_state.document_project(source);
+    let fold = crate::app::state::project_case::fold_of(project);
+    let pages = project_pages(project);
+    let root = resolve_netlist_root_for(document_state, source);
     let set = assemble_project_sheets(document_state, &pages, &root, fold);
     (pages, set)
+}
+
+fn project_pages(project: Option<&crate::app::state::LoadedProject>) -> Vec<PathBuf> {
+    project
+        .map(|p| {
+            let dir = p.dir();
+            p.data
+                .sheets
+                .iter()
+                .map(|s| dir.join(&s.filename))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// The sheet-walk order every whole-project Annotate operation must agree
@@ -147,6 +171,14 @@ pub(crate) fn resolve_netlist_root(document_state: &DocumentState) -> Option<Pat
         .or_else(|| document_state.active_path.clone())
 }
 
+/// [`resolve_netlist_root`] for an explicit `source` document.
+pub(crate) fn resolve_netlist_root_for(document_state: &DocumentState, source: &Path) -> PathBuf {
+    document_state
+        .document_project(source)
+        .and_then(project_root_sheet_path)
+        .unwrap_or_else(|| source.to_path_buf())
+}
+
 /// The warning to surface when [`resolve_netlist_root`] had to fall back to the
 /// active sheet *inside a project* because the project declares no root sheet
 /// (#338). `None` for a declared root and for a loose document, where rooting
@@ -155,15 +187,23 @@ pub(crate) fn resolve_netlist_root(document_state: &DocumentState) -> Option<Pat
 /// Kept apart from the resolver so the resolver stays pure (`view` reaches it
 /// through [`assemble_active_project_sheets`]); update-side callers log this.
 pub(crate) fn netlist_root_fallback_warning(document_state: &DocumentState) -> Option<String> {
-    let project = document_state.active_document_project()?;
+    let active = document_state.active_path.as_deref()?;
+    netlist_root_fallback_warning_for(document_state, active)
+}
+
+/// [`netlist_root_fallback_warning`] for an explicit `source` document.
+pub(crate) fn netlist_root_fallback_warning_for(
+    document_state: &DocumentState,
+    source: &Path,
+) -> Option<String> {
+    let project = document_state.document_project(source)?;
     if project.data.schematic_root.is_some() {
         return None;
     }
-    let active = document_state.active_path.as_ref()?;
     Some(format!(
         "Netlist: project '{}' declares no root sheet; rooting at the active sheet '{}'",
         project.data.name,
-        active.display()
+        source.display()
     ))
 }
 
@@ -349,7 +389,7 @@ pub(crate) struct AssembledGraph {
     pub(crate) sheets: HashMap<signex_net::SheetKey, SchematicSheet>,
     /// Per-parent resolution: `resolved[parent_key][cs.filename]` is the
     /// child's key — the shape [`signex_net::ProjectGraph::resolved`] and
-    /// [`signex_erc::run_with_project`] both take.
+    /// [`signex_erc::run_with_project`] (as `resolutions`) both take.
     pub(crate) resolved: HashMap<signex_net::SheetKey, HashMap<String, signex_net::SheetKey>>,
     /// Structural problems found while assembling the graph.
     pub(crate) issues: Vec<signex_net::StitchIssue>,

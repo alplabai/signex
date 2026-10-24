@@ -172,6 +172,7 @@ fn load_preview_sheets(inputs: AnnotatePreviewInputs) -> AnnotatePreviewLoad {
 fn compute_entries(
     sheets: &[(String, SchematicSheet)],
     locked: &std::collections::HashSet<uuid::Uuid>,
+    order: crate::app::state::AnnotateOrder,
 ) -> Vec<AnnotatePreviewEntry> {
     let mut next = seed_counters(sheets);
     // The same project-wide grouping the action builds, so the preview
@@ -181,12 +182,12 @@ fn compute_entries(
         .iter()
         .map(|(_, sheet)| sheet.symbols.as_slice())
         .collect();
-    let parts = signex_types::schematic::ProjectParts::new(&documents, locked);
+    let parts = signex_types::schematic::ProjectParts::new(&documents, locked, order);
     let mut designator_of_part: std::collections::HashMap<usize, String> =
         std::collections::HashMap::new();
     let mut out = Vec::new();
     for (sheet_ordinal, (title, sheet)) in sheets.iter().enumerate() {
-        for i in signex_types::schematic::annotation_order(&sheet.symbols) {
+        for i in signex_types::schematic::annotation_order(&sheet.symbols, order) {
             let sym = &sheet.symbols[i];
             if sym.reference.is_empty() || !is_target(sym) {
                 continue;
@@ -274,7 +275,11 @@ impl Signex {
     /// CPU only; called when locks change or a load lands.
     pub(crate) fn recompute_annotate_entries(&mut self) {
         let cache = &mut self.ui_state.annotate_preview;
-        cache.entries = compute_entries(&cache.sheets, &self.ui_state.annotate_locked);
+        cache.entries = compute_entries(
+            &cache.sheets,
+            &self.ui_state.annotate_locked,
+            self.ui_state.annotate_order,
+        );
     }
 
     /// Forget the cached sheets so the next refresh reloads them (dialog
@@ -389,7 +394,11 @@ impl Signex {
     #[cfg(test)]
     pub(super) fn preview_project_annotations(&self) -> Vec<AnnotatePreviewEntry> {
         let load = load_preview_sheets(self.preview_inputs());
-        compute_entries(&load.sheets, &self.ui_state.annotate_locked)
+        compute_entries(
+            &load.sheets,
+            &self.ui_state.annotate_locked,
+            self.ui_state.annotate_order,
+        )
     }
 }
 
