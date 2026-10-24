@@ -581,32 +581,12 @@ mod tests {
 
     #[test]
     fn an_italic_item_shapes_with_the_italic_canvas_face() {
-        let mut fs = cryoglyph::FontSystem::new_with_fonts(
-            [
-                include_bytes!("../../tests/fonts/Iosevka-Regular.ttf").as_slice(),
-                include_bytes!("../../tests/fonts/Iosevka-Italic.ttf").as_slice(),
-            ]
-            .map(|font| cryoglyph::fontdb::Source::Binary(std::sync::Arc::new(font))),
-        );
-        let face_of = |fs: &mut cryoglyph::FontSystem, italic: bool| {
-            let item = TextItem {
-                content: "NET_A".to_string(),
-                position: [0.0, 0.0],
-                size_mm: 1.0,
-                color: [1.0; 4],
-                bold: false,
-                italic,
-                rotation: 0.0,
-                h_align: TextHAlign::Left,
-                v_align: TextVAlign::Top,
-            };
-            let attrs = attrs_for_item(&item, "Iosevka");
-            let metrics = cryoglyph::Metrics::new(20.0, 24.0);
-            let buffer = shaped_buffer(fs, &item, metrics, &attrs, [800.0, 600.0]);
-            let font_id = buffer.layout_runs().next().expect("one run").glyphs[0].font_id;
-            let face = fs.db().face(font_id).expect("shaped face");
-            (face.post_script_name.clone(), face.style)
-        };
+        let mut fs = hermetic_font_system(&[
+            include_bytes!("../../tests/fonts/Iosevka-Regular.ttf"),
+            include_bytes!("../../tests/fonts/Iosevka-Italic.ttf"),
+        ]);
+        // Only the two test faces: a system Iosevka must not take part.
+        assert_eq!(fs.db().faces().count(), 2);
 
         assert_eq!(
             face_of(&mut fs, true),
@@ -621,11 +601,53 @@ mod tests {
         );
     }
 
+    #[test]
+    fn an_italic_item_with_no_italic_face_shapes_with_the_upright_face() {
+        let mut fs = test_font_system();
+
+        assert_eq!(
+            face_of(&mut fs, true),
+            ("Iosevka".to_string(), cryoglyph::fontdb::Style::Normal)
+        );
+    }
+
+    /// PostScript name and style of the face the first glyph of an
+    /// `"Iosevka"` item shapes with.
+    fn face_of(fs: &mut cryoglyph::FontSystem, italic: bool) -> (String, cryoglyph::fontdb::Style) {
+        let item = TextItem {
+            content: "NET_A".to_string(),
+            position: [0.0, 0.0],
+            size_mm: 1.0,
+            color: [1.0; 4],
+            bold: false,
+            italic,
+            rotation: 0.0,
+            h_align: TextHAlign::Left,
+            v_align: TextVAlign::Top,
+        };
+        let attrs = attrs_for_item(&item, "Iosevka");
+        let metrics = cryoglyph::Metrics::new(20.0, 24.0);
+        let buffer = shaped_buffer(fs, &item, metrics, &attrs, [800.0, 600.0]);
+        let font_id = buffer.layout_runs().next().expect("one run").glyphs[0].font_id;
+        let face = fs.db().face(font_id).expect("shaped face");
+        (face.post_script_name.clone(), face.style)
+    }
+
+    /// A font system holding only `fonts`. `FontSystem::new_with_fonts` also
+    /// loads the system fonts, so a machine with Iosevka installed would
+    /// shape with its own faces instead of the test copies.
+    fn hermetic_font_system(fonts: &[&'static [u8]]) -> cryoglyph::FontSystem {
+        let mut db = cryoglyph::fontdb::Database::new();
+        for font in fonts {
+            db.load_font_source(cryoglyph::fontdb::Source::Binary(std::sync::Arc::new(
+                *font,
+            )));
+        }
+        cryoglyph::FontSystem::new_with_locale_and_db("en-US".to_string(), db)
+    }
+
     fn test_font_system() -> cryoglyph::FontSystem {
-        let font = include_bytes!("../../tests/fonts/Iosevka-Regular.ttf");
-        cryoglyph::FontSystem::new_with_fonts([cryoglyph::fontdb::Source::Binary(
-            std::sync::Arc::new(font.as_slice()),
-        )])
+        hermetic_font_system(&[include_bytes!("../../tests/fonts/Iosevka-Regular.ttf")])
     }
 
     /// Left edge of each laid-out line's first glyph, and each line's width.

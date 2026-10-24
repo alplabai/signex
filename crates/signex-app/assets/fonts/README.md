@@ -25,6 +25,11 @@ pyftsubset release/Iosevka-Italic.ttf --unicodes-file=unicodes.txt \
 Run against the release's `Iosevka-Regular.ttf`, this recipe reproduces the
 bundled `Iosevka-Regular.ttf` byte for byte.
 
+The canvas loads these faces alongside the system fonts. On a machine that also
+has Iosevka installed, the system "Iosevka" family can be picked instead of the
+bundled faces, so italic canvas text may then use the installed Oblique rather
+than the bundled Italic.
+
 ## Roboto (UI chrome)
 
 `Roboto-Regular.ttf` and `Roboto-Bold.ttf`.
