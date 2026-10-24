@@ -22,7 +22,7 @@ use signex_types::schematic::{
 };
 
 use crate::context::ErcContext;
-use crate::diagnostic::Diagnostic;
+use crate::diagnostic::{Diagnostic, LocationSpace};
 use crate::{RuleKind, Severity, sel};
 
 // ---------------------------------------------------------------------------
