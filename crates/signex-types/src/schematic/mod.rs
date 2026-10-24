@@ -418,6 +418,11 @@ pub struct TextProp {
     pub position: Point,
     pub rotation: f64,
     pub font_size: f64,
+    /// Font family the author chose for this text, `None` to inherit the
+    /// sheet default (see [`crate::font`]). Never rewritten when the family
+    /// is not installed: resolution happens at render time only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_family: Option<String>,
     #[serde(default)]
     pub justify_h: HAlign,
     #[serde(default)]

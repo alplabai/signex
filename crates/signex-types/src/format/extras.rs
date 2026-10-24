@@ -216,12 +216,19 @@ pub(in crate::format) struct SheetExtras {
     pub(in crate::format) title_block: BTreeMap<String, String>,
     #[serde(default)]
     pub(in crate::format) lib_symbols: BTreeMap<String, crate::schematic::LibSymbol>,
+<<<<<<< HEAD
     /// Net colour overrides: wire/junction uuid -> `#RRGGBBAA`. Skipped
     /// when empty so a sheet without overrides re-saves byte-identical, and
     /// an older build, which does not know the key, keeps it in `unknown`
     /// and writes it back.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub(in crate::format) net_colors: BTreeMap<String, String>,
+=======
+    /// Sheet-wide default font family; omitted when unset so a sheet that
+    /// never chose one serialises exactly as it did before the field existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(in crate::format) font_family: Option<String>,
+>>>>>>> 541a9d15 (feat(types,engine): store an optional font family on text items and the sheet (#510))
     /// Keys this build does not recognise (`[extras.sheet]`).
     #[serde(flatten)]
     pub(in crate::format) unknown: UnknownFields,
@@ -238,7 +245,11 @@ impl SheetExtras {
             && self.no_erc_directives.is_empty()
             && self.title_block.is_empty()
             && self.lib_symbols.is_empty()
+<<<<<<< HEAD
             && self.net_colors.is_empty()
+=======
+            && self.font_family.is_none()
+>>>>>>> 541a9d15 (feat(types,engine): store an optional font family on text items and the sheet (#510))
             && self.unknown.is_empty()
     }
 
@@ -261,11 +272,15 @@ impl SheetExtras {
                 .iter()
                 .map(|(key, value)| (key.clone(), value.clone()))
                 .collect(),
+<<<<<<< HEAD
             net_colors: s
                 .net_colors
                 .iter()
                 .map(|(id, color)| (id.to_string(), color.to_hex()))
                 .collect(),
+=======
+            font_family: s.font_family.clone(),
+>>>>>>> 541a9d15 (feat(types,engine): store an optional font family on text items and the sheet (#510))
             unknown: s.unknown.extras.clone(),
         }
     }

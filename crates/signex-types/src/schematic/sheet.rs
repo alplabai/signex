@@ -54,6 +54,11 @@ pub struct Label {
     pub shape: String,
     #[serde(default)]
     pub font_size: f64,
+    /// Font family the author chose for this label, `None` to inherit the
+    /// sheet default (see [`crate::font`]). On disk it is an optional
+    /// `font_family` TSV column, present only when some label sets one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_family: Option<String>,
     #[serde(default)]
     pub justify: HAlign,
     #[serde(default = "default_label_v_align")]
@@ -110,6 +115,11 @@ pub struct TextNote {
     pub rotation: f64,
     #[serde(default)]
     pub font_size: f64,
+    /// Font family the author chose for this text, `None` to inherit the
+    /// sheet default (see [`crate::font`]). Never rewritten when the family
+    /// is not installed: resolution happens at render time only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_family: Option<String>,
     #[serde(default)]
     pub justify_h: HAlign,
     #[serde(default)]
@@ -265,6 +275,11 @@ pub struct SchematicSheet {
     pub generator_version: String,
     #[serde(default)]
     pub paper_size: String,
+    /// Sheet-wide default font family for every text item that names none.
+    /// `None` means the bundled default (Iosevka). Stored under
+    /// `[extras.sheet]` only when set, so legacy files stay byte-identical.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_family: Option<String>,
     #[serde(default = "default_root_sheet_page")]
     pub root_sheet_page: String,
     #[serde(default)]
@@ -324,6 +339,7 @@ impl Default for SchematicSheet {
             generator: String::new(),
             generator_version: String::new(),
             paper_size: String::new(),
+            font_family: None,
             root_sheet_page: default_root_sheet_page(),
             symbols: Vec::new(),
             wires: Vec::new(),

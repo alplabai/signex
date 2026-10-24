@@ -87,6 +87,7 @@ fn text_prop(n: u128, y: f64) -> TextProp {
         position: pt(10.0 * n as f64, y),
         rotation: 0.0,
         font_size: 1.27,
+        font_family: None,
         justify_h: HAlign::Left,
         justify_v: VAlign::Bottom,
         hidden: false,
@@ -125,6 +126,7 @@ fn label(n: u128) -> Label {
         label_type: LabelType::Net,
         shape: String::new(),
         font_size: 1.27,
+        font_family: None,
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
     }
@@ -137,6 +139,7 @@ fn text_note(n: u128) -> TextNote {
         position: pt(40.0, 5.0 * n as f64),
         rotation: 0.0,
         font_size: 1.27,
+        font_family: None,
         justify_h: HAlign::Left,
         justify_v: VAlign::Bottom,
     }
@@ -235,6 +238,7 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         // Loaded baseline only; the app owns the live overrides and no command edits them.
         net_colors: _,
         paper_size,
+        font_family,
         root_sheet_page,
         symbols,
         wires,
@@ -284,6 +288,10 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         DocumentPatch::LIB_SYMBOLS,
     );
     flag(
+        differ(font_family, &b.font_family),
+        DocumentPatch::FONT_FAMILY,
+    );
+    flag(
         differ(paper_size, &b.paper_size)
             || differ(root_sheet_page, &b.root_sheet_page)
             || differ(&sorted(title_block), &sorted(&b.title_block)),
@@ -305,7 +313,7 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 36] = [
+const ALL_KINDS: [CommandKind; 38] = [
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
@@ -342,6 +350,8 @@ const ALL_KINDS: [CommandKind; 36] = [
     CommandKind::RenameChildSheetFile,
     CommandKind::ModifyChildSheet,
     CommandKind::SetPaperSize,
+    CommandKind::SetTextFontFamily,
+    CommandKind::SetDocumentFontFamily,
 ];
 
 /// Adding a `CommandKind` breaks this match: add a sample below and list the
@@ -384,7 +394,9 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::ReconcileChildSheetPins
         | CommandKind::RenameChildSheetFile
         | CommandKind::ModifyChildSheet
-        | CommandKind::SetPaperSize => {}
+        | CommandKind::SetPaperSize
+        | CommandKind::SetTextFontFamily
+        | CommandKind::SetDocumentFontFamily => {}
     }
 }
 
@@ -704,6 +716,19 @@ fn samples() -> Vec<(String, Command)> {
         "SetPaperSize",
         Command::SetPaperSize {
             paper_size: "A3".into(),
+        },
+    );
+    add(
+        "SetTextFontFamily",
+        Command::SetTextFontFamily {
+            target: crate::TextTarget::Label(uid(LABEL, 1)),
+            font_family: Some("Fira Mono".into()),
+        },
+    );
+    add(
+        "SetDocumentFontFamily",
+        Command::SetDocumentFontFamily {
+            font_family: Some("Fira Mono".into()),
         },
     );
     out

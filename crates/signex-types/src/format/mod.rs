@@ -44,6 +44,8 @@ mod unknown_columns;
 mod version;
 
 #[cfg(test)]
+mod font_family_tests;
+#[cfg(test)]
 mod net_colors_tests;
 #[cfg(test)]
 mod non_finite_tests;
@@ -474,6 +476,7 @@ impl SnxSchematic {
             generator: raw.generator,
             generator_version: raw.generator_version,
             paper_size: raw.paper_size,
+            font_family: sheet_extras.font_family,
             root_sheet_page: raw.root_sheet_page,
             symbols,
             wires,
