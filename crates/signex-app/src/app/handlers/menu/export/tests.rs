@@ -189,6 +189,7 @@ pub(crate) fn app_workspace(dir: &str, listed: &[&str]) -> Signex {
         },
         pending_libraries: HashMap::new(),
         case_fold: Default::default(),
+        case_probed: false,
     });
     // The sticky pointer every one of these regressions is about.
     app.document_state.active_project = Some(id);

@@ -74,6 +74,7 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
         data,
         pending_libraries: std::collections::HashMap::new(),
         case_fold: Default::default(),
+        case_probed: false,
     });
     app.document_state.active_project = Some(id);
 
@@ -1480,6 +1481,7 @@ fn insert_other_project(app: &mut Signex, index: usize) -> (TempDir, PathBuf) {
             },
             pending_libraries: std::collections::HashMap::new(),
             case_fold: Default::default(),
+            case_probed: false,
         },
     );
     (tmp, prj)

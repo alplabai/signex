@@ -59,8 +59,9 @@ fn project_listing_sheet<'a>(
     projects: &'a [LoadedProject],
     path: &Path,
     fold_of: &dyn Fn(&LoadedProject) -> CaseFold,
+    include: &dyn Fn(&LoadedProject) -> bool,
 ) -> Option<&'a LoadedProject> {
-    projects.iter().find(|p| {
+    projects.iter().filter(|p| include(p)).find(|p| {
         let fold = fold_of(p);
         let key = path_key_with(path, fold);
         let dir = p.dir();
@@ -148,8 +149,11 @@ pub(crate) fn project_owning_sheet_with<'a>(
     owning_sheet_walk(projects, loaded, path, &[fold], &|_| fold)
 }
 
-/// The ownership walk. `folds` are the distinct rules in play: the parent
-/// lookup tries each, since the child's own project is not known yet.
+/// The ownership walk. A direct listing in ANY project wins first, each
+/// project compared under its own fold. Otherwise the hierarchy is walked once
+/// per distinct rule in `folds`: a parent found under rule F is accepted only
+/// when the project listing it also has rule F, so a folding map can never
+/// attribute a different file to a case-sensitive project.
 fn owning_sheet_walk<'a>(
     projects: &'a [LoadedProject],
     loaded: &HashMap<PathBuf, Vec<String>>,
@@ -157,25 +161,23 @@ fn owning_sheet_walk<'a>(
     folds: &[CaseFold],
     fold_of: &dyn Fn(&LoadedProject) -> CaseFold,
 ) -> Option<&'a LoadedProject> {
-    if let Some(project) = project_listing_sheet(projects, path, fold_of) {
+    if let Some(project) = project_listing_sheet(projects, path, fold_of, &|_| true) {
         return Some(project);
     }
-    let parent_maps: Vec<(CaseFold, HashMap<String, PathBuf>)> = folds
-        .iter()
-        .map(|&fold| (fold, parent_of(loaded, fold)))
-        .collect();
-    let mut seen: HashSet<PathBuf> = HashSet::new();
-    let mut current = path.to_path_buf();
-    while seen.insert(current.clone()) {
-        let parent = parent_maps
-            .iter()
-            .find_map(|(fold, map)| map.get(&path_key_with(&current, *fold)))?;
-        if let Some(project) = project_listing_sheet(projects, parent, fold_of) {
-            return Some(project);
+    folds.iter().find_map(|&fold| {
+        let parents = parent_of(loaded, fold);
+        let same_rule = |p: &LoadedProject| fold_of(p) == fold;
+        let mut seen: HashSet<PathBuf> = HashSet::new();
+        let mut current = path.to_path_buf();
+        while seen.insert(current.clone()) {
+            let parent = parents.get(&path_key_with(&current, fold))?;
+            if let Some(project) = project_listing_sheet(projects, parent, &|_| fold, &same_rule) {
+                return Some(project);
+            }
+            current = parent.clone();
         }
-        current = parent.clone();
-    }
-    None
+        None
+    })
 }
 
 /// True when `path` is `root` or lies under it, compared component-wise on
@@ -403,6 +405,7 @@ mod tests {
             },
             pending_libraries: std::collections::HashMap::new(),
             case_fold: Default::default(),
+            case_probed: false,
         }
     }
 

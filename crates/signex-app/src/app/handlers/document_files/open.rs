@@ -341,6 +341,7 @@ impl Signex {
                 data,
                 pending_libraries: std::collections::HashMap::new(),
                 case_fold: crate::app::state::scope::CaseFold::host_default(),
+                case_probed: false,
             });
         self.document_state.active_project = Some(id);
         Ok((id, mount_task))

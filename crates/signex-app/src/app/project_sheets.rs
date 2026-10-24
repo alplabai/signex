@@ -238,7 +238,7 @@ pub(crate) fn assemble_project_sheets(
 }
 
 /// Breadth-first load of `seeds` and their `child_sheets` descendants into
-/// `set`. Returns the `path_key`s actually loaded by this walk.
+/// `set`. Returns the path keys actually loaded by this walk.
 fn walk(
     document_state: &DocumentState,
     seeds: &[PathBuf],
@@ -1101,7 +1101,7 @@ mod tests {
     /// #536 — the root must survive a `SheetKey` collision.
     ///
     /// Reproducible on EVERY platform, not just Windows as the issue
-    /// first read. `path_key` folds case only under `cfg!(windows)`, but
+    /// first read. The host-default fold only folds case under `cfg!(windows)`, but
     /// `sheet_key` relativizes against `base` and falls back to the bare
     /// `file_name()` when a path is not under it. A sheet living outside
     /// the project directory therefore keys as `top.snxsch` and collides

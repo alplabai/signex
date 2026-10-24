@@ -22,9 +22,15 @@ impl Signex {
         }
         self.ui_state.project_netlist = None;
         self.refresh_project_netlist();
-        if !self.ui_state.erc_violations_by_path.is_empty()
-            || !self.ui_state.erc_violations.is_empty()
-        {
+        // ERC runs on the active document's project; another project's probe
+        // landing says nothing about those results.
+        let erc_project_changed = self
+            .document_state
+            .active_document_project()
+            .is_some_and(|p| p.id == project_id);
+        let erc_on_screen = !self.ui_state.erc_violations_by_path.is_empty()
+            || !self.ui_state.erc_violations.is_empty();
+        if erc_project_changed && erc_on_screen {
             crate::diagnostics::log_info(
                 "ERC results predate the volume check of this project; run ERC again.",
             );

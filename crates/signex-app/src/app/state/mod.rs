@@ -344,6 +344,8 @@ pub struct LoadedProject {
     /// Path-key rules for this project's volume, probed once off-thread
     /// after load (#694); the host default until the answer arrives.
     pub case_fold: scope::CaseFold,
+    /// The volume probe has reported; the first answer wins.
+    pub case_probed: bool,
 }
 
 impl LoadedProject {
@@ -444,8 +446,6 @@ pub struct DocumentState {
     /// resolution — must use [`DocumentState::active_document_project`]
     /// instead, or it silently operates on another project's sheets (#406).
     pub active_project: Option<ProjectId>,
-    /// Projects whose volume probe has reported; the first answer wins.
-    pub(crate) probed_projects: std::collections::HashSet<ProjectId>,
     /// Files with unsaved edits, keyed by absolute path. Tracks the
     /// "Altium-style" project-scoped dirty state — a file stays in this
     /// set after its tab is closed (the engine in `engines` keeps the

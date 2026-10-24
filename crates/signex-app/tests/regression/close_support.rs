@@ -19,7 +19,7 @@ pub fn close_first_project(app: &mut Signex) {
         app.ui_state.project_close_confirm.is_none(),
         "the gate must wait for the task, not read the disk in update",
     );
-    let result = app.resolve_sheet_refs_blocking(app.document_state.projects[0].id);
+    let result = app.resolve_sheet_refs_blocking();
     let _ = app.update(Message::Project(ProjectMsg::CloseRefsResolved {
         project_id,
         result,

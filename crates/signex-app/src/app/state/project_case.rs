@@ -5,6 +5,12 @@
 //! only stores the answer on `LoadedProject::case_fold`. Until it arrives (and
 //! when it cannot decide) the project keys paths by the host default.
 //!
+//! The fallback here (host default, warned) deliberately differs from
+//! `volume_case`'s identity probe, which answers "ignores case" when it cannot
+//! decide: a wrong KEY only mis-stitches a netlist and is reported, whereas a
+//! wrong IDENTITY could discard another project's unsaved sheet, so identity
+//! takes the data-loss-safe side.
+//!
 //! One fold per project: whoever picks the project reads `case_fold` once and
 //! passes it down; nothing downstream re-derives it from a path.
 
@@ -83,12 +89,12 @@ impl DocumentState {
     /// keeps the host default and says so in the Messages panel. A project
     /// closed while the worker ran is ignored.
     pub(crate) fn apply_case_probe(&mut self, id: ProjectId, outcome: CaseProbeOutcome) -> bool {
-        if !self.probed_projects.insert(id) {
-            return false;
-        }
         let Some(project) = self.projects.iter_mut().find(|p| p.id == id) else {
             return false;
         };
+        if std::mem::replace(&mut project.case_probed, true) {
+            return false;
+        }
         let before = project.case_fold;
         match outcome {
             CaseProbeOutcome::Decided(ignores) => project.case_fold = CaseFold::from_probe(ignores),
@@ -148,6 +154,7 @@ mod tests {
             },
             pending_libraries: HashMap::new(),
             case_fold: CaseFold::default(),
+            case_probed: false,
         });
         (app.document_state, id)
     }
@@ -256,7 +263,7 @@ mod tests {
     fn a_direct_listing_beats_a_hierarchical_claim_across_different_folds() {
         // P1 (case-insensitive) lists `a.snxsch`, which references `s.snxsch`.
         // P2 (case-sensitive) lists `s.snxsch` itself. P2 owns it.
-        let (mut ds, p1) = state_with_project("/w/p1-694", "a.snxsch");
+        let (mut ds, _p1) = state_with_project("/w/p1-694", "a.snxsch");
         let (other, _p2) = state_with_project("/w/p2-694", "s.snxsch");
         let mut second = other.projects[0].clone();
         second.id = ds.mint_project_id();
@@ -270,10 +277,42 @@ mod tests {
 
         let owner = project_owning_sheet(&ds.projects, &refs, Path::new("/w/p2-694/s.snxsch"));
 
-        let _ = p1;
         assert_eq!(
             owner.map(|p| p.dir().to_path_buf()),
             Some(PathBuf::from("/w/p2-694"))
         );
+    }
+
+    #[test]
+    fn a_folding_map_cannot_attribute_a_different_file_to_a_case_sensitive_project() {
+        // P1 folds case; P2 does not. P2's `top` references `Sub.snxsch`, and
+        // an unlisted, DIFFERENT `/p2/sub.snxsch` is open: P2 does not own it.
+        let (mut ds, _p1) = state_with_project("/w/p1-694b", "a.snxsch");
+        let (other, _p2) = state_with_project("/w/p2-694b", "top.snxsch");
+        let mut second = other.projects[0].clone();
+        second.id = ds.mint_project_id();
+        second.case_fold = CaseFold::from_probe(false);
+        ds.projects[0].case_fold = CaseFold::from_probe(true);
+        ds.projects.push(second);
+        let refs = HashMap::from([(
+            PathBuf::from("/w/p2-694b/top.snxsch"),
+            vec!["Sub.snxsch".to_string()],
+        )]);
+
+        let owner = project_owning_sheet(&ds.projects, &refs, Path::new("/w/p2-694b/sub.snxsch"));
+
+        assert!(
+            owner.is_none(),
+            "{:?}",
+            owner.map(|p| p.dir().to_path_buf())
+        );
+
+        // User-visible: the focused sheet is loose, not another project's page.
+        let loose = PathBuf::from("/w/p2-694b/sub.snxsch");
+        let sheet = crate::app::handlers::menu::export::tests::sheet_with_net("R1", "N", &[]);
+        crate::app::handlers::menu::export::tests::open_with(&mut ds, &loose, sheet);
+        ds.active_path = Some(loose.clone());
+        assert_eq!(ds.unowned_engine_paths(), vec![loose]);
+        assert!(ds.active_document_project().is_none());
     }
 }
