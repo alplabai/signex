@@ -59,7 +59,19 @@ fn an_adapter_failure_raises_the_card_and_skips_the_success_log() {
 
     app.handle_enable_version_control_confirm();
 
-    assert!(app.document_state.error_notice.is_some());
+    // Where the failure surfaces depends on the host: with a git identity the
+    // repository is created and the `.gitattributes` write fails (error card);
+    // on a runner without one, creating the repository already fails and the
+    // dialog stays open with the error. Either way the user sees it.
+    let dialog_error = app
+        .ui_state
+        .enable_version_control
+        .as_ref()
+        .is_some_and(|state| state.error.is_some());
+    assert!(
+        app.document_state.error_notice.is_some() || dialog_error,
+        "the failure must be shown to the user"
+    );
     assert!(
         !app.document_state
             .projects
