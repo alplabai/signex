@@ -1,6 +1,7 @@
 //! Document tab bar — tabs for open schematic sheets and PCB.
 
-use iced::widget::{Row, container, mouse_area, row, text};
+use iced::widget::scrollable::{Direction, RelativeOffset, Scrollbar};
+use iced::widget::{Row, container, mouse_area, row, scrollable, text, tooltip};
 use iced::{Element, Length};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
@@ -24,6 +25,28 @@ pub enum TabMessage {
     /// In New Window). Replaces the inline close-X / undock buttons
     /// that used to live on every tab.
     ContextMenu(usize),
+}
+
+/// Stable id of the tab strip's scrollable, so the active tab can be
+/// scrolled into view from `update`.
+const TAB_STRIP_ID: &str = "document-tab-strip";
+
+/// Relative scroll offset that brings tab `active` of `count` into view.
+/// Tab widths vary with their titles, so this is the index's proportional
+/// position along the strip: exact at both ends (newly appended tab =
+/// end), close enough in between for a tab to land on screen.
+fn reveal_offset(active: usize, count: usize) -> RelativeOffset {
+    let x = if count < 2 {
+        0.0
+    } else {
+        active.min(count - 1) as f32 / (count - 1) as f32
+    };
+    RelativeOffset { x, y: 0.0 }
+}
+
+/// Task scrolling the tab strip so tab `active` (of `count`) is visible.
+pub fn reveal_active_tab<M: Send + 'static>(active: usize, count: usize) -> iced::Task<M> {
+    iced::widget::operation::snap_to(TAB_STRIP_ID, reveal_offset(active, count))
 }
 
 pub fn view<'a>(
@@ -58,7 +81,7 @@ pub fn view<'a>(
         // marker now lives on the corresponding row in the Projects
         // tree (red dot to the right of the file name) so the user
         // sees dirty state without it competing with tab close-X.
-        let label = tab.title.clone();
+        let label = ellipsize_title(&tab.title, MAX_TAB_TITLE_CHARS);
 
         let is_active = i == active;
         let is_dragging = dragging == Some(i);
@@ -109,6 +132,14 @@ pub fn view<'a>(
             .on_right_press(TabMessage::ContextMenu(i))
             .interaction(cursor)
             .into();
+        // The pill shows an ellipsized title; hovering names the full path.
+        let tab_el: Element<'_, TabMessage> = tooltip(
+            tab_el,
+            container(text(tab.path.display().to_string()).size(11)).padding([2, 6]),
+            tooltip::Position::Bottom,
+        )
+        .style(styles::context_menu(tokens))
+        .into();
         bar = bar.push(tab_el);
     }
 
@@ -126,7 +157,18 @@ pub fn view<'a>(
             ..iced::widget::container::Style::default()
         });
     container(iced::widget::column![
-        container(bar).width(Length::Fill).padding(iced::Padding {
+        // More tabs than fit scroll sideways (wheel / thin scrollbar) rather
+        // than being clipped off the right edge.
+        container(
+            scrollable(bar)
+                .id(TAB_STRIP_ID)
+                .direction(Direction::Horizontal(
+                    Scrollbar::new().width(3).scroller_width(3),
+                ))
+                .width(Length::Fill),
+        )
+        .width(Length::Fill)
+        .padding(iced::Padding {
             top: 2.0,
             right: 6.0,
             bottom: 0.0,
@@ -137,6 +179,18 @@ pub fn view<'a>(
     .width(Length::Fill)
     .style(styles::toolbar_strip(tokens))
     .into()
+}
+
+/// Longest tab title drawn in full; longer ones are cut and end in `…`.
+const MAX_TAB_TITLE_CHARS: usize = 28;
+
+/// `title` cut to at most `max` characters, ending in `…` when cut.
+fn ellipsize_title(title: &str, max: usize) -> String {
+    if title.chars().count() <= max {
+        return title.to_owned();
+    }
+    let kept: String = title.chars().take(max.saturating_sub(1)).collect();
+    format!("{kept}…")
 }
 
 /// Resolve the pill bg fill for the current state. Altium parity:
@@ -157,5 +211,32 @@ fn pill_fill(tokens: &ThemeTokens, is_active: bool, is_dragging: bool) -> iced::
             a: tab_active.a * 0.35,
             ..tab_active
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ellipsize_title, reveal_active_tab, reveal_offset};
+
+    #[test]
+    fn reveal_offset_is_exact_at_both_ends_and_proportional_between() {
+        assert_eq!(reveal_offset(0, 1).x, 0.0);
+        assert_eq!(reveal_offset(0, 5).x, 0.0);
+        assert_eq!(reveal_offset(4, 5).x, 1.0);
+        assert_eq!(reveal_offset(2, 5).x, 0.5);
+        assert_eq!(reveal_offset(9, 5).x, 1.0);
+    }
+
+    #[test]
+    fn revealing_a_tab_emits_a_scroll_task() {
+        assert_eq!(reveal_active_tab::<()>(1, 3).units(), 1);
+    }
+
+    #[test]
+    fn short_titles_are_untouched_and_long_ones_end_in_an_ellipsis() {
+        assert_eq!(ellipsize_title("power.snxsch", 28), "power.snxsch");
+        let cut = ellipsize_title("a_very_long_sheet_name_that_overflows.snxsch", 10);
+        assert_eq!(cut.chars().count(), 10);
+        assert!(cut.ends_with('…'));
     }
 }
