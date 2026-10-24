@@ -159,7 +159,7 @@ pub(crate) fn is_reserved_device_name(name: &str) -> bool {
 /// (no IO) is a `\\.\` device path, or its last component is a reserved
 /// device name. Always false off Windows, where these are ordinary files.
 #[cfg(windows)]
-fn names_windows_device(path: &Path) -> bool {
+pub(crate) fn names_windows_device(path: &Path) -> bool {
     use std::path::{Component, Prefix};
     let device_prefix = std::path::absolute(path).is_ok_and(|abs| {
         matches!(
@@ -174,7 +174,7 @@ fn names_windows_device(path: &Path) -> bool {
 }
 
 #[cfg(not(windows))]
-fn names_windows_device(_path: &Path) -> bool {
+pub(crate) fn names_windows_device(_path: &Path) -> bool {
     false
 }
 

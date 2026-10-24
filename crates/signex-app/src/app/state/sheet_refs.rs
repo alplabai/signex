@@ -18,7 +18,9 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use super::reference_policy::{Share, is_walk_refused, path_is_refused, share_of};
+use super::reference_policy::{
+    Share, is_walk_refused, names_windows_device, path_is_refused, share_of,
+};
 use super::scope::{CaseFold, KeyMap, ReachSets, path_key_with};
 use super::sheet_read::{WalkLimits, read_child_refs};
 use super::volume_case::{IgnoresCase, VolumeCase};
@@ -154,6 +156,13 @@ fn real_path(path: &Path, volume: &mut VolumeCase) -> PathBuf {
     let mut tail: Vec<&std::ffi::OsStr> = Vec::new();
     let mut current = path;
     loop {
+        // An ancestor that maps to a device (`NUL` in `NUL/x.snxsch`) must
+        // never reach CreateFile either (#999): fold the path lexically from
+        // here, exactly as when nothing canonicalises.
+        if names_windows_device(current) {
+            let folded = PathBuf::from(current.to_string_lossy().to_lowercase());
+            return join_tail(folded, tail, true);
+        }
         if let Ok(real) = std::fs::canonicalize(current) {
             let fold = !tail.is_empty() && volume.ignores_case(&real);
             return join_tail(real, tail, fold);
@@ -1281,6 +1290,60 @@ mod tests {
                     .all(|k| !k.to_lowercase().contains(device)),
                 "{device}: {:?}",
                 resolved.keys.real
+            );
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_device_name_used_as_a_folder_is_never_canonicalised() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let mut volume = VolumeCase::new(|_| true);
+
+        for folder in ["NUL", "com1", "aux .d"] {
+            let path = tmp.path().join(folder).join("x.snxsch");
+            let real = real_path(&path, &mut volume);
+            // Canonicalising any ancestor would yield a verbatim `\?\` path;
+            // the device ancestor must stop the walk before that.
+            assert!(
+                !real.to_string_lossy().starts_with(r"\?\"),
+                "{folder}: {real:?}"
+            );
+            assert_eq!(
+                real,
+                PathBuf::from(path.to_string_lossy().to_lowercase()),
+                "{folder}"
+            );
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_device_folder_in_a_child_or_extra_path_is_keyed_without_canonicalising() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path().join("x.snxsch");
+        write_sheet(&root, &[r"NUL\x.snxsch"]);
+        let inputs = SheetRefInputs {
+            loaded: HashMap::new(),
+            roots: vec![root.clone()],
+            projects: Vec::new(),
+            extra: vec![tmp.path().join("NUL").join("lib.snxlib")],
+            trusted: Vec::new(),
+        };
+
+        let resolved = inputs.resolve_within(|_| false, WalkLimits::default());
+
+        for real in resolved.keys.real.values() {
+            let text = real.to_string_lossy();
+            if text.to_lowercase().contains("nul") {
+                assert!(!text.starts_with(r"\?\"), "{real:?}");
+            }
+        }
+        for sheet in &resolved.unreadable {
+            let label = sheet.label();
+            assert!(
+                !label.contains("os error 87") && !label.contains("os error 1"),
+                "{label}"
             );
         }
     }
