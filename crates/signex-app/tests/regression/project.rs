@@ -1680,3 +1680,30 @@ fn new_project_write_failure_reaches_the_user_after_the_task_runs() {
             .all(|p| p.path != prj_path)
     );
 }
+
+#[test]
+fn second_new_project_for_the_same_path_while_pending_is_ignored() {
+    let tmp = TempDir::new().expect("tempdir");
+    let prj_path = tmp.path().join("Twice.snxprj");
+
+    let (mut app, _t) = Signex::new();
+    let first = app.update(Message::File(FileMsg::NewProject(Some(prj_path.clone()))));
+    let second = app.update(Message::File(FileMsg::NewProject(Some(prj_path.clone()))));
+    assert!(first.units() >= 1, "first dispatch spawns the worker");
+    assert_eq!(
+        second.units(),
+        0,
+        "second dispatch is ignored while pending"
+    );
+
+    crate::settle_support::settle_task(&mut app, first);
+    let sch_path = tmp.path().join("Twice.snxsch");
+    let tabs = app
+        .document_state
+        .tabs
+        .iter()
+        .filter(|t| t.path == sch_path)
+        .count();
+    assert_eq!(tabs, 1, "schematic tab must not be duplicated");
+    assert!(!app.document_state.pending_opens.contains(&prj_path));
+}

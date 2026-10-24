@@ -66,7 +66,9 @@ impl Signex {
         match outcome.result {
             Ok(()) => {
                 log::info!("{}", outcome.success_log);
-                if let Some(notice) = outcome.advisory {
+                if let Some(notice) = outcome.advisory
+                    && self.document_state.error_notice.is_none()
+                {
                     self.document_state.error_notice = Some(notice);
                 }
                 for warning in outcome.warnings {

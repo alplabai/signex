@@ -51,13 +51,20 @@ impl Signex {
         match new_project_parts(&path) {
             // The directory, the refusal check and the file writes run on a
             // blocking worker; `handle_new_project_written` opens the project.
-            Ok(_) => iced::Task::perform(
-                super::super::dock::project_navigation::add_io::on_blocking_pool({
-                    let path = path.clone();
-                    move || write_new_project_files(&path).map_err(|e| format!("{e:#}"))
-                }),
-                move |result| Message::File(FileMsg::NewProjectWritten { path, result }),
-            ),
+            Ok(_) => {
+                // A second New Project for the same path while the first
+                // worker is pending would race it; ignore it.
+                if !self.document_state.pending_opens.insert(path.clone()) {
+                    return iced::Task::none();
+                }
+                iced::Task::perform(
+                    super::super::dock::project_navigation::add_io::on_blocking_pool({
+                        let path = path.clone();
+                        move || write_new_project_files(&path).map_err(|e| format!("{e:#}"))
+                    }),
+                    move |result| Message::File(FileMsg::NewProjectWritten { path, result }),
+                )
+            }
             Err(error) => {
                 self.report_new_project_failure(&format!("{error:#}"));
                 iced::Task::none()
@@ -82,6 +89,7 @@ impl Signex {
         project_path: PathBuf,
         result: Result<(), String>,
     ) -> iced::Task<Message> {
+        self.document_state.pending_opens.remove(&project_path);
         if let Err(error) = result {
             self.report_new_project_failure(&error);
             return iced::Task::none();
@@ -522,30 +530,45 @@ fn write_new_project_files(project_path: &std::path::Path) -> Result<()> {
     std::fs::create_dir_all(dir)
         .with_context(|| format!("create project directory {}", dir.display()))?;
 
-    // Refuse to create a new project over an existing, non-empty
-    // `.snxprj` — writing the empty marker below would truncate it
-    // and destroy the user's project. A zero-byte file is a legacy
-    // marker and safe to (re)write.
-    if let Ok(meta) = std::fs::metadata(project_path)
-        && meta.len() > 0
+    // Take the marker atomically: `create_new` never truncates. An
+    // existing zero-byte file is a legacy marker and fine; a non-empty
+    // one is a real project, which we refuse to clobber.
+    match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(project_path)
     {
-        anyhow::bail!(
-            "a project already exists at {} — open it instead of creating a new one over it",
-            project_path.display()
-        );
+        Ok(_) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            let len = std::fs::metadata(project_path)
+                .map(|m| m.len())
+                .unwrap_or(0);
+            if len > 0 {
+                anyhow::bail!(
+                    "a project already exists at {} — open it instead of creating a new one over it",
+                    project_path.display()
+                );
+            }
+        }
+        Err(e) => {
+            return Err(e)
+                .with_context(|| format!("write project file {}", project_path.display()));
+        }
     }
 
-    std::fs::write(project_path, b"")
-        .with_context(|| format!("write project file {}", project_path.display()))?;
-
     let sch_path = dir.join(format!("{stem}.snxsch"));
-    if !sch_path.exists() {
-        let sheet = super::blank_schematic_sheet();
-        let serialised = signex_types::format::SnxSchematic::new(sheet)
-            .write_string()
-            .context("serialise blank schematic")?;
-        signex_types::atomic_io::atomic_write(&sch_path, serialised.as_bytes())
-            .with_context(|| format!("write blank schematic {}", sch_path.display()))?;
+    let sheet = super::blank_schematic_sheet();
+    let serialised = signex_types::format::SnxSchematic::new(sheet)
+        .write_string()
+        .context("serialise blank schematic")?;
+    // No-clobber publish; an existing schematic is kept as is (#933).
+    if let Err(e) =
+        super::super::dock::project_navigation::add_io::create_noclobber(&sch_path, |f| {
+            std::io::Write::write_all(f, serialised.as_bytes())
+        })
+        && !sch_path.exists()
+    {
+        anyhow::bail!("write blank schematic {}: {e}", sch_path.display());
     }
     Ok(())
 }
