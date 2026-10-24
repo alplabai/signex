@@ -46,6 +46,35 @@ fn a_refused_init_keeps_the_dialog_open_with_the_error_and_logs_it() {
     );
 }
 
+/// `.gitattributes` is a directory, so the adapter cannot write it: the
+/// error card shows, auto-commit stays off and no success line is logged.
+#[test]
+fn an_adapter_failure_raises_the_card_and_skips_the_success_log() {
+    let _ = crate::diagnostics::init_logging();
+    let tmp = tempfile::TempDir::new().unwrap();
+    std::fs::write(tmp.path().join("demo.snxprj"), "x").unwrap();
+    std::fs::create_dir(tmp.path().join(".gitattributes")).unwrap();
+    let mut app = open_dialog_on(tmp.path());
+    let marker = format!("initialised repository at {}", tmp.path().display());
+
+    app.handle_enable_version_control_confirm();
+
+    assert!(app.document_state.error_notice.is_some());
+    assert!(
+        !app.document_state
+            .projects
+            .iter()
+            .any(|p| p.data.enable_git),
+        "enable_git must stay off"
+    );
+    assert!(
+        !crate::diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.message.contains(&marker)),
+        "no success log after an adapter failure"
+    );
+}
+
 #[test]
 fn the_setup_failure_notice_names_version_control() {
     let notice = crate::app::state::ErrorNotice::version_control("auto-commit is off");
