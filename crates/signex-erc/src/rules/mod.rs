@@ -15,7 +15,7 @@ use std::collections::HashMap;
 
 use signex_net::{SheetConnectivity, point_on_segment, pt_key};
 use signex_types::schematic::{
-    LabelType, PartKey, Point, SelectedKind, group_into_parts, normalize_port_name,
+    LabelType, PartKey, PinDirection, Point, SelectedKind, group_into_parts, normalize_port_name,
     normalized_lib_id,
 };
 
@@ -88,8 +88,9 @@ pub(crate) fn unused_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
             if pin.connected {
                 continue;
             }
-            // Do-not-connect / unclassified pins are left open by design.
-            if !pin.required {
+            // Do-not-connect pins are left open by design. Unclassified pins
+            // (the default for freshly authored library pins) stay flagged.
+            if pin.electrical_type == PinDirection::DoNotConnect {
                 continue;
             }
             let reference = if symbol.reference.is_empty() {
@@ -117,6 +118,10 @@ pub(crate) fn duplicate_ref_designator(ctx: &ErcContext, out: &mut Vec<Diagnosti
     // Symbols of this sheet (origin `None`) plus every child sheet's
     // (origin `Some(filename)`), so a designator reused across sheets is a
     // duplicate too. Children are visited in filename order for stable output.
+    // Only one level deep: child contexts are built without grandchildren, so
+    // a clash between a top symbol and a grandchild sheet is not seen (#915).
+    // Power/flag symbols (`is_power`, `#`-prefixed refs) are not designators,
+    // matching annotate.
     let mut child_names: Vec<&String> = ctx.children.keys().collect();
     child_names.sort();
     let mut by_ref: HashMap<&str, Vec<(Option<&str>, &crate::context::ErcSymbol)>> = HashMap::new();
@@ -128,7 +133,7 @@ pub(crate) fn duplicate_ref_designator(ctx: &ErcContext, out: &mut Vec<Diagnosti
     for (origin, symbols) in sources {
         for symbol in symbols {
             let r = symbol.reference.trim();
-            if r.is_empty() || r.ends_with('?') {
+            if r.is_empty() || r.ends_with('?') || symbol.is_power || r.starts_with('#') {
                 continue;
             }
             by_ref.entry(r).or_default().push((origin, symbol));

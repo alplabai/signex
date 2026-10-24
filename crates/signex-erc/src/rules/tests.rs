@@ -756,16 +756,20 @@ fn net_label_conflict_checks_global_and_power_labels() {
 }
 
 #[test]
-fn unused_pin_skips_pins_not_required() {
-    let mut sym = symbol_with_pin("U1", pt(5.0, 0.0), false);
-    sym.pins[0].required = false;
-    let c = ctx(Vec::new(), Vec::new(), Vec::new(), vec![sym]);
-    let mut out = Vec::new();
-    unused_pin(&c, &mut out);
-    assert!(
-        out.is_empty(),
-        "a do-not-connect pin is not flagged: {out:?}"
-    );
+fn unused_pin_skips_do_not_connect_but_flags_unclassified() {
+    for (dir, flagged) in [
+        (PinDirection::DoNotConnect, false),
+        (PinDirection::Unclassified, true),
+    ] {
+        let mut sym = symbol_with_pin("U1", pt(5.0, 0.0), false);
+        sym.pins[0].electrical_type = dir;
+        // Mirrors projection: neither type is `required`.
+        sym.pins[0].required = false;
+        let c = ctx(Vec::new(), Vec::new(), Vec::new(), vec![sym]);
+        let mut out = Vec::new();
+        unused_pin(&c, &mut out);
+        assert_eq!(out.len(), usize::from(flagged), "{dir:?}: {out:?}");
+    }
 }
 
 fn lib_symbol_ref(reference: &str, lib_id: &str, unit: u32) -> ErcSymbol {
@@ -812,6 +816,24 @@ fn duplicate_ref_designator_leaves_a_clash_inside_one_child_to_that_child() {
         vec![
             lib_symbol_ref("R1", "Device:R", 1),
             lib_symbol_ref("R1", "Device:R", 1),
+        ],
+    );
+    let mut out = Vec::new();
+    duplicate_ref_designator(&c, &mut out);
+    assert!(out.is_empty(), "{out:?}");
+}
+
+#[test]
+fn duplicate_ref_designator_ignores_power_and_flag_symbols_across_sheets() {
+    let mut top_flag = lib_symbol_ref("#FLG01", "power:PWR_FLAG", 1);
+    top_flag.is_power = false; // `#` prefix alone must exclude it
+    let mut top_pwr = lib_symbol_ref("#PWR01", "power:GND", 1);
+    top_pwr.is_power = true;
+    let c = with_child(
+        vec![top_pwr, top_flag],
+        vec![
+            lib_symbol_ref("#PWR01", "power:GND", 1),
+            lib_symbol_ref("#FLG01", "power:PWR_FLAG", 1),
         ],
     );
     let mut out = Vec::new();
