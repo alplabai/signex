@@ -157,6 +157,61 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
 
+  # Library-server Postgres integration test (#113). Non-required: the
+  # default `cargo test --workspace` stays hermetic (SQLite); this job
+  # exercises the Postgres migrations against a real server. The test is
+  # `#[ignore]`d without the URL, hence `--ignored`. Throwaway CI-only
+  # credentials on a job-local service container; no secrets.
+  library-server-pg:
+    name: test · library-server postgres
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_USER: signex
+          POSTGRES_PASSWORD: signex
+          POSTGRES_DB: signex_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U signex -d signex_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SIGNEX_TEST_PG_URL: postgres://signex:signex@localhost:5432/signex_test
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Test (postgres)
+        run: cargo test -p signex-library-server --test integration_db -- --ignored
+
+  # Fuzz build smoke (#113). Non-required. cargo-fuzz needs nightly, so this
+  # is the one deliberate exception to the 1.97.0 lockstep pin; `+nightly`
+  # overrides rust-toolchain.toml. `fuzz/` is outside the workspace.
+  fuzz:
+    name: fuzz · snxsch_parse
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@nightly
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+
+      - name: Install cargo-fuzz
+        run: cargo +nightly install cargo-fuzz --locked
+
+      - name: Fuzz 60 s
+        run: cargo +nightly fuzz run snxsch_parse -- -max_total_time=60
+
   deny:
     name: deny · licenses + deps
     runs-on: ubuntu-latest
