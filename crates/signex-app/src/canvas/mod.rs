@@ -570,6 +570,11 @@ fn shift_snapshot_for_selection(
             nc.position = shift(nc.position);
         }
     }
+    for d in out.no_erc_directives.iter_mut() {
+        if is_selected(d.uuid, SelectedKind::NoErcDirective) {
+            d.position = shift(d.position);
+        }
+    }
     for l in out.labels.iter_mut() {
         if is_selected(l.uuid, SelectedKind::Label) {
             l.position = shift(l.position);

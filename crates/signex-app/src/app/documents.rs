@@ -793,6 +793,8 @@ pub enum Tool {
     Component,
     Text,
     NoConnect,
+    /// Generic No-ERC directive (Altium's "Place No ERC").
+    NoErcDirective,
     BusEntry,
     Line,
     Rectangle,
@@ -813,6 +815,7 @@ impl std::fmt::Display for Tool {
             Tool::Component => write!(f, "Place Component"),
             Tool::Text => write!(f, "Place Text"),
             Tool::NoConnect => write!(f, "Place No Connect"),
+            Tool::NoErcDirective => write!(f, "Place No ERC"),
             Tool::BusEntry => write!(f, "Place Bus Entry"),
             Tool::Line => write!(f, "Draw Line"),
             Tool::Rectangle => write!(f, "Draw Rectangle"),

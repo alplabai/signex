@@ -133,6 +133,7 @@ impl Engine {
             | Command::PlaceWireSegment { .. }
             | Command::PlaceJunction { .. }
             | Command::PlaceNoConnect { .. }
+            | Command::PlaceNoErcDirective { .. }
             | Command::PlaceBusEntry { .. }
             | Command::PlaceTextNote { .. }
             | Command::PlaceSchDrawing { .. } => self.exec_place(before, cmd),

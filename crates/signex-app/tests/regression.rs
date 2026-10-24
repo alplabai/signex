@@ -154,3 +154,6 @@ mod symbol_undo_steps;
 mod schematic_field_drag;
 #[path = "regression/surface_failures.rs"]
 mod surface_failures;
+
+#[path = "regression/no_erc_directive.rs"]
+mod no_erc_directive;

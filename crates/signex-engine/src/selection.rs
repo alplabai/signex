@@ -138,6 +138,12 @@ impl Engine {
                     .iter()
                     .find(|nc| nc.uuid == item.uuid)
                     .map(|nc| (nc.position.x, nc.position.y)),
+                SelectedKind::NoErcDirective => self
+                    .document
+                    .no_erc_directives
+                    .iter()
+                    .find(|d| d.uuid == item.uuid)
+                    .map(|d| (d.position.x, d.position.y)),
                 SelectedKind::TextNote => self
                     .document
                     .text_notes
@@ -307,6 +313,18 @@ impl Engine {
                 info.push((
                     "Position".into(),
                     format!("{:.2}, {:.2}", no_connect.position.x, no_connect.position.y),
+                ));
+            }
+            SelectedKind::NoErcDirective => {
+                let directive = self
+                    .document
+                    .no_erc_directives
+                    .iter()
+                    .find(|d| d.uuid == item.uuid)?;
+                info.push(("Type".into(), "No ERC Directive".into()));
+                info.push((
+                    "Position".into(),
+                    format!("{:.2}, {:.2}", directive.position.x, directive.position.y),
                 ));
             }
             SelectedKind::TextNote => {
@@ -607,7 +625,8 @@ fn clipboard_slot(kind: SelectedKind) -> Option<ClipboardSlot> {
         SelectedKind::Junction => Some(ClipboardSlot::Junction),
         SelectedKind::NoConnect => Some(ClipboardSlot::NoConnect),
         SelectedKind::TextNote => Some(ClipboardSlot::TextNote),
-        SelectedKind::BusEntry
+        SelectedKind::NoErcDirective
+        | SelectedKind::BusEntry
         | SelectedKind::SheetPin
         | SelectedKind::ChildSheet
         | SelectedKind::Drawing

@@ -153,6 +153,20 @@ impl SchematicCanvas<'_> {
                                 draw_x(&mut *frame, s);
                             }
                         }
+                        SelectedKind::NoErcDirective => {
+                            if let Some(d) =
+                                snap.no_erc_directives.iter().find(|d| d.uuid == sel.uuid)
+                            {
+                                let s = cam.world_to_screen(
+                                    iced::Point::new(
+                                        (d.position.x + dxf) as f32,
+                                        (d.position.y + dyf) as f32,
+                                    ),
+                                    bounds,
+                                );
+                                draw_x(&mut *frame, s);
+                            }
+                        }
                         SelectedKind::SheetPin => {
                             if let Some(pin) = snap
                                 .child_sheets

@@ -14,6 +14,7 @@ use super::labels::{
     halign_to_svg, label_colour, label_size_pt, label_spin_style, schematic_text_offset_global,
     schematic_text_offset_hier, schematic_text_offset_net, spin_text_style, valign_to_svg,
 };
+use super::markers::{push_no_connect_x, push_no_erc_diamond};
 use super::symbols::{push_symbol_lib_graphics, push_symbol_pins, symbol_eval_variables};
 use super::text::{TextStyle, draw_text_outline};
 use super::*;
@@ -156,34 +157,19 @@ impl SvgRenderContext {
             ));
         }
 
-        // Standard's "no_connect" X markers map to Altium's "No-ERC
-        // Markers" — render them only when the user kept the toggle
-        // on. Altium's checklist hides these from the printed PDF
-        // for cleaner deliverables.
-        if opts.include_no_erc_markers {
+        if opts.include_no_connect_markers {
             for nc in &sheet.schematic.no_connects {
-                let arm = (1.0 * xform.mm_to_unit) as f32;
-                let cx = xform.x(nc.position.x);
-                let cy = xform.px_y(nc.position.y);
-                let style = SvgStyle {
-                    stroke_rgb: Some(palette.no_connect),
-                    fill_rgb: None,
-                    stroke_width: 0.8,
-                };
-                elements.push(SvgElement::Path {
-                    commands: vec![
-                        SvgPathCommand::MoveTo(pt(cx - arm, cy - arm)),
-                        SvgPathCommand::LineTo(pt(cx + arm, cy + arm)),
-                    ],
-                    style,
-                });
-                elements.push(SvgElement::Path {
-                    commands: vec![
-                        SvgPathCommand::MoveTo(pt(cx - arm, cy + arm)),
-                        SvgPathCommand::LineTo(pt(cx + arm, cy - arm)),
-                    ],
-                    style,
-                });
+                push_no_connect_x(&mut elements, &xform, palette.no_connect, nc.position);
+            }
+        }
+        if opts.include_no_erc_markers {
+            for directive in &sheet.schematic.no_erc_directives {
+                push_no_erc_diamond(
+                    &mut elements,
+                    &xform,
+                    palette.no_connect,
+                    directive.position,
+                );
             }
         }
 

@@ -104,7 +104,9 @@ pub struct PdfOptions {
     /// include" checklist verbatim.
     ///
     /// Live toggles (renderer honours the value):
-    ///   `include_no_erc_markers`, `include_notes`.
+    ///   `include_no_erc_markers` (No-ERC directives),
+    ///   `include_no_connect_markers` (no-connect X marks),
+    ///   `include_notes`.
     ///
     /// Dormant toggles — Standard's schema has no equivalent concept,
     /// so these are stored for Altium-import parity but produce no
@@ -116,6 +118,9 @@ pub struct PdfOptions {
     /// project keeps the user's intent — when the corresponding
     /// signex-types feature lands the gating is one-line.
     pub include_no_erc_markers: bool,
+    /// Draws the no-connect X marks. Separate from the No-ERC
+    /// directive toggle above: they are different schematic objects.
+    pub include_no_connect_markers: bool,
     pub include_parameter_sets: bool,
     pub include_probes: bool,
     pub include_blankets: bool,
@@ -234,6 +239,7 @@ impl Default for PdfOptions {
             physical_sheet_number: true,
             physical_document_number: true,
             include_no_erc_markers: true,
+            include_no_connect_markers: true,
             include_parameter_sets: true,
             include_probes: true,
             include_blankets: true,
