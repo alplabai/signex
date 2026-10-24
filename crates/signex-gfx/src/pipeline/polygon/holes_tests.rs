@@ -147,7 +147,7 @@ fn holes_touching_the_outline_fall_back_to_the_solid_outline() {
     };
     let total = filled_area(&polygon);
     assert!(
-        (total - 200.0).abs() < 1e-3 || (total - 184.0).abs() < 1e-3,
-        "either the solid fill or the exact cut-out fill, got {total}"
+        (total - 200.0).abs() < 1e-3,
+        "expected the solid fill, got {total}"
     );
 }

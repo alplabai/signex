@@ -6,6 +6,12 @@
 //! coincident vertices in the bridged ring that the strict [`super::ear_clip`]
 //! rejects. This module bridges holes with the visible-vertex method and
 //! clips the result with a tolerant ear test.
+//!
+//! Holes that touch the outer ring are outside the `Zone.holes` invariant
+//! (strictly inside). A single hole sharing part of an outer edge, or touching
+//! an outer corner, triangulates correctly here; several holes on the same
+//! outer edge may not, and the GPU fill then falls back to the solid outline
+//! (#897).
 
 use super::Point2;
 use super::predicates::{Sign, orient2d};

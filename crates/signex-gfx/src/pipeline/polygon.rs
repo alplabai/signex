@@ -152,7 +152,12 @@ fn append_fill_with_holes(vertices: &mut Vec<PolygonVertex>, polygon: &GpuPolygo
         .iter()
         .map(|&[a, b, c]| signed_area(&[merged[a], merged[b], merged[c]]).abs())
         .sum();
-    if triangles.is_empty() || (filled - expected).abs() > expected.abs() * 1e-6 + 1e-9 {
+    // A non-finite vertex makes every comparison false, so it would pass the
+    // area check unnoticed; treat it as a failed fill.
+    if triangles.is_empty()
+        || !filled.is_finite()
+        || (filled - expected).abs() > expected.abs() * 1e-6 + 1e-9
+    {
         return false;
     }
     for [a, b, c] in triangles {

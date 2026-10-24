@@ -277,6 +277,7 @@ impl Signex {
     }
 
     pub(crate) fn open_pcb_tab(&mut self, path: PathBuf, title: String, board: PcbBoard) {
+        report_unusable_zone_holes(&path, &board);
         self.park_active_schematic_session();
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
         self.document_state.tabs.push(TabInfo {
@@ -506,5 +507,24 @@ impl Signex {
         if self.has_active_schematic() {
             self.apply_page_dimensions_to_canvas();
         }
+    }
+}
+
+/// Tell the user, once per open, about zone holes the renderer will not cut
+/// out: holes that touch or cross the outline, lie outside it, overlap
+/// another hole, or are malformed (#897). Both render paths skip them, so
+/// without this the zone would just look solid there.
+fn report_unusable_zone_holes(path: &std::path::Path, board: &PcbBoard) {
+    let dropped: usize = board
+        .zones
+        .iter()
+        .map(|zone| zone.holes.len() - zone.usable_holes().len())
+        .sum();
+    if dropped > 0 {
+        crate::diagnostics::log_warning(format!(
+            "{}: {dropped} zone hole(s) are drawn as solid copper: a hole must lie strictly \
+             inside its zone outline and not touch or overlap another hole",
+            path.display()
+        ));
     }
 }

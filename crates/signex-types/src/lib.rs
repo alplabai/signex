@@ -14,3 +14,4 @@ pub mod rotation2d;
 pub mod schematic;
 pub mod theme;
 pub mod violation;
+mod zone_holes;
