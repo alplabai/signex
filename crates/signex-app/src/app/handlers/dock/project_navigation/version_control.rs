@@ -134,8 +134,8 @@ impl Signex {
                     // flag, leaving the project in a mismatch state.
                     // Now any failure logs through diagnostics AND
                     // skips the flag flip; `.git` already exists, so
-                    // the user fixes the cause and repairs/initialises
-                    // from the project menu, or removes `.git`.
+                    // the user fixes the cause, deletes `.git` and enables
+                    // version control again.
                     let mut adapter_ok = false;
                     let mut adapter_error: Option<String> = None;
                     match signex_library::adapters::local_git_project::LocalGitProjectAdapter::open_or_init(
@@ -156,7 +156,7 @@ impl Signex {
                             Err(e) => {
                                 crate::diagnostics::log_warning(format!(
                                     "[git] write_gitattributes failed: {e} — \
-                                     enable_git left off; fix the cause and run the                                      repair/initialise action, or remove .git"
+                                     enable_git left off; fix the cause, delete the project's .git folder, then enable version control again"
                                 ));
                                 adapter_error =
                                     Some(format!("could not write .gitattributes: {e}"));
@@ -165,7 +165,7 @@ impl Signex {
                         Err(e) => {
                             crate::diagnostics::log_warning(format!(
                                 "[git] open_or_init failed for {}: {e} — \
-                                 enable_git left off; fix the cause and run the                                  repair/initialise action, or remove .git",
+                                 enable_git left off; fix the cause, delete the project's .git folder, then enable version control again",
                                 state.project_dir.display()
                             ));
                             adapter_error = Some(format!("could not open the repository: {e}"));
