@@ -510,7 +510,7 @@ fn build_scope(
             netlist,
             netlist_sheets,
             netlist_sheet_placements,
-            current_sheet: Some(active_path.clone()),
+            current_sheet: Some(active_path.to_path_buf()),
         },
         issues,
     ))
