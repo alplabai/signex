@@ -27,7 +27,7 @@ impl Engine {
         moves: Vec<(SelectedItem, f64, f64)>,
         keep_wires: bool,
     ) -> Result<CommandResult, EngineError> {
-        let mut items: Vec<SelectedItem> = moves.iter().map(|(item, _, _)| item.clone()).collect();
+        let mut items: Vec<SelectedItem> = moves.iter().map(|(item, _, _)| *item).collect();
         // Pin tips must be read before the symbols move.
         let tips = keep_wires.then(|| crate::moved_pin_tips(&self.document, &items));
 

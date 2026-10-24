@@ -30,7 +30,7 @@
 //!     `(fixed.x, new.y)`), the alternative is the other L;
 //!   - a result of zero length is dropped when something else still holds
 //!     the point, and otherwise left alone (the pin lands on that end).
-//!   Dots on `K` move with the tip.
+//!     Dots on `K` move with the tip.
 //!
 //! # Collisions
 //!
