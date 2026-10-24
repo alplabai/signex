@@ -7,6 +7,19 @@
 use super::super::*;
 use iced::widget::column;
 
+/// Value-text colour for an input drawn on `bg`: black or white,
+/// whichever contrasts more. These row builders receive resolved colours
+/// rather than `ThemeTokens`, so the primary-text token is unavailable;
+/// the input background decides instead (white on dark themes, as before).
+fn text_on(bg: Color) -> Color {
+    use crate::styles::tokens::contrast_ratio;
+    if contrast_ratio(Color::WHITE, bg) >= contrast_ratio(Color::BLACK, bg) {
+        Color::WHITE
+    } else {
+        Color::BLACK
+    }
+}
+
 /// Thin 1px separator line. `pub(super)` so sibling modules
 /// (footprint_editor_properties, symbol_editor_properties, etc.)
 /// extracted from this file can share the single implementation.
@@ -53,7 +66,7 @@ pub fn form_input_row<'a, M: 'a>(
                 container(
                     text(value.to_string())
                         .size(11)
-                        .color(Color::WHITE)
+                        .color(text_on(input_bg))
                         .wrapping(iced::widget::text::Wrapping::None),
                 )
                 .width(Length::Fill)
@@ -110,7 +123,7 @@ pub fn form_int_edit_row<'a>(
                     },
                     icon: Color::TRANSPARENT,
                     placeholder: Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0),
-                    value: Color::WHITE,
+                    value: text_on(input_bg),
                     selection: Color::from_rgba8(0x4D, 0x52, 0x66, 0.6),
                 }),
         ]
@@ -153,7 +166,7 @@ pub fn form_mm_edit_row<'a>(
                     },
                     icon: Color::TRANSPARENT,
                     placeholder: Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0),
-                    value: Color::WHITE,
+                    value: text_on(input_bg),
                     selection: Color::from_rgba8(0x4D, 0x52, 0x66, 0.6),
                 }),
         ]
@@ -668,4 +681,15 @@ pub fn font_style_row<'a>(
     .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
     .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn text_on_follows_background_lightness() {
+        assert_eq!(text_on(Color::from_rgb(0.12, 0.13, 0.16)), Color::WHITE);
+        assert_eq!(text_on(Color::from_rgb(0.99, 0.96, 0.89)), Color::BLACK);
+    }
 }
