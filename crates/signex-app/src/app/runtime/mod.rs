@@ -38,10 +38,13 @@ impl Signex {
         self.document_state.panel_ctx.grid_size_mm = self.ui_state.grid_size_mm;
         self.document_state.panel_ctx.visible_grid_mm = self.ui_state.visible_grid_mm;
         self.document_state.panel_ctx.snap_hotspots = self.ui_state.snap_hotspots;
-        self.interaction_state.pcb_canvas.set_grid(
+        let (visible, visible_grid_mm) = (
             self.ui_state.grid_visible,
             self.ui_state.visible_grid_mm as f64,
         );
+        for canvas in self.interaction_state.all_pcb_canvases_mut() {
+            canvas.set_grid(visible, visible_grid_mm);
+        }
     }
 
     pub(crate) fn finish_update(&mut self) -> Task<Message> {
@@ -292,15 +295,17 @@ impl Signex {
         } else {
             signex_types::theme::canvas_colors(self.ui_state.theme_id)
         };
-        self.interaction_state.pcb_canvas.set_theme_colors(
-            crate::render_config::to_iced(&colors.background),
-            crate::render_config::to_iced(&colors.grid),
-        );
-        self.interaction_state.pcb_canvas.canvas_colors = colors;
+        for canvas in self.interaction_state.all_pcb_canvases_mut() {
+            canvas.set_theme_colors(
+                crate::render_config::to_iced(&colors.background),
+                crate::render_config::to_iced(&colors.grid),
+            );
+            canvas.canvas_colors = colors;
+            canvas.clear_content_cache();
+        }
         self.interaction_state
             .active_canvas_mut()
             .clear_content_cache();
-        self.interaction_state.pcb_canvas.clear_content_cache();
     }
 }
 

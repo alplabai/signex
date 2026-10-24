@@ -379,8 +379,9 @@ impl Signex {
 
     /// The document a reported cursor point belongs to: the active schematic,
     /// else the active tab (a PCB has no `active_path`). `active_path` comes
-    /// first because an undocked window's event swaps it but not
-    /// `active_tab`.
+    /// first because an undocked schematic window's event swaps it but not
+    /// `active_tab`. An undocked PCB window's event swaps both (#494), and
+    /// both then name its tab.
     fn cursor_document_now(&self) -> Option<&std::path::Path> {
         self.document_state.active_path.as_deref().or_else(|| {
             self.document_state

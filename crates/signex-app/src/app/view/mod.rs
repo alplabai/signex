@@ -637,12 +637,24 @@ impl Signex {
                     other => other,
                 })
             }
-        } else if self.has_active_pcb() {
-            let pcb_canvas = &self.interaction_state.pcb_canvas;
+        } else if self.pcb_for_window(window_id).is_some() {
+            // Each window reads its own PCB canvas, and an undocked
+            // window's events carry its id, as for the schematic (#494).
+            let pcb_canvas = self.interaction_state.pcb_canvas_for_window(window_id);
             let base: Element<'_, Message> = canvas(pcb_canvas)
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .into();
+            let base = if is_main {
+                base
+            } else {
+                base.map(move |msg| match msg {
+                    Message::CanvasEvent(event) => {
+                        Message::CanvasEventInWindow { window_id, event }
+                    }
+                    other => other,
+                })
+            };
             if pcb_canvas.gpu_render {
                 // Stack the GPU shader ABOVE the CPU canvas: the canvas paints
                 // the opaque background + grid and owns pan/zoom/cursor/fit;

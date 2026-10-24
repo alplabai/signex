@@ -20,7 +20,14 @@ pub struct InteractionState {
     /// `Message::Window(WindowMsg::SecondaryWindowClosed)`. Reads go through
     /// `canvas_for_window`; writes happen via the dispatch swap trick.
     pub canvases: std::collections::HashMap<iced::window::Id, CanvasSlot>,
+    /// The main-window PCB canvas. Like `canvas`, the event-dispatch layer
+    /// swaps an undocked window's entry from `pcb_canvases` into this slot
+    /// while it handles that window's event.
     pub pcb_canvas: PcbCanvas,
+    /// PCB canvases owned by undocked PCB tab windows, so each window keeps
+    /// its own camera, viewport and caches (#494). Populated and drained
+    /// alongside `canvases`. Reads go through `pcb_canvas_for_window`.
+    pub pcb_canvases: std::collections::HashMap<iced::window::Id, PcbCanvas>,
     pub dragging: Option<DragTarget>,
     pub drag_start_pos: Option<f32>,
     pub drag_start_size: f32,
@@ -148,6 +155,19 @@ impl InteractionState {
     /// `dispatch::ui::handle_canvas_event_in_window`.
     pub fn canvas_for_window(&self, window_id: iced::window::Id) -> &CanvasSlot {
         self.canvases.get(&window_id).unwrap_or(&self.canvas)
+    }
+
+    /// Per-window PCB canvas lookup, falling back to the main window's.
+    pub fn pcb_canvas_for_window(&self, window_id: iced::window::Id) -> &PcbCanvas {
+        self.pcb_canvases
+            .get(&window_id)
+            .unwrap_or(&self.pcb_canvas)
+    }
+
+    /// Every PCB canvas, main window first. App-wide settings (theme, grid,
+    /// the GPU-render flag) go to all of them.
+    pub fn all_pcb_canvases_mut(&mut self) -> impl Iterator<Item = &mut PcbCanvas> {
+        std::iter::once(&mut self.pcb_canvas).chain(self.pcb_canvases.values_mut())
     }
 
     pub fn canvas_for_window_mut(&mut self, window_id: iced::window::Id) -> &mut CanvasSlot {
