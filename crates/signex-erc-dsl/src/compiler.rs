@@ -69,6 +69,11 @@ pub fn compile(rules: &[RuleAst]) -> Result<Vec<CompiledRule>, Vec<DslError>> {
     let mut errors = Vec::new();
 
     for rule in rules {
+        let unsupported = crate::validator::unsupported_features(rule);
+        if !unsupported.is_empty() {
+            errors.extend(unsupported);
+            continue;
+        }
         match compile_rule(rule) {
             Ok(compiled) => out.push(compiled),
             Err(err) => errors.push(err),
@@ -422,7 +427,8 @@ fn resolve_field(field: &FieldExprAst, subject: Subject<'_>) -> Option<Value> {
         (FieldExprAst::MethodCall { object, method, .. }, Subject::Sheet(_))
             if object == "sheet" && method == "tagged" =>
         {
-            // Tag information is not projected into `ErcContext` yet.
+            // Unreachable through `compile()`, which rejects `sheet.tagged()`
+            // until tag information is projected into `ErcContext` (#835).
             Some(Value::Bool(false))
         }
         _ => None,

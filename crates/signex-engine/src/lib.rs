@@ -14,6 +14,9 @@ mod exec;
 #[cfg(test)]
 pub(crate) mod test_support;
 
+#[cfg(test)]
+mod annotation_tests;
+
 use std::path::{Path, PathBuf};
 
 pub use annotation::AnnotateScope;
@@ -29,6 +32,7 @@ pub use sheet_placement::{
     DEFAULT_CHILD_SHEET_STROKE_MM, MIN_CHILD_SHEET_EDGE_MM, child_sheet_from_corners,
     unused_sheet_stem,
 };
+pub use sheet::{exposed_sheet_ports, ports_for_pin_sync, unplaced_sheet_ports};
 use signex_types::schematic::SchematicSheet;
 
 const JUNCTION_TOLERANCE_MM: f64 = 0.01;
@@ -134,6 +138,7 @@ impl Engine {
             | Command::PlaceWireSegment { .. }
             | Command::PlaceJunction { .. }
             | Command::PlaceNoConnect { .. }
+            | Command::PlaceNoErcDirective { .. }
             | Command::PlaceBusEntry { .. }
             | Command::PlaceTextNote { .. }
             | Command::PlaceSchDrawing { .. } => self.exec_place(before, cmd),
@@ -326,7 +331,7 @@ mod tests {
             .unwrap();
         assert_eq!(pin.position, Point::new(25.0, 33.0));
         assert_eq!(pin.rotation, 90.0);
-        assert_eq!(pin.direction, "output");
+        assert_eq!(pin.direction, "input", "reconcile never rewrites a pin");
     }
 
     #[test]
@@ -592,7 +597,11 @@ mod tests {
             name: "SDA".to_string(),
             direction: "input".to_string(),
         }];
-        let changed = crate::sheet::reconcile_child_sheet_pins(&mut child, &ports);
+        let changed = crate::sheet::reconcile_child_sheet_pins(
+            &mut child,
+            &ports,
+            &signex_net::SheetPinContacts::default(),
+        );
 
         assert!(changed);
         assert_eq!(child.pins.len(), 1);

@@ -68,7 +68,7 @@
 # legitimate uses (lock guards, adapters), so the gate does not ban it; it
 # flags only a `drop(...)` whose argument is provably Task-shaped:
 #   * `drop(<recv>.handle_x(...))` / `drop(Self::handle_x(...))`, or
-#   * `drop(name)` where `name` was bound earlier IN THE SAME FILE by a
+#   * `drop(name)` where `name` was bound earlier IN THE SAME FN by a
 #     single-line `let [mut] name: <type containing Task> = ...` or
 #     `let [mut] name = <recv>.handle_x(...)`.
 # `drop` may be spelled `mem::drop` / `std::mem::drop` / `core::mem::drop`, and
@@ -76,10 +76,13 @@
 # non-blank line (the flagged line is the `drop(` one). An annotation counts
 # only when the type names `Task<...>` or is exactly `[path::]Task`, so
 # `TaskId` is not a Task.
+# Bindings are tracked per `fn`: a `fn` line resets them (GH #732), so a
+# same-named binding in another function never trips the gate.
 # Blind spots: a binding the awk cannot see (multi-line `let`, a `Task`
 # returned from a non-`handle_` method with no annotation, a function
-# parameter), and name shadowing (a later non-Task `name` re-binds and
-# clears the flag, but a shadow in another scope can still confuse it).
+# parameter), and name shadowing inside one fn (a later non-Task `name`
+# re-binds and clears the flag, but a shadow in an inner block can still
+# confuse it).
 # Unlike the `let _ =` check this one also scans inline test modules,
 # because the site that prompted it was in one; dedicated test files stay
 # excluded by `list_files`. To consume a Task in a test, assert on it
@@ -189,6 +192,10 @@ find_task_drops() {
         if (is_task_arg(line)) print pending_line
         pending_line = 0
       }
+      # A new `fn` is a new scope: bindings from the previous fn do not carry
+      # over (GH #732). A nested fn also clears the outer bindings — a
+      # missed catch, never a false positive.
+      if (line ~ /^[ \t]*(pub(\([^)]*\))?[ \t]+)?(const[ \t]+)?(async[ \t]+)?(unsafe[ \t]+)?fn[ \t]+[A-Za-z_]/) delete tasks
       if (match(line, /^[ \t]*let (mut )?[A-Za-z_][A-Za-z0-9_]*/)) {
         decl = substr(line, RSTART, RLENGTH)
         sub(/^[ \t]*let (mut )?/, "", decl)

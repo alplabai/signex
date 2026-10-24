@@ -108,6 +108,23 @@ fn label_with_text(text: &str) -> Label {
 }
 
 #[test]
+fn non_finite_rotation_fails_the_write_instead_of_saving_an_unloadable_file() {
+    for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        let mut sheet = empty_sheet();
+        let mut sym = sample_symbol();
+        sym.rotation = bad;
+        sheet.symbols.push(sym);
+        match SnxSchematic::new(sheet).write_string() {
+            Err(FormatError::TsvFieldWrite { field, row, .. }) => {
+                assert_eq!(field, "rotation");
+                assert_eq!(row, 1);
+            }
+            other => panic!("rotation={bad}: expected TsvFieldWrite, got {other:?}"),
+        }
+    }
+}
+
+#[test]
 fn snxsch_survives_backslash_and_quote_in_label_text() {
     // Backslash + trailing quote in a label used to produce a file
     // that `SnxSchematic::parse` could never reopen.
@@ -503,6 +520,11 @@ fn snxpcb_round_trip_with_data() {
             PcbPoint { x: 30.0, y: 40.0 },
             PcbPoint { x: 10.0, y: 40.0 },
         ],
+        holes: vec![vec![
+            PcbPoint { x: 15.0, y: 25.0 },
+            PcbPoint { x: 20.0, y: 25.0 },
+            PcbPoint { x: 20.0, y: 30.0 },
+        ]],
         priority: 0,
         fill_type: String::new(),
         thermal_relief: false,
@@ -510,6 +532,7 @@ fn snxpcb_round_trip_with_data() {
         thermal_width: 0.0,
         clearance: 0.0,
         min_thickness: 0.0,
+        unknown: Default::default(),
     });
 
     let snx = SnxPcb::new(board.clone());
@@ -536,6 +559,83 @@ fn snxpcb_round_trip_with_data() {
     assert_eq!(back.board.zones.len(), 1);
     assert_eq!(back.board.zones[0].net_name, "GND");
     assert_eq!(back.board.zones[0].outline.len(), 4);
+    assert_eq!(back.board.zones[0].holes, board.zones[0].holes);
+}
+
+/// #818: a zone without holes writes no `holes` key, so files saved before
+/// the field existed re-save byte-identically, and they still parse.
+#[test]
+fn zone_without_holes_writes_no_holes_key() {
+    let mut board = empty_board();
+    board.zones.push(Zone {
+        uuid: Uuid::parse_str("0192a8c0-0040-7000-8000-000000000002").unwrap(),
+        net: 0,
+        net_name: String::new(),
+        layer: "TopCopper".into(),
+        outline: vec![
+            PcbPoint { x: 0.0, y: 0.0 },
+            PcbPoint { x: 1.0, y: 0.0 },
+            PcbPoint { x: 1.0, y: 1.0 },
+        ],
+        holes: Vec::new(),
+        priority: 0,
+        fill_type: String::new(),
+        thermal_relief: false,
+        thermal_gap: 0.0,
+        thermal_width: 0.0,
+        clearance: 0.0,
+        min_thickness: 0.0,
+        unknown: Default::default(),
+    });
+    let text = SnxPcb::new(board).write_string().expect("serialise");
+    assert!(!text.contains("holes"), "{text}");
+    let back = SnxPcb::parse(&text).expect("parse");
+    assert!(back.board.zones[0].holes.is_empty());
+}
+
+/// #883: zone keys this build does not know, written by a later build,
+/// survive a load and save instead of being dropped (which for `holes`
+/// would have turned a cut-out back into solid copper), and re-save stably.
+#[test]
+fn unknown_zone_keys_survive_a_round_trip() {
+    let mut board = empty_board();
+    board.zones.push(Zone {
+        uuid: Uuid::parse_str("0192a8c0-0040-7000-8000-000000000003").unwrap(),
+        net: 0,
+        net_name: String::new(),
+        layer: "TopCopper".into(),
+        outline: vec![
+            PcbPoint { x: 0.0, y: 0.0 },
+            PcbPoint { x: 1.0, y: 0.0 },
+            PcbPoint { x: 1.0, y: 1.0 },
+        ],
+        holes: Vec::new(),
+        priority: 0,
+        fill_type: String::new(),
+        thermal_relief: false,
+        thermal_gap: 0.0,
+        thermal_width: 0.0,
+        clearance: 0.0,
+        min_thickness: 0.0,
+        unknown: Default::default(),
+    });
+    let text = SnxPcb::new(board).write_string().expect("serialise");
+    // What a later build would add: a scalar and a nested table.
+    let marker = "min_thickness = 0.0\n";
+    assert!(text.contains(marker), "{text}");
+    let future = text.replacen(
+        marker,
+        &format!("{marker}hatch_pitch = 0.5\nfuture_mode = \"stitched\"\n"),
+        1,
+    );
+
+    let parsed = SnxPcb::parse(&future).expect("parse");
+    assert!(!parsed.board.zones[0].unknown.is_empty());
+    let resaved = parsed.write_string().expect("re-serialise");
+    let again = SnxPcb::parse(&resaved).expect("re-parse");
+    assert_eq!(resaved, again.write_string().expect("third save"));
+    assert!(resaved.contains("hatch_pitch = 0.5"), "{resaved}");
+    assert!(resaved.contains("future_mode = \"stitched\""), "{resaved}");
 }
 
 #[test]

@@ -4,6 +4,7 @@ use super::super::super::*;
 
 mod add;
 mod close_project;
+mod dialog_target;
 mod open_document;
 mod project_actions;
 mod remove;

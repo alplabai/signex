@@ -86,10 +86,8 @@ impl Signex {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::BusEntry)));
                 self.interaction_state.pending_power = None;
             }
-            // No-ERC directive reuses the existing No-Connect tool (Altium's
-            // "Place No ERC" also drops an X marker at the clicked pin).
             ActiveBarAction::PlaceNoERC => {
-                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::NoConnect)));
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::NoErcDirective)));
             }
             // Sheet symbol has its own tool: a hierarchical sheet, not a
             // plain rectangle.

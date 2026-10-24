@@ -215,6 +215,12 @@ impl Signex {
                                 String::new(),
                                 String::new(),
                             ),
+                            Tool::NoErcDirective => (
+                                PrePlacementKind::Other,
+                                "No ERC".to_string(),
+                                String::new(),
+                                String::new(),
+                            ),
                             Tool::Text => (
                                 PrePlacementKind::TextNote,
                                 "Text".to_string(),
@@ -452,8 +458,11 @@ impl Signex {
                 self.finish_update()
             }
             ToolMessage::SelectTool(tool) => {
-                if self.interaction_state.current_tool != tool {
-                    self.clear_shape_anchors();
+                // Buffers belong to the tool that started them (#102).
+                // Re-selecting the active tool mid-gesture keeps the gesture
+                // on purpose: only a switch to a different tool drops the buffers.
+                if tool != self.interaction_state.current_tool {
+                    self.clear_drawing_buffers();
                 }
                 self.interaction_state.current_tool = tool;
                 // Re-label the floating cursor tag so the user sees which
@@ -465,6 +474,7 @@ impl Signex {
                     Tool::BusEntry => Some("Bus Entry".to_string()),
                     Tool::Text => Some("Text".to_string()),
                     Tool::NoConnect => Some("No Connect".to_string()),
+                    Tool::NoErcDirective => Some("No ERC".to_string()),
                     Tool::Label => Some("Label".to_string()),
                     Tool::Component => Some("Component".to_string()),
                     Tool::Line => Some("Line".to_string()),

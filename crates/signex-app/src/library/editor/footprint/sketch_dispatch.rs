@@ -327,16 +327,24 @@ fn apply_edit_inner(footprint: &mut Footprint, edit: SketchEdit) {
     match edit {
         SketchEdit::AddEntity(e) => sketch.entities.push(*e),
         SketchEdit::DeleteEntity(id) => {
-            sketch.entities.retain(|e| e.id != id);
-            // Drop dangling constraint refs — coarse rule, drop any
-            // constraint that mentions the deleted ID via the kind's
-            // payload. Most kinds carry one or two SketchEntityIds;
-            // we use Debug to stringify for a simple text search.
-            // This is intentionally simple for v0.13; Phase 6 wires
-            // a structured constraint-rewrite pass.
-            sketch
-                .constraints
-                .retain(|c| !format!("{:?}", c.kind).contains(&id.to_string()));
+            // Structural cascade: lines/arcs/circles built on the entity
+            // and every constraint or array naming a removed entity go with it, in
+            // this one mutation (one undo step).
+            let removed = sketch.remove_entity_cascade(id);
+            let others = removed.entities.len().saturating_sub(1);
+            if others > 0 || !removed.constraints.is_empty() || !removed.arrays.is_empty() {
+                crate::diagnostics::log_info(format!(
+                    "Deleting a sketch entity also removed {others} dependent entity(ies), {} constraint(s) and {} array(s)",
+                    removed.constraints.len(),
+                    removed.arrays.len()
+                ));
+            }
+            if removed.repaired > 0 {
+                crate::diagnostics::log_warning(format!(
+                    "Repaired {} dangling sketch reference(s) left by an earlier edit",
+                    removed.repaired
+                ));
+            }
         }
         SketchEdit::MovePoint { id, dx, dy } => {
             for ent in sketch.entities.iter_mut() {
@@ -384,6 +392,14 @@ pub(super) fn solve_and_bake(
 
     let resolved = parameter::resolve(&sketch.parameters).map_err(SketchError::Expr)?;
 
+    // Runs synchronously inside `update`. A plain solve is one LM pass,
+    // bounded by `timeout_ms` (50 ms). A stalled one also tries the offset
+    // retry; a retry that converges then runs up to three project-and-
+    // re-solve passes, each with its own 50 ms budget (about 20% extra time
+    // measured on a long chain). Over-constraint narrowing can add up to
+    // `2 × SHRINK_LIMIT` more passes: about 1 s worst case on a conflicting
+    // sketch (#765). If that ever shows as a stall, move the solve into a
+    // `Task`.
     match state.sketch_solver.solve(sketch, &resolved) {
         Ok(out) => {
             state.conflict.clear();

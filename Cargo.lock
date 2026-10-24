@@ -5392,8 +5392,10 @@ name = "signex-engine"
 version = "0.15.0"
 dependencies = [
  "anyhow",
+ "signex-erc",
  "signex-net",
  "signex-types",
+ "tempfile",
  "thiserror 2.0.18",
  "uuid",
 ]
@@ -5463,7 +5465,6 @@ dependencies = [
  "tokio",
  "toml 0.8.23",
  "tracing",
- "tracing-subscriber",
  "url",
  "uuid",
  "walkdir",
@@ -5483,6 +5484,7 @@ dependencies = [
  "signex-library",
  "signex-sketch",
  "sqlx",
+ "subtle",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",

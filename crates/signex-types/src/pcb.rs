@@ -315,6 +315,14 @@ pub struct Zone {
     pub layer: String,
     #[serde(default)]
     pub outline: Vec<Point>,
+    /// Cut-outs inside `outline` (keep-out islands): each entry is a closed
+    /// polygon the zone does not fill (#818). Not written when empty, so a
+    /// zone without holes keeps its exact pre-#818 bytes. A hole with fewer
+    /// than 3 vertices is malformed and consumers must skip it, as the
+    /// renderer skips an outline with `len() < 3`; the parser does not
+    /// validate this.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub holes: Vec<Vec<Point>>,
     #[serde(default)]
     pub priority: u32,
     #[serde(default)]
@@ -329,6 +337,11 @@ pub struct Zone {
     pub clearance: f64,
     #[serde(default)]
     pub min_thickness: f64,
+    /// Keys in this zone's `[[zones]]` table that this build does not
+    /// recognise, kept so a save re-emits them: a zone field added by a
+    /// later build (as `holes` was in #818) survives a re-save here (#883).
+    #[serde(flatten)]
+    pub unknown: UnknownFields,
 }
 
 // ---------------------------------------------------------------------------

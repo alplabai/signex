@@ -62,6 +62,9 @@ impl Engine {
             !sym.is_power && !sym.reference.starts_with('#') && !locked.contains(&sym.uuid)
         };
         let order = annotation_order(&self.document.symbols);
+        // Set by every phase that rewrites a designator, so each rewrite gets
+        // an undo step and a dirty mark (#829).
+        let mut changed = false;
 
         // Phase 1: reset to '?' if requested. A part with a locked unit keeps
         // the locked unit's designator on its other units.
@@ -73,20 +76,31 @@ impl Engine {
                 if !is_designator_target(symbol) {
                     continue;
                 }
-                if let Some(designator) = parts
+                let target = match parts
                     .part(sheet, idx)
                     .and_then(|part| parts.locked_designator(part))
                 {
-                    symbol.reference = designator.to_string();
-                    continue;
-                }
-                let prefix = alphabetic_prefix(&symbol.reference);
-                if !prefix.is_empty() {
-                    symbol.reference = format!("{prefix}?");
+                    Some(designator) => designator.to_string(),
+                    None => {
+                        let prefix = alphabetic_prefix(&symbol.reference);
+                        if prefix.is_empty() {
+                            continue;
+                        }
+                        format!("{prefix}?")
+                    }
+                };
+                if symbol.reference != target {
+                    symbol.reference = target;
+                    changed = true;
                 }
             }
         }
         if matches!(mode, AnnotateMode::ResetOnly) {
+            // Nothing to reset: no undo step, and an unopened sheet is not
+            // rewritten on disk (the caller saves on `Ok(true)`).
+            if !changed {
+                return Ok(false);
+            }
             let patch_pair = PatchPair {
                 semantic: SemanticPatch::SymbolFieldsUpdated,
                 document: DocumentPatch::SYMBOLS,
@@ -114,7 +128,6 @@ impl Engine {
         }
 
         // Phase 3: renumber '?' symbols using the shared counter.
-        let mut changed = false;
         for idx in order {
             let symbol = &mut self.document.symbols[idx];
             if !is_designator_target(symbol) {
@@ -148,6 +161,15 @@ impl Engine {
             changed = true;
         }
 
+        // A designator reset in Phase 1 and handed back unchanged in Phase 3
+        // is no edit; annotation only ever rewrites `reference`.
+        let changed = changed
+            && self
+                .document
+                .symbols
+                .iter()
+                .zip(&before.symbols)
+                .any(|(now, was)| now.reference != was.reference);
         if !changed {
             return Ok(false);
         }

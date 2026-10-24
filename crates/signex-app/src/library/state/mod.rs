@@ -498,6 +498,21 @@ pub struct LibraryState {
     /// An external-edit `stat` pass is running off-thread (#531); a tick
     /// that lands meanwhile is dropped rather than stacked behind it.
     pub external_poll_in_flight: bool,
+    /// Set while a poll's blocking `stat` pass runs, including one that
+    /// outlived [`crate::library::external_poll::POLL_TIMEOUT`]. No new pass
+    /// starts behind it, so a hung network mount cannot pile up threads.
+    ///
+    /// The one piece of Model state written off the UI thread: after a
+    /// timeout no message is pending to clear it, and a hung `stat` may never
+    /// return to send one, so `update` reads the blocking thread's own
+    /// drop-guarded flag instead (#869 review).
+    pub external_poll_stat_running: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// A stall was reported and the poll has not completed since, so the
+    /// warning is not repeated every tick (#827).
+    pub external_poll_stall_reported: bool,
+    /// A failed pass was reported and the poll has not completed since, so
+    /// a pass that fails every tick logs once, not every 2 s (#869 review).
+    pub external_poll_failure_reported: bool,
 }
 
 /// Three mount sources surfaced as collapsible sections inside the

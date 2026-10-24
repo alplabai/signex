@@ -109,7 +109,7 @@ impl DistributorAdapter for JlcpcbAdapter {
 
     fn lookup_by_url(&self, url: &Url) -> Result<Option<DistributorPart>, DistributorError> {
         let host = url.host_str().unwrap_or("");
-        if !host.ends_with("jlcpcb.com") {
+        if !super::host_in_domain(host, "jlcpcb.com") {
             return Ok(None);
         }
         // JLCPCB part URLs include the LCSC code as a query param `partno=Cxxxx`
@@ -245,6 +245,14 @@ mod tests {
     fn lookup_by_url_rejects_non_jlcpcb_host() {
         let a = JlcpcbAdapter::with_base_url("http://unused.invalid", None);
         let url = Url::parse("https://example.com/parts/C123").unwrap();
+        assert!(a.lookup_by_url(&url).unwrap().is_none());
+    }
+
+    #[test]
+    fn lookup_by_url_rejects_lookalike_host_offline() {
+        // Dot-anchored host check returns before any network call.
+        let a = JlcpcbAdapter::with_base_url("http://unused.invalid", None);
+        let url = Url::parse("https://eviljlcpcb.com/parts?partno=C123").unwrap();
         assert!(a.lookup_by_url(&url).unwrap().is_none());
     }
 }

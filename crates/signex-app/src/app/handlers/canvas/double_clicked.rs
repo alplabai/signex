@@ -42,9 +42,12 @@ impl Signex {
         // second press. For multi-click shape tools that
         // means the 2nd click would otherwise be eaten. Route
         // DoubleClicked into the same commit path as Clicked.
+        // Shape commits snap to the grid exactly like the single-click
+        // path (`handle_canvas_clicked`); hit-testing keeps the raw cursor.
+        let (snapped_x, snapped_y) = self.snap_to_grid(world_x, world_y);
         match self.interaction_state.current_tool {
             Tool::Line => {
-                let p = signex_types::schematic::Point::new(world_x, world_y);
+                let p = signex_types::schematic::Point::new(snapped_x, snapped_y);
                 if let Some(start) = self.interaction_state.shape_anchor.take() {
                     let drawing = signex_types::schematic::SchDrawing::Line {
                         uuid: uuid::Uuid::new_v4(),
@@ -73,7 +76,7 @@ impl Signex {
             }
             Tool::Rectangle => {
                 let (pp_w, pp_fill) = pre_placement_shape(&self.document_state);
-                let p = signex_types::schematic::Point::new(world_x, world_y);
+                let p = signex_types::schematic::Point::new(snapped_x, snapped_y);
                 if let Some(start) = self.interaction_state.shape_anchor.take() {
                     let drawing = signex_types::schematic::SchDrawing::Rect {
                         uuid: uuid::Uuid::new_v4(),
@@ -97,7 +100,7 @@ impl Signex {
             }
             Tool::Circle => {
                 let (pp_w, pp_fill) = pre_placement_shape(&self.document_state);
-                let p = signex_types::schematic::Point::new(world_x, world_y);
+                let p = signex_types::schematic::Point::new(snapped_x, snapped_y);
                 if let Some(center) = self.interaction_state.shape_anchor.take() {
                     let dx = p.x - center.x;
                     let dy = p.y - center.y;
@@ -126,7 +129,7 @@ impl Signex {
             }
             Tool::Arc => {
                 let (pp_w, pp_fill) = pre_placement_shape(&self.document_state);
-                let p = signex_types::schematic::Point::new(world_x, world_y);
+                let p = signex_types::schematic::Point::new(snapped_x, snapped_y);
                 self.interaction_state.arc_points.push(p);
                 if self.interaction_state.arc_points.len() >= 3 {
                     let pts = std::mem::take(&mut self.interaction_state.arc_points);
@@ -166,7 +169,7 @@ impl Signex {
         // vertex at this point. Append the cursor as the
         // final vertex, then commit if we now have >= 2.
         if self.interaction_state.current_tool == Tool::Polyline {
-            let p = signex_types::schematic::Point::new(world_x, world_y);
+            let p = signex_types::schematic::Point::new(snapped_x, snapped_y);
             // Avoid appending a duplicate of the anchor when
             // the user double-clicks on the same spot.
             let is_dup = self

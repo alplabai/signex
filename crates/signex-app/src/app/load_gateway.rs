@@ -306,7 +306,18 @@ impl Signex {
         let is_pcb = matches!(self.active_tab_cached_document(), Some(TabDocument::Pcb(_)));
 
         if is_schematic {
+            // Selection UUIDs belong to the document they were picked in;
+            // carrying them to another schematic tab leaves ghost
+            // selections that delete/move would target (#102).
+            let previous_path = self.document_state.active_path.clone();
             if self.activate_active_schematic_session() {
+                if previous_path != self.document_state.active_path {
+                    self.interaction_state.active_canvas_mut().selected.clear();
+                    // In-flight drawing buffers belong to the document too.
+                    self.clear_drawing_buffers();
+                    // Also resets the mirrored panel_ctx selection fields.
+                    self.update_selection_info();
+                }
                 self.apply_loaded_schematic(None, true, false, false);
             }
         } else if is_pcb {
@@ -393,7 +404,7 @@ impl Signex {
         &mut self,
         schematic: Option<SchematicSheet>,
         clear_bg_cache: bool,
-        fit_to_paper: bool,
+        fit_to_content: bool,
         refresh_panel_ctx: bool,
     ) {
         if let Some(schematic) = schematic {
@@ -404,8 +415,8 @@ impl Signex {
         }
         self.sync_canvas_from_visible_schematic(crate::schematic_runtime::RenderInvalidation::FULL);
 
-        if fit_to_paper {
-            self.interaction_state.active_canvas_mut().fit_to_paper();
+        if fit_to_content {
+            self.interaction_state.active_canvas_mut().fit_to_content();
         }
         if clear_bg_cache {
             self.interaction_state.active_canvas_mut().clear_bg_cache();

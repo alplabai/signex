@@ -465,6 +465,12 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
             leaf("About Signex", None, MenuMessage::OpenAbout, mc),
             leaf("Documentation", None, MenuMessage::OpenDocumentation, mc),
             leaf("Report an Issue", None, MenuMessage::ReportIssue, mc),
+            leaf(
+                "Open Sample Project",
+                None,
+                MenuMessage::OpenSampleProject,
+                mc,
+            ),
             separator(mc),
             leaf(
                 &cmd_label("show_current_command_hotkeys", "Keyboard Shortcuts"),
