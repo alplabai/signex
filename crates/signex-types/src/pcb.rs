@@ -337,6 +337,11 @@ pub struct Zone {
     pub clearance: f64,
     #[serde(default)]
     pub min_thickness: f64,
+    /// Keys in this zone's `[[zones]]` table that this build does not
+    /// recognise, kept so a save re-emits them: a zone field added by a
+    /// later build (as `holes` was in #818) survives a re-save here (#883).
+    #[serde(flatten)]
+    pub unknown: UnknownFields,
 }
 
 // ---------------------------------------------------------------------------
