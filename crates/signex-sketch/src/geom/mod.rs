@@ -20,6 +20,8 @@ pub mod curves;
 pub mod fixed;
 pub mod halfedge;
 mod holes;
+#[cfg(test)]
+mod holes_touching_tests;
 pub mod hull;
 pub mod offset;
 pub mod offset_arc;
@@ -28,6 +30,7 @@ pub mod polylabel;
 pub mod predicates;
 pub mod segment;
 pub mod simplify;
+mod tolerant_clip;
 pub mod triangulate;
 
 pub use aabb_index::{Aabb, AabbIndex};

@@ -5,13 +5,15 @@
 //! equal-x holes are ordinary pour geometry, and they leave collinear and
 //! coincident vertices in the bridged ring that the strict [`super::ear_clip`]
 //! rejects. This module bridges holes with the visible-vertex method and
-//! clips the result with a tolerant ear test.
+//! clips the result with a tolerant ear test (see [`super::tolerant_clip`]).
 //!
-//! Holes that touch the outer ring are outside the `Zone.holes` invariant
-//! (strictly inside). A single hole sharing part of an outer edge, or touching
-//! an outer corner, triangulates correctly here; several holes on the same
-//! outer edge may not, and the GPU fill then falls back to the solid outline
-//! (#897).
+//! Holes may touch the outer ring or each other (at a vertex, or along part of
+//! an edge): rings are first given matching vertices where one touches the
+//! interior of another's edge, and a hole whose rightmost vertex already sits
+//! on the ring is bridged there with a zero-length bridge. `Zone.holes`
+//! guarantees strictly interior, disjoint holes and the app drops the rest
+//! (#901); this stays correct for direct callers. Holes that overlap or cross
+//! are not supported and can yield an inexact triangulation.
 
 use super::Point2;
 use super::predicates::{Sign, orient2d};
@@ -23,7 +25,8 @@ use super::predicates::{Sign, orient2d};
 /// a ray from `M` towards +x: any hole not yet bridged lies entirely left of
 /// `M.x`, so it cannot stand between `M` and the ray's first hit, and the
 /// bridge never crosses an unbridged hole.
-pub(super) fn merge_holes(outer: Vec<Point2>, mut holes: Vec<Vec<Point2>>) -> Vec<Point2> {
+pub(super) fn merge_holes(mut outer: Vec<Point2>, mut holes: Vec<Vec<Point2>>) -> Vec<Point2> {
+    split_touched_edges(&mut outer, &mut holes);
     let max_x = |h: &[Point2]| h.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max);
     holes.sort_by(|a, b| {
         max_x(b)
@@ -37,6 +40,11 @@ pub(super) fn merge_holes(outer: Vec<Point2>, mut holes: Vec<Vec<Point2>>) -> Ve
 
 /// Splice `hole` into `ring` with a zero-width bridge from the hole's
 /// rightmost vertex to the ring vertex visible along the +x ray.
+///
+/// A hole whose rightmost vertex already lies on the ring (it touches the
+/// outline, or a hole bridged earlier) needs no ray: the ray would run along
+/// the touched edge and bridge to its far end, laying the hole's boundary over
+/// the ring's. The bridge is then zero length, at that point.
 fn bridge_hole(ring: &[Point2], hole: &[Point2]) -> Vec<Point2> {
     let mut hole_idx = 0;
     for (i, p) in hole.iter().enumerate().skip(1) {
@@ -46,7 +54,13 @@ fn bridge_hole(ring: &[Point2], hole: &[Point2]) -> Vec<Point2> {
         }
     }
     let m = hole[hole_idx];
-    let ring_idx = visible_vertex(ring, m).unwrap_or_else(|| nearest_vertex(ring, m));
+    let around = [
+        hole[(hole_idx + hole.len() - 1) % hole.len()],
+        hole[(hole_idx + 1) % hole.len()],
+    ];
+    let ring_idx = coincident_vertex(ring, m, around)
+        .or_else(|| visible_vertex(ring, m))
+        .unwrap_or_else(|| nearest_vertex(ring, m));
 
     let mut merged = Vec::with_capacity(ring.len() + hole.len() + 2);
     merged.extend_from_slice(&ring[..=ring_idx]);
@@ -54,6 +68,100 @@ fn bridge_hole(ring: &[Point2], hole: &[Point2]) -> Vec<Point2> {
     merged.extend_from_slice(&hole[..=hole_idx]);
     merged.extend_from_slice(&ring[ring_idx..]);
     merged
+}
+
+/// The ring vertex `m` coincides with, if any: a hole vertex that touches the
+/// ring. `around` are the hole's two neighbours of `m`; among several
+/// coincident ring copies (earlier bridges leave them) the one that opens
+/// towards both is taken.
+fn coincident_vertex(ring: &[Point2], m: Point2, around: [Point2; 2]) -> Option<usize> {
+    let same = |&j: &usize| ring[j] == m;
+    let open_towards = |&j: &usize| around.iter().all(|&q| in_cone(ring, j, q));
+    let n = ring.len();
+    (0..n)
+        .filter(same)
+        .find(open_towards)
+        .or_else(|| (0..n).find(same))
+}
+
+/// Insert every vertex of one ring that lies in the interior of another
+/// ring's edge into that edge. Rings that touch along part of an edge (a hole
+/// sharing a stretch of the outline, two holes sharing a stretch of side)
+/// then carry matching vertices on both sides, so the bridged ring's
+/// overlapping boundary pieces cancel pairwise in the clipper instead of
+/// forming T-junctions it cannot resolve. Only ring pairs whose bounding
+/// boxes overlap are compared, so disjoint layouts cost one box test per pair.
+fn split_touched_edges(outer: &mut Vec<Point2>, holes: &mut [Vec<Point2>]) {
+    let boxes: Vec<(Point2, Point2)> = std::iter::once(&*outer)
+        .chain(holes.iter())
+        .map(|r| bounds(r))
+        .collect();
+    let rings: Vec<Vec<Point2>> = std::iter::once(outer.clone())
+        .chain(holes.iter().cloned())
+        .collect();
+    for (i, target) in std::iter::once(outer).chain(holes.iter_mut()).enumerate() {
+        let neighbours: Vec<&Vec<Point2>> = (0..rings.len())
+            .filter(|&j| j != i && boxes_touch(boxes[i], boxes[j]))
+            .map(|j| &rings[j])
+            .collect();
+        if neighbours.is_empty() {
+            continue;
+        }
+        *target = with_touching_vertices(target, &neighbours);
+    }
+}
+
+fn bounds(ring: &[Point2]) -> (Point2, Point2) {
+    ring.iter().fold(
+        (
+            Point2::new(f64::INFINITY, f64::INFINITY),
+            Point2::new(f64::NEG_INFINITY, f64::NEG_INFINITY),
+        ),
+        |(lo, hi), q| {
+            (
+                Point2::new(lo.x.min(q.x), lo.y.min(q.y)),
+                Point2::new(hi.x.max(q.x), hi.y.max(q.y)),
+            )
+        },
+    )
+}
+
+fn boxes_touch(a: (Point2, Point2), b: (Point2, Point2)) -> bool {
+    a.0.x <= b.1.x && b.0.x <= a.1.x && a.0.y <= b.1.y && b.0.y <= a.1.y
+}
+
+/// `ring` with each vertex of `others` that lies in the interior of one of its
+/// edges inserted into that edge, in order along the edge.
+fn with_touching_vertices(ring: &[Point2], others: &[&Vec<Point2>]) -> Vec<Point2> {
+    let mut out = Vec::with_capacity(ring.len());
+    for (i, &a) in ring.iter().enumerate() {
+        let b = ring[(i + 1) % ring.len()];
+        out.push(a);
+        let mut on_edge: Vec<Point2> = others
+            .iter()
+            .flat_map(|r| r.iter().copied())
+            .filter(|&q| on_open_segment(a, b, q))
+            .collect();
+        on_edge.sort_by(|p, q| {
+            a.distance_sq(*p)
+                .partial_cmp(&a.distance_sq(*q))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        on_edge.dedup();
+        out.extend(on_edge);
+    }
+    out
+}
+
+/// Whether `m` lies strictly between the endpoints of segment `a`-`b`.
+fn on_open_segment(a: Point2, b: Point2, m: Point2) -> bool {
+    m.x >= a.x.min(b.x)
+        && m.x <= a.x.max(b.x)
+        && m.y >= a.y.min(b.y)
+        && m.y <= a.y.max(b.y)
+        && m != a
+        && m != b
+        && orient2d(a, b, m) == Sign::Zero
 }
 
 fn nearest_vertex(ring: &[Point2], m: Point2) -> usize {
@@ -160,87 +268,6 @@ fn in_cone(ring: &[Point2], j: usize, m: Point2) -> bool {
 fn in_triangle(p: Point2, a: Point2, b: Point2, c: Point2) -> bool {
     let s = [orient2d(a, b, p), orient2d(b, c, p), orient2d(c, a, p)];
     !(s.contains(&Sign::Positive) && s.contains(&Sign::Negative))
-}
-
-/// Ear-clip a CCW ring that may contain bridge duplicates, collinear runs
-/// and zero-width spikes, which are dropped without losing area. A vertex
-/// blocks an ear only when it is non-convex and inside the ear triangle
-/// (edges included) at coordinates distinct from the ear's corners. If no
-/// ear is found the clipper cuts a convex corner anyway rather than give up,
-/// so the result may then not partition the ring exactly; callers that need
-/// the area exact should check it.
-pub(super) fn clip_ears_tolerant(pts: &[Point2]) -> Vec<[usize; 3]> {
-    let mut ring: Vec<usize> = (0..pts.len()).collect();
-    let mut triangles = Vec::with_capacity(pts.len().saturating_sub(2));
-    let mut cursor = 0;
-    loop {
-        drop_degenerate(pts, &mut ring);
-        let n = ring.len();
-        if n < 3 {
-            break;
-        }
-        let at = |i: usize| (ring[(i + n - 1) % n], ring[i], ring[(i + 1) % n]);
-        let pick = (0..n)
-            .map(|k| (cursor + k) % n)
-            .find(|&i| {
-                let (a, b, c) = at(i);
-                orient2d(pts[a], pts[b], pts[c]) == Sign::Positive && !is_blocked(pts, &ring, i)
-            })
-            .or_else(|| {
-                (0..n).find(|&i| {
-                    let (a, b, c) = at(i);
-                    orient2d(pts[a], pts[b], pts[c]) == Sign::Positive
-                })
-            });
-        let Some(i) = pick else { break };
-        let (a, b, c) = at(i);
-        triangles.push([a, b, c]);
-        ring.remove(i);
-        cursor = i.saturating_sub(1);
-    }
-    triangles
-}
-
-/// Remove vertices that coincide with their successor or are collinear with
-/// their neighbours (this includes zero-width spikes).
-fn drop_degenerate(pts: &[Point2], ring: &mut Vec<usize>) {
-    loop {
-        let n = ring.len();
-        if n < 3 {
-            return;
-        }
-        let bad = (0..n).find(|&i| {
-            let (a, b, c) = (
-                pts[ring[(i + n - 1) % n]],
-                pts[ring[i]],
-                pts[ring[(i + 1) % n]],
-            );
-            b == c || orient2d(a, b, c) == Sign::Zero
-        });
-        match bad {
-            Some(i) => {
-                ring.remove(i);
-            }
-            None => return,
-        }
-    }
-}
-
-fn is_blocked(pts: &[Point2], ring: &[usize], i: usize) -> bool {
-    let n = ring.len();
-    let (pa, pb, pc) = (ring[(i + n - 1) % n], ring[i], ring[(i + 1) % n]);
-    let (a, b, c) = (pts[pa], pts[pb], pts[pc]);
-    (0..n).any(|j| {
-        let (prev, cur, next) = (ring[(j + n - 1) % n], ring[j], ring[(j + 1) % n]);
-        if cur == pa || cur == pb || cur == pc {
-            return false;
-        }
-        let q = pts[cur];
-        if q == a || q == b || q == c {
-            return false;
-        }
-        orient2d(pts[prev], q, pts[next]) != Sign::Positive && in_triangle(q, a, b, c)
-    })
 }
 
 #[cfg(test)]
