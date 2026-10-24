@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use signex_library_server::{
     API_TOKEN_ENV, AppState, DATABASE_URL_ENV, router_with_in_memory_state, router_with_state,
-    with_rate_limit,
+    with_rate_limit_trusted,
 };
 
 /// Default bind address — loopback only. Previously `0.0.0.0:3535`, which
@@ -11,6 +11,25 @@ use signex_library_server::{
 /// container images, etc.).
 const DEFAULT_BIND: &str = "127.0.0.1:3535";
 const BIND_ENV: &str = "SIGNEX_LIBRARY_BIND";
+/// Explicit opt-in to serve plaintext HTTP on a non-loopback address.
+const INSECURE_BIND_ENV: &str = "SIGNEX_ALLOW_INSECURE_BIND";
+const INSECURE_BIND_FLAG: &str = "--allow-insecure-bind";
+/// Comma-separated proxy IPs whose `X-Forwarded-For` / `Forwarded` is believed
+/// by the rate limiter.
+const TRUSTED_PROXIES_ENV: &str = "SIGNEX_TRUSTED_PROXIES";
+
+/// Parse a comma-separated IP list. A bad entry is a startup error: silently
+/// dropping it would quietly fall back to one shared bucket.
+fn parse_trusted_proxies(raw: &str) -> anyhow::Result<Vec<std::net::IpAddr>> {
+    raw.split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| {
+            s.parse()
+                .map_err(|_| anyhow::anyhow!("{TRUSTED_PROXIES_ENV}: `{s}` is not an IP address"))
+        })
+        .collect()
+}
 
 /// Parse a `host:port` bind string and return whether the host is a
 /// loopback (127.0.0.0/8 or [::1]). IPv6 zone-id addresses (`fe80::1%lo0`)
@@ -25,9 +44,25 @@ fn is_loopback_bind(bind: &str) -> bool {
 
 /// HI-1 + persistence policy: a non-loopback bind requires both an API token
 /// and a persistent database URL. Loopback dev mode needs neither.
-fn check_bind_policy(bind: &str, token_set: bool, db_url_set: bool) -> anyhow::Result<()> {
+///
+/// The server has no TLS stack, so a non-loopback bind is plaintext. It is
+/// refused unless `allow_insecure` is set, which an operator does only when a
+/// TLS-terminating reverse proxy (or private network) fronts the listener.
+fn check_bind_policy(
+    bind: &str,
+    token_set: bool,
+    db_url_set: bool,
+    allow_insecure: bool,
+) -> anyhow::Result<()> {
     if is_loopback_bind(bind) {
         return Ok(());
+    }
+    if !allow_insecure {
+        anyhow::bail!(
+            "refusing to serve PLAINTEXT HTTP on non-loopback address `{bind}`: this server has no TLS. \
+             Terminate TLS in a reverse proxy and bind loopback, or, if the listener is only \
+             reachable by that proxy, pass `{INSECURE_BIND_FLAG}` (or set `{INSECURE_BIND_ENV}=1`)"
+        );
     }
     if !token_set {
         anyhow::bail!(
@@ -65,7 +100,17 @@ async fn main() -> anyhow::Result<()> {
     let db_url = std::env::var(DATABASE_URL_ENV)
         .ok()
         .filter(|s| !s.is_empty());
-    check_bind_policy(&bind, token_set, db_url.is_some())?;
+    let allow_insecure = std::env::args().any(|a| a == INSECURE_BIND_FLAG)
+        || std::env::var(INSECURE_BIND_ENV).is_ok_and(|v| matches!(v.as_str(), "1" | "true"));
+    check_bind_policy(&bind, token_set, db_url.is_some(), allow_insecure)?;
+    if allow_insecure && !is_loopback_bind(&bind) {
+        tracing::warn!(
+            "serving plaintext HTTP on `{bind}` ({INSECURE_BIND_ENV} / {INSECURE_BIND_FLAG}); \
+             TLS must be terminated in front of this listener"
+        );
+    }
+    let trusted_proxies =
+        parse_trusted_proxies(&std::env::var(TRUSTED_PROXIES_ENV).unwrap_or_default())?;
 
     let listener = tokio::net::TcpListener::bind(&bind).await?;
     tracing::info!(
@@ -92,7 +137,7 @@ async fn main() -> anyhow::Result<()> {
     // HI-2: per-IP rate limit applied here (not in `router_with_state`)
     // so integration tests can hit the bare router via `oneshot` without
     // going through the governor's `ConnectInfo` extractor.
-    let app = with_rate_limit(router);
+    let app = with_rate_limit_trusted(router, trusted_proxies);
     // `into_make_service_with_connect_info::<SocketAddr>()` plumbs the
     // peer IP into request extensions — `tower_governor` reads it from
     // there to bucket requests by source.
@@ -106,7 +151,7 @@ async fn main() -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{check_bind_policy, is_loopback_bind};
+    use super::{check_bind_policy, is_loopback_bind, parse_trusted_proxies};
 
     #[test]
     fn loopback_binds_are_accepted() {
@@ -134,20 +179,38 @@ mod tests {
     fn bind_policy_covers_all_combinations() {
         let public = "0.0.0.0:3535";
         let loopback = "127.0.0.1:3535";
-        // loopback: always allowed
-        for (t, d) in [(false, false), (true, false), (false, true), (true, true)] {
-            assert!(check_bind_policy(loopback, t, d).is_ok());
+        // loopback: always allowed, opt-in irrelevant
+        for (t, d, i) in [
+            (false, false, false),
+            (true, true, false),
+            (false, false, true),
+        ] {
+            assert!(check_bind_policy(loopback, t, d, i).is_ok());
         }
-        // non-loopback: needs token AND db url
-        let no_token = check_bind_policy(public, false, true)
+        // non-loopback without the opt-in: refused even with token + db
+        let plain = check_bind_policy(public, true, true, false)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            plain.contains("PLAINTEXT") && plain.contains("--allow-insecure-bind"),
+            "{plain}"
+        );
+        // with the opt-in: token AND db url still required
+        let no_token = check_bind_policy(public, false, true, true)
             .unwrap_err()
             .to_string();
         assert!(no_token.contains("without"), "{no_token}");
-        let no_db = check_bind_policy(public, true, false)
+        let no_db = check_bind_policy(public, true, false, true)
             .unwrap_err()
             .to_string();
         assert!(no_db.contains("ephemeral"), "{no_db}");
-        assert!(check_bind_policy(public, false, false).is_err());
-        assert!(check_bind_policy(public, true, true).is_ok());
+        assert!(check_bind_policy(public, true, true, true).is_ok());
+    }
+
+    #[test]
+    fn trusted_proxies_parse_or_fail_loudly() {
+        assert!(parse_trusted_proxies("").unwrap().is_empty());
+        assert_eq!(parse_trusted_proxies("10.0.0.1, ::1").unwrap().len(), 2);
+        assert!(parse_trusted_proxies("10.0.0.1,nope").is_err());
     }
 }

@@ -61,7 +61,7 @@ local-git = ["dep:git2", "dep:walkdir"]
 # Hermetic commit identity for tests that make real git commits; see
 # `git_identity::test_identity`. Enabled only through dev-dependencies.
 test-identity = ["local-git"]
-database = ["dep:reqwest"]
+database = ["dep:reqwest", "dep:keyring"]
 distributors-community = [
     "dep:keyring",
     "dep:oauth2",
