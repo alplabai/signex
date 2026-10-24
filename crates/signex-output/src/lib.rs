@@ -84,7 +84,10 @@ pub struct ExportContext {
     /// File of the sheet the user is looking at, for [`PageRange::Current`].
     /// Keyed by path rather than index so it survives the app filtering
     /// `sheets` down to the files ticked in the export dialog. `None`, or a
-    /// path no longer in `sheets`, resolves to the first sheet.
+    /// path no longer in `sheets`, resolves to the first sheet. The path is
+    /// compared exactly, so the caller supplies the spelling `sheets` uses
+    /// (case folding is the project's rule, not this crate's), and a viewed
+    /// sheet that is not a declared page must be put into `sheets` by the caller.
     pub current_sheet: Option<PathBuf>,
 }
 
