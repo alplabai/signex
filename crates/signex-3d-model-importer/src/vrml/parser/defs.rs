@@ -283,6 +283,38 @@ mod tests {
         assert!(warnings.is_empty(), "{warnings:?}");
     }
 
+    /// #887: a `PROTO` declaration instantiates nothing, and a name `DEF`d
+    /// in its body belongs to the prototype, not to the file.
+    #[test]
+    fn a_proto_body_neither_imports_nor_leaks_its_defs() {
+        let src = format!(
+            "PROTO P [ field SFFloat r 1 ] {{ DEF inner {TRI} }} Group {{ children [ USE inner ] }}"
+        );
+        let (meshes, warnings) = parse_src(&src);
+        assert!(meshes.is_empty(), "the body's shape was imported");
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(warnings[0].reason.contains("USE inner is not resolved"));
+    }
+
+    /// #887: prototype instances are not expanded; the first of each name is
+    /// reported, and geometry around them still imports.
+    #[test]
+    fn prototype_instances_are_reported_once_per_name() {
+        let src = format!(
+            "PROTO P [ ] {{ {TRI} }} EXTERNPROTO E [ ] \"lib.wrl#E\" P {{ }} P {{ }} E {{ }} {TRI}"
+        );
+        let (meshes, warnings) = parse_src(&src);
+        assert_eq!(meshes.len(), 1, "only the plain shape imports");
+        let reasons: Vec<&str> = warnings.iter().map(|w| w.reason.as_str()).collect();
+        assert_eq!(
+            reasons,
+            [
+                "instances of prototype P are not imported",
+                "instances of prototype E are not imported"
+            ]
+        );
+    }
+
     /// A name bound to another kind of node is refused, with a warning.
     #[test]
     fn a_use_in_the_wrong_slot_is_ignored_with_a_warning() {

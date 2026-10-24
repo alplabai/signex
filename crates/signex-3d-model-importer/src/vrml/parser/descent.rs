@@ -29,6 +29,10 @@ pub(super) struct Parser<'a> {
     defs: Defs,
     /// The budget and depth refusals are reported once each, not per `USE`.
     use_budget_reported: bool,
+    /// Prototype names declared so far; an instance of one is not imported
+    /// and is reported once per name (#887).
+    protos: std::collections::HashSet<String>,
+    reported_protos: std::collections::HashSet<String>,
     use_depth_reported: bool,
 }
 
@@ -43,6 +47,8 @@ impl<'a> Parser<'a> {
             defs: Defs::default(),
             use_budget_reported: false,
             use_depth_reported: false,
+            protos: Default::default(),
+            reported_protos: Default::default(),
         }
     }
 
@@ -215,10 +221,22 @@ impl<'a> Parser<'a> {
                     _ => Ok(None),
                 }
             }
+            "PROTO" | "EXTERNPROTO" => {
+                self.skip_proto_declaration(&keyword)?;
+                Ok(None)
+            }
             "Transform" => self.parse_transform().map(Some),
             "Group" | "Collision" | "Anchor" => self.parse_group().map(Some),
             "Shape" => self.parse_shape().map(Some),
             _ => {
+                if self.protos.contains(&keyword) && self.reported_protos.insert(keyword.clone()) {
+                    let line = self.current_line();
+                    ParseWarning::push(
+                        &mut self.warnings,
+                        Some(line),
+                        format!("instances of prototype {keyword} are not imported"),
+                    );
+                }
                 // Unknown node type: consume its body if it has one.
                 if let Some(Token::LBrace) = self.peek() {
                     self.consume_block()?;
@@ -226,6 +244,29 @@ impl<'a> Parser<'a> {
                 Ok(None)
             }
         }
+    }
+
+    /// Skip a `PROTO name [ interface ] { body }` or
+    /// `EXTERNPROTO name [ interface ] url` declaration (#887). A
+    /// declaration defines a node type and instantiates nothing, and names
+    /// `DEF`d in its body belong to the prototype's own scope, so neither the
+    /// body's geometry nor its `DEF` names may reach the scene. Instances are
+    /// not expanded; the first one of each prototype is reported.
+    fn skip_proto_declaration(&mut self, keyword: &str) -> Result<(), ParseError> {
+        let name = self.expect_word()?;
+        if let Some(Token::LBracket) = self.peek() {
+            self.consume_block()?;
+        }
+        if keyword == "PROTO" {
+            if let Some(Token::LBrace) = self.peek() {
+                self.consume_block()?;
+            }
+        } else {
+            // The URL: one string, or a list of them.
+            self.skip_field_value()?;
+        }
+        self.protos.insert(name);
+        Ok(())
     }
 
     fn parse_transform(&mut self) -> Result<Node, ParseError> {
