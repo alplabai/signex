@@ -1,5 +1,6 @@
-//! Build the 5 reference parametric footprints that ship in
-//! `assets/stock-library/footprints/`, wrapped by `Stock.snxlib`.
+//! Build the reference parametric footprints and the passive/discrete
+//! symbols that ship in `assets/stock-library/`, wrapped by
+//! `Stock.snxlib`.
 //!
 //! Run via:
 //!
@@ -21,6 +22,7 @@
 
 pub mod ids;
 pub mod manifest;
+pub mod symbols;
 
 use std::error::Error;
 use std::path::Path;
@@ -94,15 +96,17 @@ pub fn render_all() -> Result<Vec<RenderedStockFile>, Box<dyn Error>> {
 }
 
 /// Write the whole stock library under `root`: the `Stock.snxlib`
-/// manifest, `symbols/` (kept by a `.gitkeep` until symbols land) and
-/// the footprints. Pure function of the id tables, so a rerun rewrites
+/// manifest, the `symbols/` set and the footprints. Pure function of the id tables, so a rerun rewrites
 /// identical bytes. Never runs `git init`: the bundled tree is a plain
 /// directory inside the Signex repo.
 pub fn write_library(root: &Path) -> Result<Vec<RenderedStockFile>, Box<dyn Error>> {
     let footprints = root.join("footprints");
     std::fs::create_dir_all(&footprints)?;
-    std::fs::create_dir_all(root.join("symbols"))?;
-    std::fs::write(root.join("symbols").join(".gitkeep"), b"")?;
+    let symbols_dir = root.join("symbols");
+    std::fs::create_dir_all(&symbols_dir)?;
+    for sym in symbols::render_all()? {
+        std::fs::write(symbols_dir.join(&sym.file_name), sym.text.as_bytes())?;
+    }
     std::fs::write(
         root.join(manifest::SNXLIB_FILE_NAME),
         manifest::render_manifest()?.as_bytes(),
@@ -125,6 +129,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!(
             "wrote {:<44} name={:<22} pads={}",
             file.file_name, file.footprint_name, file.pad_count
+        );
+    }
+    for sym in symbols::render_all()? {
+        println!(
+            "wrote {:<44} name={:<22} pins={} designator={}",
+            sym.file_name, sym.symbol_name, sym.pin_count, sym.designator
         );
     }
     println!(

@@ -3,7 +3,7 @@ library_id = "019df45d-af5e-7a00-8c3b-dd3bf89b40ae"
 
 [library]
 name = "Stock"
-description = "Reference footprints bundled with Signex."
+description = "Reference footprints and symbols bundled with Signex."
 
 [mode]
 kind = "local_git"
