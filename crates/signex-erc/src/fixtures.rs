@@ -192,7 +192,7 @@ pub(crate) fn net_of(symbols: &[ErcSymbol]) -> ErcNet {
                 reference: s.reference.clone(),
                 position: p.world_pos,
                 direction: p.electrical_type,
-                is_power: s.is_power,
+                is_power_flag: s.is_power && signex_net::is_power_flag(&s.lib_id),
             })
         })
         .collect();

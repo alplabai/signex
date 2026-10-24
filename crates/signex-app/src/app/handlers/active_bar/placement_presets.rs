@@ -30,11 +30,21 @@ impl Signex {
             ActiveBarAction::PlacePowerMinus5 => {
                 follow = self.set_pending_power_port("-5V", "power:-5V");
             }
-            ActiveBarAction::PlacePowerArrow
-            | ActiveBarAction::PlacePowerWave
-            | ActiveBarAction::PlacePowerBar
-            | ActiveBarAction::PlacePowerCircle => {
-                follow = self.set_pending_power_port("PWR", "power:PWR_FLAG");
+            // Styled ports carry the style keyword the built-in power renderer
+            // recognizes. They must never use `power:PWR_FLAG`: a flag does not
+            // name a net, so a styled port with that lib_id would stop merging
+            // by value in the netlist and ERC.
+            ActiveBarAction::PlacePowerArrow => {
+                follow = self.set_pending_power_port("PWR", "power:arrow");
+            }
+            ActiveBarAction::PlacePowerWave => {
+                follow = self.set_pending_power_port("PWR", "power:wave");
+            }
+            ActiveBarAction::PlacePowerBar => {
+                follow = self.set_pending_power_port("PWR", "power:bar");
+            }
+            ActiveBarAction::PlacePowerCircle => {
+                follow = self.set_pending_power_port("PWR", "power:circle");
             }
             ActiveBarAction::PlacePowerSignalGND => {
                 follow = self.set_pending_power_port("GNDREF", "power:GNDREF");

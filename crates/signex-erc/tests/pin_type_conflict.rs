@@ -269,6 +269,17 @@ fn flag(reference: &'static str, x: f64, value: &'static str) -> Part {
     }
 }
 
+/// An ordinary (non-flag) power port whose single pin is a `PowerOutput`.
+fn port(reference: &'static str, x: f64, value: &'static str) -> Part {
+    Part {
+        reference,
+        direction: PinDirection::PowerOutput,
+        is_power: true,
+        value,
+        x,
+    }
+}
+
 fn sheet_of(parts: &[Part]) -> SchematicSheet {
     let mut sheet = SchematicSheet {
         paper_size: "A4".to_string(),
@@ -277,6 +288,8 @@ fn sheet_of(parts: &[Part]) -> SchematicSheet {
     for part in parts {
         let lib_id = if part.reference.starts_with("#FLG") {
             "power:PWR_FLAG".to_string()
+        } else if part.reference.starts_with("#STY") {
+            "power:arrow".to_string()
         } else {
             format!("lib_{}", part.reference)
         };
@@ -450,6 +463,35 @@ fn two_genuine_power_outputs_are_still_flagged() {
         plain("U2", PinDirection::PowerOutput, 10.0),
     ]);
     wire(&mut sheet, 0.0, 10.0);
+
+    assert_eq!(conflicts(signex_erc::run(&sheet)).len(), 1);
+}
+
+#[test]
+fn a_vcc_port_is_not_exempt_from_a_real_power_driver() {
+    // Only a flag is exempt from PowerOut x PowerOut; an ordinary VCC port
+    // driving the same rail as a regulator output is still reported.
+    let mut sheet = sheet_of(&[
+        plain("U1", PinDirection::PowerOutput, 0.0),
+        port("#PWR01", 10.0, "VCC"),
+    ]);
+    wire(&mut sheet, 0.0, 10.0);
+
+    assert_eq!(conflicts(signex_erc::run(&sheet)).len(), 1);
+}
+
+#[test]
+fn styled_power_ports_with_one_value_still_merge_their_rails() {
+    // Styled ports are ordinary ports (not flags): two sharing a value join
+    // one net, so the drivers behind them conflict.
+    let mut sheet = sheet_of(&[
+        plain("U1", PinDirection::PowerOutput, 0.0),
+        port("#STY01", 10.0, "+3V3"),
+        plain("U2", PinDirection::PowerOutput, 100.0),
+        port("#STY02", 110.0, "+3V3"),
+    ]);
+    wire(&mut sheet, 0.0, 10.0);
+    wire(&mut sheet, 100.0, 110.0);
 
     assert_eq!(conflicts(signex_erc::run(&sheet)).len(), 1);
 }

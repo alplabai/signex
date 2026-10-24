@@ -178,10 +178,10 @@ pub struct ErcNetPin {
     /// World-space position of the pin tip.
     pub position: Point,
     pub direction: PinDirection,
-    /// `true` when the owning symbol is a power port / power flag
-    /// (`PWR_FLAG`). Such symbols are merged by value into one net (#675), so
-    /// their pins say nothing about two real drivers sharing a rail.
-    pub is_power: bool,
+    /// `true` when the owning symbol is a power flag (`PWR_FLAG`), not an
+    /// ordinary power port. A flag declares a rail driven without naming it,
+    /// so its pin says nothing about two real drivers sharing the rail.
+    pub is_power_flag: bool,
 }
 
 /// A logical net: the set of pins and labels connected by wires/junctions.
@@ -524,7 +524,7 @@ fn summarize_nets(
                 reference: sym.reference.clone(),
                 position: pin.world_pos,
                 direction: pin.electrical_type,
-                is_power: sym.is_power,
+                is_power_flag: sym.is_power && signex_net::is_power_flag(&sym.lib_id),
             });
         }
     }

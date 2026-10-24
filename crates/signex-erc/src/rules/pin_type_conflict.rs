@@ -59,9 +59,13 @@ fn badness(severity: Severity) -> u8 {
 /// A power flag declares "this rail is driven"; it does not drive it, so its
 /// `PowerOutput` pin meeting another `PowerOutput` pin (a regulator output, or
 /// another flag on the same rail) is the flag doing its job, not two drivers
-/// fighting. Flags no longer join nets by value (see `signex_net::is_power_flag`).
+/// fighting. Only a flag is exempt: an ordinary power port (a VCC symbol) on
+/// the net does not excuse two real drivers. Flags do not join nets by value
+/// (see `signex_net::is_power_flag`).
 fn is_power_flag_pair(p: &PinPair<'_>) -> bool {
-    p.axis_a == PinAxis::PowerOut && p.axis_b == PinAxis::PowerOut && (p.a.is_power || p.b.is_power)
+    p.axis_a == PinAxis::PowerOut
+        && p.axis_b == PinAxis::PowerOut
+        && (p.a.is_power_flag || p.b.is_power_flag)
 }
 
 fn conflicts_on_net(ctx: &ErcContext, net: &ErcNet, matrix: &PinMatrix, out: &mut Vec<Diagnostic>) {
