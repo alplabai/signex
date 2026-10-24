@@ -32,6 +32,11 @@ pub enum SolveError {
     /// normal equations went singular and no constraint can be named.
     #[error("over-constrained: conflicting constraints {}", join_ids(.0))]
     OverConstrained(Vec<crate::id::ConstraintId>),
+    /// The sketch names entities it does not contain (a hand-edited or
+    /// corrupt file, or a buggy edit). Nothing was solved; deleting or
+    /// restoring the named entities makes the sketch solvable again.
+    #[error("sketch references missing entities: {}", join_ids(.0))]
+    DanglingReference(Vec<crate::id::SketchEntityId>),
     #[error("solve exceeded time budget ({elapsed_ms} ms > {budget_ms} ms)")]
     Timeout { elapsed_ms: u64, budget_ms: u64 },
     /// LO-12: covers genuine internal failures (LU dimension mismatch,
@@ -42,7 +47,7 @@ pub enum SolveError {
     Internal(String),
 }
 
-fn join_ids(ids: &[crate::id::ConstraintId]) -> String {
+fn join_ids<T: ToString>(ids: &[T]) -> String {
     let names: Vec<String> = ids.iter().map(ToString::to_string).collect();
     format!("[{}]", names.join(", "))
 }

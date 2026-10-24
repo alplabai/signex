@@ -17,6 +17,17 @@ use signex_sketch::SketchData;
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
+use signex_sketch::solver::Solver;
+
+/// `Solver::default()` with a wall-clock budget no loaded machine reaches.
+/// These tests check what the solver converges to, not how fast it gets
+/// there; the 50 ms default failed them on a busy runner (#879).
+pub fn solver() -> Solver {
+    Solver {
+        timeout_ms: 60_000,
+        ..Solver::default()
+    }
+}
 
 pub struct Sketch {
     pub data: SketchData,

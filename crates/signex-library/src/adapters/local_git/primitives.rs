@@ -27,12 +27,12 @@ impl LocalGitAdapter {
             .join(format!("{uuid}.{}", primitive_ext(kind)))
     }
 
-    /// Read a primitive JSON file at `<root>/<subdir>/<uuid>.<ext>`.
-    pub(super) fn read_primitive<T: DeserializeOwned>(
+    /// Bytes of the primitive file at `<root>/<subdir>/<uuid>.<ext>`.
+    fn read_primitive_bytes(
         &self,
         kind: PrimitiveKind,
         uuid: Uuid,
-    ) -> Result<T, LibraryError> {
+    ) -> Result<Vec<u8>, LibraryError> {
         let path = self.primitive_path(kind, uuid);
         if !path.exists() {
             return Err(LibraryError::NotFound(format!(
@@ -40,155 +40,149 @@ impl LocalGitAdapter {
                 primitive_kind_str(kind)
             )));
         }
-        let bytes = fs::read(&path)?;
-        // v0.18.4 — `.snxfpt` and `.snxsym` ship as TOML+TSV
-        // envelopes. v0.18.5 — `.snxsim` ships as TOML envelope.
-        // For each primitive kind that's been migrated, build the
-        // file envelope, pull the first contained primitive, then
-        // serde-round-trip through JSON to recover the generic T.
-        if matches!(kind, PrimitiveKind::Footprint) {
-            let file = crate::primitive::FootprintFile::from_bytes(&bytes)
-                .map_err(|e| LibraryError::Backend(format!("read .snxfpt: {e}")))?;
-            let fp = file
-                .footprints
-                .into_iter()
-                .next()
-                .ok_or_else(|| LibraryError::Backend("empty FootprintFile".into()))?;
-            let buf = serde_json::to_vec(&fp)
-                .map_err(|e| LibraryError::Backend(format!("re-serialise footprint: {e}")))?;
-            let value: T = serde_json::from_slice(&buf)
-                .map_err(|e| LibraryError::Backend(format!("read primitive: {e}")))?;
-            return Ok(value);
-        }
-        if matches!(kind, PrimitiveKind::Sim) {
-            let file = SimFile::from_bytes(&bytes)
-                .map_err(|e| LibraryError::Backend(format!("read .snxsim: {e}")))?;
-            let model = file
-                .models
-                .into_iter()
-                .next()
-                .ok_or_else(|| LibraryError::Backend("empty SimFile".into()))?;
-            let buf = serde_json::to_vec(&model)
-                .map_err(|e| LibraryError::Backend(format!("re-serialise sim: {e}")))?;
-            let value: T = serde_json::from_slice(&buf)
-                .map_err(|e| LibraryError::Backend(format!("read primitive: {e}")))?;
-            return Ok(value);
-        }
-        // HI-8: Symbol files are TOML+TSV envelopes since v0.18.4 and
-        // are read via `get_symbol`/`scan_symbol_files` which dispatch
-        // through `SymbolFile::from_bytes`. The generic JSON fallback
-        // below is unreachable on supported kinds; guard it so a
-        // future refactor that adds e.g. `Model3d` doesn't silently
-        // try to parse a TOML file as JSON.
-        debug_assert!(
-            !matches!(kind, PrimitiveKind::Symbol),
-            "read_primitive::<Symbol> must route through get_symbol; this generic path \
-             would attempt serde_json on a TOML envelope and fail at runtime"
-        );
-        let value: T = serde_json::from_slice(&bytes)
-            .map_err(|e| LibraryError::Backend(format!("read primitive: {e}")))?;
-        Ok(value)
+        Ok(fs::read(&path)?)
     }
 
-    /// Persist a primitive file under `<root>/<subdir>/<uuid>.<ext>`,
-    /// stage + commit it via libgit2 with the supplied message.
+    /// Read the first footprint of the `.snxfpt` TOML+TSV envelope (v0.18.4).
     ///
-    /// `.snxfpt` files emit as TOML+TSV envelope (v0.18.4); `.snxsim`
-    /// files emit as TOML envelope (v0.18.5). `.snxsym` is handled
-    /// outside this generic path via `save_symbol_in_container` so
-    /// multi-symbol containers are preserved.
-    pub(super) fn write_primitive<T: Serialize>(
+    /// Typed per kind rather than generic over `T: DeserializeOwned`: the
+    /// generic form had to serialise the footprint to JSON and parse it back
+    /// just to hand the caller the value it already had (#534).
+    pub(super) fn read_footprint(&self, uuid: Uuid) -> Result<Footprint, LibraryError> {
+        let bytes = self.read_primitive_bytes(PrimitiveKind::Footprint, uuid)?;
+        crate::primitive::FootprintFile::from_bytes(&bytes)
+            .map_err(|e| LibraryError::Backend(format!("read .snxfpt: {e}")))?
+            .footprints
+            .into_iter()
+            .next()
+            .ok_or_else(|| LibraryError::Backend("empty FootprintFile".into()))
+    }
+
+    /// Read the first model of the `.snxsim` TOML envelope (v0.18.5).
+    pub(super) fn read_sim(&self, uuid: Uuid) -> Result<SimModel, LibraryError> {
+        let bytes = self.read_primitive_bytes(PrimitiveKind::Sim, uuid)?;
+        SimFile::from_bytes(&bytes)
+            .map_err(|e| LibraryError::Backend(format!("read .snxsim: {e}")))?
+            .models
+            .into_iter()
+            .next()
+            .ok_or_else(|| LibraryError::Backend("empty SimFile".into()))
+    }
+
+    /// Persist `fp` into `<root>/footprints/<uuid>.snxfpt`, merging into the
+    /// existing envelope (HI-7) so sibling footprints survive, then commit.
+    pub(super) fn write_footprint(
+        &self,
+        fp: &Footprint,
+        message: &str,
+    ) -> Result<(), LibraryError> {
+        let (rel_path, abs_path) =
+            self.prepare_primitive_write(PrimitiveKind::Footprint, fp.uuid)?;
+        // The container is read, merged and rewritten: another Signex
+        // process doing the same would drop this edit (#893, see
+        // `write_lock`). The cascade that follows takes the lock itself.
+        let _write_lock = self.lock_for_write()?;
+        let mut file = match fs::read(&abs_path) {
+            Ok(existing) => crate::primitive::FootprintFile::from_bytes(&existing)
+                .map_err(|e| LibraryError::Backend(format!("re-read .snxfpt: {e}")))?,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                crate::primitive::FootprintFile::from_footprint(fp.clone())
+            }
+            Err(e) => return Err(LibraryError::from(e)),
+        };
+        // Replace by uuid; preserve siblings.
+        if let Some(slot) = file.footprints.iter_mut().find(|f| f.uuid == fp.uuid) {
+            *slot = fp.clone();
+        } else {
+            file.footprints.push(fp.clone());
+        }
+        file.updated = chrono::Utc::now();
+        let bytes = file
+            .to_toml_string()
+            .map_err(|e| LibraryError::Backend(format!("emit .snxfpt: {e}")))?
+            .into_bytes();
+        self.persist_primitive(
+            PrimitiveKind::Footprint,
+            fp.uuid,
+            &rel_path,
+            &abs_path,
+            &bytes,
+            message,
+        )
+    }
+
+    /// Persist `model` into `<root>/sims/<uuid>.snxsim`, merging into the
+    /// existing envelope (HI-7) so a multi-model file is not clobbered.
+    pub(super) fn write_sim(&self, model: &SimModel, message: &str) -> Result<(), LibraryError> {
+        let (rel_path, abs_path) = self.prepare_primitive_write(PrimitiveKind::Sim, model.uuid)?;
+        // The container is read, merged and rewritten: another Signex
+        // process doing the same would drop this edit (#893, see
+        // `write_lock`). The cascade that follows takes the lock itself.
+        let _write_lock = self.lock_for_write()?;
+        let mut file = match fs::read(&abs_path) {
+            Ok(existing) => SimFile::from_bytes(&existing)
+                .map_err(|e| LibraryError::Backend(format!("re-read .snxsim: {e}")))?,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                SimFile::from_model(model.clone())
+            }
+            Err(e) => return Err(LibraryError::from(e)),
+        };
+        if let Some(slot) = file.models.iter_mut().find(|m| m.uuid == model.uuid) {
+            *slot = model.clone();
+        } else {
+            file.models.push(model.clone());
+        }
+        file.updated = chrono::Utc::now();
+        let bytes = file
+            .to_toml_string()
+            .map_err(|e| LibraryError::Backend(format!("emit .snxsim: {e}")))?
+            .into_bytes();
+        self.persist_primitive(
+            PrimitiveKind::Sim,
+            model.uuid,
+            &rel_path,
+            &abs_path,
+            &bytes,
+            message,
+        )
+    }
+
+    /// Refuse before touching disk if the commit cannot be made, create the
+    /// primitive directory, and return the (repo-relative, absolute) path.
+    /// Symbols go through `save_symbol_in_container` instead.
+    fn prepare_primitive_write(
         &self,
         kind: PrimitiveKind,
         uuid: Uuid,
-        value: &T,
-        message: &str,
-    ) -> Result<(), LibraryError> {
+    ) -> Result<(String, PathBuf), LibraryError> {
         self.ensure_commit_identity()?;
-        let dir = self.primitive_dir(kind);
-        fs::create_dir_all(&dir)?;
+        fs::create_dir_all(self.primitive_dir(kind))?;
         let rel_path = format!("{}/{uuid}.{}", primitive_subdir(kind), primitive_ext(kind));
         let abs_path = self.root_dir.join(&rel_path);
-        let bytes = if matches!(kind, PrimitiveKind::Footprint) {
-            // T is Footprint here — round-trip through JSON to obtain
-            // the typed value, then merge into the existing envelope
-            // on disk if present (HI-7) so a multi-footprint file
-            // doesn't get clobbered by a single-element rewrite.
-            let buf = serde_json::to_vec(value)
-                .map_err(|e| LibraryError::Backend(format!("re-serialise footprint: {e}")))?;
-            let fp: crate::primitive::Footprint = serde_json::from_slice(&buf)
-                .map_err(|e| LibraryError::Backend(format!("write primitive: {e}")))?;
-            let mut file = match fs::read(&abs_path) {
-                Ok(existing) => crate::primitive::FootprintFile::from_bytes(&existing)
-                    .map_err(|e| LibraryError::Backend(format!("re-read .snxfpt: {e}")))?,
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                    crate::primitive::FootprintFile::from_footprint(fp.clone())
-                }
-                Err(e) => return Err(LibraryError::from(e)),
-            };
-            // Replace by uuid; preserve siblings.
-            let target_uuid = fp.uuid;
-            if let Some(slot) = file.footprints.iter_mut().find(|f| f.uuid == target_uuid) {
-                *slot = fp;
-            } else {
-                file.footprints.push(fp);
-            }
-            file.updated = chrono::Utc::now();
-            file.to_toml_string()
-                .map_err(|e| LibraryError::Backend(format!("emit .snxfpt: {e}")))?
-                .into_bytes()
-        } else if matches!(kind, PrimitiveKind::Sim) {
-            // T is SimModel here — same JSON round-trip recovery
-            // pattern, then merge into the existing envelope (HI-7)
-            // so the SPICE / Verilog-A multi-element file doesn't
-            // get clobbered.
-            let buf = serde_json::to_vec(value)
-                .map_err(|e| LibraryError::Backend(format!("re-serialise sim: {e}")))?;
-            let model: SimModel = serde_json::from_slice(&buf)
-                .map_err(|e| LibraryError::Backend(format!("write primitive: {e}")))?;
-            let mut file = match fs::read(&abs_path) {
-                Ok(existing) => SimFile::from_bytes(&existing)
-                    .map_err(|e| LibraryError::Backend(format!("re-read .snxsim: {e}")))?,
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                    SimFile::from_model(model.clone())
-                }
-                Err(e) => return Err(LibraryError::from(e)),
-            };
-            let target_uuid = model.uuid;
-            if let Some(slot) = file.models.iter_mut().find(|m| m.uuid == target_uuid) {
-                *slot = model;
-            } else {
-                file.models.push(model);
-            }
-            file.updated = chrono::Utc::now();
-            file.to_toml_string()
-                .map_err(|e| LibraryError::Backend(format!("emit .snxsim: {e}")))?
-                .into_bytes()
-        } else {
-            // HI-8: Symbols are written via `save_symbol_in_container`,
-            // not this generic path. The pretty-JSON branch is left
-            // for forward-compat with future kinds whose on-disk
-            // format hasn't been migrated.
-            debug_assert!(
-                !matches!(kind, PrimitiveKind::Symbol),
-                "write_primitive::<Symbol> must route through save_symbol_in_container; \
-                 the JSON fallback would write a non-canonical format"
-            );
-            serde_json::to_vec_pretty(value)
-                .map_err(|e| LibraryError::Backend(format!("write primitive: {e}")))?
-        };
+        Ok((rel_path, abs_path))
+    }
+
+    fn persist_primitive(
+        &self,
+        kind: PrimitiveKind,
+        uuid: Uuid,
+        rel_path: &str,
+        abs_path: &Path,
+        bytes: &[u8],
+        message: &str,
+    ) -> Result<(), LibraryError> {
         // HI-6: atomic write — primitive containers (`.snxsim`,
         // `.snxfpt`, `.snxsym`) are TOML+TSV envelopes; a half-written
         // file destroys all primitives in the container, so we cannot
         // afford the in-place truncate that `fs::write` does on
         // existing destinations.
-        signex_types::atomic_io::atomic_write(&abs_path, &bytes)?;
-
+        signex_types::atomic_io::atomic_write(abs_path, bytes)?;
         let fallback = format!("save {} {uuid}", primitive_kind_str(kind));
-        self.commit_path(&rel_path, message, &fallback)
+        self.commit_path(rel_path, message, &fallback)
     }
 
-    /// Stage `rel_path` and create a new commit. Used by primitive saves
+    /// Stage `rel_path` and create a new commit, unless the staged tree
+    /// matches HEAD's (an unchanged save). Used by primitive saves
     /// (`*.snx*` files) and table writes (the `.snxlib` itself). When
     /// the parent directory has no `.git/`, this is a no-op — the file
     /// has already been written to disk by the caller, and the user
@@ -215,42 +209,15 @@ impl LocalGitAdapter {
         let sig = git2::Signature::now(&sig_name, &sig_email)
             .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
 
-        let mut index = repo
-            .index()
-            .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
-        index
-            .add_path(Path::new(rel_path))
-            .map_err(|e| LibraryError::Backend(format!("git add: {e}")))?;
-        index
-            .write()
-            .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
-        let tree_oid = index
-            .write_tree()
-            .map_err(|e| LibraryError::Backend(format!("git write tree: {e}")))?;
-        let tree = repo
-            .find_tree(tree_oid)
-            .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
-
-        // Resolve the parent commit. An unborn HEAD (fresh repo, no commits
-        // yet) is the only legitimate "no parent" case — every other error
-        // (corrupt ref, locked ref) propagates so we don't silently produce
-        // an orphan commit on a broken repo.
-        let parent = match repo.head() {
-            Ok(h) => h
-                .peel_to_commit()
-                .map_err(|e| LibraryError::Backend(format!("git peel to commit: {e}")))
-                .map(Some)?,
-            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => None,
-            Err(e) => return Err(LibraryError::Backend(format!("git head: {e}"))),
-        };
-        let parents: Vec<&git2::Commit> = parent.as_ref().map(|c| vec![c]).unwrap_or_default();
         let commit_message = if message.is_empty() {
             fallback_message.to_string()
         } else {
             message.to_string()
         };
-        repo.commit(Some("HEAD"), &sig, &sig, &commit_message, &tree, &parents)
-            .map_err(|e| LibraryError::Backend(format!("git commit: {e}")))?;
+        retry_on_git_lock(repo.path(), || {
+            stage_and_commit(&repo, Path::new(rel_path), &sig, &commit_message)
+        })
+        .map_err(|e| LibraryError::Backend(format!("git commit {rel_path}: {e}")))?;
         Ok(())
     }
 
@@ -266,7 +233,7 @@ impl LocalGitAdapter {
         let text = lf.write()?;
         // HI-6: atomic write — never half-write the manifest.
         signex_types::atomic_io::atomic_write(&self.file_path, text.as_bytes())?;
-        Ok(())
+        self.note_own_write(&text)
     }
 
     /// Mutate the in-memory `library_file`, persist it, and commit the
@@ -303,10 +270,17 @@ impl LocalGitAdapter {
         F: FnOnce(&mut LibraryFile) -> Result<bool, LibraryError>,
     {
         self.ensure_commit_identity()?;
+        // Another Signex process could otherwise reload and write between
+        // our reload and our write (see `write_lock`). Taken before the
+        // in-process guard, and held until the write is done.
+        let _write_lock = self.lock_for_write()?;
         let mut guard = self
             .library_file
             .write()
             .map_err(|_| LibraryError::Backend("library_file write lock poisoned".into()))?;
+        // An external edit must be merged in, not overwritten by a stale
+        // copy; an unreadable file refuses the edit (see `disk_sync`).
+        self.reload_if_stale(&mut guard, super::disk_sync::Verify::Content)?;
         if !f(&mut guard)? {
             return Ok(());
         }
@@ -320,6 +294,7 @@ impl LocalGitAdapter {
     /// Returns an empty vec for unknown tables (matches the old
     /// `tables/<name>.tsv` "missing file = empty" semantics).
     pub(super) fn snapshot_table(&self, name: &str) -> Result<Vec<ComponentRow>, LibraryError> {
+        self.refresh_for_read();
         let guard = self
             .library_file
             .read()
@@ -344,10 +319,12 @@ impl LocalGitAdapter {
     pub(super) fn scan_symbol_files(&self) -> Result<Vec<(PathBuf, SymbolFile)>, LibraryError> {
         let dir = self.primitive_dir(PrimitiveKind::Symbol);
         if !dir.exists() {
+            self.record_symbol_problems(&[]);
             return Ok(Vec::new());
         }
         let suffix = format!(".{SYMBOL_EXT}");
         let mut out: Vec<(PathBuf, SymbolFile)> = Vec::new();
+        let mut problems: Vec<SymbolFileProblem> = Vec::new();
         for entry in walkdir::WalkDir::new(&dir)
             .min_depth(1)
             .max_depth(1)
@@ -364,17 +341,93 @@ impl LocalGitAdapter {
             if !name.ends_with(&suffix) {
                 continue;
             }
-            let bytes = fs::read(path)?;
-            // TOML-only (alpha policy, no legacy JSON support — pre-v0.18.4
-            // libraries must be regenerated). `from_bytes` decodes UTF-8 and
-            // hands off to `from_toml_str`; the format-token check inside
-            // surfaces `UnsupportedFormat` for any drift.
-            let file = SymbolFile::from_bytes(&bytes)
-                .map_err(|e| LibraryError::Backend(format!("read symbol file {name}: {e}")))?;
-            out.push((path.to_path_buf(), file));
+            // #690 — a container that cannot be read or parsed affects only
+            // itself: skip it, never rewrite it, and record it so it is
+            // reported (see `symbol_file_problems`).
+            let parsed = fs::read(path)
+                .map_err(|e| e.to_string())
+                // TOML-only (alpha policy, no legacy JSON support —
+                // pre-v0.18.4 libraries must be regenerated). `from_bytes`
+                // decodes UTF-8 and hands off to `from_toml_str`; the
+                // format-token check inside surfaces `UnsupportedFormat`
+                // for any drift.
+                .and_then(|bytes| SymbolFile::from_bytes(&bytes).map_err(|e| e.to_string()));
+            match parsed {
+                Ok(file) => out.push((path.to_path_buf(), file)),
+                Err(error) => problems.push(SymbolFileProblem::new(path.to_path_buf(), &error)),
+            }
         }
         out.sort_by(|a, b| a.0.cmp(&b.0));
+        self.record_symbol_problems(&problems);
         Ok(out)
+    }
+
+    /// Containers the most recent symbol scan skipped because they could not
+    /// be read or parsed. Empty when every `.snxsym` is healthy.
+    pub fn symbol_file_problems(&self) -> Vec<SymbolFileProblem> {
+        self.symbol_problems
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .current()
+    }
+
+    /// Update the ledger and log each newly seen problem once. The app's
+    /// logger routes `tracing::warn!` into the Messages panel.
+    fn record_symbol_problems(&self, found: &[SymbolFileProblem]) {
+        let fresh = self
+            .symbol_problems
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .observe(found);
+        for p in fresh {
+            tracing::warn!(
+                "Skipped unreadable symbol file {} (left untouched): {}",
+                p.path.display(),
+                p.error
+            );
+        }
+    }
+
+    fn refuse_if_skipped_file_mentions(&self, uuid: Uuid) -> Result<(), LibraryError> {
+        let hyphenated = uuid.hyphenated().to_string();
+        let simple = uuid.simple().to_string();
+        for p in self.symbol_file_problems() {
+            // A file we cannot read may hold this symbol, so treat it as a match.
+            let mentions = fs::read(&p.path)
+                .map(|bytes| {
+                    let text = String::from_utf8_lossy(&bytes).to_lowercase();
+                    text.contains(&hyphenated) || text.contains(&simple)
+                })
+                .unwrap_or(true);
+            if mentions {
+                return Err(LibraryError::Backend(format!(
+                    "symbol {uuid} appears in unreadable symbol file {} ({}); \
+                     not saving a second copy",
+                    p.path.display(),
+                    p.error
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    /// Error for a symbol lookup that found nothing while some containers
+    /// were skipped: the symbol may live in one of them, so "not found"
+    /// would be a guess.
+    pub(super) fn symbol_lookup_undetermined(&self, uuid: Uuid) -> Option<LibraryError> {
+        let problems = self.symbol_file_problems();
+        if problems.is_empty() {
+            return None;
+        }
+        let names: Vec<String> = problems
+            .iter()
+            .map(|p| p.path.display().to_string())
+            .collect();
+        Some(LibraryError::Backend(format!(
+            "symbol {uuid} not found; {} symbol file(s) could not be read: {}",
+            problems.len(),
+            names.join(", ")
+        )))
     }
 
     pub(super) fn save_symbol_in_container(
@@ -383,6 +436,10 @@ impl LocalGitAdapter {
         message: &str,
     ) -> Result<(), LibraryError> {
         self.ensure_commit_identity()?;
+        // The container is read, merged and rewritten: another Signex
+        // process doing the same would drop this edit (#893, see
+        // `write_lock`). The cascade that follows takes the lock itself.
+        let _write_lock = self.lock_for_write()?;
         let dir = self.primitive_dir(PrimitiveKind::Symbol);
         fs::create_dir_all(&dir)?;
 
@@ -403,6 +460,10 @@ impl LocalGitAdapter {
                 path
             }
             None => {
+                // A skipped container whose text mentions this uuid may
+                // already hold the symbol; writing a second copy elsewhere
+                // would fork it. Refuse that one case, name the file.
+                self.refuse_if_skipped_file_mentions(sym.uuid)?;
                 let file = SymbolFile::from_symbol(sym.clone());
                 let path = self.fresh_symbol_file_path(&dir, &file)?;
                 // v0.18.4 — emit TOML envelope.

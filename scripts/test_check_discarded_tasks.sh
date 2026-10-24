@@ -85,6 +85,12 @@ mod tests {
     }
 }'
 
+run_case drop_task_after_other_fn fail 'fn a() {}
+fn b() {
+    let state = app.handle_x();
+    drop(state);
+}'
+
 # --- negative controls: the gate must leave these alone ------------------
 
 run_case drop_lock_guard pass 'fn f() {
@@ -108,6 +114,14 @@ run_case drop_same_name_other_fn pass 'fn a() {
 }
 fn b() {
     let state = lock.lock();
+    drop(state);
+}'
+
+run_case drop_same_name_param_other_fn pass 'fn a() {
+    let state = app.handle_x();
+    state
+}
+fn b(state: Guard) {
     drop(state);
 }'
 

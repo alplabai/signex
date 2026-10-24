@@ -6,7 +6,6 @@ use common::Sketch;
 
 use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
 use signex_sketch::id::{ConstraintId, SketchEntityId};
-use signex_sketch::solver::Solver;
 use signex_sketch::solver::residual::ResolvedParams;
 use signex_sketch::solver::state::point_xy;
 
@@ -28,7 +27,7 @@ fn off_circle_end_point_is_pulled_onto_the_circle() {
     let end = s.add_point(0.0, 7.0);
     s.add_arc(c, start, end, true);
 
-    let out = Solver::default()
+    let out = common::solver()
         .solve(&s.data, &ResolvedParams::new())
         .expect("an arc alone is satisfiable");
 
@@ -64,7 +63,7 @@ fn end_point_stays_on_circle_while_dimensioned() {
         },
     });
 
-    let out = Solver::default()
+    let out = common::solver()
         .solve(&s.data, &ResolvedParams::new())
         .expect("circle and dimension intersect, so this is satisfiable");
 

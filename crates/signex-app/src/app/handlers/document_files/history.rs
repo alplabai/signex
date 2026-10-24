@@ -12,7 +12,7 @@ impl Signex {
     /// message; nothing destructive runs (the working tree changes
     /// only on a successful blob read + atomic write).
     pub(crate) fn handle_history_restore_clicked(&mut self, sha: &str) {
-        self.sync_footprint_dirty_paths();
+        self.sync_editor_dirty_paths();
         let active = match self.document_state.tabs.get(self.document_state.active_tab) {
             Some(t) => t,
             None => return,
@@ -175,6 +175,7 @@ impl Signex {
                         return;
                     }
                 };
+                crate::app::load_gateway::report_unusable_zone_holes(&path, &board);
                 if let Some(t) = self.document_state.tabs.get_mut(active_idx) {
                     t.cached_document = Some(crate::app::TabDocument::Pcb(board));
                 }
@@ -195,17 +196,25 @@ impl Signex {
                 match signex_library::FootprintFile::from_toml_str(&bytes) {
                     Ok(file) if !file.footprints.is_empty() => {
                         let snap_disabled = !self.ui_state.snap_enabled;
-                        let state = crate::app::FootprintEditorState::new(p.clone(), file)
+                        let state = crate::app::FootprintEditorState::reloaded(p.clone(), file)
                             .with_global_snap_disabled(snap_disabled);
+                        // A load repair makes the reloaded editor differ from
+                        // disk, so it is dirty; otherwise it matches disk and
+                        // the stale marker must go. Either way the tab and
+                        // `dirty_paths` follow the editor, or quit would not
+                        // offer to save the repair (or would ask about a
+                        // file that matches disk).
+                        let dirty = state.dirty;
                         self.document_state
                             .footprint_editors
                             .insert(p.clone(), state);
-                        // The reloaded editor is clean, so the stale
-                        // dirty marker must go or quit asks about a
-                        // file that matches disk.
-                        self.document_state.dirty_paths.remove(&p);
+                        if dirty {
+                            self.document_state.dirty_paths.insert(p.clone());
+                        } else {
+                            self.document_state.dirty_paths.remove(&p);
+                        }
                         if let Some(tab) = self.document_state.tabs.get_mut(active_idx) {
-                            tab.dirty = false;
+                            tab.dirty = dirty;
                         }
                         if let Some(editor) = self.document_state.footprint_editors.get_mut(&p) {
                             editor.canvas_cache.clear();

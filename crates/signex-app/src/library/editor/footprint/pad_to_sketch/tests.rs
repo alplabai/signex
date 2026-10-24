@@ -169,6 +169,37 @@ fn mirror_delete_pad_drops_sketch_entity() {
     assert_eq!(fp.sketch.as_ref().unwrap().entities.len(), 0);
 }
 
+#[test]
+fn pads_mode_delete_of_an_array_source_drops_the_array_and_the_sketch_still_solves() {
+    use signex_sketch::array::{Array, ArrayId, ArrayKind, NumberingScheme};
+    use signex_sketch::solver::Solver;
+    use signex_sketch::solver::residual::ResolvedParams;
+
+    let mut fp = Footprint::empty("test");
+    let mut pad = editor_pad("1", 1.0, 1.0);
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+    let centre = pad.sketch_entity_id.expect("minted");
+    fp.sketch.as_mut().unwrap().arrays.push(Array {
+        id: ArrayId::new(),
+        kind: ArrayKind::Linear {
+            source: centre,
+            count_expr: "3".into(),
+            dx_expr: "1mm".into(),
+            dy_expr: "0mm".into(),
+        },
+        numbering: NumberingScheme::default(),
+    });
+
+    mirror_delete_pad_from_sketch(&pad, &mut fp);
+
+    let sketch = fp.sketch.as_ref().unwrap();
+    assert!(sketch.arrays.is_empty());
+    assert!(sketch.dangling_refs().is_empty());
+    Solver::default()
+        .solve(sketch, &ResolvedParams::new())
+        .expect("the sketch still solves after the pad delete");
+}
+
 /// Build a footprint whose sketch holds a closed rectangle profile and a
 /// centre Point carrying a `SketchProfile` PadAttr seeded from one of the
 /// rectangle's Lines — the shape produced by "Make Pad from Profile".

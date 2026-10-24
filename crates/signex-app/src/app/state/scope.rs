@@ -135,6 +135,23 @@ pub(crate) fn project_owning_sheet<'a>(
     project_owning_sheet_with(projects, loaded, path, CaseFold::host_default())
 }
 
+/// Every open engine whose sheet belongs to project `id`, by the same
+/// ownership rule as [`project_owning_sheet`].
+pub(crate) fn engines_in_project<'a>(
+    projects: &[LoadedProject],
+    refs: &HashMap<PathBuf, Vec<String>>,
+    engines: &'a HashMap<PathBuf, signex_engine::Engine>,
+    id: super::ProjectId,
+) -> Vec<&'a signex_engine::Engine> {
+    engines
+        .iter()
+        .filter(|(path, _)| {
+            project_owning_sheet(projects, refs, path).is_some_and(|owner| owner.id == id)
+        })
+        .map(|(_, engine)| engine)
+        .collect()
+}
+
 /// [`project_owning_sheet`] with an explicit case policy.
 pub(crate) fn project_owning_sheet_with<'a>(
     projects: &'a [LoadedProject],

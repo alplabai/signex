@@ -93,115 +93,21 @@ impl Engine {
                 Ok(CommandResult::changed(patch_pair))
             }
             Command::AnnotateAll { mode } => {
-                use crate::command::AnnotateMode;
-                // Power ports (is_power == true, or reference starting with '#')
-                // are net anchors, not real components. Their references
-                // carry the net name, not a designator. Skip them in every
-                // phase so annotation only touches real parts.
-                let is_designator_target = |sym: &signex_types::schematic::Symbol| -> bool {
-                    !sym.is_power && !sym.reference.starts_with('#')
-                };
-                // Phase 1: optionally reset existing numbers back to '?'.
-                if matches!(
-                    mode,
-                    AnnotateMode::ResetOnly | AnnotateMode::ResetAndRenumber
-                ) {
-                    for symbol in self.document.symbols.iter_mut() {
-                        if !is_designator_target(symbol) {
-                            continue;
-                        }
-                        // Keep the alphabetic prefix; drop the digit tail.
-                        let prefix: String = symbol
-                            .reference
-                            .chars()
-                            .take_while(|c| c.is_ascii_alphabetic())
-                            .collect();
-                        if !prefix.is_empty() {
-                            symbol.reference = format!("{prefix}?");
-                        }
-                    }
-                }
-                if matches!(mode, AnnotateMode::ResetOnly) {
-                    let patch_pair = PatchPair {
-                        semantic: SemanticPatch::SymbolFieldsUpdated,
-                        document: DocumentPatch::SYMBOLS,
-                    };
-                    self.record_history(before, patch_pair);
-                    return Ok(CommandResult::changed(patch_pair));
-                }
-
-                // Phase 2: find the max number per prefix from already-annotated
-                // symbols so Incremental doesn't collide. Skip power ports
-                // — their numbers use a different (#PWR) namespace.
-                let mut next_by_prefix: std::collections::HashMap<String, u32> =
-                    std::collections::HashMap::new();
-                for symbol in &self.document.symbols {
-                    if !is_designator_target(symbol) {
-                        continue;
-                    }
-                    let prefix: String = symbol
-                        .reference
-                        .chars()
-                        .take_while(|c| c.is_ascii_alphabetic())
-                        .collect();
-                    if prefix.is_empty() {
-                        continue;
-                    }
-                    let rest = &symbol.reference[prefix.len()..];
-                    if let Ok(n) = rest.parse::<u32>() {
-                        let entry = next_by_prefix.entry(prefix).or_insert(0);
-                        if n > *entry {
-                            *entry = n;
-                        }
-                    }
-                }
-
-                // Phase 3: iterate symbols in a stable order (by position,
-                // then uuid) and assign sequential numbers to any '?' tails.
-                let mut order: Vec<usize> = (0..self.document.symbols.len()).collect();
-                order.sort_by(|a, b| {
-                    let sa = &self.document.symbols[*a];
-                    let sb = &self.document.symbols[*b];
-                    sa.position
-                        .y
-                        .partial_cmp(&sb.position.y)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                        .then(
-                            sa.position
-                                .x
-                                .partial_cmp(&sb.position.x)
-                                .unwrap_or(std::cmp::Ordering::Equal),
-                        )
-                        .then(sa.uuid.cmp(&sb.uuid))
-                });
-
-                for idx in order {
-                    let symbol = &mut self.document.symbols[idx];
-                    if !is_designator_target(symbol) {
-                        continue;
-                    }
-                    if !symbol.reference.ends_with('?') {
-                        continue;
-                    }
-                    let prefix: String = symbol
-                        .reference
-                        .chars()
-                        .take_while(|c| c.is_ascii_alphabetic())
-                        .collect();
-                    if prefix.is_empty() {
-                        continue;
-                    }
-                    let next = next_by_prefix.entry(prefix.clone()).or_insert(0);
-                    *next += 1;
-                    symbol.reference = format!("{prefix}{next}");
-                }
-
+                // The same part-aware pass the app's annotate runs, so units of
+                // a multi-unit part keep one designator here too (#829). It
+                // snapshots and records its own history, so `before` is unused.
+                drop(before);
+                let changed =
+                    self.annotate_with_seed(mode, &mut std::collections::HashMap::new())?;
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::SymbolFieldsUpdated,
                     document: DocumentPatch::SYMBOLS,
                 };
-                self.record_history(before, patch_pair);
-                Ok(CommandResult::changed(patch_pair))
+                Ok(if changed {
+                    CommandResult::changed(patch_pair)
+                } else {
+                    CommandResult::unchanged()
+                })
             }
             Command::MoveSymbolAbsolute { symbol_id, x, y } => {
                 let Some(symbol) = self
@@ -362,13 +268,17 @@ impl Engine {
                 ports,
             } => {
                 let mut changed = false;
-                for child in self
-                    .document
-                    .child_sheets
-                    .iter_mut()
-                    .filter(|child| child.filename == child_filename)
-                {
-                    changed |= sheet::reconcile_child_sheet_pins(child, &ports);
+                // Per symbol: pins an earlier symbol just gained are contacts too.
+                for idx in 0..self.document.child_sheets.len() {
+                    if self.document.child_sheets[idx].filename != child_filename {
+                        continue;
+                    }
+                    let contacts = signex_net::SheetPinContacts::of_sheet(&self.document);
+                    changed |= sheet::reconcile_child_sheet_pins(
+                        &mut self.document.child_sheets[idx],
+                        &ports,
+                        &contacts,
+                    );
                 }
 
                 if !changed {

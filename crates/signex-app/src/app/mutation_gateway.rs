@@ -35,6 +35,9 @@ impl Signex {
         if patch.contains(signex_engine::DocumentPatch::NO_CONNECTS) {
             invalidation |= RenderInvalidation::NO_CONNECTS;
         }
+        if patch.contains(signex_engine::DocumentPatch::NO_ERC_DIRECTIVES) {
+            invalidation |= RenderInvalidation::NO_ERC_DIRECTIVES;
+        }
         if patch.contains(signex_engine::DocumentPatch::CHILD_SHEETS) {
             invalidation |= RenderInvalidation::CHILD_SHEETS;
         }
@@ -89,9 +92,22 @@ impl Signex {
         clear_overlay_cache: bool,
         update_selection_info: bool,
     ) -> bool {
+        self.apply_engine_command_checked(command, clear_overlay_cache, update_selection_info)
+            .0
+    }
+
+    /// [`Self::apply_engine_command`] that also says whether the engine
+    /// rejected the command, for callers that report on the outcome.
+    pub(crate) fn apply_engine_command_checked(
+        &mut self,
+        command: signex_engine::Command,
+        clear_overlay_cache: bool,
+        update_selection_info: bool,
+    ) -> (bool, bool) {
         let Some(engine) = self.document_state.active_engine_mut() else {
-            return false;
+            return (false, true);
         };
+        let mut failed = false;
 
         let invalidation = match engine.execute(command) {
             Ok(result) if result.changed => result
@@ -102,11 +118,17 @@ impl Signex {
             Err(error) => {
                 let error = anyhow::Error::new(error);
                 crate::diagnostics::log_error("Engine command failed", &error);
+                failed = true;
                 crate::schematic_runtime::RenderInvalidation::NONE
             }
         };
 
-        self.finish_schematic_mutation(invalidation, clear_overlay_cache, update_selection_info)
+        let changed = self.finish_schematic_mutation(
+            invalidation,
+            clear_overlay_cache,
+            update_selection_info,
+        );
+        (changed, failed)
     }
 
     /// Mark the active document as having unsaved edits, without running a
@@ -210,7 +232,7 @@ impl Signex {
         // Invalidate + re-derive the cached project netlist when this edit
         // touched connectivity (ADR-0002 D7). Same electrical bits that drive
         // net membership — deliberately including no-connects and buses, which
-        // `point_is_connected` reads.
+        // `ConnectedPoints` reads.
         if invalidation.intersects(Self::netlist_render_mask()) {
             self.ui_state.project_netlist = None;
             self.refresh_project_netlist();
@@ -227,7 +249,7 @@ impl Signex {
     /// The `RenderInvalidation` bits that mean project connectivity changed, so
     /// the cached netlist must be re-derived. Mirrors the electrical
     /// `DocumentPatch` bits: symbols, wires, labels, junctions, child sheets,
-    /// and — easy to miss — no-connects and buses, which `point_is_connected`
+    /// and — easy to miss — no-connects and buses, which `ConnectedPoints`
     /// reads when deciding whether a pin lands on a net.
     fn netlist_render_mask() -> crate::schematic_runtime::RenderInvalidation {
         use crate::schematic_runtime::RenderInvalidation as R;
@@ -343,7 +365,7 @@ mod tests {
     fn connectivity_edits_invalidate_the_netlist_cache() {
         // Every bit that changes net membership must invalidate the cache —
         // including the two the review flagged as easy to miss: no-connects and
-        // buses, which `point_is_connected` reads.
+        // buses, which `ConnectedPoints` reads.
         for bit in [
             DocumentPatch::SYMBOLS,
             DocumentPatch::WIRES,
@@ -362,6 +384,7 @@ mod tests {
     fn non_connectivity_edits_leave_the_netlist_cache() {
         for bit in [
             DocumentPatch::TEXT_NOTES,
+            DocumentPatch::NO_ERC_DIRECTIVES,
             DocumentPatch::DRAWINGS,
             DocumentPatch::LIB_SYMBOLS,
             DocumentPatch::PAPER,

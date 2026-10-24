@@ -16,7 +16,6 @@ use iced::widget::column;
 /// user can drop rows individually before deletion lands.
 pub(super) fn view_table_sidebar<'a>(
     library_path: &'a std::path::Path,
-    library_state: &'a LibraryState,
     lib: &'a OpenLibrary,
     browser: &'a LibraryBrowserState,
     tokens: &'a ThemeTokens,
@@ -329,13 +328,9 @@ pub(super) fn view_table_sidebar<'a>(
             );
         }
 
-        let classes_list = library_state
-            .set
-            .get(lib.library_id)
-            .map(|adapter| adapter.library_classes())
-            .unwrap_or_default();
-
-        for entry in &classes_list {
+        // The cached registry, never the adapter: `view` must not stat or
+        // re-parse the `.snxlib` (see `OpenLibrary::cached_classes`).
+        for entry in &lib.cached_classes {
             // `if let` guards both branches in one shot — the rename
             // form draws when this row is the renaming target;
             // otherwise the static row + ✎/× buttons render below.
