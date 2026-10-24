@@ -280,14 +280,14 @@ impl Signex {
     /// F34 — Save-As dialog confirmed for a new symbol library file
     /// (`.snxsym`). The user picked the location + filename in the
     /// rfd `save_file()` dialog — that click IS the explicit save
-    /// action, so we write the empty `SymbolFile` to disk
-    /// immediately, register the path on the containing project's
-    /// `data.libraries` list (so the tree shows it directly under
-    /// Libraries), then open it as a clean primitive editor tab
-    /// (dirty=false). Subsequent edits flow through the regular
-    /// `Ctrl+S → save_primitive_tab_at` path.
+    /// action, so the empty `SymbolFile` is written off the update thread;
+    /// [`handle_add_library_file_written`] then registers the path on
+    /// `project_id` (the project the dialog was opened for) and opens it as a
+    /// clean primitive editor tab (dirty=false). Subsequent edits flow
+    /// through the regular `Ctrl+S → save_primitive_tab_at` path.
     pub(crate) fn handle_add_library_symbol_file_picked(
         &mut self,
+        project_id: crate::app::state::ProjectId,
         path: std::path::PathBuf,
     ) -> Task<Message> {
         let stem = path
@@ -298,49 +298,17 @@ impl Signex {
         let symbol = signex_library::Symbol::empty(stem);
         let file = signex_library::SymbolFile::from_symbol(symbol);
         // v0.18.4 — emit TOML envelope (mirror of v0.18.2 .snxfpt).
-        let text = match file.to_toml_string() {
-            Ok(s) => s,
-            Err(e) => {
-                tracing::warn!(
-                    target: "signex::library",
-                    path = %path.display(),
-                    error = %e,
-                    "AddLibrarySymbolFilePicked: serialize failed"
-                );
-                return Task::none();
-            }
-        };
-        if let Some(parent) = path.parent()
-            && let Err(e) = std::fs::create_dir_all(parent)
-        {
-            tracing::warn!(
-                target: "signex::library",
-                parent = %parent.display(),
-                error = %e,
-                "AddLibrarySymbolFilePicked: create symbols dir failed"
-            );
-            return Task::none();
-        }
-        if let Err(e) = signex_types::atomic_io::atomic_write(&path, text.as_bytes()) {
-            tracing::warn!(
-                target: "signex::library",
-                path = %path.display(),
-                error = %e,
-                "AddLibrarySymbolFilePicked: write .snxsym failed"
-            );
-            return Task::none();
-        }
-        self.register_standalone_library_on_project(&path);
-        self.handle_open_primitive(path)
+        let text = file.to_toml_string().map_err(|e| e.to_string());
+        self.write_new_library_file(project_id, path, text, "symbol")
     }
 
     /// F34 — Footprint counterpart to
     /// [`handle_add_library_symbol_file_picked`]. Writes an empty
-    /// `FootprintFile` (TOML+TSV envelope), registers the file as a
-    /// project library entry, opens the file as a clean primitive
-    /// editor tab.
+    /// `FootprintFile` (TOML+TSV envelope), then registers the file as a
+    /// project library entry and opens it as a clean primitive editor tab.
     pub(crate) fn handle_add_library_footprint_file_picked(
         &mut self,
+        project_id: crate::app::state::ProjectId,
         path: std::path::PathBuf,
     ) -> Task<Message> {
         let stem = path
@@ -351,72 +319,85 @@ impl Signex {
         let footprint = signex_library::Footprint::empty(stem);
         // v0.18.4 — emit TOML+TSV envelope.
         let file = signex_library::FootprintFile::from_footprint(footprint);
-        let text = match file.to_toml_string() {
-            Ok(s) => s,
+        let text = file.to_toml_string().map_err(|e| e.to_string());
+        self.write_new_library_file(project_id, path, text, "footprint")
+    }
+
+    fn write_new_library_file(
+        &mut self,
+        project_id: crate::app::state::ProjectId,
+        path: std::path::PathBuf,
+        text: Result<String, String>,
+        kind: &'static str,
+    ) -> Task<Message> {
+        let text = match text {
+            Ok(t) => t,
             Err(e) => {
-                tracing::warn!(
-                    target: "signex::library",
-                    path = %path.display(),
-                    error = %e,
-                    "AddLibraryFootprintFilePicked: serialize failed"
-                );
+                crate::diagnostics::log_warning(format!(
+                    "New {kind} library {}: serialize failed: {e}",
+                    path.display()
+                ));
                 return Task::none();
             }
         };
-        if let Some(parent) = path.parent()
-            && let Err(e) = std::fs::create_dir_all(parent)
-        {
-            tracing::warn!(
-                target: "signex::library",
-                parent = %parent.display(),
-                error = %e,
-                "AddLibraryFootprintFilePicked: create footprints dir failed"
-            );
+        Task::perform(
+            {
+                let path = path.clone();
+                crate::app::handlers::dock::project_navigation::add_io::on_blocking_pool(
+                    move || write_library_file(&path, &text),
+                )
+            },
+            move |result| {
+                Message::Library(LibraryMessage::AddLibraryFileWritten {
+                    project_id,
+                    path,
+                    result,
+                })
+            },
+        )
+    }
+
+    /// Completion of the new-library-file write: a failure goes to the
+    /// Messages panel; success registers the file on the project the dialog
+    /// was opened for (even if it is no longer the active one) and opens it.
+    pub(crate) fn handle_add_library_file_written(
+        &mut self,
+        project_id: crate::app::state::ProjectId,
+        path: std::path::PathBuf,
+        result: Result<(), String>,
+    ) -> Task<Message> {
+        if let Err(e) = result {
+            crate::diagnostics::log_warning(format!("New library file: {e}"));
             return Task::none();
         }
-        if let Err(e) = signex_types::atomic_io::atomic_write(&path, text.as_bytes()) {
-            tracing::warn!(
-                target: "signex::library",
-                path = %path.display(),
-                error = %e,
-                "AddLibraryFootprintFilePicked: write .snxfpt failed"
-            );
-            return Task::none();
-        }
-        self.register_standalone_library_on_project(&path);
+        self.register_standalone_library_on_project(project_id, &path);
         self.handle_open_primitive(path)
     }
 
-    /// Find the project containing `path` and push a `LibraryEntry`
-    /// for it onto `data.libraries` (project-local relative path when
-    /// `path` is inside the project dir, absolute otherwise). Marks
-    /// the project dirty + refreshes the panel context so the new
-    /// entry shows immediately. No-op when the path is already
-    /// registered, or when no loaded project owns the file's parent.
-    fn register_standalone_library_on_project(&mut self, path: &std::path::Path) {
+    /// Push a `LibraryEntry` for `path` onto `project_id`'s `data.libraries`
+    /// (project-local relative path when `path` is inside the project dir,
+    /// absolute otherwise). Marks the project dirty + refreshes the panel
+    /// context so the new entry shows immediately. No-op when the path is
+    /// already registered; a project closed since the dialog opened is
+    /// reported to the Messages panel.
+    fn register_standalone_library_on_project(
+        &mut self,
+        project_id: crate::app::state::ProjectId,
+        path: &std::path::Path,
+    ) {
         use signex_types::project::{LibraryEntry, LibraryEntryKind};
-        // Resolve the target project index first so the mutable borrow
-        // of `projects` is short-lived (the active-project fallback
-        // chained on iter_mut tripped E0500).
         let target_idx = self
             .document_state
             .projects
             .iter()
-            .position(|p| {
-                let project_dir = std::path::PathBuf::from(&p.data.dir);
-                !project_dir.as_os_str().is_empty() && path.starts_with(&project_dir)
-            })
-            .or_else(|| {
-                self.document_state
-                    .active_project
-                    .and_then(|id| self.document_state.projects.iter().position(|p| p.id == id))
-            });
+            .position(|p| p.id == project_id);
         let Some(idx) = target_idx else {
-            tracing::warn!(
-                target: "signex::library",
-                path = %path.display(),
-                "register_standalone_library: no project to attach to"
-            );
+            crate::diagnostics::log_warning(format!(
+                "New library file {}: its project ({project_id}) was closed before the write \
+                 finished. The file is already on disk but is not in any project; use Add \
+                 Existing from inside the project to add it.",
+                path.display()
+            ));
             return;
         };
         let Some(loaded) = self.document_state.projects.get_mut(idx) else {
@@ -448,5 +429,34 @@ impl Signex {
         let project_path = loaded.path.clone();
         self.document_state.dirty_paths.insert(project_path);
         self.refresh_panel_ctx();
+    }
+}
+
+/// Create `path`'s parent directory and write `text` atomically, refusing an existing `path`. Runs on a
+/// blocking worker, never in `update`.
+fn write_library_file(path: &std::path::Path, text: &str) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("create {} failed: {e}", parent.display()))?;
+    }
+    // No-clobber: a new library must never replace an existing file.
+    crate::app::handlers::dock::project_navigation::add_io::create_noclobber(path, |f| {
+        std::io::Write::write_all(f, text.as_bytes())
+    })
+    .map_err(|e| format!("write {} failed: {e}", path.display()))
+}
+
+#[cfg(test)]
+mod write_library_file_tests {
+    use super::write_library_file;
+
+    #[test]
+    fn creating_over_an_existing_library_is_refused_and_leaves_it_untouched() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("new").join("lib.snxsym");
+        write_library_file(&p, "first").unwrap();
+        let err = write_library_file(&p, "second").unwrap_err();
+        assert!(err.contains("already exists"), "{err}");
+        assert_eq!(std::fs::read_to_string(&p).unwrap(), "first");
     }
 }

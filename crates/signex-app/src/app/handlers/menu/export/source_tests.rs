@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use uuid::Uuid;
 
-use super::tests::{add_project, app_workspace, open_with, sheet_with_net};
+use super::tests::{add_project, app_workspace, open_with, pdf_request_all_sheets, sheet_with_net};
 use crate::app::Signex;
 
 /// Count `/Type /Page` objects (not `/Pages`) in the PDF.
@@ -50,7 +50,8 @@ fn switching_tabs_while_the_pdf_dialog_is_open_exports_the_original_document() {
 
     // The dialog opened on A; the user then clicks over to B's tab.
     app.document_state.active_path = Some(b);
-    let _ = app.handle_export_pdf_finished(a, Ok(out.clone()));
+    let request = Box::new(pdf_request_all_sheets(&app, &a));
+    let _ = app.handle_export_pdf_finished(request, Ok(out.clone()));
 
     let bytes = std::fs::read(&out).expect("the PDF is written");
     assert_eq!(
@@ -68,8 +69,9 @@ fn a_closed_source_document_refuses_the_pdf_export_and_says_so() {
     let out = std::env::temp_dir().join(format!("signex-833-gone-{}.pdf", Uuid::new_v4()));
 
     // The source tab was closed while the dialog was up.
+    let request = Box::new(pdf_request_all_sheets(&app, &a));
     app.document_state.engines.remove(&a);
-    let _ = app.handle_export_pdf_finished(a, Ok(out.clone()));
+    let _ = app.handle_export_pdf_finished(request, Ok(out.clone()));
 
     assert!(!out.exists(), "nothing is written for a vanished source");
     assert!(
@@ -81,5 +83,134 @@ fn a_closed_source_document_refuses_the_pdf_export_and_says_so() {
             .iter()
             .any(|e| e.message.contains("a.snxsch") && e.message.contains("PDF export refused")),
         "the refusal must reach the Messages panel"
+    );
+}
+
+#[test]
+fn the_no_netlist_warning_names_the_exported_document_not_the_current_tab() {
+    let _ = crate::diagnostics::init_logging();
+    let source = Path::new("/w/exported-852/source.snxsch");
+    let ctx = signex_output::ExportContext {
+        sheets: Vec::new(),
+        metadata: Default::default(),
+        netlist: None,
+        netlist_sheets: Vec::new(),
+    };
+
+    super::log_stitch_issues(source, &ctx, &super::ExportIssues::default());
+
+    assert!(
+        crate::diagnostics::recent_entries().iter().any(|e| {
+            e.message.contains("no netlist derived") && e.message.contains("exported-852")
+        }),
+        "the warning must name the exported document"
+    );
+}
+
+#[test]
+fn netlist_finished_exports_the_document_it_started_from() {
+    let (mut app, a, b) = two_projects();
+    let out = std::env::temp_dir().join(format!("signex-852-{}.net", Uuid::new_v4()));
+
+    app.document_state.active_path = Some(b);
+    let _ = app.handle_export_netlist_finished(a, Ok(out.clone()));
+
+    let text = std::fs::read_to_string(&out).expect("the netlist is written");
+    assert!(text.contains("R_A"), "project A's part is exported: {text}");
+    assert!(!text.contains("R_B"), "project B's parts are not: {text}");
+    std::fs::remove_file(&out).ok();
+}
+
+#[test]
+fn a_closed_netlist_source_writes_nothing_and_says_so() {
+    let (mut app, a, _b) = two_projects();
+    let _ = crate::diagnostics::init_logging();
+    let out = std::env::temp_dir().join(format!("signex-852-gone-{}.net", Uuid::new_v4()));
+
+    app.document_state.engines.remove(&a);
+    let _ = app.handle_export_netlist_finished(a, Ok(out.clone()));
+
+    assert!(!out.exists());
+    assert!(
+        crate::diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.message.contains("Netlist export refused") && e.message.contains("a.snxsch")),
+        "the refusal must reach the Messages panel"
+    );
+}
+
+#[test]
+fn bom_finished_exports_the_document_it_started_from() {
+    let (mut app, a, b) = two_projects();
+    let out = std::env::temp_dir().join(format!("signex-852-{}.csv", Uuid::new_v4()));
+
+    app.document_state.active_path = Some(b);
+    let _ = app.handle_export_bom_finished(a, Default::default(), Ok(out.clone()));
+
+    let text = std::fs::read_to_string(&out).expect("the BOM is written");
+    assert!(text.contains("R_A"), "project A's part is listed: {text}");
+    assert!(!text.contains("R_B"), "project B's parts are not: {text}");
+    std::fs::remove_file(&out).ok();
+}
+
+#[test]
+fn overlapping_pdf_exports_each_use_their_own_request() {
+    let (mut app, a, b) = two_projects();
+    let out_a = std::env::temp_dir().join(format!("signex-852-oa-{}.pdf", Uuid::new_v4()));
+    let out_b = std::env::temp_dir().join(format!("signex-852-ob-{}.pdf", Uuid::new_v4()));
+    // Two Export clicks, both save dialogs still open: B's request picks no
+    // sheets, A's picks all of its own.
+    let req_a = pdf_request_all_sheets(&app, &a);
+    let mut req_b = pdf_request_all_sheets(&app, &b);
+    req_b.files.clear();
+
+    let _ = app.handle_export_pdf_finished(Box::new(req_b), Ok(out_b.clone()));
+    let _ = app.handle_export_pdf_finished(Box::new(req_a), Ok(out_a.clone()));
+
+    assert!(
+        !out_b.exists(),
+        "B's empty pick is refused, not replaced by A's"
+    );
+    assert!(out_a.exists(), "A still exports with its own picks");
+    std::fs::remove_file(&out_a).ok();
+}
+
+#[test]
+fn a_cancelled_save_dialog_writes_nothing() {
+    let (mut app, a, _b) = two_projects();
+    let request = Box::new(pdf_request_all_sheets(&app, &a));
+    let _ = app.handle_export_pdf_finished(request, Err("cancelled".into()));
+    assert!(app.document_state.error_notice.is_none());
+}
+
+#[test]
+fn a_detached_bom_preview_exports_the_document_it_was_built_for() {
+    let (mut app, a, b) = two_projects();
+    let out = std::env::temp_dir().join(format!("signex-852-bp-{}.csv", Uuid::new_v4()));
+
+    let _ = app.handle_bom_preview_open();
+    assert_eq!(
+        app.document_state.bom_preview.as_ref().map(|p| &p.source),
+        Some(&a)
+    );
+    app.document_state.active_path = Some(b);
+    let _ = app.handle_bom_preview_export();
+    // The dialog task is not run here; its completion is what the preview's
+    // captured source and options feed, so build that message by hand.
+    let _ = app.handle_export_bom_finished(a, Default::default(), Ok(out.clone()));
+
+    let text = std::fs::read_to_string(&out).expect("the BOM is written");
+    assert!(text.contains("R_A") && !text.contains("R_B"), "{text}");
+    std::fs::remove_file(&out).ok();
+}
+
+#[test]
+fn a_detached_print_preview_records_the_document_it_was_built_for() {
+    let (mut app, a, b) = two_projects();
+    let _ = app.handle_print_preview_requested();
+    app.document_state.active_path = Some(b);
+    assert_eq!(
+        app.document_state.preview.as_ref().map(|p| &p.source),
+        Some(&a)
     );
 }
