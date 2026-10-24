@@ -276,7 +276,7 @@ pub(crate) struct AssembledGraph {
     pub(crate) sheets: HashMap<signex_net::SheetKey, SchematicSheet>,
     /// Per-parent resolution: `resolved[parent_key][cs.filename]` is the
     /// child's key — the shape [`signex_net::ProjectGraph::resolved`] and
-    /// [`signex_erc::run_with_project`] both take.
+    /// [`signex_erc::run_with_project`] (as `resolutions`) both take.
     pub(crate) resolved: HashMap<signex_net::SheetKey, HashMap<String, signex_net::SheetKey>>,
     /// Structural problems found while assembling the graph.
     pub(crate) issues: Vec<signex_net::StitchIssue>,
