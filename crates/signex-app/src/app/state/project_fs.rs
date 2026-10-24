@@ -9,6 +9,11 @@
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
+
+/// A probe still unanswered after this long is presumed hung (a dead network
+/// mount) and abandoned so the next one can start.
+const PROBE_DEADLINE: Duration = crate::library::external_poll::POLL_TIMEOUT;
 
 /// What the project tree needs to know about the disk.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -69,7 +74,8 @@ pub struct ProjectFsCache {
     pub facts: ProjectFsFacts,
     wanted: ProjectFsRequest,
     stale: bool,
-    in_flight: bool,
+    /// When the running probe started; `None` while idle.
+    in_flight: Option<Instant>,
 }
 
 impl ProjectFsCache {
@@ -81,13 +87,22 @@ impl ProjectFsCache {
         }
     }
 
+    /// The disk changed without the path set changing (a save, delete or
+    /// rename the app did itself): re-probe on the next update.
+    pub fn invalidate(&mut self) {
+        self.stale = true;
+    }
+
     /// Claim the next probe, if one may start: none while another runs, and
     /// `force` (the poll tick) or staleness is needed.
     pub fn begin_probe(&mut self, force: bool) -> Option<ProjectFsRequest> {
-        if self.in_flight || !(force || self.stale) || !self.is_watching() {
+        if self.in_flight.is_some_and(|t| t.elapsed() < PROBE_DEADLINE)
+            || !(force || self.stale)
+            || !self.is_watching()
+        {
             return None;
         }
-        self.in_flight = true;
+        self.in_flight = Some(Instant::now());
         self.stale = false;
         Some(self.wanted.clone())
     }
@@ -95,7 +110,10 @@ impl ProjectFsCache {
     /// A probe ended; `facts` is `None` when its worker died. True when the
     /// facts changed and the tree must be rebuilt.
     pub fn finish_probe(&mut self, facts: Option<ProjectFsFacts>) -> bool {
-        self.in_flight = false;
+        self.in_flight = None;
+        if facts.is_none() {
+            self.stale = true;
+        }
         match facts {
             Some(f) if f != self.facts => {
                 self.facts = f;
@@ -109,5 +127,51 @@ impl ProjectFsCache {
     /// keep ticking.
     pub fn is_watching(&self) -> bool {
         self.wanted != ProjectFsRequest::default()
+    }
+
+    #[cfg(test)]
+    pub fn probe_running(&self) -> bool {
+        self.in_flight.is_some()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn watching() -> ProjectFsCache {
+        let mut cache = ProjectFsCache::default();
+        cache.want(ProjectFsRequest {
+            exists: vec![PathBuf::from("a")],
+            listings: Vec::new(),
+        });
+        cache
+    }
+
+    #[test]
+    fn a_hung_probe_is_reclaimed_after_the_deadline() {
+        let mut cache = watching();
+        assert!(cache.begin_probe(true).is_some());
+        assert!(cache.begin_probe(true).is_none(), "still within deadline");
+        cache.in_flight = Instant::now().checked_sub(PROBE_DEADLINE + Duration::from_secs(1));
+        assert!(cache.begin_probe(true).is_some(), "deadline passed");
+    }
+
+    #[test]
+    fn a_dead_worker_leaves_the_cache_stale() {
+        let mut cache = watching();
+        cache.begin_probe(false);
+        assert!(!cache.finish_probe(None));
+        assert!(cache.begin_probe(false).is_some(), "retry without a tick");
+    }
+
+    #[test]
+    fn invalidate_makes_the_next_probe_start() {
+        let mut cache = watching();
+        cache.begin_probe(false);
+        cache.finish_probe(Some(ProjectFsFacts::default()));
+        assert!(cache.begin_probe(false).is_none());
+        cache.invalidate();
+        assert!(cache.begin_probe(false).is_some());
     }
 }

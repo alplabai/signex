@@ -126,6 +126,29 @@ mod tests {
     }
 
     #[test]
+    fn a_save_completion_makes_the_next_update_probe() {
+        let tmp = tempfile::Builder::new()
+            .prefix("snx-111")
+            .tempdir()
+            .unwrap();
+        let mut app = app_with_sheet(tmp.path());
+        app.refresh_panel_ctx();
+        run_probe(&mut app, false);
+        assert!(!app.document_state.project_fs.probe_running());
+        let done = crate::persist::DocumentSaveDone {
+            path: tmp.path().join("S.snxsch"),
+            revision: 0,
+            save_as_from: None,
+            result: Ok(crate::persist::SaveOutcome::Written),
+        };
+        let _ = app.update(Message::File(crate::app::FileMsg::DocumentSaved(done)));
+        assert!(
+            app.document_state.project_fs.probe_running(),
+            "the update started a probe"
+        );
+    }
+
+    #[test]
     fn a_changed_project_set_makes_the_next_update_probe() {
         let tmp = tempfile::Builder::new()
             .prefix("snx-111")

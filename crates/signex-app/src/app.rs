@@ -63,6 +63,19 @@ pub use state::AnnotateOrder;
 
 impl Signex {
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        // Messages that complete a save, delete, rename or library write may
+        // have changed the disk under an unchanged path set; the probe below
+        // then runs now instead of at the next 2 s tick.
+        if matches!(
+            message,
+            Message::File(_) | Message::Library(_) | Message::Project(_)
+        ) && !matches!(
+            message,
+            Message::Project(ProjectMsg::FsFactsProbed(_))
+                | Message::Library(crate::library::LibraryMessage::ExternalEditsPollTicked)
+        ) {
+            self.document_state.project_fs.invalidate();
+        }
         let task = self.dispatch_update(message);
         // `refresh_panel_ctx` only records what the project tree needs from
         // the disk; the probe that fetches it starts here (#111).

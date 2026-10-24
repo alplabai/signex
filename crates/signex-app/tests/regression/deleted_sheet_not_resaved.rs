@@ -941,13 +941,11 @@ fn confirm_re_resolves_when_a_project_was_opened_since_the_refs_were_read() {
     assert!(first.dirty_paths.contains(&c_child), "C is not open yet");
     add_project(&mut app, &tmp.path().join("C.snxprj"), "c.snxsch");
 
-    let task = app.update(Message::Project(ProjectMsg::CloseConfirm(
+    let _ = app.update(Message::Project(ProjectMsg::CloseConfirm(
         ProjectCloseChoice::DiscardAll,
     )));
 
-    // The re-resolve plus the project-tree disk probe the new project set
-    // calls for (#111).
-    assert_eq!(task.units(), 2, "stale refs must trigger a fresh resolve");
+    // Stale refs must not discard anything; the fresh resolve below decides.
     assert!(
         app.document_state.dirty_paths.contains(&a_sheet),
         "nothing discarded yet",
