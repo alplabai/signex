@@ -8,9 +8,12 @@ use super::TabInfo;
 
 mod interaction;
 mod pdf_page_setup;
+mod reference_policy;
 pub(crate) mod scope;
+mod sheet_read;
 pub(crate) mod sheet_refs;
 mod ui;
+pub(crate) mod volume_case;
 
 pub use interaction::InteractionState;
 pub use pdf_page_setup::PageSetupInputs;
