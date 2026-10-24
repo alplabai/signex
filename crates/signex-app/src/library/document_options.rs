@@ -10,7 +10,7 @@
 //! `LibraryState::document_options.is_some()`.
 
 use iced::widget::{Space, button, column, container, pick_list, row, text};
-use iced::{Border, Element, Length, Theme};
+use iced::{Element, Length};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
@@ -26,7 +26,6 @@ pub fn view<'a>(
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
-    let border = theme_ext::border_color(tokens);
 
     let header = container(
         row![
@@ -78,36 +77,14 @@ pub fn view<'a>(
         button(text(grid_label).size(11).color(text_c))
             .padding([2, 8])
             .on_press(LibraryMessage::DocumentOptionsCycleGridSize)
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.04,
-                ))),
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                },
-                text_color: text_c,
-                ..iced::widget::button::Style::default()
-            })
+            .style(crate::styles::outline_button(tokens))
             .into();
 
     let unit_label = format!("{}", state.draft.unit);
     let unit_btn: Element<'a, LibraryMessage> = button(text(unit_label).size(11).color(text_c))
         .padding([2, 8])
         .on_press(LibraryMessage::DocumentOptionsCycleUnit)
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.04,
-            ))),
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
-            },
-            text_color: text_c,
-            ..iced::widget::button::Style::default()
-        })
+        .style(crate::styles::outline_button(tokens))
         .into();
 
     let body = column![
@@ -121,33 +98,15 @@ pub fn view<'a>(
     let cancel = button(text("Cancel").size(11).color(text_c))
         .padding([4, 14])
         .on_press(LibraryMessage::DocumentOptionsCancel)
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.04,
-            ))),
-            text_color: text_c,
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
-            },
-            ..iced::widget::button::Style::default()
-        });
-    let apply = button(text("Apply").size(11).color(iced::Color::WHITE))
-        .padding([4, 14])
-        .on_press(LibraryMessage::DocumentOptionsApply)
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgb(
-                0.00, 0.47, 0.84,
-            ))),
-            text_color: iced::Color::WHITE,
-            border: Border {
-                width: 0.0,
-                radius: 3.0.into(),
-                ..Border::default()
-            },
-            ..iced::widget::button::Style::default()
-        });
+        .style(crate::styles::outline_button(tokens));
+    let apply = button(
+        text("Apply")
+            .size(11)
+            .color(crate::styles::tokens::on_accent(tokens)),
+    )
+    .padding([4, 14])
+    .on_press(LibraryMessage::DocumentOptionsApply)
+    .style(crate::styles::accent_button(tokens));
 
     let footer = container(
         row![
