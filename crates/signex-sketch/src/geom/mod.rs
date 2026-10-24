@@ -19,6 +19,7 @@ pub mod boolean_general;
 pub mod curves;
 pub mod fixed;
 pub mod halfedge;
+mod holes;
 pub mod hull;
 pub mod offset;
 pub mod offset_arc;

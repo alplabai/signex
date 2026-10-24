@@ -313,6 +313,9 @@ impl Signex {
             lbl_check("No-ERC Markers", opts.include_no_erc_markers, |v| {
                 Message::PrintPreview(PrintPreviewMsg::SetIncludeNoErcMarkers(v))
             }),
+            lbl_check("No-Connect Markers", opts.include_no_connect_markers, |v| {
+                Message::PrintPreview(PrintPreviewMsg::SetIncludeNoConnectMarkers(v))
+            }),
             lbl_check("Parameter Sets", opts.include_parameter_sets, |v| {
                 Message::PrintPreview(PrintPreviewMsg::SetIncludeParameterSets(v))
             }),

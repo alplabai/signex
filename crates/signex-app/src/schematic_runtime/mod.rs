@@ -14,7 +14,7 @@ use signex_renderer::schematic::{
 use signex_renderer::theme::ResolvedTheme;
 use signex_types::schematic::{
     Aabb, FillType, HAlign, Label, LabelType, Point, SchDrawing, SchematicSheet, SelectedItem,
-    SelectedKind, Symbol, TextNote, TextProp, VAlign, circumcircle,
+    SelectedKind, Symbol, TextNote, TextProp, VAlign, circumcircle, field_effective_style,
 };
 use signex_types::theme::{CanvasColors, Color as ThemeColor};
 use std::collections::{HashMap, HashSet};
@@ -26,7 +26,7 @@ pub mod selection;
 mod snapshot;
 pub mod text;
 
-use snapshot::build_renderer_snapshot;
+pub use snapshot::build_renderer_snapshot;
 
 pub type SchematicRenderSnapshot = SchematicSheet;
 
@@ -47,6 +47,7 @@ impl RenderInvalidation {
     pub const DRAWINGS: Self = Self(1 << 9);
     pub const LIB_SYMBOLS: Self = Self(1 << 10);
     pub const PAPER: Self = Self(1 << 11);
+    pub const NO_ERC_DIRECTIVES: Self = Self(1 << 12);
     pub const FULL: Self = Self(u32::MAX);
 
     /// True when any bit of `mask` is also set in `self`.
@@ -410,17 +411,17 @@ fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
             anchor: symbol.position,
         });
 
-        if let Some(ref_text) = symbol.ref_text.as_ref() {
+        if let Some(ref_text) = symbol.ref_text.as_ref().filter(|p| !p.hidden) {
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolRefField),
-                bbox: text_prop_aabb(symbol, &symbol.reference, ref_text),
+                bbox: text_prop_aabb(&symbol.reference, ref_text, symbol),
                 anchor: ref_text.position,
             });
         }
-        if let Some(val_text) = symbol.val_text.as_ref() {
+        if let Some(val_text) = symbol.val_text.as_ref().filter(|p| !p.hidden) {
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolValField),
-                bbox: text_prop_aabb(symbol, &symbol.value, val_text),
+                bbox: text_prop_aabb(&symbol.value, val_text, symbol),
                 anchor: val_text.position,
             });
         }
@@ -490,6 +491,19 @@ fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
                 no_connect.position.y + 0.5,
             ),
             anchor: no_connect.position,
+        });
+    }
+
+    for directive in &snapshot.no_erc_directives {
+        out.push(ItemBound {
+            item: SelectedItem::new(directive.uuid, SelectedKind::NoErcDirective),
+            bbox: Aabb::new(
+                directive.position.x - 0.5,
+                directive.position.y - 0.5,
+                directive.position.x + 0.5,
+                directive.position.y + 0.5,
+            ),
+            anchor: directive.position,
         });
     }
 
@@ -587,14 +601,43 @@ fn symbol_body_aabb(symbol: &Symbol) -> Aabb {
     )
 }
 
-fn text_prop_aabb(symbol: &Symbol, text: &str, prop: &TextProp) -> Aabb {
+fn text_prop_aabb(text: &str, prop: &TextProp, symbol: &Symbol) -> Aabb {
     let chars = text.chars().count().max(1) as f64;
     let h = prop
         .font_size
         .max(signex_types::schematic::SCHEMATIC_TEXT_MM);
     let w = h * 0.6 * chars;
-    let (x, y) = instance_transform(symbol, &prop.position);
-    Aabb::new(x - w * 0.5, y - h * 0.5, x + w * 0.5, y + h * 0.5)
+    let (rot, h_align, v_align) = field_effective_style(prop, symbol);
+    // Mirror the renderer (`anchored_top_left_px`): the alignment offset is
+    // computed in the text's local frame, then rotated with the text about
+    // the anchor (y-down). `prop.position` is world-space (drag and the
+    // engine translate it directly), so it skips the symbol transform.
+    let ox = match h_align {
+        HAlign::Left => 0.0,
+        HAlign::Center => -w * 0.5,
+        HAlign::Right => -w,
+    };
+    let oy = match v_align {
+        VAlign::Top => 0.0,
+        VAlign::Center => -h * 0.5,
+        VAlign::Bottom => -h,
+    };
+    let (sin, cos) = rot.to_radians().sin_cos();
+    let mut bbox: Option<Aabb> = None;
+    for (lx, ly) in [(ox, oy), (ox + w, oy), (ox, oy + h), (ox + w, oy + h)] {
+        let x = prop.position.x + lx * cos - ly * sin;
+        let y = prop.position.y + lx * sin + ly * cos;
+        bbox = Some(match bbox {
+            None => Aabb::new(x, y, x, y),
+            Some(b) => Aabb::new(
+                b.min_x.min(x),
+                b.min_y.min(y),
+                b.max_x.max(x),
+                b.max_y.max(y),
+            ),
+        });
+    }
+    bbox.expect("four corners")
 }
 
 fn note_aabb(note: &TextNote) -> Aabb {
@@ -721,6 +764,21 @@ fn rect_visible(min: iced::Point, size: iced::Size, bounds: Rectangle) -> bool {
 
 fn point_visible(p: iced::Point, bounds: Rectangle, pad: f32) -> bool {
     p.x >= -pad && p.y >= -pad && p.x <= bounds.width + pad && p.y <= bounds.height + pad
+}
+
+/// Culls text by its extent, not just its anchor: the anchor may sit off
+/// screen while a long label or flag still reaches into view. The reach is the
+/// longest side of the hit box in every direction, which also covers rotation
+/// and one-sided flags.
+fn text_anchor_visible(
+    anchor: iced::Point,
+    bounds: Rectangle,
+    pad: f32,
+    bbox: &Aabb,
+    scale: f32,
+) -> bool {
+    let reach = (bbox.width().max(bbox.height()) as f32) * scale;
+    point_visible(anchor, bounds, pad + reach)
 }
 
 fn resolve_stroke_color(

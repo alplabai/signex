@@ -15,6 +15,9 @@ pub enum ContextAction {
     Paste,
     SmartPaste,
     OpenChildSheet,
+    /// Reconcile the selected sheet symbol's pins with the child schematic's
+    /// hierarchical / global labels (#359). Gated like `OpenChildSheet`.
+    SyncSheetPins,
     Delete,
     SelectAll,
     ZoomFit,
@@ -290,6 +293,11 @@ pub enum ProjectTreeAction {
 pub struct RenameDialogState {
     pub target_path: std::path::PathBuf,
     pub tree_path: Vec<usize>,
+    /// The owning project, captured when the dialog opened. Submit re-points
+    /// `tree_path[0]` at that project's current index, so adding or removing
+    /// a project while the dialog is open cannot retarget it (#855). `None`
+    /// keeps `tree_path` as given.
+    pub project_id: Option<crate::app::state::ProjectId>,
     pub buffer: String,
     pub error: Option<String>,
     /// `true` when this rename targets the project root — the submit
@@ -391,6 +399,8 @@ pub struct ProjectOptionsState {
 pub struct RemoveDialogState {
     pub target_path: std::path::PathBuf,
     pub tree_path: Vec<usize>,
+    /// The owning project; see [`RenameDialogState::project_id`] (#855).
+    pub project_id: Option<crate::app::state::ProjectId>,
     pub display_name: String,
     /// Does the target live outside the project folder (a Shared / Global
     /// library)? Such a target is never offered for deletion (#139).

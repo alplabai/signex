@@ -586,6 +586,7 @@ async fn run_polygon_smoke_pass_with(
 
 pub async fn run_polygon_smoke_pass() -> Result<u32, String> {
     let polygons = [GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[2.0, 2.0], [8.0, 2.0], [8.0, 8.0], [2.0, 8.0]],
         fill_color: [0.2, 0.7, 0.9, 1.0],
         stroke_color: None,

@@ -27,6 +27,7 @@ pub mod sim;
 pub mod standalone;
 pub mod supply;
 pub mod symbol;
+pub mod text_extent;
 
 use iced::widget::{Space, button, column, container, row, text};
 use iced::{Border, Element, Length, Theme};

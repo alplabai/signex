@@ -1,0 +1,76 @@
+format = "snxlib/1"
+library_id = "019df45d-af5e-7a00-8c3b-dd3bf89b40ae"
+
+[library]
+name = "Stock"
+description = "Reference footprints bundled with Signex."
+
+[mode]
+kind = "local_git"
+
+[workflow]
+mode = "personal"
+review_required = false
+reviewers_required = 1
+auto_lifecycle_promote = "Released"
+
+[users]
+default_role = ""
+allow_self_signup = false
+
+[[classes]]
+key = "resistor"
+label = "Resistor"
+
+[[classes]]
+key = "capacitor"
+label = "Capacitor"
+
+[[classes]]
+key = "inductor"
+label = "Inductor"
+
+[[classes]]
+key = "diode"
+label = "Diode"
+
+[[classes]]
+key = "led"
+label = "LED"
+
+[[classes]]
+key = "transistor"
+label = "Transistor"
+
+[[classes]]
+key = "ic"
+label = "Integrated Circuit"
+
+[[classes]]
+key = "connector"
+label = "Connector"
+
+[[classes]]
+key = "switch"
+label = "Switch"
+
+[[classes]]
+key = "crystal"
+label = "Crystal / Oscillator"
+
+[[classes]]
+key = "mechanical"
+label = "Mechanical"
+
+[[classes]]
+key = "fiducial"
+label = "Fiducial"
+
+[[classes]]
+key = "generic"
+label = "Generic"
+
+[tables.components]
+tsv = '''
+row_id	internal_pn	class	datasheet	state	symbol_ref	footprint_ref	sim_ref	primary_mpn	alternates	supply	parameters	pin_map_overrides	created	updated	content_hash	version	released	symbol_version	footprint_version	sim_version
+'''

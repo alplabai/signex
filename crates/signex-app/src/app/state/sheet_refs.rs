@@ -18,7 +18,10 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
+use super::reference_policy::{Share, is_refused, path_is_refused, share_of};
 use super::scope::{CaseFold, KeyMap, ReachSets, path_key_with};
+use super::sheet_read::{WalkLimits, read_child_refs};
+use super::volume_case::{IgnoresCase, VolumeCase};
 use super::{DocumentState, ProjectId, scope};
 use crate::app::project_sheets::{normalize_clamped, ownership_reference};
 use crate::library::state::EditorAddress;
@@ -32,6 +35,27 @@ const MAX_NAMES_LISTED: usize = 5;
 #[derive(Debug, Clone)]
 pub struct UnreadableSheet {
     pub(crate) path: PathBuf,
+    /// Why it was not followed, e.g. `is not a regular file`.
+    pub(crate) reason: String,
+    /// Label with the whole reference text, not just its file name. A refused
+    /// network or device reference needs the host or share spelled out, and
+    /// only a Unix path keeps `\\host\share\x` as one component.
+    pub(crate) whole_path: bool,
+}
+
+impl UnreadableSheet {
+    /// `name (reason)` for the Messages panel and the dialog.
+    fn label(&self) -> String {
+        let name = if self.whole_path {
+            self.path.to_string_lossy().into_owned()
+        } else {
+            file_label(&self.path)
+        };
+        match self.reason.as_str() {
+            "" => name,
+            reason => format!("{name} ({reason})"),
+        }
+    }
 }
 
 /// `a, b, c (+N more)`: at most [`MAX_NAMES_LISTED`] names, then a count, so a
@@ -66,6 +90,10 @@ pub struct SheetRefs {
     pub(crate) keys: KeyMap,
     /// Keys of the sheets the walk visited and read.
     pub(crate) walked: HashSet<String>,
+    /// The walk hit its sheet cap, so `walked` is knowingly incomplete. Not
+    /// a reason to resolve again (that would hit the same cap); Discard All
+    /// is already off through `unreadable`.
+    pub(crate) truncated: bool,
 }
 
 impl SheetRefs {
@@ -83,11 +111,7 @@ impl SheetRefs {
         if self.unreadable.is_empty() {
             return None;
         }
-        let names: Vec<String> = self
-            .unreadable
-            .iter()
-            .map(|u| file_label(&u.path))
-            .collect();
+        let names: Vec<String> = self.unreadable.iter().map(UnreadableSheet::label).collect();
         Some(format!(
             "Discard All is disabled: {} sheet(s) could not be read ({}), so ownership is unknown",
             names.len(),
@@ -109,6 +133,9 @@ pub(crate) struct SheetRefInputs {
     /// Other paths ownership compares later (dirty documents, project files,
     /// library files), so they are keyed by file identity too.
     extra: Vec<PathBuf>,
+    /// UNC shares the open projects sit on: a reference on one of them is
+    /// followed, any other network or device name is refused.
+    trusted: Vec<Share>,
 }
 
 /// The real spelling of `path`, remembered in `keys`. Disk IO.
@@ -118,26 +145,100 @@ pub(crate) struct SheetRefInputs {
 /// file. A path that does not exist gets its nearest existing ancestor
 /// canonicalised and the rest appended; if even that fails the normalised
 /// path is kept.
-fn real_path(path: &Path) -> PathBuf {
-    if let Ok(real) = std::fs::canonicalize(path) {
-        return real;
-    }
-    match (path.parent(), path.file_name()) {
-        (Some(parent), Some(name)) if !parent.as_os_str().is_empty() => {
-            real_path(parent).join(name)
+///
+/// The missing tail has no real spelling to collapse onto, so when its
+/// ancestor sits on a case-insensitive volume the tail is lowercased: `N` and
+/// `n` are then one never-saved file (#771). A case-sensitive volume keeps
+/// the tail verbatim, so two names that differ only by case stay two files.
+fn real_path(path: &Path, volume: &mut VolumeCase) -> PathBuf {
+    let mut tail: Vec<&std::ffi::OsStr> = Vec::new();
+    let mut current = path;
+    loop {
+        if let Ok(real) = std::fs::canonicalize(current) {
+            let fold = !tail.is_empty() && volume.ignores_case(&real);
+            return join_tail(real, tail, fold);
         }
-        _ => path.to_path_buf(),
+        match (current.parent(), current.file_name()) {
+            (Some(parent), Some(name)) if !parent.as_os_str().is_empty() => {
+                tail.push(name);
+                current = parent;
+            }
+            _ => return join_tail(current.to_path_buf(), tail, false),
+        }
     }
 }
 
+/// `base` followed by `tail` (collected leaf-first), lowercased when `fold`.
+fn join_tail(mut base: PathBuf, tail: Vec<&std::ffi::OsStr>, fold: bool) -> PathBuf {
+    for name in tail.into_iter().rev() {
+        if fold {
+            base.push(name.to_string_lossy().to_lowercase());
+        } else {
+            base.push(name);
+        }
+    }
+    base
+}
+
 /// Record and return the ownership key of `path`.
-fn identity_key(keys: &mut KeyMap, path: &Path) -> String {
+fn identity_key(keys: &mut KeyMap, volume: &mut VolumeCase, path: &Path) -> String {
     let lexical = keys.lexical_key(path);
     let real = keys
         .real
         .entry(lexical)
-        .or_insert_with(|| real_path(&normalize_clamped(path)));
+        .or_insert_with(|| real_path(&normalize_clamped(path), volume));
     path_key_with(real, keys.fold)
+}
+
+/// The network / device references the walk refused, each listed once and the
+/// list bounded: a hostile sheet can name a million distinct `\\h\s\<n>`
+/// children, and neither the list nor the duplicate check may grow with them.
+struct Refusals {
+    seen: HashSet<PathBuf>,
+    /// Entries listed in `unreadable`; once it reaches `cap` the rest only count.
+    listed: usize,
+    hidden: usize,
+    cap: usize,
+}
+
+impl Refusals {
+    fn new(cap: usize) -> Self {
+        Self {
+            seen: HashSet::new(),
+            listed: 0,
+            hidden: 0,
+            cap,
+        }
+    }
+
+    /// Record `reference` as unreadable, once.
+    fn refuse(&mut self, unreadable: &mut Vec<UnreadableSheet>, reference: &str) {
+        let path = PathBuf::from(reference.trim());
+        if !self.seen.insert(path.clone()) {
+            return;
+        }
+        if self.listed >= self.cap {
+            self.hidden += 1;
+            return;
+        }
+        self.listed += 1;
+        unreadable.push(UnreadableSheet {
+            path,
+            reason: "is a network or device path, not followed".to_string(),
+            whole_path: true,
+        });
+    }
+
+    /// The single `(+N more refused)` entry for what the cap hid.
+    fn finish(self, unreadable: &mut Vec<UnreadableSheet>) {
+        if self.hidden > 0 {
+            unreadable.push(UnreadableSheet {
+                path: PathBuf::from(format!("(+{} more refused)", self.hidden)),
+                reason: String::new(),
+                whole_path: true,
+            });
+        }
+    }
 }
 
 fn push_unique(into: &mut Vec<String>, from: impl IntoIterator<Item = String>) {
@@ -159,33 +260,77 @@ impl SheetRefInputs {
     /// terminates.
     ///
     /// Blocking file IO: call from a worker thread.
-    pub(crate) fn resolve(self, fold: CaseFold) -> SheetRefs {
+    pub(crate) fn resolve(self, fold: CaseFold, ignores_case: IgnoresCase) -> SheetRefs {
+        self.resolve_within(fold, ignores_case, WalkLimits::default())
+    }
+
+    /// [`resolve`](Self::resolve) with explicit bounds.
+    ///
+    /// The references and files are untrusted (see [`super::sheet_read`]): a
+    /// network, device or verbatim reference is never canonicalised or read,
+    /// a file that is not a regular file or is oversized is not read, and a
+    /// walk past `limits.max_sheets` stops. Each is reported as unreadable,
+    /// which switches Discard All off.
+    pub(crate) fn resolve_within(
+        self,
+        fold: CaseFold,
+        ignores_case: IgnoresCase,
+        limits: WalkLimits,
+    ) -> SheetRefs {
         let Self {
             loaded,
             roots,
             projects,
             extra,
+            trusted,
         } = self;
         let mut keys = KeyMap::lexical(fold);
+        let mut volume = VolumeCase::new(ignores_case);
         let mut loaded_by_key: HashMap<String, Vec<String>> = HashMap::new();
         for (path, refs) in &loaded {
-            let key = identity_key(&mut keys, path);
+            let key = identity_key(&mut keys, &mut volume, path);
             push_unique(loaded_by_key.entry(key).or_default(), refs.iter().cloned());
         }
         for path in &extra {
-            identity_key(&mut keys, path);
+            identity_key(&mut keys, &mut volume, path);
         }
         let mut disk: HashMap<PathBuf, Vec<String>> = HashMap::new();
         let mut unreadable = Vec::new();
+        let mut refusals = Refusals::new(limits.max_sheets);
         let mut walked: HashSet<String> = HashSet::new();
-        let mut pending: Vec<PathBuf> = roots.iter().map(|r| normalize_clamped(r)).collect();
+        let mut pending: Vec<PathBuf> = Vec::new();
+        let mut truncated = false;
+        for root in &roots {
+            if path_is_refused(root, &trusted) {
+                refusals.refuse(&mut unreadable, &root.to_string_lossy());
+                // Never canonicalised (that is the IO refused), so the key the
+                // staleness check computes is the one recorded by `identity_key`
+                // if anything else keyed this path, the lexical one if not.
+                walked.insert(keys.key(root));
+            } else {
+                pending.push(normalize_clamped(root));
+            }
+        }
         while let Some(path) = pending.pop() {
-            let key = identity_key(&mut keys, &path);
+            let key = identity_key(&mut keys, &mut volume, &path);
             if !walked.insert(key.clone()) {
                 continue;
             }
-            let saved = read_child_refs(&path).unwrap_or_else(|_| {
-                unreadable.push(UnreadableSheet { path: path.clone() });
+            if walked.len() > limits.max_sheets {
+                unreadable.push(UnreadableSheet {
+                    path: PathBuf::from("(rest of the walk)"),
+                    reason: format!("stopped after {} sheets", limits.max_sheets),
+                    whole_path: false,
+                });
+                truncated = true;
+                break;
+            }
+            let saved = read_child_refs(&path, limits.max_sheet_bytes).unwrap_or_else(|reason| {
+                unreadable.push(UnreadableSheet {
+                    path: path.clone(),
+                    reason,
+                    whole_path: false,
+                });
                 Vec::new()
             });
             let mut children = saved.clone();
@@ -194,15 +339,58 @@ impl SheetRefInputs {
             }
             disk.insert(path.clone(), saved);
             let dir = keys.child_dir(&path);
-            pending.extend(children.iter().filter_map(|c| ownership_reference(&dir, c)));
+            for child in &children {
+                let Some(next) = ownership_reference(&dir, child) else {
+                    continue;
+                };
+                if is_refused(child, &trusted) {
+                    refusals.refuse(&mut unreadable, child);
+                    walked.insert(keys.key(&next));
+                } else {
+                    pending.push(next);
+                }
+            }
         }
+        refusals.finish(&mut unreadable);
         SheetRefs {
             disk,
             unreadable,
             resolved_for: projects,
             keys,
             walked,
+            truncated,
         }
+    }
+}
+
+/// Why a resolved [`SheetRefs`] no longer describes the workspace.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StaleRefs {
+    /// A project was opened or closed since the resolve.
+    ProjectsChanged,
+    /// A document became dirty that the resolve never keyed.
+    NewDirtyDocument,
+    /// A sheet now references a file the resolve never read (an engine edit).
+    ReferencesChanged,
+}
+
+impl StaleRefs {
+    /// Log wording for one cause.
+    pub(crate) const fn describe(self) -> &'static str {
+        match self {
+            Self::ProjectsChanged => "the open projects changed",
+            Self::NewDirtyDocument => "a document with unsaved changes was added",
+            Self::ReferencesChanged => "a sheet's child references were edited",
+        }
+    }
+
+    /// `a; b` over `causes`.
+    pub(crate) fn describe_all(causes: &[Self]) -> String {
+        causes
+            .iter()
+            .map(|c| c.describe())
+            .collect::<Vec<_>>()
+            .join("; ")
     }
 }
 
@@ -269,6 +457,11 @@ impl DocumentState {
                 .collect(),
             projects: self.projects.iter().map(|p| p.id).collect(),
             extra,
+            trusted: self
+                .projects
+                .iter()
+                .filter_map(|p| share_of(&p.path))
+                .collect(),
         }
     }
 
@@ -302,16 +495,33 @@ impl DocumentState {
     /// read from disk, and every dirty document was keyed by file identity.
     /// When false the caller resolves again rather than act on stale evidence.
     pub(crate) fn refs_are_current(&self, sheet_refs: &SheetRefs) -> bool {
+        self.stale_causes(sheet_refs).is_empty()
+    }
+
+    /// Everything that makes `sheet_refs` stale, none when it is current.
+    /// Reported together so the log says what actually changed (#771).
+    pub(crate) fn stale_causes(&self, sheet_refs: &SheetRefs) -> Vec<StaleRefs> {
         let open: Vec<ProjectId> = self.projects.iter().map(|p| p.id).collect();
-        sheet_refs.is_current_for(&open)
-            && self
-                .dirty_paths
-                .iter()
-                .all(|path| sheet_refs.keys.knows(path))
-            && self
+        let mut causes = Vec::new();
+        if !sheet_refs.is_current_for(&open) {
+            causes.push(StaleRefs::ProjectsChanged);
+        }
+        if !self
+            .dirty_paths
+            .iter()
+            .all(|path| sheet_refs.keys.knows(path))
+        {
+            causes.push(StaleRefs::NewDirtyDocument);
+        }
+        if !sheet_refs.truncated
+            && !self
                 .reach_sets(sheet_refs)
                 .all_keys()
                 .all(|key| sheet_refs.walked.contains(key))
+        {
+            causes.push(StaleRefs::ReferencesChanged);
+        }
+        causes
     }
 
     /// Split the dirty documents of `projects[closing]` into [`CloseScan`]'s
@@ -393,26 +603,6 @@ impl DocumentState {
     }
 }
 
-/// `child_sheets` filenames of the sheet at `path`. A missing file has none;
-/// an unreadable or unparsable one returns why.
-fn read_child_refs(path: &Path) -> Result<Vec<String>, String> {
-    let text = match std::fs::read_to_string(path) {
-        Ok(text) => text,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(e) => return Err(format!("could not be read: {e}")),
-    };
-    signex_types::format::SnxSchematic::parse(&text)
-        .map(|parsed| {
-            parsed
-                .sheet
-                .child_sheets
-                .into_iter()
-                .map(|c| c.filename)
-                .collect()
-        })
-        .map_err(|e| format!("could not be parsed: {e}"))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -490,6 +680,8 @@ mod tests {
                 .iter()
                 .map(|n| UnreadableSheet {
                     path: PathBuf::from(n),
+                    reason: String::new(),
+                    whole_path: false,
                 })
                 .collect(),
             ..SheetRefs::default()
@@ -511,9 +703,10 @@ mod tests {
             roots: vec![root.clone()],
             projects: Vec::new(),
             extra: Vec::new(),
+            trusted: Vec::new(),
         };
 
-        let resolved = inputs.resolve(CaseFold::Preserve);
+        let resolved = inputs.resolve(CaseFold::Preserve, |_| false);
 
         assert!(resolved.unreadable.is_empty(), "{:?}", resolved.unreadable);
         assert_eq!(resolved.disk.len(), 1, "{:?}", resolved.disk.keys());
@@ -535,9 +728,10 @@ mod tests {
             roots: vec![root],
             projects: Vec::new(),
             extra: Vec::new(),
+            trusted: Vec::new(),
         };
 
-        let resolved = inputs.resolve(CaseFold::Fold);
+        let resolved = inputs.resolve(CaseFold::Fold, |_| false);
 
         // The engine's grandchild is followed through the variant spelling.
         assert!(
@@ -566,9 +760,10 @@ mod tests {
             roots: vec![root],
             projects: Vec::new(),
             extra: Vec::new(),
+            trusted: Vec::new(),
         };
 
-        let resolved = inputs.resolve(CaseFold::Preserve);
+        let resolved = inputs.resolve(CaseFold::Preserve, |_| false);
 
         assert!(
             resolved.disk.contains_key(&outside),
@@ -596,9 +791,10 @@ mod tests {
             roots: vec![root],
             projects: Vec::new(),
             extra: Vec::new(),
+            trusted: Vec::new(),
         };
 
-        let resolved = inputs.resolve(CaseFold::Preserve);
+        let resolved = inputs.resolve(CaseFold::Preserve, |_| false);
 
         assert!(
             resolved.disk.contains_key(&outside),
@@ -623,9 +819,10 @@ mod tests {
             roots: vec![root.clone()],
             projects: Vec::new(),
             extra: Vec::new(),
+            trusted: Vec::new(),
         };
 
-        let resolved = inputs.resolve(CaseFold::Preserve);
+        let resolved = inputs.resolve(CaseFold::Preserve, |_| false);
 
         assert!(resolved.unreadable.is_empty(), "{:?}", resolved.unreadable);
         assert!(resolved.disk.contains_key(&root));
@@ -675,11 +872,361 @@ mod tests {
         let shared = a_dir.join("S.snxsch");
         docs.dirty_paths.insert(shared.clone());
 
-        let refs = docs.sheet_ref_inputs().resolve(CaseFold::Fold);
+        let refs = docs.sheet_ref_inputs().resolve(CaseFold::Fold, |_| false);
         let scan = docs.close_scan(&refs, 0, &[]);
 
         assert!(scan.mine.is_empty(), "{:?}", scan.mine);
         assert_eq!(scan.kept, vec![shared]);
+    }
+
+    /// A's never-saved `N.snxsch` and B's saved sheet referencing
+    /// `../A/n.snxsch`; neither file exists. Returns A's close scan.
+    fn close_scan_of_never_saved_sheet(fold: CaseFold, ignores_case: IgnoresCase) -> CloseScan {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let (a_dir, b_dir) = (tmp.path().join("A"), tmp.path().join("B"));
+        std::fs::create_dir_all(&a_dir).expect("mkdir A");
+        std::fs::create_dir_all(&b_dir).expect("mkdir B");
+        write_sheet(&b_dir.join("b.snxsch"), &["../A/n.snxsch"]);
+        let (mut app, _task) = crate::app::Signex::new();
+        let docs = &mut app.document_state;
+        docs.projects.push(loaded_project(1, &a_dir, "N.snxsch"));
+        docs.projects.push(loaded_project(2, &b_dir, "b.snxsch"));
+        docs.dirty_paths.insert(a_dir.join("N.snxsch"));
+
+        let refs = docs.sheet_ref_inputs().resolve(fold, ignores_case);
+        docs.close_scan(&refs, 0, &[])
+    }
+
+    #[test]
+    fn a_never_saved_case_variant_sheet_is_kept_when_its_volume_ignores_case() {
+        let scan = close_scan_of_never_saved_sheet(CaseFold::Preserve, |_| true);
+
+        assert!(scan.mine.is_empty(), "N is B's sheet too: {:?}", scan.mine);
+        assert_eq!(scan.kept.len(), 1, "{:?}", scan.kept);
+        assert_eq!(file_label(&scan.kept[0]), "N.snxsch");
+    }
+
+    #[test]
+    fn a_never_saved_case_variant_sheet_stays_two_files_on_a_case_sensitive_volume() {
+        let scan = close_scan_of_never_saved_sheet(CaseFold::Preserve, |_| false);
+
+        assert_eq!(scan.mine.len(), 1, "N and n are different files");
+        assert!(scan.kept.is_empty(), "{:?}", scan.kept);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_never_saved_case_variant_sheet_is_kept_on_the_real_volume() {
+        use super::super::volume_case::directory_ignores_case;
+        let probe = tempfile::tempdir().expect("tempdir");
+        if !directory_ignores_case(probe.path()) {
+            eprintln!("skipped: the temp volume is case-sensitive");
+            return;
+        }
+
+        let scan = close_scan_of_never_saved_sheet(CaseFold::Preserve, directory_ignores_case);
+
+        assert!(scan.mine.is_empty(), "N is B's sheet too: {:?}", scan.mine);
+        assert_eq!(scan.kept.len(), 1, "{:?}", scan.kept);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_refused_reference_the_resolve_also_keyed_is_current_on_the_next_check() {
+        // `//host/share/..` is refused as a network name on every host, but
+        // on Unix it is also a real local file whose canonical spelling
+        // differs (here through a symlink). The staleness check must find
+        // the refused entry under the same key it computes for it.
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let base = tmp.path().canonicalize().expect("canonical tmp");
+        std::fs::create_dir_all(base.join("real")).expect("mkdir real");
+        std::os::unix::fs::symlink(base.join("real"), base.join("link")).expect("symlink");
+        let a_dir = base.join("A");
+        std::fs::create_dir_all(&a_dir).expect("mkdir A");
+        let other = base.join("link").join("y.snxsch");
+        let reference = format!("/{}", other.display());
+        write_sheet(&a_dir.join("a.snxsch"), &[reference.as_str()]);
+        let (mut app, _task) = crate::app::Signex::new();
+        let docs = &mut app.document_state;
+        docs.projects.push(loaded_project(1, &a_dir, "a.snxsch"));
+        docs.dirty_paths.insert(other);
+
+        let refs = docs
+            .sheet_ref_inputs()
+            .resolve(CaseFold::Preserve, |_| false);
+
+        assert_eq!(refs.unreadable.len(), 1, "{:?}", refs.unreadable);
+        assert_eq!(docs.stale_causes(&refs), Vec::new(), "re-resolve loop");
+    }
+
+    /// Resolve a walk whose only root is `root`.
+    fn resolve_root(root: &Path, limits: WalkLimits) -> SheetRefs {
+        SheetRefInputs {
+            loaded: HashMap::new(),
+            roots: vec![root.to_path_buf()],
+            projects: Vec::new(),
+            extra: Vec::new(),
+            trusted: Vec::new(),
+        }
+        .resolve_within(CaseFold::Preserve, |_| false, limits)
+    }
+
+    fn assert_discard_blocked_by(refs: &SheetRefs, needle: &str) {
+        let reason = refs.discard_blocked_reason().expect("Discard All is off");
+        assert!(reason.contains("Discard All is disabled"), "{reason}");
+        assert!(reason.contains(needle), "{reason}");
+    }
+
+    #[test]
+    fn a_network_reference_is_refused_unread_and_disables_discard_all() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path().join("x.snxsch");
+        write_sheet(
+            &root,
+            &[r"\\attacker\share\y.snxsch", "//attacker/share/z.snxsch"],
+        );
+
+        let resolved = resolve_root(&root, WalkLimits::default());
+
+        assert_eq!(resolved.unreadable.len(), 2, "{:?}", resolved.unreadable);
+        assert_discard_blocked_by(&resolved, "attacker");
+        // Never canonicalised: no real path was recorded for either.
+        assert!(
+            resolved.keys.real.keys().all(|k| !k.contains("attacker")),
+            "{:?}",
+            resolved.keys.real.keys(),
+        );
+    }
+
+    #[test]
+    fn a_refused_reference_is_labelled_with_its_whole_text_on_every_host() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path().join("x.snxsch");
+        write_sheet(&root, &[r"\\attacker\share\y.snxsch"]);
+
+        let resolved = resolve_root(&root, WalkLimits::default());
+
+        let label = resolved.unreadable[0].label();
+        assert!(label.starts_with(r"\\attacker\share\y.snxsch ("), "{label}");
+    }
+
+    #[test]
+    fn many_refused_children_are_bounded_and_counted_once_each() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path().join("x.snxsch");
+        let children: Vec<String> = (0..5000).map(|n| format!(r"\\h\s\{n}.snxsch")).collect();
+        let refs: Vec<&str> = children.iter().map(String::as_str).collect();
+        write_sheet(&root, &refs);
+        let limits = WalkLimits {
+            max_sheets: 50,
+            ..WalkLimits::default()
+        };
+        let started = std::time::Instant::now();
+
+        let resolved = resolve_root(&root, limits);
+
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+        // 50 listed, plus the single summary entry for the other 4950.
+        assert_eq!(
+            resolved.unreadable.len(),
+            51,
+            "{}",
+            resolved.unreadable.len()
+        );
+        assert_eq!(resolved.unreadable[50].label(), "(+4950 more refused)");
+        assert_discard_blocked_by(&resolved, "network or device");
+    }
+
+    #[test]
+    fn a_network_project_sheet_entry_is_refused_unread() {
+        let resolved = resolve_root(
+            Path::new(r"\\attacker\share\root.snxsch"),
+            WalkLimits::default(),
+        );
+
+        assert_discard_blocked_by(&resolved, "attacker");
+        assert!(resolved.disk.is_empty(), "{:?}", resolved.disk.keys());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_unc_reference_is_never_opened_on_windows() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path().join("x.snxsch");
+        write_sheet(&root, &[r"\\localhost\c$\y.snxsch", r"\\.\NUL"]);
+
+        let resolved = resolve_root(&root, WalkLimits::default());
+
+        assert_eq!(resolved.unreadable.len(), 2, "{:?}", resolved.unreadable);
+        assert_discard_blocked_by(&resolved, "network or device");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_double_slash_rooted_project_is_walked_not_refused_on_unix() {
+        // `//` is UNC to the text classifier on every host, so the project's
+        // own share is trusted and its sheets are read; another share is not.
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let base = tmp.path().canonicalize().expect("canonical tmp");
+        write_sheet(
+            &base.join("x.snxsch"),
+            &["y.snxsch", "//elsewhere/share/z.snxsch"],
+        );
+        write_sheet(&base.join("y.snxsch"), &[]);
+        let root = PathBuf::from(format!("/{}", base.join("x.snxsch").display()));
+        let trusted: Vec<Share> = share_of(&root).into_iter().collect();
+        assert_eq!(trusted.len(), 1, "{root:?} names a share");
+
+        let resolved = SheetRefInputs {
+            loaded: HashMap::new(),
+            roots: vec![root],
+            projects: Vec::new(),
+            extra: Vec::new(),
+            trusted,
+        }
+        .resolve(CaseFold::Preserve, |_| false);
+
+        assert_eq!(resolved.unreadable.len(), 1, "{:?}", resolved.unreadable);
+        assert_eq!(
+            resolved.unreadable[0].path,
+            PathBuf::from("//elsewhere/share/z.snxsch")
+        );
+        assert!(resolved.disk.contains_key(&base.join("y.snxsch")));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_unc_project_on_its_own_share_is_walked_on_windows() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let local = tmp.path().join("x.snxsch");
+        write_sheet(&local, &[]);
+        // The administrative share of the drive the temp dir is on.
+        let text = local.to_string_lossy().into_owned();
+        let (drive, rest) = text.split_at(2);
+        let root = PathBuf::from(format!(r"\\localhost\{}${rest}", &drive[..1]));
+        if std::fs::metadata(&root).is_err() {
+            eprintln!("skipped: no administrative share for {root:?}");
+            return;
+        }
+        let trusted: Vec<Share> = share_of(&root).into_iter().collect();
+
+        let resolved = SheetRefInputs {
+            loaded: HashMap::new(),
+            roots: vec![root],
+            projects: Vec::new(),
+            extra: Vec::new(),
+            trusted,
+        }
+        .resolve(CaseFold::Fold, |_| true);
+
+        assert!(resolved.unreadable.is_empty(), "{:?}", resolved.unreadable);
+        assert_eq!(resolved.disk.len(), 1, "{:?}", resolved.disk.keys());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_device_reference_is_not_read_and_disables_discard_all() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path().join("x.snxsch");
+        write_sheet(&root, &["/dev/zero"]);
+
+        let resolved = resolve_root(&root, WalkLimits::default());
+
+        assert_discard_blocked_by(&resolved, "zero (is not a regular file)");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_fifo_reference_is_not_opened_and_disables_discard_all() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let fifo = tmp.path().join("pipe.snxsch");
+        let made = std::process::Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .expect("mkfifo runs");
+        assert!(made.success());
+        let root = tmp.path().join("x.snxsch");
+        write_sheet(&root, &["pipe.snxsch"]);
+
+        let resolved = resolve_root(&root, WalkLimits::default());
+
+        assert_discard_blocked_by(&resolved, "pipe.snxsch (is not a regular file)");
+    }
+
+    #[test]
+    fn an_oversized_sheet_is_unreadable_and_disables_discard_all() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path().join("x.snxsch");
+        write_sheet(&root, &["big.snxsch"]);
+        std::fs::write(tmp.path().join("big.snxsch"), vec![b'x'; 4096]).expect("write");
+        let limits = WalkLimits {
+            max_sheet_bytes: 1024,
+            ..WalkLimits::default()
+        };
+
+        let resolved = resolve_root(&root, limits);
+
+        assert_discard_blocked_by(&resolved, "big.snxsch (is larger than 1024 bytes)");
+    }
+
+    #[test]
+    fn a_walk_past_the_sheet_cap_stops_and_disables_discard_all() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        // root -> s0 -> s1 -> ... a chain longer than the cap.
+        let root = tmp.path().join("root.snxsch");
+        write_sheet(&root, &["s0.snxsch"]);
+        for n in 0..10 {
+            let next = format!("s{}.snxsch", n + 1);
+            write_sheet(&tmp.path().join(format!("s{n}.snxsch")), &[next.as_str()]);
+        }
+        let limits = WalkLimits {
+            max_sheets: 4,
+            ..WalkLimits::default()
+        };
+
+        let resolved = resolve_root(&root, limits);
+
+        assert!(resolved.truncated);
+        assert!(resolved.disk.len() <= 4, "{:?}", resolved.disk.keys());
+        assert_discard_blocked_by(&resolved, "stopped after 4 sheets");
+    }
+
+    #[test]
+    fn a_walk_within_the_cap_is_not_truncated() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path().join("root.snxsch");
+        write_sheet(&root, &[]);
+
+        let resolved = resolve_root(&root, WalkLimits::default());
+
+        assert!(!resolved.truncated);
+        assert!(resolved.discard_blocked_reason().is_none());
+    }
+
+    #[test]
+    fn stale_causes_name_each_thing_that_changed() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dir = tmp.path().join("A");
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        write_sheet(&dir.join("a.snxsch"), &[]);
+        let (mut app, _task) = crate::app::Signex::new();
+        let docs = &mut app.document_state;
+        docs.projects.push(loaded_project(1, &dir, "a.snxsch"));
+        let refs = docs
+            .sheet_ref_inputs()
+            .resolve(CaseFold::Preserve, |_| false);
+        assert!(docs.stale_causes(&refs).is_empty());
+
+        docs.dirty_paths.insert(dir.join("fresh.snxsch"));
+        assert_eq!(docs.stale_causes(&refs), vec![StaleRefs::NewDirtyDocument]);
+
+        docs.dirty_paths.clear();
+        docs.projects.push(loaded_project(2, &dir, "a.snxsch"));
+        assert_eq!(docs.stale_causes(&refs), vec![StaleRefs::ProjectsChanged]);
+        assert_eq!(
+            StaleRefs::describe_all(&[StaleRefs::ProjectsChanged, StaleRefs::NewDirtyDocument]),
+            "the open projects changed; a document with unsaved changes was added",
+        );
     }
 
     #[test]
@@ -696,9 +1243,10 @@ mod tests {
             roots: vec![root.clone()],
             projects: Vec::new(),
             extra: Vec::new(),
+            trusted: Vec::new(),
         };
 
-        let resolved = inputs.resolve(CaseFold::Preserve);
+        let resolved = inputs.resolve(CaseFold::Preserve, |_| false);
 
         assert!(resolved.disk.contains_key(&base.join("saved.snxsch")));
         assert!(resolved.disk.contains_key(&base.join("edited.snxsch")));

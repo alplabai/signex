@@ -154,6 +154,7 @@ pub fn prepare_mount(path: &Path) -> Result<PreparedMount, String> {
         cached_sims: Vec::new(),
         cached_classes: Vec::new(),
         observed_stamp: None,
+        own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
     };
     // Same tolerance as the synchronous path: one unreadable table must

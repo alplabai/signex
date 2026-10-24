@@ -13,6 +13,7 @@ mod panel_open;
 mod project_navigation;
 mod property_editor;
 mod sch_library;
+mod search_prefs_persist;
 
 impl Signex {
     pub(crate) fn handle_dock_message(&mut self, msg: DockMessage) -> Task<Message> {

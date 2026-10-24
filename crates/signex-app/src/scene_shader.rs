@@ -75,15 +75,13 @@ use crate::app::Message;
 /// `SceneShaderProgram::<YourSurface>::new(...)`. Do not reach for a second
 /// copy of this module — that is what #625 removed.
 ///
-/// **Known gap.** The type-level split separates *surfaces*, not *instances of
-/// one surface*. Two undocked schematic windows would both emit
-/// `ScenePrimitive<SchematicSurface>`, share one slot, and collide on the
-/// generation cache exactly as above. The fix is a discriminator in the
-/// resident key — the primitive carrying an instance id (window or document)
-/// alongside its generation, and the pipeline storing both — not a split of
-/// the `signex_gfx` pipelines. Unreachable today: the PCB is the only mounted
-/// surface and it has a single `PcbCanvas`, not one per window. Must be solved
-/// before the schematic mounts (#199), which is per-window.
+/// **Instances of one surface.** The type-level split separates *surfaces*,
+/// not *instances of one surface*. Every window's PCB canvas (one per undocked
+/// PCB tab since #494) emits `ScenePrimitive<PcbSurface>` and shares one slot.
+/// They cannot collide on the generation cache because `PcbCanvas` draws its
+/// generations from one process-wide counter, so no two canvases ever hold
+/// the same value. A new per-window surface must do the same; the schematic
+/// (#199) is per-window too.
 pub trait SceneSurface: 'static + Send + Sync + std::fmt::Debug {
     /// Name used in this surface's one-shot text-failure warnings.
     const LABEL: &'static str;

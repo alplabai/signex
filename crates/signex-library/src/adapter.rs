@@ -479,6 +479,29 @@ pub trait LibraryAdapter: Send + Sync {
         None
     }
 
+    /// Read, rewrite and write back one file of this library while holding
+    /// the library's cross-process write lock, so another Signex process
+    /// cannot write the file between the read and the write (#902).
+    ///
+    /// `rewrite` receives the file's current bytes (`None` when it does not
+    /// exist) and returns the bytes to write, or `None` to leave the file as
+    /// it is. Returns whether the file was written. A written file is
+    /// committed with `commit_message` before the lock is released, so
+    /// another process cannot replace it while git reads it. A failed
+    /// commit is logged, not returned: the file is already saved, and the
+    /// next commit picks it up.
+    ///
+    /// The default has no lock to take and no version control, and only
+    /// does the read and write; see [`rewrite_file`].
+    fn rewrite_file_locked(
+        &self,
+        abs_path: &std::path::Path,
+        _commit_message: &str,
+        rewrite: &mut crate::adapter::FileRewrite<'_>,
+    ) -> Result<bool, LibraryError> {
+        rewrite_file(abs_path, rewrite)
+    }
+
     /// Stage and commit a file the caller already wrote to disk, using
     /// the adapter's own version-control surface. `abs_path` must live
     /// under [`Self::root_path`]; adapters whose `root_path` is `None`
@@ -523,6 +546,30 @@ pub trait LibraryAdapter: Send + Sync {
             "history not implemented for this adapter".into(),
         ))
     }
+}
+
+/// The rewrite step of [`LibraryAdapter::rewrite_file_locked`]: given the
+/// file's current bytes (`None` when it does not exist), the bytes to write,
+/// or `None` to leave it as it is.
+pub type FileRewrite<'a> = dyn FnMut(Option<&[u8]>) -> Result<Option<Vec<u8>>, LibraryError> + 'a;
+
+/// The read and write of [`LibraryAdapter::rewrite_file_locked`], with no
+/// lock. Used directly for a primitive file that belongs to no mounted
+/// library. The write is atomic.
+pub fn rewrite_file(
+    abs_path: &Path,
+    rewrite: &mut crate::adapter::FileRewrite<'_>,
+) -> Result<bool, LibraryError> {
+    let current = match std::fs::read(abs_path) {
+        Ok(bytes) => Some(bytes),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return Err(e.into()),
+    };
+    let Some(bytes) = rewrite(current.as_deref())? else {
+        return Ok(false);
+    };
+    signex_types::atomic_io::atomic_write(abs_path, &bytes)?;
+    Ok(true)
 }
 
 #[cfg(test)]

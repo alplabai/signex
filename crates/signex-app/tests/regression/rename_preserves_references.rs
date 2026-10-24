@@ -103,6 +103,7 @@ fn fixture() -> Fixture {
 
 fn submit_rename(app: &mut Signex, target: &Path, buffer: &str) {
     app.ui_state.rename_dialog = Some(RenameDialogState {
+        project_id: None,
         target_path: target.to_path_buf(),
         tree_path: vec![0, 1],
         buffer: buffer.to_string(),
