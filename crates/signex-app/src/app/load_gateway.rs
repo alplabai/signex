@@ -159,6 +159,7 @@ impl Signex {
                 match signex_engine::Engine::new_with_path(sheet, Some(p.clone())) {
                     Ok(engine) => {
                         self.document_state.engines.insert(p.clone(), engine);
+                        self.clear_net_color_steps(&p);
                         self.document_state.active_path = Some(p);
                     }
                     Err(_) => self.document_state.clear_active_engine(),

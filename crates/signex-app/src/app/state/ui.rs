@@ -384,10 +384,11 @@ pub struct UiState {
     /// colour steps and engine edits in true chronological order. Separate
     /// from the engine's history because net colours are render-only and
     /// shouldn't mix with document mutations.
-    pub net_color_undo: Vec<NetColorStep>,
+    pub net_color_undo: std::collections::HashMap<std::path::PathBuf, Vec<NetColorStep>>,
+    /// Keyed by document path: each document has its own timeline.
     /// Redo mirror of [`Self::net_color_undo`]; cleared by any new colour
     /// action or engine edit.
-    pub net_color_redo: Vec<NetColorStep>,
+    pub net_color_redo: std::collections::HashMap<std::path::PathBuf, Vec<NetColorStep>>,
     /// Custom net-color picker state. When `show = true`, a floating
     /// iced_aw ColorPicker appears anchored to the Active Bar button;
     /// `draft` is the user's pending pick — committed on OK.

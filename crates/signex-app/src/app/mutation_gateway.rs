@@ -114,7 +114,7 @@ impl Signex {
             update_selection_info,
         );
         if changed {
-            self.ui_state.net_color_redo.clear();
+            self.clear_active_net_color_redo();
             CommandOutcome::Changed
         } else {
             CommandOutcome::Unchanged
@@ -181,7 +181,7 @@ impl Signex {
             update_selection_info,
         );
         if changed {
-            self.ui_state.net_color_redo.clear();
+            self.clear_active_net_color_redo();
         }
         let outcome = if failed.is_some() {
             CommandOutcome::Failed
@@ -191,6 +191,12 @@ impl Signex {
             CommandOutcome::Unchanged
         };
         (outcome, failed)
+    }
+
+    fn clear_active_net_color_redo(&mut self) {
+        if let Some(path) = &self.document_state.active_path {
+            self.ui_state.net_color_redo.remove(path);
+        }
     }
 
     /// Mark the active document as having unsaved edits, without running a
@@ -205,6 +211,8 @@ impl Signex {
     ///
     /// Returns `false` when there is no active schematic session to mark.
     pub(crate) fn mark_active_document_dirty(&mut self) -> bool {
+        // Any history-recording edit ends the colour redo branch.
+        self.clear_active_net_color_redo();
         self.with_active_schematic_session_mut(|session| {
             session.set_dirty(true);
         })

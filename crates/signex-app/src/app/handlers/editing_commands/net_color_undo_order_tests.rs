@@ -14,8 +14,15 @@ fn color(r: u8) -> signex_types::theme::Color {
 }
 
 fn app_with_symbol() -> (Signex, uuid::Uuid) {
+    let (mut app, _task) = Signex::new();
+    let id = add_doc(&mut app, "undo-order.snxsch");
+    (app, id)
+}
+
+/// Open a one-symbol schematic tab and make it the active document.
+fn add_doc(app: &mut Signex, name: &str) -> uuid::Uuid {
     let id = uuid::Uuid::new_v4();
-    let path = std::path::PathBuf::from("undo-order.snxsch");
+    let path = std::path::PathBuf::from(name);
     let sheet = SchematicSheet {
         uuid: uuid::Uuid::new_v4(),
         paper_size: "A4".to_string(),
@@ -27,13 +34,12 @@ fn app_with_symbol() -> (Signex, uuid::Uuid) {
         }],
         ..Default::default()
     };
-    let (mut app, _task) = Signex::new();
     app.document_state.engines.insert(
         path.clone(),
         signex_engine::Engine::new(sheet).expect("engine"),
     );
     app.document_state.tabs.push(crate::app::TabInfo {
-        title: "undo-order".to_string(),
+        title: name.to_string(),
         path: path.clone(),
         cached_document: None,
         dirty: false,
@@ -42,7 +48,29 @@ fn app_with_symbol() -> (Signex, uuid::Uuid) {
     });
     app.document_state.active_tab = app.document_state.tabs.len() - 1;
     app.document_state.active_path = Some(path);
-    (app, id)
+    id
+}
+
+fn activate(app: &mut Signex, name: &str) {
+    let path = std::path::PathBuf::from(name);
+    app.document_state.active_tab = app
+        .document_state
+        .tabs
+        .iter()
+        .position(|t| t.path == path)
+        .expect("tab");
+    app.document_state.active_path = Some(path);
+}
+
+fn active_steps(
+    steps: &std::collections::HashMap<std::path::PathBuf, Vec<crate::app::state::NetColorStep>>,
+    app: &Signex,
+) -> usize {
+    app.document_state
+        .active_path
+        .as_ref()
+        .and_then(|p| steps.get(p))
+        .map_or(0, Vec::len)
 }
 
 fn move_symbol(app: &mut Signex, id: uuid::Uuid) {
@@ -110,8 +138,88 @@ fn a_new_engine_edit_clears_colour_redo() {
         .wire_color_overrides
         .insert(uuid::Uuid::new_v4(), color(1));
     app.handle_undo_requested();
-    assert_eq!(app.ui_state.net_color_redo.len(), 1);
+    assert_eq!(active_steps(&app.ui_state.net_color_redo, &app), 1);
 
     move_symbol(&mut app, id);
-    assert!(app.ui_state.net_color_redo.is_empty());
+    assert_eq!(active_steps(&app.ui_state.net_color_redo, &app), 0);
+}
+
+/// A colour on A is untouched by Ctrl+Z in B; switching back undoes it.
+#[test]
+fn colour_steps_belong_to_their_own_document() {
+    let (mut app, _a_sym) = app_with_symbol();
+    let b_sym = add_doc(&mut app, "b.snxsch");
+    activate(&mut app, "undo-order.snxsch");
+    let wire = uuid::Uuid::new_v4();
+    app.record_net_color_undo();
+    app.ui_state.wire_color_overrides.insert(wire, color(9));
+
+    activate(&mut app, "b.snxsch");
+    move_symbol(&mut app, b_sym);
+    app.handle_undo_requested();
+    assert_eq!(symbol_x(&app), 0.0, "B's own edit is undone");
+    assert!(
+        app.ui_state.wire_color_overrides.contains_key(&wire),
+        "A's colour is not touched from B"
+    );
+    app.handle_undo_requested();
+    assert!(app.ui_state.wire_color_overrides.contains_key(&wire));
+
+    activate(&mut app, "undo-order.snxsch");
+    app.handle_undo_requested();
+    assert!(app.ui_state.wire_color_overrides.is_empty());
+}
+
+/// Redo availability and effect are per document.
+#[test]
+fn colour_redo_is_enabled_only_for_its_document() {
+    let (mut app, _a_sym) = app_with_symbol();
+    add_doc(&mut app, "b.snxsch");
+    activate(&mut app, "undo-order.snxsch");
+    app.record_net_color_undo();
+    app.ui_state
+        .wire_color_overrides
+        .insert(uuid::Uuid::new_v4(), color(1));
+    app.handle_undo_requested();
+    assert_eq!(active_steps(&app.ui_state.net_color_redo, &app), 1);
+
+    activate(&mut app, "b.snxsch");
+    assert_eq!(active_steps(&app.ui_state.net_color_redo, &app), 0);
+    app.handle_redo_requested();
+    assert!(app.ui_state.wire_color_overrides.is_empty(), "no-op on B");
+}
+
+/// Replacing a document's engine drops that document's colour steps only.
+#[test]
+fn reload_clears_that_documents_colour_steps() {
+    let (mut app, _a_sym) = app_with_symbol();
+    add_doc(&mut app, "b.snxsch");
+    activate(&mut app, "undo-order.snxsch");
+    app.record_net_color_undo();
+    activate(&mut app, "b.snxsch");
+    app.record_net_color_undo();
+
+    app.clear_net_color_steps(std::path::Path::new("undo-order.snxsch"));
+    assert!(
+        !app.ui_state
+            .net_color_undo
+            .contains_key(std::path::Path::new("undo-order.snxsch"))
+    );
+    assert_eq!(active_steps(&app.ui_state.net_color_undo, &app), 1);
+}
+
+/// Annotate records engine history outside the gateway; it must still end
+/// the colour redo branch.
+#[test]
+fn annotate_style_dirty_marking_clears_colour_redo() {
+    let (mut app, _id) = app_with_symbol();
+    app.record_net_color_undo();
+    app.ui_state
+        .wire_color_overrides
+        .insert(uuid::Uuid::new_v4(), color(1));
+    app.handle_undo_requested();
+    assert_eq!(active_steps(&app.ui_state.net_color_redo, &app), 1);
+
+    app.mark_active_document_dirty();
+    assert_eq!(active_steps(&app.ui_state.net_color_redo, &app), 0);
 }

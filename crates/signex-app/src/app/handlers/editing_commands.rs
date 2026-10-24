@@ -25,28 +25,43 @@ impl Signex {
     /// Record the current overrides as an undoable step, before a
     /// net-colour change. A new colour action ends the redo branch.
     pub(crate) fn record_net_color_undo(&mut self) {
+        let Some(path) = self.document_state.active_path.clone() else {
+            return;
+        };
         let at = self.engine_undo_position();
-        self.ui_state
-            .net_color_undo
-            .push(crate::app::state::NetColorStep {
+        self.ui_state.net_color_redo.remove(&path);
+        self.ui_state.net_color_undo.entry(path).or_default().push(
+            crate::app::state::NetColorStep {
                 colors: self.ui_state.wire_color_overrides.clone(),
                 at,
-            });
-        self.ui_state.net_color_redo.clear();
+            },
+        );
+    }
+
+    /// Forget a document's colour steps, e.g. when its engine is replaced.
+    pub(crate) fn clear_net_color_steps(&mut self, path: &std::path::Path) {
+        self.ui_state.net_color_undo.remove(path);
+        self.ui_state.net_color_redo.remove(path);
     }
 
     /// Install `step`'s colours, pushing the displaced ones onto the
     /// opposite stack (`undoing` -> redo stack, else undo stack).
-    fn swap_net_colors(&mut self, step: crate::app::state::NetColorStep, undoing: bool) {
+    fn swap_net_colors(
+        &mut self,
+        path: std::path::PathBuf,
+        step: crate::app::state::NetColorStep,
+        undoing: bool,
+    ) {
         let displaced = crate::app::state::NetColorStep {
             colors: std::mem::replace(&mut self.ui_state.wire_color_overrides, step.colors),
             at: step.at,
         };
-        if undoing {
-            self.ui_state.net_color_redo.push(displaced);
+        let stack = if undoing {
+            &mut self.ui_state.net_color_redo
         } else {
-            self.ui_state.net_color_undo.push(displaced);
-        }
+            &mut self.ui_state.net_color_undo
+        };
+        stack.entry(path).or_default().push(displaced);
         self.interaction_state
             .active_canvas_mut()
             .clear_content_cache();
@@ -84,14 +99,12 @@ impl Signex {
         // stamped with the engine's edit-timeline position; it is the
         // newest action only while no engine edit has landed since.
         let position = self.engine_undo_position();
-        if self
-            .ui_state
-            .net_color_undo
-            .last()
-            .is_some_and(|step| step.at >= position)
-            && let Some(step) = self.ui_state.net_color_undo.pop()
+        if let Some(path) = self.document_state.active_path.clone()
+            && let Some(stack) = self.ui_state.net_color_undo.get_mut(&path)
+            && stack.last().is_some_and(|step| step.at >= position)
+            && let Some(step) = stack.pop()
         {
-            self.swap_net_colors(step, true);
+            self.swap_net_colors(path, step, true);
             return;
         }
         let undone = self.apply_engine_undo(true);
@@ -126,14 +139,12 @@ impl Signex {
         // A colour step undone at `at` came after the `at`-th engine edit
         // and before the next, so it is redone before that edit.
         let position = self.engine_undo_position();
-        if self
-            .ui_state
-            .net_color_redo
-            .last()
-            .is_some_and(|step| step.at <= position)
-            && let Some(step) = self.ui_state.net_color_redo.pop()
+        if let Some(path) = self.document_state.active_path.clone()
+            && let Some(stack) = self.ui_state.net_color_redo.get_mut(&path)
+            && stack.last().is_some_and(|step| step.at <= position)
+            && let Some(step) = stack.pop()
         {
-            self.swap_net_colors(step, false);
+            self.swap_net_colors(path, step, false);
             return;
         }
         let redone = self.apply_engine_redo(true);
