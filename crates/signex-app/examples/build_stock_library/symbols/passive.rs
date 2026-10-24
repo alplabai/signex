@@ -9,11 +9,10 @@
 //! Pin positions are multiples of the 1.27 mm schematic grid.
 //!
 //! Power ports are ordinary symbols whose single pin is
-//! `PinDirection::Power` and whose designator is `#PWR?`: the leading
-//! `#` is what the annotator, BOM and netlist exporters use to treat a
-//! reference as a non-part, and the placement tool marks the placed
-//! instance `is_power` (which ERC reads for `MissingPowerFlag` and
-//! `PowerPortShort`).
+//! `PinDirection::Power`, named after the net, with designator `#PWR?`
+//! and the net name as comment. Library placement does not yet turn
+//! them into power ports (`is_power`, `value` = net name), so ERC and
+//! net naming don't see them; tracked in #928.
 
 use signex_library::primitive::symbol::{PinDirection, PinOrientation, Symbol, SymbolPin};
 
