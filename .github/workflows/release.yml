@@ -160,7 +160,9 @@ jobs:
             cargo build --release --target "$t" -p signex-app
           done
           mkdir -p target/universal-apple-darwin/release
-          lipo -create -output target/universal-apple-darwin/release/signex \n            target/aarch64-apple-darwin/release/signex \n            target/x86_64-apple-darwin/release/signex
+          lipo -create -output target/universal-apple-darwin/release/signex \
+            target/aarch64-apple-darwin/release/signex \
+            target/x86_64-apple-darwin/release/signex
           archs="$(lipo -archs target/universal-apple-darwin/release/signex)"
           echo "universal binary archs: $archs"
           for a in x86_64 arm64; do
