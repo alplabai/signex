@@ -30,6 +30,7 @@ mod selection_request;
 pub(crate) mod sheet_hierarchy;
 mod state;
 mod symbol_history;
+mod undo_groups;
 pub(crate) mod view;
 
 pub use contracts::{

@@ -35,6 +35,7 @@ fn a_phase_one_rewrite_records_history() {
         parts: &parts,
         sheet: 0,
         locked: &locked,
+        undo_group: None,
     };
 
     let changed = engine
@@ -122,4 +123,36 @@ fn annotate_all_keeps_the_units_of_a_part_together() {
         .map(|s| s.reference.as_str())
         .collect();
     assert_eq!(refs, ["U1", "U1"]);
+}
+
+/// #829 item 2: an annotate pass given an undo group stamps its history
+/// entry with it, and the stamp follows the entry through undo and redo.
+#[test]
+fn an_annotate_undo_group_is_stamped_and_survives_undo_and_redo() {
+    let mut sheet = test_sheet();
+    sheet.symbols.push(unit("U?", 1, 0.0));
+    let mut engine = Engine::new(sheet).unwrap();
+    let locked = HashSet::new();
+    let parts = ProjectParts::new(&[&engine.document().symbols], &locked);
+    let scope = AnnotateScope {
+        parts: &parts,
+        sheet: 0,
+        locked: &locked,
+        undo_group: Some(7),
+    };
+    engine
+        .annotate_in_project(
+            AnnotateMode::ResetAndRenumber,
+            &mut HashMap::new(),
+            scope,
+            &mut HashMap::new(),
+        )
+        .unwrap();
+
+    assert_eq!(engine.next_undo_group(), Some(7));
+    engine.undo().unwrap();
+    assert_eq!(engine.next_undo_group(), None);
+    assert_eq!(engine.next_redo_group(), Some(7));
+    engine.redo().unwrap();
+    assert_eq!(engine.next_undo_group(), Some(7));
 }

@@ -182,3 +182,27 @@ fn os_close_request_proceeds_when_preferences_is_clean() {
         "a clean Preferences window must be allowed to close normally"
     );
 }
+
+/// #829 — the Annotate undo draft follows the draft/dirty/discard pattern.
+#[test]
+fn annotate_undo_draft_marks_dirty_and_discard_restores_it() {
+    use signex_app::annotate_undo::AnnotateUndo;
+    let (mut app, _t) = Signex::new();
+    app.ui_state.annotate_undo = AnnotateUndo::Project;
+    let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+    assert!(!app.ui_state.preferences_dirty);
+
+    let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
+        PrefMsg::DraftAnnotateUndo(AnnotateUndo::PerSheet),
+    )));
+    assert!(app.ui_state.preferences_dirty, "a changed draft is unsaved");
+    assert_eq!(app.ui_state.annotate_undo, AnnotateUndo::Project);
+
+    let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
+        PrefMsg::DiscardAndClose,
+    )));
+    assert_eq!(
+        app.ui_state.preferences_draft_annotate_undo,
+        AnnotateUndo::Project
+    );
+}

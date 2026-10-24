@@ -37,6 +37,7 @@ pub mod fonts;
 pub mod icons;
 // Crate-internal: `IgnoreResult` is an in-tree convention, not part of
 // this crate's API surface, so the module stays private.
+pub mod annotate_undo;
 mod ignore;
 pub mod keyboard_shortcuts_modal;
 pub mod keymap;
