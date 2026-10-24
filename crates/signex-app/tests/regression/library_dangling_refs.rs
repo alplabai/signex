@@ -53,17 +53,16 @@ struct Fixture {
     library_id: Uuid,
 }
 
-fn fixture() -> Fixture {
-    signex_library::git_identity::test_identity::install();
-    let _ = signex_app::diagnostics::init_logging();
-    let tmp = tempfile::tempdir().unwrap();
-    let library_file = tmp.path().join("Lib").join("Lib.snxlib");
+/// Initialise an empty library named `name` under `dir`; returns its
+/// `.snxlib` path and library id.
+fn init_library(dir: &std::path::Path, name: &str) -> (PathBuf, Uuid) {
+    let library_file = dir.join(name).join(format!("{name}.snxlib"));
     let library_id = Uuid::now_v7();
     let manifest = SnxlibManifest {
         format: FORMAT_TOKEN.into(),
         library_id,
         library: LibrarySection {
-            name: "Lib".into(),
+            name: name.into(),
             description: None,
         },
         mode: LibraryMode::default(),
@@ -72,6 +71,14 @@ fn fixture() -> Fixture {
         classes: Vec::new(),
     };
     LocalGitAdapter::init(&library_file, manifest, LibraryInitOptions::default()).unwrap();
+    (library_file, library_id)
+}
+
+fn fixture() -> Fixture {
+    signex_library::git_identity::test_identity::install();
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = tempfile::tempdir().unwrap();
+    let (library_file, library_id) = init_library(tmp.path(), "Lib");
     let (mut app, _t) = Signex::new();
     // Bootstrap queued mounts for the stock libraries; a sweep waits for
     // those, and these tests drive the sweep themselves.
@@ -209,4 +216,86 @@ fn saving_a_symbol_refreshes_a_preview_that_already_resolved_it() {
         shown.description, "edited in the symbol editor",
         "the preview must draw the saved symbol, not the copy resolved before the save"
     );
+}
+
+/// An unreadable `.snxsym` is skipped by the listing, so the symbols in
+/// it are undetermined, not missing: the row must not be reported.
+#[test]
+fn a_binding_into_an_unreadable_symbol_file_is_not_reported_as_missing() {
+    let mut f = fixture();
+    let dir = f.library_file.parent().unwrap().join("symbols");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("broken.snxsym"), b"not = [valid").unwrap();
+    let pn = format!("UNDETERMINED-{}", Uuid::now_v7().simple());
+    LocalGitAdapter::open(&f.library_file)
+        .unwrap()
+        .insert_row("R", row(&pn, f.library_id, Uuid::now_v7()), "seed")
+        .unwrap();
+
+    f.app.library.open_library(f.library_file.clone()).unwrap();
+
+    assert_eq!(lines_containing(&pn), 0, "undetermined is not missing");
+    let lib = f.app.library.library_at(&f.library_file).unwrap();
+    assert!(lib.dangling.refs.is_empty());
+    assert!(!lib.dangling.listings_complete);
+}
+
+/// A preview whose row binds a symbol in ANOTHER library refreshes when
+/// that symbol is saved, even though the preview tab belongs to the
+/// first library.
+#[test]
+fn saving_a_symbol_refreshes_a_preview_bound_across_libraries() {
+    let mut f = fixture();
+    let (other_file, other_id) = init_library(f._tmp.path(), "Other");
+    let symbol_path = other_file
+        .parent()
+        .unwrap()
+        .join("symbols")
+        .join("far.snxsym");
+    std::fs::create_dir_all(symbol_path.parent().unwrap()).unwrap();
+    let file = SymbolFile::from_symbol(Symbol::empty("FAR"));
+    std::fs::write(&symbol_path, file.to_toml_string().unwrap()).unwrap();
+    let symbol_id = file.symbols[0].uuid;
+    let bound = row("CROSS-ROW", other_id, symbol_id);
+    let row_id = bound.row_id;
+    LocalGitAdapter::open(&f.library_file)
+        .unwrap()
+        .insert_row("R", bound.clone(), "seed")
+        .unwrap();
+    f.app.library.open_library(f.library_file.clone()).unwrap();
+    f.app.library.open_library(other_file).unwrap();
+
+    let mut preview = ComponentPreviewState::from_row(f.library_file.clone(), "R".into(), bound);
+    preview.symbol = f
+        .app
+        .library
+        .set
+        .resolve_symbol(&PrimitiveRef::new(other_id, symbol_id))
+        .unwrap();
+    assert_eq!(preview.symbol.as_ref().unwrap().description, "");
+    let address = EditorAddress::new(f.library_file.clone(), "R".into(), RowId::from_uuid(row_id));
+    f.app.library.editors.insert(address.clone(), preview);
+
+    let mut edited = file.clone();
+    edited.symbols[0].description = "edited in the other library".into();
+    let mut editor = SymbolEditorState::new(symbol_path.clone(), file);
+    editor.file = edited;
+    editor.dirty = true;
+    f.app
+        .document_state
+        .symbol_editors
+        .insert(symbol_path.clone(), editor);
+    f.app.document_state.tabs.push(TabInfo {
+        title: "far".into(),
+        path: symbol_path.clone(),
+        cached_document: None,
+        dirty: true,
+        project_id: None,
+        kind: TabKind::SymbolEditor(symbol_path),
+    });
+    f.app.document_state.active_tab = f.app.document_state.tabs.len() - 1;
+    let _ = f.app.update(Message::File(FileMsg::Save));
+
+    let shown = f.app.library.editors[&address].symbol.as_ref().unwrap();
+    assert_eq!(shown.description, "edited in the other library");
 }

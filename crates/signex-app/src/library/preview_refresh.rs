@@ -14,7 +14,10 @@ use super::state::LibraryState;
 
 impl LibraryState {
     /// Re-resolve the symbol and footprint of every Component Preview
-    /// open on the library whose directory contains `saved`.
+    /// whose row binds a primitive in the library whose directory
+    /// contains `saved`. The binding's `library_id` decides, not the
+    /// library the preview tab belongs to: a row may bind a primitive
+    /// from another library.
     ///
     /// Only previews that already resolved a primitive are touched; one
     /// that has not been visited stays lazy. The sim is left alone: its
@@ -23,7 +26,7 @@ impl LibraryState {
     /// the failure, rather than blanking a preview over a transient read
     /// error.
     pub fn refresh_loaded_previews(&mut self, saved: &Path) {
-        let Some(library_root) = self
+        let Some(saved_library) = self
             .open_libraries
             .iter()
             .find(|lib| {
@@ -31,17 +34,13 @@ impl LibraryState {
                     .map(|d| saved.starts_with(d))
                     .unwrap_or(false)
             })
-            .map(|lib| lib.root.clone())
+            .map(|lib| lib.library_id)
         else {
             return;
         };
         let set = &self.set;
-        for state in self
-            .editors
-            .values_mut()
-            .filter(|state| state.library_path == library_root)
-        {
-            if state.symbol.is_some() {
+        for state in self.editors.values_mut() {
+            if state.symbol.is_some() && state.row.symbol_ref.library_id == saved_library {
                 let reference = state.row.symbol_ref;
                 if let Some(fresh) = reresolve(
                     set.resolve_symbol(&reference),
@@ -53,6 +52,7 @@ impl LibraryState {
             }
             if state.footprint.is_some()
                 && let Some(reference) = state.row.footprint_ref
+                && reference.library_id == saved_library
                 && let Some(fresh) = reresolve(
                     set.resolve_footprint(&reference),
                     ResolvedKind::Footprint,

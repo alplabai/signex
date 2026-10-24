@@ -24,23 +24,15 @@ use super::state::LibraryState;
 const MAX_REPORTED_PER_SWEEP: usize = 20;
 
 /// Per-library result of the last sweep.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DanglingSweep {
-    /// True when all three primitive listings were read successfully.
-    /// A failed listing keeps an old (possibly empty) cache, which says
-    /// nothing about what exists, so such a library is not swept.
+    /// True when all three primitive listings were read successfully and
+    /// no symbol container was skipped as unreadable. A failed or partial
+    /// listing says nothing about what is missing, so such a library is
+    /// not swept. False until the first listing has actually run.
     pub listings_complete: bool,
     /// Bindings that resolved to nothing at the last sweep.
     pub refs: Vec<DanglingRef>,
-}
-
-impl Default for DanglingSweep {
-    fn default() -> Self {
-        Self {
-            listings_complete: true,
-            refs: Vec::new(),
-        }
-    }
 }
 
 impl DanglingSweep {
