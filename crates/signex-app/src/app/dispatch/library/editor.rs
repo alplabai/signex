@@ -575,7 +575,7 @@ impl Signex {
                 target: "signex::library",
                 path = %path.display(),
                 error = %e,
-                "save primitive: commit_external_change failed (file written; commit deferred)",
+                "save primitive: commit_external_change failed (file written, not committed)",
             );
         }
     }

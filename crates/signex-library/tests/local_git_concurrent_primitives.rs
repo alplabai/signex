@@ -105,99 +105,94 @@ fn concurrent_edits_to_one_symbol_container_lose_no_change() {
     assert!(text.contains("B-14"), "B's last edit was lost:\n{text}");
 }
 
-/// #900 review: while this save waits on `.git/index.lock`, another process
-/// commits a change to a different file and writes its new index. The
-/// retried commit must build on that commit, not write back the index as it
-/// was before it (which would silently revert the other change in HEAD).
+/// #900 review: two processes committing different files of one repository
+/// never revert each other. Each commit is checked along first-parent
+/// history: a file's version may only grow. A commit built from a shared
+/// on-disk index that the other process rewrote in between would write back
+/// that file's older version.
 #[test]
-fn a_retried_commit_keeps_another_process_commit_made_meanwhile() {
+fn concurrent_commits_to_one_repository_never_revert_each_other() {
+    use signex_library::adapters::local_git_project::LocalGitProjectAdapter;
+    signex_library::git_identity::test_identity::install();
+    const COMMITS: u32 = 100;
     let dir = tempfile::tempdir().unwrap();
-    let file = versioned_library(dir.path());
-    let root = file.parent().unwrap().to_path_buf();
-    let adapter = LocalGitAdapter::open(&file).unwrap();
-    adapter.save_symbol(Symbol::empty("A"), "add A").unwrap();
-    adapter.save_symbol(Symbol::empty("B"), "add B").unwrap();
-    drop(adapter);
-    let symbol_file = |name: &str| -> String {
-        std::fs::read_dir(root.join("symbols"))
-            .unwrap()
-            .map(|e| e.unwrap().file_name().into_string().unwrap())
-            .find(|f| {
-                std::fs::read_to_string(root.join("symbols").join(f))
-                    .unwrap()
-                    .contains(&format!("\"{name}\""))
+    let root = dir.path().to_path_buf();
+    for name in ["a.txt", "b.txt"] {
+        std::fs::write(root.join(name), "0").unwrap();
+    }
+    let seed = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+    for name in ["a.txt", "b.txt"] {
+        seed.commit_path(Path::new(name), "seed").unwrap();
+    }
+    drop(seed);
+
+    let writers: Vec<_> = ["a.txt", "b.txt"]
+        .into_iter()
+        .map(|name| {
+            let root = root.clone();
+            std::thread::spawn(move || {
+                let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+                for i in 1..=COMMITS {
+                    std::fs::write(root.join(name), i.to_string()).unwrap();
+                    adapter
+                        .commit_path(Path::new(name), &format!("{name} {i}"))
+                        .unwrap();
+                }
             })
-            .expect("symbol file")
-    };
-    let a_file = symbol_file("A");
+        })
+        .collect();
+    for writer in writers {
+        writer.join().unwrap();
+    }
 
-    // Another process starts its commit: it holds the index lock.
-    let git_dir = root.join(".git");
-    let lock = git_dir.join("index.lock");
-    std::fs::copy(git_dir.join("index"), &lock).unwrap();
-
-    let saver = {
-        let file = file.clone();
-        std::thread::spawn(move || {
-            let adapter = LocalGitAdapter::open(&file).unwrap();
-            let mut b = Symbol::empty("B");
-            b.name = "B-edited".into();
-            adapter.save_symbol(b, "edit B")
+    let repo = git2::Repository::open(&root).unwrap();
+    // A file not committed yet (the first seed commit) counts as version 0.
+    let version = |tree: &git2::Tree<'_>, name: &str| -> u32 {
+        tree.get_name(name).map_or(0, |entry| {
+            let blob = repo.find_blob(entry.id()).unwrap();
+            std::str::from_utf8(blob.content())
+                .unwrap()
+                .parse()
+                .unwrap()
         })
     };
-    std::thread::sleep(Duration::from_millis(300));
-
-    // ... commits a change to A, writes its new index, and releases.
-    let repo = git2::Repository::open(&root).unwrap();
-    let a_text = std::fs::read_to_string(root.join("symbols").join(&a_file))
-        .unwrap()
-        .replace("\"A\"", "\"A-by-other\"");
-    std::fs::write(root.join("symbols").join(&a_file), &a_text).unwrap();
-    let head = repo.head().unwrap().peel_to_commit().unwrap();
-    let blob = repo.blob(a_text.as_bytes()).unwrap();
-    let symbols = head.tree().unwrap().get_name("symbols").unwrap().id();
-    let mut sub = repo
-        .treebuilder(Some(&repo.find_tree(symbols).unwrap()))
-        .unwrap();
-    sub.insert(&a_file, blob, 0o100644).unwrap();
-    let sub_id = sub.write().unwrap();
-    let mut top = repo.treebuilder(Some(&head.tree().unwrap())).unwrap();
-    top.insert("symbols", sub_id, 0o040000).unwrap();
-    let tree = repo.find_tree(top.write().unwrap()).unwrap();
-    let sig = git2::Signature::now("Other", "other@example.com").unwrap();
-    repo.commit(Some("HEAD"), &sig, &sig, "other edits A", &tree, &[&head])
-        .unwrap();
-    let mut other_index = git2::Index::open(&lock).unwrap();
-    other_index.read_tree(&tree).unwrap();
-    other_index.write().unwrap();
-    std::fs::rename(&lock, git_dir.join("index")).unwrap();
-
-    saver.join().unwrap().expect("the save goes through");
-
-    let head = repo.head().unwrap().peel_to_commit().unwrap();
-    let a_in_head = head
-        .tree()
-        .unwrap()
-        .get_path(&Path::new("symbols").join(&a_file))
-        .unwrap()
-        .to_object(&repo)
-        .unwrap()
-        .peel_to_blob()
-        .unwrap();
-    assert!(
-        String::from_utf8_lossy(a_in_head.content()).contains("A-by-other"),
-        "the other process's change to A was reverted in HEAD"
-    );
+    let mut history = Vec::new();
+    let mut commit = repo.head().unwrap().peel_to_commit().unwrap();
+    loop {
+        let tree = commit.tree().unwrap();
+        history.push((
+            version(&tree, "a.txt"),
+            version(&tree, "b.txt"),
+            commit.id(),
+        ));
+        match commit.parent(0) {
+            Ok(parent) => commit = parent,
+            Err(_) => break,
+        }
+    }
+    history.reverse();
+    for pair in history.windows(2) {
+        let ((a0, b0, _), (a1, b1, id)) = (pair[0], pair[1]);
+        assert!(
+            a1 >= a0 && b1 >= b0,
+            "commit {id} reverted a file: ({a0}, {b0}) -> ({a1}, {b1})"
+        );
+    }
+    let last = history.last().unwrap();
+    assert_eq!((last.0, last.1), (COMMITS, COMMITS));
 }
 
 /// #900 review: an `index.lock` a crashed git left behind never goes away by
-/// itself. The save is refused at once with a hint, instead of freezing for
-/// the whole lock wait on every save.
+/// itself. The commit does not need the index (its tree is built from the
+/// parent commit), so the save goes through at once instead of freezing for
+/// the whole lock wait; only the best-effort index refresh is skipped, with
+/// a warning. Signex never removes the lock.
 #[test]
-fn a_stale_git_index_lock_is_refused_at_once_with_a_hint() {
+fn a_stale_git_index_lock_does_not_block_or_fail_the_save() {
     let dir = tempfile::tempdir().unwrap();
     let file = versioned_library(dir.path());
-    let lock = file.parent().unwrap().join(".git").join("index.lock");
+    let root = file.parent().unwrap().to_path_buf();
+    let lock = root.join(".git").join("index.lock");
     let stale = std::fs::File::create(&lock).unwrap();
     stale
         .set_modified(std::time::SystemTime::now() - Duration::from_secs(60))
@@ -206,19 +201,17 @@ fn a_stale_git_index_lock_is_refused_at_once_with_a_hint() {
 
     let adapter = LocalGitAdapter::open(&file).unwrap();
     let started = std::time::Instant::now();
-    let err = adapter
+    adapter
         .save_symbol(Symbol::empty("R"), "add R")
-        .expect_err("refused while the stale lock is there");
+        .expect("the commit does not need the index lock");
 
     assert!(
         started.elapsed() < Duration::from_secs(2),
         "{:?}",
         started.elapsed()
     );
-    assert!(
-        err.to_string()
-            .contains("if no git process is running, remove it"),
-        "{err}"
-    );
     assert!(lock.exists(), "the lock is never removed by Signex");
+    let repo = git2::Repository::open(&root).unwrap();
+    let head = repo.head().unwrap().peel_to_commit().unwrap();
+    assert!(String::from_utf8_lossy(head.message_bytes()).starts_with("add R"));
 }
