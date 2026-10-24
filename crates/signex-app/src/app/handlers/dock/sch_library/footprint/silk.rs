@@ -40,7 +40,7 @@ impl Signex {
         endpoint: SilkLineEndpoint,
         value: String,
     ) -> bool {
-        let parsed = value.trim().parse::<f64>().ok();
+        let parsed = crate::numeric_field::parse_field_f64(&value);
         if let Some(parsed) = parsed
             && let Some(editor) = self.active_footprint_editor_mut()
             && let Some(idx) = editor.state.selected_silk_f
@@ -73,7 +73,7 @@ impl Signex {
         field: SilkTextField,
         value: String,
     ) -> bool {
-        let parsed = value.trim().parse::<f64>().ok();
+        let parsed = crate::numeric_field::parse_field_f64(&value);
         if let Some(parsed) = parsed
             && let Some(editor) = self.active_footprint_editor_mut()
             && let Some(idx) = editor.state.selected_silk_f
@@ -112,7 +112,7 @@ impl Signex {
         v: &str,
     ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
-            let parsed = v.trim().parse::<f64>().ok();
+            let parsed = crate::numeric_field::parse_field_f64(v);
             if let Some(idx) = editor.state.selected_silk_f
                 && let Some(w) = parsed
                 && w >= 0.0

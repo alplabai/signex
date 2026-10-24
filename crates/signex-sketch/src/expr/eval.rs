@@ -63,6 +63,17 @@ pub struct EvalContext {
 /// Recursive interpreter; each binary op is type-checked by family
 /// before reduction. Errors are bubbled up as [`ExprError`].
 pub fn eval(node: &ExprNode, ctx: &EvalContext) -> Result<Quantity, ExprError> {
+    let q = eval_node(node, ctx)?;
+    // `powf`, overflowing products and the like can yield NaN / inf with
+    // no error of their own; refuse to hand those to the solver or bake.
+    if q.value.is_finite() {
+        Ok(q)
+    } else {
+        Err(ExprError::NonFinite(format!("{}", q.value)))
+    }
+}
+
+fn eval_node(node: &ExprNode, ctx: &EvalContext) -> Result<Quantity, ExprError> {
     match node {
         ExprNode::Literal(q) => Ok(*q),
         ExprNode::Ref(name) => {

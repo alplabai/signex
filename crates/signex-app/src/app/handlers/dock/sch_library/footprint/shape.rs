@@ -217,7 +217,7 @@ impl Signex {
     /// v0.13 — Altium "Snap Distance" setter.
     pub(crate) fn handle_fp_set_snap_distance(&mut self, raw: String) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut()
-            && let Ok(v) = raw.trim().parse::<f64>()
+            && let Some(v) = crate::numeric_field::parse_field_f64(&raw)
         {
             editor.state.snap_options.snap_distance_mm = v.clamp(0.001, 100.0);
             editor.canvas_cache.clear();
@@ -229,7 +229,7 @@ impl Signex {
     /// v0.13 — Altium "Axis Snap Range" setter.
     pub(crate) fn handle_fp_set_axis_snap_range(&mut self, raw: String) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut()
-            && let Ok(v) = raw.trim().parse::<f64>()
+            && let Some(v) = crate::numeric_field::parse_field_f64(&raw)
         {
             editor.state.snap_options.axis_snap_range_mm = v.clamp(0.001, 100.0);
             editor.canvas_cache.clear();

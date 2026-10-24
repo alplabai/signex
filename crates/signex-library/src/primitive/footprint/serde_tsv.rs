@@ -166,8 +166,11 @@ fn layers_from_token(s: &str) -> Vec<LayerId> {
 }
 
 fn parse_f64_cell_fp(col: &'static str, s: &str) -> Result<f64, FootprintFileError> {
-    s.parse()
-        .map_err(|_| FootprintFileError::InvalidNumericCell {
+    // #678: reject `NaN` / `inf` (and `1e999`, which overflows to inf).
+    s.parse::<f64>()
+        .ok()
+        .filter(|v| v.is_finite())
+        .ok_or_else(|| FootprintFileError::InvalidNumericCell {
             column: col,
             value: s.to_string(),
         })
@@ -343,4 +346,25 @@ pub enum FootprintFileError {
     InvalidPadShape(String),
     #[error("invalid numeric cell in column {column:?}: {value:?}")]
     InvalidNumericCell { column: &'static str, value: String },
+}
+
+#[cfg(test)]
+mod non_finite_cell_tests {
+    use super::*;
+
+    /// #678: `f64::from_str` accepts `NaN` / `inf` and overflows `1e999`;
+    /// a numeric cell must reject all of them.
+    #[test]
+    fn numeric_cell_rejects_non_finite() {
+        for bad in ["NaN", "nan", "inf", "-inf", "infinity", "1e999"] {
+            assert!(
+                matches!(
+                    parse_f64_cell_fp("col", bad),
+                    Err(FootprintFileError::InvalidNumericCell { .. })
+                ),
+                "{bad:?} must be rejected"
+            );
+        }
+        assert_eq!(parse_f64_cell_fp("col", "1.5").unwrap(), 1.5);
+    }
 }

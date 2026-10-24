@@ -325,7 +325,7 @@ fn resolve_effective_click(
         .state
         .placement_input
         .as_ref()
-        .and_then(|p| p.buffer.parse::<f64>().ok());
+        .and_then(|p| crate::numeric_field::parse_field_f64(&p.buffer));
     // v0.14-footprint — multi-dimension tools (Line len/angle,
     // Rectangle w/h, Rounded-Rect w/h/radius) keep the focused
     // field in `placement_input` and the rest in
@@ -337,7 +337,7 @@ fn resolve_effective_click(
             .chain(editor.state.placement_input_others.iter().map(Some))
             .flatten()
             .find(|p| p.kind == kind)
-            .and_then(|p| p.buffer.parse::<f64>().ok())
+            .and_then(|p| crate::numeric_field::parse_field_f64(&p.buffer))
     };
     let line_len_typed = field_value(PlacementInputKind::LineLength);
     let line_ang_typed = field_value(PlacementInputKind::LineAngle);
