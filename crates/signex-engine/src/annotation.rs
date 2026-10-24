@@ -153,8 +153,14 @@ impl Engine {
                 continue;
             }
             let next = next_by_prefix.entry(prefix.clone()).or_insert(0);
-            *next += 1;
-            symbol.reference = format!("{prefix}{next}");
+            let Some(issued) = next.checked_add(1) else {
+                // Wrapping would re-issue a designator that already exists
+                // (and panics in debug). Undo this pass's partial renumber.
+                self.document = before;
+                return Err(EngineError::DesignatorOverflow { prefix });
+            };
+            *next = issued;
+            symbol.reference = format!("{prefix}{issued}");
             if let Some(part) = part {
                 assigned.insert(part, symbol.reference.clone());
             }
@@ -196,6 +202,16 @@ mod tests {
     use signex_types::schematic::{Point, Symbol};
     use std::collections::HashMap;
 
+    fn symbol(reference: &str, x: f64) -> Symbol {
+        Symbol {
+            uuid: uuid::Uuid::new_v4(),
+            lib_id: "Device:R".to_string(),
+            reference: reference.to_string(),
+            position: Point::new(x, 0.0),
+            ..Default::default()
+        }
+    }
+
     fn unit(reference: &str, lib_id: &str, unit: u32, y: f64) -> Symbol {
         Symbol {
             uuid: uuid::Uuid::new_v4(),
@@ -205,6 +221,60 @@ mod tests {
             position: Point::new(0.0, y),
             ..Default::default()
         }
+    }
+
+    /// #678 - `R4294967295` seeds the counter at `u32::MAX`; the next
+    /// `+= 1` panicked in debug builds and wrapped to `R0`/`R1` in release
+    /// (re-issuing a designator that already exists).
+    #[test]
+    fn annotating_past_u32_max_is_an_error_not_a_wrap() {
+        let mut sheet = test_sheet();
+        sheet.symbols.push(symbol("R4294967295", 0.0));
+        sheet.symbols.push(symbol("R?", 1.0));
+        sheet.symbols.push(symbol("R?", 2.0));
+        let mut engine = Engine::new(sheet).unwrap();
+        let mut counters = HashMap::new();
+
+        let result = engine.annotate_with_seed(AnnotateMode::Incremental, &mut counters);
+
+        assert!(
+            matches!(result, Err(EngineError::DesignatorOverflow { ref prefix }) if prefix == "R"),
+            "got {result:?}"
+        );
+        let refs: Vec<_> = engine
+            .document()
+            .symbols
+            .iter()
+            .map(|s| s.reference.as_str())
+            .collect();
+        assert_eq!(
+            refs,
+            ["R4294967295", "R?", "R?"],
+            "a failed annotate must leave the sheet untouched"
+        );
+    }
+
+    #[test]
+    fn annotating_below_the_limit_still_numbers_symbols() {
+        let mut sheet = test_sheet();
+        sheet.symbols.push(symbol("R?", 1.0));
+        sheet.symbols.push(symbol("R?", 2.0));
+        let mut engine = Engine::new(sheet).unwrap();
+        let mut counters = HashMap::new();
+
+        assert!(
+            engine
+                .annotate_with_seed(AnnotateMode::Incremental, &mut counters)
+                .unwrap()
+        );
+        let mut refs: Vec<_> = engine
+            .document()
+            .symbols
+            .iter()
+            .map(|s| s.reference.clone())
+            .collect();
+        refs.sort();
+        assert_eq!(refs, ["R1", "R2"]);
     }
 
     fn annotated(mode: AnnotateMode, symbols: Vec<Symbol>) -> Vec<String> {

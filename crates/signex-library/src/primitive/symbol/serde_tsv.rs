@@ -136,10 +136,14 @@ fn fmt_opt_f64(v: Option<f64>) -> String {
 }
 
 fn parse_f64_cell(col: &'static str, s: &str) -> Result<f64, SymbolFileError> {
-    s.parse().map_err(|_| SymbolFileError::InvalidNumericCell {
-        column: col,
-        value: s.to_string(),
-    })
+    // #678: reject `NaN` / `inf` (and `1e999`, which overflows to inf).
+    s.parse::<f64>()
+        .ok()
+        .filter(|v| v.is_finite())
+        .ok_or_else(|| SymbolFileError::InvalidNumericCell {
+            column: col,
+            value: s.to_string(),
+        })
 }
 
 fn parse_opt_f64_cell(col: &'static str, s: &str) -> Result<Option<f64>, SymbolFileError> {
@@ -283,4 +287,25 @@ fn pin_from_tsv_row(cells: &[&str]) -> Result<SymbolPin, SymbolFileError> {
         locked: parse_bool_cell("locked", cells[18])?,
         part_number,
     })
+}
+
+#[cfg(test)]
+mod non_finite_cell_tests {
+    use super::*;
+
+    /// #678: `f64::from_str` accepts `NaN` / `inf` and overflows `1e999`;
+    /// a numeric cell must reject all of them.
+    #[test]
+    fn numeric_cell_rejects_non_finite() {
+        for bad in ["NaN", "nan", "inf", "-inf", "infinity", "1e999"] {
+            assert!(
+                matches!(
+                    parse_f64_cell("col", bad),
+                    Err(SymbolFileError::InvalidNumericCell { .. })
+                ),
+                "{bad:?} must be rejected"
+            );
+        }
+        assert_eq!(parse_f64_cell("col", "1.5").unwrap(), 1.5);
+    }
 }

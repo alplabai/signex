@@ -194,6 +194,19 @@ impl LocalGitAdapter {
         message: &str,
         fallback_message: &str,
     ) -> Result<(), LibraryError> {
+        self.commit_change(None, rel_path, message, fallback_message)
+    }
+
+    /// Like [`commit_path`](Self::commit_path), but also drops
+    /// `removed_rel_path` from the index, so a file moved to `rel_path` is
+    /// recorded as a rename rather than left tracked at its old name.
+    pub(super) fn commit_change(
+        &self,
+        removed_rel_path: Option<&str>,
+        rel_path: &str,
+        message: &str,
+        fallback_message: &str,
+    ) -> Result<(), LibraryError> {
         if !self.root_dir.join(".git").exists() {
             return Ok(());
         }
@@ -215,7 +228,13 @@ impl LocalGitAdapter {
             message.to_string()
         };
         retry_on_git_lock(repo.path(), || {
-            stage_and_commit(&repo, Path::new(rel_path), &sig, &commit_message)
+            stage_and_commit(
+                &repo,
+                removed_rel_path.map(Path::new),
+                Path::new(rel_path),
+                &sig,
+                &commit_message,
+            )
         })
         .map_err(|e| LibraryError::Backend(format!("git commit {rel_path}: {e}")))?;
         Ok(())
@@ -223,7 +242,7 @@ impl LocalGitAdapter {
 
     // ── Table helpers ──────────────────────────────────────────────────────
 
-    fn snxlib_rel_path(&self) -> Result<String, LibraryError> {
+    pub(super) fn snxlib_rel_path(&self) -> Result<String, LibraryError> {
         file_name_str(&self.file_path)
     }
 
