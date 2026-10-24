@@ -38,9 +38,8 @@ fn two_rapid_saves_to_one_repo_commit_in_order_one_at_a_time() {
         rel_path: PathBuf::from("a.snxsch"),
         result: Ok(Some("deadbeef".to_string())),
     }));
-    let _second_task = app.drain_pending_git_commits();
     assert!(
         app.document_state.pending_git_commits.is_empty(),
-        "the second commit is released once the first completes"
+        "the second commit is released by the update that handled the first's completion"
     );
 }

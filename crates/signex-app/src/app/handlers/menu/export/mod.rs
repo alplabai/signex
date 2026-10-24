@@ -48,8 +48,17 @@ fn build_bom_export_context(
 fn build_bom_export_scope(
     document_state: &crate::app::state::DocumentState,
 ) -> Option<(ExportContext, ExportIssues)> {
-    let (mut ctx, issues) = build_export_scope(document_state)?;
-    if document_state.active_document_project().is_none() {
+    build_bom_export_scope_for_source(document_state, document_state.active_path.as_deref()?)
+}
+
+/// [`build_bom_export_scope`] for an explicit source document (#852): the BOM
+/// completion path, where the dialog may have outlived the originating tab.
+fn build_bom_export_scope_for_source(
+    document_state: &crate::app::state::DocumentState,
+    source: &std::path::Path,
+) -> Option<(ExportContext, ExportIssues)> {
+    let (mut ctx, issues) = build_export_scope_for_source(document_state, source)?;
+    if document_state.document_project(source).is_none() {
         ctx.netlist_sheets.clear();
         ctx.netlist_sheet_placements.clear();
     }
@@ -191,11 +200,7 @@ fn log_uncovered_chars(chars: &[char]) {
 /// Put the stitch issues in front of the user — called once per *user action*
 /// (print-preview open, PDF written, netlist written), never from the shared
 /// context builder.
-fn log_stitch_issues(
-    document_state: &crate::app::state::DocumentState,
-    ctx: &ExportContext,
-    issues: &ExportIssues,
-) {
+fn log_stitch_issues(source: &std::path::Path, ctx: &ExportContext, issues: &ExportIssues) {
     for message in issues.messages() {
         crate::diagnostics::log_warning(format!("Export: {message}"));
     }
@@ -210,10 +215,7 @@ fn log_stitch_issues(
         // document the user was looking at.
         crate::diagnostics::log_warning(format!(
             "Export: no netlist derived for {} — NET_NAME() annotations will be unresolved",
-            document_state
-                .active_path
-                .as_ref()
-                .map_or_else(String::new, |p| p.display().to_string())
+            source.display()
         ));
     } else if issues.netlist_is_incomplete() {
         crate::diagnostics::log_warning(
@@ -265,10 +267,10 @@ fn owned_pages(
 /// tab belonging to some *other* loaded project must not ride along.
 fn loose_pages(
     document_state: &crate::app::state::DocumentState,
-    active_path: &PathBuf,
+    active_path: &std::path::Path,
 ) -> Vec<SheetSnapshot> {
     let mut paths: Vec<PathBuf> = document_state.unowned_engine_paths();
-    paths.sort_by_key(|p| p != active_path);
+    paths.sort_by_key(|p| p.as_path() != active_path);
     let sheet_count = paths.len();
     paths
         .into_iter()
@@ -324,10 +326,11 @@ fn export_metadata(
 /// is machine-consumed and refuses on a hole, the PDF is human-consumed and
 /// degrades loudly. See `handle_export_netlist_finished` /
 /// `handle_export_pdf_finished`.
+#[cfg(test)]
 fn build_export_scope(
     document_state: &crate::app::state::DocumentState,
 ) -> Option<(ExportContext, ExportIssues)> {
-    build_scope(document_state, true)
+    build_scope(document_state, document_state.active_path.as_deref()?, true)
 }
 
 /// [`build_export_scope`] without `ExportContext::netlist_sheets`, for the
@@ -336,41 +339,45 @@ fn build_export_scope(
 fn build_page_scope(
     document_state: &crate::app::state::DocumentState,
 ) -> Option<(ExportContext, ExportIssues)> {
-    build_scope(document_state, false)
+    build_scope(
+        document_state,
+        document_state.active_path.as_deref()?,
+        false,
+    )
 }
 
 /// [`build_page_scope`] for an explicit source document rather than the active
-/// tab — the PDF completion path, where the OS dialog may have outlived the tab
-/// the export was started from (#833). `None` when `source` is no longer open.
-///
-/// The scope machinery resolves ownership and the netlist root off
-/// `active_path`, so the source is made active for the one synchronous build
-/// and the real active path is put straight back — nothing awaits in between.
+/// tab — the BOM / PDF completion path, where the OS dialog may have outlived
+/// the tab the export was started from (#833). `None` when `source` is no
+/// longer open.
 fn build_page_scope_for_source(
-    document_state: &mut crate::app::state::DocumentState,
+    document_state: &crate::app::state::DocumentState,
     source: &std::path::Path,
 ) -> Option<(ExportContext, ExportIssues)> {
-    if !document_state.engines.contains_key(source) {
-        return None;
-    }
-    let previous = document_state.active_path.replace(source.to_path_buf());
-    let scope = build_page_scope(document_state);
-    document_state.active_path = previous;
-    scope
+    build_scope(document_state, source, false)
+}
+
+/// [`build_export_scope`] for an explicit source document (#852): the netlist
+/// completion path.
+fn build_export_scope_for_source(
+    document_state: &crate::app::state::DocumentState,
+    source: &std::path::Path,
+) -> Option<(ExportContext, ExportIssues)> {
+    build_scope(document_state, source, true)
 }
 
 fn build_scope(
     document_state: &crate::app::state::DocumentState,
+    active_path: &std::path::Path,
     with_netlist_sheets: bool,
 ) -> Option<(ExportContext, ExportIssues)> {
-    let active_path = document_state.active_path.as_ref()?;
     let active_engine = document_state.engines.get(active_path)?;
 
     // Scope comes from `active_document_project()` — the project that owns
     // the active document — NOT `active_loaded_project()`, whose
     // `active_project` pointer is sticky by design and keeps pointing at the
     // last-loaded project while a loose file is focused (#406).
-    let owning_project = document_state.active_document_project();
+    let owning_project = document_state.document_project(active_path);
 
     // One assembler answers what the project consists of — for the export, the
     // cached canvas netlist, the ERC run, annotate and the duplicate-designator
@@ -383,12 +390,13 @@ fn build_scope(
     // happened to be looking at — same intent, two different .net files, no
     // way to tell them apart. Active-path rooting stays on the loose-document
     // path, where the active document *is* the whole scope.
-    if let Some(warning) = crate::app::project_sheets::netlist_root_fallback_warning(document_state)
+    if let Some(warning) =
+        crate::app::project_sheets::netlist_root_fallback_warning_for(document_state, active_path)
     {
         crate::diagnostics::log_warning(warning);
     }
     let (pages, sheet_set) =
-        crate::app::project_sheets::assemble_active_project_sheets(document_state);
+        crate::app::project_sheets::assemble_project_sheets_for(document_state, active_path);
 
     let sheets = match owning_project {
         Some(project) => owned_pages(project, &pages, &sheet_set),
