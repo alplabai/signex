@@ -66,6 +66,9 @@ pub struct PcbCanvas {
     /// updated immediately on draft change for live preview, committed/reverted
     /// on Save/Discard. Mirrors `UiState::pcb_gpu_render` (the saved value).
     pub gpu_render: bool,
+    /// Per-wheel-notch zoom factor (Preferences "Zoom speed"). Synced from
+    /// `UiState` on every update, so canvases created later pick it up.
+    pub zoom_step: f32,
     pub theme_bg: Color,
     pub theme_grid: Color,
     pub canvas_colors: signex_types::theme::CanvasColors,
@@ -105,6 +108,7 @@ impl PcbCanvas {
             viewport: std::cell::Cell::new(Rectangle::with_size(iced::Size::ZERO)),
             grid_visible: true,
             gpu_render: false,
+            zoom_step: Camera::zoom_step_factor(Camera::ZOOM_STEP_PERCENT_DEFAULT),
             theme_bg: crate::render_config::to_iced(&colors.background),
             theme_grid: crate::render_config::to_iced(&colors.grid),
             canvas_colors: colors,
@@ -165,11 +169,13 @@ impl PcbCanvas {
 
     /// Zoom one wheel notch about the view centre (View > Zoom In/Out).
     /// Returns whether the camera changed (false at the zoom limits).
-    pub fn zoom_about_centre(&self, zoom_in: bool) -> bool {
+    pub fn zoom_about_centre(&self, zoom_in: bool, step: f32) -> bool {
         let bounds = self.viewport.get();
         let centre = iced::Point::new(bounds.width / 2.0, bounds.height / 2.0);
         let notch = if zoom_in { 1.0 } else { -1.0 };
-        self.camera.borrow_mut().zoom_at(centre, notch, bounds)
+        self.camera
+            .borrow_mut()
+            .zoom_at(centre, notch, step, bounds)
     }
 
     /// Recentre the view on world point `(x, y)` without changing zoom (#525).
@@ -514,10 +520,12 @@ impl canvas::Program<Message> for PcbCanvas {
                     mouse::ScrollDelta::Pixels { y, .. } => *y / 50.0,
                 };
                 if let Some(cursor_pos) = cursor.position_in(bounds)
-                    && self
-                        .camera
-                        .borrow_mut()
-                        .zoom_at(cursor_pos, scroll_y, bounds)
+                    && self.camera.borrow_mut().zoom_at(
+                        cursor_pos,
+                        scroll_y,
+                        self.zoom_step,
+                        bounds,
+                    )
                 {
                     return Some(
                         canvas::Action::publish(Message::CanvasEvent(CanvasEvent::CursorMoved))

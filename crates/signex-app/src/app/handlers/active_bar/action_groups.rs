@@ -284,10 +284,19 @@ impl Signex {
                 }
                 Task::none()
             }
-            // MoveSelection / MoveSelectionXY → open the Move
-            // Selection dialog (numeric ΔX / ΔY apply to every
-            // selected item through Command::MoveSelection).
-            ActiveBarAction::MoveSelection | ActiveBarAction::MoveSelectionXY => {
+            // Move / Move Selection → arm the interactive click-click
+            // gestures (#271); the drop commits through MoveSelected.
+            ActiveBarAction::Move => {
+                self.arm_move_pick(crate::canvas::MovePick::Object);
+                Task::none()
+            }
+            ActiveBarAction::MoveSelection => {
+                self.arm_move_pick(crate::canvas::MovePick::Selection);
+                Task::none()
+            }
+            // Move Selection by X, Y... → open the dialog (numeric ΔX / ΔY
+            // apply to every selected item through Command::MoveSelection).
+            ActiveBarAction::MoveSelectionXY => {
                 self.update(Message::MoveSelection(MoveSelectionMsg::Open))
             }
             ActiveBarAction::AlignLeft

@@ -40,16 +40,14 @@ fn add_constraint_for_selection(
     use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
     use crate::library::editor::footprint::sketch_mode::SketchEdit;
     use crate::library::messages::SketchConstraintTag;
-    use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
+    use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget, parse_dimension_input};
     use signex_sketch::id::ConstraintId;
 
     let primary = editor.state.selected_sketch;
     let secondary = editor.state.selected_sketch_secondary;
-    let dim_target = editor
-        .state
-        .dimension_input
-        .trim()
-        .parse::<f64>()
+    // The domain parser rejects NaN / inf; a refused value surfaces
+    // through `dim_input_error` below when no constraint comes out.
+    let dim_target = parse_dimension_input(&editor.state.dimension_input)
         .ok()
         .map(DimTarget::Literal);
 
@@ -79,11 +77,7 @@ fn add_constraint_for_selection(
     let extra_kind = extra.and_then(kind_of);
     // Angle's DimTarget is stored in radians (canonical unit);
     // the dim-input field is degrees, so convert here.
-    let angle_target = editor
-        .state
-        .dimension_input
-        .trim()
-        .parse::<f64>()
+    let angle_target = parse_dimension_input(&editor.state.dimension_input)
         .ok()
         .map(|deg| DimTarget::Literal(deg.to_radians()));
 
@@ -255,7 +249,7 @@ fn add_constraint_for_selection(
 /// the failure there is a selection mismatch, not a bad number.
 fn dim_input_error(dimension_input: &str) -> Option<String> {
     let typed = dimension_input.trim();
-    if typed.is_empty() || typed.parse::<f64>().is_ok() {
+    if typed.is_empty() || signex_sketch::constraint::parse_dimension_input(typed).is_ok() {
         return None;
     }
     Some(typed.to_string())
@@ -284,7 +278,7 @@ fn report_constraint_not_added(
             );
             format!(
                 "{tag:?}: \"{buffer}\" is not a valid dimension — no constraint was added. \
-                 Enter a number using \".\" as the decimal separator (degrees for Angle)."
+                 Enter a finite number using \".\" as the decimal separator (degrees for Angle)."
             )
         }
         None => {

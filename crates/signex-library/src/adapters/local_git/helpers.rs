@@ -25,8 +25,13 @@ const GIT_LOCK_STALE: std::time::Duration = std::time::Duration::from_secs(10);
 /// `ErrorCode::Modified` and [`retry_on_git_lock`] rebuilds on the new tip.
 /// The on-disk index entry is updated afterwards, best effort, so the
 /// working copy does not show the file as changed.
+///
+/// `removed_rel_path` is dropped from the new tree (and the index) in the
+/// same commit, so a file moved to `rel_path` is recorded as a rename
+/// rather than left tracked at its old name.
 pub(super) fn stage_and_commit(
     repo: &git2::Repository,
+    removed_rel_path: Option<&Path>,
     rel_path: &Path,
     signature: &git2::Signature<'_>,
     message: &str,
@@ -42,9 +47,20 @@ pub(super) fn stage_and_commit(
         Err(e) => return Err(e),
     };
     let base = parent.as_ref().map(|c| c.tree()).transpose()?;
+    let head_tree = base.clone();
+    let base = match (removed_rel_path, base) {
+        (Some(removed), Some(tree)) => {
+            let components: Vec<&std::ffi::OsStr> = removed.iter().collect();
+            match tree_without_path(repo, &tree, &components)? {
+                Some(id) => Some(repo.find_tree(id)?),
+                None => None,
+            }
+        }
+        (_, base) => base,
+    };
     let components: Vec<&std::ffi::OsStr> = rel_path.iter().collect();
     let tree_id = tree_with_blob(repo, base.as_ref(), &components, blob)?;
-    if base.as_ref().is_some_and(|b| b.id() == tree_id) {
+    if head_tree.as_ref().is_some_and(|b| b.id() == tree_id) {
         return Ok(None);
     }
     let tree = repo.find_tree(tree_id)?;
@@ -55,6 +71,11 @@ pub(super) fn stage_and_commit(
     if let Err(e) = retry_on_git_lock(repo.path(), || {
         let mut index = repo.index()?;
         index.read(true)?;
+        if let Some(removed) = removed_rel_path
+            && index.get_path(removed, 0).is_some()
+        {
+            index.remove_path(removed)?;
+        }
         index.add_path(rel_path)?;
         index.write()
     }) {
@@ -66,6 +87,40 @@ pub(super) fn stage_and_commit(
         );
     }
     Ok(Some(oid))
+}
+
+/// `base` without the entry at `path`, written as new trees up to the
+/// root. `None` when removing it leaves the tree empty; `base` unchanged
+/// when the entry does not exist.
+fn tree_without_path(
+    repo: &git2::Repository,
+    base: &git2::Tree<'_>,
+    path: &[&std::ffi::OsStr],
+) -> Result<Option<git2::Oid>, git2::Error> {
+    let name = path[0].to_string_lossy();
+    let Some(entry) = base.get_name(&name) else {
+        return Ok(Some(base.id()));
+    };
+    let mut builder = repo.treebuilder(Some(base))?;
+    if path.len() == 1 {
+        builder.remove(&*name)?;
+    } else {
+        let Ok(sub) = repo.find_tree(entry.id()) else {
+            return Ok(Some(base.id()));
+        };
+        match tree_without_path(repo, &sub, &path[1..])? {
+            Some(id) => {
+                builder.insert(&*name, id, 0o040000)?;
+            }
+            None => {
+                builder.remove(&*name)?;
+            }
+        }
+    }
+    if builder.is_empty() {
+        return Ok(None);
+    }
+    builder.write().map(Some)
 }
 
 /// `base` with the file at `path` set to `blob`, written as new trees up to

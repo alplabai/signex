@@ -14,6 +14,7 @@ impl SchematicCanvas<'_> {
         // the symbol-field anchor→moved guide line, which the content
         // render doesn't draw on its own.
         if state.move_dragging
+            && !self.float_is_stale(state)
             && let (Some(origin), Some(current)) = (state.move_origin, state.move_current)
         {
             let dx = (current.0 - origin.0) as f32;

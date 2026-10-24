@@ -26,6 +26,11 @@ impl SchematicCanvas<'_> {
             let wx = world.x as f64;
             let wy = world.y as f64;
 
+            // Click-click Move / Move Selection: pick or drop (#271).
+            if let Some(action) = self.update_move_pick_press(state, wx, wy) {
+                return Some(action);
+            }
+
             // Double-click detection (300ms, 5px threshold)
             let now = std::time::Instant::now();
             if let (Some(last_time), Some(last_pos)) =
@@ -140,6 +145,13 @@ impl SchematicCanvas<'_> {
         &self,
         state: &mut CanvasState,
     ) -> Option<canvas::Action<Message>> {
+        self.drop_stale_float(state);
+        // A click-click move keeps floating through the picking press's
+        // release; only the next press drops it.
+        if state.is_floating() {
+            return Some(canvas::Action::capture());
+        }
+
         // Case 1: Drag-to-move in progress → commit the move
         if state.move_dragging {
             if let (Some(origin), Some(current)) = (state.move_origin, state.move_current) {
@@ -201,12 +213,20 @@ impl SchematicCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
-        // Abort an in-progress drag — matches Altium / Esc behavior.
+        // Abort a floating move or in-progress drag — matches Altium / Esc.
+        // `pan_moved` makes the matching right-release read as a drag, so the
+        // press that cancelled does not also open the context menu.
+        if state.is_floating() {
+            state.clear_move();
+            state.pan_moved = true;
+            return Some(canvas::Action::capture());
+        }
         if state.move_dragging || state.click_on_selected {
             state.move_dragging = false;
             state.click_on_selected = false;
             state.move_origin = None;
             state.move_current = None;
+            state.pan_moved = true;
             return Some(canvas::Action::capture());
         }
         if let Some(pos) = cursor.position_in(bounds) {
@@ -296,6 +316,7 @@ impl SchematicCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
+        self.drop_stale_float(state);
         if let Some(cursor_pos) = cursor.position_in(bounds) {
             // Pan if right/middle button held
             if state.panning {
@@ -330,7 +351,7 @@ impl SchematicCanvas<'_> {
             }
 
             // Track drag-to-move (selected items)
-            if state.click_on_selected {
+            if state.click_on_selected || state.is_floating() {
                 let world = self.camera().screen_to_world(cursor_pos, bounds);
                 let wx = world.x as f64;
                 let wy = world.y as f64;

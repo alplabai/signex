@@ -47,8 +47,11 @@ byte-identically. Filenames name the feature:
 | Text hostility | `text-adversarial-label`, `text-adversarial-fields`, `hostile_label_text` (backslash, quote, bare `-`, tab, newline) |
 | Numeric | `coordinates-nanometre-rounding`, `regulator_stage` (sorted map keys) |
 
-Holes (known, deliberately absent): hierarchical child sheets and
-multi-sheet projects (`.snxprj`, separate task); unknown vendor keys
+Hierarchy: `hierarchy-root-two-children` (two child-sheet symbols with
+pins), `hierarchy-nested-middle` (a child that is itself a parent) and
+`hierarchy-child-leaf` (the bottom of the chain).
+
+Holes (known, deliberately absent): unknown vendor keys
 (dropped on parse today, blocked on forward-compat work); a symbol whose
 extras are entirely default, because it does not round-trip today
 (data loss: the writer omits `[extras.symbols.<uuid>]` for a default
@@ -58,6 +61,25 @@ and off the board after one save/reload; fix is a manual
 `impl Default for SymbolExtras` with `unit` 1, `in_bom` and `on_board` true;
 tracked as #789, fixed by its own PR, which also adds the bare-symbol fixture).
 Every symbol fixture therefore carries a non-default `footprint`.
+
+Hierarchy sheets: `hierarchy-root-two-children`, `hierarchy-nested-middle`,
+`hierarchy-child-leaf` (hierarchical label `VIN` matching the parent's sheet
+pin) and `hierarchy-repeated-child-instances` (one child file instantiated
+twice, non-empty `instances`, non-default `stroke_color`/`fill_color`).
+
+## Project files (`.snxprj`)
+
+`project/*.snxprj` are walked by `../round_trip_project_corpus.rs`, which
+loads each with `parse_project`, saves with `write_project`, and requires
+the exact same bytes. `parse_project` rewrites `dir` to the file's real
+location, so fixtures store `"dir": ""` and the harness restores that
+placeholder before comparing. Coverage: `minimal-empty`,
+`two-flat-sheets`, `hierarchical-three-sheets` (the sheet list for the
+hierarchy fixtures: root -> middle -> leaf all resolve in the corpus),
+`full-with-libraries-and-variants`, `unknown-keys-preserved` (unknown keys
+at top level, per sheet and per library, plus the `format` token).
+`MIN_PROJECT_FIXTURES` guards the count. These are not blessable: edit by
+hand and keep keys alphabetical (the writer sorts them).
 
 ## Intentional format change
 
