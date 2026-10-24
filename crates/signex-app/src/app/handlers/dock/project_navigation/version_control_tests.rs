@@ -1,0 +1,54 @@
+//! #110 item 7 — a failed Enable Version Control is shown to the user and
+//! lands in the Messages panel instead of only being logged.
+
+use super::*;
+
+fn open_dialog_on(project_dir: &std::path::Path) -> Signex {
+    let (mut app, _task) = Signex::new();
+    app.ui_state.enable_version_control = Some(crate::app::EnableVersionControlState {
+        scope: crate::app::VersionControlScope::Project,
+        project_path: project_dir.join("demo.snxprj"),
+        project_dir: project_dir.to_path_buf(),
+        project_name: "demo".to_string(),
+        items: Vec::new(),
+        use_lfs: false,
+        intro_text: String::new(),
+        error: None,
+    });
+    app
+}
+
+/// `.git` already exists, so the library refuses to initialise: the dialog
+/// stays open with the reason on an error line, and the Messages panel gets
+/// a record naming the project directory.
+#[test]
+fn a_refused_init_keeps_the_dialog_open_with_the_error_and_logs_it() {
+    let _ = crate::diagnostics::init_logging();
+    let tmp = tempfile::TempDir::new().unwrap();
+    std::fs::create_dir(tmp.path().join(".git")).unwrap();
+    let mut app = open_dialog_on(tmp.path());
+    let marker = tmp.path().display().to_string();
+
+    app.handle_enable_version_control_confirm();
+
+    let state = app
+        .ui_state
+        .enable_version_control
+        .as_ref()
+        .expect("the dialog must stay open after a failure");
+    assert!(state.error.is_some(), "the failure reason is shown");
+    assert!(
+        crate::diagnostics::recent_entries().iter().any(|entry| {
+            entry.message.contains("enable version control failed")
+                && entry.message.contains(&marker)
+        }),
+        "the failure must reach the Messages panel"
+    );
+}
+
+#[test]
+fn the_setup_failure_notice_names_version_control() {
+    let notice = crate::app::state::ErrorNotice::version_control("auto-commit is off");
+    assert_eq!(notice.title, "Version Control Setup Failed");
+    assert!(notice.detail.contains("auto-commit is off"));
+}

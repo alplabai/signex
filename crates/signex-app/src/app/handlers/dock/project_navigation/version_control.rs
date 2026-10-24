@@ -135,6 +135,7 @@ impl Signex {
                     // skips the flag flip so the user re-runs Enable
                     // VC after fixing the underlying issue.
                     let mut adapter_ok = false;
+                    let mut adapter_error: Option<String> = None;
                     match signex_library::adapters::local_git_project::LocalGitProjectAdapter::open_or_init(
                         state.project_dir.clone(),
                     ) {
@@ -155,6 +156,8 @@ impl Signex {
                                     "[git] write_gitattributes failed: {e} — \
                                      enable_git left off; re-run Enable VC after fix"
                                 ));
+                                adapter_error =
+                                    Some(format!("could not write .gitattributes: {e}"));
                             }
                         },
                         Err(e) => {
@@ -163,7 +166,19 @@ impl Signex {
                                  enable_git left off; re-run Enable VC after fix",
                                 state.project_dir.display()
                             ));
+                            adapter_error = Some(format!("could not open the repository: {e}"));
                         }
+                    }
+                    if let Some(reason) = adapter_error {
+                        // The dialog closes below and `.git` now exists, so it
+                        // cannot be reopened — without this the user sees a
+                        // normal close with auto-commit still off.
+                        self.document_state.error_notice =
+                            Some(crate::app::state::ErrorNotice::version_control(format!(
+                                "The repository at {} was created, but auto-commit is not \
+                                 enabled: {reason}",
+                                state.project_dir.display()
+                            )));
                     }
 
                     // Flip `enable_git = true` on the matching
@@ -201,6 +216,10 @@ impl Signex {
                 ));
             }
             Err(error) => {
+                crate::diagnostics::log_warning(format!(
+                    "[git] enable version control failed at {}: {error}",
+                    state.project_dir.display()
+                ));
                 if let Some(s) = self.ui_state.enable_version_control.as_mut() {
                     s.error = Some(error.to_string());
                 }
@@ -379,3 +398,7 @@ pub(crate) fn build_gitignore_body(items: &[crate::app::TrackItem]) -> String {
         out
     }
 }
+
+#[cfg(test)]
+#[path = "version_control_tests.rs"]
+mod version_control_tests;
