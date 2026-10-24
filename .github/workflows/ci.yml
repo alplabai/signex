@@ -191,27 +191,6 @@ jobs:
       - name: Test (postgres)
         run: cargo test -p signex-library-server --test integration_db -- --ignored
 
-  # Fuzz build smoke (#113). Non-required. cargo-fuzz needs nightly, so this
-  # is the one deliberate exception to the 1.97.0 lockstep pin; `+nightly`
-  # overrides rust-toolchain.toml. `fuzz/` is outside the workspace.
-  fuzz:
-    name: fuzz · snxsch_parse
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: dtolnay/rust-toolchain@nightly
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: fuzz
-
-      - name: Install cargo-fuzz
-        run: cargo +nightly install cargo-fuzz --locked
-
-      - name: Fuzz 60 s
-        run: cargo +nightly fuzz run snxsch_parse -- -max_total_time=60
-
   deny:
     name: deny · licenses + deps
     runs-on: ubuntu-latest

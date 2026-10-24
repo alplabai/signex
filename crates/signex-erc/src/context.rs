@@ -620,6 +620,15 @@ mod tests {
     }
 
     #[test]
+    fn pt_key_buckets_at_one_micron() {
+        // #113 item 1: the ERC point key is a 1 um round, so 0.4 um folds into
+        // the origin bucket while 0.6 um and a full 1 um do not.
+        assert_eq!(pt_key(&pt(0.0004, 0.0)), pt_key(&pt(0.0, 0.0)));
+        assert_ne!(pt_key(&pt(0.0006, 0.0)), pt_key(&pt(0.0, 0.0)));
+        assert_ne!(pt_key(&pt(0.0, 0.001)), pt_key(&pt(0.0, 0.0)));
+    }
+
+    #[test]
     fn junction_gates_connectivity_but_off_points_do_not() {
         // D5.3: a pin tapping a wire mid-span where a junction sits is
         // connected. D5.4: buses no longer gate, so a point that is only on a
