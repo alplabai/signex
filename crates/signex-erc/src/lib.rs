@@ -100,6 +100,25 @@ impl RuleKind {
         }
     }
 
+    /// `true` for a rule whose findings carry their own per-finding severity
+    /// from another table (the pin connection matrix), so its row can only be
+    /// switched on or off: a row-level severity would flatten every cell's
+    /// verdict. [`apply_overrides`] honours only `Off` for such a rule.
+    pub fn is_on_off_only(self) -> bool {
+        matches!(self, RuleKind::PinTypeConflict)
+    }
+
+    /// The override to store when the user picks `chosen` on this rule's row:
+    /// verbatim, except an [`RuleKind::is_on_off_only`] rule keeps only the
+    /// on/off choice (any "on" level becomes the rule's default severity).
+    pub fn normalize_override(self, chosen: Severity) -> Severity {
+        if self.is_on_off_only() && chosen != Severity::Off {
+            self.default_severity()
+        } else {
+            chosen
+        }
+    }
+
     /// Every built-in rule, in the order the ERC dialog lists them.
     pub const ALL: [RuleKind; 14] = [
         RuleKind::UnusedPin,
