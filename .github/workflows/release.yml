@@ -281,6 +281,7 @@ jobs:
   package-windows:
     name: Package + sign (windows ${{ matrix.arch }})
     needs: [version, build]
+    if: ${{ !cancelled() && needs.version.result == 'success' && needs.build.result == 'success' }}
     runs-on: windows-latest
     permissions:
       contents: read
@@ -412,6 +413,7 @@ jobs:
   package-macos:
     name: Package + sign (macOS)
     needs: [version, build]
+    if: ${{ !cancelled() && needs.version.result == 'success' && needs.build.result == 'success' }}
     runs-on: macos-14
     permissions:
       contents: read
@@ -556,7 +558,7 @@ jobs:
   release:
     name: Create Release
     needs: [build, package-windows, package-macos]
-    if: github.event_name == 'push'
+    if: ${{ !cancelled() && github.event_name == 'push' && needs.build.result == 'success' && needs.package-windows.result == 'success' && needs.package-macos.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
