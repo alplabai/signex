@@ -19,7 +19,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use super::reference_policy::{
-    Share, is_walk_refused, path_is_refused, share_of, trust_real_shares,
+    Share, is_path_refused, is_walk_refused, share_of, trust_real_shares,
 };
 use super::scope::{CaseFold, KeyMap, ReachSets, path_key_with};
 use super::sheet_read::{WalkLimits, read_child_refs};
@@ -193,12 +193,6 @@ fn join_tail(mut base: PathBuf, tail: Vec<&std::ffi::OsStr>, fold: bool) -> Path
         }
     }
     base
-}
-
-/// True when `path`, or what it normalises to, names a device or an untrusted
-/// network share. The one rule roots, extra, loaded and child paths all use.
-fn is_path_refused(path: &Path, trusted: &[Share]) -> bool {
-    path_is_refused(path, trusted) || path_is_refused(&normalize_clamped(path), trusted)
 }
 
 /// Record and return the ownership key of `path`.
@@ -1242,6 +1236,50 @@ mod tests {
 
         assert!(resolved.unreadable.is_empty(), "{:?}", resolved.unreadable);
         assert_eq!(resolved.disk.len(), 1, "{:?}", resolved.disk.keys());
+    }
+
+    /// A project dir spelled locally (a symlink here, a mapped drive in the
+    /// wild) whose real path is on a share: only `project_dirs` can make the
+    /// share trusted, so the same walk without it must refuse the root.
+    #[cfg(windows)]
+    #[test]
+    fn project_dirs_make_the_real_share_of_a_local_spelling_trusted_on_windows() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let real = tmp.path().join("real");
+        std::fs::create_dir_all(&real).expect("mkdir");
+        write_sheet(&real.join("x.snxsch"), &[]);
+        let text = real.to_string_lossy().into_owned();
+        let (drive, rest) = text.split_at(2);
+        let unc_dir = PathBuf::from(format!(r"\\localhost\{}${rest}", &drive[..1]));
+        if std::fs::metadata(&unc_dir).is_err() {
+            eprintln!("skipped: no administrative share for {unc_dir:?}");
+            return;
+        }
+        let link = tmp.path().join("link");
+        if std::os::windows::fs::symlink_dir(&unc_dir, &link).is_err() {
+            eprintln!("skipped: cannot create a directory symlink");
+            return;
+        }
+        let root = unc_dir.join("x.snxsch");
+        let inputs = |project_dirs: Vec<PathBuf>| SheetRefInputs {
+            loaded: HashMap::new(),
+            roots: vec![root.clone()],
+            projects: Vec::new(),
+            extra: Vec::new(),
+            trusted: Vec::new(),
+            project_dirs,
+        };
+
+        let without = inputs(Vec::new()).resolve(|_| true);
+        assert!(
+            !without.unreadable.is_empty(),
+            "refused without project_dirs"
+        );
+        assert!(without.disk.is_empty());
+
+        let with = inputs(vec![link]).resolve(|_| true);
+        assert!(with.unreadable.is_empty(), "{:?}", with.unreadable);
+        assert_eq!(with.disk.len(), 1, "{:?}", with.disk.keys());
     }
 
     #[cfg(windows)]

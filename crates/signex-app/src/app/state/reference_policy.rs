@@ -15,7 +15,13 @@
 
 use std::path::{Path, PathBuf};
 
-/// A UNC server and share, compared without case.
+use crate::app::project_sheets::normalize_clamped;
+
+/// A UNC server and share, compared without ASCII case.
+///
+/// Only ASCII letters fold: SMB name matching is not Unicode-case-insensitive,
+/// so U+212A KELVIN SIGN must stay distinct from `k` (Windows would contact a
+/// different host). A non-ASCII name therefore matches only the same spelling.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct Share {
     server: String,
@@ -42,7 +48,7 @@ fn is_backslash(c: char) -> bool {
     c == '\\'
 }
 
-/// The server and share named by the leading segments of `rest`, lowercased.
+/// The server and share named by the leading segments of `rest`, ASCII-lowercased.
 ///
 /// `strict` is the verbatim `\\?\UNC\` form: Windows does not rewrite `/` there,
 /// so only `\` separates segments, an empty segment is not skipped, and a
@@ -53,8 +59,8 @@ fn share_from(rest: &str, strict: bool) -> Option<Share> {
     let share = |server: &str, share: &str| {
         let ok = |s: &str| !s.is_empty() && !s.contains('/');
         (ok(server) && ok(share)).then(|| Share {
-            server: server.to_lowercase(),
-            share: share.to_lowercase(),
+            server: server.to_ascii_lowercase(),
+            share: share.to_ascii_lowercase(),
         })
     };
     if strict {
@@ -158,6 +164,12 @@ pub(crate) fn path_is_refused(path: &Path, trusted: &[Share]) -> bool {
     is_refused(&path.to_string_lossy(), trusted)
 }
 
+/// True when `path`, or what it normalises to, names a device or an untrusted
+/// network share. The one rule roots, extra, loaded and child paths all use.
+pub(crate) fn is_path_refused(path: &Path, trusted: &[Share]) -> bool {
+    path_is_refused(path, trusted) || path_is_refused(&normalize_clamped(path), trusted)
+}
+
 /// Add the share of each project directory's real (canonical) spelling to
 /// `trusted`. A project opened through a mapped drive, DFS or a symlink to a
 /// share is spelled locally, but its children resolve to `\\?\UNC\srv\share`;
@@ -169,7 +181,7 @@ pub(crate) fn trust_real_shares(
     canonical: impl Fn(&Path) -> Option<PathBuf>,
 ) {
     let seed = trusted.clone();
-    for dir in dirs.iter().filter(|d| !path_is_refused(d, &seed)) {
+    for dir in dirs.iter().filter(|d| !is_path_refused(d, &seed)) {
         if let Some(share) = canonical(dir).and_then(|real| share_of(&real))
             && !trusted.contains(&share)
         {
@@ -344,6 +356,40 @@ mod tests {
         ] {
             assert!(!is_refused(reference, &trusted), "{reference}");
         }
+    }
+
+    #[test]
+    fn a_unicode_look_alike_server_or_share_is_never_the_trusted_name() {
+        let trusted = trusting(r"\\desktop\c$\proj\p.snxprj");
+
+        for reference in [
+            // U+212A KELVIN SIGN lowercases to ASCII `k`.
+            "\\\\DES\u{212A}TOP\\c$\\x",
+            "\\\\des\u{212A}top\\c$\\x",
+            "\\\\?\\UNC\\DES\u{212A}TOP\\c$\\x",
+            "//DES\u{212A}TOP/c$/x",
+            // U+212B ANGSTROM SIGN lowercases to U+00E5, not an ASCII letter.
+            "\\\\desktop\\c\u{212B}$\\x",
+        ] {
+            assert!(is_refused(reference, &trusted), "{reference}");
+        }
+        // Plain ASCII case variants are still the trusted share.
+        for reference in [
+            r"\\DESKTOP\C$\x",
+            r"\\Desktop\c$\x",
+            r"\\?\UNC\DeskTop\C$\x",
+        ] {
+            assert!(!is_refused(reference, &trusted), "{reference}");
+        }
+    }
+
+    #[test]
+    fn a_non_ascii_share_matches_only_its_own_exact_spelling() {
+        let trusted = trusting("\\\\srv\\caf\u{e9}\\p.snxprj");
+
+        assert!(!is_refused("\\\\SRV\\caf\u{e9}\\x", &trusted));
+        assert!(is_refused("\\\\srv\\caf\u{c9}\\x", &trusted));
+        assert!(is_refused("\\\\srv\\cafe\\x", &trusted));
     }
 
     #[test]
