@@ -94,12 +94,22 @@ pub const SNXPCB_FORMAT_V1: &str = "snxpcb/1.1";
 // Error type
 // ---------------------------------------------------------------------------
 
+fn parse_finite<T: serde::de::DeserializeOwned>(input: &str) -> Result<T, FormatError> {
+    use crate::numeric::{TomlFiniteError, parse_toml_finite};
+    parse_toml_finite(input).map_err(|e| match e {
+        TomlFiniteError::Toml(e) => FormatError::TomlDeserialize(e),
+        TomlFiniteError::NonFinite { path } => FormatError::NonFiniteNumber { path },
+    })
+}
+
 #[derive(Debug, Error)]
 pub enum FormatError {
     #[error("toml serialisation failed: {0}")]
     TomlSerialize(#[from] toml::ser::Error),
     #[error("toml deserialisation failed: {0}")]
     TomlDeserialize(#[from] toml::de::Error),
+    #[error("non-finite number (nan/inf) at `{path}`; fix the value to open this file")]
+    NonFiniteNumber { path: String },
     #[error(
         "unsupported format version {found:?}: this build reads {expected:?} \
          (same major version, any minor)"
@@ -377,7 +387,7 @@ impl SnxSchematic {
     pub fn parse(input: &str) -> Result<Self, FormatError> {
         // Stage 1: deserialise the document into the raw envelope —
         // manifest header + bulk blocks + extras.
-        let raw: SchRaw = toml::from_str(input)?;
+        let raw: SchRaw = parse_finite(input)?;
 
         version::check(&raw.format, SNXSCH_FORMAT_V1)?;
 
@@ -706,7 +716,7 @@ impl SnxPcb {
 
     /// Parse a TOML+TSV string from disk.
     pub fn parse(input: &str) -> Result<Self, FormatError> {
-        let raw: PcbRaw = toml::from_str(input)?;
+        let raw: PcbRaw = parse_finite(input)?;
 
         version::check(&raw.format, SNXPCB_FORMAT_V1)?;
 

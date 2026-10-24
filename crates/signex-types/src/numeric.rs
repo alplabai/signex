@@ -28,6 +28,60 @@ pub fn parse_finite_f64(text: &str) -> Result<f64, FiniteParseError> {
     }
 }
 
+/// Why [`parse_toml_finite`] refused a document.
+#[derive(Debug, Error)]
+pub enum TomlFiniteError {
+    /// The text is not valid TOML for the target type.
+    #[error(transparent)]
+    Toml(#[from] toml::de::Error),
+    /// TOML accepts `nan` / `inf`; a document carrying one could be opened
+    /// but never saved (writers refuse non-finite numbers), so loading it
+    /// is refused. `path` names the offending key (`extras.pcb.keepout[2].x`).
+    #[error("non-finite number (nan/inf) at `{path}`")]
+    NonFinite { path: String },
+}
+
+/// Key path of the first `nan` / `inf` float in `value`, if any.
+pub fn first_non_finite_toml_path(value: &toml::Value) -> Option<String> {
+    fn walk(v: &toml::Value, path: &mut String) -> bool {
+        match v {
+            toml::Value::Float(f) => !f.is_finite(),
+            toml::Value::Array(items) => items.iter().enumerate().any(|(i, item)| {
+                let len = path.len();
+                path.push_str(&format!("[{i}]"));
+                walk(item, path) || {
+                    path.truncate(len);
+                    false
+                }
+            }),
+            toml::Value::Table(table) => table.iter().any(|(k, item)| {
+                let len = path.len();
+                if !path.is_empty() {
+                    path.push('.');
+                }
+                path.push_str(k);
+                walk(item, path) || {
+                    path.truncate(len);
+                    false
+                }
+            }),
+            _ => false,
+        }
+    }
+    let mut path = String::new();
+    walk(value, &mut path).then_some(path)
+}
+
+/// `toml::from_str`, but a `nan` / `inf` anywhere in the document is an
+/// error naming its key path instead of a file that cannot be saved.
+pub fn parse_toml_finite<T: serde::de::DeserializeOwned>(text: &str) -> Result<T, TomlFiniteError> {
+    let value: toml::Value = toml::from_str(text)?;
+    if let Some(path) = first_non_finite_toml_path(&value) {
+        return Err(TomlFiniteError::NonFinite { path });
+    }
+    Ok(value.try_into()?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
