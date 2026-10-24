@@ -81,6 +81,21 @@ pub struct ExportContext {
     /// sheet counts once. The BOM multiplies a sheet's parts by this; the
     /// netlist ignores it, since its topology is already per-occurrence.
     pub netlist_sheet_placements: Vec<usize>,
+    /// File of the sheet the user is looking at, for [`PageRange::Current`].
+    /// Keyed by path rather than index so it survives the app filtering
+    /// `sheets` down to the files ticked in the export dialog. `None`, or a
+    /// path no longer in `sheets`, resolves to the first sheet.
+    pub current_sheet: Option<PathBuf>,
+}
+
+impl ExportContext {
+    /// Zero-based index into [`Self::sheets`] that "Current page" prints.
+    pub fn current_sheet_index(&self) -> usize {
+        self.current_sheet
+            .as_ref()
+            .and_then(|path| self.sheets.iter().position(|s| &s.path == path))
+            .unwrap_or(0)
+    }
 }
 
 #[derive(Debug, Clone)]

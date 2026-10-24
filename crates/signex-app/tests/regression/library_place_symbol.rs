@@ -603,6 +603,7 @@ fn a_library_power_port_places_as_a_power_port() {
         netlist: None,
         netlist_sheet_placements: Vec::new(),
         netlist_sheets: Vec::new(),
+        current_sheet: None,
     };
     let table = signex_output::bom::rollup(&ctx, &Default::default());
     assert!(table.rows.is_empty(), "power ports stay out of the BOM");
