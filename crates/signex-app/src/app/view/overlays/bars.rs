@@ -745,6 +745,7 @@ mod tests {
     /// blocking predicate reads, which is all these tests care about.
     fn blank_preview() -> PreviewState {
         PreviewState {
+            source: std::path::PathBuf::new(),
             pages: Vec::new(),
             page_handles: Vec::new(),
             selected: 0,

@@ -35,6 +35,9 @@
 #[path = "regression/close_support.rs"]
 mod close_support;
 
+#[path = "regression/settle_support.rs"]
+mod settle_support;
+
 #[path = "regression/project.rs"]
 mod project;
 
@@ -153,6 +156,8 @@ mod idle_cursor_move;
 mod library_dangling_refs;
 #[path = "regression/library_delete_undo.rs"]
 mod library_delete_undo;
+#[path = "regression/newer_minor_read_only.rs"]
+mod newer_minor_read_only;
 #[path = "regression/primitive_container_merge.rs"]
 mod primitive_container_merge;
 #[path = "regression/primitive_save_cascade.rs"]

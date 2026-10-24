@@ -37,8 +37,11 @@ pub(crate) type IgnoresCase = fn(&Path) -> bool;
 trait CaseFs {
     /// A bounded sample of the entry names directly inside `dir`.
     fn entry_names(&self, dir: &Path) -> Vec<OsString>;
-    /// True when `a` and `b` both exist and are the same filesystem object.
-    fn is_same_entry(&self, a: &Path, b: &Path) -> bool;
+    /// Whether `b` names the same filesystem object as the real entry `a`.
+    /// `Err` carries why `a` itself could not be stat'ed (deleted since the
+    /// listing, permission denied): that says nothing about case, so it must
+    /// not read as "different entry". A missing `b` is a plain `Ok(false)`.
+    fn is_same_entry(&self, a: &Path, b: &Path) -> Result<bool, String>;
     /// `dir`'s parent when it exists and is on the same volume as `dir`.
     fn parent_on_same_volume(&self, dir: &Path) -> Option<PathBuf>;
 }
@@ -61,21 +64,20 @@ impl CaseFs for RealFs {
             .unwrap_or_default()
     }
 
-    fn is_same_entry(&self, a: &Path, b: &Path) -> bool {
+    fn is_same_entry(&self, a: &Path, b: &Path) -> Result<bool, String> {
         #[cfg(unix)]
         {
             use std::os::unix::fs::MetadataExt;
-            match (std::fs::symlink_metadata(a), std::fs::symlink_metadata(b)) {
-                (Ok(a), Ok(b)) => a.dev() == b.dev() && a.ino() == b.ino(),
-                _ => false,
-            }
+            let a = std::fs::symlink_metadata(a).map_err(|e| format!("stat failed: {e}"))?;
+            Ok(
+                std::fs::symlink_metadata(b)
+                    .is_ok_and(|b| a.dev() == b.dev() && a.ino() == b.ino()),
+            )
         }
         #[cfg(not(unix))]
         {
-            match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
-                (Ok(a), Ok(b)) => a == b,
-                _ => false,
-            }
+            let a = std::fs::canonicalize(a).map_err(|e| format!("stat failed: {e}"))?;
+            Ok(std::fs::canonicalize(b).is_ok_and(|b| a == b))
         }
     }
 
@@ -104,24 +106,30 @@ pub(crate) fn directory_ignores_case(dir: &Path) -> bool {
 /// [`directory_ignores_case`] without the safe-side fallback: `None` when the
 /// volume could not be asked (a missing, unreadable or lettered-entry-free
 /// directory with no usable ancestor), so a caller can tell the user instead
-/// of silently guessing (#694).
-pub(crate) fn probe_directory_case(dir: &Path) -> Option<bool> {
+/// of silently guessing (#694). `Err` is an undecided answer with a reason
+/// (the real entry could not be stat'ed), so the warning can say why.
+pub(crate) fn probe_directory_case(dir: &Path) -> Result<Option<bool>, String> {
     probe_tri_with(&RealFs, dir)
 }
 
 fn probe_with(fs: &impl CaseFs, dir: &Path) -> bool {
-    probe_tri_with(fs, dir).unwrap_or(true)
+    probe_tri_with(fs, dir).ok().flatten().unwrap_or(true)
 }
 
-fn probe_tri_with(fs: &impl CaseFs, dir: &Path) -> Option<bool> {
+fn probe_tri_with(fs: &impl CaseFs, dir: &Path) -> Result<Option<bool>, String> {
     let mut current = dir.to_path_buf();
     loop {
         for name in fs.entry_names(&current) {
             if let Some(flipped) = flip_ascii_case(&name) {
-                return Some(fs.is_same_entry(&current.join(&name), &current.join(flipped)));
+                return fs
+                    .is_same_entry(&current.join(&name), &current.join(flipped))
+                    .map(Some);
             }
         }
-        current = fs.parent_on_same_volume(&current)?;
+        match fs.parent_on_same_volume(&current) {
+            Some(parent) => current = parent,
+            None => return Ok(None),
+        }
     }
 }
 
@@ -185,6 +193,8 @@ mod tests {
         sensitive: bool,
         entries: Vec<&'static str>,
         parent_on_same_volume: bool,
+        /// Every stat of an entry here fails, as on an unreadable share.
+        stat_fails: bool,
     }
 
     impl FakeFs {
@@ -201,8 +211,14 @@ mod tests {
                     sensitive,
                     entries: entries.to_vec(),
                     parent_on_same_volume,
+                    stat_fails: false,
                 },
             );
+            self
+        }
+
+        fn with_failing_stat(mut self, path: &str) -> Self {
+            self.dirs.get_mut(Path::new(path)).unwrap().stat_fails = true;
             self
         }
     }
@@ -216,13 +232,16 @@ mod tests {
 
         /// Looked up in the directory that holds `a`: a case-sensitive one
         /// needs the exact name, an insensitive one folds ASCII case.
-        fn is_same_entry(&self, a: &Path, b: &Path) -> bool {
+        fn is_same_entry(&self, a: &Path, b: &Path) -> Result<bool, String> {
             let Some(dir) = a.parent().and_then(|p| self.dirs.get(p)) else {
-                return false;
+                return Err("stat failed: no such directory".to_string());
             };
             let (a, b) = (a.file_name().unwrap(), b.file_name().unwrap());
+            if dir.stat_fails {
+                return Err("stat failed: Permission denied (os error 13)".to_string());
+            }
             let a_exists = dir.entries.iter().any(|e| OsStr::new(e) == a);
-            a_exists && (a == b || (!dir.sensitive && a.eq_ignore_ascii_case(b)))
+            Ok(a_exists && (a == b || (!dir.sensitive && a.eq_ignore_ascii_case(b))))
         }
 
         fn parent_on_same_volume(&self, dir: &Path) -> Option<PathBuf> {
@@ -303,15 +322,37 @@ mod tests {
         let sensitive = FakeFs::default().dir("/cs", true, &["Top.snxsch"], false);
         let undecidable = FakeFs::default().dir("/none", true, &["123"], false);
 
-        assert_eq!(probe_tri_with(&insensitive, Path::new("/ci")), Some(true));
-        assert_eq!(probe_tri_with(&sensitive, Path::new("/cs")), Some(false));
-        assert_eq!(probe_tri_with(&undecidable, Path::new("/none")), None);
+        assert_eq!(
+            probe_tri_with(&insensitive, Path::new("/ci")),
+            Ok(Some(true))
+        );
+        assert_eq!(
+            probe_tri_with(&sensitive, Path::new("/cs")),
+            Ok(Some(false))
+        );
+        assert_eq!(probe_tri_with(&undecidable, Path::new("/none")), Ok(None));
         assert_eq!(
             probe_tri_with(&FakeFs::default(), Path::new("/absent")),
-            None
+            Ok(None)
         );
         // The bool wrapper keeps folding "undecidable" into "ignores case".
         assert!(probe_with(&undecidable, Path::new("/none")));
+    }
+
+    #[test]
+    fn a_failing_stat_of_the_real_entry_is_undecided_not_case_sensitive() {
+        // `/share` ignores case, but its entry cannot be stat'ed (deleted
+        // since the listing, permission denied): the old `false` read as a
+        // confident "case-sensitive" and folded wrongly (#970).
+        let fs = FakeFs::default()
+            .dir("/share", false, &["Top.snxsch"], false)
+            .with_failing_stat("/share");
+
+        let reason = probe_tri_with(&fs, Path::new("/share")).expect_err("undecided");
+
+        assert!(reason.contains("Permission denied"), "{reason}");
+        // The bool wrapper stays on the data-loss-safe side.
+        assert!(probe_with(&fs, Path::new("/share")));
     }
 
     #[test]
