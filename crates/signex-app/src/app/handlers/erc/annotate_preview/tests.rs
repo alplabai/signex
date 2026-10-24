@@ -290,3 +290,101 @@ fn toggling_a_lock_rederives_the_rows_without_reloading() {
     assert!(app.begin_annotate_preview_load().is_none());
     std::fs::remove_dir_all(&dir).ok();
 }
+
+#[test]
+fn invalidating_drops_the_rows_so_lock_all_cannot_act_on_a_stale_list() {
+    let (mut app, dir) = fixture();
+    app.ui_state.annotate_dialog_open = true;
+    load_into_cache(&mut app);
+    assert!(!app.ui_state.annotate_preview.entries.is_empty());
+
+    app.invalidate_annotate_preview();
+
+    assert!(app.ui_state.annotate_preview.entries.is_empty());
+    assert!(app.annotate_preview_uuids().is_empty());
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn lock_all_waits_for_a_pending_reload() {
+    use crate::app::{AnnotateMsg, Message};
+    let (mut app, dir) = fixture();
+    app.ui_state.annotate_dialog_open = true;
+    let (generation, inputs) = app
+        .begin_annotate_preview_load()
+        .expect("first load must start");
+    assert!(app.annotate_preview_is_loading());
+
+    let _ = app.update(Message::Annotate(AnnotateMsg::SetAllLocked(true)));
+    assert!(
+        app.ui_state.annotate_locked.is_empty(),
+        "lock-all must not act on a list that is still loading"
+    );
+
+    app.handle_annotate_preview_loaded(generation, &Ok(super::load_preview_sheets(inputs)));
+    let _ = app.update(Message::Annotate(AnnotateMsg::SetAllLocked(true)));
+    assert!(!app.ui_state.annotate_locked.is_empty());
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn the_fingerprint_follows_the_declared_pages() {
+    let (mut app, dir) = fixture();
+    let before = super::fingerprint(&app.document_state);
+    let project = &mut app.document_state.projects[0];
+    let mut extra = project.data.sheets[0].clone();
+    extra.filename = "added.snxsch".to_string();
+    project.data.sheets.push(extra);
+    assert_ne!(before, super::fingerprint(&app.document_state));
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn a_failed_load_says_so_and_is_retried() {
+    let (mut app, dir) = fixture();
+    app.ui_state.annotate_dialog_open = true;
+    let (generation, _inputs) = app.begin_annotate_preview_load().expect("load");
+
+    app.handle_annotate_preview_loaded(generation, &Err("worker died".to_string()));
+
+    assert!(app.ui_state.annotate_preview.load_failed);
+    assert!(!app.ui_state.annotate_preview.loading);
+    assert!(
+        app.begin_annotate_preview_load().is_some(),
+        "a failed load must not be remembered as current"
+    );
+    assert!(
+        !app.ui_state.annotate_preview.load_failed,
+        "retry clears it"
+    );
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn resetting_duplicates_drops_the_cached_rows() {
+    let (mut app, dir) = fixture();
+    app.ui_state.annotate_dialog_open = true;
+    // Two parts holding the same designator on the open root sheet.
+    let root = dir.join("a_root.snxsch");
+    let engine = app.document_state.engines.get_mut(&root).expect("engine");
+    let mut document = engine.document().clone();
+    for sym in &mut document.symbols {
+        sym.reference = "R1".to_string();
+    }
+    let mut twin = document.symbols[0].clone();
+    twin.uuid = Uuid::new_v4();
+    document.symbols.push(twin);
+    engine
+        .execute(signex_engine::Command::ReplaceDocument { document })
+        .expect("replace");
+    load_into_cache(&mut app);
+    assert!(!app.ui_state.annotate_preview.entries.is_empty());
+
+    let _ = app.handle_reset_duplicate_designators();
+
+    assert!(
+        app.ui_state.annotate_preview.entries.is_empty(),
+        "the reset rewrites sheets, so the rows must be reloaded"
+    );
+    std::fs::remove_dir_all(&dir).ok();
+}

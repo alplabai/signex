@@ -160,3 +160,33 @@ pub fn write_zoom_step_percent_pref_at(path: &Path, percent: u8) {
         prefs.insert("zoom_step_percent".to_string(), serde_json::json!(percent));
     })
 }
+
+// ──────────────────────────────────────────────────────────────────────────
+// Annotate undo scope
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Read the "Annotate undo" preference. A missing or unknown value is the
+/// default, one step for the whole project.
+pub fn read_annotate_undo_pref() -> crate::annotate_undo::AnnotateUndo {
+    read_annotate_undo_pref_at(&prefs_path())
+}
+
+pub fn read_annotate_undo_pref_at(path: &Path) -> crate::annotate_undo::AnnotateUndo {
+    read_prefs_json(path)
+        .and_then(|json| json["annotate_undo"].as_str().map(str::to_string))
+        .map(|token| crate::annotate_undo::AnnotateUndo::from_token(&token))
+        .unwrap_or_default()
+}
+
+pub fn write_annotate_undo_pref(scope: crate::annotate_undo::AnnotateUndo) {
+    write_annotate_undo_pref_at(&prefs_path(), scope)
+}
+
+pub fn write_annotate_undo_pref_at(path: &Path, scope: crate::annotate_undo::AnnotateUndo) {
+    update_prefs_json(path, "annotate_undo", |prefs| {
+        prefs.insert(
+            "annotate_undo".to_string(),
+            serde_json::Value::String(scope.token().to_string()),
+        );
+    })
+}

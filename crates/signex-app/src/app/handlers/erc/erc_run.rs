@@ -68,6 +68,7 @@ impl Signex {
             project_dir: ds.active_document_project().map(|p| p.dir().to_path_buf()),
             overrides: self.ui_state.erc_severity_override.clone(),
             config: self.erc_config(),
+            fold: crate::app::state::project_case::fold_of(ds.active_document_project()),
         };
 
         self.ui_state.erc_run_generation += 1;
@@ -149,8 +150,11 @@ impl Signex {
             .and_then(|p| self.ui_state.erc_violations_by_path.get(p))
             .cloned()
             .unwrap_or_default();
+        // Only a point in THIS sheet's own coordinates may be drawn here; a
+        // child-space or unplaced one would land on empty canvas (#956).
         self.interaction_state.active_canvas_mut().erc_markers = violations
             .iter()
+            .filter(|v| v.location_space == signex_erc::LocationSpace::ThisSheet)
             .map(|v| crate::canvas::ErcMarker {
                 x: v.location.x,
                 y: v.location.y,
@@ -202,6 +206,7 @@ impl Signex {
                         world_x: v.location.x,
                         world_y: v.location.y,
                         select: v.primary,
+                        locatable: v.location_space == signex_erc::LocationSpace::ThisSheet,
                     });
                 }
             }
@@ -240,6 +245,11 @@ impl Signex {
         // rule kind — the engine command path operates on the active
         // engine, and even the non-mutating rules want the canvas to
         // scroll to the offending point.
+        if !target.locatable {
+            // No point on any open sheet to go to: report, don't pan.
+            self.ui_state.erc_focus_global_index = Some(clamped);
+            return Task::none();
+        }
         self.ensure_sheet_open_and_active(&target.sheet_path);
 
         match target.rule_kind {
@@ -277,6 +287,11 @@ impl Signex {
         }
         let clamped = index.min(entries.len() - 1);
         let target = entries[clamped].clone();
+
+        if !target.locatable {
+            self.ui_state.erc_focus_global_index = Some(clamped);
+            return Task::none();
+        }
 
         // Ensure the target sheet is open and active before focusing its point.
         self.ensure_sheet_open_and_active(&target.sheet_path);

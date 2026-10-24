@@ -38,6 +38,9 @@ pub struct AnnotatePreviewCache {
     fingerprint: Option<u64>,
     /// A load is in flight.
     pub loading: bool,
+    /// The newest load failed; the dialog says so instead of claiming there
+    /// is nothing to annotate.
+    pub load_failed: bool,
     /// The project's sheets, in the order the action walks them.
     sheets: Arc<Vec<(String, SchematicSheet)>>,
     /// Rows derived from `sheets` and the lock set - what the dialog renders.
@@ -57,6 +60,7 @@ pub(crate) struct AnnotatePreviewInputs {
     open: OpenSheets,
     pages: Vec<PathBuf>,
     root: Option<PathBuf>,
+    fold: crate::app::state::scope::CaseFold,
     active_path: Option<PathBuf>,
     active_doc: Option<SchematicSheet>,
     tab_titles: Vec<(PathBuf, String)>,
@@ -116,9 +120,12 @@ fn sheet_display_title(tab_titles: &[(PathBuf, String)], path: &Path) -> String 
 /// sheets from disk, so it only ever runs on a blocking thread.
 fn load_preview_sheets(inputs: AnnotatePreviewInputs) -> AnnotatePreviewLoad {
     let set = match &inputs.root {
-        Some(root) => {
-            project_sheets::assemble_project_sheets_from(&inputs.open, &inputs.pages, root)
-        }
+        Some(root) => project_sheets::assemble_project_sheets_from(
+            &inputs.open,
+            &inputs.pages,
+            root,
+            inputs.fold,
+        ),
         None => project_sheets::ProjectSheetSet::empty(),
     };
     let warnings = set
@@ -222,6 +229,8 @@ fn compute_entries(
 fn fingerprint(state: &crate::app::state::DocumentState) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     state.active_path.hash(&mut h);
+    // The declared pages decide which sheets the load covers.
+    crate::app::project_sheets::declared_pages(state).hash(&mut h);
     for tab in &state.tabs {
         (&tab.path, &tab.title).hash(&mut h);
     }
@@ -270,8 +279,20 @@ impl Signex {
 
     /// Forget the cached sheets so the next refresh reloads them (dialog
     /// opened, or the action just rewrote sheets - possibly on disk).
+    ///
+    /// The rows go too: All Off / lock-all act on the listed uuids, so stale
+    /// rows would leave symbols placed since the last load unlocked.
     pub(crate) fn invalidate_annotate_preview(&mut self) {
-        self.ui_state.annotate_preview.fingerprint = None;
+        let cache = &mut self.ui_state.annotate_preview;
+        cache.fingerprint = None;
+        cache.sheets = Arc::default();
+        cache.entries.clear();
+    }
+
+    /// The dialog is open and its rows are being reloaded - lock-all and Run
+    /// must wait, or they act on a list that no longer matches the project.
+    pub(crate) fn annotate_preview_is_loading(&self) -> bool {
+        self.ui_state.annotate_dialog_open && self.ui_state.annotate_preview.loading
     }
 
     /// Capture the load's inputs from live state (memory only, no IO).
@@ -284,6 +305,7 @@ impl Signex {
                 .active_path
                 .clone()
                 .map(|active| project_sheets::resolve_netlist_root(ds).unwrap_or(active)),
+            fold: crate::app::state::project_case::fold_of(ds.active_document_project()),
             active_path: ds.active_path.clone(),
             active_doc: ds.active_engine().map(|e| e.document().clone()),
             tab_titles: ds
@@ -309,6 +331,7 @@ impl Signex {
         cache.generation += 1;
         cache.fingerprint = Some(fp);
         cache.loading = true;
+        cache.load_failed = false;
         Some((cache.generation, inputs))
     }
 
@@ -350,7 +373,15 @@ impl Signex {
                 self.ui_state.annotate_preview.sheets = Arc::new(load.sheets.clone());
                 self.recompute_annotate_entries();
             }
-            Err(why) => crate::diagnostics::log_warning(why),
+            Err(why) => {
+                crate::diagnostics::log_warning(format!("Annotate preview failed: {why}"));
+                // Not remembered as loaded: the next refresh retries.
+                let cache = &mut self.ui_state.annotate_preview;
+                cache.fingerprint = None;
+                cache.load_failed = true;
+                cache.sheets = Arc::default();
+                cache.entries.clear();
+            }
         }
     }
 

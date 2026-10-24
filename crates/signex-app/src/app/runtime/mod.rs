@@ -69,6 +69,7 @@ impl Signex {
     pub(crate) fn finish_update(&mut self) -> Task<Message> {
         self.sync_panel_ctx_mirrors();
         self.sync_diagnostics_panel_ctx();
+        self.refresh_command_palette_if_stale();
 
         // Re-resolve the History panel's active path; on change, bump
         // the generation counter and kick off an async load. Stale

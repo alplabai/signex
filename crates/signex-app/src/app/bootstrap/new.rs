@@ -84,6 +84,7 @@ impl Signex {
         let symbol_grid_style = crate::fonts::read_symbol_grid_style_pref();
         let symbol_pin_selection = crate::fonts::read_symbol_pin_selection_pref();
         let zoom_step_percent = crate::fonts::read_zoom_step_percent_pref();
+        let annotate_undo = crate::fonts::read_annotate_undo_pref();
         // Default to the 50-mil Altium grid; user-set value overrides
         // through the prefs file (UX §1.5 — last-used grid persists).
         let grid_size_mm =
@@ -226,6 +227,8 @@ impl Signex {
                 preferences_draft_pcb_gpu_render: pcb_gpu_render,
                 zoom_step_percent,
                 preferences_draft_zoom_step_percent: zoom_step_percent,
+                annotate_undo,
+                preferences_draft_annotate_undo: annotate_undo,
                 symbol_grid_size_mm,
                 preferences_draft_symbol_grid_size_mm: symbol_grid_size_mm,
                 symbol_grid_style,
@@ -309,6 +312,8 @@ impl Signex {
                 active_project: None,
                 dirty_paths: std::collections::HashSet::new(),
                 next_project_id: 0,
+                next_undo_group: 0,
+                undo_groups: std::collections::HashMap::new(),
                 panel_ctx: crate::panels::PanelContext {
                     projects: Vec::new(),
                     sym_count: 0,
@@ -365,6 +370,8 @@ impl Signex {
                     child_sheet_border_advanced_open: false,
                     child_sheet_fill_advanced_open: false,
                     child_sheet_stroke_width_buf: None,
+                    child_sheet_name_buf: None,
+                    child_sheet_file_buf: None,
                     component_filter: initial_component_filter,
                     collapsed_sections: std::collections::HashSet::new(),
                     pre_placement: None,
@@ -470,6 +477,9 @@ impl Signex {
         // section is populated from the get-go.
         app.library.global_libraries =
             crate::panels::components_panel::global_prefs::load_and_mount_all(&mut app.library);
+        // #328 — the bundled stock library is mounted every launch, not
+        // user-configured; a missing one warns and leaves the section empty.
+        crate::panels::components_panel::stock::mount_stock(&mut app.library);
         // #630 — seed the two render surfaces that consume a grid style
         // from the saved preferences. Everything else the old
         // `render_config` global carried (canvas font/size/style) had no

@@ -26,6 +26,8 @@ pub(super) struct ErcRunInputs {
     pub project_dir: Option<PathBuf>,
     pub overrides: HashMap<signex_erc::RuleKind, signex_erc::Severity>,
     pub config: signex_erc::ErcConfig,
+    /// The owning project's key rules, chosen once by whoever picked the project.
+    pub fold: crate::app::state::scope::CaseFold,
 }
 
 /// What the job found. Messages are replayed to the Messages panel by the
@@ -56,9 +58,12 @@ pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
     // The project itself, from the one assembler the export and the cached
     // canvas netlist also use (#406).
     let project_set = match &inputs.root {
-        Some(root) => {
-            project_sheets::assemble_project_sheets_from(&inputs.open, &inputs.pages, root)
-        }
+        Some(root) => project_sheets::assemble_project_sheets_from(
+            &inputs.open,
+            &inputs.pages,
+            root,
+            inputs.fold,
+        ),
         None => project_sheets::ProjectSheetSet::empty(),
     };
     for (path, why) in &project_set.unreadable {
@@ -71,7 +76,9 @@ pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
             .and_then(|r| r.parent().map(PathBuf::from))
     });
     // `None` root: ERC reports on every sheet regardless of reachability.
-    let graph = project_sheets::project_graph(&project_set.sheets, base_dir.as_deref(), None);
+    let fold = project_set.fold;
+    let graph =
+        project_sheets::project_graph_with(&project_set.sheets, base_dir.as_deref(), None, fold);
     warnings.extend(
         graph
             .issues
@@ -87,7 +94,7 @@ pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
     let empty_resolved: HashMap<String, signex_net::SheetKey> = HashMap::new();
     let mut by_path: ViolationsByPath = HashMap::new();
     for (path, snapshot) in &snapshots {
-        let key = project_sheets::sheet_key(path, base_dir.as_deref());
+        let key = project_sheets::sheet_key_with(path, base_dir.as_deref(), fold);
         let resolved = graph.resolved.get(&key).unwrap_or(&empty_resolved);
         let raw = match dsl_eval_fns.as_ref() {
             Some(eval_fns) => signex_erc::run_with_project_dsl_and_config(
@@ -110,6 +117,8 @@ pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
         );
     }
 
+    refile_child_sheet_violations(&mut by_path);
+
     let total: usize = by_path.values().map(Vec::len).sum();
     infos.push(format!(
         "ERC: {total} total violations across {} sheet(s)",
@@ -119,6 +128,37 @@ pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
         by_path,
         warnings,
         infos,
+    }
+}
+
+/// Move every child-space violation (e.g. `BadHierSheetPin` on a child's
+/// hierarchical label) from the parent's list to the child sheet that owns the
+/// coordinate, so its marker and panel entry land on the right canvas (#956).
+/// A child that was not part of the run stays under the parent as a
+/// non-locatable entry: it is reported, never drawn at a foreign coordinate.
+fn refile_child_sheet_violations(by_path: &mut ViolationsByPath) {
+    let ran: std::collections::HashSet<std::path::PathBuf> = by_path.keys().cloned().collect();
+    let mut moved: Vec<(std::path::PathBuf, signex_erc::Violation)> = Vec::new();
+    for (parent, list) in by_path.iter_mut() {
+        let dir = parent.parent().unwrap_or_else(|| std::path::Path::new(""));
+        let (child_space, kept): (Vec<_>, Vec<_>) = std::mem::take(list)
+            .into_iter()
+            .partition(|v| v.location_space == signex_erc::LocationSpace::ChildSheet);
+        *list = kept;
+        for v in child_space {
+            let owner = v
+                .child_sheet
+                .as_deref()
+                .and_then(|name| crate::app::project_sheets::resolve_child_reference(dir, name))
+                .filter(|p| p != parent && ran.contains(p));
+            match owner {
+                Some(child) => moved.push((child, v.into_child_sheet_space())),
+                None => list.push(v),
+            }
+        }
+    }
+    for (child, v) in moved {
+        by_path.entry(child).or_default().push(v);
     }
 }
 

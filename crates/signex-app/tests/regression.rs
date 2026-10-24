@@ -35,6 +35,9 @@
 #[path = "regression/close_support.rs"]
 mod close_support;
 
+#[path = "regression/settle_support.rs"]
+mod settle_support;
+
 #[path = "regression/project.rs"]
 mod project;
 
@@ -43,6 +46,9 @@ mod bom_validation;
 
 #[path = "regression/pdf_page_setup.rs"]
 mod pdf_page_setup;
+
+#[path = "regression/annotate_undo_scope.rs"]
+mod annotate_undo_scope;
 
 #[path = "regression/prefs.rs"]
 mod prefs;
@@ -150,6 +156,8 @@ mod idle_cursor_move;
 mod library_delete_undo;
 #[path = "regression/primitive_container_merge.rs"]
 mod primitive_container_merge;
+#[path = "regression/primitive_save_cascade.rs"]
+mod primitive_save_cascade;
 #[path = "regression/reload_and_switch_state.rs"]
 mod reload_and_switch_state;
 #[path = "regression/save_as_by_document_kind.rs"]
@@ -159,6 +167,8 @@ mod stable_addressing;
 
 #[path = "regression/place_sheet_tool.rs"]
 mod place_sheet_tool;
+#[path = "regression/sheet_symbol_edit.rs"]
+mod sheet_symbol_edit;
 
 #[path = "regression/symbol_undo_steps.rs"]
 mod symbol_undo_steps;
@@ -178,3 +188,7 @@ mod no_erc_directive;
 
 #[path = "regression/click_click_move.rs"]
 mod click_click_move;
+
+// #925 — non-finite grid steps are refused into the Messages panel.
+#[path = "regression/grid_step_refusal.rs"]
+mod grid_step_refusal;

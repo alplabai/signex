@@ -1,7 +1,19 @@
 use super::*;
 
+/// What an engine command did to the active document.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CommandOutcome {
+    /// The document changed.
+    Changed,
+    /// The command ran and found nothing to change.
+    Unchanged,
+    /// The engine rejected the command (already logged) or there was no
+    /// active schematic to run it on.
+    Failed,
+}
+
 impl Signex {
-    fn render_invalidation_for_patch(
+    pub(super) fn render_invalidation_for_patch(
         patch: signex_engine::DocumentPatch,
     ) -> crate::schematic_runtime::RenderInvalidation {
         use crate::schematic_runtime::RenderInvalidation;
@@ -60,16 +72,29 @@ impl Signex {
         clear_overlay_cache: bool,
         update_selection_info: bool,
     ) -> bool {
+        self.apply_engine_commands_checked(commands, clear_overlay_cache, update_selection_info)
+            == CommandOutcome::Changed
+    }
+
+    /// [`Self::apply_engine_commands`] that says whether the batch changed
+    /// the document, left it as it was, or was rejected (and rolled back),
+    /// for callers that report on the outcome.
+    pub(crate) fn apply_engine_commands_checked(
+        &mut self,
+        commands: Vec<signex_engine::Command>,
+        clear_overlay_cache: bool,
+        update_selection_info: bool,
+    ) -> CommandOutcome {
         if commands.is_empty() {
-            return false;
+            return CommandOutcome::Unchanged;
         }
 
         let Some(engine) = self.document_state.active_engine_mut() else {
-            return false;
+            return CommandOutcome::Failed;
         };
 
         // One engine history entry for the whole batch, with the patches
-        // OR-ed together — the grouping the app's marker stack used to
+        // OR-ed together - the grouping the app's marker stack used to
         // encode, now owned by the engine that holds the history.
         let invalidation = match engine.execute_batch(commands) {
             Ok(result) => result
@@ -79,11 +104,16 @@ impl Signex {
             Err(error) => {
                 let error = anyhow::Error::new(error);
                 crate::diagnostics::log_error("Engine command execution failed", &error);
-                return false;
+                return CommandOutcome::Failed;
             }
         };
 
-        self.finish_schematic_mutation(invalidation, clear_overlay_cache, update_selection_info)
+        if self.finish_schematic_mutation(invalidation, clear_overlay_cache, update_selection_info)
+        {
+            CommandOutcome::Changed
+        } else {
+            CommandOutcome::Unchanged
+        }
     }
 
     pub(crate) fn apply_engine_command(
@@ -93,21 +123,38 @@ impl Signex {
         update_selection_info: bool,
     ) -> bool {
         self.apply_engine_command_checked(command, clear_overlay_cache, update_selection_info)
-            .0
+            == CommandOutcome::Changed
     }
 
-    /// [`Self::apply_engine_command`] that also says whether the engine
-    /// rejected the command, for callers that report on the outcome.
+    /// [`Self::apply_engine_command`] that says whether the command changed
+    /// the document, left it as it was, or was rejected, for callers that
+    /// report on the outcome.
     pub(crate) fn apply_engine_command_checked(
         &mut self,
         command: signex_engine::Command,
         clear_overlay_cache: bool,
         update_selection_info: bool,
-    ) -> (bool, bool) {
+    ) -> CommandOutcome {
+        self.apply_engine_command_reporting(command, clear_overlay_cache, update_selection_info)
+            .0
+    }
+
+    /// [`Self::apply_engine_command_checked`] that also hands back the
+    /// engine's refusal text, for callers that must show the user why an
+    /// edit did not happen. `None` means the engine accepted the command.
+    pub(crate) fn apply_engine_command_reporting(
+        &mut self,
+        command: signex_engine::Command,
+        clear_overlay_cache: bool,
+        update_selection_info: bool,
+    ) -> (CommandOutcome, Option<String>) {
         let Some(engine) = self.document_state.active_engine_mut() else {
-            return (false, true);
+            return (
+                CommandOutcome::Failed,
+                Some("There is no active schematic.".to_string()),
+            );
         };
-        let mut failed = false;
+        let mut failed = None;
 
         let invalidation = match engine.execute(command) {
             Ok(result) if result.changed => result
@@ -116,9 +163,9 @@ impl Signex {
                 .unwrap_or(crate::schematic_runtime::RenderInvalidation::NONE),
             Ok(_) => crate::schematic_runtime::RenderInvalidation::NONE,
             Err(error) => {
+                failed = Some(error.to_string());
                 let error = anyhow::Error::new(error);
                 crate::diagnostics::log_error("Engine command failed", &error);
-                failed = true;
                 crate::schematic_runtime::RenderInvalidation::NONE
             }
         };
@@ -128,7 +175,14 @@ impl Signex {
             clear_overlay_cache,
             update_selection_info,
         );
-        (changed, failed)
+        let outcome = if failed.is_some() {
+            CommandOutcome::Failed
+        } else if changed {
+            CommandOutcome::Changed
+        } else {
+            CommandOutcome::Unchanged
+        };
+        (outcome, failed)
     }
 
     /// Mark the active document as having unsaved edits, without running a
@@ -162,6 +216,17 @@ impl Signex {
     /// also makes the `Engine::can_undo` the Edit menu reads
     /// (`app/view/mod.rs`) agree with what Undo will actually do.
     pub(crate) fn apply_engine_undo(&mut self, update_selection_info: bool) -> bool {
+        if let Some(group) = self
+            .document_state
+            .active_engine()
+            .and_then(|engine| engine.next_undo_group())
+        {
+            return self.apply_grouped_step(
+                group,
+                super::undo_groups::StepDirection::Undo,
+                update_selection_info,
+            );
+        }
         let invalidation = if let Some(engine) = self.document_state.active_engine_mut() {
             match engine.undo() {
                 Ok(Some(patch_pair)) => Self::render_invalidation_for_patch(patch_pair.document),
@@ -182,6 +247,17 @@ impl Signex {
     /// Redo one step of the **active** engine's own history. Mirror of
     /// [`Signex::apply_engine_undo`].
     pub(crate) fn apply_engine_redo(&mut self, update_selection_info: bool) -> bool {
+        if let Some(group) = self
+            .document_state
+            .active_engine()
+            .and_then(|engine| engine.next_redo_group())
+        {
+            return self.apply_grouped_step(
+                group,
+                super::undo_groups::StepDirection::Redo,
+                update_selection_info,
+            );
+        }
         let invalidation = if let Some(engine) = self.document_state.active_engine_mut() {
             match engine.redo() {
                 Ok(Some(patch_pair)) => Self::render_invalidation_for_patch(patch_pair.document),
@@ -199,7 +275,7 @@ impl Signex {
         self.finish_schematic_mutation(invalidation, true, update_selection_info)
     }
 
-    fn finish_schematic_mutation(
+    pub(super) fn finish_schematic_mutation(
         &mut self,
         invalidation: crate::schematic_runtime::RenderInvalidation,
         clear_overlay_cache: bool,
@@ -292,24 +368,26 @@ impl Signex {
         // (#338): a child sheet in focus must not shrink the netlist to its
         // own subtree. A loose document (or a project with no declared root)
         // roots at the active sheet — see `resolve_netlist_root`.
+        let project = self.document_state.active_document_project();
+        let fold = crate::app::state::project_case::fold_of(project);
+        let project_dir = project.map(|p| p.dir().to_path_buf());
         let set = crate::app::project_sheets::assemble_project_sheets(
             &self.document_state,
             &[],
             &root_path,
+            fold,
         );
-        let project_dir = self
-            .document_state
-            .active_document_project()
-            .map(|p| p.dir().to_path_buf());
         let base_dir = project_dir
             .clone()
             .or_else(|| root_path.parent().map(std::path::PathBuf::from));
-        let graph = crate::app::project_sheets::project_graph(
+        let graph = crate::app::project_sheets::project_graph_with(
             &set.sheets,
             base_dir.as_deref(),
             Some(&root_path),
+            fold,
         );
-        let root_key = crate::app::project_sheets::sheet_key(&root_path, base_dir.as_deref());
+        let root_key =
+            crate::app::project_sheets::sheet_key_with(&root_path, base_dir.as_deref(), fold);
         if !graph.sheets.contains_key(&root_key) {
             // The root sheet is exempt from losing a SheetKey collision
             // (#536), so reaching here means it was never assembled at
@@ -394,6 +472,62 @@ mod tests {
                 "{bit:?} must not invalidate the netlist"
             );
         }
+    }
+
+    fn reconcile(filename: &str, port: &str) -> signex_engine::Command {
+        signex_engine::Command::ReconcileChildSheetPins {
+            child_filename: filename.to_string(),
+            ports: vec![signex_engine::SheetPort {
+                name: port.to_string(),
+                direction: "input".to_string(),
+            }],
+        }
+    }
+
+    #[test]
+    fn checked_command_tells_changed_from_unchanged_from_failed() {
+        use crate::app::handlers::menu::export::tests as fx;
+        // No active schematic: the command cannot run at all.
+        let (mut bare, _task) = Signex::new();
+        assert_eq!(
+            bare.apply_engine_command_checked(reconcile("child.snxsch", "A"), true, true),
+            CommandOutcome::Failed
+        );
+
+        let top = std::path::PathBuf::from("/w/gw/top.snxsch");
+        let mut app = fx::app_workspace("/w/gw", &["top.snxsch"]);
+        let mut sheet = fx::sheet_with_net("R_TOP", "TOP_NET", &["child.snxsch"]);
+        // A zero-sized symbol has no edge slot for the new pin, and the
+        // fixture's wire sits at the origin; give it room away from it.
+        sheet.child_sheets[0].position = signex_types::schematic::Point::new(100.0, 100.0);
+        sheet.child_sheets[0].size = (30.0, 30.0);
+        fx::open_with(&mut app.document_state, &top, sheet);
+        // A mutation only counts as changed once it reaches a tab's session.
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "top".to_string(),
+            path: top.clone(),
+            cached_document: None,
+            dirty: false,
+            project_id: None,
+            kind: crate::app::TabKind::Schematic,
+        });
+        app.document_state.active_tab = 0;
+        app.document_state.active_path = Some(top);
+
+        // A file no sheet symbol references: nothing to reconcile.
+        assert_eq!(
+            app.apply_engine_command_checked(reconcile("other.snxsch", "A"), true, true),
+            CommandOutcome::Unchanged
+        );
+        assert_eq!(
+            app.apply_engine_command_checked(reconcile("child.snxsch", "A"), true, true),
+            CommandOutcome::Changed
+        );
+        // The same port again is already in place.
+        assert_eq!(
+            app.apply_engine_command_checked(reconcile("child.snxsch", "A"), true, true),
+            CommandOutcome::Unchanged
+        );
     }
 
     /// The export fixture, on purpose: the whole point is that both paths

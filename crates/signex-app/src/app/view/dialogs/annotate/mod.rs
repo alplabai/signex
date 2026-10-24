@@ -401,6 +401,8 @@ impl Signex {
                 container(
                     text(if self.ui_state.annotate_preview.loading {
                         "Loading project sheets…"
+                    } else if self.ui_state.annotate_preview.load_failed {
+                        "Could not load the project's sheets - see the Messages panel."
                     } else {
                         "No symbols need annotation — every reference has a number."
                     })
@@ -542,7 +544,7 @@ impl Signex {
             Space::new().width(4),
             primary_button(
                 "Accept Changes",
-                if changes == 0 {
+                if changes == 0 || self.ui_state.annotate_preview.loading {
                     None
                 } else {
                     Some(Message::Annotate(AnnotateMsg::Run(

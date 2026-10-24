@@ -270,6 +270,9 @@ impl Signex {
         let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(preview.table.rows.len());
         for (visible_idx, &row_idx) in row_order.iter().enumerate() {
             let Some(r) = preview.table.rows.get(row_idx) else {
+                // `row_order` is rebuilt with `table` in `update`; a stale
+                // index means that pairing broke - fail loudly in dev.
+                debug_assert!(false, "stale BOM row_order index {row_idx}");
                 continue;
             };
             let alt_bg = if visible_idx % 2 == 0 {

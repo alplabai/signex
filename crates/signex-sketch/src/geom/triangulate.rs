@@ -224,7 +224,7 @@ pub fn ear_clip_with_holes(
     // Bridge the holes in descending rightmost-x order and clip the merged
     // ring with the degeneracy-tolerant clipper (see `holes`).
     let merged = super::holes::merge_holes(outer_pts, hole_pts);
-    let triangles = super::holes::clip_ears_tolerant(&merged);
+    let triangles = super::tolerant_clip::clip_ears_tolerant(&merged);
     (merged, triangles)
 }
 

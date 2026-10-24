@@ -84,6 +84,10 @@ impl Signex {
             ProjectMsg::CloseRefsResolved { project_id, result } => {
                 self.handle_close_refs_resolved(project_id, result)
             }
+            ProjectMsg::CaseProbed {
+                project_id,
+                outcome,
+            } => self.handle_case_probed(project_id, outcome),
             ProjectMsg::AppQuitConfirm(choice) => self.handle_app_quit_confirm(choice),
             ProjectMsg::CloseOptions => {
                 self.ui_state.project_options = None;
@@ -338,6 +342,14 @@ impl Signex {
     /// Annotate dialog family handler (namespaced, ADR-0001 D3).
     pub(crate) fn dispatch_annotate_message(&mut self, msg: AnnotateMsg) -> Task<Message> {
         match msg {
+            AnnotateMsg::Run(_) | AnnotateMsg::SetAllLocked(_)
+                if self.annotate_preview_is_loading() =>
+            {
+                // The dialog's rows are being reloaded; acting now would use
+                // a lock set built from a list that is out of date. The
+                // buttons are disabled meanwhile.
+                Task::none()
+            }
             AnnotateMsg::Run(mode) => {
                 // The action can rewrite unopened sheets on disk, which the
                 // in-memory fingerprint cannot see: force a reload.

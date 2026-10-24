@@ -361,6 +361,8 @@ impl Signex {
             .panel_ctx
             .child_sheet_stroke_width_buf
             .clone();
+        let child_sheet_name_buf = self.document_state.panel_ctx.child_sheet_name_buf.clone();
+        let child_sheet_file_buf = self.document_state.panel_ctx.child_sheet_file_buf.clone();
         let component_filter = self.document_state.panel_ctx.component_filter.clone();
         let collapsed_sections = self.document_state.panel_ctx.collapsed_sections.clone();
         let pre_placement = self.document_state.panel_ctx.pre_placement.clone();
@@ -483,6 +485,8 @@ impl Signex {
             child_sheet_border_advanced_open,
             child_sheet_fill_advanced_open,
             child_sheet_stroke_width_buf,
+            child_sheet_name_buf,
+            child_sheet_file_buf,
             component_filter,
             collapsed_sections,
             pre_placement,

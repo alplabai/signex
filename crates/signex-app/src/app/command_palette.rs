@@ -48,6 +48,29 @@ pub struct CommandPaletteState {
     pub results: Vec<CommandEntry>,
     /// How many catalog entries matched `query` (before the cap).
     pub total_matches: usize,
+    /// [`catalog_stamp`] when `results` was last built; a different stamp
+    /// means the symbols or files behind the rows changed under the open
+    /// palette.
+    pub catalog_stamp: u64,
+}
+
+/// Hash of the live inputs [`build_catalog`] reads that change while the
+/// palette is open: the placed symbols and each project's file list.
+pub fn catalog_stamp(app: &super::Signex) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    app.document_state.panel_ctx.placed_symbols.hash(&mut h);
+    for project in &app.document_state.projects {
+        let d = &project.data;
+        (&d.dir, &d.name, &d.schematic_root, &d.pcb_file).hash(&mut h);
+        for sheet in &d.sheets {
+            sheet.filename.hash(&mut h);
+        }
+        for lib in &d.libraries {
+            lib.path.hash(&mut h);
+        }
+    }
+    h.finish()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

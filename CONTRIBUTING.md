@@ -220,7 +220,12 @@ the importable ruleset is in [`.github/rulesets/`](.github/rulesets/). In short:
   `check · macos-latest`, `check · windows-latest`, `test · workspace`,
   `deny · licenses + deps`, `PR-description self-declaration`,
   `No GPL-tool-shaped names anywhere in crates/`, `fmt · rustfmt`,
-  `no god-files`, `no discarded tasks`, and `lint lockstep`. `clippy` runs inside the `check`
+  `no god-files`, `no discarded tasks`, and `lint lockstep`. The `deny` job
+  includes `cargo deny check bans`. `arch guard` (`scripts/check_arch_guard.sh`)
+  checks crate dependency edges against `scripts/arch-edges.txt` and keeps
+  domain crates off the UI/GPU stack; when it fires on an intended new edge,
+  add that line to the table (or run the script with `--generate`) in the same
+  PR. `clippy` runs inside the `check`
   job — a deny-by-default lint fails that job and therefore blocks; its
   warn-level output only annotates. The `cargo-deny` sources/advisories steps
   stay informational and don't block.

@@ -9,6 +9,8 @@
 //! the builder in its family's `all()`. Chain a new family into
 //! [`build_all`].
 
+pub mod connector;
+pub mod logic;
 pub mod passive;
 
 use std::error::Error;
@@ -173,7 +175,10 @@ pub struct RenderedSymbol {
 
 /// Every stock symbol, family by family.
 pub fn build_all() -> Vec<Symbol> {
-    passive::all()
+    let mut all = passive::all();
+    all.extend(connector::all());
+    all.extend(logic::all());
+    all
 }
 
 /// Render every stock symbol to `symbols/<name>.snxsym` text. Pure
