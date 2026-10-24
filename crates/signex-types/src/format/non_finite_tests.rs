@@ -243,6 +243,59 @@ fn a_non_finite_board_outline_point_in_extras_fails_the_save() {
     }
 }
 
+/// #828 -- the manifest, stackup and zones tables are serde-written like
+/// extras, so each needs the same finite guard before it reaches the file.
+#[test]
+fn a_non_finite_manifest_stackup_or_zone_number_fails_the_save() {
+    use crate::pcb::{PcbSetup, Zone};
+    let setup = |grid_size| PcbSetup {
+        grid_size,
+        clearance: 0.25,
+        trace_width: 0.2,
+        via_diameter: 0.6,
+        via_drill: 0.3,
+        track_min_width: 0.1,
+        via_min_diameter: 0.4,
+        via_min_drill: 0.2,
+    };
+    let zone = |min_thickness| Zone {
+        uuid: uuid::Uuid::nil(),
+        net: 0,
+        net_name: String::new(),
+        layer: "TopCopper".into(),
+        outline: Vec::new(),
+        holes: Vec::new(),
+        priority: 0,
+        fill_type: String::new(),
+        thermal_relief: false,
+        thermal_gap: 0.0,
+        thermal_width: 0.0,
+        clearance: 0.0,
+        min_thickness,
+        unknown: Default::default(),
+    };
+    for bad in [f64::NAN, f64::INFINITY] {
+        let mut manifest = super::tests::empty_board();
+        manifest.thickness = bad;
+        let mut stackup = super::tests::empty_board();
+        stackup.setup = Some(setup(bad));
+        let mut zones = super::tests::empty_board();
+        zones.zones.push(zone(bad));
+        for (what, board, key) in [
+            ("manifest", manifest, "thickness"),
+            ("stackup", stackup, "grid_size"),
+            ("zones", zones, "min_thickness"),
+        ] {
+            match SnxPcb::new(board).write_string() {
+                Err(FormatError::NonFiniteExtra { path }) => {
+                    assert!(path.ends_with(key), "{what} {bad}: path {path:?}");
+                }
+                other => panic!("{what} {bad}: expected NonFiniteExtra, got {other:?}"),
+            }
+        }
+    }
+}
+
 #[test]
 fn finite_extras_still_save() {
     use crate::schematic::{HAlign, Point, SchematicSheet, Symbol, TextProp, VAlign};

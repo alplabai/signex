@@ -267,6 +267,7 @@ impl SnxSchematic {
             root_sheet_page: self.sheet.root_sheet_page.clone(),
             unknown: self.sheet.unknown.manifest.clone(),
         };
+        finite_toml::ensure_finite(&manifest)?;
         out.push_str(&toml::to_string_pretty(&manifest)?);
         out.push('\n');
 
@@ -528,6 +529,7 @@ impl SnxPcb {
             thickness: self.board.thickness,
             unknown: self.board.unknown.manifest.clone(),
         };
+        finite_toml::ensure_finite(&manifest)?;
         out.push_str(&toml::to_string_pretty(&manifest)?);
         out.push('\n');
 
@@ -573,7 +575,9 @@ impl SnxPcb {
                 unknown: &self.board.unknown.nets,
             });
             out.push('\n');
-            out.push_str(&toml::to_string_pretty(&StackupWrapper { stackup, nets })?);
+            let wrapper = StackupWrapper { stackup, nets };
+            finite_toml::ensure_finite(&wrapper)?;
+            out.push_str(&toml::to_string_pretty(&wrapper)?);
         }
 
         // TSV blocks: footprints, pads, tracks, vias.
@@ -602,9 +606,11 @@ impl SnxPcb {
                 zones: &'a [Zone],
             }
             out.push('\n');
-            out.push_str(&toml::to_string_pretty(&ZonesWrapper {
+            let wrapper = ZonesWrapper {
                 zones: &self.board.zones,
-            })?);
+            };
+            finite_toml::ensure_finite(&wrapper)?;
+            out.push_str(&toml::to_string_pretty(&wrapper)?);
         }
 
         // Footprint extras / pad extras / board extras — wrap in a
