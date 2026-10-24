@@ -66,8 +66,7 @@ run_case external_non_ui_dep_is_fine pass \
 
 run_case app_may_use_iced pass \
   'signex-app -> signex-types' \
-  "[$TYPES, {\"name\": \"signex-app\", \"dependencies\": [$(dep signex-types), $(dep iced), $(dep wgpu)]}]" \
-  "domain crate 'signex-types' depends on 'wgpu'"
+  "[$TYPES, {\"name\": \"signex-app\", \"dependencies\": [$(dep signex-types), $(dep iced), $(dep wgpu)]}]"
 
 # --- positive controls: the gate must flag these ---------------------------
 
@@ -94,7 +93,8 @@ run_case domain_crate_on_iced_prefixed fail \
 
 run_case domain_crate_on_wgpu fail \
   '# no workspace edges' \
-  "[{\"name\": \"signex-types\", \"dependencies\": [$(dep wgpu)]}]"
+  "[{\"name\": \"signex-types\", \"dependencies\": [$(dep wgpu)]}]" \
+  "domain crate 'signex-types' depends on 'wgpu'"
 
 run_case domain_crate_on_widgets fail \
   'signex-library -> signex-widgets' \
