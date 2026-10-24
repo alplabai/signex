@@ -179,6 +179,10 @@ pub enum Command {
     /// nothing is mutated then. One undo step.
     ReplaceLibSymbol {
         lib_symbol: LibSymbol,
+        /// `(placed symbol uuid, library_version)` stamps applied in the
+        /// same undo step: the version is informational, the content is the
+        /// truth (#950).
+        library_versions: Vec<(uuid::Uuid, String)>,
     },
     /// Add a hierarchical sheet symbol. Rejected with
     /// [`EngineError::EmptyChildSheetFilename`] when `filename` is blank.

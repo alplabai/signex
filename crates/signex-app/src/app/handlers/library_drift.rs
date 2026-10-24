@@ -83,10 +83,27 @@ impl Signex {
                 (path.clone(), entries)
             })
             .collect();
+        let instances = self
+            .document_state
+            .engines
+            .iter()
+            .flat_map(|(path, engine)| {
+                engine.document().symbols.iter().filter_map(|s| {
+                    Some((
+                        path.clone(),
+                        s.uuid,
+                        s.lib_id.clone(),
+                        s.library_id?,
+                        s.row_id?,
+                    ))
+                })
+            })
+            .collect();
         Some(DriftJob {
             generation: self.library.drift.generation,
             sheets,
             libs,
+            instances,
         })
     }
 
@@ -121,6 +138,11 @@ impl Signex {
         }
         self.library.drift.drifted = drifted;
         self.library.drift.names = report.names;
+        self.library.drift.versions = report
+            .versions
+            .into_iter()
+            .map(|(sheet, symbol, version)| ((sheet, symbol), version))
+            .collect();
         self.update_selection_info();
         Task::none()
     }
@@ -151,8 +173,23 @@ impl Signex {
             ));
             return;
         };
+        let library_versions = self
+            .document_state
+            .active_engine()
+            .map(|e| e.document().symbols.iter())
+            .into_iter()
+            .flatten()
+            .filter(|s| s.lib_id == lib_id)
+            .filter_map(|s| {
+                let v = self.library.drift.versions.get(&(sheet.clone(), s.uuid))?;
+                Some((s.uuid, v.clone()))
+            })
+            .collect();
         let outcome = self.apply_engine_command_checked(
-            signex_engine::Command::ReplaceLibSymbol { lib_symbol: fresh },
+            signex_engine::Command::ReplaceLibSymbol {
+                lib_symbol: fresh,
+                library_versions,
+            },
             true,
             true,
         );

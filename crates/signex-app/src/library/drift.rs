@@ -54,7 +54,15 @@ pub struct DriftReport {
     /// The [`DriftState::generation`] this pass was started under; a report
     /// whose generation is no longer current is stale and dropped.
     pub generation: u64,
+    /// `(sheet, placed symbol uuid, row version)` for each placed instance of
+    /// a drifted `lib_id`: the informational stamp "Update from library"
+    /// writes together with the new copy (#950).
+    pub versions: Vec<(PathBuf, Uuid, String)>,
 }
+
+/// A placed library-backed symbol: `(sheet, symbol uuid, lib_id, library id,
+/// row id)`. The worker reads the row's version for it.
+pub type PlacedInstance = (PathBuf, Uuid, String, Uuid, Uuid);
 
 /// One sheet's embedded entries: `(sheet path, [(lib_id, embedded copy)])`.
 /// The copies are cloned on the UI thread and hashed in the worker.
@@ -66,6 +74,7 @@ pub struct DriftJob {
     pub generation: u64,
     pub sheets: Vec<SheetEntries>,
     pub libs: Vec<MountedLibrary>,
+    pub instances: Vec<PlacedInstance>,
 }
 
 impl DriftJob {
@@ -73,14 +82,18 @@ impl DriftJob {
     pub fn run(self) -> DriftReport {
         DriftReport {
             generation: self.generation,
-            ..compute_drift(&self.sheets, &self.libs)
+            ..compute_drift(&self.sheets, &self.libs, &self.instances)
         }
     }
 }
 
 /// Compare every embedded entry with its mounted library's current symbol.
 /// Entries whose library is not mounted are skipped (nothing to compare).
-pub fn compute_drift(sheets: &[SheetEntries], libs: &[MountedLibrary]) -> DriftReport {
+pub fn compute_drift(
+    sheets: &[SheetEntries],
+    libs: &[MountedLibrary],
+    instances: &[PlacedInstance],
+) -> DriftReport {
     use signex_library::LibraryAdapter as _;
     use signex_library::adapters::local_git::LocalGitAdapter;
 
@@ -125,9 +138,36 @@ pub fn compute_drift(sheets: &[SheetEntries], libs: &[MountedLibrary]) -> DriftR
                 drifted.insert(lib_id.clone(), fresh.clone());
             }
         }
+        for (_, symbol, _, library_id, row_id) in instances
+            .iter()
+            .filter(|i| &i.0 == sheet && drifted.contains_key(&i.2))
+        {
+            let version = adapters
+                .get(library_id)
+                .and_then(|a| a.as_ref().ok())
+                .and_then(|a| row_version(a, *row_id));
+            if let Some(version) = version {
+                report.versions.push((sheet.clone(), *symbol, version));
+            }
+        }
         report.sheets.push((sheet.clone(), drifted));
     }
     report
+}
+
+/// The version of row `row_id`, whichever table holds it.
+fn row_version(
+    adapter: &signex_library::adapters::local_git::LocalGitAdapter,
+    row_id: Uuid,
+) -> Option<String> {
+    use signex_library::LibraryAdapter as _;
+    let id = signex_library::RowId::from_uuid(row_id);
+    adapter
+        .list_tables()
+        .ok()?
+        .iter()
+        .find_map(|t| adapter.read_row(t, id).ok())
+        .map(|r| r.version)
 }
 
 fn split_lib_id(lib_id: &str) -> Option<(Uuid, Uuid)> {
@@ -174,6 +214,8 @@ pub struct DriftState {
     pub drifted: HashMap<PathBuf, BTreeMap<String, LibSymbol>>,
     /// `lib_id` -> `"<Library>/<Symbol>"` where the library is mounted.
     pub names: HashMap<String, String>,
+    /// `(sheet, placed symbol uuid)` -> the row version to stamp on update.
+    pub versions: HashMap<(PathBuf, Uuid), String>,
 }
 
 impl DriftState {
@@ -243,6 +285,7 @@ mod tests {
             netlist: None,
             netlist_sheet_placements: Vec::new(),
             netlist_sheets: vec![sheet],
+            current_sheet: None,
         };
         let names = HashMap::from([("L:S".to_string(), "Passives/R".to_string())]);
         apply_library_names(&mut ctx, &names);

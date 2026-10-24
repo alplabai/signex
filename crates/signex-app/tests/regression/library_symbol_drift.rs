@@ -240,3 +240,151 @@ fn a_stale_drift_report_is_dropped() {
     ))));
     assert!(is_drifted(&app), "the older pass must not overwrite");
 }
+
+// ---- #950: content hash is the truth, library_version a stamp both paths move ----
+
+fn version(app: &Signex) -> String {
+    doc(app).symbols[0].library_version.clone()
+}
+
+/// Make the placed symbol look stale by version, as after a library bump.
+fn make_version_stale(app: &mut Signex) {
+    let engine = app.document_state.active_engine_mut().unwrap();
+    let mut d = engine.document().clone();
+    d.symbols[0].library_version = "0.0.1".into();
+    engine.set_document(d);
+}
+
+fn wire_pin_1(app: &mut Signex) {
+    let tip = {
+        let sheet = doc(app);
+        let sym = &sheet.symbols[0];
+        let lib = &sheet.lib_symbols[&sym.lib_id];
+        let pin1 = lib.pins.iter().find(|p| p.pin.number == "1").unwrap();
+        SymbolTransform::from_symbol(sym).apply(pin1.pin.position)
+    };
+    app.document_state
+        .active_engine_mut()
+        .unwrap()
+        .execute(signex_engine::Command::PlaceWireSegment {
+            wire: Wire {
+                start: tip,
+                end: Point::new(tip.x - 10.0, tip.y),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+}
+
+fn scan(app: &mut Signex) {
+    let sheet = app.document_state.active_path.clone().unwrap();
+    app.scan_library_updates_for_open_schematic(sheet);
+}
+
+fn team_fixture() -> Fixture {
+    let f = fixture();
+    let text = std::fs::read_to_string(&f.snxlib).unwrap();
+    assert!(text.contains("mode = \"personal\""));
+    std::fs::write(
+        &f.snxlib,
+        text.replace("mode = \"personal\"", "mode = \"team\""),
+    )
+    .unwrap();
+    f
+}
+
+fn apply_team_updates(app: &mut Signex) {
+    for e in &mut app.library.library_updates.as_mut().unwrap().entries {
+        e.selected = true;
+    }
+    let _ = app.update(Message::Library(LibraryMessage::LibraryUpdatesApply));
+}
+
+#[test]
+fn update_from_library_also_stamps_the_version() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    make_version_stale(&mut app);
+    let id = select_first(&mut app);
+    edit_library_symbol(&f, add_pin);
+    check_drift(&mut app);
+    click_update(&mut app, id);
+    assert_eq!(version(&app), "1.2.3");
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(version(&app), "0.0.1", "stamp shares the undo step");
+}
+
+#[test]
+fn personal_auto_apply_adopts_the_copy_and_leaves_no_drift() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    let before = pin_count(&app);
+    make_version_stale(&mut app);
+    edit_library_symbol(&f, add_pin);
+    scan(&mut app);
+    assert_eq!(pin_count(&app), before + 1);
+    assert_eq!(version(&app), "1.2.3");
+    assert!(app.library.library_updates.is_none());
+    check_drift(&mut app);
+    assert!(!is_drifted(&app));
+}
+
+#[test]
+fn personal_auto_apply_refusal_leaves_version_and_copy() {
+    let _ = signex_app::diagnostics::init_logging();
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    wire_pin_1(&mut app);
+    let before = pin_count(&app);
+    make_version_stale(&mut app);
+    edit_library_symbol(&f, |s| s.pins.retain(|p| p.number != "1"));
+    scan(&mut app);
+    assert_eq!(pin_count(&app), before);
+    assert_eq!(version(&app), "0.0.1");
+    let logged = signex_app::diagnostics::recent_entries()
+        .iter()
+        .any(|e| e.message.contains("update not applied") && e.message.contains("U1 pin 1"));
+    assert!(logged, "the refusal must reach the Messages panel");
+}
+
+#[test]
+fn team_apply_adopts_the_copy_and_leaves_no_update_or_drift() {
+    let f = team_fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    let before = pin_count(&app);
+    make_version_stale(&mut app);
+    edit_library_symbol(&f, add_pin);
+    check_drift(&mut app);
+    scan(&mut app);
+    assert!(app.library.library_updates.is_some());
+    apply_team_updates(&mut app);
+    assert_eq!(pin_count(&app), before + 1);
+    assert_eq!(version(&app), "1.2.3");
+    check_drift(&mut app);
+    assert!(!is_drifted(&app));
+    scan(&mut app);
+    assert!(
+        app.library.library_updates.is_none(),
+        "no update offered again"
+    );
+}
+
+#[test]
+fn team_apply_refusal_leaves_version_and_copy() {
+    let f = team_fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    wire_pin_1(&mut app);
+    let before = pin_count(&app);
+    make_version_stale(&mut app);
+    edit_library_symbol(&f, |s| s.pins.retain(|p| p.number != "1"));
+    check_drift(&mut app);
+    scan(&mut app);
+    apply_team_updates(&mut app);
+    assert_eq!(pin_count(&app), before);
+    assert_eq!(version(&app), "0.0.1");
+}
