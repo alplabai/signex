@@ -538,6 +538,9 @@ impl Signex {
         // sheet refreshed nothing at all.
         if resets > 0 {
             self.refresh_panel_ctx();
+            // Unopened sheets were rewritten on disk, which the in-memory
+            // fingerprint cannot see.
+            self.invalidate_annotate_preview();
         }
         crate::diagnostics::log_info(format!(
             "Reset Duplicate Designators: {} duplicate reference(s) found project-wide; reset on {} sheet(s)",
@@ -553,6 +556,8 @@ impl Signex {
         order: super::super::super::state::AnnotateOrder,
     ) -> Task<Message> {
         self.ui_state.annotate_order = order;
+        // The cached preview rows were ordered under the old setting.
+        self.recompute_annotate_entries();
         Task::none()
     }
 }

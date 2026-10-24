@@ -62,15 +62,20 @@ fn a_case_insensitive_volume_stitches_one_sheet_for_one_file() {
     assert_eq!(terminals, 1, "R1 pin 1 appears once, not once per spelling");
 }
 
-/// Only goes red on a Windows host: elsewhere the old host default is already
-/// case-sensitive, so this guards the NTFS per-directory case-sensitivity
-/// case rather than reproducing it on Linux CI.
+/// The fold is built by hand (what `from_probe(false)` yields on a Windows
+/// host) so the NTFS per-directory case-sensitivity case can fail on Linux CI
+/// too: it must differ from `CaseFold::FOLD`, which merges the two files.
 #[test]
 fn a_case_sensitive_directory_keeps_both_case_variants_as_two_sheets() {
     // Two real files on an NTFS directory with per-directory case
     // sensitivity: `A.snxsch` and `a.snxsch`, even on a Windows host.
     let mut app = app_workspace("/w/cs", &["A.snxsch", "a.snxsch"]);
-    set_fold(&mut app, CaseFold::from_probe(false));
+    let fold = CaseFold {
+        fold_case: false,
+        backslash_is_separator: true,
+    };
+    assert_ne!(fold, CaseFold::FOLD);
+    set_fold(&mut app, fold);
     open_with(
         &mut app.document_state,
         &PathBuf::from("/w/cs/A.snxsch"),

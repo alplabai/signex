@@ -31,6 +31,9 @@ pub enum CaseProbeOutcome {
     /// The probe ran but could not decide (empty, read-only or unreadable
     /// volume).
     Undecided,
+    /// The probe could not stat the entry it needed (deleted meanwhile,
+    /// permission denied); carries the reason.
+    StatFailed(String),
     /// The worker itself failed; carries the reason.
     Failed(String),
 }
@@ -40,8 +43,9 @@ pub(crate) fn spawn_case_probe(project_id: ProjectId, dir: PathBuf) -> Task<Mess
     Task::perform(
         async move {
             match tokio::task::spawn_blocking(move || probe_directory_case(&dir)).await {
-                Ok(Some(ignores_case)) => CaseProbeOutcome::Decided(ignores_case),
-                Ok(None) => CaseProbeOutcome::Undecided,
+                Ok(Ok(Some(ignores_case))) => CaseProbeOutcome::Decided(ignores_case),
+                Ok(Ok(None)) => CaseProbeOutcome::Undecided,
+                Ok(Err(reason)) => CaseProbeOutcome::StatFailed(reason),
                 Err(error) => CaseProbeOutcome::Failed(error.to_string()),
             }
         },
@@ -68,6 +72,9 @@ pub(crate) fn undecided_message(
     };
     let reason = match outcome {
         CaseProbeOutcome::Failed(error) => format!("Volume check failed ({error})"),
+        CaseProbeOutcome::StatFailed(error) => {
+            format!("Could not tell if this volume ignores case ({error})")
+        }
         _ => "Could not tell if this volume ignores case".to_string(),
     };
     format!("{reason}; assuming {assumed}: {}", project_dir.display())
@@ -213,6 +220,21 @@ mod tests {
             "{message}"
         );
         assert!(!message.contains("Could not tell"), "{message}");
+    }
+
+    #[test]
+    fn a_failed_stat_names_its_reason_in_the_undecided_warning() {
+        let message = undecided_message(
+            &CaseProbeOutcome::StatFailed("stat failed: Permission denied".to_string()),
+            Path::new("/w/p"),
+            CaseFold::host_default(),
+        );
+
+        assert!(
+            message.contains("stat failed: Permission denied"),
+            "{message}"
+        );
+        assert!(message.find("stat failed").unwrap() < message.find("/w/p").unwrap());
     }
 
     #[test]
