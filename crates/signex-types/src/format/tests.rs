@@ -115,11 +115,11 @@ fn non_finite_rotation_fails_the_write_instead_of_saving_an_unloadable_file() {
         sym.rotation = bad;
         sheet.symbols.push(sym);
         match SnxSchematic::new(sheet).write_string() {
-            Err(FormatError::TsvFieldWrite { field, row, .. }) => {
+            Err(FormatError::NonFiniteField { field, row, .. }) => {
                 assert_eq!(field, "rotation");
-                assert_eq!(row, 1);
+                assert_eq!(row, 0);
             }
-            other => panic!("rotation={bad}: expected TsvFieldWrite, got {other:?}"),
+            other => panic!("rotation={bad}: expected NonFiniteField, got {other:?}"),
         }
     }
 }

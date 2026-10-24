@@ -473,7 +473,8 @@ pub struct FootprintEditorState {
     /// being edited, those edits share the one snapshot taken before
     /// the first of them, so typing a description is one undo step and
     /// does not push earlier edits out of the depth-capped history.
-    /// Cleared by every other history push, undo and redo.
+    /// Cleared by every other history push, undo and redo, and by a
+    /// sibling switch, add or delete (anything that rewrites `active_idx`).
     last_edit_key: Option<(FieldEditKey, usize)>,
 }
 
@@ -623,6 +624,15 @@ impl FootprintEditorState {
             self.history.remove(0);
         }
         self.redo.clear();
+        self.last_edit_key = None;
+    }
+
+    /// Forget which field was last edited, so the next edit opens a new
+    /// undo step. Call when the edit target changes without an edit
+    /// (switching the active footprint): the key is `(field, active_idx)`,
+    /// so leaving footprint A and coming back would otherwise match it
+    /// and merge two separate edits of A.
+    pub(crate) fn clear_edit_coalescing(&mut self) {
         self.last_edit_key = None;
     }
 

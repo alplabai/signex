@@ -21,8 +21,12 @@ impl Signex {
         self.handle_print_preview_requested()
     }
 
+    /// `source` is the document the export was started from, captured when the
+    /// save dialog opened; the scope is built from it, never from whichever tab
+    /// is active now (#833). A source closed in the meantime is refused.
     pub(crate) fn handle_export_pdf_finished(
         &mut self,
+        source: PathBuf,
         result: Result<PathBuf, String>,
     ) -> Task<Message> {
         let save_path = match result {
@@ -37,17 +41,22 @@ impl Signex {
             }
         };
 
-        let (mut ctx, issues) = match super::build_page_scope(&self.document_state) {
-            Some(c) => c,
-            None => {
-                self.document_state.pending_pdf_options = None;
-                self.document_state.pending_pdf_files = None;
-                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
-                    "Cannot export PDF: no active schematic.".to_string(),
-                ));
-                return Task::none();
-            }
-        };
+        let (mut ctx, issues) =
+            match super::build_page_scope_for_source(&mut self.document_state, &source) {
+                Some(c) => c,
+                None => {
+                    self.document_state.pending_pdf_options = None;
+                    self.document_state.pending_pdf_files = None;
+                    let reason = format!(
+                        "PDF export refused: the source document {} is no longer open.",
+                        source.display()
+                    );
+                    crate::diagnostics::log_warning(reason.clone());
+                    self.document_state.error_notice =
+                        Some(crate::app::state::ErrorNotice::export(reason));
+                    return Task::none();
+                }
+            };
         // Human-consumed deliverable: a partial PDF beats a refusal — the
         // user may well be printing or reviewing mid-refactor with a child
         // file genuinely absent from disk. So this degrades rather than

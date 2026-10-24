@@ -41,6 +41,8 @@ mod unknown;
 mod unknown_columns;
 
 #[cfg(test)]
+mod non_finite_tests;
+#[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod unknown_columns_tests;
@@ -52,6 +54,7 @@ mod unknown_tests;
 pub use pcb_rows::{PcbFootprintRow, PcbPadRow, PcbTrackRow, PcbViaRow};
 pub use sch_rows::{SchComponentRow, SchJunctionRow, SchLabelRow, SchWireRow};
 pub use tsv::{parse_tsv_block, write_tsv_block};
+pub use units::NonFiniteField;
 pub use unknown::{BoardUnknown, SheetUnknown, UnknownFields};
 pub use unknown_columns::{MAX_FOREIGN_COLUMN_NAME_BYTES, MAX_FOREIGN_COLUMNS, UnknownColumns};
 
@@ -147,14 +150,14 @@ pub enum FormatError {
         field: String,
         message: String,
     },
-    /// A float cell was non-finite at write time; writing it would produce
-    /// a file the reader rejects. `block`/`row` are filled by `write_tsv_block`.
-    #[error("TSV block {block:?}: row {row} field {field:?} holds non-finite float {value}")]
-    TsvFieldWrite {
+    #[error(
+        "block {block:?}: row {row} field {field:?} holds a non-finite or out-of-range number; \
+         it cannot be saved"
+    )]
+    NonFiniteField {
         block: String,
         row: usize,
         field: String,
-        value: String,
     },
     #[error("TSV block {block:?}: TSV body is empty — at minimum a header row is required")]
     TsvEmpty { block: String },
@@ -163,6 +166,29 @@ pub enum FormatError {
 // ---------------------------------------------------------------------------
 // SnxTable trait — manual row schemas (no derive macro for simplicity).
 // ---------------------------------------------------------------------------
+
+/// Name the block and row of a [`NonFiniteField`] refusal.
+fn non_finite_error(block: &str, row: usize, e: NonFiniteField) -> FormatError {
+    FormatError::NonFiniteField {
+        block: block.to_string(),
+        row,
+        field: e.0.to_string(),
+    }
+}
+
+/// Translate every item of `items` to its TSV row, failing on the first
+/// value the wire format cannot hold.
+fn build_rows<T, R>(
+    block: &str,
+    items: &[T],
+    to_row: impl Fn(&T) -> Result<R, NonFiniteField>,
+) -> Result<Vec<R>, FormatError> {
+    items
+        .iter()
+        .enumerate()
+        .map(|(i, item)| to_row(item).map_err(|e| non_finite_error(block, i, e)))
+        .collect()
+}
 
 /// A row schema for TSV bulk blocks.
 ///
@@ -175,9 +201,9 @@ pub trait SnxTable: Sized {
     fn columns() -> &'static [&'static str];
 
     /// Emit one cell per declared column. Length must equal
-    /// [`SnxTable::columns`]. Empty cells use `""`. Fails with
-    /// [`FormatError::TsvFieldWrite`] on a non-finite float.
-    fn to_row(&self) -> Result<Vec<String>, FormatError>;
+    /// [`SnxTable::columns`]. Empty cells use `""`. A non-finite number
+    /// is refused with the field's name (see [`FormatError::NonFiniteField`]).
+    fn to_row(&self) -> Result<Vec<String>, NonFiniteField>;
 
     /// Parse a row of the known cells, already ordered as [`SnxTable::columns`].
     /// Implementations report parse failures via [`FormatError::TsvFieldParse`].
@@ -241,12 +267,10 @@ impl SnxSchematic {
 
         // Bulk TSV blocks. Each is `[sheets.<entity>]` with a single
         // `content` key holding a literal multi-line string.
-        let component_rows: Vec<SchComponentRow> =
-            self.sheet.symbols.iter().map(symbol_to_row).collect();
-        let wire_rows: Vec<SchWireRow> = self.sheet.wires.iter().map(wire_to_row).collect();
-        let junction_rows: Vec<SchJunctionRow> =
-            self.sheet.junctions.iter().map(junction_to_row).collect();
-        let label_rows: Vec<SchLabelRow> = self.sheet.labels.iter().map(label_to_row).collect();
+        let component_rows = build_rows("sheets.components", &self.sheet.symbols, symbol_to_row)?;
+        let wire_rows = build_rows("sheets.wires", &self.sheet.wires, wire_to_row)?;
+        let junction_rows = build_rows("sheets.junctions", &self.sheet.junctions, junction_to_row)?;
+        let label_rows = build_rows("sheets.labels", &self.sheet.labels, label_to_row)?;
 
         write_tsv_section(&mut out, "sheets.components", &component_rows)?;
         write_tsv_section(&mut out, "sheets.wires", &wire_rows)?;
@@ -546,16 +570,17 @@ impl SnxPcb {
         }
 
         // TSV blocks: footprints, pads, tracks, vias.
-        let footprint_rows: Vec<PcbFootprintRow> =
-            self.board.footprints.iter().map(footprint_to_row).collect();
+        let footprint_rows = build_rows("footprints", &self.board.footprints, footprint_to_row)?;
         let mut pad_rows: Vec<PcbPadRow> = Vec::new();
         for fp in &self.board.footprints {
             for pad in &fp.pads {
-                pad_rows.push(pad_to_row(pad, &fp.reference));
+                let row = pad_to_row(pad, &fp.reference)
+                    .map_err(|e| non_finite_error("pads", pad_rows.len(), e))?;
+                pad_rows.push(row);
             }
         }
-        let track_rows: Vec<PcbTrackRow> = self.board.segments.iter().map(track_to_row).collect();
-        let via_rows: Vec<PcbViaRow> = self.board.vias.iter().map(via_to_row).collect();
+        let track_rows = build_rows("tracks", &self.board.segments, track_to_row)?;
+        let via_rows = build_rows("vias", &self.board.vias, via_to_row)?;
 
         write_tsv_section(&mut out, "footprints", &footprint_rows)?;
         write_tsv_section(&mut out, "pads", &pad_rows)?;

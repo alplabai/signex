@@ -24,15 +24,15 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
         let parts: Vec<&str> = s.split(',').collect();
         let x = parts
             .first()
-            .and_then(|p| p.trim().parse::<f64>().ok())
+            .and_then(|p| crate::numeric_field::parse_field_f64(p))
             .unwrap_or(0.0);
         let y = parts
             .get(1)
-            .and_then(|p| p.trim().parse::<f64>().ok())
+            .and_then(|p| crate::numeric_field::parse_field_f64(p))
             .unwrap_or(0.0);
         (x, y)
     };
-    let parse_f64 = |s: &str| -> f64 { s.trim().parse::<f64>().ok().unwrap_or(0.0) };
+    let parse_f64 = |s: &str| -> f64 { crate::numeric_field::parse_field_f64(s).unwrap_or(0.0) };
     let parse_fill = |s: &str| -> FillType {
         match s {
             "Outline" => FillType::Outline,

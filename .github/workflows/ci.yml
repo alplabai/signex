@@ -120,6 +120,30 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
+  # The same suite on Windows and macOS (#695): `check` compiles the
+  # `cfg(windows)` / macOS code, but only this job runs it. A separate job,
+  # not a matrix on `test`, so the required `test · workspace` context keeps
+  # its exact name. The GPU smoke tests get WARP (DX12) on Windows and the
+  # runner's Metal device on macOS; no extra install.
+  test-os:
+    name: test · ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+
+      - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Test
+        run: cargo test --workspace
+
   fmt:
     name: fmt · rustfmt
     runs-on: ubuntu-latest
@@ -162,6 +186,30 @@ jobs:
       - name: Check advisories
         run: cargo deny --all-features check advisories
         continue-on-error: true
+
+      # `[bans]` in deny.toml (the glyphon regression ban; duplicate
+      # versions at "warn") was configured but never evaluated, because only
+      # the three checks above ran (#664). Hard: a banned crate fails the job.
+      - name: Check bans
+        run: cargo deny --all-features check bans
+
+  arch-guard:
+    name: arch guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+      - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
+
+      # ADR-0001 D5 (#664): workspace dependency edges are an allow-list in
+      # scripts/arch-edges.txt, and domain crates may not depend on the
+      # UI/GPU stack. Rules and rationale live in the script.
+      - name: Architecture guard
+        run: bash scripts/check_arch_guard.sh
+
+      - name: Architecture guard controls
+        run: bash scripts/test_check_arch_guard.sh
 
   no-god-files:
     name: no god-files

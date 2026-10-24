@@ -14,10 +14,9 @@
 //! `FONT_SIZE` constant, and `ti(tokens.…)` for every colour.
 //!
 //! Mounting site: `app/view/mod.rs::collect_overlays`, alongside the
-//! Move-By modal, gated by the `needs_overlay` predicate
-//! (`ed.state.align_modal.is_some()`). A modal flag left out of
-//! `needs_overlay` renders as a silent no-op from a non-canvas tab —
-//! the same trap `move_by_modal.rs` documents.
+//! Move-By modal. `footprint_align_overlay` returns nothing
+//! unless `ed.state.align_modal.is_some()`, so the modal's builder owns
+//! its open check and no other flag needs updating.
 
 use std::path::Path;
 

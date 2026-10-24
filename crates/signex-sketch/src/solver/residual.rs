@@ -14,6 +14,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use crate::constraint::{Constraint, ConstraintKind, DimTarget};
 use crate::error::SketchError;
+use crate::expr::ExprError;
 use crate::expr::ast::ExprNode;
 use crate::expr::eval::{EvalContext, eval as eval_expr};
 use crate::expr::parse::parse as parse_expr;
@@ -57,7 +58,8 @@ pub type ResolvedParams = HashMap<String, f64>;
 /// parameter table).
 pub fn resolve_dim(target: &DimTarget, params: &ResolvedParams) -> Result<f64, SketchError> {
     match target {
-        DimTarget::Literal(v) => Ok(*v),
+        DimTarget::Literal(v) if v.is_finite() => Ok(*v),
+        DimTarget::Literal(v) => Err(SketchError::Expr(ExprError::NonFinite(format!("{v}")))),
         DimTarget::Expr(s) => {
             let body = s.trim().trim_start_matches('=').trim();
             // Fast path: single bare identifier.

@@ -329,6 +329,9 @@ pub struct UiState {
     /// (BringToFrontOf / SendToBackOf). When Some, the next canvas click
     /// resolves the reference uuid and submits the Reorder command.
     pub reorder_picker: Option<ReorderPicker>,
+    /// Armed click-click Move / Move Selection (#271). The canvas mirrors it
+    /// in `CanvasSlot::move_pick`; the picking press consumes it.
+    pub move_pick: Option<crate::canvas::MovePick>,
     /// Pin-connection matrix overrides — sparse map keyed by (row, col)
     /// pin-type index. Any entry present replaces the default severity
     /// for that pair; missing entries fall back to the hard-coded

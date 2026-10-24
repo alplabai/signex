@@ -2,6 +2,16 @@ use serde::{Deserialize, Serialize};
 
 use crate::id::{ConstraintId, SketchEntityId};
 
+/// Parse the text of a dimension input box into a canonical-unit number.
+///
+/// Rejects anything that is not a finite number: `NaN`, `inf` and values
+/// that overflow `f64` all parse under `f64::from_str` but would make
+/// every later solve diverge.
+pub fn parse_dimension_input(text: &str) -> Result<f64, crate::expr::ExprError> {
+    signex_types::numeric::parse_finite_f64(text)
+        .map_err(|_| crate::expr::ExprError::BadQuantity(text.to_string()))
+}
+
 /// Optional dimension target — either a literal length/angle in
 /// canonical units (mm or rad) or an expression string evaluated at
 /// solve time.
