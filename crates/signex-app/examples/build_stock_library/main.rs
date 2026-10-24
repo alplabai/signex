@@ -96,9 +96,10 @@ pub fn render_all() -> Result<Vec<RenderedStockFile>, Box<dyn Error>> {
 }
 
 /// Write the whole stock library under `root`: the `Stock.snxlib`
-/// manifest, the `symbols/` set and the footprints. Pure function of the id tables, so a rerun rewrites
-/// identical bytes. Never runs `git init`: the bundled tree is a plain
-/// directory inside the Signex repo.
+/// manifest, the `symbols/` set and the footprints. Pure function of
+/// the id tables, so a rerun rewrites identical bytes. Never runs
+/// `git init`: the bundled tree is a plain directory inside the Signex
+/// repo.
 pub fn write_library(root: &Path) -> Result<Vec<RenderedStockFile>, Box<dyn Error>> {
     let footprints = root.join("footprints");
     std::fs::create_dir_all(&footprints)?;
