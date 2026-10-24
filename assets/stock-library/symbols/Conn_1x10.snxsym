@@ -1,0 +1,53 @@
+format = "snxsym/v1"
+file_uuid = "c29d38e1-580f-4b5b-800d-90050306e7c6"
+display_name = "Conn_1x10"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols]]
+uuid = "8d2e9e62-fc08-4777-bc43-dd5e0b68cf19"
+name = "Conn_1x10"
+anchor = [
+    0.0,
+    0.0,
+]
+pins_tsv = '''
+number	name	electrical	pos_x	pos_y	orientation	length	description	function	pin_package_length	propagation_delay_ns	designator_visible	name_visible	inside_symbol	inside_edge_symbol	outside_edge_symbol	outside_symbol	hidden	locked	part_number
+1	Pin_1	Passive	-5.08	11.43	Right	2.54					true	false	None	None	None	None	false	false	1
+2	Pin_2	Passive	-5.08	8.89	Right	2.54					true	false	None	None	None	None	false	false	1
+3	Pin_3	Passive	-5.08	6.35	Right	2.54					true	false	None	None	None	None	false	false	1
+4	Pin_4	Passive	-5.08	3.81	Right	2.54					true	false	None	None	None	None	false	false	1
+5	Pin_5	Passive	-5.08	1.27	Right	2.54					true	false	None	None	None	None	false	false	1
+6	Pin_6	Passive	-5.08	-1.27	Right	2.54					true	false	None	None	None	None	false	false	1
+7	Pin_7	Passive	-5.08	-3.81	Right	2.54					true	false	None	None	None	None	false	false	1
+8	Pin_8	Passive	-5.08	-6.35	Right	2.54					true	false	None	None	None	None	false	false	1
+9	Pin_9	Passive	-5.08	-8.89	Right	2.54					true	false	None	None	None	None	false	false	1
+10	Pin_10	Passive	-5.08	-11.43	Right	2.54					true	false	None	None	None	None	false	false	1
+'''
+designator = "J?"
+comment = "*"
+description = "10-pin single-row header, 2.54 mm pitch."
+component_type = "Standard"
+mirrored = false
+version = "0.0.1"
+released = false
+part_count = 1
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "rectangle"
+from = [
+    -2.54,
+    12.7,
+]
+to = [
+    1.27,
+    -12.7,
+]
+
+[symbols.schematic_params]

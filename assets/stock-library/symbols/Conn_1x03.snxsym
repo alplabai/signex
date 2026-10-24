@@ -1,0 +1,46 @@
+format = "snxsym/v1"
+file_uuid = "abca7e23-d806-4d39-95f4-d9a2f17ee48a"
+display_name = "Conn_1x03"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols]]
+uuid = "d4f30085-41dc-458b-b7cc-0a3be9242226"
+name = "Conn_1x03"
+anchor = [
+    0.0,
+    0.0,
+]
+pins_tsv = '''
+number	name	electrical	pos_x	pos_y	orientation	length	description	function	pin_package_length	propagation_delay_ns	designator_visible	name_visible	inside_symbol	inside_edge_symbol	outside_edge_symbol	outside_symbol	hidden	locked	part_number
+1	Pin_1	Passive	-5.08	2.54	Right	2.54					true	false	None	None	None	None	false	false	1
+2	Pin_2	Passive	-5.08	0	Right	2.54					true	false	None	None	None	None	false	false	1
+3	Pin_3	Passive	-5.08	-2.54	Right	2.54					true	false	None	None	None	None	false	false	1
+'''
+designator = "J?"
+comment = "*"
+description = "3-pin single-row header, 2.54 mm pitch."
+component_type = "Standard"
+mirrored = false
+version = "0.0.1"
+released = false
+part_count = 1
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "rectangle"
+from = [
+    -2.54,
+    3.81,
+]
+to = [
+    1.27,
+    -3.81,
+]
+
+[symbols.schematic_params]

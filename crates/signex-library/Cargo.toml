@@ -53,6 +53,22 @@ dirs = { version = "5", optional = true }
 # kept un-feature-gated so every adapter can `tracing::warn!` consistently.
 tracing = { workspace = true }
 
+# OS-keychain backends (#976). keyring 3.x ships NO default backend: without one
+# every OS silently falls back to its in-memory mock and nothing is persisted.
+# Features are enabled per target and unify with the optional `keyring` dep above.
+# Linux uses the pure-Rust zbus Secret Service client (`async-secret-service` +
+# `crypto-rust`), so no libdbus / libsecret / OpenSSL is needed at build time.
+# Deliberately NOT `linux-native-*-persistent`: its keyutils layer would keep
+# working with no Secret Service and silently lose secrets on reboot.
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { workspace = true, features = ["windows-native"], optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { workspace = true, features = ["apple-native"], optional = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { workspace = true, features = ["async-secret-service", "crypto-rust", "async-io"], optional = true }
+
 [features]
 default = []
 ai-stub = ["dep:pdf-extract", "dep:regex"]

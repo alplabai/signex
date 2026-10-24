@@ -41,8 +41,8 @@ pub use adapters::library_set::{LibrarySet, UnresolvedRefs};
 #[cfg(feature = "ai-stub")]
 pub use ai_stub::{PinGuess, PinoutGuess, extract_pinout};
 pub use cascade::{
-    CascadeReport, cascade_after_footprint_save, cascade_after_sim_save, cascade_after_symbol_save,
-    patch_bump,
+    CascadeKind, CascadeReport, PrimitiveSave, cascade_after_footprint_save, cascade_after_saves,
+    cascade_after_sim_save, cascade_after_symbol_save, patch_bump,
 };
 pub use component::{ComponentRow, DatasheetRef, PinPadOverride, PlmReserved};
 pub use diff::{

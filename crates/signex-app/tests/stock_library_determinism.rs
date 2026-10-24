@@ -178,7 +178,7 @@ fn symbols_dir() -> PathBuf {
 #[test]
 fn committed_stock_symbols_match_the_generator() {
     let rendered = stock_gen::symbols::render_all().expect("render symbols");
-    assert_eq!(rendered.len(), 20, "15 discretes, 4 power ports, 1 IC body");
+    assert_eq!(rendered.len(), 38, "20 passives, 11 connectors, 7 logic");
     let mut committed: Vec<String> = std::fs::read_dir(symbols_dir())
         .expect("read symbols dir")
         .map(|e| e.expect("entry").file_name().to_string_lossy().into_owned())
@@ -248,4 +248,51 @@ fn every_stock_symbol_pin_is_on_the_schematic_grid_and_converts() {
             assert_eq!(symbol.pins[0].electrical, PinDirection::Power);
         }
     }
+}
+
+#[test]
+fn logic_packages_are_14_pin_with_power_on_7_and_14() {
+    use signex_library::primitive::symbol::{PinDirection, SymbolFile};
+    let mut seen = 0;
+    for sym in stock_gen::symbols::render_all().expect("render symbols") {
+        if !sym.symbol_name.starts_with("74HC") {
+            continue;
+        }
+        seen += 1;
+        let file = SymbolFile::from_toml_str(&sym.text).expect("parse");
+        let pins = &file.symbols[0].pins;
+        let mut numbers: Vec<u32> = pins.iter().map(|p| p.number.parse().unwrap()).collect();
+        numbers.sort();
+        assert_eq!(numbers, (1..=14).collect::<Vec<_>>(), "{}", sym.symbol_name);
+        let find = |n: &str| pins.iter().find(|p| p.number == n).unwrap();
+        assert_eq!(find("7").name, "GND");
+        assert_eq!(find("7").electrical, PinDirection::Power);
+        assert_eq!(find("14").name, "VCC");
+        assert_eq!(find("14").electrical, PinDirection::Power);
+        assert_eq!(sym.designator, "U?");
+    }
+    assert_eq!(seen, 7);
+}
+
+#[test]
+fn connector_pin_count_matches_name() {
+    use signex_library::primitive::symbol::{PinDirection, SymbolFile};
+    let mut seen = 0;
+    for sym in stock_gen::symbols::render_all().expect("render symbols") {
+        let Some((kind, dims)) = sym.symbol_name.split_once('_') else {
+            continue;
+        };
+        if kind != "Conn" && kind != "Screw" {
+            continue;
+        }
+        seen += 1;
+        let (rows, cols) = dims.split_once('x').unwrap();
+        let expected = rows.parse::<usize>().unwrap() * cols.parse::<usize>().unwrap();
+        let file = SymbolFile::from_toml_str(&sym.text).expect("parse");
+        let pins = &file.symbols[0].pins;
+        assert_eq!(pins.len(), expected, "{}", sym.symbol_name);
+        assert_eq!(sym.designator, "J?");
+        assert!(pins.iter().all(|p| p.electrical == PinDirection::Passive));
+    }
+    assert_eq!(seen, 11);
 }
