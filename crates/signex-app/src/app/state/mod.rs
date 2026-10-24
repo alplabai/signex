@@ -793,6 +793,22 @@ impl DocumentState {
             .collect()
     }
 
+    /// Every open engine that belongs to the same project as the active
+    /// document, the active one included. A loose active document yields only
+    /// itself. Used where a name must be unique across the whole hierarchy
+    /// (a project-wide default such as a new child sheet's `sheetN`).
+    pub fn engines_in_active_document_project(&self) -> Vec<&signex_engine::Engine> {
+        let Some(project) = self.active_document_project() else {
+            return self.active_engine().into_iter().collect();
+        };
+        scope::engines_in_project(
+            &self.projects,
+            &self.child_sheet_refs(),
+            &self.engines,
+            project.id,
+        )
+    }
+
     pub fn active_engine(&self) -> Option<&signex_engine::Engine> {
         self.engines.get(self.active_path.as_ref()?)
     }
