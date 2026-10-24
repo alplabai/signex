@@ -455,7 +455,9 @@ fn padded_sheet_pin_binds_the_trimmed_child_label() {
 
 #[test]
 fn blank_port_names_never_bind() {
-    let (root, map) = parent_child("   ", pt(0.0, 0.0), "  ", LabelType::Hierarchical);
+    // Identical blank spellings: an untrimmed string compare would bind them
+    // (the pre-#751 stitcher did), so only the blank check keeps them apart.
+    let (root, map) = parent_child("  ", pt(0.0, 0.0), "  ", LabelType::Hierarchical);
     let p = stitch(&root, "root", &map);
     assert_eq!(p.netlist.nets.len(), 2, "blank names are not ports");
 }
