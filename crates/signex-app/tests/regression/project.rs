@@ -518,6 +518,15 @@ fn f10_save_persists_snxprj_as_valid_json() {
 // §3.3 — Add Existing dedup: same file twice is silently skipped
 // ─────────────────────────────────────────────────────────────────
 
+/// Stand-in for the off-thread worker `AddExistingFilePicked` starts: the
+/// files already sit at their final paths, so deliver the completion.
+fn add_existing_landed(app: &mut Signex, paths: &[std::path::PathBuf]) {
+    let _ = app.update(Message::Project(ProjectMsg::AddExistingFilesCopied {
+        project_id: app.document_state.projects[0].id,
+        results: Ok(paths.iter().cloned().map(Ok).collect()),
+    }));
+}
+
 #[test]
 fn add_existing_same_file_twice_is_silently_skipped() {
     let (mut app, tmp, _prj) = fixture_project_with_companions("India");
@@ -529,10 +538,7 @@ fn add_existing_same_file_twice_is_silently_skipped() {
     assert!(new_sheet.exists());
 
     // First add — succeeds, sheet appears.
-    let _ = app.update(Message::Project(ProjectMsg::AddExistingFilePicked {
-        project_id: app.document_state.projects[0].id,
-        paths: Some(vec![new_sheet.clone()]),
-    }));
+    add_existing_landed(&mut app, std::slice::from_ref(&new_sheet));
     assert_eq!(
         app.document_state.projects[0].data.sheets.len(),
         1,
@@ -540,10 +546,7 @@ fn add_existing_same_file_twice_is_silently_skipped() {
     );
 
     // Second add — silent no-op, list size unchanged.
-    let _ = app.update(Message::Project(ProjectMsg::AddExistingFilePicked {
-        project_id: app.document_state.projects[0].id,
-        paths: Some(vec![new_sheet.clone()]),
-    }));
+    add_existing_landed(&mut app, std::slice::from_ref(&new_sheet));
     assert_eq!(
         app.document_state.projects[0].data.sheets.len(),
         1,
@@ -561,12 +564,17 @@ fn add_existing_with_external_path_copies_into_project_dir() {
     let external_sheet = external.path().join("ExternalSheet.snxsch");
     fs::write(&external_sheet, b"external sheet bytes").unwrap();
 
+    // `update` only plans the copy (no IO on the UI thread)...
     let _ = app.update(Message::Project(ProjectMsg::AddExistingFilePicked {
         project_id: app.document_state.projects[0].id,
         paths: Some(vec![external_sheet.clone()]),
     }));
+    assert!(!project_dir.join("ExternalSheet.snxsch").exists());
 
+    // ...the worker copies, then the completion registers the sheet.
     let copied = project_dir.join("ExternalSheet.snxsch");
+    fs::copy(&external_sheet, &copied).unwrap();
+    add_existing_landed(&mut app, std::slice::from_ref(&copied));
     assert!(
         copied.exists(),
         "external sheet must be copied into the project dir"
@@ -617,9 +625,19 @@ fn add_new_schematic_writes_blank_snxsch_marks_project_dirty_no_tab_open() {
     let new_sheet = tmp.path().join("FreshSheet.snxsch");
     assert!(!new_sheet.exists());
 
+    let project_id = app.document_state.projects[0].id;
     let _ = app.update(Message::Project(ProjectMsg::AddNewSchematicPicked {
-        project_id: app.document_state.projects[0].id,
+        project_id,
         path: Some(new_sheet.clone()),
+    }));
+    assert!(!new_sheet.exists(), "update itself does no IO");
+
+    // The worker writes the sheet; the completion registers it.
+    fs::write(&new_sheet, b"blank").unwrap();
+    let _ = app.update(Message::Project(ProjectMsg::AddNewSchematicWritten {
+        project_id,
+        path: new_sheet.clone(),
+        result: Ok(()),
     }));
 
     assert!(new_sheet.exists(), "new .snxsch must land on disk");

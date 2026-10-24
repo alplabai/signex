@@ -238,6 +238,9 @@ impl Signex {
         // detached preview window also needs to close so the OS
         // window doesn't linger after Export — same shape as
         // `handle_print_preview_export`.
+        let Some(source) = self.document_state.active_path.clone() else {
+            return Some(Task::none());
+        };
         self.document_state.pending_bom_options = Some(options);
         self.document_state.bom_preview = None;
         let close_window = self.close_detached_modal(crate::app::state::ModalId::BomPreview);
@@ -253,9 +256,12 @@ impl Signex {
                     .await
                     .map(|file| file.path().to_path_buf())
             },
-            |path| {
+            move |path| {
                 if let Some(path) = path {
-                    Message::Export(ExportMsg::BomFinished(Ok(path)))
+                    Message::Export(ExportMsg::BomFinished {
+                        source,
+                        result: Ok(path),
+                    })
                 } else {
                     Message::Noop
                 }
@@ -303,6 +309,7 @@ impl Signex {
 
     pub(crate) fn handle_export_bom_finished(
         &mut self,
+        source: PathBuf,
         result: Result<PathBuf, String>,
     ) -> Task<Message> {
         let save_path = match result {
@@ -316,13 +323,18 @@ impl Signex {
             }
         };
 
-        let (ctx, issues) = match super::build_page_scope(&self.document_state) {
+        let (ctx, issues) = match super::build_page_scope_for_source(&self.document_state, &source)
+        {
             Some(c) => c,
             None => {
                 self.document_state.pending_bom_options = None;
-                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
-                    "Cannot export BOM: no active schematic.".to_string(),
-                ));
+                let reason = format!(
+                    "Cannot export BOM: the source document {} is no longer open.",
+                    source.display()
+                );
+                crate::diagnostics::log_warning(reason.clone());
+                self.document_state.error_notice =
+                    Some(crate::app::state::ErrorNotice::export(reason));
                 return Task::none();
             }
         };
@@ -333,7 +345,7 @@ impl Signex {
         // *wrong* subtree — wrong parts, wrong quantities. Surface it loudly,
         // once, from this user action, exactly like the PDF/netlist
         // deliverables (ADR-0002 D8: degradation is reported, never silent).
-        super::log_stitch_issues(&self.document_state, &ctx, &issues);
+        super::log_stitch_issues(&source, &ctx, &issues);
 
         // Honour the user's picks from the BOM preview modal when
         // present. The pending slot is populated by
@@ -352,7 +364,7 @@ impl Signex {
             None => {
                 let active_variant = self
                     .document_state
-                    .active_document_project()
+                    .document_project(&source)
                     .and_then(|p| p.data.active_variant.clone())
                     .unwrap_or_else(|| "Base".to_string());
                 BomOptions {

@@ -118,7 +118,10 @@ fn export_with_issues_still_writes_and_reports_the_summary() {
         .clone();
     app.document_state.pending_bom_options = Some(options);
 
-    let _ = app.update(Message::Export(ExportMsg::BomFinished(Ok(out.clone()))));
+    let _ = app.update(Message::Export(ExportMsg::BomFinished {
+        source: app.document_state.active_path.clone().expect("active"),
+        result: Ok(out.clone()),
+    }));
 
     assert!(out.exists(), "advisory validation must not block the write");
     let notice = app

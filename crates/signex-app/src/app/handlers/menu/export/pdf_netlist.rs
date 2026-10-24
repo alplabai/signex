@@ -34,19 +34,17 @@ impl Signex {
             Err(e) => {
                 // Cancelled — drop pending state so the next open
                 // starts fresh.
-                self.document_state.pending_pdf_options = None;
-                self.document_state.pending_pdf_files = None;
+                self.document_state.take_pending_pdf_for(&source);
                 log::info!("PDF export cancelled: {e}");
                 return Task::none();
             }
         };
 
         let (mut ctx, issues) =
-            match super::build_page_scope_for_source(&mut self.document_state, &source) {
+            match super::build_page_scope_for_source(&self.document_state, &source) {
                 Some(c) => c,
                 None => {
-                    self.document_state.pending_pdf_options = None;
-                    self.document_state.pending_pdf_files = None;
+                    self.document_state.take_pending_pdf_for(&source);
                     let reason = format!(
                         "PDF export refused: the source document {} is no longer open.",
                         source.display()
@@ -61,19 +59,18 @@ impl Signex {
         // user may well be printing or reviewing mid-refactor with a child
         // file genuinely absent from disk. So this degrades rather than
         // blocks, but it degrades *loudly*, once, from this user action.
-        super::log_stitch_issues(&self.document_state, &ctx, &issues);
+        super::log_stitch_issues(&source, &ctx, &issues);
 
         // Use pending options if they were set by the dialog, otherwise fall back to defaults.
-        let options = self
-            .document_state
-            .pending_pdf_options
-            .take()
-            .unwrap_or_default();
+        let (options, files) = match self.document_state.take_pending_pdf_for(&source) {
+            Some(p) => (p.options, Some(p.files)),
+            None => (Default::default(), None),
+        };
         // Filter sheets to the user's file picks. The preview path
         // populates `pending_pdf_files`; legacy direct-export
         // callers (none today) leave it None and get the full
         // sheet list.
-        if let Some(files) = self.document_state.pending_pdf_files.take() {
+        if let Some(files) = files {
             ctx.sheets.retain(|s| files.contains(&s.path));
             if ctx.sheets.is_empty() {
                 self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
@@ -132,6 +129,9 @@ impl Signex {
             return Some(Task::none());
         }
 
+        // The save dialog outlives any tab switch; pin the export to the
+        // document it was started from (#852).
+        let source = self.document_state.active_path.clone()?;
         let format = NetlistOptions::default().format;
         Some(Task::perform(
             async move {
@@ -143,9 +143,12 @@ impl Signex {
                     .await
                     .map(|file| file.path().to_path_buf())
             },
-            |path| {
+            move |path| {
                 if let Some(path) = path {
-                    Message::Export(ExportMsg::NetlistFinished(Ok(path)))
+                    Message::Export(ExportMsg::NetlistFinished {
+                        source,
+                        result: Ok(path),
+                    })
                 } else {
                     Message::Noop
                 }
@@ -155,6 +158,7 @@ impl Signex {
 
     pub(crate) fn handle_export_netlist_finished(
         &mut self,
+        source: PathBuf,
         result: Result<PathBuf, String>,
     ) -> Task<Message> {
         let save_path = match result {
@@ -165,14 +169,18 @@ impl Signex {
             }
         };
 
-        let (ctx, issues) = match super::build_export_scope(&self.document_state) {
-            Some(c) => c,
-            None => {
-                log::warn!("Netlist export: no active schematic");
-                return Task::none();
-            }
-        };
-        super::log_stitch_issues(&self.document_state, &ctx, &issues);
+        let (ctx, issues) =
+            match super::build_export_scope_for_source(&self.document_state, &source) {
+                Some(c) => c,
+                None => {
+                    crate::diagnostics::log_warning(format!(
+                        "Netlist export refused: the source document {} is no longer open.",
+                        source.display()
+                    ));
+                    return Task::none();
+                }
+            };
+        super::log_stitch_issues(&source, &ctx, &issues);
 
         // Not a hole the user can accept: the file would be wrong, not partial.
         if let Some(refusal) = issues.shared_reference_refusal(&ctx) {

@@ -83,3 +83,95 @@ fn a_closed_source_document_refuses_the_pdf_export_and_says_so() {
         "the refusal must reach the Messages panel"
     );
 }
+
+#[test]
+fn the_no_netlist_warning_names_the_exported_document_not_the_current_tab() {
+    let _ = crate::diagnostics::init_logging();
+    let source = Path::new("/w/exported-852/source.snxsch");
+    let ctx = signex_output::ExportContext {
+        sheets: Vec::new(),
+        metadata: Default::default(),
+        netlist: None,
+        netlist_sheets: Vec::new(),
+    };
+
+    super::log_stitch_issues(source, &ctx, &super::ExportIssues::default());
+
+    assert!(
+        crate::diagnostics::recent_entries().iter().any(|e| {
+            e.message.contains("no netlist derived") && e.message.contains("exported-852")
+        }),
+        "the warning must name the exported document"
+    );
+}
+
+#[test]
+fn netlist_finished_exports_the_document_it_started_from() {
+    let (mut app, a, b) = two_projects();
+    let out = std::env::temp_dir().join(format!("signex-852-{}.net", Uuid::new_v4()));
+
+    app.document_state.active_path = Some(b);
+    let _ = app.handle_export_netlist_finished(a, Ok(out.clone()));
+
+    let text = std::fs::read_to_string(&out).expect("the netlist is written");
+    assert!(text.contains("R_A"), "project A's part is exported: {text}");
+    assert!(!text.contains("R_B"), "project B's parts are not: {text}");
+    std::fs::remove_file(&out).ok();
+}
+
+#[test]
+fn a_closed_netlist_source_writes_nothing_and_says_so() {
+    let (mut app, a, _b) = two_projects();
+    let _ = crate::diagnostics::init_logging();
+    let out = std::env::temp_dir().join(format!("signex-852-gone-{}.net", Uuid::new_v4()));
+
+    app.document_state.engines.remove(&a);
+    let _ = app.handle_export_netlist_finished(a, Ok(out.clone()));
+
+    assert!(!out.exists());
+    assert!(
+        crate::diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.message.contains("Netlist export refused") && e.message.contains("a.snxsch")),
+        "the refusal must reach the Messages panel"
+    );
+}
+
+#[test]
+fn bom_finished_exports_the_document_it_started_from() {
+    let (mut app, a, b) = two_projects();
+    let out = std::env::temp_dir().join(format!("signex-852-{}.csv", Uuid::new_v4()));
+
+    app.document_state.active_path = Some(b);
+    let _ = app.handle_export_bom_finished(a, Ok(out.clone()));
+
+    let text = std::fs::read_to_string(&out).expect("the BOM is written");
+    assert!(text.contains("R_A"), "project A's part is listed: {text}");
+    assert!(!text.contains("R_B"), "project B's parts are not: {text}");
+    std::fs::remove_file(&out).ok();
+}
+
+#[test]
+fn a_pending_pdf_stash_for_another_document_is_left_alone() {
+    let (mut app, a, b) = two_projects();
+    let out = std::env::temp_dir().join(format!("signex-852-pend-{}.pdf", Uuid::new_v4()));
+    app.document_state.pending_pdf = Some(crate::app::state::PendingPdfExport {
+        source: b.clone(),
+        options: Default::default(),
+        files: std::collections::HashSet::new(),
+    });
+
+    // A completion for A must not consume (or be filtered by) B's stash: the
+    // empty `files` set would otherwise reject the export.
+    let _ = app.handle_export_pdf_finished(a, Ok(out.clone()));
+
+    assert!(out.exists(), "A exports with defaults");
+    assert!(
+        app.document_state
+            .pending_pdf
+            .as_ref()
+            .is_some_and(|p| p.source == b),
+        "B's stash survives for B's own completion"
+    );
+    std::fs::remove_file(&out).ok();
+}

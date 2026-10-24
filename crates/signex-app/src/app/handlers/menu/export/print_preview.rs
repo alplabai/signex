@@ -25,7 +25,9 @@ impl Signex {
         // here — once. `rerasterize_print_preview` below must stay silent: it
         // fires on every settings toggle and on every keystroke in the
         // specific-page input.
-        super::log_stitch_issues(&self.document_state, &ctx, &issues);
+        if let Some(active) = self.document_state.active_path.as_deref() {
+            super::log_stitch_issues(active, &ctx, &issues);
+        }
 
         // Derive page size and orientation from the active schematic document
         // so the preview matches the actual sheet dimensions rather than
@@ -255,8 +257,11 @@ impl Signex {
         // and selected files into pending slots for
         // `handle_export_pdf_finished` to consume; on cancel the
         // pending state is dropped and the modal is unaffected.
-        self.document_state.pending_pdf_options = Some(pdf_options);
-        self.document_state.pending_pdf_files = Some(files);
+        self.document_state.pending_pdf = Some(crate::app::state::PendingPdfExport {
+            source: source.clone(),
+            options: pdf_options,
+            files,
+        });
 
         Some(Task::perform(
             async {

@@ -152,8 +152,8 @@ impl Signex {
                 let task = self.handle_export_pdf_finished(source, result);
                 iced::Task::batch([task, self.finish_update()])
             }
-            ExportMsg::NetlistFinished(result) => {
-                let task = self.handle_export_netlist_finished(result);
+            ExportMsg::NetlistFinished { source, result } => {
+                let task = self.handle_export_netlist_finished(source, result);
                 iced::Task::batch([task, self.finish_update()])
             }
             ExportMsg::PdfOpenDialog => {
@@ -172,8 +172,8 @@ impl Signex {
                 let task = self.handle_bom_preview_open();
                 iced::Task::batch([task, self.finish_update()])
             }
-            ExportMsg::BomFinished(result) => {
-                let task = self.handle_export_bom_finished(result);
+            ExportMsg::BomFinished { source, result } => {
+                let task = self.handle_export_bom_finished(source, result);
                 iced::Task::batch([task, self.finish_update()])
             }
             ExportMsg::ErcReportPathChosen(result) => {

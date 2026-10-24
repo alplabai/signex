@@ -260,12 +260,17 @@ impl Signex {
             LibraryMessage::LibraryCreateOptionsConfirm => {
                 self.handle_library_create_options_confirm()
             }
-            LibraryMessage::AddLibrarySymbolFilePicked(path) => {
-                self.handle_add_library_symbol_file_picked(path)
+            LibraryMessage::AddLibrarySymbolFilePicked { project_id, path } => {
+                self.handle_add_library_symbol_file_picked(project_id, path)
             }
-            LibraryMessage::AddLibraryFootprintFilePicked(path) => {
-                self.handle_add_library_footprint_file_picked(path)
+            LibraryMessage::AddLibraryFootprintFilePicked { project_id, path } => {
+                self.handle_add_library_footprint_file_picked(project_id, path)
             }
+            LibraryMessage::AddLibraryFileWritten {
+                project_id,
+                path,
+                result,
+            } => self.handle_add_library_file_written(project_id, path, result),
             LibraryMessage::ComponentPreviewOpened {
                 path,
                 table,

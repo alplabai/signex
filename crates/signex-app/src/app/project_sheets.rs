@@ -62,8 +62,27 @@ impl ProjectSheetSet {
 pub(crate) fn assemble_active_project_sheets(
     document_state: &DocumentState,
 ) -> (Vec<PathBuf>, ProjectSheetSet) {
-    let pages: Vec<PathBuf> = document_state
-        .active_document_project()
+    let Some(active_path) = document_state.active_path.as_deref() else {
+        let pages = project_pages(document_state.active_document_project());
+        return (pages, ProjectSheetSet::empty());
+    };
+    assemble_project_sheets_for(document_state, active_path)
+}
+
+/// [`assemble_active_project_sheets`] for an explicit `source` document rather
+/// than the active tab (#852).
+pub(crate) fn assemble_project_sheets_for(
+    document_state: &DocumentState,
+    source: &Path,
+) -> (Vec<PathBuf>, ProjectSheetSet) {
+    let pages = project_pages(document_state.document_project(source));
+    let root = resolve_netlist_root_for(document_state, source);
+    let set = assemble_project_sheets(document_state, &pages, &root);
+    (pages, set)
+}
+
+fn project_pages(project: Option<&crate::app::state::LoadedProject>) -> Vec<PathBuf> {
+    project
         .map(|p| {
             let dir = p.dir();
             p.data
@@ -72,13 +91,7 @@ pub(crate) fn assemble_active_project_sheets(
                 .map(|s| dir.join(&s.filename))
                 .collect()
         })
-        .unwrap_or_default();
-    let Some(active_path) = document_state.active_path.clone() else {
-        return (pages, ProjectSheetSet::empty());
-    };
-    let root = resolve_netlist_root(document_state).unwrap_or(active_path);
-    let set = assemble_project_sheets(document_state, &pages, &root);
-    (pages, set)
+        .unwrap_or_default()
 }
 
 /// The sheet-walk order every whole-project Annotate operation must agree
@@ -129,6 +142,14 @@ pub(crate) fn resolve_netlist_root(document_state: &DocumentState) -> Option<Pat
         .or_else(|| document_state.active_path.clone())
 }
 
+/// [`resolve_netlist_root`] for an explicit `source` document.
+pub(crate) fn resolve_netlist_root_for(document_state: &DocumentState, source: &Path) -> PathBuf {
+    document_state
+        .document_project(source)
+        .and_then(project_root_sheet_path)
+        .unwrap_or_else(|| source.to_path_buf())
+}
+
 /// The warning to surface when [`resolve_netlist_root`] had to fall back to the
 /// active sheet *inside a project* because the project declares no root sheet
 /// (#338). `None` for a declared root and for a loose document, where rooting
@@ -137,15 +158,23 @@ pub(crate) fn resolve_netlist_root(document_state: &DocumentState) -> Option<Pat
 /// Kept apart from the resolver so the resolver stays pure (`view` reaches it
 /// through [`assemble_active_project_sheets`]); update-side callers log this.
 pub(crate) fn netlist_root_fallback_warning(document_state: &DocumentState) -> Option<String> {
-    let project = document_state.active_document_project()?;
+    let active = document_state.active_path.as_deref()?;
+    netlist_root_fallback_warning_for(document_state, active)
+}
+
+/// [`netlist_root_fallback_warning`] for an explicit `source` document.
+pub(crate) fn netlist_root_fallback_warning_for(
+    document_state: &DocumentState,
+    source: &Path,
+) -> Option<String> {
+    let project = document_state.document_project(source)?;
     if project.data.schematic_root.is_some() {
         return None;
     }
-    let active = document_state.active_path.as_ref()?;
     Some(format!(
         "Netlist: project '{}' declares no root sheet; rooting at the active sheet '{}'",
         project.data.name,
-        active.display()
+        source.display()
     ))
 }
 

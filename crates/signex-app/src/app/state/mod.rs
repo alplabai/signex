@@ -378,6 +378,18 @@ pub struct NetlistIncompletePrompt {
     pub ctx: signex_output::ExportContext,
 }
 
+/// A PDF export in flight: what the preview modal chose, for the document it
+/// was chosen on (#852).
+#[derive(Debug, Clone)]
+pub struct PendingPdfExport {
+    /// The document the export was started from.
+    pub source: PathBuf,
+    pub options: signex_output::PdfOptions,
+    /// Sheet paths to include, from the preview's file picker. An empty set
+    /// (after a Clear) means "no files chosen" and the export is rejected.
+    pub files: std::collections::HashSet<PathBuf>,
+}
+
 pub struct DocumentState {
     pub dock: DockArea,
     /// Change detection + debounce for persisting `dock` (#692). The
@@ -451,18 +463,12 @@ pub struct DocumentState {
     /// open. Doubles as the unified PDF Export modal — `File → Export
     /// PDF` and `File → Print Preview` both populate this field.
     pub preview: Option<PreviewState>,
-    /// Pending PDF options stashed from the unified preview modal
-    /// while the file picker is running. Used by
-    /// `handle_export_pdf_finished` to apply user-selected options
-    /// instead of defaults. Cleared after export.
-    pub pending_pdf_options: Option<signex_output::PdfOptions>,
-    /// Companion to `pending_pdf_options` — sheet paths to include in
-    /// the export, copied from the preview's file picker. Empty set
-    /// (after a Clear) means "no files chosen" and the export is
-    /// rejected with a user-visible error. `None` means the preview
-    /// path was bypassed (legacy direct-export caller); the export
-    /// then includes every sheet by default.
-    pub pending_pdf_files: Option<std::collections::HashSet<PathBuf>>,
+    /// PDF options + file picks stashed from the unified preview modal while
+    /// the file picker is running, tied to the document they were chosen for.
+    /// `handle_export_pdf_finished` applies them only to a completion with the
+    /// same `source`. `None` means the preview path was bypassed; the export
+    /// then uses defaults and includes every sheet.
+    pub pending_pdf: Option<PendingPdfExport>,
     /// Pending BOM options stashed from the BOM preview modal while
     /// the file picker is running. Without this, the user's column /
     /// grouping / variant / include-DNP picks in the preview would
@@ -763,6 +769,27 @@ impl DocumentState {
         let Some(path) = self.active_path.as_ref() else {
             return self.active_loaded_project();
         };
+        self.document_project(path)
+    }
+
+    /// Take the pending PDF export if it belongs to `source`; one stashed for
+    /// another document is left for its own completion.
+    pub fn take_pending_pdf_for(&mut self, source: &std::path::Path) -> Option<PendingPdfExport> {
+        if self
+            .pending_pdf
+            .as_ref()
+            .is_some_and(|p| p.source == source)
+        {
+            self.pending_pdf.take()
+        } else {
+            None
+        }
+    }
+
+    /// Project that owns the document at `path` (the explicit-path form of
+    /// [`active_document_project`](Self::active_document_project), for async
+    /// completions that resolve against the document they started from).
+    pub fn document_project(&self, path: &std::path::Path) -> Option<&LoadedProject> {
         scope::project_owning_sheet(&self.projects, &self.child_sheet_refs(), path)
     }
 

@@ -210,14 +210,24 @@ pub enum ExportMsg {
         source: std::path::PathBuf,
         result: Result<std::path::PathBuf, String>,
     },
-    /// Completion of netlist export — carries either the saved path or error.
-    NetlistFinished(Result<std::path::PathBuf, String>),
+    /// Completion of netlist export — carries the document the export was
+    /// started from (captured when the dialog opened, #852) plus either the
+    /// saved path or error.
+    NetlistFinished {
+        source: std::path::PathBuf,
+        result: Result<std::path::PathBuf, String>,
+    },
     /// User invoked File → Export → Bill of Materials… — open the
     /// BOM preview modal instead of going straight to the file
     /// dialog. Mirrors Print Preview.
     BomRequested,
-    /// Completion of BOM export — carries either the saved path or error.
-    BomFinished(Result<std::path::PathBuf, String>),
+    /// Completion of BOM export — carries the document the export was started
+    /// from (captured when the dialog opened, #852) plus either the saved path
+    /// or error.
+    BomFinished {
+        source: std::path::PathBuf,
+        result: Result<std::path::PathBuf, String>,
+    },
     /// User picked a path for File → Export → ERC Report — format and write.
     ErcReportPathChosen(Result<std::path::PathBuf, String>),
     /// The ERC report write completed — carries the path or the IO error.
@@ -347,6 +357,20 @@ pub enum ProjectMsg {
     AddNewSchematicPicked {
         project_id: crate::app::state::ProjectId,
         path: Option<std::path::PathBuf>,
+    },
+    /// The off-thread copies behind `AddExistingFilePicked` finished: one
+    /// entry per pick, `Ok` the path to register, `Err` a message for the
+    /// Messages panel. The outer `Err` is a worker that died.
+    AddExistingFilesCopied {
+        project_id: crate::app::state::ProjectId,
+        results: Result<Vec<Result<std::path::PathBuf, String>>, String>,
+    },
+    /// The off-thread blank-schematic write behind `AddNewSchematicPicked`
+    /// finished.
+    AddNewSchematicWritten {
+        project_id: crate::app::state::ProjectId,
+        path: std::path::PathBuf,
+        result: Result<(), String>,
     },
     /// v0.23 — Async project-git commit completed. The dispatcher
     /// removes the `(project_root, rel_path)` entry from
