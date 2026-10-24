@@ -2,17 +2,27 @@
 //!
 //! - Service name format: `signex-distributor-<provider>`
 //! - Used by Mouser (API key) and DigiKey (OAuth refresh token).
-//! - Tests gated by platform: Windows Credential Manager works; Linux/macOS
-//!   CI runners may lack a backend → callers must handle
-//!   `KeyringError::Backend` gracefully.
+//! - Backends (see this crate's `Cargo.toml`): Windows Credential Manager,
+//!   macOS Keychain, Linux Secret Service over D-Bus (pure-Rust zbus client).
+//!   There is deliberately NO plaintext or in-memory fallback: when the OS
+//!   has no usable keychain every operation returns `KeyringError::Backend`
+//!   and callers must show it to the user.
 
 use ::keyring::Entry;
 
 const SERVICE_PREFIX: &str = "signex-distributor-";
 
+/// Actionable remediation appended to every backend failure shown to the user.
+#[cfg(target_os = "linux")]
+const KEYCHAIN_HINT: &str = "Signex stores API credentials in the Secret Service keychain; \
+     start GNOME Keyring or KeePassXC (Secret Service integration) on the D-Bus session bus and unlock it.";
+#[cfg(not(target_os = "linux"))]
+const KEYCHAIN_HINT: &str = "Signex stores API credentials in the OS keychain; \
+     check that it is available and unlocked.";
+
 #[derive(Debug, thiserror::Error)]
 pub enum KeyringError {
-    #[error("keyring backend unavailable: {0}")]
+    #[error("OS keychain unavailable ({0}). {KEYCHAIN_HINT}")]
     Backend(String),
     #[error("entry not found")]
     NotFound,
@@ -93,6 +103,14 @@ impl KeyringStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn backend_error_names_reason_and_remedy() {
+        let msg = KeyringError::Backend("no D-Bus session".into()).to_string();
+        assert!(msg.contains("OS keychain unavailable"), "{msg}");
+        assert!(msg.contains("no D-Bus session"), "{msg}");
+        assert!(msg.contains(KEYCHAIN_HINT), "{msg}");
+    }
 
     #[test]
     fn service_prefix_is_stable() {
