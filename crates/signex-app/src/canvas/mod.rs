@@ -57,8 +57,8 @@ pub struct CanvasState {
     move_dragging: bool,
     /// Current world position during a move-drag (for preview offset).
     move_current: Option<(f64, f64)>,
-    /// Set while a click-click move floats: the `move_epoch` it started in.
-    move_float: Option<u64>,
+    /// Set while a click-click move floats (see `move_pick::Float`).
+    move_float: Option<move_pick::Float>,
     // ─── Double-click detection ───
     /// Timestamp of last left-click (for double-click detection).
     last_click_time: Option<std::time::Instant>,
