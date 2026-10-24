@@ -38,7 +38,43 @@ impl Signex {
             .document_state
             .document_saves
             .begin(target.clone(), bytes);
-        Ok(Task::perform(
+        Ok(Self::spawn_document_write(
+            job,
+            target,
+            revision,
+            save_as_from,
+        ))
+    }
+
+    /// Snapshot the active PCB tab's board and return the task that writes
+    /// it atomically to its `.snxpcb`. The completion routes through the
+    /// same `DocumentSaved` message as a schematic save.
+    pub(crate) fn begin_pcb_save(&mut self, path: PathBuf) -> Result<Task<Message>> {
+        let board = self
+            .document_state
+            .tabs
+            .iter()
+            .filter(|tab| matches!(tab.kind, TabKind::Pcb) && tab.path == path)
+            .find_map(|tab| tab.cached_document.as_ref()?.as_pcb())
+            .with_context(|| format!("no open PCB at {}", path.display()))?;
+        let bytes = signex_types::format::SnxPcb::new(board.clone())
+            .write_string()
+            .with_context(|| format!("encode PCB {}", path.display()))?
+            .into_bytes();
+        let job = self
+            .document_state
+            .document_saves
+            .begin(path.clone(), bytes);
+        Ok(Self::spawn_document_write(job, path, 0, None))
+    }
+
+    fn spawn_document_write(
+        job: crate::persist::DocumentSaveJob,
+        target: PathBuf,
+        revision: u64,
+        save_as_from: Option<PathBuf>,
+    ) -> Task<Message> {
+        Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || job.run())
                     .await
@@ -53,7 +89,7 @@ impl Signex {
                     result,
                 }))
             },
-        ))
+        )
     }
 
     /// A schematic write finished. Success clears the dirty marker only if
@@ -88,6 +124,7 @@ impl Signex {
             return Task::none();
         }
         match save_as_from {
+            None if self.is_pcb_path(&path) => self.mark_pcb_saved(&path),
             None => self.mark_saved(&path, revision),
             Some(from) => self.apply_saved_as(&from, path, revision),
         }
@@ -141,6 +178,33 @@ impl Signex {
         // dirty; now it is clean nothing needs it.
         if !self.document_is_held_open(path) {
             self.document_state.engines.remove(path);
+        }
+        let label = path
+            .file_name()
+            .map(|f| f.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.display().to_string());
+        self.commit_save_to_project_git(path, &format!("Save {label}"));
+    }
+
+    fn is_pcb_path(&self, path: &std::path::Path) -> bool {
+        self.document_state
+            .tabs
+            .iter()
+            .any(|tab| matches!(tab.kind, TabKind::Pcb) && tab.path == path)
+    }
+
+    /// A PCB write landed: clear the dirty marker and queue the project git
+    /// commit, same message style as a schematic save.
+    fn mark_pcb_saved(&mut self, path: &std::path::Path) {
+        crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()));
+        self.document_state.dirty_paths.remove(path);
+        for tab in self
+            .document_state
+            .tabs
+            .iter_mut()
+            .filter(|t| t.path == path)
+        {
+            tab.dirty = false;
         }
         let label = path
             .file_name()

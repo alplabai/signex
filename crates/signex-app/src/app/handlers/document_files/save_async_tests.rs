@@ -65,3 +65,34 @@ fn a_clean_engine_is_dropped_unless_an_undocked_window_holds_the_path() {
     land(&mut app, &path, revision);
     assert!(!app.document_state.engines.contains_key(&path));
 }
+
+#[test]
+fn a_pcb_completion_requests_the_project_git_commit() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &[]);
+    app.document_state.projects[0].data.enable_git = true;
+    let path = dir.path().join("board.snxpcb");
+    app.open_pcb_tab(path.clone(), "board".into(), empty_board());
+    land(&mut app, &path, 0);
+    assert_eq!(app.document_state.inflight_git_commits.len(), 1);
+}
+
+fn empty_board() -> signex_types::pcb::PcbBoard {
+    signex_types::pcb::PcbBoard {
+        unknown: Default::default(),
+        uuid: uuid::Uuid::new_v4(),
+        version: 1,
+        generator: "signex-test".into(),
+        thickness: 1.6,
+        outline: vec![],
+        layers: vec![],
+        setup: None,
+        nets: vec![],
+        footprints: vec![],
+        segments: vec![],
+        vias: vec![],
+        zones: vec![],
+        graphics: vec![],
+        texts: vec![],
+    }
+}
