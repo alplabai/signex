@@ -503,6 +503,30 @@ fn to_toml_string_refuses_a_non_finite_graphic() {
     }
 }
 
+/// #828 -- the pad-shape reader refuses what the writer refuses: a
+/// `nan` / `inf` ratio or custom point is `InvalidPadShape`, not geometry.
+#[test]
+fn pad_shape_from_token_refuses_a_non_finite_number() {
+    for token in [
+        "round_rect:inf",
+        "round_rect:-inf",
+        "round_rect:nan",
+        "chamfered:nan:0000",
+        "chamfered:inf:1111",
+        "custom:inf,0|1,1",
+        "custom:0,0|1,nan|1,1",
+        "custom:0,0|1,-inf",
+    ] {
+        assert!(
+            matches!(
+                pad_shape_from_token(token),
+                Err(FootprintFileError::InvalidPadShape(ref t)) if t == token
+            ),
+            "{token:?} must be refused as InvalidPadShape"
+        );
+    }
+}
+
 #[test]
 fn a_finite_footprint_still_saves() {
     let mut fp = Footprint::empty("OK");

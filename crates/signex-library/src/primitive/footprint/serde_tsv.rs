@@ -1,6 +1,7 @@
 //! Pad TSV codec + token conversions for the footprint wire format.
 
 use super::*;
+use signex_types::numeric::parse_finite_f64;
 
 // ---- Pad TSV codec --------------------------------------------------
 
@@ -93,6 +94,9 @@ fn bool_bit(b: bool) -> char {
 
 pub(super) fn pad_shape_from_token(s: &str) -> Result<PadShape, FootprintFileError> {
     let invalid = || FootprintFileError::InvalidPadShape(s.to_string());
+    // A bare `parse::<f64>()` accepts `nan` / `inf`; the writer refuses them,
+    // so the reader must too (#828).
+    let finite = |text: &str| parse_finite_f64(text).map_err(|_| invalid());
     if s == "round" {
         return Ok(PadShape::Round);
     }
@@ -103,14 +107,14 @@ pub(super) fn pad_shape_from_token(s: &str) -> Result<PadShape, FootprintFileErr
         return Ok(PadShape::Oval);
     }
     if let Some(rest) = s.strip_prefix("round_rect:") {
-        let radius_ratio: f64 = rest.parse().map_err(|_| invalid())?;
+        let radius_ratio = finite(rest)?;
         return Ok(PadShape::RoundRect { radius_ratio });
     }
     if let Some(rest) = s.strip_prefix("chamfered:") {
         let mut parts = rest.splitn(2, ':');
         let ratio_str = parts.next().ok_or_else(invalid)?;
         let bits_str = parts.next().ok_or_else(invalid)?;
-        let chamfer_ratio: f64 = ratio_str.parse().map_err(|_| invalid())?;
+        let chamfer_ratio = finite(ratio_str)?;
         let bits: Vec<char> = bits_str.chars().collect();
         if bits.len() != 4 || bits.iter().any(|c| *c != '0' && *c != '1') {
             return Err(invalid());
@@ -138,8 +142,8 @@ pub(super) fn pad_shape_from_token(s: &str) -> Result<PadShape, FootprintFileErr
                 if xy.next().is_some() {
                     return Err(invalid());
                 }
-                let x: f64 = x_str.parse().map_err(|_| invalid())?;
-                let y: f64 = y_str.parse().map_err(|_| invalid())?;
+                let x = finite(x_str)?;
+                let y = finite(y_str)?;
                 points.push([x, y]);
             }
             points
