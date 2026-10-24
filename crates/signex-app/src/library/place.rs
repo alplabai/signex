@@ -54,7 +54,10 @@ pub fn resolve_placement(
     .map_err(|e| format!("Could not read the symbol of {}: {e}", row.internal_pn))?;
 
     let lib_id = format!("{}:{}", row.symbol_ref.library_id, row.symbol_ref.uuid);
-    let value = if row.primary_mpn.mpn.is_empty() {
+    let is_power = is_power_port(&symbol);
+    let value = if is_power {
+        power_port_net_name(&symbol)
+    } else if row.primary_mpn.mpn.is_empty() {
         symbol.comment.clone()
     } else {
         row.primary_mpn.mpn.clone()
@@ -67,8 +70,31 @@ pub fn resolve_placement(
         library_version: row.version.clone(),
         internal_pn: row.internal_pn.to_string(),
         value,
+        is_power,
         prefix: designator_prefix(&symbol.designator),
     })
+}
+
+/// A power port: designator starts with `#`, or its only pin is a
+/// `PinDirection::Power` pin (the stock `GND` / `VCC` symbols).
+fn is_power_port(symbol: &signex_library::primitive::Symbol) -> bool {
+    use signex_library::primitive::PinDirection;
+    symbol.designator.trim_start().starts_with('#')
+        || matches!(symbol.pins.as_slice(), [pin] if pin.electrical == PinDirection::Power)
+}
+
+/// The global net name a power port stamps: its comment, or the pin name
+/// when the comment is empty or the `*` placeholder.
+fn power_port_net_name(symbol: &signex_library::primitive::Symbol) -> String {
+    let comment = symbol.comment.trim();
+    if !comment.is_empty() && comment != "*" {
+        return comment.to_owned();
+    }
+    symbol
+        .pins
+        .first()
+        .map(|p| p.name.trim().to_owned())
+        .unwrap_or_default()
 }
 
 /// Reference prefix from a library designator: `"U?"` -> `"U"`, empty -> `"U"`.

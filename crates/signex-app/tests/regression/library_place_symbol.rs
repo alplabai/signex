@@ -21,9 +21,9 @@ use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig};
 use signex_library::manufacturer::ManufacturerPart;
 use signex_library::param::ParamMap;
 use signex_library::primitive::{
-    PrimitiveRef, Symbol, SymbolFile, SymbolGraphic, SymbolGraphicKind, SymbolPin,
+    PinDirection, PrimitiveRef, Symbol, SymbolFile, SymbolGraphic, SymbolGraphicKind, SymbolPin,
 };
-use signex_types::schematic::{NoConnect, SchematicSheet, SymbolTransform};
+use signex_types::schematic::{NoConnect, Point, SchematicSheet, SymbolTransform, Wire};
 use std::path::PathBuf;
 use uuid::Uuid;
 
@@ -74,6 +74,10 @@ fn cross_library() -> (Fixture, Fixture) {
 /// `symbol_ref` overrides where the row's symbol lives; every library also
 /// carries its own copy of the symbol.
 fn build(name: &str, symbol_ref: Option<(Uuid, Uuid)>) -> Fixture {
+    build_with(name, symbol_ref, two_unit_symbol())
+}
+
+fn build_with(name: &str, symbol_ref: Option<(Uuid, Uuid)>, symbol: Symbol) -> Fixture {
     signex_library::git_identity::test_identity::install();
     let tmp = tempfile::tempdir().expect("tempdir");
     let dir = tmp.path().join(name);
@@ -101,7 +105,6 @@ fn build(name: &str, symbol_ref: Option<(Uuid, Uuid)>) -> Fixture {
     .expect("init");
     let library_id = adapter.library_id();
 
-    let symbol = two_unit_symbol();
     let sym_uuid = symbol.uuid;
     std::fs::create_dir_all(dir.join("symbols")).expect("symbols dir");
     std::fs::write(
@@ -548,4 +551,66 @@ fn each_unit_selects_its_own_body() {
     };
     assert_eq!(body_for(1), [1]);
     assert_eq!(body_for(2), [2]);
+}
+
+/// Stock-style power port: one `Power` pin named `GND`, `#PWR?`, comment `GND`.
+fn gnd_symbol() -> Symbol {
+    let mut s = Symbol::empty("GND");
+    s.designator = "#PWR?".into();
+    s.comment = "GND".into();
+    let mut p = SymbolPin::new("1", "GND");
+    p.electrical = PinDirection::Power;
+    s.pins.push(p);
+    s
+}
+
+#[test]
+fn a_library_power_port_places_as_a_power_port() {
+    let f = build_with("gnd", None, gnd_symbol());
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    place(&mut app, &f);
+    assert!(app.document_state.error_notice.is_none());
+
+    let mut sheet = doc(&app).clone();
+    let (a, b) = (&sheet.symbols[0], &sheet.symbols[1]);
+    assert!(a.is_power && b.is_power);
+    assert_eq!(a.value, "GND");
+    assert_eq!(a.reference, "#PWR1");
+    assert_eq!(b.reference, "#PWR2");
+
+    // A wire from the pin tip makes a net the port names.
+    let lib = sheet.lib_symbols.get(&a.lib_id).expect("lib");
+    let tip = SymbolTransform::from_symbol(a).apply(lib.pins[0].pin.position);
+    sheet.wires.push(Wire {
+        uuid: Uuid::new_v4(),
+        start: tip,
+        end: Point::new(tip.x + 10.16, tip.y),
+        ..Default::default()
+    });
+    let nets = signex_net::build_netlist(&sheet).nets;
+    assert!(nets.iter().any(|n| n.name == "GND"), "{nets:?}");
+
+    let ctx = signex_output::ExportContext {
+        sheets: vec![signex_output::SheetSnapshot {
+            path: "gnd.snxsch".into(),
+            schematic: sheet,
+            sheet_name: "Main".into(),
+            sheet_number: 1,
+            sheet_count: 1,
+        }],
+        metadata: Default::default(),
+        netlist: None,
+        netlist_sheets: Vec::new(),
+    };
+    let table = signex_output::bom::rollup(&ctx, &Default::default());
+    assert!(table.rows.is_empty(), "power ports stay out of the BOM");
+}
+
+#[test]
+fn an_ordinary_part_is_not_a_power_port() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    assert!(!doc(&app).symbols[0].is_power);
 }
