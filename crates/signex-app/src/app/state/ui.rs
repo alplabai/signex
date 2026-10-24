@@ -292,6 +292,11 @@ pub struct UiState {
     /// Global cursor into the flattened ERC diagnostics list spanning all
     /// sheets in `erc_violations_by_path`. Used by next/prev navigation.
     pub erc_focus_global_index: Option<usize>,
+    /// Token of the newest ERC run; a finished run applies only if it still
+    /// matches (#111).
+    pub erc_run_generation: u64,
+    /// An ERC run is in flight; the ERC panel shows "Running…".
+    pub erc_running: bool,
     /// Cached authoritative project netlist (ADR-0002 D7). Derived state, held
     /// like any other Model state: recomputed in `update` off the shared sheet
     /// view and invalidated whenever a schematic edit touches connectivity
@@ -353,6 +358,9 @@ pub struct UiState {
     /// Exposed as per-row checkboxes in the Annotate dialog; the engine
     /// skips these uuids in `annotate_with_seed_and_locks`.
     pub annotate_locked: std::collections::HashSet<uuid::Uuid>,
+    /// Cached Annotate-dialog preview; loaded off-thread and re-derived in
+    /// `update`, never in `view` (#111).
+    pub annotate_preview: crate::app::handlers::erc::AnnotatePreviewCache,
     /// Altium-style rubber-band selection mode. Drives how the box
     /// drag classifies hits (Inside / Outside / TouchingLine).
     pub selection_mode: crate::schematic_runtime::hit_test::SelectionMode,
@@ -370,12 +378,17 @@ pub struct UiState {
     /// double-click or a click on the first vertex closes the polygon
     /// and commits the selection. Escape or right-click cancels.
     pub lasso_polygon: Option<Vec<signex_types::schematic::Point>>,
-    /// App-level undo stack for net-color floods. Each entry is the
-    /// full `wire_color_overrides` map captured before an action —
-    /// popping one restores the previous state. This is separate from
-    /// the engine's undo because net colours are render-only and
+    /// App-level undo stack for net-color floods. Each step holds the
+    /// full `wire_color_overrides` map captured before an action plus the
+    /// engine's `undo_position` at that moment, so Ctrl+Z can interleave
+    /// colour steps and engine edits in true chronological order. Separate
+    /// from the engine's history because net colours are render-only and
     /// shouldn't mix with document mutations.
-    pub net_color_undo: Vec<std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>>,
+    pub net_color_undo: std::collections::HashMap<std::path::PathBuf, Vec<NetColorStep>>,
+    /// Keyed by document path: each document has its own timeline.
+    /// Redo mirror of [`Self::net_color_undo`]; cleared by any new colour
+    /// action or engine edit.
+    pub net_color_redo: std::collections::HashMap<std::path::PathBuf, Vec<NetColorStep>>,
     /// Custom net-color picker state. When `show = true`, a floating
     /// iced_aw ColorPicker appears anchored to the Active Bar button;
     /// `draft` is the user's pending pick — committed on OK.
@@ -448,4 +461,12 @@ impl UiState {
     pub fn preferences_has_unsaved_changes(&self) -> bool {
         self.preferences_dirty_sticky || self.preferences_draft_differs()
     }
+}
+
+/// One net-colour undo/redo step: the override map to restore, stamped
+/// with the engine edit-timeline position it was recorded at.
+#[derive(Debug, Clone)]
+pub struct NetColorStep {
+    pub colors: std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    pub at: usize,
 }

@@ -100,6 +100,7 @@ impl Signex {
                     report(&path, &e.to_string());
                     return Task::none();
                 }
+                self.library.drift.check_pending = true;
             }
             Err(e) => {
                 report(&path, &e);

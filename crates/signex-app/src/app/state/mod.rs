@@ -19,7 +19,7 @@ pub(crate) mod volume_case;
 
 pub use interaction::InteractionState;
 pub use pdf_page_setup::PageSetupInputs;
-pub use ui::UiState;
+pub use ui::{NetColorStep, UiState};
 
 pub struct Signex {
     pub ui_state: UiState,
@@ -411,6 +411,9 @@ pub struct DocumentState {
     /// The Components filter + Library Browser queries and the debounce
     /// that persists them (#859); see `handlers/dock/search_prefs_persist.rs`.
     pub search_prefs: crate::persist::SearchPrefsSync,
+    /// Off-thread document writes: per-path ordering, in-flight tracking and
+    /// the quit barrier (#859); see `handlers/document_files/save_async.rs`.
+    pub document_saves: crate::persist::DocumentSaves,
     pub tabs: Vec<TabInfo>,
     pub active_tab: usize,
     /// All live schematic engines keyed by their on-disk path. Every
@@ -575,6 +578,10 @@ pub struct BomPreviewState {
     /// `bom::rollup`). Click a header cell to set; click the same one
     /// again to flip direction.
     pub sort: Option<(usize, bool)>,
+    /// Row indexes into `table.rows` in display order under `sort`. Recomputed
+    /// in `update` whenever the rows, columns or sort change, so `view` only
+    /// reads it.
+    pub row_order: Vec<usize>,
     /// In-flight column drag — `Some(from_idx)` while the user is
     /// holding the mouse down on a header cell. The header only
     /// renders the drag highlight once the cursor has moved past

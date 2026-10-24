@@ -102,8 +102,19 @@ impl Signex {
                 iced::Task::batch([task, self.finish_update()])
             }
             FileMsg::SaveAs { from_path, to_path } => {
-                self.handle_active_document_save_as_requested(from_path, to_path);
+                let task = self.handle_active_document_save_as_requested(from_path, to_path);
+                iced::Task::batch([task, self.finish_update()])
+            }
+            FileMsg::DocumentSaveWaitFailed(reason) => {
+                crate::diagnostics::log_error(
+                    "Could not confirm that document writes finished before exit",
+                    &anyhow::anyhow!(reason),
+                );
                 self.finish_update()
+            }
+            FileMsg::DocumentSaved(done) => {
+                let task = self.handle_document_saved(done);
+                iced::Task::batch([task, self.finish_update()])
             }
             FileMsg::SavePrimitiveAs { from_path, to_path } => {
                 if let Err(error) = self.handle_save_primitive_as(&from_path, &to_path) {
@@ -193,6 +204,29 @@ impl Signex {
 
     /// BOM-preview modal message handler (namespaced family, ADR-0001 D3).
     pub(crate) fn dispatch_bom_preview_message(&mut self, msg: BomPreviewMsg) -> Task<Message> {
+        // Pure pointer/UI-state messages cannot change the row order; every
+        // other message (and any future one) re-sorts after it ran.
+        let reorders = !matches!(
+            msg,
+            BomPreviewMsg::ColumnHoverEnter(_)
+                | BomPreviewMsg::ColumnHoverExit(_)
+                | BomPreviewMsg::ColumnDragStart(_)
+                | BomPreviewMsg::ColumnResizeStart(_)
+                | BomPreviewMsg::ColumnResizeEnd
+                | BomPreviewMsg::SetSidebarTab(_)
+        );
+        let task = self.dispatch_bom_preview_message_inner(msg);
+        if reorders && let Some(p) = self.document_state.bom_preview.as_mut() {
+            p.row_order = crate::app::view::dialogs::sorted_row_order(
+                &p.table.rows,
+                &p.options.columns,
+                p.sort,
+            );
+        }
+        task
+    }
+
+    fn dispatch_bom_preview_message_inner(&mut self, msg: BomPreviewMsg) -> Task<Message> {
         match msg {
             BomPreviewMsg::SetGrouping(g) => {
                 self.handle_bom_preview_set_grouping(g);

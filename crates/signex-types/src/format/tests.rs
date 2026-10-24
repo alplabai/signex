@@ -181,7 +181,7 @@ fn snxsch_survives_embedded_newline_in_label_text() {
 fn snxpcb_round_trip_empty() {
     let snx = SnxPcb::new(empty_board());
     let s = snx.write_string().expect("serialise");
-    assert!(s.contains("format = \"snxpcb/1\""));
+    assert!(s.contains(&format!("format = \"{SNXPCB_FORMAT_V1}\"")));
     let back = SnxPcb::parse(&s).expect("round-trip");
     assert_eq!(back.format, SNXPCB_FORMAT_V1);
 }

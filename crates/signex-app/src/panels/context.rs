@@ -141,6 +141,8 @@ pub struct PanelContext {
     pub erc_diagnostics: Vec<ErcDiagnosticEntry>,
     /// Focused ERC diagnostic index used by prev/next navigation arrows.
     pub erc_focus_index: Option<usize>,
+    /// An ERC run is in flight (the panel shows "Running…").
+    pub erc_running: bool,
     pub diagnostics_level: String,
     /// Recent application diagnostics shown in the Messages panel.
     pub diagnostics: Vec<crate::diagnostics::DiagnosticEntry>,
