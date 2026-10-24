@@ -30,6 +30,7 @@ use crate::app::FootprintEditorState;
 use crate::library::editor::footprint::state::AlignOp;
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::styles::ti;
+use crate::styles::tokens;
 
 /// Base font size the whole card derives its spacing/widths from —
 /// no hardcoded pixel constants independent of this (mirrors
@@ -70,7 +71,6 @@ pub fn view_align_modal<'a>(
     let text_c = ti(tokens.text);
     let text_muted = ti(tokens.text_secondary);
     let border_c = ti(tokens.border);
-    let accent_c = ti(tokens.accent);
     let toolbar_bg = ti(tokens.toolbar_bg);
 
     // Card width derives from the font size rather than magic pixels.
@@ -80,7 +80,7 @@ pub fn view_align_modal<'a>(
         row![
             text("Align Selection").size(FONT_SIZE + 1.0).color(text_c),
             iced::widget::Space::new().width(Length::Fill),
-            close_x(cancel_msg(&path), text_muted),
+            close_x(cancel_msg(&path), text_muted, tokens),
         ]
         .align_y(iced::Alignment::Center),
     )
@@ -116,9 +116,7 @@ pub fn view_align_modal<'a>(
                     path: path.clone(),
                     msg: PrimitiveEdit::Footprint(ctor(option)),
                 },
-                accent_c,
-                text_muted,
-                border_c,
+                tokens,
             ));
         }
         column![text(caption).size(FONT_SIZE - 1.0).color(text_muted), chips,]
@@ -144,7 +142,7 @@ pub fn view_align_modal<'a>(
 
     let footer = row![
         iced::widget::Space::new().width(Length::Fill),
-        secondary_button("Cancel", cancel_msg(&path), text_c, border_c),
+        secondary_button("Cancel", cancel_msg(&path), tokens),
         iced::widget::Space::new().width(FONT_SIZE * 0.6),
         primary_button(
             "OK",
@@ -152,8 +150,7 @@ pub fn view_align_modal<'a>(
                 path,
                 msg: PrimitiveEdit::Footprint(FootprintEditorMsg::AlignConfirm),
             },
-            accent_c,
-            border_c,
+            tokens,
         ),
     ]
     .align_y(iced::Alignment::Center);
@@ -182,102 +179,74 @@ fn cancel_msg(path: &Path) -> LibraryMessage {
 }
 
 /// One mutually-exclusive option chip. `selected` fills it with the
-/// accent colour; otherwise it is a bordered, muted, transparent chip.
+/// accent colour; otherwise it is a bordered outline chip.
 fn option_chip<'a>(
     label: &'a str,
     selected: bool,
     message: LibraryMessage,
-    accent: Color,
-    text_muted: Color,
-    border: Color,
+    tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
-    let (bg, fg) = if selected {
-        (accent, Color::WHITE)
+    let fg = if selected {
+        tokens::on_accent(tokens)
     } else {
-        (Color::TRANSPARENT, text_muted)
+        tokens::muted_text(tokens)
     };
-    button(
+    let chip = button(
         container(text(label.to_string()).size(FONT_SIZE - 1.0).color(fg))
             .padding([FONT_SIZE * 0.35, FONT_SIZE * 0.7]),
     )
-    .on_press(message)
-    .style(move |_: &iced::Theme, _| button::Style {
-        background: Some(Background::Color(bg)),
-        border: Border {
-            width: 1.0,
-            radius: 4.0.into(),
-            color: border,
-        },
-        text_color: fg,
-        ..button::Style::default()
-    })
-    .into()
+    .on_press(message);
+    if selected {
+        chip.style(crate::styles::accent_button(tokens)).into()
+    } else {
+        chip.style(crate::styles::outline_button(tokens)).into()
+    }
 }
 
-fn close_x(message: LibraryMessage, text_color: Color) -> Element<'static, LibraryMessage> {
+fn close_x<'a>(
+    message: LibraryMessage,
+    text_color: Color,
+    tokens: &ThemeTokens,
+) -> Element<'a, LibraryMessage> {
     button(text("\u{2715}").size(FONT_SIZE - 1.0).color(text_color))
         .padding(FONT_SIZE * 0.25)
         .on_press(message)
-        .style(move |_: &iced::Theme, _| button::Style {
-            background: Some(Background::Color(Color::TRANSPARENT)),
-            text_color,
-            ..button::Style::default()
-        })
+        .style(crate::styles::subtle_button(tokens))
         .into()
 }
 
 fn secondary_button<'a>(
     label: &str,
     message: LibraryMessage,
-    text_color: Color,
-    border: Color,
+    tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     button(
         container(
             text(label.to_string())
                 .size(FONT_SIZE - 1.0)
-                .color(text_color),
+                .color(ti(tokens.text)),
         )
         .padding([FONT_SIZE * 0.4, FONT_SIZE * 1.1]),
     )
     .on_press(message)
-    .style(move |_: &iced::Theme, _| button::Style {
-        background: Some(Background::Color(Color::TRANSPARENT)),
-        border: Border {
-            width: 1.0,
-            radius: 4.0.into(),
-            color: border,
-        },
-        text_color,
-        ..button::Style::default()
-    })
+    .style(crate::styles::outline_button(tokens))
     .into()
 }
 
 fn primary_button<'a>(
     label: &str,
     message: LibraryMessage,
-    accent: Color,
-    border: Color,
+    tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     button(
         container(
             text(label.to_string())
                 .size(FONT_SIZE - 1.0)
-                .color(Color::WHITE),
+                .color(tokens::on_accent(tokens)),
         )
         .padding([FONT_SIZE * 0.4, FONT_SIZE * 1.1]),
     )
     .on_press(message)
-    .style(move |_: &iced::Theme, _| button::Style {
-        background: Some(Background::Color(accent)),
-        border: Border {
-            width: 1.0,
-            radius: 4.0.into(),
-            color: border,
-        },
-        text_color: Color::WHITE,
-        ..button::Style::default()
-    })
+    .style(crate::styles::accent_button(tokens))
     .into()
 }
