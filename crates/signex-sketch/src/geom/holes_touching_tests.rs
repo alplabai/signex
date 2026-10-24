@@ -413,6 +413,34 @@ fn wavy_outline(size: f64, vertices: usize) -> Vec<Point2> {
     ring
 }
 
+/// A 32 x 32 grid of 16-gon cut-outs, the size the timing harness reports
+/// on, triangulates to the right area and stays far inside a generous time
+/// bound, so a slide back to the old cubic clipper (about 1.6 s in release,
+/// far longer in a debug test build) fails here instead of only in the
+/// ignored harness.
+#[test]
+fn a_32_by_32_grid_of_cut_outs_triangulates_exactly_and_quickly() {
+    let (side, pitch) = (32_usize, 10.0);
+    let size = pitch * (side as f64 + 1.0);
+    let holes: Vec<Vec<Point2>> = (0..side * side)
+        .map(|k| {
+            let (cx, cy) = (
+                pitch * ((k % side) as f64 + 1.0),
+                pitch * ((k / side) as f64 + 1.0),
+            );
+            regular_polygon(cx, cy, 3.0, 16, 0.0)
+        })
+        .collect();
+    let outer = rect(0.0, 0.0, size, size);
+    let t0 = std::time::Instant::now();
+    assert_eq!(area_error(&outer, &holes), None);
+    let took = t0.elapsed();
+    assert!(
+        took < std::time::Duration::from_secs(20),
+        "32x32 cut-outs took {took:?}"
+    );
+}
+
 /// Timing harness for the bridging and ear clipping of grids of 16-gon holes:
 /// `cargo test --release -p signex-sketch --lib -- --ignored --nocapture clipper_timing`.
 #[test]

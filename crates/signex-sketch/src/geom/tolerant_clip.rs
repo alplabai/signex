@@ -14,10 +14,13 @@
 //!
 //! A vertex that is currently convex never blocks, coincident or not: it can
 //! only touch the ear's boundary, not enter it. Only vertices that were
-//! non-convex when the ring was built can become blockers, because clipping
-//! never turns a convex vertex non-convex, so they are indexed once in a
-//! [`PointGrid`] of [`super::AabbIndex`] cells and each ear queries just the
-//! cells under its bounding box instead of scanning the whole ring.
+//! non-convex when the ring was built are treated as blockers. Clipping an ear
+//! does not turn a convex neighbour non-convex; removing a degenerate spike
+//! tip in `settle` changes a neighbour's direction and is not shown to keep
+//! that, so the index is a working assumption there rather than a proven
+//! invariant. The indexed vertices sit in a [`PointGrid`] of
+//! [`super::AabbIndex`] cells and each ear queries just the cells under its
+//! bounding box instead of scanning the whole ring.
 //!
 //! The one exception is the forced cut below, which only runs after no ear
 //! passed the test, i.e. on input that is already not a clean partition (the
