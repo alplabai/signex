@@ -58,19 +58,19 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
                 "Netlist (Protel .NET)...",
                 None,
                 MenuMessage::ExportNetlist,
-                ctx.has_schematic,
+                ctx.commands.has_schematic,
             ),
             leaf_if(
                 "Bill of Materials…",
                 None,
                 MenuMessage::ExportBom,
-                ctx.has_schematic,
+                ctx.commands.has_schematic,
             ),
             leaf_if(
                 "ERC Report…",
                 None,
                 MenuMessage::ExportErcReport,
-                ctx.has_schematic,
+                ctx.commands.has_schematic,
             ),
         ]),
     );
@@ -89,7 +89,7 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
                 "Place Component...",
                 None,
                 MenuMessage::LibraryPlaceComponent,
-                ctx.has_schematic,
+                ctx.commands.has_schematic,
             ),
         ]),
     );
@@ -282,7 +282,7 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
                 &cmd_label("cycle_snap_grid_forward", "Cycle Grid Size"),
                 shortcut_for(&ctx, "cycle_snap_grid_forward", "G"),
                 MenuMessage::CycleGrid,
-                enabled(&ctx, "cycle_snap_grid_forward"),
+                crate::app::command::enablement::cycle_grid_menu_enabled(&ctx.commands),
             ),
             leaf_if(
                 &cmd_label("toggle_auto_focus", "AutoFocus (dim unselected)"),
@@ -349,19 +349,19 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
                 "Annotate Schematics...",
                 None,
                 MenuMessage::Annotate,
-                ctx.has_schematic,
+                ctx.commands.has_schematic,
             ),
             leaf_if(
                 "Reset Schematic Designators...",
                 None,
                 MenuMessage::AnnotateReset,
-                ctx.has_schematic,
+                ctx.commands.has_schematic,
             ),
             leaf_if(
                 "Reset Duplicate Schematic Designators...",
                 None,
                 MenuMessage::AnnotateResetDuplicates,
-                ctx.has_schematic,
+                ctx.commands.has_schematic,
             ),
             separator(mc),
             leaf_if(
@@ -414,7 +414,7 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
                 "Up Hierarchy",
                 None,
                 MenuMessage::AscendToParentSheet,
-                ctx.has_schematic,
+                ctx.commands.has_schematic,
             ),
             separator(mc),
             // Multi-part component flow — only meaningful when the

@@ -173,8 +173,6 @@ impl Signex {
         // the same predicate the keyboard path dispatches by (#368).
         let menu_ctx = crate::menu_bar::MenuContext {
             commands: self.command_context(Some(window_id)),
-            has_schematic: self.has_active_schematic(),
-            has_pcb: self.has_active_pcb(),
             has_project: document.active_project.is_some(),
             // Secondary windows (detached modal, undocked tab) borrow
             // the main window's scale. Good enough until per-window

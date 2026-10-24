@@ -230,8 +230,6 @@ pub struct MenuContext {
     /// The enablement facts for this window; rows keyed on a command id
     /// grey themselves through [`crate::app::command::is_enabled`] (#368).
     pub(crate) commands: crate::app::command::CommandContext,
-    pub has_schematic: bool,
-    pub has_pcb: bool,
     /// Reserved for guarding project-wide items (e.g. multi-sheet
     /// navigator, BOM across project) when those land. Currently no
     /// menu entry reads this but the field stays so callers don't
@@ -253,8 +251,6 @@ impl Default for MenuContext {
     fn default() -> Self {
         Self {
             commands: Default::default(),
-            has_schematic: false,
-            has_pcb: false,
             has_project: false,
             scale_factor: 1.0,
             active_keymap: None,

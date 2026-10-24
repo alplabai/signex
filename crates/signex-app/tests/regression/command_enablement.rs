@@ -48,3 +48,19 @@ fn ctrl_z_still_undoes_in_a_footprint_editor_tab() {
         "Ctrl+Z must still reach the footprint editor's own history"
     );
 }
+
+/// #907 review: the change itself, end to end. Ctrl+W (Place Wire in the
+/// default profile) with no document open used to arm the wire tool while
+/// Place ▸ Wire was greyed; it now does nothing.
+#[test]
+fn place_wire_with_no_document_open_does_nothing() {
+    let (mut app, _t) = Signex::new();
+
+    press(&mut app, "Ctrl+W");
+
+    assert_eq!(
+        app.interaction_state.current_tool,
+        signex_app::app::Tool::Select,
+        "no schematic: the wire tool must not arm"
+    );
+}

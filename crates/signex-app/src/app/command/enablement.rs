@@ -13,6 +13,10 @@
 //! only the schematic engine. Commands with no entry, including the ones
 //! whose handler acts from any tab (Find, the grid toggle, AutoFocus), are
 //! always enabled.
+//!
+//! Ids that resolve to the same message share one arm (`place_net_label`
+//! and `place_local_net_label`, …), so an alias cannot bypass the gate; a
+//! test checks every such pair in the catalog.
 
 use crate::keymap::AppCommandId;
 
@@ -21,11 +25,14 @@ use super::super::*;
 /// The facts the enablement predicates read, for one window.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct CommandContext {
-    /// A schematic sheet is shown: the main window's active tab, or the
-    /// undocked tab window the command came from.
+    /// The main window's active tab is a schematic sheet.
     pub has_schematic: bool,
-    /// A PCB is shown, in the same sense.
+    /// The main window's active tab is a PCB.
     pub has_pcb: bool,
+    /// The undocked tab window the command came from shows a schematic or
+    /// a PCB. Only Fit All acts on that window's own canvas; every other
+    /// handler acts on the main window's active tab.
+    pub undocked_has_canvas: bool,
     /// ERC and annotation have sheets to work on: a project is open, or
     /// some schematic is. They assemble the project's sheets, not only the
     /// active tab's.
@@ -34,7 +41,7 @@ pub(crate) struct CommandContext {
     pub has_symbol_editor: bool,
     /// The active tab is a `.snxfpt` footprint editor.
     pub has_footprint_editor: bool,
-    /// A schematic canvas the command can act on has a selection.
+    /// The main window's schematic canvas has a selection.
     pub has_selection: bool,
     /// Undo has something to undo: the symbol or footprint editor's own
     /// history in an editor tab, else a net-colour change or the
@@ -59,25 +66,47 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
         "cut" | "copy" | "duplicate" => ctx.has_selection,
         // The footprint editor deletes its own selection, which is not the
         // schematic canvas's; with none it is a no-op.
-        "delete_selection" => ctx.has_selection || ctx.has_footprint_editor,
+        "delete_selection" | "remove_last_vertex" => ctx.has_selection || ctx.has_footprint_editor,
         "print"
         | "paste"
         | "smart_paste"
+        | "paste_special"
         | "select_all"
         | "place_wire"
         | "place_bus"
         | "place_net_label"
-        | "open_components_panel" => ctx.has_schematic,
+        | "place_local_net_label"
+        | "open_components_panel"
+        | "place_symbol" => ctx.has_schematic,
         // These assemble the project's sheets, not only the active tab's.
-        "annotate_schematic_quietly" | "force_annotate_all_schematics" | "run_erc" => {
-            ctx.has_schematic || ctx.has_sheets
+        "annotate_schematic_quietly"
+        | "force_annotate_all_schematics"
+        | "run_erc"
+        | "update_pcb_from_schematic" => ctx.has_schematic || ctx.has_sheets,
+        "zoom_to_fit" | "zoom_to_all_objects" | "show_all_design_objects" => {
+            ctx.has_schematic || ctx.has_pcb || ctx.undocked_has_canvas
         }
-        "zoom_to_fit" => ctx.has_schematic || ctx.has_pcb,
-        // The keystroke opens the footprint editor's grid picker; the
-        // View menu row cycles the schematic / PCB grid.
-        "cycle_snap_grid_forward" => ctx.has_schematic || ctx.has_pcb || ctx.has_footprint_editor,
+        // The keystroke opens the footprint editor's grid picker and does
+        // nothing elsewhere. The View menu row shares the label but cycles
+        // the schematic / PCB grid; see [`cycle_grid_menu_enabled`].
+        "cycle_snap_grid_forward" | "open_grid_picker" => ctx.has_footprint_editor,
         _ => true,
     }
+}
+
+/// View ▸ Cycle Grid Size: the menu row sends `MenuMessage::CycleGrid`,
+/// which steps the schematic / PCB grid, not the command its label is
+/// taken from.
+pub(crate) fn cycle_grid_menu_enabled(ctx: &CommandContext) -> bool {
+    ctx.has_schematic || ctx.has_pcb
+}
+
+/// Commands whose handler explains to the user why it did nothing. The
+/// menu greys them by [`is_enabled`], but a keystroke still reaches the
+/// handler so the explanation is not lost (Save As in a PCB tab, #671;
+/// Print with no schematic).
+pub(crate) fn explains_when_unavailable(command: &AppCommandId) -> bool {
+    matches!(command.as_str(), "save_document_as" | "print")
 }
 
 impl Signex {
@@ -85,39 +114,49 @@ impl Signex {
     /// the main window).
     ///
     /// The handlers act on the main window's active tab, from whichever
-    /// window the key came in, so these facts are the main window's. An
-    /// undocked tab window adds its own document for the commands routed to
-    /// its canvas (Fit All): a fact is true when either shows it. Every
-    /// other window (a detached panel or modal, a component editor) adds
-    /// nothing, so Ctrl+S typed there still saves the main window's
-    /// document.
+    /// window the key came in, so the facts are the main window's. The
+    /// only exception is `undocked_has_canvas`, for Fit All, which an
+    /// undocked tab routes to its own canvas. Any other window (a detached
+    /// panel or modal, a component editor) adds nothing, so Ctrl+S typed
+    /// there still saves the main window's document.
     pub(crate) fn command_context(&self, window: Option<iced::window::Id>) -> CommandContext {
         let document = &self.document_state;
+        let active_kind = document.tabs.get(document.active_tab).map(|t| &t.kind);
+        let (can_undo, can_redo) = self.history_available(active_kind);
+        CommandContext {
+            has_schematic: document.active_engine().is_some(),
+            has_pcb: self.has_active_pcb(),
+            undocked_has_canvas: self.undocked_tab_has_canvas(window),
+            has_sheets: document.active_project.is_some() || !document.engines.is_empty(),
+            has_symbol_editor: matches!(active_kind, Some(TabKind::SymbolEditor(_))),
+            has_footprint_editor: matches!(active_kind, Some(TabKind::FootprintEditor(_))),
+            has_selection: !self.interaction_state.active_canvas().selected.is_empty(),
+            can_undo,
+            can_redo,
+            project_dirty: self.active_project_is_dirty(),
+        }
+    }
+
+    /// Whether `window` is an undocked tab window showing a schematic or a
+    /// PCB.
+    fn undocked_tab_has_canvas(&self, window: Option<iced::window::Id>) -> bool {
         let ui = &self.ui_state;
-        let undocked_tab = window.filter(|id| {
-            ui.main_window_id != Some(*id)
+        window.is_some_and(|id| {
+            ui.main_window_id != Some(id)
                 && matches!(
-                    ui.windows.get(id),
+                    ui.windows.get(&id),
                     Some(crate::app::state::WindowKind::UndockedTab { .. })
                 )
-        });
-        let engine = document.active_engine();
-        let has_schematic = engine.is_some()
-            || undocked_tab.is_some_and(|id| document.engine_for_window(id, ui).is_some());
-        let has_pcb = self.has_active_pcb()
-            || undocked_tab.is_some_and(|id| self.pcb_for_window(id).is_some());
-        let has_selection = !self.interaction_state.active_canvas().selected.is_empty()
-            || undocked_tab.is_some_and(|id| {
-                !self
-                    .interaction_state
-                    .canvas_for_window(id)
-                    .selected
-                    .is_empty()
-            });
-        let active_kind = document.tabs.get(document.active_tab).map(|t| &t.kind);
-        let has_symbol_editor = matches!(active_kind, Some(TabKind::SymbolEditor(_)));
-        let has_footprint_editor = matches!(active_kind, Some(TabKind::FootprintEditor(_)));
-        let (can_undo, can_redo) = match active_kind {
+                && (self.document_state.engine_for_window(id, ui).is_some()
+                    || self.pcb_for_window(id).is_some())
+        })
+    }
+
+    /// `(can_undo, can_redo)` for the active tab: an editor tab's own
+    /// history, else net-colour changes and the schematic engine.
+    fn history_available(&self, active_kind: Option<&TabKind>) -> (bool, bool) {
+        let document = &self.document_state;
+        match active_kind {
             Some(TabKind::SymbolEditor(path)) => document
                 .symbol_editors
                 .get(path)
@@ -130,29 +169,27 @@ impl Signex {
                 .map_or((false, false), |e| {
                     (!e.history.is_empty(), !e.redo.is_empty())
                 }),
-            _ => (
-                !ui.net_color_undo.is_empty() || engine.is_some_and(|e| e.can_undo()),
-                engine.is_some_and(|e| e.can_redo()),
-            ),
-        };
-        let project_dirty = document.active_project.is_some_and(|id| {
+            _ => {
+                let engine = document.active_engine();
+                (
+                    !self.ui_state.net_color_undo.is_empty()
+                        || engine.is_some_and(|e| e.can_undo()),
+                    engine.is_some_and(|e| e.can_redo()),
+                )
+            }
+        }
+    }
+
+    /// Whether the active project's `.snxprj` has unsaved changes.
+    fn active_project_is_dirty(&self) -> bool {
+        let document = &self.document_state;
+        document.active_project.is_some_and(|id| {
             document
                 .projects
                 .iter()
                 .find(|p| p.id == id)
                 .is_some_and(|p| document.dirty_paths.contains(&p.path))
-        });
-        CommandContext {
-            has_schematic,
-            has_pcb,
-            has_sheets: document.active_project.is_some() || !document.engines.is_empty(),
-            has_symbol_editor,
-            has_footprint_editor,
-            has_selection,
-            can_undo,
-            can_redo,
-            project_dirty,
-        }
+        })
     }
 }
 
@@ -368,5 +405,100 @@ mod tests {
         ] {
             assert!(enabled(&app, command), "{command}");
         }
+    }
+
+    /// #907 review: ids that resolve to the same message are the same
+    /// command, so they must get the same answer. An alias left to the
+    /// default arm would let a second key bypass the gate.
+    #[test]
+    fn ids_that_resolve_to_the_same_message_share_their_enablement() {
+        let facts: [fn(&mut CommandContext); 10] = [
+            |c| c.has_schematic = true,
+            |c| c.has_pcb = true,
+            |c| c.undocked_has_canvas = true,
+            |c| c.has_sheets = true,
+            |c| c.has_symbol_editor = true,
+            |c| c.has_footprint_editor = true,
+            |c| c.has_selection = true,
+            |c| c.can_undo = true,
+            |c| c.can_redo = true,
+            |c| c.project_dirty = true,
+        ];
+        let mut contexts = vec![CommandContext::default()];
+        contexts.extend(facts.iter().map(|set| {
+            let mut ctx = CommandContext::default();
+            set(&mut ctx);
+            ctx
+        }));
+        let resolved: Vec<(AppCommandId, String)> = crate::keymap::all_command_ids()
+            .filter_map(|name| {
+                let command = id(name);
+                super::super::bridge::resolve(&command).map(|m| (command, format!("{m:?}")))
+            })
+            .collect();
+        for (a, message_a) in &resolved {
+            for (b, message_b) in &resolved {
+                if message_a != message_b {
+                    continue;
+                }
+                for ctx in &contexts {
+                    assert_eq!(
+                        is_enabled(a, ctx),
+                        is_enabled(b, ctx),
+                        "{} and {} resolve to one message but differ in {ctx:?}",
+                        a.as_str(),
+                        b.as_str()
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn undo_and_redo_in_a_symbol_editor_follow_its_own_history() {
+        let (mut app, path) = with_symbol_editor();
+        assert!(!enabled(&app, "undo"));
+        let editor = app.document_state.symbol_editors.get_mut(&path).unwrap();
+        let snapshot = editor.snapshot();
+        editor.commit_history(snapshot);
+        assert!(enabled(&app, "undo"));
+
+        let _ = app.dispatch_command(&id("undo"), CommandArgs::none(), None);
+        assert!(enabled(&app, "redo"));
+    }
+
+    /// #907 review: an undocked tab window counts only for Fit All, which
+    /// it routes to its own canvas. Copy and the rest act on the main
+    /// window's tab, so they stay disabled with no document there.
+    #[test]
+    fn an_undocked_schematic_enables_fit_all_only() {
+        let (mut app, _task) = Signex::new();
+        let path = PathBuf::from("undocked.snxsch");
+        let engine =
+            signex_engine::Engine::new(signex_types::schematic::SchematicSheet::default()).unwrap();
+        app.document_state.engines.insert(path.clone(), engine);
+        let window = iced::window::Id::unique();
+        app.ui_state.windows.insert(
+            window,
+            crate::app::state::WindowKind::UndockedTab {
+                path,
+                title: "undocked".into(),
+            },
+        );
+
+        let ctx = app.command_context(Some(window));
+
+        assert!(is_enabled(&id("zoom_to_fit"), &ctx));
+        assert!(!is_enabled(&id("paste"), &ctx));
+        assert!(!is_enabled(&id("save_document_as"), &ctx));
+    }
+
+    /// #907 review: Save As and Print explain in the Messages panel why
+    /// they did nothing, so the keystroke still reaches them.
+    #[test]
+    fn save_as_and_print_still_explain_why_they_did_nothing() {
+        assert!(explains_when_unavailable(&id("save_document_as")));
+        assert!(explains_when_unavailable(&id("print")));
+        assert!(!explains_when_unavailable(&id("save_document")));
     }
 }

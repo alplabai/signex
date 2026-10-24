@@ -45,14 +45,18 @@ impl Signex {
     /// plain [`Message::CanvasEvent`] always targets the main window (#525).
     ///
     /// A command [`is_enabled`] says has nothing to act on in that window is
-    /// dropped here, the same rule the menu bar greys its row by (#368).
+    /// dropped here, the same rule the menu bar greys its row by (#368),
+    /// unless its handler tells the user why it did nothing
+    /// ([`enablement::explains_when_unavailable`]).
     pub(crate) fn dispatch_command(
         &mut self,
         command: &crate::keymap::AppCommandId,
         _args: CommandArgs,
         window: Option<iced::window::Id>,
     ) -> Task<Message> {
-        if !is_enabled(command, &self.command_context(window)) {
+        if !is_enabled(command, &self.command_context(window))
+            && !enablement::explains_when_unavailable(command)
+        {
             return Task::none();
         }
         match (core_to_message(command), window) {

@@ -45,7 +45,7 @@ pub(crate) fn is_dispatchable(command: &AppCommandId) -> bool {
 
 /// The resolution itself. Pure: no logging, no side effects, so both
 /// entry points above are built from one table and cannot drift.
-fn resolve(command: &AppCommandId) -> Option<Message> {
+pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
     use crate::library::editor::footprint::state::EditorMode;
 
     let message = match command.as_str() {
