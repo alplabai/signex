@@ -33,6 +33,7 @@ use crate::pcb::{Footprint, PcbBoard, Point as PcbPoint, Zone};
 use crate::schematic::SchematicSheet;
 
 mod extras;
+mod finite_toml;
 mod pcb_rows;
 mod sch_rows;
 mod tsv;
@@ -159,6 +160,10 @@ pub enum FormatError {
         row: usize,
         field: String,
     },
+    #[error(
+        "extras table {path:?} holds a non-finite number (NaN or infinity); it cannot be saved"
+    )]
+    NonFiniteExtra { path: String },
     #[error("TSV block {block:?}: TSV body is empty — at minimum a header row is required")]
     TsvEmpty { block: String },
 }
@@ -323,13 +328,15 @@ impl SnxSchematic {
                 #[serde(skip_serializing_if = "Option::is_none")]
                 sheet: Option<SheetExtras>,
             }
-            let body = toml::to_string_pretty(&ExtrasWrapper {
+            let wrapper = ExtrasWrapper {
                 extras: ExtrasInner {
                     symbols: symbols_extras,
                     junctions: junctions_extras,
                     sheet: sheet_extras_opt,
                 },
-            })?;
+            };
+            finite_toml::ensure_finite(&wrapper)?;
+            let body = toml::to_string_pretty(&wrapper)?;
             out.push('\n');
             out.push_str(&body);
         }
@@ -635,13 +642,15 @@ impl SnxPcb {
                 board: Option<BoardExtras>,
             }
             out.push('\n');
-            out.push_str(&toml::to_string_pretty(&ExtrasWrapper {
+            let wrapper = ExtrasWrapper {
                 extras: ExtrasInner {
                     footprints,
                     pads,
                     board: board_extras,
                 },
-            })?);
+            };
+            finite_toml::ensure_finite(&wrapper)?;
+            out.push_str(&toml::to_string_pretty(&wrapper)?);
         }
 
         Ok(out)

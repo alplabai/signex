@@ -197,3 +197,67 @@ fn writing_a_sheet_with_a_nan_coordinate_fails_naming_the_row() {
         other => panic!("expected NonFiniteField, got {other:?}"),
     }
 }
+
+/// #828 -- f64 fields carried in the `[extras.*]` TOML tables are not TSV
+/// cells, so the row guard never saw them. TOML spells them `nan` / `inf`,
+/// which would save without complaint; the writer must refuse instead.
+#[test]
+fn a_non_finite_symbol_text_in_extras_fails_the_save_naming_the_path() {
+    use crate::schematic::{HAlign, Point, SchematicSheet, Symbol, TextProp, VAlign};
+    for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        let symbol = Symbol {
+            ref_text: Some(TextProp {
+                position: Point { x: 0.0, y: 0.0 },
+                rotation: 0.0,
+                font_size: bad,
+                justify_h: HAlign::default(),
+                justify_v: VAlign::default(),
+                hidden: false,
+            }),
+            ..Symbol::default()
+        };
+        let uuid = symbol.uuid;
+        let mut sheet = SchematicSheet::default();
+        sheet.symbols.push(symbol);
+        match SnxSchematic::new(sheet).write_string() {
+            Err(FormatError::NonFiniteExtra { path }) => {
+                assert_eq!(path, format!("extras.symbols.{uuid}.ref_text.font_size"));
+            }
+            other => panic!("{bad}: expected NonFiniteExtra, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn a_non_finite_board_outline_point_in_extras_fails_the_save() {
+    let mut board = super::tests::empty_board();
+    board.outline.push(crate::pcb::Point {
+        x: f64::INFINITY,
+        y: 0.0,
+    });
+    match SnxPcb::new(board).write_string() {
+        Err(FormatError::NonFiniteExtra { path }) => {
+            assert_eq!(path, "extras.board.outline[0].x");
+        }
+        other => panic!("expected NonFiniteExtra, got {other:?}"),
+    }
+}
+
+#[test]
+fn finite_extras_still_save() {
+    use crate::schematic::{HAlign, Point, SchematicSheet, Symbol, TextProp, VAlign};
+    let symbol = Symbol {
+        ref_text: Some(TextProp {
+            position: Point { x: 1.0, y: 2.0 },
+            rotation: 90.0,
+            font_size: 1.27,
+            justify_h: HAlign::default(),
+            justify_v: VAlign::default(),
+            hidden: false,
+        }),
+        ..Symbol::default()
+    };
+    let mut sheet = SchematicSheet::default();
+    sheet.symbols.push(symbol);
+    assert!(SnxSchematic::new(sheet).write_string().is_ok());
+}
