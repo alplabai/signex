@@ -363,6 +363,10 @@ pub enum ProjectMsg {
         project_id: crate::app::ProjectId,
         outcome: crate::app::state::project_case::CaseProbeOutcome,
     },
+    /// The off-thread filesystem probe behind the project tree's
+    /// `(missing)` marks and library listings finished (#111); `None` is a
+    /// worker that died.
+    FsFactsProbed(Option<Box<crate::app::state::project_fs::ProjectFsFacts>>),
     /// User choice (Save All / Discard All / Cancel) on the app-quit
     /// confirmation modal, shown when the user tries to exit Signex
     /// while `dirty_paths` is non-empty. Reuses `ProjectCloseChoice`.

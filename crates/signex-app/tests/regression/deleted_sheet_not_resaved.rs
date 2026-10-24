@@ -945,7 +945,9 @@ fn confirm_re_resolves_when_a_project_was_opened_since_the_refs_were_read() {
         ProjectCloseChoice::DiscardAll,
     )));
 
-    assert_eq!(task.units(), 1, "stale refs must trigger a fresh resolve");
+    // The re-resolve plus the project-tree disk probe the new project set
+    // calls for (#111).
+    assert_eq!(task.units(), 2, "stale refs must trigger a fresh resolve");
     assert!(
         app.document_state.dirty_paths.contains(&a_sheet),
         "nothing discarded yet",

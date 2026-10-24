@@ -88,6 +88,7 @@ impl Signex {
                 project_id,
                 outcome,
             } => self.handle_case_probed(project_id, outcome),
+            ProjectMsg::FsFactsProbed(facts) => self.handle_project_fs_probed(facts),
             ProjectMsg::AppQuitConfirm(choice) => self.handle_app_quit_confirm(choice),
             ProjectMsg::CloseOptions => {
                 self.ui_state.project_options = None;

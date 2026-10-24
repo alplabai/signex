@@ -63,6 +63,12 @@ pub use state::AnnotateOrder;
 
 impl Signex {
     pub fn update(&mut self, message: Message) -> Task<Message> {
-        self.dispatch_update(message)
+        let task = self.dispatch_update(message);
+        // `refresh_panel_ctx` only records what the project tree needs from
+        // the disk; the probe that fetches it starts here (#111).
+        match self.start_project_fs_probe(false) {
+            Some(probe) => Task::batch([task, probe]),
+            None => task,
+        }
     }
 }
