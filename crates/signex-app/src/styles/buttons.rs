@@ -99,16 +99,16 @@ pub fn hover_row(
     }
 }
 
-/// Primary action: accent fill with [`tokens::on_accent`] text. Hover
-/// and press blend the text colour into the accent (lighten on dark
-/// accents, darken on light ones).
+/// Primary action: [`tokens::accent_fill`] with white text
+/// ([`tokens::on_accent`]). Hover and press darken the fill, so white
+/// keeps its 4.5:1 contrast in every state.
 pub fn accent_button(
     tokens: &ThemeTokens,
 ) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
-    let accent = tokens::accent(tokens);
+    let accent = tokens::accent_fill(tokens);
     let on = tokens::on_accent(tokens);
-    let hover = composite_over(Color { a: 0.10, ..on }, accent);
-    let pressed = composite_over(Color { a: 0.20, ..on }, accent);
+    let hover = tokens::accent_fill_hover(tokens);
+    let pressed = tokens::accent_fill_pressed(tokens);
     let disabled = composite_over(Color { a: 0.5, ..accent }, ti(tokens.panel_bg));
     move |_: &Theme, status: button::Status| button::Style {
         background: fill(match status {
