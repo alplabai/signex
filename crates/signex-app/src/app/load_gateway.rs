@@ -510,21 +510,41 @@ impl Signex {
     }
 }
 
-/// Tell the user, once per open, about zone holes the renderer will not cut
-/// out: holes that touch or cross the outline, lie outside it, overlap
-/// another hole, or are malformed (#897). Both render paths skip them, so
-/// without this the zone would just look solid there.
-fn report_unusable_zone_holes(path: &std::path::Path, board: &PcbBoard) {
-    let dropped: usize = board
+/// Tell the user, once per open or reload, about zone holes the renderer
+/// will not cut out, naming each zone and why (#897). Both render paths skip
+/// them, so without this the zone would just look solid there.
+pub(crate) fn report_unusable_zone_holes(path: &std::path::Path, board: &PcbBoard) {
+    let zones: Vec<String> = board
         .zones
         .iter()
-        .map(|zone| zone.holes.len() - zone.usable_holes().len())
-        .sum();
-    if dropped > 0 {
+        .filter_map(|zone| {
+            let problems = zone.hole_problems();
+            if problems.is_empty() {
+                return None;
+            }
+            let holes: Vec<String> = problems
+                .iter()
+                .map(|(i, problem)| format!("hole {i} {}", problem.describe()))
+                .collect();
+            let net = if zone.net_name.is_empty() {
+                format!("net {}", zone.net)
+            } else {
+                zone.net_name.clone()
+            };
+            Some(format!(
+                "zone {net} on {}: {}",
+                zone.layer,
+                holes.join(", ")
+            ))
+        })
+        .collect();
+    if !zones.is_empty() {
+        // Details first: the Messages panel truncates long entries.
         crate::diagnostics::log_warning(format!(
-            "{}: {dropped} zone hole(s) are drawn as solid copper: a hole must lie strictly \
-             inside its zone outline and not touch or overlap another hole",
-            path.display()
+            "{}: {}; drawn as solid copper (a hole must be a simple ring strictly inside \
+             its outline, apart from the other holes)",
+            path.display(),
+            zones.join("; ")
         ));
     }
 }

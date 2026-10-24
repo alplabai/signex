@@ -326,7 +326,9 @@ fn pcb_open_finished_err_opens_no_tab_and_does_not_panic() {
 fn opening_a_board_with_an_unusable_zone_hole_warns_once() {
     use signex_types::pcb::{Point, Zone};
     drop(signex_app::diagnostics::init_logging());
-    let path = PathBuf::from("/tmp/zone-hole-warning-897/board.snxpcb");
+    let dir = TempDir::with_prefix("zone-hole-warning-").unwrap();
+    let path = dir.path().join("board.snxpcb");
+    let marker = dir.path().display().to_string();
     let rect = |x0: f64, y0: f64, x1: f64, y1: f64| {
         vec![
             Point { x: x0, y: y0 },
@@ -356,9 +358,9 @@ fn opening_a_board_with_an_unusable_zone_hole_warns_once() {
         signex_app::diagnostics::recent_entries()
             .iter()
             .filter(|e| {
-                e.message.contains("zone-hole-warning-897")
+                e.message.contains(&marker)
                     && e.message
-                        .contains("1 zone hole(s) are drawn as solid copper")
+                        .contains("hole 1 is not strictly inside the outline")
             })
             .count()
     };

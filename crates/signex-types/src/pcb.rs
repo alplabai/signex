@@ -322,12 +322,13 @@ pub struct Zone {
     /// renderer skips an outline with `len() < 3`; the parser does not
     /// validate this.
     ///
-    /// Holes must be disjoint from each other and lie strictly inside
-    /// `outline`, touching neither it nor each other's rings: the GPU
+    /// Holes must be simple rings, disjoint from each other and strictly
+    /// inside `outline`, touching neither it nor each other: the GPU
     /// triangulation and the CPU even-odd fill only agree for such holes. A
     /// cut-out that reaches the outline is a notch, and belongs in `outline`
-    /// itself. A zone that breaks this still draws (as its solid outline on
-    /// the GPU), just not as the cut-outs the author meant.
+    /// itself. Both render paths draw only [`Zone::usable_holes`]; each hole
+    /// that breaks the rule is drawn as copper (the valid ones still cut
+    /// out), and the app reports it when the board is opened (#897).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub holes: Vec<Vec<Point>>,
     #[serde(default)]

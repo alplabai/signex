@@ -175,6 +175,7 @@ impl Signex {
                         return;
                     }
                 };
+                crate::app::load_gateway::report_unusable_zone_holes(&path, &board);
                 if let Some(t) = self.document_state.tabs.get_mut(active_idx) {
                     t.cached_document = Some(crate::app::TabDocument::Pcb(board));
                 }
