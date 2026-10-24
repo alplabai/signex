@@ -118,6 +118,9 @@ mod library_browser_cell_commit;
 #[path = "regression/render_config_grid_style.rs"]
 mod render_config_grid_style;
 
+#[path = "regression/zoom_speed_pref.rs"]
+mod zoom_speed_pref;
+
 #[path = "regression/rename_preserves_references.rs"]
 mod rename_preserves_references;
 
@@ -177,3 +180,7 @@ mod no_erc_directive;
 
 #[path = "regression/click_click_move.rs"]
 mod click_click_move;
+
+// #925 — non-finite grid steps are refused into the Messages panel.
+#[path = "regression/grid_step_refusal.rs"]
+mod grid_step_refusal;

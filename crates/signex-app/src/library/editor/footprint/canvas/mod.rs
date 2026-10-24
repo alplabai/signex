@@ -58,7 +58,6 @@ const DEFAULT_PX_PER_MM: f32 = 30.0;
 
 const MIN_SCALE: f32 = 5.0;
 const MAX_SCALE: f32 = 400.0;
-const ZOOM_FACTOR: f32 = 1.15;
 
 /// Canvas-only state owned by `iced::widget::Canvas`. The editor's
 /// model lives in `FootprintEditorState`; this struct only holds
@@ -221,6 +220,9 @@ pub struct FootprintCanvas<'a> {
     pub silk_f: &'a [signex_library::primitive::footprint::FpGraphic],
     /// v0.18.16 — silk-back graphics (mirror layer for B.SilkS).
     pub silk_b: &'a [signex_library::primitive::footprint::FpGraphic],
+    /// Per-wheel-notch zoom factor — the Preferences "Zoom speed", shared
+    /// with the schematic, PCB and symbol canvases.
+    pub zoom_step: f32,
 }
 
 impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {

@@ -483,6 +483,7 @@ fn context_target_msg_to_state(
         SymbolContextTargetMsg::Empty => SymbolContextTarget::Empty,
         SymbolContextTargetMsg::Pin(idx) => SymbolContextTarget::Pin(idx),
         SymbolContextTargetMsg::Graphic(idx) => SymbolContextTarget::Graphic(idx),
+        SymbolContextTargetMsg::Field(key) => SymbolContextTarget::Field(key),
     }
 }
 

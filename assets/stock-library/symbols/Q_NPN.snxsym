@@ -1,0 +1,118 @@
+format = "snxsym/v2"
+file_uuid = "8c48665d-b41e-433b-9edd-54b86ed4dfd4"
+display_name = "Q_NPN"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols]]
+uuid = "3aa4c65d-91dc-46f4-b1cd-bd010bce921d"
+name = "Q_NPN"
+anchor = [
+    0.0,
+    0.0,
+]
+pins_tsv = '''
+number	name	electrical	pos_x	pos_y	orientation	length	description	function	pin_package_length	propagation_delay_ns	designator_visible	name_visible	inside_symbol	inside_edge_symbol	outside_edge_symbol	outside_symbol	hidden	locked	part_number
+1	B	Passive	-5.08	0	Right	2.54					true	true	None	None	None	None	false	false	1
+2	E	Passive	2.54	-5.08	Up	2.54					true	true	None	None	None	None	false	false	1
+3	C	Passive	2.54	5.08	Down	2.54					true	true	None	None	None	None	false	false	1
+'''
+designator = "Q?"
+comment = "*"
+description = "NPN bipolar transistor; pins 1 B, 2 E, 3 C."
+component_type = "Standard"
+mirrored = false
+version = "0.0.1"
+released = false
+part_count = 1
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    -2.54,
+    0.0,
+]
+to = [
+    -1.27,
+    0.0,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    -1.27,
+    1.905,
+]
+to = [
+    -1.27,
+    -1.905,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    -1.27,
+    0.635,
+]
+to = [
+    2.54,
+    2.54,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    -1.27,
+    -0.635,
+]
+to = [
+    2.54,
+    -2.54,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+fill = [
+    0,
+    0,
+    0,
+    255,
+]
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "polygon"
+vertices = [
+    [
+    1.905,
+    -2.2225,
+],
+    [
+    1.2342,
+    -1.5517,
+],
+    [
+    0.9658,
+    -2.0884,
+],
+]
+
+[symbols.schematic_params]

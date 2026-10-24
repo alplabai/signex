@@ -1,0 +1,150 @@
+format = "snxsym/v2"
+file_uuid = "d50383cb-013d-4fc4-9874-6e6196548032"
+display_name = "LED"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols]]
+uuid = "c2368f96-f502-4125-94e5-029eaa698ede"
+name = "LED"
+anchor = [
+    0.0,
+    0.0,
+]
+pins_tsv = '''
+number	name	electrical	pos_x	pos_y	orientation	length	description	function	pin_package_length	propagation_delay_ns	designator_visible	name_visible	inside_symbol	inside_edge_symbol	outside_edge_symbol	outside_symbol	hidden	locked	part_number
+2	A	Passive	0	3.81	Down	2.54					true	false	None	None	None	None	false	false	1
+1	K	Passive	0	-3.81	Up	2.54					true	false	None	None	None	None	false	false	1
+'''
+designator = "D?"
+comment = "*"
+description = "Light-emitting diode; pin 1 cathode, pin 2 anode."
+component_type = "Standard"
+mirrored = false
+version = "0.0.1"
+released = false
+part_count = 1
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "polygon"
+vertices = [
+    [
+    -1.27,
+    1.27,
+],
+    [
+    1.27,
+    1.27,
+],
+    [
+    0.0,
+    -1.27,
+],
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    -1.27,
+    -1.27,
+]
+to = [
+    1.27,
+    -1.27,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    1.524,
+    0.508,
+]
+to = [
+    2.794,
+    1.778,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+fill = [
+    0,
+    0,
+    0,
+    255,
+]
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "polygon"
+vertices = [
+    [
+    2.794,
+    1.778,
+],
+    [
+    2.2036,
+    1.4704,
+],
+    [
+    2.4864,
+    1.1876,
+],
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    1.524,
+    -0.508,
+]
+to = [
+    2.794,
+    0.762,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+fill = [
+    0,
+    0,
+    0,
+    255,
+]
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "polygon"
+vertices = [
+    [
+    2.794,
+    0.762,
+],
+    [
+    2.2036,
+    0.4544,
+],
+    [
+    2.4864,
+    0.1716,
+],
+]
+
+[symbols.schematic_params]

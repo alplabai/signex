@@ -62,6 +62,7 @@ impl Signex {
         self.ui_state.preferences_draft_symbol_grid_size_mm = self.ui_state.symbol_grid_size_mm;
         self.ui_state.preferences_draft_symbol_grid_style = self.ui_state.symbol_grid_style;
         self.ui_state.preferences_draft_symbol_pin_selection = self.ui_state.symbol_pin_selection;
+        self.ui_state.preferences_draft_zoom_step_percent = self.ui_state.zoom_step_percent;
         // Fresh working copy of the live profile set for the Keyboard
         // Shortcuts pane; drop any stale recorder / status with it.
         self.ui_state.preferences_keymap_editor =
@@ -221,6 +222,7 @@ impl Signex {
                 self.ui_state.symbol_grid_style = self.ui_state.preferences_draft_symbol_grid_style;
                 self.ui_state.symbol_pin_selection =
                     self.ui_state.preferences_draft_symbol_pin_selection;
+                self.ui_state.zoom_step_percent = self.ui_state.preferences_draft_zoom_step_percent;
                 // The live-preview already pushed the draft into the widget;
                 // re-assert it so the saved and effective flags can't diverge.
                 self.set_pcb_gpu_render(self.ui_state.pcb_gpu_render);
@@ -244,6 +246,7 @@ impl Signex {
                 crate::fonts::write_symbol_grid_size_mm_pref(self.ui_state.symbol_grid_size_mm);
                 crate::fonts::write_symbol_grid_style_pref(self.ui_state.symbol_grid_style);
                 crate::fonts::write_symbol_pin_selection_pref(self.ui_state.symbol_pin_selection);
+                crate::fonts::write_zoom_step_percent_pref(self.ui_state.zoom_step_percent);
                 // Component classes — keep entries with non-empty keys
                 // and labels, dedupe by key (last write wins) so the
                 // dropdown never shows blanks or duplicates.
@@ -409,6 +412,12 @@ impl Signex {
                 // Live preview only — `revert_preferences_drafts` pushes
                 // the committed style back if the user discards.
                 self.document_state.panel_ctx.symbol_grid_style = style;
+                self.recompute_preferences_dirty();
+            }
+            PrefMsg::DraftZoomStepPercent(percent) => {
+                // Out-of-range input is clamped, never stored raw.
+                self.ui_state.preferences_draft_zoom_step_percent =
+                    crate::canvas::Camera::clamp_zoom_step_percent(percent as i64);
                 self.recompute_preferences_dirty();
             }
             PrefMsg::DraftSymbolPinSelection(mode) => {

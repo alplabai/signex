@@ -516,6 +516,7 @@ pub enum SymbolContextTargetMsg {
     Empty,
     Pin(usize),
     Graphic(usize),
+    Field(crate::library::editor::symbol::state::FieldKey),
 }
 
 /// Which context-menu submenu is accordion-expanded — pure-data alias

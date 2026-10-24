@@ -45,6 +45,25 @@ impl Signex {
         for canvas in self.interaction_state.all_pcb_canvases_mut() {
             canvas.set_grid(visible, visible_grid_mm);
         }
+        self.sync_zoom_step();
+    }
+
+    /// Push the effective "Zoom speed" into the canvases that hold their
+    /// own copy: every PCB canvas and the symbol / footprint editor tabs
+    /// (the schematic reads it per frame through `CanvasViewPrefs`). Also
+    /// called from the Preferences draft / discard paths, which do not run
+    /// `finish_update`.
+    pub(in crate::app) fn sync_zoom_step(&mut self) {
+        let zoom_step = self.ui_state.effective_zoom_step();
+        for canvas in self.interaction_state.all_pcb_canvases_mut() {
+            canvas.zoom_step = zoom_step;
+        }
+        for editor in self.document_state.symbol_editors.values_mut() {
+            editor.zoom_step = zoom_step;
+        }
+        for editor in self.document_state.footprint_editors.values_mut() {
+            editor.zoom_step = zoom_step;
+        }
     }
 
     pub(crate) fn finish_update(&mut self) -> Task<Message> {
@@ -306,6 +325,7 @@ impl Signex {
             visible_grid_mm: self.ui_state.visible_grid_mm as f64,
             grid_style: self.ui_state.preferences_draft_grid_style,
             auto_focus: self.ui_state.auto_focus,
+            zoom_step: self.ui_state.effective_zoom_step(),
             draw_mode: self.interaction_state.draw_mode,
             wire_color_overrides: &self.ui_state.wire_color_overrides,
             selection_filters: &self.interaction_state.selection_filters,

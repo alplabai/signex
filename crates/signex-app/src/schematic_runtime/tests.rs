@@ -383,3 +383,86 @@ fn hidden_field_has_no_hit_box() {
         30.0
     ));
 }
+
+fn anchored_label(label_type: LabelType, rotation: f64) -> Label {
+    Label {
+        unknown_columns: Default::default(),
+        uuid: uuid::Uuid::new_v4(),
+        text: "DATA_BUS_0".into(),
+        position: Point::new(20.0, 30.0),
+        rotation,
+        label_type,
+        shape: String::new(),
+        font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
+        justify: HAlign::Left,
+        justify_v: VAlign::Bottom,
+    }
+}
+
+/// Extent of `bbox` along the unit axis `(dx, dy)`, measured from `anchor`.
+fn extent_along(bbox: &Aabb, anchor: (f64, f64), (dx, dy): (f64, f64)) -> (f64, f64) {
+    let along = |x: f64, y: f64| (x - anchor.0) * dx + (y - anchor.1) * dy;
+    let corners = [
+        along(bbox.min_x, bbox.min_y),
+        along(bbox.min_x, bbox.max_y),
+        along(bbox.max_x, bbox.min_y),
+        along(bbox.max_x, bbox.max_y),
+    ];
+    (
+        corners.iter().cloned().fold(f64::INFINITY, f64::min),
+        corners.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
+    )
+}
+
+#[test]
+fn label_box_starts_at_anchor_and_extends_in_label_direction() {
+    for label_type in [LabelType::Net, LabelType::Global, LabelType::Hierarchical] {
+        for rotation in [0.0_f64, 90.0, 180.0, 270.0] {
+            let label = anchored_label(label_type, rotation);
+            let anchor = (label.position.x, label.position.y);
+            let bbox = label_aabb(&label);
+            let (sin, cos) = rotation.to_radians().sin_cos();
+            let dir = (cos.round(), sin.round());
+            let (back, forward) = extent_along(&bbox, anchor, dir);
+            let what = format!("{label_type:?} @ {rotation}");
+
+            // The label reaches well past the anchor in its direction...
+            assert!(forward > 5.0, "{what}: forward extent {forward}");
+            // ...and only a flag's arrow tip may sit behind the anchor.
+            let max_back = if label::is_flag(&label) { 1.0 } else { 0.0 };
+            assert!(back >= -max_back - 1e-9, "{what}: back extent {back}");
+        }
+    }
+}
+
+#[test]
+fn flag_text_runs_away_from_the_connection_point() {
+    for label_type in [LabelType::Global, LabelType::Hierarchical] {
+        for rotation in [0.0_f64, 90.0, 180.0, 270.0] {
+            let label = anchored_label(label_type, rotation);
+            let anchor = (label.position.x, label.position.y);
+            let (tx, ty) = label::flag_text_anchor(&label);
+            let (sin, cos) = rotation.to_radians().sin_cos();
+            let along = (tx - anchor.0) * cos.round() + (ty - anchor.1) * sin.round();
+            assert!(
+                along > 0.0,
+                "{label_type:?} @ {rotation}: text start {along}"
+            );
+            // The text start sits inside the hit box, so click and draw agree.
+            let bbox = label_aabb(&label);
+            assert!(tx >= bbox.min_x && tx <= bbox.max_x && ty >= bbox.min_y && ty <= bbox.max_y);
+        }
+    }
+}
+
+#[test]
+fn rotated_global_label_is_hit_on_its_flag_not_on_empty_space() {
+    let mut snapshot = empty_snapshot();
+    let label = anchored_label(LabelType::Global, 90.0);
+    let uuid = label.uuid;
+    snapshot.labels.push(label);
+    // Rotated 90 degrees the flag runs down (+y) from (20, 30).
+    let hit = hit_test::hit_test(&snapshot, 20.0, 38.0);
+    assert_eq!(hit, Some(SelectedItem::new(uuid, SelectedKind::Label)));
+    assert_eq!(hit_test::hit_test(&snapshot, 28.0, 30.0), None);
+}

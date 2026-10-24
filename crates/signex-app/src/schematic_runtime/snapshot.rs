@@ -457,9 +457,10 @@ pub fn build_renderer_snapshot(
                 [0.0, 0.0, 0.0, 0.0],
                 transform,
             ));
+            let (tx, ty) = label::flag_text_anchor(label);
             labels.push(TextInput {
                 content: label.text.clone(),
-                position: [label.position.x as f32, label.position.y as f32],
+                position: [tx as f32, ty as f32],
                 size_mm: label
                     .font_size
                     .max(signex_types::schematic::SCHEMATIC_TEXT_MM)
@@ -468,7 +469,7 @@ pub fn build_renderer_snapshot(
                 bold: false,
                 italic: false,
                 rotation_rad: label.rotation.to_radians() as f32,
-                h_align: HAlign::Center,
+                h_align: HAlign::Left,
                 v_align: VAlign::Center,
             });
         } else {
