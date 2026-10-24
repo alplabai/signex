@@ -295,6 +295,7 @@ impl Signex {
                                     lib_path.display()
                                 ));
                             } else {
+                                self.library.sweep_dangling_refs();
                                 crate::diagnostics::log_info(format!(
                                     "[reload] LibraryBrowser tab {} refreshed",
                                     lib_path.display()
