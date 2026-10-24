@@ -89,22 +89,19 @@ impl Signex {
                 self.ui_state.project_options = None;
                 Task::none()
             }
-            ProjectMsg::AddExistingFilePicked { project_idx, paths } => {
-                self.handle_add_existing_file_picked(project_idx, paths);
+            ProjectMsg::AddExistingFilePicked { project_id, paths } => {
+                self.handle_add_existing_file_picked(project_id, paths);
                 Task::none()
             }
-            ProjectMsg::AddNewSchematicPicked { project_idx, path } => {
-                self.handle_add_new_schematic_picked(project_idx, path);
+            ProjectMsg::AddNewSchematicPicked { project_id, path } => {
+                self.handle_add_new_schematic_picked(project_id, path);
                 Task::none()
             }
             ProjectMsg::GitCommitDone {
                 project_root,
                 rel_path,
                 result,
-            } => {
-                self.handle_project_git_commit_done(project_root, rel_path, result);
-                Task::none()
-            }
+            } => self.handle_project_git_commit_done(project_root, rel_path, result),
         }
     }
 
