@@ -159,6 +159,7 @@ impl Signex {
                 match signex_engine::Engine::new_with_path(sheet, Some(p.clone())) {
                     Ok(engine) => {
                         self.document_state.engines.insert(p.clone(), engine);
+                        self.clear_net_color_steps(&p);
                         self.document_state.active_path = Some(p);
                     }
                     Err(_) => self.document_state.clear_active_engine(),
@@ -280,6 +281,7 @@ impl Signex {
         title: String,
         sheet: SchematicSheet,
     ) {
+        warn_if_read_only(&path, sheet.unknown.newer_minor_source.as_deref());
         self.park_active_schematic_session();
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
         let scan_path = path.clone();
@@ -341,6 +343,7 @@ impl Signex {
 
     pub(crate) fn open_pcb_tab(&mut self, path: PathBuf, title: String, board: PcbBoard) {
         report_unusable_zone_holes(&path, &board);
+        warn_if_read_only(&path, board.unknown.newer_minor_source.as_deref());
         self.park_active_schematic_session();
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
         self.document_state.tabs.push(TabInfo {
@@ -379,6 +382,7 @@ impl Signex {
                     self.interaction_state.active_canvas_mut().selected.clear();
                     // In-flight drawing buffers belong to the document too.
                     self.clear_drawing_buffers();
+                    self.cancel_move_pick();
                     // Also resets the mirrored panel_ctx selection fields.
                     self.update_selection_info();
                 }
@@ -608,6 +612,17 @@ pub(crate) fn report_unusable_zone_holes(path: &std::path::Path, board: &PcbBoar
              its outline, apart from the other holes)",
             path.display(),
             zones.join("; ")
+        ));
+    }
+}
+
+/// A document written by a newer Signex loads for viewing only: saving it
+/// would drop content this build cannot represent (the writer refuses).
+fn warn_if_read_only(path: &std::path::Path, newer_minor_source: Option<&str>) {
+    if let Some(token) = newer_minor_source {
+        crate::diagnostics::log_warning(format!(
+            "{} was written by a newer Signex ({token}); it is read-only in this build -- saving is refused",
+            path.display()
         ));
     }
 }

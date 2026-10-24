@@ -6,6 +6,7 @@ mod annotation;
 mod history;
 mod selection;
 mod sheet;
+mod sheet_identity;
 mod sheet_placement;
 mod transform;
 
@@ -17,6 +18,9 @@ pub(crate) mod test_support;
 #[cfg(test)]
 mod annotation_tests;
 
+#[cfg(test)]
+mod sheet_identity_tests;
+
 use std::path::{Path, PathBuf};
 
 pub use annotation::AnnotateScope;
@@ -26,9 +30,12 @@ pub use command::{
 };
 pub use error::EngineError;
 use history::HistoryEntry;
+pub use history::UndoGroupId;
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
 pub use selection::{ClipboardSelection, SelectionAnchor, SelectionDetails, partition_cuttable};
-pub use sheet::{exposed_sheet_ports, ports_for_pin_sync, unplaced_sheet_ports};
+pub use sheet::{
+    blank_port_label_count, exposed_sheet_ports, ports_for_pin_sync, unplaced_sheet_ports,
+};
 pub use sheet_placement::{
     DEFAULT_CHILD_SHEET_STROKE_MM, MIN_CHILD_SHEET_EDGE_MM, child_sheet_from_corners,
     unused_sheet_stem,
@@ -43,12 +50,26 @@ pub struct Engine {
     path: Option<PathBuf>,
     history: Vec<HistoryEntry>,
     redo_stack: Vec<HistoryEntry>,
+    /// Entries evicted from the front of `history` by the cap, so
+    /// `undo_position` keeps counting up past `MAX_HISTORY_ENTRIES`.
+    history_evicted: usize,
     /// Set for the duration of an `execute_batch` loop so the commands in
     /// the batch do not each land their own history entry — the batch
     /// records one coalesced entry when the loop finishes. Always `false`
     /// outside that loop, so every other path behaves exactly as before.
     /// See `exec/batch.rs`.
     history_suppressed: bool,
+    /// Re-drawn from a process-wide counter by every entry point that can
+    /// change `document` (and at construction), so an off-thread save can
+    /// tell whether the document moved on while it ran, even if the engine
+    /// was replaced by a fresh one meanwhile.
+    revision: u64,
+}
+
+/// Process-wide revision source: values are never reused across engines.
+pub(crate) fn next_revision() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 impl Engine {
@@ -65,7 +86,9 @@ impl Engine {
             path,
             history: Vec::new(),
             redo_stack: Vec::new(),
+            history_evicted: 0,
             history_suppressed: false,
+            revision: crate::next_revision(),
         })
     }
 
@@ -86,7 +109,9 @@ impl Engine {
             path: Some(path.to_path_buf()),
             history: Vec::new(),
             redo_stack: Vec::new(),
+            history_evicted: 0,
             history_suppressed: false,
+            revision: crate::next_revision(),
         })
     }
 
@@ -98,11 +123,23 @@ impl Engine {
         self.save_as(&path)
     }
 
-    pub fn save_as(&mut self, path: &Path) -> Result<(), EngineError> {
-        let snx = signex_types::format::SnxSchematic::new(self.document.clone());
-        let content = snx
+    /// The current document encoded as `.snxsch` text: the consistent
+    /// snapshot an off-thread save writes. Pair it with [`Self::revision`].
+    pub fn serialize(&self) -> Result<String, EngineError> {
+        signex_types::format::SnxSchematic::new(self.document.clone())
             .write_string()
-            .map_err(|error| EngineError::SaveFailed(std::io::Error::other(error.to_string())))?;
+            .map_err(|error| EngineError::SaveFailed(std::io::Error::other(error.to_string())))
+    }
+
+    /// Changes whenever the document may have changed (any command, undo,
+    /// redo, annotate or replace). Equal revisions mean an unchanged document;
+    /// revisions are unique across engine instances.
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    pub fn save_as(&mut self, path: &Path) -> Result<(), EngineError> {
+        let content = self.serialize()?;
         // HI-6: atomic write — a crash mid-save no longer truncates the
         // destination. The user's prior file stays intact until the
         // rename succeeds.
@@ -113,6 +150,7 @@ impl Engine {
     }
 
     pub fn execute(&mut self, cmd: Command) -> Result<CommandResult, EngineError> {
+        self.revision = crate::next_revision();
         let before = self.document.clone();
 
         match cmd {
@@ -134,6 +172,7 @@ impl Engine {
             | Command::PlaceBus { .. }
             | Command::PlaceLabel { .. }
             | Command::PlaceSymbol { .. }
+            | Command::RegisterLibSymbol { .. }
             | Command::PlaceChildSheet { .. }
             | Command::PlaceWireSegment { .. }
             | Command::PlaceJunction { .. }
@@ -149,6 +188,7 @@ impl Engine {
             | Command::ReorderObjects { .. }
             | Command::ReconcileChildSheetPins { .. }
             | Command::RenameChildSheetFile { .. }
+            | Command::ModifyChildSheet { .. }
             | Command::SetPaperSize { .. } => self.exec_structure(before, cmd),
         }
     }
@@ -166,6 +206,7 @@ impl Engine {
     }
 
     pub fn set_document(&mut self, document: SchematicSheet) {
+        self.revision = crate::next_revision();
         self.document = document;
     }
 }
@@ -178,6 +219,51 @@ mod tests {
         BusEntry, ChildSheet, FillType, GRID_MM, Label, LabelType, Point, SelectedItem,
         SelectedKind, SheetPin,
     };
+
+    #[test]
+    fn every_mutating_entry_point_moves_the_revision() {
+        use crate::command::AnnotateMode;
+        use signex_types::schematic::AnnotateOrder;
+        let mut engine = Engine::new(test_sheet()).unwrap();
+        let mut last = engine.revision();
+        let mut moved = |engine: &Engine, what: &str| {
+            assert_ne!(engine.revision(), last, "{what} must move the revision");
+            last = engine.revision();
+        };
+        engine
+            .execute(Command::SetPaperSize {
+                paper_size: "A3".into(),
+            })
+            .unwrap();
+        moved(&engine, "execute");
+        engine
+            .execute_batch([Command::SetPaperSize {
+                paper_size: "A2".into(),
+            }])
+            .unwrap();
+        moved(&engine, "execute_batch");
+        engine.undo().unwrap();
+        moved(&engine, "undo");
+        engine.redo().unwrap();
+        moved(&engine, "redo");
+        engine
+            .annotate_with_seed(
+                AnnotateMode::Incremental,
+                &mut Default::default(),
+                AnnotateOrder::UpThenAcross,
+            )
+            .unwrap();
+        moved(&engine, "annotate");
+        engine.set_document(test_sheet());
+        moved(&engine, "set_document");
+    }
+
+    #[test]
+    fn revisions_are_unique_across_engine_instances() {
+        let a = Engine::new(test_sheet()).unwrap();
+        let b = Engine::new(test_sheet()).unwrap();
+        assert_ne!(a.revision(), b.revision());
+    }
 
     #[test]
     fn collect_exposed_sheet_ports_prefers_hierarchical_over_global() {

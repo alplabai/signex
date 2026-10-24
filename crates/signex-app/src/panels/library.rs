@@ -43,6 +43,11 @@ pub struct LibraryRowDetail {
     /// The row lives in a read-only mount (the stock library); the
     /// Pick buttons render disabled.
     pub read_only: bool,
+    /// Row has no symbol binding — the panel flags it in the warning
+    /// colour next to the Pick Symbol button.
+    pub symbol_unbound: bool,
+    /// Row has no footprint binding (see `symbol_unbound`).
+    pub footprint_unbound: bool,
 }
 
 // ─── SCH Library Panel (Altium parity) ───────────────────────────────
@@ -519,6 +524,7 @@ pub fn view_library_row_properties<'a>(
     muted: iced::Color,
     primary: iced::Color,
     border_c: iced::Color,
+    warning: iced::Color,
 ) -> Element<'a, PanelMsg> {
     // Truncate the row UUID to its first 8 hex chars for a
     // human-scannable identity line.
@@ -578,13 +584,21 @@ pub fn view_library_row_properties<'a>(
         Space::new().height(12),
         text("Symbol").size(11).color(muted),
         Space::new().height(4),
-        text(d.symbol_summary.clone()).size(11).color(primary),
+        text(d.symbol_summary.clone())
+            .size(11)
+            .color(if d.symbol_unbound { warning } else { primary }),
         Space::new().height(6),
         pick_symbol_btn,
         Space::new().height(14),
         text("Footprint").size(11).color(muted),
         Space::new().height(4),
-        text(d.footprint_summary.clone()).size(11).color(primary),
+        text(d.footprint_summary.clone())
+            .size(11)
+            .color(if d.footprint_unbound {
+                warning
+            } else {
+                primary
+            }),
         Space::new().height(6),
         pick_footprint_btn,
     ]

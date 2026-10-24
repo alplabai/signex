@@ -5,10 +5,14 @@ use std::path::PathBuf;
 use signex_output::{ExportContext, ProjectMetadata, SheetSnapshot};
 
 mod bom;
+#[cfg(test)]
+mod current_page_tests;
 mod erc_report;
 mod page_setup;
 mod pdf_netlist;
 mod print_preview;
+#[cfg(test)]
+mod source_tests;
 #[cfg(test)]
 pub(crate) mod tests;
 
@@ -23,10 +27,45 @@ pub(crate) mod tests;
 /// user's ERC results and eventually the earliest copies of the very stitch
 /// warnings this path exists to deliver. Surfacing belongs to the user
 /// actions — see [`log_stitch_issues`].
+#[cfg(test)]
 fn build_export_context(
     document_state: &crate::app::state::DocumentState,
 ) -> Option<ExportContext> {
     build_page_scope(document_state).map(|(ctx, _issues)| ctx)
+}
+
+/// The BOM's context: like [`build_export_context`] but carrying the project
+/// hierarchy (`netlist_sheets` + placement counts), so a BOM counts every part
+/// on every child sheet once per placement (#730). A loose document keeps the
+/// exported page scope (every unowned open tab), like the PDF: the hierarchy
+/// is dropped so the BOM does not narrow to the active sheet's subtree.
+fn build_bom_export_context(
+    document_state: &crate::app::state::DocumentState,
+) -> Option<ExportContext> {
+    build_bom_export_scope(document_state).map(|(ctx, _issues)| ctx)
+}
+
+/// The BOM's scope, shared by the preview and the written file so the user
+/// sees what gets exported: [`build_export_scope`] plus the loose-document
+/// rule (drop the hierarchy, keep every unowned open tab).
+fn build_bom_export_scope(
+    document_state: &crate::app::state::DocumentState,
+) -> Option<(ExportContext, ExportIssues)> {
+    build_bom_export_scope_for_source(document_state, document_state.active_path.as_deref()?)
+}
+
+/// [`build_bom_export_scope`] for an explicit source document (#852): the BOM
+/// completion path, where the dialog may have outlived the originating tab.
+fn build_bom_export_scope_for_source(
+    document_state: &crate::app::state::DocumentState,
+    source: &std::path::Path,
+) -> Option<(ExportContext, ExportIssues)> {
+    let (mut ctx, issues) = build_export_scope_for_source(document_state, source)?;
+    if document_state.document_project(source).is_none() {
+        ctx.netlist_sheets.clear();
+        ctx.netlist_sheet_placements.clear();
+    }
+    Some((ctx, issues))
 }
 
 /// Everything that went wrong while deriving the export's netlist.
@@ -164,11 +203,7 @@ fn log_uncovered_chars(chars: &[char]) {
 /// Put the stitch issues in front of the user — called once per *user action*
 /// (print-preview open, PDF written, netlist written), never from the shared
 /// context builder.
-fn log_stitch_issues(
-    document_state: &crate::app::state::DocumentState,
-    ctx: &ExportContext,
-    issues: &ExportIssues,
-) {
+fn log_stitch_issues(source: &std::path::Path, ctx: &ExportContext, issues: &ExportIssues) {
     for message in issues.messages() {
         crate::diagnostics::log_warning(format!("Export: {message}"));
     }
@@ -183,10 +218,7 @@ fn log_stitch_issues(
         // document the user was looking at.
         crate::diagnostics::log_warning(format!(
             "Export: no netlist derived for {} — NET_NAME() annotations will be unresolved",
-            document_state
-                .active_path
-                .as_ref()
-                .map_or_else(String::new, |p| p.display().to_string())
+            source.display()
         ));
     } else if issues.netlist_is_incomplete() {
         crate::diagnostics::log_warning(
@@ -238,10 +270,10 @@ fn owned_pages(
 /// tab belonging to some *other* loaded project must not ride along.
 fn loose_pages(
     document_state: &crate::app::state::DocumentState,
-    active_path: &PathBuf,
+    active_path: &std::path::Path,
 ) -> Vec<SheetSnapshot> {
     let mut paths: Vec<PathBuf> = document_state.unowned_engine_paths();
-    paths.sort_by_key(|p| p != active_path);
+    paths.sort_by_key(|p| p.as_path() != active_path);
     let sheet_count = paths.len();
     paths
         .into_iter()
@@ -297,33 +329,58 @@ fn export_metadata(
 /// is machine-consumed and refuses on a hole, the PDF is human-consumed and
 /// degrades loudly. See `handle_export_netlist_finished` /
 /// `handle_export_pdf_finished`.
+#[cfg(test)]
 fn build_export_scope(
     document_state: &crate::app::state::DocumentState,
 ) -> Option<(ExportContext, ExportIssues)> {
-    build_scope(document_state, true)
+    build_scope(document_state, document_state.active_path.as_deref()?, true)
 }
 
 /// [`build_export_scope`] without `ExportContext::netlist_sheets`, for the
-/// paths that never read it (PDF, BOM, print preview). Skips the per-sheet
+/// paths that never read it (PDF, print preview). Skips the per-sheet
 /// copy that only the Protel netlist needs.
 fn build_page_scope(
     document_state: &crate::app::state::DocumentState,
 ) -> Option<(ExportContext, ExportIssues)> {
-    build_scope(document_state, false)
+    build_scope(
+        document_state,
+        document_state.active_path.as_deref()?,
+        false,
+    )
+}
+
+/// [`build_page_scope`] for an explicit source document rather than the active
+/// tab — the BOM / PDF completion path, where the OS dialog may have outlived
+/// the tab the export was started from (#833). `None` when `source` is no
+/// longer open.
+fn build_page_scope_for_source(
+    document_state: &crate::app::state::DocumentState,
+    source: &std::path::Path,
+) -> Option<(ExportContext, ExportIssues)> {
+    build_scope(document_state, source, false)
+}
+
+/// [`build_export_scope`] for an explicit source document (#852): the netlist
+/// completion path.
+fn build_export_scope_for_source(
+    document_state: &crate::app::state::DocumentState,
+    source: &std::path::Path,
+) -> Option<(ExportContext, ExportIssues)> {
+    build_scope(document_state, source, true)
 }
 
 fn build_scope(
     document_state: &crate::app::state::DocumentState,
+    active_path: &std::path::Path,
     with_netlist_sheets: bool,
 ) -> Option<(ExportContext, ExportIssues)> {
-    let active_path = document_state.active_path.as_ref()?;
     let active_engine = document_state.engines.get(active_path)?;
 
     // Scope comes from `active_document_project()` — the project that owns
     // the active document — NOT `active_loaded_project()`, whose
     // `active_project` pointer is sticky by design and keeps pointing at the
     // last-loaded project while a loose file is focused (#406).
-    let owning_project = document_state.active_document_project();
+    let owning_project = document_state.document_project(active_path);
 
     // One assembler answers what the project consists of — for the export, the
     // cached canvas netlist, the ERC run, annotate and the duplicate-designator
@@ -336,18 +393,28 @@ fn build_scope(
     // happened to be looking at — same intent, two different .net files, no
     // way to tell them apart. Active-path rooting stays on the loose-document
     // path, where the active document *is* the whole scope.
-    if let Some(warning) = crate::app::project_sheets::netlist_root_fallback_warning(document_state)
+    if let Some(warning) =
+        crate::app::project_sheets::netlist_root_fallback_warning_for(document_state, active_path)
     {
         crate::diagnostics::log_warning(warning);
     }
     let (pages, sheet_set) =
-        crate::app::project_sheets::assemble_active_project_sheets(document_state);
+        crate::app::project_sheets::assemble_project_sheets_for(document_state, active_path);
 
     let sheets = match owning_project {
         Some(project) => owned_pages(project, &pages, &sheet_set),
         None => loose_pages(document_state, active_path),
     };
     let metadata = export_metadata(active_engine, owning_project);
+    // The active sheet's page, matched under the project's case rules (#694):
+    // `A.snxsch` and `a.snxsch` are one file on a case-insensitive volume, but
+    // `signex-output` compares paths exactly. Hand it the page's own spelling.
+    let fold = crate::app::state::project_case::fold_of(owning_project);
+    let active_key = crate::app::state::scope::path_key_with(active_path, fold);
+    let current_sheet = sheets
+        .iter()
+        .find(|s| crate::app::state::scope::path_key_with(&s.path, fold) == active_key)
+        .map_or_else(|| active_path.to_path_buf(), |s| s.path.clone());
 
     // Derive the authoritative project netlist off that same sheet set, so the
     // netlist exporter reads the contract instead of re-deriving connectivity
@@ -356,6 +423,7 @@ fn build_scope(
     let mut issues = ExportIssues::default();
     let set = sheet_set;
     let mut netlist_sheets: Vec<signex_types::schematic::SchematicSheet> = Vec::new();
+    let mut netlist_sheet_placements: Vec<usize> = Vec::new();
     let netlist = set.root.clone().and_then(|root_path| {
         // A declared page that exists and was read but that nothing
         // hierarchically references is stitched in below as its own
@@ -377,12 +445,15 @@ fn build_scope(
         let base_dir = project_dir
             .clone()
             .or_else(|| root_path.parent().map(PathBuf::from));
-        let graph = crate::app::project_sheets::project_graph(
+        let fold = set.fold;
+        let graph = crate::app::project_sheets::project_graph_with(
             &set.sheets,
             base_dir.as_deref(),
             Some(&root_path),
+            fold,
         );
-        let root_key = crate::app::project_sheets::sheet_key(&root_path, base_dir.as_deref());
+        let root_key =
+            crate::app::project_sheets::sheet_key_with(&root_path, base_dir.as_deref(), fold);
         if !graph.sheets.contains_key(&root_key) {
             // The root is exempt from losing a SheetKey collision (#536),
             // so reaching here means it was never loaded at all — absent,
@@ -402,8 +473,13 @@ fn build_scope(
         // Root + every declared page its hierarchy never reaches (#430) —
         // a flat multi-page project stitches into one netlist only if each
         // page is named as a root of its own.
-        let roots =
-            crate::app::project_sheets::project_roots(root_key, &set, &graph, base_dir.as_deref());
+        let roots = crate::app::project_sheets::project_roots(
+            root_key,
+            &set,
+            &graph,
+            base_dir.as_deref(),
+            fold,
+        );
         // `build_project_netlist` always produces a netlist and reports what
         // it could not stitch in-band. The issues are returned to the caller
         // rather than acted on here, because severity is a per-deliverable
@@ -417,8 +493,20 @@ fn build_scope(
         // key order so the output is deterministic: hierarchical children are
         // not printed pages, yet their parts sit in the netlist's terminals.
         if with_netlist_sheets {
+            // Placement counts come from the same occurrence walk the netlist
+            // just used, so the BOM multiplies a child by how often it is
+            // placed (#730). A sheet the walk never reaches counts zero.
+            let counts = signex_net::sheet_placements(&signex_net::ProjectGraph {
+                sheets: &graph.sheets,
+                resolved: &graph.resolved,
+                roots: &roots,
+            });
             let mut keyed: Vec<_> = graph.sheets.into_iter().collect();
             keyed.sort_by(|a, b| a.0.cmp(&b.0));
+            netlist_sheet_placements = keyed
+                .iter()
+                .map(|(key, _)| counts.get(key).copied().unwrap_or(0))
+                .collect();
             netlist_sheets = keyed.into_iter().map(|(_, sheet)| sheet).collect();
         }
         let mut stitch = result.issues;
@@ -433,7 +521,52 @@ fn build_scope(
             metadata,
             netlist,
             netlist_sheets,
+            netlist_sheet_placements,
+            current_sheet: Some(current_sheet),
         },
         issues,
     ))
+}
+
+/// "Current page" for a document that is not a declared page — a hierarchical
+/// child opened by descending into a sheet symbol. The declared pages do not
+/// contain it, so the plain index lookup would silently print sheet 0. When
+/// `range` is `Current` and the viewed sheet is not among `ctx.sheets`, replace
+/// the page set with that sheet's live snapshot and return `true` (the caller
+/// then skips its file-pick filter, which only names declared pages).
+fn isolate_undeclared_current(
+    ctx: &mut ExportContext,
+    document_state: &crate::app::state::DocumentState,
+    source: &std::path::Path,
+    range: &signex_output::PageRange,
+) -> bool {
+    if !matches!(range, signex_output::PageRange::Current)
+        || ctx
+            .sheets
+            .iter()
+            .any(|s| Some(&s.path) == ctx.current_sheet.as_ref())
+    {
+        return false;
+    }
+    let Some(engine) = document_state.engines.get(source) else {
+        crate::diagnostics::log_warning(format!(
+            "Export: current sheet {} is not open; printing the first page instead",
+            source.display()
+        ));
+        return false;
+    };
+    let sheet_name = source
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("Sheet")
+        .to_string();
+    ctx.sheets = vec![SheetSnapshot {
+        path: source.to_path_buf(),
+        schematic: engine.document().clone(),
+        sheet_name,
+        sheet_number: 1,
+        sheet_count: 1,
+    }];
+    ctx.current_sheet = Some(source.to_path_buf());
+    true
 }

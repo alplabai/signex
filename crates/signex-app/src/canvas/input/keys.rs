@@ -17,6 +17,10 @@ impl SchematicCanvas<'_> {
         &self,
         state: &mut CanvasState,
     ) -> Option<canvas::Action<Message>> {
+        if state.is_floating() {
+            state.clear_move();
+            return Some(canvas::Action::capture());
+        }
         if state.move_dragging || state.click_on_selected {
             state.move_dragging = false;
             state.click_on_selected = false;

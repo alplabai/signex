@@ -5,10 +5,15 @@ use std::path::PathBuf;
 use super::super::*;
 
 mod git;
+#[cfg(test)]
+mod git_tests;
 mod history;
 mod open;
 mod recent;
 mod save;
+mod save_async;
+#[cfg(test)]
+mod save_async_tests;
 
 /// Save-As dialog Task for a symbol / footprint, used by the first save
 /// of a new primitive and by File > Save As (#671). The dialog defaults

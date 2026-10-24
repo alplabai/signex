@@ -64,7 +64,7 @@ shrink.
 | `mirror_x` | Mirror along X-axis | modify | `X` | `X` |
 | `mirror_y` | Mirror along Y-axis | modify | `Y` | `Y` |
 | `move_object` | Move object | modify | `M M` | — |
-| `move_selection` | Move | modify | — | `M` |
+| `move_selection` | Move selection | modify | — | `M` |
 | `new_document` | New | file | — | `Ctrl+N` |
 | `next_document_tab` | Next open document tab | window | `Ctrl+Tab` | — |
 | `next_grid` | Next grid | view | — | `N` |

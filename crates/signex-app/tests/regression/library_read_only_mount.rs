@@ -498,7 +498,7 @@ fn new_component_skips_a_read_only_library_and_uses_the_writable_one() {
 }
 
 #[test]
-fn new_component_with_only_read_only_libraries_explains_and_logs() {
+fn new_component_with_only_read_only_libraries_writes_nothing() {
     ensure_logger();
     let tmp = tempfile::Builder::new()
         .prefix("signex-329-newc-ro-")
@@ -510,64 +510,5 @@ fn new_component_with_only_read_only_libraries_explains_and_logs() {
 
     let _ = app.update(Message::Library(LibraryMessage::NewComponent));
 
-    assert_eq!(before, bytes_of(tmp.path()));
-    let modal = app
-        .library
-        .new_component
-        .as_ref()
-        .expect("the modal opens to explain");
-    assert!(modal.library_idx.is_none());
-    assert!(
-        modal
-            .error
-            .as_deref()
-            .is_some_and(|e| e.contains("read-only"))
-    );
-    assert!(logged("New Component refused"));
-}
-
-#[test]
-fn new_component_submit_into_a_read_only_library_is_refused_and_logged() {
-    ensure_logger();
-    let tmp = tempfile::Builder::new()
-        .prefix("signex-329-newc-sub-")
-        .tempdir()
-        .expect("tempdir");
-    let (snxlib, _row_id) = stock_like_library(tmp.path());
-    let mut app = app_with_browser(&snxlib, true);
-    let before = bytes_of(tmp.path());
-    app.library.new_component = Some(signex_app::library::state::NewComponentState {
-        internal_pn: "X-1".into(),
-        library_idx: Some(0),
-        table: Some(TABLE.to_string()),
-        ..Default::default()
-    });
-
-    let _ = app.update(Message::Library(LibraryMessage::NewComponentSubmit));
-
-    assert_eq!(before, bytes_of(tmp.path()));
-    assert!(
-        app.library
-            .new_component
-            .as_ref()
-            .and_then(|m| m.error.as_deref())
-            .is_some_and(|e| e.contains("read-only"))
-    );
-    assert!(logged("New Component refused"));
-}
-
-#[test]
-fn the_new_component_picker_does_not_adopt_a_read_only_library() {
-    let tmp = tempfile::Builder::new()
-        .prefix("signex-329-newc-pick-")
-        .tempdir()
-        .expect("tempdir");
-    let (snxlib, _row_id) = stock_like_library(tmp.path());
-    let mut app = app_with_browser(&snxlib, true);
-    app.library.new_component = Some(Default::default());
-
-    let _ = app.update(Message::Library(LibraryMessage::NewComponentSetLibrary(0)));
-
-    let modal = app.library.new_component.as_ref().expect("modal");
-    assert!(modal.library_idx.is_none());
+    assert_eq!(before, bytes_of(tmp.path()), "nothing is written");
 }

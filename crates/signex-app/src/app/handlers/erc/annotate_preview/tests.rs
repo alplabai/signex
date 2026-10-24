@@ -1,0 +1,390 @@
+//! The Annotate preview and the Annotate action must describe the same sheets
+//! AND promise the same designator on each.
+//!
+//! Round 5 repointed `handle_annotate` at the shared assembler and left the
+//! preview on its own rule. The dialog the user approves and the operation that
+//! runs then described *different sheet sets*, in both directions: the preview
+//! hid the unlisted hierarchical children the action renumbers and saves to
+//! disk, and listed loose tabs the action refuses to touch (#406).
+//!
+//! Fixing the sheet *set* left the *order* still disagreeing: the preview
+//! walked sorted-path order while the action walked cached tabs in tab order,
+//! then unopened sheets sorted, then the active engine unconditionally last —
+//! so a project whose active sheet doesn't happen to sort last got a preview
+//! that promised one designator and an action that assigned another (#435).
+//! [`crate::app::project_sheets::ordered_project_sheet_paths`] is now the one
+//! walk both sides use.
+//!
+//! These drive the real preview against the real handler over one fixture, so a
+//! future change to either alone goes red.
+
+use std::path::PathBuf;
+
+use signex_types::format::SnxSchematic;
+use uuid::Uuid;
+
+use crate::app::Signex;
+use crate::app::documents::{TabInfo, TabKind};
+use crate::app::handlers::menu::export::tests::{app_workspace, open_with, sheet_with_net};
+
+/// A project listing only `a_root.snxsch`, which is open (and active) and
+/// references `z_child.snxsch` — a hierarchical child sitting unlisted and
+/// unopened on disk. Both hold one unannotated `R?`. Plus a loose tab from
+/// nowhere, also `R?`.
+///
+/// The names are deliberately adversarial to ordering: `a_root` sorts BEFORE
+/// `z_child`, the opposite of what the old action's walk order gave the
+/// active sheet (unopened sheets first, active engine unconditionally last).
+/// A fixture where the active sheet already sorted last (as `top`/`child` did
+/// before #435) can't tell sorted-path order and "active-last" apart — this
+/// one can.
+///
+/// Returns the app and the temp dir (caller cleans up).
+fn fixture() -> (Signex, PathBuf) {
+    let dir = std::env::temp_dir().join(format!("signex-annotate-preview-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).expect("tempdir");
+
+    let child = SnxSchematic::new(sheet_with_net("R?", "CHILD_NET", &[]))
+        .write_string()
+        .expect("serialize child");
+    std::fs::write(dir.join("z_child.snxsch"), child).expect("write child");
+
+    let mut app = app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"]);
+    let root = dir.join("a_root.snxsch");
+    open_with(
+        &mut app.document_state,
+        &root,
+        sheet_with_net("R?", "ROOT_NET", &["z_child.snxsch"]),
+    );
+    let loose = PathBuf::from("/w/loose/scratch.snxsch");
+    open_with(
+        &mut app.document_state,
+        &loose,
+        sheet_with_net("R?", "LOOSE_NET", &[]),
+    );
+    // Tabs, not just engines: the old preview seeded from `tabs`, and
+    // `handle_annotate`'s cached-tab pass keys off the active tab index — so
+    // the loose tab must be a non-active tab for its exclusion to mean
+    // anything.
+    app.document_state.tabs.push(tab("a_root", root.clone()));
+    app.document_state.tabs.push(tab("scratch", loose));
+    app.document_state.active_tab = 0;
+    app.document_state.active_path = Some(root);
+    (app, dir)
+}
+
+fn tab(title: &str, path: PathBuf) -> TabInfo {
+    TabInfo {
+        title: title.to_string(),
+        path,
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: TabKind::Schematic,
+    }
+}
+
+/// The proposed designator the preview promises for the sheet titled `sheet`.
+fn proposed_for(app: &Signex, sheet: &str) -> Option<String> {
+    app.preview_project_annotations()
+        .into_iter()
+        .find(|e| e.sheet == sheet)
+        .map(|e| e.proposed)
+}
+
+#[test]
+fn the_preview_promises_what_the_action_assigns() {
+    let (mut app, dir) = fixture();
+
+    let promised_child = proposed_for(&app, "z_child");
+    let promised_root = proposed_for(&app, "a_root");
+
+    let _ = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
+
+    let written = std::fs::read_to_string(dir.join("z_child.snxsch")).expect("child still on disk");
+    let child_after: Vec<String> = SnxSchematic::parse(&written)
+        .expect("child parses")
+        .sheet
+        .symbols
+        .iter()
+        .map(|s| s.reference.clone())
+        .collect();
+    let root_after: Vec<String> = app
+        .document_state
+        .engines
+        .get(&dir.join("a_root.snxsch"))
+        .expect("root engine")
+        .document()
+        .symbols
+        .iter()
+        .map(|s| s.reference.clone())
+        .collect();
+    std::fs::remove_dir_all(&dir).ok();
+
+    // The action renumbers the unlisted child and saves the file. The preview
+    // must have shown that row — otherwise Signex writes a schematic the user
+    // was never shown (#406) — AND it must be the SAME number the action
+    // assigns, not just a row with the right sheet name (#435): `a_root`
+    // sorts before `z_child`, so a preview/action pair that disagree on walk
+    // order swap these two numbers rather than merely omitting one.
+    assert_eq!(
+        promised_child.as_deref(),
+        child_after.first().map(String::as_str),
+        "the preview must promise exactly what the action writes to the child \
+         file on disk (preview said {promised_child:?}, disk holds {child_after:?})"
+    );
+    assert_eq!(
+        promised_root.as_deref(),
+        root_after.first().map(String::as_str),
+        "…and the same for the active sheet (preview said {promised_root:?}, \
+         engine holds {root_after:?})"
+    );
+    assert!(
+        child_after.first().is_some_and(|r| !r.ends_with('?')),
+        "precondition: the action does renumber the child: {child_after:?}"
+    );
+    assert_ne!(
+        promised_child, promised_root,
+        "precondition: root and child must land on distinct numbers for this \
+         fixture to be able to catch a swap"
+    );
+}
+
+#[test]
+fn the_preview_omits_tabs_the_action_refuses_to_touch() {
+    let (mut app, dir) = fixture();
+
+    let rows = app.preview_project_annotations();
+    let sheets: Vec<&str> = rows.iter().map(|e| e.sheet.as_str()).collect();
+    assert!(
+        !sheets.contains(&"scratch"),
+        "a loose tab is not part of this project — the action leaves it alone, \
+         so the preview must not offer to renumber it: {sheets:?}"
+    );
+
+    let _ = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
+    let loose_after = app
+        .document_state
+        .engines
+        .get(&PathBuf::from("/w/loose/scratch.snxsch"))
+        .expect("loose engine")
+        .document()
+        .symbols
+        .first()
+        .map(|s| s.reference.clone());
+    std::fs::remove_dir_all(&dir).ok();
+
+    assert_eq!(
+        loose_after.as_deref(),
+        Some("R?"),
+        "precondition: the action really does leave the loose tab untouched"
+    );
+}
+
+#[test]
+fn the_preview_honours_locks_like_the_action() {
+    use signex_types::schematic::Symbol;
+    let unit = |unit: u32, y: f64| Symbol {
+        uuid: Uuid::new_v4(),
+        lib_id: "Amplifier:LM358".to_string(),
+        reference: "U?".to_string(),
+        unit,
+        position: signex_types::schematic::Point::new(0.0, y),
+        ..Default::default()
+    };
+    let (locked, sibling) = (unit(1, 0.0), unit(2, 10.0));
+    let locked_uuid = locked.uuid;
+    let dir = std::env::temp_dir().join(format!("signex-preview-lock-{}", Uuid::new_v4()));
+    let mut app = app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"]);
+    let root = dir.join("a_root.snxsch");
+    let mut sheet = sheet_with_net("R?", "ROOT_NET", &[]);
+    sheet.symbols = vec![locked, sibling];
+    open_with(&mut app.document_state, &root, sheet);
+    app.document_state.active_path = Some(root);
+    app.ui_state.annotate_locked.insert(locked_uuid);
+
+    let proposed: Vec<String> = app
+        .preview_project_annotations()
+        .into_iter()
+        .filter(|e| e.sheet == "a_root")
+        .map(|e| e.proposed)
+        .collect();
+    assert_eq!(proposed, ["U?", "U?"]);
+}
+
+/// Load the preview the way the dialog does: claim a generation, run the
+/// job, deliver the result.
+fn load_into_cache(app: &mut Signex) {
+    let (generation, inputs) = app
+        .begin_annotate_preview_load()
+        .expect("the cache must be stale here");
+    let load = super::load_preview_sheets(inputs);
+    app.handle_annotate_preview_loaded(generation, &Ok(load));
+}
+
+fn cached(app: &Signex, sheet: &str) -> Option<String> {
+    app.ui_state
+        .annotate_preview
+        .entries
+        .iter()
+        .find(|e| e.sheet == sheet)
+        .map(|e| e.proposed.clone())
+}
+
+#[test]
+fn the_cached_preview_is_reloaded_after_an_edit() {
+    let (mut app, dir) = fixture();
+    app.ui_state.annotate_dialog_open = true;
+
+    load_into_cache(&mut app);
+    assert_eq!(cached(&app, "a_root").as_deref(), Some("R1"));
+    assert!(
+        app.begin_annotate_preview_load().is_none(),
+        "nothing changed, so the cache must be reused"
+    );
+
+    // Edit the open document: its designator is no longer `R?`.
+    let root = dir.join("a_root.snxsch");
+    let engine = app.document_state.engines.get_mut(&root).expect("engine");
+    let mut document = engine.document().clone();
+    document.symbols[0].reference = "R7".to_string();
+    engine
+        .execute(signex_engine::Command::ReplaceDocument { document })
+        .expect("replace");
+
+    // The stale cache still holds the old rows until the reload lands, but
+    // the edit must be detected - the stale-cache bug the old view-time
+    // comment feared.
+    assert_eq!(cached(&app, "a_root").as_deref(), Some("R1"));
+    let (generation, inputs) = app
+        .begin_annotate_preview_load()
+        .expect("an edit must invalidate the cache");
+    let load = super::load_preview_sheets(inputs);
+
+    // A result for a superseded generation is dropped.
+    let superseded = super::load_preview_sheets(app.preview_inputs());
+    app.handle_annotate_preview_loaded(generation - 1, &Ok(superseded));
+    assert_eq!(cached(&app, "a_root").as_deref(), Some("R1"));
+
+    app.handle_annotate_preview_loaded(generation, &Ok(load));
+    assert_eq!(
+        cached(&app, "a_root").as_deref(),
+        Some("R7"),
+        "the reloaded preview must reflect the edit"
+    );
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn toggling_a_lock_rederives_the_rows_without_reloading() {
+    let (mut app, dir) = fixture();
+    app.ui_state.annotate_dialog_open = true;
+    load_into_cache(&mut app);
+    let uuid = app.ui_state.annotate_preview.entries[0].uuid;
+    assert_eq!(cached(&app, "a_root").as_deref(), Some("R1"));
+
+    app.ui_state.annotate_locked.insert(uuid);
+    app.recompute_annotate_entries();
+
+    assert_eq!(cached(&app, "a_root").as_deref(), Some("R?"));
+    assert!(app.begin_annotate_preview_load().is_none());
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn invalidating_drops_the_rows_so_lock_all_cannot_act_on_a_stale_list() {
+    let (mut app, dir) = fixture();
+    app.ui_state.annotate_dialog_open = true;
+    load_into_cache(&mut app);
+    assert!(!app.ui_state.annotate_preview.entries.is_empty());
+
+    app.invalidate_annotate_preview();
+
+    assert!(app.ui_state.annotate_preview.entries.is_empty());
+    assert!(app.annotate_preview_uuids().is_empty());
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn lock_all_waits_for_a_pending_reload() {
+    use crate::app::{AnnotateMsg, Message};
+    let (mut app, dir) = fixture();
+    app.ui_state.annotate_dialog_open = true;
+    let (generation, inputs) = app
+        .begin_annotate_preview_load()
+        .expect("first load must start");
+    assert!(app.annotate_preview_is_loading());
+
+    let _ = app.update(Message::Annotate(AnnotateMsg::SetAllLocked(true)));
+    assert!(
+        app.ui_state.annotate_locked.is_empty(),
+        "lock-all must not act on a list that is still loading"
+    );
+
+    app.handle_annotate_preview_loaded(generation, &Ok(super::load_preview_sheets(inputs)));
+    let _ = app.update(Message::Annotate(AnnotateMsg::SetAllLocked(true)));
+    assert!(!app.ui_state.annotate_locked.is_empty());
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn the_fingerprint_follows_the_declared_pages() {
+    let (mut app, dir) = fixture();
+    let before = super::fingerprint(&app.document_state);
+    let project = &mut app.document_state.projects[0];
+    let mut extra = project.data.sheets[0].clone();
+    extra.filename = "added.snxsch".to_string();
+    project.data.sheets.push(extra);
+    assert_ne!(before, super::fingerprint(&app.document_state));
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn a_failed_load_says_so_and_is_retried() {
+    let (mut app, dir) = fixture();
+    app.ui_state.annotate_dialog_open = true;
+    let (generation, _inputs) = app.begin_annotate_preview_load().expect("load");
+
+    app.handle_annotate_preview_loaded(generation, &Err("worker died".to_string()));
+
+    assert!(app.ui_state.annotate_preview.load_failed);
+    assert!(!app.ui_state.annotate_preview.loading);
+    assert!(
+        app.begin_annotate_preview_load().is_some(),
+        "a failed load must not be remembered as current"
+    );
+    assert!(
+        !app.ui_state.annotate_preview.load_failed,
+        "retry clears it"
+    );
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn resetting_duplicates_drops_the_cached_rows() {
+    let (mut app, dir) = fixture();
+    app.ui_state.annotate_dialog_open = true;
+    // Two parts holding the same designator on the open root sheet.
+    let root = dir.join("a_root.snxsch");
+    let engine = app.document_state.engines.get_mut(&root).expect("engine");
+    let mut document = engine.document().clone();
+    for sym in &mut document.symbols {
+        sym.reference = "R1".to_string();
+    }
+    let mut twin = document.symbols[0].clone();
+    twin.uuid = Uuid::new_v4();
+    document.symbols.push(twin);
+    engine
+        .execute(signex_engine::Command::ReplaceDocument { document })
+        .expect("replace");
+    load_into_cache(&mut app);
+    assert!(!app.ui_state.annotate_preview.entries.is_empty());
+
+    let _ = app.handle_reset_duplicate_designators();
+
+    assert!(
+        app.ui_state.annotate_preview.entries.is_empty(),
+        "the reset rewrites sheets, so the rows must be reloaded"
+    );
+    std::fs::remove_dir_all(&dir).ok();
+}

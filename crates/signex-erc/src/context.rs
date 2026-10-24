@@ -168,6 +168,18 @@ pub struct ErcSheetPin {
 // ErcNet  (derived — not directly from the snapshot)
 // ---------------------------------------------------------------------------
 
+/// A pin on an [`ErcNet`], with enough identity to point a diagnostic at it.
+#[derive(Debug, Clone)]
+pub struct ErcNetPin {
+    /// The symbol that owns the pin.
+    pub symbol: Uuid,
+    /// That symbol's reference designator, for messages.
+    pub reference: String,
+    /// World-space position of the pin tip.
+    pub position: Point,
+    pub direction: PinDirection,
+}
+
 /// A logical net: the set of pins and labels connected by wires/junctions.
 /// Derived during projection via union-find over wire endpoints.
 #[derive(Debug, Clone)]
@@ -179,7 +191,11 @@ pub struct ErcNet {
     /// DSL: `net.class == "i2c"`.
     pub class: String,
     /// Electrical types of every pin on this net. DSL: `has_pin_kind(...)`.
+    /// Always the `direction` of each entry of [`ErcNet::pins`], in order.
     pub pin_types: Vec<PinDirection>,
+    /// The same pins with the symbol and position that make a finding on one
+    /// of them locatable.
+    pub pins: Vec<ErcNetPin>,
     /// `true` if any pin is Output / PowerOutput / ThreeStatable /
     /// OpenDrainLow / OpenDrainHigh. DSL: `has_driver()`.
     pub has_driver: bool,
@@ -212,6 +228,10 @@ pub struct ErcContext {
     /// Child sheet contexts keyed by filename. Only populated when built via
     /// [`from_snapshot_with_children`].
     pub children: HashMap<String, ErcContext>,
+    /// This sheet's project key, when built by [`from_snapshot_with_children`].
+    /// Lets cross-sheet rules count a file once however many parents
+    /// reference it.
+    pub key: Option<signex_net::SheetKey>,
 }
 
 impl ErcContext {
@@ -228,27 +248,58 @@ impl ErcContext {
         Self::project(snapshot, HashMap::new())
     }
 
-    /// `resolved` is THIS sheet's own resolution submap — `cs.filename ->
-    /// SheetKey` — not a project-wide map; `sheets` is the shared
-    /// `SheetKey -> SchematicSheet` table every sheet's submap is looked up
-    /// against. Keying `resolved` per-sheet (rather than a single project-wide
-    /// filename map) is what keeps this in step with
+    /// Build a context whose `children` are filled recursively from the
+    /// project's per-parent resolution table: `resolutions[parent_key]` is
+    /// that sheet's own `cs.filename -> SheetKey` submap (the shape of
+    /// `signex_net::ProjectGraph::resolved`), looked up against the shared
+    /// `sheets` table. `own_key` is this sheet's key (`None` for a sheet with
+    /// no place in the project, which then has no children). Per-parent
+    /// submaps, not one project-wide filename map, keep this in step with
     /// `signex_net::build_project_netlist` when two parents in different
     /// directories reference a child by the same filename string (#466).
+    ///
+    /// A child that is already an ancestor (a reference cycle) is still
+    /// attached, so a direct-child lookup finds it, but is not expanded
+    /// further — that is what bounds the recursion.
     pub fn from_snapshot_with_children(
         snapshot: &SchematicSheet,
-        resolved: &HashMap<String, signex_net::SheetKey>,
+        own_key: Option<&signex_net::SheetKey>,
+        resolutions: &HashMap<signex_net::SheetKey, HashMap<String, signex_net::SheetKey>>,
         sheets: &HashMap<signex_net::SheetKey, SchematicSheet>,
     ) -> Self {
-        let child_ctxs = resolved
-            .iter()
-            .filter_map(|(filename, key)| {
-                sheets
-                    .get(key)
-                    .map(|s| (filename.clone(), Self::from_snapshot(s)))
-            })
-            .collect();
-        Self::project(snapshot, child_ctxs)
+        Self::build(snapshot, own_key, resolutions, sheets, &mut Vec::new())
+    }
+
+    fn build<'a>(
+        snapshot: &SchematicSheet,
+        key: Option<&'a signex_net::SheetKey>,
+        resolutions: &'a HashMap<signex_net::SheetKey, HashMap<String, signex_net::SheetKey>>,
+        sheets: &HashMap<signex_net::SheetKey, SchematicSheet>,
+        ancestors: &mut Vec<&'a signex_net::SheetKey>,
+    ) -> Self {
+        let mut children = HashMap::new();
+        if let Some(k) = key {
+            ancestors.push(k);
+        }
+        for (filename, child_key) in key.and_then(|k| resolutions.get(k)).into_iter().flatten() {
+            let Some(child) = sheets.get(child_key) else {
+                continue;
+            };
+            let ctx = if ancestors.contains(&child_key) {
+                let mut leaf = Self::project(child, HashMap::new());
+                leaf.key = Some(child_key.clone());
+                leaf
+            } else {
+                Self::build(child, Some(child_key), resolutions, sheets, ancestors)
+            };
+            children.insert(filename.clone(), ctx);
+        }
+        if key.is_some() {
+            ancestors.pop();
+        }
+        let mut ctx = Self::project(snapshot, children);
+        ctx.key = key.cloned();
+        ctx
     }
 
     fn project(snapshot: &SchematicSheet, children: HashMap<String, ErcContext>) -> Self {
@@ -408,6 +459,7 @@ impl ErcContext {
             child_sheets,
             nets,
             children,
+            key: None,
         }
     }
 }
@@ -487,7 +539,7 @@ fn summarize_nets(
 
     // Group connected (non-no-connect) pins by net root.
     // No-connect pins are skipped — they're isolated by design.
-    let mut net_pins: HashMap<(i64, i64), Vec<PinDirection>> = HashMap::new();
+    let mut net_pins: HashMap<(i64, i64), Vec<ErcNetPin>> = HashMap::new();
     for sym in symbols {
         for pin in &sym.pins {
             // Only wire- or label-connected pins belong to a logical net.
@@ -499,7 +551,12 @@ fn summarize_nets(
             // re-probing, so we include everything that's "connected" — the
             // no-connect case creates a small singleton net that harms nothing.
             let root = conn.root_of(&pin.world_pos);
-            net_pins.entry(root).or_default().push(pin.electrical_type);
+            net_pins.entry(root).or_default().push(ErcNetPin {
+                symbol: sym.uuid,
+                reference: sym.reference.clone(),
+                position: pin.world_pos,
+                direction: pin.electrical_type,
+            });
         }
     }
 
@@ -542,13 +599,15 @@ fn summarize_nets(
                 .map(|i| name[..i].to_ascii_lowercase())
                 .unwrap_or_else(|| name.to_ascii_lowercase());
 
-            let has_driver = pins.iter().any(|t| DRIVING.contains(t));
-            let has_pullup = pins.contains(&PinDirection::Passive);
+            let pin_types: Vec<PinDirection> = pins.iter().map(|p| p.direction).collect();
+            let has_driver = pin_types.iter().any(|t| DRIVING.contains(t));
+            let has_pullup = pin_types.contains(&PinDirection::Passive);
 
             ErcNet {
                 name,
                 class,
-                pin_types: pins.to_vec(),
+                pin_types,
+                pins: pins.to_vec(),
                 has_driver,
                 has_pullup,
             }
@@ -594,6 +653,15 @@ mod tests {
             pins,
             attrs: HashMap::new(),
         }
+    }
+
+    #[test]
+    fn pt_key_buckets_at_one_micron() {
+        // #113 item 1: the ERC point key is a 1 um round, so 0.4 um folds into
+        // the origin bucket while 0.6 um and a full 1 um do not.
+        assert_eq!(pt_key(&pt(0.0004, 0.0)), pt_key(&pt(0.0, 0.0)));
+        assert_ne!(pt_key(&pt(0.0006, 0.0)), pt_key(&pt(0.0, 0.0)));
+        assert_ne!(pt_key(&pt(0.0, 0.001)), pt_key(&pt(0.0, 0.0)));
     }
 
     #[test]

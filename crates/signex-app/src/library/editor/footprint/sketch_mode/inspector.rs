@@ -19,13 +19,14 @@
 
 use iced::{
     Border, Color, Element, Length, Theme,
-    widget::{Space, button, column, container, pick_list, row, scrollable, text, text_input},
+    widget::{Space, column, container, pick_list, row, scrollable, text, text_input},
 };
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use crate::app::FootprintEditorState;
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
+use crate::styles::tokens::{self, Overlay};
 
 /// Render the inspector strip. Returns an empty `Space` when not in
 /// Sketch mode so the caller can unconditionally add it to the body
@@ -45,6 +46,7 @@ pub fn view<'a>(
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
+    let strip_bg = tokens::overlay(tokens, Overlay::Faint);
 
     // v0.14.2: tool palette + constraint authoring picker have moved
     // into the Fusion-360-style floating Active Bar over the canvas
@@ -53,7 +55,7 @@ pub fn view<'a>(
     // warnings — Role is a v0.16.2 addition for selection-aware bake
     // attr assignment.
     let dof = view_dof(editor, text_c, muted);
-    let params = view_params(editor, text_c, muted, border);
+    let params = view_params(editor, text_c, muted, border, tokens);
     let role = view_role(editor, text_c, muted);
     let warnings = view_warnings(editor, text_c, muted);
 
@@ -76,9 +78,7 @@ pub fn view<'a>(
     )
     .padding([4, 8])
     .style(move |_: &Theme| iced::widget::container::Style {
-        background: Some(iced::Background::Color(iced::Color::from_rgba(
-            1.0, 1.0, 1.0, 0.02,
-        ))),
+        background: Some(iced::Background::Color(strip_bg)),
         border: Border {
             width: 0.0,
             radius: 0.0.into(),
@@ -87,308 +87,6 @@ pub fn view<'a>(
         ..iced::widget::container::Style::default()
     })
     .into()
-}
-
-// v0.14.2: replaced by `crate::library::editor::footprint::sketch_mode
-// ::active_bar` — kept the body below temporarily as a doc-only ref;
-// remove on next visual-pass commit.
-#[expect(
-    dead_code,
-    reason = "v0.14.2 replaced this with sketch_mode::active_bar; kept as a doc-only reference"
-)]
-fn view_tool_palette<'a>(
-    editor: &'a FootprintEditorState,
-    text_c: Color,
-    muted: Color,
-    border: Color,
-) -> Element<'a, LibraryMessage> {
-    use crate::library::editor::footprint::state::SketchTool;
-    let active = editor.state.active_tool;
-    let mk_pill = |label: &'static str, target: SketchTool| -> Element<'a, LibraryMessage> {
-        let path = editor.path.clone();
-        let on = active == target;
-        let label_color = if on { text_c } else { muted };
-        button(text(label).size(11).color(label_color))
-            .padding([3, 8])
-            .on_press(LibraryMessage::PrimitiveEditorEvent {
-                path,
-                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchSetTool(target)),
-            })
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: if on {
-                    Some(iced::Background::Color(iced::Color::from_rgba(
-                        1.0, 1.0, 1.0, 0.10,
-                    )))
-                } else {
-                    Some(iced::Background::Color(iced::Color::from_rgba(
-                        1.0, 1.0, 1.0, 0.02,
-                    )))
-                },
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                },
-                ..iced::widget::button::Style::default()
-            })
-            .into()
-    };
-
-    use crate::library::editor::footprint::state::ToolPending;
-    let pending_label: String = match editor.state.tool_pending {
-        ToolPending::Idle => match active {
-            SketchTool::Select => String::new(),
-            SketchTool::Point => "click to place".into(),
-            SketchTool::Line => "click first endpoint".into(),
-            SketchTool::Rectangle => "click first corner".into(),
-            SketchTool::RoundedRectangle => "click first corner (radius from input)".into(),
-            SketchTool::Circle => "click centre".into(),
-            SketchTool::Arc => "click centre".into(),
-            // #467 — 3-point Edge Arc.
-            SketchTool::EdgeArc => "click start point".into(),
-            SketchTool::Mirror => {
-                "select a Line first, then click a Point to mirror".into()
-            }
-            SketchTool::Offset => {
-                "select a Line / Arc / Circle first, then click on the side to offset (distance from input)".into()
-            }
-            SketchTool::RectPattern => {
-                "click an entity to mint a 2×2 grid array (5 mm × 5 mm; edit via JSON or Properties)".into()
-            }
-            SketchTool::CircularPattern => {
-                "click an entity to mint a 4-instance circular array (360°; centre 5 mm right of source)".into()
-            }
-            SketchTool::TangentArc => "click first endpoint of tangent arc".into(),
-            SketchTool::Fillet => {
-                "click the first Line — radius from input (default 0.5 mm)".into()
-            }
-            SketchTool::Trim => {
-                "click a Line segment to remove it (cuts to nearest intersections)".into()
-            }
-            // #372 — single click splits a Line in two at the click.
-            SketchTool::BreakTrack => {
-                "click a Line to split it in two at the click point".into()
-            }
-            // #361 — endpoint-biased segment grab.
-            SketchTool::DragTrackEnd => {
-                "press anywhere on a track and drag its nearer end to a new position".into()
-            }
-        },
-        ToolPending::LineFirst { .. } => "click second endpoint (Esc to cancel)".into(),
-        ToolPending::RectangleFirst { .. } => "click opposite corner (Esc to cancel)".into(),
-        ToolPending::RoundedRectangleFirst { .. } => "click opposite corner (Esc to cancel)".into(),
-        ToolPending::CircleCenter { .. } => "click radius point (Esc to cancel)".into(),
-        ToolPending::ArcCenter { .. } => "click start (Esc to cancel)".into(),
-        ToolPending::ArcStart { .. } => "click end (Esc to cancel)".into(),
-        ToolPending::EdgeArcStart { .. } => "click end point (Esc to cancel)".into(),
-        ToolPending::EdgeArcEnd { .. } => {
-            "click a point the arc passes through (Esc to cancel)".into()
-        }
-        ToolPending::RepickPolarCenter { .. } => {
-            "click a Point to set polar centre (Esc to cancel)".into()
-        }
-        ToolPending::TangentArcFirst { .. } => "click second endpoint (Esc to cancel)".into(),
-        ToolPending::FilletFirst { .. } => {
-            "click the second Line that shares a corner (Esc to cancel)".into()
-        }
-    };
-
-    row![
-        text("Tool:").size(11).color(muted),
-        mk_pill("Select", SketchTool::Select),
-        mk_pill("Point", SketchTool::Point),
-        mk_pill("Line", SketchTool::Line),
-        mk_pill("Circle", SketchTool::Circle),
-        mk_pill("Arc", SketchTool::Arc),
-        Space::new().width(Length::Fixed(8.0)),
-        text(pending_label).size(10).color(muted),
-    ]
-    .spacing(4)
-    .align_y(iced::Alignment::Center)
-    .into()
-}
-
-/// v0.13.3 — selection-aware constraint submenu. Renders a row of
-/// applicable-constraint pills based on the current
-/// `selected_sketch` + `selected_sketch_secondary` slots. Empty
-/// when no entity is selected. Includes the Dimension tool's inline
-/// numeric value-entry field for `DistancePtPt`.
-///
-/// v0.14.2: superseded by the Active Bar in
-/// `crate::library::editor::footprint::sketch_mode::active_bar`.
-#[expect(
-    dead_code,
-    reason = "v0.14.2 replaced this with sketch_mode::active_bar; kept as a doc-only reference"
-)]
-fn view_constraint_submenu<'a>(
-    editor: &'a FootprintEditorState,
-    text_c: Color,
-    muted: Color,
-    border: Color,
-) -> Element<'a, LibraryMessage> {
-    use crate::library::messages::SketchConstraintTag;
-    use signex_sketch::entity::EntityKind;
-
-    let primary = editor.state.selected_sketch;
-    let secondary = editor.state.selected_sketch_secondary;
-    let kind_of = |id: signex_sketch::id::SketchEntityId| -> Option<&'static str> {
-        editor
-            .primitive()
-            .sketch
-            .as_ref()?
-            .entities
-            .iter()
-            .find(|e| e.id == id)
-            .map(|e| match e.kind {
-                EntityKind::Point { .. } => "Point",
-                EntityKind::Line { .. } => "Line",
-                EntityKind::Arc { .. } => "Arc",
-                EntityKind::Circle { .. } => "Circle",
-            })
-    };
-    let p_kind = primary.and_then(kind_of);
-    let s_kind = secondary.and_then(kind_of);
-
-    let mut tags: Vec<(&'static str, SketchConstraintTag)> = Vec::new();
-    // Each arm fills `tags` and yields whether that selection needs the
-    // inline numeric value field (only DistancePtPt does).
-    let needs_dim_input = match (p_kind, s_kind) {
-        (Some("Point"), None) => {
-            tags.push(("Fix", SketchConstraintTag::Fixed));
-            false
-        }
-        (Some("Line"), None) => {
-            tags.push(("Horizontal", SketchConstraintTag::Horizontal));
-            tags.push(("Vertical", SketchConstraintTag::Vertical));
-            false
-        }
-        (Some("Point"), Some("Point")) => {
-            tags.push(("Coincident", SketchConstraintTag::Coincident));
-            tags.push(("Distance", SketchConstraintTag::DistancePtPt));
-            true
-        }
-        (Some("Line"), Some("Line")) => {
-            tags.push(("Parallel", SketchConstraintTag::Parallel));
-            tags.push(("Perpendicular", SketchConstraintTag::Perpendicular));
-            tags.push(("Equal length", SketchConstraintTag::EqualLength));
-            false
-        }
-        (Some("Point"), Some("Line")) | (Some("Line"), Some("Point")) => {
-            tags.push(("On line", SketchConstraintTag::PointOnLine));
-            tags.push(("Midpoint", SketchConstraintTag::Midpoint));
-            false
-        }
-        _ => false,
-    };
-
-    let header_label = match (p_kind, s_kind) {
-        (None, _) => "Selection: (none) — click a sketch entity in Sketch mode",
-        (Some(a), None) => match a {
-            "Point" => "Selection: 1 Point",
-            "Line" => "Selection: 1 Line",
-            "Arc" => "Selection: 1 Arc",
-            "Circle" => "Selection: 1 Circle",
-            _ => "Selection: 1 entity",
-        },
-        (Some(_), Some(_)) => "Selection: 2 entities",
-    };
-
-    let mut pill_row = row![text(header_label).size(11).color(muted)]
-        .spacing(6)
-        .align_y(iced::Alignment::Center);
-
-    for (label, tag) in &tags {
-        let path = editor.path.clone();
-        let t = *tag;
-        let pill = button(text(*label).size(11).color(text_c))
-            .padding([3, 8])
-            .on_press(LibraryMessage::PrimitiveEditorEvent {
-                path,
-                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchAddConstraintForSelection(
-                    t,
-                )),
-            })
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.04,
-                ))),
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                },
-                ..iced::widget::button::Style::default()
-            });
-        pill_row = pill_row.push(pill);
-    }
-
-    if needs_dim_input {
-        let path = editor.path.clone();
-        pill_row = pill_row.push(Space::new().width(Length::Fixed(8.0)));
-        pill_row = pill_row.push(text("mm:").size(11).color(muted));
-        let input = text_input("0.0", &editor.state.dimension_input)
-            .size(11)
-            .padding(2)
-            .width(Length::Fixed(80.0))
-            .style(move |_: &Theme, _| iced::widget::text_input::Style {
-                background: iced::Background::Color(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)),
-                border: Border {
-                    width: 1.0,
-                    radius: 2.0.into(),
-                    color: border,
-                },
-                icon: iced::Color::TRANSPARENT,
-                placeholder: muted,
-                value: text_c,
-                selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
-            })
-            .on_input(move |s| LibraryMessage::PrimitiveEditorEvent {
-                path: path.clone(),
-                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchDimensionInput(s)),
-            });
-        pill_row = pill_row.push(input);
-    }
-
-    if primary.is_some() {
-        let clear_path = editor.path.clone();
-        pill_row = pill_row.push(Space::new().width(Length::Fixed(8.0)));
-        let clear = button(text("Deselect").size(10).color(muted))
-            .padding([2, 6])
-            .on_press(LibraryMessage::PrimitiveEditorEvent {
-                path: clear_path,
-                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchSelect {
-                    id: None,
-                    shift: false,
-                }),
-            })
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.02,
-                ))),
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                },
-                ..iced::widget::button::Style::default()
-            });
-        pill_row = pill_row.push(clear);
-    }
-
-    container(pill_row)
-        .padding([4, 10])
-        .style(move |_: &Theme| iced::widget::container::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.01,
-            ))),
-            border: Border {
-                width: 0.0,
-                radius: 0.0.into(),
-                color: Color::TRANSPARENT,
-            },
-            ..iced::widget::container::Style::default()
-        })
-        .into()
 }
 
 fn view_dof<'a>(
@@ -425,7 +123,10 @@ fn view_params<'a>(
     text_c: Color,
     muted: Color,
     border: Color,
+    tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
+    let input_bg = tokens::input_bg(tokens);
+    let selection = tokens::selection_tint(tokens);
     let mut col = column![text("Parameters").size(11).color(text_c)].spacing(2);
 
     if let Some(sketch) = editor.primitive().sketch.as_ref() {
@@ -448,9 +149,7 @@ fn view_params<'a>(
                         .size(10)
                         .padding(2)
                         .style(move |_: &Theme, _| iced::widget::text_input::Style {
-                            background: iced::Background::Color(iced::Color::from_rgba(
-                                1.0, 1.0, 1.0, 0.04,
-                            )),
+                            background: iced::Background::Color(input_bg),
                             border: Border {
                                 width: 1.0,
                                 radius: 2.0.into(),
@@ -459,7 +158,7 @@ fn view_params<'a>(
                             icon: iced::Color::TRANSPARENT,
                             placeholder: muted,
                             value: text_c,
-                            selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
+                            selection,
                         })
                         .on_input(move |new_expr| LibraryMessage::PrimitiveEditorEvent {
                             path: path.clone(),

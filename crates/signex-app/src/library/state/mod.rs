@@ -21,7 +21,6 @@
 //!   stable identity, not the window id.
 //! * `picker` — component picker modal state (used by schematic
 //!   placement; flattens across every open library).
-//! * `new_component` — modal state for the "New Row" flow
 //!   (library + table + class + InternalPN).
 //! * `template_registry` — bundled + per-library parameter templates,
 //!   resolved at component-class lookup time.
@@ -31,9 +30,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use signex_library::{
-    ComponentClass, ComponentRow, ComponentSummary, DistributorSource, Footprint, LibraryAdapter,
-    LibraryError, LibrarySet, LocalGitAdapter, PrimitiveKind, PrimitiveRef, PrimitiveSummary,
-    RowId, SimModel, Symbol, TemplateRegistry, UseSite, WhereUsedIndex,
+    ComponentRow, ComponentSummary, DistributorSource, Footprint, LibraryAdapter, LibraryError,
+    LibrarySet, LocalGitAdapter, PrimitiveKind, PrimitiveSummary, RowId, SimModel, Symbol,
+    TemplateRegistry, UseSite, WhereUsedIndex,
 };
 use signex_types::coord::Unit;
 
@@ -372,9 +371,6 @@ pub enum PrimitivePickerTarget {
     /// The user picks for an open Component Preview tab — apply +
     /// save the row.
     PreviewRow(EditorAddress),
-    /// The user picks while filling out the New Component modal — apply
-    /// to `NewComponentState.symbol_ref` / `.footprint_ref`.
-    NewComponentForm,
     /// The user picks while editing a row in the Library Browser
     /// grid's Edit Component Details modal (Deliverable B).
     EditRowModal(EditorAddress),
@@ -386,15 +382,12 @@ pub enum PrimitivePickerTarget {
 }
 
 impl PrimitivePickerTarget {
-    /// Directory of the library whose row this pick writes, or `None`
-    /// for the New Component form, which writes nothing until its own
-    /// Create step.
+    /// Directory of the library whose row this pick writes.
     pub fn library_path(&self) -> Option<&std::path::Path> {
         match self {
             Self::PreviewRow(a) | Self::EditRowModal(a) | Self::BrowserRow(a) => {
                 Some(a.library_path.as_path())
             }
-            Self::NewComponentForm => None,
         }
     }
 }
@@ -428,8 +421,6 @@ pub struct LibraryState {
     pub expanded: Vec<bool>,
     /// Library left-dock search box buffer.
     pub panel_search: String,
-    /// "New Component" modal state — `None` while closed.
-    pub new_component: Option<NewComponentState>,
     /// "Close Library — Unsaved Drafts" modal state — `None` while closed.
     pub close_library_confirm: Option<CloseLibraryConfirmState>,
     /// Bundled + per-library parameter templates. Reference-counted
@@ -482,6 +473,9 @@ pub struct LibraryState {
     /// every app start (Stage 9 mount-source 3). The on-disk schema
     /// lives in `panels::components_panel::global_prefs`.
     pub global_libraries: Vec<crate::panels::components_panel::global_prefs::GlobalLibraryEntry>,
+    /// Mounted path of the bundled stock library; `None` when it was not
+    /// found or failed to mount. Set once at bootstrap.
+    pub stock_library: Option<PathBuf>,
     /// Components Panel UI state — collapsed sections + substring
     /// filter. Stage 9 ships the simple substring matcher; the full
     /// search syntax (plan §5) is polish work.
@@ -543,6 +537,9 @@ pub enum ComponentsMountSource {
     /// Persisted across app launches via
     /// `<config_dir>/signex/global_libraries.toml`.
     Global,
+    /// The library bundled with the install; resolved and mounted at
+    /// bootstrap, never recorded in `global_libraries.toml`.
+    Stock,
 }
 
 impl ComponentsMountSource {
@@ -551,6 +548,7 @@ impl ComponentsMountSource {
             Self::Project => "Project",
             Self::Installed => "Installed",
             Self::Global => "Global",
+            Self::Stock => "Stock",
         }
     }
 
@@ -562,6 +560,7 @@ impl ComponentsMountSource {
             Self::Project => "project",
             Self::Installed => "installed",
             Self::Global => "global",
+            Self::Stock => "stock",
         }
     }
 
@@ -571,6 +570,7 @@ impl ComponentsMountSource {
         ComponentsMountSource::Project,
         ComponentsMountSource::Installed,
         ComponentsMountSource::Global,
+        ComponentsMountSource::Stock,
     ];
 }
 
@@ -584,6 +584,7 @@ pub struct ComponentsPanelState {
     pub collapsed_project: bool,
     pub collapsed_installed: bool,
     pub collapsed_global: bool,
+    pub collapsed_stock: bool,
     /// Substring filter applied to mpn / manufacturer / internal_pn
     /// / library name. Empty = show everything. Stage 9 uses a
     /// case-insensitive `contains` match across all three fields;
@@ -635,8 +636,10 @@ pub struct LibraryCreateOptionsState {
 
 mod methods;
 mod preview;
+mod relocate;
 #[cfg(test)]
 mod tests;
 
 pub use methods::*;
 pub use preview::*;
+pub use relocate::rebase_path;

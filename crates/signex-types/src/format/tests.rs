@@ -115,11 +115,11 @@ fn non_finite_rotation_fails_the_write_instead_of_saving_an_unloadable_file() {
         sym.rotation = bad;
         sheet.symbols.push(sym);
         match SnxSchematic::new(sheet).write_string() {
-            Err(FormatError::TsvFieldWrite { field, row, .. }) => {
+            Err(FormatError::NonFiniteField { field, row, .. }) => {
                 assert_eq!(field, "rotation");
-                assert_eq!(row, 1);
+                assert_eq!(row, 0);
             }
-            other => panic!("rotation={bad}: expected TsvFieldWrite, got {other:?}"),
+            other => panic!("rotation={bad}: expected NonFiniteField, got {other:?}"),
         }
     }
 }
@@ -181,7 +181,7 @@ fn snxsch_survives_embedded_newline_in_label_text() {
 fn snxpcb_round_trip_empty() {
     let snx = SnxPcb::new(empty_board());
     let s = snx.write_string().expect("serialise");
-    assert!(s.contains("format = \"snxpcb/1\""));
+    assert!(s.contains(&format!("format = \"{SNXPCB_FORMAT_V1}\"")));
     let back = SnxPcb::parse(&s).expect("round-trip");
     assert_eq!(back.format, SNXPCB_FORMAT_V1);
 }

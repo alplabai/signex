@@ -68,6 +68,12 @@ pub enum AnnotateMsg {
     /// Lock (`true`, "All Off") or unlock (`false`, "All On") every symbol
     /// the dialog lists.
     SetAllLocked(bool),
+    /// The background load of the preview's sheets finished. `generation`
+    /// is the load's token; stale results are dropped.
+    PreviewLoaded {
+        generation: u64,
+        result: std::sync::Arc<Result<crate::app::handlers::erc::AnnotatePreviewLoad, String>>,
+    },
 }
 
 /// ERC dialog message family (ADR-0001 D3). Namespaced under
@@ -86,6 +92,12 @@ pub enum ErcMsg {
     /// Click on a pin-connection matrix cell: cycle its severity
     /// Error → Warning → Info → Off → (back to baseline default).
     PinMatrixCellCycled { row: u8, col: u8 },
+    /// A background ERC run finished. `generation` is the run's token: a
+    /// result is applied only if no newer run has started since.
+    RunFinished {
+        generation: u64,
+        result: std::sync::Arc<Result<crate::app::handlers::erc::ErcRunOutcome, String>>,
+    },
 }
 
 /// Preferences modal message family (ADR-0001 D3). Namespaced under
@@ -202,16 +214,34 @@ pub enum ExportMsg {
     /// `document_state.preview` with the rasterized pages plus every
     /// PDF setting in one modal.
     PdfOpenDialog,
-    /// Completion of PDF export — carries either the saved path or error.
-    PdfFinished(Result<std::path::PathBuf, String>),
-    /// Completion of netlist export — carries either the saved path or error.
-    NetlistFinished(Result<std::path::PathBuf, String>),
+    /// Completion of PDF export — carries the request (source document,
+    /// options and sheet picks) captured at the Export click, plus the saved
+    /// path or a cancel/error. The OS save dialog is non-modal and the preview
+    /// can change before it returns, so nothing is read from shared state
+    /// (#833, #852).
+    PdfFinished {
+        // Boxed: the options make this the largest `Message` variant.
+        request: Box<crate::app::state::PdfExportRequest>,
+        result: Result<std::path::PathBuf, String>,
+    },
+    /// Completion of netlist export — carries the document the export was
+    /// started from (captured when the dialog opened, #852) plus either the
+    /// saved path or error.
+    NetlistFinished {
+        source: std::path::PathBuf,
+        result: Result<std::path::PathBuf, String>,
+    },
     /// User invoked File → Export → Bill of Materials… — open the
     /// BOM preview modal instead of going straight to the file
     /// dialog. Mirrors Print Preview.
     BomRequested,
-    /// Completion of BOM export — carries either the saved path or error.
-    BomFinished(Result<std::path::PathBuf, String>),
+    /// Completion of BOM export — carries the document and options captured
+    /// at the Export click (#852) plus either the saved path or a cancel/error.
+    BomFinished {
+        source: std::path::PathBuf,
+        options: Box<signex_output::BomOptions>,
+        result: Result<std::path::PathBuf, String>,
+    },
     /// User picked a path for File → Export → ERC Report — format and write.
     ErcReportPathChosen(Result<std::path::PathBuf, String>),
     /// The ERC report write completed — carries the path or the IO error.
@@ -282,6 +312,12 @@ pub enum FileMsg {
         result: Result<Box<signex_types::pcb::PcbBoard>, String>,
     },
     Save,
+    /// Completion of an off-thread document write (Save / Save As). The
+    /// dirty marker clears only if the document has not changed since the
+    /// snapshot; see `handlers/document_files/save_async.rs`.
+    DocumentSaved(crate::persist::DocumentSaveDone),
+    /// Quit could not confirm that in-flight document writes finished.
+    DocumentSaveWaitFailed(String),
     /// User picked a destination from the schematic Save As dialog.
     /// `from_path` is the tab the dialog was opened for; the dialog is
     /// not modal, so the active tab may have changed by the time it
@@ -320,6 +356,13 @@ pub enum ProjectMsg {
         project_id: crate::app::ProjectId,
         result: Result<Box<crate::app::state::sheet_refs::SheetRefs>, String>,
     },
+    /// The off-thread probe of a freshly loaded project's volume finished
+    /// (#694): the volume ignores case, is case-sensitive, could not be
+    /// decided, or the worker failed.
+    CaseProbed {
+        project_id: crate::app::ProjectId,
+        outcome: crate::app::state::project_case::CaseProbeOutcome,
+    },
     /// User choice (Save All / Discard All / Cancel) on the app-quit
     /// confirmation modal, shown when the user tries to exit Signex
     /// while `dirty_paths` is non-empty. Reuses `ProjectCloseChoice`.
@@ -327,11 +370,11 @@ pub enum ProjectMsg {
     /// Dismiss the Project Options metadata modal.
     CloseOptions,
     /// Result of the `Add Existing to Project…` file picker. Carries
-    /// the owning project's index plus the user's picks (`None` on
+    /// the owning project's id plus the user's picks (`None` on
     /// cancel, otherwise one or more paths from `pick_files`) so the
     /// handler can copy each into the project directory in turn.
     AddExistingFilePicked {
-        project_idx: usize,
+        project_id: crate::app::state::ProjectId,
         paths: Option<Vec<std::path::PathBuf>>,
     },
     /// Result of the `Add New ▸ Schematic` Save-As dialog. `None`
@@ -339,8 +382,22 @@ pub enum ProjectMsg {
     /// a blank `.snxsch`, registers it on the project, and marks
     /// the .snxprj dirty.
     AddNewSchematicPicked {
-        project_idx: usize,
+        project_id: crate::app::state::ProjectId,
         path: Option<std::path::PathBuf>,
+    },
+    /// The off-thread copies behind `AddExistingFilePicked` finished: one
+    /// entry per pick, `Ok` the path to register, `Err` a message for the
+    /// Messages panel. The outer `Err` is a worker that died.
+    AddExistingFilesCopied {
+        project_id: crate::app::state::ProjectId,
+        results: Result<Vec<Result<std::path::PathBuf, String>>, String>,
+    },
+    /// The off-thread blank-schematic write behind `AddNewSchematicPicked`
+    /// finished.
+    AddNewSchematicWritten {
+        project_id: crate::app::state::ProjectId,
+        path: std::path::PathBuf,
+        result: Result<(), String>,
     },
     /// v0.23 — Async project-git commit completed. The dispatcher
     /// removes the `(project_root, rel_path)` entry from

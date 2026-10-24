@@ -39,6 +39,7 @@ impl SchematicCanvas<'_> {
                 &preview,
                 &ghost_transform,
                 ghost_color,
+                &self.prefs.canvas_colors,
             );
         }
     }
@@ -78,6 +79,7 @@ impl SchematicCanvas<'_> {
                 &preview,
                 &ghost_transform,
                 ghost_color,
+                &self.prefs.canvas_colors,
             );
         }
     }
@@ -120,6 +122,7 @@ impl SchematicCanvas<'_> {
                 &ghost_transform,
                 ghost_color,
                 ghost_fill,
+                &self.prefs.canvas_colors,
             );
         }
     }

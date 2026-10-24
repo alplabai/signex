@@ -30,24 +30,28 @@ mod selection_request;
 pub(crate) mod sheet_hierarchy;
 mod state;
 mod symbol_history;
+mod undo_groups;
+pub use undo_groups::UndoGroupSheets;
 pub(crate) mod view;
 
 pub use contracts::{
     AnnotateMsg, AppQuitConfirmState, BomPreviewMsg, CommandPaletteMsg, ContextAction,
     ContextMenuMsg, ContextMenuState, ContextSubmenu, DragTarget, EditMsg, EnableVersionControlMsg,
     EnableVersionControlState, ErcMsg, ExportMsg, FileMsg, GridPickerState, GridPropertiesMsg,
-    GridPropertiesState, Message, MoveSelectionMsg, NetColorMsg, OverlayMsg, ParameterManagerMsg,
-    PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice, ProjectCloseConfirmState, ProjectMsg,
-    ProjectOptionsState, ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice,
-    RemoveDialogState, RemoveMsg, RenameDialogState, RenameMsg, SelectionFilterCustomState,
-    SelectionFilterMsg, StatusBarRequest, TabContextAction, TabContextMenuState, TextEditMsg,
-    TextEditState, TrackItem, UiMsg, VersionControlScope, WindowMsg,
+    GridPropertiesState, LibraryRowRef, Message, MoveSelectionMsg, NetColorMsg, OverlayMsg,
+    ParameterManagerMsg, PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice,
+    ProjectCloseConfirmState, ProjectMsg, ProjectOptionsState, ProjectTreeAction,
+    ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RemoveMsg, RenameDialogState,
+    RenameMsg, SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest, TabContextAction,
+    TabContextMenuState, TextEditMsg, TextEditState, TrackItem, UiMsg, VersionControlScope,
+    WindowMsg,
 };
 pub use documents::{
     ComponentEditorTab, DrawMode, FootprintEditorState, FootprintHistorySnapshot,
     GraphicFillPicker, LocalColorPicker, LocalColorSlot, SchematicTabSession, SymbolEditorState,
     SymbolViewRequest, TabDocument, TabInfo, TabKind, Tool,
 };
+pub(crate) use handlers::selection_workflow::passes_filter;
 pub use state::{
     DocumentState, InteractionState, KeymapRecorderState, LoadedProject, PageSetupInputs,
     PreviewState, ProjectId, Signex, UiState,

@@ -17,36 +17,42 @@ pub fn move_selected(sym: &mut Symbol, sel: Option<SymbolSelection>, x: f64, y: 
         Some(SymbolSelection::Graphic(idx)) => {
             translate_graphic_to(sym, idx, x, y);
         }
-        // SymbolSelection::Field — no-op; the on-canvas designator /
-        // value drag re-binds against `ComponentRow` once that pipeline
-        // ships.
+        Some(SymbolSelection::Field(key)) => move_field_to(sym, key, x, y),
         // All / Multiple — delta-based movement handled by move_all / move_multiple.
-        Some(SymbolSelection::Field(_))
-        | Some(SymbolSelection::All)
-        | Some(SymbolSelection::Multiple { .. })
-        | None => {}
+        Some(SymbolSelection::All) | Some(SymbolSelection::Multiple { .. }) | None => {}
     }
 }
 
-/// Shift every pin and every graphic by `(dx, dy)` mm.
+/// Shift every pin and graphic visible on `active_part` by `(dx, dy)` mm.
 ///
 /// Used when the user drags with `SymbolSelection::All` active (Ctrl+A
-/// select-all). The caller is responsible for computing the delta and
-/// for grid-snapping if desired.
-pub fn move_all(sym: &mut Symbol, dx: f64, dy: f64) {
-    for pin in &mut sym.pins {
-        pin.position[0] += dx;
-        pin.position[1] += dy;
-    }
-    for graphic in &mut sym.graphics {
-        translate_graphic_by(&mut graphic.kind, dx, dy);
-    }
+/// select-all, or a box over everything on the unit). `All` names the
+/// ACTIVE unit's items, like box-select, delete and rotate do, so other
+/// units' items stay put. Field positions follow the policy documented
+/// on [`move_multiple`]. The caller computes the delta and snaps it.
+pub fn move_all(sym: &mut Symbol, active_part: u8, dx: f64, dy: f64) {
+    let pins: Vec<usize> = (0..sym.pins.len())
+        .filter(|&i| pin_on_part(&sym.pins[i], active_part))
+        .collect();
+    let graphics: Vec<usize> = (0..sym.graphics.len())
+        .filter(|&i| graphic_on_part(&sym.graphics[i], active_part))
+        .collect();
+    move_multiple(sym, &pins, &graphics, dx, dy);
 }
 
 /// Shift only the specified pins and graphics by `(dx, dy)` mm.
 ///
 /// Used when the user drags with `SymbolSelection::Multiple` active
 /// (box selection result). Out-of-range indices are silently skipped.
+///
+/// Field policy: `designator_pos` / `comment_pos` are stored once per
+/// symbol and shared by every unit (units are not first-class yet,
+/// #289, and the format has no per-unit positions). Stored positions
+/// therefore shift only when the move covers the WHOLE symbol: every
+/// pin and graphic of every unit. Moving one unit's whole body on a
+/// multi-unit symbol leaves them where they are, otherwise the other
+/// units' fields would drift away from bodies that did not move.
+/// Default-placed fields follow the active unit's body on their own.
 pub fn move_multiple(
     sym: &mut Symbol,
     pin_indices: &[usize],
@@ -54,6 +60,8 @@ pub fn move_multiple(
     dx: f64,
     dy: f64,
 ) {
+    let covers_symbol = (0..sym.pins.len()).all(|i| pin_indices.contains(&i))
+        && (0..sym.graphics.len()).all(|i| graphic_indices.contains(&i));
     for &i in pin_indices {
         if let Some(pin) = sym.pins.get_mut(i) {
             pin.position[0] += dx;
@@ -64,6 +72,9 @@ pub fn move_multiple(
         if let Some(g) = sym.graphics.get_mut(i) {
             translate_graphic_by(&mut g.kind, dx, dy);
         }
+    }
+    if covers_symbol {
+        shift_placed_fields(sym, dx, dy);
     }
 }
 

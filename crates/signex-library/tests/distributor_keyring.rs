@@ -107,3 +107,27 @@ fn service_name_format_matches_spec() {
     assert_eq!(store.service_name(), "signex-distributor-digikey");
     assert_eq!(store.username(), "user1");
 }
+
+/// #976 regression: a secret written through one `Entry` must be readable
+/// through a *separate* `Entry` for the same service/user. keyring's in-memory
+/// mock (what every OS used before the backend features were enabled) keeps
+/// the value only inside the `Entry` object, so it fails the second read; a
+/// real OS keychain passes.
+///
+/// `#[ignore]` because it needs a real, unlocked keychain (Windows Credential
+/// Manager, macOS Keychain, or a Secret Service provider on the D-Bus session
+/// bus) and writes to it; headless CI has none. Run explicitly with
+/// `cargo test -p signex-library --features distributors-community \
+///   --test distributor_keyring -- --ignored`.
+#[test]
+#[ignore = "needs a real unlocked OS keychain; run with --ignored on a desktop session"]
+fn secret_survives_across_separate_entries() {
+    let writer = entry_for("two-entry-roundtrip");
+    let reader = entry_for("two-entry-roundtrip");
+    writer
+        .set_secret("persisted-across-entries")
+        .expect("a real keychain backend must accept the write (is one running and unlocked?)");
+    let got = reader.get_secret();
+    cleanup(&writer);
+    assert_eq!(got.unwrap(), "persisted-across-entries");
+}

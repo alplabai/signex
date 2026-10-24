@@ -8,6 +8,8 @@
 
 mod ambiguous_label_anchor;
 pub(crate) use ambiguous_label_anchor::ambiguous_label_anchor;
+mod pin_type_conflict;
+pub(crate) use pin_type_conflict::pin_type_conflict;
 mod pins_touch_not_connected;
 pub(crate) use pins_touch_not_connected::pins_touch_not_connected;
 
@@ -15,7 +17,7 @@ use std::collections::HashMap;
 
 use signex_net::{SheetConnectivity, point_on_segment, pt_key};
 use signex_types::schematic::{
-    LabelType, PartKey, Point, SelectedKind, group_into_parts, normalize_port_name,
+    LabelType, PartKey, PinDirection, Point, SelectedKind, group_into_parts, normalize_port_name,
     normalized_lib_id,
 };
 
@@ -88,6 +90,11 @@ pub(crate) fn unused_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
             if pin.connected {
                 continue;
             }
+            // Do-not-connect pins are left open by design. Unclassified pins
+            // (the default for freshly authored library pins) stay flagged.
+            if pin.electrical_type == PinDirection::DoNotConnect {
+                continue;
+            }
             let reference = if symbol.reference.is_empty() {
                 "(unnamed)"
             } else {
@@ -110,15 +117,30 @@ pub(crate) fn unused_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 // ---------------------------------------------------------------------------
 
 pub(crate) fn duplicate_ref_designator(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
-    let mut by_ref: HashMap<&str, Vec<&crate::context::ErcSymbol>> = HashMap::new();
-    for symbol in &ctx.symbols {
-        let r = symbol.reference.trim();
-        if r.is_empty() || r.ends_with('?') {
-            continue;
+    // Symbols of this sheet (origin 0, unnamed) plus every descendant sheet's
+    // (origin n, named by its filename), so a designator reused across sheets
+    // is a duplicate too. Descendants are walked depth-first in filename order
+    // for stable output; a file reached more than once (or the top sheet
+    // reached through a cycle) is taken once, so it is never compared with
+    // itself. Power/flag symbols (`is_power`, `#`-prefixed refs) are not
+    // designators, matching annotate.
+    let mut sources: Vec<(Option<&str>, &ErcContext)> = vec![(None, ctx)];
+    let mut seen: Vec<&signex_net::SheetKey> = ctx.key.iter().collect();
+    collect_descendants(ctx, &mut sources, &mut seen);
+    /// `(source index, sheet name, symbol)`.
+    type Entry<'a> = (usize, Option<&'a str>, &'a crate::context::ErcSymbol);
+    let mut by_ref: HashMap<&str, Vec<Entry>> = HashMap::new();
+    for (origin, (name, sheet)) in sources.iter().enumerate() {
+        for symbol in &sheet.symbols {
+            let r = symbol.reference.trim();
+            if r.is_empty() || r.ends_with('?') || symbol.is_power || r.starts_with('#') {
+                continue;
+            }
+            by_ref.entry(r).or_default().push((origin, *name, symbol));
         }
-        by_ref.entry(r).or_default().push(symbol);
     }
-    for (reference, symbols) in by_ref {
+    for (reference, entries) in by_ref {
+        let symbols: Vec<&crate::context::ErcSymbol> = entries.iter().map(|e| e.2).collect();
         // Units of one multi-unit part share a designator legitimately; only
         // distinct parts holding the same designator are a duplicate (#691).
         let parts = group_into_parts(symbols.iter().map(|s| PartKey {
@@ -127,6 +149,11 @@ pub(crate) fn duplicate_ref_designator(ctx: &ErcContext, out: &mut Vec<Diagnosti
             unit: s.unit,
         }));
         if parts.len() < 2 {
+            continue;
+        }
+        // A clash wholly inside one child sheet belongs to that sheet's own run.
+        let first_origin = entries[0].0;
+        if first_origin != 0 && entries.iter().all(|e| e.0 == first_origin) {
             continue;
         }
         // Units that carry one designator but come from different library
@@ -142,23 +169,54 @@ pub(crate) fn duplicate_ref_designator(ctx: &ErcContext, out: &mut Vec<Diagnosti
             String::new()
         };
         for (part_idx, part) in parts.iter().enumerate() {
-            let peer = &symbols[parts[(part_idx + 1) % parts.len()][0]];
+            let (peer_origin, _, peer) = entries[parts[(part_idx + 1) % parts.len()][0]];
             for &member in part {
-                let sym = symbols[member];
-                out.push(
-                    Diagnostic::new(
-                        RuleKind::DuplicateRefDesignator,
-                        format!(
-                            "Reference '{reference}' is used by {} parts{hint}",
-                            parts.len()
-                        ),
-                        sym.position,
-                    )
-                    .with_primary(sel(sym.uuid, SelectedKind::Symbol))
-                    .with_peer(sel(peer.uuid, SelectedKind::Symbol)),
+                let (origin, name, sym) = entries[member];
+                let mut message = format!(
+                    "Reference '{reference}' is used by {} parts{hint}",
+                    parts.len()
                 );
+                if let Some(sheet) = name {
+                    message.push_str(&format!("; this one is on sheet '{sheet}'"));
+                }
+                let mut d =
+                    Diagnostic::new(RuleKind::DuplicateRefDesignator, message, sym.position);
+                // Selections only resolve on this sheet; a child symbol's
+                // position lives in the child's own coordinates.
+                if origin == 0 {
+                    d = d.with_primary(sel(sym.uuid, SelectedKind::Symbol));
+                    if peer_origin == 0 {
+                        d = d.with_peer(sel(peer.uuid, SelectedKind::Symbol));
+                    }
+                } else {
+                    d = d.in_space(LocationSpace::ChildSheet);
+                }
+                out.push(d);
             }
         }
+    }
+}
+
+/// Depth-first, filename-ordered walk of `ctx`'s descendants into `out`,
+/// skipping any sheet whose key is already in `seen` (cycles, repeated
+/// instances). Sheets without a key are always taken.
+fn collect_descendants<'a>(
+    ctx: &'a ErcContext,
+    out: &mut Vec<(Option<&'a str>, &'a ErcContext)>,
+    seen: &mut Vec<&'a signex_net::SheetKey>,
+) {
+    let mut names: Vec<&String> = ctx.children.keys().collect();
+    names.sort();
+    for name in names {
+        let child = &ctx.children[name];
+        if let Some(k) = &child.key {
+            if seen.contains(&k) {
+                continue;
+            }
+            seen.push(k);
+        }
+        out.push((Some(name.as_str()), child));
+        collect_descendants(child, out, seen);
     }
 }
 
@@ -264,21 +322,25 @@ pub(crate) fn net_label_conflict(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     );
 
     let mut by_root: HashMap<(i64, i64), Vec<&crate::context::ErcLabel>> = HashMap::new();
-    for lbl in ctx
-        .labels
-        .iter()
-        .filter(|l| matches!(l.label_type, LabelType::Net))
-    {
+    for lbl in ctx.labels.iter().filter(|l| {
+        matches!(
+            l.label_type,
+            LabelType::Net | LabelType::Global | LabelType::Power
+        )
+    }) {
         // `merge_named_labels` already anchored every label, so a plain
         // `root_of` reads the final class.
         let root = conn.root_of(&lbl.position);
         by_root.entry(root).or_default().push(lbl);
     }
 
-    for labels in by_root.values() {
+    for labels in by_root.values_mut() {
         if labels.len() < 2 {
             continue;
         }
+        // Report a Net-vs-Net clash in preference to one involving a
+        // Global/Power name: the Net names are what the netlist drops.
+        labels.sort_by_key(|l| !matches!(l.label_type, LabelType::Net));
         let first = labels[0];
         let Some(conflicting) = labels.iter().find(|l| l.text != first.text) else {
             continue;
@@ -534,7 +596,7 @@ pub(crate) fn bad_hier_sheet_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
                         lbl.position,
                     )
                     .with_severity(Severity::Warning)
-                    .in_space(LocationSpace::ChildSheet)
+                    .in_child_sheet(child.filename.as_str())
                     .with_primary(sel(lbl.uuid, SelectedKind::Label)),
                 );
             }

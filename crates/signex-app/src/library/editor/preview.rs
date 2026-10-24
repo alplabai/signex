@@ -92,7 +92,8 @@ fn render_panes<'a>(
     // When the symbol_ref is the nil sentinel ("unbound") the user
     // hasn't picked a symbol yet — surface "Pick Symbol" instead of
     // "Open Symbol Editor". Same shape for footprint.
-    let symbol_unbound = state.row.symbol_ref.uuid.is_nil();
+    let symbol_unbound = state.row.is_symbol_unbound();
+    let footprint_unbound = state.row.is_footprint_unbound();
     let (mut symbol_msg, symbol_btn_label): (Option<LibraryMessage>, &'static str) =
         if symbol_unbound {
             (
@@ -113,14 +114,14 @@ fn render_panes<'a>(
 
     let (mut footprint_msg, footprint_btn_label): (Option<LibraryMessage>, &'static str) =
         match state.row.footprint_ref.as_ref() {
-            None => (
+            _ if footprint_unbound => (
                 Some(LibraryMessage::OpenPrimitivePicker {
                     kind: signex_library::PrimitiveKind::Footprint,
                     target: super::super::state::PrimitivePickerTarget::PreviewRow(address.clone()),
                 }),
                 "Pick Footprint",
             ),
-            Some(_) => (
+            _ => (
                 footprint_path(state).map(|p| LibraryMessage::OpenPrimitiveEditor { path: p }),
                 "Open Footprint Editor",
             ),
@@ -137,14 +138,24 @@ fn render_panes<'a>(
 
     let symbol_pane = render_pane(
         "Symbol",
-        symbol_summary_text(state.symbol.as_ref()),
+        if symbol_unbound {
+            "No symbol bound".to_string()
+        } else {
+            symbol_summary_text(state.symbol.as_ref())
+        },
+        symbol_unbound,
         symbol_msg,
         symbol_btn_label,
         tokens,
     );
     let footprint_pane = render_pane(
         "Footprint",
-        footprint_summary_text(state.footprint.as_ref()),
+        if footprint_unbound {
+            "No footprint bound".to_string()
+        } else {
+            footprint_summary_text(state.footprint.as_ref())
+        },
+        footprint_unbound,
         footprint_msg,
         footprint_btn_label,
         tokens,
@@ -166,11 +177,16 @@ fn render_panes<'a>(
 fn render_pane<'a>(
     label: &'a str,
     summary: String,
+    unbound: bool,
     open_msg: Option<LibraryMessage>,
     button_label: &'a str,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
+    let text_c = if unbound {
+        theme_ext::warning_color(tokens)
+    } else {
+        theme_ext::text_primary(tokens)
+    };
     let muted = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
 

@@ -165,6 +165,7 @@ fn prepare_mount_marked(path: &Path, read_only: bool) -> Result<PreparedMount, S
         cached_sims: Vec::new(),
         cached_classes: Vec::new(),
         observed_stamp: None,
+        dangling: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
     };
@@ -278,6 +279,7 @@ impl LibraryState {
         self.set.mount(prepared.adapter)?;
         self.open_libraries.push(prepared.entry);
         self.expanded.push(true);
+        self.sweep_dangling_refs();
         Ok(())
     }
 }

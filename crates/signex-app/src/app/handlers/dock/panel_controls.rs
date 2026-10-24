@@ -36,6 +36,9 @@ impl Signex {
                 self.refresh_panel_ctx();
             }
             crate::panels::PanelMsg::ClearErc => {
+                // Drop any in-flight run's result too.
+                self.ui_state.erc_run_generation += 1;
+                self.ui_state.erc_running = false;
                 self.ui_state.erc_violations.clear();
                 self.ui_state.erc_violations_by_path.clear();
                 self.ui_state.erc_focus_global_index = None;
@@ -197,7 +200,7 @@ impl Signex {
                 // Emit the engine update only when the string parses
                 // cleanly — empty / partial input stays in the buffer
                 // so the user can keep typing.
-                if let Ok(v) = text.trim().parse::<f64>() {
+                if let Some(v) = crate::numeric_field::parse_field_f64(text) {
                     use crate::app::contracts::DrawingFieldEdit as E;
                     use crate::panels::DrawingFieldId as F;
                     let edit = match field_id {

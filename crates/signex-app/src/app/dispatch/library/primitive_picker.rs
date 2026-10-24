@@ -121,21 +121,6 @@ impl Signex {
                     modal.error = None;
                 }
             }
-            PrimitivePickerTarget::NewComponentForm => {
-                if let Some(nc) = self.library.new_component.as_mut() {
-                    match picker.kind {
-                        PrimitiveKind::Symbol => {
-                            nc.symbol_ref = Some(primitive_ref);
-                        }
-                        PrimitiveKind::Footprint => {
-                            nc.footprint_ref = Some(primitive_ref);
-                        }
-                        PrimitiveKind::Sim => { /* nothing today */ }
-                        _ => {}
-                    }
-                    nc.error = None;
-                }
-            }
             PrimitivePickerTarget::BrowserRow(address) => {
                 self.apply_primitive_pick_to_browser_row(address, picker.kind, primitive_ref);
             }

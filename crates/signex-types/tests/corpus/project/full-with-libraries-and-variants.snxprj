@@ -1,0 +1,34 @@
+{
+  "active_variant": "Eco",
+  "dir": "",
+  "enable_git": true,
+  "format": "snxprj/1",
+  "libraries": [
+    {
+      "kind": "project_local",
+      "library_id": "0192a8c0-0000-7020-8000-000000000001",
+      "path": "parts.snxlib"
+    },
+    {
+      "kind": "shared",
+      "library_id": null,
+      "path": "/opt/shared/connectors.snxlib"
+    }
+  ],
+  "name": "full-with-libraries-and-variants",
+  "pcb_file": "full-with-libraries-and-variants.snxpcb",
+  "schematic_root": "full-with-libraries-and-variants.snxsch",
+  "sheets": [
+    {
+      "filename": "full-with-libraries-and-variants.snxsch",
+      "labels_count": 3,
+      "name": "full-with-libraries-and-variants",
+      "symbols_count": 12,
+      "wires_count": 40
+    }
+  ],
+  "variant_definitions": [
+    "Eco",
+    "Premium"
+  ]
+}
