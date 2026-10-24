@@ -14,9 +14,13 @@
 //! loopback MUST sit behind a TLS-terminating reverse proxy. Behind a proxy
 //! the per-IP rate limiter sees the proxy's address, so all clients share
 //! one bucket unless the proxy addresses are listed in `SIGNEX_TRUSTED_PROXIES`
-//! (see [`with_rate_limit_trusted`]). `main` refuses a non-loopback plaintext
-//! bind unless `--allow-insecure-bind` / `SIGNEX_ALLOW_INSECURE_BIND=1` is given. The client refuses to send its token over `http://` to a
-//! non-loopback host, including via a redirect.
+//! (see [`with_rate_limit_trusted`]); `SIGNEX_TRUSTED_PROXY_HEADER`
+//! (`x-forwarded-for` or `forwarded`) is then REQUIRED and names the one header
+//! the proxy overwrites (or appends to) -- the other is ignored.
+//!
+//! `main` refuses a non-loopback plaintext bind unless `--allow-insecure-bind`
+//! / `SIGNEX_ALLOW_INSECURE_BIND=1` is given. The client refuses to send its
+//! token over `http://` to a non-loopback host, including via a redirect.
 //!
 //! ## DBLib row model
 //!
@@ -61,7 +65,7 @@ mod rate_limit_key;
 pub mod routes;
 
 pub use db::AppState;
-pub use rate_limit_key::TrustedProxyKeyExtractor;
+pub use rate_limit_key::{ProxyHeader, TrustedProxyKeyExtractor};
 
 /// Env var that holds the bearer token for the protected routes.
 /// Unset → unauthenticated mode (with a startup warning).
@@ -199,18 +203,23 @@ pub fn router_with_state(state: AppState) -> Router {
 /// Also schedules a periodic `retain_recent` sweep on the limiter so
 /// dormant IP entries are dropped (parallels [`LOCK_SWEEP_INTERVAL`]).
 pub fn with_rate_limit(router: Router) -> Router {
-    with_rate_limit_trusted(router, Vec::new())
+    with_rate_limit_trusted(router, Vec::new(), ProxyHeader::default())
 }
 
 /// Like [`with_rate_limit`], but a request whose TCP peer is in
-/// `trusted_proxies` is bucketed by the client address from `X-Forwarded-For` /
-/// `Forwarded`. Any other peer is bucketed by its own address.
-pub fn with_rate_limit_trusted(router: Router, trusted_proxies: Vec<IpAddr>) -> Router {
+/// `trusted_proxies` is bucketed by the client address from `header` only (the
+/// other forwarding header is ignored). Any other peer is bucketed by its own
+/// address.
+pub fn with_rate_limit_trusted(
+    router: Router,
+    trusted_proxies: Vec<IpAddr>,
+    header: ProxyHeader,
+) -> Router {
     let governor_conf = Arc::new(
         GovernorConfigBuilder::default()
             .per_second(RATE_LIMIT_PER_SECOND)
             .burst_size(RATE_LIMIT_BURST_SIZE)
-            .key_extractor(TrustedProxyKeyExtractor::new(trusted_proxies))
+            .key_extractor(TrustedProxyKeyExtractor::new(trusted_proxies, header))
             .finish()
             .expect("governor config: per_second/burst_size both nonzero"),
     );

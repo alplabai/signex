@@ -20,8 +20,6 @@ pub mod distributors;
 pub mod git_identity;
 pub mod hash;
 pub mod identity;
-#[cfg(any(feature = "distributors-community", feature = "database"))]
-pub mod keyring_store;
 pub mod library_file;
 pub mod lifecycle;
 pub mod manifest;

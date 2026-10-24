@@ -11,7 +11,7 @@ pub mod cache;
 pub mod digikey;
 mod http;
 pub mod jlcpcb;
-pub use crate::keyring_store as keyring;
+pub mod keyring;
 pub mod lcsc;
 pub mod mouser;
 mod throttle;

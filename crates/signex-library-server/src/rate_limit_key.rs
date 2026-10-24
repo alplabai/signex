@@ -2,9 +2,11 @@
 //!
 //! By default requests are bucketed by the TCP peer address. Behind a reverse
 //! proxy every request shares the proxy's address, so an operator may list the
-//! proxy addresses as trusted; only then is the client address read from
-//! `X-Forwarded-For` / `Forwarded`. Headers from any other peer are ignored,
-//! since a direct client could otherwise forge them to dodge the limit.
+//! proxy addresses as trusted and name the ONE header their proxy writes
+//! ([`ProxyHeader`]); only then is the client address read, and only from that
+//! header. The other header is ignored entirely (a client can forge it, and a
+//! proxy that overwrites only one passes the other through). Headers from any
+//! other peer are ignored too.
 
 use std::net::{IpAddr, SocketAddr};
 
@@ -12,45 +14,66 @@ use axum::extract::ConnectInfo;
 use axum::http::{HeaderMap, Request};
 use tower_governor::{GovernorError, key_extractor::KeyExtractor};
 
+/// The single forwarding header the operator's proxy is known to write.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ProxyHeader {
+    #[default]
+    XForwardedFor,
+    Forwarded,
+}
+
+impl std::str::FromStr for ProxyHeader {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, String> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "x-forwarded-for" => Ok(Self::XForwardedFor),
+            "forwarded" => Ok(Self::Forwarded),
+            other => Err(format!("`{other}` is not `x-forwarded-for` or `forwarded`")),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct TrustedProxyKeyExtractor {
     trusted: Vec<IpAddr>,
+    header: ProxyHeader,
 }
 
 impl TrustedProxyKeyExtractor {
-    pub fn new(trusted: Vec<IpAddr>) -> Self {
-        Self { trusted }
+    pub fn new(trusted: Vec<IpAddr>, header: ProxyHeader) -> Self {
+        // Canonical form so `::ffff:10.0.0.1` (dual-stack listener) matches `10.0.0.1`.
+        let trusted = trusted.into_iter().map(|ip| ip.to_canonical()).collect();
+        Self { trusted, header }
     }
 
     fn is_trusted(&self, ip: &IpAddr) -> bool {
-        self.trusted.contains(ip)
+        self.trusted.contains(&ip.to_canonical())
     }
 
     /// Walk the forwarded chain right-to-left (nearest hop first), skipping
     /// trusted proxies; the first untrusted hop is the real client. A hop that
     /// does not parse stops the walk (`None` -> caller falls back to the peer).
     fn client_from_headers(&self, headers: &HeaderMap) -> Option<IpAddr> {
-        let hops: Vec<Option<IpAddr>> = if headers.contains_key("x-forwarded-for") {
-            headers
+        let hops: Vec<Option<IpAddr>> = match self.header {
+            ProxyHeader::XForwardedFor => headers
                 .get_all("x-forwarded-for")
                 .iter()
                 .filter_map(|v| v.to_str().ok())
                 .flat_map(|s| s.split(','))
-                .map(|s| s.trim().parse::<IpAddr>().ok())
-                .collect()
-        } else {
-            headers
+                .map(|s| parse_hop(s.trim()))
+                .collect(),
+            ProxyHeader::Forwarded => headers
                 .get_all(axum::http::header::FORWARDED)
                 .iter()
                 .filter_map(|v| v.to_str().ok())
                 .flat_map(|s| s.split(','))
                 .map(forwarded_for)
-                .collect()
+                .collect(),
         };
         for hop in hops.into_iter().rev() {
             match hop {
                 Some(ip) if self.is_trusted(&ip) => continue,
-                other => return other,
+                other => return other.map(|ip| ip.to_canonical()),
             }
         }
         None
@@ -68,6 +91,11 @@ fn forwarded_for(entry: &str) -> Option<IpAddr> {
                 .map(|_| &p[4..])
         })?
         .trim_matches('"');
+    parse_hop(v)
+}
+
+/// One hop: bare IP, `ip:port`, `[v6]` or `[v6]:port`.
+fn parse_hop(v: &str) -> Option<IpAddr> {
     v.parse::<SocketAddr>()
         .map(|s| s.ip())
         .or_else(|_| v.trim_matches(['[', ']']).parse::<IpAddr>())
@@ -81,7 +109,7 @@ impl KeyExtractor for TrustedProxyKeyExtractor {
         let peer = req
             .extensions()
             .get::<ConnectInfo<SocketAddr>>()
-            .map(|ci| ci.0.ip())
+            .map(|ci| ci.0.ip().to_canonical())
             .ok_or(GovernorError::UnableToExtractKey)?;
         if self.is_trusted(&peer) {
             Ok(self.client_from_headers(req.headers()).unwrap_or(peer))
@@ -108,7 +136,11 @@ mod tests {
     }
 
     fn ex() -> TrustedProxyKeyExtractor {
-        TrustedProxyKeyExtractor::new(vec!["10.0.0.1".parse().unwrap()])
+        ex_h(ProxyHeader::XForwardedFor)
+    }
+
+    fn ex_h(h: ProxyHeader) -> TrustedProxyKeyExtractor {
+        TrustedProxyKeyExtractor::new(vec!["10.0.0.1".parse().unwrap()], h)
     }
 
     fn ip(s: &str) -> IpAddr {
@@ -129,7 +161,10 @@ mod tests {
             "10.0.0.1",
             Some(("forwarded", "for=\"[2001:db8::1]:80\";proto=https")),
         );
-        assert_eq!(ex().extract(&r).unwrap(), ip("2001:db8::1"));
+        assert_eq!(
+            ex_h(ProxyHeader::Forwarded).extract(&r).unwrap(),
+            ip("2001:db8::1")
+        );
     }
 
     #[test]
@@ -157,6 +192,88 @@ mod tests {
         let r = req("10.0.0.1", Some(("x-forwarded-for", "1.2.3.4")));
         let e = TrustedProxyKeyExtractor::default();
         assert_eq!(e.extract(&r).unwrap(), ip("10.0.0.1"));
+    }
+
+    fn req2(peer: &str, hdrs: &[(&str, &str)]) -> Request<()> {
+        let mut b = Request::builder();
+        for (k, v) in hdrs {
+            b = b.header(*k, *v);
+        }
+        let mut r = b.body(()).unwrap();
+        r.extensions_mut().insert(ConnectInfo(
+            format!("{peer}:1234").parse::<SocketAddr>().unwrap(),
+        ));
+        r
+    }
+
+    #[test]
+    fn only_the_configured_header_is_read() {
+        let r = req2(
+            "10.0.0.1",
+            &[
+                ("x-forwarded-for", "6.6.6.6"),
+                ("forwarded", "for=198.51.100.7"),
+            ],
+        );
+        assert_eq!(
+            ex_h(ProxyHeader::Forwarded).extract(&r).unwrap(),
+            ip("198.51.100.7")
+        );
+        let r = req2(
+            "10.0.0.1",
+            &[
+                ("x-forwarded-for", "198.51.100.7"),
+                ("forwarded", "for=6.6.6.6"),
+            ],
+        );
+        assert_eq!(
+            ex_h(ProxyHeader::XForwardedFor).extract(&r).unwrap(),
+            ip("198.51.100.7")
+        );
+        // Configured header absent: the other is never consulted.
+        let r = req("10.0.0.1", Some(("x-forwarded-for", "6.6.6.6")));
+        assert_eq!(
+            ex_h(ProxyHeader::Forwarded).extract(&r).unwrap(),
+            ip("10.0.0.1")
+        );
+    }
+
+    #[test]
+    fn proxy_header_parses_or_errors() {
+        assert_eq!("X-Forwarded-For".parse(), Ok(ProxyHeader::XForwardedFor));
+        assert_eq!("forwarded".parse(), Ok(ProxyHeader::Forwarded));
+        assert!("".parse::<ProxyHeader>().is_err());
+        assert!("x-real-ip".parse::<ProxyHeader>().is_err());
+    }
+
+    #[test]
+    fn ipv4_mapped_peer_matches_trusted_ipv4_proxy() {
+        let r = req(
+            "[::ffff:10.0.0.1]",
+            Some(("x-forwarded-for", "198.51.100.7")),
+        );
+        assert_eq!(ex().extract(&r).unwrap(), ip("198.51.100.7"));
+        let plain = req("203.0.113.9", None);
+        let mapped = req("[::ffff:203.0.113.9]", None);
+        assert_eq!(
+            ex().extract(&plain).unwrap(),
+            ex().extract(&mapped).unwrap()
+        );
+        let r = req("10.0.0.1", Some(("x-forwarded-for", "::ffff:198.51.100.7")));
+        assert_eq!(ex().extract(&r).unwrap(), ip("198.51.100.7"));
+    }
+
+    #[test]
+    fn hops_with_ports_parse() {
+        let r = req("10.0.0.1", Some(("x-forwarded-for", "1.2.3.4:5678")));
+        assert_eq!(ex().extract(&r).unwrap(), ip("1.2.3.4"));
+        let r = req("10.0.0.1", Some(("x-forwarded-for", "[2001:db8::1]:4711")));
+        assert_eq!(ex().extract(&r).unwrap(), ip("2001:db8::1"));
+        let r = req("10.0.0.1", Some(("forwarded", "for=1.2.3.4:5678")));
+        assert_eq!(
+            ex_h(ProxyHeader::Forwarded).extract(&r).unwrap(),
+            ip("1.2.3.4")
+        );
     }
 
     #[test]

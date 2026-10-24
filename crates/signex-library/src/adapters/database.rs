@@ -100,40 +100,9 @@ fn redirect_policy(has_token: bool) -> reqwest::redirect::Policy {
     })
 }
 
-/// OS-keychain lookup for a `@signex-keychain:<name>` sigil: service
-/// `signex-distributor-library`, username `<name>`.
-fn keychain_secret(name: &str) -> Result<String, String> {
-    use crate::keyring_store::KeyringStore;
-    KeyringStore::for_provider("library", name)
-        .and_then(|s| s.get_secret())
-        .map_err(|e| e.to_string())
-}
-
-/// Turn the manifest `auth` value into the bearer token: a
-/// `@signex-keychain:<name>` sigil is resolved through `lookup`; anything else
-/// is used verbatim. Errors name the keychain item but never carry a secret.
-fn resolve_auth(
-    auth: &str,
-    lookup: &dyn Fn(&str) -> Result<String, String>,
-) -> Result<String, LibraryError> {
-    let Some(name) = auth.strip_prefix(KEYCHAIN_SIGIL) else {
-        return Ok(auth.to_string());
-    };
-    if name.is_empty() {
-        return Err(LibraryError::Backend(format!(
-            "library auth `{KEYCHAIN_SIGIL}` names no keychain item"
-        )));
-    }
-    lookup(name).map_err(|e| {
-        LibraryError::Backend(format!(
-            "OS keychain item `{name}` (service `signex-distributor-library`) unavailable: {e}"
-        ))
-    })
-}
-
 impl DatabaseAdapter {
-    /// Construct from a manifest. The manifest's `auth` field is the bearer
-    /// token, or a `@signex-keychain:<name>` sigil resolved via the OS keychain; the holder is derived from it.
+    /// Construct from a manifest. The manifest's `auth` field is treated as
+    /// the bearer token; the holder is derived from it.
     pub fn new(manifest: Manifest) -> Result<Self, LibraryError> {
         let (base_url, auth) = match &manifest.mode {
             LibraryMode::Database { url, auth } => {
@@ -145,7 +114,12 @@ impl DatabaseAdapter {
                 )));
             }
         };
-        let auth = resolve_auth(&auth, &keychain_secret)?;
+        if auth.starts_with(KEYCHAIN_SIGIL) {
+            return Err(LibraryError::Backend(format!(
+                "library auth `{KEYCHAIN_SIGIL}...` is not resolved by the database adapter yet; \
+             refusing to send the sigil as a bearer token (OS keychain resolution: #976)"
+            )));
+        }
         check_transport_security(&base_url, !auth.is_empty())?;
         let client = reqwest::blocking::Client::builder()
             .connect_timeout(HTTP_CONNECT_TIMEOUT)
@@ -680,28 +654,25 @@ mod tests {
     }
 
     #[test]
-    fn keychain_sigil_resolves_through_lookup() {
-        let ok = |n: &str| {
-            assert_eq!(n, "alplab");
-            Ok("tok-123".to_string())
+    fn keychain_sigil_is_rejected_with_the_sigil_error() {
+        let manifest = Manifest {
+            library: LibraryMeta {
+                name: "remote".into(),
+                library_id: Uuid::nil(),
+                description: None,
+            },
+            mode: LibraryMode::Database {
+                url: "https://lib.example.com".into(),
+                auth: "@signex-keychain:x".into(),
+            },
+            workflow: Default::default(),
+            users: Default::default(),
+            tables: Vec::new(),
         };
-        assert_eq!(
-            resolve_auth("@signex-keychain:alplab", &ok).unwrap(),
-            "tok-123"
-        );
-        assert_eq!(resolve_auth("plain", &ok).unwrap(), "plain");
-        assert_eq!(resolve_auth("", &ok).unwrap(), "");
-    }
-
-    #[test]
-    fn keychain_sigil_failure_names_item_without_secret() {
-        let miss = |_: &str| Err("entry not found".to_string());
-        let msg = resolve_auth("@signex-keychain:alplab", &miss)
-            .unwrap_err()
-            .to_string();
-        assert!(msg.contains("alplab") && msg.contains("not found"), "{msg}");
-        let empty = resolve_auth("@signex-keychain:", &miss).unwrap_err();
-        assert!(empty.to_string().contains("names no keychain item"));
+        let err = DatabaseAdapter::new(manifest)
+            .err()
+            .expect("sigil must be refused");
+        assert!(err.to_string().contains("not resolved"), "{err}");
     }
 
     #[test]
@@ -734,6 +705,26 @@ mod tests {
         let msg = err.to_string();
         assert!(!msg.contains("hunter2") && !msg.contains("alice"), "{msg}");
         assert!(msg.contains("http://lib.example.com:8080"), "{msg}");
+    }
+
+    #[test]
+    fn keychain_sigil_reported_before_transport_error() {
+        let manifest = Manifest {
+            library: LibraryMeta {
+                name: "remote".into(),
+                library_id: Uuid::nil(),
+                description: None,
+            },
+            mode: LibraryMode::Database {
+                url: "http://lib.example.com".into(),
+                auth: "@signex-keychain:x".into(),
+            },
+            workflow: Default::default(),
+            users: Default::default(),
+            tables: Vec::new(),
+        };
+        let err = DatabaseAdapter::new(manifest).err().expect("refused");
+        assert!(err.to_string().contains("not resolved"), "{err}");
     }
 
     use crate::library_file::{FORMAT_TOKEN, LibrarySection};

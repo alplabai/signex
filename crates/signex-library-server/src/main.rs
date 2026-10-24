@@ -17,6 +17,43 @@ const INSECURE_BIND_FLAG: &str = "--allow-insecure-bind";
 /// Comma-separated proxy IPs whose `X-Forwarded-For` / `Forwarded` is believed
 /// by the rate limiter.
 const TRUSTED_PROXIES_ENV: &str = "SIGNEX_TRUSTED_PROXIES";
+/// `x-forwarded-for` | `forwarded`: the one header the trusted proxy writes.
+/// Required when `SIGNEX_TRUSTED_PROXIES` is non-empty; the other is ignored.
+const TRUSTED_PROXY_HEADER_ENV: &str = "SIGNEX_TRUSTED_PROXY_HEADER";
+
+/// `1` / `true` / `yes` (any case) enable the opt-in; any other set value is
+/// warned about and treated as off.
+fn insecure_env_enabled(raw: Option<&str>) -> bool {
+    let Some(v) = raw else { return false };
+    match v.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" => true,
+        "" | "0" | "false" | "no" => false,
+        other => {
+            tracing::warn!(
+                "{INSECURE_BIND_ENV}=`{other}` not recognised (use 1/true/yes); ignored"
+            );
+            false
+        }
+    }
+}
+
+/// Header setting is mandatory exactly when proxies are trusted.
+fn parse_proxy_header(
+    proxies: &[std::net::IpAddr],
+    raw: Option<&str>,
+) -> anyhow::Result<signex_library_server::ProxyHeader> {
+    let raw = raw.map(str::trim).filter(|s| !s.is_empty());
+    match (proxies.is_empty(), raw) {
+        (true, None) => Ok(Default::default()),
+        (false, None) => anyhow::bail!(
+            "{TRUSTED_PROXY_HEADER_ENV} must be `x-forwarded-for` or `forwarded` when \
+             {TRUSTED_PROXIES_ENV} is set"
+        ),
+        (_, Some(r)) => r
+            .parse()
+            .map_err(|e| anyhow::anyhow!("{TRUSTED_PROXY_HEADER_ENV}: {e}")),
+    }
+}
 
 /// Parse a comma-separated IP list. A bad entry is a startup error: silently
 /// dropping it would quietly fall back to one shared bucket.
@@ -101,7 +138,7 @@ async fn main() -> anyhow::Result<()> {
         .ok()
         .filter(|s| !s.is_empty());
     let allow_insecure = std::env::args().any(|a| a == INSECURE_BIND_FLAG)
-        || std::env::var(INSECURE_BIND_ENV).is_ok_and(|v| matches!(v.as_str(), "1" | "true"));
+        || insecure_env_enabled(std::env::var(INSECURE_BIND_ENV).ok().as_deref());
     check_bind_policy(&bind, token_set, db_url.is_some(), allow_insecure)?;
     if allow_insecure && !is_loopback_bind(&bind) {
         tracing::warn!(
@@ -111,6 +148,10 @@ async fn main() -> anyhow::Result<()> {
     }
     let trusted_proxies =
         parse_trusted_proxies(&std::env::var(TRUSTED_PROXIES_ENV).unwrap_or_default())?;
+    let proxy_header = parse_proxy_header(
+        &trusted_proxies,
+        std::env::var(TRUSTED_PROXY_HEADER_ENV).ok().as_deref(),
+    )?;
 
     let listener = tokio::net::TcpListener::bind(&bind).await?;
     tracing::info!(
@@ -137,7 +178,7 @@ async fn main() -> anyhow::Result<()> {
     // HI-2: per-IP rate limit applied here (not in `router_with_state`)
     // so integration tests can hit the bare router via `oneshot` without
     // going through the governor's `ConnectInfo` extractor.
-    let app = with_rate_limit_trusted(router, trusted_proxies);
+    let app = with_rate_limit_trusted(router, trusted_proxies, proxy_header);
     // `into_make_service_with_connect_info::<SocketAddr>()` plumbs the
     // peer IP into request extensions — `tower_governor` reads it from
     // there to bucket requests by source.
@@ -151,7 +192,10 @@ async fn main() -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{check_bind_policy, is_loopback_bind, parse_trusted_proxies};
+    use super::{
+        check_bind_policy, insecure_env_enabled, is_loopback_bind, parse_proxy_header,
+        parse_trusted_proxies,
+    };
 
     #[test]
     fn loopback_binds_are_accepted() {
@@ -205,6 +249,27 @@ mod tests {
             .to_string();
         assert!(no_db.contains("ephemeral"), "{no_db}");
         assert!(check_bind_policy(public, true, true, true).is_ok());
+    }
+
+    #[test]
+    fn insecure_env_values() {
+        assert!(insecure_env_enabled(Some("1")));
+        assert!(insecure_env_enabled(Some("TRUE")));
+        assert!(insecure_env_enabled(Some(" Yes ")));
+        assert!(!insecure_env_enabled(Some("0")));
+        assert!(!insecure_env_enabled(Some("on")));
+        assert!(!insecure_env_enabled(None));
+    }
+
+    #[test]
+    fn proxy_header_required_with_trusted_proxies() {
+        let p = parse_trusted_proxies("10.0.0.1").unwrap();
+        assert!(parse_proxy_header(&p, None).is_err());
+        assert!(parse_proxy_header(&p, Some(" ")).is_err());
+        assert!(parse_proxy_header(&p, Some("x-real-ip")).is_err());
+        assert!(parse_proxy_header(&p, Some("Forwarded")).is_ok());
+        assert!(parse_proxy_header(&[], None).is_ok());
+        assert!(parse_proxy_header(&[], Some("bogus")).is_err());
     }
 
     #[test]

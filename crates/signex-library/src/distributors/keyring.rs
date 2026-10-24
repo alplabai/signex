@@ -1,5 +1,4 @@
-//! OS keyring credential storage: distributor adapters and the database
-//! adapter's `@signex-keychain:` auth sigil.
+//! OS keyring credential storage for distributor adapters.
 //!
 //! - Service name format: `signex-distributor-<provider>`
 //! - Used by Mouser (API key) and DigiKey (OAuth refresh token).
