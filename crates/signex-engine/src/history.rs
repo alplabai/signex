@@ -52,6 +52,15 @@ impl Engine {
         self.redo_stack.last().and_then(|entry| entry.group)
     }
 
+    /// Monotonic position in the edit timeline: how many recorded edits
+    /// are currently applied, counting any evicted by the history cap.
+    /// Undo lowers it, redo raises it, a new edit raises it and drops
+    /// the redo branch. App-level state that interleaves with engine
+    /// history (net colours) stamps itself with this to order undo.
+    pub fn undo_position(&self) -> usize {
+        self.history_evicted + self.history.len()
+    }
+
     pub fn undo(&mut self) -> Result<Option<PatchPair>, EngineError> {
         self.revision = crate::next_revision();
         let Some(entry) = self.history.pop() else {
@@ -109,6 +118,7 @@ impl Engine {
 
         if self.history.len() >= MAX_HISTORY_ENTRIES {
             self.history.remove(0);
+            self.history_evicted += 1;
         }
         self.history.push(HistoryEntry {
             snapshot,

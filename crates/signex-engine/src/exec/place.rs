@@ -160,6 +160,7 @@ impl Engine {
 
                 Ok(CommandResult::changed(patch_pair))
             }
+            Command::ReplaceLibSymbol { lib_symbol } => self.replace_lib_symbol(before, lib_symbol),
             Command::PlaceChildSheet { child_sheet } => {
                 // A sheet with no target file cannot be stitched or
                 // navigated, so a blank filename is rejected up front,

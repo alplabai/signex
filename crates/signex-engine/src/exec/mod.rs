@@ -8,7 +8,10 @@
 mod batch;
 mod edits;
 mod place;
+mod replace_lib_symbol;
 mod structure;
 
 #[cfg(test)]
 mod register_lib_symbol_tests;
+#[cfg(test)]
+mod replace_lib_symbol_tests;

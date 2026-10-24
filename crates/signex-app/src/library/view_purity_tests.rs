@@ -12,9 +12,7 @@ use std::sync::atomic::Ordering;
 use signex_types::theme::{ThemeId, theme_tokens};
 use uuid::Uuid;
 
-use super::state::{
-    LibraryBrowserState, LibraryDisplaySettings, LibraryState, NewComponentState, OpenLibrary,
-};
+use super::state::{LibraryBrowserState, LibraryDisplaySettings, LibraryState, OpenLibrary};
 use super::test_adapters::CountingAdapter;
 
 #[test]
@@ -44,21 +42,10 @@ fn library_views_trigger_no_adapter_call() {
 
     let tokens = theme_tokens(ThemeId::Signex);
     let browser = LibraryBrowserState::new(root.clone());
-    let new_component = NewComponentState {
-        library_idx: Some(0),
-        ..NewComponentState::default()
-    };
 
     // Several frames, as the runtime would draw them.
     for _ in 0..3 {
         drop(super::browser::view(&root, &state, &browser, &tokens));
-        drop(super::new_component::view(
-            &state,
-            &new_component,
-            &tokens,
-            ThemeId::Signex,
-            Vec::new(),
-        ));
     }
 
     assert_eq!(

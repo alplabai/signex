@@ -190,6 +190,7 @@ fn power_references_are_not_listed_beside_a_real_shared_part() {
         netlist: None,
         netlist_sheets: Vec::new(),
         netlist_sheet_placements: Vec::new(),
+        current_sheet: None,
     };
     let refusal = issues.shared_reference_refusal(&ctx).expect("R1 is shared");
     assert!(refusal.contains("R1"), "{refusal}");

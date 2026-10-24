@@ -98,6 +98,7 @@ fn the_no_netlist_warning_names_the_exported_document_not_the_current_tab() {
         netlist: None,
         netlist_sheets: Vec::new(),
         netlist_sheet_placements: Vec::new(),
+        current_sheet: None,
     };
 
     super::log_stitch_issues(source, &ctx, &super::ExportIssues::default());

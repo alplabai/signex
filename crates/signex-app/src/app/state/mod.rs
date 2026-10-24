@@ -19,7 +19,7 @@ pub(crate) mod volume_case;
 
 pub use interaction::InteractionState;
 pub use pdf_page_setup::PageSetupInputs;
-pub use ui::UiState;
+pub use ui::{NetColorStep, UiState};
 
 pub struct Signex {
     pub ui_state: UiState,
