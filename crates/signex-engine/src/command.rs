@@ -51,6 +51,7 @@ pub enum CommandKind {
     PlaceLabel,
     PlaceSymbol,
     RegisterLibSymbol,
+    ReplaceLibSymbol,
     PlaceChildSheet,
     PlaceJunction,
     PlaceNoConnect,
@@ -169,6 +170,14 @@ pub enum Command {
     /// the entry. Run in the same batch as the `PlaceSymbol` that
     /// references it so one undo removes both.
     RegisterLibSymbol {
+        lib_symbol: LibSymbol,
+    },
+    /// Replace the sheet's embedded copy of `lib_symbol.id` with
+    /// `lib_symbol` ("Update from library", #912). Refused with
+    /// [`EngineError::LibSymbolPinsConnected`] when a pin that has a wire
+    /// or no-connect on it would vanish or move off that connection;
+    /// nothing is mutated then. One undo step.
+    ReplaceLibSymbol {
         lib_symbol: LibSymbol,
     },
     /// Add a hierarchical sheet symbol. Rejected with
@@ -319,6 +328,7 @@ impl Command {
             Command::PlaceLabel { .. } => CommandKind::PlaceLabel,
             Command::PlaceSymbol { .. } => CommandKind::PlaceSymbol,
             Command::RegisterLibSymbol { .. } => CommandKind::RegisterLibSymbol,
+            Command::ReplaceLibSymbol { .. } => CommandKind::ReplaceLibSymbol,
             Command::PlaceChildSheet { .. } => CommandKind::PlaceChildSheet,
             Command::PlaceJunction { .. } => CommandKind::PlaceJunction,
             Command::PlaceNoConnect { .. } => CommandKind::PlaceNoConnect,

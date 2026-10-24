@@ -22,6 +22,7 @@ pub mod component_preview;
 pub mod create_options;
 pub mod dangling;
 pub mod document_options;
+pub mod drift;
 pub mod edit_row_modal;
 pub mod editor;
 pub mod external_poll;

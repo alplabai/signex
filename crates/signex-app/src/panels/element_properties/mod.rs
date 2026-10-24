@@ -9,6 +9,7 @@
 mod child_sheet;
 mod drawing;
 mod drawing_preview;
+mod library_rows;
 mod selected;
 
 pub(super) use child_sheet::view_child_sheet_properties;
