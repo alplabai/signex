@@ -6,7 +6,6 @@
 
 use super::*;
 use crate::app::state::ProjectId;
-use crate::app::state::scope::CaseFold;
 use crate::app::state::sheet_refs::{SheetRefs, StaleRefs};
 use crate::app::state::volume_case::directory_ignores_case;
 
@@ -42,10 +41,11 @@ impl Signex {
     /// already in hand (a project opened meanwhile has unresolved children).
     fn spawn_close_refs_resolve(&self, project_id: ProjectId) -> Task<Message> {
         let inputs = self.document_state.sheet_ref_inputs();
+        let fold = self.document_state.fold_for_project(project_id);
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
-                    Box::new(inputs.resolve(CaseFold::host_default(), directory_ignores_case))
+                    Box::new(inputs.resolve(fold, directory_ignores_case))
                 })
                 .await
                 .map_err(|e| format!("sheet-reference worker failed: {e}"))
@@ -58,12 +58,14 @@ impl Signex {
     /// thread. The body the task runs off-thread, exposed so a regression
     /// test can complete the task without an async runtime.
     #[doc(hidden)]
-    pub fn resolve_sheet_refs_blocking(&self) -> Result<Box<SheetRefs>, String> {
-        Ok(Box::new(
-            self.document_state
-                .sheet_ref_inputs()
-                .resolve(CaseFold::host_default(), directory_ignores_case),
-        ))
+    pub fn resolve_sheet_refs_blocking(
+        &self,
+        project_id: ProjectId,
+    ) -> Result<Box<SheetRefs>, String> {
+        Ok(Box::new(self.document_state.sheet_ref_inputs().resolve(
+            self.document_state.fold_for_project(project_id),
+            directory_ignores_case,
+        )))
     }
 
     /// The Close Project gate, run once the sheet references are resolved:
@@ -693,6 +695,7 @@ mod tests {
                 unknown: Default::default(),
             },
             pending_libraries: std::collections::HashMap::new(),
+            case_fold: Default::default(),
         });
         let path = dir.join("lib.snxlib").join("footprints").join("g.snxfpt");
         let file =
@@ -728,7 +731,7 @@ mod tests {
         let project_id = app.document_state.projects[0].id;
         let task = app.close_project_at_tree_path(&[0]);
         assert_eq!(task.units(), 1, "the disk read must run off-thread");
-        let result = app.resolve_sheet_refs_blocking();
+        let result = app.resolve_sheet_refs_blocking(project_id);
         let _ = app.handle_close_refs_resolved(project_id, result);
 
         // The draft is not reached by any sheet walk, so it is kept (no

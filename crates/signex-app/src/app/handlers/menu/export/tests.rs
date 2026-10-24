@@ -188,6 +188,7 @@ pub(crate) fn app_workspace(dir: &str, listed: &[&str]) -> Signex {
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
+        case_fold: Default::default(),
     });
     // The sticky pointer every one of these regressions is about.
     app.document_state.active_project = Some(id);
@@ -933,6 +934,7 @@ fn uncovered_pdf_characters_reach_the_messages_panel() {
     );
 }
 
+mod case_probe;
 mod protel_hierarchy;
 
 /// Append a second loaded project (`listed` sheets under `dir`) to `app`.

@@ -301,6 +301,7 @@ impl Signex {
                 active_path: None,
                 projects: Vec::new(),
                 active_project: None,
+                probed_projects: std::collections::HashSet::new(),
                 dirty_paths: std::collections::HashSet::new(),
                 next_project_id: 0,
                 panel_ctx: crate::panels::PanelContext {

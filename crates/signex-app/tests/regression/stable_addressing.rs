@@ -119,6 +119,7 @@ fn close_project_with_interleaved_tabs_keeps_the_active_document() {
                 unknown: Default::default(),
             },
             pending_libraries: std::collections::HashMap::new(),
+            case_fold: Default::default(),
         });
     }
     push_tab(&mut app, Path::new("p1a.snxfpt"), Some(ids[0]));

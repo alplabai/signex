@@ -706,7 +706,7 @@ mod tests {
             trusted: Vec::new(),
         };
 
-        let resolved = inputs.resolve(CaseFold::Preserve, |_| false);
+        let resolved = inputs.resolve(CaseFold::PRESERVE, |_| false);
 
         assert!(resolved.unreadable.is_empty(), "{:?}", resolved.unreadable);
         assert_eq!(resolved.disk.len(), 1, "{:?}", resolved.disk.keys());
@@ -731,7 +731,7 @@ mod tests {
             trusted: Vec::new(),
         };
 
-        let resolved = inputs.resolve(CaseFold::Fold, |_| false);
+        let resolved = inputs.resolve(CaseFold::FOLD, |_| false);
 
         // The engine's grandchild is followed through the variant spelling.
         assert!(
@@ -763,7 +763,7 @@ mod tests {
             trusted: Vec::new(),
         };
 
-        let resolved = inputs.resolve(CaseFold::Preserve, |_| false);
+        let resolved = inputs.resolve(CaseFold::PRESERVE, |_| false);
 
         assert!(
             resolved.disk.contains_key(&outside),
@@ -794,7 +794,7 @@ mod tests {
             trusted: Vec::new(),
         };
 
-        let resolved = inputs.resolve(CaseFold::Preserve, |_| false);
+        let resolved = inputs.resolve(CaseFold::PRESERVE, |_| false);
 
         assert!(
             resolved.disk.contains_key(&outside),
@@ -822,7 +822,7 @@ mod tests {
             trusted: Vec::new(),
         };
 
-        let resolved = inputs.resolve(CaseFold::Preserve, |_| false);
+        let resolved = inputs.resolve(CaseFold::PRESERVE, |_| false);
 
         assert!(resolved.unreadable.is_empty(), "{:?}", resolved.unreadable);
         assert!(resolved.disk.contains_key(&root));
@@ -853,6 +853,7 @@ mod tests {
                 unknown: Default::default(),
             },
             pending_libraries: HashMap::new(),
+            case_fold: Default::default(),
         }
     }
 
@@ -872,7 +873,7 @@ mod tests {
         let shared = a_dir.join("S.snxsch");
         docs.dirty_paths.insert(shared.clone());
 
-        let refs = docs.sheet_ref_inputs().resolve(CaseFold::Fold, |_| false);
+        let refs = docs.sheet_ref_inputs().resolve(CaseFold::FOLD, |_| false);
         let scan = docs.close_scan(&refs, 0, &[]);
 
         assert!(scan.mine.is_empty(), "{:?}", scan.mine);
@@ -899,7 +900,7 @@ mod tests {
 
     #[test]
     fn a_never_saved_case_variant_sheet_is_kept_when_its_volume_ignores_case() {
-        let scan = close_scan_of_never_saved_sheet(CaseFold::Preserve, |_| true);
+        let scan = close_scan_of_never_saved_sheet(CaseFold::PRESERVE, |_| true);
 
         assert!(scan.mine.is_empty(), "N is B's sheet too: {:?}", scan.mine);
         assert_eq!(scan.kept.len(), 1, "{:?}", scan.kept);
@@ -908,7 +909,7 @@ mod tests {
 
     #[test]
     fn a_never_saved_case_variant_sheet_stays_two_files_on_a_case_sensitive_volume() {
-        let scan = close_scan_of_never_saved_sheet(CaseFold::Preserve, |_| false);
+        let scan = close_scan_of_never_saved_sheet(CaseFold::PRESERVE, |_| false);
 
         assert_eq!(scan.mine.len(), 1, "N and n are different files");
         assert!(scan.kept.is_empty(), "{:?}", scan.kept);
@@ -924,7 +925,7 @@ mod tests {
             return;
         }
 
-        let scan = close_scan_of_never_saved_sheet(CaseFold::Preserve, directory_ignores_case);
+        let scan = close_scan_of_never_saved_sheet(CaseFold::PRESERVE, directory_ignores_case);
 
         assert!(scan.mine.is_empty(), "N is B's sheet too: {:?}", scan.mine);
         assert_eq!(scan.kept.len(), 1, "{:?}", scan.kept);
@@ -953,7 +954,7 @@ mod tests {
 
         let refs = docs
             .sheet_ref_inputs()
-            .resolve(CaseFold::Preserve, |_| false);
+            .resolve(CaseFold::PRESERVE, |_| false);
 
         assert_eq!(refs.unreadable.len(), 1, "{:?}", refs.unreadable);
         assert_eq!(docs.stale_causes(&refs), Vec::new(), "re-resolve loop");
@@ -968,7 +969,7 @@ mod tests {
             extra: Vec::new(),
             trusted: Vec::new(),
         }
-        .resolve_within(CaseFold::Preserve, |_| false, limits)
+        .resolve_within(CaseFold::PRESERVE, |_| false, limits)
     }
 
     fn assert_discard_blocked_by(refs: &SheetRefs, needle: &str) {
@@ -1084,7 +1085,7 @@ mod tests {
             extra: Vec::new(),
             trusted,
         }
-        .resolve(CaseFold::Preserve, |_| false);
+        .resolve(CaseFold::PRESERVE, |_| false);
 
         assert_eq!(resolved.unreadable.len(), 1, "{:?}", resolved.unreadable);
         assert_eq!(
@@ -1117,7 +1118,7 @@ mod tests {
             extra: Vec::new(),
             trusted,
         }
-        .resolve(CaseFold::Fold, |_| true);
+        .resolve(CaseFold::FOLD, |_| true);
 
         assert!(resolved.unreadable.is_empty(), "{:?}", resolved.unreadable);
         assert_eq!(resolved.disk.len(), 1, "{:?}", resolved.disk.keys());
@@ -1214,7 +1215,7 @@ mod tests {
         docs.projects.push(loaded_project(1, &dir, "a.snxsch"));
         let refs = docs
             .sheet_ref_inputs()
-            .resolve(CaseFold::Preserve, |_| false);
+            .resolve(CaseFold::PRESERVE, |_| false);
         assert!(docs.stale_causes(&refs).is_empty());
 
         docs.dirty_paths.insert(dir.join("fresh.snxsch"));
@@ -1246,7 +1247,7 @@ mod tests {
             trusted: Vec::new(),
         };
 
-        let resolved = inputs.resolve(CaseFold::Preserve, |_| false);
+        let resolved = inputs.resolve(CaseFold::PRESERVE, |_| false);
 
         assert!(resolved.disk.contains_key(&base.join("saved.snxsch")));
         assert!(resolved.disk.contains_key(&base.join("edited.snxsch")));

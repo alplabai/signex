@@ -73,6 +73,7 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
         path: prj_path.clone(),
         data,
         pending_libraries: std::collections::HashMap::new(),
+        case_fold: Default::default(),
     });
     app.document_state.active_project = Some(id);
 
@@ -1478,6 +1479,7 @@ fn insert_other_project(app: &mut Signex, index: usize) -> (TempDir, PathBuf) {
                 unknown: Default::default(),
             },
             pending_libraries: std::collections::HashMap::new(),
+            case_fold: Default::default(),
         },
     );
     (tmp, prj)

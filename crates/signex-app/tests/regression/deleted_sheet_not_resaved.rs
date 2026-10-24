@@ -47,6 +47,7 @@ fn add_project(app: &mut Signex, prj_path: &Path, sheet: &str) -> ProjectId {
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
+        case_fold: Default::default(),
     });
     id
 }
@@ -950,7 +951,7 @@ fn confirm_re_resolves_when_a_project_was_opened_since_the_refs_were_read() {
     );
     assert_eq!(app.document_state.projects.len(), 2, "A is still open");
     let project_id = app.document_state.projects[0].id;
-    let result = app.resolve_sheet_refs_blocking();
+    let result = app.resolve_sheet_refs_blocking(app.document_state.projects[0].id);
     let _ = app.update(Message::Project(ProjectMsg::CloseRefsResolved {
         project_id,
         result,
@@ -974,7 +975,7 @@ fn a_project_opened_while_the_resolve_runs_triggers_a_fresh_resolve() {
     let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
         ProjectTreeAction::CloseProject(vec![0]),
     )));
-    let stale = app.resolve_sheet_refs_blocking();
+    let stale = app.resolve_sheet_refs_blocking(app.document_state.projects[0].id);
     add_project(&mut app, &tmp.path().join("C.snxprj"), "c.snxsch");
 
     let task = app.update(Message::Project(ProjectMsg::CloseRefsResolved {
@@ -1108,7 +1109,7 @@ fn an_engine_edit_made_while_the_resolve_ran_is_seen_at_completion() {
     let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
         ProjectTreeAction::CloseProject(vec![0]),
     )));
-    let result = app.resolve_sheet_refs_blocking();
+    let result = app.resolve_sheet_refs_blocking(app.document_state.projects[0].id);
     // The gap: B's open sheet now references `c`.
     let edited = engine_referencing(&b_path, "../c.snxsch");
     app.document_state.engines.insert(b_path, edited);

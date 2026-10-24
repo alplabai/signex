@@ -84,6 +84,10 @@ impl Signex {
             ProjectMsg::CloseRefsResolved { project_id, result } => {
                 self.handle_close_refs_resolved(project_id, result)
             }
+            ProjectMsg::CaseProbed {
+                project_id,
+                outcome,
+            } => self.handle_case_probed(project_id, outcome),
             ProjectMsg::AppQuitConfirm(choice) => self.handle_app_quit_confirm(choice),
             ProjectMsg::CloseOptions => {
                 self.ui_state.project_options = None;

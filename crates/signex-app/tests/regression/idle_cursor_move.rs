@@ -121,6 +121,7 @@ fn push_git_project(app: &mut Signex, dir: &Path) {
             unknown: Default::default(),
         },
         pending_libraries: std::collections::HashMap::new(),
+        case_fold: Default::default(),
     });
 }
 
