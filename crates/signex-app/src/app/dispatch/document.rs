@@ -102,8 +102,19 @@ impl Signex {
                 iced::Task::batch([task, self.finish_update()])
             }
             FileMsg::SaveAs { from_path, to_path } => {
-                self.handle_active_document_save_as_requested(from_path, to_path);
+                let task = self.handle_active_document_save_as_requested(from_path, to_path);
+                iced::Task::batch([task, self.finish_update()])
+            }
+            FileMsg::DocumentSaveWaitFailed(reason) => {
+                crate::diagnostics::log_error(
+                    "Could not confirm that document writes finished before exit",
+                    &anyhow::anyhow!(reason),
+                );
                 self.finish_update()
+            }
+            FileMsg::DocumentSaved(done) => {
+                let task = self.handle_document_saved(done);
+                iced::Task::batch([task, self.finish_update()])
             }
             FileMsg::SavePrimitiveAs { from_path, to_path } => {
                 if let Err(error) = self.handle_save_primitive_as(&from_path, &to_path) {

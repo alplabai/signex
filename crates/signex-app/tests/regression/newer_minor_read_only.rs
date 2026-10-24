@@ -43,11 +43,14 @@ fn saving_a_newer_minor_schematic_is_refused_and_stays_dirty() {
     assert_eq!(std::fs::read_to_string(&path).unwrap(), newer, "untouched");
     assert!(app.document_state.dirty_paths.contains(&path));
     assert!(app.document_state.tabs[0].dirty);
-    assert!(app.document_state.error_notice.is_some());
+    // The card carries the full cause; the Messages panel line is trimmed
+    // to 160 bytes, so only its leading context is matched.
+    let notice = app.document_state.error_notice.as_ref().expect("card");
+    assert!(notice.detail.contains("newer Signex") && notice.detail.contains("snxsch/1.7"));
     assert!(
         signex_app::diagnostics::recent_entries()
             .iter()
-            .any(|e| e.message.contains("newer Signex") && e.message.contains("snxsch/1.7")),
+            .any(|e| e.message.contains("Failed to save active document")),
         "refusal must reach the Messages panel"
     );
 }

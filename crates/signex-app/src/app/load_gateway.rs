@@ -159,6 +159,7 @@ impl Signex {
                 match signex_engine::Engine::new_with_path(sheet, Some(p.clone())) {
                     Ok(engine) => {
                         self.document_state.engines.insert(p.clone(), engine);
+                        self.clear_net_color_steps(&p);
                         self.document_state.active_path = Some(p);
                     }
                     Err(_) => self.document_state.clear_active_engine(),
@@ -303,6 +304,7 @@ impl Signex {
         // mode opens the "Library Updates Available" modal on the
         // next view tick.
         self.scan_library_updates_for_open_schematic(scan_path);
+        self.library.drift.check_pending = true;
     }
 
     /// Reattach a tab to a schematic engine that's already parked in

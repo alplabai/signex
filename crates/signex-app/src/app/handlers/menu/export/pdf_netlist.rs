@@ -64,7 +64,14 @@ impl Signex {
         super::log_stitch_issues(&source, &ctx, &issues);
 
         // Filter sheets to the user's file picks from the Settings tab.
-        ctx.sheets.retain(|s| files.contains(&s.path));
+        if !super::isolate_undeclared_current(
+            &mut ctx,
+            &self.document_state,
+            &source,
+            &options.page_range,
+        ) {
+            ctx.sheets.retain(|s| files.contains(&s.path));
+        }
         if ctx.sheets.is_empty() {
             self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
                 "Cannot export PDF: no files selected in the Settings tab.".to_string(),

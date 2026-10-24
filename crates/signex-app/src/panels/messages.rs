@@ -641,6 +641,9 @@ pub enum PanelMsg {
     EditSymbolValue(uuid::Uuid, String),
     /// Edit a symbol's footprint (committed on submit).
     EditSymbolFootprint(uuid::Uuid, String),
+    /// Replace the sheet's embedded library symbol with the library's
+    /// current one (Properties ▸ "Update from library", #912).
+    UpdateSymbolFromLibrary(uuid::Uuid),
     /// Toggle a symbol's mirror_x.
     ToggleSymbolMirrorX(uuid::Uuid),
     /// Toggle a symbol's mirror_y.

@@ -303,14 +303,26 @@ impl Signex {
     }
 
     pub(super) fn rerasterize_print_preview(&mut self) {
-        let (pdf_opts, preview_dpi) = match self.document_state.preview.as_ref() {
-            Some(preview) => (preview.pdf_options.clone(), preview.quality.preview_dpi()),
+        let (pdf_opts, preview_dpi, source) = match self.document_state.preview.as_ref() {
+            Some(preview) => (
+                preview.pdf_options.clone(),
+                preview.quality.preview_dpi(),
+                preview.source.clone(),
+            ),
             None => return,
         };
 
-        let mut ctx = match super::build_export_context(&self.document_state) {
-            Some(c) => c,
-            None => return,
+        // Rasterise the document the preview was opened for, not whichever tab
+        // is active now: Export prints `preview.source`, so the two must agree.
+        let mut ctx = match super::build_page_scope_for_source(&self.document_state, &source) {
+            Some((c, _issues)) => c,
+            None => {
+                crate::diagnostics::log_warning(format!(
+                    "Print preview: the source document {} is no longer open",
+                    source.display()
+                ));
+                return;
+            }
         };
         // Re-seed the picker from the freshly built context. `sheet_files` was
         // captured once at modal open; if the active document changed while the
@@ -343,7 +355,14 @@ impl Signex {
         // empty filter set means "no files selected" — matches
         // Altium's "you must pick at least one file" UX. We render
         // a still-valid empty preview so the modal stays usable.
-        ctx.sheets.retain(|sheet| file_filter.contains(&sheet.path));
+        if !super::isolate_undeclared_current(
+            &mut ctx,
+            &self.document_state,
+            &source,
+            &pdf_opts.page_range,
+        ) {
+            ctx.sheets.retain(|sheet| file_filter.contains(&sheet.path));
+        }
         if ctx.sheets.is_empty() {
             // Don't blow up with a "no pages" error in the empty-set
             // case — the user is mid-toggle. Drop the preview pages
