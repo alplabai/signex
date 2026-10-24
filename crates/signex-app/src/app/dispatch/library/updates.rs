@@ -191,6 +191,11 @@ impl Signex {
             self.document_state
                 .dirty_paths
                 .insert(schematic_path.clone());
+            if self.document_state.active_path.as_deref() == Some(schematic_path.as_path()) {
+                self.sync_canvas_from_visible_schematic(
+                    crate::schematic_runtime::RenderInvalidation::SYMBOLS,
+                );
+            }
             tracing::info!(
                 target: "signex::library",
                 schematic = %schematic_path.display(),
@@ -247,6 +252,11 @@ impl Signex {
             self.document_state
                 .dirty_paths
                 .insert(schematic_path.clone());
+            if self.document_state.active_path.as_deref() == Some(schematic_path.as_path()) {
+                self.sync_canvas_from_visible_schematic(
+                    crate::schematic_runtime::RenderInvalidation::SYMBOLS,
+                );
+            }
         }
         // If some entries were left unchecked, treat the schematic as
         // "still has skipped drift" so the status bar keeps its

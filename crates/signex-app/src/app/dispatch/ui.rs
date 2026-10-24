@@ -475,7 +475,16 @@ impl Signex {
                 // position, as closing a tab does.
                 .unwrap_or_else(|| saved_active_tab.min(tabs.len().saturating_sub(1)));
         }
+        // The main slot's cache missed any edit made while the window's
+        // canvas was swapped in; refresh it if it shows the same sheet.
+        let main_shows_target =
+            saved_active_path.is_some() && saved_active_path == self.document_state.active_path;
         self.document_state.active_path = saved_active_path;
+        if main_shows_target {
+            self.sync_canvas_from_visible_schematic(
+                crate::schematic_runtime::RenderInvalidation::FULL,
+            );
+        }
 
         match task_result {
             Ok(task) => task,

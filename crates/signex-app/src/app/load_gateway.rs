@@ -177,21 +177,32 @@ impl Signex {
         // HashMap storage: an open schematic tab always has its engine
         // resident in `document_state.engines`.
         if let Some(engine) = self.document_state.active_engine() {
-            if let Some(cache) = self
+            // An undocked window showing the same sheet keeps its own slot
+            // and cache; refresh it too or it goes stale (#171).
+            let active_path = self.document_state.active_path.as_deref();
+            let sheet = engine.document();
+            let windows = &self.ui_state.windows;
+            let slots = self
                 .interaction_state
-                .active_canvas_mut()
-                .render_cache
-                .as_mut()
-            {
-                cache.update_from_sheet(engine.document(), invalidation);
-            } else {
-                self.interaction_state
-                    .active_canvas_mut()
-                    .set_render_cache(Some(
-                        crate::schematic_runtime::SchematicRenderCache::from_sheet(
-                            engine.document(),
-                        ),
+                .canvases
+                .iter_mut()
+                .filter(|(id, _)| {
+                    matches!(
+                        windows.get(id),
+                        Some(super::state::WindowKind::UndockedTab { path, .. })
+                            if Some(path.as_path()) == active_path
+                    )
+                })
+                .map(|(_, slot)| slot)
+                .chain(std::iter::once(&mut self.interaction_state.canvas));
+            for slot in slots {
+                if let Some(cache) = slot.render_cache.as_mut() {
+                    cache.update_from_sheet(sheet, invalidation);
+                } else {
+                    slot.set_render_cache(Some(
+                        crate::schematic_runtime::SchematicRenderCache::from_sheet(sheet),
                     ));
+                }
             }
             return;
         }

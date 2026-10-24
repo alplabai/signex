@@ -530,6 +530,88 @@ mod tests {
         );
     }
 
+    /// An undocked window showing the active sheet keeps its own slot; both
+    /// directions of the swap used by undocked canvas events must refresh it.
+    #[test]
+    fn undocked_slot_of_the_same_sheet_follows_every_edit() {
+        use crate::app::handlers::menu::export::tests as fx;
+        use signex_types::schematic::{Junction, Point, Wire};
+        let top = std::path::PathBuf::from("/w/gw/top.snxsch");
+        let mut app = fx::app_workspace("/w/gw", &["top.snxsch"]);
+        let sheet = fx::sheet_with_net("R_TOP", "TOP_NET", &[]);
+        let second = crate::schematic_runtime::SchematicRenderCache::from_sheet(&sheet);
+        fx::open_with(&mut app.document_state, &top, sheet.clone());
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "top".to_string(),
+            path: top.clone(),
+            cached_document: None,
+            dirty: false,
+            project_id: None,
+            kind: crate::app::TabKind::Schematic,
+        });
+        app.document_state.active_tab = 0;
+        app.document_state.active_path = Some(top.clone());
+        app.interaction_state.canvas.set_render_cache(Some(
+            crate::schematic_runtime::SchematicRenderCache::from_sheet(&sheet),
+        ));
+        let window = iced::window::Id::unique();
+        app.ui_state.windows.insert(
+            window,
+            crate::app::state::WindowKind::UndockedTab {
+                path: top,
+                title: "top".to_string(),
+            },
+        );
+        let mut slot = crate::canvas::CanvasSlot::default();
+        slot.set_render_cache(Some(second));
+        app.interaction_state.canvases.insert(window, slot);
+
+        let junction = Junction {
+            uuid: uuid::Uuid::new_v4(),
+            position: Point::new(50.0, 50.0),
+            diameter: 0.0,
+            minted: false,
+            unknown_columns: Default::default(),
+        };
+        app.apply_engine_command(
+            signex_engine::Command::PlaceJunction { junction },
+            true,
+            true,
+        );
+
+        // The undocked event path: the window's slot is swapped into the main one.
+        let mut swapped = app.interaction_state.canvases.remove(&window).unwrap();
+        std::mem::swap(&mut app.interaction_state.canvas, &mut swapped);
+        let wire = Wire {
+            uuid: uuid::Uuid::new_v4(),
+            start: Point::new(0.0, 0.0),
+            end: Point::new(10.0, 0.0),
+            stroke_width: 0.0,
+            unknown_columns: Default::default(),
+        };
+        app.apply_engine_command(
+            signex_engine::Command::PlaceWireSegment { wire },
+            true,
+            true,
+        );
+        std::mem::swap(&mut app.interaction_state.canvas, &mut swapped);
+        app.interaction_state.canvases.insert(window, swapped);
+
+        let engine = app
+            .document_state
+            .active_engine()
+            .unwrap()
+            .document()
+            .clone();
+        let other = app.interaction_state.canvases[&window]
+            .render_cache
+            .as_ref()
+            .unwrap()
+            .snapshot();
+        assert_eq!(other.junctions.len(), engine.junctions.len());
+        assert_eq!(other.wires.len(), engine.wires.len());
+    }
+
     /// The export fixture, on purpose: the whole point is that both paths
     /// answer "what sheets does this project consist of" the same way.
     fn app_with_a_child_only_on_disk() -> (Signex, std::path::PathBuf) {
