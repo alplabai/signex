@@ -143,9 +143,7 @@ impl Signex {
     /// below the chrome strip; scoring + ranking happens in the
     /// `command_palette` module so this view stays a thin renderer.
     pub(super) fn view_command_palette_dropdown(&self) -> Element<'_, Message> {
-        use crate::app::command_palette::{
-            CommandSource, MAX_RESULTS, build_catalog, rank_results,
-        };
+        use crate::app::command_palette::{CommandSource, MAX_RESULTS};
         use iced::widget::{Space, button, column, container, row, scrollable, text};
         use iced::{Alignment, Background, Border, Color};
 
@@ -157,9 +155,9 @@ impl Signex {
         let accent_c = crate::styles::ti(tokens.accent);
         let hover_c = crate::styles::ti(tokens.hover);
 
-        let catalog = build_catalog(self);
-        let ranked = rank_results(&catalog, &self.ui_state.command_palette.query);
-        let total = ranked.len();
+        // Ranked in `update` (`refresh_command_palette_results`), read here.
+        let results = &self.ui_state.command_palette.results;
+        let total = self.ui_state.command_palette.total_matches;
         let selected = self
             .ui_state
             .command_palette
@@ -167,8 +165,7 @@ impl Signex {
             .min(total.saturating_sub(1));
 
         let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(MAX_RESULTS.min(total));
-        for (display_idx, &(catalog_idx, _score)) in ranked.iter().take(MAX_RESULTS).enumerate() {
-            let entry = &catalog[catalog_idx];
+        for (display_idx, entry) in results.iter().enumerate() {
             let is_active = display_idx == selected;
             let row_bg = if is_active {
                 Some(Background::Color(hover_c))

@@ -36,6 +36,9 @@ impl Signex {
                 self.refresh_panel_ctx();
             }
             crate::panels::PanelMsg::ClearErc => {
+                // Drop any in-flight run's result too.
+                self.ui_state.erc_run_generation += 1;
+                self.ui_state.erc_running = false;
                 self.ui_state.erc_violations.clear();
                 self.ui_state.erc_violations_by_path.clear();
                 self.ui_state.erc_focus_global_index = None;
