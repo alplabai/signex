@@ -37,7 +37,7 @@ fn column_value(c: &signex_output::BomColumn, r: &signex_output::BomRow) -> Stri
 /// the modal and the CSV/HTML/XLSX the user exports next never disagree — a
 /// plain `str` compare here would show R1, R10, R2 over an export reading
 /// R1, R2, R10. Every other column sorts case-insensitively on its cell text.
-fn sorted_row_order(
+pub(in crate::app) fn sorted_row_order(
     rows: &[signex_output::BomRow],
     columns: &[signex_output::BomColumn],
     sort: Option<(usize, bool)>,
@@ -263,12 +263,15 @@ impl Signex {
             .width(Length::Fixed(table_width.max(100.0)))
             .into();
 
-        let row_order =
-            sorted_row_order(&preview.table.rows, &preview.options.columns, preview.sort);
+        // Display order is computed in `update` (`BomPreviewState::row_order`),
+        // never here.
+        let row_order = &preview.row_order;
 
         let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(preview.table.rows.len());
         for (visible_idx, &row_idx) in row_order.iter().enumerate() {
-            let r = &preview.table.rows[row_idx];
+            let Some(r) = preview.table.rows.get(row_idx) else {
+                continue;
+            };
             let alt_bg = if visible_idx % 2 == 0 {
                 Color::from_rgba(1.0, 1.0, 1.0, 0.0)
             } else {

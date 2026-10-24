@@ -50,7 +50,10 @@ impl Signex {
             .iter()
             .position(|c| matches!(c, signex_output::BomColumn::Designator))
             .map(|idx| (idx, true));
+        let row_order =
+            crate::app::view::dialogs::sorted_row_order(&table.rows, &opts.columns, default_sort);
         self.document_state.bom_preview = Some(crate::app::state::BomPreviewState {
+            row_order,
             options: opts,
             table,
             validation_report,

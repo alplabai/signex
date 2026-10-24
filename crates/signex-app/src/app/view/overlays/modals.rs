@@ -259,20 +259,6 @@ impl Signex {
         Some(backdrop.into())
     }
 
-    /// New Component modal was removed (v0.13); "Add Component" now
-    /// appends a draft row directly to the Library Browser table, so this
-    /// overlay deliberately contributes no layers.
-    ///
-    /// It used to compute the per-library class list here purely to keep
-    /// that code exercised; the same computation lives in
-    /// `library/browser/sidebar.rs` and `dispatch/library/browser/classes.rs`,
-    /// which are the real consumers, so the copy was dropped. Prune this
-    /// function together with the `library.new_component` state + messages
-    /// once the append-row-direct dispatcher migration lands.
-    pub(in crate::app::view) fn new_component_overlay(&self) -> Vec<Element<'_, Message>> {
-        Vec::new()
-    }
-
     /// F25 (2026-05-03) — Edit Component Details modal removed. Row click
     /// selects → Properties panel surfaces detail. Render branch retained
     /// behind `EDIT_MODAL_ENABLED` for one release; prune the supporting

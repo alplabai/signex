@@ -25,6 +25,7 @@ impl Signex {
                 // First keystroke promotes a passive (placeholder)
                 // chrome bar into a live palette.
                 self.ui_state.command_palette.open = true;
+                self.refresh_command_palette_results();
                 Task::none()
             }
             CommandPaletteMsg::MoveSelection(delta) => {
@@ -42,6 +43,7 @@ impl Signex {
     fn open_command_palette(&mut self) -> Task<Message> {
         self.ui_state.command_palette.open = true;
         self.ui_state.command_palette.selected_index = 0;
+        self.refresh_command_palette_results();
         // Focus + select-all so a fresh `Ctrl+Shift+P` can be typed
         // over without the user clearing the previous query manually.
         Task::batch([
@@ -50,13 +52,22 @@ impl Signex {
         ])
     }
 
-    fn move_command_palette_selection(&mut self, delta: i32) {
-        // Recompute the result count so wrapping respects the live
-        // query — saves carrying a separate "results_len" cache.
+    /// Rebuild the catalog and rank it against the live query, keeping the
+    /// top [`MAX_RESULTS`] for the dropdown to render.
+    fn refresh_command_palette_results(&mut self) {
         let catalog = build_catalog(self);
-        let total = rank_results(&catalog, &self.ui_state.command_palette.query)
-            .len()
-            .min(MAX_RESULTS);
+        let ranked = rank_results(&catalog, &self.ui_state.command_palette.query);
+        let palette = &mut self.ui_state.command_palette;
+        palette.total_matches = ranked.len();
+        palette.results = ranked
+            .iter()
+            .take(MAX_RESULTS)
+            .map(|&(catalog_idx, _)| catalog[catalog_idx].clone())
+            .collect();
+    }
+
+    fn move_command_palette_selection(&mut self, delta: i32) {
+        let total = self.ui_state.command_palette.total_matches.min(MAX_RESULTS);
         if total == 0 {
             self.ui_state.command_palette.selected_index = 0;
             return;
@@ -138,5 +149,32 @@ impl Signex {
                 kind: signex_types::schematic::SelectedKind::Symbol,
             }),
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::handlers::menu::export::tests::app_workspace;
+
+    #[test]
+    fn the_query_ranks_into_the_cache_the_view_reads() {
+        let dir = std::env::temp_dir().join(format!("signex-palette-{}", uuid::Uuid::new_v4()));
+        let mut app = app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"]);
+
+        let _ =
+            app.dispatch_command_palette_message(CommandPaletteMsg::QueryChanged(String::new()));
+        let everything = app.ui_state.command_palette.total_matches;
+        assert!(everything > 0);
+        assert_eq!(
+            app.ui_state.command_palette.results.len(),
+            everything.min(MAX_RESULTS)
+        );
+
+        let _ = app.dispatch_command_palette_message(CommandPaletteMsg::QueryChanged(
+            "zzzzqqqqxxxx".to_string(),
+        ));
+        assert_eq!(app.ui_state.command_palette.total_matches, 0);
+        assert!(app.ui_state.command_palette.results.is_empty());
     }
 }

@@ -235,12 +235,35 @@ fn pcb_canvas_zooms_about_its_centre() {
     assert!(pcb.zoom_about_centre(false, 1.1));
 }
 
+/// Send `message` and run every task it (transitively) produces to
+/// completion, the way the iced runtime would - ERC and the Annotate preview
+/// finish on background tasks, so a bare `update` leaves them pending.
+fn settle(app: &mut Signex, message: Message) {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let mut pending = vec![message];
+    while let Some(message) = pending.pop() {
+        let task = app.update(message);
+        let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+            continue;
+        };
+        runtime.block_on(async {
+            while let Some(action) = futures::StreamExt::next(&mut stream).await {
+                if let iced_runtime::Action::Output(next) = action {
+                    pending.push(next);
+                }
+            }
+        });
+    }
+}
+
 #[test]
 fn annotate_all_off_locks_every_listed_symbol_and_all_on_unlocks_them() {
     let a = uuid::Uuid::new_v4();
     let b = uuid::Uuid::new_v4();
     let (mut app, _path) = app_with(vec![symbol(a, "R?", 0.0), symbol(b, "R?", 10.0)]);
 
+    // The dialog lists what its background load found, so open it first.
+    settle(&mut app, Message::Annotate(AnnotateMsg::OpenDialog));
     let _ = app.update(Message::Annotate(AnnotateMsg::SetAllLocked(true)));
     assert!(app.ui_state.annotate_locked.contains(&a));
     assert!(app.ui_state.annotate_locked.contains(&b));

@@ -56,15 +56,11 @@ impl Signex {
         // `handle_annotate` acts on, so the dialog and the operation cannot
         // describe different sheets (#406).
         //
-        // This reads unopened sheets from disk, on every frame this modal
-        // renders, which `view` is not supposed to do. Deliberately left:
-        // the alternative is a snapshot cached in state, and a snapshot goes
-        // stale against the live state `handle_annotate` reads — which is
-        // precisely the preview-disagrees-with-the-action bug above, bought
-        // back for a frame-rate win nobody has asked for. Lift it into a Task
-        // when the parse is measured to matter, and invalidate it on every
-        // document mutation when you do.
-        let proposed = self.preview_project_annotations();
+        // The rows come from `ui_state.annotate_preview`, loaded off-thread
+        // and re-fetched whenever the open documents' content fingerprint
+        // changes (see `handlers/erc/annotate_preview.rs`), so a cached
+        // preview cannot disagree with the action it previews (#111).
+        let proposed = &self.ui_state.annotate_preview.entries;
         let total_symbols: usize = proposed.len();
         let current_sheet_name = self
             .document_state
@@ -403,14 +399,18 @@ impl Signex {
         if proposed.is_empty() {
             rows_col = rows_col.push(
                 container(
-                    text("No symbols need annotation — every reference has a number.")
-                        .size(11)
-                        .color(text_muted),
+                    text(if self.ui_state.annotate_preview.loading {
+                        "Loading project sheets…"
+                    } else {
+                        "No symbols need annotation — every reference has a number."
+                    })
+                    .size(11)
+                    .color(text_muted),
                 )
                 .padding([10, 12]),
             );
         } else {
-            for entry in &proposed {
+            for entry in proposed {
                 let is_locked = locked_set.contains(&entry.uuid);
                 // Rows that actually change highlight in the accent color;
                 // unchanged rows fade into the muted palette. Locked rows

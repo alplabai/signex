@@ -42,6 +42,12 @@ pub struct CommandPaletteState {
     /// Highlighted row in the result list (0-based, clamped to results
     /// at render time).
     pub selected_index: usize,
+    /// The top [`MAX_RESULTS`] ranked entries for `query`, refreshed in
+    /// `update` when the palette opens or the query changes, so `view` only
+    /// reads them instead of rebuilding and re-ranking the catalog per frame.
+    pub results: Vec<CommandEntry>,
+    /// How many catalog entries matched `query` (before the cap).
+    pub total_matches: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

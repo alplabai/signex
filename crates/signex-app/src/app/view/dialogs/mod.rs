@@ -10,8 +10,8 @@ use super::*;
 use iced::Color;
 
 mod annotate;
-mod annotate_preview;
 mod bom;
+pub(in crate::app) use bom::sorted_row_order;
 mod confirms;
 mod erc;
 mod project;

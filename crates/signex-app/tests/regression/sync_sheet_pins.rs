@@ -15,6 +15,27 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
+/// Send `message` and run every task it (transitively) produces to
+/// completion, the way the iced runtime would - ERC and the Annotate preview
+/// finish on background tasks, so a bare `update` leaves them pending.
+fn settle(app: &mut Signex, message: Message) {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let mut pending = vec![message];
+    while let Some(message) = pending.pop() {
+        let task = app.update(message);
+        let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+            continue;
+        };
+        runtime.block_on(async {
+            while let Some(action) = futures::StreamExt::next(&mut stream).await {
+                if let iced_runtime::Action::Output(next) = action {
+                    pending.push(next);
+                }
+            }
+        });
+    }
+}
+
 fn empty_sheet() -> SchematicSheet {
     SchematicSheet {
         unknown: Default::default(),
@@ -340,7 +361,7 @@ fn deleting_the_last_child_label_drops_its_stale_auto_pin_and_the_erc_finding() 
     // The user deletes the only label in the child and saves it.
     write_sheet(&f.child_path, empty_sheet());
     sync(&mut f.app);
-    let _ = f.app.update(Message::Erc(ErcMsg::Run));
+    settle(&mut f.app, Message::Erc(ErcMsg::Run));
 
     assert!(
         named(&pins_of(&f), "SDA").is_none(),
@@ -361,7 +382,7 @@ fn padded_label_is_cleared_by_erc_and_synced_under_the_trimmed_name() {
     let mut f = fixture(Some(child));
 
     sync(&mut f.app);
-    let _ = f.app.update(Message::Erc(ErcMsg::Run));
+    settle(&mut f.app, Message::Erc(ErcMsg::Run));
 
     let pins = pins_of(&f);
     assert!(
@@ -391,7 +412,7 @@ fn hier_pin_messages(app: &Signex) -> Vec<String> {
 #[test]
 fn sync_clears_the_bad_hier_sheet_pin_drift_on_the_next_erc_run() {
     let mut f = fixture(Some(child_with_labels()));
-    let _ = f.app.update(Message::Erc(ErcMsg::Run));
+    settle(&mut f.app, Message::Erc(ErcMsg::Run));
     let drift = hier_pin_messages(&f.app);
     assert!(
         drift.iter().any(|m| m.contains("Sheet pin 'OLD_AUTO'")),
@@ -403,7 +424,7 @@ fn sync_clears_the_bad_hier_sheet_pin_drift_on_the_next_erc_run() {
     );
 
     sync(&mut f.app);
-    let _ = f.app.update(Message::Erc(ErcMsg::Run));
+    settle(&mut f.app, Message::Erc(ErcMsg::Run));
 
     let after = hier_pin_messages(&f.app);
     assert!(

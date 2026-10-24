@@ -287,6 +287,11 @@ pub struct UiState {
     /// Global cursor into the flattened ERC diagnostics list spanning all
     /// sheets in `erc_violations_by_path`. Used by next/prev navigation.
     pub erc_focus_global_index: Option<usize>,
+    /// Token of the newest ERC run; a finished run applies only if it still
+    /// matches (#111).
+    pub erc_run_generation: u64,
+    /// An ERC run is in flight; the ERC panel shows "Running…".
+    pub erc_running: bool,
     /// Cached authoritative project netlist (ADR-0002 D7). Derived state, held
     /// like any other Model state: recomputed in `update` off the shared sheet
     /// view and invalidated whenever a schematic edit touches connectivity
@@ -348,6 +353,9 @@ pub struct UiState {
     /// Exposed as per-row checkboxes in the Annotate dialog; the engine
     /// skips these uuids in `annotate_with_seed_and_locks`.
     pub annotate_locked: std::collections::HashSet<uuid::Uuid>,
+    /// Cached Annotate-dialog preview; loaded off-thread and re-derived in
+    /// `update`, never in `view` (#111).
+    pub annotate_preview: crate::app::handlers::erc::AnnotatePreviewCache,
     /// Altium-style rubber-band selection mode. Drives how the box
     /// drag classifies hits (Inside / Outside / TouchingLine).
     pub selection_mode: crate::schematic_runtime::hit_test::SelectionMode,

@@ -59,10 +59,9 @@ impl ProjectSheetSet {
 /// cached canvas/ERC netlist, the ERC run, annotate and the duplicate-designator
 /// reset. Deriving the page list and the root here, once, is the point — each
 /// of those used to do it slightly differently and they disagreed (#406).
-pub(crate) fn assemble_active_project_sheets(
-    document_state: &DocumentState,
-) -> (Vec<PathBuf>, ProjectSheetSet) {
-    let pages: Vec<PathBuf> = document_state
+/// The page paths the project owning the active document declares.
+pub(crate) fn declared_pages(document_state: &DocumentState) -> Vec<PathBuf> {
+    document_state
         .active_document_project()
         .map(|p| {
             let dir = p.dir();
@@ -72,7 +71,13 @@ pub(crate) fn assemble_active_project_sheets(
                 .map(|s| dir.join(&s.filename))
                 .collect()
         })
-        .unwrap_or_default();
+        .unwrap_or_default()
+}
+
+pub(crate) fn assemble_active_project_sheets(
+    document_state: &DocumentState,
+) -> (Vec<PathBuf>, ProjectSheetSet) {
+    let pages = declared_pages(document_state);
     let Some(active_path) = document_state.active_path.clone() else {
         return (pages, ProjectSheetSet::empty());
     };
@@ -157,8 +162,21 @@ pub(crate) fn load_sheet(
     document_state: &DocumentState,
     path: &Path,
 ) -> Result<Option<SchematicSheet>, String> {
-    if let Some(engine) = document_state.engines.get(path) {
-        return Ok(Some(engine.document().clone()));
+    load_sheet_with(
+        &|p| document_state.engines.get(p).map(|e| e.document().clone()),
+        path,
+    )
+}
+
+/// [`load_sheet`] over an arbitrary "is it open?" lookup, so a background job
+/// can read from a snapshot of the open sheets instead of borrowing the live
+/// [`DocumentState`].
+fn load_sheet_with(
+    open: &dyn Fn(&Path) -> Option<SchematicSheet>,
+    path: &Path,
+) -> Result<Option<SchematicSheet>, String> {
+    if let Some(sheet) = open(path) {
+        return Ok(Some(sheet));
     }
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
@@ -191,6 +209,41 @@ pub(crate) fn assemble_project_sheets(
     pages: &[PathBuf],
     root_path: &Path,
 ) -> ProjectSheetSet {
+    assemble_project_sheets_with(
+        &|p| document_state.engines.get(p).map(|e| e.document().clone()),
+        pages,
+        root_path,
+    )
+}
+
+/// The open sheets' documents, keyed by path: the part of [`DocumentState`] the
+/// assembler reads, cloned out so the (disk-reading) assembly can run on a
+/// blocking thread.
+pub(crate) type OpenSheets = HashMap<PathBuf, SchematicSheet>;
+
+/// Snapshot every open engine's document.
+pub(crate) fn open_sheets_snapshot(document_state: &DocumentState) -> OpenSheets {
+    document_state
+        .engines
+        .iter()
+        .map(|(path, engine)| (path.clone(), engine.document().clone()))
+        .collect()
+}
+
+/// [`assemble_project_sheets`] over a snapshot instead of the live state.
+pub(crate) fn assemble_project_sheets_from(
+    open: &OpenSheets,
+    pages: &[PathBuf],
+    root_path: &Path,
+) -> ProjectSheetSet {
+    assemble_project_sheets_with(&|p| open.get(p).cloned(), pages, root_path)
+}
+
+fn assemble_project_sheets_with(
+    open: &dyn Fn(&Path) -> Option<SchematicSheet>,
+    pages: &[PathBuf],
+    root_path: &Path,
+) -> ProjectSheetSet {
     let mut set = ProjectSheetSet {
         sheets: HashMap::new(),
         pages_outside_the_hierarchy: Vec::new(),
@@ -202,15 +255,10 @@ pub(crate) fn assemble_project_sheets(
     // Walk the root's subtree first and remember what it covered: that — not
     // the assembled set — is what the netlist stitcher will actually traverse,
     // so it is the only honest answer to "is this page in the netlist?".
-    let reachable = walk(
-        document_state,
-        &[root_path.to_path_buf()],
-        &mut visited,
-        &mut set,
-    );
+    let reachable = walk(open, &[root_path.to_path_buf()], &mut visited, &mut set);
     // Then the declared pages and their own subtrees, so ERC and the children
     // map see the whole project even where the hierarchy does not connect it.
-    walk(document_state, pages, &mut visited, &mut set);
+    walk(open, pages, &mut visited, &mut set);
 
     set.pages_outside_the_hierarchy = pages
         .iter()
@@ -224,7 +272,7 @@ pub(crate) fn assemble_project_sheets(
 /// Breadth-first load of `seeds` and their `child_sheets` descendants into
 /// `set`. Returns the `path_key`s actually loaded by this walk.
 fn walk(
-    document_state: &DocumentState,
+    open: &dyn Fn(&Path) -> Option<SchematicSheet>,
     seeds: &[PathBuf],
     visited: &mut HashSet<String>,
     set: &mut ProjectSheetSet,
@@ -241,7 +289,7 @@ fn walk(
             }
             continue;
         }
-        let sheet = match load_sheet(document_state, &path) {
+        let sheet = match load_sheet_with(open, &path) {
             Ok(Some(sheet)) => sheet,
             // Absent: the stitcher reports this as the MissingChild it is.
             Ok(None) => continue,
