@@ -57,6 +57,21 @@ impl ProjectSheetSet {
     }
 }
 
+/// The page paths the project owning the active document declares.
+pub(crate) fn declared_pages(document_state: &DocumentState) -> Vec<PathBuf> {
+    document_state
+        .active_document_project()
+        .map(|p| {
+            let dir = p.dir();
+            p.data
+                .sheets
+                .iter()
+                .map(|s| dir.join(&s.filename))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// The declared page paths of the project owning the active document, plus
 /// [`assemble_project_sheets`] over them — rooted at that project's root sheet,
 /// or at the active document itself when it belongs to no project.
@@ -68,9 +83,35 @@ impl ProjectSheetSet {
 pub(crate) fn assemble_active_project_sheets(
     document_state: &DocumentState,
 ) -> (Vec<PathBuf>, ProjectSheetSet) {
-    let project = document_state.active_document_project();
+    let Some(active_path) = document_state.active_path.as_deref() else {
+        let project = document_state.active_document_project();
+        return (
+            project_pages(project),
+            ProjectSheetSet {
+                fold: crate::app::state::project_case::fold_of(project),
+                ..ProjectSheetSet::empty()
+            },
+        );
+    };
+    assemble_project_sheets_for(document_state, active_path)
+}
+
+/// [`assemble_active_project_sheets`] for an explicit `source` document rather
+/// than the active tab (#852).
+pub(crate) fn assemble_project_sheets_for(
+    document_state: &DocumentState,
+    source: &Path,
+) -> (Vec<PathBuf>, ProjectSheetSet) {
+    let project = document_state.document_project(source);
     let fold = crate::app::state::project_case::fold_of(project);
-    let pages: Vec<PathBuf> = project
+    let pages = project_pages(project);
+    let root = resolve_netlist_root_for(document_state, source);
+    let set = assemble_project_sheets(document_state, &pages, &root, fold);
+    (pages, set)
+}
+
+fn project_pages(project: Option<&crate::app::state::LoadedProject>) -> Vec<PathBuf> {
+    project
         .map(|p| {
             let dir = p.dir();
             p.data
@@ -79,19 +120,7 @@ pub(crate) fn assemble_active_project_sheets(
                 .map(|s| dir.join(&s.filename))
                 .collect()
         })
-        .unwrap_or_default();
-    let Some(active_path) = document_state.active_path.clone() else {
-        return (
-            pages,
-            ProjectSheetSet {
-                fold,
-                ..ProjectSheetSet::empty()
-            },
-        );
-    };
-    let root = resolve_netlist_root(document_state).unwrap_or(active_path);
-    let set = assemble_project_sheets(document_state, &pages, &root, fold);
-    (pages, set)
+        .unwrap_or_default()
 }
 
 /// The sheet-walk order every whole-project Annotate operation must agree
@@ -142,6 +171,14 @@ pub(crate) fn resolve_netlist_root(document_state: &DocumentState) -> Option<Pat
         .or_else(|| document_state.active_path.clone())
 }
 
+/// [`resolve_netlist_root`] for an explicit `source` document.
+pub(crate) fn resolve_netlist_root_for(document_state: &DocumentState, source: &Path) -> PathBuf {
+    document_state
+        .document_project(source)
+        .and_then(project_root_sheet_path)
+        .unwrap_or_else(|| source.to_path_buf())
+}
+
 /// The warning to surface when [`resolve_netlist_root`] had to fall back to the
 /// active sheet *inside a project* because the project declares no root sheet
 /// (#338). `None` for a declared root and for a loose document, where rooting
@@ -150,15 +187,23 @@ pub(crate) fn resolve_netlist_root(document_state: &DocumentState) -> Option<Pat
 /// Kept apart from the resolver so the resolver stays pure (`view` reaches it
 /// through [`assemble_active_project_sheets`]); update-side callers log this.
 pub(crate) fn netlist_root_fallback_warning(document_state: &DocumentState) -> Option<String> {
-    let project = document_state.active_document_project()?;
+    let active = document_state.active_path.as_deref()?;
+    netlist_root_fallback_warning_for(document_state, active)
+}
+
+/// [`netlist_root_fallback_warning`] for an explicit `source` document.
+pub(crate) fn netlist_root_fallback_warning_for(
+    document_state: &DocumentState,
+    source: &Path,
+) -> Option<String> {
+    let project = document_state.document_project(source)?;
     if project.data.schematic_root.is_some() {
         return None;
     }
-    let active = document_state.active_path.as_ref()?;
     Some(format!(
         "Netlist: project '{}' declares no root sheet; rooting at the active sheet '{}'",
         project.data.name,
-        active.display()
+        source.display()
     ))
 }
 
@@ -170,8 +215,21 @@ pub(crate) fn load_sheet(
     document_state: &DocumentState,
     path: &Path,
 ) -> Result<Option<SchematicSheet>, String> {
-    if let Some(engine) = document_state.engines.get(path) {
-        return Ok(Some(engine.document().clone()));
+    load_sheet_with(
+        &|p| document_state.engines.get(p).map(|e| e.document().clone()),
+        path,
+    )
+}
+
+/// [`load_sheet`] over an arbitrary "is it open?" lookup, so a background job
+/// can read from a snapshot of the open sheets instead of borrowing the live
+/// [`DocumentState`].
+fn load_sheet_with(
+    open: &dyn Fn(&Path) -> Option<SchematicSheet>,
+    path: &Path,
+) -> Result<Option<SchematicSheet>, String> {
+    if let Some(sheet) = open(path) {
+        return Ok(Some(sheet));
     }
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
@@ -205,6 +263,44 @@ pub(crate) fn assemble_project_sheets(
     root_path: &Path,
     fold: CaseFold,
 ) -> ProjectSheetSet {
+    assemble_project_sheets_with(
+        &|p| document_state.engines.get(p).map(|e| e.document().clone()),
+        pages,
+        root_path,
+        fold,
+    )
+}
+
+/// The open sheets' documents, keyed by path: the part of [`DocumentState`] the
+/// assembler reads, cloned out so the (disk-reading) assembly can run on a
+/// blocking thread.
+pub(crate) type OpenSheets = HashMap<PathBuf, SchematicSheet>;
+
+/// Snapshot every open engine's document.
+pub(crate) fn open_sheets_snapshot(document_state: &DocumentState) -> OpenSheets {
+    document_state
+        .engines
+        .iter()
+        .map(|(path, engine)| (path.clone(), engine.document().clone()))
+        .collect()
+}
+
+/// [`assemble_project_sheets`] over a snapshot instead of the live state.
+pub(crate) fn assemble_project_sheets_from(
+    open: &OpenSheets,
+    pages: &[PathBuf],
+    root_path: &Path,
+    fold: CaseFold,
+) -> ProjectSheetSet {
+    assemble_project_sheets_with(&|p| open.get(p).cloned(), pages, root_path, fold)
+}
+
+fn assemble_project_sheets_with(
+    open: &dyn Fn(&Path) -> Option<SchematicSheet>,
+    pages: &[PathBuf],
+    root_path: &Path,
+    fold: CaseFold,
+) -> ProjectSheetSet {
     let mut set = ProjectSheetSet {
         sheets: HashMap::new(),
         pages_outside_the_hierarchy: Vec::new(),
@@ -218,7 +314,7 @@ pub(crate) fn assemble_project_sheets(
     // the assembled set — is what the netlist stitcher will actually traverse,
     // so it is the only honest answer to "is this page in the netlist?".
     let reachable = walk(
-        document_state,
+        open,
         &[root_path.to_path_buf()],
         &mut visited,
         &mut set,
@@ -226,7 +322,7 @@ pub(crate) fn assemble_project_sheets(
     );
     // Then the declared pages and their own subtrees, so ERC and the children
     // map see the whole project even where the hierarchy does not connect it.
-    walk(document_state, pages, &mut visited, &mut set, fold);
+    walk(open, pages, &mut visited, &mut set, fold);
 
     set.pages_outside_the_hierarchy = pages
         .iter()
@@ -240,7 +336,7 @@ pub(crate) fn assemble_project_sheets(
 /// Breadth-first load of `seeds` and their `child_sheets` descendants into
 /// `set`. Returns the path keys actually loaded by this walk.
 fn walk(
-    document_state: &DocumentState,
+    open: &dyn Fn(&Path) -> Option<SchematicSheet>,
     seeds: &[PathBuf],
     visited: &mut HashSet<String>,
     set: &mut ProjectSheetSet,
@@ -258,7 +354,7 @@ fn walk(
             }
             continue;
         }
-        let sheet = match load_sheet(document_state, &path) {
+        let sheet = match load_sheet_with(open, &path) {
             Ok(Some(sheet)) => sheet,
             // Absent: the stitcher reports this as the MissingChild it is.
             Ok(None) => continue,
@@ -293,7 +389,7 @@ pub(crate) struct AssembledGraph {
     pub(crate) sheets: HashMap<signex_net::SheetKey, SchematicSheet>,
     /// Per-parent resolution: `resolved[parent_key][cs.filename]` is the
     /// child's key — the shape [`signex_net::ProjectGraph::resolved`] and
-    /// [`signex_erc::run_with_project`] both take.
+    /// [`signex_erc::run_with_project`] (as `resolutions`) both take.
     pub(crate) resolved: HashMap<signex_net::SheetKey, HashMap<String, signex_net::SheetKey>>,
     /// Structural problems found while assembling the graph.
     pub(crate) issues: Vec<signex_net::StitchIssue>,

@@ -35,6 +35,9 @@
 #[path = "regression/close_support.rs"]
 mod close_support;
 
+#[path = "regression/settle_support.rs"]
+mod settle_support;
+
 #[path = "regression/project.rs"]
 mod project;
 
@@ -151,6 +154,8 @@ mod dead_schematic_controls;
 mod idle_cursor_move;
 #[path = "regression/library_delete_undo.rs"]
 mod library_delete_undo;
+#[path = "regression/newer_minor_read_only.rs"]
+mod newer_minor_read_only;
 #[path = "regression/primitive_container_merge.rs"]
 mod primitive_container_merge;
 #[path = "regression/primitive_save_cascade.rs"]
@@ -189,3 +194,7 @@ mod click_click_move;
 // #925 — non-finite grid steps are refused into the Messages panel.
 #[path = "regression/grid_step_refusal.rs"]
 mod grid_step_refusal;
+
+// #961 — the Annotate dialog's order of processing drives the numbering.
+#[path = "regression/annotate_order.rs"]
+mod annotate_order;

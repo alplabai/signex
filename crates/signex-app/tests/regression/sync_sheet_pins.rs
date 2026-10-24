@@ -323,7 +323,7 @@ fn deleting_the_last_child_label_drops_its_stale_auto_pin_and_the_erc_finding() 
     // The user deletes the only label in the child and saves it.
     write_sheet(&f.child_path, empty_sheet());
     sync(&mut f.app);
-    let _ = f.app.update(Message::Erc(ErcMsg::Run));
+    crate::settle_support::settle(&mut f.app, Message::Erc(ErcMsg::Run));
 
     assert!(
         named(&pins_of(&f), "SDA").is_none(),
@@ -344,7 +344,7 @@ fn padded_label_is_cleared_by_erc_and_synced_under_the_trimmed_name() {
     let mut f = fixture(Some(child));
 
     sync(&mut f.app);
-    let _ = f.app.update(Message::Erc(ErcMsg::Run));
+    crate::settle_support::settle(&mut f.app, Message::Erc(ErcMsg::Run));
 
     let pins = pins_of(&f);
     assert!(
@@ -363,9 +363,12 @@ fn padded_label_is_cleared_by_erc_and_synced_under_the_trimmed_name() {
 }
 
 fn hier_pin_messages(app: &Signex) -> Vec<String> {
+    // Every sheet's list: a finding about a child's label is filed under the
+    // child sheet, where its coordinate lives (#956).
     app.ui_state
-        .erc_violations
-        .iter()
+        .erc_violations_by_path
+        .values()
+        .flatten()
         .filter(|v| v.rule == signex_erc::RuleKind::BadHierSheetPin)
         .map(|v| v.message.clone())
         .collect()
@@ -374,7 +377,7 @@ fn hier_pin_messages(app: &Signex) -> Vec<String> {
 #[test]
 fn sync_clears_the_bad_hier_sheet_pin_drift_on_the_next_erc_run() {
     let mut f = fixture(Some(child_with_labels()));
-    let _ = f.app.update(Message::Erc(ErcMsg::Run));
+    crate::settle_support::settle(&mut f.app, Message::Erc(ErcMsg::Run));
     let drift = hier_pin_messages(&f.app);
     assert!(
         drift.iter().any(|m| m.contains("Sheet pin 'OLD_AUTO'")),
@@ -386,7 +389,7 @@ fn sync_clears_the_bad_hier_sheet_pin_drift_on_the_next_erc_run() {
     );
 
     sync(&mut f.app);
-    let _ = f.app.update(Message::Erc(ErcMsg::Run));
+    crate::settle_support::settle(&mut f.app, Message::Erc(ErcMsg::Run));
 
     let after = hier_pin_messages(&f.app);
     assert!(

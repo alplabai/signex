@@ -280,6 +280,7 @@ impl Signex {
         title: String,
         sheet: SchematicSheet,
     ) {
+        warn_if_read_only(&path, sheet.unknown.newer_minor_source.as_deref());
         self.park_active_schematic_session();
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
         let scan_path = path.clone();
@@ -341,6 +342,7 @@ impl Signex {
 
     pub(crate) fn open_pcb_tab(&mut self, path: PathBuf, title: String, board: PcbBoard) {
         report_unusable_zone_holes(&path, &board);
+        warn_if_read_only(&path, board.unknown.newer_minor_source.as_deref());
         self.park_active_schematic_session();
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
         self.document_state.tabs.push(TabInfo {
@@ -609,6 +611,17 @@ pub(crate) fn report_unusable_zone_holes(path: &std::path::Path, board: &PcbBoar
              its outline, apart from the other holes)",
             path.display(),
             zones.join("; ")
+        ));
+    }
+}
+
+/// A document written by a newer Signex loads for viewing only: saving it
+/// would drop content this build cannot represent (the writer refuses).
+fn warn_if_read_only(path: &std::path::Path, newer_minor_source: Option<&str>) {
+    if let Some(token) = newer_minor_source {
+        crate::diagnostics::log_warning(format!(
+            "{} was written by a newer Signex ({token}); it is read-only in this build -- saving is refused",
+            path.display()
         ));
     }
 }

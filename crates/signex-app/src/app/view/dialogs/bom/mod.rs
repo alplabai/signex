@@ -20,6 +20,8 @@ mod rules;
 mod sidebar;
 mod table;
 
+pub(in crate::app) use table::sorted_row_order;
+
 impl Signex {
     pub(in crate::app::view) fn view_bom_preview(&self) -> Element<'_, Message> {
         let modal_w = 1000.0_f32;
