@@ -6,6 +6,7 @@
 //! raises an [`ErrorNotice`]. Re-pointing only changes the reference — no
 //! file is ever created, moved or renamed here.
 
+use crate::app::project_sheets::ownership_reference;
 use crate::app::state::ErrorNotice;
 
 use super::super::super::*;
@@ -52,6 +53,12 @@ impl Signex {
             ));
             return;
         }
+        if let Some(taken) = self.file_used_by_another_open_sheet(id, trimmed) {
+            self.refuse_child_sheet_edit(format!(
+                "Another sheet symbol in this project already references '{taken}'."
+            ));
+            return;
+        }
         self.apply_child_sheet_edit(id, None, Some(filename));
     }
 
@@ -90,6 +97,42 @@ impl Signex {
             .find(|c| c.uuid != id && c.name.trim().eq_ignore_ascii_case(name))
             .map(|c| c.name.clone())
     }
+
+    /// The reference of another open sheet symbol in the active project that
+    /// resolves to the same file as `filename` (typed against the active
+    /// sheet's folder). Each reference is resolved against the folder of the
+    /// sheet that carries it, so `a/x.snxsch` and `x.snxsch` held by sheets
+    /// in different folders are told apart. The engine only sees its own
+    /// document; the same-document clash is its to refuse.
+    fn file_used_by_another_open_sheet(&self, id: uuid::Uuid, filename: &str) -> Option<String> {
+        let active = self.document_state.active_path.as_ref()?;
+        let target = file_identity(&ownership_reference(active.parent()?, filename)?);
+        self.document_state
+            .engine_entries_in_active_document_project()
+            .into_iter()
+            .filter(|(path, _)| *path != active)
+            .find_map(|(path, engine)| {
+                let dir = path.parent()?;
+                engine
+                    .document()
+                    .child_sheets
+                    .iter()
+                    .filter(|c| c.uuid != id)
+                    .find(|c| {
+                        ownership_reference(dir, &c.filename)
+                            .is_some_and(|p| file_identity(&p) == target)
+                    })
+                    .map(|c| c.filename.clone())
+            })
+    }
+}
+
+/// Case- and separator-insensitive key for a resolved sheet path, matching
+/// the engine's own file-reference comparison.
+fn file_identity(path: &std::path::Path) -> String {
+    path.to_string_lossy()
+        .replace('\\', "/")
+        .to_ascii_lowercase()
 }
 
 /// The buffered text for sheet `id`, clearing the buffer either way.

@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use tempfile::TempDir;
 
-fn empty_sheet() -> SchematicSheet {
+pub(crate) fn empty_sheet() -> SchematicSheet {
     SchematicSheet {
         uuid: uuid::Uuid::new_v4(),
         version: 0,

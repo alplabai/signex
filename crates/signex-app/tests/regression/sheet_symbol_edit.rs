@@ -173,3 +173,83 @@ fn the_default_stem_skips_an_unlisted_sheet_already_on_disk() {
         "the existing file must be left alone"
     );
 }
+
+#[test]
+fn a_file_another_sheet_of_the_project_references_is_refused() {
+    use signex_app::app::{LoadedProject, TabInfo, TabKind};
+    use signex_types::project::{ProjectData, SheetEntry};
+
+    let tmp = TempDir::new().expect("tempdir");
+    let (mut app, _first, root) = app_with_one_sheet(&tmp);
+    // `root` references sheet1.snxsch. A second open sheet of the same project
+    // places its own symbol (default sheet2.snxsch).
+    let other = tmp.path().join("other.snxsch");
+    app.document_state.engines.insert(
+        other.clone(),
+        signex_engine::Engine::new(super::place_sheet_tool::empty_sheet()).expect("engine"),
+    );
+    app.document_state.tabs.push(TabInfo {
+        title: "other".to_string(),
+        path: other.clone(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: TabKind::Schematic,
+    });
+    let project = app.document_state.mint_project_id();
+    app.document_state.projects.push(LoadedProject {
+        id: project,
+        path: tmp.path().join("P.snxprj"),
+        data: ProjectData {
+            name: "P".to_string(),
+            dir: tmp.path().to_string_lossy().into_owned(),
+            schematic_root: Some("root.snxsch".to_string()),
+            pcb_file: None,
+            sheets: ["root.snxsch", "other.snxsch"]
+                .iter()
+                .map(|f| SheetEntry {
+                    name: (*f).to_string(),
+                    filename: (*f).to_string(),
+                    symbols_count: 0,
+                    wires_count: 0,
+                    labels_count: 0,
+                    unknown: Default::default(),
+                })
+                .collect(),
+            variant_definitions: Vec::new(),
+            active_variant: None,
+            libraries: Vec::new(),
+            enable_git: false,
+            unknown: Default::default(),
+        },
+        pending_libraries: Default::default(),
+    });
+    app.document_state.active_tab = 1;
+    app.document_state.active_path = Some(other.clone());
+    let _ = app.update(Message::Tool(signex_app::toolbar::ToolMessage::SelectTool(
+        signex_app::app::Tool::Sheet,
+    )));
+    drag(&mut app, (10.0, 10.0), (50.0, 40.0));
+    let id = sheets(&app)[0].uuid;
+    let before = identity(&app);
+    app.document_state.dirty_paths.clear();
+    app.document_state.error_notice = None;
+
+    type_and_commit_file(&mut app, id, "sheet1.snxsch");
+
+    let notice = app
+        .document_state
+        .error_notice
+        .as_ref()
+        .expect("a file used by another sheet must raise a notice");
+    assert!(notice.detail.contains("already references"), "{notice:?}");
+    assert_eq!(identity(&app), before, "the edit must not apply");
+    assert!(!app.document_state.dirty_paths.contains(&other));
+
+    // A free file name is still accepted.
+    app.document_state.error_notice = None;
+    type_and_commit_file(&mut app, id, "free.snxsch");
+    assert!(app.document_state.error_notice.is_none());
+    assert_eq!(identity(&app).1, "free.snxsch");
+    let _ = root;
+}
