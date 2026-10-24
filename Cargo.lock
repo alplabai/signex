@@ -5332,6 +5332,7 @@ dependencies = [
  "iced",
  "iced_aw",
  "iced_runtime",
+ "iced_tiny_skia",
  "image",
  "log",
  "num-traits",
