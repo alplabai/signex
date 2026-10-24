@@ -330,6 +330,7 @@ impl Signex {
             grid_style: self.ui_state.preferences_draft_grid_style,
             auto_focus: self.ui_state.auto_focus,
             zoom_step: self.ui_state.effective_zoom_step(),
+            move_keeps_wires: self.ui_state.move_keeps_wires,
             draw_mode: self.interaction_state.draw_mode,
             wire_color_overrides: &self.ui_state.wire_color_overrides,
             selection_filters: &self.interaction_state.selection_filters,

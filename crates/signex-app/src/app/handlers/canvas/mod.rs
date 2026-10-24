@@ -164,6 +164,7 @@ impl Signex {
                             items: self.interaction_state.active_canvas().selected.clone(),
                             dx,
                             dy,
+                            keep_wires: self.ui_state.move_keeps_wires,
                         },
                         true,
                         true,

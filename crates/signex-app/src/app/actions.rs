@@ -360,6 +360,7 @@ impl Signex {
         let center_y = (min_y + max_y) / 2.0;
         let gs = crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm);
 
+        let keep_wires = self.ui_state.move_keeps_wires;
         let mut engine_commands = Vec::new();
         for anchor in &positions {
             let (target_x, target_y) = match action {
@@ -381,7 +382,12 @@ impl Signex {
                     anchor.uuid,
                     anchor.kind,
                 )];
-                engine_commands.push(signex_engine::Command::MoveSelection { items, dx, dy });
+                engine_commands.push(signex_engine::Command::MoveSelection {
+                    items,
+                    dx,
+                    dy,
+                    keep_wires,
+                });
             }
         }
 
@@ -409,6 +415,7 @@ impl Signex {
                                 items,
                                 dx,
                                 dy: 0.0,
+                                keep_wires,
                             });
                         }
                     }
@@ -428,6 +435,7 @@ impl Signex {
                                 items,
                                 dx: 0.0,
                                 dy,
+                                keep_wires,
                             });
                         }
                     }

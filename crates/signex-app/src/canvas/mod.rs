@@ -6,6 +6,7 @@
 //! - overlay: selection, cursor, wire-in-progress (cleared every frame)
 
 mod camera;
+mod drag_preview;
 mod draw;
 mod erc_marker;
 pub mod grid;
@@ -331,6 +332,9 @@ pub struct CanvasViewPrefs<'a> {
     pub grid_style: crate::render_config::GridStyle,
     pub auto_focus: bool,
     pub zoom_step: f32,
+    /// Preview rubber-banded wires while a selection floats (mirrors the
+    /// "Keep wires connected when moving" preference).
+    pub move_keeps_wires: bool,
     pub draw_mode: crate::app::DrawMode,
     pub wire_color_overrides: &'a std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
     pub selection_filters: &'a std::collections::HashSet<crate::active_bar::SelectionFilter>,
@@ -476,7 +480,13 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         let shifted_snapshot =
             if let (Some((dx, dy)), Some(snap)) = (drag_offset, self.active_snapshot()) {
                 if !self.selected.is_empty() {
-                    Some(shift_snapshot_for_selection(snap, &self.selected, dx, dy))
+                    Some(drag_preview::snapshot(
+                        snap,
+                        &self.selected,
+                        dx,
+                        dy,
+                        self.prefs.move_keeps_wires,
+                    ))
                 } else {
                     None
                 }
@@ -822,6 +832,7 @@ mod tests {
             grid_style: crate::render_config::GridStyle::Dots,
             auto_focus: false,
             zoom_step: 1.1,
+            move_keeps_wires: true,
             draw_mode: crate::app::DrawMode::Ortho90,
             wire_color_overrides: overrides,
             selection_filters: filters,
