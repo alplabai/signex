@@ -676,23 +676,10 @@ impl Signex {
         }
     }
 
-    /// Walk the open libraries to find one whose root contains
-    /// `path` (e.g. `…/mylib.snxlib/symbols/foo.snxsym` lives under
-    /// `…/mylib.snxlib/`), and ask the matching adapter to reload
-    /// the primitive UUID encoded in the file. The adapter's
-    /// `reload_primitive` (where supported) repopulates its in-memory
-    /// cache so any Component Preview tabs that resolve through
-    /// `LibrarySet` see the new bytes on the next render.
-    ///
-    /// Best-effort — returns silently when the path isn't under a
-    /// mounted library or when the adapter has no reload hook.
-    fn reload_primitive_in_library_set(&mut self, _path: &std::path::Path) {
-        // Stubbed pending the corresponding `LibrarySet::reload_primitive`
-        // helper. The standalone editor tab already holds the
-        // authoritative copy of the primitive in memory and on-disk
-        // round-trips happen here; Component Preview tabs pull
-        // through `LibrarySet::resolve_*` on the next view, so the
-        // only hole this leaves is a Preview tab that has already
-        // resolved + cached its primitive in editor state.
+    /// Refresh the previews that already resolved a primitive from the
+    /// library `path` lives in, so a Component Preview tab draws the
+    /// bytes just saved instead of the copy it resolved earlier.
+    fn reload_primitive_in_library_set(&mut self, path: &std::path::Path) {
+        self.library.refresh_loaded_previews(path);
     }
 }

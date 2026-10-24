@@ -152,6 +152,8 @@ mod command_enablement;
 mod dead_schematic_controls;
 #[path = "regression/idle_cursor_move.rs"]
 mod idle_cursor_move;
+#[path = "regression/library_dangling_refs.rs"]
+mod library_dangling_refs;
 #[path = "regression/library_delete_undo.rs"]
 mod library_delete_undo;
 #[path = "regression/newer_minor_read_only.rs"]
