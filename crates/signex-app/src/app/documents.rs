@@ -128,22 +128,19 @@ impl SchematicTabSession {
         self.dirty = dirty;
     }
 
-    pub fn save(&mut self) -> Result<(), signex_engine::EngineError> {
-        self.engine.set_path(Some(self.path.clone()));
-        self.engine.save()?;
-        self.dirty = false;
-        Ok(())
-    }
-
-    pub fn save_as(&mut self, path: PathBuf) -> Result<(), signex_engine::EngineError> {
-        self.engine.save_as(&path)?;
+    /// A Save As write to `path` succeeded: re-key the session onto it. The
+    /// document counts as saved only if it has not changed since the
+    /// snapshot taken at `saved_revision`.
+    pub fn finish_save_as(&mut self, path: PathBuf, saved_revision: u64) {
+        self.engine.set_path(Some(path.clone()));
         self.title = path
             .file_stem()
             .map(|stem| stem.to_string_lossy().to_string())
             .unwrap_or_else(|| "Schematic".to_string());
         self.path = path;
-        self.dirty = false;
-        Ok(())
+        if self.engine.revision() == saved_revision {
+            self.dirty = false;
+        }
     }
 
     pub fn into_parts(self) -> (signex_engine::Engine, String, PathBuf, bool) {

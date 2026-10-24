@@ -249,6 +249,22 @@ fn loose_schematic_exports_itself_not_the_sticky_projects_sheets() {
     );
 }
 
+/// #109 — "Current page" must name the sheet in the active tab, not whichever
+/// sheet the project lists first.
+#[test]
+fn the_export_context_names_the_active_sheet_as_current() {
+    let mut ds = workspace("/w/a", &["top.snxsch", "power.snxsch"]);
+    let top = PathBuf::from("/w/a").join("top.snxsch");
+    let power = PathBuf::from("/w/a").join("power.snxsch");
+    open(&mut ds, &top, &[]);
+    open(&mut ds, &power, &[]);
+    ds.active_path = Some(power.clone());
+
+    let ctx = context(&ds);
+
+    assert_eq!(ctx.sheets[ctx.current_sheet_index()].path, power);
+}
+
 #[test]
 fn hierarchical_child_sheet_exports_its_owning_project() {
     // The critical one. `top.snxsch` is the only entry in ProjectA's persisted

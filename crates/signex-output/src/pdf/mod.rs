@@ -289,7 +289,11 @@ impl Exporter for PdfExporter {
             return Err(PdfError::NoSheets);
         }
 
-        let sheet_indices = resolve_page_range(&opts.page_range, ctx.sheets.len())?;
+        let sheet_indices = resolve_page_range(
+            &opts.page_range,
+            ctx.sheets.len(),
+            ctx.current_sheet_index(),
+        )?;
         let expr_tables = build_expression_tables(&ctx.sheets, ctx.netlist.as_ref());
         let (page_w_mm, page_h_mm) = opts.page_size.dimensions_mm(opts.orientation);
         let page_w_pt = (page_w_mm * MM_TO_PT) as f32;

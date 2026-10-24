@@ -807,4 +807,6 @@ impl<'a> SymbolCanvas<'a> {
 }
 
 #[cfg(test)]
+mod rotate_keys_tests;
+#[cfg(test)]
 mod tests;

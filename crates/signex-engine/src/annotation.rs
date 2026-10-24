@@ -63,6 +63,7 @@ impl Engine {
         scope: AnnotateScope<'_>,
         assigned: &mut HashMap<usize, String>,
     ) -> Result<bool, EngineError> {
+        self.revision = crate::next_revision();
         let before = self.document.clone();
         let AnnotateScope {
             parts,

@@ -162,9 +162,7 @@ impl Signex {
                     }
                 }
                 if diff {
-                    self.ui_state
-                        .net_color_undo
-                        .push(self.ui_state.wire_color_overrides.clone());
+                    self.record_net_color_undo();
                     for uuid in net_wire_uuids {
                         if pending.a == 0 {
                             self.ui_state.wire_color_overrides.remove(&uuid);

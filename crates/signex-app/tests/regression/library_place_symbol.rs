@@ -27,15 +27,15 @@ use signex_types::schematic::{NoConnect, Point, SchematicSheet, SymbolTransform,
 use std::path::PathBuf;
 use uuid::Uuid;
 
-struct Fixture {
+pub(crate) struct Fixture {
     _tmp: tempfile::TempDir,
-    snxlib: PathBuf,
-    library_id: Uuid,
-    symbol_id: Uuid,
-    row_id: Uuid,
+    pub(crate) snxlib: PathBuf,
+    pub(crate) library_id: Uuid,
+    pub(crate) symbol_id: Uuid,
+    pub(crate) row_id: Uuid,
 }
 
-fn two_unit_symbol() -> Symbol {
+pub(crate) fn two_unit_symbol() -> Symbol {
     let mut s = Symbol::empty("TWO-UNIT");
     s.designator = "U?".into();
     s.part_count = 2;
@@ -60,7 +60,7 @@ fn two_unit_symbol() -> Symbol {
 }
 
 /// A library with a two-unit symbol and one row bound to it.
-fn fixture() -> Fixture {
+pub(crate) fn fixture() -> Fixture {
     build("lib", None)
 }
 
@@ -157,7 +157,7 @@ fn build_with(name: &str, symbol_ref: Option<(Uuid, Uuid)>, symbol: Symbol) -> F
 }
 
 /// An app with an empty active sheet and the fixture library mounted.
-fn app_with_library(f: &Fixture) -> Signex {
+pub(crate) fn app_with_library(f: &Fixture) -> Signex {
     app_with_libraries(&[f])
 }
 
@@ -223,11 +223,11 @@ fn complete(
 }
 
 /// Worker + completion against the sheet `app_with_library` made active.
-fn place(app: &mut Signex, f: &Fixture) {
+pub(crate) fn place(app: &mut Signex, f: &Fixture) {
     complete(app, f, "place-364.snxsch", resolve(f, f.row_id));
 }
 
-fn doc(app: &Signex) -> &SchematicSheet {
+pub(crate) fn doc(app: &Signex) -> &SchematicSheet {
     app.document_state
         .active_engine()
         .expect("engine")
@@ -417,9 +417,11 @@ fn warned(app: &mut Signex, f: &Fixture, resolved: Box<ResolvedPlacement>) -> bo
     let _ = signex_app::diagnostics::init_logging();
     let before = signex_app::diagnostics::newest_entry_id().unwrap_or(0);
     complete(app, f, "place-364.snxsch", Ok(resolved));
-    signex_app::diagnostics::recent_entries()
-        .iter()
-        .any(|e| e.id > before && e.message.contains("keeps its existing copy of SNX-TWO"))
+    signex_app::diagnostics::recent_entries().iter().any(|e| {
+        e.id > before
+            && e.message.contains("keeps its existing copy")
+            && e.message.contains("Update from library")
+    })
 }
 
 #[test]
@@ -603,6 +605,7 @@ fn a_library_power_port_places_as_a_power_port() {
         netlist: None,
         netlist_sheet_placements: Vec::new(),
         netlist_sheets: Vec::new(),
+        current_sheet: None,
     };
     let table = signex_output::bom::rollup(&ctx, &Default::default());
     assert!(table.rows.is_empty(), "power ports stay out of the BOM");

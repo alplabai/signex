@@ -74,7 +74,7 @@ impl ColumnKind {
             ColumnKind::Mpn => r.primary_mpn.mpn.clone(),
             ColumnKind::Rev => r.version.clone(),
             ColumnKind::Symbol => {
-                if r.symbol_ref.uuid == uuid::Uuid::nil() {
+                if r.is_symbol_unbound() {
                     "—".to_string()
                 } else {
                     // Surface the short uuid prefix so the user has an
@@ -84,7 +84,7 @@ impl ColumnKind {
                 }
             }
             ColumnKind::Footprint => match &r.footprint_ref {
-                Some(fp) if fp.uuid != uuid::Uuid::nil() => {
+                Some(fp) if !r.is_footprint_unbound() => {
                     format!("• {:.8}", fp.uuid)
                 }
                 _ => "—".to_string(),
@@ -159,12 +159,12 @@ pub(super) fn derive_columns(
     columns.push(GridColumn {
         label: "Symbol".to_string(),
         kind: ColumnKind::Symbol,
-        width: 120.0,
+        width: 140.0,
     });
     columns.push(GridColumn {
         label: "Footprint".to_string(),
         kind: ColumnKind::Footprint,
-        width: 120.0,
+        width: 140.0,
     });
 
     // F19 — template-derived basic-parameter columns. Resolve unique

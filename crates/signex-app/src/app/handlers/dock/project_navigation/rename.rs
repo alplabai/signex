@@ -131,6 +131,10 @@ impl Signex {
             .map(|&idx| self.plan_reference_rewrites(idx, &state.target_path, new_name))
             .unwrap_or_default();
 
+        // A write still running for this sheet would recreate the old file
+        // (or land after the move); let it finish first. Same bounded wait
+        // as Save All's `try_save_dirty_path`.
+        self.document_state.document_saves.barrier().wait();
         if let Err(e) = std::fs::rename(&state.target_path, &new_path) {
             self.set_rename_error(&format!("Rename failed: {e}"));
             return iced::Task::none();

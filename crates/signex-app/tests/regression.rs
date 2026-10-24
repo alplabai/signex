@@ -64,6 +64,11 @@ mod diagnostics_routing;
 
 #[path = "regression/dock_layout_persist.rs"]
 mod dock_layout_persist;
+#[path = "regression/document_save_async.rs"]
+mod document_save_async;
+// #859 — rename / History restore wait for an in-flight document write.
+#[path = "regression/document_save_ordering.rs"]
+mod document_save_ordering;
 #[path = "regression/search_prefs_persist.rs"]
 mod search_prefs_persist;
 
@@ -121,6 +126,9 @@ mod history_reload_repair;
 #[path = "regression/library_browser_cell_commit.rs"]
 mod library_browser_cell_commit;
 
+#[path = "regression/library_new_component.rs"]
+mod library_new_component;
+
 #[path = "regression/render_config_grid_style.rs"]
 mod render_config_grid_style;
 
@@ -152,6 +160,8 @@ mod command_enablement;
 mod dead_schematic_controls;
 #[path = "regression/idle_cursor_move.rs"]
 mod idle_cursor_move;
+#[path = "regression/library_dangling_refs.rs"]
+mod library_dangling_refs;
 #[path = "regression/library_delete_undo.rs"]
 mod library_delete_undo;
 #[path = "regression/newer_minor_read_only.rs"]
@@ -177,6 +187,8 @@ mod symbol_undo_steps;
 
 #[path = "regression/library_place_symbol.rs"]
 mod library_place_symbol;
+#[path = "regression/library_symbol_drift.rs"]
+mod library_symbol_drift;
 
 #[path = "regression/canvas_editing_correctness.rs"]
 mod canvas_editing_correctness;

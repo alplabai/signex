@@ -453,6 +453,10 @@ impl LibraryAdapter for LocalGitAdapter {
         Ok(out)
     }
 
+    fn symbol_listing_is_partial(&self) -> bool {
+        !self.symbol_file_problems().is_empty()
+    }
+
     fn list_footprints(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
         self.list_primitive_summaries(PrimitiveKind::Footprint)
     }
