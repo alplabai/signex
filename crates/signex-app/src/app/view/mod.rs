@@ -581,7 +581,11 @@ impl Signex {
                 Surface::ProjectHint => start_screen::hint_view(tokens),
                 Surface::Start => {
                     let open_shortcut = self.keymap_shortcut_label("open_document", "Ctrl+O");
-                    start_screen::view(tokens, &open_shortcut)
+                    start_screen::view(
+                        tokens,
+                        &open_shortcut,
+                        self.ui_state.recent_projects.entries(),
+                    )
                 }
             }
         }
