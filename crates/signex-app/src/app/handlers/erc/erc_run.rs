@@ -5,9 +5,16 @@ use iced::Task;
 use super::super::super::*;
 
 impl Signex {
+    /// The run-time ERC configuration: the user's pin-matrix overrides laid
+    /// over the baseline matrix.
+    pub(crate) fn erc_config(&self) -> signex_erc::ErcConfig {
+        signex_erc::ErcConfig::with_pin_matrix_overrides(&self.ui_state.pin_matrix_overrides)
+    }
+
     pub(crate) fn handle_run_erc(&mut self) -> Task<Message> {
         let dsl_eval_fns = self.load_project_dsl_eval_fns();
         let overrides = self.ui_state.erc_severity_override.clone();
+        let config = self.erc_config();
         let apply_overrides = |violations: Vec<signex_erc::Violation>| {
             signex_erc::apply_overrides(violations, &overrides)
         };
@@ -96,19 +103,21 @@ impl Signex {
         for (path, snapshot) in &snapshots_by_path {
             let key = crate::app::project_sheets::sheet_key(path, base_dir.as_deref());
             let violations = if let Some(eval_fns) = dsl_eval_fns.as_ref() {
-                apply_overrides(signex_erc::run_with_project_and_dsl(
+                apply_overrides(signex_erc::run_with_project_dsl_and_config(
                     snapshot,
                     Some(&key),
                     &graph.resolved,
                     &graph.sheets,
                     eval_fns,
+                    &config,
                 ))
             } else {
-                apply_overrides(signex_erc::run_with_project(
+                apply_overrides(signex_erc::run_with_project_and_config(
                     snapshot,
                     Some(&key),
                     &graph.resolved,
                     &graph.sheets,
+                    &config,
                 ))
             };
             by_path.insert(path.clone(), violations);

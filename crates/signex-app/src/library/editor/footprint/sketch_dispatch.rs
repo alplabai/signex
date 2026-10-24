@@ -41,6 +41,20 @@ pub fn apply_sketch_edit(
     mutate_solve_or_revert(state, footprint, |fp| apply_edit_inner(fp, edit))
 }
 
+/// The warnings in `current` that were not in the previous solve's set,
+/// remembering `current` as the new set. A drag re-solves every frame
+/// with the same warnings; only a change in the set reaches the log.
+pub(super) fn take_unlogged_warnings(current: &[String], logged: &mut Vec<String>) -> Vec<String> {
+    let fresh = current
+        .iter()
+        .filter(|w| !logged.contains(w))
+        .cloned()
+        .collect();
+    logged.clear();
+    logged.extend_from_slice(current);
+    fresh
+}
+
 /// Surface a failed edit: Properties-strip warning plus the Messages
 /// panel. A named conflict was reverted and says so; any other failure
 /// (no convergence, an empty conflict) left the edit in place and says that.
@@ -540,6 +554,15 @@ pub(super) fn solve_and_bake(
                     &mut footprint.body_3d,
                     &mut state.solve_warnings,
                 )?;
+
+                // Bake warnings (a skipped over-cap array, a dropped
+                // feature) are failures the user must be able to see:
+                // the inspector strip is not the Messages panel.
+                for warning in
+                    take_unlogged_warnings(&state.solve_warnings, &mut state.logged_solve_warnings)
+                {
+                    crate::diagnostics::log_warning(format!("Sketch bake: {warning}"));
+                }
 
                 // v0.22 Phase D2 — refresh editor-side pads cache so
                 // the canvas + Pads-mode Properties panel see what

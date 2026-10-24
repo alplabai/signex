@@ -7,7 +7,8 @@ use signex_types::schematic::{LabelType, PinDirection, Point};
 use uuid::Uuid;
 
 use crate::context::{
-    ErcBus, ErcChildSheet, ErcContext, ErcLabel, ErcPin, ErcSheetPin, ErcSymbol, ErcWire, PaperSize,
+    ErcBus, ErcChildSheet, ErcContext, ErcLabel, ErcNet, ErcNetPin, ErcPin, ErcSheetPin, ErcSymbol,
+    ErcWire, PaperSize,
 };
 use crate::{RuleKind, Violation, engine};
 
@@ -148,6 +149,22 @@ pub(crate) fn context_for(kind: RuleKind) -> ErcContext {
             c.wires.push(wire(pt(5.0, -5.0), pt(5.0, 5.0)));
             c.labels.push(label("X", pt(5.0, 0.0), LabelType::Net));
         }
+        RuleKind::PinTypeConflict => {
+            // Two outputs on one wire.
+            c.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+            for (reference, at) in [("U1", pt(0.0, 0.0)), ("U2", pt(10.0, 0.0))] {
+                let mut s = symbol(reference, at);
+                s.pins.push(ErcPin {
+                    world_pos: at,
+                    number: "1".into(),
+                    electrical_type: PinDirection::Output,
+                    required: true,
+                    connected: true,
+                });
+                c.symbols.push(s);
+            }
+            c.nets.push(net_of(&c.symbols));
+        }
         RuleKind::PinsTouchNotConnected => {
             for r in ["R1", "R2"] {
                 let mut s = symbol(r, pt(10.0, 10.0));
@@ -163,6 +180,30 @@ pub(crate) fn context_for(kind: RuleKind) -> ErcContext {
         }
     }
     c
+}
+
+/// One net holding every pin of `symbols`, as `summarize_nets` would build it
+/// for symbols whose pins all sit on one wire.
+pub(crate) fn net_of(symbols: &[ErcSymbol]) -> ErcNet {
+    let pins: Vec<ErcNetPin> = symbols
+        .iter()
+        .flat_map(|s| {
+            s.pins.iter().map(|p| ErcNetPin {
+                symbol: s.uuid,
+                reference: s.reference.clone(),
+                position: p.world_pos,
+                direction: p.electrical_type,
+            })
+        })
+        .collect();
+    ErcNet {
+        name: String::new(),
+        class: String::new(),
+        pin_types: pins.iter().map(|p| p.direction).collect(),
+        pins,
+        has_driver: false,
+        has_pullup: false,
+    }
 }
 
 /// Every violation of `kind` that the fixture for `kind` produces.

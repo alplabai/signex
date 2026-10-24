@@ -9,3 +9,6 @@ mod batch;
 mod edits;
 mod place;
 mod structure;
+
+#[cfg(test)]
+mod register_lib_symbol_tests;

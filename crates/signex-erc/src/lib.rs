@@ -23,14 +23,17 @@ pub mod context;
 pub mod diagnostic;
 pub mod engine;
 #[cfg(test)]
+#[cfg(test)]
 mod fixtures;
 mod overrides;
+pub mod pin_matrix;
 pub mod rule;
 mod rules;
 
 pub use context::ErcContext;
 pub use diagnostic::{Diagnostic, LocationSpace};
 pub use overrides::apply_overrides;
+pub use pin_matrix::{ErcConfig, PinAxis, PinMatrix};
 pub use rule::{AnalysisScope, Applicability, RuleDefinition, RuleId, RuleTarget};
 
 /// What kind of violation this is. Stable identifier that maps to a severity
@@ -65,6 +68,10 @@ pub enum RuleKind {
     /// (issue #402) — a defensible runtime answer, but not one the user can
     /// predict from the geometry, so it is surfaced rather than assumed.
     AmbiguousLabelAnchor,
+    /// Two pins whose electrical types the pin connection matrix forbids
+    /// (two outputs, an output on a power rail, a driven no-connect, ...) share
+    /// a net. Severity per pair comes from the matrix, not from this rule.
+    PinTypeConflict,
     /// Pins of two different symbols sit on the same point with no wire,
     /// junction, label or no-connect there. Pin-to-pin contact is not a
     /// connection (ADR-0002 D5.1), so the netlist keeps them apart; this rule
@@ -88,12 +95,13 @@ impl RuleKind {
             RuleKind::PowerPortShort => "Power port short",
             RuleKind::SymbolOutsideSheet => "Symbol outside sheet boundary",
             RuleKind::AmbiguousLabelAnchor => "Ambiguous label anchor",
+            RuleKind::PinTypeConflict => "Pin type conflict",
             RuleKind::PinsTouchNotConnected => "Pins touch but are not connected",
         }
     }
 
     /// Every built-in rule, in the order the ERC dialog lists them.
-    pub const ALL: [RuleKind; 13] = [
+    pub const ALL: [RuleKind; 14] = [
         RuleKind::UnusedPin,
         RuleKind::DuplicateRefDesignator,
         RuleKind::HierPortDisconnected,
@@ -106,6 +114,7 @@ impl RuleKind {
         RuleKind::PowerPortShort,
         RuleKind::SymbolOutsideSheet,
         RuleKind::AmbiguousLabelAnchor,
+        RuleKind::PinTypeConflict,
         RuleKind::PinsTouchNotConnected,
     ];
 
@@ -119,7 +128,8 @@ impl RuleKind {
             RuleKind::DuplicateRefDesignator
             | RuleKind::BusBitWidthMismatch
             | RuleKind::BadHierSheetPin
-            | RuleKind::PowerPortShort => Severity::Error,
+            | RuleKind::PowerPortShort
+            | RuleKind::PinTypeConflict => Severity::Error,
             RuleKind::UnusedPin
             | RuleKind::HierPortDisconnected
             | RuleKind::DanglingWire
@@ -200,23 +210,31 @@ impl Violation {
     }
 }
 
-/// Run every enabled rule against the snapshot. Returns a flat list of
-/// violations in rule order.
+/// Run every enabled rule against the snapshot with the baseline pin
+/// connection matrix. Returns a flat list of violations in rule order.
 pub fn run(snapshot: &SchematicSheet) -> Vec<Violation> {
+    run_with_config(snapshot, &ErcConfig::default())
+}
+
+/// [`run`] with an explicit [`ErcConfig`] (the user's pin-matrix overrides).
+pub fn run_with_config(snapshot: &SchematicSheet, config: &ErcConfig) -> Vec<Violation> {
     let ctx = ErcContext::from_snapshot(snapshot);
-    engine::run_all(&ctx)
-        .into_iter()
-        .map(Violation::from)
-        .collect()
+    into_violations(engine::run_all_with_config(&ctx, config))
 }
 
 /// Run built-in ERC rules plus caller-provided DSL evaluator functions.
 pub fn run_with_dsl(snapshot: &SchematicSheet, dsl_rules: &[engine::EvalFn]) -> Vec<Violation> {
+    run_with_dsl_and_config(snapshot, dsl_rules, &ErcConfig::default())
+}
+
+/// [`run_with_dsl`] with an explicit [`ErcConfig`].
+pub fn run_with_dsl_and_config(
+    snapshot: &SchematicSheet,
+    dsl_rules: &[engine::EvalFn],
+    config: &ErcConfig,
+) -> Vec<Violation> {
     let ctx = ErcContext::from_snapshot(snapshot);
-    engine::run_all_with_dsl(&ctx, dsl_rules)
-        .into_iter()
-        .map(Violation::from)
-        .collect()
+    into_violations(engine::run_all_with_dsl_and_config(&ctx, dsl_rules, config))
 }
 
 /// Run ERC for a schematic in the context of a whole project. Cross-sheet
@@ -239,11 +257,28 @@ pub fn run_with_project(
     >,
     sheets: &std::collections::HashMap<signex_net::SheetKey, SchematicSheet>,
 ) -> Vec<Violation> {
+    run_with_project_and_config(
+        snapshot,
+        own_key,
+        resolutions,
+        sheets,
+        &ErcConfig::default(),
+    )
+}
+
+/// [`run_with_project`] with an explicit [`ErcConfig`].
+pub fn run_with_project_and_config(
+    snapshot: &SchematicSheet,
+    own_key: Option<&signex_net::SheetKey>,
+    resolutions: &std::collections::HashMap<
+        signex_net::SheetKey,
+        std::collections::HashMap<String, signex_net::SheetKey>,
+    >,
+    sheets: &std::collections::HashMap<signex_net::SheetKey, SchematicSheet>,
+    config: &ErcConfig,
+) -> Vec<Violation> {
     let ctx = ErcContext::from_snapshot_with_children(snapshot, own_key, resolutions, sheets);
-    engine::run_all(&ctx)
-        .into_iter()
-        .map(Violation::from)
-        .collect()
+    into_violations(engine::run_all_with_config(&ctx, config))
 }
 
 /// Run project-scoped ERC with built-in rules plus caller-provided DSL rules.
@@ -258,11 +293,34 @@ pub fn run_with_project_and_dsl(
     sheets: &std::collections::HashMap<signex_net::SheetKey, SchematicSheet>,
     dsl_rules: &[engine::EvalFn],
 ) -> Vec<Violation> {
+    run_with_project_dsl_and_config(
+        snapshot,
+        own_key,
+        resolutions,
+        sheets,
+        dsl_rules,
+        &ErcConfig::default(),
+    )
+}
+
+/// [`run_with_project_and_dsl`] with an explicit [`ErcConfig`].
+pub fn run_with_project_dsl_and_config(
+    snapshot: &SchematicSheet,
+    own_key: Option<&signex_net::SheetKey>,
+    resolutions: &std::collections::HashMap<
+        signex_net::SheetKey,
+        std::collections::HashMap<String, signex_net::SheetKey>,
+    >,
+    sheets: &std::collections::HashMap<signex_net::SheetKey, SchematicSheet>,
+    dsl_rules: &[engine::EvalFn],
+    config: &ErcConfig,
+) -> Vec<Violation> {
     let ctx = ErcContext::from_snapshot_with_children(snapshot, own_key, resolutions, sheets);
-    engine::run_all_with_dsl(&ctx, dsl_rules)
-        .into_iter()
-        .map(Violation::from)
-        .collect()
+    into_violations(engine::run_all_with_dsl_and_config(&ctx, dsl_rules, config))
+}
+
+fn into_violations(diagnostics: Vec<Diagnostic>) -> Vec<Violation> {
+    diagnostics.into_iter().map(Violation::from).collect()
 }
 
 /// Helper for rules to build a [`SelectedItem`] when they only have a uuid.

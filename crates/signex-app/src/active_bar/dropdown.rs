@@ -179,7 +179,7 @@ const SELECT_MODE: &[EntrySpec] = &[
 
 const SELECT: &[EntrySpec] = &[
     EntrySpec::item(ic::icon_dd_drag, "Drag", ActiveBarAction::Drag),
-    EntrySpec::item(ic::icon_dd_move, "Move", ActiveBarAction::MoveSelection),
+    EntrySpec::item(ic::icon_dd_move, "Move", ActiveBarAction::Move),
     EntrySpec::item(
         ic::icon_dd_move_sel,
         "Move Selection",
@@ -1142,7 +1142,7 @@ mod tests {
             false,
             &[
                 "ITEM:Drag|disabled=true|icon=true|checked=false|shortcut=None",
-                "ITEM:Move|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Move|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Move Selection|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Move Selection by X, Y...|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Drag Selection|disabled=true|icon=true|checked=false|shortcut=None",
@@ -1165,7 +1165,7 @@ mod tests {
             true,
             &[
                 "ITEM:Drag|disabled=true|icon=true|checked=false|shortcut=None",
-                "ITEM:Move|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Move|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Move Selection|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Move Selection by X, Y...|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Drag Selection|disabled=true|icon=true|checked=false|shortcut=None",

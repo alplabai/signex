@@ -17,14 +17,9 @@ pub fn move_selected(sym: &mut Symbol, sel: Option<SymbolSelection>, x: f64, y: 
         Some(SymbolSelection::Graphic(idx)) => {
             translate_graphic_to(sym, idx, x, y);
         }
-        // SymbolSelection::Field — no-op; the on-canvas designator /
-        // value drag re-binds against `ComponentRow` once that pipeline
-        // ships.
+        Some(SymbolSelection::Field(key)) => move_field_to(sym, key, x, y),
         // All / Multiple — delta-based movement handled by move_all / move_multiple.
-        Some(SymbolSelection::Field(_))
-        | Some(SymbolSelection::All)
-        | Some(SymbolSelection::Multiple { .. })
-        | None => {}
+        Some(SymbolSelection::All) | Some(SymbolSelection::Multiple { .. }) | None => {}
     }
 }
 
@@ -41,19 +36,32 @@ pub fn move_all(sym: &mut Symbol, dx: f64, dy: f64) {
     for graphic in &mut sym.graphics {
         translate_graphic_by(&mut graphic.kind, dx, dy);
     }
+    shift_placed_fields(sym, dx, dy);
 }
 
 /// Shift only the specified pins and graphics by `(dx, dy)` mm.
 ///
 /// Used when the user drags with `SymbolSelection::Multiple` active
 /// (box selection result). Out-of-range indices are silently skipped.
+///
+/// When the selection covers EVERY pin and graphic of `active_part` it is
+/// a whole-body move, so stored field positions shift too (like
+/// [`move_all`]); any narrower selection leaves the fields where they are.
 pub fn move_multiple(
     sym: &mut Symbol,
+    active_part: u8,
     pin_indices: &[usize],
     graphic_indices: &[usize],
     dx: f64,
     dy: f64,
 ) {
+    let covers_body = !(pin_indices.is_empty() && graphic_indices.is_empty())
+        && (0..sym.pins.len())
+            .filter(|&i| pin_on_part(&sym.pins[i], active_part))
+            .all(|i| pin_indices.contains(&i))
+        && (0..sym.graphics.len())
+            .filter(|&i| graphic_on_part(&sym.graphics[i], active_part))
+            .all(|i| graphic_indices.contains(&i));
     for &i in pin_indices {
         if let Some(pin) = sym.pins.get_mut(i) {
             pin.position[0] += dx;
@@ -64,6 +72,9 @@ pub fn move_multiple(
         if let Some(g) = sym.graphics.get_mut(i) {
             translate_graphic_by(&mut g.kind, dx, dy);
         }
+    }
+    if covers_body {
+        shift_placed_fields(sym, dx, dy);
     }
 }
 

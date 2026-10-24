@@ -277,6 +277,7 @@ impl Signex {
                 net_color_palette_open: false,
                 parameter_manager_open: false,
                 reorder_picker: None,
+                move_pick: None,
                 pin_matrix_overrides: crate::fonts::read_pin_matrix_overrides(),
                 annotate_locked: std::collections::HashSet::new(),
                 selection_mode: crate::schematic_runtime::hit_test::SelectionMode::default(),
@@ -395,6 +396,7 @@ impl Signex {
                 bom_preview: None,
                 pending_git_commits: Vec::new(),
                 inflight_git_commits: std::collections::HashSet::new(),
+                active_git_repos: std::collections::HashSet::new(),
                 pending_opens: std::collections::HashSet::new(),
             },
             interaction_state: InteractionState {
