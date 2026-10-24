@@ -375,6 +375,28 @@ impl Signex {
             })
     }
 
+    /// File references of every selected sheet symbol on the active sheet,
+    /// each distinct file once, in selection order.
+    pub(crate) fn selected_child_sheet_filenames(&self) -> Vec<String> {
+        let Some(engine) = self.document_state.active_engine() else {
+            return Vec::new();
+        };
+        let document = engine.document();
+        let mut filenames: Vec<String> = Vec::new();
+        for item in &self.interaction_state.active_canvas().selected {
+            if item.kind != signex_types::schematic::SelectedKind::ChildSheet {
+                continue;
+            }
+            let Some(sheet) = document.child_sheets.iter().find(|s| s.uuid == item.uuid) else {
+                continue;
+            };
+            if !filenames.contains(&sheet.filename) {
+                filenames.push(sheet.filename.clone());
+            }
+        }
+        filenames
+    }
+
     pub(crate) fn open_selected_child_sheet(&mut self) -> bool {
         if let Some(filename) = self.selected_child_sheet_filename() {
             self.open_or_focus_child_sheet(filename.as_str());

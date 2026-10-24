@@ -82,6 +82,8 @@ fn add_project(app: &mut Signex, dir: &Path) {
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
+        case_fold: Default::default(),
+        case_probed: false,
     });
 }
 

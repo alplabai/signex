@@ -61,15 +61,16 @@ impl Signex {
             MenuMessage::CycleGrid => Some(self.cycle_grid_size()),
             MenuMessage::ZoomIn | MenuMessage::ZoomOut => {
                 let zoom_in = matches!(msg, MenuMessage::ZoomIn);
+                let step = self.ui_state.effective_zoom_step();
                 if self.has_active_schematic() {
                     let canvas = self.interaction_state.active_canvas_mut();
-                    if canvas.zoom_about_centre(zoom_in) {
+                    if canvas.zoom_about_centre(zoom_in, step) {
                         canvas.clear_bg_cache();
                         canvas.clear_content_cache();
                     }
                 } else if self.has_active_pcb() {
                     let canvas = &mut self.interaction_state.pcb_canvas;
-                    if canvas.zoom_about_centre(zoom_in) {
+                    if canvas.zoom_about_centre(zoom_in, step) {
                         canvas.clear_bg_cache();
                         canvas.clear_content_cache();
                     }

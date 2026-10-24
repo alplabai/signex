@@ -101,18 +101,27 @@ pub(crate) fn directory_ignores_case(dir: &Path) -> bool {
     probe_with(&RealFs, dir)
 }
 
+/// [`directory_ignores_case`] without the safe-side fallback: `None` when the
+/// volume could not be asked (a missing, unreadable or lettered-entry-free
+/// directory with no usable ancestor), so a caller can tell the user instead
+/// of silently guessing (#694).
+pub(crate) fn probe_directory_case(dir: &Path) -> Option<bool> {
+    probe_tri_with(&RealFs, dir)
+}
+
 fn probe_with(fs: &impl CaseFs, dir: &Path) -> bool {
+    probe_tri_with(fs, dir).unwrap_or(true)
+}
+
+fn probe_tri_with(fs: &impl CaseFs, dir: &Path) -> Option<bool> {
     let mut current = dir.to_path_buf();
     loop {
         for name in fs.entry_names(&current) {
             if let Some(flipped) = flip_ascii_case(&name) {
-                return fs.is_same_entry(&current.join(&name), &current.join(flipped));
+                return Some(fs.is_same_entry(&current.join(&name), &current.join(flipped)));
             }
         }
-        match fs.parent_on_same_volume(&current) {
-            Some(parent) => current = parent,
-            None => return true,
-        }
+        current = fs.parent_on_same_volume(&current)?;
     }
 }
 
@@ -286,6 +295,23 @@ mod tests {
 
         assert!(probe_with(&fs, Path::new("/d")));
         assert!(probe_with(&FakeFs::default(), Path::new("/absent")));
+    }
+
+    #[test]
+    fn the_tri_state_probe_tells_insensitive_sensitive_and_undecidable_apart() {
+        let insensitive = FakeFs::default().dir("/ci", false, &["Top.snxsch"], false);
+        let sensitive = FakeFs::default().dir("/cs", true, &["Top.snxsch"], false);
+        let undecidable = FakeFs::default().dir("/none", true, &["123"], false);
+
+        assert_eq!(probe_tri_with(&insensitive, Path::new("/ci")), Some(true));
+        assert_eq!(probe_tri_with(&sensitive, Path::new("/cs")), Some(false));
+        assert_eq!(probe_tri_with(&undecidable, Path::new("/none")), None);
+        assert_eq!(
+            probe_tri_with(&FakeFs::default(), Path::new("/absent")),
+            None
+        );
+        // The bool wrapper keeps folding "undecidable" into "ignores case".
+        assert!(probe_with(&undecidable, Path::new("/none")));
     }
 
     #[test]

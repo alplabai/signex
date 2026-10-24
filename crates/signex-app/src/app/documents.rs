@@ -269,6 +269,9 @@ pub struct SymbolEditorState {
     /// switches reset this to a centered-origin home view so the
     /// symbol anchor opens in a predictable place.
     pub camera: crate::canvas::Camera,
+    /// Per-wheel-notch zoom factor (Preferences "Zoom speed"). Synced from
+    /// `UiState` on every update, like the PCB canvases' `zoom_step`.
+    pub zoom_step: f32,
     /// Last cursor world position over the canvas, in mm. Drives the
     /// status footer's X/Y readout. `None` when the cursor is
     /// outside the canvas. Per-tab — tracking the cursor is
@@ -364,6 +367,7 @@ impl SymbolEditorState {
             canvas_cache: iced::widget::canvas::Cache::default(),
             dirty: false,
             camera: crate::canvas::Camera::default(),
+            zoom_step: default_zoom_step(),
             cursor_mm: None,
             pending_view: None,
             selection_filter: Default::default(),
@@ -454,6 +458,9 @@ pub struct FootprintEditorState {
     pub panel_selected_idx: Option<usize>,
     pub state: crate::library::editor::footprint::state::FootprintEditorState,
     pub canvas_cache: iced::widget::canvas::Cache,
+    /// Per-wheel-notch zoom factor (Preferences "Zoom speed"); see
+    /// [`SymbolEditorState::zoom_step`].
+    pub zoom_step: f32,
     pub dirty: bool,
     /// v0.24 Phase 1 (Track B) — Undo history. Pre-mutation snapshots
     /// pushed by `push_history` ahead of each dispatcher mutation;
@@ -539,6 +546,7 @@ impl FootprintEditorState {
             panel_selected_idx: None,
             state,
             canvas_cache: iced::widget::canvas::Cache::default(),
+            zoom_step: default_zoom_step(),
             // An arc repaired on load differs from what is on disk, so the
             // document opens dirty and a save persists the repair.
             dirty: repaired,
@@ -848,4 +856,10 @@ impl std::fmt::Display for Tool {
             Tool::Sheet => write!(f, "Place Sheet"),
         }
     }
+}
+
+/// Zoom factor a fresh editor tab starts with, before the first update
+/// syncs the saved Preferences "Zoom speed" into it.
+fn default_zoom_step() -> f32 {
+    crate::canvas::Camera::zoom_step_factor(crate::canvas::Camera::ZOOM_STEP_PERCENT_DEFAULT)
 }

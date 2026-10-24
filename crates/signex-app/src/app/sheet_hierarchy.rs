@@ -32,7 +32,8 @@ use std::path::{Path, PathBuf};
 use signex_types::schematic::SchematicSheet;
 
 use crate::app::project_sheets::{lexically_normalize, resolve_child_reference};
-use crate::app::state::scope::path_key;
+pub(crate) use crate::app::state::scope::CaseFold;
+use crate::app::state::scope::path_key_with;
 
 /// Upper bound on nodes in one built tree. A shared sub-sheet instantiated
 /// twice at every level of a deep hierarchy doubles per level; without a bound
@@ -81,10 +82,10 @@ pub struct SheetNode {
 }
 
 impl SheetNode {
-    /// Whether this occurrence is the sheet stored at `path` (separator- and
-    /// case-insensitive on Windows, like every other sheet-path comparison).
-    pub fn is_at(&self, path: &Path) -> bool {
-        path_key(&self.path) == path_key(path)
+    /// Whether this occurrence is the sheet stored at `path`, compared under
+    /// the project's `fold` like every other sheet-path comparison.
+    pub fn is_at(&self, path: &Path, fold: CaseFold) -> bool {
+        path_key_with(&self.path, fold) == path_key_with(path, fold)
     }
 
     /// The node reached by following child indices from this one.
@@ -95,16 +96,19 @@ impl SheetNode {
     }
 }
 
-/// The identity two sheet paths are compared by (separator- and case-folded
-/// on Windows) — exposed so the panel keys its row markers the same way.
-pub(crate) fn sheet_path_key(path: &Path) -> String {
-    path_key(path)
+/// The identity two sheet paths are compared by under the project's `fold` —
+/// exposed so the panel keys its row markers the same way.
+pub(crate) fn sheet_path_key(path: &Path, fold: CaseFold) -> String {
+    path_key_with(path, fold)
 }
 
 /// The whole Navigator tree: the root sheet's occurrences, followed by any
 /// declared page the root does not reach (a flat project's other pages).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct SheetHierarchy {
+    /// The project's key rules the tree was built under; the panel keys its
+    /// rows with the same ones.
+    pub fold: CaseFold,
     pub root: Option<SheetNode>,
     /// Pages the project lists that no sheet reference reaches, as extra
     /// top-level rows after the root.
@@ -126,35 +130,38 @@ impl SheetHierarchy {
 
 /// What the builder looks sheets up in, keyed on the normalised path.
 struct Lookup<'a> {
+    fold: CaseFold,
     sheets: HashMap<String, &'a SchematicSheet>,
     unreadable: HashMap<String, &'a str>,
 }
 
-fn normalised_key(path: &Path) -> String {
-    path_key(&lexically_normalize(path))
+fn normalised_key(path: &Path, fold: CaseFold) -> String {
+    path_key_with(&lexically_normalize(path), fold)
 }
 
 impl<'a> Lookup<'a> {
     fn new(
         sheets: &'a HashMap<PathBuf, SchematicSheet>,
         unreadable: &'a [(PathBuf, String)],
+        fold: CaseFold,
     ) -> Self {
         let mut by_key: HashMap<String, &SchematicSheet> = HashMap::new();
         // Entries already stored under their canonical spelling win over an
         // alias of the same file, so the choice does not depend on map order.
         for (path, sheet) in sheets {
             if lexically_normalize(path) == *path {
-                by_key.insert(normalised_key(path), sheet);
+                by_key.insert(normalised_key(path, fold), sheet);
             }
         }
         for (path, sheet) in sheets {
-            by_key.entry(normalised_key(path)).or_insert(sheet);
+            by_key.entry(normalised_key(path, fold)).or_insert(sheet);
         }
         let unreadable = unreadable
             .iter()
-            .map(|(path, why)| (normalised_key(path), why.as_str()))
+            .map(|(path, why)| (normalised_key(path, fold), why.as_str()))
             .collect();
         Self {
+            fold,
             sheets: by_key,
             unreadable,
         }
@@ -162,14 +169,15 @@ impl<'a> Lookup<'a> {
 }
 
 /// Build the occurrence tree rooted at `root` over `sheets`, plus a subtree
-/// for every page in `loose_pages`.
+/// for every page in `loose_pages`, all keyed under the project's `fold`.
 pub(crate) fn build_sheet_hierarchy(
     sheets: &HashMap<PathBuf, SchematicSheet>,
     unreadable: &[(PathBuf, String)],
     root: &Path,
     loose_pages: &[PathBuf],
+    fold: CaseFold,
 ) -> SheetHierarchy {
-    let lookup = Lookup::new(sheets, unreadable);
+    let lookup = Lookup::new(sheets, unreadable, fold);
     let build = |path: &Path| {
         let filename = path
             .file_name()
@@ -191,6 +199,7 @@ pub(crate) fn build_sheet_hierarchy(
         )
     };
     SheetHierarchy {
+        fold,
         root: Some(build(root)),
         loose: loose_pages.iter().map(|page| build(page)).collect(),
     }
@@ -205,7 +214,7 @@ fn expand(
     ancestors: &mut Vec<String>,
     budget: &mut usize,
 ) -> SheetNode {
-    let key = normalised_key(&path);
+    let key = normalised_key(&path, lookup.fold);
     let leaf = |kind, detail: Option<String>| SheetNode {
         name: name.clone(),
         filename: filename.clone(),
@@ -276,18 +285,19 @@ fn expand(
 pub(crate) fn parent_sheet(
     sheets: &HashMap<PathBuf, SchematicSheet>,
     child: &Path,
+    fold: CaseFold,
 ) -> Option<PathBuf> {
-    let child_key = normalised_key(child);
+    let child_key = normalised_key(child, fold);
     let mut candidates: Vec<(&PathBuf, &SchematicSheet)> = sheets.iter().collect();
-    candidates.sort_by_key(|(path, _)| path_key(path));
+    candidates.sort_by_key(|(path, _)| path_key_with(path, fold));
     candidates
         .into_iter()
-        .filter(|(path, _)| normalised_key(path) != child_key)
+        .filter(|(path, _)| normalised_key(path, fold) != child_key)
         .find(|(path, sheet)| {
             let dir = path.parent().unwrap_or_else(|| Path::new(""));
             sheet.child_sheets.iter().any(|cs| {
                 resolve_child_reference(dir, &cs.filename)
-                    .is_some_and(|resolved| normalised_key(&resolved) == child_key)
+                    .is_some_and(|resolved| normalised_key(&resolved, fold) == child_key)
             })
         })
         .map(|(path, _)| path.clone())
@@ -325,7 +335,7 @@ mod tests {
     }
 
     fn build(sheets: &HashMap<PathBuf, SchematicSheet>, root: &Path) -> SheetNode {
-        build_sheet_hierarchy(sheets, &[], root, &[])
+        build_sheet_hierarchy(sheets, &[], root, &[], CaseFold::host_default())
             .root
             .expect("root")
     }
@@ -443,14 +453,17 @@ mod tests {
     fn parent_is_the_referencing_sheet() {
         let sheets = three_level();
         assert_eq!(
-            parent_sheet(&sheets, &p("adc.snxsch")),
+            parent_sheet(&sheets, &p("adc.snxsch"), CaseFold::host_default()),
             Some(p("mcu.snxsch"))
         );
         assert_eq!(
-            parent_sheet(&sheets, &p("mcu.snxsch")),
+            parent_sheet(&sheets, &p("mcu.snxsch"), CaseFold::host_default()),
             Some(p("root.snxsch"))
         );
-        assert_eq!(parent_sheet(&sheets, &p("root.snxsch")), None);
+        assert_eq!(
+            parent_sheet(&sheets, &p("root.snxsch"), CaseFold::host_default()),
+            None
+        );
     }
 
     #[test]
@@ -462,7 +475,7 @@ mod tests {
 
         for _ in 0..8 {
             assert_eq!(
-                parent_sheet(&sheets, &p("shared.snxsch")),
+                parent_sheet(&sheets, &p("shared.snxsch"), CaseFold::host_default()),
                 Some(p("a.snxsch"))
             );
         }
@@ -551,9 +564,15 @@ mod tests {
         sheets.insert(p("root.snxsch"), sheet(&[("Bad", "bad.snxsch")]));
         let unreadable = vec![(p("bad.snxsch"), "expected a sheet".to_string())];
 
-        let tree = build_sheet_hierarchy(&sheets, &unreadable, &p("root.snxsch"), &[])
-            .root
-            .expect("root");
+        let tree = build_sheet_hierarchy(
+            &sheets,
+            &unreadable,
+            &p("root.snxsch"),
+            &[],
+            CaseFold::host_default(),
+        )
+        .root
+        .expect("root");
 
         assert_eq!(tree.children[0].kind, SheetNodeKind::Unreadable);
         assert_eq!(tree.children[0].detail.as_deref(), Some("expected a sheet"));
@@ -564,7 +583,13 @@ mod tests {
         let mut sheets = three_level();
         sheets.insert(p("extra.snxsch"), sheet(&[]));
 
-        let h = build_sheet_hierarchy(&sheets, &[], &p("root.snxsch"), &[p("extra.snxsch")]);
+        let h = build_sheet_hierarchy(
+            &sheets,
+            &[],
+            &p("root.snxsch"),
+            &[p("extra.snxsch")],
+            CaseFold::host_default(),
+        );
 
         let names: Vec<_> = h.top_level().map(|n| n.name.as_str()).collect();
         assert_eq!(names, ["root", "extra"]);
@@ -582,8 +607,62 @@ mod tests {
         sheets.insert(p("x.snxsch"), sheet(&[]));
 
         assert_eq!(
-            parent_sheet(&sheets, &p("x.snxsch")),
+            parent_sheet(&sheets, &p("x.snxsch"), CaseFold::host_default()),
             Some(p("root.snxsch"))
+        );
+    }
+
+    #[test]
+    fn an_apfs_style_fold_finds_a_child_referenced_in_another_case() {
+        // One file, loaded as `child.snxsch`, referenced as `Child.snxsch`.
+        let mut sheets = HashMap::new();
+        sheets.insert(p("root.snxsch"), sheet(&[("C", "Child.snxsch")]));
+        sheets.insert(p("child.snxsch"), sheet(&[]));
+        let kind_under = |fold| {
+            build_sheet_hierarchy(&sheets, &[], &p("root.snxsch"), &[], fold)
+                .root
+                .expect("root")
+                .children[0]
+                .kind
+        };
+
+        assert_eq!(
+            kind_under(CaseFold::from_probe(true)),
+            SheetNodeKind::Present,
+            "the netlist stitches this sheet, so the Navigator must too"
+        );
+        assert_eq!(
+            kind_under(CaseFold::from_probe(false)),
+            SheetNodeKind::Missing,
+            "a case-sensitive volume has no such file"
+        );
+    }
+
+    #[test]
+    fn a_case_sensitive_fold_keeps_two_case_variant_files_apart() {
+        let mut sheets = HashMap::new();
+        sheets.insert(
+            p("root.snxsch"),
+            sheet(&[("U", "A.snxsch"), ("L", "a.snxsch")]),
+        );
+        sheets.insert(p("A.snxsch"), sheet(&[("X", "x.snxsch")]));
+        sheets.insert(p("a.snxsch"), sheet(&[]));
+        sheets.insert(p("x.snxsch"), sheet(&[]));
+
+        let root = build_sheet_hierarchy(
+            &sheets,
+            &[],
+            &p("root.snxsch"),
+            &[],
+            CaseFold::from_probe(false),
+        )
+        .root
+        .expect("root");
+
+        assert_eq!(root.children[0].children.len(), 1, "A.snxsch has its child");
+        assert!(
+            root.children[1].children.is_empty(),
+            "a.snxsch is its own file, not A.snxsch's twin"
         );
     }
 }

@@ -1,0 +1,86 @@
+format = "snxsym/v1"
+file_uuid = "3a3a79ea-de2d-4995-9dd1-736030c60c4c"
+display_name = "L"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols]]
+uuid = "53e23353-f544-4652-8123-b8666f5986b9"
+name = "L"
+anchor = [
+    0.0,
+    0.0,
+]
+pins_tsv = '''
+number	name	electrical	pos_x	pos_y	orientation	length	description	function	pin_package_length	propagation_delay_ns	designator_visible	name_visible	inside_symbol	inside_edge_symbol	outside_edge_symbol	outside_symbol	hidden	locked	part_number
+1	1	Passive	0	3.81	Down	2.54					true	false	None	None	None	None	false	false	1
+2	2	Passive	0	-3.81	Up	2.54					true	false	None	None	None	None	false	false	1
+'''
+designator = "L?"
+comment = "*"
+description = "Inductor (four-hump coil)."
+component_type = "Standard"
+mirrored = false
+version = "0.0.1"
+released = false
+part_count = 1
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "arc"
+center = [
+    0.0,
+    0.9525,
+]
+radius = 0.3175
+start_deg = 270.0
+end_deg = 90.0
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "arc"
+center = [
+    0.0,
+    0.3175,
+]
+radius = 0.3175
+start_deg = 270.0
+end_deg = 90.0
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "arc"
+center = [
+    0.0,
+    -0.3175,
+]
+radius = 0.3175
+start_deg = 270.0
+end_deg = 90.0
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "arc"
+center = [
+    0.0,
+    -0.9525,
+]
+radius = 0.3175
+start_deg = 270.0
+end_deg = 90.0
+
+[symbols.schematic_params]
