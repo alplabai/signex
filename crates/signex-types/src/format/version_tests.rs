@@ -16,9 +16,15 @@ fn snxsch_accepts_current_and_newer_minor_rejects_other_major() {
 
     let newer = SnxSchematic::parse(&format!("format = \"snxsch/1.7\"\n{SCH_ID}")).unwrap();
     assert!(newer.is_from_newer_minor());
-    // Saving must not stamp a newer file down to this build's minor.
-    let out = newer.write_string().unwrap();
-    assert!(out.starts_with("format = \"snxsch/1.7\""), "{out}");
+    // Saving would drop content this build cannot represent: refused.
+    let err = newer.write_string().unwrap_err();
+    assert!(err.to_string().contains("snxsch/1.7"), "{err}");
+    // Even re-wrapped (as the engine does), the source is remembered.
+    assert!(
+        SnxSchematic::new(newer.sheet.clone())
+            .write_string()
+            .is_err()
+    );
 
     for bad in ["snxsch/2", "snxsch/0.9", "snxpcb/1", "snxsch/x"] {
         let err = SnxSchematic::parse(&format!("format = \"{bad}\"\n{SCH_ID}")).unwrap_err();
@@ -28,7 +34,7 @@ fn snxsch_accepts_current_and_newer_minor_rejects_other_major() {
 }
 
 #[test]
-fn snxpcb_older_minor_saves_as_current_newer_minor_is_kept() {
+fn snxpcb_older_minor_saves_as_current_newer_minor_is_read_only() {
     let old = SnxPcb::parse(&format!("format = \"snxpcb/1\"\n{PCB_ID}")).unwrap();
     assert!(!old.is_from_newer_minor());
     let out = old.write_string().unwrap();
@@ -39,8 +45,9 @@ fn snxpcb_older_minor_saves_as_current_newer_minor_is_kept() {
 
     let newer = SnxPcb::parse(&format!("format = \"snxpcb/1.9\"\n{PCB_ID}")).unwrap();
     assert!(newer.is_from_newer_minor());
-    let out = newer.write_string().unwrap();
-    assert!(out.starts_with("format = \"snxpcb/1.9\""), "{out}");
+    let err = newer.write_string().unwrap_err();
+    assert!(err.to_string().contains("snxpcb/1.9"), "{err}");
+    assert!(SnxPcb::new(newer.board.clone()).write_string().is_err());
 
     assert!(SnxPcb::parse(&format!("format = \"snxpcb/2.0\"\n{PCB_ID}")).is_err());
 }

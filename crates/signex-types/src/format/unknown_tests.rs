@@ -327,7 +327,11 @@ pad_future = 5
     let orphan = board
         .footprints
         .iter()
-        .find(|f| f.uuid.is_nil())
+        .find(|f| {
+            f.pads.iter().any(|p| p.unknown.len() == 1)
+                && f.value.is_empty()
+                && f.footprint_id.is_empty()
+        })
         .expect("synthetic orphan footprint");
     assert!(orphan.unknown.is_empty());
     assert_eq!(orphan.pads[0].unknown.len(), 1);

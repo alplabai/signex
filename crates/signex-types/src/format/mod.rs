@@ -29,10 +29,11 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::pcb::{Footprint, PcbBoard, Point as PcbPoint, Zone};
+use crate::pcb::{PcbBoard, Zone};
 use crate::schematic::SchematicSheet;
 
 mod extras;
+mod pcb_footprints;
 mod pcb_rows;
 mod sch_rows;
 mod tsv;
@@ -43,6 +44,8 @@ mod version;
 
 #[cfg(test)]
 mod non_finite_tests;
+#[cfg(test)]
+mod pcb_footprints_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
@@ -66,10 +69,7 @@ use extras::{
     BoardExtras, FootprintExtras, JunctionExtras, PadExtras, PcbExtras, PcbExtrasRaw, SchExtrasRaw,
     SheetExtras, SymbolExtras,
 };
-use pcb_rows::{
-    footprint_to_row, pad_to_row, row_to_footprint, row_to_pad, row_to_track, row_to_via,
-    track_to_row, via_to_row,
-};
+use pcb_rows::{footprint_to_row, pad_to_row, row_to_track, row_to_via, track_to_row, via_to_row};
 use sch_rows::{
     junction_to_row, label_to_row, row_to_junction, row_to_label, row_to_symbol, row_to_wire,
     symbol_to_row, wire_to_row,
@@ -105,6 +105,22 @@ pub enum FormatError {
          (same major version, any minor)"
     )]
     UnsupportedVersion { found: String, expected: String },
+    #[error(
+        "this file was written by a newer Signex ({found}); saving it with this build \
+         ({current}) would lose data -- open it in the newer version"
+    )]
+    NewerMinorReadOnly { found: String, current: String },
+    #[error(
+        "footprints {first:?} and {second:?} share uuid {uuid}; pads are keyed by footprint \
+         uuid, so saving would merge them"
+    )]
+    DuplicateFootprintUuid {
+        uuid: String,
+        first: String,
+        second: String,
+    },
+    #[error("stackup lists {types} layer_types for {layers} layers")]
+    LayerTypesExceedLayers { layers: usize, types: usize },
     #[error(
         "TSV block {block:?}: header has {expected} columns ({columns:?}), data row {row} has {got}"
     )]
@@ -257,19 +273,23 @@ impl SnxSchematic {
     }
 
     /// True when the file was written by a newer minor version than this
-    /// build knows: it loaded (unknown content is preserved) but the caller
-    /// should warn. See `version.rs`.
+    /// build knows: it loaded for viewing but `write_string` refuses to
+    /// save it (unknown content would be lost); the caller should warn. See `version.rs`.
     pub fn is_from_newer_minor(&self) -> bool {
         version::is_newer_minor(&self.format, SNXSCH_FORMAT_V1)
     }
 
     /// Serialise to a TOML+TSV string for writing to disk.
     pub fn write_string(&self) -> Result<String, FormatError> {
+        version::refuse_save(&self.format, SNXSCH_FORMAT_V1)?;
+        if let Some(src) = &self.sheet.unknown.newer_minor_source {
+            version::refuse_save(src, SNXSCH_FORMAT_V1)?;
+        }
         let mut out = String::new();
 
         // Manifest header — emit as a small TOML document.
         let manifest = SchManifest {
-            format: version::token_to_write(&self.format, SNXSCH_FORMAT_V1),
+            format: SNXSCH_FORMAT_V1.to_string(),
             schematic_id: self.sheet.uuid,
             version: self.sheet.version,
             generator: self.sheet.generator.clone(),
@@ -424,6 +444,8 @@ impl SnxSchematic {
             unknown: SheetUnknown {
                 manifest: raw.unknown,
                 extras: sheet_extras.unknown,
+                newer_minor_source: version::is_newer_minor(&raw.format, SNXSCH_FORMAT_V1)
+                    .then(|| raw.format.clone()),
             },
         };
 
@@ -520,19 +542,24 @@ impl SnxPcb {
     }
 
     /// True when the file was written by a newer minor version than this
-    /// build knows: it loaded (unknown content is preserved) but the caller
-    /// should warn. See `version.rs`.
+    /// build knows: it loaded for viewing but `write_string` refuses to
+    /// save it (unknown content would be lost); the caller should warn. See `version.rs`.
     pub fn is_from_newer_minor(&self) -> bool {
         version::is_newer_minor(&self.format, SNXPCB_FORMAT_V1)
     }
 
     /// Serialise to a TOML+TSV string for writing to disk.
     pub fn write_string(&self) -> Result<String, FormatError> {
+        version::refuse_save(&self.format, SNXPCB_FORMAT_V1)?;
+        if let Some(src) = &self.board.unknown.newer_minor_source {
+            version::refuse_save(src, SNXPCB_FORMAT_V1)?;
+        }
+        pcb_footprints::check_unique_footprint_uuids(&self.board.footprints)?;
         let mut out = String::new();
 
         // Manifest header.
         let manifest = PcbManifest {
-            format: version::token_to_write(&self.format, SNXPCB_FORMAT_V1),
+            format: SNXPCB_FORMAT_V1.to_string(),
             pcb_id: self.board.uuid,
             version: self.board.version,
             generator: self.board.generator.clone(),
@@ -704,60 +731,12 @@ impl SnxPcb {
         let extras = raw.extras.unwrap_or_default();
         let board_extras = extras.board.unwrap_or_default();
 
-        let mut footprints: Vec<Footprint> = footprint_rows
-            .into_iter()
-            .map(|row| {
-                let key = row.uuid.to_string();
-                let extra = extras.footprints.get(&key).cloned().unwrap_or_default();
-                row_to_footprint(row, extra)
-            })
-            .collect();
-
-        // `footprint_ref` holds the footprint uuid (1.1) or its reference
-        // designator (1.0). Match uuid first so footprints that share a
-        // designator keep their own pads.
-        for prow in pad_rows {
-            let extra = extras
-                .pads
-                .get(&prow.uuid.to_string())
-                .cloned()
-                .unwrap_or_default();
-            let pad = row_to_pad(prow.clone(), extra);
-            let by_uuid = prow
-                .footprint_ref
-                .parse::<Uuid>()
-                .ok()
-                .and_then(|u| footprints.iter().position(|f| f.uuid == u));
-            let target = by_uuid.or_else(|| {
-                footprints
-                    .iter()
-                    .position(|f| f.reference == prow.footprint_ref)
-            });
-            if let Some(fp) = target.map(|i| &mut footprints[i]) {
-                fp.pads.push(pad);
-            } else {
-                // Orphan pad — preserve as a synthetic footprint
-                // entry to avoid silent data loss.
-                footprints.push(Footprint {
-                    uuid: Uuid::nil(),
-                    reference: prow.footprint_ref.clone(),
-                    value: String::new(),
-                    footprint_id: String::new(),
-                    position: PcbPoint { x: 0.0, y: 0.0 },
-                    rotation: 0.0,
-                    layer: String::new(),
-                    locked: false,
-                    pads: vec![pad],
-                    graphics: Vec::new(),
-                    properties: Vec::new(),
-                    // The synthetic footprint is not in the file: it
-                    // carries no foreign keys and must not inherit the
-                    // orphan pad's.
-                    unknown: UnknownFields::default(),
-                    unknown_columns: UnknownColumns::default(),
-                });
-            }
-        }
+        let footprints = pcb_footprints::assemble_footprints(
+            footprint_rows,
+            pad_rows,
+            &extras.footprints,
+            &extras.pads,
+        );
 
         let segments = track_rows.into_iter().map(row_to_track).collect();
         let vias = via_rows.into_iter().map(row_to_via).collect();
@@ -768,6 +747,12 @@ impl SnxPcb {
         // Stackup → layers list (rebuild LayerDef with synthetic ids).
         let (layers, setup, stackup_unknown) = match raw.stackup {
             Some(s) => {
+                if s.layer_types.len() > s.layers.len() {
+                    return Err(FormatError::LayerTypesExceedLayers {
+                        layers: s.layers.len(),
+                        types: s.layer_types.len(),
+                    });
+                }
                 let layers: Vec<crate::pcb::LayerDef> = s
                     .layers
                     .into_iter()
@@ -808,6 +793,8 @@ impl SnxPcb {
                 stackup: stackup_unknown,
                 nets: nets_unknown,
                 extras: board_extras.unknown,
+                newer_minor_source: version::is_newer_minor(&raw.format, SNXPCB_FORMAT_V1)
+                    .then(|| raw.format.clone()),
             },
         };
 
