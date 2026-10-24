@@ -254,29 +254,52 @@ mod tests {
         assert!(cache.invalidate("..", "anything").is_err());
     }
 
-    /// Captures `tracing` output from the current thread into a buffer.
-    #[derive(Clone, Default)]
-    struct Captured(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+    /// Collects the `warn!` events emitted on the current thread while `f`
+    /// runs, each rendered as `message key=value ...`. A tiny hand-written
+    /// subscriber, so the crate needs no `tracing-subscriber` dev-dependency
+    /// (#830 review).
+    fn warnings(f: impl FnOnce()) -> Vec<String> {
+        use std::fmt::Write as _;
+        use std::sync::{Arc, Mutex};
+        use tracing::field::{Field, Visit};
+        use tracing::span::{Attributes, Id, Record};
+        use tracing::{Event, Level, Metadata, Subscriber};
 
-    impl std::io::Write for Captured {
-        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            self.0.lock().unwrap().extend_from_slice(buf);
-            Ok(buf.len())
+        struct Render(String);
+        impl Visit for Render {
+            fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+                if field.name() == "message" {
+                    let _ = write!(self.0, "{value:?}");
+                } else {
+                    let _ = write!(self.0, " {}={value:?}", field.name());
+                }
+            }
         }
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-    }
 
-    fn logged(f: impl FnOnce()) -> String {
-        let buf = Captured::default();
-        let sink = buf.clone();
-        let subscriber = tracing_subscriber::fmt()
-            .with_writer(move || sink.clone())
-            .with_ansi(false)
-            .finish();
-        tracing::subscriber::with_default(subscriber, f);
-        String::from_utf8(buf.0.lock().unwrap().clone()).unwrap()
+        struct Collect(Arc<Mutex<Vec<String>>>);
+        impl Subscriber for Collect {
+            fn enabled(&self, _: &Metadata<'_>) -> bool {
+                true
+            }
+            fn new_span(&self, _: &Attributes<'_>) -> Id {
+                Id::from_u64(1)
+            }
+            fn record(&self, _: &Id, _: &Record<'_>) {}
+            fn record_follows_from(&self, _: &Id, _: &Id) {}
+            fn event(&self, event: &Event<'_>) {
+                if *event.metadata().level() == Level::WARN {
+                    let mut render = Render(String::new());
+                    event.record(&mut render);
+                    self.0.lock().unwrap().push(render.0);
+                }
+            }
+            fn enter(&self, _: &Id) {}
+            fn exit(&self, _: &Id) {}
+        }
+
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        tracing::subscriber::with_default(Collect(seen.clone()), f);
+        seen.lock().unwrap().clone()
     }
 
     /// #806: a corrupt entry is a miss, and the read failure is logged
@@ -290,11 +313,15 @@ mod tests {
         std::fs::write(&path, b"{").unwrap();
 
         let mut hit = Some(part("sentinel"));
-        let log = logged(|| hit = cache.get_or_warn("lcsc", "R1", DEFAULT_TTL));
+        let warned = warnings(|| hit = cache.get_or_warn("lcsc", "R1", DEFAULT_TTL));
         assert!(hit.is_none());
-        assert!(log.contains("WARN"), "{log}");
-        assert!(log.contains("distributor cache read failed"), "{log}");
-        assert!(log.contains("R1"), "{log}");
+        assert_eq!(warned.len(), 1);
+        assert!(
+            warned[0].contains("distributor cache read failed"),
+            "message text missing: {}",
+            warned[0]
+        );
+        assert!(warned[0].contains("R1"), "MPN missing: {}", warned[0]);
     }
 
     /// An absent entry is an ordinary miss: no warning.
@@ -303,9 +330,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let cache = DistributorCache::with_root(dir.path()).unwrap();
         let mut miss = Some(part("sentinel"));
-        let log = logged(|| miss = cache.get_or_warn("lcsc", "R1", DEFAULT_TTL));
+        let warned = warnings(|| miss = cache.get_or_warn("lcsc", "R1", DEFAULT_TTL));
         assert!(miss.is_none());
-        assert!(log.is_empty(), "{log}");
+        assert!(warned.is_empty());
 
         cache.put("lcsc", &part("R1")).unwrap();
         let hit = cache.get_or_warn("lcsc", "R1", DEFAULT_TTL).unwrap();

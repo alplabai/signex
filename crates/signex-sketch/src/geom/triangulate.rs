@@ -176,13 +176,13 @@ fn point_in_triangle(p: Point2, a: Point2, b: Point2, c: Point2) -> bool {
 
 /// Triangulate an outer polygon with optional hole rings. Each
 /// hole is bridged to the outer ring via a "cut" edge connecting
-/// the rightmost hole vertex to the nearest outer vertex visible
-/// to it; after all holes are bridged the merged ring is a
-/// simple polygon that the basic ear-clipper handles.
+/// the hole's rightmost vertex to a ring vertex visible along a +x
+/// ray (holes bridged in descending rightmost-x order); the merged
+/// ring is then clipped by a clipper that tolerates the collinear
+/// and coincident vertices the bridges leave behind.
 ///
-/// Output triangle indices reference a flat vertex array
-/// `[outer_vertices, hole_0_vertices, hole_1_vertices, ...]` in
-/// the same order as the input. Hole rings should wind opposite
+/// Output triangle indices reference the returned merged ring (the outer
+/// ring with each hole spliced in at its bridge), not the input arrays. Hole rings should wind opposite
 /// to the outer ring (CCW outer + CW holes by convention) but
 /// the implementation normalises before merging.
 pub fn ear_clip_with_holes(
@@ -221,64 +221,11 @@ pub fn ear_clip_with_holes(
         hole_pts.push(pts);
     }
 
-    // Sort holes by descending rightmost x so we bridge the
-    // outer-most holes first (matches the standard left-to-right
-    // hole-cutter convention; without this, bridges from later
-    // holes can cross earlier ones).
-    hole_pts.sort_by(|a, b| {
-        let ax = a.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max);
-        let bx = b.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max);
-        bx.partial_cmp(&ax).unwrap_or(std::cmp::Ordering::Equal)
-    });
-
-    // Stitch holes into the outer ring one at a time.
-    let mut merged: Vec<Point2> = outer_pts;
-    for hole in hole_pts {
-        merged = bridge_hole_into_outer(&merged, &hole);
-    }
-
-    let triangles = ear_clip(&merged);
+    // Bridge the holes in descending rightmost-x order and clip the merged
+    // ring with the degeneracy-tolerant clipper (see `holes`).
+    let merged = super::holes::merge_holes(outer_pts, hole_pts);
+    let triangles = super::holes::clip_ears_tolerant(&merged);
     (merged, triangles)
-}
-
-/// Bridge a hole into the outer ring. Pick the hole's rightmost
-/// vertex, find the outer vertex closest to it (left-of, on a
-/// horizontal ray), and cut a "bridge" edge that visits both
-/// rings. The bridge is two coincident edges so the merged ring
-/// is still simple.
-fn bridge_hole_into_outer(outer: &[Point2], hole: &[Point2]) -> Vec<Point2> {
-    if hole.is_empty() {
-        return outer.to_vec();
-    }
-    // Hole's rightmost vertex.
-    let mut hole_idx = 0;
-    let mut max_x = hole[0].x;
-    for (i, p) in hole.iter().enumerate().skip(1) {
-        if p.x > max_x {
-            max_x = p.x;
-            hole_idx = i;
-        }
-    }
-    // Closest outer vertex to the hole's rightmost (Euclidean).
-    let target = hole[hole_idx];
-    let mut outer_idx = 0;
-    let mut best_d = f64::INFINITY;
-    for (i, p) in outer.iter().enumerate() {
-        let dx = p.x - target.x;
-        let dy = p.y - target.y;
-        let d = dx * dx + dy * dy;
-        if d < best_d {
-            best_d = d;
-            outer_idx = i;
-        }
-    }
-    // Splice: outer[0..=outer_idx] + hole[hole_idx..] + hole[..=hole_idx] + outer[outer_idx..].
-    let mut merged: Vec<Point2> = Vec::with_capacity(outer.len() + hole.len() + 2);
-    merged.extend_from_slice(&outer[..=outer_idx]);
-    merged.extend_from_slice(&hole[hole_idx..]);
-    merged.extend_from_slice(&hole[..=hole_idx]);
-    merged.extend_from_slice(&outer[outer_idx..]);
-    merged
 }
 
 #[cfg(test)]
@@ -418,5 +365,53 @@ mod tests {
         assert_eq!(merged.len(), 10);
         // n=10 → 8 triangles.
         assert_eq!(tris.len(), 8);
+    }
+
+    #[test]
+    fn hole_bridge_skips_nearest_outer_vertex_hidden_behind_a_wall() {
+        // C-shaped outer (open to the right) with a tooth hanging into the
+        // gap. The hole sits in the bottom arm; the tooth tip (6.5, 3) is the
+        // plain nearest outer vertex to the hole's rightmost vertex but lies
+        // across the arm's top wall (y = 2), so a bridge to it crosses an
+        // outer edge. The bridge must go to a visible vertex instead.
+        let outer = vec![
+            p(0.0, 0.0),
+            p(10.0, 0.0),
+            p(10.0, 2.0),
+            p(2.0, 2.0),
+            p(2.0, 5.0),
+            p(6.0, 5.0),
+            p(6.5, 3.0),
+            p(7.0, 5.0),
+            p(10.0, 5.0),
+            p(10.0, 7.0),
+            p(0.0, 7.0),
+        ];
+        let hole = vec![p(5.0, 0.5), p(6.5, 0.5), p(6.5, 1.5), p(5.0, 1.5)];
+        let (merged, tris) = ear_clip_with_holes(&outer, std::slice::from_ref(&hole));
+
+        let expected = signed_area(&outer).abs() - signed_area(&hole).abs();
+        let total: f64 = tris
+            .iter()
+            .map(|&[a, b, c]| signed_area(&[merged[a], merged[b], merged[c]]).abs())
+            .sum();
+        assert!(
+            (total - expected).abs() <= expected * 1e-9,
+            "triangle area {total}, want {expected}"
+        );
+        for &[a, b, c] in &tris {
+            let m = Point2::new(
+                (merged[a].x + merged[b].x + merged[c].x) / 3.0,
+                (merged[a].y + merged[b].y + merged[c].y) / 3.0,
+            );
+            assert!(
+                crate::geom::point_in_polygon(m, &outer),
+                "centroid {m:?} outside outer"
+            );
+            assert!(
+                !crate::geom::point_in_polygon(m, &hole),
+                "centroid {m:?} inside hole"
+            );
+        }
     }
 }

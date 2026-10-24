@@ -194,3 +194,73 @@ fn live_lookup_smoke() {
         "live LCSC should return at least one hit"
     );
 }
+
+/// Counts `warn!` events emitted on the current thread while `f` runs.
+fn count_warnings(f: impl FnOnce()) -> usize {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use tracing::span::{Attributes, Id, Record};
+    use tracing::{Event, Level, Metadata, Subscriber};
+
+    struct Count(Arc<AtomicUsize>);
+    impl Subscriber for Count {
+        fn enabled(&self, _: &Metadata<'_>) -> bool {
+            true
+        }
+        fn new_span(&self, _: &Attributes<'_>) -> Id {
+            Id::from_u64(1)
+        }
+        fn record(&self, _: &Id, _: &Record<'_>) {}
+        fn record_follows_from(&self, _: &Id, _: &Id) {}
+        fn event(&self, event: &Event<'_>) {
+            if *event.metadata().level() == Level::WARN {
+                self.0.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+        fn enter(&self, _: &Id) {}
+        fn exit(&self, _: &Id) {}
+    }
+
+    let count = Arc::new(AtomicUsize::new(0));
+    tracing::subscriber::with_default(Count(count.clone()), f);
+    count.load(Ordering::SeqCst)
+}
+
+/// #806 at the adapter: a corrupt cache entry is logged and treated as a
+/// miss, so `lookup_by_mpn` falls through to the live API instead of
+/// failing or staying silent.
+#[test]
+fn a_corrupt_cache_entry_falls_through_to_the_live_lookup_and_warns() {
+    let dir = tempfile::tempdir().unwrap();
+    let cache =
+        signex_library::distributors::cache::DistributorCache::with_root(dir.path()).unwrap();
+    let mpn = "RC0805FR-0710KL";
+    let entry = cache.entry_path("lcsc", mpn);
+    std::fs::create_dir_all(entry.parent().unwrap()).unwrap();
+    std::fs::write(&entry, b"{").unwrap();
+
+    with_mock_server(
+        |server| {
+            Box::pin(async move {
+                Mock::given(method("GET"))
+                    .and(path("/wmsc/product/list"))
+                    .and(query_param("keyword", "RC0805FR-0710KL"))
+                    .respond_with(
+                        ResponseTemplate::new(200)
+                            .set_body_json(fixture_response("RC0805FR-0710KL")),
+                    )
+                    .expect(1)
+                    .mount(server)
+                    .await;
+            })
+        },
+        move |base| {
+            let adapter = LcscAdapter::with_base_url(base, Some(cache));
+            let mut parts = Vec::new();
+            let warned = count_warnings(|| parts = adapter.lookup_by_mpn(mpn).unwrap());
+            assert_eq!(parts.len(), 1, "the live result is returned");
+            assert_eq!(parts[0].mpn, mpn);
+            assert_eq!(warned, 1, "the corrupt entry must be logged once");
+        },
+    );
+}

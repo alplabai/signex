@@ -49,16 +49,6 @@ pub fn read_component_filter() -> String {
     json["component_filter"].as_str().unwrap_or("").to_string()
 }
 
-/// Persist the Components-panel filter without clobbering other keys.
-pub fn write_component_filter(query: &str) {
-    update_prefs_json(&prefs_path(), "component_filter", |prefs| {
-        prefs.insert(
-            "component_filter".to_string(),
-            serde_json::Value::String(query.to_string()),
-        );
-    })
-}
-
 /// Read the persisted per-`.snxlib` Library Browser search queries.
 /// Keyed by the absolute path's display string; entries for libraries
 /// that no longer exist on disk are harmless — they're loaded but only
@@ -88,22 +78,56 @@ pub fn read_library_browser_searches() -> std::collections::HashMap<PathBuf, Str
     out
 }
 
-/// Persist a single library's search query. Reading the existing map
-/// from disk first means concurrent updates to other libraries don't
-/// stomp each other (same-process only — cross-process serialisation
-/// is out of scope for prefs).
-pub fn write_library_browser_search(library_path: &std::path::Path, query: &str) {
-    let key = library_path.display().to_string();
-    update_prefs_json(&prefs_path(), "library_browser_searches", |prefs| {
-        let entry = prefs
-            .entry("library_browser_searches".to_string())
-            .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
-        if let Some(obj) = entry.as_object_mut() {
-            if query.is_empty() {
-                obj.remove(&key);
-            } else {
-                obj.insert(key, serde_json::Value::String(query.to_string()));
+/// Writes the search boxes (Components filter + per-library Library
+/// Browser queries) into `prefs.json`. The production store of the
+/// debounced search-prefs loop; it runs on a background thread via `Task`,
+/// never inside `update` (#859). The change is merged key by key into what
+/// is on disk under the prefs IO lock, so entries this session never
+/// touched survive.
+pub struct PrefsSearchStore {
+    path: PathBuf,
+}
+
+impl PrefsSearchStore {
+    /// The store for the user's real `prefs.json`.
+    pub fn user_prefs() -> Self {
+        Self::at(prefs_path())
+    }
+
+    /// The store for an explicit prefs file (tests).
+    pub fn at(path: PathBuf) -> Self {
+        Self { path }
+    }
+}
+
+impl crate::persist::DebouncedStore<crate::persist::SearchPrefsChange> for PrefsSearchStore {
+    fn write(&self, change: &crate::persist::SearchPrefsChange) -> Result<(), String> {
+        try_update_prefs_json(&self.path, "search boxes", |prefs| {
+            if let Some(filter) = &change.component_filter {
+                prefs.insert(
+                    "component_filter".to_string(),
+                    serde_json::Value::String(filter.clone()),
+                );
             }
-        }
-    })
+            if change.library_searches.is_empty() {
+                return;
+            }
+            let entry = prefs
+                .entry("library_browser_searches".to_string())
+                .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+            if !entry.is_object() {
+                *entry = serde_json::Value::Object(serde_json::Map::new());
+            }
+            if let Some(searches) = entry.as_object_mut() {
+                for (library, query) in &change.library_searches {
+                    let key = library.display().to_string();
+                    if query.is_empty() {
+                        searches.remove(&key);
+                    } else {
+                        searches.insert(key, serde_json::Value::String(query.clone()));
+                    }
+                }
+            }
+        })
+    }
 }

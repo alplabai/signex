@@ -93,6 +93,7 @@ fn renaming_a_dirty_sheet_moves_its_dirty_marker_and_dirties_the_project() {
     activate(&mut app, 0);
 
     app.ui_state.rename_dialog = Some(RenameDialogState {
+        project_id: None,
         target_path: old.clone(),
         tree_path: vec![0],
         buffer: "PSU.snxsch".to_string(),
@@ -157,6 +158,7 @@ fn renaming_a_non_sheet_file_does_not_dirty_the_project() {
     app.document_state.active_project = Some(id);
 
     app.ui_state.rename_dialog = Some(RenameDialogState {
+        project_id: None,
         target_path: old.clone(),
         tree_path: vec![0],
         buffer: "R0402.snxfpt".to_string(),

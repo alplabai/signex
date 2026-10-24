@@ -62,6 +62,7 @@ fn outline_circle(cx: f32, cy: f32, r: f32) -> Circle {
 /// Convex quad standing in for a filled SMD pad: fill only, no stroke.
 fn convex_filled_pad() -> GpuPolygon {
     GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]],
         fill_color: [0.85, 0.65, 0.13, 1.0],
         stroke_color: None,
@@ -74,6 +75,7 @@ fn convex_filled_pad() -> GpuPolygon {
 /// inward corner) — an L-shape, not a fan-friendly convex polygon.
 fn concave_zone() -> GpuPolygon {
     GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![
             [10.0, 0.0],
             [14.0, 0.0],
@@ -92,6 +94,7 @@ fn concave_zone() -> GpuPolygon {
 /// fill and an outline).
 fn filled_and_stroked_polygon() -> GpuPolygon {
     GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[20.0, 0.0], [22.0, 0.0], [21.0, 2.0]],
         fill_color: [0.3, 0.3, 0.3, 1.0],
         stroke_color: Some([1.0, 1.0, 1.0, 1.0]),
@@ -103,6 +106,7 @@ fn filled_and_stroked_polygon() -> GpuPolygon {
 /// stroke carries all the visible signal.
 fn outline_only_rule_area() -> GpuPolygon {
     GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[30.0, 0.0], [32.0, 0.0], [32.0, 2.0], [30.0, 2.0]],
         fill_color: [0.0, 0.0, 0.0, 0.0],
         stroke_color: Some([0.9, 0.1, 0.1, 1.0]),
@@ -150,6 +154,7 @@ fn build_full_board_scene() -> Scene {
         overlay_lines: vec![solid_line(0.0, -1.0, 10.0, -1.0)],
         overlay_circles: vec![filled_circle(-5.0, -5.0, 0.5)],
         overlay_polygons: vec![GpuPolygon {
+            holes: Vec::new(),
             vertices: vec![[40.0, 0.0], [42.0, 0.0], [42.0, 2.0], [40.0, 2.0]],
             fill_color: [0.6, 0.6, 1.0, 0.4],
             stroke_color: None,
@@ -158,6 +163,7 @@ fn build_full_board_scene() -> Scene {
         erc_marker_lines: vec![solid_line(-1.0, -1.0, -2.0, -2.0)],
         erc_marker_circles: vec![outline_circle(-3.0, -3.0, 0.3)],
         erc_marker_polygons: vec![GpuPolygon {
+            holes: Vec::new(),
             vertices: vec![[50.0, 0.0], [52.0, 0.0], [51.0, 2.0]],
             fill_color: [1.0, 0.0, 0.0, 1.0],
             stroke_color: None,

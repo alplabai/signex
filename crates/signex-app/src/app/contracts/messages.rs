@@ -388,6 +388,7 @@ pub enum PrintPreviewMsg {
     SetPhysicalSheetNumber(bool),
     SetPhysicalDocumentNumber(bool),
     SetIncludeNoErcMarkers(bool),
+    SetIncludeNoConnectMarkers(bool),
     SetIncludeParameterSets(bool),
     SetIncludeProbes(bool),
     SetIncludeBlankets(bool),
