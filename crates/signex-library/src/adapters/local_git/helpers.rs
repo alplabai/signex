@@ -4,24 +4,76 @@ use super::*;
 
 // ── Free helpers ───────────────────────────────────────────────────────────
 
-/// How long a git write waits for another process's `.git/index.lock` (or
+/// How long a commit waits for another process's `.git/index.lock` (or a
 /// ref lock) to go away before giving up (#893).
 const GIT_LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// An `index.lock` older than this is taken for one a crashed git left
+/// behind: the commit is refused at once with a hint, instead of waiting
+/// out [`GIT_LOCK_WAIT`] on every save.
+const GIT_LOCK_STALE: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Stage `rel_path` and commit it with `message`, from a freshly read index
+/// and the current HEAD. Returns `None` when the staged tree equals HEAD's
+/// (an unchanged save, #149). Every attempt starts from the repository's
+/// current state, so a retry after another process committed builds on
+/// that commit instead of writing back the index as it was before it.
+pub(super) fn stage_and_commit(
+    repo: &git2::Repository,
+    rel_path: &Path,
+    signature: &git2::Signature<'_>,
+    message: &str,
+) -> Result<Option<git2::Oid>, git2::Error> {
+    let mut index = repo.index()?;
+    index.read(true)?;
+    index.add_path(rel_path)?;
+    index.write()?;
+    let tree = repo.find_tree(index.write_tree()?)?;
+    // An unborn HEAD (fresh repo) is the only legitimate "no parent" case.
+    let parent = match repo.head() {
+        Ok(head) => Some(head.peel_to_commit()?),
+        Err(e) if e.code() == git2::ErrorCode::UnbornBranch => None,
+        Err(e) => return Err(e),
+    };
+    if parent.as_ref().is_some_and(|p| p.tree_id() == tree.id()) {
+        return Ok(None);
+    }
+    let parents: Vec<&git2::Commit> = parent.iter().collect();
+    repo.commit(Some("HEAD"), signature, signature, message, &tree, &parents)
+        .map(Some)
+}
 
 /// Run a git write, retrying while another process holds the index or a
 /// ref lock. Another Signex instance committing to the same repository
 /// (another library in a project-scope repo, or the project itself) holds
 /// `.git/index.lock` for the length of one commit; without the retry the
-/// second save fails with `git add` / `git commit` despite no conflict.
+/// second save fails although nothing conflicts. `op` must redo the whole
+/// staged write from current state (see [`stage_and_commit`]): retrying
+/// with an index read before the other commit would revert it.
 pub(super) fn retry_on_git_lock<T>(
+    git_dir: &Path,
     mut op: impl FnMut() -> Result<T, git2::Error>,
 ) -> Result<T, git2::Error> {
     let deadline = std::time::Instant::now() + GIT_LOCK_WAIT;
     loop {
         match op() {
-            Err(e)
-                if e.code() == git2::ErrorCode::Locked && std::time::Instant::now() < deadline =>
-            {
+            Err(e) if e.code() == git2::ErrorCode::Locked => {
+                let index_lock = git_dir.join("index.lock");
+                let stale = std::fs::metadata(&index_lock)
+                    .and_then(|m| m.modified())
+                    .ok()
+                    .and_then(|t| t.elapsed().ok())
+                    .is_some_and(|age| age > GIT_LOCK_STALE);
+                if stale {
+                    return Err(git2::Error::from_str(&format!(
+                        "{} is older than {} s; if no git process is running, remove it",
+                        index_lock.display(),
+                        GIT_LOCK_STALE.as_secs()
+                    )));
+                }
+                if std::time::Instant::now() >= deadline {
+                    return Err(e);
+                }
                 std::thread::sleep(std::time::Duration::from_millis(20));
             }
             other => return other,
