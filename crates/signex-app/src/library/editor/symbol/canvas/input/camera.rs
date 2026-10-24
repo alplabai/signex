@@ -20,7 +20,8 @@ impl SymbolCanvas<'_> {
             mouse::ScrollDelta::Lines { y, .. } => *y,
             mouse::ScrollDelta::Pixels { y, .. } => *y / 30.0,
         };
-        if dy.abs() < f32::EPSILON {
+        // NaN passes the `<` test, so reject it explicitly.
+        if dy.is_nan() || dy.abs() < f32::EPSILON {
             return None;
         }
         Some(

@@ -84,6 +84,10 @@ impl Signex {
             ProjectMsg::CloseRefsResolved { project_id, result } => {
                 self.handle_close_refs_resolved(project_id, result)
             }
+            ProjectMsg::CaseProbed {
+                project_id,
+                outcome,
+            } => self.handle_case_probed(project_id, outcome),
             ProjectMsg::AppQuitConfirm(choice) => self.handle_app_quit_confirm(choice),
             ProjectMsg::CloseOptions => {
                 self.ui_state.project_options = None;
@@ -433,6 +437,9 @@ impl Signex {
         // several actions after it happened is worse than useless: it
         // attaches the message to the wrong action.
         self.sync_diagnostics_panel_ctx();
+        // Same reason: the draft, discard and Save paths change the zoom
+        // speed the PCB / symbol / footprint canvases hold a copy of.
+        self.sync_zoom_step();
         task
     }
 

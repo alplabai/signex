@@ -5,6 +5,7 @@ pub fn draw_selection_overlay(
     snapshot: &SchematicRenderSnapshot,
     selected: &[SelectedItem],
     transform: &ScreenTransform,
+    colors: &CanvasColors,
 ) {
     let stroke = Color::from_rgba(0.95, 0.95, 1.0, 0.95);
     let fill = Color::from_rgba(0.65, 0.72, 1.0, 0.12);
@@ -89,9 +90,7 @@ pub fn draw_selection_overlay(
     draw_renderer_snapshot(
         frame,
         &snapshot,
-        &ResolvedTheme::from_canvas_colors(signex_types::theme::canvas_colors(
-            signex_types::theme::ThemeId::Signex,
-        )),
+        &ResolvedTheme::from_canvas_colors(*colors),
         DirtyFlags::OVERLAY,
         transform,
     );

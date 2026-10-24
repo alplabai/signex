@@ -52,7 +52,7 @@ static PREFS_PATH_LOCK: Mutex<()> = Mutex::new(());
 /// protects a file path, not an invariant that a panicking test can leave
 /// half-applied, and [`PrefsPathGuard`] has already restored the path by
 /// the time this lock is released.
-fn serial() -> std::sync::MutexGuard<'static, ()> {
+pub(crate) fn serial() -> std::sync::MutexGuard<'static, ()> {
     PREFS_PATH_LOCK
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -67,7 +67,7 @@ fn serial() -> std::sync::MutexGuard<'static, ()> {
 /// working copy as well as the prefs, so the one test that drives a real
 /// Save would otherwise leave `keyboard_shortcuts.toml` behind for every
 /// later `Signex::new()` in this binary to load.
-struct PrefsPathGuard {
+pub(crate) struct PrefsPathGuard {
     path: std::path::PathBuf,
     before: Option<Vec<u8>>,
     keymap_path: Option<std::path::PathBuf>,
@@ -75,7 +75,7 @@ struct PrefsPathGuard {
 }
 
 impl PrefsPathGuard {
-    fn capture() -> Self {
+    pub(crate) fn capture() -> Self {
         let path = signex_app::fonts::prefs_file_path();
         let before = std::fs::read(&path).ok();
         let keymap_path = signex_app::keymap::config_path();

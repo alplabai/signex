@@ -6,7 +6,7 @@
 use std::path::Path;
 
 use signex_bom::{BomComponent, BomContext, BomEngineOptions, build_table, validate_table};
-use signex_types::schematic::{Symbol, group_into_parts};
+use signex_types::schematic::{SchematicSheet, Symbol, group_into_parts};
 use thiserror::Error;
 
 use crate::{ExportContext, Exporter};
@@ -200,18 +200,65 @@ fn engine_options_from_opts(opts: &BomOptions) -> BomEngineOptions {
 }
 
 fn build_bom_context(ctx: &ExportContext, opts: &BomOptions) -> BomContext {
-    let mut components = Vec::new();
+    // One ordered symbol list over every sheet, grouped once: the units of a
+    // multi-unit part are bought and fitted once even when they sit on
+    // different pages (#691). A sheet placed N times contributes its symbols N
+    // times; the same unit appearing twice is two parts, so a child placed N
+    // times still yields N parts. Per-instance designators do not exist yet
+    // (the netlist reports `SharedReferenceAcrossInstances` for the same
+    // reason), so every copy carries the sheet's own designator.
+    let mut placed: Vec<&Symbol> = Vec::new();
+    for (sheet, placements) in bom_sheets(ctx) {
+        for _ in 0..placements {
+            placed.extend(
+                sheet
+                    .symbols
+                    .iter()
+                    .filter(|sym| !(sym.reference.starts_with("#PWR") || sym.is_power)),
+            );
+        }
+    }
+    let components = placed_components(&placed, opts);
 
-    // One component per physical part: every unit of a multi-unit part is a
-    // separate placed symbol, but it is bought and fitted once (#691). The
-    // part takes what ANY of its units sets (see `units`), so an MPN typed on
-    // unit 2 or a DNP flag on unit 2 is not lost to unit 1.
-    let placed: Vec<&Symbol> = ctx
-        .sheets
+    BomContext {
+        components,
+        metadata: BomMetadata {
+            title: ctx.metadata.title.clone(),
+            revision: ctx.metadata.revision.clone(),
+            date: ctx.metadata.date.clone(),
+        },
+    }
+}
+
+/// The sheets a BOM is built from, each with its placement count. When the
+/// app derived the project hierarchy (`netlist_sheets`) that is every sheet
+/// the netlist uses -- including hierarchical children that are not printed
+/// pages -- weighted by how often it is placed. Otherwise (a caller with no
+/// hierarchy, or a loose document) it is the exported pages, once each.
+fn bom_sheets(ctx: &ExportContext) -> Vec<(&SchematicSheet, usize)> {
+    if ctx.netlist_sheets.is_empty() {
+        return ctx.sheets.iter().map(|s| (&s.schematic, 1)).collect();
+    }
+    debug_assert_eq!(
+        ctx.netlist_sheets.len(),
+        ctx.netlist_sheet_placements.len(),
+        "netlist_sheet_placements is index-matched to netlist_sheets"
+    );
+    ctx.netlist_sheets
         .iter()
-        .flat_map(|sheet_snap| sheet_snap.schematic.symbols.iter())
-        .filter(|sym| !(sym.reference.starts_with("#PWR") || sym.is_power))
-        .collect();
+        .enumerate()
+        .map(|(i, sheet)| {
+            let placements = ctx.netlist_sheet_placements.get(i).copied().unwrap_or(1);
+            (sheet, placements)
+        })
+        .collect()
+}
+
+/// The components of a placed-symbol list, one per physical part. A part takes
+/// what ANY of its units sets (see `units`), so an MPN typed on unit 2 or a DNP
+/// flag on unit 2 is not lost to unit 1.
+fn placed_components(placed: &[&Symbol], opts: &BomOptions) -> Vec<BomComponent> {
+    let mut components = Vec::new();
     let parts = group_into_parts(placed.iter().map(|sym| sym.part_key()));
 
     for part in &parts {
@@ -267,15 +314,7 @@ fn build_bom_context(ctx: &ExportContext, opts: &BomOptions) -> BomContext {
             unit_conflicts: merged.conflicts,
         });
     }
-
-    BomContext {
-        components,
-        metadata: BomMetadata {
-            title: ctx.metadata.title.clone(),
-            revision: ctx.metadata.revision.clone(),
-            date: ctx.metadata.date.clone(),
-        },
-    }
+    components
 }
 
 fn component_is_exported(component: &BomComponent, opts: &BomOptions) -> bool {
@@ -598,6 +637,7 @@ mod tests {
             metadata: ProjectMetadata::default(),
             netlist: None,
             netlist_sheets: Vec::new(),
+            netlist_sheet_placements: Vec::new(),
         }
     }
 
@@ -641,6 +681,54 @@ mod tests {
                 .iter()
                 .any(|i| i.rule == BomRule::DuplicateDesignator)
         );
+    }
+
+    fn second_sheet_with(symbols: Vec<Symbol>) -> SheetSnapshot {
+        SheetSnapshot {
+            path: "power.snxsch".into(),
+            schematic: SchematicSheet {
+                paper_size: "A4".to_string(),
+                symbols,
+                ..Default::default()
+            },
+            sheet_name: "Power".to_string(),
+            sheet_number: 2,
+            sheet_count: 2,
+        }
+    }
+
+    fn assert_one_lm358(ctx: &ExportContext) {
+        let (table, report) = rollup_with_validation(ctx, &BomOptions::default());
+        assert_eq!(table.rows.len(), 1);
+        assert_eq!(table.rows[0].qty, 1);
+        assert!(
+            !report
+                .issues
+                .iter()
+                .any(|i| i.rule == BomRule::DuplicateDesignator)
+        );
+    }
+
+    #[test]
+    fn units_of_one_part_split_across_two_pages_are_one_part() {
+        let mut ctx = context_with(vec![unit_of("U1", "Amplifier:LM358", 1)]);
+        ctx.sheets
+            .push(second_sheet_with(vec![unit_of("U1", "Amplifier:LM358", 2)]));
+        assert_one_lm358(&ctx);
+    }
+
+    #[test]
+    fn units_split_across_hierarchy_sheets_are_one_part() {
+        let mut ctx = context_with(vec![unit_of("U1", "Amplifier:LM358", 1)]);
+        ctx.netlist_sheets = vec![
+            ctx.sheets[0].schematic.clone(),
+            SchematicSheet {
+                symbols: vec![unit_of("U1", "Amplifier:LM358", 2)],
+                ..Default::default()
+            },
+        ];
+        ctx.netlist_sheet_placements = vec![1, 1];
+        assert_one_lm358(&ctx);
     }
 
     fn with_field(mut sym: Symbol, key: &str, value: &str) -> Symbol {
@@ -1116,6 +1204,7 @@ mod tests {
             metadata: ProjectMetadata::default(),
             netlist: None,
             netlist_sheets: Vec::new(),
+            netlist_sheet_placements: Vec::new(),
         }
     }
 
@@ -1250,5 +1339,37 @@ mod tests {
             part_with_fields("R2", &[("Tolerance", "5%")]),
         ]);
         assert_eq!(rollup(&ctx, &BomOptions::default()).rows.len(), 2);
+    }
+
+    #[test]
+    fn hierarchy_sheets_are_counted_once_per_placement_and_skip_power() {
+        let mut ctx = export_ctx(vec![part_with_fields("R1", &[])]);
+        let mut child = ctx.sheets[0].schematic.clone();
+        child.symbols = vec![part_with_fields("C1", &[])];
+        let mut power = part_with_fields("#PWR01", &[]);
+        power.is_power = true;
+        child.symbols.push(power);
+        ctx.netlist_sheets = vec![ctx.sheets[0].schematic.clone(), child];
+        ctx.netlist_sheet_placements = vec![1, 3];
+
+        let table = rollup(&ctx, &BomOptions::default());
+        let mut refs: Vec<_> = table
+            .rows
+            .iter()
+            .flat_map(|r| r.references.clone())
+            .collect();
+        refs.sort();
+        assert_eq!(refs, ["C1", "C1", "C1", "R1"]);
+
+        // No hierarchy derived: the exported pages count once, as before.
+        ctx.netlist_sheets.clear();
+        ctx.netlist_sheet_placements.clear();
+        let table = rollup(&ctx, &BomOptions::default());
+        let refs: Vec<_> = table
+            .rows
+            .iter()
+            .flat_map(|r| r.references.clone())
+            .collect();
+        assert_eq!(refs, ["R1"]);
     }
 }
