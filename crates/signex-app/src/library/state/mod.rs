@@ -385,6 +385,8 @@ pub enum PrimitivePickerTarget {
 /// [`crate::app::Signex`] as a single field so the dispatcher can
 /// borrow it independently of the rest of `DocumentState`.
 pub struct LibraryState {
+    /// Embedded-vs-library symbol drift per open sheet (#912).
+    pub drift: super::drift::DriftState,
     /// Cross-library resolver — maps `library_id → adapter`. New in
     /// the v0.9 refactor: editors load primitives by `PrimitiveRef`
     /// without knowing which `*.snxlib/` they came from.

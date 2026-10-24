@@ -173,6 +173,7 @@ impl Engine {
             | Command::PlaceLabel { .. }
             | Command::PlaceSymbol { .. }
             | Command::RegisterLibSymbol { .. }
+            | Command::ReplaceLibSymbol { .. }
             | Command::PlaceChildSheet { .. }
             | Command::PlaceWireSegment { .. }
             | Command::PlaceJunction { .. }

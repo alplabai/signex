@@ -187,6 +187,8 @@ mod symbol_undo_steps;
 
 #[path = "regression/library_place_symbol.rs"]
 mod library_place_symbol;
+#[path = "regression/library_symbol_drift.rs"]
+mod library_symbol_drift;
 
 #[path = "regression/canvas_editing_correctness.rs"]
 mod canvas_editing_correctness;
