@@ -1,0 +1,69 @@
+format = "snxsym/v1"
+file_uuid = "a3c3f38f-10dc-4990-acc1-e2d3e6b86176"
+display_name = "Screw_1x02"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols]]
+uuid = "f3cab735-da24-44e6-bb3e-4615efc900f1"
+name = "Screw_1x02"
+anchor = [
+    0.0,
+    0.0,
+]
+pins_tsv = '''
+number	name	electrical	pos_x	pos_y	orientation	length	description	function	pin_package_length	propagation_delay_ns	designator_visible	name_visible	inside_symbol	inside_edge_symbol	outside_edge_symbol	outside_symbol	hidden	locked	part_number
+1	Pin_1	Passive	-5.08	1.27	Right	2.54					true	false	None	None	None	None	false	false	1
+2	Pin_2	Passive	-5.08	-1.27	Right	2.54					true	false	None	None	None	None	false	false	1
+'''
+designator = "J?"
+comment = "*"
+description = "2-position screw terminal block."
+component_type = "Standard"
+mirrored = false
+version = "0.0.1"
+released = false
+part_count = 1
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "rectangle"
+from = [
+    -2.54,
+    2.54,
+]
+to = [
+    1.27,
+    -2.54,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "circle"
+center = [
+    -0.635,
+    1.27,
+]
+radius = 0.635
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "circle"
+center = [
+    -0.635,
+    -1.27,
+]
+radius = 0.635
+
+[symbols.schematic_params]

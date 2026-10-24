@@ -34,7 +34,7 @@ DOMAIN=(
   signex-3d-model-importer
 )
 # Matched as exact names or, with a trailing *, as a prefix.
-UI_STACK=(iced 'iced_*' wgpu winit cryoglyph rfd signex-widgets signex-app)
+UI_STACK=(iced 'iced_*' wgpu 'wgpu-*' naga winit cryoglyph glyphon rfd signex-widgets signex-app)
 
 metadata() {
   if [[ -n "${ARCH_GUARD_METADATA:-}" ]]; then
@@ -59,19 +59,43 @@ current_edges() {
   ' <<<"$META" | sort -u
 }
 
+# The table's edges, one per line, without comments or blanks. `grep -v`
+# exits 1 when every line is a comment, which `set -e` / pipefail would turn
+# into a silent abort, so an all-comment table must read as empty.
+table_edges() {
+  [[ -f "$EDGES" ]] || return 0
+  { grep -v '^[[:space:]]*#' "$EDGES" || true; } \
+    | sed 's/[[:space:]]*#.*$//; s/[[:space:]]*$//; /^[[:space:]]*$/d' | sort -u
+}
+
 if [[ "${1:-}" == "--generate" ]]; then
+  # Keep the trailing `# ...` note of every edge that is still present, so a
+  # regenerate does not drop recorded debt (e.g. `# known debt (#664)`).
+  # Bash 3.2 (stock macOS) has no associative arrays, so the notes go
+  # through a tab-separated temp file and awk does the lookup.
+  notes_file="$(mktemp)"
+  trap 'rm -f "$notes_file"' EXIT
+  if [[ -f "$EDGES" ]]; then
+    awk '!/^[[:space:]]*#/ && /#/ {
+      i = index($0, "#"); edge = substr($0, 1, i - 1); sub(/[[:space:]]+$/, "", edge)
+      print edge "\t  #" substr($0, i + 1)
+    }' "$EDGES" > "$notes_file"
+  fi
+  generated="$(current_edges)"
   {
     echo "# Allowed workspace dependency edges (normal deps only)."
     echo "# Checked by scripts/check_arch_guard.sh. Add a line to add an edge."
-    current_edges
-  } > "$EDGES"
-  echo "Wrote $(grep -vc '^#' "$EDGES") edges to ${EDGES#"$ROOT"/}"
+    awk -F'\t' 'FILENAME == ARGV[1] { note[$1] = $2; next } $0 != "" { print $0 note[$0] }' \
+      "$notes_file" - <<<"$generated"
+  } > "$EDGES.tmp"
+  mv "$EDGES.tmp" "$EDGES"
+  echo "Wrote $(table_edges | grep -c .) edges to ${EDGES#"$ROOT"/}"
   exit 0
 fi
 
 fail=0
 
-allowed="$(grep -v '^[[:space:]]*#' "$EDGES" | sed 's/[[:space:]]*#.*$//; /^[[:space:]]*$/d' | sort -u)"
+allowed="$(table_edges)"
 actual="$(current_edges)"
 
 while IFS= read -r edge; do

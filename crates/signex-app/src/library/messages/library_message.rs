@@ -539,6 +539,9 @@ pub struct ResolvedPlacement {
     pub library_version: String,
     pub internal_pn: String,
     pub value: String,
+    /// The symbol is a power port: the placed instance is `is_power` and
+    /// `value` is its net name.
+    pub is_power: bool,
     /// Reference prefix from the library symbol's designator (`U?` -> `U`).
     pub prefix: String,
 }
