@@ -13,6 +13,7 @@ pub fn draw_text_note_preview(
     note: &TextNote,
     transform: &ScreenTransform,
     color: Color,
+    colors: &CanvasColors,
 ) {
     let snapshot = RendererSnapshot {
         wires: Vec::new(),
@@ -43,9 +44,7 @@ pub fn draw_text_note_preview(
     draw_renderer_snapshot(
         frame,
         &snapshot,
-        &ResolvedTheme::from_canvas_colors(signex_types::theme::canvas_colors(
-            signex_types::theme::ThemeId::Signex,
-        )),
+        &ResolvedTheme::from_canvas_colors(*colors),
         DirtyFlags::TEXT,
         transform,
     );

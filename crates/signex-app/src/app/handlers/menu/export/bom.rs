@@ -112,7 +112,7 @@ impl Signex {
         };
         preview.options.rule_options.set_enabled(rule, enabled);
         let opts = preview.options.clone();
-        let Some(ctx) = super::build_export_context(&self.document_state) else {
+        let Some(ctx) = super::build_bom_export_context(&self.document_state) else {
             return;
         };
         if let Some(preview) = self.document_state.bom_preview.as_mut() {
@@ -284,7 +284,7 @@ impl Signex {
         &self,
         opts: &BomOptions,
     ) -> Option<(signex_output::BomTable, signex_output::BomValidationReport)> {
-        let ctx = super::build_export_context(&self.document_state)?;
+        let ctx = super::build_bom_export_context(&self.document_state)?;
         Some(signex_output::bom::rollup_with_validation(&ctx, opts))
     }
 
@@ -319,20 +319,20 @@ impl Signex {
             }
         };
 
-        let (ctx, issues) = match super::build_page_scope_for_source(&self.document_state, &source)
-        {
-            Some(c) => c,
-            None => {
-                let reason = format!(
-                    "Cannot export BOM: the source document {} is no longer open.",
-                    source.display()
-                );
-                crate::diagnostics::log_warning(reason.clone());
-                self.document_state.error_notice =
-                    Some(crate::app::state::ErrorNotice::export(reason));
-                return Task::none();
-            }
-        };
+        let (ctx, issues) =
+            match super::build_bom_export_scope_for_source(&self.document_state, &source) {
+                Some(c) => c,
+                None => {
+                    let reason = format!(
+                        "Cannot export BOM: the source document {} is no longer open.",
+                        source.display()
+                    );
+                    crate::diagnostics::log_warning(reason.clone());
+                    self.document_state.error_notice =
+                        Some(crate::app::state::ErrorNotice::export(reason));
+                    return Task::none();
+                }
+            };
         // A BOM is a machine-and-procurement-consumed deliverable, not the
         // print-preview intermediate `rebuild_bom_table` renders — so unlike
         // that path it must not stay silent. A cross-dir child-filename
@@ -341,6 +341,15 @@ impl Signex {
         // once, from this user action, exactly like the PDF/netlist
         // deliverables (ADR-0002 D8: degradation is reported, never silent).
         super::log_stitch_issues(&source, &ctx, &issues);
+        // A project whose hierarchy could not be derived falls back to the
+        // printed pages only, so child-sheet parts would be missing. Say so in
+        // BOM terms; the netlist warning does not tell a BOM user that.
+        if self.document_state.document_project(&source).is_some() && ctx.netlist_sheets.is_empty()
+        {
+            crate::diagnostics::log_warning(
+                "BOM: project hierarchy could not be derived - parts on child sheets are not included",
+            );
+        }
 
         // Picker filter sets a default extension; the user may rename the
         // file in the dialog. Trust the saved-as extension over the

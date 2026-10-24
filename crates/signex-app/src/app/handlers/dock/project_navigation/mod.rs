@@ -8,6 +8,8 @@ pub(crate) mod add_io;
 mod add_tests;
 mod close_project;
 mod dialog_target;
+#[cfg(test)]
+mod library_row_tests;
 mod open_document;
 mod project_actions;
 mod remove;
@@ -242,8 +244,11 @@ impl Signex {
             ProjectTreeAction::OpenEnableVersionControl(tree_path) => {
                 self.open_enable_version_control_dialog(tree_path);
             }
-            ProjectTreeAction::OpenLibraryEnableVersionControl(tree_path) => {
-                self.open_library_enable_version_control_dialog(tree_path);
+            ProjectTreeAction::OpenLibraryEnableVersionControl(row) => {
+                self.open_library_enable_version_control_dialog(row);
+            }
+            ProjectTreeAction::RemoveLibrary(row) => {
+                self.open_library_remove_dialog(row);
             }
         }
         Task::none()

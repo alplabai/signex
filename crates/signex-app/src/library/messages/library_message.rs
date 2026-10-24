@@ -286,6 +286,14 @@ pub enum LibraryMessage {
         table: String,
         row_id: RowId,
     },
+    /// Completion of the off-thread read behind `PlaceLibraryComponent`.
+    /// `target_sheet` is the sheet that was active when the gesture
+    /// started; the handler refuses to place anywhere else.
+    LibraryComponentResolved {
+        target_sheet: PathBuf,
+        library_path: PathBuf,
+        result: Result<Box<ResolvedPlacement>, String>,
+    },
     /// Internal trace-only signal: a Component Preview tab was
     /// opened for the given address. Fired alongside
     /// `OpenComponentRow` so downstream observers can attach to a
@@ -530,4 +538,24 @@ pub enum LibraryMessage {
     /// The `stat` pass finished, or timed out (#827); see
     /// [`crate::library::external_poll::PollOutcome`].
     ExternalEditsPolled(crate::library::external_poll::PollOutcome),
+}
+
+/// What the off-thread read of a library row hands back to `update`:
+/// everything needed to register the `LibSymbol` and place the part,
+/// with no further IO.
+#[derive(Debug, Clone)]
+pub struct ResolvedPlacement {
+    /// `"<library uuid>:<symbol uuid>"` — `LibSymbol.id` and `Symbol.lib_id`.
+    pub lib_id: String,
+    pub lib_symbol: signex_types::schematic::LibSymbol,
+    pub library_id: uuid::Uuid,
+    pub row_id: uuid::Uuid,
+    pub library_version: String,
+    pub internal_pn: String,
+    pub value: String,
+    /// The symbol is a power port: the placed instance is `is_power` and
+    /// `value` is its net name.
+    pub is_power: bool,
+    /// Reference prefix from the library symbol's designator (`U?` -> `U`).
+    pub prefix: String,
 }

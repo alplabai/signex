@@ -95,6 +95,7 @@ fn the_no_netlist_warning_names_the_exported_document_not_the_current_tab() {
         metadata: Default::default(),
         netlist: None,
         netlist_sheets: Vec::new(),
+        netlist_sheet_placements: Vec::new(),
     };
 
     super::log_stitch_issues(source, &ctx, &super::ExportIssues::default());

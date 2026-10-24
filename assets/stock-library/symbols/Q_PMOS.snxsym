@@ -1,0 +1,223 @@
+format = "snxsym/v2"
+file_uuid = "11898e98-1cf7-4f6c-b0c7-c88853622bf7"
+display_name = "Q_PMOS"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols]]
+uuid = "e7e9f067-7a54-43a3-bafb-87a4cfa17d79"
+name = "Q_PMOS"
+anchor = [
+    0.0,
+    0.0,
+]
+pins_tsv = '''
+number	name	electrical	pos_x	pos_y	orientation	length	description	function	pin_package_length	propagation_delay_ns	designator_visible	name_visible	inside_symbol	inside_edge_symbol	outside_edge_symbol	outside_symbol	hidden	locked	part_number
+1	G	Passive	-5.08	0	Right	2.54					true	true	None	None	None	None	false	false	1
+2	S	Passive	2.54	-5.08	Up	2.54					true	true	None	None	None	None	false	false	1
+3	D	Passive	2.54	5.08	Down	2.54					true	true	None	None	None	None	false	false	1
+'''
+designator = "Q?"
+comment = "*"
+description = "P-channel enhancement MOSFET; pins 1 G, 2 S, 3 D."
+component_type = "Standard"
+mirrored = false
+version = "0.0.1"
+released = false
+part_count = 1
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    -2.54,
+    0.0,
+]
+to = [
+    -1.905,
+    0.0,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    -1.905,
+    1.905,
+]
+to = [
+    -1.905,
+    -1.905,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    -1.27,
+    1.905,
+]
+to = [
+    -1.27,
+    1.27,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    -1.27,
+    0.635,
+]
+to = [
+    -1.27,
+    -0.635,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    -1.27,
+    -1.27,
+]
+to = [
+    -1.27,
+    -1.905,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    -1.27,
+    1.5875,
+]
+to = [
+    2.54,
+    1.5875,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    2.54,
+    1.5875,
+]
+to = [
+    2.54,
+    2.54,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    -1.27,
+    -1.5875,
+]
+to = [
+    2.54,
+    -1.5875,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    2.54,
+    -1.5875,
+]
+to = [
+    2.54,
+    -2.54,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    -1.27,
+    0.0,
+]
+to = [
+    1.905,
+    0.0,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    1.905,
+    0.0,
+]
+to = [
+    1.905,
+    -1.5875,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+fill = [
+    0,
+    0,
+    0,
+    255,
+]
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "polygon"
+vertices = [
+    [
+    0.0,
+    0.0,
+],
+    [
+    -0.762,
+    0.254,
+],
+    [
+    -0.762,
+    -0.254,
+],
+]
+
+[symbols.schematic_params]

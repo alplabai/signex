@@ -84,6 +84,10 @@ impl Signex {
             ProjectMsg::CloseRefsResolved { project_id, result } => {
                 self.handle_close_refs_resolved(project_id, result)
             }
+            ProjectMsg::CaseProbed {
+                project_id,
+                outcome,
+            } => self.handle_case_probed(project_id, outcome),
             ProjectMsg::AppQuitConfirm(choice) => self.handle_app_quit_confirm(choice),
             ProjectMsg::CloseOptions => {
                 self.ui_state.project_options = None;
@@ -394,87 +398,40 @@ impl Signex {
             ErcMsg::CloseDialog => self.handle_close_erc_dialog(),
             ErcMsg::SeverityChanged(rule, sev) => self.handle_erc_severity_changed(rule, sev),
             ErcMsg::PinMatrixCellCycled { row, col } => {
-                use signex_erc::Severity;
-                // Baseline defaults must match the `MATRIX` constant in
-                // `pin_matrix_view` so "clearing" an override drops back
-                // to the same severity the user sees in the UI.
-                const BASELINE: [[Severity; 6]; 6] = [
-                    [
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                    ],
-                    [
-                        Severity::Off,
-                        Severity::Error,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Error,
-                        Severity::Error,
-                    ],
-                    [
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Warning,
-                    ],
-                    [
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Error,
-                    ],
-                    [
-                        Severity::Off,
-                        Severity::Error,
-                        Severity::Off,
-                        Severity::Off,
-                        Severity::Error,
-                        Severity::Error,
-                    ],
-                    [
-                        Severity::Off,
-                        Severity::Error,
-                        Severity::Warning,
-                        Severity::Error,
-                        Severity::Error,
-                        Severity::Off,
-                    ],
-                ];
-                let key = (row, col);
-                let baseline = BASELINE
-                    .get(row as usize)
-                    .and_then(|r| r.get(col as usize))
-                    .copied()
-                    .unwrap_or(Severity::Off);
-                let current = self
-                    .ui_state
-                    .pin_matrix_overrides
-                    .get(&key)
-                    .copied()
-                    .unwrap_or(baseline);
-                let next = match current {
-                    Severity::Error => Severity::Warning,
-                    Severity::Warning => Severity::Info,
-                    Severity::Info => Severity::Off,
-                    Severity::Off => Severity::Error,
-                };
-                if next == baseline {
-                    self.ui_state.pin_matrix_overrides.remove(&key);
-                } else {
-                    self.ui_state.pin_matrix_overrides.insert(key, next);
-                }
-                crate::fonts::write_pin_matrix_overrides(&self.ui_state.pin_matrix_overrides);
-                Task::none()
+                self.handle_pin_matrix_cell_cycled(row, col)
             }
         }
+    }
+
+    /// Cycle one pin-matrix cell Error -> Warning -> Info -> Off -> Error and
+    /// persist the result. A pair of pin types is unordered, so the mirrored
+    /// cell is written with it: the dialog then never shows two different
+    /// verdicts for the same pair. A value equal to the baseline drops the
+    /// override instead of storing it.
+    fn handle_pin_matrix_cell_cycled(&mut self, row: u8, col: u8) -> Task<Message> {
+        use signex_erc::Severity;
+        use signex_erc::pin_matrix::baseline_cell;
+        let current = self
+            .ui_state
+            .pin_matrix_overrides
+            .get(&(row, col))
+            .copied()
+            .unwrap_or_else(|| baseline_cell(row, col));
+        let next = match current {
+            Severity::Error => Severity::Warning,
+            Severity::Warning => Severity::Info,
+            Severity::Info => Severity::Off,
+            Severity::Off => Severity::Error,
+        };
+        for key in [(row, col), (col, row)] {
+            if next == baseline_cell(key.0, key.1) {
+                self.ui_state.pin_matrix_overrides.remove(&key);
+            } else {
+                self.ui_state.pin_matrix_overrides.insert(key, next);
+            }
+        }
+        crate::fonts::write_pin_matrix_overrides(&self.ui_state.pin_matrix_overrides);
+        Task::none()
     }
 
     /// Preferences modal family handler (namespaced, ADR-0001 D3).
@@ -493,6 +450,9 @@ impl Signex {
         // several actions after it happened is worse than useless: it
         // attaches the message to the wrong action.
         self.sync_diagnostics_panel_ctx();
+        // Same reason: the draft, discard and Save paths change the zoom
+        // speed the PCB / symbol / footprint canvases hold a copy of.
+        self.sync_zoom_step();
         task
     }
 

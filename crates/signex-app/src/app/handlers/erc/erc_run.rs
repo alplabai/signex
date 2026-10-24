@@ -5,9 +5,16 @@ use iced::Task;
 use super::super::super::*;
 
 impl Signex {
+    /// The run-time ERC configuration: the user's pin-matrix overrides laid
+    /// over the baseline matrix.
+    pub(crate) fn erc_config(&self) -> signex_erc::ErcConfig {
+        signex_erc::ErcConfig::with_pin_matrix_overrides(&self.ui_state.pin_matrix_overrides)
+    }
+
     pub(crate) fn handle_run_erc(&mut self) -> Task<Message> {
         let dsl_eval_fns = self.load_project_dsl_eval_fns();
         let overrides = self.ui_state.erc_severity_override.clone();
+        let config = self.erc_config();
         let apply_overrides = |violations: Vec<signex_erc::Violation>| {
             signex_erc::apply_overrides(violations, &overrides)
         };
@@ -70,10 +77,12 @@ impl Signex {
         // `None`: ERC has no single entry point — it reports on every
         // sheet regardless of reachability (see the loop below), so the
         // root-exemption #536 added has nothing to exempt here.
-        let graph = crate::app::project_sheets::project_graph(
+        let fold = project_set.fold;
+        let graph = crate::app::project_sheets::project_graph_with(
             &project_set.sheets,
             base_dir.as_deref(),
             None,
+            fold,
         );
         for issue in &graph.issues {
             crate::diagnostics::log_warning(crate::app::project_sheets::stitch_issue_message(
@@ -95,20 +104,22 @@ impl Signex {
         let empty_resolved: std::collections::HashMap<String, signex_net::SheetKey> =
             std::collections::HashMap::new();
         for (path, snapshot) in &snapshots_by_path {
-            let key = crate::app::project_sheets::sheet_key(path, base_dir.as_deref());
+            let key = crate::app::project_sheets::sheet_key_with(path, base_dir.as_deref(), fold);
             let resolved = graph.resolved.get(&key).unwrap_or(&empty_resolved);
             let violations = if let Some(eval_fns) = dsl_eval_fns.as_ref() {
-                apply_overrides(signex_erc::run_with_project_and_dsl(
+                apply_overrides(signex_erc::run_with_project_dsl_and_config(
                     snapshot,
                     resolved,
                     &graph.sheets,
                     eval_fns,
+                    &config,
                 ))
             } else {
-                apply_overrides(signex_erc::run_with_project(
+                apply_overrides(signex_erc::run_with_project_and_config(
                     snapshot,
                     resolved,
                     &graph.sheets,
+                    &config,
                 ))
             };
             by_path.insert(path.clone(), violations);

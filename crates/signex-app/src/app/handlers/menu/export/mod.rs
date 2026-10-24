@@ -31,6 +31,40 @@ fn build_export_context(
     build_page_scope(document_state).map(|(ctx, _issues)| ctx)
 }
 
+/// The BOM's context: like [`build_export_context`] but carrying the project
+/// hierarchy (`netlist_sheets` + placement counts), so a BOM counts every part
+/// on every child sheet once per placement (#730). A loose document keeps the
+/// exported page scope (every unowned open tab), like the PDF: the hierarchy
+/// is dropped so the BOM does not narrow to the active sheet's subtree.
+fn build_bom_export_context(
+    document_state: &crate::app::state::DocumentState,
+) -> Option<ExportContext> {
+    build_bom_export_scope(document_state).map(|(ctx, _issues)| ctx)
+}
+
+/// The BOM's scope, shared by the preview and the written file so the user
+/// sees what gets exported: [`build_export_scope`] plus the loose-document
+/// rule (drop the hierarchy, keep every unowned open tab).
+fn build_bom_export_scope(
+    document_state: &crate::app::state::DocumentState,
+) -> Option<(ExportContext, ExportIssues)> {
+    build_bom_export_scope_for_source(document_state, document_state.active_path.as_deref()?)
+}
+
+/// [`build_bom_export_scope`] for an explicit source document (#852): the BOM
+/// completion path, where the dialog may have outlived the originating tab.
+fn build_bom_export_scope_for_source(
+    document_state: &crate::app::state::DocumentState,
+    source: &std::path::Path,
+) -> Option<(ExportContext, ExportIssues)> {
+    let (mut ctx, issues) = build_export_scope_for_source(document_state, source)?;
+    if document_state.document_project(source).is_none() {
+        ctx.netlist_sheets.clear();
+        ctx.netlist_sheet_placements.clear();
+    }
+    Some((ctx, issues))
+}
+
 /// Everything that went wrong while deriving the export's netlist.
 #[derive(Default)]
 pub(crate) struct ExportIssues {
@@ -300,7 +334,7 @@ fn build_export_scope(
 }
 
 /// [`build_export_scope`] without `ExportContext::netlist_sheets`, for the
-/// paths that never read it (PDF, BOM, print preview). Skips the per-sheet
+/// paths that never read it (PDF, print preview). Skips the per-sheet
 /// copy that only the Protel netlist needs.
 fn build_page_scope(
     document_state: &crate::app::state::DocumentState,
@@ -377,6 +411,7 @@ fn build_scope(
     let mut issues = ExportIssues::default();
     let set = sheet_set;
     let mut netlist_sheets: Vec<signex_types::schematic::SchematicSheet> = Vec::new();
+    let mut netlist_sheet_placements: Vec<usize> = Vec::new();
     let netlist = set.root.clone().and_then(|root_path| {
         // A declared page that exists and was read but that nothing
         // hierarchically references is stitched in below as its own
@@ -398,12 +433,15 @@ fn build_scope(
         let base_dir = project_dir
             .clone()
             .or_else(|| root_path.parent().map(PathBuf::from));
-        let graph = crate::app::project_sheets::project_graph(
+        let fold = set.fold;
+        let graph = crate::app::project_sheets::project_graph_with(
             &set.sheets,
             base_dir.as_deref(),
             Some(&root_path),
+            fold,
         );
-        let root_key = crate::app::project_sheets::sheet_key(&root_path, base_dir.as_deref());
+        let root_key =
+            crate::app::project_sheets::sheet_key_with(&root_path, base_dir.as_deref(), fold);
         if !graph.sheets.contains_key(&root_key) {
             // The root is exempt from losing a SheetKey collision (#536),
             // so reaching here means it was never loaded at all — absent,
@@ -423,8 +461,13 @@ fn build_scope(
         // Root + every declared page its hierarchy never reaches (#430) —
         // a flat multi-page project stitches into one netlist only if each
         // page is named as a root of its own.
-        let roots =
-            crate::app::project_sheets::project_roots(root_key, &set, &graph, base_dir.as_deref());
+        let roots = crate::app::project_sheets::project_roots(
+            root_key,
+            &set,
+            &graph,
+            base_dir.as_deref(),
+            fold,
+        );
         // `build_project_netlist` always produces a netlist and reports what
         // it could not stitch in-band. The issues are returned to the caller
         // rather than acted on here, because severity is a per-deliverable
@@ -438,8 +481,20 @@ fn build_scope(
         // key order so the output is deterministic: hierarchical children are
         // not printed pages, yet their parts sit in the netlist's terminals.
         if with_netlist_sheets {
+            // Placement counts come from the same occurrence walk the netlist
+            // just used, so the BOM multiplies a child by how often it is
+            // placed (#730). A sheet the walk never reaches counts zero.
+            let counts = signex_net::sheet_placements(&signex_net::ProjectGraph {
+                sheets: &graph.sheets,
+                resolved: &graph.resolved,
+                roots: &roots,
+            });
             let mut keyed: Vec<_> = graph.sheets.into_iter().collect();
             keyed.sort_by(|a, b| a.0.cmp(&b.0));
+            netlist_sheet_placements = keyed
+                .iter()
+                .map(|(key, _)| counts.get(key).copied().unwrap_or(0))
+                .collect();
             netlist_sheets = keyed.into_iter().map(|(_, sheet)| sheet).collect();
         }
         let mut stitch = result.issues;
@@ -454,6 +509,7 @@ fn build_scope(
             metadata,
             netlist,
             netlist_sheets,
+            netlist_sheet_placements,
         },
         issues,
     ))

@@ -117,7 +117,7 @@ impl DatabaseAdapter {
         if auth.starts_with(KEYCHAIN_SIGIL) {
             return Err(LibraryError::Backend(format!(
                 "library auth `{KEYCHAIN_SIGIL}...` is not resolved by the database adapter yet; \
-             refusing to send the sigil as a bearer token"
+             refusing to send the sigil as a bearer token (OS keychain resolution: #976)"
             )));
         }
         check_transport_security(&base_url, !auth.is_empty())?;
