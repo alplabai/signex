@@ -155,6 +155,7 @@ pub fn emit_opaque_pass_preview(
         };
 
         scene.polygons.push(GpuPolygon {
+            holes: Vec::new(),
             vertices: square_vertices([x, y], tile_size),
             fill_color,
             stroke_color: Some(stroke_color),

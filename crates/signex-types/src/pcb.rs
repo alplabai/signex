@@ -321,6 +321,13 @@ pub struct Zone {
     /// than 3 vertices is malformed and consumers must skip it, as the
     /// renderer skips an outline with `len() < 3`; the parser does not
     /// validate this.
+    ///
+    /// Holes must be disjoint from each other and lie strictly inside
+    /// `outline`, touching neither it nor each other's rings: the GPU
+    /// triangulation and the CPU even-odd fill only agree for such holes. A
+    /// cut-out that reaches the outline is a notch, and belongs in `outline`
+    /// itself. A zone that breaks this still draws (as its solid outline on
+    /// the GPU), just not as the cut-outs the author meant.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub holes: Vec<Vec<Point>>,
     #[serde(default)]
