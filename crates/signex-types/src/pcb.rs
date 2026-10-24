@@ -340,6 +340,13 @@ pub struct Zone {
     /// Keys in this zone's `[[zones]]` table that this build does not
     /// recognise, kept so a save re-emits them: a zone field added by a
     /// later build (as `holes` was in #818) survives a re-save here (#883).
+    ///
+    /// Unlike `Pad` and `Footprint`, whose foreign keys come from an
+    /// `[extras.*]` table, a zone is its own TOML table, so the bag is
+    /// flattened straight into it. Two side effects on the JSON path (tests
+    /// only today): the foreign keys serialise at the zone's top level rather
+    /// than under `"unknown"`, and a `null` foreign value does not
+    /// deserialise, since TOML has no null.
     #[serde(flatten)]
     pub unknown: UnknownFields,
 }
