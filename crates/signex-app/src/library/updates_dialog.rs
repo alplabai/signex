@@ -30,11 +30,9 @@
 //! `LibraryState.skipped_updates_for` so the status bar can show a
 //! persistent indicator until resolved.
 //!
-//! The matching `needs_overlay` predicate in
-//! `app/view/mod.rs::view_main_for` includes
-//! `library_updates.is_some()` — without it the modal's `collect_overlays`
-//! contribution is discarded silently and clicks fall through (memory:
-//! `[needs_overlay predicate gates modal rendering]`).
+//! Painted by `library_updates_overlay` via `collect_overlays`, which
+//! runs every frame; the builder's `library_updates.is_some()` guard is
+//! the only open check.
 
 use std::path::PathBuf;
 
