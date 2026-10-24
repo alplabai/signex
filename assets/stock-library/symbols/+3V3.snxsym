@@ -1,0 +1,50 @@
+format = "snxsym/v2"
+file_uuid = "e58c46cd-6870-4bfb-9278-eef1afa95d0b"
+display_name = "+3V3"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols]]
+uuid = "1908711d-a1cf-4cdd-9420-8bdf894680c1"
+name = "+3V3"
+anchor = [
+    0.0,
+    0.0,
+]
+pins_tsv = '''
+number	name	electrical	pos_x	pos_y	orientation	length	description	function	pin_package_length	propagation_delay_ns	designator_visible	name_visible	inside_symbol	inside_edge_symbol	outside_edge_symbol	outside_symbol	hidden	locked	part_number
+1	+3V3	Power	0	0	Up	1.27					false	false	None	None	None	None	false	false	1
+'''
+designator = "#PWR?"
+comment = "+3V3"
+description = "+3V3 supply power port (arrow)."
+component_type = "Standard"
+mirrored = false
+version = "0.0.1"
+released = false
+part_count = 1
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "polygon"
+vertices = [
+    [
+    -0.635,
+    1.27,
+],
+    [
+    0.635,
+    1.27,
+],
+    [
+    0.0,
+    2.032,
+],
+]
+
+[symbols.schematic_params]

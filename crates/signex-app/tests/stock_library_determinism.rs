@@ -170,3 +170,82 @@ fn writing_the_library_twice_is_byte_identical_and_never_inits_git() {
     assert!(!dir.path().join(".git").exists(), "no git init in the tree");
     assert!(dir.path().join("symbols").is_dir());
 }
+
+fn symbols_dir() -> PathBuf {
+    stock_root().join("symbols")
+}
+
+#[test]
+fn committed_stock_symbols_match_the_generator() {
+    let rendered = stock_gen::symbols::render_all().expect("render symbols");
+    assert_eq!(rendered.len(), 20, "15 discretes, 4 power ports, 1 IC body");
+    let mut committed: Vec<String> = std::fs::read_dir(symbols_dir())
+        .expect("read symbols dir")
+        .map(|e| e.expect("entry").file_name().to_string_lossy().into_owned())
+        .collect();
+    committed.sort();
+    let mut expected: Vec<String> = rendered.iter().map(|r| r.file_name.clone()).collect();
+    expected.sort();
+    assert_eq!(
+        committed, expected,
+        "symbols/ holds exactly the generated set"
+    );
+    for sym in &rendered {
+        assert_eq!(
+            read_lf(&symbols_dir().join(&sym.file_name)),
+            sym.text,
+            "{} is stale: rerun `cargo run --example build_stock_library -p signex-app`",
+            sym.file_name
+        );
+    }
+}
+
+#[test]
+fn every_committed_symbol_round_trips_byte_identical() {
+    use signex_library::primitive::symbol::SymbolFile;
+    for sym in stock_gen::symbols::render_all().expect("render symbols") {
+        let text = read_lf(&symbols_dir().join(&sym.file_name));
+        let parsed = SymbolFile::from_toml_str(&text).expect("parse");
+        assert_eq!(
+            parsed.to_toml_string().expect("write"),
+            text,
+            "{} does not round-trip",
+            sym.file_name
+        );
+    }
+}
+
+#[test]
+fn every_stock_symbol_pin_is_on_the_schematic_grid_and_converts() {
+    use signex_library::primitive::symbol::{PinDirection, SymbolFile};
+    let grid = stock_gen::symbols::GRID_MM;
+    for sym in stock_gen::symbols::render_all().expect("render symbols") {
+        let file = SymbolFile::from_toml_str(&sym.text).expect("parse");
+        let symbol = &file.symbols[0];
+        assert!(!symbol.pins.is_empty(), "{} has no pins", symbol.name);
+        for pin in &symbol.pins {
+            for v in pin.position {
+                let steps = v / grid;
+                assert!(
+                    (steps - steps.round()).abs() < 1e-6,
+                    "{} pin {} at {:?} is off the {grid} mm grid",
+                    symbol.name,
+                    pin.number,
+                    pin.position
+                );
+            }
+        }
+        let lib = symbol.to_lib_symbol(symbol.name.clone());
+        assert_eq!(
+            lib.pins.len(),
+            symbol.pins.len(),
+            "{} pins lost",
+            symbol.name
+        );
+        assert!(!lib.graphics.is_empty(), "{} has no body", symbol.name);
+        if symbol.designator == "#PWR?" {
+            assert_eq!(symbol.pins.len(), 1);
+            assert_eq!(symbol.pins[0].electrical, PinDirection::Power);
+        }
+    }
+}

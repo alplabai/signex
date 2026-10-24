@@ -1,0 +1,60 @@
+format = "snxsym/v1"
+file_uuid = "e288a70a-095b-4259-944f-4f63a9f33a7d"
+display_name = "Ferrite"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols]]
+uuid = "9b67ea2f-57cc-464f-b39b-80a1508c1ca9"
+name = "Ferrite"
+anchor = [
+    0.0,
+    0.0,
+]
+pins_tsv = '''
+number	name	electrical	pos_x	pos_y	orientation	length	description	function	pin_package_length	propagation_delay_ns	designator_visible	name_visible	inside_symbol	inside_edge_symbol	outside_edge_symbol	outside_symbol	hidden	locked	part_number
+1	1	Passive	0	3.81	Down	2.54					true	false	None	None	None	None	false	false	1
+2	2	Passive	0	-3.81	Up	2.54					true	false	None	None	None	None	false	false	1
+'''
+designator = "FB?"
+comment = "*"
+description = "Ferrite bead: a rectangle struck through by a diagonal."
+component_type = "Standard"
+mirrored = false
+version = "0.0.1"
+released = false
+part_count = 1
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "rectangle"
+from = [
+    -1.016,
+    1.27,
+]
+to = [
+    1.016,
+    -1.27,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    -1.016,
+    -1.27,
+]
+to = [
+    1.016,
+    1.27,
+]
+
+[symbols.schematic_params]
