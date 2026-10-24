@@ -411,6 +411,9 @@ pub struct DocumentState {
     /// The Components filter + Library Browser queries and the debounce
     /// that persists them (#859); see `handlers/dock/search_prefs_persist.rs`.
     pub search_prefs: crate::persist::SearchPrefsSync,
+    /// Off-thread document writes: per-path ordering, in-flight tracking and
+    /// the quit barrier (#859); see `handlers/document_files/save_async.rs`.
+    pub document_saves: crate::persist::DocumentSaves,
     pub tabs: Vec<TabInfo>,
     pub active_tab: usize,
     /// All live schematic engines keyed by their on-disk path. Every
