@@ -118,6 +118,9 @@ impl Signex {
                 )));
             return;
         }
+        // A write still running for this file would recreate it after the
+        // delete; let it finish first (same bounded wait as rename).
+        self.document_state.document_saves.barrier().wait();
         let result = if target.is_dir() {
             std::fs::remove_dir_all(target)
         } else {
