@@ -222,7 +222,9 @@ jobs:
         shell: bash
         run: |
           V="${{ steps.version.outputs.version }}"
-          sudo dpkg -i "signex_${V}_${{ matrix.arch }}.deb"
+          # apt (not dpkg -i) resolves the Depends line, as a tester's install does.
+          sudo apt-get update -q
+          sudo apt-get install -y "./signex_${V}_${{ matrix.arch }}.deb"
           bash scripts/smoke_release_artifact.sh "$V" /usr/bin/signex
           # --appimage-extract-and-run: no FUSE needed on the runner.
           bash scripts/smoke_release_artifact.sh "$V" \
