@@ -200,22 +200,25 @@ fn engine_options_from_opts(opts: &BomOptions) -> BomEngineOptions {
 }
 
 fn build_bom_context(ctx: &ExportContext, opts: &BomOptions) -> BomContext {
-    let mut components = Vec::new();
-
+    // One ordered symbol list over every sheet, grouped once: the units of a
+    // multi-unit part are bought and fitted once even when they sit on
+    // different pages (#691). A sheet placed N times contributes its symbols N
+    // times; the same unit appearing twice is two parts, so a child placed N
+    // times still yields N parts. Per-instance designators do not exist yet
+    // (the netlist reports `SharedReferenceAcrossInstances` for the same
+    // reason), so every copy carries the sheet's own designator.
+    let mut placed: Vec<&Symbol> = Vec::new();
     for (sheet, placements) in bom_sheets(ctx) {
-        // One component per physical part: every unit of a multi-unit part is
-        // a separate placed symbol, but it is bought and fitted once (#691).
-        // Parts are grouped per sheet: the same designator on two sheets is
-        // two parts, not two units of one.
-        let sheet_parts = sheet_components(sheet, opts);
-        // A sheet placed N times contributes N copies of each part. Per-
-        // instance designators do not exist yet (the netlist reports
-        // `SharedReferenceAcrossInstances` for the same reason), so every copy
-        // carries the sheet's own designator.
         for _ in 0..placements {
-            components.extend(sheet_parts.iter().cloned());
+            placed.extend(
+                sheet
+                    .symbols
+                    .iter()
+                    .filter(|sym| !(sym.reference.starts_with("#PWR") || sym.is_power)),
+            );
         }
     }
+    let components = placed_components(&placed, opts);
 
     BomContext {
         components,
@@ -251,16 +254,11 @@ fn bom_sheets(ctx: &ExportContext) -> Vec<(&SchematicSheet, usize)> {
         .collect()
 }
 
-/// The components of one sheet, one per physical part. A part takes what ANY
-/// of its units sets (see `units`), so an MPN typed on unit 2 or a DNP flag on
-/// unit 2 is not lost to unit 1.
-fn sheet_components(sheet: &SchematicSheet, opts: &BomOptions) -> Vec<BomComponent> {
+/// The components of a placed-symbol list, one per physical part. A part takes
+/// what ANY of its units sets (see `units`), so an MPN typed on unit 2 or a DNP
+/// flag on unit 2 is not lost to unit 1.
+fn placed_components(placed: &[&Symbol], opts: &BomOptions) -> Vec<BomComponent> {
     let mut components = Vec::new();
-    let placed: Vec<&Symbol> = sheet
-        .symbols
-        .iter()
-        .filter(|sym| !(sym.reference.starts_with("#PWR") || sym.is_power))
-        .collect();
     let parts = group_into_parts(placed.iter().map(|sym| sym.part_key()));
 
     for part in &parts {
@@ -683,6 +681,54 @@ mod tests {
                 .iter()
                 .any(|i| i.rule == BomRule::DuplicateDesignator)
         );
+    }
+
+    fn second_sheet_with(symbols: Vec<Symbol>) -> SheetSnapshot {
+        SheetSnapshot {
+            path: "power.snxsch".into(),
+            schematic: SchematicSheet {
+                paper_size: "A4".to_string(),
+                symbols,
+                ..Default::default()
+            },
+            sheet_name: "Power".to_string(),
+            sheet_number: 2,
+            sheet_count: 2,
+        }
+    }
+
+    fn assert_one_lm358(ctx: &ExportContext) {
+        let (table, report) = rollup_with_validation(ctx, &BomOptions::default());
+        assert_eq!(table.rows.len(), 1);
+        assert_eq!(table.rows[0].qty, 1);
+        assert!(
+            !report
+                .issues
+                .iter()
+                .any(|i| i.rule == BomRule::DuplicateDesignator)
+        );
+    }
+
+    #[test]
+    fn units_of_one_part_split_across_two_pages_are_one_part() {
+        let mut ctx = context_with(vec![unit_of("U1", "Amplifier:LM358", 1)]);
+        ctx.sheets
+            .push(second_sheet_with(vec![unit_of("U1", "Amplifier:LM358", 2)]));
+        assert_one_lm358(&ctx);
+    }
+
+    #[test]
+    fn units_split_across_hierarchy_sheets_are_one_part() {
+        let mut ctx = context_with(vec![unit_of("U1", "Amplifier:LM358", 1)]);
+        ctx.netlist_sheets = vec![
+            ctx.sheets[0].schematic.clone(),
+            SchematicSheet {
+                symbols: vec![unit_of("U1", "Amplifier:LM358", 2)],
+                ..Default::default()
+            },
+        ];
+        ctx.netlist_sheet_placements = vec![1, 1];
+        assert_one_lm358(&ctx);
     }
 
     fn with_field(mut sym: Symbol, key: &str, value: &str) -> Symbol {

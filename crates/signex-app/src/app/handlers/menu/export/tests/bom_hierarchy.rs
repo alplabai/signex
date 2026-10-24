@@ -151,3 +151,32 @@ fn a_loose_documents_written_bom_matches_the_preview() {
     assert!(written.contains("R_X"), "written BOM: {written}");
     assert!(written.contains("R_Y"), "written BOM: {written}");
 }
+
+#[test]
+fn a_project_whose_hierarchy_cannot_be_derived_says_so_in_bom_terms() {
+    // The declared root sheet is neither open nor on disk, so no hierarchy is
+    // derived and the BOM falls back to the printed pages. A BOM user must be
+    // told child-sheet parts are missing, in BOM terms.
+    let _ = crate::diagnostics::init_logging();
+    let dir = std::env::temp_dir().join(format!("signex-bom-noroot-{}", uuid::Uuid::new_v4()));
+    let mut app = app_workspace(&dir.to_string_lossy(), &["top.snxsch"]);
+    app.document_state.projects[0].data.schematic_root = Some("gone-root.snxsch".to_string());
+    let top = dir.join("top.snxsch");
+    open_with(
+        &mut app.document_state,
+        &top,
+        sheet_with_net("R_TOP", "TOP_NET", &[]),
+    );
+    app.document_state.active_path = Some(top);
+
+    let out = dir.join("bom.csv");
+    let _ = app.handle_export_bom_finished(Ok(out));
+
+    let warned = crate::diagnostics::recent_entries().iter().any(|e| {
+        e.level == crate::diagnostics::DiagnosticLevel::Warning
+            && e.message
+                .contains("BOM: project hierarchy could not be derived")
+    });
+    assert!(warned, "the BOM warning must reach the Messages panel");
+    std::fs::remove_dir_all(&dir).ok();
+}
