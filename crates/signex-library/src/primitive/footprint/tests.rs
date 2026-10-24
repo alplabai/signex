@@ -423,6 +423,9 @@ fn footprint_file_get_by_uuid() {
 
 const NON_FINITE: [f64; 3] = [f64::NAN, f64::INFINITY, f64::NEG_INFINITY];
 
+/// A column name and the edit that puts a number in that column.
+type PadSetter = (&'static str, fn(&mut Pad, f64));
+
 fn assert_non_finite_names(result: Result<String, FootprintFileError>, needles: &[&str]) {
     match result {
         Err(FootprintFileError::NonFiniteField { field }) => {
@@ -439,7 +442,7 @@ fn assert_non_finite_names(result: Result<String, FootprintFileError>, needles: 
 /// silently on reopen) and a debug build panicked in `debug_assert!`.
 #[test]
 fn pads_to_tsv_refuses_a_non_finite_cell() {
-    let setters: [(&str, fn(&mut Pad, f64)); 8] = [
+    let setters: [PadSetter; 8] = [
         ("size", |p, v| p.size[0] = v),
         ("pos", |p, v| p.position[1] = v),
         ("rotation", |p, v| p.rotation = v),

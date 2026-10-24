@@ -24,34 +24,6 @@ fn typed_or_keep(text: &str, keep: f64) -> f64 {
     crate::numeric_field::parse_field_f64(text).unwrap_or(keep)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::typed_or_keep;
-
-    /// #828 -- the pin X / Y / length and graphic-field inputs keep the
-    /// stored value for every non-finite entry.
-    #[test]
-    fn non_finite_entries_keep_the_stored_value() {
-        for bad in ["nan", "NaN", "inf", "-inf", "infinity", "1e999", "-1e999"] {
-            assert_eq!(typed_or_keep(bad, 2.54), 2.54, "{bad:?}");
-        }
-    }
-
-    #[test]
-    fn ordinary_entries_commit() {
-        assert_eq!(typed_or_keep(" 1.5 ", 2.54), 1.5);
-        assert_eq!(typed_or_keep("-3", 2.54), -3.0);
-        assert_eq!(typed_or_keep("1.", 2.54), 1.0);
-    }
-
-    #[test]
-    fn mid_edit_text_keeps_the_stored_value() {
-        assert_eq!(typed_or_keep("", 2.54), 2.54);
-        assert_eq!(typed_or_keep("-", 2.54), 2.54);
-        assert_eq!(typed_or_keep("1,5", 2.54), 2.54);
-    }
-}
-
 /// Properties panel content for the active `.snxsym` standalone editor
 /// tab. Mirrors Altium SchLib's right-dock Properties.
 pub(super) fn view_symbol_editor_properties<'a>(
@@ -166,4 +138,32 @@ fn prop_row_static<'a>(
     .padding([3, 8])
     .width(Length::Fill)
     .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::typed_or_keep;
+
+    /// #828 -- the pin X / Y / length and graphic-field inputs keep the
+    /// stored value for every non-finite entry.
+    #[test]
+    fn non_finite_entries_keep_the_stored_value() {
+        for bad in ["nan", "NaN", "inf", "-inf", "infinity", "1e999", "-1e999"] {
+            assert_eq!(typed_or_keep(bad, 2.54), 2.54, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn ordinary_entries_commit() {
+        assert_eq!(typed_or_keep(" 1.5 ", 2.54), 1.5);
+        assert_eq!(typed_or_keep("-3", 2.54), -3.0);
+        assert_eq!(typed_or_keep("1.", 2.54), 1.0);
+    }
+
+    #[test]
+    fn mid_edit_text_keeps_the_stored_value() {
+        assert_eq!(typed_or_keep("", 2.54), 2.54);
+        assert_eq!(typed_or_keep("-", 2.54), 2.54);
+        assert_eq!(typed_or_keep("1,5", 2.54), 2.54);
+    }
 }

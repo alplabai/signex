@@ -705,6 +705,9 @@ fn arc_near_full_turn_stays_an_arc_on_load() {
 
 const NON_FINITE: [f64; 3] = [f64::NAN, f64::INFINITY, f64::NEG_INFINITY];
 
+/// A column name and the edit that puts a number in that column.
+type PinSetter = (&'static str, fn(&mut SymbolPin, f64));
+
 fn assert_non_finite_names(result: Result<String, SymbolFileError>, needles: &[&str]) {
     match result {
         Err(SymbolFileError::NonFiniteField { field }) => {
@@ -721,7 +724,7 @@ fn assert_non_finite_names(result: Result<String, SymbolFileError>, needles: &[&
 /// silently on reopen) and a debug build panicked in `debug_assert!`.
 #[test]
 fn pins_to_tsv_refuses_a_non_finite_cell() {
-    let setters: [(&str, fn(&mut SymbolPin, f64)); 5] = [
+    let setters: [PinSetter; 5] = [
         ("pos_x", |p, v| p.position[0] = v),
         ("pos_y", |p, v| p.position[1] = v),
         ("length", |p, v| p.length = v),
