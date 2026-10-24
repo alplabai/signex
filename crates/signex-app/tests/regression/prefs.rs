@@ -305,6 +305,33 @@ fn prefs_grid_style_round_trip_through_json() {
 }
 
 #[test]
+fn prefs_zoom_step_percent_round_trip_and_defaults() {
+    let (_tmp, path) = temp_prefs_path();
+    // Old prefs file without the key: default 10 (a x1.10 notch).
+    assert_eq!(signex_app::fonts::read_zoom_step_percent_pref_at(&path), 10);
+
+    signex_app::fonts::write_zoom_step_percent_pref_at(&path, 25);
+    assert_eq!(signex_app::fonts::read_zoom_step_percent_pref_at(&path), 25);
+
+    // Out-of-range / non-numeric values clamp or fall back to the default.
+    for (raw, expected) in [
+        ("200", 50),
+        ("0", 5),
+        ("-4", 5),
+        ("12.6", 13),
+        ("\"fast\"", 10),
+        ("null", 10),
+    ] {
+        fs::write(&path, format!(r#"{{"zoom_step_percent": {raw}}}"#)).unwrap();
+        assert_eq!(
+            signex_app::fonts::read_zoom_step_percent_pref_at(&path),
+            expected,
+            "zoom_step_percent {raw}"
+        );
+    }
+}
+
+#[test]
 fn prefs_enum_case_insensitive_decode() {
     // The legacy match arms accepted both lowercase and TitleCase tokens
     // (e.g. "altium" | "Altium"). The refactor uses
