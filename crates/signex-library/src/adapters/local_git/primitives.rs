@@ -294,6 +294,10 @@ impl LocalGitAdapter {
         F: FnOnce(&mut LibraryFile) -> Result<bool, LibraryError>,
     {
         self.ensure_commit_identity()?;
+        // Another Signex process could otherwise reload and write between
+        // our reload and our write (see `write_lock`). Taken before the
+        // in-process guard, and held until the write is done.
+        let _write_lock = self.lock_for_write()?;
         let mut guard = self
             .library_file
             .write()
