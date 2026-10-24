@@ -186,10 +186,11 @@ impl Signex {
 
         // Two pending entries for one path would share a tree key, so the
         // tree could expand or select the wrong row (#855).
-        // Compared the way the host's filesystem does, so `Parts.snxlib` and
-        // `parts.snxlib` are one library on macOS and Windows.
-        use crate::app::state::scope::{CaseFold, path_key_with};
-        let fold = CaseFold::host_default();
+        // Compared the way the project's volume does (probed on load, #694),
+        // so `Parts.snxlib` and `parts.snxlib` are one library where it
+        // ignores case.
+        use crate::app::state::scope::path_key_with;
+        let fold = loaded.case_fold;
         let key = path_key_with(&lib_path, fold);
         if loaded
             .pending_libraries

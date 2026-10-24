@@ -1,0 +1,49 @@
+format = "snxsym/v1"
+file_uuid = "15411de1-42d3-4ae8-b105-8ead8714b324"
+display_name = "Conn_1x06"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols]]
+uuid = "a8dc8059-32fa-4317-922c-2664893d3451"
+name = "Conn_1x06"
+anchor = [
+    0.0,
+    0.0,
+]
+pins_tsv = '''
+number	name	electrical	pos_x	pos_y	orientation	length	description	function	pin_package_length	propagation_delay_ns	designator_visible	name_visible	inside_symbol	inside_edge_symbol	outside_edge_symbol	outside_symbol	hidden	locked	part_number
+1	Pin_1	Passive	-5.08	6.35	Right	2.54					true	false	None	None	None	None	false	false	1
+2	Pin_2	Passive	-5.08	3.81	Right	2.54					true	false	None	None	None	None	false	false	1
+3	Pin_3	Passive	-5.08	1.27	Right	2.54					true	false	None	None	None	None	false	false	1
+4	Pin_4	Passive	-5.08	-1.27	Right	2.54					true	false	None	None	None	None	false	false	1
+5	Pin_5	Passive	-5.08	-3.81	Right	2.54					true	false	None	None	None	None	false	false	1
+6	Pin_6	Passive	-5.08	-6.35	Right	2.54					true	false	None	None	None	None	false	false	1
+'''
+designator = "J?"
+comment = "*"
+description = "6-pin single-row header, 2.54 mm pitch."
+component_type = "Standard"
+mirrored = false
+version = "0.0.1"
+released = false
+part_count = 1
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "rectangle"
+from = [
+    -2.54,
+    7.62,
+]
+to = [
+    1.27,
+    -7.62,
+]
+
+[symbols.schematic_params]

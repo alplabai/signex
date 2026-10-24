@@ -8,6 +8,7 @@ use signex_types::schematic::{ProjectParts, Symbol, annotation_order};
 use uuid::Uuid;
 
 use super::Engine;
+use crate::history::UndoGroupId;
 
 /// Where one sheet sits in a project-wide annotation pass. The parts are
 /// grouped across every sheet before the first sheet is touched, so units of
@@ -19,6 +20,9 @@ pub struct AnnotateScope<'a> {
     pub sheet: usize,
     /// Symbols the pass must leave alone.
     pub locked: &'a HashSet<Uuid>,
+    /// When set, the undo entry this sheet records is stamped with the id so
+    /// the whole pass undoes and redoes as one step across sheets.
+    pub undo_group: Option<UndoGroupId>,
 }
 
 impl Engine {
@@ -35,6 +39,7 @@ impl Engine {
             parts: &parts,
             sheet: 0,
             locked: &locked,
+            undo_group: None,
         };
         self.annotate_in_project(mode, next_by_prefix, scope, &mut HashMap::new())
     }
@@ -57,6 +62,7 @@ impl Engine {
             parts,
             sheet,
             locked,
+            undo_group,
         } = scope;
         let is_designator_target = |sym: &Symbol| -> bool {
             !sym.is_power && !sym.reference.starts_with('#') && !locked.contains(&sym.uuid)
@@ -105,7 +111,7 @@ impl Engine {
                 semantic: SemanticPatch::SymbolFieldsUpdated,
                 document: DocumentPatch::SYMBOLS,
             };
-            self.record_history(before, patch_pair);
+            self.record_grouped_history(before, patch_pair, undo_group);
             return Ok(true);
         }
 
@@ -183,7 +189,7 @@ impl Engine {
             semantic: SemanticPatch::SymbolFieldsUpdated,
             document: DocumentPatch::SYMBOLS,
         };
-        self.record_history(before, patch_pair);
+        self.record_grouped_history(before, patch_pair, undo_group);
         Ok(true)
     }
 }
@@ -364,6 +370,7 @@ mod tests {
                 parts: &parts,
                 sheet,
                 locked,
+                undo_group: None,
             };
             engine
                 .annotate_in_project(mode, &mut seed, scope, &mut assigned)

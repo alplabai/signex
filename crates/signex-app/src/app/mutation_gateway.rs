@@ -13,7 +13,7 @@ pub(crate) enum CommandOutcome {
 }
 
 impl Signex {
-    fn render_invalidation_for_patch(
+    pub(super) fn render_invalidation_for_patch(
         patch: signex_engine::DocumentPatch,
     ) -> crate::schematic_runtime::RenderInvalidation {
         use crate::schematic_runtime::RenderInvalidation;
@@ -199,6 +199,17 @@ impl Signex {
     /// also makes the `Engine::can_undo` the Edit menu reads
     /// (`app/view/mod.rs`) agree with what Undo will actually do.
     pub(crate) fn apply_engine_undo(&mut self, update_selection_info: bool) -> bool {
+        if let Some(group) = self
+            .document_state
+            .active_engine()
+            .and_then(|engine| engine.next_undo_group())
+        {
+            return self.apply_grouped_step(
+                group,
+                super::undo_groups::StepDirection::Undo,
+                update_selection_info,
+            );
+        }
         let invalidation = if let Some(engine) = self.document_state.active_engine_mut() {
             match engine.undo() {
                 Ok(Some(patch_pair)) => Self::render_invalidation_for_patch(patch_pair.document),
@@ -219,6 +230,17 @@ impl Signex {
     /// Redo one step of the **active** engine's own history. Mirror of
     /// [`Signex::apply_engine_undo`].
     pub(crate) fn apply_engine_redo(&mut self, update_selection_info: bool) -> bool {
+        if let Some(group) = self
+            .document_state
+            .active_engine()
+            .and_then(|engine| engine.next_redo_group())
+        {
+            return self.apply_grouped_step(
+                group,
+                super::undo_groups::StepDirection::Redo,
+                update_selection_info,
+            );
+        }
         let invalidation = if let Some(engine) = self.document_state.active_engine_mut() {
             match engine.redo() {
                 Ok(Some(patch_pair)) => Self::render_invalidation_for_patch(patch_pair.document),
@@ -236,7 +258,7 @@ impl Signex {
         self.finish_schematic_mutation(invalidation, true, update_selection_info)
     }
 
-    fn finish_schematic_mutation(
+    pub(super) fn finish_schematic_mutation(
         &mut self,
         invalidation: crate::schematic_runtime::RenderInvalidation,
         clear_overlay_cache: bool,
@@ -329,24 +351,26 @@ impl Signex {
         // (#338): a child sheet in focus must not shrink the netlist to its
         // own subtree. A loose document (or a project with no declared root)
         // roots at the active sheet — see `resolve_netlist_root`.
+        let project = self.document_state.active_document_project();
+        let fold = crate::app::state::project_case::fold_of(project);
+        let project_dir = project.map(|p| p.dir().to_path_buf());
         let set = crate::app::project_sheets::assemble_project_sheets(
             &self.document_state,
             &[],
             &root_path,
+            fold,
         );
-        let project_dir = self
-            .document_state
-            .active_document_project()
-            .map(|p| p.dir().to_path_buf());
         let base_dir = project_dir
             .clone()
             .or_else(|| root_path.parent().map(std::path::PathBuf::from));
-        let graph = crate::app::project_sheets::project_graph(
+        let graph = crate::app::project_sheets::project_graph_with(
             &set.sheets,
             base_dir.as_deref(),
             Some(&root_path),
+            fold,
         );
-        let root_key = crate::app::project_sheets::sheet_key(&root_path, base_dir.as_deref());
+        let root_key =
+            crate::app::project_sheets::sheet_key_with(&root_path, base_dir.as_deref(), fold);
         if !graph.sheets.contains_key(&root_key) {
             // The root sheet is exempt from losing a SheetKey collision
             // (#536), so reaching here means it was never assembled at

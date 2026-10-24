@@ -6,8 +6,10 @@ use crate::dock::DockArea;
 
 use super::TabInfo;
 
+mod case_fold;
 mod interaction;
 mod pdf_page_setup;
+pub(crate) mod project_case;
 mod reference_policy;
 pub(crate) mod scope;
 mod sheet_read;
@@ -339,6 +341,11 @@ pub struct LoadedProject {
     /// becomes the eventual `library_id` once materialised.
     pub pending_libraries:
         std::collections::HashMap<uuid::Uuid, crate::library::commands::PendingLibrarySpec>,
+    /// Path-key rules for this project's volume, probed once off-thread
+    /// after load (#694); the host default until the answer arrives.
+    pub case_fold: scope::CaseFold,
+    /// The volume probe has reported; the first answer wins.
+    pub case_probed: bool,
 }
 
 impl LoadedProject {
@@ -452,6 +459,14 @@ pub struct DocumentState {
     /// which we detect by resolving through `projects` and treating None
     /// as "no longer loaded").
     pub next_project_id: u32,
+    /// Monotonic counter minting the raw value of [`signex_engine::UndoGroupId`]s for
+    /// project-wide undo steps (an annotate run under "One step for the whole
+    /// project"). Never reused.
+    pub next_undo_group: u64,
+    /// The sheets each undo group touched. Undo/redo of a
+    /// grouped entry consults this to find the sheets that must move with it.
+    pub undo_groups:
+        std::collections::HashMap<signex_engine::UndoGroupId, crate::app::UndoGroupSheets>,
     pub panel_ctx: crate::panels::PanelContext,
     pub standard_lib_dir: Option<PathBuf>,
     pub loaded_lib: std::collections::HashMap<String, signex_types::schematic::LibSymbol>,

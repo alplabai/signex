@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 use super::*;
 use crate::app::project_sheets::{assemble_project_sheets, project_root_sheet_path};
-use crate::app::state::scope::path_key;
+use crate::app::state::scope::path_key_with;
 
 /// One parent-sheet reference to re-point: `parent` holds a child entry whose
 /// `filename` is currently `from` and must become `to`.
@@ -100,17 +100,18 @@ impl Signex {
             .map(|s| dir.join(&s.filename))
             .collect();
         let root = project_root_sheet_path(project).unwrap_or_else(|| old_path.to_path_buf());
-        let set = assemble_project_sheets(&self.document_state, &pages, &root);
-        let old_key = path_key(old_path);
+        let set = assemble_project_sheets(&self.document_state, &pages, &root, project.case_fold);
+        let fold = project.case_fold;
+        let old_key = path_key_with(old_path, fold);
 
         let mut plan = Vec::new();
         for (parent, sheet) in &set.sheets {
-            if path_key(parent) == old_key {
+            if path_key_with(parent, fold) == old_key {
                 continue;
             }
             let parent_dir = parent.parent().unwrap_or_else(|| Path::new(""));
             for child in &sheet.child_sheets {
-                if path_key(&parent_dir.join(&child.filename)) != old_key {
+                if path_key_with(&parent_dir.join(&child.filename), fold) != old_key {
                     continue;
                 }
                 let rewrite = ReferenceRewrite {

@@ -326,6 +326,13 @@ pub enum ProjectMsg {
         project_id: crate::app::ProjectId,
         result: Result<Box<crate::app::state::sheet_refs::SheetRefs>, String>,
     },
+    /// The off-thread probe of a freshly loaded project's volume finished
+    /// (#694): the volume ignores case, is case-sensitive, could not be
+    /// decided, or the worker failed.
+    CaseProbed {
+        project_id: crate::app::ProjectId,
+        outcome: crate::app::state::project_case::CaseProbeOutcome,
+    },
     /// User choice (Save All / Discard All / Cancel) on the app-quit
     /// confirmation modal, shown when the user tries to exit Signex
     /// while `dirty_paths` is non-empty. Reuses `ProjectCloseChoice`.

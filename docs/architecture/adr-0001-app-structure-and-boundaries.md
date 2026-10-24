@@ -138,6 +138,7 @@ Cargo blocks the big violations (a domain crate physically cannot import Iced â€
 
 - Slice internals are `pub(super)` / `pub(crate)`. A slice **never** imports a sibling slice's internals, `views`, or `widgets`.
 - Add a CI arch-guard (same mechanism as the existing KiCad-surface guards) that grep-fails on (a) cross-slice imports between `library/<a>/` and `library/<b>/`, and (b) domain-shaped algorithms surfacing in the app crate. A boundary that is not machine-checked erodes.
+- The crate-level half is machine-checked: `scripts/check_arch_guard.sh` (CI job `arch guard`, #664) fails on a workspace dependency edge missing from `scripts/arch-edges.txt` and on a domain crate depending on the UI/GPU stack. The in-crate cross-slice guard above is still to do.
 
 ### D6. Reusable views/widgets use three tiers with promotion-by-need
 
