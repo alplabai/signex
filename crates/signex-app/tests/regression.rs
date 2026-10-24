@@ -137,6 +137,8 @@ mod sync_sheet_pins;
 #[path = "regression/start_screen.rs"]
 mod start_screen;
 
+#[path = "regression/command_enablement.rs"]
+mod command_enablement;
 #[path = "regression/dead_schematic_controls.rs"]
 mod dead_schematic_controls;
 #[path = "regression/idle_cursor_move.rs"]

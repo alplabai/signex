@@ -168,36 +168,12 @@ impl Signex {
         let ui = &self.ui_state;
         let document = &self.document_state;
         let interaction = &self.interaction_state;
-        // Context-aware menu: each leaf gates on whether its action
-        // makes sense in the current app state. `has_schematic` /
-        // `has_selection` drive most entries; undo / redo consult
-        // the engine's history so they grey out when empty.
-        // v0.14.2: surface the active tab's primitive-editor kind to
-        // the menu so File ▸ Save / Save As enable themselves for
-        // `.snxsym` and `.snxfpt` standalone editor tabs.
-        let active_tab_kind = document.tabs.get(document.active_tab).map(|t| &t.kind);
-        let has_symbol_editor =
-            matches!(active_tab_kind, Some(crate::app::TabKind::SymbolEditor(_)));
-        let has_footprint_editor = matches!(
-            active_tab_kind,
-            Some(crate::app::TabKind::FootprintEditor(_))
-        );
-
+        // Context-aware menu: rows keyed on a command id grey through
+        // `command::is_enabled`, from this window's `CommandContext` —
+        // the same predicate the keyboard path dispatches by (#368).
         let menu_ctx = crate::menu_bar::MenuContext {
-            has_schematic: self.has_active_schematic(),
-            has_pcb: self.has_active_pcb(),
+            commands: self.command_context(Some(window_id)),
             has_project: document.active_project.is_some(),
-            has_selection: !interaction.canvas_for_window(window_id).selected.is_empty(),
-            can_undo: document
-                .engine_for_window(window_id, ui)
-                .map(|e| e.can_undo())
-                .unwrap_or(false),
-            can_redo: document
-                .engine_for_window(window_id, ui)
-                .map(|e| e.can_redo())
-                .unwrap_or(false),
-            has_symbol_editor,
-            has_footprint_editor,
             // Secondary windows (detached modal, undocked tab) borrow
             // the main window's scale. Good enough until per-window
             // scale tracking lands — it's only wrong if the user drags
