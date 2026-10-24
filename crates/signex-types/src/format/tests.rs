@@ -532,6 +532,7 @@ fn snxpcb_round_trip_with_data() {
         thermal_width: 0.0,
         clearance: 0.0,
         min_thickness: 0.0,
+        unknown: Default::default(),
     });
 
     let snx = SnxPcb::new(board.clone());
@@ -558,9 +559,7 @@ fn snxpcb_round_trip_with_data() {
     assert_eq!(back.board.zones.len(), 1);
     assert_eq!(back.board.zones[0].net_name, "GND");
     assert_eq!(back.board.zones[0].outline.len(), 4);
-    assert_eq!(back.board.zones[0].holes.len(), 1);
-    assert_eq!(back.board.zones[0].holes[0].len(), 3);
-    assert!((back.board.zones[0].holes[0][1].x - 20.0).abs() < 1e-9);
+    assert_eq!(back.board.zones[0].holes, board.zones[0].holes);
 }
 
 /// #818: a zone without holes writes no `holes` key, so files saved before
@@ -586,6 +585,7 @@ fn zone_without_holes_writes_no_holes_key() {
         thermal_width: 0.0,
         clearance: 0.0,
         min_thickness: 0.0,
+        unknown: Default::default(),
     });
     let text = SnxPcb::new(board).write_string().expect("serialise");
     assert!(!text.contains("holes"), "{text}");

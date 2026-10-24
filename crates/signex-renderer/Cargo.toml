@@ -15,6 +15,7 @@ serde_json = { workspace = true }
 
 [dev-dependencies]
 regex = { workspace = true }
+signex-gfx = { workspace = true, features = ["test-support"] }
 tempfile = "3"
 
 # GH #548 — inherit [workspace.lints.rust] (unused_must_use = deny).

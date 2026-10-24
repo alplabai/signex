@@ -131,9 +131,9 @@ pub(super) fn prefs_io_lock() -> std::sync::MutexGuard<'static, ()> {
 
 /// Paths currently in the refused state, so the report below fires on
 /// the transition into failure rather than on every attempt.
-/// `write_component_filter` runs once per keystroke in the Components
-/// panel filter box, so an unconditional `error!` would fill the
-/// Messages panel with one copy of the same line per character typed.
+/// A writer can run many times in a row (a search box, a drag), so an
+/// unconditional `error!` would fill the Messages panel with one copy of
+/// the same line per attempt.
 fn reported_failures() -> &'static Mutex<HashSet<PathBuf>> {
     static REPORTED: OnceLock<Mutex<HashSet<PathBuf>>> = OnceLock::new();
     REPORTED.get_or_init(|| Mutex::new(HashSet::new()))
@@ -211,7 +211,8 @@ pub(super) fn update_prefs_json(
 
 /// [`update_prefs_json`] for callers that report the failure themselves.
 ///
-/// The dock-layout writer runs on a background task and must hand the
+/// The dock-layout writer and the search-prefs writer (#859) run on
+/// background tasks and must hand the
 /// outcome back to `update` so the Messages panel and the retry logic see
 /// it (#692), so this returns the failure instead of logging it. The
 /// refusal rule is identical: a file that cannot be loaded is left

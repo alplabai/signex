@@ -47,6 +47,7 @@ impl RenderInvalidation {
     pub const DRAWINGS: Self = Self(1 << 9);
     pub const LIB_SYMBOLS: Self = Self(1 << 10);
     pub const PAPER: Self = Self(1 << 11);
+    pub const NO_ERC_DIRECTIVES: Self = Self(1 << 12);
     pub const FULL: Self = Self(u32::MAX);
 
     /// True when any bit of `mask` is also set in `self`.
@@ -490,6 +491,19 @@ fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
                 no_connect.position.y + 0.5,
             ),
             anchor: no_connect.position,
+        });
+    }
+
+    for directive in &snapshot.no_erc_directives {
+        out.push(ItemBound {
+            item: SelectedItem::new(directive.uuid, SelectedKind::NoErcDirective),
+            bbox: Aabb::new(
+                directive.position.x - 0.5,
+                directive.position.y - 0.5,
+                directive.position.x + 0.5,
+                directive.position.y + 0.5,
+            ),
+            anchor: directive.position,
         });
     }
 

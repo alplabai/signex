@@ -86,6 +86,7 @@ impl Signex {
             Message::Remove(msg) => self.dispatch_remove_message(msg),
             Message::Window(msg) => self.dispatch_window_message(msg),
             Message::DockLayout(msg) => self.dispatch_dock_layout_message(msg),
+            Message::SearchPrefs(msg) => self.dispatch_search_prefs_message(msg),
             Message::MoveSelection(msg) => self.dispatch_move_selection_message(msg),
             Message::NetColor(msg) => self.dispatch_net_color_message(msg),
             Message::ParameterManager(msg) => self.dispatch_parameter_manager_message(msg),
@@ -312,7 +313,7 @@ impl Signex {
             WindowMsg::SecondaryWindowClosed(id) => {
                 // Main window closed → terminate the process.
                 if self.ui_state.main_window_id == Some(id) {
-                    return self.flush_dock_layout_then(iced::exit());
+                    return self.flush_quit_writes_then(iced::exit());
                 }
                 let mut layout_persist = Task::none();
                 // Drop the entry and dismiss the backing modal state so
@@ -378,6 +379,7 @@ impl Signex {
                         // that's gone.
                         WindowKind::UndockedTab { .. } => {
                             self.interaction_state.canvases.remove(&id);
+                            self.interaction_state.pcb_canvases.remove(&id);
                         }
                         // Closing a detached panel reattaches it to the
                         // dock so the user doesn't lose access to the
@@ -481,8 +483,15 @@ impl Signex {
                 // to *this* window's document, not to the app.
                 per_window.paper_width_mm = self.interaction_state.canvas.paper_width_mm;
                 per_window.paper_height_mm = self.interaction_state.canvas.paper_height_mm;
-                per_window.fit_to_paper();
+                per_window.fit_to_content();
                 self.interaction_state.canvases.insert(id, per_window);
+                // A PCB tab gets its own PCB canvas too, so panning one
+                // window no longer moves the other (#494).
+                if let Some(per_window_pcb) = self.new_pcb_canvas_for(&path) {
+                    self.interaction_state
+                        .pcb_canvases
+                        .insert(id, per_window_pcb);
+                }
                 // Raise + focus the undocked tab window — like the
                 // detached modal, it opens at `Level::Normal` and can
                 // land behind the main window otherwise.
@@ -497,6 +506,7 @@ impl Signex {
                 // canvas cache + selection leak.
                 self.ui_state.windows.remove(&id);
                 self.interaction_state.canvases.remove(&id);
+                self.interaction_state.pcb_canvases.remove(&id);
                 iced::window::close(id)
             }
             WindowMsg::DetachFloatingPanel(idx) => self.handle_detach_floating_panel(idx),

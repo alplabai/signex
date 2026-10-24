@@ -146,13 +146,11 @@ impl Signex {
         // Revert the live-preview GPU flag to the saved value; the content
         // cache clear below repaints the PCB canvas so a discarded toggle
         // takes no effect.
-        self.interaction_state.pcb_canvas.gpu_render = self.ui_state.pcb_gpu_render;
+        self.set_pcb_gpu_render(self.ui_state.pcb_gpu_render);
         // Revert the render inputs used for schematic live preview.
         self.document_state.panel_ctx.tokens = self.tokens_for(self.ui_state.theme_id);
         // #630 — the schematic grid style previewed live, so push the
-        // committed value back to every window's canvas. Power port /
-        // label / multisheet style have no draw-path reader at all, so
-        // restoring their draft fields above is the whole revert.
+        // committed value back to every window's canvas.
         // #629 — the symbol grid style is the only one of the three
         // Symbol Editor settings with a live preview, so it is the only
         // one to push back. Grid size and pin selection reach the editor
@@ -164,7 +162,16 @@ impl Signex {
         // clear them again here. `set_grid_style` already dropped every
         // schematic bg cache, so only the PCB one is left to invalidate.
         self.update_canvas_theme();
-        self.interaction_state.pcb_canvas.clear_bg_cache();
+        for canvas in self.interaction_state.all_pcb_canvases_mut() {
+            canvas.clear_bg_cache();
+        }
+    }
+
+    /// Set the effective PCB GPU-render flag on every PCB canvas (#494).
+    fn set_pcb_gpu_render(&mut self, enabled: bool) {
+        for canvas in self.interaction_state.all_pcb_canvases_mut() {
+            canvas.gpu_render = enabled;
+        }
     }
 
     pub(crate) fn handle_preferences_message(
@@ -216,7 +223,7 @@ impl Signex {
                     self.ui_state.preferences_draft_symbol_pin_selection;
                 // The live-preview already pushed the draft into the widget;
                 // re-assert it so the saved and effective flags can't diverge.
-                self.interaction_state.pcb_canvas.gpu_render = self.ui_state.pcb_gpu_render;
+                self.set_pcb_gpu_render(self.ui_state.pcb_gpu_render);
                 self.update_canvas_theme();
                 self.document_state.panel_ctx.tokens = self.tokens_for(self.ui_state.theme_id);
                 self.document_state.panel_ctx.ui_font_name = self.ui_state.ui_font_name.clone();
@@ -382,9 +389,11 @@ impl Signex {
                 // Live preview: push the draft into the widget's effective flag
                 // and repaint the PCB canvas so the toggle shows immediately.
                 // Persisted only on Save; reverted on Discard.
-                self.interaction_state.pcb_canvas.gpu_render = enabled;
-                self.interaction_state.pcb_canvas.clear_content_cache();
-                self.interaction_state.pcb_canvas.clear_bg_cache();
+                for canvas in self.interaction_state.all_pcb_canvases_mut() {
+                    canvas.gpu_render = enabled;
+                    canvas.clear_content_cache();
+                    canvas.clear_bg_cache();
+                }
                 self.recompute_preferences_dirty();
             }
             // #629 — these three used to call `write_*_pref` right here,

@@ -16,8 +16,7 @@ use crate::sketch::SketchData;
 use self::dof::{DofColor, entity_colours, over_constraint_ids};
 use self::jacobian::numerical_jacobian;
 use self::lm::{
-    LmFailure, SolveResult, solve_lm_keeping_state, solve_lm_perturbed,
-    undo_offset_on_unconstrained,
+    LmFailure, SolveResult, solve_lm_keeping_state, solve_lm_perturbed, undo_retry_offset,
 };
 use self::residual::ResolvedParams;
 
@@ -104,7 +103,16 @@ impl Solver {
             return Err(failure.error);
         }
         let retry = match self.run(sketch, params, true) {
-            Ok(result) => return Ok(undo_offset_on_unconstrained(sketch, params, result)),
+            Ok(result) => {
+                return Ok(undo_retry_offset(
+                    sketch,
+                    params,
+                    self.timeout_ms,
+                    self.tolerance,
+                    self.max_iters,
+                    result,
+                ));
+            }
             Err(retry) if retry.stalled => *retry,
             Err(retry) => return Err(retry.error),
         };

@@ -4,11 +4,11 @@
 mod common;
 use common::Sketch;
 
+use signex_sketch::SolveError;
 use signex_sketch::array::{Array, ArrayId, ArrayKind, NumberingScheme};
 use signex_sketch::constraint::{Constraint, ConstraintKind};
 use signex_sketch::id::ConstraintId;
 use signex_sketch::solver::residual::ResolvedParams;
-use signex_sketch::{SolveError, Solver};
 
 fn constrain(s: &mut Sketch, kind: ConstraintKind) -> ConstraintId {
     let id = ConstraintId::new();
@@ -44,7 +44,7 @@ fn deleting_a_point_removes_its_line_arc_and_constraints_and_still_solves() {
     assert_eq!(left, vec![kept, kept_h]);
     assert!(s.data.entities.iter().any(|e| e.id == keep_line));
 
-    Solver::default()
+    common::solver()
         .solve(&s.data, &ResolvedParams::new())
         .expect("the remaining sketch solves");
 }
@@ -74,7 +74,7 @@ fn a_sketch_with_a_dangling_ref_returns_a_typed_error_then_heals() {
     s.data.entities.retain(|e| e.id != a);
     assert_eq!(s.data.dangling_refs(), vec![a]);
 
-    let err = Solver::default()
+    let err = common::solver()
         .solve(&s.data, &ResolvedParams::new())
         .unwrap_err();
     assert!(
@@ -86,7 +86,7 @@ fn a_sketch_with_a_dangling_ref_returns_a_typed_error_then_heals() {
     let removed = s.data.remove_entity_cascade(b);
     assert!(removed.repaired_entities.contains(&line));
     assert!(s.data.dangling_refs().is_empty());
-    Solver::default()
+    common::solver()
         .solve(&s.data, &ResolvedParams::new())
         .expect("healed sketch solves");
 }
@@ -152,7 +152,7 @@ fn an_array_pointing_at_a_missing_entity_is_a_dangling_reference() {
     s.data.arrays.push(linear(ghost));
 
     assert_eq!(s.data.dangling_refs(), vec![ghost]);
-    let err = Solver::default()
+    let err = common::solver()
         .solve(&s.data, &ResolvedParams::new())
         .unwrap_err();
     assert!(matches!(err, SolveError::DanglingReference(_)), "{err:?}");

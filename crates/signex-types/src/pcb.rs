@@ -317,7 +317,18 @@ pub struct Zone {
     pub outline: Vec<Point>,
     /// Cut-outs inside `outline` (keep-out islands): each entry is a closed
     /// polygon the zone does not fill (#818). Not written when empty, so a
-    /// zone without holes keeps its exact pre-#818 bytes.
+    /// zone without holes keeps its exact pre-#818 bytes. A hole with fewer
+    /// than 3 vertices is malformed and consumers must skip it, as the
+    /// renderer skips an outline with `len() < 3`; the parser does not
+    /// validate this.
+    ///
+    /// Holes must be simple rings, disjoint from each other and strictly
+    /// inside `outline`, touching neither it nor each other: the GPU
+    /// triangulation and the CPU even-odd fill only agree for such holes. A
+    /// cut-out that reaches the outline is a notch, and belongs in `outline`
+    /// itself. Both render paths draw only [`Zone::usable_holes`]; each hole
+    /// that breaks the rule is drawn as copper (the valid ones still cut
+    /// out), and the app reports it when the board is opened (#897).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub holes: Vec<Vec<Point>>,
     #[serde(default)]
@@ -334,6 +345,18 @@ pub struct Zone {
     pub clearance: f64,
     #[serde(default)]
     pub min_thickness: f64,
+    /// Keys in this zone's `[[zones]]` table that this build does not
+    /// recognise, kept so a save re-emits them: a zone field added by a
+    /// later build (as `holes` was in #818) survives a re-save here (#883).
+    ///
+    /// Unlike `Pad` and `Footprint`, whose foreign keys come from an
+    /// `[extras.*]` table, a zone is its own TOML table, so the bag is
+    /// flattened straight into it. Two side effects on the JSON path (tests
+    /// only today): the foreign keys serialise at the zone's top level rather
+    /// than under `"unknown"`, and a `null` foreign value does not
+    /// deserialise, since TOML has no null.
+    #[serde(flatten)]
+    pub unknown: UnknownFields,
 }
 
 // ---------------------------------------------------------------------------

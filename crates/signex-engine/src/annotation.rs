@@ -96,6 +96,11 @@ impl Engine {
             }
         }
         if matches!(mode, AnnotateMode::ResetOnly) {
+            // Nothing to reset: no undo step, and an unopened sheet is not
+            // rewritten on disk (the caller saves on `Ok(true)`).
+            if !changed {
+                return Ok(false);
+            }
             let patch_pair = PatchPair {
                 semantic: SemanticPatch::SymbolFieldsUpdated,
                 document: DocumentPatch::SYMBOLS,

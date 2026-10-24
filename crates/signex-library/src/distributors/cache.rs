@@ -254,17 +254,30 @@ mod tests {
         assert!(cache.invalidate("..", "anything").is_err());
     }
 
-    /// Counts `warn!` events emitted on the current thread while `f` runs.
-    /// A tiny hand-written subscriber, so the crate needs no
-    /// `tracing-subscriber` dev-dependency (#830 review).
-    fn warnings(f: impl FnOnce()) -> usize {
-        use std::sync::Arc;
-        use std::sync::atomic::{AtomicUsize, Ordering};
+    /// Collects the `warn!` events emitted on the current thread while `f`
+    /// runs, each rendered as `message key=value ...`. A tiny hand-written
+    /// subscriber, so the crate needs no `tracing-subscriber` dev-dependency
+    /// (#830 review).
+    fn warnings(f: impl FnOnce()) -> Vec<String> {
+        use std::fmt::Write as _;
+        use std::sync::{Arc, Mutex};
+        use tracing::field::{Field, Visit};
         use tracing::span::{Attributes, Id, Record};
         use tracing::{Event, Level, Metadata, Subscriber};
 
-        struct Count(Arc<AtomicUsize>);
-        impl Subscriber for Count {
+        struct Render(String);
+        impl Visit for Render {
+            fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+                if field.name() == "message" {
+                    let _ = write!(self.0, "{value:?}");
+                } else {
+                    let _ = write!(self.0, " {}={value:?}", field.name());
+                }
+            }
+        }
+
+        struct Collect(Arc<Mutex<Vec<String>>>);
+        impl Subscriber for Collect {
             fn enabled(&self, _: &Metadata<'_>) -> bool {
                 true
             }
@@ -275,16 +288,18 @@ mod tests {
             fn record_follows_from(&self, _: &Id, _: &Id) {}
             fn event(&self, event: &Event<'_>) {
                 if *event.metadata().level() == Level::WARN {
-                    self.0.fetch_add(1, Ordering::SeqCst);
+                    let mut render = Render(String::new());
+                    event.record(&mut render);
+                    self.0.lock().unwrap().push(render.0);
                 }
             }
             fn enter(&self, _: &Id) {}
             fn exit(&self, _: &Id) {}
         }
 
-        let count = Arc::new(AtomicUsize::new(0));
-        tracing::subscriber::with_default(Count(count.clone()), f);
-        count.load(Ordering::SeqCst)
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        tracing::subscriber::with_default(Collect(seen.clone()), f);
+        seen.lock().unwrap().clone()
     }
 
     /// #806: a corrupt entry is a miss, and the read failure is logged
@@ -300,7 +315,13 @@ mod tests {
         let mut hit = Some(part("sentinel"));
         let warned = warnings(|| hit = cache.get_or_warn("lcsc", "R1", DEFAULT_TTL));
         assert!(hit.is_none());
-        assert_eq!(warned, 1);
+        assert_eq!(warned.len(), 1);
+        assert!(
+            warned[0].contains("distributor cache read failed"),
+            "message text missing: {}",
+            warned[0]
+        );
+        assert!(warned[0].contains("R1"), "MPN missing: {}", warned[0]);
     }
 
     /// An absent entry is an ordinary miss: no warning.
@@ -311,7 +332,7 @@ mod tests {
         let mut miss = Some(part("sentinel"));
         let warned = warnings(|| miss = cache.get_or_warn("lcsc", "R1", DEFAULT_TTL));
         assert!(miss.is_none());
-        assert_eq!(warned, 0);
+        assert!(warned.is_empty());
 
         cache.put("lcsc", &part("R1")).unwrap();
         let hit = cache.get_or_warn("lcsc", "R1", DEFAULT_TTL).unwrap();

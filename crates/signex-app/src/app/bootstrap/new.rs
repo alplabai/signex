@@ -62,6 +62,11 @@ impl Signex {
             crate::dock::DockLayoutSnapshot::capture(&dock),
         );
 
+        let initial_component_filter = crate::fonts::read_component_filter();
+        let search_prefs = crate::persist::SearchPrefsSync::new(std::sync::Arc::new(
+            crate::fonts::PrefsSearchStore::user_prefs(),
+        ));
+
         let sch_canvas = CanvasSlot::new();
         let mut pcb_canvas = crate::pcb_canvas::PcbCanvas::new();
         // Read the persisted GPU-render preference ONCE — each read is a full
@@ -175,6 +180,7 @@ impl Signex {
                 snap_enabled: crate::fonts::read_snap_enabled_pref(),
                 cursor_x: 0.0,
                 cursor_y: 0.0,
+                cursor_document: None,
                 zoom: 100.0,
                 grid_size_mm,
                 visible_grid_mm: 1.27,
@@ -284,6 +290,7 @@ impl Signex {
             document_state: DocumentState {
                 dock,
                 dock_layout_sync,
+                search_prefs,
                 tabs: vec![],
                 active_tab: 0,
                 engines: std::collections::HashMap::new(),
@@ -351,7 +358,7 @@ impl Signex {
                     child_sheet_border_advanced_open: false,
                     child_sheet_fill_advanced_open: false,
                     child_sheet_stroke_width_buf: None,
-                    component_filter: crate::fonts::read_component_filter(),
+                    component_filter: initial_component_filter,
                     collapsed_sections: std::collections::HashSet::new(),
                     pre_placement: None,
                     erc_diagnostics: Vec::new(),
@@ -395,6 +402,7 @@ impl Signex {
                 canvas: sch_canvas,
                 canvases: std::collections::HashMap::new(),
                 pcb_canvas,
+                pcb_canvases: std::collections::HashMap::new(),
                 dragging: None,
                 drag_start_pos: None,
                 drag_start_size: 0.0,
@@ -455,9 +463,8 @@ impl Signex {
             crate::panels::components_panel::global_prefs::load_and_mount_all(&mut app.library);
         // #630 — seed the two render surfaces that consume a grid style
         // from the saved preferences. Everything else the old
-        // `render_config` global carried (canvas font/size/style, power
-        // port / label / multisheet style) had no reader in any draw
-        // path, so there is nothing left to seed.
+        // `render_config` global carried (canvas font/size/style) had no
+        // reader in any draw path, so there is nothing left to seed.
         app.document_state.panel_ctx.symbol_grid_style = app.ui_state.symbol_grid_style;
 
         // Multi-window (Phase 1): open the main OS window here. Phase 2

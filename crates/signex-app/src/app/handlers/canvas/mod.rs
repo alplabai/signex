@@ -6,6 +6,7 @@ use super::super::*;
 mod clicked;
 mod double_clicked;
 mod layout_drag;
+mod sheet_tool;
 mod sync_sheet_pins;
 #[cfg(test)]
 mod tests;
@@ -46,6 +47,10 @@ impl Signex {
             CanvasEvent::CursorAt { x, y, zoom_pct } => {
                 self.ui_state.cursor_x = x as f64;
                 self.ui_state.cursor_y = y as f64;
+                if self.ui_state.cursor_document.as_deref() != self.cursor_document_now() {
+                    self.ui_state.cursor_document =
+                        self.cursor_document_now().map(std::path::Path::to_path_buf);
+                }
                 self.ui_state.zoom = zoom_pct;
                 // Hover detection: fast hit-test against the active
                 // schematic snapshot so the tooltip overlay (in
@@ -187,18 +192,39 @@ impl Signex {
                     .set(None);
                 self.interaction_state.pcb_canvas.pending_fit.set(None);
             }
-            CanvasEvent::FitAll => {
+            CanvasEvent::CenterAtCursor => {
+                // `cursor_x/y` is the world position `CursorAt` last reported.
+                // It means nothing in another document (a tab switched with
+                // the keyboard, another window), nor before the first hover.
+                if self.ui_state.cursor_document.is_none()
+                    || self.ui_state.cursor_document.as_deref() != self.cursor_document_now()
+                {
+                    return Task::none();
+                }
+                let (x, y) = (self.ui_state.cursor_x as f32, self.ui_state.cursor_y as f32);
+                // A user camera move cancels a deferred fit, as in `CursorMoved`;
+                // otherwise a queued fit lands afterwards and undoes the centring.
+                self.interaction_state
+                    .active_canvas_mut()
+                    .pending_fit
+                    .set(None);
+                self.interaction_state.pcb_canvas.pending_fit.set(None);
                 if self.has_active_schematic() {
-                    self.interaction_state.active_canvas_mut().fit_to_paper();
-                    self.interaction_state.active_canvas_mut().clear_bg_cache();
                     self.interaction_state
                         .active_canvas_mut()
-                        .clear_content_cache();
+                        .center_on_world(x, y);
+                } else if self.has_active_pcb() {
+                    self.interaction_state.pcb_canvas.center_on_world(x, y);
+                }
+                self.clear_active_camera_caches();
+            }
+            CanvasEvent::FitAll => {
+                if self.has_active_schematic() {
+                    self.interaction_state.active_canvas_mut().fit_to_content();
                 } else if self.has_active_pcb() {
                     self.interaction_state.pcb_canvas.fit_to_board();
-                    self.interaction_state.pcb_canvas.clear_bg_cache();
-                    self.interaction_state.pcb_canvas.clear_content_cache();
                 }
+                self.clear_active_camera_caches();
             }
             CanvasEvent::CtrlClicked { world_x, world_y } => {
                 if let Some(snapshot) = self.active_render_snapshot()
@@ -350,6 +376,33 @@ impl Signex {
             false
         }
     }
+
+    /// The document a reported cursor point belongs to: the active schematic,
+    /// else the active tab (a PCB has no `active_path`). `active_path` comes
+    /// first because an undocked schematic window's event swaps it but not
+    /// `active_tab`. An undocked PCB window's event swaps both (#494), and
+    /// both then name its tab.
+    fn cursor_document_now(&self) -> Option<&std::path::Path> {
+        self.document_state.active_path.as_deref().or_else(|| {
+            self.document_state
+                .tabs
+                .get(self.document_state.active_tab)
+                .map(|tab| tab.path.as_path())
+        })
+    }
+
+    /// Redraw the active schematic or PCB canvas after its camera moved.
+    fn clear_active_camera_caches(&mut self) {
+        if self.has_active_schematic() {
+            let canvas = self.interaction_state.active_canvas_mut();
+            canvas.clear_bg_cache();
+            canvas.clear_content_cache();
+        } else if self.has_active_pcb() {
+            let canvas = &mut self.interaction_state.pcb_canvas;
+            canvas.clear_bg_cache();
+            canvas.clear_content_cache();
+        }
+    }
 }
 
 /// Resolve a selected item's primary anchor — the world point that should
@@ -390,6 +443,11 @@ fn primary_anchor_world(
             .iter()
             .find(|n| n.uuid == item.uuid)
             .map(|n| (n.position.x, n.position.y)),
+        SelectedKind::NoErcDirective => snap
+            .no_erc_directives
+            .iter()
+            .find(|d| d.uuid == item.uuid)
+            .map(|d| (d.position.x, d.position.y)),
         SelectedKind::TextNote => snap
             .text_notes
             .iter()

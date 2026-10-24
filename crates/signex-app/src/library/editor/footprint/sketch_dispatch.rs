@@ -392,6 +392,14 @@ pub(super) fn solve_and_bake(
 
     let resolved = parameter::resolve(&sketch.parameters).map_err(SketchError::Expr)?;
 
+    // Runs synchronously inside `update`. A plain solve is one LM pass,
+    // bounded by `timeout_ms` (50 ms). A stalled one also tries the offset
+    // retry; a retry that converges then runs up to three project-and-
+    // re-solve passes, each with its own 50 ms budget (about 20% extra time
+    // measured on a long chain). Over-constraint narrowing can add up to
+    // `2 × SHRINK_LIMIT` more passes: about 1 s worst case on a conflicting
+    // sketch (#765). If that ever shows as a stall, move the solve into a
+    // `Task`.
     match state.sketch_solver.solve(sketch, &resolved) {
         Ok(out) => {
             state.conflict.clear();

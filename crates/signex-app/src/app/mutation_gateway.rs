@@ -35,6 +35,9 @@ impl Signex {
         if patch.contains(signex_engine::DocumentPatch::NO_CONNECTS) {
             invalidation |= RenderInvalidation::NO_CONNECTS;
         }
+        if patch.contains(signex_engine::DocumentPatch::NO_ERC_DIRECTIVES) {
+            invalidation |= RenderInvalidation::NO_ERC_DIRECTIVES;
+        }
         if patch.contains(signex_engine::DocumentPatch::CHILD_SHEETS) {
             invalidation |= RenderInvalidation::CHILD_SHEETS;
         }
@@ -381,6 +384,7 @@ mod tests {
     fn non_connectivity_edits_leave_the_netlist_cache() {
         for bit in [
             DocumentPatch::TEXT_NOTES,
+            DocumentPatch::NO_ERC_DIRECTIVES,
             DocumentPatch::DRAWINGS,
             DocumentPatch::LIB_SYMBOLS,
             DocumentPatch::PAPER,

@@ -78,6 +78,10 @@ impl LocalGitAdapter {
     ) -> Result<(), LibraryError> {
         let (rel_path, abs_path) =
             self.prepare_primitive_write(PrimitiveKind::Footprint, fp.uuid)?;
+        // The container is read, merged and rewritten: another Signex
+        // process doing the same would drop this edit (#893, see
+        // `write_lock`). The cascade that follows takes the lock itself.
+        let _write_lock = self.lock_for_write()?;
         let mut file = match fs::read(&abs_path) {
             Ok(existing) => crate::primitive::FootprintFile::from_bytes(&existing)
                 .map_err(|e| LibraryError::Backend(format!("re-read .snxfpt: {e}")))?,
@@ -111,6 +115,10 @@ impl LocalGitAdapter {
     /// existing envelope (HI-7) so a multi-model file is not clobbered.
     pub(super) fn write_sim(&self, model: &SimModel, message: &str) -> Result<(), LibraryError> {
         let (rel_path, abs_path) = self.prepare_primitive_write(PrimitiveKind::Sim, model.uuid)?;
+        // The container is read, merged and rewritten: another Signex
+        // process doing the same would drop this edit (#893, see
+        // `write_lock`). The cascade that follows takes the lock itself.
+        let _write_lock = self.lock_for_write()?;
         let mut file = match fs::read(&abs_path) {
             Ok(existing) => SimFile::from_bytes(&existing)
                 .map_err(|e| LibraryError::Backend(format!("re-read .snxsim: {e}")))?,
@@ -201,47 +209,15 @@ impl LocalGitAdapter {
         let sig = git2::Signature::now(&sig_name, &sig_email)
             .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
 
-        let mut index = repo
-            .index()
-            .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
-        index
-            .add_path(Path::new(rel_path))
-            .map_err(|e| LibraryError::Backend(format!("git add: {e}")))?;
-        index
-            .write()
-            .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
-        let tree_oid = index
-            .write_tree()
-            .map_err(|e| LibraryError::Backend(format!("git write tree: {e}")))?;
-        let tree = repo
-            .find_tree(tree_oid)
-            .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
-
-        // Resolve the parent commit. An unborn HEAD (fresh repo, no commits
-        // yet) is the only legitimate "no parent" case — every other error
-        // (corrupt ref, locked ref) propagates so we don't silently produce
-        // an orphan commit on a broken repo.
-        let parent = match repo.head() {
-            Ok(h) => h
-                .peel_to_commit()
-                .map_err(|e| LibraryError::Backend(format!("git peel to commit: {e}")))
-                .map(Some)?,
-            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => None,
-            Err(e) => return Err(LibraryError::Backend(format!("git head: {e}"))),
-        };
-        // An unchanged save stages the same tree as HEAD; committing it would
-        // only add an empty history entry (#149).
-        if parent.as_ref().is_some_and(|p| p.tree_id() == tree_oid) {
-            return Ok(());
-        }
-        let parents: Vec<&git2::Commit> = parent.as_ref().map(|c| vec![c]).unwrap_or_default();
         let commit_message = if message.is_empty() {
             fallback_message.to_string()
         } else {
             message.to_string()
         };
-        repo.commit(Some("HEAD"), &sig, &sig, &commit_message, &tree, &parents)
-            .map_err(|e| LibraryError::Backend(format!("git commit: {e}")))?;
+        retry_on_git_lock(repo.path(), || {
+            stage_and_commit(&repo, Path::new(rel_path), &sig, &commit_message)
+        })
+        .map_err(|e| LibraryError::Backend(format!("git commit {rel_path}: {e}")))?;
         Ok(())
     }
 
@@ -294,6 +270,10 @@ impl LocalGitAdapter {
         F: FnOnce(&mut LibraryFile) -> Result<bool, LibraryError>,
     {
         self.ensure_commit_identity()?;
+        // Another Signex process could otherwise reload and write between
+        // our reload and our write (see `write_lock`). Taken before the
+        // in-process guard, and held until the write is done.
+        let _write_lock = self.lock_for_write()?;
         let mut guard = self
             .library_file
             .write()
@@ -456,6 +436,10 @@ impl LocalGitAdapter {
         message: &str,
     ) -> Result<(), LibraryError> {
         self.ensure_commit_identity()?;
+        // The container is read, merged and rewritten: another Signex
+        // process doing the same would drop this edit (#893, see
+        // `write_lock`). The cascade that follows takes the lock itself.
+        let _write_lock = self.lock_for_write()?;
         let dir = self.primitive_dir(PrimitiveKind::Symbol);
         fs::create_dir_all(&dir)?;
 

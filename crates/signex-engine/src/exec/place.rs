@@ -227,6 +227,18 @@ impl Engine {
 
                 Ok(CommandResult::changed(patch_pair))
             }
+            Command::PlaceNoErcDirective { directive } => {
+                self.document.no_erc_directives.push(directive);
+
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::ObjectPlaced,
+                    document: DocumentPatch::NO_ERC_DIRECTIVES,
+                };
+
+                self.record_history(before, patch_pair);
+
+                Ok(CommandResult::changed(patch_pair))
+            }
             Command::PlaceBusEntry { bus_entry } => {
                 self.document.bus_entries.push(bus_entry);
 

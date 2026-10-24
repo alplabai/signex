@@ -244,6 +244,10 @@ pub struct SymbolEditorState {
     /// works against `file.symbols[active_idx]`; access via
     /// [`primitive`](Self::primitive) / [`primitive_mut`](Self::primitive_mut).
     pub file: signex_library::SymbolFile,
+    /// The container as this editor last loaded or saved it. A save
+    /// writes only the symbols that differ from it, so another window's
+    /// saves to the other symbols of the file survive (#902).
+    pub baseline: signex_library::SymbolFile,
     /// Which symbol within the file is currently being edited. The
     /// SCH-Library left-dock panel will eventually drive this index;
     /// for now it always lands on the first symbol.
@@ -350,6 +354,7 @@ impl SymbolEditorState {
     pub fn new(path: PathBuf, file: signex_library::SymbolFile) -> Self {
         let mut state = Self {
             path,
+            baseline: file.clone(),
             file,
             active_idx: 0,
             active_part: 1,
@@ -433,6 +438,10 @@ pub struct FootprintEditorState {
     /// via [`primitive`](Self::primitive) /
     /// [`primitive_mut`](Self::primitive_mut).
     pub file: signex_library::FootprintFile,
+    /// The container as this editor last loaded or saved it; see
+    /// [`SymbolEditorState::baseline`] (#902). Taken before the load
+    /// repairs are cleared, so a repaired footprint counts as changed.
+    pub baseline: signex_library::FootprintFile,
     /// Which footprint within the file is currently being edited.
     /// The Footprint Library left-dock panel + canvas tab strip
     /// drive this; defaults to the first footprint.
@@ -501,15 +510,30 @@ impl FootprintEditorState {
     /// user opened. The editor opens on the first footprint in the
     /// file. The caller is responsible for confirming the file is
     /// non-empty before this call.
-    pub fn new(path: PathBuf, mut file: signex_library::FootprintFile) -> Self {
+    pub fn new(path: PathBuf, file: signex_library::FootprintFile) -> Self {
+        Self::build(path, file, true)
+    }
+
+    /// Rebuild the editor from a file re-read off disk (a History restore).
+    /// Behaves like [`Self::new`] except the load repairs are not logged
+    /// again: the user was already told when the file was opened.
+    /// `dirty` is still `true` when
+    /// something was repaired, so the caller must mirror it into the tab.
+    pub fn reloaded(path: PathBuf, file: signex_library::FootprintFile) -> Self {
+        Self::build(path, file, false)
+    }
+
+    fn build(path: PathBuf, mut file: signex_library::FootprintFile, log_repairs: bool) -> Self {
         let active_idx = 0;
-        let repaired = Self::take_load_repairs(&path, &mut file);
+        let baseline = file.clone();
+        let repaired = Self::take_load_repairs(&path, &mut file, log_repairs);
         let state = crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
             &file.footprints[active_idx],
         );
         Self {
             path,
             file,
+            baseline,
             active_idx,
             panel_selected_idx: None,
             state,
@@ -526,9 +550,13 @@ impl FootprintEditorState {
     /// Report, once, what the loader repaired (the Messages panel names it)
     /// and clear the transient record so history snapshots never carry it.
     /// Returns whether anything was repaired. Opening a footprint into an
-    /// editor is the only place this logs; previews, mounts and history
-    /// reads stay quiet.
-    fn take_load_repairs(path: &std::path::Path, file: &mut signex_library::FootprintFile) -> bool {
+    /// editor ([`Self::new`]) is the only place this logs; previews, mounts,
+    /// history reads and [`Self::reloaded`] pass `log_repairs = false`.
+    fn take_load_repairs(
+        path: &std::path::Path,
+        file: &mut signex_library::FootprintFile,
+        log_repairs: bool,
+    ) -> bool {
         use signex_library::LoadRepair;
         let mut moved: Vec<String> = Vec::new();
         let mut removed = 0usize;
@@ -540,7 +568,7 @@ impl FootprintEditorState {
                 }
             }
         }
-        if !moved.is_empty() {
+        if log_repairs && !moved.is_empty() {
             crate::diagnostics::log_warning(format!(
                 "{}: moved the end point of {} arc(s) onto its circle (centre and start \
                  unchanged); save the file to keep the repair: {}",
@@ -549,7 +577,7 @@ impl FootprintEditorState {
                 moved.join(", ")
             ));
         }
-        if removed > 0 {
+        if log_repairs && removed > 0 {
             crate::diagnostics::log_warning(format!(
                 "{}: removed {removed} dangling sketch reference(s) (entities/constraints/arrays); \
                  save the file to keep the repair",
@@ -776,6 +804,8 @@ pub enum Tool {
     Component,
     Text,
     NoConnect,
+    /// Generic No-ERC directive (Altium's "Place No ERC").
+    NoErcDirective,
     BusEntry,
     Line,
     Rectangle,
@@ -784,6 +814,8 @@ pub enum Tool {
     Arc,
     /// Click-by-click polyline; Enter / double-click commits.
     Polyline,
+    /// Two-click corner-to-corner hierarchical sheet symbol.
+    Sheet,
 }
 
 impl std::fmt::Display for Tool {
@@ -796,12 +828,14 @@ impl std::fmt::Display for Tool {
             Tool::Component => write!(f, "Place Component"),
             Tool::Text => write!(f, "Place Text"),
             Tool::NoConnect => write!(f, "Place No Connect"),
+            Tool::NoErcDirective => write!(f, "Place No ERC"),
             Tool::BusEntry => write!(f, "Place Bus Entry"),
             Tool::Line => write!(f, "Draw Line"),
             Tool::Rectangle => write!(f, "Draw Rectangle"),
             Tool::Circle => write!(f, "Draw Circle"),
             Tool::Arc => write!(f, "Draw Arc"),
             Tool::Polyline => write!(f, "Draw Polygon"),
+            Tool::Sheet => write!(f, "Place Sheet"),
         }
     }
 }

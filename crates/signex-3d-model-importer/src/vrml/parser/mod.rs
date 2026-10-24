@@ -362,6 +362,7 @@ fn fan_triangulate(
     }
 }
 
+mod defs;
 mod descent;
 use descent::Parser;
 

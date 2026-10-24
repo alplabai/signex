@@ -531,29 +531,82 @@ mod tests {
         data
     }
 
-    fn best_parse_time(data: &str, expected: usize) -> std::time::Duration {
-        (0..3)
-            .map(|_| {
-                let started = std::time::Instant::now();
-                let entities = parse_entities(data).expect("parse");
-                assert_eq!(entities.len(), expected);
-                started.elapsed()
-            })
-            .min()
-            .unwrap()
-    }
-
     #[test]
     fn many_entities_parse_in_linear_time() {
-        // The old per-statement newline recount was O(n^2). Compare a 20k and
-        // an 80k run instead of an absolute budget: 4x the input costs ~4x
-        // when linear and ~16x when quadratic, so a 10x ceiling separates
-        // them with slack for scheduler noise (best of three per size).
-        let small = best_parse_time(&synthetic_data(20_000), 20_000);
-        let large = best_parse_time(&synthetic_data(80_000), 80_000);
-        let floor = std::time::Duration::from_millis(1);
-        let ratio = large.as_secs_f64() / small.max(floor).as_secs_f64();
-        assert!(ratio < 10.0, "parse scaled {ratio:.1}x for 4x input");
+        // Guards the #112 fix (the old per-statement newline recount was
+        // O(n^2)) without trusting wall-clock ratios of runs of very
+        // different length (#851). Both samples cover the same amount of
+        // input: 16 back-to-back parses of SMALL statements against one parse
+        // of 16 x SMALL. Linear code makes the two take about as long;
+        // quadratic makes the single large parse ~16x slower. A 4x ceiling
+        // separates them, and load lands on both samples alike.
+        //
+        // The large parse runs on its own thread with a deadline of 4x the
+        // small sample, so a quadratic regression fails in seconds instead of
+        // hanging the suite. Three attempts; one quiet attempt passes.
+        use std::sync::mpsc;
+        use std::time::{Duration, Instant};
+
+        const SMALL: u32 = 1_000;
+        const REPEATS: u32 = 16;
+        const CEILING: u32 = 4;
+        let small = synthetic_data(SMALL);
+        let large = std::sync::Arc::new(synthetic_data(SMALL * REPEATS));
+
+        let mut ratios = Vec::new();
+        for _ in 0..3 {
+            let started = Instant::now();
+            for _ in 0..REPEATS {
+                assert_eq!(parse_entities(&small).expect("parse").len(), SMALL as usize);
+            }
+            let small_total = started.elapsed().max(Duration::from_millis(1));
+
+            let (tx, rx) = mpsc::channel();
+            let data = std::sync::Arc::clone(&large);
+            // Detached on purpose: past the deadline nothing waits for it.
+            // It runs on beside the next attempt, which only slows the
+            // already-failing regression case, and ends with the test binary.
+            std::thread::spawn(move || {
+                let started = Instant::now();
+                let parsed = parse_entities(&data).expect("parse").len();
+                let _ = tx.send((parsed, started.elapsed()));
+            });
+            match rx.recv_timeout(small_total * CEILING) {
+                Ok((parsed, large_time)) => {
+                    assert_eq!(parsed, (SMALL * REPEATS) as usize);
+                    let ratio = large_time.as_secs_f64() / small_total.as_secs_f64();
+                    if ratio < f64::from(CEILING) {
+                        return;
+                    }
+                    ratios.push(format!("{ratio:.1}x"));
+                }
+                Err(_) => ratios.push(format!(">{CEILING}x (deadline)")),
+            }
+        }
+        panic!(
+            "one parse of 16x the input took over {CEILING}x as long as 16 small parses: {ratios:?}"
+        );
+    }
+
+    /// Carried-forward line numbers stay exact across a large input. This is
+    /// a correctness check, not a guard on #112's speed: the old quadratic
+    /// recount produced exact lines too, just slowly.
+    #[test]
+    fn statement_lines_stay_exact_across_a_large_input() {
+        // Kept small: a quadratic regression would make a larger input take
+        // minutes here, and the speed guard above already catches that.
+        const COUNT: usize = 5_000;
+        let data = synthetic_data(COUNT as u32);
+        // The trailing newline leaves a blank tail, skipped like `parse_entities` does.
+        let statements: Vec<_> = split_statements(&data)
+            .into_iter()
+            .filter(|(s, _)| s.trim().starts_with('#'))
+            .collect();
+        assert_eq!(statements.len(), COUNT);
+        for (i, (_, line)) in statements.iter().enumerate().step_by(499) {
+            assert_eq!(*line, i + 1);
+        }
+        assert_eq!(statements.last().unwrap().1, COUNT);
     }
 
     #[test]
