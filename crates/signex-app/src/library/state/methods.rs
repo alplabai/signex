@@ -79,6 +79,8 @@ impl Default for LibraryState {
             external_poll_stat_running: Default::default(),
             external_poll_stall_reported: false,
             external_poll_failure_reported: false,
+            pricing_refresh: None,
+            clock: chrono::Utc::now(),
         }
     }
 }
@@ -165,6 +167,7 @@ impl LibraryState {
             cached_classes: Vec::new(),
             observed_stamp: None,
             dangling: Default::default(),
+            pricing: Default::default(),
             own_edit_stamp: None,
             display: LibraryDisplaySettings::default(),
         };
@@ -234,7 +237,17 @@ impl LibraryState {
         let names = adapter.list_tables()?;
         let mut tables: HashMap<String, Vec<ComponentRow>> = HashMap::new();
         let mut summaries: Vec<ComponentSummary> = Vec::new();
+        let mut pricing: HashMap<Uuid, signex_library::RowPricing> = HashMap::new();
         for name in names {
+            match adapter.table_pricing(&name) {
+                Ok(cached) => pricing.extend(cached),
+                Err(e) => tracing::warn!(
+                    target: "signex::library",
+                    table = %name,
+                    error = %e,
+                    "refresh_components: cached prices unreadable; none shown"
+                ),
+            }
             match adapter.read_table(&name) {
                 Ok(rows) => {
                     for row in &rows {
@@ -267,8 +280,10 @@ impl LibraryState {
         let footprints = adapter.list_footprints();
         let sims = adapter.list_sims();
         let classes = adapter.library_classes();
+        self.clock = chrono::Utc::now();
         if let Some(lib) = self.library_at_mut(root) {
             lib.tables = tables;
+            lib.pricing = pricing;
             lib.cached_components = summaries;
             lib.cached_classes = classes;
             lib.observed_stamp = stamp;
@@ -502,6 +517,10 @@ pub struct OpenLibrary {
     /// Rows whose symbol / footprint / sim binding resolves to nothing,
     /// from the last [`LibraryState::sweep_dangling_refs`].
     pub dangling: crate::library::dangling::DanglingSweep,
+    /// Cached distributor prices by `row_id`, as the last
+    /// [`LibraryState::refresh_components`] read them. `view` reads this;
+    /// it never asks the adapter.
+    pub pricing: HashMap<Uuid, signex_library::RowPricing>,
 }
 
 /// Per-library canvas + UI defaults shared across every primitive

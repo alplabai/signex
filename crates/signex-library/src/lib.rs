@@ -73,7 +73,7 @@ pub use manufacturer::{AlternateStatus, DistributorListing, ManufacturerPart};
 pub use param::{ParamMap, ParamValue};
 pub use pricing::{
     CachedPricing, DroppedUpdate, PricingError, PricingUpdate, RowPricing, StoreOutcome, age_label,
-    distributor_key, format_price,
+    current_pricing, distributor_key, format_price,
 };
 pub use pricing_refresh::{
     ClientUnavailable, FailureKind, PricingRefreshReport, RowFailure, refresh_library_pricing,

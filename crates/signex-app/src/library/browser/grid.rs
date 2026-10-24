@@ -17,6 +17,7 @@ pub(super) fn view_grid<'a>(
     columns: &[GridColumn],
     browser: &'a LibraryBrowserState,
     dangling: &DanglingSweep,
+    prices: &super::price::PriceView<'_>,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
@@ -154,6 +155,21 @@ pub(super) fn view_grid<'a>(
                         container(text(label).size(BROWSER_TEXT_SIZE).color(color))
                             .padding([4, 6])
                             .width(Length::Fixed(c.width)),
+                    );
+                    continue;
+                }
+
+                // Cached price: read-only; Refresh All Pricing is the only
+                // writer.
+                if matches!(c.kind, ColumnKind::Price) {
+                    data_row = data_row.push(
+                        container(
+                            text(prices.text(r))
+                                .size(BROWSER_TEXT_SIZE)
+                                .color(theme_ext::text_secondary(tokens)),
+                        )
+                        .padding([4, 6])
+                        .width(Length::Fixed(c.width)),
                     );
                     continue;
                 }

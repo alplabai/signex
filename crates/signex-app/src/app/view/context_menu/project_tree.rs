@@ -54,6 +54,25 @@ pub(super) fn tree_node_role(icon: &TreeIcon, path_len: usize, has_children: boo
     TreeNodeRole::Unknown
 }
 
+/// "Refresh All Pricing" for a library node. Enabled whenever the node
+/// resolves to a library; the refresh itself refuses a second concurrent run
+/// with a Messages-panel line, so the row stays pressable while one runs.
+pub(super) fn refresh_pricing_entry(
+    library_ref: Option<crate::app::LibraryRowRef>,
+) -> DropdownEntry<Message> {
+    match library_ref {
+        Some(row) => dd_msg(
+            None,
+            "Refresh All Pricing",
+            "",
+            Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+                crate::app::ProjectTreeAction::RefreshLibraryPricing(row),
+            )),
+        ),
+        None => dd_disabled(None, "Refresh All Pricing", Some("Library not found")),
+    }
+}
+
 impl Signex {
     /// Build the Projects-panel tree-view right-click menu. The item set
     /// is derived from the clicked node's [`TreeNodeRole`] — project root
@@ -258,14 +277,7 @@ impl Signex {
                     ));
                 }
                 v.push(DropdownEntry::Separator);
-                // Distributor pricing refresh has no backing implementation
-                // yet (no row-to-part binding or pricing store), so the row
-                // is shown greyed rather than wired to a no-op.
-                v.push(dd_disabled(
-                    None,
-                    "Refresh All Pricing",
-                    Some("Not yet available"),
-                ));
+                v.push(refresh_pricing_entry(library_ref.clone()));
                 v.push(DropdownEntry::Separator);
                 // Enable Version Control on the library directory itself —
                 // hidden once the library has a `.git/`.

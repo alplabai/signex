@@ -133,6 +133,9 @@ mod library_browser_cell_commit;
 #[path = "regression/library_new_component.rs"]
 mod library_new_component;
 
+#[path = "regression/library_pricing_refresh.rs"]
+mod library_pricing_refresh;
+
 #[path = "regression/render_config_grid_style.rs"]
 mod render_config_grid_style;
 

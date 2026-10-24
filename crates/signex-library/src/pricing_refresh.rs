@@ -74,7 +74,7 @@ impl RowFailure {
 }
 
 /// Outcome of fetching; nothing is stored yet.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct PricingRefreshReport {
     /// Rows looked at.
     pub rows_considered: usize,

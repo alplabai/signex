@@ -155,6 +155,7 @@ pub fn prepare_mount(path: &Path) -> Result<PreparedMount, String> {
         cached_classes: Vec::new(),
         observed_stamp: None,
         dangling: Default::default(),
+        pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
     };

@@ -508,6 +508,13 @@ pub enum LibraryMessage {
     /// The off-thread library read behind the Library Updates modal's Apply
     /// finished; the update itself is applied from this result.
     LibraryUpdateSymbolsRead(Box<crate::library::drift::SymbolsRead>),
+    /// The background Refresh All Pricing walk finished. `Err` is a failure
+    /// of the walk as a whole (library unreadable, write refused); per-row
+    /// failures are inside the report.
+    PricingRefreshFinished {
+        library_path: PathBuf,
+        outcome: std::sync::Arc<Result<signex_library::PricingRefreshReport, String>>,
+    },
 }
 
 /// What the off-thread read of a library row hands back to `update`:

@@ -287,6 +287,9 @@ pub enum ProjectTreeAction {
     /// Right-click on a library node → Remove from Project. Resolved by
     /// the library's identity, not its row position (#742).
     RemoveLibrary(LibraryRowRef),
+    /// Right-click on a library node → Refresh All Pricing. Runs in the
+    /// background; resolved by the library's identity like the rest.
+    RefreshLibraryPricing(LibraryRowRef),
 }
 
 /// Stable identity of a library row in the project tree: the owning

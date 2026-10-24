@@ -181,6 +181,28 @@ pub fn distributor_key(name: &str) -> String {
         .collect()
 }
 
+/// The cached prices that still describe `row`, in the order the row lists
+/// its distributors (the user's preference). A cached price whose distributor
+/// or SKU the row no longer lists is left out.
+pub fn current_pricing<'a>(
+    row: &crate::component::ComponentRow,
+    cached: &'a RowPricing,
+) -> Vec<(&'a str, &'a CachedPricing)> {
+    let mut out: Vec<(&str, &CachedPricing)> = Vec::new();
+    for listing in &row.supply {
+        let wanted = distributor_key(&listing.distributor);
+        let hit = cached
+            .iter()
+            .find(|(name, c)| distributor_key(name) == wanted && c.sku == listing.sku.trim());
+        if let Some((name, c)) = hit
+            && !out.iter().any(|(n, _)| n == name)
+        {
+            out.push((name.as_str(), c));
+        }
+    }
+    out
+}
+
 /// One price to write back: which row, which distributor, what was fetched.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PricingUpdate {
@@ -295,6 +317,57 @@ mod tests {
         assert_eq!(c.summary(now).unwrap(), "0.0123 USD @1 \u{b7} 3 d ago");
         c.fetched_at = now;
         assert!(c.summary(now).unwrap().ends_with("just now"));
+    }
+
+    #[test]
+    fn current_pricing_follows_the_rows_listings() {
+        use crate::component::{ComponentRow, DatasheetRef, PlmReserved};
+        use crate::identity::{ComponentClass, InternalPn};
+        use crate::lifecycle::LifecycleState;
+        use crate::manufacturer::{DistributorListing, ManufacturerPart};
+        use crate::param::ParamMap;
+        use crate::primitive::PrimitiveRef;
+        let now = Utc::now();
+        let mut row = ComponentRow {
+            row_id: Uuid::nil(),
+            internal_pn: InternalPn::new("R"),
+            class: ComponentClass::new("resistor"),
+            datasheet: DatasheetRef::default(),
+            state: LifecycleState::Draft,
+            symbol_ref: PrimitiveRef::new(Uuid::nil(), Uuid::nil()),
+            footprint_ref: None,
+            sim_ref: None,
+            pin_map_overrides: Vec::new(),
+            primary_mpn: ManufacturerPart::draft("A", "B"),
+            alternates: Vec::new(),
+            supply: vec![DistributorListing::new("Digi-Key", "DK-1")],
+            parameters: ParamMap::new(),
+            plm: PlmReserved::default(),
+            version: "0.0.1".into(),
+            released: false,
+            symbol_version: String::new(),
+            footprint_version: String::new(),
+            sim_version: String::new(),
+            created: now,
+            updated: now,
+            content_hash: [0; 32],
+        };
+        let cached = RowPricing::from([(
+            "DigiKey".to_string(),
+            CachedPricing {
+                sku: "DK-1".into(),
+                currency: "USD".into(),
+                stock: None,
+                breaks: vec![PriceBreak {
+                    qty: 1,
+                    unit_price: 1.0,
+                }],
+                fetched_at: now,
+            },
+        )]);
+        assert_eq!(current_pricing(&row, &cached).len(), 1);
+        row.supply[0].sku = "DK-2".into();
+        assert!(current_pricing(&row, &cached).is_empty(), "SKU changed");
     }
 
     #[test]
