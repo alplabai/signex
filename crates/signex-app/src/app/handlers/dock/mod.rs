@@ -4,6 +4,7 @@ use crate::dock::DockMessage;
 
 use super::super::*;
 
+mod child_sheet_identity;
 mod floating_layout;
 mod layout_persist;
 mod library_browser;

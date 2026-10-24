@@ -129,12 +129,24 @@ pub(crate) fn engines_in_project<'a>(
     engines: &'a HashMap<PathBuf, signex_engine::Engine>,
     id: super::ProjectId,
 ) -> Vec<&'a signex_engine::Engine> {
+    engine_entries_in_project(projects, refs, engines, id)
+        .into_iter()
+        .map(|(_, engine)| engine)
+        .collect()
+}
+
+/// [`engines_in_project`] keeping each engine's sheet path.
+pub(crate) fn engine_entries_in_project<'a>(
+    projects: &[LoadedProject],
+    refs: &HashMap<PathBuf, Vec<String>>,
+    engines: &'a HashMap<PathBuf, signex_engine::Engine>,
+    id: super::ProjectId,
+) -> Vec<(&'a PathBuf, &'a signex_engine::Engine)> {
     engines
         .iter()
         .filter(|(path, _)| {
             project_owning_sheet(projects, refs, path).is_some_and(|owner| owner.id == id)
         })
-        .map(|(_, engine)| engine)
         .collect()
 }
 

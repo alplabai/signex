@@ -911,6 +911,14 @@ pub enum PanelMsg {
     ChildSheetStrokeWidthTyping(uuid::Uuid, String),
     /// Commit the currently-buffered child sheet stroke width.
     CommitChildSheetStrokeWidth(uuid::Uuid),
+    /// Buffered keystroke for the selected sheet symbol's Name input.
+    ChildSheetNameTyping(uuid::Uuid, String),
+    /// Buffered keystroke for the selected sheet symbol's File input.
+    ChildSheetFileTyping(uuid::Uuid, String),
+    /// Commit the buffered sheet symbol Name (Enter).
+    CommitChildSheetName(uuid::Uuid),
+    /// Commit the buffered sheet symbol File reference (Enter).
+    CommitChildSheetFile(uuid::Uuid),
     /// Reset child sheet styling (border / fill colour, line width)
     /// back to theme defaults.
     ResetChildSheetStyle(uuid::Uuid),
