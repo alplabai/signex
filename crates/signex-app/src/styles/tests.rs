@@ -57,21 +57,45 @@ fn overlay_steps_are_monotonic() {
 }
 
 #[test]
-fn on_accent_reaches_3_to_1_contrast_on_every_builtin() {
+fn on_accent_is_the_expected_colour_and_reaches_4_5_to_1_on_every_builtin() {
+    // White wherever it reaches 4.5:1 on the accent; black where white fails.
+    let expected = |id: ThemeId| match id {
+        ThemeId::VsCodeDark => Color::WHITE,
+        ThemeId::Signex
+        | ThemeId::Alplab
+        | ThemeId::CatppuccinMocha
+        | ThemeId::GitHubDark
+        | ThemeId::SolarizedLight
+        | ThemeId::Nord => Color::BLACK,
+        ThemeId::Custom => unreachable!("BUILTINS excludes Custom"),
+    };
     for (id, t) in builtin_tokens() {
-        let ratio = contrast_ratio(on_accent(&t), accent(&t));
-        assert!(ratio >= 3.0, "{id:?}: on_accent contrast {ratio} < 3:1");
+        let got = on_accent(&t);
+        assert_eq!(got, expected(id), "{id:?}: on_accent colour");
+        let ratio = contrast_ratio(got, accent(&t));
+        assert!(ratio >= 4.5, "{id:?}: on_accent contrast {ratio} < 4.5:1");
     }
 }
 
 #[test]
-fn light_themes_are_exactly_solarized() {
-    let light: Vec<_> = builtin_tokens()
-        .into_iter()
-        .filter(|(_, t)| is_light(t))
-        .map(|(id, _)| id)
-        .collect();
-    assert_eq!(light, vec![ThemeId::SolarizedLight]);
+fn readable_on_prefers_white_when_it_reaches_4_5_to_1() {
+    for (id, t) in builtin_tokens() {
+        for bg in [accent(&t), ti(t.selection), ti(t.panel_bg)] {
+            if contrast_ratio(Color::WHITE, bg) >= 4.5 {
+                assert_eq!(readable_on(bg), Color::WHITE, "{id:?}");
+            }
+        }
+    }
+}
+
+#[test]
+fn light_themes_have_text_darker_than_panel() {
+    // Property, not a roster: a theme is light exactly when its primary
+    // text is darker than its panel, and the helpers must handle both.
+    for (id, t) in builtin_tokens() {
+        let text_darker = relative_luminance(ti(t.text)) < relative_luminance(ti(t.panel_bg));
+        assert_eq!(is_light(&t), text_darker, "{id:?}");
+    }
 }
 
 #[test]

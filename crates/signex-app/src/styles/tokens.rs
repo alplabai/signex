@@ -65,11 +65,21 @@ pub fn accent(tokens: &ThemeTokens) -> Color {
     ti(tokens.accent)
 }
 
-/// Text / icon colour that reads on top of [`accent`]: black or white,
-/// whichever has the higher WCAG contrast against the accent.
+/// Text / icon colour that reads on top of [`accent`]; see [`readable_on`].
 pub fn on_accent(tokens: &ThemeTokens) -> Color {
-    let a = ti(tokens.accent);
-    if contrast_ratio(Color::WHITE, a) >= contrast_ratio(Color::BLACK, a) {
+    readable_on(ti(tokens.accent))
+}
+
+/// Minimum WCAG contrast for normal-size text.
+pub const MIN_TEXT_CONTRAST: f32 = 4.5;
+
+/// Text colour for an opaque fill `bg`. White is preferred whenever it
+/// reaches [`MIN_TEXT_CONTRAST`] (the long-standing look on dark and
+/// mid-tone fills); only when white fails does the higher-contrast of
+/// black / white win.
+pub fn readable_on(bg: Color) -> Color {
+    let white = contrast_ratio(Color::WHITE, bg);
+    if white >= MIN_TEXT_CONTRAST || white >= contrast_ratio(Color::BLACK, bg) {
         Color::WHITE
     } else {
         Color::BLACK

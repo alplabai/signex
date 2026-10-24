@@ -7,17 +7,12 @@
 use super::super::*;
 use iced::widget::column;
 
-/// Value-text colour for an input drawn on `bg`: black or white,
-/// whichever contrasts more. These row builders receive resolved colours
-/// rather than `ThemeTokens`, so the primary-text token is unavailable;
-/// the input background decides instead (white on dark themes, as before).
+/// Value-text colour for an input drawn on `bg`: white whenever it
+/// reaches 4.5:1 against `bg`, otherwise whichever of black / white
+/// contrasts more. These row builders receive resolved colours rather
+/// than `ThemeTokens`, so the input background decides.
 fn text_on(bg: Color) -> Color {
-    use crate::styles::tokens::contrast_ratio;
-    if contrast_ratio(Color::WHITE, bg) >= contrast_ratio(Color::BLACK, bg) {
-        Color::WHITE
-    } else {
-        Color::BLACK
-    }
+    crate::styles::tokens::readable_on(bg)
 }
 
 /// Thin 1px separator line. `pub(super)` so sibling modules
@@ -686,6 +681,28 @@ pub fn font_style_row<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn text_on_each_builtin_selection_is_the_expected_readable_colour() {
+        use crate::styles::tokens::contrast_ratio;
+        use signex_types::theme::{ThemeId, theme_tokens};
+        let expected = |id: ThemeId| match id {
+            // GitHubDark #388BFD and SolarizedLight #268BD2: white < 4.5:1.
+            ThemeId::GitHubDark | ThemeId::SolarizedLight => Color::BLACK,
+            ThemeId::Signex
+            | ThemeId::Alplab
+            | ThemeId::VsCodeDark
+            | ThemeId::CatppuccinMocha
+            | ThemeId::Nord => Color::WHITE,
+            ThemeId::Custom => unreachable!("BUILTINS excludes Custom"),
+        };
+        for &id in ThemeId::BUILTINS {
+            let bg = crate::styles::ti(theme_tokens(id).selection);
+            let got = text_on(bg);
+            assert_eq!(got, expected(id), "{id:?}");
+            assert!(contrast_ratio(got, bg) >= 3.0, "{id:?}");
+        }
+    }
 
     #[test]
     fn text_on_follows_background_lightness() {
