@@ -86,19 +86,23 @@ jobs:
           # dedicated arm64 runners or the `cross` action with a custom
           # image. Revisit in a patch release; drop here so v0.6 can ship.
 
-          - target: aarch64-apple-darwin
+          # One universal (arm64 + x86_64) binary built on a single
+          # Apple Silicon runner: both slices are cross-built by the Xcode
+          # toolchain and joined with `lipo`. Rosetta 2 only translates
+          # x86_64 -> arm64, so an arm64-only build cannot run on an Intel
+          # Mac; a second macos-13 row is avoided because that queue is
+          # deprecated and takes 30+ minutes to pick up a job.
+          # `target` is a label here (job/artifact name); `rust_targets`
+          # is what rustup installs and cargo builds.
+          - target: universal-apple-darwin
+            rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
             os: macos-14
-            arch: aarch64
-            arch_suffix: aarch64
+            arch: universal
+            arch_suffix: universal
 
           # macos-latest was stalling on v0.6.2 (set-up job failed in 2s
           # — queue exhausted). Pinned to macos-14 (Apple Silicon) for
           # stable capacity. Bump to macos-15 when macos-14 rolls off.
-
-          # x86_64-apple-darwin deferred — macos-13 runners are in the
-          # deprecated queue and take 30+ minutes to pick up a job. Apple
-          # Silicon Macs run the aarch64-apple-darwin binary natively;
-          # Intel Macs can run it under Rosetta 2.
 
     steps:
       - uses: actions/checkout@v5
@@ -118,11 +122,13 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
         with:
-          targets: ${{ matrix.target }}
+          targets: ${{ matrix.rust_targets || matrix.target }}
 
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
+          # Both macOS slices live under target/<triple>/; cache each.
+          cache-targets: true
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -139,7 +145,29 @@ jobs:
             desktop-file-utils fakeroot
 
       - name: Build release binary
+        if: runner.os != 'macOS'
         run: cargo build --release --target ${{ matrix.target }} -p signex-app
+
+      # ─── macOS: two slices -> one universal binary ────────────────
+      - name: Build macOS slices and lipo into a universal binary
+        if: runner.os == 'macOS'
+        run: |
+          # Floor matches LSMinimumSystemVersion in installer/macos/Info.plist
+          # so the cc-built C/C++ deps (wgpu/iced) and the x86_64 slice
+          # target the same minimum macOS.
+          export MACOSX_DEPLOYMENT_TARGET=11.0
+          for t in aarch64-apple-darwin x86_64-apple-darwin; do
+            cargo build --release --target "$t" -p signex-app
+          done
+          mkdir -p target/universal-apple-darwin/release
+          lipo -create -output target/universal-apple-darwin/release/signex \
+            target/aarch64-apple-darwin/release/signex \
+            target/x86_64-apple-darwin/release/signex
+          archs="$(lipo -archs target/universal-apple-darwin/release/signex)"
+          echo "universal binary archs: $archs"
+          for a in x86_64 arm64; do
+            [[ " $archs " == *" $a "* ]] || { echo "::error::missing $a slice in universal binary"; exit 1; }
+          done
 
       # ─── Windows: InnoSetup installer ────────────────────────────
       - name: Install InnoSetup
@@ -179,6 +207,19 @@ jobs:
             "target/${{ matrix.target }}/release/signex" \
             "${{ steps.version.outputs.version }}" \
             "${{ matrix.arch_suffix }}"
+
+      - name: Verify DMG contains both architectures
+        if: runner.os == 'macOS'
+        run: |
+          DMG="signex-macos-${{ matrix.arch_suffix }}-${{ steps.version.outputs.version }}.dmg"
+          MNT="$(mktemp -d)"
+          hdiutil attach "$DMG" -mountpoint "$MNT" -nobrowse -readonly
+          archs="$(lipo -archs "$MNT/Signex.app/Contents/MacOS/signex")"
+          hdiutil detach "$MNT"
+          echo "shipped binary archs: $archs"
+          for a in x86_64 arm64; do
+            [[ " $archs " == *" $a "* ]] || { echo "::error::$DMG is missing $a"; exit 1; }
+          done
 
       # ─── Linux: .deb package ──────────────────────────────────────
       - name: Build Linux .deb package
