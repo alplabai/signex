@@ -1,5 +1,6 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
+use super::holes::triangulate_with_holes;
 use crate::vrml::parser::VrmlMesh;
 
 #[derive(Debug)]
@@ -116,37 +117,47 @@ pub fn parse_to_meshes(source: &str) -> Result<StepMeshResult, ParseError> {
         }
     };
 
-    let mut holes_skipped = 0usize;
+    // Holes left in the outline fill, per reason.
+    let mut holes_not_cut: BTreeMap<String, usize> = BTreeMap::new();
     for bound_refs in advanced_faces.values() {
         // The face outline is its FACE_OUTER_BOUND, or, when none is marked
         // (legal STEP), the loop with the largest area. Every other bound is a
-        // hole. Holes are not cut: that needs a real polygon-with-holes
-        // triangulation, and the outline's fan still covers the opening. They
-        // are only left out of the mesh as extra solid faces, and counted (#708).
+        // hole, cut out of the outline by `triangulate_with_holes`. A face
+        // that cannot be cut keeps the outline fill and is counted (#708).
         let mut loops: Vec<(Vec<[f32; 3]>, bool)> = bound_refs
             .iter()
             .filter_map(|r| face_bounds.get(r))
             .map(|&(loop_id, is_outer)| (loop_points_of(loop_id), is_outer))
             .collect();
-        holes_skipped += loops.len().saturating_sub(1);
         let outline = match loops.iter().position(|l| l.1) {
             Some(i) => Some(i),
             None => (0..loops.len())
                 .max_by(|&i, &j| loop_area(&loops[i].0).total_cmp(&loop_area(&loops[j].0))),
         };
-        if let Some(i) = outline {
-            let loop_points = loops.swap_remove(i).0;
-            if loop_points.len() >= 3 {
-                let mesh = triangulate_polygon(&loop_points);
-                if !mesh.indices.is_empty() {
-                    meshes.push(mesh);
+        let Some(i) = outline else { continue };
+        let loop_points = loops.swap_remove(i).0;
+        if loop_points.len() < 3 {
+            continue;
+        }
+        let holes: Vec<Vec<[f32; 3]>> = loops.into_iter().map(|l| l.0).collect();
+        let mesh = if holes.is_empty() {
+            triangulate_polygon(&loop_points)
+        } else {
+            match triangulate_with_holes(&loop_points, &holes) {
+                Ok(mesh) => mesh,
+                Err(reason) => {
+                    *holes_not_cut.entry(reason).or_default() += holes.len();
+                    triangulate_polygon(&loop_points)
                 }
             }
+        };
+        if !mesh.indices.is_empty() {
+            meshes.push(mesh);
         }
     }
-    if holes_skipped > 0 {
+    for (reason, count) in holes_not_cut {
         // Outside the shared 24-entry cap, which real files fill first.
-        unsupported_entities.push(format!("FACE_BOUND (hole not cut) x{holes_skipped}"));
+        unsupported_entities.push(format!("FACE_BOUND (hole not cut: {reason}) x{count}"));
     }
 
     if meshes.is_empty() {
@@ -661,32 +672,198 @@ ENDSEC;
         assert_eq!(parse_refs("'a #5',(#7)"), vec![7]);
     }
 
+    /// A single ADVANCED_FACE over `loops` (outer flag, point indices), with
+    /// every point written as a CARTESIAN_POINT and every loop as a POLY_LOOP.
+    fn face_src(points: &[[f64; 3]], loops: &[(bool, &[usize])]) -> String {
+        let mut src = String::from("DATA;\n");
+        for (i, p) in points.iter().enumerate() {
+            src += &format!(
+                "#{} = CARTESIAN_POINT('',({:?},{:?},{:?}));\n",
+                i + 1,
+                p[0],
+                p[1],
+                p[2]
+            );
+        }
+        let mut bounds = Vec::new();
+        for (k, (outer, idx)) in loops.iter().enumerate() {
+            let refs: Vec<String> = idx.iter().map(|i| format!("#{}", i + 1)).collect();
+            src += &format!("#{} = POLY_LOOP('',({}));\n", 100 + k, refs.join(","));
+            let kind = if *outer {
+                "FACE_OUTER_BOUND"
+            } else {
+                "FACE_BOUND"
+            };
+            src += &format!("#{} = {kind}('',#{},.T.);\n", 200 + k, 100 + k);
+            bounds.push(format!("#{}", 200 + k));
+        }
+        src += &format!(
+            "#300 = ADVANCED_FACE('',({}),#999,.T.);\nENDSEC;",
+            bounds.join(",")
+        );
+        src
+    }
+
+    fn corner(m: &VrmlMesh, tri: usize, k: usize) -> [f64; 3] {
+        let i = m.indices[tri * 3 + k] as usize * 3;
+        [
+            f64::from(m.positions[i]),
+            f64::from(m.positions[i + 1]),
+            f64::from(m.positions[i + 2]),
+        ]
+    }
+
+    fn triangle_count(m: &VrmlMesh) -> usize {
+        m.indices.len() / 3
+    }
+
+    /// 3D area of triangle `tri`.
+    fn area(m: &VrmlMesh, tri: usize) -> f64 {
+        let (a, b, c) = (corner(m, tri, 0), corner(m, tri, 1), corner(m, tri, 2));
+        let u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+        let v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+        let n = [
+            u[1] * v[2] - u[2] * v[1],
+            u[2] * v[0] - u[0] * v[2],
+            u[0] * v[1] - u[1] * v[0],
+        ];
+        (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt() / 2.0
+    }
+
+    fn total_area(m: &VrmlMesh) -> f64 {
+        (0..triangle_count(m)).map(|t| area(m, t)).sum()
+    }
+
+    fn centroid(m: &VrmlMesh, tri: usize) -> [f64; 3] {
+        let c: Vec<[f64; 3]> = (0..3).map(|k| corner(m, tri, k)).collect();
+        [0, 1, 2].map(|d| (c[0][d] + c[1][d] + c[2][d]) / 3.0)
+    }
+
+    /// Unit normal of triangle `tri` (winding-sensitive).
+    fn normal(m: &VrmlMesh, tri: usize) -> [f64; 3] {
+        let (a, b, c) = (corner(m, tri, 0), corner(m, tri, 1), corner(m, tri, 2));
+        let u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+        let v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+        let n = [
+            u[1] * v[2] - u[2] * v[1],
+            u[2] * v[0] - u[0] * v[2],
+            u[0] * v[1] - u[1] * v[0],
+        ];
+        let l = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+        [n[0] / l, n[1] / l, n[2] / l]
+    }
+
+    fn has_hole_warning(r: &StepMeshResult) -> bool {
+        r.unsupported_entities.iter().any(|e| e.contains("hole"))
+    }
+
+    /// Rotate about the x axis, to put a face in a non-axis plane.
+    fn tilt(p: [f64; 3], deg: f64) -> [f64; 3] {
+        let (s, c) = deg.to_radians().sin_cos();
+        [p[0], p[1] * c - p[2] * s, p[1] * s + p[2] * c]
+    }
+
+    /// Undo [`tilt`].
+    fn untilt(p: [f64; 3], deg: f64) -> [f64; 3] {
+        tilt(p, -deg)
+    }
+
+    const SQUARE: [[f64; 3]; 4] = [[0., 0., 0.], [10., 0., 0.], [10., 10., 0.], [0., 10., 0.]];
+    const HOLE_A: [[f64; 3]; 4] = [[2., 2., 0.], [2., 4., 0.], [4., 4., 0.], [4., 2., 0.]];
+    const HOLE_B: [[f64; 3]; 4] = [[6., 6., 0.], [6., 8., 0.], [8., 8., 0.], [8., 6., 0.]];
+
+    fn in_square(c: [f64; 3], h: &[[f64; 3]; 4]) -> bool {
+        c[0] > h[0][0] && c[0] < h[2][0] && c[1] > h[0][1] && c[1] < h[2][1]
+    }
+
     #[test]
-    fn face_bound_hole_is_not_fan_filled() {
-        let src = r#"
-DATA;
-#1 = CARTESIAN_POINT('',(0.,0.,0.));
-#2 = CARTESIAN_POINT('',(4.,0.,0.));
-#3 = CARTESIAN_POINT('',(0.,4.,0.));
-#4 = CARTESIAN_POINT('',(1.,1.,0.));
-#5 = CARTESIAN_POINT('',(2.,1.,0.));
-#6 = CARTESIAN_POINT('',(1.,2.,0.));
-#20 = POLY_LOOP('',(#1,#2,#3));
-#21 = POLY_LOOP('',(#4,#5,#6));
-#22 = FACE_BOUND('',#21,.T.);
-#23 = FACE_OUTER_BOUND('',#20,.T.);
-#30 = ADVANCED_FACE('',(#22,#23),#999,.T.);
-ENDSEC;
-"#;
-        let result = parse_to_meshes(src).expect("parse");
-        assert_eq!(result.meshes.len(), 1, "only the outer loop is filled");
-        assert_eq!(result.meshes[0].positions[4], 0.0);
-        assert_eq!(result.meshes[0].positions[3], 4.0);
+    fn face_bound_hole_is_cut_not_fan_filled() {
+        let mut pts = SQUARE.to_vec();
+        pts.extend(HOLE_A);
+        let src = face_src(&pts, &[(false, &[4, 5, 6, 7]), (true, &[0, 1, 2, 3])]);
+        let result = parse_to_meshes(&src).expect("parse");
+        assert_eq!(result.meshes.len(), 1);
+        let m = &result.meshes[0];
+        assert!(
+            (total_area(m) - (100.0 - 4.0)).abs() < 1e-4,
+            "{}",
+            total_area(m)
+        );
+        for t in 0..triangle_count(m) {
+            assert!(
+                !in_square(centroid(m, t), &HOLE_A),
+                "triangle {t} covers the hole"
+            );
+            // Same facing as the outline loop (counter-clockwise about +z).
+            assert!(normal(m, t)[2] > 0.99);
+        }
+        assert!(
+            !has_hole_warning(&result),
+            "{:?}",
+            result.unsupported_entities
+        );
+    }
+
+    #[test]
+    fn hole_is_cut_in_a_tilted_plane() {
+        let mut pts: Vec<[f64; 3]> = SQUARE.to_vec();
+        pts.extend(HOLE_A);
+        let pts: Vec<[f64; 3]> = pts.into_iter().map(|p| tilt(p, 30.0)).collect();
+        let src = face_src(&pts, &[(true, &[0, 1, 2, 3]), (false, &[4, 5, 6, 7])]);
+        let result = parse_to_meshes(&src).expect("parse");
+        let m = &result.meshes[0];
+        assert!((total_area(m) - 96.0).abs() < 1e-3, "{}", total_area(m));
+        let want = tilt([0.0, 0.0, 1.0], 30.0);
+        for t in 0..triangle_count(m) {
+            assert!(!in_square(untilt(centroid(m, t), 30.0), &HOLE_A));
+            let n = normal(m, t);
+            let facing = n[0] * want[0] + n[1] * want[1] + n[2] * want[2];
+            assert!(facing > 0.999, "winding flipped: {facing}");
+        }
+        assert!(!has_hole_warning(&result));
+    }
+
+    #[test]
+    fn two_holes_in_one_face_are_both_cut() {
+        let mut pts = SQUARE.to_vec();
+        pts.extend(HOLE_A);
+        pts.extend(HOLE_B);
+        let src = face_src(
+            &pts,
+            &[
+                (true, &[0, 1, 2, 3]),
+                (false, &[4, 5, 6, 7]),
+                (false, &[8, 9, 10, 11]),
+            ],
+        );
+        let result = parse_to_meshes(&src).expect("parse");
+        let m = &result.meshes[0];
+        assert!(
+            (total_area(m) - (100.0 - 8.0)).abs() < 1e-4,
+            "{}",
+            total_area(m)
+        );
+        for t in 0..triangle_count(m) {
+            let c = centroid(m, t);
+            assert!(!in_square(c, &HOLE_A) && !in_square(c, &HOLE_B));
+        }
+        assert!(!has_hole_warning(&result));
+    }
+
+    #[test]
+    fn non_planar_hole_falls_back_to_the_outline_with_a_warning() {
+        let mut pts = SQUARE.to_vec();
+        pts.extend(HOLE_A);
+        pts[5][2] = 3.0; // a hole corner far off the face plane
+        let src = face_src(&pts, &[(true, &[0, 1, 2, 3]), (false, &[4, 5, 6, 7])]);
+        let result = parse_to_meshes(&src).expect("parse");
+        let m = &result.meshes[0];
+        assert!((total_area(m) - 100.0).abs() < 1e-4, "outline fill kept");
         assert!(
             result
                 .unsupported_entities
                 .iter()
-                .any(|e| e.contains("hole"))
+                .any(|e| e.contains("hole not cut: non-planar loop"))
         );
     }
 
@@ -708,10 +885,8 @@ ENDSEC;
         );
         let result = parse_to_meshes(&src).expect("parse");
         assert_eq!(result.meshes.len(), 1);
-        assert_eq!(
-            result.meshes[0].positions[3], 4.0,
-            "outer loop, not the hole"
-        );
+        // Outline 8 minus the 0.5 hole, not the hole's 0.5.
+        assert!((total_area(&result.meshes[0]) - 7.5).abs() < 1e-4);
     }
 
     #[test]
@@ -719,8 +894,10 @@ ENDSEC;
         let noise: String = (100..140)
             .map(|i| format!("#{i} = FANCY_THING_{i}('');\n"))
             .collect();
+        // Non-planar hole, so the warning is still emitted.
+        let triangles = TRIANGLES.replace("(1.,1.,0.)", "(1.,1.,5.)");
         let src = format!(
-            "DATA;\n{TRIANGLES}\n{noise}#22 = FACE_BOUND('',#21,.T.);\n\
+            "DATA;\n{triangles}\n{noise}#22 = FACE_BOUND('',#21,.T.);\n\
              #23 = FACE_OUTER_BOUND('',#20,.T.);\n#30 = ADVANCED_FACE('',(#22,#23),#999,.T.);\nENDSEC;"
         );
         let result = parse_to_meshes(&src).expect("parse");
