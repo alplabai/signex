@@ -26,6 +26,7 @@ use signex_widgets::theme_ext;
 
 use crate::app::FootprintEditorState;
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
+use crate::styles::tokens::{self, Overlay};
 
 /// Render the inspector strip. Returns an empty `Space` when not in
 /// Sketch mode so the caller can unconditionally add it to the body
@@ -45,6 +46,7 @@ pub fn view<'a>(
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
+    let strip_bg = tokens::overlay(tokens, Overlay::Faint);
 
     // v0.14.2: tool palette + constraint authoring picker have moved
     // into the Fusion-360-style floating Active Bar over the canvas
@@ -53,7 +55,7 @@ pub fn view<'a>(
     // warnings — Role is a v0.16.2 addition for selection-aware bake
     // attr assignment.
     let dof = view_dof(editor, text_c, muted);
-    let params = view_params(editor, text_c, muted, border);
+    let params = view_params(editor, text_c, muted, border, tokens);
     let role = view_role(editor, text_c, muted);
     let warnings = view_warnings(editor, text_c, muted);
 
@@ -76,9 +78,7 @@ pub fn view<'a>(
     )
     .padding([4, 8])
     .style(move |_: &Theme| iced::widget::container::Style {
-        background: Some(iced::Background::Color(iced::Color::from_rgba(
-            1.0, 1.0, 1.0, 0.02,
-        ))),
+        background: Some(iced::Background::Color(strip_bg)),
         border: Border {
             width: 0.0,
             radius: 0.0.into(),
@@ -101,8 +101,11 @@ fn view_tool_palette<'a>(
     text_c: Color,
     muted: Color,
     border: Color,
+    tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     use crate::library::editor::footprint::state::SketchTool;
+    let pressed_bg = tokens::overlay(tokens, Overlay::Pressed);
+    let faint_bg = tokens::overlay(tokens, Overlay::Faint);
     let active = editor.state.active_tool;
     let mk_pill = |label: &'static str, target: SketchTool| -> Element<'a, LibraryMessage> {
         let path = editor.path.clone();
@@ -116,13 +119,9 @@ fn view_tool_palette<'a>(
             })
             .style(move |_: &Theme, _| iced::widget::button::Style {
                 background: if on {
-                    Some(iced::Background::Color(iced::Color::from_rgba(
-                        1.0, 1.0, 1.0, 0.10,
-                    )))
+                    Some(iced::Background::Color(pressed_bg))
                 } else {
-                    Some(iced::Background::Color(iced::Color::from_rgba(
-                        1.0, 1.0, 1.0, 0.02,
-                    )))
+                    Some(iced::Background::Color(faint_bg))
                 },
                 border: Border {
                     width: 1.0,
@@ -225,7 +224,11 @@ fn view_constraint_submenu<'a>(
     text_c: Color,
     muted: Color,
     border: Color,
+    tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
+    let strip_bg = tokens::overlay(tokens, Overlay::Faint);
+    let input_bg = tokens::input_bg(tokens);
+    let selection = tokens::selection_tint(tokens);
     use crate::library::messages::SketchConstraintTag;
     use signex_sketch::entity::EntityKind;
 
@@ -308,17 +311,7 @@ fn view_constraint_submenu<'a>(
                     t,
                 )),
             })
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.04,
-                ))),
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                },
-                ..iced::widget::button::Style::default()
-            });
+            .style(crate::styles::outline_button(tokens));
         pill_row = pill_row.push(pill);
     }
 
@@ -331,7 +324,7 @@ fn view_constraint_submenu<'a>(
             .padding(2)
             .width(Length::Fixed(80.0))
             .style(move |_: &Theme, _| iced::widget::text_input::Style {
-                background: iced::Background::Color(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)),
+                background: iced::Background::Color(input_bg),
                 border: Border {
                     width: 1.0,
                     radius: 2.0.into(),
@@ -340,7 +333,7 @@ fn view_constraint_submenu<'a>(
                 icon: iced::Color::TRANSPARENT,
                 placeholder: muted,
                 value: text_c,
-                selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
+                selection,
             })
             .on_input(move |s| LibraryMessage::PrimitiveEditorEvent {
                 path: path.clone(),
@@ -361,26 +354,14 @@ fn view_constraint_submenu<'a>(
                     shift: false,
                 }),
             })
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.02,
-                ))),
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                },
-                ..iced::widget::button::Style::default()
-            });
+            .style(crate::styles::outline_button(tokens));
         pill_row = pill_row.push(clear);
     }
 
     container(pill_row)
         .padding([4, 10])
         .style(move |_: &Theme| iced::widget::container::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.01,
-            ))),
+            background: Some(iced::Background::Color(strip_bg)),
             border: Border {
                 width: 0.0,
                 radius: 0.0.into(),
@@ -425,7 +406,10 @@ fn view_params<'a>(
     text_c: Color,
     muted: Color,
     border: Color,
+    tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
+    let input_bg = tokens::input_bg(tokens);
+    let selection = tokens::selection_tint(tokens);
     let mut col = column![text("Parameters").size(11).color(text_c)].spacing(2);
 
     if let Some(sketch) = editor.primitive().sketch.as_ref() {
@@ -448,9 +432,7 @@ fn view_params<'a>(
                         .size(10)
                         .padding(2)
                         .style(move |_: &Theme, _| iced::widget::text_input::Style {
-                            background: iced::Background::Color(iced::Color::from_rgba(
-                                1.0, 1.0, 1.0, 0.04,
-                            )),
+                            background: iced::Background::Color(input_bg),
                             border: Border {
                                 width: 1.0,
                                 radius: 2.0.into(),
@@ -459,7 +441,7 @@ fn view_params<'a>(
                             icon: iced::Color::TRANSPARENT,
                             placeholder: muted,
                             value: text_c,
-                            selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
+                            selection,
                         })
                         .on_input(move |new_expr| LibraryMessage::PrimitiveEditorEvent {
                             path: path.clone(),
