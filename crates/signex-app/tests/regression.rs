@@ -35,6 +35,9 @@
 #[path = "regression/close_support.rs"]
 mod close_support;
 
+#[path = "regression/settle_support.rs"]
+mod settle_support;
+
 #[path = "regression/project.rs"]
 mod project;
 

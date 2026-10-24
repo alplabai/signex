@@ -68,6 +68,12 @@ pub enum AnnotateMsg {
     /// Lock (`true`, "All Off") or unlock (`false`, "All On") every symbol
     /// the dialog lists.
     SetAllLocked(bool),
+    /// The background load of the preview's sheets finished. `generation`
+    /// is the load's token; stale results are dropped.
+    PreviewLoaded {
+        generation: u64,
+        result: std::sync::Arc<Result<crate::app::handlers::erc::AnnotatePreviewLoad, String>>,
+    },
 }
 
 /// ERC dialog message family (ADR-0001 D3). Namespaced under
@@ -86,6 +92,12 @@ pub enum ErcMsg {
     /// Click on a pin-connection matrix cell: cycle its severity
     /// Error → Warning → Info → Off → (back to baseline default).
     PinMatrixCellCycled { row: u8, col: u8 },
+    /// A background ERC run finished. `generation` is the run's token: a
+    /// result is applied only if no newer run has started since.
+    RunFinished {
+        generation: u64,
+        result: std::sync::Arc<Result<crate::app::handlers::erc::ErcRunOutcome, String>>,
+    },
 }
 
 /// Preferences modal message family (ADR-0001 D3). Namespaced under
