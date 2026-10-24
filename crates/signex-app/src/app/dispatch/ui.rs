@@ -306,16 +306,23 @@ impl Signex {
                 // single-axis steps in `SnapOptions`; the Y field
                 // exists in the dialog for forward compatibility).
                 let draft = self.ui_state.grid_properties.clone();
-                // NaN / inf are refused with a Messages-panel line, not
-                // dropped silently (#925).
-                let parsed_x = draft
-                    .as_ref()
-                    .and_then(|s| crate::numeric_field::parse_field_f64(&s.step_x_mm));
+                // A step that is not a finite number above zero is refused
+                // with its reason in the Messages panel; the previous
+                // value is kept and the dialog stays open so the user can
+                // correct it (#972).
+                let step_x = match draft.as_ref().map(|s| validated_grid_step(&s.step_x_mm)) {
+                    Some(Ok(step)) => Some(step),
+                    Some(Err(reason)) => {
+                        crate::diagnostics::log_warning(format!(
+                            "Grid step refused, previous value kept: {reason}"
+                        ));
+                        return self.finish_update();
+                    }
+                    None => None,
+                };
                 if let (Some(d), Some(editor)) = (draft, self.active_footprint_editor_mut()) {
                     let opts = &mut editor.state.snap_options;
-                    if let Some(step) = parsed_x
-                        && step > 0.0
-                    {
+                    if let Some(step) = step_x {
                         opts.grid_step_mm = step;
                     }
                     opts.fine_grid_display = d.fine_display;
@@ -474,5 +481,15 @@ impl Signex {
             Ok(task) => task,
             Err(payload) => resume_unwind(payload),
         }
+    }
+}
+
+/// Parse a Grid Properties step field: it must be a finite number above
+/// zero. The error is the user-facing reason for the refusal.
+fn validated_grid_step(text: &str) -> Result<f64, String> {
+    match signex_types::numeric::parse_finite_f64(text) {
+        Ok(step) if step > 0.0 => Ok(step),
+        Ok(step) => Err(format!("{step} is not above zero")),
+        Err(err) => Err(err.to_string()),
     }
 }
