@@ -463,7 +463,14 @@ impl Signex {
                 LayerId::new("B.Mask"),
             ],
         };
-        self.with_selected_pad(idx, |pad| pad.layers = layers);
+        let default_drill = self
+            .active_footprint_editor_mut()
+            .and_then(|editor| editor.state.next_pad_defaults.drill_diameter_mm)
+            .unwrap_or(crate::library::editor::footprint::state::DEFAULT_THROUGH_HOLE_DRILL_MM);
+        self.with_selected_pad(idx, |pad| {
+            pad.layers = layers;
+            pad.apply_side_drill(side, default_drill);
+        });
         true
     }
     pub(crate) fn fp_editor_set_selected_pad_shape(
