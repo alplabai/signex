@@ -45,7 +45,7 @@ fn solver_default_solves_anchored_horizontal_distance() {
         kind: ConstraintKind::Horizontal { line },
     });
 
-    let solver = Solver::default();
+    let solver = common::solver();
     let out = solver
         .solve(&s.data, &empty_params())
         .expect("default solver should converge on this canonical case");
@@ -102,7 +102,7 @@ fn solver_detects_over_constrained() {
         },
     });
 
-    let solver = Solver::default();
+    let solver = common::solver();
     match solver.solve(&s.data, &empty_params()) {
         Ok(out) => {
             // LM converged to a least-squares compromise; both
@@ -130,7 +130,7 @@ fn solver_under_constrained_returns_under_dof() {
     let mut s = Sketch::new();
     let p = s.add_point(2.5, 7.5);
 
-    let solver = Solver::default();
+    let solver = common::solver();
     let out = solver.solve(&s.data, &empty_params()).unwrap();
 
     // No constraints → m = 0 → rank(J) = 0 < n = 2 → P is Under.
@@ -246,7 +246,7 @@ fn solver_tolerance_field_is_honoured() {
 
     // For comparison, the default-tolerance solve takes more than 0
     // iterations on the same problem.
-    let out_tight = Solver::default().solve(&s.data, &empty_params()).unwrap();
+    let out_tight = common::solver().solve(&s.data, &empty_params()).unwrap();
     assert!(
         out_tight.result.iterations > 0,
         "default tolerance should take at least one iteration"

@@ -66,19 +66,27 @@ impl Signex {
         ctx: &crate::app::ProjectTreeContextMenuState,
     ) -> Element<'_, Message> {
         use crate::app::ProjectTreeAction as A;
-        use signex_widgets::tree_view::get_node;
+        use signex_widgets::tree_view::{get_node, resolve_path};
 
         let panel_ctx = &self.document_state.panel_ctx;
         let tokens = &panel_ctx.tokens;
         let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(18);
 
-        let Some(path) = ctx.path.as_ref() else {
+        let Some(key) = ctx.key.as_ref() else {
             // Background (empty-area) clicks currently produce no menu —
             // Altium shows a "New Project..." flow there which we do not
             // ship yet. Return an empty placeholder so the overlay layer
             // above has something to render into.
             return container(iced::widget::Space::new()).into();
         };
+        // Resolve the stored key against the tree as it is NOW, so the
+        // actions below carry indices of the row the user right-clicked
+        // even if the tree was rebuilt since. A row that no longer exists
+        // yields no menu rather than a menu for whatever took its place.
+        let Some(path_vec) = resolve_path(panel_ctx.project_tree.as_slice(), key) else {
+            return container(iced::widget::Space::new()).into();
+        };
+        let path = &path_vec;
         let Some(node) = get_node(panel_ctx.project_tree.as_slice(), path) else {
             return container(iced::widget::Space::new()).into();
         };

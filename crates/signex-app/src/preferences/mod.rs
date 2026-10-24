@@ -4,9 +4,7 @@
 //! Left side: tree of settings categories.
 //! Right side: settings panel for the selected category.
 
-use crate::render_config::{
-    GridStyle, LabelStyle, MultisheetStyle, PinSelectionMode, PowerPortStyle,
-};
+use crate::render_config::{GridStyle, PinSelectionMode};
 use iced::widget::{Column, Space, button, column, container, row, scrollable, svg, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use signex_types::theme::ThemeId;
@@ -110,12 +108,6 @@ pub enum PrefMsg {
     DraftTheme(ThemeId),
     /// Update the draft UI font (not applied until Save).
     DraftFont(String),
-    /// Update draft power port drawing style (applies as live preview).
-    DraftPowerPortStyle(PowerPortStyle),
-    /// Update draft global/hier label drawing style (applies as live preview).
-    DraftLabelStyle(LabelStyle),
-    /// Update draft hierarchical-sheet drawing style (applies as live preview).
-    DraftMultisheetStyle(MultisheetStyle),
     /// Update draft visible-grid render style (applies as live preview).
     DraftGridStyle(GridStyle),
     /// Toggle the experimental PCB GPU render. Applies as live preview,
@@ -267,9 +259,6 @@ pub struct PrefsView<'a> {
     pub draft_theme: ThemeId,
     pub saved_theme: ThemeId,
     pub draft_font: &'a str,
-    pub draft_power_port_style: PowerPortStyle,
-    pub draft_label_style: LabelStyle,
-    pub draft_multisheet_style: MultisheetStyle,
     pub draft_grid_style: GridStyle,
     pub draft_pcb_gpu_render: bool,
     pub draft_symbol_grid_size_mm: f32,
@@ -322,7 +311,7 @@ pub struct PrefsView<'a> {
 /// * `custom_name`      — name of the loaded custom theme (if any)
 /// * `dirty`            — whether there are unsaved changes
 pub fn view<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
-    let dialog = build_dialog(v);
+    let dialog = build_dialog(v, true);
 
     container(
         column![
@@ -354,15 +343,16 @@ pub fn view<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
 
 // ─── Dialog shell ─────────────────────────────────────────────
 
-/// Render the Preferences dialog body without the centred backdrop —
-/// used by `view_detached_modal` so the dialog fills its own OS window.
-/// In-window callers go through `view()` which wraps this in a tinted
-/// dismiss layer.
+/// Render the Preferences dialog body without the centred backdrop or
+/// the in-dialog header — used by `view_detached_modal` so the dialog
+/// fills its own OS window, whose native title bar supplies the title and
+/// the close button. In-window callers go through `view()` which wraps the
+/// full dialog (header included) in a tinted dismiss layer.
 pub(crate) fn view_body<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
-    build_dialog(v)
+    build_dialog(v, false)
 }
 
-fn build_dialog<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
+fn build_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Element<'a, PrefMsg> {
     let PrefsView {
         nav,
         dirty,
@@ -441,7 +431,11 @@ fn build_dialog<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     // outside every `scrollable` and shows in whichever pane the user is
     // on. `view()` and `view_body()` both funnel through here, so this one
     // insertion covers the in-app overlay and the detached OS window.
-    let mut col_items: Vec<Element<'a, PrefMsg>> = vec![header.into(), h_divider()];
+    let mut col_items: Vec<Element<'a, PrefMsg>> = Vec::new();
+    if with_header {
+        col_items.push(header.into());
+        col_items.push(h_divider());
+    }
     if let Some(banner) = build_prefs_file_banner(prefs_load_error, prefs_status) {
         col_items.push(banner);
     }

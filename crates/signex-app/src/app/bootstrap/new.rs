@@ -57,6 +57,15 @@ impl Signex {
         };
         // Silence unused-mut when read_dock_layout returns Some.
         let _ = &mut dock;
+        let dock_layout_sync = crate::dock::DockLayoutSync::new(
+            std::sync::Arc::new(crate::fonts::PrefsDockLayoutStore::user_prefs()),
+            crate::dock::DockLayoutSnapshot::capture(&dock),
+        );
+
+        let initial_component_filter = crate::fonts::read_component_filter();
+        let search_prefs = crate::persist::SearchPrefsSync::new(std::sync::Arc::new(
+            crate::fonts::PrefsSearchStore::user_prefs(),
+        ));
 
         let sch_canvas = CanvasSlot::new();
         let mut pcb_canvas = crate::pcb_canvas::PcbCanvas::new();
@@ -171,6 +180,7 @@ impl Signex {
                 snap_enabled: crate::fonts::read_snap_enabled_pref(),
                 cursor_x: 0.0,
                 cursor_y: 0.0,
+                cursor_document: None,
                 zoom: 100.0,
                 grid_size_mm,
                 visible_grid_mm: 1.27,
@@ -209,12 +219,6 @@ impl Signex {
                 // to the wrong canvas colours.
                 preferences_draft_theme: crate::fonts::read_theme_pref(),
                 preferences_draft_font: String::new(),
-                power_port_style: crate::fonts::read_power_port_style_pref(),
-                preferences_draft_power_port_style: crate::fonts::read_power_port_style_pref(),
-                label_style: crate::fonts::read_label_style_pref(),
-                preferences_draft_label_style: crate::fonts::read_label_style_pref(),
-                multisheet_style: crate::fonts::read_multisheet_style_pref(),
-                preferences_draft_multisheet_style: crate::fonts::read_multisheet_style_pref(),
                 grid_style: crate::fonts::read_grid_style_pref(),
                 preferences_draft_grid_style: crate::fonts::read_grid_style_pref(),
                 pcb_gpu_render,
@@ -285,6 +289,8 @@ impl Signex {
             },
             document_state: DocumentState {
                 dock,
+                dock_layout_sync,
+                search_prefs,
                 tabs: vec![],
                 active_tab: 0,
                 engines: std::collections::HashMap::new(),
@@ -352,7 +358,7 @@ impl Signex {
                     child_sheet_border_advanced_open: false,
                     child_sheet_fill_advanced_open: false,
                     child_sheet_stroke_width_buf: None,
-                    component_filter: crate::fonts::read_component_filter(),
+                    component_filter: initial_component_filter,
                     collapsed_sections: std::collections::HashSet::new(),
                     pre_placement: None,
                     erc_diagnostics: Vec::new(),
@@ -397,6 +403,7 @@ impl Signex {
                 canvas: sch_canvas,
                 canvases: std::collections::HashMap::new(),
                 pcb_canvas,
+                pcb_canvases: std::collections::HashMap::new(),
                 dragging: None,
                 drag_start_pos: None,
                 drag_start_size: 0.0,
@@ -444,6 +451,12 @@ impl Signex {
             },
             library: crate::library::LibraryState::default(),
         };
+        // The PCB canvas starts from the loaded grid state, not its own
+        // defaults, so the first frame honours a saved "grid off" (#682).
+        app.interaction_state.pcb_canvas.set_grid(
+            app.ui_state.grid_visible,
+            app.ui_state.visible_grid_mm as f64,
+        );
         // v0.9 Stage 9: load + mount globally-configured libraries
         // before the first frame so the Components Panel's Global
         // section is populated from the get-go.
@@ -451,9 +464,8 @@ impl Signex {
             crate::panels::components_panel::global_prefs::load_and_mount_all(&mut app.library);
         // #630 — seed the two render surfaces that consume a grid style
         // from the saved preferences. Everything else the old
-        // `render_config` global carried (canvas font/size/style, power
-        // port / label / multisheet style) had no reader in any draw
-        // path, so there is nothing left to seed.
+        // `render_config` global carried (canvas font/size/style) had no
+        // reader in any draw path, so there is nothing left to seed.
         app.document_state.panel_ctx.symbol_grid_style = app.ui_state.symbol_grid_style;
 
         // Multi-window (Phase 1): open the main OS window here. Phase 2

@@ -44,7 +44,7 @@ use std::time::Instant;
 use crate::error::SolveError;
 use crate::sketch::SketchData;
 use crate::solver::jacobian::numerical_jacobian;
-use crate::solver::linalg::{LinAlgError, LuDecomposition};
+use crate::solver::linalg::{self, LinAlgError, LuDecomposition};
 use crate::solver::math::{add_diag, axpy, matmul_ata, matvec_t, norm_sq, norm_vec};
 use crate::solver::residual::{ResolvedParams, total_residual};
 use crate::solver::state::{EntityIndex, pack};
@@ -129,7 +129,14 @@ pub fn solve_lm_keeping_state(
     tolerance: f64,
     max_iters: usize,
 ) -> Result<SolveResult, Box<LmFailure>> {
-    run_lm(sketch, params, timeout_ms, tolerance, max_iters, false)
+    run_lm(
+        sketch,
+        params,
+        timeout_ms,
+        tolerance,
+        max_iters,
+        Start::Seed,
+    )
 }
 
 /// [`solve_lm_keeping_state`] from a slightly moved start. A start on a
@@ -143,35 +150,156 @@ pub fn solve_lm_perturbed(
     tolerance: f64,
     max_iters: usize,
 ) -> Result<SolveResult, Box<LmFailure>> {
-    run_lm(sketch, params, timeout_ms, tolerance, max_iters, true)
+    run_lm(
+        sketch,
+        params,
+        timeout_ms,
+        tolerance,
+        max_iters,
+        Start::Perturbed,
+    )
 }
 
-/// A Jacobian entry below this counts as zero: no residual depends on the
-/// variable. Real constraint derivatives are O(1); finite-difference noise
-/// is orders of magnitude smaller.
-const COLUMN_ZERO_TOL: f64 = 1e-6;
+/// Where an LM run starts.
+enum Start {
+    /// The sketch's stored values.
+    Seed,
+    /// The stored values moved by the deterministic retry offset.
+    Perturbed,
+    /// An explicit state vector (the re-solve after an offset retry).
+    From(Vec<f64>),
+}
 
-/// Undo the retry's start offset on variables nothing constrains. A
-/// perturbed retry moves every variable by ~[`START_OFFSET_REL`] of the
-/// sketch extent; the ones no residual depends on would otherwise keep that
-/// offset and drift free geometry. Variables with a non-zero Jacobian column
-/// keep the retry's values, so the result still satisfies every residual.
-pub fn undo_offset_on_unconstrained(
+/// Project-and-re-solve passes after a retry. One pass is exact only to
+/// first order where the constrained directions themselves move (a floppy
+/// chain off an anchor); two or three bring the leftover offset to rounding
+/// noise.
+const UNDO_PASSES: usize = 3;
+
+/// A pass that moves the state by less than this, relative to the sketch
+/// extent, has nothing left to undo.
+const UNDO_DONE_REL: f64 = 1e-12;
+
+/// Relative column norm below which no residual depends on a variable
+/// (fallback path only).
+const COLUMN_ZERO_REL: f64 = 1e-9;
+
+/// Take the retry's start offset back out of a converged solution (#765).
+///
+/// A perturbed retry moves every variable by ~[`START_OFFSET_REL`] of the
+/// sketch extent. The constraints pin only some directions; along the rest
+/// (a free point, or a point on a single distance circle) the offset would
+/// stay and drift geometry the user never touched. So the offset is
+/// projected onto the row space of the Jacobian, the directions the
+/// constraints actually pin, which keeps the solution closest to the
+/// stored values, and the sketch is re-solved from there. That repeats up
+/// to [`UNDO_PASSES`] times, because one projection is exact only to first
+/// order.
+///
+/// If no pass succeeds (the Jacobian fails, or the re-solve does not
+/// converge, e.g. on its own timeout), the retry's result is kept, with
+/// only the variables no residual depends on put back: they cannot affect
+/// the residual, so the reported norm stays the state's own.
+pub fn undo_retry_offset(
+    sketch: &SketchData,
+    params: &ResolvedParams,
+    timeout_ms: u64,
+    tolerance: f64,
+    max_iters: usize,
+    result: SolveResult,
+) -> SolveResult {
+    let original = pack(sketch).vector;
+    let extent = original.iter().fold(1.0_f64, |m, v| m.max(v.abs()));
+    let mut best = result;
+    let mut polished = false;
+    for _ in 0..UNDO_PASSES {
+        let Ok(j) = numerical_jacobian(sketch, &best.state, &best.index, params) else {
+            break;
+        };
+        let Some(start) = row_space_point(&j, &original, &best.state) else {
+            break;
+        };
+        let moved = start
+            .iter()
+            .zip(&best.state)
+            .fold(0.0_f64, |m, (a, b)| m.max((a - b).abs()));
+        let Ok(next) = run_lm(
+            sketch,
+            params,
+            timeout_ms,
+            tolerance,
+            max_iters,
+            Start::From(start),
+        ) else {
+            break;
+        };
+        best = SolveResult {
+            iterations: best.iterations + next.iterations,
+            elapsed_ms: best.elapsed_ms + next.elapsed_ms,
+            ..next
+        };
+        polished = true;
+        if moved <= UNDO_DONE_REL * extent {
+            break;
+        }
+    }
+    if polished {
+        best
+    } else {
+        restore_unconstrained(sketch, params, best, &original)
+    }
+}
+
+/// Put back `original` on every variable no residual depends on: a column of
+/// the Jacobian that is zero relative to the largest one.
+fn restore_unconstrained(
     sketch: &SketchData,
     params: &ResolvedParams,
     mut result: SolveResult,
+    original: &[f64],
 ) -> SolveResult {
     let Ok(j) = numerical_jacobian(sketch, &result.state, &result.index, params) else {
         return result;
     };
-    let original = pack(sketch).vector;
+    let column_norm = |k: usize| -> f64 { j.iter().map(|row| row[k] * row[k]).sum::<f64>().sqrt() };
+    let largest = (0..result.state.len()).fold(0.0_f64, |m, k| m.max(column_norm(k)));
     for (k, value) in result.state.iter_mut().enumerate() {
-        let depends = j.iter().any(|row| row[k].abs() > COLUMN_ZERO_TOL);
-        if !depends {
+        if column_norm(k) <= COLUMN_ZERO_REL * largest {
             *value = original[k];
         }
     }
     result
+}
+
+/// `original` plus only the part of `solved - original` that lies in the
+/// row space of `j`: `original + Jᵀ (J Jᵀ + εI)⁻¹ J (solved - original)`.
+/// The small ridge `ε` keeps redundant constraints (dependent rows) from
+/// making `J Jᵀ` singular. With no constraints the row space is empty and
+/// the result is `original` itself.
+fn row_space_point(j: &[Vec<f64>], original: &[f64], solved: &[f64]) -> Option<Vec<f64>> {
+    if j.is_empty() {
+        return Some(original.to_vec());
+    }
+    let delta: Vec<f64> = solved.iter().zip(original).map(|(s, o)| s - o).collect();
+    let m = j.len();
+    let mut jjt = vec![vec![0.0; m]; m];
+    for (a, row_a) in j.iter().enumerate() {
+        for (b, row_b) in j.iter().enumerate() {
+            jjt[a][b] = row_a.iter().zip(row_b).map(|(x, y)| x * y).sum();
+        }
+    }
+    let scale = (0..m).fold(1.0_f64, |acc, k| acc.max(jjt[k][k]));
+    for (k, row) in jjt.iter_mut().enumerate() {
+        row[k] += 1e-12 * scale;
+    }
+    let j_delta: Vec<f64> = j
+        .iter()
+        .map(|row| row.iter().zip(&delta).map(|(x, d)| x * d).sum())
+        .collect();
+    let w = linalg::solve(&jjt, &j_delta).ok()?;
+    let step = matvec_t(j, &w);
+    let point: Vec<f64> = original.iter().zip(&step).map(|(o, s)| o + s).collect();
+    point.iter().all(|v| v.is_finite()).then_some(point)
 }
 
 fn run_lm(
@@ -180,18 +308,46 @@ fn run_lm(
     timeout_ms: u64,
     tolerance: f64,
     max_iters: usize,
-    perturb: bool,
+    start: Start,
 ) -> Result<SolveResult, Box<LmFailure>> {
     let started = Instant::now();
-    let packed = pack(sketch);
-    let mut state = packed.vector.clone();
-    if perturb {
-        let extent = state.iter().fold(1.0_f64, |m, v| m.max(v.abs()));
-        for (i, v) in state.iter_mut().enumerate() {
-            // Distinct, non-zero offsets per variable: 0.5 .. 1.5.
-            *v += START_OFFSET_REL * extent * (0.5 + (i % 7) as f64 / 6.0);
-        }
+    let dangling = sketch.dangling_refs();
+    if !dangling.is_empty() {
+        // The caller reports the error; this stays at debug so a stuck
+        // sketch is not logged twice.
+        tracing::debug!(
+            target: "signex::sketch",
+            missing = dangling.len(),
+            "sketch references entities that do not exist; solve refused"
+        );
+        return Err(Box::new(LmFailure {
+            error: SolveError::DanglingReference(dangling),
+            state: Vec::new(),
+            index: EntityIndex::default(),
+            stalled: false,
+        }));
     }
+    let packed = pack(sketch);
+    let mut state = match start {
+        Start::Seed => packed.vector.clone(),
+        Start::Perturbed => {
+            let mut state = packed.vector.clone();
+            let extent = state.iter().fold(1.0_f64, |m, v| m.max(v.abs()));
+            for (i, v) in state.iter_mut().enumerate() {
+                // Distinct, non-zero offsets per variable: 0.5 .. 1.5.
+                *v += START_OFFSET_REL * extent * (0.5 + (i % 7) as f64 / 6.0);
+            }
+            state
+        }
+        Start::From(state) => {
+            debug_assert_eq!(state.len(), packed.vector.len(), "re-solve start length");
+            if state.len() == packed.vector.len() {
+                state
+            } else {
+                packed.vector.clone()
+            }
+        }
+    };
     let outcome = iterate_lm(
         sketch,
         params,

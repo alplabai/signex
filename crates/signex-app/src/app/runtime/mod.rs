@@ -30,13 +30,25 @@ impl Signex {
         out
     }
 
-    pub(crate) fn finish_update(&mut self) -> Task<Message> {
+    /// Copy the UI-state grid/unit/snap fields into the panel context.
+    pub(in crate::app) fn sync_panel_ctx_mirrors(&mut self) {
         self.document_state.panel_ctx.unit = self.ui_state.unit;
         self.document_state.panel_ctx.grid_visible = self.ui_state.grid_visible;
         self.document_state.panel_ctx.snap_enabled = self.ui_state.snap_enabled;
         self.document_state.panel_ctx.grid_size_mm = self.ui_state.grid_size_mm;
         self.document_state.panel_ctx.visible_grid_mm = self.ui_state.visible_grid_mm;
         self.document_state.panel_ctx.snap_hotspots = self.ui_state.snap_hotspots;
+        let (visible, visible_grid_mm) = (
+            self.ui_state.grid_visible,
+            self.ui_state.visible_grid_mm as f64,
+        );
+        for canvas in self.interaction_state.all_pcb_canvases_mut() {
+            canvas.set_grid(visible, visible_grid_mm);
+        }
+    }
+
+    pub(crate) fn finish_update(&mut self) -> Task<Message> {
+        self.sync_panel_ctx_mirrors();
         self.sync_diagnostics_panel_ctx();
 
         // Re-resolve the History panel's active path; on change, bump
@@ -64,6 +76,17 @@ impl Signex {
     pub(in crate::app) fn sync_diagnostics_panel_ctx(&mut self) {
         self.document_state.panel_ctx.diagnostics_level =
             crate::diagnostics::configured_level_label().to_string();
+        // Ids are monotonic and eviction only happens on push, so an
+        // unchanged newest id means the ring is unchanged: skip the clone.
+        let held = self
+            .document_state
+            .panel_ctx
+            .diagnostics
+            .last()
+            .map(|e| e.id);
+        if held.is_some() && held == crate::diagnostics::newest_entry_id() {
+            return;
+        }
         self.document_state.panel_ctx.diagnostics = crate::diagnostics::recent_entries();
     }
 
@@ -85,6 +108,8 @@ impl Signex {
         }
 
         self.sync_visible_document_from_active_tab();
+        // A half-placed two-click shape belongs to the tab it was started in.
+        self.clear_shape_anchors();
         // ERC results are cached per-sheet. On tab switch, repoint the visible
         // list/markers at the newly active sheet instead of dropping results.
         let active_path = self
@@ -270,21 +295,57 @@ impl Signex {
         } else {
             signex_types::theme::canvas_colors(self.ui_state.theme_id)
         };
-        self.interaction_state.pcb_canvas.set_theme_colors(
-            crate::render_config::to_iced(&colors.background),
-            crate::render_config::to_iced(&colors.grid),
-        );
-        self.interaction_state.pcb_canvas.canvas_colors = colors;
+        for canvas in self.interaction_state.all_pcb_canvases_mut() {
+            canvas.set_theme_colors(
+                crate::render_config::to_iced(&colors.background),
+                crate::render_config::to_iced(&colors.grid),
+            );
+            canvas.canvas_colors = colors;
+            canvas.clear_content_cache();
+        }
         self.interaction_state
             .active_canvas_mut()
             .clear_content_cache();
-        self.interaction_state.pcb_canvas.clear_content_cache();
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// #682 — bootstrap seeds the PCB canvas from the loaded grid state, so
+    /// a saved grid-off (or a non-default size) holds before any update.
+    #[test]
+    fn bootstrap_seeds_pcb_canvas_grid_from_ui_state() {
+        let (app, _t) = Signex::new();
+
+        assert_eq!(
+            app.interaction_state.pcb_canvas.grid_visible,
+            app.ui_state.grid_visible
+        );
+        assert_eq!(
+            app.interaction_state.pcb_canvas.visible_grid_mm,
+            app.ui_state.visible_grid_mm as f64
+        );
+    }
+
+    /// #682 — the PCB canvas used to keep its own grid fields that nothing
+    /// ever wrote after construction, so the Grid Toggle and Visible Grid
+    /// Size never reached it. `finish_update` now hands them over.
+    #[test]
+    fn pcb_canvas_follows_grid_toggle_and_visible_size() {
+        let (mut app, _t) = Signex::new();
+        app.ui_state.grid_visible = false;
+        app.ui_state.visible_grid_mm = 5.08;
+
+        let _ = app.finish_update();
+
+        assert!(!app.interaction_state.pcb_canvas.grid_visible);
+        assert_eq!(
+            app.interaction_state.pcb_canvas.visible_grid_mm,
+            5.08_f32 as f64
+        );
+    }
 
     /// #631 — the canvas used to own copies of these settings, written by
     /// whichever handler changed them. Most of those sites wrote

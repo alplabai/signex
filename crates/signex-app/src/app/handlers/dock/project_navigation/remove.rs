@@ -18,9 +18,11 @@ impl Signex {
             .unwrap_or("")
             .to_string();
         let is_outside_project = self.is_outside_project_target(&tree_path, &target_path);
+        let project_id = self.project_id_at_tree_path(&tree_path);
         self.ui_state.remove_dialog = Some(crate::app::RemoveDialogState {
             target_path,
             tree_path,
+            project_id,
             display_name,
             is_outside_project,
         });
@@ -164,9 +166,16 @@ impl Signex {
     ) -> iced::Task<Message> {
         use crate::app::RemoveChoice;
 
-        let Some(state) = self.ui_state.remove_dialog.take() else {
+        let Some(mut state) = self.ui_state.remove_dialog.take() else {
             return iced::Task::none();
         };
+        if !self.repoint_dialog_tree_path(state.project_id, &mut state.tree_path) {
+            crate::diagnostics::log_warning(format!(
+                "Remove \"{}\" cancelled: its project was closed while the dialog was open.",
+                state.display_name
+            ));
+            return iced::Task::none();
+        }
 
         // Close any tab backed by this file before we touch disk or
         // drop it from the project's in-memory list — otherwise the

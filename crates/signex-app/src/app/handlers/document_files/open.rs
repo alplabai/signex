@@ -121,11 +121,11 @@ impl Signex {
         // `.snxprj` parse, no heavy IO) — only the schematic tab's
         // read+parse below is async, via `open_document_path`'s
         // `snxsch` branch.
-        let _project_task = self.open_document_path(project_path.to_path_buf())?;
+        let project_task = self.open_document_path(project_path.to_path_buf())?;
         let schematic_task = if sch_path.exists() {
             // Best-effort: surface the schematic tab so the new project
-            // lands the user on a drawable canvas. Errors here just
-            // leave them on the Welcome view.
+            // lands the user on a drawable canvas. A failure is logged
+            // to the Messages panel and leaves them on the Welcome view.
             match self.open_document_path(sch_path) {
                 Ok(task) => task,
                 Err(error) => {
@@ -137,7 +137,72 @@ impl Signex {
             iced::Task::none()
         };
         self.refresh_panel_ctx();
-        Ok(schematic_task)
+        // Both Tasks go back to the runtime: the project's library
+        // mounts must never be dropped (see `open_document_path`).
+        Ok(iced::Task::batch([project_task, schematic_task]))
+    }
+
+    /// Help ▸ Open Sample Project: unpack the bundled sample (once) into
+    /// the per-user config directory on a blocking worker, so `update`
+    /// does no IO. `handle_sample_project_unpacked` opens it.
+    pub(crate) fn handle_open_sample_project(&mut self) -> iced::Task<Message> {
+        let Some(root) = crate::sample_project::sample_root() else {
+            self.report_sample_failure(&anyhow::anyhow!(
+                "no per-user config directory to unpack the sample into"
+            ));
+            return iced::Task::none();
+        };
+        iced::Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || {
+                    crate::sample_project::ensure_extracted(&root)
+                        .map(|_| root)
+                        .map_err(|error| format!("{error:#}"))
+                })
+                .await
+                .unwrap_or_else(|error| Err(format!("sample unpack did not complete: {error}")))
+            },
+            |result| Message::File(FileMsg::SampleProjectUnpacked(result)),
+        )
+    }
+
+    /// Open the unpacked sample project and its sheet like any other
+    /// project. A failure reaches the log and the Open Failed notice.
+    pub(crate) fn handle_sample_project_unpacked(
+        &mut self,
+        result: Result<PathBuf, String>,
+    ) -> iced::Task<Message> {
+        let root = match result {
+            Ok(root) => root,
+            Err(message) => {
+                self.report_sample_failure(&anyhow::anyhow!(message));
+                return iced::Task::none();
+            }
+        };
+        let project_task = match self.open_document_path(crate::sample_project::project_path(&root))
+        {
+            Ok(task) => task,
+            Err(error) => {
+                self.report_sample_failure(&error);
+                return iced::Task::none();
+            }
+        };
+        // The project task carries cold library mounts; never drop it.
+        let sheet_task = match self.open_document_path(crate::sample_project::sheet_path(&root)) {
+            Ok(task) => task,
+            Err(error) => {
+                crate::diagnostics::log_error("Open sample sheet", &error);
+                iced::Task::none()
+            }
+        };
+        self.refresh_panel_ctx();
+        iced::Task::batch([project_task, sheet_task])
+    }
+
+    fn report_sample_failure(&mut self, error: &anyhow::Error) {
+        crate::diagnostics::log_error("Open sample project", error);
+        self.document_state.error_notice =
+            Some(crate::app::state::ErrorNotice::open(format!("{error:#}")));
     }
 
     pub(crate) fn handle_active_document_save_requested(&mut self) -> iced::Task<Message> {

@@ -16,6 +16,10 @@ signex-net = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 uuid = { workspace = true }
+[dev-dependencies]
+signex-erc = { workspace = true }
+tempfile = "3"
+
 # GH #548 — inherit [workspace.lints.rust] (unused_must_use = deny).
 [lints]
 workspace = true

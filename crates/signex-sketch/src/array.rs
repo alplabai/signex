@@ -72,6 +72,17 @@ pub enum ArrayKind {
     },
 }
 
+impl ArrayKind {
+    /// Every entity this array names: its source, plus the centre of a
+    /// polar array.
+    pub fn entity_refs(&self) -> Vec<SketchEntityId> {
+        match self {
+            Self::Linear { source, .. } | Self::Grid { source, .. } => vec![*source],
+            Self::Polar { source, center, .. } => vec![*source, *center],
+        }
+    }
+}
+
 /// Predicate evaluated per `(i, j)` index in a Grid array.
 /// `true` keeps the instance; `false` skips it. `i`, `j`, `nx`, `ny`
 /// are bound in scope.

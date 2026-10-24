@@ -36,7 +36,7 @@ fn two_rapid_saves_to_one_repo_commit_in_order_one_at_a_time() {
     let _ = app.update(Message::Project(ProjectMsg::GitCommitDone {
         project_root: dir.path().to_path_buf(),
         rel_path: PathBuf::from("a.snxsch"),
-        result: Ok("deadbeef".to_string()),
+        result: Ok(Some("deadbeef".to_string())),
     }));
     let _second_task = app.drain_pending_git_commits();
     assert!(

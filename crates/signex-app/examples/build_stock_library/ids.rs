@@ -22,10 +22,14 @@ pub enum StockKind {
     Fiducial1mm,
 }
 
+/// Identity of the stock library itself. Designs reference stock
+/// primitives by `PrimitiveRef { library_id, uuid }`, so like the rows
+/// below this is a published contract: never regenerate or edit it.
+pub const STOCK_LIBRARY_ID: &str = "019df45d-af5e-7a00-8c3b-dd3bf89b40ae";
+
 /// Pinned identity of one stock `.snxfpt` file.
 pub struct StockIds {
     pub kind: StockKind,
-    pub file_name: &'static str,
     file_uuid: &'static str,
     footprint_uuid: &'static str,
     plane: &'static str,
@@ -38,6 +42,13 @@ fn parse(id: &str) -> Uuid {
 }
 
 impl StockIds {
+    /// On-disk name: `LocalGitAdapter` finds a footprint at
+    /// `footprints/<footprint uuid>.snxfpt`, so the library lists and
+    /// loads it only under that name.
+    pub fn file_name(&self) -> String {
+        format!("{}.snxfpt", self.footprint_uuid)
+    }
+
     pub fn file_uuid(&self) -> Uuid {
         parse(self.file_uuid)
     }
@@ -69,7 +80,6 @@ impl StockIds {
 pub const STOCK_IDS: &[StockIds] = &[
     StockIds {
         kind: StockKind::Soic8,
-        file_name: "SOIC-8.snxfpt",
         file_uuid: "019df45d-af5f-7bb0-914a-26cc90477b10",
         footprint_uuid: "019df45d-af5f-7bb0-914a-26b538180e51",
         plane: "e09fba70-a152-4bdf-a5b9-63e910b7feb9",
@@ -86,7 +96,6 @@ pub const STOCK_IDS: &[StockIds] = &[
     },
     StockIds {
         kind: StockKind::Qfn16,
-        file_name: "QFN-16.snxfpt",
         file_uuid: "019df45d-af61-7612-8d18-c80e4c879451",
         footprint_uuid: "019df45d-af61-7612-8d18-c7f4c67e4b0e",
         plane: "820e5c14-38a5-480a-9098-08579b42ef2d",
@@ -111,7 +120,6 @@ pub const STOCK_IDS: &[StockIds] = &[
     },
     StockIds {
         kind: StockKind::R0805,
-        file_name: "R0805.snxfpt",
         file_uuid: "019df45d-af64-7bb2-b787-add74d246d40",
         footprint_uuid: "019df45d-af63-7823-b5c3-01594028ccef",
         plane: "cdbf6963-91f5-44b7-9f96-a2e01a046265",
@@ -122,7 +130,6 @@ pub const STOCK_IDS: &[StockIds] = &[
     },
     StockIds {
         kind: StockKind::MountingHole3p2,
-        file_name: "MountingHole-3.2mm.snxfpt",
         file_uuid: "019df45d-af65-71a1-b568-29e703608649",
         footprint_uuid: "019df45d-af65-71a1-b568-29d0a5242184",
         plane: "6287d9cd-d2d8-4190-bd2e-46de49a389ac",
@@ -130,7 +137,6 @@ pub const STOCK_IDS: &[StockIds] = &[
     },
     StockIds {
         kind: StockKind::Fiducial1mm,
-        file_name: "Fiducial-1mm.snxfpt",
         file_uuid: "019df45d-af66-75c0-b9cf-2bbf173b0066",
         footprint_uuid: "019df45d-af66-75c0-b9cf-2ba7e253d69c",
         plane: "7c74fab9-10b4-4550-aad0-cec6d5b2c3e9",
