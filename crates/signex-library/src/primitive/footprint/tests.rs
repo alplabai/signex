@@ -245,7 +245,7 @@ fn pad_shape_token_round_trip_each_variant() {
         PadShape::Custom(Polygon::new(Vec::new())),
     ];
     for s in cases {
-        let token = pad_shape_to_token(&s).unwrap();
+        let token = pad_shape_to_token(&s, "t").unwrap();
         let back = pad_shape_from_token(&token).unwrap();
         assert_eq!(s, back, "round-trip failed via token {token:?}");
     }
@@ -419,4 +419,90 @@ fn footprint_file_get_by_uuid() {
         Some("B")
     );
     assert!(file.get_footprint(Uuid::now_v7()).is_none());
+}
+
+const NON_FINITE: [f64; 3] = [f64::NAN, f64::INFINITY, f64::NEG_INFINITY];
+
+fn assert_non_finite_names(result: Result<String, FootprintFileError>, needles: &[&str]) {
+    match result {
+        Err(FootprintFileError::NonFiniteField { field }) => {
+            for needle in needles {
+                assert!(field.contains(needle), "{field:?} must name {needle:?}");
+            }
+        }
+        other => panic!("expected NonFiniteField, got {other:?}"),
+    }
+}
+
+/// #828 -- a non-finite pad cell is a save error naming pad and column.
+/// Before the guard a release build wrote an empty cell (the value reset
+/// silently on reopen) and a debug build panicked in `debug_assert!`.
+#[test]
+fn pads_to_tsv_refuses_a_non_finite_cell() {
+    let setters: [(&str, fn(&mut Pad, f64)); 8] = [
+        ("size", |p, v| p.size[0] = v),
+        ("pos", |p, v| p.position[1] = v),
+        ("rotation", |p, v| p.rotation = v),
+        ("drill_diameter", |p, v| {
+            p.drill = Some(Drill {
+                diameter: v,
+                slot_length: None,
+            })
+        }),
+        ("drill_slot_length", |p, v| {
+            p.drill = Some(Drill {
+                diameter: 0.8,
+                slot_length: Some(v),
+            })
+        }),
+        ("solder_mask_margin", |p, v| p.solder_mask_margin = Some(v)),
+        ("paste_margin", |p, v| p.paste_margin = Some(v)),
+        ("shape", |p, v| {
+            p.shape = PadShape::RoundRect { radius_ratio: v }
+        }),
+    ];
+    for (column, set) in setters {
+        for bad in NON_FINITE {
+            let mut pad = fixture_pad("A1");
+            set(&mut pad, bad);
+            assert_non_finite_names(pads_to_tsv(&[pad]), &[column, "\"A1\""]);
+        }
+    }
+}
+
+#[test]
+fn pads_to_tsv_refuses_a_non_finite_custom_shape_point() {
+    for bad in NON_FINITE {
+        let mut pad = fixture_pad("C");
+        pad.shape = PadShape::Custom(Polygon::new(vec![[0.0, 0.0], [bad, 1.0], [1.0, 1.0]]));
+        assert_non_finite_names(pads_to_tsv(&[pad]), &["shape", "\"C\""]);
+    }
+}
+
+/// #828 -- the TOML-carried numbers (graphics, courtyard, ...) are
+/// guarded too, and the error names the key path.
+#[test]
+fn to_toml_string_refuses_a_non_finite_graphic() {
+    for bad in NON_FINITE {
+        let mut fp = Footprint::empty("G");
+        fp.silk_f.push(FpGraphic {
+            kind: FpGraphicKind::Line {
+                from: [0.0, 0.0],
+                to: [1.0, 0.0],
+            },
+            stroke_width: bad,
+            filled: false,
+        });
+        assert_non_finite_names(
+            FootprintFile::from_footprint(fp).to_toml_string(),
+            &["footprints[0].silk_f[0].stroke_width"],
+        );
+    }
+}
+
+#[test]
+fn a_finite_footprint_still_saves() {
+    let mut fp = Footprint::empty("OK");
+    fp.pads.push(fixture_pad("1"));
+    assert!(FootprintFile::from_footprint(fp).to_toml_string().is_ok());
 }

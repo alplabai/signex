@@ -28,6 +28,46 @@ pub fn parse_finite_f64(text: &str) -> Result<f64, FiniteParseError> {
     }
 }
 
+/// Key path (`extras.board.outline[0].x`) of the first NaN or infinite
+/// float in `tree`, or `None` when every float is finite.
+///
+/// TOML spells those values `nan` / `inf`, so a serde-written table
+/// carries them without complaint and a save would persist the poison.
+/// Writers run this over what they are about to serialise and refuse the
+/// save, naming the key, before any byte is written.
+pub fn first_non_finite_path<T: serde::Serialize>(
+    tree: &T,
+) -> Result<Option<String>, toml::ser::Error> {
+    let value = toml::Value::try_from(tree)?;
+    Ok(non_finite_in(&value, &mut String::new()))
+}
+
+/// Depth-first search; `path` is the key path of `value`, reused across
+/// the walk so a hit can report where it was found.
+fn non_finite_in(value: &toml::Value, path: &mut String) -> Option<String> {
+    match value {
+        toml::Value::Float(f) if !f.is_finite() => Some(path.clone()),
+        toml::Value::Table(table) => table.iter().find_map(|(key, child)| {
+            let mark = path.len();
+            if !path.is_empty() {
+                path.push('.');
+            }
+            path.push_str(key);
+            let hit = non_finite_in(child, path);
+            path.truncate(mark);
+            hit
+        }),
+        toml::Value::Array(items) => items.iter().enumerate().find_map(|(i, child)| {
+            let mark = path.len();
+            path.push_str(&format!("[{i}]"));
+            let hit = non_finite_in(child, path);
+            path.truncate(mark);
+            hit
+        }),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
