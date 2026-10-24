@@ -6,11 +6,12 @@
 //! symbol and footprint canvases, so these tests drive the real
 //! Preferences message and then a real zoom on a canvas.
 //!
-//! **No test here saves** — `PrefMsg::Save` writes the per-process prefs
-//! path guarded by another module's `Mutex` (see
-//! `render_config_grid_style.rs`). The canvases zoom with the draft, the
-//! same effective-value rule `grid_style` follows, so the draft alone is
-//! observable; the persisted round trip lives in `prefs.rs`.
+//! The canvases zoom with the draft, the same effective-value rule
+//! `grid_style` follows, so most tests here only draft. The Save and
+//! startup tests at the bottom do write the per-process prefs path; they
+//! take the shared lock (`serial()` + `PrefsPathGuard`, see
+//! `render_config_grid_style.rs`), and the file round trip itself lives in
+//! `prefs.rs`.
 
 use signex_app::app::{Message, PreferencesMsg, Signex, SymbolEditorState, TabInfo, TabKind};
 use signex_app::library::messages::{LibraryMessage, PrimitiveEdit, SymbolEditorMsg};
@@ -102,13 +103,15 @@ fn a_fractional_scroll_on_the_symbol_editor_is_proportional() {
     // Arrange
     let (mut app, path) = symbol_app();
     let _ = app.update(Message::Preferences(PreferencesMsg::Open));
-    let _ = app.update(inner(PrefMsg::DraftZoomStepPercent(21)));
+    // 44% so half a notch (1.44^0.5 = 1.2) cannot coincide with a full
+    // notch at the old fixed 1.1.
+    let _ = app.update(inner(PrefMsg::DraftZoomStepPercent(44)));
 
     // Act
     let ratio = wheel_in(&mut app, &path, 0.5);
 
-    // Assert — 1.21^0.5 = 1.1
-    assert!((ratio - 1.1).abs() < 1e-4, "half a notch, got {ratio}");
+    // Assert
+    assert!((ratio - 1.2).abs() < 1e-4, "half a notch, got {ratio}");
 }
 
 /// Discarding the dialog must put the zoom step back, or an abandoned
