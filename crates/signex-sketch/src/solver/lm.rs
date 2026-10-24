@@ -170,6 +170,20 @@ enum Start {
     From(Vec<f64>),
 }
 
+/// Project-and-re-solve passes after a retry. One pass is exact only to
+/// first order where the constrained directions themselves move (a floppy
+/// chain off an anchor); two or three bring the leftover offset to rounding
+/// noise.
+const UNDO_PASSES: usize = 3;
+
+/// A pass that moves the state by less than this, relative to the sketch
+/// extent, has nothing left to undo.
+const UNDO_DONE_REL: f64 = 1e-12;
+
+/// Relative column norm below which no residual depends on a variable
+/// (fallback path only).
+const COLUMN_ZERO_REL: f64 = 1e-9;
+
 /// Take the retry's start offset back out of a converged solution (#765).
 ///
 /// A perturbed retry moves every variable by ~[`START_OFFSET_REL`] of the
@@ -178,9 +192,14 @@ enum Start {
 /// stay and drift geometry the user never touched. So the offset is
 /// projected onto the row space of the Jacobian, the directions the
 /// constraints actually pin, which keeps the solution closest to the
-/// stored values. The projection is exact only to first order, so the
-/// sketch is re-solved from there; if that re-solve fails, the retry's own
-/// result is kept unchanged (its residual is then still its own).
+/// stored values, and the sketch is re-solved from there. That repeats up
+/// to [`UNDO_PASSES`] times, because one projection is exact only to first
+/// order.
+///
+/// If no pass succeeds (the Jacobian fails, or the re-solve does not
+/// converge, e.g. on its own timeout), the retry's result is kept, with
+/// only the variables no residual depends on put back: they cannot affect
+/// the residual, so the reported norm stays the state's own.
 pub fn undo_retry_offset(
     sketch: &SketchData,
     params: &ResolvedParams,
@@ -190,27 +209,66 @@ pub fn undo_retry_offset(
     result: SolveResult,
 ) -> SolveResult {
     let original = pack(sketch).vector;
+    let extent = original.iter().fold(1.0_f64, |m, v| m.max(v.abs()));
+    let mut best = result;
+    let mut polished = false;
+    for _ in 0..UNDO_PASSES {
+        let Ok(j) = numerical_jacobian(sketch, &best.state, &best.index, params) else {
+            break;
+        };
+        let Some(start) = row_space_point(&j, &original, &best.state) else {
+            break;
+        };
+        let moved = start
+            .iter()
+            .zip(&best.state)
+            .fold(0.0_f64, |m, (a, b)| m.max((a - b).abs()));
+        let Ok(next) = run_lm(
+            sketch,
+            params,
+            timeout_ms,
+            tolerance,
+            max_iters,
+            Start::From(start),
+        ) else {
+            break;
+        };
+        best = SolveResult {
+            iterations: best.iterations + next.iterations,
+            elapsed_ms: best.elapsed_ms + next.elapsed_ms,
+            ..next
+        };
+        polished = true;
+        if moved <= UNDO_DONE_REL * extent {
+            break;
+        }
+    }
+    if polished {
+        best
+    } else {
+        restore_unconstrained(sketch, params, best, &original)
+    }
+}
+
+/// Put back `original` on every variable no residual depends on: a column of
+/// the Jacobian that is zero relative to the largest one.
+fn restore_unconstrained(
+    sketch: &SketchData,
+    params: &ResolvedParams,
+    mut result: SolveResult,
+    original: &[f64],
+) -> SolveResult {
     let Ok(j) = numerical_jacobian(sketch, &result.state, &result.index, params) else {
         return result;
     };
-    let Some(start) = row_space_point(&j, &original, &result.state) else {
-        return result;
-    };
-    match run_lm(
-        sketch,
-        params,
-        timeout_ms,
-        tolerance,
-        max_iters,
-        Start::From(start),
-    ) {
-        Ok(polished) => SolveResult {
-            iterations: result.iterations + polished.iterations,
-            elapsed_ms: result.elapsed_ms + polished.elapsed_ms,
-            ..polished
-        },
-        Err(_) => result,
+    let column_norm = |k: usize| -> f64 { j.iter().map(|row| row[k] * row[k]).sum::<f64>().sqrt() };
+    let largest = (0..result.state.len()).fold(0.0_f64, |m, k| m.max(column_norm(k)));
+    for (k, value) in result.state.iter_mut().enumerate() {
+        if column_norm(k) <= COLUMN_ZERO_REL * largest {
+            *value = original[k];
+        }
     }
+    result
 }
 
 /// `original` plus only the part of `solved - original` that lies in the
@@ -281,8 +339,14 @@ fn run_lm(
             }
             state
         }
-        Start::From(state) if state.len() == packed.vector.len() => state,
-        Start::From(_) => packed.vector.clone(),
+        Start::From(state) => {
+            debug_assert_eq!(state.len(), packed.vector.len(), "re-solve start length");
+            if state.len() == packed.vector.len() {
+                state
+            } else {
+                packed.vector.clone()
+            }
+        }
     };
     let outcome = iterate_lm(
         sketch,

@@ -246,3 +246,101 @@ fn the_saddle_retry_does_not_slide_a_partly_constrained_point() {
         out.result.final_residual_norm
     );
 }
+
+/// The saddle sketch (`a`, `b` fixed; `p` 5 from each), from which the
+/// solver needs the offset retry.
+fn saddle() -> (
+    Sketch,
+    signex_sketch::id::SketchEntityId,
+    signex_sketch::id::SketchEntityId,
+) {
+    let mut s = Sketch::new();
+    let a = s.add_point(0.0, 0.0);
+    let b = s.add_point(8.0, 0.0);
+    let p = s.add_point(4.0, 0.0);
+    for point in [a, b] {
+        s.data.constraints.push(Constraint {
+            id: ConstraintId::new(),
+            kind: ConstraintKind::Fixed { point },
+        });
+    }
+    s.data.constraints.push(distance(a, p, 5.0));
+    s.data.constraints.push(distance(b, p, 5.0));
+    (s, a, p)
+}
+
+fn solved_xy(
+    s: &Sketch,
+    out: &signex_sketch::solver::FullSolveOutput,
+    id: signex_sketch::id::SketchEntityId,
+) -> (f64, f64) {
+    signex_sketch::solver::state::point_xy(id, &out.result.state, &out.result.index, &s.data)
+        .expect("point")
+}
+
+/// #890 review: when the point a constraint hangs off itself moves (here `p`
+/// leaves the saddle), each project-and-re-solve pass removes only part of
+/// the sideways offset (about 0.7 of it here: the anchor moves 3 against a
+/// radius of 10). Three passes bring `q` from 1e-2 off x = 4 (the trunk
+/// result) to under 1e-3.
+#[test]
+fn the_retry_offset_is_undone_when_the_anchor_moves() {
+    let (mut s, _, p) = saddle();
+    let q = s.add_point(4.0, 10.0);
+    s.data.constraints.push(distance(p, q, 10.0));
+    let out = common::solver()
+        .solve(&s.data, &ResolvedParams::new())
+        .expect("solves");
+    let (qx, _) = solved_xy(&s, &out, q);
+    assert!((qx - 4.0).abs() < 1e-3, "q drifted sideways: x = {qx}");
+}
+
+/// #890 review: a floppy chain of links hanging off a fixed point needs no
+/// movement at all, so none of its points may drift after the retry.
+#[test]
+fn a_floppy_chain_does_not_drift_after_the_retry() {
+    let (mut s, a, _) = saddle();
+    let mut links = Vec::new();
+    let mut prev = a;
+    for k in 1..=10 {
+        let at = (-2.0 * f64::from(k), 0.0);
+        let point = s.add_point(at.0, at.1);
+        s.data.constraints.push(distance(prev, point, 2.0));
+        links.push((point, at));
+        prev = point;
+    }
+    let out = common::solver()
+        .solve(&s.data, &ResolvedParams::new())
+        .expect("solves");
+    for (point, (x0, y0)) in links {
+        let (x, y) = solved_xy(&s, &out, point);
+        assert!(
+            (x - x0).abs() < 1e-6 && (y - y0).abs() < 1e-6,
+            "a link moved from ({x0}, {y0}) to ({x}, {y})"
+        );
+    }
+}
+
+/// #765 item 2, at a scale where the old reset visibly broke a constraint:
+/// the reported residual must be the returned state's own.
+#[test]
+fn the_reported_residual_matches_the_state_at_a_large_extent() {
+    let (mut s, a, _) = saddle();
+    let q = s.add_point(0.0, 1e7);
+    s.data.constraints.push(distance(a, q, 1e7));
+    let params = ResolvedParams::new();
+    let out = common::solver().solve(&s.data, &params).expect("solves");
+    let r = signex_sketch::solver::residual::total_residual(
+        &s.data,
+        &out.result.state,
+        &out.result.index,
+        &params,
+    )
+    .expect("residual");
+    let norm = r.iter().map(|v| v * v).sum::<f64>().sqrt();
+    assert!(
+        (norm - out.result.final_residual_norm).abs() < 1e-6,
+        "reported {} but the state's residual is {norm}",
+        out.result.final_residual_norm
+    );
+}
