@@ -163,6 +163,30 @@ jobs:
         run: cargo deny --all-features check advisories
         continue-on-error: true
 
+      # `[bans]` in deny.toml (the glyphon regression ban; duplicate
+      # versions at "warn") was configured but never evaluated, because only
+      # the three checks above ran (#664). Hard: a banned crate fails the job.
+      - name: Check bans
+        run: cargo deny --all-features check bans
+
+  arch-guard:
+    name: arch guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+      - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
+
+      # ADR-0001 D5 (#664): workspace dependency edges are an allow-list in
+      # scripts/arch-edges.txt, and domain crates may not depend on the
+      # UI/GPU stack. Rules and rationale live in the script.
+      - name: Architecture guard
+        run: bash scripts/check_arch_guard.sh
+
+      - name: Architecture guard controls
+        run: bash scripts/test_check_arch_guard.sh
+
   no-god-files:
     name: no god-files
     runs-on: ubuntu-latest
