@@ -129,29 +129,14 @@ impl Signex {
                 // just the drag delta. Snapping only the delta preserves an
                 // off-grid origin; users expect the endpoint to be on-grid
                 // like Standard/Altium do.
-                let (dx, dy) = if self.ui_state.snap_enabled {
-                    let gs = crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm);
-                    let primary = self
-                        .interaction_state
-                        .canvas
-                        .selected
-                        .first()
-                        .and_then(|item| {
-                            let snap = self.active_render_snapshot()?;
-                            primary_anchor_world(snap, item)
-                        });
-                    if let Some((px, py)) = primary {
-                        let target_x = px + dx;
-                        let target_y = py + dy;
-                        let snapped_x = (target_x / gs).round() * gs;
-                        let snapped_y = (target_y / gs).round() * gs;
-                        (snapped_x - px, snapped_y - py)
-                    } else {
-                        ((dx / gs).round() * gs, (dy / gs).round() * gs)
-                    }
-                } else {
-                    (dx, dy)
-                };
+                let (dx, dy) = crate::canvas::drag_preview::snapped_move_delta(
+                    self.active_render_snapshot(),
+                    &self.interaction_state.active_canvas().selected,
+                    dx,
+                    dy,
+                    self.ui_state.snap_enabled,
+                    crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm),
+                );
                 if (dx.abs() > 0.001 || dy.abs() > 0.001)
                     && !self
                         .interaction_state
@@ -432,77 +417,5 @@ impl Signex {
             canvas.clear_bg_cache();
             canvas.clear_content_cache();
         }
-    }
-}
-
-/// Resolve a selected item's primary anchor — the world point that should
-/// snap to the grid (connection point for labels/wires/symbols, etc.).
-fn primary_anchor_world(
-    snap: &crate::schematic_runtime::SchematicRenderSnapshot,
-    item: &signex_types::schematic::SelectedItem,
-) -> Option<(f64, f64)> {
-    use signex_types::schematic::SelectedKind;
-    match item.kind {
-        SelectedKind::Label => snap
-            .labels
-            .iter()
-            .find(|l| l.uuid == item.uuid)
-            .map(|l| (l.position.x, l.position.y)),
-        SelectedKind::Symbol => snap
-            .symbols
-            .iter()
-            .find(|s| s.uuid == item.uuid)
-            .map(|s| (s.position.x, s.position.y)),
-        SelectedKind::Wire => snap
-            .wires
-            .iter()
-            .find(|w| w.uuid == item.uuid)
-            .map(|w| (w.start.x, w.start.y)),
-        SelectedKind::Bus => snap
-            .buses
-            .iter()
-            .find(|b| b.uuid == item.uuid)
-            .map(|b| (b.start.x, b.start.y)),
-        SelectedKind::Junction => snap
-            .junctions
-            .iter()
-            .find(|j| j.uuid == item.uuid)
-            .map(|j| (j.position.x, j.position.y)),
-        SelectedKind::NoConnect => snap
-            .no_connects
-            .iter()
-            .find(|n| n.uuid == item.uuid)
-            .map(|n| (n.position.x, n.position.y)),
-        SelectedKind::NoErcDirective => snap
-            .no_erc_directives
-            .iter()
-            .find(|d| d.uuid == item.uuid)
-            .map(|d| (d.position.x, d.position.y)),
-        SelectedKind::TextNote => snap
-            .text_notes
-            .iter()
-            .find(|t| t.uuid == item.uuid)
-            .map(|t| (t.position.x, t.position.y)),
-        SelectedKind::ChildSheet => snap
-            .child_sheets
-            .iter()
-            .find(|c| c.uuid == item.uuid)
-            .map(|c| (c.position.x, c.position.y)),
-        SelectedKind::SheetPin => snap
-            .child_sheets
-            .iter()
-            .find_map(|c| c.pins.iter().find(|pin| pin.uuid == item.uuid))
-            .map(|pin| (pin.position.x, pin.position.y)),
-        SelectedKind::SymbolRefField => snap
-            .symbols
-            .iter()
-            .find(|s| s.uuid == item.uuid)
-            .and_then(|s| s.ref_text.as_ref().map(|rt| (rt.position.x, rt.position.y))),
-        SelectedKind::SymbolValField => snap
-            .symbols
-            .iter()
-            .find(|s| s.uuid == item.uuid)
-            .and_then(|s| s.val_text.as_ref().map(|vt| (vt.position.x, vt.position.y))),
-        _ => None,
     }
 }

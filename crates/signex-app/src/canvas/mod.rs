@@ -6,7 +6,7 @@
 //! - overlay: selection, cursor, wire-in-progress (cleared every frame)
 
 mod camera;
-mod drag_preview;
+pub(crate) mod drag_preview;
 mod draw;
 mod erc_marker;
 pub mod grid;
@@ -472,7 +472,16 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
             state
                 .move_origin
                 .zip(state.move_current)
-                .map(|((ox, oy), (cx, cy))| (cx - ox, cy - oy))
+                .map(|((ox, oy), (cx, cy))| {
+                    drag_preview::snapped_move_delta(
+                        self.active_snapshot(),
+                        &self.selected,
+                        cx - ox,
+                        cy - oy,
+                        self.prefs.snap_enabled,
+                        self.prefs.snap_grid_mm,
+                    )
+                })
         } else {
             None
         };

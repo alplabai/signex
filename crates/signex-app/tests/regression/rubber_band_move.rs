@@ -194,3 +194,74 @@ fn with_the_preference_off_wires_stay_behind_as_before() {
     assert_eq!(symbol_y(&app, &path), 65.0);
     assert_eq!(segments(&app, &path), before, "Move By is plain too");
 }
+
+#[test]
+fn align_is_one_command_and_one_undo_step() {
+    let (mut app, path, symbol) = app_with_resistor();
+    // A second, stationary-row symbol so Align Top has something to align to.
+    {
+        let engine = app.document_state.engines.get_mut(&path).unwrap();
+        let mut sheet = engine.document().clone();
+        let id = Uuid::new_v4();
+        let mut second = sheet.symbols[0].clone();
+        second.uuid = id;
+        second.reference = "R2".to_string();
+        second.position = Point::new(90.0, 70.0);
+        sheet.symbols.push(second);
+        *engine = signex_engine::Engine::new(sheet).expect("engine");
+    }
+    app.interaction_state.active_canvas_mut().selected = vec![
+        SelectedItem::new(symbol, SelectedKind::Symbol),
+        SelectedItem::new(
+            app.document_state.engines[&path].document().symbols[1].uuid,
+            SelectedKind::Symbol,
+        ),
+    ];
+    let before = segments(&app, &path);
+    let _ = app.update(Message::ActiveBar(ActiveBarMsg::Action(
+        ActiveBarAction::AlignTop,
+    )));
+    let doc = app.document_state.engines[&path].document();
+    assert_eq!(doc.symbols[0].position.y, doc.symbols[1].position.y);
+    let after = segments(&app, &path);
+    assert!(
+        after.iter().all(|s| s.0.0 == s.1.0 || s.0.1 == s.1.1),
+        "{after:?}"
+    );
+
+    let _ = app.update(Message::Edit(signex_app::app::EditMsg::Undo));
+    assert_eq!(
+        segments(&app, &path),
+        before,
+        "one undo reverts the whole align"
+    );
+    assert_eq!(symbol_y(&app, &path), 50.0);
+}
+
+#[test]
+fn a_pin_that_cannot_be_kept_connected_reaches_the_messages_panel() {
+    let (mut app, path, _) = app_with_resistor();
+    {
+        // Foreign wires on both L routes of pin 1's wire.
+        let engine = app.document_state.engines.get_mut(&path).unwrap();
+        let mut sheet = engine.document().clone();
+        for (a, b) in [((45.0, 55.0), (45.0, 58.0)), ((30.0, 55.0), (30.0, 58.0))] {
+            sheet.wires.push(Wire {
+                uuid: Uuid::new_v4(),
+                start: Point::new(a.0, a.1),
+                end: Point::new(b.0, b.1),
+                ..Default::default()
+            });
+        }
+        *engine = signex_engine::Engine::new(sheet).expect("engine");
+    }
+    let _ = signex_app::diagnostics::init_logging();
+    drop_by(&mut app, 0.0, 10.0);
+    let reported = signex_app::diagnostics::recent_entries()
+        .into_iter()
+        .any(|entry| entry.message.contains("could not keep R1 pin 1 connected"));
+    assert!(
+        reported,
+        "the engine warning must reach the diagnostics ring"
+    );
+}

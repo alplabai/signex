@@ -6,6 +6,111 @@
 use crate::schematic_runtime::SchematicRenderSnapshot;
 use signex_types::schematic::SelectedItem;
 
+/// The drag delta after grid snapping: the PRIMARY selected item's
+/// connection point (its stored `position`) lands on a grid dot after the
+/// move, not just the delta. Snapping only the delta would preserve an
+/// off-grid origin; users expect the endpoint to be on-grid. The commit and
+/// the drag ghost both call this, so the preview shows exactly the
+/// topology the drop will produce.
+pub(crate) fn snapped_move_delta(
+    snap: Option<&SchematicRenderSnapshot>,
+    selected: &[SelectedItem],
+    dx: f64,
+    dy: f64,
+    snap_enabled: bool,
+    grid_mm: f64,
+) -> (f64, f64) {
+    if !snap_enabled {
+        return (dx, dy);
+    }
+    let primary = selected
+        .first()
+        .and_then(|item| snap.and_then(|snap| primary_anchor_world(snap, item)));
+    match primary {
+        Some((px, py)) => {
+            let snapped_x = ((px + dx) / grid_mm).round() * grid_mm;
+            let snapped_y = ((py + dy) / grid_mm).round() * grid_mm;
+            (snapped_x - px, snapped_y - py)
+        }
+        None => (
+            (dx / grid_mm).round() * grid_mm,
+            (dy / grid_mm).round() * grid_mm,
+        ),
+    }
+}
+
+/// Resolve a selected item's primary anchor — the world point that should
+/// snap to the grid (connection point for labels/wires/symbols, etc.).
+fn primary_anchor_world(
+    snap: &crate::schematic_runtime::SchematicRenderSnapshot,
+    item: &signex_types::schematic::SelectedItem,
+) -> Option<(f64, f64)> {
+    use signex_types::schematic::SelectedKind;
+    match item.kind {
+        SelectedKind::Label => snap
+            .labels
+            .iter()
+            .find(|l| l.uuid == item.uuid)
+            .map(|l| (l.position.x, l.position.y)),
+        SelectedKind::Symbol => snap
+            .symbols
+            .iter()
+            .find(|s| s.uuid == item.uuid)
+            .map(|s| (s.position.x, s.position.y)),
+        SelectedKind::Wire => snap
+            .wires
+            .iter()
+            .find(|w| w.uuid == item.uuid)
+            .map(|w| (w.start.x, w.start.y)),
+        SelectedKind::Bus => snap
+            .buses
+            .iter()
+            .find(|b| b.uuid == item.uuid)
+            .map(|b| (b.start.x, b.start.y)),
+        SelectedKind::Junction => snap
+            .junctions
+            .iter()
+            .find(|j| j.uuid == item.uuid)
+            .map(|j| (j.position.x, j.position.y)),
+        SelectedKind::NoConnect => snap
+            .no_connects
+            .iter()
+            .find(|n| n.uuid == item.uuid)
+            .map(|n| (n.position.x, n.position.y)),
+        SelectedKind::NoErcDirective => snap
+            .no_erc_directives
+            .iter()
+            .find(|d| d.uuid == item.uuid)
+            .map(|d| (d.position.x, d.position.y)),
+        SelectedKind::TextNote => snap
+            .text_notes
+            .iter()
+            .find(|t| t.uuid == item.uuid)
+            .map(|t| (t.position.x, t.position.y)),
+        SelectedKind::ChildSheet => snap
+            .child_sheets
+            .iter()
+            .find(|c| c.uuid == item.uuid)
+            .map(|c| (c.position.x, c.position.y)),
+        SelectedKind::SheetPin => snap
+            .child_sheets
+            .iter()
+            .find_map(|c| c.pins.iter().find(|pin| pin.uuid == item.uuid))
+            .map(|pin| (pin.position.x, pin.position.y)),
+        SelectedKind::SymbolRefField => snap
+            .symbols
+            .iter()
+            .find(|s| s.uuid == item.uuid)
+            .and_then(|s| s.ref_text.as_ref().map(|rt| (rt.position.x, rt.position.y))),
+        SelectedKind::SymbolValField => snap
+            .symbols
+            .iter()
+            .find(|s| s.uuid == item.uuid)
+            .and_then(|s| s.val_text.as_ref().map(|vt| (vt.position.x, vt.position.y))),
+        _ => None,
+    }
+}
+
 pub(super) fn snapshot(
     snap: &SchematicRenderSnapshot,
     selection: &[SelectedItem],
@@ -18,7 +123,7 @@ pub(super) fn snapshot(
         // Tips come from the unshifted sheet; the follow pass then edits
         // the shifted copy, whose unselected wires are still in place.
         let tips = signex_engine::moved_pin_tips(snap, selection);
-        signex_engine::follow_moved_pins(&mut shifted, &tips, selection, dx, dy);
+        let _ = signex_engine::follow_moved_pins(&mut shifted, &tips, selection);
     }
     shifted
 }
@@ -85,6 +190,23 @@ mod tests {
             ..Default::default()
         });
         (sheet, SelectedItem::new(uuid, SelectedKind::Symbol))
+    }
+
+    #[test]
+    fn the_snapped_delta_puts_the_primary_anchor_on_the_grid() {
+        let (sheet, item) = sheet_with_wired_resistor();
+        // Symbol origin (50, 50) on a 1.27 grid: 50 / 1.27 is not integral.
+        let (dx, dy) = snapped_move_delta(Some(&sheet), &[item], 0.3, 3.1, true, 1.27);
+        let (x, y) = (50.0 + dx, 50.0 + dy);
+        for v in [x, y] {
+            let cells = v / 1.27;
+            assert!((cells - cells.round()).abs() < 1e-9, "{v} is off-grid");
+        }
+        assert_eq!(
+            snapped_move_delta(Some(&sheet), &[], 0.3, 3.1, false, 1.27),
+            (0.3, 3.1),
+            "snap off leaves the delta alone"
+        );
     }
 
     #[test]

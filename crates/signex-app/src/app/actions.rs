@@ -361,7 +361,7 @@ impl Signex {
         let gs = crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm);
 
         let keep_wires = self.ui_state.move_keeps_wires;
-        let mut engine_commands = Vec::new();
+        let mut moves = Vec::new();
         for anchor in &positions {
             let (target_x, target_y) = match action {
                 ActiveBarAction::AlignLeft => (min_x, anchor.y),
@@ -378,16 +378,8 @@ impl Signex {
             let dx = target_x - anchor.x;
             let dy = target_y - anchor.y;
             if dx.abs() > 0.001 || dy.abs() > 0.001 {
-                let items = vec![signex_types::schematic::SelectedItem::new(
-                    anchor.uuid,
-                    anchor.kind,
-                )];
-                engine_commands.push(signex_engine::Command::MoveSelection {
-                    items,
-                    dx,
-                    dy,
-                    keep_wires,
-                });
+                let item = signex_types::schematic::SelectedItem::new(anchor.uuid, anchor.kind);
+                moves.push((item, dx, dy));
             }
         }
 
@@ -396,7 +388,7 @@ impl Signex {
             ActiveBarAction::DistributeHorizontally | ActiveBarAction::DistributeVertically
         ) && positions.len() > 2
         {
-            engine_commands.clear();
+            moves.clear();
             let mut sorted = positions.clone();
             let n = sorted.len();
             match action {
@@ -407,16 +399,11 @@ impl Signex {
                         let target_x = min_x + step * index as f64;
                         let dx = target_x - anchor.x;
                         if dx.abs() > 0.001 {
-                            let items = vec![signex_types::schematic::SelectedItem::new(
+                            let item = signex_types::schematic::SelectedItem::new(
                                 anchor.uuid,
                                 anchor.kind,
-                            )];
-                            engine_commands.push(signex_engine::Command::MoveSelection {
-                                items,
-                                dx,
-                                dy: 0.0,
-                                keep_wires,
-                            });
+                            );
+                            moves.push((item, dx, 0.0));
                         }
                     }
                 }
@@ -427,16 +414,11 @@ impl Signex {
                         let target_y = min_y + step * index as f64;
                         let dy = target_y - anchor.y;
                         if dy.abs() > 0.001 {
-                            let items = vec![signex_types::schematic::SelectedItem::new(
+                            let item = signex_types::schematic::SelectedItem::new(
                                 anchor.uuid,
                                 anchor.kind,
-                            )];
-                            engine_commands.push(signex_engine::Command::MoveSelection {
-                                items,
-                                dx: 0.0,
-                                dy,
-                                keep_wires,
-                            });
+                            );
+                            moves.push((item, 0.0, dy));
                         }
                     }
                 }
@@ -444,8 +426,14 @@ impl Signex {
             }
         }
 
-        if !engine_commands.is_empty() {
-            self.apply_engine_commands(engine_commands, true, false);
+        // One command for the whole align/distribute: one undo step, and a
+        // wire between two symbols that move alike translates whole.
+        if !moves.is_empty() {
+            self.apply_engine_commands(
+                vec![signex_engine::Command::MoveEach { moves, keep_wires }],
+                true,
+                false,
+            );
         }
     }
 }
