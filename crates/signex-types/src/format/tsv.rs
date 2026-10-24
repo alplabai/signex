@@ -206,16 +206,14 @@ pub fn write_tsv_block<R: SnxTable>(block: &str, rows: &[R]) -> Result<String, F
     let mut header: Vec<String> = columns.iter().map(|c| (*c).to_string()).collect();
     header.extend(foreign.iter().map(|name| encode_cell(name)));
     all_rows.push(header);
-    for (row_idx, row) in rows.iter().enumerate() {
-        let mut cells = row.to_row().map_err(|e| match e {
-            FormatError::TsvFieldWrite { field, value, .. } => FormatError::TsvFieldWrite {
-                block: block.to_string(),
-                row: row_idx + 1,
-                field,
-                value,
-            },
-            other => other,
-        })?;
+    for row in rows {
+        let mut cells =
+            row.to_row()
+                .map_err(|NonFiniteField(field)| FormatError::NonFiniteField {
+                    block: block.to_string(),
+                    row: all_rows.len() - 1,
+                    field: field.to_string(),
+                })?;
         debug_assert_eq!(
             cells.len(),
             columns.len(),
@@ -466,18 +464,13 @@ pub(in crate::format) fn parse_uuid(
 /// Format an `f64` for TSV: trailing zeros stripped to keep diffs
 /// minimal. Whole numbers emit as `0` rather than `0.0`.
 ///
-/// Non-finite values are rejected: `parse_f64` refuses `NaN`/`inf`, so
-/// writing one would save a file that can never be reopened. The error
-/// carries only `field`; `write_tsv_block` fills in block and row.
-/// The `i64` cast is bounded by the real `i64::MAX as f64` limit (HI-13).
-pub(in crate::format) fn format_f64(field: &str, f: f64) -> Result<String, FormatError> {
+/// HI-13: the `as i64` cast would wrap past `i64::MAX as f64`, so whole
+/// numbers use the real cast bound. A non-finite value is refused: the
+/// reader rejects `NaN` / `inf`, so writing one would save a document
+/// that cannot be reopened.
+pub(in crate::format) fn format_f64(f: f64, field: &'static str) -> Result<String, NonFiniteField> {
     if !f.is_finite() {
-        return Err(FormatError::TsvFieldWrite {
-            block: String::new(),
-            row: 0,
-            field: field.to_string(),
-            value: f.to_string(),
-        });
+        return Err(NonFiniteField(field));
     }
     if f == 0.0 {
         return Ok("0".to_string());

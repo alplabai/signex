@@ -213,6 +213,55 @@ jobs:
           cd staging
           tar czf "../signex-linux-${{ matrix.arch_suffix }}-${{ steps.version.outputs.version }}.tar.gz" *
 
+      # ─── Smoke-test the artifacts we just built (#342) ───────────
+      # Install/run what a tester would receive and assert `--version`
+      # equals the tag's version. Any failure fails the leg, so the
+      # `release` job (needs: build) never publishes. Runs before upload.
+      - name: Smoke-test Linux .deb and AppImage
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          V="${{ steps.version.outputs.version }}"
+          # apt (not dpkg -i) resolves the Depends line, as a tester's install does.
+          sudo apt-get update -q
+          sudo apt-get install -y "./signex_${V}_${{ matrix.arch }}.deb"
+          bash scripts/smoke_release_artifact.sh "$V" /usr/bin/signex
+          # --appimage-extract-and-run: no FUSE needed on the runner.
+          bash scripts/smoke_release_artifact.sh "$V" \
+            "./Signex-${V}-${{ matrix.arch_suffix }}.AppImage" --appimage-extract-and-run
+
+      # The aarch64 Windows installer cannot execute on the x64 runner,
+      # so only the x64 leg is smoke-tested.
+      - name: Smoke-test Windows installer
+        if: runner.os == 'Windows' && matrix.arch == 'x64'
+        shell: pwsh
+        run: |
+          $v = "${{ steps.version.outputs.version }}"
+          $dir = Join-Path $env:RUNNER_TEMP "signex-smoke"
+          # Per-user install (PrivilegesRequired=lowest); /DIR pins the
+          # location so the check does not depend on {autopf} resolution.
+          $p = Start-Process -FilePath ".\signex-setup-${{ matrix.arch_suffix }}-$v.exe" `
+            -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=`"$dir`"" `
+            -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "installer exited $($p.ExitCode)" }
+          # signex.exe is a console-subsystem binary, so stdout is capturable.
+          $exe = ($dir -replace '\\', '/') + "/signex.exe"
+          bash scripts/smoke_release_artifact.sh $v $exe
+          if ($LASTEXITCODE -ne 0) { throw "smoke test failed" }
+
+      - name: Smoke-test macOS DMG
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          V="${{ steps.version.outputs.version }}"
+          MNT="$RUNNER_TEMP/signex-dmg"
+          hdiutil attach -nobrowse -readonly -mountpoint "$MNT" \
+            "signex-macos-${{ matrix.arch_suffix }}-${V}.dmg"
+          rc=0
+          bash scripts/smoke_release_artifact.sh "$V" "$MNT/Signex.app/Contents/MacOS/signex" || rc=$?
+          hdiutil detach "$MNT" -force || true
+          exit $rc
+
       # ─── Upload all artifacts for this target ─────────────────────
       - name: Upload artifacts
         uses: actions/upload-artifact@v5

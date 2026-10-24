@@ -135,6 +135,37 @@ impl LibrarySet {
         self.libs.remove(&MountKey::Path(path.to_path_buf()))
     }
 
+    /// Re-key the file-backed adapter mounted at `old` to `new` after the
+    /// `.snxlib` was renamed on disk, telling the adapter its new path.
+    ///
+    /// Atomic: on any failure (`NotFound` for an unmounted `old`,
+    /// `Conflict` when `new` is already mounted, the adapter refusing)
+    /// the mount at `old` is left exactly as it was.
+    pub fn relocate(&mut self, old: &Path, new: &Path) -> Result<(), LibraryError> {
+        let old_key = MountKey::Path(old.to_path_buf());
+        let new_key = MountKey::Path(new.to_path_buf());
+        if self.libs.contains_key(&new_key) {
+            return Err(LibraryError::Conflict(format!(
+                "library at {} is already mounted",
+                new.display()
+            )));
+        }
+        let mut adapter = self
+            .libs
+            .remove(&old_key)
+            .ok_or_else(|| LibraryError::NotFound(old.display().to_string()))?;
+        match adapter.relocate_library_file(new) {
+            Ok(()) => {
+                self.libs.insert(new_key, adapter);
+                Ok(())
+            }
+            Err(e) => {
+                self.libs.insert(old_key, adapter);
+                Err(e)
+            }
+        }
+    }
+
     /// Number of mounted libraries.
     pub fn len(&self) -> usize {
         self.libs.len()

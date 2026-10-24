@@ -108,6 +108,8 @@ impl Signex {
         }
 
         self.sync_visible_document_from_active_tab();
+        // A move armed or floating on the previous tab must not drop here.
+        self.cancel_move_pick();
         // A half-placed two-click shape belongs to the tab it was started in.
         self.clear_shape_anchors();
         // ERC results are cached per-sheet. On tab switch, repoint the visible
@@ -282,6 +284,7 @@ impl Signex {
             auto_focus: self.ui_state.auto_focus,
             draw_mode: self.interaction_state.draw_mode,
             wire_color_overrides: &self.ui_state.wire_color_overrides,
+            selection_filters: &self.interaction_state.selection_filters,
         }
     }
 

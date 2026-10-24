@@ -41,6 +41,8 @@ pub fn rotate_selected_with_pivot(
         Some(SymbolSelection::Graphic(idx)) => {
             rotate_graphic_90(sym, idx, clockwise, graphic_pivot_mode)
         }
+        // A field is plain text anchored at one point: there is no
+        // orientation to turn, so rotating it is deliberately a no-op.
         Some(SymbolSelection::Field(_))
         | Some(SymbolSelection::All)
         | Some(SymbolSelection::Multiple { .. })

@@ -379,6 +379,7 @@ impl Signex {
                     self.interaction_state.active_canvas_mut().selected.clear();
                     // In-flight drawing buffers belong to the document too.
                     self.clear_drawing_buffers();
+                    self.cancel_move_pick();
                     // Also resets the mirrored panel_ctx selection fields.
                     self.update_selection_info();
                 }

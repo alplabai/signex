@@ -11,9 +11,8 @@
 //!
 //! Mounted as a full-screen overlay backdrop via
 //! `app/view/mod.rs::collect_overlays` when
-//! `LibraryState::create_options.is_some()`. The matching
-//! `needs_overlay` predicate must include the same flag (memory
-//! note `[needs_overlay predicate gates modal rendering]`).
+//! `LibraryState::create_options.is_some()`; `create_options_overlay`
+//! owns that guard.
 
 use iced::widget::{Space, button, checkbox, column, container, row, text};
 use iced::{Border, Element, Length, Theme};

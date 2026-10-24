@@ -44,6 +44,7 @@ pub mod keymap;
 pub(crate) mod layout_probe;
 pub mod library;
 pub mod menu_bar;
+mod numeric_field;
 pub mod panels;
 pub mod passive_calculator_modal;
 pub mod pcb_canvas;
