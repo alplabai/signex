@@ -37,10 +37,8 @@ pub(super) fn apply_symbol_move(editor: &mut SymEditor, msg: SymbolEditorMsg) {
             }) => {
                 let pins = pin_indices.clone();
                 let graphics = graphic_indices.clone();
-                let active_part = editor.active_part;
                 crate::library::editor::symbol::state::move_multiple(
                     editor.primitive_mut(),
-                    active_part,
                     &pins,
                     &graphics,
                     dx,
@@ -48,7 +46,13 @@ pub(super) fn apply_symbol_move(editor: &mut SymEditor, msg: SymbolEditorMsg) {
                 );
             }
             _ => {
-                crate::library::editor::symbol::state::move_all(editor.primitive_mut(), dx, dy);
+                let active_part = editor.active_part;
+                crate::library::editor::symbol::state::move_all(
+                    editor.primitive_mut(),
+                    active_part,
+                    dx,
+                    dy,
+                );
             }
         },
         SymbolEditorMsg::MoveGraphicHandle { idx, handle, x, y } => {

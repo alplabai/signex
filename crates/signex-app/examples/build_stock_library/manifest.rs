@@ -51,7 +51,7 @@ pub fn stock_library_file() -> LibraryFile {
             .expect("stock library id constant is a well-formed UUID"),
         library: LibrarySection {
             name: "Stock".to_string(),
-            description: Some("Reference footprints bundled with Signex.".to_string()),
+            description: Some("Reference footprints and symbols bundled with Signex.".to_string()),
         },
         mode: LibraryMode::LocalGit,
         workflow: WorkflowConfig {
