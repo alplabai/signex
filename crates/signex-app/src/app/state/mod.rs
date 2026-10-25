@@ -8,6 +8,7 @@ use super::TabInfo;
 
 mod case_fold;
 mod interaction;
+mod link_policy;
 mod pdf_page_setup;
 mod pdf_preview_raster;
 pub(crate) mod project_case;
