@@ -206,7 +206,7 @@ impl Signex {
 
     /// Component Preview tab — apply a freshly-picked primitive ref to
     /// the row, resolve through the LibrarySet, save via update_row.
-    fn apply_primitive_pick_to_preview(
+    pub(super) fn apply_primitive_pick_to_preview(
         &mut self,
         address: EditorAddress,
         kind: PrimitiveKind,
@@ -286,6 +286,12 @@ impl Signex {
                 }
             }
             Err(e) => {
+                // Offer "Reload from server" when the row moved on.
+                if matches!(e, signex_library::LibraryError::RowChanged { .. })
+                    && let Some(state) = self.library.editors.get_mut(&address)
+                {
+                    state.stale_base = true;
+                }
                 crate::diagnostics::log_warning(format!(
                     "Primitive binding for row {} was not saved: {e}",
                     address.row_id

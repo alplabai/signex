@@ -159,6 +159,12 @@ impl ComponentPreviewState {
         }
     }
 
+    /// Unsaved work: the dirty flag, or a half-typed numeric value still in
+    /// an edit buffer (those do not set `dirty` until they parse).
+    pub fn has_unsaved_edits(&self) -> bool {
+        self.dirty || !self.params_edit_buf.is_empty()
+    }
+
     pub fn mark_dirty(&mut self) {
         self.dirty = true;
     }

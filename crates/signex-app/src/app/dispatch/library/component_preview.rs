@@ -45,7 +45,7 @@ impl Signex {
                     .library
                     .editors
                     .get(&address)
-                    .is_some_and(|state| state.dirty);
+                    .is_some_and(|state| state.has_unsaved_edits());
                 if needs_confirm {
                     if let Some(state) = self.library.editors.get_mut(&address) {
                         state.reload_confirming = true;
@@ -322,7 +322,9 @@ impl Signex {
             .library
             .editors
             .iter()
-            .filter(|(a, s)| a.library_path == library_path && rows.contains(&a.row_id) && !s.dirty)
+            .filter(|(a, s)| {
+                a.library_path == library_path && rows.contains(&a.row_id) && !s.has_unsaved_edits()
+            })
             .map(|(a, _)| a.clone())
             .collect();
         for address in clean {

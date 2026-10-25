@@ -1,11 +1,10 @@
 //! Signex library DB-flavour server.
 //!
-//! Exposes a JSON HTTP API over a shared `AppState` (DB pool + lock manager).
+//! Exposes a JSON HTTP API over a shared `AppState` (DB pool).
 //! Liveness checks (`/health`, `/version`) stay anonymous so process
 //! supervisors don't need credentials. Every other route — the
-//! `/tables` + `/rows` row tier, the primitive
-//! (`/symbols` / `/footprints` / `/sims`) routes, and the advisory
-//! `/rows/:row_id/locks` endpoint — is gated behind a bearer-token
+//! `/tables` + `/rows` row tier and the primitive
+//! (`/symbols` / `/footprints` / `/sims`) routes — is gated behind a bearer-token
 //! check sourced from the `SIGNEX_API_TOKEN` env var (compared in constant time).
 //!
 //! ## Transport security

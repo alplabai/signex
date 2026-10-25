@@ -318,3 +318,41 @@ fn the_edit_modal_reloads_the_stored_row_after_a_stale_refusal() {
     assert_eq!(reloaded.draft.server_revision, Some(2));
     assert!(!reloaded.stale_base && !reloaded.reload_confirming);
 }
+
+#[test]
+fn a_preview_with_a_half_typed_value_is_not_reloaded_over() {
+    let (mut app, address) = app_with_row(1, 1);
+    {
+        let preview = app.library.editors.get_mut(&address).unwrap();
+        preview.dirty = false;
+        preview.params_edit_buf.insert("tcr".into(), "4.".into());
+    }
+
+    commit_cell(&mut app, &address, "R-115b");
+
+    let preview = editor(&app, &address);
+    assert_eq!(
+        preview.row.internal_pn.as_str(),
+        "R-115",
+        "typed value kept"
+    );
+    assert_eq!(
+        preview.params_edit_buf.get("tcr").map(String::as_str),
+        Some("4.")
+    );
+    assert_eq!(preview.row.server_revision, Some(1));
+}
+
+#[test]
+fn a_stale_primitive_bind_from_the_preview_offers_the_reload() {
+    let (mut app, address) = app_with_row(2, 1);
+
+    app.apply_primitive_pick_to_preview(
+        address.clone(),
+        signex_library::PrimitiveKind::Symbol,
+        PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4()),
+    );
+
+    assert!(editor(&app, &address).stale_base);
+    assert_eq!(editor(&app, &address).row.server_revision, Some(1));
+}
