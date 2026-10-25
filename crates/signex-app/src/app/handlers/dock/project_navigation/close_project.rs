@@ -228,6 +228,7 @@ impl Signex {
                 .cloned()
                 .collect();
             for path in sweep {
+                self.forget_net_colors_of(&path);
                 self.document_state.engines.remove(&path);
             }
         }
@@ -477,6 +478,7 @@ impl Signex {
                 // dirty_paths entries are gone either way).
                 let mut tasks: Vec<Task<Message>> = Vec::new();
                 for path in &state.dirty_paths {
+                    self.forget_net_colors_of(path);
                     self.document_state.engines.remove(path);
                     self.document_state.dirty_paths.remove(path);
                     if let Some(tab) = self
