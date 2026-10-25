@@ -87,6 +87,23 @@ impl Signex {
         })
     }
 
+    /// The key rule for "does another open project use this?": the dialog's
+    /// fold, case-folded when any open project's volume folds. Folding can
+    /// only report more sharing, and another project's probe describes its
+    /// own folder, not the volume of a file it reaches (#1034).
+    fn shared_use_fold(&self, state: &RemoveDialogState) -> CaseFold {
+        let fold = self.dialog_fold(state);
+        let any_folds = self
+            .document_state
+            .projects
+            .iter()
+            .any(|p| p.case_fold.fold_case);
+        CaseFold {
+            fold_case: fold.fold_case || any_folds,
+            ..fold
+        }
+    }
+
     /// `state` with `tree_path[0]` re-pointed at its project's current index
     /// (#855), or `None` after a Messages-panel warning when that project was
     /// closed while the dialog was open.
@@ -141,12 +158,12 @@ impl Signex {
     /// treated as shared.
     pub(crate) fn discard_block(&self, state: &RemoveDialogState) -> Option<DiscardBlock> {
         let owner = state.tree_path.first().copied()?;
-        let reach = self.document_state.lexical_reach_sets();
-        let fold = self.dialog_fold(state);
-        let docs = self.unsaved_documents(&state.target_path, fold);
+        let docs = self.unsaved_documents(&state.target_path, self.dialog_fold(state));
+        let share_fold = self.shared_use_fold(state);
+        let reach = self.document_state.lexical_reach_sets(share_fold);
         let shared = |p: &std::path::Path| {
             reach.reached_under_by_other(owner, p)
-                || self.library_listed_by_other_project(owner, p, fold)
+                || self.library_listed_by_other_project(owner, p, share_fold)
         };
         if shared(&state.target_path) || docs.iter().any(|p| shared(p)) {
             return Some(DiscardBlock::Shared);
@@ -163,6 +180,11 @@ impl Signex {
 
     /// Body text of the unsaved-edits prompt, and whether Discard is offered.
     pub(crate) fn exclude_dirty_prompt(&self, state: &RemoveDialogState) -> (String, bool) {
+        // Re-point the owner as the handler does. A view must not log, so a
+        // closed project keeps its old index; the handler cancels on click.
+        let mut state = state.clone();
+        self.repoint_dialog_tree_path(state.project_id, &mut state.tree_path);
+        let state = &state;
         let docs = self.unsaved_documents(&state.target_path, self.dialog_fold(state));
         let name = &state.display_name;
         let mut body = if docs.len() <= 1 {
@@ -286,8 +308,18 @@ impl Signex {
     ) {
         let keys: std::collections::HashSet<String> =
             docs.iter().map(|p| path_key_with(p, fold)).collect();
-        let doc = &mut self.document_state;
         let is_discarded = |p: &std::path::PathBuf| keys.contains(&path_key_with(p, fold));
+        let dead: Vec<std::path::PathBuf> = self
+            .document_state
+            .engines
+            .keys()
+            .filter(|p| is_discarded(p))
+            .cloned()
+            .collect();
+        for path in &dead {
+            self.forget_net_colors_of(path);
+        }
+        let doc = &mut self.document_state;
         doc.engines.retain(|p, _| !is_discarded(p));
         doc.symbol_editors.retain(|p, _| !is_discarded(p));
         doc.footprint_editors.retain(|p, _| !is_discarded(p));

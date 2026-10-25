@@ -545,11 +545,13 @@ impl DocumentState {
     /// Ownership walks over the open engines' references alone: no disk, so
     /// safe inside `update`. A walk that meets a sheet no engine holds is
     /// flagged (`ReachSets::other_walk_incomplete`) rather than guessed.
-    pub(crate) fn lexical_reach_sets(&self) -> ReachSets {
+    /// Keys follow `fold`, the caller's probed rule, never the host family
+    /// (#1034).
+    pub(crate) fn lexical_reach_sets(&self, fold: CaseFold) -> ReachSets {
         ReachSets::with_keys(
             &self.projects,
             &self.child_sheet_refs(),
-            &KeyMap::lexical(CaseFold::host_default()),
+            &KeyMap::lexical(fold),
         )
     }
 

@@ -4,6 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
+use super::exclude_dirty::DiscardBlock;
 use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::app::state::scope::CaseFold;
 use crate::app::{ExcludeDirtyChoice, Message, RemoveChoice, RemoveDialogState, RemoveMsg, Signex};
@@ -82,4 +83,136 @@ fn discard_drops_a_dirty_sheet_under_a_case_variant_on_a_folding_volume() {
     assert!(!app.document_state.dirty_paths.contains(&held));
     assert!(!app.document_state.engines.contains_key(Path::new(&held)));
     assert!(!project_lists_sheet(&app));
+}
+
+/// #1051 — a discarded sheet's net-colour overrides go with its engine.
+#[test]
+fn discard_forgets_the_discarded_sheets_net_colours() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, _tmp, held) = folding_project_with_dirty_lowercase_sheet();
+    let wire = uuid::Uuid::new_v4();
+    let sheet = signex_types::schematic::SchematicSheet {
+        wires: vec![signex_types::schematic::Wire {
+            uuid: wire,
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    let mut engine = signex_engine::Engine::new(sheet).expect("engine");
+    engine.set_path(Some(held.clone()));
+    app.document_state.engines.insert(held, engine);
+    let red = signex_types::theme::Color {
+        r: 255,
+        g: 0,
+        b: 0,
+        a: 255,
+    };
+    app.ui_state.wire_color_overrides.insert(wire, red);
+
+    exclude_then(&mut app, ExcludeDirtyChoice::Discard);
+
+    assert!(
+        !app.ui_state.wire_color_overrides.contains_key(&wire),
+        "a discarded sheet must not leave its net colours behind"
+    );
+}
+
+/// Project A holds `Power.snxsch` dirty. Project B, on the same folding
+/// volume, lists and has loaded the same file as `power.snxsch`. Both probes
+/// say "folds", so the host family must not decide (#1034).
+fn two_folding_projects_sharing_one_sheet() -> (Signex, tempfile::TempDir, PathBuf, PathBuf) {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let dir = tmp.path().to_str().expect("utf8 tempdir").to_string();
+    let mut app = app_workspace(&dir, &["Power.snxsch"]);
+    let mut other = app_workspace(&dir, &["power.snxsch"])
+        .document_state
+        .projects
+        .remove(0);
+    other.id = app.document_state.mint_project_id();
+    other.path = tmp.path().join("ProjectB.snxprj");
+    app.document_state.projects.push(other);
+    for project in &mut app.document_state.projects {
+        project.case_fold = CaseFold::from_probe(true);
+    }
+    let a_sheet = tmp.path().join("Power.snxsch");
+    let b_sheet = tmp.path().join("power.snxsch");
+    for sheet in [&a_sheet, &b_sheet] {
+        let mut engine =
+            signex_engine::Engine::new(signex_types::schematic::SchematicSheet::default())
+                .expect("engine");
+        engine.set_path(Some(sheet.clone()));
+        app.document_state.engines.insert(sheet.clone(), engine);
+    }
+    app.document_state.dirty_paths.insert(a_sheet.clone());
+    app.ui_state.remove_dialog = Some(RemoveDialogState {
+        target_path: a_sheet.clone(),
+        tree_path: vec![0, 0],
+        project_id: Some(app.document_state.projects[0].id),
+        display_name: "Power.snxsch".to_string(),
+        is_outside_project: false,
+        unsaved_prompt: false,
+    });
+    (app, tmp, a_sheet, b_sheet)
+}
+
+/// #1034 — the share check keys both spellings as one file, so Discard is
+/// withheld and a Discard attempt drops neither project's engine.
+#[test]
+fn discard_is_withheld_when_a_folding_project_reaches_the_sheet_under_another_spelling() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, _tmp, a_sheet, b_sheet) = two_folding_projects_sharing_one_sheet();
+    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
+        RemoveChoice::ExcludeFromProject,
+    )));
+    let state = app.ui_state.remove_dialog.clone().expect("prompt open");
+    assert!(state.unsaved_prompt);
+
+    assert_eq!(app.discard_block(&state), Some(DiscardBlock::Shared));
+
+    let _ = app.update(Message::Remove(RemoveMsg::ExcludeDirty(
+        ExcludeDirtyChoice::Discard,
+    )));
+    assert!(app.document_state.engines.contains_key(&a_sheet));
+    assert!(
+        app.document_state.engines.contains_key(&b_sheet),
+        "the other project's engine must survive a refused Discard"
+    );
+    assert!(app.document_state.dirty_paths.contains(&a_sheet));
+}
+
+/// The prompt names the owner by the project's current index, so closing an
+/// earlier project while the stage is open does not make the dialog's own
+/// project look like "another project".
+#[test]
+fn prompt_follows_its_project_when_an_earlier_project_closes() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let dir = tmp.path().to_str().expect("utf8 tempdir").to_string();
+    let mut app = app_workspace(&dir, &["Other.snxsch"]);
+    let mut owner = app_workspace(&dir, &["X.snxsch"])
+        .document_state
+        .projects
+        .remove(0);
+    owner.id = app.document_state.mint_project_id();
+    owner.path = tmp.path().join("ProjectB.snxprj");
+    let owner_id = owner.id;
+    app.document_state.projects.push(owner);
+    let sheet = tmp.path().join("X.snxsch");
+    let mut engine = signex_engine::Engine::new(signex_types::schematic::SchematicSheet::default())
+        .expect("engine");
+    engine.set_path(Some(sheet.clone()));
+    app.document_state.engines.insert(sheet.clone(), engine);
+    app.document_state.dirty_paths.insert(sheet.clone());
+    let state = RemoveDialogState {
+        target_path: sheet,
+        tree_path: vec![1, 0],
+        project_id: Some(owner_id),
+        display_name: "X.snxsch".to_string(),
+        is_outside_project: false,
+        unsaved_prompt: true,
+    };
+
+    app.document_state.projects.remove(0);
+
+    let (body, can_discard) = app.exclude_dirty_prompt(&state);
+    assert!(can_discard, "only the dialog's own project is open: {body}");
 }
