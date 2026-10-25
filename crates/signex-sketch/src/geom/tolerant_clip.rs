@@ -19,8 +19,9 @@
 //! tip in `settle` changes a neighbour's direction and is not shown to keep
 //! that, so the index is a working assumption there rather than a proven
 //! invariant. The indexed vertices sit in a [`PointGrid`] of
-//! [`super::AabbIndex`] cells and each ear queries just the cells under its
-//! bounding box instead of scanning the whole ring.
+//! [`super::AabbIndex`] cells and each ear queries just the cells its triangle
+//! overlaps instead of scanning the whole ring (a bounding box would reach
+//! most of a long thin strip for every thin ear).
 //!
 //! The one exception is the forced cut below, which only runs after no ear
 //! passed the test, i.e. on input that is already not a clean partition (the
@@ -28,7 +29,6 @@
 //! non-convex is not added to the index.
 
 use super::Point2;
-use super::aabb_index::Aabb;
 use super::point_grid::PointGrid;
 use super::predicates::{Sign, orient2d};
 
@@ -38,7 +38,24 @@ use super::predicates::{Sign, orient2d};
 /// result may then not partition the ring exactly; callers that need the area
 /// exact should check it.
 pub(super) fn clip_ears_tolerant(pts: &[Point2]) -> Vec<[usize; 3]> {
-    let mut ring = LinkedRing::new(pts);
+    let triangles = clip_ring(LinkedRing::new(pts));
+    // Every clip in the tests also runs with the original bounding-box query
+    // and must give the same triangles.
+    #[cfg(test)]
+    {
+        let mut reference = LinkedRing::new(pts);
+        reference.box_reference = true;
+        assert_eq!(
+            triangles,
+            clip_ring(reference),
+            "the triangle query changed the triangulation"
+        );
+    }
+    triangles
+}
+
+fn clip_ring(mut ring: LinkedRing<'_>) -> Vec<[usize; 3]> {
+    let pts = ring.pts;
     let mut triangles = Vec::with_capacity(pts.len().saturating_sub(2));
     ring.settle((0..pts.len()).collect());
     let mut cursor = ring.first_alive();
@@ -71,6 +88,11 @@ struct LinkedRing<'a> {
     count: usize,
     /// Vertices that were non-convex when the ring was built.
     reflex: PointGrid<usize>,
+    /// The vertex that blocked the most recent blocked ear.
+    last_blocker: std::cell::Cell<Option<usize>>,
+    /// Test-only: answer `is_blocked` with the original box query.
+    #[cfg(test)]
+    box_reference: bool,
 }
 
 impl<'a> LinkedRing<'a> {
@@ -83,6 +105,9 @@ impl<'a> LinkedRing<'a> {
             alive: vec![true; n],
             count: n,
             reflex: PointGrid::empty(),
+            last_blocker: std::cell::Cell::new(None),
+            #[cfg(test)]
+            box_reference: false,
         };
         let reflex: Vec<usize> = (0..n).filter(|&v| !ring.is_convex(v)).collect();
         ring.reflex = PointGrid::new(reflex.into_iter().map(|v| (pts[v], v)).collect());
@@ -141,16 +166,47 @@ impl<'a> LinkedRing<'a> {
     fn is_blocked(&self, b: usize) -> bool {
         let (a, c) = (self.prev[b], self.next[b]);
         let tri = [self.pts[a], self.pts[b], self.pts[c]];
-        let region = Aabb::from_points(&tri).expect("three corners");
-        self.reflex.query(region).any(|&q| {
-            if !self.alive[q] || [a, b, c].contains(&q) || self.is_convex(q) {
-                return false;
-            }
-            match tri.iter().position(|&corner| corner == self.pts[q]) {
-                Some(k) => self.runs_into_ear(q, tri, k),
-                None => in_triangle(self.pts[q], tri),
-            }
-        })
+        #[cfg(test)]
+        if self.box_reference {
+            let region = super::aabb_index::Aabb::from_points(&tri).expect("three corners");
+            return self
+                .reflex
+                .query(region)
+                .any(|&q| self.blocks(q, [a, b, c], tri));
+        }
+        // Neighbouring ears are mostly blocked by the same vertex, so try the
+        // last one first; a long thin ear otherwise scans a long run of cells
+        // before it meets its blocker.
+        if let Some(q) = self.last_blocker.get()
+            && self.blocks(q, [a, b, c], tri)
+        {
+            return true;
+        }
+        let blocker = self
+            .reflex
+            .query_triangle(tri)
+            .find(|&&q| self.blocks(q, [a, b, c], tri));
+        self.last_blocker
+            .set(blocker.copied().or(self.last_blocker.get()));
+        blocker.is_some()
+    }
+
+    /// Whether vertex `q` stops the ear `tri` (corners `[a, b, c]`).
+    fn blocks(&self, q: usize, [a, b, c]: [usize; 3], tri: [Point2; 3]) -> bool {
+        #[cfg(test)]
+        if !self.box_reference {
+            CANDIDATES_TESTED.with(|n| n.set(n.get() + 1));
+        }
+        if !self.alive[q] || [a, b, c].contains(&q) {
+            return false;
+        }
+        // The geometric test goes first: it rejects nearly every candidate of
+        // a long thin ear and is cheaper than the convexity test.
+        let touches = match tri.iter().position(|&corner| corner == self.pts[q]) {
+            Some(k) => self.runs_into_ear(q, tri, k),
+            None => in_triangle(self.pts[q], tri),
+        };
+        touches && !self.is_convex(q)
     }
 
     /// Whether a ring edge leaving `q`, which sits at corner `k` of the ear
@@ -169,4 +225,11 @@ impl<'a> LinkedRing<'a> {
 fn in_triangle(p: Point2, [a, b, c]: [Point2; 3]) -> bool {
     let s = [orient2d(a, b, p), orient2d(b, c, p), orient2d(c, a, p)];
     !(s.contains(&Sign::Positive) && s.contains(&Sign::Negative))
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Reflex vertices the blocking test looked at, for the cost bound in
+    /// the strip test.
+    pub(super) static CANDIDATES_TESTED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
