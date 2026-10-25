@@ -527,6 +527,27 @@ fn a_1000_to_1_strip_of_cut_outs_triangulates_exactly() {
     );
 }
 
+/// The clipper looks at a bounded number of reflex vertices per ear on a
+/// strip of cut-outs. Its ears are long and thin and most are blocked by a
+/// vertex far along the strip, so a box query or a scan up to the blocker
+/// looks at millions of vertices here (8.2 million for 18004 vertices, and
+/// quadratic in the strip length). Counting vertices rather than time keeps
+/// the bound exact on any machine.
+#[test]
+fn clipping_a_strip_of_cut_outs_tests_few_vertices_per_ear() {
+    let (outer, holes) = strip_of_cut_outs(1000, 16);
+    let merged = super::holes::merge_holes(outer, holes);
+    super::tolerant_clip::CANDIDATES_TESTED.with(|n| n.set(0));
+    let tris = super::tolerant_clip::clip_ears_tolerant(&merged);
+    let tested = super::tolerant_clip::CANDIDATES_TESTED.with(|n| n.get());
+    assert_eq!(tris.len(), merged.len() - 2);
+    assert!(
+        tested < 200 * merged.len(),
+        "{tested} vertices tested for a ring of {}",
+        merged.len()
+    );
+}
+
 /// Timing harness for the bridging and ear clipping of grids of 16-gon holes:
 /// `cargo test --release -p signex-sketch --lib -- --ignored --nocapture clipper_timing`.
 #[test]

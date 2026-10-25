@@ -110,6 +110,38 @@ impl CellGrid {
         (lo, hi)
     }
 
+    /// The columns, first to last, that the triangle `tri` can reach inside
+    /// row `row`: the x extent of the triangle clipped to the row's slab,
+    /// widened by a column and a hair of slab so rounding in the cell maths
+    /// never drops a cell that holds a point of the triangle.
+    pub(super) fn row_columns(&self, row: usize, tri: [Point2; 3]) -> (usize, usize) {
+        let (lo, hi) = self.row_span(row);
+        let pad = self.cell_h * 1e-9;
+        let (lo, hi) = (lo - pad, hi + pad);
+        let (mut x0, mut x1) = (f64::INFINITY, f64::NEG_INFINITY);
+        let mut take = |x: f64| {
+            x0 = x0.min(x);
+            x1 = x1.max(x);
+        };
+        for k in 0..3 {
+            let (a, b) = (tri[k], tri[(k + 1) % 3]);
+            if a.y >= lo && a.y <= hi {
+                take(a.x);
+            }
+            for edge_y in [lo, hi] {
+                if (a.y < edge_y) != (b.y < edge_y) {
+                    take(a.x + (b.x - a.x) * (edge_y - a.y) / (b.y - a.y));
+                }
+            }
+        }
+        if x0 > x1 {
+            return (1, 0);
+        }
+        let first = self.column(x0).saturating_sub(1);
+        let last = (self.column(x1) + 1).min(self.nx.saturating_sub(1));
+        (first, last)
+    }
+
     pub(super) fn cell_width(&self) -> f64 {
         self.cell_w
     }
@@ -165,6 +197,54 @@ impl<T: Clone> PointGrid<T> {
             columns
                 .clone()
                 .flat_map(move |column| self.cells[grid.index(column, row)].query_region(region))
+        })
+    }
+
+    /// The items whose point lies in a cell the triangle `tri` overlaps and
+    /// inside its bounding box: a superset of the items inside the triangle.
+    /// Only the cells the triangle crosses are walked, not every cell under
+    /// its box, and in an order that reaches the corners of a long thin
+    /// triangle first (that is where its blockers sit), so an `any` / `find`
+    /// over a thin ear usually stops early. Non-finite corners fall back to
+    /// the box.
+    pub(super) fn query_triangle(&self, tri: [Point2; 3]) -> impl Iterator<Item = &T> + '_ {
+        let grid = &self.grid;
+        let region = Aabb::from_points(&tri).expect("three corners");
+        let finite = tri.iter().all(|p| p.x.is_finite() && p.y.is_finite());
+        // (row, first column, last column) per row the triangle crosses,
+        // widest run first so the sweep below can stop at the first short one.
+        let mut runs: Vec<(usize, usize, usize)> = if self.cells.is_empty() {
+            Vec::new()
+        } else {
+            (grid.row(region.min.y)..=grid.row(region.max.y))
+                .map(|row| {
+                    let (first, last) = if finite {
+                        grid.row_columns(row, tri)
+                    } else {
+                        (grid.column(region.min.x), grid.column(region.max.x))
+                    };
+                    (row, first, last)
+                })
+                .collect()
+        };
+        let width = |&(_, first, last): &(usize, usize, usize)| (last + 1).saturating_sub(first);
+        runs.sort_by_key(|run| std::cmp::Reverse(width(run)));
+        let longest = runs.first().map_or(0, width);
+        let runs = std::rc::Rc::new(runs);
+        // Step `i` takes the i-th cell from alternating ends of every run
+        // that is long enough to have one.
+        (0..longest).flat_map(move |i| {
+            let runs = std::rc::Rc::clone(&runs);
+            let count = runs.partition_point(|run| width(run) > i);
+            (0..count).flat_map(move |k| {
+                let (row, first, last) = runs[k];
+                let column = if i % 2 == 0 {
+                    first + i / 2
+                } else {
+                    last - i / 2
+                };
+                self.cells[grid.index(column, row)].query_region(region)
+            })
         })
     }
 }
