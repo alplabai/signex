@@ -12,6 +12,11 @@
 pub mod uf;
 
 mod build;
+mod bus;
+pub use bus::{
+    BusAnalysis, BusGeometry, BusGroup, BusMember, EntryAttachment, SheetBus, analyse_buses,
+    sheet_buses,
+};
 pub use build::{
     ConnectedPoints, FloodElements, SheetConnectivity, SheetPinContacts, best_net_name_of,
     build_netlist, connected_points, flood_net_elements, is_power_flag, point_on_segment, pt_key,

@@ -1,6 +1,7 @@
 //! Tests for single-sheet netlist building.
 use super::*;
 
+mod bus_members;
 mod pin_contact_and_power;
 mod wire_order;
 use signex_types::schematic::{
