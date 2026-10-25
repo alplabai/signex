@@ -211,6 +211,7 @@ impl Signex {
         // The tab closed mid-save and parked the engine because it was
         // dirty; now it is clean nothing needs it.
         if !self.document_is_held_open(path) {
+            self.forget_net_colors_of(path);
             self.document_state.engines.remove(path);
         }
         let label = path
