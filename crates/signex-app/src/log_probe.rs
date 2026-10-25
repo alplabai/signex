@@ -37,54 +37,117 @@ pub(crate) fn assert_logged(level: DiagnosticLevel, target: &str, contains: &str
 /// Line number of every tracing / log macro call whose argument list
 /// carries a top-level `target = …` field instead of `target: …`.
 pub(crate) fn macro_calls_with_target_field(source: &str) -> Vec<usize> {
-    const MACROS: [&str; 6] = ["trace!", "debug!", "info!", "warn!", "error!", "event!"];
+    const MACROS: [&str; 13] = [
+        "trace!",
+        "debug!",
+        "info!",
+        "warn!",
+        "error!",
+        "event!",
+        "span!",
+        "trace_span!",
+        "debug_span!",
+        "info_span!",
+        "warn_span!",
+        "error_span!",
+        "log!",
+    ];
     let bytes = source.as_bytes();
     let mut lines = Vec::new();
     for name in MACROS {
         for (at, _) in source.match_indices(name) {
             let boundary =
                 at == 0 || !(bytes[at - 1].is_ascii_alphanumeric() || bytes[at - 1] == b'_');
-            let open = at + name.len();
-            if !boundary || bytes.get(open) != Some(&b'(') {
+            if !boundary {
                 continue;
             }
-            if args_have_target_field(&source[open + 1..]) {
+            // `warn! (…)`, `warn!{…}` and `warn![…]` are all macro calls.
+            let rest = source[at + name.len()..].trim_start();
+            if !rest.starts_with(['(', '[', '{']) {
+                continue;
+            }
+            if args_have_target_field(&rest[1..]) {
                 lines.push(source[..at].matches('\n').count() + 1);
             }
         }
     }
     lines.sort_unstable();
+    lines.dedup();
     lines
 }
 
-/// Scans one macro's argument list (the text after its `(`) at depth 0.
-fn args_have_target_field(args: &str) -> bool {
-    let mut depth = 0usize;
-    let mut in_str = false;
-    let mut prev = '\0';
-    let mut arg_start = 0usize;
-    for (i, c) in args.char_indices() {
-        if in_str {
-            if c == '"' && prev != '\\' {
-                in_str = false;
+/// Index just past the string, raw string or char literal starting at
+/// `chars[i]`, or `None` when `chars[i]` does not start one (a lifetime
+/// tick is not a literal).
+fn skip_literal(chars: &[char], i: usize) -> Option<usize> {
+    let is_ident = |c: char| c.is_alphanumeric() || c == '_';
+    match chars[i] {
+        '"' => {
+            let mut j = i + 1;
+            while j < chars.len() {
+                match chars[j] {
+                    // A backslash escapes only the next char, so `"\\"` closes.
+                    '\\' => j += 2,
+                    '"' => return Some(j + 1),
+                    _ => j += 1,
+                }
             }
-            prev = c;
+            Some(chars.len())
+        }
+        'r' if i == 0 || !is_ident(chars[i - 1]) || chars[i - 1] == 'b' => {
+            let hashes = chars[i + 1..].iter().take_while(|&&c| c == '#').count();
+            if chars.get(i + 1 + hashes) != Some(&'"') {
+                return None;
+            }
+            let close: Vec<char> = std::iter::once('"')
+                .chain(std::iter::repeat_n('#', hashes))
+                .collect();
+            let body = i + 2 + hashes;
+            let end = (body..chars.len())
+                .find(|&j| chars[j..].starts_with(&close))
+                .map_or(chars.len(), |j| j + close.len());
+            Some(end)
+        }
+        '\'' => match (chars.get(i + 1), chars.get(i + 2)) {
+            (Some('\\'), _) => {
+                let close = (i + 2..chars.len()).find(|&j| chars[j] == '\'');
+                Some(close.map_or(chars.len(), |j| j + 1))
+            }
+            (Some(_), Some('\'')) => Some(i + 3),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Scans one macro's argument list (the text after its opening
+/// delimiter) at depth 0, ignoring string, raw-string and char literals.
+fn args_have_target_field(args: &str) -> bool {
+    let chars: Vec<char> = args.chars().collect();
+    let segment = |from: usize, to: usize| chars[from..to].iter().collect::<String>();
+    let mut depth = 0usize;
+    let mut arg_start = 0usize;
+    let mut i = 0usize;
+    while i < chars.len() {
+        if let Some(next) = skip_literal(&chars, i) {
+            i = next;
             continue;
         }
-        match c {
-            '"' => in_str = true,
+        match chars[i] {
             '(' | '[' | '{' => depth += 1,
-            ')' | ']' | '}' if depth == 0 => return starts_with_target_field(&args[arg_start..i]),
+            ')' | ']' | '}' if depth == 0 => {
+                return starts_with_target_field(&segment(arg_start, i));
+            }
             ')' | ']' | '}' => depth -= 1,
             ',' if depth == 0 => {
-                if starts_with_target_field(&args[arg_start..i]) {
+                if starts_with_target_field(&segment(arg_start, i)) {
                     return true;
                 }
                 arg_start = i + 1;
             }
             _ => {}
         }
-        prev = c;
+        i += 1;
     }
     false
 }
@@ -110,6 +173,10 @@ mod tests {
     #[test]
     fn the_target_directive_reaches_the_record() {
         init();
+        if crate::diagnostics::configured_level() < log::LevelFilter::Warn {
+            eprintln!("skipped: SIGNEX_LOG/RUST_LOG filters out WARN records");
+            return;
+        }
         tracing::warn!(target: "signex::log_probe_good", "good record marker");
         assert_logged(
             DiagnosticLevel::Warning,
@@ -142,6 +209,44 @@ mod tests {
         assert_eq!(macro_calls_with_target_field(late), [1]);
         assert!(macro_calls_with_target_field(good).is_empty());
         assert!(macro_calls_with_target_field(other).is_empty());
+    }
+
+    /// Literals must not confuse the argument scan: a quote or bracket
+    /// inside one neither ends nor opens anything.
+    #[test]
+    fn the_scanner_reads_literals_and_macro_forms_correctly() {
+        let detected = [
+            // `"\\"` closes at its second quote; the field after it is real.
+            "warn!(\"a\\\\\", target = \"x\");",
+            // Char literals holding a quote or a bracket.
+            "warn!('\"', target = \"x\");",
+            "warn!(')', target = \"x\");",
+            "warn!('(', target = \"x\");",
+            "warn!('\\'', target = \"x\");",
+            "warn!('\\\\', target = \"x\");",
+            // Raw strings with quotes and brackets inside.
+            "warn!(r#\")\"#, target = \"x\");",
+            "warn!(r#\"a\"b)\"#, target = \"x\");",
+            "warn! (target = \"x\", \"m\");",
+            "warn!{target = \"x\", \"m\"}",
+            "warn![target = \"x\", \"m\"]",
+            "tracing::info_span!(target = \"x\", \"s\");",
+            "span!(Level::INFO, target = \"x\");",
+            "event!(target = \"x\", Level::INFO, \"m\");",
+        ];
+        for source in detected {
+            assert_eq!(macro_calls_with_target_field(source), [1], "{source}");
+        }
+        let clean = [
+            "warn!(r#\"target = \"x\"\"#, y);",
+            "warn!(\"target = x\\\", target = y\");",
+            "warn!(')', target: \"x\");",
+            "warn!(target: \"x\", 'a', \"m\");",
+            "info_span!(target: \"x\", \"s\");",
+        ];
+        for source in clean {
+            assert!(macro_calls_with_target_field(source).is_empty(), "{source}");
+        }
     }
 
     /// No source file in the workspace writes `target = …` inside a
