@@ -208,13 +208,7 @@ impl Signex {
                 }
 
                 self.ui_state.enable_version_control = None;
-                // `.git` now exists: record it at once so the menu and the
-                // open guards stop offering Enable before the re-probe lands.
-                self.document_state.project_fs.facts.set_exists(
-                    crate::app::state::project_fs::git_marker(&state.project_dir),
-                    true,
-                );
-                self.document_state.project_fs.invalidate();
+                self.record_git_present(&state.project_dir);
                 self.refresh_panel_ctx();
                 let scope_label = match state.scope {
                     crate::app::VersionControlScope::Project => "repository",
@@ -237,6 +231,17 @@ impl Signex {
                 }
             }
         }
+    }
+
+    /// `.git` now exists under `dir`: record it at once so the menu and the
+    /// open guards stop offering Enable before the re-probe lands, then
+    /// re-probe to confirm.
+    pub(super) fn record_git_present(&mut self, dir: &std::path::Path) {
+        self.document_state
+            .project_fs
+            .facts
+            .set_exists(crate::app::state::project_fs::git_marker(dir), true);
+        self.document_state.project_fs.invalidate();
     }
 }
 
