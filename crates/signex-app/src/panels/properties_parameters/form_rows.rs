@@ -130,6 +130,15 @@ pub fn form_int_edit_row<'a>(
     .into()
 }
 
+/// A typed mm value clamped to 1..=2000. Refused or half-typed text keeps
+/// `current`: `clamp` passes NaN through, so a typed `nan` would otherwise
+/// reach the canvas paper size (#828).
+fn typed_mm(text: &str, current: f32) -> f32 {
+    crate::numeric_field::parse_field_f64(text)
+        .map_or(current, |v| v as f32)
+        .clamp(1.0, 2000.0)
+}
+
 /// Form row: label | floating-point mm text_input (no spinner buttons).
 pub fn form_mm_edit_row<'a>(
     label: &str,
@@ -145,10 +154,7 @@ pub fn form_mm_edit_row<'a>(
         row![
             property_label(label.to_string(), label_c),
             iced::widget::text_input("", &text_value)
-                .on_input(move |s| {
-                    let parsed: f32 = s.trim().parse().unwrap_or(0.0);
-                    (on_change_cl)(parsed.clamp(1.0, 2000.0))
-                })
+                .on_input(move |s| (on_change_cl)(typed_mm(&s, value)))
                 .size(11)
                 .padding([3, 6])
                 .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
@@ -708,5 +714,23 @@ mod tests {
     fn text_on_follows_background_lightness() {
         assert_eq!(text_on(Color::from_rgb(0.12, 0.13, 0.16)), Color::WHITE);
         assert_eq!(text_on(Color::from_rgb(0.99, 0.96, 0.89)), Color::BLACK);
+    }
+
+    /// #828 — `f32::clamp(NaN)` is NaN, so a typed `nan` must be refused
+    /// before the clamp, not by it.
+    #[test]
+    fn typed_mm_keeps_the_current_value_on_refused_or_half_typed_text() {
+        for bad in ["nan", "NaN", "inf", "-inf", "1e999", "", "-", "1,5"] {
+            assert_eq!(typed_mm(bad, 297.0), 297.0, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn typed_mm_clamps_a_finite_value() {
+        assert_eq!(typed_mm(" 210 ", 297.0), 210.0);
+        assert_eq!(typed_mm("0", 297.0), 1.0);
+        assert_eq!(typed_mm("5000", 297.0), 2000.0);
+        // Finite as f64 but infinite as f32: the clamp still bounds it.
+        assert_eq!(typed_mm("1e300", 297.0), 2000.0);
     }
 }

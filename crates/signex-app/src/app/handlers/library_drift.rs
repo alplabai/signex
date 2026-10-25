@@ -75,6 +75,9 @@ impl Signex {
             self.update_selection_info();
             return None;
         }
+        // Drop what belongs to an unmounted library now: until the async
+        // pass returns, "Update from library" must not apply its symbol.
+        self.prune_unmounted_drift(&libs);
         // Clone only; hashing and library reads happen in the worker.
         let sheets: Vec<SheetEntries> = self
             .document_state
@@ -97,6 +100,19 @@ impl Signex {
         })
     }
 
+    /// Remove `names` and `drifted` entries whose library is not in `libs`.
+    fn prune_unmounted_drift(&mut self, libs: &[MountedLibrary]) {
+        let mounted = |lib_id: &str| {
+            crate::library::drift::library_of(lib_id)
+                .is_some_and(|library| libs.iter().any(|l| l.id == library))
+        };
+        let drift = &mut self.library.drift;
+        drift.names.retain(|lib_id, _| mounted(lib_id));
+        for rows in drift.drifted.values_mut() {
+            rows.retain(|lib_id| mounted(lib_id));
+        }
+    }
+
     pub(crate) fn handle_library_drift_checked(&mut self, report: DriftReport) -> Task<Message> {
         // A newer pass was started since this one: its result is stale.
         if report.generation != self.library.drift.generation {
@@ -116,6 +132,10 @@ impl Signex {
                 continue;
             }
             let was = self.library.drift.drifted.get(&sheet);
+            let mut entries = entries;
+            if let Some(previous) = was {
+                keep_unreadable_rows(&mut entries, previous, &report.unreadable);
+            }
             let changed = was.is_none_or(|w| *w != entries);
             if changed && !entries.is_empty() {
                 crate::diagnostics::log_info(format!(
@@ -127,7 +147,9 @@ impl Signex {
             drifted.insert(sheet, entries);
         }
         self.library.drift.drifted = drifted;
-        self.library.drift.names = report.names;
+        let mut names = report.names;
+        keep_unreadable_names(&mut names, &self.library.drift.names, &report.unreadable);
+        self.library.drift.names = names;
         self.update_selection_info();
         Task::none()
     }
@@ -167,5 +189,30 @@ impl Signex {
             wanted: vec![(lib_id, stamps)],
         };
         self.spawn_apply_read(input)
+    }
+}
+
+/// An unreadable library says nothing about its rows: carry the previous
+/// ones over instead of reading the failure as "no drift". A kept row is only
+/// a flag: "Update from library" re-reads the library when it is used, and the
+/// engine's connectivity gate still vets the result.
+fn keep_unreadable_rows(
+    entries: &mut std::collections::BTreeSet<String>,
+    previous: &std::collections::BTreeSet<String>,
+    unreadable: &std::collections::HashSet<String>,
+) {
+    for lib_id in previous.iter().filter(|id| unreadable.contains(*id)) {
+        entries.insert(lib_id.clone());
+    }
+}
+
+/// Same rule for the readable `Library/Symbol` names.
+fn keep_unreadable_names(
+    names: &mut std::collections::HashMap<String, String>,
+    previous: &std::collections::HashMap<String, String>,
+    unreadable: &std::collections::HashSet<String>,
+) {
+    for (lib_id, name) in previous.iter().filter(|(id, _)| unreadable.contains(*id)) {
+        names.entry(lib_id.clone()).or_insert_with(|| name.clone());
     }
 }

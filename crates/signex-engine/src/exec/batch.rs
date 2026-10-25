@@ -62,7 +62,8 @@ impl Engine {
             "execute_batch does not nest: the inner batch would consume the outer batch's history entry"
         );
 
-        self.revision = crate::next_revision();
+        let base_revision = self.revision;
+        self.bump_revision();
         let before = self.document.clone();
 
         // Everything between here and the reset runs with `record_history`
@@ -71,6 +72,8 @@ impl Engine {
         self.history_suppressed = true;
         let coalesced = self.run_batch(commands);
         self.history_suppressed = false;
+        // The inner commands each bumped; the batch is one edit.
+        self.base_revision = base_revision;
 
         let patch_pair = match coalesced {
             Ok(Some(patch_pair)) => patch_pair,

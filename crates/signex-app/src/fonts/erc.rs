@@ -66,6 +66,7 @@ fn erc_rule_kind_key(rule: signex_erc::RuleKind) -> &'static str {
         AmbiguousLabelAnchor => "ambiguous_label_anchor",
         PinTypeConflict => "pin_type_conflict",
         PinsTouchNotConnected => "pins_touch_not_connected",
+        NetMultipleNames => "net_multiple_names",
     }
 }
 
@@ -86,6 +87,7 @@ fn parse_erc_rule_kind(s: &str) -> Option<signex_erc::RuleKind> {
         "ambiguous_label_anchor" => AmbiguousLabelAnchor,
         "pin_type_conflict" => PinTypeConflict,
         "pins_touch_not_connected" => PinsTouchNotConnected,
+        "net_multiple_names" => NetMultipleNames,
         _ => return None,
     })
 }

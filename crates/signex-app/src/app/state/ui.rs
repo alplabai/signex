@@ -388,6 +388,10 @@ pub struct UiState {
     /// Keyed by document path: each document has its own timeline.
     /// Redo mirror of [`Self::net_color_undo`]; cleared by any new colour
     /// action or engine edit.
+    /// Per sheet, bumped by every net-colour change. Colours are not part of
+    /// the engine revision, so a save records this too and may mark the sheet
+    /// clean only if it is unchanged when the write lands.
+    pub net_color_revision: std::collections::HashMap<std::path::PathBuf, u64>,
     pub net_color_redo: std::collections::HashMap<std::path::PathBuf, Vec<NetColorStep>>,
     /// Custom net-color picker state. When `show = true`, a floating
     /// iced_aw ColorPicker appears anchored to the Active Bar button;

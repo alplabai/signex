@@ -54,6 +54,7 @@ const ALL_HELPERS: &[&[HelperDesc]] = &[NET_HELPERS, PIN_HELPERS];
 // Known field access patterns: (object, field, valid_targets)
 const FIELD_ACCESS: &[(&str, &str, &[TargetKind])] = &[
     ("net", "name", &[TargetKind::Net]),
+    ("net", "names", &[TargetKind::Net]),
     ("net", "class", &[TargetKind::Net]),
     ("pin", "kind", &[TargetKind::Pin]),
     ("pin", "required", &[TargetKind::Pin]),

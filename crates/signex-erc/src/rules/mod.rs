@@ -9,6 +9,8 @@
 mod ambiguous_label_anchor;
 pub(crate) use ambiguous_label_anchor::ambiguous_label_anchor;
 mod clash_scope;
+mod multiple_names;
+pub(crate) use multiple_names::net_multiple_names;
 mod pin_type_conflict;
 pub(crate) use pin_type_conflict::pin_type_conflict;
 mod pins_touch_not_connected;
@@ -309,7 +311,10 @@ pub(crate) fn dangling_wire(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 // Rule: NetLabelConflict
 // ---------------------------------------------------------------------------
 
-pub(crate) fn net_label_conflict(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
+/// The label groups [`net_label_conflict`] reports: each is the Net / Global /
+/// Power labels of one net that carry at least two different texts, Net labels
+/// first. `net_multiple_names` uses it to leave these nets to this rule.
+pub(super) fn label_conflict_groups(ctx: &ErcContext) -> Vec<Vec<&crate::context::ErcLabel>> {
     let mut conn = wire_connectivity(ctx);
     let wires = wire_pairs(ctx);
 
@@ -345,13 +350,20 @@ pub(crate) fn net_label_conflict(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
         by_root.entry(root).or_default().push(lbl);
     }
 
-    for labels in by_root.values_mut() {
-        if labels.len() < 2 {
-            continue;
-        }
+    let mut groups: Vec<Vec<&crate::context::ErcLabel>> = by_root
+        .into_values()
+        .filter(|labels| labels.iter().any(|l| l.text != labels[0].text))
+        .collect();
+    for labels in &mut groups {
         // Report a Net-vs-Net clash in preference to one involving a
         // Global/Power name: the Net names are what the netlist drops.
         labels.sort_by_key(|l| !matches!(l.label_type, LabelType::Net));
+    }
+    groups
+}
+
+pub(crate) fn net_label_conflict(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
+    for labels in label_conflict_groups(ctx) {
         let first = labels[0];
         let Some(conflicting) = labels.iter().find(|l| l.text != first.text) else {
             continue;

@@ -197,3 +197,130 @@ fn writing_a_sheet_with_a_nan_coordinate_fails_naming_the_row() {
         other => panic!("expected NonFiniteField, got {other:?}"),
     }
 }
+
+/// #828 -- f64 fields carried in the `[extras.*]` TOML tables are not TSV
+/// cells, so the row guard never saw them. TOML spells them `nan` / `inf`,
+/// which would save without complaint; the writer must refuse instead.
+#[test]
+fn a_non_finite_symbol_text_in_extras_fails_the_save_naming_the_path() {
+    use crate::schematic::{HAlign, Point, SchematicSheet, Symbol, TextProp, VAlign};
+    for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        let symbol = Symbol {
+            ref_text: Some(TextProp {
+                position: Point { x: 0.0, y: 0.0 },
+                rotation: 0.0,
+                font_size: bad,
+                justify_h: HAlign::default(),
+                justify_v: VAlign::default(),
+                hidden: false,
+            }),
+            ..Symbol::default()
+        };
+        let uuid = symbol.uuid;
+        let mut sheet = SchematicSheet::default();
+        sheet.symbols.push(symbol);
+        match SnxSchematic::new(sheet).write_string() {
+            Err(FormatError::NonFiniteTomlField { path }) => {
+                assert_eq!(path, format!("extras.symbols.{uuid}.ref_text.font_size"));
+            }
+            other => panic!("{bad}: expected NonFiniteTomlField, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn a_non_finite_board_outline_point_in_extras_fails_the_save() {
+    let mut board = super::tests::empty_board();
+    board.outline.push(crate::pcb::Point {
+        x: f64::INFINITY,
+        y: 0.0,
+    });
+    match SnxPcb::new(board).write_string() {
+        Err(FormatError::NonFiniteTomlField { path }) => {
+            assert_eq!(path, "extras.board.outline[0].x");
+        }
+        other => panic!("expected NonFiniteTomlField, got {other:?}"),
+    }
+}
+
+/// #828 -- the manifest, stackup and zones tables are serde-written like
+/// extras, so each needs the same finite guard before it reaches the file.
+#[test]
+fn a_non_finite_manifest_stackup_or_zone_number_fails_the_save() {
+    use crate::pcb::{PcbSetup, Zone};
+    let setup = |grid_size| PcbSetup {
+        grid_size,
+        clearance: 0.25,
+        trace_width: 0.2,
+        via_diameter: 0.6,
+        via_drill: 0.3,
+        track_min_width: 0.1,
+        via_min_diameter: 0.4,
+        via_min_drill: 0.2,
+    };
+    let zone = |min_thickness| Zone {
+        uuid: uuid::Uuid::nil(),
+        net: 0,
+        net_name: String::new(),
+        layer: "TopCopper".into(),
+        outline: Vec::new(),
+        holes: Vec::new(),
+        priority: 0,
+        fill_type: String::new(),
+        thermal_relief: false,
+        thermal_gap: 0.0,
+        thermal_width: 0.0,
+        clearance: 0.0,
+        min_thickness,
+        unknown: Default::default(),
+    };
+    for bad in [f64::NAN, f64::INFINITY] {
+        let mut manifest = super::tests::empty_board();
+        manifest.thickness = bad;
+        let mut stackup = super::tests::empty_board();
+        stackup.setup = Some(setup(bad));
+        let mut zones = super::tests::empty_board();
+        zones.zones.push(zone(bad));
+        // Each path names its table, so a NaN board thickness does not read
+        // as an extras key.
+        for (what, board, expected) in [
+            ("manifest", manifest, "manifest.thickness"),
+            ("stackup", stackup, "stackup.setup.grid_size"),
+            ("zones", zones, "zones[0].min_thickness"),
+        ] {
+            let err = SnxPcb::new(board)
+                .write_string()
+                .expect_err("a non-finite number must fail the save");
+            let message = err.to_string();
+            match err {
+                FormatError::NonFiniteTomlField { path } => {
+                    assert_eq!(path, expected, "{what} {bad}");
+                }
+                other => panic!("{what} {bad}: expected NonFiniteTomlField, got {other:?}"),
+            }
+            assert!(
+                message.contains(expected) && !message.contains("extras"),
+                "{what} {bad}: {message}"
+            );
+        }
+    }
+}
+
+#[test]
+fn finite_extras_still_save() {
+    use crate::schematic::{HAlign, Point, SchematicSheet, Symbol, TextProp, VAlign};
+    let symbol = Symbol {
+        ref_text: Some(TextProp {
+            position: Point { x: 1.0, y: 2.0 },
+            rotation: 90.0,
+            font_size: 1.27,
+            justify_h: HAlign::default(),
+            justify_v: VAlign::default(),
+            hidden: false,
+        }),
+        ..Symbol::default()
+    };
+    let mut sheet = SchematicSheet::default();
+    sheet.symbols.push(symbol);
+    assert!(SnxSchematic::new(sheet).write_string().is_ok());
+}

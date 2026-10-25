@@ -293,6 +293,13 @@ pub struct SchematicSheet {
     pub title_block: HashMap<String, String>,
     #[serde(default)]
     pub lib_symbols: HashMap<String, LibSymbol>,
+    /// Net colour overrides set with the Active Bar net-colour pen, keyed by
+    /// the uuid of the wire or junction they colour. Saved per sheet in
+    /// `[extras.sheet.net_colors]`; empty (and not written) when the sheet
+    /// has none. Overrides whose element no longer exists are pruned when
+    /// the sheet is saved.
+    #[serde(default)]
+    pub net_colors: HashMap<Uuid, crate::theme::Color>,
     /// Keys in the `.snxsch` manifest and `[extras.sheet]` that this
     /// build does not recognise, kept per section so a save re-emits
     /// each where it was found. Empty for every file written by this
@@ -331,6 +338,7 @@ impl Default for SchematicSheet {
             no_erc_directives: Vec::new(),
             title_block: HashMap::new(),
             lib_symbols: HashMap::new(),
+            net_colors: HashMap::new(),
             unknown: SheetUnknown::default(),
         }
     }

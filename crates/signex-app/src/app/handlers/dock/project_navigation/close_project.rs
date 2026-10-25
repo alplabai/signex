@@ -283,7 +283,7 @@ impl Signex {
         self.document_state.document_saves.barrier().wait();
         if let Some(engine) = self.document_state.engines.get_mut(path) {
             engine
-                .save()
+                .save_with_net_colors(&self.ui_state.wire_color_overrides)
                 .with_context(|| format!("save schematic {}", path.display()))?;
             self.document_state.dirty_paths.remove(path);
             if let Some(tab) = self
@@ -346,6 +346,7 @@ impl Signex {
                     &format!("{context}: could not save {}", path.display()),
                     &err,
                 );
+                crate::app::handlers::document_files::log_foreign_column_offenders(&err);
                 let name = path
                     .file_name()
                     .and_then(|s| s.to_str())

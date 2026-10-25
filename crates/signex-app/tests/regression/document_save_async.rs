@@ -353,6 +353,7 @@ fn a_superseded_save_as_neither_rekeys_nor_marks_clean() {
         signex_app::persist::DocumentSaveDone {
             path: target.clone(),
             revision,
+            net_color_revision: 0,
             save_as_from: Some(path.clone()),
             result: Ok(signex_app::persist::SaveOutcome::Superseded),
         },
