@@ -18,9 +18,9 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
+use super::link_policy::link_leads_to_refused;
 use super::reference_policy::{
-    Share, is_path_refused, is_walk_refused, link_leads_to_refused, names_windows_device, share_of,
-    trust_real_shares,
+    Share, is_path_refused, is_walk_refused, names_windows_device, share_of, trust_real_shares,
 };
 use super::scope::{CaseFold, KeyMap, ReachSets, path_key_with};
 use super::sheet_read::{WalkLimits, read_child_refs};
@@ -1186,6 +1186,32 @@ mod tests {
 
         assert_eq!(resolved.unreadable.len(), 2, "{:?}", resolved.unreadable);
         assert_discard_blocked_by(&resolved, "network or device");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_child_that_is_a_symlink_to_a_share_is_unreadable_and_never_opened_on_windows() {
+        use std::os::windows::fs::{symlink_dir, symlink_file};
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path().join("x.snxsch");
+        write_sheet(&root, &["link.snxsch", r"dirlink\y.snxsch"]);
+        // An unresolvable host: nothing can answer for it, whatever the LAN does.
+        let file = symlink_file(
+            r"\\nonexistent.invalid\s\z.snxsch",
+            tmp.path().join("link.snxsch"),
+        );
+        let dir = symlink_dir(r"\\nonexistent.invalid\s", tmp.path().join("dirlink"));
+        if let Some(e) = file.err().or(dir.err()) {
+            assert_eq!(e.raw_os_error(), Some(1314), "{e}");
+            eprintln!("skipped: cannot create symlinks ({e})");
+            return;
+        }
+
+        let resolved = resolve_root(&root, WalkLimits::default());
+
+        assert_eq!(resolved.unreadable.len(), 2, "{:?}", resolved.unreadable);
+        assert_discard_blocked_by(&resolved, "network or device");
+        assert!(resolved.disk.len() == 1, "{:?}", resolved.disk.keys());
     }
 
     #[cfg(unix)]

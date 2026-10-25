@@ -80,13 +80,16 @@ fn after_unc_segment(rest: &str, sep: fn(char) -> bool) -> Option<&str> {
 
 /// True for the verbatim-disk spelling `C:\..` (what `canonicalize` returns on
 /// Windows once `\\?\` is stripped): the same local disk as `C:\..`, so it is
-/// followed. A drive letter, a colon, then a separator. A bare `\\?\C:` is the
-/// volume device itself, not its root directory, so it is refused (#1019).
-fn is_verbatim_disk(rest: &str) -> bool {
+/// followed. A drive letter, a colon, then a separator: only `\` in the strict
+/// all-backslash `\\?\` form, where Windows leaves `/` alone. A bare `\\?\C:`
+/// is the volume device itself, not its root directory, so it is refused
+/// (#1019).
+fn is_verbatim_disk(rest: &str, strict: bool) -> bool {
     let mut chars = rest.chars();
     matches!(
         (chars.next(), chars.next(), chars.next()),
-        (Some(d), Some(':'), Some('/' | '\\')) if d.is_ascii_alphabetic()
+        (Some(d), Some(':'), Some(sep))
+            if d.is_ascii_alphabetic() && (is_backslash(sep) || (!strict && is_separator(sep)))
     )
 }
 
@@ -113,7 +116,7 @@ fn classify_double_separator(after: &str, backslashes: bool) -> ReferenceKind {
     } else {
         rest.trim_start_matches(is_separator)
     };
-    if marker == '?' && is_verbatim_disk(rest) {
+    if marker == '?' && is_verbatim_disk(rest, strict) {
         return ReferenceKind::Local;
     }
     let sep: fn(char) -> bool = if strict { is_backslash } else { is_separator };
@@ -220,24 +223,6 @@ pub(crate) fn names_windows_device(_path: &Path) -> bool {
 /// network share. The one rule roots, extra, loaded and child paths all use.
 pub(crate) fn is_path_refused(path: &Path, trusted: &[Share]) -> bool {
     path_is_refused(path, trusted) || path_is_refused(&normalize_clamped(path), trusted)
-}
-
-/// True when `path` is a link (symlink or junction) whose target is a device
-/// or an untrusted network share (#1020). The classifier only reads spelling,
-/// so a link spelled as a plain local file could otherwise be followed to
-/// hardware or a remote host. Disk IO (one canonicalise); `false` for a path
-/// that does not exist.
-///
-/// A target that cannot be canonicalised (a device often cannot) falls back to
-/// the link's own target text.
-pub(crate) fn link_leads_to_refused(path: &Path, trusted: &[Share]) -> bool {
-    match std::fs::canonicalize(path) {
-        Ok(real) => is_path_refused(&real, trusted),
-        Err(_) => std::fs::read_link(path).is_ok_and(|target| {
-            let target = path.parent().map_or(target.clone(), |p| p.join(&target));
-            is_path_refused(&target, trusted)
-        }),
-    }
 }
 
 /// Add the share of each project directory's real (canonical) spelling to
@@ -354,43 +339,19 @@ mod tests {
     }
 
     #[test]
+    fn a_strict_verbatim_drive_needs_a_backslash_after_the_colon() {
+        assert!(is_refused(r"\\?\C:/x.snxsch", &[]));
+        assert!(!is_refused(r"\\?\C:\x.snxsch", &[]));
+        assert!(!is_refused("//?/C:/x.snxsch", &[]));
+    }
+
+    #[test]
     fn a_bare_verbatim_drive_is_refused_with_padding_but_its_root_is_not() {
         for reference in [r"\\?\C:", "//?/C:", r"  \\?\C:  ", r"\\?\C: "] {
             assert!(is_refused(reference, &[]), "{reference:?}");
         }
         assert!(!is_refused(r"\\?\C:\", &[]));
         assert!(!is_refused("//?/C:/", &[]));
-    }
-
-    #[test]
-    fn a_missing_path_is_not_a_link_to_a_refused_target() {
-        let tmp = tempfile::tempdir().expect("tempdir");
-        assert!(!link_leads_to_refused(&tmp.path().join("none.snxsch"), &[]));
-        assert!(!link_leads_to_refused(tmp.path(), &[]));
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn a_symlink_to_a_device_or_untrusted_share_is_refused() {
-        let tmp = tempfile::tempdir().expect("tempdir");
-        let real = tmp.path().join("real.snxsch");
-        std::fs::write(&real, "x").expect("write");
-        let ok = tmp.path().join("ok.snxsch");
-        let device = tmp.path().join("dev.snxsch");
-        let share = tmp.path().join("share.snxsch");
-        let link = |target: &Path, at: &Path| std::os::windows::fs::symlink_file(target, at);
-        if let Err(e) = link(&real, &ok) {
-            // Creating a symlink needs Developer Mode or elevation.
-            assert_eq!(e.raw_os_error(), Some(1314), "{e}");
-            eprintln!("skipped: cannot create symlinks ({e})");
-            return;
-        }
-        link(Path::new(r"\\.\NUL"), &device).expect("device link");
-        link(Path::new(r"\\attacker\share\x.snxsch"), &share).expect("share link");
-
-        assert!(!link_leads_to_refused(&ok, &[]));
-        assert!(link_leads_to_refused(&device, &[]));
-        assert!(link_leads_to_refused(&share, &[]));
     }
 
     #[test]
