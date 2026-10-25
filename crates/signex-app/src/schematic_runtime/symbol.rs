@@ -4,8 +4,7 @@
 
 use super::snapshot::{ArcStroke, push_arc};
 use super::*;
-use signex_types::schematic::{SymbolPrimitive, lower_symbol, primitives_bounds};
-use std::sync::{Mutex, OnceLock};
+use signex_types::schematic::{SymbolPrimitive, arc_polyline, lower_symbol, primitives_bounds};
 
 /// Half extents of the box a symbol gets when its library graphics are
 /// missing or empty.
@@ -31,10 +30,7 @@ pub(super) fn symbol_geometry(
         .unwrap_or_default();
     match primitives_bounds(&primitives) {
         Some(bbox) => (primitives, bbox),
-        None => {
-            report_fallback_once(&symbol.lib_id);
-            (Vec::new(), fallback_box(symbol))
-        }
+        None => (Vec::new(), fallback_box(symbol)),
     }
 }
 
@@ -52,21 +48,25 @@ fn fallback_box(symbol: &Symbol) -> Aabb {
     )
 }
 
-/// Warn once per library id: this runs on every redraw and hit-test, and a
-/// missing library entry is a standing condition, not an event.
-fn report_fallback_once(lib_id: &str) {
-    static REPORTED: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
-    let first = REPORTED
-        .get_or_init(|| Mutex::new(HashSet::new()))
-        .lock()
-        .map(|mut reported| reported.insert(lib_id.to_owned()))
-        .unwrap_or(true);
-    if first {
-        tracing::warn!(
-            lib_id,
-            "symbol has no library graphics on this sheet; drawing a placeholder box"
-        );
-    }
+/// Library ids of placed symbols that will be drawn as the placeholder box
+/// because their library entry is missing or draws nothing. Sorted, one entry
+/// per id. The caller reports them when a sheet loads, not on every redraw.
+pub(crate) fn symbols_without_geometry(snapshot: &SchematicRenderSnapshot) -> Vec<String> {
+    let mut ids: Vec<String> = snapshot
+        .symbols
+        .iter()
+        .filter(|symbol| {
+            snapshot
+                .lib_symbols
+                .get(&symbol.lib_id)
+                .map(|lib| primitives_bounds(&lower_symbol(lib, symbol)).is_none())
+                .unwrap_or(true)
+        })
+        .map(|symbol| symbol.lib_id.clone())
+        .collect();
+    ids.sort();
+    ids.dedup();
+    ids
 }
 
 /// Colours and render id shared by every primitive of one symbol.
@@ -171,17 +171,31 @@ pub(super) fn push_primitives(
                 mid,
                 end,
                 width,
-            } => push_arc(
-                [*start, *mid, *end],
-                ArcStroke {
-                    id: style.id,
-                    width_mm: style.stroke_mm(*width),
-                    color: stroke,
-                },
-                style.scale,
-                sink.arcs,
-                sink.wires,
-            ),
+                fill,
+            } => {
+                if *fill != FillType::None {
+                    sink.polygons.push(PolygonInput {
+                        vertices: arc_polyline(*start, *mid, *end)
+                            .iter()
+                            .map(|p| [p.x as f32, p.y as f32])
+                            .collect(),
+                        fill_color: style.fill_rgba(*fill),
+                        stroke_color: None,
+                        stroke_width_mm: 0.0,
+                    });
+                }
+                push_arc(
+                    [*start, *mid, *end],
+                    ArcStroke {
+                        id: style.id,
+                        width_mm: style.stroke_mm(*width),
+                        color: stroke,
+                    },
+                    style.scale,
+                    sink.arcs,
+                    sink.wires,
+                );
+            }
             SymbolPrimitive::Text {
                 text,
                 position,

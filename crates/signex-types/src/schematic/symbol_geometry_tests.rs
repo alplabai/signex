@@ -142,3 +142,169 @@ fn empty_symbol_has_no_bounds() {
     let l = lib(vec![], vec![]);
     assert!(primitives_bounds(&lower_symbol(&l, &placed(0.0, 0.0, 0.0))).is_none());
 }
+
+fn mirrored(mirror_x: bool, mirror_y: bool) -> Symbol {
+    Symbol {
+        mirror_x,
+        mirror_y,
+        ..Symbol::default()
+    }
+}
+
+/// A body that is not centred on its origin: x 0..10, y 0..4 in Y-up space.
+fn offset_body() -> LibSymbol {
+    lib(
+        vec![Graphic::Rectangle {
+            start: Point::new(0.0, 0.0),
+            end: Point::new(10.0, 4.0),
+            width: 0.0,
+            fill: FillType::None,
+        }],
+        vec![],
+    )
+}
+
+#[test]
+fn mirror_y_flips_the_box_about_the_origin_x() {
+    let l = offset_body();
+    assert_box(bounds(&l, &mirrored(false, false)), 0.0, -4.0, 10.0, 0.0);
+    assert_box(bounds(&l, &mirrored(false, true)), -10.0, -4.0, 0.0, 0.0);
+}
+
+#[test]
+fn mirror_x_flips_the_box_about_the_origin_y() {
+    assert_box(
+        bounds(&offset_body(), &mirrored(true, false)),
+        0.0,
+        0.0,
+        10.0,
+        4.0,
+    );
+}
+
+fn lib_text(rotation: f64) -> Graphic {
+    Graphic::Text {
+        text: "+".into(),
+        position: Point::new(0.0, 0.0),
+        rotation,
+        font_size: 1.27,
+        bold: false,
+        italic: false,
+        justify_h: HAlign::Left,
+        justify_v: VAlign::Top,
+    }
+}
+
+fn first_text(l: &LibSymbol, sym: &Symbol) -> (f64, HAlign, VAlign) {
+    lower_symbol(l, sym)
+        .into_iter()
+        .find_map(|p| match p {
+            SymbolPrimitive::Text {
+                rotation_deg,
+                h_align,
+                v_align,
+                ..
+            } => Some((rotation_deg, h_align, v_align)),
+            _ => None,
+        })
+        .expect("a text primitive")
+}
+
+#[test]
+fn library_text_on_a_half_turned_symbol_is_readable_and_flipped() {
+    let l = lib(vec![lib_text(0.0)], vec![]);
+    assert_eq!(
+        first_text(&l, &placed(0.0, 0.0, 180.0)),
+        (0.0, HAlign::Right, VAlign::Top)
+    );
+    assert_eq!(
+        first_text(&l, &placed(0.0, 0.0, 270.0)),
+        (90.0, HAlign::Left, VAlign::Bottom)
+    );
+}
+
+#[test]
+fn library_text_on_a_quarter_turned_symbol_stays_turned() {
+    let l = lib(vec![lib_text(0.0)], vec![]);
+    assert_eq!(
+        first_text(&l, &placed(0.0, 0.0, 90.0)),
+        (90.0, HAlign::Left, VAlign::Top)
+    );
+}
+
+#[test]
+fn library_text_swaps_justification_on_a_mirror() {
+    let l = lib(vec![lib_text(0.0)], vec![]);
+    assert_eq!(
+        first_text(&l, &mirrored(false, true)),
+        (0.0, HAlign::Right, VAlign::Top)
+    );
+    assert_eq!(
+        first_text(&l, &mirrored(true, false)),
+        (0.0, HAlign::Left, VAlign::Bottom)
+    );
+}
+
+#[test]
+fn text_box_text_sits_in_the_frames_top_left_corner() {
+    // Frame x 0..10, y 0..4 in Y-up space: its top-left is (0, 4), which is
+    // world (0, -4). The old anchor was the frame's bottom-left, (0, 0).
+    let l = lib(
+        vec![Graphic::TextBox {
+            text: "T".into(),
+            position: Point::new(0.0, 0.0),
+            rotation: 0.0,
+            size: Point::new(10.0, 4.0),
+            font_size: 1.27,
+            bold: false,
+            italic: false,
+            width: 0.0,
+            fill: FillType::None,
+        }],
+        vec![],
+    );
+    let at = lower_symbol(&l, &placed(0.0, 0.0, 0.0))
+        .into_iter()
+        .find_map(|p| match p {
+            SymbolPrimitive::Text { position, .. } => Some(position),
+            _ => None,
+        })
+        .expect("a text primitive");
+    assert!(
+        (at.x - 0.0).abs() < 1e-9 && (at.y + 4.0).abs() < 1e-9,
+        "{at:?}"
+    );
+}
+
+#[test]
+fn filled_arc_keeps_its_fill() {
+    let arc = Graphic::Arc {
+        start: Point::new(-5.0, 0.0),
+        mid: Point::new(0.0, 5.0),
+        end: Point::new(5.0, 0.0),
+        width: 0.0,
+        fill: FillType::Background,
+    };
+    let prims = lower_symbol(&lib(vec![arc], vec![]), &placed(0.0, 0.0, 0.0));
+    assert!(matches!(
+        prims[0],
+        SymbolPrimitive::Arc {
+            fill: FillType::Background,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn arc_polyline_runs_start_to_end_through_the_bulge() {
+    let pts = arc_polyline(
+        Point::new(-5.0, 0.0),
+        Point::new(0.0, 5.0),
+        Point::new(5.0, 0.0),
+    );
+    let (first, last) = (pts[0], pts[pts.len() - 1]);
+    assert!((first.x + 5.0).abs() < 1e-9 && first.y.abs() < 1e-9);
+    assert!((last.x - 5.0).abs() < 1e-9 && last.y.abs() < 1e-9);
+    assert!(pts.iter().any(|p| (p.y - 5.0).abs() < 1e-9));
+    assert!(pts.iter().all(|p| p.y >= -1e-9));
+}

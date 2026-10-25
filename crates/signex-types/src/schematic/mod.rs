@@ -772,14 +772,15 @@ impl Default for Symbol {
 mod bus_name;
 pub use bus_name::*;
 mod field_style;
-pub use field_style::field_effective_style;
+pub use field_style::{field_effective_style, readable_text_style};
 mod parts;
 pub use parts::*;
 mod sheet;
 pub use sheet::*;
 mod symbol_geometry;
 pub use symbol_geometry::{
-    SymbolPrimitive, instance_pins, lower_symbol, pin_direction, primitives_bounds, text_aabb,
+    SymbolPrimitive, arc_polyline, instance_pins, lower_symbol, pin_direction, primitives_bounds,
+    text_aabb,
 };
 
 #[cfg(test)]

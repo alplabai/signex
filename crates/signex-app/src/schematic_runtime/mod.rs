@@ -26,6 +26,7 @@ pub mod overlay;
 pub mod selection;
 mod snapshot;
 mod symbol;
+pub(crate) use symbol::symbols_without_geometry;
 pub mod text;
 
 pub use snapshot::build_renderer_snapshot;
@@ -445,15 +446,25 @@ struct ItemBound {
 }
 
 fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
+    collect_item_bounds_with(snapshot, true)
+}
+
+/// `symbol_bodies = false` leaves out the symbol body entries, which are the
+/// only ones that need the library lowering.
+fn collect_item_bounds_with(
+    snapshot: &SchematicRenderSnapshot,
+    symbol_bodies: bool,
+) -> Vec<ItemBound> {
     let mut out = Vec::new();
 
     for symbol in &snapshot.symbols {
-        let item = SelectedItem::new(symbol.uuid, SelectedKind::Symbol);
-        out.push(ItemBound {
-            item,
-            bbox: symbol::symbol_bounds(snapshot, symbol),
-            anchor: symbol.position,
-        });
+        if symbol_bodies {
+            out.push(ItemBound {
+                item: SelectedItem::new(symbol.uuid, SelectedKind::Symbol),
+                bbox: symbol::symbol_bounds(snapshot, symbol),
+                anchor: symbol.position,
+            });
+        }
 
         if let Some(ref_text) = symbol.ref_text.as_ref().filter(|p| !p.hidden) {
             out.push(ItemBound {
@@ -619,7 +630,17 @@ fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
 }
 
 fn item_aabb(snapshot: &SchematicRenderSnapshot, item: &SelectedItem) -> Option<Aabb> {
-    collect_item_bounds(snapshot)
+    // A symbol body is the only bound that costs a library lowering; look the
+    // selected symbol up directly, and skip every body for any other item, so
+    // the per-frame selection overlay does not lower the whole sheet per item.
+    if item.kind == SelectedKind::Symbol {
+        return snapshot
+            .symbols
+            .iter()
+            .find(|symbol| symbol.uuid == item.uuid)
+            .map(|symbol| symbol::symbol_bounds(snapshot, symbol));
+    }
+    collect_item_bounds_with(snapshot, false)
         .into_iter()
         .find(|entry| entry.item == *item)
         .map(|entry| entry.bbox)

@@ -7,12 +7,15 @@
 
 use super::{
     Aabb, FillType, Graphic, HAlign, LibPin, LibSymbol, PIN_LENGTH_MM, Point, SCHEMATIC_TEXT_MM,
-    Symbol, SymbolTransform, VAlign, circumcircle,
+    Symbol, SymbolTransform, VAlign, circumcircle, readable_text_style,
 };
 use std::f64::consts::{FRAC_PI_2, TAU};
 
 /// Segments a cubic bezier is sampled into.
 const BEZIER_SEGMENTS: usize = 16;
+
+/// Segments an arc is sampled into when it is filled.
+const ARC_SEGMENTS: usize = 32;
 
 /// One drawable piece of a placed symbol, in world (schematic, Y-down) mm.
 #[derive(Debug, Clone, PartialEq)]
@@ -38,6 +41,7 @@ pub enum SymbolPrimitive {
         mid: Point,
         end: Point,
         width: f64,
+        fill: FillType,
     },
     Text {
         text: String,
@@ -148,12 +152,13 @@ fn lower_graphic(graphic: &Graphic, t: &SymbolTransform, out: &mut Vec<SymbolPri
             mid,
             end,
             width,
-            ..
+            fill,
         } => out.push(SymbolPrimitive::Arc {
             start: t.apply(*start),
             mid: t.apply(*mid),
             end: t.apply(*end),
             width: *width,
+            fill: *fill,
         }),
         Graphic::Bezier {
             points,
@@ -173,14 +178,9 @@ fn lower_graphic(graphic: &Graphic, t: &SymbolTransform, out: &mut Vec<SymbolPri
             justify_h,
             justify_v,
             ..
-        } => out.push(SymbolPrimitive::Text {
-            text: text.clone(),
-            position: t.apply(*position),
-            rotation_deg: t.apply_angle(*rotation),
-            size: text_size(*font_size),
-            h_align: *justify_h,
-            v_align: *justify_v,
-        }),
+        } => out.push(readable_text(
+            t, text, *position, *rotation, *font_size, *justify_h, *justify_v,
+        )),
         Graphic::TextBox {
             text,
             position,
@@ -192,15 +192,47 @@ fn lower_graphic(graphic: &Graphic, t: &SymbolTransform, out: &mut Vec<SymbolPri
         } => {
             let far = Point::new(position.x + size.x, position.y + size.y);
             out.push(path(&rect_corners(*position, far), true, *width, *fill));
-            out.push(SymbolPrimitive::Text {
-                text: text.clone(),
-                position: t.apply(*position),
-                rotation_deg: t.apply_angle(0.0),
-                size: text_size(*font_size),
-                h_align: HAlign::Left,
-                v_align: VAlign::Top,
-            });
+            // Library space is Y-up, so the frame's visual top-left is the
+            // corner with the smallest x and the largest y.
+            let top_left = Point::new(position.x.min(far.x), position.y.max(far.y));
+            out.push(readable_text(
+                t,
+                text,
+                top_left,
+                0.0,
+                *font_size,
+                HAlign::Left,
+                VAlign::Top,
+            ));
         }
+    }
+}
+
+/// Body text placed like a field: folded to a readable angle with its
+/// justification swapped on a turn or mirror (`readable_text_style`).
+fn readable_text(
+    t: &SymbolTransform,
+    text: &str,
+    position: Point,
+    rotation: f64,
+    font_size: f64,
+    justify_h: HAlign,
+    justify_v: VAlign,
+) -> SymbolPrimitive {
+    let (rotation_deg, h_align, v_align) = readable_text_style(
+        t.rotation_deg + rotation,
+        justify_h,
+        justify_v,
+        t.mirror_x,
+        t.mirror_y,
+    );
+    SymbolPrimitive::Text {
+        text: text.to_owned(),
+        position: t.apply(position),
+        rotation_deg,
+        size: text_size(font_size),
+        h_align,
+        v_align,
     }
 }
 
@@ -260,6 +292,7 @@ fn primitive_bounds(primitive: &SymbolPrimitive) -> Option<Aabb> {
             mid,
             end,
             width,
+            ..
         } => Some(arc_bounds(*start, *mid, *end).expand(width * 0.5)),
         SymbolPrimitive::Text {
             text,
@@ -309,6 +342,30 @@ fn arc_bounds(start: Point, mid: Point, end: Point) -> Aabb {
             let (x, y) = (cx + r * c.cos(), cy + r * c.sin());
             b.union(&Aabb::new(x, y, x, y))
         })
+}
+
+/// Points along the arc from `start` through `mid` to `end`, in that order,
+/// for filling it (closed by the chord) or exporting it as a polyline.
+/// Collinear points give the three points themselves.
+pub fn arc_polyline(start: Point, mid: Point, end: Point) -> Vec<Point> {
+    let Some((cx, cy, r)) = circumcircle(start, mid, end) else {
+        return vec![start, mid, end];
+    };
+    let angle = |p: Point| (p.y - cy).atan2(p.x - cx);
+    let (a0, am, a1) = (angle(start), angle(mid), angle(end));
+    let turn = |from: f64, to: f64| (to - from).rem_euclid(TAU);
+    // Signed sweep from `start` to `end` that passes `mid`.
+    let sweep = if turn(a0, am) < turn(a0, a1) {
+        turn(a0, a1)
+    } else {
+        -turn(a1, a0)
+    };
+    (0..=ARC_SEGMENTS)
+        .map(|i| {
+            let a = a0 + sweep * i as f64 / ARC_SEGMENTS as f64;
+            Point::new(cx + r * a.cos(), cy + r * a.sin())
+        })
+        .collect()
 }
 
 /// Box of `text` anchored at `anchor` with the given justification, rotated
