@@ -257,7 +257,7 @@ impl Signex {
 
 /// Routed by extension, not by an open tab, so a PCB whose tab closed
 /// mid-write still logs and commits.
-fn is_pcb_path(path: &std::path::Path) -> bool {
+pub(super) fn is_pcb_path(path: &std::path::Path) -> bool {
     path.extension()
         .is_some_and(|ext| ext == "snxpcb" || ext == "standard_pcb")
 }

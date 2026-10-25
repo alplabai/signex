@@ -159,7 +159,10 @@ fn ctrl_s_after_a_restore_that_cannot_be_re_read_refuses_to_undo_it() {
     app.document_state.dirty_paths.insert(path.clone());
     app.reload_active_tab_from_disk();
     assert!(app.document_state.error_notice.is_some(), "restore card");
-    assert!(app.begin_pcb_save(path.clone()).is_err());
+    assert!(
+        matches!(app.begin_pcb_save(path.clone()), Ok(None)),
+        "clean tab: nothing to write"
+    );
     press_save(&mut app);
     assert_eq!(
         std::fs::read_to_string(&path).expect("read"),
@@ -223,12 +226,38 @@ fn a_restore_that_reads_as_non_utf8_refuses_to_undo_it() {
     commit_revision(dir.path(), &path, &encoded(&empty_board()));
     app.handle_history_restore_clicked(&old);
     assert!(app.document_state.error_notice.is_some(), "restore card");
-    assert!(app.begin_pcb_save(path.clone()).is_err());
+    assert!(no_commit_requested(&app));
+    assert!(
+        app.interaction_state
+            .pcb_canvas
+            .active_renderer_snapshot()
+            .is_none()
+    );
+    assert!(!app.document_state.dirty_paths.contains(&path));
+    assert!(
+        matches!(app.begin_pcb_save(path.clone()), Ok(None)),
+        "clean tab: nothing to write"
+    );
     press_save(&mut app);
     assert_eq!(
         std::fs::read(&path).expect("read"),
         vec![0xff, 0xfe, 0x00, 0x80]
     );
+}
+
+#[test]
+fn closing_a_pcb_tab_drops_its_dirty_marker() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, path) = app_with_pcb(dir.path());
+    mark_dirty(&mut app, &path);
+    assert!(app.document_state.dirty_paths.contains(&path));
+    let _ = app.close_tab_now(0);
+    assert!(!app.document_state.dirty_paths.contains(&path));
+}
+
+#[test]
+fn standard_pcb_files_count_as_pcb_paths() {
+    assert!(super::save_async::is_pcb_path(Path::new("x.standard_pcb")));
 }
 
 #[test]

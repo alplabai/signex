@@ -5,8 +5,10 @@ use super::super::super::*;
 impl Signex {
     /// v0.22 Phase 8.5 — Resolve the active tab's path and project,
     /// then call `LocalGitProjectAdapter::restore_at` with the user-
-    /// picked SHA. Marks the file dirty so the next Ctrl+S captures
-    /// the restored content.
+    /// picked SHA. Per kind: a schematic ends dirty, so the next Ctrl+S
+    /// captures the restored content; a PCB ends clean and commits
+    /// "Restore X"; a footprint or symbol ends clean and is not committed
+    /// (a pre-existing gap).
     ///
     /// Best-effort: failures log a warning and surface as a status
     /// message; nothing destructive runs (the working tree changes
@@ -174,6 +176,8 @@ impl Signex {
                         if let Some(t) = self.document_state.tabs.get_mut(active_idx) {
                             t.cached_document = None;
                         }
+                        // The tab was never edited, so it is not unsaved.
+                        self.document_state.dirty_paths.remove(&path);
                         self.apply_loaded_empty_document(false);
                         self.report_restore_failure(format!(
                             "{} was restored but could not be re-read: {e}. \
@@ -197,6 +201,9 @@ impl Signex {
                     .file_name()
                     .map(|f| f.to_string_lossy().into_owned())
                     .unwrap_or_else(|| path.display().to_string());
+                // ponytail: dropped while a commit of this file is in flight, so
+                // restoring A then B quickly can leave B uncommitted; re-queue
+                // via a dirty-again flag if that bites.
                 self.commit_save_to_project_git(&path, &format!("Restore {label}"));
             }
             crate::app::TabKind::FootprintEditor(p) => {

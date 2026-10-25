@@ -255,9 +255,11 @@ impl LocalGitProjectAdapter {
     /// Signex process saving into it cannot interleave with the restore
     /// (#906).
     ///
-    /// Does NOT create a new commit — that's the app layer's call
-    /// (it'll observe the dirty file on next save and commit through
-    /// [`commit_path`] with a "Restore from <sha>" message).
+    /// Does NOT create a new commit — that's the app layer's call, and it
+    /// differs per kind: a schematic is left dirty and commits on the next
+    /// Save; a PCB commits "Restore X" through [`commit_path`] at once; a
+    /// footprint or symbol ends clean and is not committed (a pre-existing
+    /// gap).
     pub fn restore_at(&self, rel_path: &Path, commit_oid: git2::Oid) -> Result<(), LibraryError> {
         let repo = git2::Repository::open(&self.project_root)
             .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;

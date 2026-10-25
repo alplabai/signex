@@ -49,10 +49,10 @@ impl Signex {
             Err(_) => return,
         };
 
-        // Idempotent: ignore duplicate enqueues for the same
-        // (project_root, rel_path) when the previous one is still
-        // inflight. The next save round adds it back if the user
-        // saves again after the prior commit completes.
+        // Idempotent: an enqueue for the same (project_root, rel_path) is
+        // DROPPED while the previous one is still inflight, not re-queued.
+        // A change made in that window stays uncommitted until a later
+        // enqueue; a clean PCB has none, so it waits for the next save.
         let key = (project_root.clone(), rel_path.clone());
         if !self.document_state.inflight_git_commits.insert(key) {
             return;
