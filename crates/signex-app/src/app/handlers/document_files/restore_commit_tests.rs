@@ -9,7 +9,7 @@ use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::app::{FileMsg, Message, Signex, TabInfo, TabKind};
 
 /// Commits `text` as `path` in the project repo and returns the sha.
-fn commit_revision(dir: &Path, path: &Path, text: &str) -> String {
+pub(super) fn commit_revision(dir: &Path, path: &Path, text: &str) -> String {
     signex_library::git_identity::test_identity::install();
     std::fs::write(path, text).expect("write revision");
     let adapter = LocalGitProjectAdapter::open_or_init(dir.to_path_buf()).expect("repo");
@@ -21,7 +21,7 @@ fn commit_revision(dir: &Path, path: &Path, text: &str) -> String {
         .to_string()
 }
 
-fn open_tab(dir: &Path, path: &Path, kind: TabKind) -> Signex {
+pub(super) fn open_tab(dir: &Path, path: &Path, kind: TabKind) -> Signex {
     let mut app = app_workspace(&dir.to_string_lossy(), &[]);
     app.document_state.projects[0].data.enable_git = true;
     app.document_state.tabs.push(TabInfo {
@@ -45,7 +45,7 @@ fn assert_restored_and_committed(app: &Signex, path: &Path, restored: &str) {
     assert!(!app.document_state.tabs[0].dirty);
 }
 
-fn footprint_text(name: &str) -> String {
+pub(super) fn footprint_text(name: &str) -> String {
     use signex_library::{Footprint, FootprintFile};
     FootprintFile::from_footprint(Footprint::empty(name))
         .to_toml_string()
@@ -461,12 +461,12 @@ fn a_queued_save_followed_by_a_restore_is_one_restore_commit() {
 
 // ---- #859: the restore runs on a worker; only the request still tracked lands.
 
-fn click_restore(app: &mut Signex, sha: &str) -> Vec<Message> {
+pub(super) fn click_restore(app: &mut Signex, sha: &str) -> Vec<Message> {
     let task = app.handle_history_restore_clicked(sha);
     collect_messages(task)
 }
 
-fn footprint_fixture() -> (tempfile::TempDir, PathBuf, String, Signex) {
+pub(super) fn footprint_fixture() -> (tempfile::TempDir, PathBuf, String, Signex) {
     let dir = tempfile::tempdir().expect("tempdir");
     let path = dir.path().join("part.snxfpt");
     let sha = commit_revision(dir.path(), &path, &footprint_text("old"));
@@ -539,7 +539,7 @@ fn closing_all_documents_cancels_a_running_restore() {
 }
 
 #[test]
-fn a_restore_finishing_after_a_tab_switch_activates_its_own_tab() {
+fn a_restore_finishing_after_a_tab_switch_restores_its_tab_without_taking_focus() {
     let (dir, path, sha, mut app) = footprint_fixture();
     let other = dir.path().join("other.snxsym");
     app.document_state.tabs.push(TabInfo {
@@ -553,8 +553,11 @@ fn a_restore_finishing_after_a_tab_switch_activates_its_own_tab() {
     let messages = click_restore(&mut app, &sha);
     app.document_state.active_tab = 1;
     finish_restore(&mut app, messages);
-    assert_eq!(app.document_state.active_tab, 0, "the restored tab");
-    assert!(app.document_state.footprint_editors.contains_key(&path));
+    assert_eq!(app.document_state.active_tab, 1, "the user's tab stays");
+    assert!(
+        app.document_state.footprint_editors.contains_key(&path),
+        "the restored tab still follows its file"
+    );
     assert_eq!(
         app.document_state.tabs[1].path.file_name().unwrap(),
         "other.snxsym"
@@ -581,13 +584,13 @@ fn a_restore_that_fails_in_git_reports_the_card_and_keeps_the_tab() {
 
 // ---- #859: nothing may write or replace a document while its restore runs.
 
-fn logged(needle: &str) -> bool {
+pub(super) fn logged(needle: &str) -> bool {
     crate::diagnostics::recent_entries()
         .iter()
         .any(|e| e.message.contains(needle))
 }
 
-fn marker_editor(app: &mut Signex, path: &Path, name: &str) {
+pub(super) fn marker_editor(app: &mut Signex, path: &Path, name: &str) {
     let file =
         signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty(name));
     app.document_state.footprint_editors.insert(
@@ -596,7 +599,7 @@ fn marker_editor(app: &mut Signex, path: &Path, name: &str) {
     );
 }
 
-fn editor_name(app: &Signex, path: &Path) -> String {
+pub(super) fn editor_name(app: &Signex, path: &Path) -> String {
     app.document_state.footprint_editors[path]
         .primitive()
         .name
@@ -614,7 +617,7 @@ fn saving_while_a_restore_runs_is_refused_and_the_restored_bytes_are_what_gets_c
     let save = app.update(Message::File(FileMsg::Save));
     run_task(&mut app, save);
     assert!(logged(
-        "Save refused: a History restore of part.snxfpt is still running"
+        "A History restore of part.snxfpt is still running, so the save was refused"
     ));
     assert_eq!(
         std::fs::read_to_string(&path).expect("read"),
@@ -642,7 +645,7 @@ fn save_as_and_save_all_paths_are_refused_for_the_restoring_document_only() {
     let err = app.refuse_save_while_restoring(&path).unwrap_err();
     assert!(
         err.to_string()
-            .starts_with("Save refused: a History restore of part.snxfpt"),
+            .starts_with("A History restore of part.snxfpt is still running"),
         "{err}"
     );
     assert!(
@@ -657,7 +660,7 @@ fn save_as_and_save_all_paths_are_refused_for_the_restoring_document_only() {
     assert!(app.save_primitive_tab_at(&path).is_err());
 }
 
-fn edit_description(app: &mut Signex, text: &str) {
+pub(super) fn edit_description(app: &mut Signex, text: &str) {
     use crate::dock::DockMessage;
     use crate::panels::PanelMsg;
     let _ = app.update(Message::Dock(DockMessage::Panel(
@@ -810,7 +813,7 @@ fn save_all_reports_the_restoring_file_and_still_saves_the_others() {
     let err = app.try_save_dirty_path(&path).unwrap_err();
     assert!(
         err.to_string()
-            .starts_with("Save refused: a History restore of part.snxfpt")
+            .starts_with("A History restore of part.snxfpt is still running")
     );
     // Another file is not held up by it.
     let other = dir.path().join("other.snxsym");

@@ -6,7 +6,7 @@
 use iced::Task;
 
 use super::super::super::*;
-use crate::app::document_read::ReadRequest;
+use crate::app::document_read::{Finished, ReadRequest};
 use crate::app::restore_job::{
     EditStamp, RestoreFailure, RestoreJob, RestoreKind, RestoredDocument,
 };
@@ -115,7 +115,7 @@ impl Signex {
             .file_name()
             .map(|f| f.to_string_lossy().into_owned())
             .unwrap_or_else(|| path.display().to_string());
-        anyhow::bail!("Save refused: a History restore of {name} is still running")
+        anyhow::bail!("A History restore of {name} is still running, so the save was refused")
     }
 
     /// Re-read the active tab's file and apply it as a restore would. Tests
@@ -151,16 +151,17 @@ impl Signex {
         result: Result<Box<RestoredDocument>, RestoreFailure>,
     ) -> Task<Message> {
         let path = request.path;
-        let current = self
+        let finished = self
             .document_state
             .pending_restores
-            .finish(&path, request.generation);
+            .finish_claim(&path, request.generation);
         let idx = self.document_state.tabs.iter().position(|t| t.path == path);
-        let Some(idx) = idx.filter(|_| current) else {
+        let Some(idx) = idx.filter(|_| finished == Finished::Current) else {
             // Cancelled (tab, project or all documents closed): the file may
-            // still have been rewritten, so say so.
+            // still have been rewritten, so say so. A cancelled restore held
+            // its claim, and so kept saves refused, until this moment.
             tracing::debug!(path = %path.display(), "stale history restore");
-            self.report_restore_without_tab(&path, sha, &result);
+            self.report_restore_without_tab(&path, sha, &result, finished);
             return Task::none();
         };
         if !matches!(result, Err(RestoreFailure::NotRestored(_)))
@@ -169,7 +170,11 @@ impl Signex {
             self.report_restore_over_edits(&path, sha);
             return Task::none();
         }
-        if idx != self.document_state.active_tab {
+        // The in-memory copy must follow the restored file or the next save
+        // would undo it, and the reload installs into the active tab: so
+        // visit the tab, then go back to where the user is.
+        let user_tab = self.document_state.active_tab;
+        if idx != user_tab {
             self.park_active_schematic_session();
             self.document_state.active_tab = idx;
             self.sync_active_tab();
@@ -186,6 +191,12 @@ impl Signex {
                 self.apply_reloaded(idx, Ok(*document));
                 self.refresh_panel_ctx();
             }
+        }
+        if idx != user_tab {
+            self.park_active_schematic_session();
+            self.document_state.active_tab = user_tab;
+            self.sync_active_tab();
+            self.refresh_panel_ctx();
         }
         Task::none()
     }
@@ -221,7 +232,18 @@ impl Signex {
         path: &std::path::Path,
         sha: &str,
         result: &Result<Box<RestoredDocument>, RestoreFailure>,
+        finished: Finished,
     ) {
+        if finished == Finished::Cancelled {
+            // Short: the Messages panel keeps only the first 157 bytes.
+            let name = path
+                .file_name()
+                .map(|f| f.to_string_lossy().into_owned())
+                .unwrap_or_else(|| path.display().to_string());
+            crate::diagnostics::log_warning(format!(
+                "[git] restore: A cancelled restore of {name} to {sha} finished; its result was dropped and saves are allowed again"
+            ));
+        }
         let text = match result {
             Err(RestoreFailure::NotRestored(message)) => message.clone(),
             _ => format!(

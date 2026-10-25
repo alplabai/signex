@@ -14,6 +14,8 @@ mod open_read;
 mod open_read_tests;
 mod recent;
 #[cfg(test)]
+mod restore_cancel_tests;
+#[cfg(test)]
 pub(crate) mod restore_commit_tests;
 mod restore_fingerprint;
 mod save;

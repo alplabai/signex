@@ -78,7 +78,7 @@ impl Signex {
     /// running, so none of them reopens a tab afterwards.
     pub(crate) fn cancel_in_flight_reads(&mut self) {
         self.document_state.pending_opens.cancel_all();
-        self.document_state.pending_restores.cancel_all();
+        self.document_state.pending_restores.cancel_all_retaining();
     }
 
     fn install_loaded_document(&mut self, path: PathBuf, document: LoadedDocument) {

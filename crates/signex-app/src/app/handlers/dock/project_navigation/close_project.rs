@@ -189,7 +189,9 @@ impl Signex {
         if let Some(project) = self.document_state.projects.get(project_idx) {
             let dir = project.dir().to_path_buf();
             self.document_state.pending_opens.cancel_under(&dir);
-            self.document_state.pending_restores.cancel_under(&dir);
+            self.document_state
+                .pending_restores
+                .cancel_under_retaining(&dir);
         }
 
         // A kept document's tab outlives the project it was opened under.

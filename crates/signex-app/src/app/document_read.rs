@@ -31,6 +31,20 @@ pub struct InFlightReads {
 struct Claim {
     generation: u64,
     tracked: bool,
+    /// Set by the `cancel_*_retaining` methods: the work is abandoned but
+    /// its worker still runs, so the claim stays until the worker reports.
+    cancelled: bool,
+}
+
+/// How a finished worker relates to the claim it started under.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Finished {
+    /// Still the tracked request: apply the result.
+    Current,
+    /// Abandoned while it ran, claim held until now: drop the result.
+    Cancelled,
+    /// Not the tracked request (superseded or its claim already dropped).
+    Stale,
 }
 
 impl InFlightReads {
@@ -49,6 +63,7 @@ impl InFlightReads {
             Claim {
                 generation,
                 tracked,
+                cancelled: false,
             },
         );
         Some(generation)
@@ -78,12 +93,49 @@ impl InFlightReads {
     /// still the one tracked for `path`; anything else is a stale completion
     /// that must not be applied.
     pub fn finish(&mut self, path: &Path, generation: u64) -> bool {
+        self.finish_claim(path, generation) == Finished::Current
+    }
+
+    /// Consume the claim of a finished worker, telling a live request from
+    /// one cancelled with a `cancel_*_retaining` method (whose claim kept
+    /// refusing saves until now).
+    pub fn finish_claim(&mut self, path: &Path, generation: u64) -> Finished {
         match self.claims.get(path) {
             Some(c) if c.tracked && c.generation == generation => {
+                let cancelled = c.cancelled;
                 self.claims.remove(path);
-                true
+                if cancelled {
+                    Finished::Cancelled
+                } else {
+                    Finished::Current
+                }
             }
-            _ => false,
+            _ => Finished::Stale,
+        }
+    }
+
+    /// Abandon the tracked claim on `path` but keep it until its worker
+    /// finishes: the worker may still write the file, so the path stays
+    /// claimed (and `contains` stays true) meanwhile.
+    pub fn cancel_retaining(&mut self, path: &Path) {
+        if let Some(c) = self.claims.get_mut(path).filter(|c| c.tracked) {
+            c.cancelled = true;
+        }
+    }
+
+    /// [`Self::cancel_retaining`] for every tracked claim under `dir`.
+    pub fn cancel_under_retaining(&mut self, dir: &Path) {
+        for (path, c) in &mut self.claims {
+            if c.tracked && path.starts_with(dir) {
+                c.cancelled = true;
+            }
+        }
+    }
+
+    /// [`Self::cancel_retaining`] for every tracked claim.
+    pub fn cancel_all_retaining(&mut self) {
+        for c in self.claims.values_mut().filter(|c| c.tracked) {
+            c.cancelled = true;
         }
     }
 
@@ -301,5 +353,40 @@ mod tests {
         reads.cancel_under(Path::new("/a"));
         assert!(!reads.contains(Path::new("/a/x.snxsch")));
         assert!(reads.contains(Path::new("/b/y.snxsch")));
+    }
+
+    #[test]
+    fn a_retained_cancel_keeps_the_claim_until_its_worker_finishes() {
+        let mut reads = InFlightReads::default();
+        let path = PathBuf::from("/a/x.snxsch");
+        let generation = reads.begin(path.clone()).expect("tracked");
+        reads.cancel_retaining(&path);
+        assert!(reads.contains(&path), "still claimed");
+        assert!(reads.begin(path.clone()).is_none(), "no second worker");
+        assert_eq!(reads.finish_claim(&path, generation), Finished::Cancelled);
+        assert!(!reads.contains(&path));
+        assert_eq!(reads.finish_claim(&path, generation), Finished::Stale);
+    }
+
+    #[test]
+    fn retained_cancels_by_directory_and_all_leave_the_rest_live() {
+        let mut reads = InFlightReads::default();
+        let a = reads.begin(PathBuf::from("/a/x")).expect("a");
+        let b = reads.begin(PathBuf::from("/b/y")).expect("b");
+        reads.cancel_under_retaining(Path::new("/a"));
+        assert_eq!(
+            reads.finish_claim(Path::new("/a/x"), a),
+            Finished::Cancelled
+        );
+        let c = reads.begin(PathBuf::from("/c/z")).expect("c");
+        reads.cancel_all_retaining();
+        assert_eq!(
+            reads.finish_claim(Path::new("/b/y"), b),
+            Finished::Cancelled
+        );
+        assert_eq!(
+            reads.finish_claim(Path::new("/c/z"), c),
+            Finished::Cancelled
+        );
     }
 }
