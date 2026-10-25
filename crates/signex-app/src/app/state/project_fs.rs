@@ -97,8 +97,7 @@ pub fn message_touches_disk(message: &crate::app::Message) -> bool {
                 | L::CreateLibraryAtPath { .. }
                 | L::LibraryCreateOptionsConfirm
                 | L::AddLibraryFileWritten { .. }
-                | L::NewComponentSubmit
-                | L::NewComponentConfirmCreateTable
+                | L::NewComponent
                 | L::BrowserConfirmAddTable { .. }
                 | L::BrowserDeleteTable { .. }
                 | L::BrowserConfirmRenameTable { .. }

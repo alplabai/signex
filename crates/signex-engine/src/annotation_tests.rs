@@ -42,7 +42,6 @@ fn a_phase_one_rewrite_records_history() {
         sheet: 0,
         locked: &locked,
         undo_group: None,
-        order: AnnotateOrder::default(),
     };
 
     let changed = engine
@@ -163,7 +162,6 @@ fn an_annotate_undo_group_is_stamped_and_survives_undo_and_redo() {
         sheet: 0,
         locked: &locked,
         undo_group: Some(crate::UndoGroupId::new(7)),
-        order: AnnotateOrder::default(),
     };
     engine
         .annotate_in_project(
@@ -293,4 +291,37 @@ fn annotate_all_command_honours_the_order() {
         })
         .unwrap();
     assert_eq!(refs_of(&engine), ["R2", "R1"]);
+}
+
+/// Units A(0,0) u1, B(10,0) u2, C(0,10) u2, D(10,10) u1 of one library symbol:
+/// the order given to the pass is the one the parts group by, so the pairing
+/// has a single source and cannot diverge from the numbering.
+#[test]
+fn the_part_pairing_follows_the_one_order_of_the_pass() {
+    let designators = |order| {
+        let mut sheet = test_sheet();
+        sheet.symbols = vec![
+            unit("U?", 1, 0.0),
+            unit("U?", 2, 10.0),
+            unit("U?", 2, 0.0),
+            unit("U?", 1, 10.0),
+        ];
+        sheet.symbols[2].position = Point::new(0.0, 10.0);
+        sheet.symbols[3].position = Point::new(10.0, 10.0);
+        let mut engine = Engine::new(sheet).unwrap();
+        engine
+            .annotate_with_seed(AnnotateMode::Incremental, &mut HashMap::new(), order)
+            .unwrap();
+        refs_of(&engine)
+    };
+    // (A,B)=U1 and (C,D)=U2 across then down.
+    assert_eq!(
+        designators(AnnotateOrder::AcrossThenDown),
+        ["U1", "U1", "U2", "U2"]
+    );
+    // (A,C)=U1 and (B,D)=U2 down then across.
+    assert_eq!(
+        designators(AnnotateOrder::DownThenAcross),
+        ["U1", "U2", "U1", "U2"]
+    );
 }

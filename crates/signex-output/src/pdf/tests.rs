@@ -25,6 +25,7 @@ pub(super) fn sample_ctx(sheet_count: usize) -> ExportContext {
         netlist: None,
         netlist_sheets: Vec::new(),
         netlist_sheet_placements: Vec::new(),
+        current_sheet: None,
     }
 }
 
@@ -133,6 +134,7 @@ fn empty_context_errors() {
         netlist: None,
         netlist_sheets: Vec::new(),
         netlist_sheet_placements: Vec::new(),
+        current_sheet: None,
     };
     let err = PdfExporter
         .export(&ctx, &PdfOptions::default())
@@ -160,6 +162,33 @@ fn page_range_range_inclusive() {
     };
     let out = PdfExporter.export(&ctx, &opts).unwrap();
     assert_eq!(out.page_count, 3); // 2, 3, 4
+}
+
+/// "Current page" prints the sheet named by `current_sheet`, not sheet 0;
+/// a path that is no longer in the (possibly filtered) sheet list falls back
+/// to the first sheet.
+#[test]
+fn page_range_current_follows_the_active_sheet() {
+    let mut ctx = sample_ctx(4);
+    ctx.current_sheet = Some(PathBuf::from("sheet_2.standard_sch"));
+    let index = ctx.current_sheet_index();
+    assert_eq!(
+        resolve_page_range(&PageRange::Current, 4, index).unwrap(),
+        [2]
+    );
+
+    ctx.current_sheet = Some(PathBuf::from("filtered_out.standard_sch"));
+    let index = ctx.current_sheet_index();
+    assert_eq!(
+        resolve_page_range(&PageRange::Current, 4, index).unwrap(),
+        [0]
+    );
+
+    let opts = PdfOptions {
+        page_range: PageRange::Current,
+        ..Default::default()
+    };
+    assert_eq!(PdfExporter.export(&ctx, &opts).unwrap().page_count, 1);
 }
 
 #[test]

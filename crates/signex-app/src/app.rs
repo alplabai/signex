@@ -69,12 +69,22 @@ impl Signex {
         if state::project_fs::message_touches_disk(&message) {
             self.document_state.project_fs.invalidate();
         }
-        let task = self.dispatch_update(message);
+        let before = self.active_tab_path();
+        let mut tasks = vec![self.dispatch_update(message)];
+        // Any activation path (select, open, close-neighbour, Ctrl+Tab)
+        // ends here: scroll the tab strip to the newly active tab.
+        if self.active_tab_path() != before {
+            let docs = &self.document_state;
+            tasks.push(tab_bar::reveal_active_tab(docs.active_tab, docs.tabs.len()));
+        }
         // `refresh_panel_ctx` only records what the project tree needs from
         // the disk; the probe that fetches it starts here (#111).
-        match self.start_project_fs_probe(false) {
-            Some(probe) => Task::batch([task, probe]),
-            None => task,
+        if let Some(probe) = self.start_project_fs_probe(false) {
+            tasks.push(probe);
         }
+        if tasks.len() == 1 {
+            return tasks.pop().expect("one task");
+        }
+        Task::batch(tasks)
     }
 }

@@ -209,8 +209,9 @@ There is currently no Intel macOS or ARM64 Linux build.
 
 ### First launch
 
-The current packages do not yet carry a trusted publisher or developer
-signature:
+Until release signing is enabled (see
+[docs/RELEASE_SIGNING.md](docs/RELEASE_SIGNING.md)), packages do not carry a
+trusted publisher or developer signature:
 
 - **Windows:** Microsoft Defender SmartScreen may appear. Select **More info**,
   then **Run anyway**.

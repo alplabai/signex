@@ -20,7 +20,7 @@ pub(crate) mod volume_case;
 
 pub use interaction::InteractionState;
 pub use pdf_page_setup::PageSetupInputs;
-pub use ui::UiState;
+pub use ui::{NetColorStep, UiState};
 
 pub struct Signex {
     pub ui_state: UiState,
@@ -176,6 +176,15 @@ impl ErrorNotice {
     pub fn save(detail: impl Into<String>) -> Self {
         Self {
             title: "Save Failed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
+    /// Enable Version Control created the repository but could not finish
+    /// setting it up, so the project is not auto-committing.
+    pub fn version_control(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Version Control Setup Failed".to_owned(),
             detail: detail.into(),
         }
     }

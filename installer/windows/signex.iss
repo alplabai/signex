@@ -55,6 +55,13 @@ WizardStyle=modern
 #if FileExists("signex.ico")
   SetupIconFile=signex.ico
 #endif
+#ifdef Sign
+; Sign the installer AND the uninstaller stub. `signex` is defined on the
+; ISCC command line (/Ssignex=...) by release.yml, only when a certificate
+; exists; builds without one never define Sign.
+SignTool=signex
+SignedUninstaller=yes
+#endif
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 ArchitecturesAllowed={#ArchAllowed}

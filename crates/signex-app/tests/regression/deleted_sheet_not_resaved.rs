@@ -941,13 +941,20 @@ fn confirm_re_resolves_when_a_project_was_opened_since_the_refs_were_read() {
     assert!(first.dirty_paths.contains(&c_child), "C is not open yet");
     add_project(&mut app, &tmp.path().join("C.snxprj"), "c.snxsch");
 
-    // Park the probe: in-flight blocks new ones, so `units()` is exact.
-    let _claimed = app.document_state.project_fs.begin_probe(true);
+    // Park the probe: in-flight blocks new ones, so `units()` is exact. The
+    // projects were pushed outside `update`, so the tree may not have asked
+    // for any paths yet; then nothing parks and this update starts the probe.
+    let parked = app.document_state.project_fs.begin_probe(true).is_some();
     let task = app.update(Message::Project(ProjectMsg::CloseConfirm(
         ProjectCloseChoice::DiscardAll,
     )));
 
-    assert_eq!(task.units(), 1, "stale refs must trigger a fresh resolve");
+    let probe = usize::from(!parked);
+    assert_eq!(
+        task.units(),
+        1 + probe,
+        "stale refs must trigger a fresh resolve"
+    );
     assert!(
         app.ui_state.project_close_confirm.is_none(),
         "the old prompt is taken until the re-resolve lands"

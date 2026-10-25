@@ -68,6 +68,7 @@ fn the_netlist_incomplete_prompt_paints_with_no_editor_tab_active() {
             netlist: None,
             netlist_sheets: Vec::new(),
             netlist_sheet_placements: Vec::new(),
+            current_sheet: None,
         },
     });
 

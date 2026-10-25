@@ -150,6 +150,67 @@ fn the_preview_promises_what_the_action_assigns() {
     );
 }
 
+/// The same promise under a non-default order. The active sheet holds a 2x2
+/// grid, so the numbers depend on the walk order: down-then-across gives the
+/// top-right unit R3 where the default order gives it R2. A preview that
+/// ignores the dialog's order, or a run that does, shows up as a mismatch.
+#[test]
+fn the_preview_promises_what_the_action_assigns_down_then_across() {
+    use std::collections::HashMap;
+
+    let (mut app, dir) = fixture();
+    app.ui_state.annotate_order = crate::app::state::AnnotateOrder::DownThenAcross;
+    let root = dir.join("a_root.snxsch");
+    let mut sheet = sheet_with_net("R?", "ROOT_NET", &["z_child.snxsch"]);
+    let template = sheet.symbols[0].clone();
+    // `[top-left, top-right, bottom-left, bottom-right]`, y grows down.
+    sheet.symbols = [(0.0, 0.0), (10.0, 0.0), (0.0, 10.0), (10.0, 10.0)]
+        .into_iter()
+        .map(|(x, y)| {
+            let mut s = template.clone();
+            s.uuid = Uuid::new_v4();
+            s.position = signex_types::schematic::Point::new(x, y);
+            s
+        })
+        .collect();
+    open_with(&mut app.document_state, &root, sheet);
+
+    let promised: HashMap<Uuid, String> = app
+        .preview_project_annotations()
+        .into_iter()
+        .filter(|e| e.sheet == "a_root")
+        .map(|e| (e.uuid, e.proposed))
+        .collect();
+
+    let _ = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
+
+    let assigned: Vec<(Uuid, String)> = app
+        .document_state
+        .engines
+        .get(&root)
+        .expect("root engine")
+        .document()
+        .symbols
+        .iter()
+        .map(|s| (s.uuid, s.reference.clone()))
+        .collect();
+    std::fs::remove_dir_all(&dir).ok();
+
+    assert_eq!(assigned.len(), 4, "precondition: the grid is on the sheet");
+    for (uuid, reference) in &assigned {
+        assert_eq!(
+            promised.get(uuid),
+            Some(reference),
+            "the preview must promise what the action assigns: {promised:?} vs {assigned:?}"
+        );
+    }
+    let numbers: Vec<&str> = assigned.iter().map(|(_, r)| r.as_str()).collect();
+    assert_eq!(
+        numbers[1], "R3",
+        "precondition: down-then-across numbers the top-right unit third: {numbers:?}"
+    );
+}
+
 #[test]
 fn the_preview_omits_tabs_the_action_refuses_to_touch() {
     let (mut app, dir) = fixture();
