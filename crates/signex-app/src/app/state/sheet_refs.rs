@@ -19,7 +19,8 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use super::reference_policy::{
-    Share, is_path_refused, is_walk_refused, names_windows_device, share_of, trust_real_shares,
+    Share, is_path_refused, is_walk_refused, link_leads_to_refused, names_windows_device, share_of,
+    trust_real_shares,
 };
 use super::scope::{CaseFold, KeyMap, ReachSets, path_key_with};
 use super::sheet_read::{WalkLimits, read_child_refs};
@@ -213,7 +214,7 @@ fn identity_key(
     trusted: &[Share],
     path: &Path,
 ) -> String {
-    if is_path_refused(path, trusted) {
+    if is_path_refused(path, trusted) || link_leads_to_refused(path, trusted) {
         return keys.key(path);
     }
     let lexical = keys.lexical_key(path);
@@ -364,6 +365,12 @@ impl SheetRefInputs {
                 });
                 truncated = true;
                 break;
+            }
+            // A link to a device or untrusted share is as refused as its spelling
+            // would be (#1020); it is never opened.
+            if link_leads_to_refused(&path, &trusted) {
+                refusals.refuse(&mut unreadable, &path.to_string_lossy());
+                continue;
             }
             let saved = read_child_refs(&path, limits.max_sheet_bytes).unwrap_or_else(|reason| {
                 unreadable.push(UnreadableSheet {
