@@ -63,8 +63,9 @@ use crate::solver::work::{WorkMeter, iteration_cost, jacobian_cost, row_space_co
 /// recovery draw on this one pool.
 ///
 /// Measured in `--release` on an Apple-silicon Mac, one unit of LM work is
-/// 0.8 to 1.0 ns, so a solve that exhausts the pool takes 96 to 123 ms
-/// (a conflicting 16-rectangle grid, n = 126: 123 ms; a jittered fully
+/// 0.8 to 1.0 ns, so a solve that exhausts the pool takes roughly 90 to
+/// 150 ms (a conflicting 16-rectangle grid, n = 126: 123 to 152 ms across
+/// runs and constructions; a jittered fully
 /// constrained 64-rectangle grid, n = 384: 122 ms) and then fails with
 /// `BudgetExceeded`. The solve runs synchronously on every drag frame, so
 /// that is the longest a failing frame can be held. Sketches that solve, with

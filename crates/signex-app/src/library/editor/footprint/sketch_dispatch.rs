@@ -411,7 +411,7 @@ pub(super) fn solve_and_bake(
     // the UI thread is #1047). The LM work of the whole solve (first run,
     // retry, offset undo, conflict narrowing) draws on ONE work budget,
     // `Solver::work_budget`, so a solve that fails is bounded: measured in
-    // release, 96 to 123 ms at the default budget. A solve that converges
+    // release, roughly 90 to 150 ms at the default budget. A solve that converges
     // also runs the DOF analysis, which the budget does not bound: 14 ms at
     // n = 254, and for an already-converged sketch 92 ms at n = 574
     // (under-constrained) or 400 to 520 ms at n = 510 (fully constrained).
