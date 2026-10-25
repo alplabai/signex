@@ -190,10 +190,11 @@ impl Signex {
                 let bytes = match std::fs::read_to_string(&p) {
                     Ok(s) => s,
                     Err(e) => {
-                        crate::diagnostics::log_warning(format!(
-                            "[reload] read {} failed: {e}",
-                            p.display()
-                        ));
+                        self.fail_primitive_reload(
+                            &p,
+                            active_idx,
+                            &format!("could not be read: {e}"),
+                        );
                         return;
                     }
                 };
@@ -219,16 +220,14 @@ impl Signex {
                         self.commit_restore(&p);
                     }
                     Ok(_) => {
-                        crate::diagnostics::log_warning(format!(
-                            "[reload] {} contains zero footprints",
-                            p.display()
-                        ));
+                        self.fail_primitive_reload(&p, active_idx, "contains zero footprints");
                     }
                     Err(e) => {
-                        crate::diagnostics::log_warning(format!(
-                            "[reload] parse {} failed: {e}",
-                            p.display()
-                        ));
+                        self.fail_primitive_reload(
+                            &p,
+                            active_idx,
+                            &format!("could not be parsed: {e}"),
+                        );
                     }
                 }
             }
@@ -236,10 +235,11 @@ impl Signex {
                 let bytes = match std::fs::read(&p) {
                     Ok(b) => b,
                     Err(e) => {
-                        crate::diagnostics::log_warning(format!(
-                            "[reload] read {} failed: {e}",
-                            p.display()
-                        ));
+                        self.fail_primitive_reload(
+                            &p,
+                            active_idx,
+                            &format!("could not be read: {e}"),
+                        );
                         return;
                     }
                 };
@@ -254,16 +254,14 @@ impl Signex {
                         self.commit_restore(&p);
                     }
                     Ok(_) => {
-                        crate::diagnostics::log_warning(format!(
-                            "[reload] {} contains zero symbols",
-                            p.display()
-                        ));
+                        self.fail_primitive_reload(&p, active_idx, "contains zero symbols");
                     }
                     Err(e) => {
-                        crate::diagnostics::log_warning(format!(
-                            "[reload] parse {} failed: {e}",
-                            p.display()
-                        ));
+                        self.fail_primitive_reload(
+                            &p,
+                            active_idx,
+                            &format!("could not be parsed: {e}"),
+                        );
                     }
                 }
             }
@@ -324,14 +322,29 @@ impl Signex {
     }
 
     /// Queue the project git commit for the restored bytes already on disk,
-    /// so a clean tab does not leave them uncommitted. Dropped while a commit
-    /// of this file is in flight (see `commit_save_to_project_git`).
+    /// so a clean tab does not leave them uncommitted. An enqueue while a
+    /// commit of this file is in flight is re-queued (see
+    /// `commit_save_to_project_git`).
     fn commit_restore(&mut self, path: &std::path::Path) {
         let label = path
             .file_name()
             .map(|f| f.to_string_lossy().into_owned())
             .unwrap_or_else(|| path.display().to_string());
         self.commit_save_to_project_git(path, &format!("Restore {label}"));
+    }
+
+    /// A restored footprint/symbol could not be loaded into its editor. The
+    /// editor in memory is the pre-restore one, so drop it (a save then
+    /// finds nothing to write and cannot overwrite the restored bytes), clear
+    /// the dirty marker set for the restore, and raise the error card.
+    fn fail_primitive_reload(&mut self, path: &std::path::Path, active_idx: usize, why: &str) {
+        self.document_state.footprint_editors.remove(path);
+        self.document_state.symbol_editors.remove(path);
+        self.set_reloaded_dirty(path, active_idx, false);
+        self.report_restore_failure(format!(
+            "{} was restored but {why}. Close and reopen the tab before editing it.",
+            path.display()
+        ));
     }
 
     /// Records whether a document just reloaded from disk is dirty, in

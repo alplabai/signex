@@ -543,6 +543,9 @@ pub struct DocumentState {
     /// [`Signex::commit_save_to_project_git`] enqueues the work and
     /// clears on `Message::Project(ProjectMsg::GitCommitDone)`.
     pub inflight_git_commits: std::collections::HashSet<(PathBuf, PathBuf)>,
+    /// Files enqueued again while their commit was inflight, with the
+    /// newest message; one more commit is queued when the running one ends.
+    pub requeued_git_commits: std::collections::HashMap<(PathBuf, PathBuf), String>,
     /// #833 — repo roots with a commit currently running. At most one
     /// commit per repo is in flight; the rest wait in
     /// `pending_git_commits` so concurrent tasks never race on the

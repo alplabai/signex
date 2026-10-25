@@ -49,12 +49,15 @@ impl Signex {
             Err(_) => return,
         };
 
-        // Idempotent: ignore duplicate enqueues for the same
-        // (project_root, rel_path) when the previous one is still
-        // inflight. The next save round adds it back if the user
-        // saves again after the prior commit completes.
+        // An enqueue for a (project_root, rel_path) that is still inflight
+        // is not run now: the running commit may have read the file before
+        // these bytes landed. Remember it (newest message wins) and
+        // `handle_project_git_commit_done` queues one more commit.
         let key = (project_root.clone(), rel_path.clone());
-        if !self.document_state.inflight_git_commits.insert(key) {
+        if !self.document_state.inflight_git_commits.insert(key.clone()) {
+            self.document_state
+                .requeued_git_commits
+                .insert(key, default_message.to_string());
             return;
         }
         self.document_state
@@ -157,6 +160,13 @@ impl Signex {
             .inflight_git_commits
             .remove(&(project_root.clone(), rel_path.clone()));
         self.document_state.active_git_repos.remove(&project_root);
+        if let Some(message) = self
+            .document_state
+            .requeued_git_commits
+            .remove(&(project_root.clone(), rel_path.clone()))
+        {
+            self.commit_save_to_project_git(&project_root.join(&rel_path), &message);
+        }
         match result {
             Ok(Some(oid)) => crate::diagnostics::log_info(format!(
                 "[git] committed {} in {} ({})",
