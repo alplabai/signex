@@ -3,6 +3,7 @@
 //! they stay independent from renderer internals.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use signex_net::{ConnectedPoints, SheetConnectivity, best_net_name_of, pt_key};
 use signex_types::schematic::SchematicSheet;
@@ -227,7 +228,7 @@ pub struct ErcContext {
     pub nets: Vec<ErcNet>,
     /// Child sheet contexts keyed by filename. Only populated when built via
     /// [`from_snapshot_with_children`].
-    pub children: HashMap<String, ErcContext>,
+    pub children: HashMap<String, Arc<ErcContext>>,
     /// This sheet's project key, when built by [`from_snapshot_with_children`].
     /// Lets cross-sheet rules count a file once however many parents
     /// reference it.
@@ -260,49 +261,21 @@ impl ErcContext {
     ///
     /// A child that is already an ancestor (a reference cycle) is still
     /// attached, so a direct-child lookup finds it, but is not expanded
-    /// further — that is what bounds the recursion.
+    /// further — that is what bounds the recursion. A sheet reached through
+    /// several paths is projected once (see `HierarchyMemo`).
     pub fn from_snapshot_with_children(
         snapshot: &SchematicSheet,
         own_key: Option<&signex_net::SheetKey>,
         resolutions: &HashMap<signex_net::SheetKey, HashMap<String, signex_net::SheetKey>>,
         sheets: &HashMap<signex_net::SheetKey, SchematicSheet>,
     ) -> Self {
-        Self::build(snapshot, own_key, resolutions, sheets, &mut Vec::new())
+        crate::hierarchy::HierarchyMemo::new().context_for(snapshot, own_key, resolutions, sheets)
     }
 
-    fn build<'a>(
+    pub(crate) fn project(
         snapshot: &SchematicSheet,
-        key: Option<&'a signex_net::SheetKey>,
-        resolutions: &'a HashMap<signex_net::SheetKey, HashMap<String, signex_net::SheetKey>>,
-        sheets: &HashMap<signex_net::SheetKey, SchematicSheet>,
-        ancestors: &mut Vec<&'a signex_net::SheetKey>,
+        children: HashMap<String, Arc<ErcContext>>,
     ) -> Self {
-        let mut children = HashMap::new();
-        if let Some(k) = key {
-            ancestors.push(k);
-        }
-        for (filename, child_key) in key.and_then(|k| resolutions.get(k)).into_iter().flatten() {
-            let Some(child) = sheets.get(child_key) else {
-                continue;
-            };
-            let ctx = if ancestors.contains(&child_key) {
-                let mut leaf = Self::project(child, HashMap::new());
-                leaf.key = Some(child_key.clone());
-                leaf
-            } else {
-                Self::build(child, Some(child_key), resolutions, sheets, ancestors)
-            };
-            children.insert(filename.clone(), ctx);
-        }
-        if key.is_some() {
-            ancestors.pop();
-        }
-        let mut ctx = Self::project(snapshot, children);
-        ctx.key = key.cloned();
-        ctx
-    }
-
-    fn project(snapshot: &SchematicSheet, children: HashMap<String, ErcContext>) -> Self {
         // --- Step 1: geometry primitives (no symbols yet) -----------------
         let wires: Vec<ErcWire> = snapshot
             .wires
