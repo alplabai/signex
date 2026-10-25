@@ -173,6 +173,7 @@ pub(crate) fn path_is_refused(path: &Path, trusted: &[Share]) -> bool {
 /// `CONIN$`, `CONOUT$`. Windows ignores case, any extension (everything from
 /// the first dot) and spaces before it, so `nul.snxsch` and `aux .snxsch` are
 /// the devices. Host independent: a pure name test.
+#[cfg_attr(not(windows), allow(dead_code))] // only the Windows device check calls it outside tests
 pub(crate) fn is_reserved_device_name(name: &str) -> bool {
     let stem = name.split('.').next().unwrap_or("").trim_end_matches(' ');
     let upper = stem.to_uppercase();
