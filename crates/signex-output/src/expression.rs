@@ -36,13 +36,21 @@ pub fn sheet_cell_value(sheet: &SheetSnapshot) -> String {
 }
 
 fn build_global_refdes_lookup(sheets: &[SheetSnapshot]) -> HashMap<String, String> {
-    // Page copies of one symbol: a symbol on exactly one page is addressed the
-    // way it always was (bare uuid, entry paths), whichever placement that
-    // page is; only a symbol printed several times needs per-placement keys.
-    let mut copies: HashMap<String, usize> = HashMap::new();
+    // The bare uuid addresses a symbol the way it always did, so it stays
+    // while every page copy resolves to one designator (a symbol on one page,
+    // or a reused child without per-placement entries); it is dropped only
+    // when the copies disagree, because then no single designator is right.
+    let mut shared: HashMap<String, Option<&str>> = HashMap::new();
     for sheet in sheets {
         for sym in &sheet.schematic.symbols {
-            *copies.entry(sym.uuid.to_string()).or_insert(0) += 1;
+            shared
+                .entry(sym.uuid.to_string())
+                .and_modify(|seen| {
+                    if *seen != Some(sym.reference.as_str()) {
+                        *seen = None;
+                    }
+                })
+                .or_insert(Some(sym.reference.as_str()));
         }
     }
     let mut out = HashMap::new();
@@ -51,35 +59,32 @@ fn build_global_refdes_lookup(sheets: &[SheetSnapshot]) -> HashMap<String, Strin
             if sym.reference.is_empty() {
                 continue;
             }
-            let single = copies.get(&sym.uuid.to_string()) == Some(&1);
+            let agreed = shared.get(&sym.uuid.to_string()).is_some_and(Option::is_some);
 
             // `sym.reference` is already the designator of this page's
             // placement (`SheetSnapshot::for_placement`).
             out.entry(symbol_occurrence_key(sym.uuid, &sheet.placement))
                 .or_insert_with(|| sym.reference.clone());
-            if single {
+            if agreed {
                 out.entry(sym.uuid.to_string())
                     .or_insert_with(|| sym.reference.clone());
             }
             out.entry(sym.reference.clone())
                 .or_insert_with(|| sym.reference.clone());
 
-            // Entries under the resolver's own rule. `uuid@path` is always
-            // safe (a path names a placement, not a symbol); the bare path
-            // keys only for a symbol on one page, else two copies would fight
-            // over them.
+            // Entries under the resolver's own rule. Every copy of a symbol
+            // carries the same `instances`, so the path keys are identical
+            // across copies and cannot fight.
             for (path, reference) in sym.valid_instance_entries() {
                 out.entry(format!("{}@{path}", sym.uuid))
                     .or_insert_with(|| reference.to_string());
-                if single {
-                    let text = path.to_string();
-                    out.entry(text.clone())
+                let text = path.to_string();
+                out.entry(text.clone())
+                    .or_insert_with(|| reference.to_string());
+                let trimmed = text.trim_matches('/');
+                if !trimmed.is_empty() {
+                    out.entry(trimmed.to_string())
                         .or_insert_with(|| reference.to_string());
-                    let trimmed = text.trim_matches('/');
-                    if !trimmed.is_empty() {
-                        out.entry(trimmed.to_string())
-                            .or_insert_with(|| reference.to_string());
-                    }
                 }
             }
         }
@@ -275,6 +280,27 @@ mod tests {
         assert_eq!(refdes[&uuid::Uuid::from_u128(9).to_string()], "R5");
         assert_eq!(refdes[&placement.to_string()], "R5");
         assert_eq!(refdes[placement.to_string().trim_matches('/')], "R5");
+    }
+
+    /// A child reused twice with no instance entries prints once per
+    /// placement, both copies resolving to the symbol's own designator: the
+    /// bare uuid still addresses it.
+    #[test]
+    fn a_reused_child_without_entries_keeps_its_bare_uuid() {
+        let sym = signex_types::schematic::Symbol {
+            uuid: uuid::Uuid::from_u128(9),
+            reference: "R5".into(),
+            ..Default::default()
+        };
+        let mut c1 = snapshot(vec![sym.clone()]);
+        c1.placement = InstancePath::from_chain(vec![uuid::Uuid::from_u128(1)]);
+        let mut c2 = snapshot(vec![sym]);
+        c2.placement = InstancePath::from_chain(vec![uuid::Uuid::from_u128(2)]);
+        let refdes = build_global_refdes_lookup(&[snapshot(vec![]), c1, c2]);
+        assert_eq!(
+            refdes.get(&uuid::Uuid::from_u128(9).to_string()),
+            Some(&"R5".to_string())
+        );
     }
 
     #[test]
