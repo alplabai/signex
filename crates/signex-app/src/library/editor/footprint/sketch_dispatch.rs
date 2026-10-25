@@ -407,14 +407,16 @@ pub(super) fn solve_and_bake(
 
     let resolved = parameter::resolve(&sketch.parameters).map_err(SketchError::Expr)?;
 
-    // Runs synchronously inside `update`, on every drag frame. The whole
-    // solve (first run, retry, offset undo, conflict narrowing, DOF
-    // analysis) draws on ONE work budget, `Solver::work_budget`, so its cost
-    // is bounded whatever the sketch does: measured in release, about 130 ms
-    // at the default budget, and the worst solve that exhausts it took
-    // 139 ms. A sketch that does not fit comes back as `BudgetExceeded` or
-    // `TooLarge`, never as a longer frame. If a frame of that length ever
-    // shows as a stall, move the solve into a `Task`.
+    // Runs synchronously inside `update`, on every drag frame (moving it off
+    // the UI thread is #1047). The LM work of the whole solve (first run,
+    // retry, offset undo, conflict narrowing) draws on ONE work budget,
+    // `Solver::work_budget`, so a solve that fails is bounded: measured in
+    // release, 96 to 123 ms at the default budget. A solve that converges
+    // also runs the DOF analysis, which the budget does not bound: 14 ms at
+    // n = 254, and for an already-converged sketch 92 ms at n = 574
+    // (under-constrained) or 400 to 520 ms at n = 510 (fully constrained).
+    // Such sizes are far beyond a footprint's sketch, but they are not
+    // refused, so a large footprint still bakes.
     match state.sketch_solver.solve(sketch, &resolved) {
         Ok(out) => {
             state.conflict.clear();

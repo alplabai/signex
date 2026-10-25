@@ -9,6 +9,7 @@ use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
 use signex_sketch::error::SolveError;
 use signex_sketch::id::ConstraintId;
 use signex_sketch::solver::lm::DEFAULT_WORK_BUDGET;
+use signex_sketch::solver::state::point_xy;
 use signex_sketch::solver::work::WorkMeter;
 use signex_sketch::solver::{Solver, residual::ResolvedParams};
 
@@ -211,13 +212,13 @@ fn recovery_sketches() -> Vec<(&'static str, Sketch)> {
 fn one_budget_covers_the_whole_solve_retries_and_recovery_included() {
     let solver = Solver::default();
     for (name, s) in recovery_sketches() {
-        let mut unlimited = WorkMeter::for_full_solve(u64::MAX);
+        let mut unlimited = WorkMeter::new(u64::MAX);
         let _ = solver.solve_with_meter(&s.data, &ResolvedParams::new(), &mut unlimited);
         let total = unlimited.spent();
         assert!(total > 0, "{name}: nothing was counted");
 
         for budget in [total, total - 1, total / 2, total / 4, 1] {
-            let mut meter = WorkMeter::for_full_solve(budget);
+            let mut meter = WorkMeter::new(budget);
             let outcome = solver.solve_with_meter(&s.data, &ResolvedParams::new(), &mut meter);
 
             assert!(
@@ -235,5 +236,111 @@ fn one_budget_covers_the_whole_solve_retries_and_recovery_included() {
                 );
             }
         }
+    }
+}
+
+/// A saddle start (so the solve takes the perturbed retry and the offset
+/// undo), plus a point no constraint touches and a point sliding on a circle
+/// round a fixed centre. The retry moves every variable by up to ~1e-3 of the
+/// extent; whatever the budget, an `Ok` must not carry that offset (#765).
+#[test]
+fn an_ok_result_never_carries_the_retry_offset_at_any_budget() {
+    let mut s = Sketch::new();
+    let a = s.add_point(0.0, 0.0);
+    let b = s.add_point(80.0, 0.0);
+    let p = s.add_point(40.0, 0.0);
+    let free = s.add_point(20.0, 20.0);
+    let slider = s.add_point(30.0, 0.0);
+    for point in [a, b] {
+        s.data
+            .constraints
+            .push(constraint(ConstraintKind::Fixed { point }));
+    }
+    for (p1, p2, mm) in [(a, p, 50.0), (b, p, 50.0), (a, slider, 30.0)] {
+        s.data
+            .constraints
+            .push(constraint(ConstraintKind::DistancePtPt {
+                p1,
+                p2,
+                target: DimTarget::Literal(mm),
+            }));
+    }
+    let solver = Solver::default();
+
+    let mut unlimited = WorkMeter::new(u64::MAX);
+    solver
+        .solve_with_meter(&s.data, &ResolvedParams::new(), &mut unlimited)
+        .expect("the sketch solves");
+    let total = unlimited.spent();
+
+    let mut checked_ok = 0;
+    for step in 0..=100u64 {
+        let budget = total / 2 + total / 2 * step / 100;
+        let mut meter = WorkMeter::new(budget);
+        let Ok(out) = solver.solve_with_meter(&s.data, &ResolvedParams::new(), &mut meter) else {
+            continue;
+        };
+        checked_ok += 1;
+        let at = |id| point_xy(id, &out.result.state, &out.result.index, &s.data).expect("free");
+        for (name, id, (x0, y0)) in [
+            ("free", free, (20.0, 20.0)),
+            ("slider", slider, (30.0, 0.0)),
+        ] {
+            let (x, y) = at(id);
+            let moved = ((x - x0).powi(2) + (y - y0).powi(2)).sqrt();
+            assert!(
+                moved <= 1e-6,
+                "{name} moved {moved} mm at budget {budget} of {total}"
+            );
+        }
+    }
+    assert!(checked_ok > 0, "the full budget must produce an Ok result");
+}
+
+/// A satisfied sketch converges without a single step, so its size must not
+/// matter: 10 by 5 mm rectangles, n = 574 and 1038, past the size one LM step
+/// fits in the default budget (about n = 530).
+#[test]
+fn a_large_already_satisfied_sketch_solves_with_the_default_budget() {
+    for rects in [72usize, 130] {
+        let mut s = Sketch::new();
+        let mut first = None;
+        for r in 0..rects {
+            let (ox, oy) = ((r % 10) as f64 * 14.0, (r / 10) as f64 * 9.0);
+            let p: Vec<_> = [(0.0, 0.0), (10.0, 0.0), (10.0, 5.0), (0.0, 5.0)]
+                .iter()
+                .map(|(x, y)| s.add_point(ox + x, oy + y))
+                .collect();
+            first.get_or_insert(p[0]);
+            let lines: Vec<_> = (0..4).map(|i| s.add_line(p[i], p[(i + 1) % 4])).collect();
+            for kind in [
+                ConstraintKind::Horizontal { line: lines[0] },
+                ConstraintKind::Horizontal { line: lines[2] },
+                ConstraintKind::Vertical { line: lines[1] },
+                ConstraintKind::Vertical { line: lines[3] },
+                ConstraintKind::DistancePtPt {
+                    p1: p[0],
+                    p2: p[1],
+                    target: DimTarget::Literal(10.0),
+                },
+                ConstraintKind::DistancePtPt {
+                    p1: p[1],
+                    p2: p[2],
+                    target: DimTarget::Literal(5.0),
+                },
+            ] {
+                s.data.constraints.push(constraint(kind));
+            }
+        }
+        let anchor = first.expect("a rectangle");
+        s.data
+            .constraints
+            .push(constraint(ConstraintKind::Fixed { point: anchor }));
+        let n = 8 * rects - 2;
+
+        let out = Solver::default()
+            .solve(&s.data, &ResolvedParams::new())
+            .unwrap_or_else(|e| panic!("n = {n} is already satisfied: {e}"));
+        assert_eq!(out.result.iterations, 0, "n = {n}");
     }
 }

@@ -111,14 +111,14 @@ impl Solver {
         }
         let retry = match self.run(sketch, params, meter, true) {
             Ok(result) => {
-                return Ok(undo_retry_offset(
+                return undo_retry_offset(
                     sketch,
                     params,
                     meter,
                     self.tolerance,
                     self.max_iters,
                     result,
-                ));
+                );
             }
             Err(retry) if retry.stalled => *retry,
             Err(retry) => return Err(retry.error),
@@ -199,6 +199,9 @@ impl Solver {
         let culprits: Vec<ConstraintId> = named
             .iter()
             .copied()
+            // A pool failure counts as "does not converge without it": the
+            // conflict set stays the full `named` list, the safe direction
+            // (it may over-name, never under-name).
             .filter(|id| {
                 self.converges_without(sketch, params, meter, &[*id])
                     .unwrap_or(false)
@@ -216,12 +219,11 @@ impl Solver {
         sketch: &SketchData,
         params: &ResolvedParams,
     ) -> Result<FullSolveOutput, SolveError> {
-        let mut meter = WorkMeter::for_full_solve(self.work_budget);
+        let mut meter = WorkMeter::new(self.work_budget);
         self.solve_with_meter(sketch, params, &mut meter)
     }
 
-    /// [`Solver::solve`] drawing on the caller's [`WorkMeter`] (build it with
-    /// [`WorkMeter::for_full_solve`]), so the work a solve really cost can be
+    /// [`Solver::solve`] drawing on the caller's [`WorkMeter`], so the work a solve really cost can be
     /// read back from [`WorkMeter::spent`], also when it failed. The meter's
     /// own budget applies; [`Solver::work_budget`] is not consulted.
     pub fn solve_with_meter(
@@ -238,11 +240,11 @@ impl Solver {
         // Compute the Jacobian once at the solved state and reuse
         // for DOF colour + over-constraint detection. A constraint-
         // free sketch has no Jacobian rows (m=0); we still build it
-        // so the API surface is consistent. Its work was held back from
-        // the LM runs, so this step is always paid for.
+        // so the API surface is consistent. The analysis runs outside the
+        // work pool and cannot fail a converged solve.
         let jacobian = numerical_jacobian(sketch, &result.state, &result.index, params)
             .map_err(|e| lm::residual_failure("post-solve jacobian", e))?;
-        meter.charge_analysis(result.state.len(), jacobian.len());
+        meter.record_analysis(result.state.len(), jacobian.len());
 
         // HI-14: thread the solved params through both analyses so
         // parametric constraints are evaluated rather than dropped.
