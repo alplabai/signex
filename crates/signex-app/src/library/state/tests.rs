@@ -104,6 +104,7 @@ fn fixture_row(pn: &str) -> ComponentRow {
         created: chrono::Utc::now(),
         updated: chrono::Utc::now(),
         content_hash: [0u8; 32],
+        server_revision: None,
     }
 }
 
@@ -205,6 +206,7 @@ fn edit_row_modal_state_seeds_tags_buffer() {
         created: chrono::Utc::now(),
         updated: chrono::Utc::now(),
         content_hash: [0u8; 32],
+        server_revision: None,
     };
     let address = EditorAddress::new(
         PathBuf::from("/tmp/x.snxlib"),

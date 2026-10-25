@@ -17,8 +17,8 @@ impl Signex {
         let Some(project_dir) = project.path.parent() else {
             return;
         };
-        if project_dir.join(".git").exists() {
-            // Already version-controlled — nothing to enable.
+        if !self.document_state.project_fs.facts.lacks_git(project_dir) {
+            // Already version-controlled (or not probed yet) — nothing to enable.
             return;
         }
         let items = collect_track_items(project, project_dir);
@@ -62,8 +62,8 @@ impl Signex {
         let Some(root_dir) = library_file_path.parent().map(|p| p.to_path_buf()) else {
             return;
         };
-        if root_dir.join(".git").exists() {
-            // Already version-controlled — nothing to enable.
+        if !self.document_state.project_fs.facts.lacks_git(&root_dir) {
+            // Already version-controlled (or not probed yet) — nothing to enable.
             return;
         }
         let library_name = library_file_path
@@ -208,6 +208,7 @@ impl Signex {
                 }
 
                 self.ui_state.enable_version_control = None;
+                self.record_git_present(&state.project_dir);
                 self.refresh_panel_ctx();
                 let scope_label = match state.scope {
                     crate::app::VersionControlScope::Project => "repository",
@@ -230,6 +231,17 @@ impl Signex {
                 }
             }
         }
+    }
+
+    /// `.git` now exists under `dir`: record it at once so the menu and the
+    /// open guards stop offering Enable before the re-probe lands, then
+    /// re-probe to confirm.
+    pub(super) fn record_git_present(&mut self, dir: &std::path::Path) {
+        self.document_state
+            .project_fs
+            .facts
+            .set_exists(crate::app::state::project_fs::git_marker(dir), true);
+        self.document_state.project_fs.invalidate();
     }
 }
 

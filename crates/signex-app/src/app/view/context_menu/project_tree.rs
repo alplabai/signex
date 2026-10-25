@@ -81,6 +81,15 @@ pub(super) fn refresh_pricing_entry(
 }
 
 impl Signex {
+    /// Whether "Enable Version Control..." is offered for `dir`: a pure read
+    /// of the probed Model fact, never the disk (#1098).
+    pub(in crate::app::view) fn offers_enable_version_control(
+        &self,
+        dir: &std::path::Path,
+    ) -> bool {
+        self.document_state.project_fs.facts.lacks_git(dir)
+    }
+
     /// Build the Projects-panel tree-view right-click menu. The item set
     /// is derived from the clicked node's [`TreeNodeRole`] — project root
     /// vs library leaf vs openable leaf vs container branch — so the menu
@@ -238,7 +247,7 @@ impl Signex {
                     .first()
                     .and_then(|idx| self.document_state.projects.get(*idx))
                     .and_then(|p| p.path.parent())
-                    .map(|dir| !dir.join(".git").exists())
+                    .map(|dir| self.offers_enable_version_control(dir))
                     .unwrap_or(false);
                 if no_git_yet {
                     v.push(dd_msg(
@@ -297,7 +306,7 @@ impl Signex {
                 // hidden once the library has a `.git/`.
                 if let Some(library_ref) = library_ref.clone()
                     && let Some(lib_dir) = library_ref.root.parent()
-                    && !lib_dir.join(".git").exists()
+                    && self.offers_enable_version_control(lib_dir)
                 {
                     v.push(dd_msg(
                         None,

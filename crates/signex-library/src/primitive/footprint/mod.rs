@@ -19,6 +19,7 @@ use crate::param::ParamMap;
 
 mod load_repair;
 mod pad;
+mod pad_columns;
 mod serde_tsv;
 #[cfg(test)]
 mod tests;
@@ -498,9 +499,10 @@ pub struct FootprintFile {
 
 const FOOTPRINT_FILE_FORMAT_TOKEN: &str = "snxfpt/1";
 
-/// Stable column layout for the per-footprint `pads_tsv` block.
-/// Adding or reordering columns is a wire-format break — bump
-/// [`FOOTPRINT_FILE_FORMAT_TOKEN`].
+/// Base column layout for the per-footprint `pads_tsv` block; these
+/// lead every header. Reordering them is a wire-format break — bump
+/// [`FOOTPRINT_FILE_FORMAT_TOKEN`]. The remaining `Pad` fields are
+/// optional trailing columns, see `pad_columns`.
 const PAD_TSV_COLUMNS: &[&str] = &[
     "number",
     "kind",
