@@ -25,6 +25,7 @@ fn land(app: &mut Signex, path: &Path, revision: u64) {
     let _ = app.update(Message::File(FileMsg::DocumentSaved(DocumentSaveDone {
         path: path.to_path_buf(),
         revision,
+        net_color_revision: 0,
         save_as_from: None,
         result: Ok(SaveOutcome::Written),
     })));
