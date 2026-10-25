@@ -32,6 +32,10 @@ fn add_doc(app: &mut Signex, name: &str) -> uuid::Uuid {
             reference: "R1".to_string(),
             ..Default::default()
         }],
+        wires: vec![signex_types::schematic::Wire {
+            uuid: uuid::Uuid::new_v4(),
+            ..Default::default()
+        }],
         ..Default::default()
     };
     app.document_state.engines.insert(
@@ -49,6 +53,16 @@ fn add_doc(app: &mut Signex, name: &str) -> uuid::Uuid {
     app.document_state.active_tab = app.document_state.tabs.len() - 1;
     app.document_state.active_path = Some(path);
     id
+}
+
+/// The uuid of the active document's fixture wire.
+fn wire_of(app: &Signex) -> uuid::Uuid {
+    app.document_state
+        .active_engine()
+        .expect("engine")
+        .document()
+        .wires[0]
+        .uuid
 }
 
 fn activate(app: &mut Signex, name: &str) {
@@ -101,7 +115,7 @@ fn symbol_x(app: &Signex) -> f64 {
 #[test]
 fn undo_and_redo_follow_chronological_order() {
     let (mut app, id) = app_with_symbol();
-    let wire = uuid::Uuid::new_v4();
+    let wire = wire_of(&app);
     let start = symbol_x(&app);
 
     app.record_net_color_undo();
@@ -136,7 +150,7 @@ fn a_new_engine_edit_clears_colour_redo() {
     app.record_net_color_undo();
     app.ui_state
         .wire_color_overrides
-        .insert(uuid::Uuid::new_v4(), color(1));
+        .insert(wire_of(&app), color(1));
     app.handle_undo_requested();
     assert_eq!(active_steps(&app.ui_state.net_color_redo, &app), 1);
 
@@ -150,7 +164,7 @@ fn colour_steps_belong_to_their_own_document() {
     let (mut app, _a_sym) = app_with_symbol();
     let b_sym = add_doc(&mut app, "b.snxsch");
     activate(&mut app, "undo-order.snxsch");
-    let wire = uuid::Uuid::new_v4();
+    let wire = wire_of(&app);
     app.record_net_color_undo();
     app.ui_state.wire_color_overrides.insert(wire, color(9));
 
@@ -179,7 +193,7 @@ fn colour_redo_is_enabled_only_for_its_document() {
     app.record_net_color_undo();
     app.ui_state
         .wire_color_overrides
-        .insert(uuid::Uuid::new_v4(), color(1));
+        .insert(wire_of(&app), color(1));
     app.handle_undo_requested();
     assert_eq!(active_steps(&app.ui_state.net_color_redo, &app), 1);
 
@@ -216,10 +230,42 @@ fn annotate_style_dirty_marking_clears_colour_redo() {
     app.record_net_color_undo();
     app.ui_state
         .wire_color_overrides
-        .insert(uuid::Uuid::new_v4(), color(1));
+        .insert(wire_of(&app), color(1));
     app.handle_undo_requested();
     assert_eq!(active_steps(&app.ui_state.net_color_redo, &app), 1);
 
     app.mark_active_document_dirty();
     assert_eq!(active_steps(&app.ui_state.net_color_redo, &app), 0);
+}
+
+/// #1005 — colour on A, colour on B, Ctrl+Z in A reverts only A's colour.
+#[test]
+fn undo_on_one_sheet_keeps_another_sheets_colour() {
+    let (mut app, _a_sym) = app_with_symbol();
+    let wire_a = wire_of(&app);
+    app.record_net_color_undo();
+    app.ui_state.wire_color_overrides.insert(wire_a, color(1));
+
+    add_doc(&mut app, "b.snxsch");
+    let wire_b = wire_of(&app);
+    app.record_net_color_undo();
+    app.ui_state.wire_color_overrides.insert(wire_b, color(2));
+
+    activate(&mut app, "undo-order.snxsch");
+    app.handle_undo_requested();
+    assert!(!app.ui_state.wire_color_overrides.contains_key(&wire_a));
+    assert_eq!(
+        app.ui_state.wire_color_overrides.get(&wire_b),
+        Some(&color(2))
+    );
+
+    app.handle_redo_requested();
+    assert_eq!(
+        app.ui_state.wire_color_overrides.get(&wire_a),
+        Some(&color(1))
+    );
+    assert_eq!(
+        app.ui_state.wire_color_overrides.get(&wire_b),
+        Some(&color(2))
+    );
 }
