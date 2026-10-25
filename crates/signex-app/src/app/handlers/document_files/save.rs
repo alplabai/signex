@@ -6,17 +6,35 @@ use anyhow::{Context, Result};
 
 use super::super::super::*;
 
+/// Messages trims an entry to this many bytes.
+const MESSAGES_ENTRY_BYTES: usize = 160;
+
+/// The advice leads each per-object line so a long object description is
+/// the part that gets cut, never the instruction.
+const OFFENDER_LINE_PREFIX: &str = "Save blocked, delete column past limit: ";
+
+/// `text` cut to at most `max_bytes`, on a char boundary.
+fn clip_to_bytes(text: &str, max_bytes: usize) -> &str {
+    let mut end = text.len().min(max_bytes);
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    &text[..end]
+}
+
 /// A save refused for too many foreign TSV columns gets one Messages
 /// line per object that carries a column past the cap, since a single
 /// entry is trimmed to 160 bytes and would lose the names.
-fn log_foreign_column_offenders(error: &anyhow::Error) {
+pub(crate) fn log_foreign_column_offenders(error: &anyhow::Error) {
     use signex_types::format::FormatError;
     let Some(FormatError::TsvTooManyForeignColumns {
-        max,
         objects,
         more_objects,
         ..
     }) = error.chain().find_map(|cause| {
+        if let Some(format_error) = cause.downcast_ref::<FormatError>() {
+            return Some(format_error);
+        }
         cause
             .downcast_ref::<std::io::Error>()?
             .get_ref()?
@@ -25,14 +43,16 @@ fn log_foreign_column_offenders(error: &anyhow::Error) {
     else {
         return;
     };
+    let room = MESSAGES_ENTRY_BYTES - OFFENDER_LINE_PREFIX.len();
     for object in objects {
         crate::diagnostics::log_warning(format!(
-            "Save blocked: {object} carries a column past the {max}-column limit; delete it to save"
+            "{OFFENDER_LINE_PREFIX}{}",
+            clip_to_bytes(object, room)
         ));
     }
     if *more_objects > 0 {
         crate::diagnostics::log_warning(format!(
-            "Save blocked: and {more_objects} more objects carry a column past the limit"
+            "Save blocked: {more_objects} more objects carry a column past the limit"
         ));
     }
 }

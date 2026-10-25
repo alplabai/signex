@@ -313,8 +313,12 @@ fn name_offending_objects<R: SnxTable>(
     }
 }
 
-/// Longest cell prefix `describe_row` echoes (a uuid is 36).
-const ROW_CELL_PREFIX_CHARS: usize = 64;
+/// Longest ref/kind prefix `describe_row` echoes; keeps a described row
+/// well inside one Messages entry.
+const ROW_CELL_PREFIX_CHARS: usize = 24;
+
+/// A uuid cell is kept whole (36 chars).
+const ROW_UUID_CHARS: usize = 36;
 
 /// `uuid (ref R1, kind net)` for a row, from whichever of those columns
 /// the block has; `row N` when it has no `uuid` column. Cells are cut
@@ -324,19 +328,19 @@ fn describe_row<R: SnxTable>(row: &R, index: usize) -> String {
     let Ok(cells) = row.to_row() else {
         return format!("row {index}");
     };
-    let cell = |column: &str| {
+    let cell = |column: &str, max_chars: usize| {
         let at = columns.iter().position(|c| *c == column)?;
         cells
             .get(at)
             .filter(|v| !v.is_empty())
-            .map(|v| v.chars().take(ROW_CELL_PREFIX_CHARS).collect::<String>())
+            .map(|v| v.chars().take(max_chars).collect::<String>())
     };
-    let Some(uuid) = cell("uuid") else {
+    let Some(uuid) = cell("uuid", ROW_UUID_CHARS) else {
         return format!("row {index}");
     };
     let detail: Vec<String> = ["ref", "kind"]
         .iter()
-        .filter_map(|column| cell(column).map(|v| format!("{column} {v}")))
+        .filter_map(|column| cell(column, ROW_CELL_PREFIX_CHARS).map(|v| format!("{column} {v}")))
         .collect();
     if detail.is_empty() {
         uuid

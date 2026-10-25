@@ -593,6 +593,38 @@ fn over_cap_write_error_says_how_many_more_objects_there_are() {
     let text = err.to_string();
     assert!(text.contains("and 36 more"), "{text}");
     assert!(text.len() < 2000, "error must stay bounded: {}", text.len());
+    // Rows 256..=263 (0-based) are the first 8 over the cap, in row order.
+    assert!(text.contains(&uuid_n(257).to_string()), "{text}");
+    assert!(text.contains(&uuid_n(264).to_string()), "{text}");
+    assert!(!text.contains(&uuid_n(265).to_string()), "{text}");
+}
+
+#[test]
+fn described_row_with_a_long_ref_stays_short() {
+    let long_ref = "R".repeat(500);
+    let row = |n: u32, range: std::ops::Range<usize>| SchComponentRow {
+        uuid: uuid_n(n),
+        ref_des: long_ref.clone(),
+        library: String::new(),
+        pos_x: 0,
+        pos_y: 0,
+        rotation: 0.0,
+        value: String::new(),
+        mpn: String::new(),
+        unknown_columns: foreign_cols(&names(range)),
+    };
+    let rows = vec![row(1, 0..200), row(2, 200..400)];
+    let err = write_tsv_block("t", &rows).unwrap_err();
+    let FormatError::TsvTooManyForeignColumns { objects, .. } = err else {
+        panic!("{err}");
+    };
+    assert_eq!(objects.len(), 1);
+    assert!(
+        objects[0].contains(&uuid_n(2).to_string()),
+        "{}",
+        objects[0]
+    );
+    assert!(objects[0].len() < 100, "{}", objects[0].len());
 }
 
 #[test]
