@@ -65,7 +65,7 @@ pub(crate) fn fixture() -> Fixture {
 }
 
 /// Row in library A whose symbol lives in library B.
-fn cross_library() -> (Fixture, Fixture) {
+pub(crate) fn cross_library() -> (Fixture, Fixture) {
     let b = build("libb", None);
     let a = build("liba", Some((b.library_id, b.symbol_id)));
     (a, b)
@@ -161,7 +161,7 @@ pub(crate) fn app_with_library(f: &Fixture) -> Signex {
     app_with_libraries(&[f])
 }
 
-fn app_with_libraries(libs: &[&Fixture]) -> Signex {
+pub(crate) fn app_with_libraries(libs: &[&Fixture]) -> Signex {
     let path = PathBuf::from("place-364.snxsch");
     let sheet = SchematicSheet {
         uuid: Uuid::new_v4(),
@@ -220,6 +220,12 @@ fn complete(
         library_path: f.snxlib.clone(),
         result,
     }));
+}
+
+/// Place `a`'s row, whose symbol lives in `b`, on the active sheet.
+pub(crate) fn place_across(app: &mut Signex, a: &Fixture, b: &Fixture) {
+    let resolved = resolve_with(a, a.row_id, &[a, b]).expect("resolves across libraries");
+    complete(app, a, "place-364.snxsch", Ok(resolved));
 }
 
 /// Worker + completion against the sheet `app_with_library` made active.
