@@ -148,6 +148,28 @@ if they are not drawn touching.
 3. Press `Esc` to leave the tool, then double-click the label, type the new
    name, and press `Enter`.
 
+### Bus labels
+
+A bus carries the signals its label names. Put a label on the bus (anywhere
+along it) with one of these forms:
+
+| Label | Signals it carries |
+|---|---|
+| `D[0..7]` | `D0`, `D1`, ... `D7` |
+| `D[7..0]` or `D[7:0]` | the same eight signals, written high to low |
+| `D[0..3]A` | `D0A`, `D1A`, `D2A`, `D3A` (the text after `]` is kept on each signal) |
+| `{SDA SCL}` | `SDA` and `SCL` (a group; items are separated by blanks) |
+| `{A[0..1] CLK}` | `A0`, `A1` and `CLK` (a group may hold ranges) |
+
+Numbers are plain unsigned integers, there is no space around them or around
+the label, and a range needs a name before the `[`. A bare name such as `VCC`
+is a net label, not a bus label.
+
+A bus never joins its signals together. A wire that leaves the bus through a
+bus entry connects to a signal only through its own net label, so label each
+entry wire with one signal of the bus (for example `D3`). ERC checks this, see
+section 9.
+
 ## 8. Annotate
 
 Annotation gives every symbol a unique reference designator such as `R1`, `R2`.
@@ -181,6 +203,10 @@ pins that connect nothing or two outputs wired together.
    Canvas** or, for an unused pin, **Add No-Connect**, which places a
    no-connect marker on that pin.
 4. **Clear** empties the list.
+
+ERC also checks buses (section 7): a wire from a bus entry with no net label,
+a label that is not one of the signals the bus carries (for example `D33` on
+`D[0..7]`), and a bus with no valid bus label are each reported as warnings.
 
 The **Messages** panel (**View ▸ Messages**) is the application's runtime
 log, not the ERC results. Read ERC results in the ERC panel.

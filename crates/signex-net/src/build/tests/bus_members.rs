@@ -89,6 +89,8 @@ fn an_unlabeled_entry_wire_is_its_own_unnamed_net_not_a_member() {
 #[test]
 fn naming_a_bus_adds_no_net() {
     let mut sheet = bus_sheet(&[]);
-    sheet.labels.push(label("D[0..7]", pt(0.0, 2.0), LabelType::Net));
+    sheet
+        .labels
+        .push(label("D[0..7]", pt(0.0, 2.0), LabelType::Net));
     assert!(build_netlist(&sheet).nets.is_empty());
 }

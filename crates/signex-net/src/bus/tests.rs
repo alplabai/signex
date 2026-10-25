@@ -51,7 +51,10 @@ fn a_mid_span_label_names_the_whole_run() {
 #[test]
 fn segments_sharing_an_endpoint_are_one_run_and_pool_their_names() {
     let mut f = Fixture::new(None);
-    f.buses = vec![(pt(0.0, 0.0), pt(0.0, 10.0)), (pt(0.0, 10.0), pt(0.0, 20.0))];
+    f.buses = vec![
+        (pt(0.0, 0.0), pt(0.0, 10.0)),
+        (pt(0.0, 10.0), pt(0.0, 20.0)),
+    ];
     f.labels = vec![(pt(0.0, 3.0), "D[0..3]"), (pt(0.0, 15.0), "{SDA SCL}")];
     let a = f.analyse();
     assert_eq!(a.groups.len(), 1);

@@ -79,6 +79,14 @@ pub enum RuleKind {
     /// connection (ADR-0002 D5.1), so the netlist keeps them apart; this rule
     /// tells the user to add the wire.
     PinsTouchNotConnected,
+    /// A wire fed through a bus entry carries no member label, so it joins no
+    /// member net of the bus.
+    BusEntryUnlabeled,
+    /// The member label on a bus entry wire is not one of the signals the bus
+    /// carries (a typo such as `D33` on `D[0..7]`).
+    BusMemberNotInBus,
+    /// A bus has no valid bus-name label, so it carries no members.
+    BusUnnamed,
 }
 
 impl RuleKind {
@@ -99,6 +107,9 @@ impl RuleKind {
             RuleKind::AmbiguousLabelAnchor => "Ambiguous label anchor",
             RuleKind::PinTypeConflict => "Pin type conflict",
             RuleKind::PinsTouchNotConnected => "Pins touch but are not connected",
+            RuleKind::BusEntryUnlabeled => "Bus entry without a member label",
+            RuleKind::BusMemberNotInBus => "Label is not a member of its bus",
+            RuleKind::BusUnnamed => "Bus has no name",
         }
     }
 
@@ -122,7 +133,7 @@ impl RuleKind {
     }
 
     /// Every built-in rule, in the order the ERC dialog lists them.
-    pub const ALL: [RuleKind; 14] = [
+    pub const ALL: [RuleKind; 17] = [
         RuleKind::UnusedPin,
         RuleKind::DuplicateRefDesignator,
         RuleKind::HierPortDisconnected,
@@ -137,6 +148,9 @@ impl RuleKind {
         RuleKind::AmbiguousLabelAnchor,
         RuleKind::PinTypeConflict,
         RuleKind::PinsTouchNotConnected,
+        RuleKind::BusEntryUnlabeled,
+        RuleKind::BusMemberNotInBus,
+        RuleKind::BusUnnamed,
     ];
 
     /// The one source of truth for a rule's severity: [`Diagnostic::new`]
@@ -157,7 +171,10 @@ impl RuleKind {
             | RuleKind::NetLabelConflict
             | RuleKind::OrphanLabel
             | RuleKind::AmbiguousLabelAnchor
-            | RuleKind::PinsTouchNotConnected => Severity::Warning,
+            | RuleKind::PinsTouchNotConnected
+            | RuleKind::BusEntryUnlabeled
+            | RuleKind::BusMemberNotInBus
+            | RuleKind::BusUnnamed => Severity::Warning,
             RuleKind::MissingPowerFlag | RuleKind::SymbolOutsideSheet => Severity::Info,
         }
     }
