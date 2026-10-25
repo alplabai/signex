@@ -222,7 +222,6 @@ impl Signex {
                 sheet,
                 locked: &locked,
                 undo_group,
-                order: self.ui_state.annotate_order,
             };
             if read_only.contains(path) {
                 continue;

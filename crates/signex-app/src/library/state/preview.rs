@@ -9,78 +9,13 @@ pub struct PickerState {
     pub selected: Option<(PathBuf, ComponentSummary)>,
 }
 
-// ─────────────────────────────────────────────────────────────────────
-// New Component flow
-// ─────────────────────────────────────────────────────────────────────
-
-/// "New Component" modal state — collected before the dispatcher
-/// inserts a row into the chosen target table and opens the
-/// Component Preview tab.
-#[derive(Debug, Clone)]
-pub struct NewComponentState {
-    /// Live edit buffer for the Internal PN field.
-    pub internal_pn: String,
-    /// Selected target library — index into `open_libraries`.
-    pub library_idx: Option<usize>,
-    /// Target table the row will be written to. `None` while the
-    /// modal first opens; the dispatcher requires it before
-    /// `NewComponentSubmit` can run because rows live in TSV tables
-    /// addressed by name. Populated from `manifest().tables()` plus
-    /// the default `<class>s` slot when the manifest declares no
-    /// overrides.
-    pub table: Option<String>,
-    /// Picked component class — defaults to "generic".
-    pub class: ComponentClass,
-    /// Tree-style category path ("Passives/Resistors/0805"). Free-form
-    /// — validation happens at submit time.
-    pub category: String,
-    /// Optional symbol primitive binding picked at modal time.
-    /// `None` = leave the row's symbol_ref as the nil sentinel; the
-    /// user can bind later via the Component Preview's Pick Symbol.
-    pub symbol_ref: Option<PrimitiveRef>,
-    /// Optional footprint primitive binding picked at modal time.
-    pub footprint_ref: Option<PrimitiveRef>,
-    /// Latest validation error.
-    pub error: Option<String>,
-    /// In-flight "+ New Table…" sub-form. `None` when the user is on
-    /// the regular Table picker; `Some(NewTableDraft)` while they're
-    /// typing a fresh table name. Confirm dispatches a
-    /// `create_empty_table` against the active library and switches
-    /// the picker to the new table; Cancel just clears this field.
-    pub creating_table: Option<NewTableDraft>,
-    /// "Advanced ▾" disclosure flag — hides the Table picker by
-    /// default so first-time users only see Library + Class + PN +
-    /// Pick Symbol/Footprint. The Table picker auto-resolves to
-    /// `manifest.table_for_class(class)` at submit time when the
-    /// disclosure stays closed; opening it lets power users pick a
-    /// custom routing or mint a new table inline.
-    pub advanced_open: bool,
-}
-
-/// Inline form state for "+ New Table…" inside the New Component
-/// modal — collects the name (and validation error if any) before the
+/// Inline form state for "+ New Table…" on the Library Browser
+/// tab strip — collects the name (and validation error if any) before the
 /// dispatcher calls `create_empty_table` on the active library.
 #[derive(Debug, Clone, Default)]
 pub struct NewTableDraft {
     pub name: String,
     pub error: Option<String>,
-}
-
-impl Default for NewComponentState {
-    fn default() -> Self {
-        Self {
-            internal_pn: String::new(),
-            library_idx: None,
-            table: None,
-            class: ComponentClass::generic(),
-            category: String::new(),
-            symbol_ref: None,
-            footprint_ref: None,
-            error: None,
-            creating_table: None,
-            advanced_open: false,
-        }
-    }
 }
 
 /// "Close Library — Unsaved Drafts" confirmation modal state.
@@ -226,7 +161,7 @@ impl ComponentPreviewState {
 
 /// Backwards-compatible alias — other slices still refer to
 /// `ComponentEditorState` while their own retarget passes land. Once
-/// every consumer (panel / documents / new_component / commands /
+/// every consumer (panel / documents / commands /
 /// dispatch) is on `ComponentPreviewState`, this alias goes away.
 pub type ComponentEditorState = ComponentPreviewState;
 

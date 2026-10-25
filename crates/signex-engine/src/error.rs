@@ -8,6 +8,16 @@ pub enum EngineError {
     UnsupportedCommand(CommandKind),
     #[error("a sheet symbol needs a target filename")]
     EmptyChildSheetFilename,
+    #[error(
+        "library symbol update refused, connected pins would be lost or moved: {}; remove those wires or no-connects first",
+        pins.join(", ")
+    )]
+    LibSymbolPinsConnected { lib_id: String, pins: Vec<String> },
+    #[error(
+        "library symbol update refused, the library symbol no longer has the unit placed as: {}; delete or re-unit those parts first",
+        parts.join(", ")
+    )]
+    LibSymbolUnitRemoved { lib_id: String, parts: Vec<String> },
     #[error("a sheet symbol needs a name")]
     EmptyChildSheetName,
     #[error("sheet file '{0}' must end in .snxsch")]

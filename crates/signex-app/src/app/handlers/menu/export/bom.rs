@@ -287,7 +287,8 @@ impl Signex {
         &self,
         opts: &BomOptions,
     ) -> Option<(signex_output::BomTable, signex_output::BomValidationReport)> {
-        let ctx = super::build_bom_export_context(&self.document_state)?;
+        let mut ctx = super::build_bom_export_context(&self.document_state)?;
+        crate::library::drift::apply_library_names(&mut ctx, &self.library.drift.names);
         Some(signex_output::bom::rollup_with_validation(&ctx, opts))
     }
 
@@ -322,7 +323,7 @@ impl Signex {
             }
         };
 
-        let (ctx, issues) =
+        let (mut ctx, issues) =
             match super::build_bom_export_scope_for_source(&self.document_state, &source) {
                 Some(c) => c,
                 None => {
@@ -344,6 +345,7 @@ impl Signex {
         // once, from this user action, exactly like the PDF/netlist
         // deliverables (ADR-0002 D8: degradation is reported, never silent).
         super::log_stitch_issues(&source, &ctx, &issues);
+        crate::library::drift::apply_library_names(&mut ctx, &self.library.drift.names);
         // A project whose hierarchy could not be derived falls back to the
         // printed pages only, so child-sheet parts would be missing. Say so in
         // BOM terms; the netlist warning does not tell a BOM user that.
@@ -360,29 +362,24 @@ impl Signex {
         opts.format = BomFormat::from_output_path(&save_path);
 
         match BomExporter.export(&ctx, &opts) {
-            Ok(output) => match std::fs::write(&save_path, &output.bytes) {
-                Ok(()) => {
-                    log::info!(
-                        "Wrote {} ({} bytes)",
-                        save_path.display(),
-                        output.bytes.len(),
-                    );
-                    // Advisory, not a gate: the file is written; tell the
-                    // user what validation found instead of dropping it.
-                    if let Some(notice) =
-                        bom_validation_notice(&output.validation_report, &save_path)
-                    {
-                        self.document_state.error_notice = Some(notice);
-                    }
-                }
-                Err(e) => {
-                    self.document_state.error_notice =
-                        Some(crate::app::state::ErrorNotice::export(format!(
-                            "Could not write BOM to {}:\n{e}",
-                            save_path.display(),
-                        )));
-                }
-            },
+            Ok(output) => {
+                let success_log = format!(
+                    "Wrote {} ({} bytes)",
+                    save_path.display(),
+                    output.bytes.len(),
+                );
+                // Advisory, not a gate: the file is written; tell the
+                // user what validation found instead of dropping it.
+                let advisory = bom_validation_notice(&output.validation_report, &save_path);
+                return super::write::write_export_task(
+                    save_path,
+                    output.bytes,
+                    "BOM",
+                    success_log,
+                    advisory,
+                    Vec::new(),
+                );
+            }
             Err(e) => {
                 self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
                     format!("BOM export failed: {e}"),

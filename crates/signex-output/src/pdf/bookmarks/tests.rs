@@ -43,6 +43,7 @@ fn ctx_with_one_sheet() -> ExportContext {
         netlist: None,
         netlist_sheets: Vec::new(),
         netlist_sheet_placements: Vec::new(),
+        current_sheet: None,
     }
 }
 
@@ -219,6 +220,7 @@ fn pin_bookmarks_skipped_when_subtoggle_off() {
         netlist: None,
         netlist_sheets: Vec::new(),
         netlist_sheet_placements: Vec::new(),
+        current_sheet: None,
     };
 
     let opts = PdfOptions {
@@ -272,6 +274,7 @@ fn multi_sheet_bookmarks_have_independent_groups() {
             netlist: None,
             netlist_sheets: Vec::new(),
             netlist_sheet_placements: Vec::new(),
+            current_sheet: None,
         }
     };
     let opts = PdfOptions {

@@ -449,6 +449,9 @@ impl Signex {
         path: &std::path::Path,
         mode: container_save::ContainerWrite,
     ) -> anyhow::Result<()> {
+        // The container write may add or replace a listed `.snxsym` /
+        // `.snxfpt` without changing the path set (#111).
+        self.document_state.project_fs.invalidate();
         // Symbol path — merge this editor's changed symbols into the
         // container on disk, so other symbols in the same file, and other
         // windows' saves to them, are preserved (#902).
@@ -674,6 +677,8 @@ impl Signex {
         {
             lib.reload_primitives(adapter);
         }
+        // A saved primitive may be the symbol an open sheet embeds (#912).
+        self.library.drift.check_pending = true;
     }
 
     /// Refresh the previews that already resolved a primitive from the

@@ -38,7 +38,7 @@ impl Signex {
                 s.pins.len(),
                 if s.pins.len() == 1 { "" } else { "s" }
             ),
-            Ok(None) if row.symbol_ref.uuid == uuid::Uuid::nil() => "Symbol unbound".to_string(),
+            Ok(None) if row.is_symbol_unbound() => "No symbol bound".to_string(),
             Ok(None) => "Symbol unresolved (UUID not in mounted libraries)".to_string(),
             Err(e) => {
                 tracing::error!(
@@ -53,7 +53,7 @@ impl Signex {
             }
         };
         let footprint_summary = match &row.footprint_ref {
-            Some(fp) if fp.uuid == uuid::Uuid::nil() => "Footprint unbound".to_string(),
+            Some(_) if row.is_footprint_unbound() => "No footprint bound".to_string(),
             Some(fp) => match self.library.set.resolve_footprint(fp) {
                 Ok(Some(_)) => "Footprint bound".to_string(),
                 Ok(None) => "Footprint unresolved (UUID not in mounted libraries)".to_string(),
@@ -69,7 +69,7 @@ impl Signex {
                     format!("Footprint could not be read from its library — {e}")
                 }
             },
-            None => "Footprint unbound".to_string(),
+            None => "No footprint bound".to_string(),
         };
 
         Some(crate::panels::LibraryRowDetail {
@@ -79,12 +79,42 @@ impl Signex {
             internal_pn: row.internal_pn.as_str().to_string(),
             class: row.class.as_str().to_string(),
             lifecycle_label: format!("{:?}", row.state),
+            symbol_unbound: row.is_symbol_unbound(),
+            footprint_unbound: row.is_footprint_unbound(),
             symbol_summary,
             footprint_summary,
         })
     }
 
+    /// Every path and directory the project tree reads from the disk. Pure:
+    /// the paths come from project data, so building it does no IO.
+    fn project_fs_request(&self) -> crate::app::state::project_fs::ProjectFsRequest {
+        let mut request = crate::app::state::project_fs::ProjectFsRequest::default();
+        for p in &self.document_state.projects {
+            let dir = std::path::Path::new(&p.data.dir);
+            let files = p
+                .data
+                .schematic_root
+                .iter()
+                .chain(p.data.pcb_file.iter())
+                .chain(p.data.sheets.iter().map(|s| &s.filename));
+            request.exists.extend(files.map(|f| dir.join(f)));
+            for entry in &p.data.libraries {
+                let resolved = p.data.resolve_library_path(entry);
+                if self.library.library_at(&resolved).is_some() {
+                    let root = resolved.parent().unwrap_or(&resolved);
+                    request.listings.push((root.join("symbols"), "snxsym"));
+                    request.listings.push((root.join("footprints"), "snxfpt"));
+                }
+                request.exists.push(resolved);
+            }
+        }
+        request
+    }
+
     pub(crate) fn refresh_panel_ctx(&mut self) {
+        let fs_request = self.project_fs_request();
+        self.document_state.project_fs.want(fs_request);
         // The dirty dots below read `dirty_paths`; make sure footprint
         // edits are in it first (#666).
         self.sync_editor_dirty_paths();
@@ -146,10 +176,11 @@ impl Signex {
                 // references (file registered on the project but
                 // missing on disk) so the tree shows them as
                 // `<name> (missing)` upfront.
-                let exists = |filename: &str| -> bool {
-                    let abs = project_dir.join(filename);
-                    abs.exists()
-                };
+                // Read from the cache, never the disk (#111): the off-thread
+                // probe keeps it current.
+                let fs_facts = &self.document_state.project_fs.facts;
+                let exists =
+                    |filename: &str| -> bool { !fs_facts.is_missing(&project_dir.join(filename)) };
                 let project_file_missing = p
                     .data
                     .schematic_root
@@ -184,7 +215,7 @@ impl Signex {
                                 .map(str::to_string)
                                 .unwrap_or_else(|| entry.path.display().to_string()),
                         };
-                        let missing = !resolved.exists();
+                        let missing = fs_facts.is_missing(&resolved);
                         // F30 — list `.snxsym` / `.snxfpt` FILES, not
                         // individual primitives. Each file can hold
                         // hundreds-to-thousands of symbols (Altium
@@ -223,29 +254,9 @@ impl Signex {
                                 .parent()
                                 .map(std::path::Path::to_path_buf)
                                 .unwrap_or_else(|| resolved.clone());
-                            let read_dir_names = |sub: &str, ext: &str| -> Vec<String> {
-                                let dir = lib_root.join(sub);
-                                let mut names: Vec<String> =
-                                    crate::app::dir_listing::list_dir_or_report(&dir, sub)
-                                        .into_iter()
-                                        .filter_map(|path| {
-                                            if path.extension().and_then(|e| e.to_str())
-                                                == Some(ext)
-                                            {
-                                                path.file_stem()
-                                                    .and_then(|s| s.to_str())
-                                                    .map(|s| s.to_string())
-                                            } else {
-                                                None
-                                            }
-                                        })
-                                        .collect();
-                                names.sort();
-                                names
-                            };
                             (
-                                read_dir_names("symbols", "snxsym"),
-                                read_dir_names("footprints", "snxfpt"),
+                                fs_facts.names_in(&lib_root.join("symbols")),
+                                fs_facts.names_in(&lib_root.join("footprints")),
                             )
                         } else {
                             (Vec::new(), Vec::new())

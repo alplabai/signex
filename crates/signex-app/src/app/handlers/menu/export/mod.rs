@@ -5,10 +5,15 @@ use std::path::PathBuf;
 use signex_output::{ExportContext, ProjectMetadata, SheetSnapshot};
 
 mod bom;
+#[cfg(test)]
+mod current_page_tests;
 mod erc_report;
 mod page_setup;
 mod pdf_netlist;
 mod print_preview;
+mod write;
+#[cfg(test)]
+pub(crate) use write::settle;
 #[cfg(test)]
 mod source_tests;
 #[cfg(test)]
@@ -25,6 +30,7 @@ pub(crate) mod tests;
 /// user's ERC results and eventually the earliest copies of the very stitch
 /// warnings this path exists to deliver. Surfacing belongs to the user
 /// actions — see [`log_stitch_issues`].
+#[cfg(test)]
 fn build_export_context(
     document_state: &crate::app::state::DocumentState,
 ) -> Option<ExportContext> {
@@ -403,6 +409,15 @@ fn build_scope(
         None => loose_pages(document_state, active_path),
     };
     let metadata = export_metadata(active_engine, owning_project);
+    // The active sheet's page, matched under the project's case rules (#694):
+    // `A.snxsch` and `a.snxsch` are one file on a case-insensitive volume, but
+    // `signex-output` compares paths exactly. Hand it the page's own spelling.
+    let fold = crate::app::state::project_case::fold_of(owning_project);
+    let active_key = crate::app::state::scope::path_key_with(active_path, fold);
+    let current_sheet = sheets
+        .iter()
+        .find(|s| crate::app::state::scope::path_key_with(&s.path, fold) == active_key)
+        .map_or_else(|| active_path.to_path_buf(), |s| s.path.clone());
 
     // Derive the authoritative project netlist off that same sheet set, so the
     // netlist exporter reads the contract instead of re-deriving connectivity
@@ -510,7 +525,51 @@ fn build_scope(
             netlist,
             netlist_sheets,
             netlist_sheet_placements,
+            current_sheet: Some(current_sheet),
         },
         issues,
     ))
+}
+
+/// "Current page" for a document that is not a declared page — a hierarchical
+/// child opened by descending into a sheet symbol. The declared pages do not
+/// contain it, so the plain index lookup would silently print sheet 0. When
+/// `range` is `Current` and the viewed sheet is not among `ctx.sheets`, replace
+/// the page set with that sheet's live snapshot and return `true` (the caller
+/// then skips its file-pick filter, which only names declared pages).
+fn isolate_undeclared_current(
+    ctx: &mut ExportContext,
+    document_state: &crate::app::state::DocumentState,
+    source: &std::path::Path,
+    range: &signex_output::PageRange,
+) -> bool {
+    if !matches!(range, signex_output::PageRange::Current)
+        || ctx
+            .sheets
+            .iter()
+            .any(|s| Some(&s.path) == ctx.current_sheet.as_ref())
+    {
+        return false;
+    }
+    let Some(engine) = document_state.engines.get(source) else {
+        crate::diagnostics::log_warning(format!(
+            "Export: current sheet {} is not open; printing the first page instead",
+            source.display()
+        ));
+        return false;
+    };
+    let sheet_name = source
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("Sheet")
+        .to_string();
+    ctx.sheets = vec![SheetSnapshot {
+        path: source.to_path_buf(),
+        schematic: engine.document().clone(),
+        sheet_name,
+        sheet_number: 1,
+        sheet_count: 1,
+    }];
+    ctx.current_sheet = Some(source.to_path_buf());
+    true
 }

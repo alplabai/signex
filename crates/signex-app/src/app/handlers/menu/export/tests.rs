@@ -249,6 +249,22 @@ fn loose_schematic_exports_itself_not_the_sticky_projects_sheets() {
     );
 }
 
+/// #109 — "Current page" must name the sheet in the active tab, not whichever
+/// sheet the project lists first.
+#[test]
+fn the_export_context_names_the_active_sheet_as_current() {
+    let mut ds = workspace("/w/a", &["top.snxsch", "power.snxsch"]);
+    let top = PathBuf::from("/w/a").join("top.snxsch");
+    let power = PathBuf::from("/w/a").join("power.snxsch");
+    open(&mut ds, &top, &[]);
+    open(&mut ds, &power, &[]);
+    ds.active_path = Some(power.clone());
+
+    let ctx = context(&ds);
+
+    assert_eq!(ctx.sheets[ctx.current_sheet_index()].path, power);
+}
+
 #[test]
 fn hierarchical_child_sheet_exports_its_owning_project() {
     // The critical one. `top.snxsch` is the only entry in ProjectA's persisted
@@ -556,10 +572,11 @@ fn netlist_export_refuses_to_write_an_incomplete_netlist() {
     let mut app = app_with_missing_child("gone-net.snxsch");
     let out = std::env::temp_dir().join(format!("signex-refuse-{}.net", Uuid::new_v4()));
 
-    let _ = app.handle_export_netlist_finished(
+    let task = app.handle_export_netlist_finished(
         app.document_state.active_path.clone().expect("active"),
         Ok(out.clone()),
     );
+    crate::app::handlers::menu::export::settle(&mut app, task);
 
     assert!(
         !out.exists(),
@@ -597,10 +614,11 @@ fn export_anyway_writes_a_clean_netlist_and_warns_in_the_messages_panel() {
     let out = std::env::temp_dir().join(format!("signex-anyway-{}.net", Uuid::new_v4()));
 
     // Default path raises the prompt; nothing is written yet.
-    let _ = app.handle_export_netlist_finished(
+    let task = app.handle_export_netlist_finished(
         app.document_state.active_path.clone().expect("active"),
         Ok(out.clone()),
     );
+    crate::app::handlers::menu::export::settle(&mut app, task);
     assert!(!out.exists(), "nothing is written until the user acts");
     assert!(
         app.document_state.netlist_incomplete_prompt.is_some(),
@@ -608,7 +626,8 @@ fn export_anyway_writes_a_clean_netlist_and_warns_in_the_messages_panel() {
     );
 
     // The user explicitly opts into the partial export.
-    let _ = app.handle_netlist_export_anyway();
+    let task = app.handle_netlist_export_anyway();
+    crate::app::handlers::menu::export::settle(&mut app, task);
 
     assert!(
         app.document_state.netlist_incomplete_prompt.is_none(),
@@ -647,10 +666,11 @@ fn export_anyway_writes_from_the_prompt_snapshot_not_a_fresh_re_derivation() {
     let mut app = app_with_missing_child("gone-snapshot.snxsch");
     let out = std::env::temp_dir().join(format!("signex-snapshot-{}.net", Uuid::new_v4()));
 
-    let _ = app.handle_export_netlist_finished(
+    let task = app.handle_export_netlist_finished(
         app.document_state.active_path.clone().expect("active"),
         Ok(out.clone()),
     );
+    crate::app::handlers::menu::export::settle(&mut app, task);
     assert!(
         app.document_state.netlist_incomplete_prompt.is_some(),
         "the prompt must be raised on the default path"
@@ -660,7 +680,8 @@ fn export_anyway_writes_from_the_prompt_snapshot_not_a_fresh_re_derivation() {
     app.document_state.engines.clear();
     app.document_state.active_path = None;
 
-    let _ = app.handle_netlist_export_anyway();
+    let task = app.handle_netlist_export_anyway();
+    crate::app::handlers::menu::export::settle(&mut app, task);
 
     assert!(
         out.exists(),
@@ -692,10 +713,11 @@ fn cancel_on_the_incomplete_prompt_writes_nothing() {
     let mut app = app_with_missing_child("gone-cancel.snxsch");
     let out = std::env::temp_dir().join(format!("signex-cancel-{}.net", Uuid::new_v4()));
 
-    let _ = app.handle_export_netlist_finished(
+    let task = app.handle_export_netlist_finished(
         app.document_state.active_path.clone().expect("active"),
         Ok(out.clone()),
     );
+    crate::app::handlers::menu::export::settle(&mut app, task);
     assert!(
         app.document_state.netlist_incomplete_prompt.is_some(),
         "precondition: the prompt is up"
@@ -740,7 +762,8 @@ fn pdf_export_proceeds_and_warns_once_per_user_action() {
 
     let source = app.document_state.active_path.clone().expect("active path");
     let request = Box::new(pdf_request_all_sheets(&app, &source));
-    let _ = app.handle_export_pdf_finished(request, Ok(out.clone()));
+    let task = app.handle_export_pdf_finished(request, Ok(out.clone()));
+    crate::app::handlers::menu::export::settle(&mut app, task);
 
     assert!(
         app.document_state.error_notice.is_none(),
@@ -834,10 +857,11 @@ fn a_flat_projects_second_page_no_longer_vanishes_from_the_netlist() {
     // …and the machine-consumed deliverable is therefore written, not held
     // behind the incomplete-export prompt.
     let out = std::env::temp_dir().join(format!("signex-flat-{}.net", Uuid::new_v4()));
-    let _ = app.handle_export_netlist_finished(
+    let task = app.handle_export_netlist_finished(
         app.document_state.active_path.clone().expect("active"),
         Ok(out.clone()),
     );
+    crate::app::handlers::menu::export::settle(&mut app, task);
 
     assert!(
         out.exists(),
@@ -863,10 +887,11 @@ fn netlist_export_writes_the_protel_format_the_dialog_promises() {
     let mut app = app_flat_project();
     let out = std::env::temp_dir().join(format!("signex-protel-{}.NET", Uuid::new_v4()));
 
-    let _ = app.handle_export_netlist_finished(
+    let task = app.handle_export_netlist_finished(
         app.document_state.active_path.clone().expect("active"),
         Ok(out.clone()),
     );
+    crate::app::handlers::menu::export::settle(&mut app, task);
 
     let bytes = std::fs::read_to_string(&out).expect("read exported netlist");
     assert!(

@@ -64,7 +64,14 @@ impl Signex {
         super::log_stitch_issues(&source, &ctx, &issues);
 
         // Filter sheets to the user's file picks from the Settings tab.
-        ctx.sheets.retain(|s| files.contains(&s.path));
+        if !super::isolate_undeclared_current(
+            &mut ctx,
+            &self.document_state,
+            &source,
+            &options.page_range,
+        ) {
+            ctx.sheets.retain(|s| files.contains(&s.path));
+        }
         if ctx.sheets.is_empty() {
             self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
                 "Cannot export PDF: no files selected in the Settings tab.".to_string(),
@@ -90,21 +97,22 @@ impl Signex {
             .export(&ctx, &options)
             .inspect(|output| super::log_uncovered_chars(&output.uncovered_chars))
         {
-            Ok(output) => match std::fs::write(&save_path, &output.bytes) {
-                Ok(()) => log::info!(
+            Ok(output) => {
+                let success_log = format!(
                     "Wrote {} ({} page(s), {} bytes)",
                     save_path.display(),
                     output.page_count,
                     output.bytes.len(),
-                ),
-                Err(e) => {
-                    self.document_state.error_notice =
-                        Some(crate::app::state::ErrorNotice::export(format!(
-                            "Could not write PDF to {}:\n{e}",
-                            save_path.display(),
-                        )));
-                }
-            },
+                );
+                return super::write::write_export_task(
+                    save_path,
+                    output.bytes,
+                    "PDF",
+                    success_log,
+                    None,
+                    Vec::new(),
+                );
+            }
             Err(e) => {
                 self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
                     format!("PDF export failed: {e}"),
@@ -211,20 +219,21 @@ impl Signex {
         }
 
         match NetlistExporter.export(&ctx, &NetlistOptions::default()) {
-            Ok(output) => match std::fs::write(&save_path, &output.bytes) {
-                Ok(()) => log::info!(
+            Ok(output) => {
+                let success_log = format!(
                     "Wrote {} ({} bytes)",
                     save_path.display(),
                     output.bytes.len(),
-                ),
-                Err(e) => {
-                    self.document_state.error_notice =
-                        Some(crate::app::state::ErrorNotice::export(format!(
-                            "Could not write netlist to {}:\n{e}",
-                            save_path.display(),
-                        )));
-                }
-            },
+                );
+                return super::write::write_export_task(
+                    save_path,
+                    output.bytes,
+                    "netlist",
+                    success_log,
+                    None,
+                    Vec::new(),
+                );
+            }
             Err(e) => {
                 self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
                     format!("Netlist export failed: {e}"),
@@ -254,31 +263,34 @@ impl Signex {
         // derivation. Re-deriving here would let a mid-modal document edit make
         // the warning describe a different project state than the file written.
         match NetlistExporter.export(&prompt.ctx, &NetlistOptions::default()) {
-            Ok(output) => match std::fs::write(&save_path, &output.bytes) {
-                Ok(()) => {
-                    log::info!(
-                        "Wrote INCOMPLETE netlist {} ({} bytes) — user chose Export anyway",
-                        save_path.display(),
-                        output.bytes.len(),
-                    );
-                    // One short line each: the Messages panel truncates long
-                    // entries, which would cut the page name off.
-                    crate::diagnostics::log_warning(
-                        "Export: wrote an INCOMPLETE netlist (Export anyway) — not a wiring \
-                         reference. Omitted:",
-                    );
-                    for message in &prompt.messages {
-                        crate::diagnostics::log_warning(format!("Export: INCOMPLETE — {message}"));
-                    }
-                }
-                Err(e) => {
-                    self.document_state.error_notice =
-                        Some(crate::app::state::ErrorNotice::export(format!(
-                            "Could not write netlist to {}:\n{e}",
-                            save_path.display(),
-                        )));
-                }
-            },
+            Ok(output) => {
+                let success_log = format!(
+                    "Wrote INCOMPLETE netlist {} ({} bytes) — user chose Export anyway",
+                    save_path.display(),
+                    output.bytes.len(),
+                );
+                // One short line each: the Messages panel truncates long
+                // entries, which would cut the page name off.
+                let mut warnings = vec![
+                    "Export: wrote an INCOMPLETE netlist (Export anyway) — not a wiring \
+                     reference. Omitted:"
+                        .to_owned(),
+                ];
+                warnings.extend(
+                    prompt
+                        .messages
+                        .iter()
+                        .map(|message| format!("Export: INCOMPLETE — {message}")),
+                );
+                return super::write::write_export_task(
+                    save_path,
+                    output.bytes,
+                    "netlist",
+                    success_log,
+                    None,
+                    warnings,
+                );
+            }
             Err(e) => {
                 self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
                     format!("Netlist export failed: {e}"),

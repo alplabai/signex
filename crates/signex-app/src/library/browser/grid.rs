@@ -176,11 +176,38 @@ pub(super) fn view_grid<'a>(
                 }
 
                 // Symbol + Footprint cells are read-only status
-                // markers (`—` unbound, `• <uuid8>` bound). Binding
-                // edit happens in the Properties panel via Pick
-                // Symbol / Pick Footprint — typing into the cell
-                // would have no defined semantics.
+                // markers (`• <uuid8>` bound). An unbound cell reads
+                // "No symbol bound" / "No footprint bound" in the
+                // warning colour and is itself the Pick Symbol /
+                // Pick Footprint button.
                 if matches!(c.kind, ColumnKind::Symbol | ColumnKind::Footprint) {
+                    let is_symbol = matches!(c.kind, ColumnKind::Symbol);
+                    let unbound = if is_symbol {
+                        r.is_symbol_unbound()
+                    } else {
+                        r.is_footprint_unbound()
+                    };
+                    if unbound {
+                        let (kind, label) = if is_symbol {
+                            (signex_library::PrimitiveKind::Symbol, "No symbol bound")
+                        } else {
+                            (
+                                signex_library::PrimitiveKind::Footprint,
+                                "No footprint bound",
+                            )
+                        };
+                        let address = crate::library::state::EditorAddress::new(
+                            lib_pb.clone(),
+                            table.to_string(),
+                            row_id,
+                        );
+                        data_row = data_row.push(
+                            container(unbound_pick_button(label, kind, address, tokens))
+                                .padding([2, 2])
+                                .width(Length::Fixed(c.width)),
+                        );
+                        continue;
+                    }
                     // A binding that resolves to nothing (#968) shows in
                     // the error colour with a warning glyph, so the row
                     // reads as broken before anyone opens it.
@@ -281,5 +308,33 @@ pub(super) fn view_grid<'a>(
         .width(Length::Fill)
         .height(Length::Fill)
         .style(crate::styles::modal_card(tokens))
+        .into()
+}
+
+/// Warning-coloured cell button for an unbound symbol / footprint that
+/// opens the existing primitive picker against this row.
+fn unbound_pick_button<'a>(
+    label: &'static str,
+    kind: signex_library::PrimitiveKind,
+    address: crate::library::state::EditorAddress,
+    tokens: &ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    let warning = theme_ext::warning_color(tokens);
+    iced::widget::button(text(label).size(BROWSER_TEXT_SIZE).color(warning))
+        .padding([2, 4])
+        .on_press(LibraryMessage::OpenPrimitivePicker {
+            kind,
+            target: crate::library::state::PrimitivePickerTarget::BrowserRow(address),
+        })
+        .style(move |_: &Theme, _| iced::widget::button::Style {
+            background: None,
+            text_color: warning,
+            border: Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: warning,
+            },
+            ..iced::widget::button::Style::default()
+        })
         .into()
 }

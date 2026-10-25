@@ -32,17 +32,6 @@ fn preview_tab_labels_are_short_and_distinct() {
 }
 
 #[test]
-fn new_component_state_defaults_to_generic_class() {
-    let nc = NewComponentState::default();
-    assert!(nc.internal_pn.is_empty());
-    assert!(nc.library_idx.is_none());
-    // Table starts unset until the user picks one in the modal.
-    assert!(nc.table.is_none());
-    assert_eq!(nc.class, ComponentClass::generic());
-    assert!(nc.category.is_empty());
-}
-
-#[test]
 fn library_set_mount_unmount_is_symmetric() {
     let mut set = LibrarySet::new();
     assert!(set.is_empty());
@@ -87,8 +76,8 @@ fn open_library_total_rows_sums_tables() {
 /// The full row schema lives in `signex_library`'s tests.
 fn fixture_row(pn: &str) -> ComponentRow {
     use signex_library::{
-        DatasheetRef, InternalPn, LifecycleState, ManufacturerPart, ParamMap, PinPadOverride,
-        PlmReserved,
+        ComponentClass, DatasheetRef, InternalPn, LifecycleState, ManufacturerPart, ParamMap,
+        PinPadOverride, PlmReserved,
     };
     let _ = (PinPadOverride::new("1", "1"),); // module touch
     ComponentRow {

@@ -50,6 +50,9 @@ pub struct Engine {
     path: Option<PathBuf>,
     history: Vec<HistoryEntry>,
     redo_stack: Vec<HistoryEntry>,
+    /// Entries evicted from the front of `history` by the cap, so
+    /// `undo_position` keeps counting up past `MAX_HISTORY_ENTRIES`.
+    history_evicted: usize,
     /// Set for the duration of an `execute_batch` loop so the commands in
     /// the batch do not each land their own history entry — the batch
     /// records one coalesced entry when the loop finishes. Always `false`
@@ -83,6 +86,7 @@ impl Engine {
             path,
             history: Vec::new(),
             redo_stack: Vec::new(),
+            history_evicted: 0,
             history_suppressed: false,
             revision: crate::next_revision(),
         })
@@ -105,6 +109,7 @@ impl Engine {
             path: Some(path.to_path_buf()),
             history: Vec::new(),
             redo_stack: Vec::new(),
+            history_evicted: 0,
             history_suppressed: false,
             revision: crate::next_revision(),
         })
@@ -168,6 +173,7 @@ impl Engine {
             | Command::PlaceLabel { .. }
             | Command::PlaceSymbol { .. }
             | Command::RegisterLibSymbol { .. }
+            | Command::ReplaceLibSymbol { .. }
             | Command::PlaceChildSheet { .. }
             | Command::PlaceWireSegment { .. }
             | Command::PlaceJunction { .. }

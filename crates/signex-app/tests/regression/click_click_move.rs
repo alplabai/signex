@@ -341,3 +341,154 @@ fn a_pick_with_no_object_under_it_cancels_the_float_instead_of_moving_the_old_se
         "the canvas float must be cancelled when the app finds nothing to lift"
     );
 }
+
+// ── Select All / Delete / undo while a move floats ────────────────────
+//
+// The float lives in the canvas widget's own state, so these drive the real
+// `SchematicCanvas` program with iced events and feed what it publishes back
+// through `Signex::update`, the way the runtime does.
+
+use iced::widget::canvas::Program as _;
+use iced::{Rectangle, event::Event, mouse};
+use signex_app::canvas::{CanvasState, CanvasViewPrefs, SchematicCanvas};
+
+const BOUNDS: Rectangle = Rectangle {
+    x: 0.0,
+    y: 0.0,
+    width: 800.0,
+    height: 600.0,
+};
+
+fn screen_at(app: &Signex, wx: f32, wy: f32) -> iced::Point {
+    let (ox, oy, scale) = app.interaction_state.active_canvas().live_camera();
+    iced::Point::new(wx * scale + ox, wy * scale + oy)
+}
+
+/// Deliver one canvas event and relay the message it publishes to the app.
+fn canvas_event(
+    app: &mut Signex,
+    state: &mut CanvasState,
+    event: Event,
+    at: iced::Point,
+) -> Option<Message> {
+    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+    let overrides = HashMap::new();
+    let message = {
+        let prefs = CanvasViewPrefs {
+            grid_visible: true,
+            theme_bg: signex_app::render_config::to_iced(&colors.background),
+            theme_grid: signex_app::render_config::to_iced(&colors.grid),
+            theme_paper: signex_app::render_config::to_iced(&colors.paper),
+            canvas_colors: colors,
+            snap_enabled: false,
+            snap_grid_mm: 1.27,
+            visible_grid_mm: 1.27,
+            grid_style: signex_app::render_config::GridStyle::Dots,
+            auto_focus: false,
+            zoom_step: 1.1,
+            draw_mode: signex_app::app::DrawMode::Ortho90,
+            wire_color_overrides: &overrides,
+            selection_filters: &app.interaction_state.selection_filters,
+        };
+        let view = SchematicCanvas::new(app.interaction_state.active_canvas(), prefs);
+        view.update(state, &event, BOUNDS, mouse::Cursor::Available(at))
+            .and_then(|action| action.into_inner().0)
+    };
+    if let Some(message) = &message {
+        let _ = app.update(message.clone());
+    }
+    message
+}
+
+fn left_press() -> Event {
+    Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
+}
+
+fn is_move_selected(message: &Option<Message>) -> bool {
+    matches!(
+        message,
+        Some(Message::CanvasEvent(CanvasEvent::MoveSelected { .. }))
+    )
+}
+
+/// Wires `a` (y = 10) and `b` (y = 40), `a` selected, Move Selection
+/// armed, picked at (20, 100) and dragged to (32.7, 100): a live float.
+fn app_with_a_floating_selection() -> (Signex, PathBuf, CanvasState, uuid::Uuid, uuid::Uuid) {
+    let a = uuid::Uuid::new_v4();
+    let b = uuid::Uuid::new_v4();
+    let (mut app, path) = app_with_wires(vec![wire(a, 10.0), wire(b, 40.0)]);
+    app.interaction_state.active_canvas_mut().selected = selection_of(a);
+    act(&mut app, ActiveBarAction::MoveSelection);
+    let mut state = CanvasState::default();
+    let at = screen_at(&app, 20.0, 100.0);
+    let picked = canvas_event(&mut app, &mut state, left_press(), at);
+    assert!(
+        matches!(
+            picked,
+            Some(Message::CanvasEvent(CanvasEvent::MovePicked { .. }))
+        ),
+        "precondition: the press picked: {picked:?}"
+    );
+    let target = screen_at(&app, 32.7, 100.0);
+    let _ = canvas_event(
+        &mut app,
+        &mut state,
+        Event::Mouse(mouse::Event::CursorMoved { position: target }),
+        target,
+    );
+    (app, path, state, a, b)
+}
+
+#[test]
+fn select_all_mid_float_cancels_it_with_no_move_or_undo_entry() {
+    let (mut app, path, mut state, a, b) = app_with_a_floating_selection();
+
+    act(&mut app, ActiveBarAction::SelectAll);
+    assert_eq!(app.interaction_state.active_canvas().selected.len(), 2);
+    let target = screen_at(&app, 32.7, 100.0);
+    let message = canvas_event(&mut app, &mut state, left_press(), target);
+
+    assert!(!is_move_selected(&message), "no drop: {message:?}");
+    assert!((wire_start(&app, &path, a).x - 10.0).abs() < 1e-6);
+    assert!((wire_start(&app, &path, b).x - 10.0).abs() < 1e-6);
+    assert!(
+        !app.document_state.engines[&path].can_undo(),
+        "a cancelled float must leave no undo entry"
+    );
+}
+
+#[test]
+fn delete_mid_float_cancels_it_with_no_stray_move() {
+    let (mut app, path, mut state, a, b) = app_with_a_floating_selection();
+
+    let _ = app.update(Message::Edit(signex_app::app::EditMsg::DeleteSelected));
+    let target = screen_at(&app, 32.7, 100.0);
+    let message = canvas_event(&mut app, &mut state, left_press(), target);
+
+    assert!(!is_move_selected(&message), "no drop: {message:?}");
+    let doc = app.document_state.engines[&path].document();
+    assert!(doc.wires.iter().all(|w| w.uuid != a), "a was deleted");
+
+    // One undo reverts the delete itself; a stray move entry would be
+    // undone first and leave `a` missing.
+    let _ = app.update(Message::Edit(signex_app::app::EditMsg::Undo));
+    assert!((wire_start(&app, &path, a).x - 10.0).abs() < 1e-6);
+    assert!((wire_start(&app, &path, b).x - 10.0).abs() < 1e-6);
+    assert!(!app.document_state.engines[&path].can_undo());
+}
+
+#[test]
+fn undo_mid_float_cancels_it_with_no_stray_move() {
+    let (mut app, path, mut state, a, b) = app_with_a_floating_selection();
+    let epoch = app.interaction_state.active_canvas().move_epoch;
+
+    let _ = app.update(Message::Edit(signex_app::app::EditMsg::Undo));
+    assert!(app.interaction_state.active_canvas().move_epoch > epoch);
+    let target = screen_at(&app, 32.7, 100.0);
+    let message = canvas_event(&mut app, &mut state, left_press(), target);
+
+    assert!(!is_move_selected(&message), "no drop: {message:?}");
+    assert!((wire_start(&app, &path, a).x - 10.0).abs() < 1e-6);
+    assert!((wire_start(&app, &path, b).x - 10.0).abs() < 1e-6);
+    assert!(!app.document_state.engines[&path].can_undo());
+}

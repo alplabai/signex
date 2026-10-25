@@ -52,6 +52,7 @@ impl Default for LibraryState {
         // `<config_dir>/signex/distributors.toml`.
         settings.preferred_order = super::super::settings::persistence::load_preferred_order();
         Self {
+            drift: Default::default(),
             set: LibrarySet::new(),
             open_libraries: Vec::new(),
             editors: HashMap::new(),
@@ -60,7 +61,6 @@ impl Default for LibraryState {
             settings,
             expanded: Vec::new(),
             panel_search: String::new(),
-            new_component: None,
             close_library_confirm: None,
             template_registry: Arc::new(TemplateRegistry::new_with_builtins()),
             library_browsers: HashMap::new(),
@@ -204,6 +204,8 @@ impl LibraryState {
                 self.expanded.remove(idx);
             }
             self.editors.retain(|key, _| key.library_path != root);
+            // Names, drift rows and Update must not use an unmounted library.
+            self.drift.check_pending = true;
         }
     }
 
@@ -288,6 +290,8 @@ impl LibraryState {
             lib.dangling.listings_complete = listings_complete(ok, symbols_partial);
         }
         self.sweep_dangling_refs();
+        // The library's symbols may have changed on disk.
+        self.drift.check_pending = true;
         Ok(())
     }
 
