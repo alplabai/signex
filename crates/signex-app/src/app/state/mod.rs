@@ -22,7 +22,8 @@ pub(crate) mod volume_case;
 pub use interaction::InteractionState;
 pub use pdf_page_setup::PageSetupInputs;
 pub use pdf_preview_raster::{
-    PageSetupMemory, RasterOutcome, RasterQueue, RememberedPageSetup, rekey_page_setup,
+    PageSetupMemory, RasterOutcome, RasterQueue, RememberedPageSetup, forget_page_setup,
+    rekey_page_setup,
 };
 pub use ui::{NetColorStep, UiState};
 
