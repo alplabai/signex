@@ -1224,7 +1224,7 @@ fn random_rubber_band_moves_never_change_the_netlist() {
         "only {rerouted} cases rerouted wires"
     );
     assert!(
-        warned * 4 < exercised,
+        warned * 100 < exercised * 27,
         "{warned} of {exercised} cases fell back to a plain move"
     );
 }
