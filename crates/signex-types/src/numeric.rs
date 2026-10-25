@@ -52,10 +52,17 @@ fn push_key(path: &mut String, key: &str) {
     } else {
         path.push('"');
         for c in key.chars() {
-            if c == '"' || c == '\\' {
-                path.push('\\');
+            match c {
+                '"' | '\\' => {
+                    path.push('\\');
+                    path.push(c);
+                }
+                '\n' => path.push_str("\\n"),
+                '\t' => path.push_str("\\t"),
+                '\r' => path.push_str("\\r"),
+                c if c.is_control() => path.push_str(&format!("\\u{:04X}", c as u32)),
+                c => path.push(c),
             }
-            path.push(c);
         }
         path.push('"');
     }
@@ -205,6 +212,21 @@ y = inf
 ";
         let err = parse_toml_finite::<Typed>(text).unwrap_err();
         assert!(matches!(err, TomlFiniteError::NonFinite { ref path } if path == "pts[1].y"));
+    }
+
+    /// The non-finite check runs before the schema check, so a file with
+    /// both reports the non-finite value first.
+    #[test]
+    fn non_finite_is_reported_before_schema_error() {
+        let err = parse_toml_finite::<Probe>("x = nan\nneeded = \"s\"\n").unwrap_err();
+        assert!(matches!(err, TomlFiniteError::NonFinite { ref path } if path == "x"));
+    }
+
+    #[test]
+    fn control_chars_in_keys_are_escaped() {
+        assert_eq!(path_of("[\"a\\nb\"]\nv = nan\n"), "\"a\\nb\".v");
+        assert_eq!(path_of("[\"a\\tb\"]\nv = nan\n"), "\"a\\tb\".v");
+        assert_eq!(path_of("[\"a\\u0001b\"]\nv = nan\n"), "\"a\\u0001b\".v");
     }
 
     #[test]

@@ -1300,3 +1300,20 @@ fn non_finite_footprint_file_is_skipped_not_fatal() {
     assert_eq!(fps[0].name, "GOOD");
     assert_eq!(std::fs::read_to_string(&bad_path).unwrap(), bad_bytes);
 }
+
+/// #924 — `.snxsim` listing stays strict: an unparseable sim is an `Err`.
+#[test]
+fn non_finite_sim_file_still_fails_listing() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "SimNan", false);
+    let sim_dir = file.parent().unwrap().join("sims");
+    std::fs::create_dir_all(&sim_dir).unwrap();
+    std::fs::write(
+        sim_dir.join(format!("{}.snxsim", Uuid::now_v7())),
+        "format = \"snxsim/v1\"
+x = nan
+",
+    )
+    .unwrap();
+    assert!(matches!(adapter.list_sims(), Err(LibraryError::Backend(_))));
+}
