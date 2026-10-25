@@ -339,7 +339,7 @@ fn read_row(opened: &OpenedLibrary, row_id: Uuid) -> RowRead {
 enum NoStamp {
     /// Its row is unreadable, missing or re-bound.
     Unreadable(String),
-    /// Its row moved past the version the user approved.
+    /// Its row moved past the version the user approved: "U1 moved to X since you approved Y".
     Moved(String),
 }
 
@@ -364,7 +364,7 @@ fn stamp_or_reason(
     match read_row(opened, w.row_id) {
         RowRead::Found(r) if row_binds_lib_id(&r, lib_id) => match &w.approved_version {
             Some(approved) if *approved != r.version => Err(NoStamp::Moved(format!(
-                "{reference}: library moved to {} since you approved {approved}; not applied.",
+                "{reference} moved to {} since you approved {approved}",
                 r.version
             ))),
             _ => Ok((w.symbol, r.version)),
@@ -383,7 +383,8 @@ fn stamp_or_reason(
 struct Decided {
     stamps: Vec<(Uuid, String)>,
     skipped: Vec<String>,
-    /// References of approved instances whose row moved (then nothing is stamped).
+    /// "U1 moved to X since you approved Y" per approved instance whose row
+    /// moved (then nothing is stamped).
     moved: Vec<String>,
     /// References of the other instances, left on the old copy by a hold-back.
     left: Vec<String>,
@@ -412,10 +413,7 @@ fn decide_stamps(
                 d.skipped.push(why);
                 d.left.push(w.reference.clone());
             }
-            Err(NoStamp::Moved(why)) => {
-                d.skipped.push(why);
-                d.moved.push(w.reference.clone());
-            }
+            Err(NoStamp::Moved(what)) => d.moved.push(what),
         }
     }
     if d.moved.is_empty() {
@@ -430,10 +428,10 @@ fn decide_stamps(
 fn held_back_summary(name: &str, moved: &[String], left: &[String]) -> String {
     let moved = moved.join(", ");
     if left.is_empty() {
-        format!("{name}: not applied ({moved} moved).")
+        format!("{name}: not applied ({moved}).")
     } else {
         format!(
-            "{name}: not applied ({moved} moved); {} left on the old copy.",
+            "{name}: not applied ({moved}); {} left on the old copy.",
             left.join(", ")
         )
     }

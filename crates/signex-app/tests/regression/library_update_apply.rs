@@ -710,8 +710,7 @@ fn apply_holds_back_a_row_that_moved_since_the_approval() {
     assert!(skipped(&app), "the update stays pending");
     let logged = signex_app::diagnostics::recent_entries().iter().any(|e| {
         e.message
-            .contains("U1: library moved to 3.0.0 since you approved")
-            && e.message.contains("not applied")
+            .contains("not applied (U1 moved to 3.0.0 since you approved 1.2.3)")
     });
     assert!(logged, "the hold-back must reach the Messages panel");
 }
@@ -1080,6 +1079,27 @@ fn a_rebound_team_row_blocks_the_personal_siblings_auto_apply() {
     assert!(logged_with(&["U1: its row binds a different symbol"]));
 }
 
+const HELD_BACK: &str =
+    "not applied (U1 moved to 3.0.0 since you approved 1.2.3); U2 left on the old copy.";
+
+/// A readable Team-mode sibling that is not stale still blocks the Personal
+/// instance's auto-apply, and the blocker line is logged.
+#[test]
+fn a_current_team_sibling_blocks_the_stale_personal_instances_auto_apply() {
+    let _ = signex_app::diagnostics::init_logging();
+    let (mut app, before) = team_beside_stale_personal(|a| a.row_id);
+    {
+        let engine = app.document_state.active_engine_mut().unwrap();
+        let mut d = engine.document().clone();
+        d.symbols[0].library_version = "1.2.3".into();
+        engine.set_document(d);
+    }
+    scan(&mut app);
+    assert_eq!(pin_count(&app), before, "the shared copy is not touched");
+    assert_eq!(doc(&app).symbols[1].library_version, "0.0.1");
+    assert!(logged_with(&["U1: its library is Team-mode"]));
+}
+
 /// A hold-back leaves the sibling instances unstamped and unadopted, says so
 /// in one summary line, and the next scan offers the update again.
 #[test]
@@ -1102,16 +1122,15 @@ fn a_hold_back_logs_one_summary_and_the_next_scan_reoffers() {
     let summaries = read.reads[0]
         .skipped
         .iter()
-        .filter(|l| l.contains("not applied (U1 moved); U2 left on the old copy."))
+        .filter(|l| l.contains(HELD_BACK))
         .count();
     assert_eq!(summaries, 1, "{:?}", read.reads[0].skipped);
+    assert_eq!(read.reads[0].skipped.len(), 1, "exactly one line");
     deliver(&mut app, read);
     assert_eq!(pin_count(&app), before, "copy not adopted");
     assert_eq!(doc(&app).symbols[0].library_version, "0.0.1");
     assert_eq!(doc(&app).symbols[1].library_version, "2.0.0");
-    assert!(logged_with(&[
-        "not applied (U1 moved); U2 left on the old copy."
-    ]));
+    assert!(logged_with(&[HELD_BACK]));
     scan(&mut app);
     let entries = &app.library.library_updates.as_ref().unwrap().entries;
     assert_eq!(entries.len(), 1);
