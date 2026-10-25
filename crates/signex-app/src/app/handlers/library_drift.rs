@@ -68,6 +68,9 @@ impl Signex {
             self.update_selection_info();
             return None;
         }
+        // Drop what belongs to an unmounted library now: until the async
+        // pass returns, "Update from library" must not apply its symbol.
+        self.prune_unmounted_drift(&libs);
         // Clone only; hashing and library reads happen in the worker.
         let sheets: Vec<SheetEntries> = self
             .document_state
@@ -90,6 +93,19 @@ impl Signex {
         })
     }
 
+    /// Remove `names` and `drifted` entries whose library is not in `libs`.
+    fn prune_unmounted_drift(&mut self, libs: &[MountedLibrary]) {
+        let mounted = |lib_id: &str| {
+            crate::library::drift::library_of(lib_id)
+                .is_some_and(|library| libs.iter().any(|l| l.id == library))
+        };
+        let drift = &mut self.library.drift;
+        drift.names.retain(|lib_id, _| mounted(lib_id));
+        for rows in drift.drifted.values_mut() {
+            rows.retain(|lib_id, _| mounted(lib_id));
+        }
+    }
+
     pub(crate) fn handle_library_drift_checked(&mut self, report: DriftReport) -> Task<Message> {
         // A newer pass was started since this one: its result is stale.
         if report.generation != self.library.drift.generation {
@@ -109,6 +125,16 @@ impl Signex {
                 continue;
             }
             let was = self.library.drift.drifted.get(&sheet);
+            let mut entries = entries;
+            // An unreadable library says nothing about its rows: keep the
+            // previous ones instead of reading the failure as "no drift".
+            if let Some(previous) = was {
+                for (lib_id, row) in previous {
+                    if report.unreadable.contains(lib_id) {
+                        entries.entry(lib_id.clone()).or_insert_with(|| row.clone());
+                    }
+                }
+            }
             let changed = was.is_none_or(|w| !w.keys().eq(entries.keys()));
             if changed && !entries.is_empty() {
                 crate::diagnostics::log_info(format!(
@@ -120,7 +146,13 @@ impl Signex {
             drifted.insert(sheet, entries);
         }
         self.library.drift.drifted = drifted;
-        self.library.drift.names = report.names;
+        let mut names = report.names;
+        for lib_id in &report.unreadable {
+            if let Some(name) = self.library.drift.names.get(lib_id) {
+                names.entry(lib_id.clone()).or_insert_with(|| name.clone());
+            }
+        }
+        self.library.drift.names = names;
         self.update_selection_info();
         Task::none()
     }

@@ -240,3 +240,54 @@ fn a_stale_drift_report_is_dropped() {
     ))));
     assert!(is_drifted(&app), "the older pass must not overwrite");
 }
+
+#[test]
+fn a_new_pass_prunes_rows_and_names_of_unmounted_libraries_at_once() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    let sheet = app.document_state.active_path.clone().unwrap();
+    let ghost = format!("{}:{}", Uuid::new_v4(), Uuid::new_v4());
+    let real = doc(&app).symbols[0].lib_id.clone();
+    let stale = doc(&app).lib_symbols[&real].clone();
+    let drift = &mut app.library.drift;
+    drift.names.insert(ghost.clone(), "Gone/Part".into());
+    drift.names.insert(real.clone(), "lib/TWO-UNIT".into());
+    let rows = drift.drifted.entry(sheet.clone()).or_default();
+    rows.insert(ghost.clone(), stale.clone());
+    rows.insert(real.clone(), stale);
+
+    // Before the worker returns: the unmounted library is already gone.
+    app.library.drift.check_pending = true;
+    assert!(app.take_drift_job().is_some());
+    assert!(!app.library.drift.is_drifted(&sheet, &ghost));
+    assert!(!app.library.drift.names.contains_key(&ghost));
+    assert!(app.library.drift.is_drifted(&sheet, &real));
+    assert!(app.library.drift.names.contains_key(&real));
+}
+
+#[test]
+fn an_unreadable_library_symbol_keeps_the_previous_drift_row() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    select_first(&mut app);
+    edit_library_symbol(&f, add_pin);
+    check_drift(&mut app);
+    assert!(is_drifted(&app));
+
+    let path = f
+        .snxlib
+        .parent()
+        .unwrap()
+        .join("symbols")
+        .join("two-unit.snxsym");
+    std::fs::write(path, "not a symbol").unwrap();
+    check_drift(&mut app);
+    assert!(
+        is_drifted(&app),
+        "an unreadable symbol must not clear drift"
+    );
+    let lib_id = doc(&app).symbols[0].lib_id.clone();
+    assert_eq!(app.library.drift.display_name(&lib_id), "lib/TWO-UNIT");
+}

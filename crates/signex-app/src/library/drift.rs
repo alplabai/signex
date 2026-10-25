@@ -13,7 +13,7 @@
 //! [`compute_drift`] does the IO and runs in `spawn_blocking`; the
 //! `update`-side half is `app/handlers/library_drift.rs`.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use signex_types::schematic::LibSymbol;
@@ -49,6 +49,9 @@ pub struct DriftReport {
     /// `lib_id` -> `"<Library>/<Symbol>"` for every entry whose library is
     /// mounted and whose symbol was readable.
     pub names: HashMap<String, String>,
+    /// `lib_id`s whose library is mounted but whose current symbol could not
+    /// be read this pass. Their previous rows are kept, not cleared.
+    pub unreadable: HashSet<String>,
     /// Failures to surface in the Messages panel.
     pub problems: Vec<String>,
     /// The [`DriftState::generation`] this pass was started under; a report
@@ -111,6 +114,7 @@ pub fn compute_drift(sheets: &[SheetEntries], libs: &[MountedLibrary]) -> DriftR
                         Some((symbol.to_lib_symbol(lib_id.clone()), name))
                     }
                     Err(e) => {
+                        report.unreadable.insert(lib_id.clone());
                         report.problems.push(format!(
                             "Could not check library symbol {lib_id} in {}: {e}",
                             lib.display_name
@@ -130,9 +134,14 @@ pub fn compute_drift(sheets: &[SheetEntries], libs: &[MountedLibrary]) -> DriftR
     report
 }
 
-fn split_lib_id(lib_id: &str) -> Option<(Uuid, Uuid)> {
+pub(crate) fn split_lib_id(lib_id: &str) -> Option<(Uuid, Uuid)> {
     let (lib, sym) = lib_id.split_once(':')?;
     Some((Uuid::parse_str(lib).ok()?, Uuid::parse_str(sym).ok()?))
+}
+
+/// The library uuid a `"<library uuid>:<symbol uuid>"` key belongs to.
+pub(crate) fn library_of(lib_id: &str) -> Option<Uuid> {
+    split_lib_id(lib_id).map(|(library, _)| library)
 }
 
 /// Stamp the readable `Library/Symbol` name as the `LibRef` field of every
