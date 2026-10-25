@@ -17,7 +17,8 @@ pub const ENV_OVERRIDE: &str = "SIGNEX_ALTIUM_IMPORT";
 /// What a finished import produced.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImportOutcome {
-    /// The file to open: the `.snxprj` for a project, else the first output.
+    /// The file to open: the `.snxprj` for a project, else the first output
+    /// (`.snxsch`, `.snxpcb`, `.snxsym` or `.snxfpt`).
     pub open: PathBuf,
     /// What the converter approximated or skipped, with counts.
     pub warnings: Vec<(String, usize)>,

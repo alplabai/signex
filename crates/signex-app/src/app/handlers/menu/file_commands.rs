@@ -28,6 +28,7 @@ impl Signex {
                     rfd::AsyncFileDialog::new()
                         .set_title("Import Altium Project")
                         .add_filter("Altium Design", &["PrjPcb", "SchDoc", "PcbDoc"])
+                        .add_filter("Altium Library", &["SchLib", "PcbLib"])
                         .add_filter("All files", &["*"])
                         .pick_file()
                         .await

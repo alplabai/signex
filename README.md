@@ -43,7 +43,7 @@ formats one-way. Run it once against your project; open the resulting
 **Migrating from Altium?** Install the optional
 [signex-altium-import](https://github.com/alplabai/signex-altium-import)
 companion (Apache-2.0, clean-room). Then **File › Import › Altium Project…**
-converts a `.PrjPcb`, `.SchDoc` or `.PcbDoc` into a sibling
+converts a `.PrjPcb`, `.SchDoc`, `.PcbDoc`, `.SchLib` or `.PcbLib` into a sibling
 `<name>-signex/` folder and opens it. The import lists everything it had to
 approximate or skip; review that list before you fabricate an imported
 board.
