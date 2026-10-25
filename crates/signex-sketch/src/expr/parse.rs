@@ -377,13 +377,13 @@ impl<'a> Parser<'a> {
     }
 
     /// Consume a left-associative binary operator, failing with
-    /// [`ExprError::TooDeep`] once the expression holds more than
+    /// [`ExprError::ChainTooLong`] once the expression holds more than
     /// [`MAX_EXPR_CHAIN`] of them. A flat `1+1+1+...` builds a left-nested
     /// tree in a loop, so only this count keeps the evaluator and the
     /// recursive `Drop` of the AST bounded.
     fn chain_link(&mut self) -> Result<(), ExprError> {
         if self.links >= MAX_EXPR_CHAIN {
-            return Err(ExprError::TooDeep {
+            return Err(ExprError::ChainTooLong {
                 max: MAX_EXPR_CHAIN,
             });
         }

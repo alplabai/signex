@@ -30,7 +30,7 @@ pub(super) fn view_graphic_selection<'a>(
                         .padding([2, 4])
                         .size(11)
                         .on_input(move |s| {
-                            let parsed = s.trim().parse::<f64>().unwrap_or(value);
+                            let parsed = super::typed_or_keep(&s, value);
                             PanelMsg::SymEditorSetGraphicField {
                                 idx: g_idx,
                                 field,

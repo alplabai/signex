@@ -141,6 +141,7 @@ mod tests {
         let done = crate::persist::DocumentSaveDone {
             path: tmp.path().join("S.snxsch"),
             revision: 0,
+            net_color_revision: 0,
             save_as_from: None,
             result: Ok(crate::persist::SaveOutcome::Written),
         };

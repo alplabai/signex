@@ -79,6 +79,10 @@ pub enum RuleKind {
     /// connection (ADR-0002 D5.1), so the netlist keeps them apart; this rule
     /// tells the user to add the wire.
     PinsTouchNotConnected,
+    /// One net carries two or more different names (labels, power ports). The
+    /// netlist shows the winner of the naming rule in `docs/NET_NAMING.md`;
+    /// the rest stay aliases. Nets `NetLabelConflict` reports are left to it.
+    NetMultipleNames,
 }
 
 impl RuleKind {
@@ -99,6 +103,7 @@ impl RuleKind {
             RuleKind::AmbiguousLabelAnchor => "Ambiguous label anchor",
             RuleKind::PinTypeConflict => "Pin type conflict",
             RuleKind::PinsTouchNotConnected => "Pins touch but are not connected",
+            RuleKind::NetMultipleNames => "Net has multiple names",
         }
     }
 
@@ -122,7 +127,7 @@ impl RuleKind {
     }
 
     /// Every built-in rule, in the order the ERC dialog lists them.
-    pub const ALL: [RuleKind; 14] = [
+    pub const ALL: [RuleKind; 15] = [
         RuleKind::UnusedPin,
         RuleKind::DuplicateRefDesignator,
         RuleKind::HierPortDisconnected,
@@ -137,6 +142,7 @@ impl RuleKind {
         RuleKind::AmbiguousLabelAnchor,
         RuleKind::PinTypeConflict,
         RuleKind::PinsTouchNotConnected,
+        RuleKind::NetMultipleNames,
     ];
 
     /// The one source of truth for a rule's severity: [`Diagnostic::new`]
@@ -158,6 +164,7 @@ impl RuleKind {
             | RuleKind::OrphanLabel
             | RuleKind::AmbiguousLabelAnchor
             | RuleKind::PinsTouchNotConnected => Severity::Warning,
+            RuleKind::NetMultipleNames => Severity::Info,
             RuleKind::MissingPowerFlag | RuleKind::SymbolOutsideSheet => Severity::Info,
         }
     }

@@ -71,6 +71,7 @@ impl Signex {
             .collect();
         for (path, step) in steps {
             self.ui_state.net_color_redo.remove(&path);
+            self.mark_net_colors_dirty(&path);
             self.ui_state
                 .net_color_undo
                 .entry(path)
@@ -114,6 +115,7 @@ impl Signex {
         let at = self.engine_undo_position();
         let colors = self.active_sheet_net_colors();
         self.ui_state.net_color_redo.remove(&path);
+        self.mark_net_colors_dirty(&path);
         self.ui_state
             .net_color_undo
             .entry(path)
@@ -139,6 +141,7 @@ impl Signex {
             colors: self.replace_active_sheet_net_colors(step.colors),
             at: step.at,
         };
+        self.mark_net_colors_dirty(&path);
         let stack = if undoing {
             &mut self.ui_state.net_color_redo
         } else {
@@ -481,5 +484,8 @@ fn norm_ccw(a: f64, b: f64) -> f64 {
     if d < 0.0 { d + TAU } else { d }
 }
 
+mod net_color_persist;
+#[cfg(test)]
+mod net_color_persist_tests;
 #[cfg(test)]
 mod net_color_undo_order_tests;

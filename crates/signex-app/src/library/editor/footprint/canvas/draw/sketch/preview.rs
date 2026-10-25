@@ -96,6 +96,15 @@ fn placement_field_buf(
         .map(|p| p.buffer.as_str())
 }
 
+/// Read a typed placement buffer for the live preview. A non-finite or
+/// overflowing buffer (`nan`, `inf`, `1e999`) reads as "not typed", so the
+/// preview falls back to the cursor instead of drawing a non-finite point.
+/// Pure on purpose: this runs every frame, so the refusal is reported
+/// where the value is committed, not here.
+fn typed_dimension(buf: Option<&str>) -> Option<f64> {
+    buf.and_then(|b| signex_types::numeric::parse_finite_f64(b).ok())
+}
+
 pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_preview(
     frame: &mut canvas::Frame,
     cstate: &FootprintCanvasState,
@@ -187,10 +196,8 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
             // will commit.
             let len_buf = placement_field_buf(state, PlacementInputKind::LineLength);
             let ang_buf = placement_field_buf(state, PlacementInputKind::LineAngle);
-            let typed_len = len_buf
-                .and_then(|b| b.parse::<f64>().ok())
-                .filter(|v| *v > 0.0);
-            let typed_ang = ang_buf.and_then(|b| b.parse::<f64>().ok());
+            let typed_len = typed_dimension(len_buf).filter(|v| *v > 0.0);
+            let typed_ang = typed_dimension(ang_buf);
             // Cursor-relative azimuth + distance (world space) — the
             // fallback when a field hasn't been typed. Mirrors the
             // second-click commit arm in dispatch/library.rs so the
@@ -260,12 +267,8 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
             };
             let w_buf = placement_field_buf(state, PlacementInputKind::RectWidth);
             let h_buf = placement_field_buf(state, PlacementInputKind::RectHeight);
-            let typed_w = w_buf
-                .and_then(|b| b.parse::<f64>().ok())
-                .filter(|v| *v > 0.0);
-            let typed_h = h_buf
-                .and_then(|b| b.parse::<f64>().ok())
-                .filter(|v| *v > 0.0);
+            let typed_w = typed_dimension(w_buf).filter(|v| *v > 0.0);
+            let typed_h = typed_dimension(h_buf).filter(|v| *v > 0.0);
             let sx = if cursor.0 < first_world.0 { -1.0 } else { 1.0 };
             let sy = if cursor.1 < first_world.1 { -1.0 } else { 1.0 };
             let ex = typed_w.map(|w| first_world.0 + sx * w).unwrap_or(cursor.0);
@@ -321,12 +324,8 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
             let w_buf = placement_field_buf(state, PlacementInputKind::RectWidth);
             let h_buf = placement_field_buf(state, PlacementInputKind::RectHeight);
             let rr_buf = placement_field_buf(state, PlacementInputKind::RRectRadius);
-            let typed_w = w_buf
-                .and_then(|b| b.parse::<f64>().ok())
-                .filter(|v| *v > 0.0);
-            let typed_h = h_buf
-                .and_then(|b| b.parse::<f64>().ok())
-                .filter(|v| *v > 0.0);
+            let typed_w = typed_dimension(w_buf).filter(|v| *v > 0.0);
+            let typed_h = typed_dimension(h_buf).filter(|v| *v > 0.0);
             let sgnx = if cursor.0 < first_world.0 { -1.0 } else { 1.0 };
             let sgny = if cursor.1 < first_world.1 { -1.0 } else { 1.0 };
             let cx_corner = typed_w
@@ -343,9 +342,8 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
             let half_h = (y1 - y0) / 2.0;
             // Corner radius: typed RRectRadius wins, then the legacy
             // dimension_input text, else 0.5 mm (matches the commit).
-            let r_input = rr_buf
-                .and_then(|b| b.parse::<f64>().ok())
-                .or_else(|| state.dimension_input.trim().parse::<f64>().ok())
+            let r_input = typed_dimension(rr_buf)
+                .or_else(|| typed_dimension(Some(state.dimension_input.trim())))
                 .unwrap_or(0.5);
             let r_max = half_w.min(half_h).max(0.05);
             let r = r_input.clamp(0.05, r_max);
@@ -797,5 +795,28 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
             size: iced::Pixels(13.0),
             ..canvas::Text::default()
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::typed_dimension;
+
+    /// #828 -- a typed length / angle / radius buffer that is not a finite
+    /// number must read as "not typed" so the preview never draws a
+    /// non-finite point.
+    #[test]
+    fn non_finite_buffers_read_as_not_typed() {
+        for bad in ["nan", "NaN", "inf", "-inf", "1e999", "-1e999"] {
+            assert_eq!(typed_dimension(Some(bad)), None, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn finite_buffers_still_read() {
+        assert_eq!(typed_dimension(Some("2.5")), Some(2.5));
+        assert_eq!(typed_dimension(Some(" 3 ")), Some(3.0));
+        assert_eq!(typed_dimension(Some("1.")), Some(1.0));
+        assert_eq!(typed_dimension(None), None);
     }
 }

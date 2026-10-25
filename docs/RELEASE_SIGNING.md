@@ -11,7 +11,12 @@ signed. Release mechanics (tagging, CHANGELOG) are in `CONTRIBUTING.md`.
 version -> verify-version (tags only) -> test (tags only) -> build (matrix, cargo, NO signing material)
 build -> package-windows (x64, arm64)  -> release (tags only)
 build -> package-macos                 -> release (tags only)
+build -> release (tags only)           # Linux legs: .deb, AppImage, tar.gz, built and uploaded in `build`
 ```
+
+The Linux legs are x86_64 (`ubuntu-latest`) and aarch64 (`ubuntu-24.04-arm`,
+built natively, not cross-compiled). They sign nothing; `SHA256SUMS.txt` is the
+only integrity artifact.
 
 `build` compiles (every dependency `build.rs` runs there) and only hands the
 unsigned `signex.exe` / `signex` to the `package-*` jobs as `unsigned-*`

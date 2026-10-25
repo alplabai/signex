@@ -9,8 +9,7 @@
 //! all do.
 //!
 //! Scope (ADR-0001 A3.1): single sheet only — no hierarchy; net names come
-//! from the highest-priority label on the net, matching the current ERC
-//! semantics. Single-sheet same-name label *merging* is applied here, by
+//! from the highest-priority name on the net (see [`best_net_name_of`]). Single-sheet same-name label *merging* is applied here, by
 //! [`SheetConnectivity::merge_named_labels`], and every consumer of that type
 //! is expected to apply it too. Only cross-sheet stitching lives elsewhere
 //! (the project-level stitcher) and is deferred to a later increment.
@@ -117,23 +116,34 @@ pub fn connected_points(sheet: &SchematicSheet) -> ConnectedPoints {
     gate
 }
 
-/// Selection priority of a label kind for naming a net: `Global > Power >
-/// Hierarchical > Net`.
+/// Rank of a name's source when a net carries more than one name: `Power (3) >
+/// Global (2) > Hierarchical (1) > local Net (0)`. A power-port value ranks as
+/// `Power`.
+pub(crate) const POWER_PORT_PRIORITY: u8 = 3;
+
 pub(crate) fn label_priority(kind: LabelType) -> u8 {
     match kind {
-        LabelType::Global => 3,
-        LabelType::Power => 2,
+        LabelType::Power => POWER_PORT_PRIORITY,
+        LabelType::Global => 2,
         LabelType::Hierarchical => 1,
         LabelType::Net => 0,
     }
 }
 
-/// The highest-priority name for a net from its labels plus any power-port
-/// carrier values (which rank as `Power`, priority 2). Returns
-/// `(priority, text)`, or `None` when nothing names the net. Ties resolve to
-/// the last candidate in (label-document order, then power-carrier order),
-/// matching the previous `max_by_key` tie-break — so label-only nets keep their
-/// exact names and the single-sheet equivalence gate holds.
+/// True when candidate `(priority, text)` should replace `best` as the net's
+/// name: a higher priority wins; on equal priority the lexicographically
+/// smallest text wins (byte order). Depends only on the candidates, never on
+/// document or iteration order, so the name is stable across runs.
+pub(crate) fn name_outranks(priority: u8, text: &str, best: Option<(u8, &str)>) -> bool {
+    best.is_none_or(|(bp, bt)| priority > bp || (priority == bp && text < bt))
+}
+
+/// The one name a net gets when it carries several (labels and power-port
+/// values), as `(priority, text)`, or `None` when nothing names the net.
+/// Every other name stays an alias: it still joins nets by name, but the
+/// netlist exports and ERC net names show only this one (net colour and
+/// highlight use label text or geometry; the BOM has no net names). User-facing
+/// description: `docs/NET_NAMING.md`.
 ///
 /// Takes plain `(kind, text)` pairs so `signex-erc`, which holds its own label
 /// snapshot type, names a net with this exact rule instead of a second copy.
@@ -141,25 +151,15 @@ pub fn best_net_name_of<'a>(
     labels: impl IntoIterator<Item = (LabelType, &'a str)>,
     power_values: &[&str],
 ) -> Option<(u8, String)> {
-    let mut best: Option<(u8, String)> = None;
-    for (kind, text) in labels {
-        if text.is_empty() {
-            continue;
-        }
-        let p = label_priority(kind);
-        if best.as_ref().is_none_or(|(bp, _)| p >= *bp) {
-            best = Some((p, text.to_string()));
+    let mut best: Option<(u8, &str)> = None;
+    let power = power_values.iter().map(|v| (POWER_PORT_PRIORITY, *v));
+    let labelled = labels.into_iter().map(|(k, t)| (label_priority(k), t));
+    for (p, text) in labelled.chain(power) {
+        if !text.is_empty() && name_outranks(p, text, best) {
+            best = Some((p, text));
         }
     }
-    for v in power_values {
-        if v.is_empty() {
-            continue;
-        }
-        if best.as_ref().is_none_or(|(bp, _)| 2 >= *bp) {
-            best = Some((2, (*v).to_string()));
-        }
-    }
-    best
+    best.map(|(p, t)| (p, t.to_string()))
 }
 
 pub(crate) fn best_net_name(labels: &[&Label], power_values: &[&str]) -> Option<(u8, String)> {

@@ -195,6 +195,8 @@ mod library_place_symbol;
 mod library_symbol_drift;
 #[path = "regression/library_update_apply.rs"]
 mod library_update_apply;
+#[path = "regression/non_finite_edits.rs"]
+mod non_finite_edits;
 
 #[path = "regression/canvas_editing_correctness.rs"]
 mod canvas_editing_correctness;
@@ -211,6 +213,10 @@ mod styled_power_port_not_flag;
 
 #[path = "regression/click_click_move.rs"]
 mod click_click_move;
+
+// #1057 - grid snapping lands on exact nm multiples (align / move).
+#[path = "regression/grid_snap_exact.rs"]
+mod grid_snap_exact;
 
 // #925 — non-finite grid steps are refused into the Messages panel.
 #[path = "regression/grid_step_refusal.rs"]

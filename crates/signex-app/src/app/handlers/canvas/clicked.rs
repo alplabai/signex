@@ -65,13 +65,12 @@ impl Signex {
             // coords can land a full grid cell off the nearest
             // wire — the visible pen snaps, but the hit target
             // was being missed.
-            let (hit_x, hit_y) =
-                if self.ui_state.snap_enabled && (self.ui_state.grid_size_mm as f64) > 0.0 {
-                    let g = self.ui_state.grid_size_mm as f64;
-                    ((world_x / g).round() * g, (world_y / g).round() * g)
-                } else {
-                    (world_x, world_y)
-                };
+            let (hit_x, hit_y) = if self.ui_state.snap_enabled && self.ui_state.grid_size_mm > 0.0 {
+                let g = crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm);
+                ((world_x / g).round() * g, (world_y / g).round() * g)
+            } else {
+                (world_x, world_y)
+            };
             // Compute the net's wire uuids while only holding an
             // immutable snapshot borrow, then release it before
             // mutating ui_state.

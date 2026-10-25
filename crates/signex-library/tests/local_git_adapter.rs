@@ -1317,3 +1317,51 @@ x = nan
     .unwrap();
     assert!(matches!(adapter.list_sims(), Err(LibraryError::Backend(_))));
 }
+
+/// #1056: a NaN parameter is refused on both insert and update, the error
+/// names the row and the key, and the `.snxlib` bytes are unchanged.
+#[test]
+fn non_finite_parameter_is_refused_and_snxlib_unchanged() {
+    use signex_library::param::ParamValue;
+
+    let dir = tempfile::tempdir().unwrap();
+    let file = snxlib_path(dir.path(), "NanRow");
+    let manifest = empty_snx_manifest("NanRow", false);
+    let lib_id = manifest.library_id;
+    let adapter = LocalGitAdapter::init(
+        &file,
+        manifest,
+        LibraryInitOptions {
+            enable_git: false,
+            use_lfs: false,
+        },
+    )
+    .unwrap();
+    let good = fixture_row("R1", "resistor", lib_id);
+    adapter
+        .insert_row("resistors", good.clone(), "good")
+        .unwrap();
+    let before = std::fs::read(&file).unwrap();
+
+    let mut bad = fixture_row("R_BAD", "resistor", lib_id);
+    bad.parameters
+        .insert("tolerance".into(), ParamValue::Number(f64::NAN));
+    let err = adapter
+        .insert_row("resistors", bad.clone(), "bad")
+        .unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("R_BAD") && msg.contains("tolerance"), "{msg}");
+    assert_eq!(std::fs::read(&file).unwrap(), before);
+
+    let mut updated = good.clone();
+    updated.parameters.insert(
+        "voltage".into(),
+        ParamValue::Measurement {
+            value: f64::INFINITY,
+            unit: "V".into(),
+        },
+    );
+    let err = adapter.update_row("resistors", updated, "bad").unwrap_err();
+    assert!(err.to_string().contains("voltage"), "{err}");
+    assert_eq!(std::fs::read(&file).unwrap(), before);
+}
