@@ -283,11 +283,44 @@ fn an_unreadable_library_symbol_keeps_the_previous_drift_row() {
         .join("symbols")
         .join("two-unit.snxsym");
     std::fs::write(path, "not a symbol").unwrap();
+    drop(signex_app::diagnostics::init_logging());
     check_drift(&mut app);
+    assert!(
+        signex_app::diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.message.contains("Could not check library symbol")),
+        "the read failure reaches the Messages panel"
+    );
     assert!(
         is_drifted(&app),
         "an unreadable symbol must not clear drift"
     );
     let lib_id = doc(&app).symbols[0].lib_id.clone();
     assert_eq!(app.library.drift.display_name(&lib_id), "lib/TWO-UNIT");
+}
+
+#[test]
+fn a_symbol_deleted_from_the_library_clears_its_row_and_name() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    select_first(&mut app);
+    edit_library_symbol(&f, add_pin);
+    check_drift(&mut app);
+    assert!(is_drifted(&app));
+
+    let path = f
+        .snxlib
+        .parent()
+        .unwrap()
+        .join("symbols")
+        .join("two-unit.snxsym");
+    std::fs::remove_file(path).unwrap();
+    check_drift(&mut app);
+    assert!(
+        !is_drifted(&app),
+        "a deleted symbol must not stay updatable"
+    );
+    let lib_id = doc(&app).symbols[0].lib_id.clone();
+    assert_eq!(app.library.drift.display_name(&lib_id), lib_id);
 }

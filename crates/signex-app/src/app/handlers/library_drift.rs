@@ -126,14 +126,8 @@ impl Signex {
             }
             let was = self.library.drift.drifted.get(&sheet);
             let mut entries = entries;
-            // An unreadable library says nothing about its rows: keep the
-            // previous ones instead of reading the failure as "no drift".
             if let Some(previous) = was {
-                for (lib_id, row) in previous {
-                    if report.unreadable.contains(lib_id) {
-                        entries.entry(lib_id.clone()).or_insert_with(|| row.clone());
-                    }
-                }
+                keep_unreadable_rows(&mut entries, previous, &report.unreadable);
             }
             let changed = was.is_none_or(|w| !w.keys().eq(entries.keys()));
             if changed && !entries.is_empty() {
@@ -147,11 +141,7 @@ impl Signex {
         }
         self.library.drift.drifted = drifted;
         let mut names = report.names;
-        for lib_id in &report.unreadable {
-            if let Some(name) = self.library.drift.names.get(lib_id) {
-                names.entry(lib_id.clone()).or_insert_with(|| name.clone());
-            }
-        }
+        keep_unreadable_names(&mut names, &self.library.drift.names, &report.unreadable);
         self.library.drift.names = names;
         self.update_selection_info();
         Task::none()
@@ -200,5 +190,30 @@ impl Signex {
             d.remove(&lib_id);
         }
         self.update_selection_info();
+    }
+}
+
+/// An unreadable library says nothing about its rows: carry the previous
+/// ones over instead of reading the failure as "no drift". A kept row applies
+/// the last good read of the library's symbol; the engine's connectivity gate
+/// still vets it when "Update from library" is used.
+fn keep_unreadable_rows(
+    entries: &mut std::collections::BTreeMap<String, signex_types::schematic::LibSymbol>,
+    previous: &std::collections::BTreeMap<String, signex_types::schematic::LibSymbol>,
+    unreadable: &std::collections::HashSet<String>,
+) {
+    for (lib_id, row) in previous.iter().filter(|(id, _)| unreadable.contains(*id)) {
+        entries.entry(lib_id.clone()).or_insert_with(|| row.clone());
+    }
+}
+
+/// Same rule for the readable `Library/Symbol` names.
+fn keep_unreadable_names(
+    names: &mut std::collections::HashMap<String, String>,
+    previous: &std::collections::HashMap<String, String>,
+    unreadable: &std::collections::HashSet<String>,
+) {
+    for (lib_id, name) in previous.iter().filter(|(id, _)| unreadable.contains(*id)) {
+        names.entry(lib_id.clone()).or_insert_with(|| name.clone());
     }
 }

@@ -279,3 +279,18 @@ fn a_new_pin_on_a_connection_is_refused_when_the_sheet_has_no_embedded_copy() {
     }
     assert!(engine.document().lib_symbols.is_empty());
 }
+
+#[test]
+fn a_replace_with_no_embedded_copy_succeeds_when_no_fresh_pin_is_connected() {
+    let mut sheet = engine_with_bare_symbol().document().clone();
+    sheet.lib_symbols.clear();
+    let mut engine = Engine::new(sheet).unwrap();
+    let fresh = lib_symbol("new", vec![lib_pin("1", -2.54), lib_pin("2", 2.54)]);
+    assert!(
+        engine
+            .execute(Command::ReplaceLibSymbol { lib_symbol: fresh })
+            .unwrap()
+            .changed
+    );
+    assert_eq!(engine.document().lib_symbols[ID].description, "new");
+}
