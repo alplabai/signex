@@ -507,10 +507,8 @@ async fn locks_endpoint_returns_409_when_held() {
 #[tokio::test]
 #[ignore = "requires SIGNEX_TEST_PG_URL"]
 async fn postgres_migrations_apply_when_env_set() {
-    let url = match std::env::var("SIGNEX_TEST_PG_URL") {
-        Ok(u) => u,
-        Err(_) => return, // Belt-and-braces — `#[ignore]` already skips by default.
-    };
+    let url = std::env::var("SIGNEX_TEST_PG_URL")
+        .expect("SIGNEX_TEST_PG_URL must be set to run the ignored Postgres tests");
     let state = AppState::connect(&url).await.expect("pg connect");
     state.migrate().await.expect("pg migrations apply");
 }

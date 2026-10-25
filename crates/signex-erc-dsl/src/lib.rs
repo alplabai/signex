@@ -94,10 +94,12 @@ mod tests {
                 name: "I2C_SDA".to_string(),
                 class: "i2c".to_string(),
                 pin_types: vec![PinDirection::Output],
+                pins: vec![],
                 has_driver: true,
                 has_pullup: false,
             }],
             children: HashMap::new(),
+            key: None,
         }
     }
 

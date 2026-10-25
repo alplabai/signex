@@ -15,6 +15,9 @@ pub enum ContextAction {
     Paste,
     SmartPaste,
     OpenChildSheet,
+    /// Reconcile the selected sheet symbol's pins with the child schematic's
+    /// hierarchical / global labels (#359). Gated like `OpenChildSheet`.
+    SyncSheetPins,
     Delete,
     SelectAll,
     ZoomFit,
@@ -280,7 +283,21 @@ pub enum ProjectTreeAction {
     OpenEnableVersionControl(Vec<usize>),
     /// Right-click on a plain-files `.snxlib` node → opens the
     /// Enable Version Control modal scoped to that library directory.
-    OpenLibraryEnableVersionControl(Vec<usize>),
+    OpenLibraryEnableVersionControl(LibraryRowRef),
+    /// Right-click on a library node → Remove from Project. Resolved by
+    /// the library's identity, not its row position (#742).
+    RemoveLibrary(LibraryRowRef),
+}
+
+/// Stable identity of a library row in the project tree: the owning
+/// project's id plus the library's resolved `.snxlib` path. Library menu
+/// actions carry this instead of a row index, so a tree rebuild between
+/// opening the menu and picking an action can never retarget a different
+/// library (#742).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LibraryRowRef {
+    pub project_id: crate::app::state::ProjectId,
+    pub root: std::path::PathBuf,
 }
 
 /// State for the rename modal. Tracks the target file, the live
@@ -290,6 +307,11 @@ pub enum ProjectTreeAction {
 pub struct RenameDialogState {
     pub target_path: std::path::PathBuf,
     pub tree_path: Vec<usize>,
+    /// The owning project, captured when the dialog opened. Submit re-points
+    /// `tree_path[0]` at that project's current index, so adding or removing
+    /// a project while the dialog is open cannot retarget it (#855). `None`
+    /// keeps `tree_path` as given.
+    pub project_id: Option<crate::app::state::ProjectId>,
     pub buffer: String,
     pub error: Option<String>,
     /// `true` when this rename targets the project root — the submit
@@ -391,6 +413,8 @@ pub struct ProjectOptionsState {
 pub struct RemoveDialogState {
     pub target_path: std::path::PathBuf,
     pub tree_path: Vec<usize>,
+    /// The owning project; see [`RenameDialogState::project_id`] (#855).
+    pub project_id: Option<crate::app::state::ProjectId>,
     pub display_name: String,
     /// Does the target live outside the project folder (a Shared / Global
     /// library)? Such a target is never offered for deletion (#139).

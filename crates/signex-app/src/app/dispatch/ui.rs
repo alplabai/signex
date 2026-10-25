@@ -306,15 +306,23 @@ impl Signex {
                 // single-axis steps in `SnapOptions`; the Y field
                 // exists in the dialog for forward compatibility).
                 let draft = self.ui_state.grid_properties.clone();
-                let parsed_x = draft
-                    .as_ref()
-                    .and_then(|s| s.step_x_mm.trim().parse::<f64>().ok());
+                // A step that is not a finite number above zero is refused
+                // with its reason in the Messages panel; the previous
+                // value is kept and the dialog stays open so the user can
+                // correct it (#972).
+                let step_x = match draft.as_ref().map(|s| validated_grid_step(&s.step_x_mm)) {
+                    Some(Ok(step)) => Some(step),
+                    Some(Err(reason)) => {
+                        crate::diagnostics::log_warning(format!(
+                            "Grid step refused, previous value kept: {reason}"
+                        ));
+                        return self.finish_update();
+                    }
+                    None => None,
+                };
                 if let (Some(d), Some(editor)) = (draft, self.active_footprint_editor_mut()) {
                     let opts = &mut editor.state.snap_options;
-                    if let Some(step) = parsed_x
-                        && step > 0.0
-                        && step.is_finite()
-                    {
+                    if let Some(step) = step_x {
                         opts.grid_step_mm = step;
                     }
                     opts.fine_grid_display = d.fine_display;
@@ -399,6 +407,17 @@ impl Signex {
             }
         };
 
+        // A PCB window whose tab has just been closed: a queued event
+        // would otherwise fall through to the main window's active board.
+        let pcb_tab = self
+            .document_state
+            .tabs
+            .iter()
+            .position(|tab| tab.path == target_path);
+        if pcb_tab.is_none() && self.interaction_state.pcb_canvases.contains_key(&window_id) {
+            return iced::Task::none();
+        }
+
         // Swap the per-window canvas into the main slot and retarget
         // `active_path` so the handler's engine + canvas accesses hit
         // the window's tab.
@@ -408,6 +427,23 @@ impl Signex {
             .remove(&window_id)
             .expect("canvases entry checked above");
         std::mem::swap(&mut self.interaction_state.canvas, &mut swapped_canvas);
+        // A PCB window swaps its PCB canvas in the same way, and retargets
+        // `active_tab` too: the PCB handlers resolve the board through the
+        // active tab, not `active_path` (#494). The main window's tab is
+        // remembered by path, so it is found again even if the handler
+        // closed or reordered tabs.
+        let saved_active_tab = self.document_state.active_tab;
+        let saved_active_tab_path = self
+            .document_state
+            .tabs
+            .get(saved_active_tab)
+            .map(|tab| tab.path.clone());
+        let mut swapped_pcb =
+            pcb_tab.and_then(|_| self.interaction_state.pcb_canvases.remove(&window_id));
+        if let (Some(pcb), Some(index)) = (swapped_pcb.as_mut(), pcb_tab) {
+            std::mem::swap(&mut self.interaction_state.pcb_canvas, pcb);
+            self.document_state.active_tab = index;
+        }
         let saved_active_path = self.document_state.active_path.take();
         self.document_state.active_path = Some(target_path);
 
@@ -429,11 +465,31 @@ impl Signex {
         self.interaction_state
             .canvases
             .insert(window_id, swapped_canvas);
+        if let Some(mut pcb) = swapped_pcb {
+            std::mem::swap(&mut self.interaction_state.pcb_canvas, &mut pcb);
+            self.interaction_state.pcb_canvases.insert(window_id, pcb);
+            let tabs = &self.document_state.tabs;
+            self.document_state.active_tab = saved_active_tab_path
+                .and_then(|path| tabs.iter().position(|tab| tab.path == path))
+                // The main window's tab itself was closed: stay at its
+                // position, as closing a tab does.
+                .unwrap_or_else(|| saved_active_tab.min(tabs.len().saturating_sub(1)));
+        }
         self.document_state.active_path = saved_active_path;
 
         match task_result {
             Ok(task) => task,
             Err(payload) => resume_unwind(payload),
         }
+    }
+}
+
+/// Parse a Grid Properties step field: it must be a finite number above
+/// zero. The error is the user-facing reason for the refusal.
+fn validated_grid_step(text: &str) -> Result<f64, String> {
+    match signex_types::numeric::parse_finite_f64(text) {
+        Ok(step) if step > 0.0 => Ok(step),
+        Ok(step) => Err(format!("{step} is not above zero")),
+        Err(err) => Err(err.to_string()),
     }
 }

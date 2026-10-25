@@ -3,6 +3,7 @@
 //! they stay independent from renderer internals.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use signex_net::{ConnectedPoints, SheetConnectivity, best_net_name_of, pt_key};
 use signex_types::schematic::SchematicSheet;
@@ -119,6 +120,14 @@ pub struct ErcLabel {
     pub label_type: LabelType,
 }
 
+impl ErcLabel {
+    /// The sheet-port name this label exposes, via the shared
+    /// `signex_types` predicate + normaliser (see `Label::port_name`).
+    pub fn port_name(&self) -> Option<&str> {
+        signex_types::schematic::sheet_port_name(self.label_type, &self.text)
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct ErcJunction {
     pub position: Point,
@@ -160,6 +169,22 @@ pub struct ErcSheetPin {
 // ErcNet  (derived — not directly from the snapshot)
 // ---------------------------------------------------------------------------
 
+/// A pin on an [`ErcNet`], with enough identity to point a diagnostic at it.
+#[derive(Debug, Clone)]
+pub struct ErcNetPin {
+    /// The symbol that owns the pin.
+    pub symbol: Uuid,
+    /// That symbol's reference designator, for messages.
+    pub reference: String,
+    /// World-space position of the pin tip.
+    pub position: Point,
+    pub direction: PinDirection,
+    /// `true` when the owning symbol is a power flag (`PWR_FLAG`), not an
+    /// ordinary power port. A flag declares a rail driven without naming it,
+    /// so its pin says nothing about two real drivers sharing the rail.
+    pub is_power_flag: bool,
+}
+
 /// A logical net: the set of pins and labels connected by wires/junctions.
 /// Derived during projection via union-find over wire endpoints.
 #[derive(Debug, Clone)]
@@ -171,7 +196,11 @@ pub struct ErcNet {
     /// DSL: `net.class == "i2c"`.
     pub class: String,
     /// Electrical types of every pin on this net. DSL: `has_pin_kind(...)`.
+    /// Always the `direction` of each entry of [`ErcNet::pins`], in order.
     pub pin_types: Vec<PinDirection>,
+    /// The same pins with the symbol and position that make a finding on one
+    /// of them locatable.
+    pub pins: Vec<ErcNetPin>,
     /// `true` if any pin is Output / PowerOutput / ThreeStatable /
     /// OpenDrainLow / OpenDrainHigh. DSL: `has_driver()`.
     pub has_driver: bool,
@@ -203,7 +232,11 @@ pub struct ErcContext {
     pub nets: Vec<ErcNet>,
     /// Child sheet contexts keyed by filename. Only populated when built via
     /// [`from_snapshot_with_children`].
-    pub children: HashMap<String, ErcContext>,
+    pub children: HashMap<String, Arc<ErcContext>>,
+    /// This sheet's project key, when built by [`from_snapshot_with_children`].
+    /// Lets cross-sheet rules count a file once however many parents
+    /// reference it.
+    pub key: Option<signex_net::SheetKey>,
 }
 
 impl ErcContext {
@@ -220,30 +253,33 @@ impl ErcContext {
         Self::project(snapshot, HashMap::new())
     }
 
-    /// `resolved` is THIS sheet's own resolution submap — `cs.filename ->
-    /// SheetKey` — not a project-wide map; `sheets` is the shared
-    /// `SheetKey -> SchematicSheet` table every sheet's submap is looked up
-    /// against. Keying `resolved` per-sheet (rather than a single project-wide
-    /// filename map) is what keeps this in step with
+    /// Build a context whose `children` are filled recursively from the
+    /// project's per-parent resolution table: `resolutions[parent_key]` is
+    /// that sheet's own `cs.filename -> SheetKey` submap (the shape of
+    /// `signex_net::ProjectGraph::resolved`), looked up against the shared
+    /// `sheets` table. `own_key` is this sheet's key (`None` for a sheet with
+    /// no place in the project, which then has no children). Per-parent
+    /// submaps, not one project-wide filename map, keep this in step with
     /// `signex_net::build_project_netlist` when two parents in different
     /// directories reference a child by the same filename string (#466).
+    ///
+    /// A child that is already an ancestor (a reference cycle) is still
+    /// attached, so a direct-child lookup finds it, but is not expanded
+    /// further — that is what bounds the recursion. A sheet reached through
+    /// several paths is projected once (see `HierarchyMemo`).
     pub fn from_snapshot_with_children(
         snapshot: &SchematicSheet,
-        resolved: &HashMap<String, signex_net::SheetKey>,
+        own_key: Option<&signex_net::SheetKey>,
+        resolutions: &HashMap<signex_net::SheetKey, HashMap<String, signex_net::SheetKey>>,
         sheets: &HashMap<signex_net::SheetKey, SchematicSheet>,
     ) -> Self {
-        let child_ctxs = resolved
-            .iter()
-            .filter_map(|(filename, key)| {
-                sheets
-                    .get(key)
-                    .map(|s| (filename.clone(), Self::from_snapshot(s)))
-            })
-            .collect();
-        Self::project(snapshot, child_ctxs)
+        crate::hierarchy::HierarchyMemo::new().context_for(snapshot, own_key, resolutions, sheets)
     }
 
-    fn project(snapshot: &SchematicSheet, children: HashMap<String, ErcContext>) -> Self {
+    pub(crate) fn project(
+        snapshot: &SchematicSheet,
+        children: HashMap<String, Arc<ErcContext>>,
+    ) -> Self {
         // --- Step 1: geometry primitives (no symbols yet) -----------------
         let wires: Vec<ErcWire> = snapshot
             .wires
@@ -400,6 +436,7 @@ impl ErcContext {
             child_sheets,
             nets,
             children,
+            key: None,
         }
     }
 }
@@ -458,7 +495,7 @@ fn summarize_nets(
     // `build_netlist` calls (issue #675).
     let power_pins: Vec<(Point, &str)> = symbols
         .iter()
-        .filter(|s| s.is_power && !s.value.is_empty())
+        .filter(|s| s.is_power && !s.value.is_empty() && !signex_net::is_power_flag(&s.lib_id))
         .flat_map(|s| s.pins.iter().map(|p| (p.world_pos, s.value.as_str())))
         .collect();
     conn.merge_power_ports(
@@ -479,7 +516,7 @@ fn summarize_nets(
 
     // Group connected (non-no-connect) pins by net root.
     // No-connect pins are skipped — they're isolated by design.
-    let mut net_pins: HashMap<(i64, i64), Vec<PinDirection>> = HashMap::new();
+    let mut net_pins: HashMap<(i64, i64), Vec<ErcNetPin>> = HashMap::new();
     for sym in symbols {
         for pin in &sym.pins {
             // Only wire- or label-connected pins belong to a logical net.
@@ -491,7 +528,13 @@ fn summarize_nets(
             // re-probing, so we include everything that's "connected" — the
             // no-connect case creates a small singleton net that harms nothing.
             let root = conn.root_of(&pin.world_pos);
-            net_pins.entry(root).or_default().push(pin.electrical_type);
+            net_pins.entry(root).or_default().push(ErcNetPin {
+                symbol: sym.uuid,
+                reference: sym.reference.clone(),
+                position: pin.world_pos,
+                direction: pin.electrical_type,
+                is_power_flag: sym.is_power && signex_net::is_power_flag(&sym.lib_id),
+            });
         }
     }
 
@@ -534,13 +577,15 @@ fn summarize_nets(
                 .map(|i| name[..i].to_ascii_lowercase())
                 .unwrap_or_else(|| name.to_ascii_lowercase());
 
-            let has_driver = pins.iter().any(|t| DRIVING.contains(t));
-            let has_pullup = pins.contains(&PinDirection::Passive);
+            let pin_types: Vec<PinDirection> = pins.iter().map(|p| p.direction).collect();
+            let has_driver = pin_types.iter().any(|t| DRIVING.contains(t));
+            let has_pullup = pin_types.contains(&PinDirection::Passive);
 
             ErcNet {
                 name,
                 class,
-                pin_types: pins.to_vec(),
+                pin_types,
+                pins: pins.to_vec(),
                 has_driver,
                 has_pullup,
             }
@@ -586,6 +631,15 @@ mod tests {
             pins,
             attrs: HashMap::new(),
         }
+    }
+
+    #[test]
+    fn pt_key_buckets_at_one_micron() {
+        // #113 item 1: the ERC point key is a 1 um round, so 0.4 um folds into
+        // the origin bucket while 0.6 um and a full 1 um do not.
+        assert_eq!(pt_key(&pt(0.0004, 0.0)), pt_key(&pt(0.0, 0.0)));
+        assert_ne!(pt_key(&pt(0.0006, 0.0)), pt_key(&pt(0.0, 0.0)));
+        assert_ne!(pt_key(&pt(0.0, 0.001)), pt_key(&pt(0.0, 0.0)));
     }
 
     #[test]

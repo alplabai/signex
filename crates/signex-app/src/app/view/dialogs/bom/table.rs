@@ -37,7 +37,7 @@ fn column_value(c: &signex_output::BomColumn, r: &signex_output::BomRow) -> Stri
 /// the modal and the CSV/HTML/XLSX the user exports next never disagree — a
 /// plain `str` compare here would show R1, R10, R2 over an export reading
 /// R1, R2, R10. Every other column sorts case-insensitively on its cell text.
-fn sorted_row_order(
+pub(in crate::app) fn sorted_row_order(
     rows: &[signex_output::BomRow],
     columns: &[signex_output::BomColumn],
     sort: Option<(usize, bool)>,
@@ -50,22 +50,31 @@ fn sorted_row_order(
     let Some(sort_col) = columns.get(sort_idx) else {
         return row_order;
     };
-    row_order.sort_by(|&a, &b| {
-        let (ra, rb) = (&rows[a], &rows[b]);
-        let cmp = match sort_col {
-            BomColumn::Qty => ra.qty.cmp(&rb.qty),
-            BomColumn::Designator | BomColumn::Reference => {
-                signex_types::designator::compare_references(
-                    first_reference(ra),
-                    first_reference(rb),
-                )
-            }
-            _ => column_value(sort_col, ra)
-                .to_ascii_lowercase()
-                .cmp(&column_value(sort_col, rb).to_ascii_lowercase()),
-        };
-        if asc { cmp } else { cmp.reverse() }
-    });
+    match sort_col {
+        BomColumn::Qty => row_order.sort_by(|&a, &b| {
+            let cmp = rows[a].qty.cmp(&rows[b].qty);
+            if asc { cmp } else { cmp.reverse() }
+        }),
+        BomColumn::Designator | BomColumn::Reference => row_order.sort_by(|&a, &b| {
+            let cmp = signex_types::designator::compare_references(
+                first_reference(&rows[a]),
+                first_reference(&rows[b]),
+            );
+            if asc { cmp } else { cmp.reverse() }
+        }),
+        // One lowercase key per row (O(n) allocations), not two per
+        // comparison. Stable, like `sort_by`, so ties keep rollup order.
+        _ => {
+            let keys: Vec<String> = rows
+                .iter()
+                .map(|r| column_value(sort_col, r).to_ascii_lowercase())
+                .collect();
+            row_order.sort_by(|&a, &b| {
+                let cmp = keys[a].cmp(&keys[b]);
+                if asc { cmp } else { cmp.reverse() }
+            });
+        }
+    }
     row_order
 }
 
@@ -254,12 +263,18 @@ impl Signex {
             .width(Length::Fixed(table_width.max(100.0)))
             .into();
 
-        let row_order =
-            sorted_row_order(&preview.table.rows, &preview.options.columns, preview.sort);
+        // Display order is computed in `update` (`BomPreviewState::row_order`),
+        // never here.
+        let row_order = &preview.row_order;
 
         let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(preview.table.rows.len());
         for (visible_idx, &row_idx) in row_order.iter().enumerate() {
-            let r = &preview.table.rows[row_idx];
+            let Some(r) = preview.table.rows.get(row_idx) else {
+                // `row_order` is rebuilt with `table` in `update`; a stale
+                // index means that pairing broke - fail loudly in dev.
+                debug_assert!(false, "stale BOM row_order index {row_idx}");
+                continue;
+            };
             let alt_bg = if visible_idx % 2 == 0 {
                 Color::from_rgba(1.0, 1.0, 1.0, 0.0)
             } else {
@@ -439,6 +454,29 @@ mod tests {
         assert_eq!(
             sorted_row_order(&rows, &columns, Some((7, true))),
             vec![0, 1]
+        );
+    }
+
+    /// Pins behaviour (not a bug repro): descending sort reverses the comparison, not the slice, so rows with
+    /// equal keys keep rollup order in both directions (and the cached
+    /// lowercase key makes "Alpha"/"alpha" equal).
+    #[test]
+    fn descending_sort_is_stable_for_equal_keys() {
+        let rows = vec![
+            row(&["R1"], 1, "Alpha"),
+            row(&["R2"], 1, "beta"),
+            row(&["R3"], 1, "alpha"),
+            row(&["R4"], 1, "BETA"),
+        ];
+        let columns = vec![BomColumn::Designator, BomColumn::Value];
+
+        assert_eq!(
+            sorted_row_order(&rows, &columns, Some((1, true))),
+            vec![0, 2, 1, 3]
+        );
+        assert_eq!(
+            sorted_row_order(&rows, &columns, Some((1, false))),
+            vec![1, 3, 0, 2]
         );
     }
 }

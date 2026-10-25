@@ -41,6 +41,20 @@ pub fn apply_sketch_edit(
     mutate_solve_or_revert(state, footprint, |fp| apply_edit_inner(fp, edit))
 }
 
+/// The warnings in `current` that were not in the previous solve's set,
+/// remembering `current` as the new set. A drag re-solves every frame
+/// with the same warnings; only a change in the set reaches the log.
+pub(super) fn take_unlogged_warnings(current: &[String], logged: &mut Vec<String>) -> Vec<String> {
+    let fresh = current
+        .iter()
+        .filter(|w| !logged.contains(w))
+        .cloned()
+        .collect();
+    logged.clear();
+    logged.extend_from_slice(current);
+    fresh
+}
+
 /// Surface a failed edit: Properties-strip warning plus the Messages
 /// panel. A named conflict was reverted and says so; any other failure
 /// (no convergence, an empty conflict) left the edit in place and says that.
@@ -327,16 +341,24 @@ fn apply_edit_inner(footprint: &mut Footprint, edit: SketchEdit) {
     match edit {
         SketchEdit::AddEntity(e) => sketch.entities.push(*e),
         SketchEdit::DeleteEntity(id) => {
-            sketch.entities.retain(|e| e.id != id);
-            // Drop dangling constraint refs — coarse rule, drop any
-            // constraint that mentions the deleted ID via the kind's
-            // payload. Most kinds carry one or two SketchEntityIds;
-            // we use Debug to stringify for a simple text search.
-            // This is intentionally simple for v0.13; Phase 6 wires
-            // a structured constraint-rewrite pass.
-            sketch
-                .constraints
-                .retain(|c| !format!("{:?}", c.kind).contains(&id.to_string()));
+            // Structural cascade: lines/arcs/circles built on the entity
+            // and every constraint or array naming a removed entity go with it, in
+            // this one mutation (one undo step).
+            let removed = sketch.remove_entity_cascade(id);
+            let others = removed.entities.len().saturating_sub(1);
+            if others > 0 || !removed.constraints.is_empty() || !removed.arrays.is_empty() {
+                crate::diagnostics::log_info(format!(
+                    "Deleting a sketch entity also removed {others} dependent entity(ies), {} constraint(s) and {} array(s)",
+                    removed.constraints.len(),
+                    removed.arrays.len()
+                ));
+            }
+            if removed.repaired > 0 {
+                crate::diagnostics::log_warning(format!(
+                    "Repaired {} dangling sketch reference(s) left by an earlier edit",
+                    removed.repaired
+                ));
+            }
         }
         SketchEdit::MovePoint { id, dx, dy } => {
             for ent in sketch.entities.iter_mut() {
@@ -384,6 +406,14 @@ pub(super) fn solve_and_bake(
 
     let resolved = parameter::resolve(&sketch.parameters).map_err(SketchError::Expr)?;
 
+    // Runs synchronously inside `update`. A plain solve is one LM pass,
+    // bounded by `timeout_ms` (50 ms). A stalled one also tries the offset
+    // retry; a retry that converges then runs up to three project-and-
+    // re-solve passes, each with its own 50 ms budget (about 20% extra time
+    // measured on a long chain). Over-constraint narrowing can add up to
+    // `2 × SHRINK_LIMIT` more passes: about 1 s worst case on a conflicting
+    // sketch (#765). If that ever shows as a stall, move the solve into a
+    // `Task`.
     match state.sketch_solver.solve(sketch, &resolved) {
         Ok(out) => {
             state.conflict.clear();
@@ -524,6 +554,15 @@ pub(super) fn solve_and_bake(
                     &mut footprint.body_3d,
                     &mut state.solve_warnings,
                 )?;
+
+                // Bake warnings (a skipped over-cap array, a dropped
+                // feature) are failures the user must be able to see:
+                // the inspector strip is not the Messages panel.
+                for warning in
+                    take_unlogged_warnings(&state.solve_warnings, &mut state.logged_solve_warnings)
+                {
+                    crate::diagnostics::log_warning(format!("Sketch bake: {warning}"));
+                }
 
                 // v0.22 Phase D2 — refresh editor-side pads cache so
                 // the canvas + Pads-mode Properties panel see what

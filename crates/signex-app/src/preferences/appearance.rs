@@ -6,9 +6,7 @@
 
 use super::*;
 use crate::fonts;
-use crate::render_config::{
-    GridStyle, LabelStyle, MultisheetStyle, PinSelectionMode, PowerPortStyle,
-};
+use crate::render_config::{GridStyle, PinSelectionMode};
 use iced::widget::{Space, button, column, container, row, text};
 use iced::{Background, Border, Element, Length, Theme};
 use signex_types::theme::ThemeId;
@@ -17,14 +15,12 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     let PrefsView {
         draft_theme,
         draft_font,
-        draft_power_port_style,
-        draft_label_style,
-        draft_multisheet_style,
         draft_grid_style,
         draft_pcb_gpu_render,
         draft_symbol_grid_size_mm,
         draft_symbol_grid_style,
         draft_symbol_pin_selection,
+        draft_zoom_step_percent,
         custom_name,
         theme_status,
         ..
@@ -221,85 +217,6 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     );
     col = col.push(Space::new().height(20));
 
-    // ── Section: Power Port Symbols ──
-    col = col.push(section_title("Power Ports"));
-    col = col.push(Space::new().height(10));
-    col = col.push(
-        row![
-            column![
-                text("Power Port Style").size(12).style(text_primary),
-                text("Choose how power symbols are rendered on canvas.")
-                    .size(10)
-                    .style(text_muted),
-            ]
-            .spacing(3)
-            .width(200),
-            Space::new().width(Length::Fill),
-            iced::widget::pick_list(
-                [PowerPortStyle::Altium, PowerPortStyle::Standard],
-                Some(draft_power_port_style),
-                PrefMsg::DraftPowerPortStyle,
-            )
-            .text_size(12)
-            .width(200),
-        ]
-        .align_y(iced::Alignment::Center),
-    );
-    col = col.push(Space::new().height(12));
-    col = col.push(
-        text("Restyled mode reshapes pin labels for rendering only. Standard preserves the library symbol's authored appearance.")
-            .size(10)
-            .style(text_muted),
-    );
-    col = col.push(Space::new().height(16));
-    col = col.push(
-        row![
-            column![
-                text("Global/Hier Label Style").size(12).style(text_primary),
-                text("Controls multi-sheet and global label appearance.")
-                    .size(10)
-                    .style(text_muted),
-            ]
-            .spacing(3)
-            .width(200),
-            Space::new().width(Length::Fill),
-            iced::widget::pick_list(
-                [LabelStyle::Standard, LabelStyle::Altium],
-                Some(draft_label_style),
-                PrefMsg::DraftLabelStyle,
-            )
-            .text_size(12)
-            .width(200),
-        ]
-        .align_y(iced::Alignment::Center),
-    );
-    col = col.push(Space::new().height(16));
-    col = col.push(
-        row![
-            column![
-                text("Multisheet Style").size(12).style(text_primary),
-                text(
-                    "Controls hierarchical sheet body fill defaults. \
-                     Per-sheet colours from the source file always win."
-                )
-                .size(10)
-                .style(text_muted),
-            ]
-            .spacing(3)
-            .width(200),
-            Space::new().width(Length::Fill),
-            iced::widget::pick_list(
-                [MultisheetStyle::Standard, MultisheetStyle::Altium],
-                Some(draft_multisheet_style),
-                PrefMsg::DraftMultisheetStyle,
-            )
-            .text_size(12)
-            .width(200),
-        ]
-        .align_y(iced::Alignment::Center),
-    );
-    col = col.push(Space::new().height(20));
-
     // ── Section: Symbol Editor ──
     col = col.push(h_sep());
     col = col.push(Space::new().height(16));
@@ -383,6 +300,41 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             .text_size(12)
             .width(200),
         ]
+        .align_y(iced::Alignment::Center),
+    );
+    col = col.push(Space::new().height(20));
+
+    // ── Section: Navigation ──
+    col = col.push(section_title("Navigation"));
+    col = col.push(Space::new().height(10));
+    col = col.push(
+        row![
+            column![
+                text("Zoom speed").size(12).style(text_primary),
+                text(
+                    "How far one mouse-wheel notch zooms on the schematic, PCB, \
+                      symbol and footprint canvases."
+                )
+                .size(10)
+                .style(text_muted),
+            ]
+            .spacing(3)
+            .width(200),
+            Space::new().width(Length::Fill),
+            iced::widget::slider(
+                crate::canvas::Camera::ZOOM_STEP_PERCENT_MIN
+                    ..=crate::canvas::Camera::ZOOM_STEP_PERCENT_MAX,
+                draft_zoom_step_percent,
+                PrefMsg::DraftZoomStepPercent,
+            )
+            .width(140),
+            text(format!("{draft_zoom_step_percent}% per notch"))
+                .size(12)
+                .style(text_primary)
+                .width(100)
+                .align_x(iced::alignment::Horizontal::Right),
+        ]
+        .spacing(10)
         .align_y(iced::Alignment::Center),
     );
     col = col.push(Space::new().height(20));

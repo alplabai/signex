@@ -228,7 +228,7 @@ impl Signex {
         raw: &str,
     ) -> bool {
         let idx = *idx;
-        if let Ok(parsed) = raw.trim().parse::<f64>() {
+        if let Some(parsed) = crate::numeric_field::parse_field_f64(raw) {
             if let Some(editor) = self.active_footprint_editor_mut()
                 && let Some(g) = editor.state.guides.get_mut(idx)
             {

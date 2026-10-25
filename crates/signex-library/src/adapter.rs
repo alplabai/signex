@@ -183,6 +183,22 @@ pub trait LibraryAdapter: Send + Sync {
         None
     }
 
+    /// Re-point a file-backed adapter at `new_file` after the `.snxlib`
+    /// was renamed on disk. Pure bookkeeping — the adapter's parsed view
+    /// stays valid, so nothing is re-read. Without it, the next row write
+    /// persists to the old path and recreates the library there.
+    ///
+    /// The caller owns the file move and calls this once the file is at
+    /// `new_file`. A git-backed adapter records the rename in the library's
+    /// own repository (old name dropped, new name added, one commit); a
+    /// failure leaves the adapter on its old path. Adapters with no on-disk
+    /// file keep the default, which refuses.
+    fn relocate_library_file(&mut self, _new_file: &std::path::Path) -> Result<(), LibraryError> {
+        Err(LibraryError::Backend(
+            "relocate_library_file not supported for this adapter".into(),
+        ))
+    }
+
     // ── Tables ──────────────────────────────────────────────────────────
     //
     // The unit of storage is a row inside a category table. The
@@ -357,6 +373,29 @@ pub trait LibraryAdapter: Send + Sync {
         ))
     }
 
+    /// Move one row's binding to `kind` onto `new_version` and patch-bump
+    /// the row's own version, re-reading the row at write time so the
+    /// write keeps any other field changed since a caller's snapshot.
+    /// Returns whether the row changed: a row already pinned at
+    /// `new_version` is left alone. The default reads and then updates;
+    /// an adapter with a write lock overrides it to do both under the lock.
+    fn bind_row_primitive_version(
+        &self,
+        table: &str,
+        row_id: RowId,
+        kind: crate::cascade::CascadeKind,
+        new_version: &str,
+        message: &str,
+    ) -> Result<bool, LibraryError> {
+        let mut row = self.read_row(table, row_id)?;
+        if crate::cascade::pinned_version(&row, kind) == new_version {
+            return Ok(false);
+        }
+        crate::cascade::apply_cascade_bump(&mut row, new_version, kind);
+        self.update_row(table, row, message)?;
+        Ok(true)
+    }
+
     // ── Row CRUD ────────────────────────────────────────────────────────
 
     fn read_row(&self, _table: &str, _row_id: RowId) -> Result<ComponentRow, LibraryError> {
@@ -458,9 +497,40 @@ pub trait LibraryAdapter: Send + Sync {
         Ok(Vec::new())
     }
 
+    /// True when the most recent `list_symbols` succeeded but left some
+    /// symbols out because a container file could not be read or parsed.
+    /// Such a listing says nothing about what is *missing*, so callers
+    /// that report absence must not trust it.
+    fn symbol_listing_is_partial(&self) -> bool {
+        false
+    }
+
     /// For local-git, the `.snxlib/` directory; for DB, `None`.
     fn root_path(&self) -> Option<PathBuf> {
         None
+    }
+
+    /// Read, rewrite and write back one file of this library while holding
+    /// the library's cross-process write lock, so another Signex process
+    /// cannot write the file between the read and the write (#902).
+    ///
+    /// `rewrite` receives the file's current bytes (`None` when it does not
+    /// exist) and returns the bytes to write, or `None` to leave the file as
+    /// it is. Returns whether the file was written. A written file is
+    /// committed with `commit_message` before the lock is released, so
+    /// another process cannot replace it while git reads it. A failed
+    /// commit is logged, not returned: the file is already saved, and the
+    /// next commit picks it up.
+    ///
+    /// The default has no lock to take and no version control, and only
+    /// does the read and write; see [`rewrite_file`].
+    fn rewrite_file_locked(
+        &self,
+        abs_path: &std::path::Path,
+        _commit_message: &str,
+        rewrite: &mut crate::adapter::FileRewrite<'_>,
+    ) -> Result<bool, LibraryError> {
+        rewrite_file(abs_path, rewrite)
     }
 
     /// Stage and commit a file the caller already wrote to disk, using
@@ -507,6 +577,30 @@ pub trait LibraryAdapter: Send + Sync {
             "history not implemented for this adapter".into(),
         ))
     }
+}
+
+/// The rewrite step of [`LibraryAdapter::rewrite_file_locked`]: given the
+/// file's current bytes (`None` when it does not exist), the bytes to write,
+/// or `None` to leave it as it is.
+pub type FileRewrite<'a> = dyn FnMut(Option<&[u8]>) -> Result<Option<Vec<u8>>, LibraryError> + 'a;
+
+/// The read and write of [`LibraryAdapter::rewrite_file_locked`], with no
+/// lock. Used directly for a primitive file that belongs to no mounted
+/// library. The write is atomic.
+pub fn rewrite_file(
+    abs_path: &Path,
+    rewrite: &mut crate::adapter::FileRewrite<'_>,
+) -> Result<bool, LibraryError> {
+    let current = match std::fs::read(abs_path) {
+        Ok(bytes) => Some(bytes),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return Err(e.into()),
+    };
+    let Some(bytes) = rewrite(current.as_deref())? else {
+        return Ok(false);
+    };
+    signex_types::atomic_io::atomic_write(abs_path, &bytes)?;
+    Ok(true)
 }
 
 #[cfg(test)]

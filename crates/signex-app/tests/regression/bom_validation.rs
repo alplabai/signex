@@ -116,9 +116,15 @@ fn export_with_issues_still_writes_and_reports_the_summary() {
         .expect("preview open")
         .options
         .clone();
-    app.document_state.pending_bom_options = Some(options);
 
-    let _ = app.update(Message::Export(ExportMsg::BomFinished(Ok(out.clone()))));
+    let finished = Message::Export(ExportMsg::BomFinished {
+        source: app.document_state.active_path.clone().expect("active"),
+        options: Box::new(options),
+        result: Ok(out.clone()),
+    });
+    let task = app.update(finished);
+    assert!(!out.exists(), "the BOM write must not run inside update");
+    crate::settle_support::settle_task(&mut app, task);
 
     assert!(out.exists(), "advisory validation must not block the write");
     let notice = app
@@ -173,4 +179,76 @@ fn column_resize_ends_on_a_global_release_away_from_the_handle() {
         preview.column_widths[&0], width_while_dragging,
         "the column must stop following the cursor after the release"
     );
+}
+
+/// #592: a dropped column takes the slot of the header it is released on,
+/// whichever direction it was dragged.
+#[test]
+fn a_dragged_column_takes_the_slot_of_the_header_it_is_dropped_on() {
+    let mut app = app_with_faulty_bom();
+    let _ = app.update(Message::Menu(MenuMessage::ExportBom));
+    let columns = |app: &Signex| {
+        app.document_state
+            .bom_preview
+            .as_ref()
+            .unwrap()
+            .options
+            .columns
+            .clone()
+    };
+    let start = columns(&app);
+    assert!(start.len() >= 4, "need four columns, have {start:?}");
+
+    // Drag right: column 0 onto column 2 lands at index 2.
+    let _ = app.update(Message::BomPreview(BomPreviewMsg::ColumnDragStart(0)));
+    let _ = app.update(Message::BomPreview(BomPreviewMsg::ColumnDragDrop(2)));
+    let after_right = columns(&app);
+    assert_eq!(after_right[2], start[0]);
+    assert_eq!(&after_right[..2], &start[1..3]);
+
+    // Drag left: column 3 onto column 1 lands at index 1.
+    let _ = app.update(Message::BomPreview(BomPreviewMsg::ColumnDragStart(3)));
+    let _ = app.update(Message::BomPreview(BomPreviewMsg::ColumnDragDrop(1)));
+    let after_left = columns(&app);
+    assert_eq!(after_left[1], after_right[3]);
+    assert_eq!(after_left[2], after_right[1]);
+}
+
+#[test]
+fn a_failed_bom_write_reaches_the_user_after_the_task_runs() {
+    let dir = std::env::temp_dir().join(format!("signex-bom-859-{}", uuid::Uuid::new_v4()));
+    // The parent "directory" is a regular file, so the off-thread write fails.
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let blocker = dir.join("blocker");
+    std::fs::write(&blocker, b"x").expect("write blocker");
+    let out = blocker.join("bom.csv");
+
+    let mut app = app_with_faulty_bom();
+    let _ = app.update(Message::Menu(MenuMessage::ExportBom));
+    let options = app
+        .document_state
+        .bom_preview
+        .as_ref()
+        .expect("preview open")
+        .options
+        .clone();
+    let finished = Message::Export(ExportMsg::BomFinished {
+        source: app.document_state.active_path.clone().expect("active"),
+        options: Box::new(options),
+        result: Ok(out.clone()),
+    });
+    let task = app.update(finished);
+    assert!(
+        app.document_state.error_notice.is_none(),
+        "the write has not run yet"
+    );
+    crate::settle_support::settle_task(&mut app, task);
+
+    let notice = app
+        .document_state
+        .error_notice
+        .as_ref()
+        .expect("a failed write must be reported");
+    assert!(notice.detail.contains("Could not write BOM"), "{notice:?}");
+    assert!(!out.exists());
 }

@@ -21,9 +21,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
-use crate::render_config::{
-    GridStyle, LabelStyle, MultisheetStyle, PinSelectionMode, PowerPortStyle,
-};
+use crate::render_config::{GridStyle, PinSelectionMode};
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeId;
 
@@ -305,14 +303,6 @@ fn production_temp_fallback_path() -> PathBuf {
 /// `%APPDATA%\signex\`. If the legacy path has a file but the
 /// canonical path doesn't, copy it forward.
 ///
-/// **F3** (stale label-style discriminants): pre-v0.10 prefs files
-/// carried label-style tokens that aren't in the current canonical
-/// set. The reader silently falls through to `LabelStyle::Standard`
-/// for unknown discriminants, but the literal stale string lingers
-/// in user-space `prefs.json` until the user changes label style +
-/// saves. Rewrite once on startup so unknown tokens normalise to
-/// the canonical default.
-///
 /// `legacy` is the legacy (pre-v0.12) POSIX-shaped prefs path to
 /// pull from when canonical is missing. Production passes
 /// [`legacy_posix_prefs_path()`]; tests inject a tempdir-shaped path.
@@ -330,36 +320,6 @@ pub fn migrate_legacy_prefs(canonical: &Path, legacy: &Path) {
         && let Ok(bytes) = std::fs::read(legacy)
     {
         write_pref_atomic(canonical, &bytes, "migrate_legacy_prefs_copy");
-    }
-
-    // F3: rewrite any non-canonical label_style discriminant → "standard".
-    // Canonical writers emit lowercase "standard" / "altium"; we accept any
-    // case match and rewrite anything else to the default.
-    const CANONICAL_LABEL_STYLES: &[&str] = &["standard", "altium"];
-    let Ok(bytes) = std::fs::read(canonical) else {
-        return;
-    };
-    let Ok(mut json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
-        return;
-    };
-    let stale_label = json
-        .get("label_style")
-        .and_then(|v| v.as_str())
-        .map(|s| {
-            !CANONICAL_LABEL_STYLES
-                .iter()
-                .any(|c| s.eq_ignore_ascii_case(c))
-        })
-        .unwrap_or(false);
-    if stale_label {
-        json["label_style"] = serde_json::Value::String("standard".to_string());
-        if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-            write_pref_atomic(
-                canonical,
-                serialized.as_bytes(),
-                "migrate_legacy_label_style",
-            );
-        }
     }
 }
 
@@ -436,111 +396,6 @@ pub fn write_component_classes_pref(classes: &[ComponentClassEntry]) {
         if let Ok(value) = serde_json::to_value(classes) {
             prefs.insert("component_classes".to_string(), value);
         }
-    })
-}
-
-/// Read `power_port_style` from preferences file.
-/// Defaults to `Altium` when missing or invalid.
-pub fn read_power_port_style_pref() -> PowerPortStyle {
-    read_power_port_style_pref_at(&prefs_path())
-}
-
-pub fn read_power_port_style_pref_at(path: &Path) -> PowerPortStyle {
-    let raw = read_prefs_json(path)
-        .and_then(|j| j["power_port_style"].as_str().map(str::to_string))
-        .unwrap_or_default();
-    if raw.eq_ignore_ascii_case("standard") {
-        PowerPortStyle::Standard
-    } else {
-        PowerPortStyle::Altium
-    }
-}
-
-/// Persist power port style without clobbering other preference keys.
-pub fn write_power_port_style_pref(style: PowerPortStyle) {
-    write_power_port_style_pref_at(&prefs_path(), style)
-}
-
-pub fn write_power_port_style_pref_at(path: &Path, style: PowerPortStyle) {
-    let token = match style {
-        PowerPortStyle::Standard => "standard",
-        PowerPortStyle::Altium => "altium",
-    };
-    update_prefs_json(path, "power_port_style", |prefs| {
-        prefs.insert(
-            "power_port_style".to_string(),
-            serde_json::Value::String(token.to_string()),
-        );
-    })
-}
-
-/// Read `label_style` from preferences file.
-/// Defaults to `Standard` when missing or invalid.
-pub fn read_label_style_pref() -> LabelStyle {
-    read_label_style_pref_at(&prefs_path())
-}
-
-pub fn read_label_style_pref_at(path: &Path) -> LabelStyle {
-    let raw = read_prefs_json(path)
-        .and_then(|j| j["label_style"].as_str().map(str::to_string))
-        .unwrap_or_default();
-    if raw.eq_ignore_ascii_case("altium") {
-        LabelStyle::Altium
-    } else {
-        LabelStyle::Standard
-    }
-}
-
-/// Persist label style without clobbering other preference keys.
-pub fn write_label_style_pref(style: LabelStyle) {
-    write_label_style_pref_at(&prefs_path(), style)
-}
-
-pub fn write_label_style_pref_at(path: &Path, style: LabelStyle) {
-    let token = match style {
-        LabelStyle::Standard => "standard",
-        LabelStyle::Altium => "altium",
-    };
-    update_prefs_json(path, "label_style", |prefs| {
-        prefs.insert(
-            "label_style".to_string(),
-            serde_json::Value::String(token.to_string()),
-        );
-    })
-}
-
-/// Read `multisheet_style` from preferences file.
-/// Defaults to `Standard` when missing or invalid.
-pub fn read_multisheet_style_pref() -> MultisheetStyle {
-    read_multisheet_style_pref_at(&prefs_path())
-}
-
-pub fn read_multisheet_style_pref_at(path: &Path) -> MultisheetStyle {
-    let raw = read_prefs_json(path)
-        .and_then(|j| j["multisheet_style"].as_str().map(str::to_string))
-        .unwrap_or_default();
-    if raw.eq_ignore_ascii_case("altium") {
-        MultisheetStyle::Altium
-    } else {
-        MultisheetStyle::Standard
-    }
-}
-
-/// Persist multisheet style without clobbering other preference keys.
-pub fn write_multisheet_style_pref(style: MultisheetStyle) {
-    write_multisheet_style_pref_at(&prefs_path(), style)
-}
-
-pub fn write_multisheet_style_pref_at(path: &Path, style: MultisheetStyle) {
-    let token = match style {
-        MultisheetStyle::Standard => "standard",
-        MultisheetStyle::Altium => "altium",
-    };
-    update_prefs_json(path, "multisheet_style", |prefs| {
-        prefs.insert(
-            "multisheet_style".to_string(),
-            serde_json::Value::String(token.to_string()),
-        );
     })
 }
 
@@ -836,6 +691,7 @@ pub fn write_symbol_pin_selection_pref(mode: PinSelectionMode) {
     })
 }
 
+pub mod bundled;
 mod dock_layout;
 mod erc;
 mod misc;

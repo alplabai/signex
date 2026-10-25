@@ -50,8 +50,11 @@ impl Signex {
     /// Dirty documents at or under `target`, sorted. Pure: callers that need
     /// a footprint draft's flag folded into `dirty_paths` run
     /// `sync_editor_dirty_paths` first.
-    pub(crate) fn unsaved_documents(&self, target: &std::path::Path) -> Vec<std::path::PathBuf> {
-        let fold = CaseFold::host_default();
+    pub(crate) fn unsaved_documents(
+        &self,
+        target: &std::path::Path,
+        fold: CaseFold,
+    ) -> Vec<std::path::PathBuf> {
         let doc = &self.document_state;
         let mut found: Vec<std::path::PathBuf> = doc
             .dirty_paths
@@ -72,8 +75,31 @@ impl Signex {
     }
 
     /// Does `target`, or anything under it, still hold unsaved edits?
-    pub(crate) fn has_unsaved_edits(&self, target: &std::path::Path) -> bool {
-        !self.unsaved_documents(target).is_empty()
+    pub(crate) fn has_unsaved_edits(&self, target: &std::path::Path, fold: CaseFold) -> bool {
+        !self.unsaved_documents(target, fold).is_empty()
+    }
+
+    /// The key rules of the project this dialog was opened for: its probed
+    /// per-volume fold (#694), or the host default for a dialog on no project.
+    pub(crate) fn dialog_fold(&self, state: &RemoveDialogState) -> CaseFold {
+        state.project_id.map_or_else(CaseFold::host_default, |id| {
+            self.document_state.fold_for_project(id)
+        })
+    }
+
+    /// `state` with `tree_path[0]` re-pointed at its project's current index
+    /// (#855), or `None` after a Messages-panel warning when that project was
+    /// closed while the dialog was open.
+    pub(crate) fn repointed_dialog(&self, state: &RemoveDialogState) -> Option<RemoveDialogState> {
+        let mut state = state.clone();
+        if self.repoint_dialog_tree_path(state.project_id, &mut state.tree_path) {
+            return Some(state);
+        }
+        crate::diagnostics::log_warning(format!(
+            "Remove \"{}\" cancelled: its project was closed while the dialog was open.",
+            state.display_name
+        ));
+        None
     }
 
     /// Does another open project list a `.snxlib` that is `path`, lies under
@@ -82,8 +108,12 @@ impl Signex {
     /// directory. Both sides are normalised lexically (`..` and `.` folded,
     /// no IO) and compared under the prompt's case rule, so `b/../Lib.snxlib`
     /// and `Lib.snxlib` are one library.
-    fn library_listed_by_other_project(&self, owner: usize, path: &std::path::Path) -> bool {
-        let fold = CaseFold::host_default();
+    fn library_listed_by_other_project(
+        &self,
+        owner: usize,
+        path: &std::path::Path,
+        fold: CaseFold,
+    ) -> bool {
         let keys = KeyMap::lexical(fold);
         let target = std::path::PathBuf::from(keys.lexical_key(path));
         self.document_state
@@ -112,9 +142,11 @@ impl Signex {
     pub(crate) fn discard_block(&self, state: &RemoveDialogState) -> Option<DiscardBlock> {
         let owner = state.tree_path.first().copied()?;
         let reach = self.document_state.lexical_reach_sets();
-        let docs = self.unsaved_documents(&state.target_path);
+        let fold = self.dialog_fold(state);
+        let docs = self.unsaved_documents(&state.target_path, fold);
         let shared = |p: &std::path::Path| {
-            reach.reached_under_by_other(owner, p) || self.library_listed_by_other_project(owner, p)
+            reach.reached_under_by_other(owner, p)
+                || self.library_listed_by_other_project(owner, p, fold)
         };
         if shared(&state.target_path) || docs.iter().any(|p| shared(p)) {
             return Some(DiscardBlock::Shared);
@@ -131,7 +163,7 @@ impl Signex {
 
     /// Body text of the unsaved-edits prompt, and whether Discard is offered.
     pub(crate) fn exclude_dirty_prompt(&self, state: &RemoveDialogState) -> (String, bool) {
-        let docs = self.unsaved_documents(&state.target_path);
+        let docs = self.unsaved_documents(&state.target_path, self.dialog_fold(state));
         let name = &state.display_name;
         let mut body = if docs.len() <= 1 {
             format!("\"{name}\" has unsaved edits.")
@@ -176,19 +208,24 @@ impl Signex {
     ) -> iced::Task<Message> {
         use crate::app::{ExcludeDirtyChoice, RemoveChoice};
 
-        let Some(state) = self.ui_state.remove_dialog.take() else {
+        let Some(taken) = self.ui_state.remove_dialog.take() else {
             return iced::Task::none();
         };
-        if !state.unsaved_prompt {
-            self.ui_state.remove_dialog = Some(state);
+        if !taken.unsaved_prompt {
+            self.ui_state.remove_dialog = Some(taken);
             return iced::Task::none();
         }
+        let Some(state) = self.repointed_dialog(&taken) else {
+            self.refresh_panel_ctx();
+            return iced::Task::none();
+        };
         self.sync_editor_dirty_paths();
-        let docs = self.unsaved_documents(&state.target_path);
+        let fold = self.dialog_fold(&state);
+        let docs = self.unsaved_documents(&state.target_path, fold);
         match choice {
             ExcludeDirtyChoice::Save => {
                 for doc_path in &docs {
-                    if let Err(err) = self.try_save_dirty_path(doc_path) {
+                    if let Err(err) = self.try_save_dirty_path_with(doc_path, fold) {
                         self.report_exclude_save_failure(&state, doc_path, &err);
                         // Keep the prompt so the user can retry or cancel.
                         self.ui_state.remove_dialog = Some(state);
@@ -209,13 +246,12 @@ impl Signex {
                     self.refresh_panel_ctx();
                     return iced::Task::none();
                 }
-                let fold = CaseFold::host_default();
                 let mut tasks: Vec<iced::Task<Message>> = docs
                     .iter()
                     .flat_map(|p| self.close_tabs_of_removed(p, false, fold))
                     .collect();
                 tasks.push(self.apply_remove(&state, RemoveChoice::ExcludeFromProject));
-                self.discard_unsaved_edits(&docs, &state.display_name);
+                self.discard_unsaved_edits(&docs, &state.display_name, fold);
                 // The discard was logged after `apply_remove` refreshed the panels.
                 self.refresh_panel_ctx();
                 iced::Task::batch(tasks)
@@ -242,8 +278,12 @@ impl Signex {
 
     /// Drop the engines / editors and dirty markers held for `docs`, so a
     /// later Save All writes nothing for them.
-    fn discard_unsaved_edits(&mut self, docs: &[std::path::PathBuf], display_name: &str) {
-        let fold = CaseFold::host_default();
+    fn discard_unsaved_edits(
+        &mut self,
+        docs: &[std::path::PathBuf],
+        display_name: &str,
+        fold: CaseFold,
+    ) {
         let keys: std::collections::HashSet<String> =
             docs.iter().map(|p| path_key_with(p, fold)).collect();
         let doc = &mut self.document_state;

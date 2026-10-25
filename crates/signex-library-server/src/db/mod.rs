@@ -11,9 +11,11 @@
 //!   backing the `/tables` and `/rows` HTTP routes.
 //!
 //! The pool is a thin enum over SQLite (default for tests + offline) and
-//! Postgres (production). Schema is portable across both — see
-//! `migrations/0001_initial.sql` (legacy, retained for forward-compat) +
-//! `migrations/0005_tabular_components.sql` (the row table).
+//! Postgres (production). Each backend has its own migration set with
+//! identical versions and tables: `migrations/*.sql` (SQLite) and
+//! `migrations/postgres/*.sql`. sqlx checksums applied migrations, so a
+//! shipped file is never edited; a DDL change is a new, higher-numbered
+//! migration in BOTH sets.
 
 use std::str::FromStr;
 use std::sync::Arc;
@@ -131,7 +133,7 @@ impl AppState {
     pub async fn migrate(&self) -> sqlx::Result<()> {
         match &self.pool {
             DbPool::Sqlite(p) => MIGRATOR.run(p).await?,
-            DbPool::Postgres(p) => MIGRATOR.run(p).await?,
+            DbPool::Postgres(p) => POSTGRES_MIGRATOR.run(p).await?,
         }
         Ok(())
     }
@@ -634,8 +636,11 @@ async fn list_primitive_summaries(
     }
 }
 
-// SQLx migrator pulling from the on-disk `migrations/` folder.
+/// SQLite migrator (`migrations/*.sql`; sqlx does not recurse into `postgres/`).
 pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
+
+/// Postgres migrator (`migrations/postgres/*.sql`).
+pub static POSTGRES_MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations/postgres");
 
 /// Wrap `serde_json::Error` into the `sqlx::Error::Decode(Box<dyn StdError>)` form.
 fn decode_err(e: serde_json::Error) -> sqlx::Error {
@@ -658,4 +663,16 @@ fn is_unique_violation(err: &sqlx::Error) -> bool {
 /// row in the result set.
 fn uuid_decode_err(e: uuid::Error) -> sqlx::Error {
     sqlx::Error::Decode(Box::new(e))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The two migration sets must stay in lockstep (same versions).
+    #[test]
+    fn migration_sets_share_versions() {
+        let v = |m: &sqlx::migrate::Migrator| m.iter().map(|m| m.version).collect::<Vec<_>>();
+        assert_eq!(v(&MIGRATOR), v(&POSTGRES_MIGRATOR));
+    }
 }

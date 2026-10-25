@@ -47,6 +47,8 @@ fn add_project(app: &mut Signex, prj_path: &Path, sheet: &str) -> ProjectId {
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
+        case_fold: Default::default(),
+        case_probed: false,
     });
     id
 }
@@ -96,6 +98,7 @@ fn deleting_a_dirty_sheet_is_not_resurrected_by_save_all_on_quit() {
     open_dirty_sheet(&mut app, &sheet, id);
 
     app.ui_state.remove_dialog = Some(RemoveDialogState {
+        project_id: None,
         target_path: sheet.clone(),
         tree_path: vec![0, 0],
         display_name: "X.snxsch".to_string(),
@@ -196,6 +199,7 @@ fn closing_a_clean_project_keeps_a_sibling_projects_clean_engine() {
 
 fn delete_file(app: &mut Signex, target: &Path) {
     app.ui_state.remove_dialog = Some(RemoveDialogState {
+        project_id: None,
         target_path: target.to_path_buf(),
         tree_path: vec![0, 0],
         display_name: target.file_name().unwrap().to_string_lossy().into_owned(),
@@ -939,11 +943,24 @@ fn confirm_re_resolves_when_a_project_was_opened_since_the_refs_were_read() {
     assert!(first.dirty_paths.contains(&c_child), "C is not open yet");
     add_project(&mut app, &tmp.path().join("C.snxprj"), "c.snxsch");
 
+    // Park the probe: in-flight blocks new ones, so `units()` is exact. The
+    // projects were pushed outside `update`, so the tree may not have asked
+    // for any paths yet; then nothing parks and this update starts the probe.
+    let parked = app.document_state.project_fs.begin_probe(true).is_some();
     let task = app.update(Message::Project(ProjectMsg::CloseConfirm(
         ProjectCloseChoice::DiscardAll,
     )));
 
-    assert_eq!(task.units(), 1, "stale refs must trigger a fresh resolve");
+    let probe = usize::from(!parked);
+    assert_eq!(
+        task.units(),
+        1 + probe,
+        "stale refs must trigger a fresh resolve"
+    );
+    assert!(
+        app.ui_state.project_close_confirm.is_none(),
+        "the old prompt is taken until the re-resolve lands"
+    );
     assert!(
         app.document_state.dirty_paths.contains(&a_sheet),
         "nothing discarded yet",
@@ -977,6 +994,8 @@ fn a_project_opened_while_the_resolve_runs_triggers_a_fresh_resolve() {
     let stale = app.resolve_sheet_refs_blocking();
     add_project(&mut app, &tmp.path().join("C.snxprj"), "c.snxsch");
 
+    // Park the probe: in-flight blocks new ones, so `units()` is exact.
+    let _claimed = app.document_state.project_fs.begin_probe(true);
     let task = app.update(Message::Project(ProjectMsg::CloseRefsResolved {
         project_id,
         result: stale,
@@ -988,6 +1007,15 @@ fn a_project_opened_while_the_resolve_runs_triggers_a_fresh_resolve() {
         "the gate must not run on refs that predate C"
     );
     assert!(app.ui_state.project_close_confirm.is_none());
+    let fresh = app.resolve_sheet_refs_blocking();
+    let _ = app.update(Message::Project(ProjectMsg::CloseRefsResolved {
+        project_id,
+        result: fresh,
+    }));
+    assert!(
+        app.ui_state.project_close_confirm.is_some(),
+        "the fresh refs reach the gate"
+    );
 }
 
 /// An engine at `path` whose sheet references `child` (unsaved, in memory).
@@ -1153,4 +1181,122 @@ fn an_engine_edit_made_while_the_modal_is_up_re_prompts_instead_of_discarding() 
         .expect("re-prompt");
     assert_eq!(modal.dirty_paths, vec![a_sheet]);
     assert_eq!(modal.kept_paths, vec![c]);
+}
+
+/// Messages-panel lines of the current diagnostics.
+fn panel_messages(app: &Signex) -> Vec<String> {
+    app.document_state
+        .panel_ctx
+        .diagnostics
+        .iter()
+        .map(|e| e.message.clone())
+        .collect()
+}
+
+/// The re-read lines the Close Project confirm logged for `project_name`.
+fn reread_lines(app: &Signex, project_name: &str) -> Vec<String> {
+    let tag = format!("'{project_name}'");
+    panel_messages(app)
+        .into_iter()
+        .filter(|m| m.contains(&tag) && m.contains("re-read"))
+        .collect()
+}
+
+#[test]
+fn a_network_reference_in_a_sheet_disables_discard_all_and_says_so() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().expect("tempdir");
+    let (mut app, _task) = Signex::new();
+    let prj = tmp.path().join("NetRef.snxprj");
+    let a = add_project(&mut app, &prj, "a.snxsch");
+    let a_sheet = tmp.path().join("a.snxsch");
+    write_sheet_with_child(&a_sheet, r"\\attacker\share\x.snxsch");
+    open_dirty_sheet(&mut app, &a_sheet, a);
+
+    close_first_project(&mut app);
+
+    let modal = app
+        .ui_state
+        .project_close_confirm
+        .as_ref()
+        .expect("the dirty sheet still prompts");
+    assert_eq!(modal.dirty_paths, vec![a_sheet]);
+    assert!(modal.sheet_refs.discard_blocked_reason().is_some());
+    assert!(
+        panel_messages(&app).iter().any(|m| {
+            m.contains("'NetRef'")
+                && m.contains("Discard All is disabled")
+                && m.contains("network or device")
+        }),
+        "{:?}",
+        panel_messages(&app),
+    );
+}
+
+#[test]
+fn the_reread_line_names_a_new_dirty_document_not_a_project_change() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().expect("tempdir");
+    let (mut app, _task) = Signex::new();
+    let prj = tmp.path().join("WordingDirty.snxprj");
+    let a = add_project(&mut app, &prj, "a.snxsch");
+    open_dirty_sheet(&mut app, &tmp.path().join("a.snxsch"), a);
+    close_first_project(&mut app);
+    // A new dirty document appears while the prompt is up; no project changed.
+    open_dirty_sheet(&mut app, &tmp.path().join("fresh.snxsch"), a);
+
+    let _ = app.update(Message::Project(ProjectMsg::CloseConfirm(
+        ProjectCloseChoice::DiscardAll,
+    )));
+
+    let lines = reread_lines(&app, "WordingDirty");
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    assert!(lines[0].contains("unsaved changes"), "{}", lines[0]);
+    assert!(!lines[0].contains("open projects changed"), "{}", lines[0]);
+}
+
+#[test]
+fn the_reread_line_names_an_edited_sheet_reference_not_a_project_change() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().expect("tempdir");
+    let (mut app, _task) = Signex::new();
+    let prj = tmp.path().join("WordingRef.snxprj");
+    let a = add_project(&mut app, &prj, "a.snxsch");
+    let a_sheet = tmp.path().join("a.snxsch");
+    open_dirty_sheet(&mut app, &a_sheet, a);
+    close_first_project(&mut app);
+    // An engine edit adds a reference to a sheet nobody read from disk.
+    app.document_state.engines.insert(
+        a_sheet.clone(),
+        engine_referencing(&a_sheet, "newchild.snxsch"),
+    );
+
+    let _ = app.update(Message::Project(ProjectMsg::CloseConfirm(
+        ProjectCloseChoice::DiscardAll,
+    )));
+
+    let lines = reread_lines(&app, "WordingRef");
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    assert!(lines[0].contains("reference"), "{}", lines[0]);
+    assert!(!lines[0].contains("open projects changed"), "{}", lines[0]);
+}
+
+#[test]
+fn the_reread_line_still_names_a_project_that_was_opened() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().expect("tempdir");
+    let (mut app, _task) = Signex::new();
+    let prj = tmp.path().join("WordingOpen.snxprj");
+    let a = add_project(&mut app, &prj, "a.snxsch");
+    open_dirty_sheet(&mut app, &tmp.path().join("a.snxsch"), a);
+    close_first_project(&mut app);
+    add_project(&mut app, &tmp.path().join("Other.snxprj"), "o.snxsch");
+
+    let _ = app.update(Message::Project(ProjectMsg::CloseConfirm(
+        ProjectCloseChoice::DiscardAll,
+    )));
+
+    let lines = reread_lines(&app, "WordingOpen");
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    assert!(lines[0].contains("open projects changed"), "{}", lines[0]);
 }

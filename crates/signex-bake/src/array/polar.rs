@@ -102,6 +102,9 @@ pub(super) fn bake_polar(
         return Ok(());
     }
     let count = count as usize;
+    if !super::within_instance_cap("polar", source, Some(count), warnings) {
+        return Ok(());
+    }
 
     // Sweep angle is an Altium-style degrees-or-radians value via the
     // expression's unit family. We expect rad here (the parser

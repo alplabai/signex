@@ -67,6 +67,8 @@ fn add_named_project(app: &mut Signex, dir: &Path, file: &str, sheet: &str) -> P
             unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
+        case_fold: Default::default(),
+        case_probed: false,
     });
     id
 }
@@ -106,6 +108,7 @@ fn exclude(app: &mut Signex, target: &Path) {
     app.ui_state.remove_dialog = Some(RemoveDialogState {
         target_path: target.to_path_buf(),
         tree_path: vec![0, 0],
+        project_id: app.document_state.projects.first().map(|p| p.id),
         display_name: target.file_name().unwrap().to_string_lossy().into_owned(),
         is_outside_project: false,
         unsaved_prompt: false,

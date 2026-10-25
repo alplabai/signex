@@ -20,17 +20,29 @@ fn apply_primitive_listing(
     listing: Result<Vec<PrimitiveSummary>, LibraryError>,
     library: &str,
     kind: &str,
-) {
+) -> bool {
     match listing {
-        Ok(entries) => *cache = entries,
-        Err(error) => tracing::warn!(
-            target: "signex::library",
-            library = %library,
-            listing = kind,
-            error = %error,
-            "primitive listing failed; previous cache kept"
-        ),
+        Ok(entries) => {
+            *cache = entries;
+            true
+        }
+        Err(error) => {
+            tracing::warn!(
+                target: "signex::library",
+                library = %library,
+                listing = kind,
+                error = %error,
+                "primitive listing failed; previous cache kept"
+            );
+            false
+        }
     }
+}
+
+/// True when every listing succeeded and the symbol listing is not
+/// missing unreadable containers: only then can absence be reported.
+fn listings_complete(ok: [bool; 3], symbols_partial: bool) -> bool {
+    ok.iter().all(|listed| *listed) && !symbols_partial
 }
 
 impl Default for LibraryState {
@@ -40,6 +52,7 @@ impl Default for LibraryState {
         // `<config_dir>/signex/distributors.toml`.
         settings.preferred_order = super::super::settings::persistence::load_preferred_order();
         Self {
+            drift: Default::default(),
             set: LibrarySet::new(),
             open_libraries: Vec::new(),
             editors: HashMap::new(),
@@ -48,7 +61,6 @@ impl Default for LibraryState {
             settings,
             expanded: Vec::new(),
             panel_search: String::new(),
-            new_component: None,
             close_library_confirm: None,
             template_registry: Arc::new(TemplateRegistry::new_with_builtins()),
             library_browsers: HashMap::new(),
@@ -60,9 +72,13 @@ impl Default for LibraryState {
             skipped_updates_for: std::collections::HashSet::new(),
             installed_libraries: Vec::new(),
             global_libraries: Vec::new(),
+            stock_library: None,
             components_panel: ComponentsPanelState::default(),
             pending_mounts: HashMap::new(),
             external_poll_in_flight: false,
+            external_poll_stat_running: Default::default(),
+            external_poll_stall_reported: false,
+            external_poll_failure_reported: false,
         }
     }
 }
@@ -148,6 +164,8 @@ impl LibraryState {
             cached_sims: Vec::new(),
             cached_classes: Vec::new(),
             observed_stamp: None,
+            dangling: Default::default(),
+            own_edit_stamp: None,
             display: LibraryDisplaySettings::default(),
         };
         if let Some(adapter) = self.set.get(library_id)
@@ -162,6 +180,7 @@ impl LibraryState {
         }
         self.open_libraries.push(entry);
         self.expanded.push(true);
+        self.sweep_dangling_refs();
         Ok(())
     }
 
@@ -185,6 +204,8 @@ impl LibraryState {
                 self.expanded.remove(idx);
             }
             self.editors.retain(|key, _| key.library_path != root);
+            // Names, drift rows and Update must not use an unmounted library.
+            self.drift.check_pending = true;
         }
     }
 
@@ -242,6 +263,7 @@ impl LibraryState {
         // we don't have to call adapter methods while `library_at_mut`
         // holds &mut self.
         let symbols = adapter.list_symbols();
+        let symbols_partial = adapter.symbol_listing_is_partial();
         let footprints = adapter.list_footprints();
         let sims = adapter.list_sims();
         let classes = adapter.library_classes();
@@ -250,23 +272,26 @@ impl LibraryState {
             lib.cached_components = summaries;
             lib.cached_classes = classes;
             lib.observed_stamp = stamp;
+            lib.own_edit_stamp = None;
             // A failed listing keeps the previous cache and warns —
             // blanking it here would render a mounted library as
             // empty. See `apply_primitive_listing`.
-            apply_primitive_listing(
-                &mut lib.cached_symbols,
-                symbols,
-                &lib.display_name,
-                "symbols",
-            );
-            apply_primitive_listing(
-                &mut lib.cached_footprints,
-                footprints,
-                &lib.display_name,
-                "footprints",
-            );
-            apply_primitive_listing(&mut lib.cached_sims, sims, &lib.display_name, "sims");
+            let name = lib.display_name.clone();
+            let ok = [
+                apply_primitive_listing(&mut lib.cached_symbols, symbols, &name, "symbols"),
+                apply_primitive_listing(
+                    &mut lib.cached_footprints,
+                    footprints,
+                    &name,
+                    "footprints",
+                ),
+                apply_primitive_listing(&mut lib.cached_sims, sims, &name, "sims"),
+            ];
+            lib.dangling.listings_complete = listings_complete(ok, symbols_partial);
         }
+        self.sweep_dangling_refs();
+        // The library's symbols may have changed on disk.
+        self.drift.check_pending = true;
         Ok(())
     }
 
@@ -282,7 +307,9 @@ impl LibraryState {
     /// Re-read only the class registry of the library at `root`, after a
     /// class mutation. Leaves `observed_stamp` alone on purpose: the file
     /// changed, the table caches were not refreshed with it, and the next
-    /// external-edit poll must still notice that.
+    /// external-edit poll must still notice that. It records the stamp the
+    /// write left in `own_edit_stamp`, so that refresh is not reported as an
+    /// external edit (#827).
     pub fn refresh_classes(&mut self, root: &Path) {
         let Some(classes) = self
             .library_at(root)
@@ -293,6 +320,7 @@ impl LibraryState {
         };
         if let Some(lib) = self.library_at_mut(root) {
             lib.cached_classes = classes;
+            lib.own_edit_stamp = signex_library::DiskStamp::of(root).ok();
         }
     }
 
@@ -378,6 +406,9 @@ impl LibraryState {
         if project_paths.iter().any(|p| p == path) {
             return ComponentsMountSource::Project;
         }
+        if self.stock_library.as_deref() == Some(path) {
+            return ComponentsMountSource::Stock;
+        }
         if self.installed_libraries.iter().any(|p| p == path) {
             return ComponentsMountSource::Installed;
         }
@@ -456,6 +487,11 @@ pub struct OpenLibrary {
     /// and refreshes the caches when they differ. `None` = unknown, which
     /// the poll treats as "refresh on the next tick".
     pub observed_stamp: Option<signex_library::DiskStamp>,
+    /// Stamp of the file right after the app's own class write, which
+    /// [`LibraryState::refresh_classes`] leaves un-re-stamped on purpose. A
+    /// poll that finds exactly this stamp refreshes without reporting an
+    /// external change; any other stamp is a real external edit (#827).
+    pub own_edit_stamp: Option<signex_library::DiskStamp>,
     /// Per-library canvas display settings — Altium "Document
     /// Options" parity. Shared across every `.snxsym` /
     /// `.snxfpt` tab opened from this `.snxlib` (so a user
@@ -463,6 +499,9 @@ pub struct OpenLibrary {
     /// same grid / unit / background colour). In-memory only as
     /// of v0.9; v0.9.x can persist to `library.toml`.
     pub display: LibraryDisplaySettings,
+    /// Rows whose symbol / footprint / sim binding resolves to nothing,
+    /// from the last [`LibraryState::sweep_dangling_refs`].
+    pub dangling: crate::library::dangling::DanglingSweep,
 }
 
 /// Per-library canvas + UI defaults shared across every primitive
@@ -561,6 +600,7 @@ impl OpenLibrary {
         self.cached_components = summaries;
         self.cached_classes = adapter.library_classes();
         self.observed_stamp = stamp;
+        self.own_edit_stamp = None;
         self.reload_primitives(adapter);
         Ok(())
     }
@@ -578,21 +618,16 @@ impl OpenLibrary {
     /// failure as an empty library.
     pub fn reload_primitives(&mut self, adapter: &dyn LibraryAdapter) {
         let symbols = adapter.list_symbols();
+        let symbols_partial = adapter.symbol_listing_is_partial();
         let footprints = adapter.list_footprints();
         let sims = adapter.list_sims();
-        apply_primitive_listing(
-            &mut self.cached_symbols,
-            symbols,
-            &self.display_name,
-            "symbols",
-        );
-        apply_primitive_listing(
-            &mut self.cached_footprints,
-            footprints,
-            &self.display_name,
-            "footprints",
-        );
-        apply_primitive_listing(&mut self.cached_sims, sims, &self.display_name, "sims");
+        let name = &self.display_name;
+        let ok = [
+            apply_primitive_listing(&mut self.cached_symbols, symbols, name, "symbols"),
+            apply_primitive_listing(&mut self.cached_footprints, footprints, name, "footprints"),
+            apply_primitive_listing(&mut self.cached_sims, sims, name, "sims"),
+        ];
+        self.dangling.listings_complete = listings_complete(ok, symbols_partial);
     }
 
     /// Total number of rows across every cached table.

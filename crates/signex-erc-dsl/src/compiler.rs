@@ -69,6 +69,11 @@ pub fn compile(rules: &[RuleAst]) -> Result<Vec<CompiledRule>, Vec<DslError>> {
     let mut errors = Vec::new();
 
     for rule in rules {
+        let unsupported = crate::validator::unsupported_features(rule);
+        if !unsupported.is_empty() {
+            errors.extend(unsupported);
+            continue;
+        }
         match compile_rule(rule) {
             Ok(compiled) => out.push(compiled),
             Err(err) => errors.push(err),
@@ -219,6 +224,8 @@ fn evaluate_rule(
                         message: message.to_string(),
                         location: Point::new(0.0, 0.0),
                         location_space: LocationSpace::Unplaced,
+                        child_sheet: None,
+                        owner_sheet: None,
                         primary: None,
                         peer: None,
                     });
@@ -236,6 +243,8 @@ fn evaluate_rule(
                             message: message.to_string(),
                             location: pin.world_pos,
                             location_space: LocationSpace::ThisSheet,
+                            child_sheet: None,
+                            owner_sheet: None,
                             primary: Some(SelectedItem::new(symbol.uuid, SelectedKind::Symbol)),
                             peer: None,
                         });
@@ -253,6 +262,8 @@ fn evaluate_rule(
                         message: message.to_string(),
                         location: symbol.position,
                         location_space: LocationSpace::ThisSheet,
+                        child_sheet: None,
+                        owner_sheet: None,
                         primary: Some(SelectedItem::new(symbol.uuid, SelectedKind::Symbol)),
                         peer: None,
                     });
@@ -269,6 +280,8 @@ fn evaluate_rule(
                         message: message.to_string(),
                         location: sheet.position,
                         location_space: LocationSpace::ThisSheet,
+                        child_sheet: None,
+                        owner_sheet: None,
                         primary: Some(SelectedItem::new(sheet.uuid, SelectedKind::ChildSheet)),
                         peer: None,
                     });
@@ -422,7 +435,8 @@ fn resolve_field(field: &FieldExprAst, subject: Subject<'_>) -> Option<Value> {
         (FieldExprAst::MethodCall { object, method, .. }, Subject::Sheet(_))
             if object == "sheet" && method == "tagged" =>
         {
-            // Tag information is not projected into `ErcContext` yet.
+            // Unreachable through `compile()`, which rejects `sheet.tagged()`
+            // until tag information is projected into `ErcContext` (#835).
             Some(Value::Bool(false))
         }
         _ => None,

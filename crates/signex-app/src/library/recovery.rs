@@ -35,11 +35,8 @@
 //! (a single `Option<RecoveryDialog>` slot — only one dialog is
 //! visible at a time). The dispatcher routes adapter errors to it;
 //! the view-side overlay flow renders it from
-//! `app/view/mod.rs::collect_overlays`. The overlay predicate in the
-//! same file gates whether `collect_overlays` runs at all (see the
-//! `[needs_overlay predicate gates modal rendering]` invariant —
-//! without that flag the modal just doesn't paint and clicks
-//! vanish).
+//! `app/view/mod.rs::collect_overlays`, which runs every frame; the
+//! builder's own `is_some()` guard is the only open check.
 
 use std::path::PathBuf;
 

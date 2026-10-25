@@ -176,6 +176,28 @@ fn measure_scale(scale: &Scale, snxlib: &Path, rows: &mut Vec<Row>) {
         })
         .1
     });
+
+    // 6. One footprint's editor-open and save (#534). Not on the open path,
+    //    but `get_footprint` / `save_footprint` once round-tripped the value
+    //    through JSON, so they are kept here as the before/after probe.
+    let Some(fp_uuid) = LocalGitAdapter::open(snxlib)
+        .expect("open")
+        .list_footprints()
+        .expect("list_footprints")
+        .first()
+        .map(|s| s.uuid)
+    else {
+        return;
+    };
+    measure(name, "get_footprint", rows, || {
+        let a = LocalGitAdapter::open(snxlib).expect("open");
+        timed(|| a.get_footprint(fp_uuid).expect("get_footprint")).1
+    });
+    measure(name, "save_footprint (incl. git commit)", rows, || {
+        let a = LocalGitAdapter::open(snxlib).expect("open");
+        let fp = a.get_footprint(fp_uuid).expect("get_footprint");
+        timed(|| a.save_footprint(fp, "probe").expect("save_footprint")).1
+    });
 }
 
 /// A fresh `OpenLibrary` display entry with empty caches — mirrors what
@@ -192,6 +214,8 @@ fn blank_open_library(snxlib: &Path, adapter: &LocalGitAdapter) -> OpenLibrary {
         cached_sims: Vec::new(),
         cached_classes: Vec::new(),
         observed_stamp: None,
+        dangling: Default::default(),
+        own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
     }
 }

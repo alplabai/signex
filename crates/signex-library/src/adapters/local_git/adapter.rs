@@ -27,6 +27,26 @@ impl LibraryAdapter for LocalGitAdapter {
         Some(&self.file_path)
     }
 
+    fn relocate_library_file(&mut self, new_file: &Path) -> Result<(), LibraryError> {
+        Self::validate_file_path(new_file)?;
+        let new_root = parent_dir(new_file)?;
+        if new_root == self.root_dir {
+            // Record the rename in the library's own history before the
+            // adapter moves, so a failed commit leaves it on the old path.
+            let old_rel = self.snxlib_rel_path()?;
+            let new_rel = file_name_str(new_file)?;
+            self.commit_change(
+                Some(&old_rel),
+                &new_rel,
+                "",
+                &format!("rename {old_rel} to {new_rel}"),
+            )?;
+        }
+        self.root_dir = new_root;
+        self.file_path = new_file.to_path_buf();
+        Ok(())
+    }
+
     // ── Tables ─────────────────────────────────────────────────────────────
 
     fn list_tables(&self) -> Result<Vec<String>, LibraryError> {
@@ -378,11 +398,11 @@ impl LibraryAdapter for LocalGitAdapter {
     }
 
     fn get_footprint(&self, uuid: Uuid) -> Result<Footprint, LibraryError> {
-        self.read_primitive::<Footprint>(PrimitiveKind::Footprint, uuid)
+        self.read_footprint(uuid)
     }
 
     fn get_sim(&self, uuid: Uuid) -> Result<SimModel, LibraryError> {
-        self.read_primitive::<SimModel>(PrimitiveKind::Sim, uuid)
+        self.read_sim(uuid)
     }
 
     fn save_symbol(&self, sym: Symbol, message: &str) -> Result<(), LibraryError> {
@@ -402,7 +422,7 @@ impl LibraryAdapter for LocalGitAdapter {
     fn save_footprint(&self, fp: Footprint, message: &str) -> Result<(), LibraryError> {
         let uuid = fp.uuid;
         let new_version = fp.version.clone();
-        self.write_primitive(PrimitiveKind::Footprint, fp.uuid, &fp, message)?;
+        self.write_footprint(&fp, message)?;
         let mode = self.manifest_synth.workflow.mode;
         let _report = crate::cascade::cascade_after_footprint_save(self, uuid, &new_version, mode)?;
         Ok(())
@@ -411,7 +431,7 @@ impl LibraryAdapter for LocalGitAdapter {
     fn save_sim(&self, sm: SimModel, message: &str) -> Result<(), LibraryError> {
         let uuid = sm.uuid;
         let new_version = sm.version.clone();
-        self.write_primitive(PrimitiveKind::Sim, sm.uuid, &sm, message)?;
+        self.write_sim(&sm, message)?;
         let mode = self.manifest_synth.workflow.mode;
         let _report = crate::cascade::cascade_after_sim_save(self, uuid, &new_version, mode)?;
         Ok(())
@@ -433,6 +453,10 @@ impl LibraryAdapter for LocalGitAdapter {
         Ok(out)
     }
 
+    fn symbol_listing_is_partial(&self) -> bool {
+        !self.symbol_file_problems().is_empty()
+    }
+
     fn list_footprints(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
         self.list_primitive_summaries(PrimitiveKind::Footprint)
     }
@@ -441,8 +465,80 @@ impl LibraryAdapter for LocalGitAdapter {
         self.list_primitive_summaries(PrimitiveKind::Sim)
     }
 
+    fn bind_row_primitive_version(
+        &self,
+        table: &str,
+        row_id: RowId,
+        kind: crate::cascade::CascadeKind,
+        new_version: &str,
+        message: &str,
+    ) -> Result<bool, LibraryError> {
+        let table_owned = table.to_string();
+        let target = row_id.as_uuid().to_string();
+        let version = new_version.to_string();
+        let fallback = format!("bind row {row_id} in {table} to v{new_version}");
+        let mut changed = false;
+        // The row is found and rewritten under the write lock, after the
+        // reload, so a field another writer changed since the caller read
+        // the row is kept.
+        self.mutate_library_file_if_changed(
+            |lf| {
+                let entry = lf.tables.get_mut(&table_owned).ok_or_else(|| {
+                    LibraryError::NotFound(format!("table {table_owned} not in library"))
+                })?;
+                validate_legacy_header(&table_owned, &entry.columns)?;
+                let slot = entry
+                    .rows
+                    .iter_mut()
+                    .find(|r| {
+                        r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == Some(target.as_str())
+                    })
+                    .ok_or_else(|| {
+                        LibraryError::NotFound(format!("row {target} in table {table_owned}"))
+                    })?;
+                let mut row = library_row_to_component(slot)?;
+                if crate::cascade::pinned_version(&row, kind) == version {
+                    return Ok(false);
+                }
+                crate::cascade::apply_cascade_bump(&mut row, &version, kind);
+                *slot = component_to_library_row(&row)?;
+                changed = true;
+                Ok(true)
+            },
+            message,
+            &fallback,
+        )?;
+        Ok(changed)
+    }
+
     fn root_path(&self) -> Option<PathBuf> {
         Some(self.root_dir.clone())
+    }
+
+    fn rewrite_file_locked(
+        &self,
+        abs_path: &Path,
+        commit_message: &str,
+        rewrite: &mut crate::adapter::FileRewrite<'_>,
+    ) -> Result<bool, LibraryError> {
+        if !abs_path.starts_with(&self.root_dir) {
+            return Err(LibraryError::Backend(format!(
+                "rewrite_file_locked: {} is not under {}",
+                abs_path.display(),
+                self.root_dir.display(),
+            )));
+        }
+        let _write_lock = self.lock_for_write()?;
+        let written = crate::adapter::rewrite_file(abs_path, rewrite)?;
+        if written && let Err(e) = self.commit_external_change(abs_path, commit_message) {
+            tracing::warn!(
+                target: "signex::library",
+                path = %abs_path.display(),
+                error = %e,
+                "save primitive: file written, not committed",
+            );
+        }
+        Ok(written)
     }
 
     fn commit_external_change(&self, abs_path: &Path, message: &str) -> Result<(), LibraryError> {

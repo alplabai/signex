@@ -257,7 +257,7 @@ pub fn form_edit_row_f64<'a>(
         text_input("", &buf)
             .size(11)
             .on_input(move |s| {
-                if let Ok(v) = s.parse::<f64>() {
+                if let Some(v) = crate::numeric_field::parse_field_f64(&s) {
                     on_submit_cb(v)
                 } else {
                     PanelMsg::Noop

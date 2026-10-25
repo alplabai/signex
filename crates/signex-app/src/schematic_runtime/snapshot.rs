@@ -1,6 +1,6 @@
 use super::*;
 
-pub(super) fn build_renderer_snapshot(
+pub fn build_renderer_snapshot(
     snapshot: &SchematicRenderSnapshot,
     transform: &ScreenTransform,
     colors: &CanvasColors,
@@ -95,6 +95,43 @@ pub(super) fn build_renderer_snapshot(
         });
     }
 
+    // No-ERC directive: a diamond outline in the `no_connect` theme token,
+    // so it never reads as the no-connect X (which uses the body colour).
+    for directive in &snapshot.no_erc_directives {
+        let center = transform.world_to_screen((directive.position.x, directive.position.y));
+        if !point_visible(center, bounds, 10.0) {
+            continue;
+        }
+
+        let color = focus_color(to_iced(&colors.no_connect), focus_set, directive.uuid);
+        let half = signex_types::schematic::SCHEMATIC_RENDER_NO_CONNECT_HALF_LEN_MM.max(
+            screen_px_to_world_mm(
+                signex_types::schematic::SCHEMATIC_RENDER_NO_CONNECT_MIN_HALF_LEN_PX,
+                transform.scale,
+            ),
+        ) as f32;
+        let width_mm = stroke_world_mm(
+            signex_types::schematic::SCHEMATIC_RENDER_NO_CONNECT_STROKE_PX,
+            transform.scale,
+        );
+        let (cx, cy) = (directive.position.x as f32, directive.position.y as f32);
+        let corners = [
+            [cx, cy - half],
+            [cx + half, cy],
+            [cx, cy + half],
+            [cx - half, cy],
+        ];
+        for (i, p0) in corners.iter().enumerate() {
+            wires.push(WireInput {
+                id: renderer_id(directive.uuid).saturating_add(i as u64),
+                p0: *p0,
+                p1: corners[(i + 1) % corners.len()],
+                width_mm,
+                explicit_color: Some(to_rgba(color)),
+            });
+        }
+    }
+
     for junction in &snapshot.junctions {
         let center = transform.world_to_screen((junction.position.x, junction.position.y));
         if !point_visible(center, bounds, 6.0) {
@@ -141,31 +178,28 @@ pub(super) fn build_renderer_snapshot(
             ),
         });
 
-        if !symbol.reference.is_empty() {
-            reference_value_texts.push(TextInput {
-                content: symbol.reference.clone(),
-                position: [symbol.position.x as f32, (symbol.position.y - 3.5) as f32],
-                size_mm: 1.05,
-                color: to_rgba(stroke_color),
-                bold: false,
-                italic: false,
-                rotation_rad: symbol.rotation.to_radians() as f32,
-                h_align: HAlign::Center,
-                v_align: VAlign::Bottom,
-            });
+        let value_color = focus_color(to_iced(&colors.value), focus_set, symbol.uuid);
+        if !symbol.reference.is_empty()
+            && let Some(text) = field_text_input(
+                symbol,
+                &symbol.reference,
+                symbol.ref_text.as_ref(),
+                FieldSlot::Reference,
+                to_rgba(stroke_color),
+            )
+        {
+            reference_value_texts.push(text);
         }
-        if !symbol.value.is_empty() {
-            reference_value_texts.push(TextInput {
-                content: symbol.value.clone(),
-                position: [symbol.position.x as f32, (symbol.position.y + 3.6) as f32],
-                size_mm: 1.05,
-                color: to_rgba(focus_color(to_iced(&colors.value), focus_set, symbol.uuid)),
-                bold: false,
-                italic: false,
-                rotation_rad: symbol.rotation.to_radians() as f32,
-                h_align: HAlign::Center,
-                v_align: VAlign::Top,
-            });
+        if !symbol.value.is_empty()
+            && let Some(text) = field_text_input(
+                symbol,
+                &symbol.value,
+                symbol.val_text.as_ref(),
+                FieldSlot::Value,
+                to_rgba(value_color),
+            )
+        {
+            reference_value_texts.push(text);
         }
     }
 
@@ -408,7 +442,7 @@ pub(super) fn build_renderer_snapshot(
 
     for label in &snapshot.labels {
         let screen = transform.world_to_screen((label.position.x, label.position.y));
-        if !point_visible(screen, bounds, 22.0) {
+        if !text_anchor_visible(screen, bounds, 22.0, &label_aabb(label), transform.scale) {
             continue;
         }
 
@@ -423,9 +457,10 @@ pub(super) fn build_renderer_snapshot(
                 [0.0, 0.0, 0.0, 0.0],
                 transform,
             ));
+            let (tx, ty) = label::flag_text_anchor(label);
             labels.push(TextInput {
                 content: label.text.clone(),
-                position: [label.position.x as f32, label.position.y as f32],
+                position: [tx as f32, ty as f32],
                 size_mm: label
                     .font_size
                     .max(signex_types::schematic::SCHEMATIC_TEXT_MM)
@@ -434,7 +469,7 @@ pub(super) fn build_renderer_snapshot(
                 bold: false,
                 italic: false,
                 rotation_rad: label.rotation.to_radians() as f32,
-                h_align: HAlign::Center,
+                h_align: HAlign::Left,
                 v_align: VAlign::Center,
             });
         } else {
@@ -457,7 +492,7 @@ pub(super) fn build_renderer_snapshot(
 
     for note in &snapshot.text_notes {
         let pos = transform.world_to_screen((note.position.x, note.position.y));
-        if !point_visible(pos, bounds, 28.0) {
+        if !text_anchor_visible(pos, bounds, 28.0, &note_aabb(note), transform.scale) {
             continue;
         }
 
@@ -489,4 +524,57 @@ pub(super) fn build_renderer_snapshot(
         erc_markers: Vec::new(),
         wire_color_overrides: HashMap::new(),
     }
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum FieldSlot {
+    Reference,
+    Value,
+}
+
+/// Text for a symbol's reference/value field. The stored `TextProp` is the
+/// single source (draw and hit-test both read it); the fixed offsets below
+/// apply only to symbols that carry no `TextProp`. A hidden field draws
+/// nothing.
+pub(super) fn field_text_input(
+    symbol: &Symbol,
+    content: &str,
+    prop: Option<&TextProp>,
+    slot: FieldSlot,
+    color: [f32; 4],
+) -> Option<TextInput> {
+    if let Some(prop) = prop {
+        if prop.hidden {
+            return None;
+        }
+        // Rotation/justification are stored relative to the symbol; resolve
+        // them exactly as the SVG exporter does.
+        let (rot_deg, h_align, v_align) = field_effective_style(prop, symbol);
+        return Some(TextInput {
+            content: content.to_owned(),
+            position: [prop.position.x as f32, prop.position.y as f32],
+            size_mm: prop.font_size as f32,
+            color,
+            bold: false,
+            italic: false,
+            rotation_rad: rot_deg.to_radians() as f32,
+            h_align,
+            v_align,
+        });
+    }
+    let (dy, v_align) = match slot {
+        FieldSlot::Reference => (-3.5, VAlign::Bottom),
+        FieldSlot::Value => (3.6, VAlign::Top),
+    };
+    Some(TextInput {
+        content: content.to_owned(),
+        position: [symbol.position.x as f32, (symbol.position.y + dy) as f32],
+        size_mm: 1.05,
+        color,
+        bold: false,
+        italic: false,
+        rotation_rad: symbol.rotation.to_radians() as f32,
+        h_align: HAlign::Center,
+        v_align,
+    })
 }

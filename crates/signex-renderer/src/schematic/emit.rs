@@ -68,6 +68,7 @@ pub(super) fn emit_polygons(snapshot: &SchematicSnapshot, scene: &mut Scene) {
 
     for polygon in &snapshot.polygons {
         scene.polygons.push(GpuPolygon {
+            holes: Vec::new(),
             vertices: polygon.vertices.clone(),
             fill_color: polygon.fill_color,
             stroke_color: polygon.stroke_color,
@@ -153,6 +154,7 @@ pub(super) fn emit_overlay_polygon_bucket(
 ) {
     for polygon in polygons {
         output.push(GpuPolygon {
+            holes: Vec::new(),
             vertices: polygon.vertices.clone(),
             fill_color: polygon.fill_color,
             stroke_color: polygon.stroke_color,
@@ -280,6 +282,7 @@ pub(super) fn emit_erc_markers(
         ];
 
         scene.erc_marker_polygons.push(GpuPolygon {
+            holes: Vec::new(),
             vertices: erc_marker_vertices(marker.severity, marker.center, marker.radius_mm),
             fill_color,
             stroke_color: Some(stroke_color),

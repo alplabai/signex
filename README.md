@@ -99,7 +99,7 @@ formats one-way. Run it once against your project; open the resulting
 - **Altium-style dirty tracking (v0.8)** — closing tabs never prompts;
   project-close lists every dirty file with Save All / Discard All / Cancel
 - **Hierarchical sheet polish (v0.8)** — Altium-port-style child-sheet pins,
-  per-sheet stroke/fill colours, multisheet style preference
+  per-sheet stroke/fill colours
 - **TabPill chrome refactor (v0.8)** — 3-sided shared borders, theme-aware
   inactive fill, drag accent from theme
 - **Apache-clean native formats (v0.9)** — `.snxsch` / `.snxpcb` are the
@@ -209,8 +209,9 @@ There is currently no Intel macOS or ARM64 Linux build.
 
 ### First launch
 
-The current packages do not yet carry a trusted publisher or developer
-signature:
+Until release signing is enabled (see
+[docs/RELEASE_SIGNING.md](docs/RELEASE_SIGNING.md)), packages do not carry a
+trusted publisher or developer signature:
 
 - **Windows:** Microsoft Defender SmartScreen may appear. Select **More info**,
   then **Run anyway**.

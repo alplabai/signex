@@ -7,8 +7,11 @@
 
 mod camera;
 mod draw;
+mod erc_marker;
 pub mod grid;
 mod input;
+mod move_pick;
+mod shape_preview;
 
 use iced::event::Event;
 use iced::mouse;
@@ -16,7 +19,10 @@ use iced::widget::canvas;
 use iced::{Color, Rectangle, Renderer, Theme};
 
 pub use camera::Camera;
+pub use erc_marker::{ErcMarker, ErcMarkerSeverity};
 pub use grid::GridState;
+pub use move_pick::MovePick;
+pub use shape_preview::ShapePreviewKind;
 
 use crate::schematic_runtime::SchematicSheetExt as _;
 
@@ -51,11 +57,14 @@ pub struct CanvasState {
     move_dragging: bool,
     /// Current world position during a move-drag (for preview offset).
     move_current: Option<(f64, f64)>,
+    /// Set while a click-click move floats (see `move_pick::Float`).
+    move_float: Option<move_pick::Float>,
     // ─── Double-click detection ───
     /// Timestamp of last left-click (for double-click detection).
     last_click_time: Option<std::time::Instant>,
-    /// World position of last left-click.
-    last_click_world: Option<(f64, f64)>,
+    /// Screen position of last left-click (double-click distance is compared
+    /// in pixels, so zooming between presses cannot skew it).
+    last_click_screen: Option<(f32, f32)>,
 }
 
 // ─── CanvasSlot (the Program) ────────────────────────────
@@ -139,36 +148,13 @@ pub struct CanvasSlot {
     /// is a reference pick, not a selection. Synced from
     /// `ui_state.reorder_picker.is_some()` at the top of each view().
     pub reorder_picker_armed: bool,
+    /// Armed Active Bar Move / Move Selection; mirrors `ui_state.move_pick`.
+    pub move_pick: Option<MovePick>,
+    /// Bumped to cancel any floating move started under an older value.
+    pub move_epoch: u64,
     /// Two-click shape anchor + which shape is being drawn. Used by
     /// the rubber-band preview for Line / Rectangle / Circle.
     pub shape_anchor: Option<(signex_types::schematic::Point, ShapePreviewKind)>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ShapePreviewKind {
-    Line,
-    Rect,
-    Circle,
-}
-
-/// Canvas-side projection of an ERC violation — just enough to draw
-/// its marker without pulling the full Violation type into the render
-/// crate.
-#[derive(Debug, Clone)]
-pub struct ErcMarker {
-    pub x: f64,
-    pub y: f64,
-    pub severity: ErcMarkerSeverity,
-    /// Uuid of the primary offending item (label, wire, symbol, …).
-    /// Reserved for a future halo/highlight pass; unused today.
-    pub primary_uuid: Option<uuid::Uuid>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ErcMarkerSeverity {
-    Error,
-    Warning,
-    Info,
 }
 
 impl Default for CanvasSlot {
@@ -213,6 +199,8 @@ impl CanvasSlot {
             arc_points: Vec::new(),
             polyline_points: Vec::new(),
             reorder_picker_armed: false,
+            move_pick: None,
+            move_epoch: 0,
             shape_anchor: None,
         }
     }
@@ -263,17 +251,34 @@ impl CanvasSlot {
         self.viewport.set(bounds);
     }
 
-    /// Zoom one wheel notch about the view centre (View > Zoom In/Out).
-    /// Returns whether the camera changed (false at the zoom limits).
-    pub fn zoom_about_centre(&self, zoom_in: bool) -> bool {
+    /// World-space point (mm) under the centre of the last-recorded canvas
+    /// viewport. Used to drop a part that was picked from a list rather than
+    /// aimed at the canvas.
+    pub fn view_centre_world(&self) -> (f64, f64) {
+        let bounds = self.viewport.get();
+        let centre = iced::Point::new(bounds.width / 2.0, bounds.height / 2.0);
+        let world = self.camera.borrow().screen_to_world(centre, bounds);
+        (f64::from(world.x), f64::from(world.y))
+    }
+
+    /// View > Zoom In/Out: one `step` notch about the centre; false at the limits.
+    pub fn zoom_about_centre(&self, zoom_in: bool, step: f32) -> bool {
         let bounds = self.viewport.get();
         let centre = iced::Point::new(bounds.width / 2.0, bounds.height / 2.0);
         let notch = if zoom_in { 1.0 } else { -1.0 };
-        self.camera_mut().zoom_at(centre, notch, bounds)
+        self.camera_mut().zoom_at(centre, notch, step, bounds)
     }
 
-    /// Fit the camera to show the schematic content.
-    pub fn fit_to_paper(&mut self) {
+    /// Recentre the view on world point `(x, y)` without changing zoom
+    /// (View > Center View At Cursor, #525).
+    pub fn center_on_world(&self, x: f32, y: f32) {
+        let bounds = self.viewport.get();
+        self.camera_mut().center_on(iced::Point::new(x, y), bounds);
+    }
+
+    /// Fit the camera to the extents of the sheet's objects (symbols, wires,
+    /// labels, ...) plus a 10 mm margin.
+    pub fn fit_to_content(&mut self) {
         if let Some(snapshot) = self.active_snapshot()
             && let Some(bounds) = snapshot.content_bounds()
         {
@@ -316,8 +321,10 @@ pub struct CanvasViewPrefs<'a> {
     pub visible_grid_mm: f64,
     pub grid_style: crate::render_config::GridStyle,
     pub auto_focus: bool,
+    pub zoom_step: f32,
     pub draw_mode: crate::app::DrawMode,
     pub wire_color_overrides: &'a std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    pub selection_filters: &'a std::collections::HashSet<crate::active_bar::SelectionFilter>,
 }
 
 /// The schematic `canvas::Program` — a per-frame *view* of the app state,
@@ -448,7 +455,7 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         // "move" visually lifts the originals out of place and places them at
         // the cursor — matches Altium's behavior where the dragged objects
         // travel with the mouse and nothing stays behind at the old location.
-        let drag_offset = if state.move_dragging {
+        let drag_offset = if state.move_dragging && !self.float_is_stale(state) {
             state
                 .move_origin
                 .zip(state.move_current)
@@ -560,6 +567,11 @@ fn shift_snapshot_for_selection(
     for nc in out.no_connects.iter_mut() {
         if is_selected(nc.uuid, SelectedKind::NoConnect) {
             nc.position = shift(nc.position);
+        }
+    }
+    for d in out.no_erc_directives.iter_mut() {
+        if is_selected(d.uuid, SelectedKind::NoErcDirective) {
+            d.position = shift(d.position);
         }
     }
     for l in out.labels.iter_mut() {
@@ -738,6 +750,8 @@ pub enum CanvasEvent {
     },
     CursorMoved,
     FitAll,
+    /// Recentre on the last reported cursor position, keeping the zoom.
+    CenterAtCursor,
     /// Left-click at world coordinates — triggers hit-testing or tool action.
     Clicked {
         world_x: f64,
@@ -767,6 +781,11 @@ pub enum CanvasEvent {
         dx: f64,
         dy: f64,
     },
+    /// Click-click move picked up at this world point (#271).
+    MovePicked {
+        world_x: f64,
+        world_y: f64,
+    },
 }
 
 #[cfg(test)]
@@ -777,9 +796,10 @@ mod tests {
     /// only touches the camera, so the values here just have to exist —
     /// #631 moved the method onto the borrowing view, which needs both
     /// halves to be constructed.
-    fn test_prefs(
-        overrides: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
-    ) -> CanvasViewPrefs<'_> {
+    pub(super) fn test_prefs<'a>(
+        overrides: &'a std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+        filters: &'a std::collections::HashSet<crate::active_bar::SelectionFilter>,
+    ) -> CanvasViewPrefs<'a> {
         let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
         CanvasViewPrefs {
             grid_visible: true,
@@ -792,8 +812,10 @@ mod tests {
             visible_grid_mm: 1.27,
             grid_style: crate::render_config::GridStyle::Dots,
             auto_focus: false,
+            zoom_step: 1.1,
             draw_mode: crate::app::DrawMode::Ortho90,
             wire_color_overrides: overrides,
+            selection_filters: filters,
         }
     }
 
@@ -836,8 +858,8 @@ mod tests {
         )));
 
         // Act
-        let overrides = std::collections::HashMap::new();
-        let view = SchematicCanvas::new(&canvas, test_prefs(&overrides));
+        let (overrides, filters) = Default::default();
+        let view = SchematicCanvas::new(&canvas, test_prefs(&overrides, &filters));
         let action = view.update_pending_fit(Rectangle::new(
             iced::Point::new(0.0, 0.0),
             iced::Size::new(800.0, 600.0),
@@ -872,8 +894,8 @@ mod tests {
             iced::Point::new(0.0, 0.0),
             iced::Size::new(100.0, 50.0),
         )));
-        let overrides = std::collections::HashMap::new();
-        let view = SchematicCanvas::new(&canvas, test_prefs(&overrides));
+        let (overrides, filters) = Default::default();
+        let view = SchematicCanvas::new(&canvas, test_prefs(&overrides, &filters));
         let _ = view.update_pending_fit(bounds);
         let after_fit = canvas.live_camera();
 

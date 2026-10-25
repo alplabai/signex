@@ -6,6 +6,9 @@ use super::super::*;
 mod clicked;
 mod double_clicked;
 mod layout_drag;
+mod move_pick;
+mod sheet_tool;
+mod sync_sheet_pins;
 #[cfg(test)]
 mod tests;
 
@@ -45,6 +48,10 @@ impl Signex {
             CanvasEvent::CursorAt { x, y, zoom_pct } => {
                 self.ui_state.cursor_x = x as f64;
                 self.ui_state.cursor_y = y as f64;
+                if self.ui_state.cursor_document.as_deref() != self.cursor_document_now() {
+                    self.ui_state.cursor_document =
+                        self.cursor_document_now().map(std::path::Path::to_path_buf);
+                }
                 self.ui_state.zoom = zoom_pct;
                 // Hover detection: fast hit-test against the active
                 // schematic snapshot so the tooltip overlay (in
@@ -163,6 +170,9 @@ impl Signex {
                     );
                 }
             }
+            CanvasEvent::MovePicked { world_x, world_y } => {
+                self.handle_canvas_move_picked(world_x, world_y);
+            }
             CanvasEvent::DoubleClicked {
                 world_x,
                 world_y,
@@ -186,18 +196,39 @@ impl Signex {
                     .set(None);
                 self.interaction_state.pcb_canvas.pending_fit.set(None);
             }
-            CanvasEvent::FitAll => {
+            CanvasEvent::CenterAtCursor => {
+                // `cursor_x/y` is the world position `CursorAt` last reported.
+                // It means nothing in another document (a tab switched with
+                // the keyboard, another window), nor before the first hover.
+                if self.ui_state.cursor_document.is_none()
+                    || self.ui_state.cursor_document.as_deref() != self.cursor_document_now()
+                {
+                    return Task::none();
+                }
+                let (x, y) = (self.ui_state.cursor_x as f32, self.ui_state.cursor_y as f32);
+                // A user camera move cancels a deferred fit, as in `CursorMoved`;
+                // otherwise a queued fit lands afterwards and undoes the centring.
+                self.interaction_state
+                    .active_canvas_mut()
+                    .pending_fit
+                    .set(None);
+                self.interaction_state.pcb_canvas.pending_fit.set(None);
                 if self.has_active_schematic() {
-                    self.interaction_state.active_canvas_mut().fit_to_paper();
-                    self.interaction_state.active_canvas_mut().clear_bg_cache();
                     self.interaction_state
                         .active_canvas_mut()
-                        .clear_content_cache();
+                        .center_on_world(x, y);
+                } else if self.has_active_pcb() {
+                    self.interaction_state.pcb_canvas.center_on_world(x, y);
+                }
+                self.clear_active_camera_caches();
+            }
+            CanvasEvent::FitAll => {
+                if self.has_active_schematic() {
+                    self.interaction_state.active_canvas_mut().fit_to_content();
                 } else if self.has_active_pcb() {
                     self.interaction_state.pcb_canvas.fit_to_board();
-                    self.interaction_state.pcb_canvas.clear_bg_cache();
-                    self.interaction_state.pcb_canvas.clear_content_cache();
                 }
+                self.clear_active_camera_caches();
             }
             CanvasEvent::CtrlClicked { world_x, world_y } => {
                 if let Some(snapshot) = self.active_render_snapshot()
@@ -247,7 +278,10 @@ impl Signex {
         crate::fonts::write_unit_pref(self.ui_state.unit);
     }
 
-    fn resolve_child_sheet_path(&self, child_filename: &str) -> Option<std::path::PathBuf> {
+    pub(crate) fn resolve_child_sheet_path(
+        &self,
+        child_filename: &str,
+    ) -> Option<std::path::PathBuf> {
         // #339/#406 — resolve a relative child reference against the directory
         // of the sheet that CARRIES the reference (the active tab's path), not
         // the project directory. This matches `project_graph` / the
@@ -322,30 +356,80 @@ impl Signex {
         }
     }
 
-    pub(crate) fn open_selected_child_sheet(&mut self) -> bool {
-        let Some(snapshot) = self.active_render_snapshot() else {
-            return false;
-        };
-
-        let filename = self
-            .interaction_state
+    /// File reference of the first selected sheet symbol on the active sheet.
+    pub(crate) fn selected_child_sheet_filename(&self) -> Option<String> {
+        // Read the engine document (the source of truth) rather than the
+        // render snapshot, which is only a derived copy.
+        let document = self.document_state.active_engine()?.document();
+        self.interaction_state
             .active_canvas()
             .selected
             .iter()
             .find(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet)
             .and_then(|item| {
-                snapshot
+                document
                     .child_sheets
                     .iter()
                     .find(|sheet| sheet.uuid == item.uuid)
                     .map(|sheet| sheet.filename.clone())
-            });
+            })
+    }
 
-        if let Some(filename) = filename {
+    /// File references of every selected sheet symbol on the active sheet,
+    /// each distinct file once, in selection order.
+    pub(crate) fn selected_child_sheet_filenames(&self) -> Vec<String> {
+        let Some(engine) = self.document_state.active_engine() else {
+            return Vec::new();
+        };
+        let document = engine.document();
+        let mut filenames: Vec<String> = Vec::new();
+        for item in &self.interaction_state.active_canvas().selected {
+            if item.kind != signex_types::schematic::SelectedKind::ChildSheet {
+                continue;
+            }
+            let Some(sheet) = document.child_sheets.iter().find(|s| s.uuid == item.uuid) else {
+                continue;
+            };
+            if !filenames.contains(&sheet.filename) {
+                filenames.push(sheet.filename.clone());
+            }
+        }
+        filenames
+    }
+
+    pub(crate) fn open_selected_child_sheet(&mut self) -> bool {
+        if let Some(filename) = self.selected_child_sheet_filename() {
             self.open_or_focus_child_sheet(filename.as_str());
             true
         } else {
             false
+        }
+    }
+
+    /// The document a reported cursor point belongs to: the active schematic,
+    /// else the active tab (a PCB has no `active_path`). `active_path` comes
+    /// first because an undocked schematic window's event swaps it but not
+    /// `active_tab`. An undocked PCB window's event swaps both (#494), and
+    /// both then name its tab.
+    fn cursor_document_now(&self) -> Option<&std::path::Path> {
+        self.document_state.active_path.as_deref().or_else(|| {
+            self.document_state
+                .tabs
+                .get(self.document_state.active_tab)
+                .map(|tab| tab.path.as_path())
+        })
+    }
+
+    /// Redraw the active schematic or PCB canvas after its camera moved.
+    fn clear_active_camera_caches(&mut self) {
+        if self.has_active_schematic() {
+            let canvas = self.interaction_state.active_canvas_mut();
+            canvas.clear_bg_cache();
+            canvas.clear_content_cache();
+        } else if self.has_active_pcb() {
+            let canvas = &mut self.interaction_state.pcb_canvas;
+            canvas.clear_bg_cache();
+            canvas.clear_content_cache();
         }
     }
 }
@@ -388,6 +472,11 @@ fn primary_anchor_world(
             .iter()
             .find(|n| n.uuid == item.uuid)
             .map(|n| (n.position.x, n.position.y)),
+        SelectedKind::NoErcDirective => snap
+            .no_erc_directives
+            .iter()
+            .find(|d| d.uuid == item.uuid)
+            .map(|d| (d.position.x, d.position.y)),
         SelectedKind::TextNote => snap
             .text_notes
             .iter()

@@ -156,6 +156,60 @@ fn deeply_nested_def_chain_is_bounded() {
     ));
 }
 
+const TRI: &str = "Shape { geometry IndexedFaceSet { coord Coordinate { point [ 0 0 0, 1 0 0, 0 1 0 ] } coordIndex [ 0 1 2 -1 ] } }";
+
+fn warned(result: &signex_3d_model_importer::ModelImportResult, needle: &str) -> bool {
+    result
+        .warnings
+        .iter()
+        .any(|w| format!("{w:?}").contains(needle))
+}
+
+/// #885 review: each `USE` pastes its bound subtree at the current depth,
+/// so 40 levels of `DEF dk` + 250 nested transforms around `USE d(k-1)`
+/// would build a tree far past the parser's depth limit and overflow the
+/// stack in the mesh walk. The copy is refused instead.
+#[test]
+fn use_cannot_nest_a_copy_past_the_depth_limit() {
+    let (_tmp, models) = fixture();
+    let mut src = format!("#VRML V2.0 utf8\nDEF d0 {TRI}\n");
+    for k in 1..=40 {
+        src.push_str(&format!("DEF d{k} "));
+        src.push_str(&"Transform { children [ ".repeat(250));
+        src.push_str(&format!("USE d{} ", k - 1));
+        src.push_str(&"] } ".repeat(250));
+        src.push('\n');
+    }
+    src.push_str("USE d40\n");
+    std::fs::write(models.join("deep_use.wrl"), src).unwrap();
+    let result = import(&models, "deep_use.wrl").expect("imports with warnings");
+    assert!(warned(&result, "nest deeper than"), "{:?}", result.warnings);
+}
+
+/// #885 review: the copy each `DEF` keeps is charged to the same budget, so
+/// nested `DEF`d wrappers around one large subtree cannot each hold a full
+/// copy without bound.
+#[test]
+fn def_copies_draw_on_the_expansion_budget() {
+    let (_tmp, models) = fixture();
+    let points: Vec<String> = (0..1000).map(|i| format!("{i} 0 0")).collect();
+    let mut inner = format!("Group {{ children [ {} ] }}", "USE l0 ".repeat(1990));
+    for w in 0..30 {
+        inner = format!("DEF w{w} Group {{ children [ {inner} ] }}");
+    }
+    let src = format!(
+        "#VRML V2.0 utf8\nDEF l0 Shape {{ geometry IndexedFaceSet {{ coord Coordinate {{ point [ {} ] }} coordIndex [ 0 1 2 -1 ] }} }}\n{inner}\n",
+        points.join(", ")
+    );
+    std::fs::write(models.join("def_copies.wrl"), src).unwrap();
+    let result = import(&models, "def_copies.wrl").expect("imports with warnings");
+    assert!(
+        warned(&result, "instancing would copy more than"),
+        "{:?}",
+        result.warnings
+    );
+}
+
 #[test]
 fn moderately_nested_vrml_still_imports() {
     let (_tmp, models) = fixture();
@@ -258,5 +312,29 @@ fn directory_named_like_a_model_is_a_typed_error() {
     assert!(matches!(
         import(&models, "dir.stp"),
         Err(ModelImportError::IoFailed { .. })
+    ));
+}
+
+#[test]
+fn directory_named_like_a_vrml_model_is_a_typed_error() {
+    let (_tmp, models) = fixture();
+    std::fs::create_dir(models.join("dir.wrl")).unwrap();
+    assert!(matches!(
+        import(&models, "dir.wrl"),
+        Err(ModelImportError::IoFailed { .. })
+    ));
+}
+
+/// The cap is checked against the file length before any byte is read, so a
+/// sparse file one byte over the cap is refused without allocating it.
+#[test]
+fn over_cap_vrml_is_refused_before_it_is_read() {
+    let (_tmp, models) = fixture();
+    let f = std::fs::File::create(models.join("huge.wrl")).unwrap();
+    f.set_len(256 * 1024 * 1024 + 1).unwrap();
+    drop(f);
+    assert!(matches!(
+        import(&models, "huge.wrl"),
+        Err(ModelImportError::IoFailed { message, .. }) if message.contains("read cap")
     ));
 }

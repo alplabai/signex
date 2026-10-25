@@ -14,6 +14,7 @@ impl SchematicCanvas<'_> {
         // the symbol-field anchor→moved guide line, which the content
         // render doesn't draw on its own.
         if state.move_dragging
+            && !self.float_is_stale(state)
             && let (Some(origin), Some(current)) = (state.move_origin, state.move_current)
         {
             let dx = (current.0 - origin.0) as f32;
@@ -147,6 +148,20 @@ impl SchematicCanvas<'_> {
                                     iced::Point::new(
                                         (nc.position.x + dxf) as f32,
                                         (nc.position.y + dyf) as f32,
+                                    ),
+                                    bounds,
+                                );
+                                draw_x(&mut *frame, s);
+                            }
+                        }
+                        SelectedKind::NoErcDirective => {
+                            if let Some(d) =
+                                snap.no_erc_directives.iter().find(|d| d.uuid == sel.uuid)
+                            {
+                                let s = cam.world_to_screen(
+                                    iced::Point::new(
+                                        (d.position.x + dxf) as f32,
+                                        (d.position.y + dyf) as f32,
                                     ),
                                     bounds,
                                 );

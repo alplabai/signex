@@ -45,7 +45,7 @@ pub(crate) fn is_dispatchable(command: &AppCommandId) -> bool {
 
 /// The resolution itself. Pure: no logging, no side effects, so both
 /// entry points above are built from one table and cannot drift.
-fn resolve(command: &AppCommandId) -> Option<Message> {
+pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
     use crate::library::editor::footprint::state::EditorMode;
 
     let message = match command.as_str() {
@@ -56,10 +56,12 @@ fn resolve(command: &AppCommandId) -> Option<Message> {
         // No originating window: this Esc was invoked as a command, not
         // typed. `None` resolves as a main-window Esc (#547).
         "cancel_current_tool" => Message::EscapePressed { window: None },
-        "center_view_at_cursor"
-        | "show_all_design_objects"
-        | "zoom_to_all_objects"
-        | "zoom_to_fit" => Message::CanvasEvent(CanvasEvent::FitAll),
+        // Recentres without zooming; it used to share the fit arm below (#525).
+        "center_view_at_cursor" => Message::CanvasEvent(CanvasEvent::CenterAtCursor),
+        // One fit primitive; it frames object extents, as all three labels promise.
+        "show_all_design_objects" | "zoom_to_all_objects" | "zoom_to_fit" => {
+            Message::CanvasEvent(CanvasEvent::FitAll)
+        }
         "copy" => Message::Edit(EditMsg::Copy),
         "cycle_selection_mode" => Message::CycleSelectionMode,
         "next_grid" => Message::Ui(UiMsg::GridCycle),
@@ -69,6 +71,7 @@ fn resolve(command: &AppCommandId) -> Option<Message> {
         "cut" => Message::Edit(EditMsg::Cut),
         "delete_selection" | "remove_last_vertex" => Message::Edit(EditMsg::DeleteSelected),
         "draw_graphic_line" => Message::Tool(ToolMessage::SelectTool(Tool::Line)),
+        "draw_hierarchical_sheet" => Message::Tool(ToolMessage::SelectTool(Tool::Sheet)),
         "duplicate" => Message::Edit(EditMsg::Duplicate),
         // Docking the Properties panel IS how this app shows the
         // selection's properties: the status bar's
@@ -338,13 +341,13 @@ mod tests {
         "autoplace_fields", "break_wire", "center_on_cursor", "clear_net_highlighting",
         "close_active_document", "copy_attributes_or_add_vertex", "cycle_fast_grid",
         "cycle_snap_grid_backward", "cycle_wiring_mode", "drag_keep_connections",
-        "draw_hierarchical_sheet", "edit_footprint_field",
+        "edit_footprint_field",
         "edit_library_symbol", "edit_object_properties", "edit_reference_designator",
         "edit_selected_symbol_in_symbol_editor",
         "edit_text_in_place", "edit_value", "fast_grid_1", "fast_grid_2", "find_next",
         "find_previous", "find_similar_objects", "highlight_net_under_cursor",
         "highlight_related_net_objects", "import_graphics", "leave_sheet", "measure_distance",
-        "move_object", "navigate_up_hierarchy", "next_document_tab",
+        "navigate_up_hierarchy", "next_document_tab",
         "next_highlighted_net_item", "next_sheet", "open_datasheet",
         "place_design_block",
         "place_global_label", "place_hierarchical_label", "place_junction",
@@ -443,6 +446,24 @@ mod tests {
         assert!(matches!(
             resolve("zoom_to_all_objects"),
             Message::CanvasEvent(CanvasEvent::FitAll)
+        ));
+        // #525: centring is not a fit.
+        assert!(matches!(
+            resolve("center_view_at_cursor"),
+            Message::CanvasEvent(CanvasEvent::CenterAtCursor)
+        ));
+    }
+
+    /// #271 — `move_object` (Altium's `M M`) resolves to the interactive
+    /// Move, not to Move Selection or an unmapped no-op.
+    #[test]
+    fn move_object_resolves_to_the_interactive_move_action() {
+        let command = AppCommandId::new("move_object").expect("a catalog id is valid");
+        assert!(matches!(
+            core_to_message(&command),
+            Some(Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+                crate::active_bar::ActiveBarAction::Move
+            )))
         ));
     }
 

@@ -168,36 +168,12 @@ impl Signex {
         let ui = &self.ui_state;
         let document = &self.document_state;
         let interaction = &self.interaction_state;
-        // Context-aware menu: each leaf gates on whether its action
-        // makes sense in the current app state. `has_schematic` /
-        // `has_selection` drive most entries; undo / redo consult
-        // the engine's history so they grey out when empty.
-        // v0.14.2: surface the active tab's primitive-editor kind to
-        // the menu so File ▸ Save / Save As enable themselves for
-        // `.snxsym` and `.snxfpt` standalone editor tabs.
-        let active_tab_kind = document.tabs.get(document.active_tab).map(|t| &t.kind);
-        let has_symbol_editor =
-            matches!(active_tab_kind, Some(crate::app::TabKind::SymbolEditor(_)));
-        let has_footprint_editor = matches!(
-            active_tab_kind,
-            Some(crate::app::TabKind::FootprintEditor(_))
-        );
-
+        // Context-aware menu: rows keyed on a command id grey through
+        // `command::is_enabled`, from this window's `CommandContext` —
+        // the same predicate the keyboard path dispatches by (#368).
         let menu_ctx = crate::menu_bar::MenuContext {
-            has_schematic: self.has_active_schematic(),
-            has_pcb: self.has_active_pcb(),
+            commands: self.command_context(Some(window_id)),
             has_project: document.active_project.is_some(),
-            has_selection: !interaction.canvas_for_window(window_id).selected.is_empty(),
-            can_undo: document
-                .engine_for_window(window_id, ui)
-                .map(|e| e.can_undo())
-                .unwrap_or(false),
-            can_redo: document
-                .engine_for_window(window_id, ui)
-                .map(|e| e.can_redo())
-                .unwrap_or(false),
-            has_symbol_editor,
-            has_footprint_editor,
             // Secondary windows (detached modal, undocked tab) borrow
             // the main window's scale. Good enough until per-window
             // scale tracking lands — it's only wrong if the user drags
@@ -371,116 +347,31 @@ impl Signex {
         // correct.
         let main: Element<'_, Message> = main.into();
 
-        // v0.13 — `has_active_bar` is now true for ANY editor tab
-        // that mounts an active bar (schematic / footprint /
-        // symbol library) so the layers Stack mounts and the bar
-        // layer fires from `view_main_for` regardless of editor
-        // kind.
-        let active_tab_kind_any = self
-            .document_state
-            .tabs
-            .get(self.document_state.active_tab)
-            .map(|t| &t.kind);
-        let has_footprint_bar = matches!(
-            active_tab_kind_any,
-            Some(crate::app::TabKind::FootprintEditor(_))
-        );
-        let has_symbol_bar = matches!(
-            active_tab_kind_any,
-            Some(crate::app::TabKind::SymbolEditor(_))
-        );
-        let has_active_bar = self.has_active_schematic() || has_footprint_bar || has_symbol_bar;
-        let dragging_tab = ui.tab_dragging.is_some();
-        let needs_overlay = has_active_bar
-            || interaction.editing_text.is_some()
-            || interaction.context_menu.is_some()
-            || interaction.project_tree_context_menu.is_some()
-            || interaction.tab_context_menu.is_some()
-            || interaction.active_bar_menu.is_some()
-            || interaction.canvas.placement_paused
-            || self
-                .document_state
-                .tabs
-                .get(self.document_state.active_tab)
-                .and_then(|tab| tab.kind.as_footprint_editor())
-                .and_then(|path| self.document_state.footprint_editors.get(path))
-                .map(|ed| {
-                    ed.state.placement_paused
-                        || ed.state.active_bar_menu.is_some()
-                        || ed.state.move_by_modal.is_some()
-                        || ed.state.align_modal.is_some()
-                })
-                .unwrap_or(false)
-            || ui.panel_list_open
-            || ui.find_replace.open
-            || ui.preferences_open
-            || ui.keyboard_shortcuts_open
-            || ui.about_open
-            || ui.passive_calculator_open
-            || ui.first_run_tour_open
-            || ui.rename_dialog.is_some()
-            || ui.remove_dialog.is_some()
-            || ui.project_close_confirm.is_some()
-            || ui.app_quit_confirm.is_some()
-            || ui.project_options.is_some()
-            || ui.enable_version_control.is_some()
-            || ui.grid_properties.is_some()
-            || ui.selection_filter_custom.is_some()
-            || interaction.grid_picker.is_some()
-            || document.bom_preview.is_some()
-            || ui.annotate_dialog_open
-            || ui.annotate_reset_confirm
-            || ui.erc_dialog_open
-            || !document.dock.floating.is_empty()
-            || dragging_tab
-            || ui.net_color_custom.show
-            // Library-side modals (New Component, Place Component picker,
-            // Pick Symbol/Footprint primitive picker) can be triggered
-            // from non-canvas contexts — e.g. the Library Browser tab's
-            // Add Component button. Without these flags the overlay
-            // Stack would never be built and the modal layer in
-            // collect_overlays would silently no-op.
-            || self.library.new_component.is_some()
-            || self.library.picker.is_some()
-            || self.library.primitive_picker.is_some()
-            || self.library.close_library_confirm.is_some()
-            || self.library.document_options.is_some()
-            || self.library.recovery.is_some()
-            || self.library.create_options.is_some()
-            || self.library.library_updates.is_some()
-            || self
-                .library
-                .library_browsers
-                .values()
-                .any(|s| s.edit_modal.is_some() || s.delete_confirm.is_some())
-            || ui.command_palette.open
-            // Hover tooltip — needs the overlay stack to render even
-            // when no other modal is open; otherwise `view_hover_tooltip`
-            // produces an Element that's silently dropped on every
-            // frame the user hovers a symbol over a bare canvas.
-            // Mirrors the needs_overlay-predicate-gates-modal pattern.
-            || (interaction.hover_symbol_uuid.is_some()
-                && interaction
-                    .hover_started_at
-                    .is_some_and(|t| t.elapsed() >= std::time::Duration::from_millis(700)));
-
-        if needs_overlay {
-            let mut overlays = self.collect_overlays();
-            // Tab drag ghost: only renders once the cursor has
-            // travelled past the same 6 px threshold the cursor
-            // gating uses (`tab_bar::view`). Mirrors that gate
-            // here so press-without-move keeps the ghost off.
-            if let Some((tab_idx, ox, oy)) = ui.tab_dragging
-                && let Some(tab) = document.tabs.get(tab_idx)
-            {
-                const DRAG_GHOST_THRESHOLD_PX: f32 = 6.0;
-                let (mx, my) = interaction.last_mouse_pos;
-                let dx = mx - ox;
-                let dy = my - oy;
-                if dx * dx + dy * dy > DRAG_GHOST_THRESHOLD_PX * DRAG_GHOST_THRESHOLD_PX {
-                    overlays.push(self.view_tab_drag_ghost(&tab.title));
-                }
+        // No open-predicate here on purpose. Every overlay builder owns
+        // its own "am I open?" guard and returns no layers when closed
+        // (see `overlay_id::extend_overlay`), so the layer list is the
+        // single answer to "is anything painted". A hand-written copy of
+        // those guards drifted — ErrorNotice, NetlistIncompletePrompt and
+        // PrintPreview were missing, so they only painted on an editor tab
+        // (#114). A new overlay needs a builder guard and an `OverlayId`,
+        // nothing else.
+        let mut overlays = self.collect_overlays();
+        // Tab drag ghost: only renders once the cursor has travelled past
+        // the same 6 px threshold the cursor gating uses
+        // (`tab_bar::view`). Mirrors that gate here so press-without-move
+        // keeps the ghost off.
+        if let Some((tab_idx, ox, oy)) = ui.tab_dragging
+            && let Some(tab) = document.tabs.get(tab_idx)
+        {
+            const DRAG_GHOST_THRESHOLD_PX: f32 = 6.0;
+            let (mx, my) = interaction.last_mouse_pos;
+            let dx = mx - ox;
+            let dy = my - oy;
+            if dx * dx + dy * dy > DRAG_GHOST_THRESHOLD_PX * DRAG_GHOST_THRESHOLD_PX {
+                overlays.push(self.view_tab_drag_ghost(&tab.title));
             }
+        }
+        if !overlays.is_empty() {
             let mut stack = iced::widget::Stack::new().push(main);
             // Resize edges sit above the content but below functional
             // overlays (Active Bar, menus, modals) so the 6 px border
@@ -637,12 +528,24 @@ impl Signex {
                     other => other,
                 })
             }
-        } else if self.has_active_pcb() {
-            let pcb_canvas = &self.interaction_state.pcb_canvas;
+        } else if self.pcb_for_window(window_id).is_some() {
+            // Each window reads its own PCB canvas, and an undocked
+            // window's events carry its id, as for the schematic (#494).
+            let pcb_canvas = self.interaction_state.pcb_canvas_for_window(window_id);
             let base: Element<'_, Message> = canvas(pcb_canvas)
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .into();
+            let base = if is_main {
+                base
+            } else {
+                base.map(move |msg| match msg {
+                    Message::CanvasEvent(event) => {
+                        Message::CanvasEventInWindow { window_id, event }
+                    }
+                    other => other,
+                })
+            };
             if pcb_canvas.gpu_render {
                 // Stack the GPU shader ABOVE the CPU canvas: the canvas paints
                 // the opaque background + grid and owns pan/zoom/cursor/fit;
@@ -678,7 +581,11 @@ impl Signex {
                 Surface::ProjectHint => start_screen::hint_view(tokens),
                 Surface::Start => {
                     let open_shortcut = self.keymap_shortcut_label("open_document", "Ctrl+O");
-                    start_screen::view(tokens, &open_shortcut)
+                    start_screen::view(
+                        tokens,
+                        &open_shortcut,
+                        self.ui_state.recent_projects.entries(),
+                    )
                 }
             }
         }
@@ -729,6 +636,9 @@ impl Signex {
         layers
     }
 }
+
+#[cfg(test)]
+mod overlay_paint_tests;
 
 #[cfg(test)]
 mod chrome_geometry_tests {

@@ -207,7 +207,13 @@ pub fn write_tsv_block<R: SnxTable>(block: &str, rows: &[R]) -> Result<String, F
     header.extend(foreign.iter().map(|name| encode_cell(name)));
     all_rows.push(header);
     for row in rows {
-        let mut cells = row.to_row();
+        let mut cells =
+            row.to_row()
+                .map_err(|NonFiniteField(field)| FormatError::NonFiniteField {
+                    block: block.to_string(),
+                    row: all_rows.len() - 1,
+                    field: field.to_string(),
+                })?;
         debug_assert_eq!(
             cells.len(),
             columns.len(),
@@ -403,17 +409,25 @@ pub(in crate::format) fn parse_f64(
     row: usize,
     field: &str,
 ) -> Result<f64, FormatError> {
+    // the writer never emits an empty float cell, so an empty cell is corruption,
+    // not "default 0". Non-finite values (`NaN`, `inf`, `infinity`) parse under
+    // `str::parse::<f64>` but are never valid document geometry.
+    let err = |message: String| FormatError::TsvFieldParse {
+        block: block.to_string(),
+        row,
+        field: field.to_string(),
+        message,
+    };
     if value.is_empty() {
-        return Ok(0.0);
+        return Err(err("empty float cell".to_string()));
     }
-    value
+    let parsed: f64 = value
         .parse()
-        .map_err(|e: std::num::ParseFloatError| FormatError::TsvFieldParse {
-            block: block.to_string(),
-            row,
-            field: field.to_string(),
-            message: e.to_string(),
-        })
+        .map_err(|e: std::num::ParseFloatError| err(e.to_string()))?;
+    if !parsed.is_finite() {
+        return Err(err(format!("non-finite float {value:?}")));
+    }
+    Ok(parsed)
 }
 
 pub(in crate::format) fn parse_uuid(
@@ -450,19 +464,21 @@ pub(in crate::format) fn parse_uuid(
 /// Format an `f64` for TSV: trailing zeros stripped to keep diffs
 /// minimal. Whole numbers emit as `0` rather than `0.0`.
 ///
-/// HI-13: the previous `< 1e15` guard was looser than the actual
-/// `i64::MAX as f64` boundary, and the `as i64` cast would wrap on
-/// the gap between them. Use the real cast bound and route non-finite
-/// inputs through `format!("{f}")` (which produces `"NaN"` / `"inf"`
-/// — visible at parse time rather than silently corrupted).
-pub(in crate::format) fn format_f64(f: f64) -> String {
+/// HI-13: the `as i64` cast would wrap past `i64::MAX as f64`, so whole
+/// numbers use the real cast bound. A non-finite value is refused: the
+/// reader rejects `NaN` / `inf`, so writing one would save a document
+/// that cannot be reopened.
+pub(in crate::format) fn format_f64(f: f64, field: &'static str) -> Result<String, NonFiniteField> {
+    if !f.is_finite() {
+        return Err(NonFiniteField(field));
+    }
     if f == 0.0 {
-        return "0".to_string();
+        return Ok("0".to_string());
     }
-    if f.is_finite() && f.fract() == 0.0 && f.abs() < (i64::MAX as f64) {
-        return format!("{}", f as i64);
+    if f.fract() == 0.0 && f.abs() < (i64::MAX as f64) {
+        return Ok(format!("{}", f as i64));
     }
-    format!("{f}")
+    Ok(format!("{f}"))
 }
 
 // ---------------------------------------------------------------------------

@@ -8,6 +8,9 @@
 #[derive(Clone, Debug, Default)]
 pub struct GpuPolygon {
     pub vertices: Vec<[f32; 2]>,
+    /// Cut-out contours inside `vertices`; left unfilled (even-odd) and
+    /// outlined like the outer boundary. Contours under 3 vertices are skipped.
+    pub holes: Vec<Vec<[f32; 2]>>,
     pub fill_color: [f32; 4],
     pub stroke_color: Option<[f32; 4]>,
     pub stroke_width: f32,

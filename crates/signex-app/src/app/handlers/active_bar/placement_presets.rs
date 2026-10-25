@@ -30,11 +30,21 @@ impl Signex {
             ActiveBarAction::PlacePowerMinus5 => {
                 follow = self.set_pending_power_port("-5V", "power:-5V");
             }
-            ActiveBarAction::PlacePowerArrow
-            | ActiveBarAction::PlacePowerWave
-            | ActiveBarAction::PlacePowerBar
-            | ActiveBarAction::PlacePowerCircle => {
-                follow = self.set_pending_power_port("PWR", "power:PWR_FLAG");
+            // Styled ports carry the style keyword the built-in power renderer
+            // recognizes. They must never use `power:PWR_FLAG`: a flag does not
+            // name a net, so a styled port with that lib_id would stop merging
+            // by value in the netlist and ERC.
+            ActiveBarAction::PlacePowerArrow => {
+                follow = self.set_pending_power_port("PWR", "power:arrow");
+            }
+            ActiveBarAction::PlacePowerWave => {
+                follow = self.set_pending_power_port("PWR", "power:wave");
+            }
+            ActiveBarAction::PlacePowerBar => {
+                follow = self.set_pending_power_port("PWR", "power:bar");
+            }
+            ActiveBarAction::PlacePowerCircle => {
+                follow = self.set_pending_power_port("PWR", "power:circle");
             }
             ActiveBarAction::PlacePowerSignalGND => {
                 follow = self.set_pending_power_port("GNDREF", "power:GNDREF");
@@ -86,18 +96,20 @@ impl Signex {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::BusEntry)));
                 self.interaction_state.pending_power = None;
             }
-            // No-ERC directive reuses the existing No-Connect tool (Altium's
-            // "Place No ERC" also drops an X marker at the clicked pin).
             ActiveBarAction::PlaceNoERC => {
-                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::NoConnect)));
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::NoErcDirective)));
             }
-            // Sheet-symbol / rounded rect / graphic — all rectangle-dragged
+            // Sheet symbol has its own tool: a hierarchical sheet, not a
+            // plain rectangle.
+            ActiveBarAction::PlaceSheetSymbol => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Sheet)));
+            }
+            // Sheet entry / rounded rect / graphic — rectangle-dragged
             // shapes in Altium. Until each has a bespoke tool, use the
             // rectangle tool so the drag-to-size gesture produces a visible
             // shape. (Text Frame is handled in action_groups so the ghost
             // text preview kicks in.)
-            ActiveBarAction::PlaceSheetSymbol
-            | ActiveBarAction::PlaceSheetEntry
+            ActiveBarAction::PlaceSheetEntry
             | ActiveBarAction::PlaceDeviceSheetSymbol
             | ActiveBarAction::PlaceReuseBlock
             | ActiveBarAction::DrawRoundRectangle
@@ -239,9 +251,7 @@ impl Signex {
             }
             ActiveBarAction::ClearAllNetColors => {
                 if !self.ui_state.wire_color_overrides.is_empty() {
-                    self.ui_state
-                        .net_color_undo
-                        .push(self.ui_state.wire_color_overrides.clone());
+                    self.record_net_color_undo();
                 }
                 // #631 — clearing `ui_state` is the whole operation now;
                 // the canvas reads that map through `CanvasViewPrefs`

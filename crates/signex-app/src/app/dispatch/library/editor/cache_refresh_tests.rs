@@ -20,6 +20,9 @@ fn app_with_cached_library() -> (Signex, PathBuf) {
     let library_id = Uuid::new_v4();
     let dir = std::env::temp_dir().join(format!("snx-editor-cache-{}", Uuid::new_v4().simple()));
     let root = dir.join("lib.snxlib");
+    // Bootstrap mounted the bundled stock library; these tests address
+    // `open_libraries.first()`, so start from an empty set.
+    app.library.open_libraries.clear();
     app.library
         .set
         .mount(Box::new(FailingListingAdapter::new(library_id)))
@@ -35,6 +38,8 @@ fn app_with_cached_library() -> (Signex, PathBuf) {
         cached_sims: vec![cached_summary("BC547.lib")],
         cached_classes: Vec::new(),
         observed_stamp: None,
+        dangling: Default::default(),
+        own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
     });
     let saved = dir.join("symbols").join("just-saved.snxsym");

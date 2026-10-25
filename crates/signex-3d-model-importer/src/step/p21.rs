@@ -1,5 +1,6 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
+use super::holes::{MAX_FILE_CUT_VERTICES, face_vertex_count, triangulate_with_holes};
 use crate::vrml::parser::VrmlMesh;
 
 #[derive(Debug)]
@@ -42,6 +43,8 @@ pub fn parse_to_meshes(source: &str) -> Result<StepMeshResult, ParseError> {
     let mut edge_loops: HashMap<u32, Vec<u32>> = HashMap::new();
     let mut oriented_edges: HashMap<u32, u32> = HashMap::new();
     let mut edge_curves: HashMap<u32, (u32, u32)> = HashMap::new();
+    // EDGE_CURVE id -> id of the curve geometry it runs along.
+    let mut edge_geometry: HashMap<u32, u32> = HashMap::new();
     // bound id -> (loop id, is FACE_OUTER_BOUND)
     let mut face_bounds: HashMap<u32, (u32, bool)> = HashMap::new();
     let mut advanced_faces: HashMap<u32, Vec<u32>> = HashMap::new();
@@ -73,6 +76,9 @@ pub fn parse_to_meshes(source: &str) -> Result<StepMeshResult, ParseError> {
                 let refs = parse_refs(&entity.params);
                 if refs.len() >= 2 {
                     edge_curves.insert(id, (refs[0], refs[1]));
+                }
+                if let Some(&geometry) = refs.get(2) {
+                    edge_geometry.insert(id, geometry);
                 }
             }
             "FACE_OUTER_BOUND" | "FACE_BOUND" => {
@@ -116,37 +122,89 @@ pub fn parse_to_meshes(source: &str) -> Result<StepMeshResult, ParseError> {
         }
     };
 
-    let mut holes_skipped = 0usize;
+    // A loop built from EDGE_LOOP keeps only each edge's end vertices, which
+    // is exact for a LINE and wrong for anything curved: a circle written as
+    // two half-circle edges collapses to the two-point loop `[a, b, a]`. A
+    // loop is `curved` when any edge runs along something other than a LINE.
+    let loop_is_curved = |loop_id: u32| -> bool {
+        let Some(edge_refs) = edge_loops.get(&loop_id) else {
+            return false;
+        };
+        edge_refs.iter().any(|oriented| {
+            let is_line = oriented_edges
+                .get(oriented)
+                .and_then(|edge| edge_geometry.get(edge))
+                .and_then(|geometry| entities.get(geometry))
+                .is_some_and(|e| e.kind == "LINE");
+            !is_line
+        })
+    };
+
+    // Holes left in the outline fill, per reason.
+    let mut holes_not_cut: BTreeMap<String, usize> = BTreeMap::new();
+    // Vertices still allowed through the hole cut for this file.
+    let mut cut_budget = MAX_FILE_CUT_VERTICES;
     for bound_refs in advanced_faces.values() {
+        // A bound listed twice is one loop, not a second hole.
+        let mut seen = std::collections::HashSet::new();
+        let bound_refs: Vec<_> = bound_refs.iter().filter(|r| seen.insert(**r)).collect();
         // The face outline is its FACE_OUTER_BOUND, or, when none is marked
         // (legal STEP), the loop with the largest area. Every other bound is a
-        // hole. Holes are not cut: that needs a real polygon-with-holes
-        // triangulation, and the outline's fan still covers the opening. They
-        // are only left out of the mesh as extra solid faces, and counted (#708).
-        let mut loops: Vec<(Vec<[f32; 3]>, bool)> = bound_refs
+        // hole, cut out of the outline by `triangulate_with_holes`. A face
+        // that cannot be cut keeps the outline fill and is counted (#708).
+        let mut loops: Vec<(Vec<[f32; 3]>, bool, bool)> = bound_refs
             .iter()
-            .filter_map(|r| face_bounds.get(r))
-            .map(|&(loop_id, is_outer)| (loop_points_of(loop_id), is_outer))
+            .filter_map(|r| face_bounds.get(*r))
+            .map(|&(loop_id, is_outer)| {
+                (loop_points_of(loop_id), is_outer, loop_is_curved(loop_id))
+            })
             .collect();
-        holes_skipped += loops.len().saturating_sub(1);
         let outline = match loops.iter().position(|l| l.1) {
             Some(i) => Some(i),
             None => (0..loops.len())
                 .max_by(|&i, &j| loop_area(&loops[i].0).total_cmp(&loop_area(&loops[j].0))),
         };
-        if let Some(i) = outline {
-            let loop_points = loops.swap_remove(i).0;
-            if loop_points.len() >= 3 {
-                let mesh = triangulate_polygon(&loop_points);
-                if !mesh.indices.is_empty() {
-                    meshes.push(mesh);
+        let Some(i) = outline else { continue };
+        let loop_points = loops.swap_remove(i).0;
+        if loop_points.len() < 3 {
+            continue;
+        }
+        // A curved hole is only known by its end vertices, so cutting it would
+        // cut the wrong shape (or nothing). Keep the outline fill and say so.
+        let curved_holes = loops.iter().filter(|l| l.2).count();
+        let holes: Vec<Vec<[f32; 3]>> = loops.into_iter().map(|l| l.0).collect();
+        let needed = face_vertex_count(&loop_points, &holes);
+        let mesh = if holes.is_empty() {
+            triangulate_polygon(&loop_points)
+        } else if curved_holes > 0 {
+            *holes_not_cut
+                .entry("hole has curved edges".to_owned())
+                .or_default() += holes.len();
+            triangulate_polygon(&loop_points)
+        } else if needed > cut_budget {
+            *holes_not_cut
+                .entry(format!(
+                    "file has more than {MAX_FILE_CUT_VERTICES} vertices to cut"
+                ))
+                .or_default() += holes.len();
+            triangulate_polygon(&loop_points)
+        } else {
+            cut_budget -= needed;
+            match triangulate_with_holes(&loop_points, &holes) {
+                Ok(mesh) => mesh,
+                Err(reason) => {
+                    *holes_not_cut.entry(reason).or_default() += holes.len();
+                    triangulate_polygon(&loop_points)
                 }
             }
+        };
+        if !mesh.indices.is_empty() {
+            meshes.push(mesh);
         }
     }
-    if holes_skipped > 0 {
+    for (reason, count) in holes_not_cut {
         // Outside the shared 24-entry cap, which real files fill first.
-        unsupported_entities.push(format!("FACE_BOUND (hole not cut) x{holes_skipped}"));
+        unsupported_entities.push(format!("FACE_BOUND (hole not cut: {reason}) x{count}"));
     }
 
     if meshes.is_empty() {
@@ -531,29 +589,82 @@ mod tests {
         data
     }
 
-    fn best_parse_time(data: &str, expected: usize) -> std::time::Duration {
-        (0..3)
-            .map(|_| {
-                let started = std::time::Instant::now();
-                let entities = parse_entities(data).expect("parse");
-                assert_eq!(entities.len(), expected);
-                started.elapsed()
-            })
-            .min()
-            .unwrap()
-    }
-
     #[test]
     fn many_entities_parse_in_linear_time() {
-        // The old per-statement newline recount was O(n^2). Compare a 20k and
-        // an 80k run instead of an absolute budget: 4x the input costs ~4x
-        // when linear and ~16x when quadratic, so a 10x ceiling separates
-        // them with slack for scheduler noise (best of three per size).
-        let small = best_parse_time(&synthetic_data(20_000), 20_000);
-        let large = best_parse_time(&synthetic_data(80_000), 80_000);
-        let floor = std::time::Duration::from_millis(1);
-        let ratio = large.as_secs_f64() / small.max(floor).as_secs_f64();
-        assert!(ratio < 10.0, "parse scaled {ratio:.1}x for 4x input");
+        // Guards the #112 fix (the old per-statement newline recount was
+        // O(n^2)) without trusting wall-clock ratios of runs of very
+        // different length (#851). Both samples cover the same amount of
+        // input: 16 back-to-back parses of SMALL statements against one parse
+        // of 16 x SMALL. Linear code makes the two take about as long;
+        // quadratic makes the single large parse ~16x slower. A 4x ceiling
+        // separates them, and load lands on both samples alike.
+        //
+        // The large parse runs on its own thread with a deadline of 4x the
+        // small sample, so a quadratic regression fails in seconds instead of
+        // hanging the suite. Three attempts; one quiet attempt passes.
+        use std::sync::mpsc;
+        use std::time::{Duration, Instant};
+
+        const SMALL: u32 = 1_000;
+        const REPEATS: u32 = 16;
+        const CEILING: u32 = 4;
+        let small = synthetic_data(SMALL);
+        let large = std::sync::Arc::new(synthetic_data(SMALL * REPEATS));
+
+        let mut ratios = Vec::new();
+        for _ in 0..3 {
+            let started = Instant::now();
+            for _ in 0..REPEATS {
+                assert_eq!(parse_entities(&small).expect("parse").len(), SMALL as usize);
+            }
+            let small_total = started.elapsed().max(Duration::from_millis(1));
+
+            let (tx, rx) = mpsc::channel();
+            let data = std::sync::Arc::clone(&large);
+            // Detached on purpose: past the deadline nothing waits for it.
+            // It runs on beside the next attempt, which only slows the
+            // already-failing regression case, and ends with the test binary.
+            std::thread::spawn(move || {
+                let started = Instant::now();
+                let parsed = parse_entities(&data).expect("parse").len();
+                let _ = tx.send((parsed, started.elapsed()));
+            });
+            match rx.recv_timeout(small_total * CEILING) {
+                Ok((parsed, large_time)) => {
+                    assert_eq!(parsed, (SMALL * REPEATS) as usize);
+                    let ratio = large_time.as_secs_f64() / small_total.as_secs_f64();
+                    if ratio < f64::from(CEILING) {
+                        return;
+                    }
+                    ratios.push(format!("{ratio:.1}x"));
+                }
+                Err(_) => ratios.push(format!(">{CEILING}x (deadline)")),
+            }
+        }
+        panic!(
+            "one parse of 16x the input took over {CEILING}x as long as 16 small parses: {ratios:?}"
+        );
+    }
+
+    /// Carried-forward line numbers stay exact across a large input. This is
+    /// a correctness check, not a guard on #112's speed: the old quadratic
+    /// recount produced exact lines too, just slowly.
+    #[test]
+    fn statement_lines_stay_exact_across_a_large_input() {
+        // Kept small: a quadratic regression would make a larger input take
+        // minutes here, and the speed guard above already catches that.
+        const COUNT: usize = 5_000;
+        let data = synthetic_data(COUNT as u32);
+        // The trailing newline leaves a blank tail, skipped like `parse_entities` does.
+        let statements: Vec<_> = split_statements(&data)
+            .into_iter()
+            .filter(|(s, _)| s.trim().starts_with('#'))
+            .collect();
+        assert_eq!(statements.len(), COUNT);
+        for (i, (_, line)) in statements.iter().enumerate().step_by(499) {
+            assert_eq!(*line, i + 1);
+        }
+        assert_eq!(statements.last().unwrap().1, COUNT);
     }
 
     #[test]
@@ -608,32 +719,276 @@ ENDSEC;
         assert_eq!(parse_refs("'a #5',(#7)"), vec![7]);
     }
 
+    /// A single ADVANCED_FACE over `loops` (outer flag, point indices), with
+    /// every point written as a CARTESIAN_POINT and every loop as a POLY_LOOP.
+    fn face_src(points: &[[f64; 3]], loops: &[(bool, &[usize])]) -> String {
+        let mut src = String::from("DATA;\n");
+        for (i, p) in points.iter().enumerate() {
+            src += &format!(
+                "#{} = CARTESIAN_POINT('',({:?},{:?},{:?}));\n",
+                i + 1,
+                p[0],
+                p[1],
+                p[2]
+            );
+        }
+        let mut bounds = Vec::new();
+        for (k, (outer, idx)) in loops.iter().enumerate() {
+            let refs: Vec<String> = idx.iter().map(|i| format!("#{}", i + 1)).collect();
+            src += &format!("#{} = POLY_LOOP('',({}));\n", 100 + k, refs.join(","));
+            let kind = if *outer {
+                "FACE_OUTER_BOUND"
+            } else {
+                "FACE_BOUND"
+            };
+            src += &format!("#{} = {kind}('',#{},.T.);\n", 200 + k, 100 + k);
+            bounds.push(format!("#{}", 200 + k));
+        }
+        src += &format!(
+            "#300 = ADVANCED_FACE('',({}),#999,.T.);\nENDSEC;",
+            bounds.join(",")
+        );
+        src
+    }
+
+    fn corner(m: &VrmlMesh, tri: usize, k: usize) -> [f64; 3] {
+        let i = m.indices[tri * 3 + k] as usize * 3;
+        [
+            f64::from(m.positions[i]),
+            f64::from(m.positions[i + 1]),
+            f64::from(m.positions[i + 2]),
+        ]
+    }
+
+    fn triangle_count(m: &VrmlMesh) -> usize {
+        m.indices.len() / 3
+    }
+
+    /// 3D area of triangle `tri`.
+    fn area(m: &VrmlMesh, tri: usize) -> f64 {
+        let (a, b, c) = (corner(m, tri, 0), corner(m, tri, 1), corner(m, tri, 2));
+        let u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+        let v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+        let n = [
+            u[1] * v[2] - u[2] * v[1],
+            u[2] * v[0] - u[0] * v[2],
+            u[0] * v[1] - u[1] * v[0],
+        ];
+        (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt() / 2.0
+    }
+
+    fn total_area(m: &VrmlMesh) -> f64 {
+        (0..triangle_count(m)).map(|t| area(m, t)).sum()
+    }
+
+    fn centroid(m: &VrmlMesh, tri: usize) -> [f64; 3] {
+        let c: Vec<[f64; 3]> = (0..3).map(|k| corner(m, tri, k)).collect();
+        [0, 1, 2].map(|d| (c[0][d] + c[1][d] + c[2][d]) / 3.0)
+    }
+
+    /// Unit normal of triangle `tri` (winding-sensitive).
+    fn normal(m: &VrmlMesh, tri: usize) -> [f64; 3] {
+        let (a, b, c) = (corner(m, tri, 0), corner(m, tri, 1), corner(m, tri, 2));
+        let u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+        let v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+        let n = [
+            u[1] * v[2] - u[2] * v[1],
+            u[2] * v[0] - u[0] * v[2],
+            u[0] * v[1] - u[1] * v[0],
+        ];
+        let l = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+        [n[0] / l, n[1] / l, n[2] / l]
+    }
+
+    fn has_hole_warning(r: &StepMeshResult) -> bool {
+        r.unsupported_entities.iter().any(|e| e.contains("hole"))
+    }
+
+    /// Rotate about the x axis, to put a face in a non-axis plane.
+    fn tilt(p: [f64; 3], deg: f64) -> [f64; 3] {
+        let (s, c) = deg.to_radians().sin_cos();
+        [p[0], p[1] * c - p[2] * s, p[1] * s + p[2] * c]
+    }
+
+    /// Undo [`tilt`].
+    fn untilt(p: [f64; 3], deg: f64) -> [f64; 3] {
+        tilt(p, -deg)
+    }
+
+    const SQUARE: [[f64; 3]; 4] = [[0., 0., 0.], [10., 0., 0.], [10., 10., 0.], [0., 10., 0.]];
+    const HOLE_A: [[f64; 3]; 4] = [[2., 2., 0.], [2., 4., 0.], [4., 4., 0.], [4., 2., 0.]];
+    const HOLE_B: [[f64; 3]; 4] = [[6., 6., 0.], [6., 8., 0.], [8., 8., 0.], [8., 6., 0.]];
+
+    fn in_square(c: [f64; 3], h: &[[f64; 3]; 4]) -> bool {
+        c[0] > h[0][0] && c[0] < h[2][0] && c[1] > h[0][1] && c[1] < h[2][1]
+    }
+
     #[test]
-    fn face_bound_hole_is_not_fan_filled() {
-        let src = r#"
-DATA;
-#1 = CARTESIAN_POINT('',(0.,0.,0.));
-#2 = CARTESIAN_POINT('',(4.,0.,0.));
-#3 = CARTESIAN_POINT('',(0.,4.,0.));
-#4 = CARTESIAN_POINT('',(1.,1.,0.));
-#5 = CARTESIAN_POINT('',(2.,1.,0.));
-#6 = CARTESIAN_POINT('',(1.,2.,0.));
-#20 = POLY_LOOP('',(#1,#2,#3));
-#21 = POLY_LOOP('',(#4,#5,#6));
-#22 = FACE_BOUND('',#21,.T.);
-#23 = FACE_OUTER_BOUND('',#20,.T.);
-#30 = ADVANCED_FACE('',(#22,#23),#999,.T.);
-ENDSEC;
-"#;
-        let result = parse_to_meshes(src).expect("parse");
-        assert_eq!(result.meshes.len(), 1, "only the outer loop is filled");
-        assert_eq!(result.meshes[0].positions[4], 0.0);
-        assert_eq!(result.meshes[0].positions[3], 4.0);
+    fn face_bound_hole_is_cut_not_fan_filled() {
+        let mut pts = SQUARE.to_vec();
+        pts.extend(HOLE_A);
+        let src = face_src(&pts, &[(false, &[4, 5, 6, 7]), (true, &[0, 1, 2, 3])]);
+        let result = parse_to_meshes(&src).expect("parse");
+        assert_eq!(result.meshes.len(), 1);
+        let m = &result.meshes[0];
+        assert!(
+            (total_area(m) - (100.0 - 4.0)).abs() < 1e-4,
+            "{}",
+            total_area(m)
+        );
+        for t in 0..triangle_count(m) {
+            assert!(
+                !in_square(centroid(m, t), &HOLE_A),
+                "triangle {t} covers the hole"
+            );
+            // Same facing as the outline loop (counter-clockwise about +z).
+            assert!(normal(m, t)[2] > 0.99);
+        }
+        assert!(
+            !has_hole_warning(&result),
+            "{:?}",
+            result.unsupported_entities
+        );
+    }
+
+    #[test]
+    fn hole_is_cut_in_a_tilted_plane() {
+        let mut pts: Vec<[f64; 3]> = SQUARE.to_vec();
+        pts.extend(HOLE_A);
+        let pts: Vec<[f64; 3]> = pts.into_iter().map(|p| tilt(p, 30.0)).collect();
+        let src = face_src(&pts, &[(true, &[0, 1, 2, 3]), (false, &[4, 5, 6, 7])]);
+        let result = parse_to_meshes(&src).expect("parse");
+        let m = &result.meshes[0];
+        assert!((total_area(m) - 96.0).abs() < 1e-3, "{}", total_area(m));
+        let want = tilt([0.0, 0.0, 1.0], 30.0);
+        for t in 0..triangle_count(m) {
+            assert!(!in_square(untilt(centroid(m, t), 30.0), &HOLE_A));
+            let n = normal(m, t);
+            let facing = n[0] * want[0] + n[1] * want[1] + n[2] * want[2];
+            assert!(facing > 0.999, "winding flipped: {facing}");
+        }
+        assert!(!has_hole_warning(&result));
+    }
+
+    #[test]
+    fn two_holes_in_one_face_are_both_cut() {
+        let mut pts = SQUARE.to_vec();
+        pts.extend(HOLE_A);
+        pts.extend(HOLE_B);
+        let src = face_src(
+            &pts,
+            &[
+                (true, &[0, 1, 2, 3]),
+                (false, &[4, 5, 6, 7]),
+                (false, &[8, 9, 10, 11]),
+            ],
+        );
+        let result = parse_to_meshes(&src).expect("parse");
+        let m = &result.meshes[0];
+        assert!(
+            (total_area(m) - (100.0 - 8.0)).abs() < 1e-4,
+            "{}",
+            total_area(m)
+        );
+        for t in 0..triangle_count(m) {
+            let c = centroid(m, t);
+            assert!(!in_square(c, &HOLE_A) && !in_square(c, &HOLE_B));
+        }
+        assert!(!has_hole_warning(&result));
+    }
+
+    /// An ADVANCED_FACE whose outline is a 10 x 10 square of LINE edges and
+    /// whose one hole is an EDGE_LOOP written by `hole_entities` (entities
+    /// and the id of the EDGE_LOOP, `#50`). Everything goes through
+    /// EDGE_LOOP / ORIENTED_EDGE / EDGE_CURVE, as real exporters write it.
+    fn edge_face_src(hole_entities: &str) -> String {
+        let mut src = String::from("DATA;\n");
+        let corners = [(0, 0), (10, 0), (10, 10), (0, 10)];
+        for (i, (x, y)) in corners.iter().enumerate() {
+            let n = i + 1;
+            src += &format!("#{n} = CARTESIAN_POINT('',({x}.,{y}.,0.));\n");
+            src += &format!("#{} = VERTEX_POINT('',#{n});\n", 10 + n);
+        }
+        src += "#9 = LINE('',#1,#8);\n";
+        for i in 0..4 {
+            let (a, b) = (11 + i, 11 + (i + 1) % 4);
+            src += &format!("#{} = EDGE_CURVE('',#{a},#{b},#9,.T.);\n", 20 + i);
+            src += &format!("#{} = ORIENTED_EDGE('',*,*,#{},.T.);\n", 30 + i, 20 + i);
+        }
+        src += "#40 = EDGE_LOOP('',(#30,#31,#32,#33));\n";
+        src += "#41 = FACE_OUTER_BOUND('',#40,.T.);\n";
+        src += hole_entities;
+        src += "#51 = FACE_BOUND('',#50,.T.);\n";
+        src += "#300 = ADVANCED_FACE('',(#41,#51),#999,.T.);\nENDSEC;";
+        src
+    }
+
+    #[test]
+    fn edge_loop_square_hole_is_cut() {
+        // Four LINE edges around (4,4)-(6,6).
+        let mut hole = String::new();
+        let pts = [(4, 4), (6, 4), (6, 6), (4, 6)];
+        for (i, (x, y)) in pts.iter().enumerate() {
+            hole += &format!("#{} = CARTESIAN_POINT('',({x}.,{y}.,0.));\n", 60 + i);
+            hole += &format!("#{} = VERTEX_POINT('',#{});\n", 70 + i, 60 + i);
+        }
+        hole += "#79 = LINE('',#60,#8);\n";
+        for i in 0..4 {
+            let (a, b) = (70 + i, 70 + (i + 1) % 4);
+            hole += &format!("#{} = EDGE_CURVE('',#{a},#{b},#79,.T.);\n", 80 + i);
+            hole += &format!("#{} = ORIENTED_EDGE('',*,*,#{},.T.);\n", 90 + i, 80 + i);
+        }
+        hole += "#50 = EDGE_LOOP('',(#90,#91,#92,#93));\n";
+        let result = parse_to_meshes(&edge_face_src(&hole)).expect("parse");
+        let m = &result.meshes[0];
+        assert!((total_area(m) - 96.0).abs() < 1e-4, "{}", total_area(m));
+        assert!(
+            !has_hole_warning(&result),
+            "{:?}",
+            result.unsupported_entities
+        );
+    }
+
+    #[test]
+    fn edge_loop_circle_hole_is_warned_not_silently_filled() {
+        // A circle as two half-circle EDGE_CURVEs a->b and b->a over one
+        // CIRCLE: the loop's end vertices are [a, b, a], zero area.
+        let hole = "#60 = CARTESIAN_POINT('',(4.,5.,0.));\n\
+             #61 = CARTESIAN_POINT('',(6.,5.,0.));\n\
+             #62 = VERTEX_POINT('',#60);\n#63 = VERTEX_POINT('',#61);\n\
+             #64 = CIRCLE('',#999,1.);\n\
+             #65 = EDGE_CURVE('',#62,#63,#64,.T.);\n\
+             #66 = EDGE_CURVE('',#63,#62,#64,.T.);\n\
+             #67 = ORIENTED_EDGE('',*,*,#65,.T.);\n\
+             #68 = ORIENTED_EDGE('',*,*,#66,.T.);\n\
+             #50 = EDGE_LOOP('',(#67,#68));\n";
+        let result = parse_to_meshes(&edge_face_src(hole)).expect("parse");
+        // The outline fill stays, and the lost hole is reported.
+        assert!((total_area(&result.meshes[0]) - 100.0).abs() < 1e-4);
         assert!(
             result
                 .unsupported_entities
                 .iter()
-                .any(|e| e.contains("hole"))
+                .any(|e| e.contains("hole not cut: hole has curved edges")),
+            "{:?}",
+            result.unsupported_entities
+        );
+    }
+
+    #[test]
+    fn non_planar_hole_falls_back_to_the_outline_with_a_warning() {
+        let mut pts = SQUARE.to_vec();
+        pts.extend(HOLE_A);
+        pts[5][2] = 3.0; // a hole corner far off the face plane
+        let src = face_src(&pts, &[(true, &[0, 1, 2, 3]), (false, &[4, 5, 6, 7])]);
+        let result = parse_to_meshes(&src).expect("parse");
+        let m = &result.meshes[0];
+        assert!((total_area(m) - 100.0).abs() < 1e-4, "outline fill kept");
+        assert!(
+            result
+                .unsupported_entities
+                .iter()
+                .any(|e| e.contains("hole not cut: non-planar loop"))
         );
     }
 
@@ -655,10 +1010,8 @@ ENDSEC;
         );
         let result = parse_to_meshes(&src).expect("parse");
         assert_eq!(result.meshes.len(), 1);
-        assert_eq!(
-            result.meshes[0].positions[3], 4.0,
-            "outer loop, not the hole"
-        );
+        // Outline 8 minus the 0.5 hole, not the hole's 0.5.
+        assert!((total_area(&result.meshes[0]) - 7.5).abs() < 1e-4);
     }
 
     #[test]
@@ -666,8 +1019,10 @@ ENDSEC;
         let noise: String = (100..140)
             .map(|i| format!("#{i} = FANCY_THING_{i}('');\n"))
             .collect();
+        // Non-planar hole, so the warning is still emitted.
+        let triangles = TRIANGLES.replace("(1.,1.,0.)", "(1.,1.,5.)");
         let src = format!(
-            "DATA;\n{TRIANGLES}\n{noise}#22 = FACE_BOUND('',#21,.T.);\n\
+            "DATA;\n{triangles}\n{noise}#22 = FACE_BOUND('',#21,.T.);\n\
              #23 = FACE_OUTER_BOUND('',#20,.T.);\n#30 = ADVANCED_FACE('',(#22,#23),#999,.T.);\nENDSEC;"
         );
         let result = parse_to_meshes(&src).expect("parse");

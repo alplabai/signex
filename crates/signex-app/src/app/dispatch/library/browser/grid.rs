@@ -29,12 +29,10 @@ impl Signex {
         if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
             state.search = value.clone();
         }
-        // Write-through so reopening this library next session
-        // restores the same filter — UX_IMPROVEMENTS §1.1.
-        // Per-path scoping prevents two libraries from
-        // sharing the same search term.
-        crate::fonts::write_library_browser_search(&library_path, &value);
-        Task::none()
+        // Persisted debounced and off-thread so reopening this library
+        // next session restores the same filter (#859). Per-path scoping
+        // prevents two libraries from sharing the same search term.
+        self.persist_library_search_soon(&library_path, &value)
     }
 
     /// Column-header click — toggles sort direction on the matching key.

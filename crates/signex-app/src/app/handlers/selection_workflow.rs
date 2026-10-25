@@ -33,7 +33,9 @@ pub(crate) fn passes_filter(
         SelectedKind::TextNote => SelectionFilter::Texts,
         SelectedKind::SymbolRefField | SelectedKind::SymbolValField => SelectionFilter::Parameters,
         SelectedKind::Drawing => SelectionFilter::DrawingObjects,
-        SelectedKind::Junction | SelectedKind::NoConnect => SelectionFilter::Other,
+        SelectedKind::Junction | SelectedKind::NoConnect | SelectedKind::NoErcDirective => {
+            SelectionFilter::Other
+        }
     };
     filters.contains(&required)
 }
@@ -61,6 +63,12 @@ fn all_selectable_items(
     }
     for no_connect in &snapshot.no_connects {
         items.push(SelectedItem::new(no_connect.uuid, SelectedKind::NoConnect));
+    }
+    for directive in &snapshot.no_erc_directives {
+        items.push(SelectedItem::new(
+            directive.uuid,
+            SelectedKind::NoErcDirective,
+        ));
     }
     for text_note in &snapshot.text_notes {
         items.push(SelectedItem::new(text_note.uuid, SelectedKind::TextNote));

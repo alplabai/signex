@@ -4,15 +4,17 @@ use crate::dock::DockMessage;
 
 use super::super::*;
 
+mod child_sheet_identity;
 mod floating_layout;
 mod layout_persist;
 mod library_browser;
 mod navigator;
 mod panel_controls;
 mod panel_open;
-mod project_navigation;
+pub(crate) mod project_navigation;
 mod property_editor;
 mod sch_library;
+mod search_prefs_persist;
 
 impl Signex {
     pub(crate) fn handle_dock_message(&mut self, msg: DockMessage) -> Task<Message> {

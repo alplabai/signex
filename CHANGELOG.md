@@ -25,6 +25,11 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 ### Added — schematic engine
 
 - **`PlaceChildSheet` engine command** — adds a hierarchical sheet symbol to the schematic as one undoable step and marks `CHILD_SHEETS` dirty so the project netlist cache invalidates. A blank `filename` is rejected with `EngineError::EmptyChildSheetFilename`; an empty `name` is allowed. Engine only — the Place Sheet canvas tool is separate (#357).
+
+### Added — schematic placement
+
+- **Place Sheet tool** (#358) — toolbar **Sheet** (and the `draw_hierarchical_sheet` command, `S` in the classic preset, the Active Bar dropdown and the canvas context menu **Place > Sheet Symbol**) places a hierarchical sheet symbol with two clicks on opposite corners, with a rubber-band preview; Esc or `CancelDrawing` cancels and returns to Select, and an edge under 5.08 mm places nothing (a warning reaches the Messages panel). The sheet gets the first unused `sheetN` as both name and file (`sheetN.snxsch`, unused in the parent and the project); renaming it from Properties is not yet possible, and the child file is not created on disk. One undo step removes it.
+
 ### Added — start screen
 
 - **Actionable start screen** — with nothing loaded, the empty centre region now shows the product name and version with **New Project**, **Open Project…** and **Keyboard Shortcuts (F1)** buttons, all dispatching existing menu messages and styled from `ThemeTokens`. A loaded project with no document selected keeps its own quieter hint. Open Sample Project and recent projects are left out until those features land (#331).
@@ -115,6 +120,7 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ### Fixed — BOM
 
+- **BOM counts every child sheet, once per placement (#730)** — the BOM was built from the printed pages only, so parts on hierarchical child sheets were missing and a child placed N times counted once. It now walks the same project hierarchy as the netlist and lists N copies of a child's parts (power symbols still excluded). Per-instance designators do not exist yet, so each copy carries the sheet's own designator. A loose document keeps exporting every unowned open tab, as the PDF does.
 - **A variant can fit a part marked DNP (#674)** — a part with DNP set in the base schematic was left out of a variant's BOM even when that variant fitted it, because the DNP filter ran before the variant was read; export validation skipped it the same way. Only the active variant's own override now lets a DNP part through. A leftover `Fitted`, `VariantFitted` or `DNP` field on the part does not, with or without an active variant.
 - **Library actions no longer silently do nothing (#152)** — Components Panel "Add Library" on the Project section and a failed Installed/Global mount now raise the error card, a failed `global_libraries.toml` write is reported, "Refresh All Pricing" is shown disabled ("Not yet available") instead of logging a TODO, and the never-emitted Manage/Add-to-Project/row-refresh stub messages are removed.
 - **Grouped BOM keeps parts with different MPNs apart (#673)** — grouping keyed only on name, value, footprint and library reference, so two parts differing in MPN, manufacturer, description or any other field merged into one row carrying the first part's data, and the BOM ordered the wrong part. A group now requires every part-level field to match; an empty field counts as absent, and variant fit-state fields (`DNP`, `Fitted@<V>`, …) never split identical parts.

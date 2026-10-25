@@ -42,6 +42,8 @@ fn ctx_with_one_sheet() -> ExportContext {
         metadata: ProjectMetadata::default(),
         netlist: None,
         netlist_sheets: Vec::new(),
+        netlist_sheet_placements: Vec::new(),
+        current_sheet: None,
     }
 }
 
@@ -70,6 +72,7 @@ fn default_opts() -> PdfOptions {
         physical_sheet_number: true,
         physical_document_number: false,
         include_no_erc_markers: false,
+        include_no_connect_markers: false,
         include_parameter_sets: false,
         include_probes: false,
         include_blankets: false,
@@ -216,6 +219,8 @@ fn pin_bookmarks_skipped_when_subtoggle_off() {
         metadata: ProjectMetadata::default(),
         netlist: None,
         netlist_sheets: Vec::new(),
+        netlist_sheet_placements: Vec::new(),
+        current_sheet: None,
     };
 
     let opts = PdfOptions {
@@ -268,6 +273,8 @@ fn multi_sheet_bookmarks_have_independent_groups() {
             metadata: ProjectMetadata::default(),
             netlist: None,
             netlist_sheets: Vec::new(),
+            netlist_sheet_placements: Vec::new(),
+            current_sheet: None,
         }
     };
     let opts = PdfOptions {

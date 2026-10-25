@@ -1,4 +1,7 @@
-use signex_types::schematic::{ChildSheet, GRID_MM, LabelType, SchematicSheet, SheetPin};
+use signex_net::{SheetPinContacts, pt_key};
+use signex_types::schematic::{
+    ChildSheet, GRID_MM, LabelType, Point, SchematicSheet, SheetPin, normalize_port_name,
+};
 
 use crate::command::SheetPort;
 
@@ -8,45 +11,93 @@ impl Engine {
     /// Returns the ports this sheet exposes to a parent hierarchical symbol.
     /// Hierarchical labels have precedence over global labels with the same name.
     pub fn collect_exposed_sheet_ports(&self) -> Vec<SheetPort> {
-        let mut ports: std::collections::BTreeMap<String, (u8, String)> =
-            std::collections::BTreeMap::new();
+        exposed_sheet_ports(&self.document)
+    }
+}
 
-        for label in &self.document.labels {
-            let Some(priority) = port_label_priority(label.label_type) else {
-                continue;
-            };
+/// The ports `child` exposes to a parent: its Hierarchical and Global labels,
+/// de-duplicated by name (Hierarchical wins), each carrying the direction of
+/// the winning label's shape. This is the one port model the reconcile
+/// command consumes; `Engine::collect_exposed_sheet_ports` delegates here.
+pub fn exposed_sheet_ports(child: &SchematicSheet) -> Vec<SheetPort> {
+    let mut ports: std::collections::BTreeMap<String, (u8, String)> =
+        std::collections::BTreeMap::new();
 
-            let name = label.text.trim();
-            if name.is_empty() {
-                continue;
-            }
+    for label in &child.labels {
+        let Some(name) = label.port_name() else {
+            continue;
+        };
+        let priority = port_label_priority(label.label_type);
 
-            let direction = normalize_sheet_pin_direction(&label.shape).to_string();
+        let direction = normalize_sheet_pin_direction(&label.shape).to_string();
 
-            match ports.get(name) {
-                Some((existing_priority, _)) if *existing_priority <= priority => {}
-                _ => {
-                    ports.insert(name.to_string(), (priority, direction));
-                }
+        match ports.get(name) {
+            Some((existing_priority, _)) if *existing_priority <= priority => {}
+            _ => {
+                ports.insert(name.to_string(), (priority, direction));
             }
         }
-
-        ports
-            .into_iter()
-            .map(|(name, (_, direction))| SheetPort { name, direction })
-            .collect()
     }
+
+    ports
+        .into_iter()
+        .map(|(name, (_, direction))| SheetPort { name, direction })
+        .collect()
+}
+
+/// How many Hierarchical / Global labels of `child` have blank text. They name
+/// no port, so the sync and the netlist ignore them; callers report the count
+/// so the label is not silently dropped.
+pub fn blank_port_label_count(child: &SchematicSheet) -> usize {
+    child
+        .labels
+        .iter()
+        .filter(|label| {
+            matches!(
+                label.label_type,
+                LabelType::Hierarchical | LabelType::Global
+            ) && normalize_port_name(&label.text).is_none()
+        })
+        .count()
+}
+
+/// The ports to hand `Command::ReconcileChildSheetPins` for the sheet symbols
+/// of `parent` that reference `child_filename`.
+///
+/// Direction policy: a NEW pin takes the direction of its child label's shape
+/// (`bidirectional` when the label carries none); a pin that already exists on
+/// a symbol keeps the direction the user (or an earlier sync) gave it. The
+/// reconcile command never touches a matched pin's direction, so this only
+/// echoes the existing direction back to keep the port list self-consistent.
+pub fn ports_for_pin_sync(
+    child: &SchematicSheet,
+    parent: &SchematicSheet,
+    child_filename: &str,
+) -> Vec<SheetPort> {
+    let mut ports = exposed_sheet_ports(child);
+    for port in &mut ports {
+        let existing = parent
+            .child_sheets
+            .iter()
+            .filter(|symbol| symbol.filename == child_filename)
+            .flat_map(|symbol| symbol.pins.iter())
+            .find(|pin| normalize_port_name(&pin.name) == Some(port.name.as_str()));
+        if let Some(pin) = existing {
+            port.direction = pin.direction.clone();
+        }
+    }
+    ports
 }
 
 // ---------------------------------------------------------------------------
 // Sheet-pin helpers (used by sheet.rs and transform.rs)
 // ---------------------------------------------------------------------------
 
-fn port_label_priority(label_type: LabelType) -> Option<u8> {
+/// Lower wins. Only called for labels `Label::port_name` accepted.
+fn port_label_priority(label_type: LabelType) -> u8 {
     match label_type {
-        LabelType::Hierarchical => Some(0),
-        LabelType::Global => Some(1),
-        _ => None,
+        LabelType::Hierarchical => 0,
+        _ => 1,
     }
 }
 
@@ -151,64 +202,63 @@ fn same_sheet_pin(lhs: &SheetPin, rhs: &SheetPin) -> bool {
         && lhs.user_moved == rhs.user_moved
 }
 
-pub(crate) fn reconcile_child_sheet_pins(child: &mut ChildSheet, ports: &[SheetPort]) -> bool {
+/// Reconcile `child`'s pins with `ports` without ever moving an existing pin.
+///
+/// A pin that matches a port (by the shared trimmed port name) keeps its
+/// position, rotation, direction, uuid and `auto_generated` flag, so wires
+/// attached to it keep their nets and a hand-added pin stays hand-added. Only
+/// a port with no pin gets a new one, in the first edge slot that no surviving
+/// pin, no pin dropped in this same sync and nothing in `blockers` (everything a pin there
+/// would connect to: see `SheetPinContacts`) occupies. When the edge has
+/// no such slot the port gets no pin; the caller reports that. Auto-generated
+/// pins whose port is gone are dropped; hand-added pins with no port are kept.
+pub(crate) fn reconcile_child_sheet_pins(
+    child: &mut ChildSheet,
+    ports: &[SheetPort],
+    blockers: &SheetPinContacts,
+) -> bool {
     let before = child.pins.clone();
     let mut existing = std::mem::take(&mut child.pins);
-    let mut next_pins = Vec::new();
-    let mut left_slot = 0usize;
-    let mut right_slot = 0usize;
+    let mut matched = Vec::new();
+    let mut unmatched_ports = Vec::new();
 
     for port in ports {
-        let direction = normalize_sheet_pin_direction(&port.direction).to_string();
-        let existing_idx = existing.iter().position(|pin| pin.name == port.name);
-
-        if let Some(idx) = existing_idx {
-            let mut pin = existing.swap_remove(idx);
-            pin.direction = direction.clone();
-            pin.auto_generated = true;
-            if !pin.user_moved {
-                let slot = if direction == "output" {
-                    let slot = right_slot;
-                    right_slot += 1;
-                    slot
-                } else {
-                    let slot = left_slot;
-                    left_slot += 1;
-                    slot
-                };
-                let (x, y, rotation) = pin_anchor_for_direction(child, &direction, slot);
-                pin.position.x = x;
-                pin.position.y = y;
-                pin.rotation = rotation;
-            }
-            next_pins.push(pin);
-        } else {
-            let slot = if direction == "output" {
-                let slot = right_slot;
-                right_slot += 1;
-                slot
-            } else {
-                let slot = left_slot;
-                left_slot += 1;
-                slot
-            };
-            let (x, y, rotation) = pin_anchor_for_direction(child, &direction, slot);
-            next_pins.push(SheetPin {
-                uuid: uuid::Uuid::new_v4(),
-                name: port.name.clone(),
-                direction,
-                position: signex_types::schematic::Point::new(x, y),
-                rotation,
-                auto_generated: true,
-                user_moved: false,
-            });
+        match existing
+            .iter()
+            .position(|pin| normalize_port_name(&pin.name) == Some(port.name.as_str()))
+        {
+            Some(idx) => matched.push(existing.remove(idx)),
+            None => unmatched_ports.push(port),
         }
     }
 
-    for pin in existing {
-        if !pin.auto_generated {
-            next_pins.push(pin);
-        }
+    // Surviving pins: matched ones plus hand-added ones with no port.
+    let mut next_pins = matched;
+    let (kept, dropped): (Vec<_>, Vec<_>) =
+        existing.into_iter().partition(|pin| !pin.auto_generated);
+    next_pins.extend(kept);
+    // A dropped pin's slot stays taken for this sync: its wire may still end there.
+    let mut taken: Vec<Point> = next_pins
+        .iter()
+        .chain(dropped.iter())
+        .map(|pin| pin.position)
+        .collect();
+
+    for port in unmatched_ports {
+        let direction = normalize_sheet_pin_direction(&port.direction).to_string();
+        let Some((x, y, rotation)) = free_pin_anchor(child, &direction, &taken, blockers) else {
+            continue;
+        };
+        taken.push(Point::new(x, y));
+        next_pins.push(SheetPin {
+            uuid: uuid::Uuid::new_v4(),
+            name: port.name.clone(),
+            direction,
+            position: Point::new(x, y),
+            rotation,
+            auto_generated: true,
+            user_moved: false,
+        });
     }
 
     child.pins = next_pins;
@@ -220,9 +270,66 @@ pub(crate) fn reconcile_child_sheet_pins(child: &mut ChildSheet, ports: &[SheetP
             .any(|(lhs, rhs)| !same_sheet_pin(lhs, rhs))
 }
 
+/// The first edge slot for `direction` that is neither in `taken` nor on a
+/// blocker, or `None` when the edge is full. Slots past the symbol's last row
+/// clamp onto it, so the search stops at the first repeated anchor.
+fn free_pin_anchor(
+    child: &ChildSheet,
+    direction: &str,
+    taken: &[Point],
+    blockers: &SheetPinContacts,
+) -> Option<(f64, f64, f64)> {
+    let mut last = None;
+    for slot in 0.. {
+        let anchor = pin_anchor_for_direction(child, direction, slot);
+        if last == Some((anchor.0, anchor.1)) {
+            return None;
+        }
+        last = Some((anchor.0, anchor.1));
+        let key = pt_key(&Point::new(anchor.0, anchor.1));
+        let occupied = taken.iter().any(|p| pt_key(p) == key);
+        if !occupied && !blockers.hits(anchor.0, anchor.1) {
+            return Some(anchor);
+        }
+    }
+    None
+}
+
+/// Ports that have no pin on a `filename` symbol after a reconcile (its edge
+/// had no free slot), per symbol: `(symbol name, port names)`.
+pub fn unplaced_sheet_ports(
+    parent: &SchematicSheet,
+    filename: &str,
+    ports: &[SheetPort],
+) -> Vec<(String, Vec<String>)> {
+    parent
+        .child_sheets
+        .iter()
+        .filter(|symbol| symbol.filename == filename)
+        .filter_map(|symbol| {
+            let missing: Vec<String> = ports
+                .iter()
+                .filter(|port| {
+                    !symbol
+                        .pins
+                        .iter()
+                        .any(|pin| normalize_port_name(&pin.name) == Some(port.name.as_str()))
+                })
+                .map(|port| port.name.clone())
+                .collect();
+            (!missing.is_empty()).then(|| (symbol.name.clone(), missing))
+        })
+        .collect()
+}
+
 // Keep the unused import silent — SchematicSheet is referenced via super.
 #[expect(
     unused_imports,
     reason = "the re-export exists so `SchematicSheet` resolves via `super` in this module's paths"
 )]
 use SchematicSheet as _;
+
+#[cfg(test)]
+mod reconcile_tests;
+#[cfg(test)]
+mod tests;

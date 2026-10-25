@@ -1,6 +1,6 @@
 use signex_types::schematic::{
-    Bus, BusEntry, ChildSheet, HAlign, Junction, Label, NoConnect, SchematicSheet, SelectedItem,
-    StrokeColor, Symbol, TextNote, Wire,
+    AnnotateOrder, Bus, BusEntry, ChildSheet, HAlign, Junction, Label, LibSymbol, NoConnect,
+    SchematicSheet, SelectedItem, StrokeColor, Symbol, TextNote, Wire,
 };
 use uuid::Uuid;
 
@@ -50,9 +50,12 @@ pub enum CommandKind {
     PlaceBus,
     PlaceLabel,
     PlaceSymbol,
+    RegisterLibSymbol,
+    ReplaceLibSymbol,
     PlaceChildSheet,
     PlaceJunction,
     PlaceNoConnect,
+    PlaceNoErcDirective,
     PlaceBusEntry,
     PlaceTextNote,
     PlaceSchDrawing,
@@ -63,6 +66,7 @@ pub enum CommandKind {
     ReorderObjects,
     ReconcileChildSheetPins,
     RenameChildSheetFile,
+    ModifyChildSheet,
     SetPaperSize,
 }
 
@@ -160,6 +164,22 @@ pub enum Command {
     PlaceSymbol {
         symbol: Symbol,
     },
+    /// Add `lib_symbol` to the sheet's `lib_symbols`, keyed by its `id`.
+    /// A no-op when that key is already present — the first definition
+    /// wins, so re-placing a library symbol never duplicates or replaces
+    /// the entry. Run in the same batch as the `PlaceSymbol` that
+    /// references it so one undo removes both.
+    RegisterLibSymbol {
+        lib_symbol: LibSymbol,
+    },
+    /// Replace the sheet's embedded copy of `lib_symbol.id` with
+    /// `lib_symbol` ("Update from library", #912). Refused with
+    /// [`EngineError::LibSymbolPinsConnected`] when a pin that has a wire
+    /// or no-connect on it would vanish or move off that connection;
+    /// nothing is mutated then. One undo step.
+    ReplaceLibSymbol {
+        lib_symbol: LibSymbol,
+    },
     /// Add a hierarchical sheet symbol. Rejected with
     /// [`EngineError::EmptyChildSheetFilename`] when `filename` is blank.
     PlaceChildSheet {
@@ -170,6 +190,11 @@ pub enum Command {
     },
     PlaceNoConnect {
         no_connect: NoConnect,
+    },
+    /// Place a generic No-ERC directive; lands in `no_erc_directives`,
+    /// never `no_connects`.
+    PlaceNoErcDirective {
+        directive: NoConnect,
     },
     PlaceBusEntry {
         bus_entry: BusEntry,
@@ -206,6 +231,8 @@ pub enum Command {
     /// deterministic order so re-running produces the same layout.
     AnnotateAll {
         mode: AnnotateMode,
+        /// Visit order; `AnnotateOrder::default()` is rows top to bottom.
+        order: AnnotateOrder,
     },
     /// Absolute positioning of a single symbol. Used by the Properties
     /// panel's future X/Y edit fields and by scripted moves; distinct from
@@ -235,6 +262,16 @@ pub enum Command {
     RenameChildSheetFile {
         from: String,
         to: String,
+    },
+    /// Rename and / or re-point one placed sheet symbol, by `sheet_id`.
+    /// `None` leaves that field untouched. The name must be non-empty and
+    /// the file must keep the `.snxsch` extension; both must stay unique
+    /// among the document's sheet symbols. Only the reference changes —
+    /// no file is created, moved or renamed. Undoable like any other edit.
+    ModifyChildSheet {
+        sheet_id: Uuid,
+        name: Option<String>,
+        filename: Option<String>,
     },
     /// Set the sheet's paper size (a named format like "A4"/"A3" — the
     /// Page Options panel is the producer). Persists through
@@ -290,9 +327,12 @@ impl Command {
             Command::PlaceBus { .. } => CommandKind::PlaceBus,
             Command::PlaceLabel { .. } => CommandKind::PlaceLabel,
             Command::PlaceSymbol { .. } => CommandKind::PlaceSymbol,
+            Command::RegisterLibSymbol { .. } => CommandKind::RegisterLibSymbol,
+            Command::ReplaceLibSymbol { .. } => CommandKind::ReplaceLibSymbol,
             Command::PlaceChildSheet { .. } => CommandKind::PlaceChildSheet,
             Command::PlaceJunction { .. } => CommandKind::PlaceJunction,
             Command::PlaceNoConnect { .. } => CommandKind::PlaceNoConnect,
+            Command::PlaceNoErcDirective { .. } => CommandKind::PlaceNoErcDirective,
             Command::PlaceBusEntry { .. } => CommandKind::PlaceBusEntry,
             Command::PlaceTextNote { .. } => CommandKind::PlaceTextNote,
             Command::PlaceSchDrawing { .. } => CommandKind::PlaceSchDrawing,
@@ -303,6 +343,7 @@ impl Command {
             Command::ReorderObjects { .. } => CommandKind::ReorderObjects,
             Command::ReconcileChildSheetPins { .. } => CommandKind::ReconcileChildSheetPins,
             Command::RenameChildSheetFile { .. } => CommandKind::RenameChildSheetFile,
+            Command::ModifyChildSheet { .. } => CommandKind::ModifyChildSheet,
             Command::SetPaperSize { .. } => CommandKind::SetPaperSize,
         }
     }

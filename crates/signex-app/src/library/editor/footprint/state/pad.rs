@@ -9,6 +9,10 @@ use super::super::layers::FpLayer;
 /// Default new-pad size in mm.
 pub(super) const NEW_PAD_SIZE_MM: f64 = 1.0;
 
+/// Drill (mm) a pad gets when it moves to Multi-Layer with no hole
+/// and no placement default to take one from.
+pub const DEFAULT_THROUGH_HOLE_DRILL_MM: f64 = 0.8;
+
 /// One pad in the editor canvas. A subset of [`signex_library::Pad`] —
 /// we only carry the fields the canvas renders or hit-tests. Persisted
 /// fields the canvas does not draw ride along in [`PadPassthrough`], so
@@ -121,6 +125,27 @@ impl Default for PadStackUi {
 }
 
 impl EditorPad {
+    /// Keep the hole consistent with the copper side. A single-copper-
+    /// layer pad has nothing for a hole to pass through, so Top /
+    /// Bottom clears the drill and its slot (a hidden drill would
+    /// still reach bake and output). Multi-Layer gives a hole-less
+    /// pad `default_drill_mm`; an existing hole is kept. A
+    /// non-plated hole pad is the hole itself and is never touched.
+    pub fn apply_side_drill(&mut self, side: PadSide, default_drill_mm: f64) {
+        if matches!(self.kind, PadKind::NptHole) {
+            return;
+        }
+        match side {
+            PadSide::Top | PadSide::Bottom => {
+                self.drill_diameter_mm = None;
+                self.passthrough.drill_slot_length_mm = None;
+            }
+            PadSide::All => {
+                self.drill_diameter_mm.get_or_insert(default_drill_mm);
+            }
+        }
+    }
+
     pub fn new_default(number: String, position_mm: (f64, f64)) -> Self {
         Self {
             number,

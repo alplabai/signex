@@ -39,7 +39,7 @@ use std::collections::{HashMap, HashSet};
 
 use signex_types::designator::compare_references;
 use signex_types::net::{Net, NetId, Netlist, Terminal};
-use signex_types::schematic::{Label, LabelType, Point, SchematicSheet};
+use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, normalize_port_name};
 use uuid::Uuid;
 
 use crate::build::{
@@ -244,30 +244,7 @@ pub fn build_project_netlist(graph: &ProjectGraph) -> ProjectNetlist {
     // references whom. `order_roots` is what puts the two in that order (#540);
     // the caller's order is kept as the tiebreak, so a flat project is walked
     // exactly as handed.
-    let mut occs: Vec<Occ> = Vec::new();
-    let mut edges: Vec<(usize, usize, usize)> = Vec::new(); // (parent occ, cs index, child occ)
-    let mut path: Vec<SheetKey> = Vec::new();
-    let mut visited: HashSet<SheetKey> = HashSet::new();
-    for key in root_order::order_roots(graph) {
-        if visited.contains(&key) {
-            continue;
-        }
-        let Some(sheet) = graph.sheets.get(&key) else {
-            continue;
-        };
-        path.clear();
-        visit(
-            graph,
-            &key,
-            sheet,
-            Vec::new(),
-            &mut path,
-            &mut occs,
-            &mut edges,
-            &mut visited,
-            &mut issues,
-        );
-    }
+    let (occs, edges) = walk_occurrences(graph, &mut issues);
 
     detect_shared_references(&occs, &mut issues);
 
@@ -305,9 +282,6 @@ pub fn build_project_netlist(graph: &ProjectGraph) -> ProjectNetlist {
         let parent_a = &analyses[parent_occ];
         let child_a = &analyses[child_occ];
         for (pin_name, pin_root) in &parent_a.pin_roots[cs_index] {
-            if pin_name.is_empty() {
-                continue;
-            }
             if let Some(child_roots) = child_a.port_labels.get(pin_name) {
                 for &cr in child_roots {
                     uf_union(&mut l2, (parent_occ, *pin_root), (child_occ, cr));
@@ -496,7 +470,10 @@ fn analyze(sheet: &SchematicSheet) -> Analysis<'_> {
         .map(|cs| {
             cs.pins
                 .iter()
-                .map(|sp| (sp.name.clone(), uf_find(&mut parent, pt_key(&sp.position))))
+                .filter_map(|sp| {
+                    let name = normalize_port_name(&sp.name)?;
+                    Some((name.to_string(), uf_find(&mut parent, pt_key(&sp.position))))
+                })
                 .collect()
         })
         .collect();
@@ -504,12 +481,10 @@ fn analyze(sheet: &SchematicSheet) -> Analysis<'_> {
     let mut port_labels: HashMap<String, Vec<Key>> = HashMap::new();
     for (root, labels) in &net_labels {
         for l in labels {
-            if l.text.is_empty()
-                || !matches!(l.label_type, LabelType::Hierarchical | LabelType::Global)
-            {
+            let Some(name) = l.port_name() else {
                 continue;
-            }
-            port_labels.entry(l.text.clone()).or_default().push(*root);
+            };
+            port_labels.entry(name.to_string()).or_default().push(*root);
         }
     }
 
@@ -603,6 +578,55 @@ fn visit<'a>(
     my_id
 }
 
+/// Walk every root of `graph` and return the occurrence tree (pre-order) and
+/// its `(parent occ, child_sheets index, child occ)` edges. Shared by the
+/// netlist and [`sheet_placements`] so both count the same hierarchy. See the
+/// traversal notes in [`build_project_netlist`] for the multi-root rules.
+fn walk_occurrences<'a>(
+    graph: &ProjectGraph<'a>,
+    issues: &mut Vec<StitchIssue>,
+) -> (Vec<Occ<'a>>, Vec<(usize, usize, usize)>) {
+    let mut occs: Vec<Occ> = Vec::new();
+    let mut edges: Vec<(usize, usize, usize)> = Vec::new();
+    let mut path: Vec<SheetKey> = Vec::new();
+    let mut visited: HashSet<SheetKey> = HashSet::new();
+    for key in root_order::order_roots(graph) {
+        if visited.contains(&key) {
+            continue;
+        }
+        let Some(sheet) = graph.sheets.get(&key) else {
+            continue;
+        };
+        path.clear();
+        visit(
+            graph,
+            &key,
+            sheet,
+            Vec::new(),
+            &mut path,
+            &mut occs,
+            &mut edges,
+            &mut visited,
+            issues,
+        );
+    }
+    (occs, edges)
+}
+
+/// How many times each sheet is placed in the project hierarchy: a root counts
+/// once, a child once per `ChildSheet` that resolves to it. This is the same
+/// occurrence expansion the netlist uses, so a consumer that multiplies a
+/// sheet's parts by this count agrees with the netlist's topology. Sheets the
+/// walk never reaches are absent.
+pub fn sheet_placements(graph: &ProjectGraph) -> std::collections::BTreeMap<SheetKey, usize> {
+    let (occs, _) = walk_occurrences(graph, &mut Vec::new());
+    let mut counts = std::collections::BTreeMap::new();
+    for occ in &occs {
+        *counts.entry(occ.key.clone()).or_insert(0) += 1;
+    }
+    counts
+}
+
 /// Union `node` into the level-2 class of `name`, seeding the bucket the first
 /// time a name is seen.
 fn bucket_join(l2: &mut HashMap<L2, L2>, bucket: &mut HashMap<String, L2>, name: &str, node: L2) {
@@ -653,6 +677,11 @@ fn detect_shared_references(occs: &[Occ], issues: &mut Vec<StitchIssue>) {
 /// corruption. Sheet identity is the [`SheetKey`], never the uuid; every sheet
 /// in the graph is checked uniformly, root included, since the root is just
 /// another entry in `sheets`.
+///
+/// The scope is deliberately the **whole graph**, not just the sheets reachable
+/// from the root (#537): since #430 a declared project page outside the
+/// hierarchy is stitched as its own top-level root, so a uuid it shares with
+/// any other sheet is the same corruption and must be reported.
 fn detect_duplicate_uuids(
     sheets: &HashMap<SheetKey, SchematicSheet>,
     issues: &mut Vec<StitchIssue>,

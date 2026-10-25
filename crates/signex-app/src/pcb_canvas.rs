@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::polygon_path::polygon_path_and_fill;
 use iced::event::Event;
 use iced::mouse;
 use iced::widget::canvas;
@@ -37,10 +38,14 @@ pub struct PcbCanvas {
     /// cache hand-off and the shader primitive share the geometry by refcount
     /// bump — no per-frame deep copy.
     scene_cache: std::cell::RefCell<Option<Arc<Scene>>>,
-    /// Monotonic id of the geometry in `scene_cache`, bumped on every
-    /// invalidation (`clear_content_cache` / `set_renderer_snapshot`). Handed to
-    /// the shader via [`Self::scene_generation`] so the GPU pipeline skips
-    /// re-uploading unchanged geometry on pan/zoom. `Cell` for the same
+    /// Id of the geometry in `scene_cache`, renewed on every invalidation
+    /// (`clear_content_cache` / `set_renderer_snapshot`). Handed to the shader
+    /// via [`Self::scene_generation`] so the GPU pipeline skips re-uploading
+    /// unchanged geometry on pan/zoom. Drawn from one process-wide counter
+    /// ([`next_scene_generation`]), so no two PCB canvases ever hold the same
+    /// value: every window's canvas shares the one `PcbSurface` pipeline and
+    /// its resident generation, and a per-canvas count would let one window
+    /// skip its upload and draw another's board (#494). `Cell` for the same
     /// `&self`-in-`view()` reason as `scene_cache`.
     scene_generation: std::cell::Cell<u64>,
     /// The **sole** home of the PCB pan/zoom camera (ADR-0001 §A1: no shadow
@@ -61,11 +66,22 @@ pub struct PcbCanvas {
     /// updated immediately on draft change for live preview, committed/reverted
     /// on Save/Discard. Mirrors `UiState::pcb_gpu_render` (the saved value).
     pub gpu_render: bool,
+    /// Per-wheel-notch zoom factor (Preferences "Zoom speed"). Synced from
+    /// `UiState` on every update, so canvases created later pick it up.
+    pub zoom_step: f32,
     pub theme_bg: Color,
     pub theme_grid: Color,
     pub canvas_colors: signex_types::theme::CanvasColors,
     pub renderer_snapshot: Option<PcbSnapshot>,
     pub visible_grid_mm: f64,
+}
+
+/// A scene generation no PCB canvas has used yet; see
+/// [`PcbCanvas::scene_generation`].
+fn next_scene_generation() -> u64 {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    NEXT.fetch_add(1, Ordering::Relaxed)
 }
 
 /// Narrowest on-screen grid pitch the PCB canvas draws; denser grids step up
@@ -86,12 +102,13 @@ impl PcbCanvas {
             content_cache: canvas::Cache::default(),
             content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
             scene_cache: std::cell::RefCell::new(None),
-            scene_generation: std::cell::Cell::new(0),
+            scene_generation: std::cell::Cell::new(next_scene_generation()),
             camera: std::cell::RefCell::new(Camera::default()),
             pending_fit: std::cell::Cell::new(None),
             viewport: std::cell::Cell::new(Rectangle::with_size(iced::Size::ZERO)),
             grid_visible: true,
             gpu_render: false,
+            zoom_step: Camera::zoom_step_factor(Camera::ZOOM_STEP_PERCENT_DEFAULT),
             theme_bg: crate::render_config::to_iced(&colors.background),
             theme_grid: crate::render_config::to_iced(&colors.grid),
             canvas_colors: colors,
@@ -108,7 +125,7 @@ impl PcbCanvas {
         self.renderer_snapshot = renderer_snapshot;
         // The board changed — the cached GPU scene no longer matches.
         *self.scene_cache.get_mut() = None;
-        *self.scene_generation.get_mut() += 1;
+        *self.scene_generation.get_mut() = next_scene_generation();
     }
 
     /// On-screen grid line spacing in pixels at `scale` px/mm, or `None` when
@@ -141,7 +158,7 @@ impl PcbCanvas {
         self.content_cache.clear();
         // GPU scene shares this content-changed signal (theme + geometry).
         *self.scene_cache.get_mut() = None;
-        *self.scene_generation.get_mut() += 1;
+        *self.scene_generation.get_mut() = next_scene_generation();
     }
 
     /// Record the canvas bounds (done on every canvas event; public so tests can
@@ -152,11 +169,21 @@ impl PcbCanvas {
 
     /// Zoom one wheel notch about the view centre (View > Zoom In/Out).
     /// Returns whether the camera changed (false at the zoom limits).
-    pub fn zoom_about_centre(&self, zoom_in: bool) -> bool {
+    pub fn zoom_about_centre(&self, zoom_in: bool, step: f32) -> bool {
         let bounds = self.viewport.get();
         let centre = iced::Point::new(bounds.width / 2.0, bounds.height / 2.0);
         let notch = if zoom_in { 1.0 } else { -1.0 };
-        self.camera.borrow_mut().zoom_at(centre, notch, bounds)
+        self.camera
+            .borrow_mut()
+            .zoom_at(centre, notch, step, bounds)
+    }
+
+    /// Recentre the view on world point `(x, y)` without changing zoom (#525).
+    pub fn center_on_world(&self, x: f32, y: f32) {
+        let bounds = self.viewport.get();
+        self.camera
+            .borrow_mut()
+            .center_on(iced::Point::new(x, y), bounds);
     }
 
     pub fn fit_to_board(&mut self) {
@@ -417,21 +444,12 @@ fn draw_polygons(
             continue;
         }
 
-        let points: Vec<iced::Point> = polygon
-            .vertices
-            .iter()
-            .map(|vertex| world_to_screen(camera, bounds, *vertex))
-            .collect();
-
-        let path = canvas::Path::new(|builder| {
-            builder.move_to(points[0]);
-            for point in &points[1..] {
-                builder.line_to(*point);
-            }
-            builder.close();
-        });
-
-        frame.fill(&path, color_from_rgba(polygon.fill_color));
+        let (path, fill) = polygon_path_and_fill(
+            polygon,
+            |vertex| world_to_screen(camera, bounds, vertex),
+            color_from_rgba(polygon.fill_color),
+        );
+        frame.fill(&path, fill);
 
         if let Some(stroke_color) = polygon.stroke_color {
             frame.stroke(
@@ -502,10 +520,12 @@ impl canvas::Program<Message> for PcbCanvas {
                     mouse::ScrollDelta::Pixels { y, .. } => *y / 50.0,
                 };
                 if let Some(cursor_pos) = cursor.position_in(bounds)
-                    && self
-                        .camera
-                        .borrow_mut()
-                        .zoom_at(cursor_pos, scroll_y, bounds)
+                    && self.camera.borrow_mut().zoom_at(
+                        cursor_pos,
+                        scroll_y,
+                        self.zoom_step,
+                        bounds,
+                    )
                 {
                     return Some(
                         canvas::Action::publish(Message::CanvasEvent(CanvasEvent::CursorMoved))
@@ -783,6 +803,25 @@ mod tests {
         canvas.clear_content_cache();
         let g2 = canvas.scene_generation();
         assert!(g2 > g1, "content/theme change must bump the generation");
+    }
+
+    /// #903 review: every window's PCB canvas uploads through one shared
+    /// pipeline, which skips the upload when the generation matches the
+    /// resident one. Two canvases must never be at the same generation, or
+    /// one window draws the other's board.
+    #[test]
+    fn two_pcb_canvases_never_share_a_scene_generation() {
+        let mut main = PcbCanvas::new();
+        let mut undocked = PcbCanvas::new();
+        let mut seen = std::collections::HashSet::new();
+        assert!(seen.insert(main.scene_generation()));
+        assert!(seen.insert(undocked.scene_generation()));
+        for _ in 0..4 {
+            main.clear_content_cache();
+            assert!(seen.insert(main.scene_generation()));
+            undocked.set_renderer_snapshot(Some(PcbSnapshot::default()));
+            assert!(seen.insert(undocked.scene_generation()));
+        }
     }
 
     #[test]

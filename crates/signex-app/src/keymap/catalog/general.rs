@@ -138,7 +138,9 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "cycle_snap_grid_forward",
         category: "view",
-        label: "Cycle forward through snap grids",
+        // The key opens the snap-grid picker (Altium's G popup, footprint
+        // editor only); it does not step through sizes (#525).
+        label: "Open the snap grid picker (footprint editor)",
         menu_label: Some("Cycle Grid Size"),
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -399,7 +401,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         id: "move_object",
         category: "modify",
         label: "Move object",
-        menu_label: None,
+        menu_label: Some("Move"),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_MUTATES,
@@ -408,8 +410,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "move_selection",
         category: "modify",
-        label: "Move",
-        menu_label: Some("Move"),
+        label: "Move selection",
+        menu_label: Some("Move Selection"),
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::GUI_MUTATES,

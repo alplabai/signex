@@ -49,22 +49,13 @@ impl Signex {
                 _ => {}
             }
         }
-        if let Some(result) = self.with_active_schematic_session_mut(|session| session.save()) {
-            result.context("save active schematic session")?;
-            let path = self.active_tab_path().unwrap_or_default();
-            crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()));
-            // v0.22 Phase 8.4 — auto-commit the saved schematic into
-            // the owning project's git repo when enable_git is on.
-            // Best-effort; failure logged + ignored (user data is on
-            // disk regardless).
-            if !path.as_os_str().is_empty() {
-                let label = path
-                    .file_name()
-                    .map(|f| f.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| path.display().to_string());
-                let msg = format!("Save {label}");
-                self.commit_save_to_project_git(&path, &msg);
-            }
+        // The write runs off the UI thread; the git auto-commit and the
+        // dirty-marker clear follow its completion (`handle_document_saved`).
+        let mut saves = Vec::new();
+        if let Some(path) = self.document_state.active_path.clone()
+            && self.document_state.engines.contains_key(&path)
+        {
+            saves.push(self.begin_schematic_save(path, None)?);
         }
         // v0.23 — PCB save-hook auto-commit. The PCB editor doesn't
         // own a save-back-to-disk path yet (Pcb tabs render from
@@ -92,7 +83,7 @@ impl Signex {
         // this the tree row stays red even though the title (which
         // reads `dirty_paths.len()` directly each frame) clears.
         self.refresh_panel_ctx();
-        Ok(iced::Task::none())
+        Ok(iced::Task::batch(saves))
     }
 
     /// Persist the active project's `.snxprj` JSON when its dirty bit
@@ -282,7 +273,7 @@ impl Signex {
         &mut self,
         from_path: &std::path::Path,
         path: PathBuf,
-    ) -> Result<()> {
+    ) -> Result<iced::Task<Message>> {
         match self.document_state.tabs.get(self.document_state.active_tab) {
             Some(tab) if matches!(tab.kind, TabKind::Schematic) && tab.path == from_path => {}
             _ => anyhow::bail!(
@@ -292,26 +283,29 @@ impl Signex {
                 from_path.display()
             ),
         }
-        // Refuse a target another open tab hosts: re-keying onto it would
-        // replace that tab's engine and discard its unsaved edits.
-        let is_other_open_document = self.document_state.active_path.as_ref() != Some(&path)
-            && (self.document_state.engines.contains_key(&path)
-                || self.document_state.tabs.iter().any(|tab| tab.path == path));
-        if is_other_open_document {
+        if self.save_as_target_is_other_open_document(&path) {
             anyhow::bail!(
                 "save as {}: that file is open in another tab or holds unsaved edits from a closed tab",
                 path.display()
             );
         }
-        if let Some(result) =
-            self.with_active_schematic_session_mut(|session| session.save_as(path.clone()))
-        {
-            result.with_context(|| format!("save active schematic as {}", path.display()))?;
-            crate::diagnostics::log_info(format!("[save-as] Wrote {}", path.display()));
-            Ok(())
-        } else {
-            anyhow::bail!("save as {}: no active schematic to save", path.display())
+        if self.document_state.document_saves.is_saving(&path) {
+            anyhow::bail!(
+                "save as {}: a write to that file is still running; try again once it finishes",
+                path.display()
+            );
         }
+        // The tab keeps its old path and title until the write succeeds.
+        self.begin_schematic_save(path, Some(from_path.to_path_buf()))
+    }
+
+    /// Whether `path` is hosted by another open tab or parked engine:
+    /// re-keying onto it would replace that engine and discard its unsaved
+    /// edits.
+    pub(super) fn save_as_target_is_other_open_document(&self, path: &std::path::Path) -> bool {
+        self.document_state.active_path.as_deref() != Some(path)
+            && (self.document_state.engines.contains_key(path)
+                || self.document_state.tabs.iter().any(|tab| tab.path == path))
     }
 
     /// Resolve `Message::File(FileMsg::SavePrimitiveAs { from_path, to_path })` —
@@ -369,7 +363,7 @@ impl Signex {
         // path) writes the new file, then undo the re-key if the write
         // fails: a tab must never point at a file that does not exist.
         let previous_title = self.retarget_primitive(from_path, to_path, None)?;
-        if let Err(error) = self.save_primitive_tab_at(to_path) {
+        if let Err(error) = self.save_primitive_tab_replacing(to_path) {
             self.retarget_primitive(to_path, from_path, previous_title.clone())
                 .context("roll back Save As re-key")?;
             return Err(error.context(format!(
