@@ -1,0 +1,128 @@
+//! A canonical, id-free picture of a sheet's connectivity, for "did this edit
+//! change any net?" checks.
+//!
+//! It reads the same per-sheet derivation the project stitcher starts from -
+//! wire/junction union, on-sheet label merge, and child-sheet pins anchored
+//! to the wire they sit on (endpoint or interior) - so a caller comparing two
+//! signatures sees exactly the differences the netlist and the hierarchy
+//! would. Net numbers (`N$3`) are not part of it; only what a net contains is.
+
+use std::collections::{BTreeSet, HashMap};
+
+use signex_types::schematic::{Point, SchematicSheet};
+use uuid::Uuid;
+
+use crate::build::{
+    anchor_point, best_net_name_of, collect_net_labels, collect_terminals, merged_sheet_parent,
+    power_name_carriers, pt_key,
+};
+use crate::uf::{Key, find as uf_find};
+
+/// What one net contains.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct NetSignature {
+    /// `(symbol uuid, pin id)` of every component pin landing on the net.
+    pub terminals: BTreeSet<(Uuid, String)>,
+    /// Labels on the net.
+    pub labels: BTreeSet<Uuid>,
+    /// Child-sheet pins anchored on the net.
+    pub sheet_pins: BTreeSet<Uuid>,
+    /// The net's name when a label or power port names it, else empty.
+    pub name: String,
+}
+
+impl NetSignature {
+    /// The same net without `terminals` and `sheet_pins`; `None` when nothing
+    /// is left to identify it.
+    #[must_use]
+    pub fn without(
+        &self,
+        terminals: &BTreeSet<(Uuid, String)>,
+        sheet_pins: &BTreeSet<Uuid>,
+    ) -> Option<Self> {
+        let projected = Self {
+            terminals: self.terminals.difference(terminals).cloned().collect(),
+            labels: self.labels.clone(),
+            sheet_pins: self.sheet_pins.difference(sheet_pins).copied().collect(),
+            name: self.name.clone(),
+        };
+        let empty = projected.terminals.is_empty()
+            && projected.labels.is_empty()
+            && projected.sheet_pins.is_empty();
+        (!empty).then_some(projected)
+    }
+}
+
+/// Every net of `sheet` that has a terminal, a label or a child-sheet pin,
+/// sorted.
+#[must_use]
+pub fn net_signatures(sheet: &SchematicSheet) -> Vec<NetSignature> {
+    let mut parent = merged_sheet_parent(sheet);
+    let wires: Vec<(Point, Point)> = sheet.wires.iter().map(|w| (w.start, w.end)).collect();
+    for pin in sheet.child_sheets.iter().flat_map(|c| c.pins.iter()) {
+        anchor_point(&mut parent, pt_key(&pin.position), &wires);
+    }
+
+    let mut nets: HashMap<Key, NetSignature> = HashMap::new();
+    let mut entry = |root: Key| {
+        nets.entry(root).or_insert_with(|| NetSignature {
+            terminals: BTreeSet::new(),
+            labels: BTreeSet::new(),
+            sheet_pins: BTreeSet::new(),
+            name: String::new(),
+        });
+        root
+    };
+
+    let terminals = collect_terminals(sheet, &mut parent);
+    let labels = collect_net_labels(sheet, &mut parent);
+    let power = power_name_carriers(sheet, &mut parent);
+    let mut pin_roots = Vec::new();
+    for pin in sheet.child_sheets.iter().flat_map(|c| c.pins.iter()) {
+        pin_roots.push((uf_find(&mut parent, pt_key(&pin.position)), pin.uuid));
+    }
+
+    let roots: Vec<Key> = terminals
+        .keys()
+        .copied()
+        .chain(labels.keys().copied())
+        .chain(pin_roots.iter().map(|(root, _)| *root))
+        .collect();
+    for root in roots {
+        entry(root);
+    }
+    for (root, list) in terminals {
+        let net = nets.get_mut(&root).expect("entry created");
+        net.terminals
+            .extend(list.into_iter().map(|t| (t.symbol, t.pin)));
+    }
+    for (root, list) in &labels {
+        let net = nets.get_mut(root).expect("entry created");
+        net.labels.extend(list.iter().map(|l| l.uuid));
+    }
+    for (root, uuid) in pin_roots {
+        nets.get_mut(&root)
+            .expect("entry created")
+            .sheet_pins
+            .insert(uuid);
+    }
+    for (root, net) in &mut nets {
+        let named = labels
+            .get(root)
+            .map(|list| list.iter().map(|l| (l.label_type, l.text.as_str())))
+            .into_iter()
+            .flatten();
+        let carriers: Vec<&str> = power
+            .iter()
+            .filter(|(r, _)| r == root)
+            .map(|(_, value)| value.as_str())
+            .collect();
+        if let Some((_, name)) = best_net_name_of(named, &carriers) {
+            net.name = name;
+        }
+    }
+
+    let mut out: Vec<NetSignature> = nets.into_values().collect();
+    out.sort();
+    out
+}

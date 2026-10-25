@@ -111,21 +111,52 @@ fn primary_anchor_world(
     }
 }
 
+/// The last ghost, keyed by what it was computed from, so a frame that
+/// changes nothing (the cursor moved inside one grid step) does not rerun
+/// the rubber-band pass.
+pub struct DragGhost {
+    key: (Vec<uuid::Uuid>, u64, u64, bool),
+    snapshot: std::rc::Rc<SchematicRenderSnapshot>,
+}
+
+/// The cell the canvas slot keeps the ghost in; cleared when the document
+/// behind it changes.
+pub type GhostCell = std::cell::RefCell<Option<DragGhost>>;
+
+/// The ghost for `selection` moved by `(dx, dy)`: with `keep_wires` the very
+/// sheet the engine commits (see [`signex_engine::preview_move`]), otherwise
+/// the plain shift.
 pub(super) fn snapshot(
+    cell: &GhostCell,
     snap: &SchematicRenderSnapshot,
     selection: &[SelectedItem],
     dx: f64,
     dy: f64,
     keep_wires: bool,
-) -> SchematicRenderSnapshot {
-    let mut shifted = super::shift_snapshot_for_selection(snap, selection, dx, dy);
-    if keep_wires {
-        // Tips come from the unshifted sheet; the follow pass then edits
-        // the shifted copy, whose unselected wires are still in place.
-        let tips = signex_engine::moved_pin_tips(snap, selection);
-        let _ = signex_engine::follow_moved_pins(&mut shifted, &tips, selection);
+) -> std::rc::Rc<SchematicRenderSnapshot> {
+    let key = (
+        selection.iter().map(|item| item.uuid).collect::<Vec<_>>(),
+        dx.to_bits(),
+        dy.to_bits(),
+        keep_wires,
+    );
+    if let Some(ghost) = cell.borrow().as_ref()
+        && ghost.key == key
+    {
+        return ghost.snapshot.clone();
     }
-    shifted
+    let built = if keep_wires {
+        let moves: Vec<_> = selection.iter().map(|item| (*item, dx, dy)).collect();
+        signex_engine::preview_move(snap, &moves, true)
+    } else {
+        super::shift_snapshot_for_selection(snap, selection, dx, dy)
+    };
+    let snapshot = std::rc::Rc::new(built);
+    *cell.borrow_mut() = Some(DragGhost {
+        key,
+        snapshot: snapshot.clone(),
+    });
+    snapshot
 }
 
 #[cfg(test)]
@@ -212,7 +243,8 @@ mod tests {
     #[test]
     fn the_ghost_rubber_bands_the_wires_when_the_preference_is_on() {
         let (sheet, item) = sheet_with_wired_resistor();
-        let ghost = snapshot(&sheet, &[item], 0.0, 10.0, true);
+        let cell = GhostCell::default();
+        let ghost = snapshot(&cell, &sheet, &[item], 0.0, 10.0, true);
         assert_eq!(ghost.symbols[0].position, Point::new(50.0, 60.0));
         assert_eq!(ghost.wires.len(), 2, "a bend wire reaches the new pin tip");
         assert!(
@@ -229,7 +261,8 @@ mod tests {
     #[test]
     fn the_ghost_leaves_wires_alone_when_the_preference_is_off() {
         let (sheet, item) = sheet_with_wired_resistor();
-        let ghost = snapshot(&sheet, &[item], 0.0, 10.0, false);
+        let cell = GhostCell::default();
+        let ghost = snapshot(&cell, &sheet, &[item], 0.0, 10.0, false);
         assert_eq!(ghost.symbols[0].position, Point::new(50.0, 60.0));
         assert_eq!(ghost.wires.len(), 1);
         assert_eq!(ghost.wires[0].end, Point::new(45.0, 50.0));

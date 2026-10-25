@@ -19,6 +19,9 @@ pub use build::{
 };
 pub use bus::{BusAnalysis, BusGeometry, BusGroup, BusLabelName, EntryAttachment, analyse_buses};
 
+mod signature;
+pub use signature::{NetSignature, net_signatures};
+
 mod project;
 pub use project::{
     ProjectGraph, ProjectNetlist, ProjectRoot, SheetKey, StitchIssue, build_project_netlist,

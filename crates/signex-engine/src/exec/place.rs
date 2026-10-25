@@ -18,6 +18,71 @@ impl Engine {
         patch
     }
 
+    /// Rubber-band the already moved `self.document` and reconcile junctions,
+    /// then check the result against the pre-move nets: any difference
+    /// escalates the offending tips (new path, then plain move) and the pass
+    /// reruns from the plain-moved sheet, so what is committed always keeps
+    /// the nets (or is the old plain move for a warned pin).
+    fn rubber_band_guarded(
+        &mut self,
+        before: &SchematicSheet,
+        tips: &[crate::PinTip],
+        items: &[SelectedItem],
+    ) -> DocumentPatch {
+        const MAX_ROUNDS: usize = 6;
+        let guard = crate::Guard::new(before);
+        let base = self.document.clone();
+        let mut policy = crate::Policy::default();
+        for round in 0.. {
+            self.document = base.clone();
+            let follow = crate::follow_moved_pins(&mut self.document, tips, items, &policy);
+            let mut touched = items.to_vec();
+            touched.extend(follow.touched);
+            let patch = self.reconciled_patch(&touched);
+            let verdict = guard.check(&self.document, tips, &policy);
+            let blamed = match verdict {
+                None => {
+                    self.warn_plain_pins(&guard, tips, &policy);
+                    return patch;
+                }
+                Some(blamed) => blamed,
+            };
+            let mut moved_down = false;
+            for key in blamed {
+                if round >= MAX_ROUNDS {
+                    policy.plain.insert(key);
+                    moved_down = true;
+                } else {
+                    moved_down |= policy.escalate(key);
+                }
+            }
+            if !moved_down {
+                // Nothing left to escalate: every offender is already a plain
+                // move, which is the behaviour the user opted out of.
+                self.warn_plain_pins(&guard, tips, &policy);
+                return patch;
+            }
+        }
+        unreachable!("the escalation loop returns from inside")
+    }
+
+    /// One notice per connected pin the guard had to leave as a plain move.
+    fn warn_plain_pins(
+        &mut self,
+        guard: &crate::Guard,
+        tips: &[crate::PinTip],
+        policy: &crate::Policy,
+    ) {
+        for tip in tips {
+            if policy.plain.contains(&tip.old_key()) && guard.was_connected(tip) {
+                self.warnings.push(format!(
+                    "could not keep {} connected without crossing another net",
+                    tip.label()
+                ));
+            }
+        }
+    }
+
     /// Move every item by its own delta; with `keep_wires` the wires on the
     /// moved pins follow (see `transform::rubber_band`) inside the same
     /// history entry.
@@ -27,7 +92,7 @@ impl Engine {
         moves: Vec<(SelectedItem, f64, f64)>,
         keep_wires: bool,
     ) -> Result<CommandResult, EngineError> {
-        let mut items: Vec<SelectedItem> = moves.iter().map(|(item, _, _)| *item).collect();
+        let items: Vec<SelectedItem> = moves.iter().map(|(item, _, _)| *item).collect();
         // Pin tips must be read before the symbols move.
         let tips = keep_wires.then(|| crate::moved_pin_tips(&self.document, &items));
 
@@ -39,14 +104,13 @@ impl Engine {
             return Ok(CommandResult::unchanged());
         }
 
-        if let Some(tips) = tips {
-            let follow = crate::follow_moved_pins(&mut self.document, &tips, &items);
-            items.extend(follow.touched);
-            self.warnings.extend(follow.warnings);
-        }
+        let patch = match tips.filter(|tips| !tips.is_empty()) {
+            Some(tips) => self.rubber_band_guarded(&before, &tips, &items),
+            None => self.reconciled_patch(&items),
+        };
         let patch_pair = PatchPair {
             semantic: SemanticPatch::SelectionMoved,
-            document: self.reconciled_patch(&items),
+            document: patch,
         };
         self.record_history(before, patch_pair);
         Ok(CommandResult::changed(patch_pair))

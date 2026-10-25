@@ -95,6 +95,8 @@ pub struct CanvasSlot {
     /// Render-facing cache of the currently visible schematic.
     /// The app updates this from the active engine or active tab cache.
     pub render_cache: Option<crate::schematic_runtime::SchematicRenderCache>,
+    /// The drag ghost computed for the current delta (see [`drag_preview`]).
+    pub(crate) drag_ghost: drag_preview::GhostCell,
     /// Currently selected items — drives selection overlay rendering.
     pub selected: Vec<signex_types::schematic::SelectedItem>,
     /// Pending fit target to transfer to CanvasState.
@@ -205,6 +207,7 @@ impl CanvasSlot {
             reorder_picker_armed: false,
             move_pick: None,
             move_epoch: 0,
+            drag_ghost: Default::default(),
             shape_anchor: None,
             #[cfg(test)]
             content_cache_clears: 0,
@@ -253,6 +256,7 @@ impl CanvasSlot {
         render_cache: Option<crate::schematic_runtime::SchematicRenderCache>,
     ) {
         self.render_cache = render_cache;
+        *self.drag_ghost.borrow_mut() = None;
     }
 
     /// Record the canvas bounds (done on every canvas event; public so tests can
@@ -490,6 +494,7 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
             if let (Some((dx, dy)), Some(snap)) = (drag_offset, self.active_snapshot()) {
                 if !self.selected.is_empty() {
                     Some(drag_preview::snapshot(
+                        &self.drag_ghost,
                         snap,
                         &self.selected,
                         dx,
@@ -503,7 +508,9 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
                 None
             };
         let effective_snapshot: Option<&crate::schematic_runtime::SchematicRenderSnapshot> =
-            shifted_snapshot.as_ref().or_else(|| self.active_snapshot());
+            shifted_snapshot
+                .as_deref()
+                .or_else(|| self.active_snapshot());
 
         // Layer 2: content (schematic elements)
         layers.push(self.draw_content(state, renderer, bounds, effective_snapshot, drag_offset));

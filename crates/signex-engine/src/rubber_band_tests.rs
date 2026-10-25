@@ -788,9 +788,14 @@ fn describe(sheet: &SchematicSheet) -> String {
         .symbols
         .iter()
         .map(|s| {
-            let a = pin_tip(sheet, s.uuid, 0);
-            let b = pin_tip(sheet, s.uuid, 1);
-            format!("{}[{},{} | {},{}]", s.reference, a.x, a.y, b.x, b.y)
+            let n = sheet.lib_symbols[&s.lib_id].pins.len();
+            let tips: Vec<String> = (0..n)
+                .map(|i| {
+                    let p = pin_tip(sheet, s.uuid, i);
+                    format!("{},{}", p.x, p.y)
+                })
+                .collect();
+            format!("{}[{}]", s.reference, tips.join(" | "))
         })
         .collect();
     let labels: Vec<_> = sheet
@@ -815,91 +820,126 @@ fn describe(sheet: &SchematicSheet) -> String {
 
 struct Case {
     sheet: SchematicSheet,
-    moved: Vec<Uuid>,
-    dx: f64,
-    dy: f64,
+    moves: Vec<(SelectedItem, f64, f64)>,
+    /// A wire is selected: it moves plainly, so nets may change by design.
+    selects_wire: bool,
 }
 
-/// A random small schematic and a random move of one or two of its symbols.
-/// Symbols sit on a 10 mm pitch so neighbours share pin tips; wires are
-/// random orthogonal pairs between pin tips and free grid points; labels
-/// sit on random points; editor-style junctions are added wherever a wire
-/// end lands on another wire. Geometry the move would land a pin on is
-/// pruned (that is user placement, not rubber-banding), as is any wire with
-/// a pin strictly inside it (the netlist does not connect those).
+fn add_labelled(sheet: &mut SchematicSheet, rng: &mut Lcg, at: (f64, f64)) {
+    let text = ["A", "B", "GND"][rng.next(3) as usize];
+    let label_type = [LabelType::Net, LabelType::Global, LabelType::Power][rng.next(3) as usize];
+    sheet.labels.push(Label {
+        unknown_columns: Default::default(),
+        uuid: Uuid::new_v4(),
+        text: text.to_string(),
+        position: Point::new(at.0, at.1),
+        rotation: 0.0,
+        label_type,
+        shape: String::new(),
+        font_size: 1.27,
+        justify: HAlign::Left,
+        justify_v: VAlign::Bottom,
+    });
+}
+
+/// A random small schematic and a random move, with nothing pruned: pins
+/// land on foreign wire ends, interiors, pins and labels, T-junctions often
+/// have no dot, labels share names across kinds, no-connects sit on pins,
+/// symbols are multi-unit or power ports, a child sheet has pins, and
+/// sometimes a wire is selected or each item moves by its own delta.
 fn random_case(rng: &mut Lcg) -> Option<Case> {
-    use signex_net::{point_on_segment, pt_key};
     let mut sheet = test_sheet();
+    sheet.lib_symbols.insert(
+        "U".to_string(),
+        lib_symbol("U", vec![unit_pin("1", -5.0, 1), unit_pin("2", 5.0, 2)]),
+    );
+    sheet.lib_symbols.insert(
+        "GND".to_string(),
+        lib_symbol("GND", vec![lib_pin("1", 0.0)]),
+    );
     let mut symbols = Vec::new();
     for col in 0..6u64 {
         for row in 0..3u64 {
-            if rng.next(100) < 55 {
-                let at = Point::new(20.0 + 10.0 * col as f64, 20.0 + 15.0 * row as f64);
-                let id = add_resistor(&mut sheet, &format!("R{}", symbols.len() + 1), at);
-                {
-                    let sym = sheet.symbols.last_mut().unwrap();
-                    sym.mirror_y = rng.next(100) < 25;
-                    sym.rotation = 90.0 * rng.next(4) as f64;
-                }
-                symbols.push(id);
+            if rng.next(100) >= 55 {
+                continue;
             }
+            let at = Point::new(20.0 + 10.0 * col as f64, 20.0 + 15.0 * row as f64);
+            let reference = format!("R{}", symbols.len() + 1);
+            let id = match rng.next(100) {
+                0..=69 => add_resistor(&mut sheet, &reference, at),
+                70..=84 => {
+                    let id = place(&mut sheet, &reference, "U", at);
+                    sheet.symbols.last_mut().unwrap().unit = 1 + rng.next(2) as u32;
+                    id
+                }
+                _ => {
+                    let id = place(&mut sheet, &format!("#PWR{}", symbols.len()), "GND", at);
+                    let sym = sheet.symbols.last_mut().unwrap();
+                    sym.is_power = true;
+                    sym.value = "GND".to_string();
+                    id
+                }
+            };
+            let sym = sheet.symbols.last_mut().unwrap();
+            sym.mirror_y = rng.next(100) < 25;
+            sym.mirror_x = rng.next(100) < 15;
+            sym.rotation = 90.0 * rng.next(4) as f64;
+            symbols.push(id);
         }
     }
     if symbols.is_empty() {
         return None;
     }
-    let picks = 1 + rng.next(2) as usize;
-    let mut moved: Vec<Uuid> = (0..picks)
-        .map(|_| symbols[rng.next(symbols.len() as u64) as usize])
-        .collect();
-    moved.dedup();
-    moved.sort();
-    moved.dedup();
-    let dx = 2.5 * (rng.next(9) as f64 - 4.0);
-    let dy = 2.5 * (rng.next(9) as f64 - 4.0);
-    if dx == 0.0 && dy == 0.0 {
-        return None;
+    let mut child = None;
+    if rng.next(100) < 25 {
+        let pins: Vec<SheetPin> = (0..2)
+            .map(|i| SheetPin {
+                uuid: Uuid::new_v4(),
+                name: format!("P{i}"),
+                direction: "input".to_string(),
+                position: Point::new(100.0, 65.0 + 5.0 * i as f64),
+                rotation: 0.0,
+                auto_generated: false,
+                user_moved: false,
+            })
+            .collect();
+        let sheet_pin = pins[0].uuid;
+        let id = Uuid::new_v4();
+        sheet.child_sheets.push(ChildSheet {
+            uuid: id,
+            name: "Child".to_string(),
+            filename: "child.snxsch".to_string(),
+            position: Point::new(100.0, 60.0),
+            size: (30.0, 20.0),
+            stroke_width: 0.12,
+            fill: FillType::None,
+            stroke_color: None,
+            fill_color: None,
+            fields_autoplaced: false,
+            pins,
+            instances: Vec::new(),
+        });
+        child = Some((id, sheet_pin));
     }
 
-    let mut old_tips = Vec::new();
-    let mut new_tips = Vec::new();
     let mut points: Vec<(f64, f64)> = Vec::new();
     for sym in &sheet.symbols {
-        for index in 0..2 {
+        let lib = &sheet.lib_symbols[&sym.lib_id];
+        for index in 0..lib.pins.len() {
             let tip = pin_tip(&sheet, sym.uuid, index);
             points.push((tip.x, tip.y));
-            old_tips.push(pt_key(&tip));
-            if moved.contains(&sym.uuid) {
-                new_tips.push(pt_key(&Point::new(tip.x + dx, tip.y + dy)));
-            }
         }
     }
-    let all: Vec<_> = old_tips.iter().chain(new_tips.iter()).copied().collect();
-    // A moved pin may not land on a stationary pin or on another moved
-    // pin: that is a new connection the user makes, not one to preserve.
-    let stationary: Vec<_> = sheet
-        .symbols
-        .iter()
-        .filter(|s| !moved.contains(&s.uuid))
-        .flat_map(|s| {
-            (0..2)
-                .map(|i| pt_key(&pin_tip(&sheet, s.uuid, i)))
-                .collect::<Vec<_>>()
-        })
-        .collect();
-    let mut distinct = new_tips.clone();
-    distinct.sort();
-    distinct.dedup();
-    if distinct.len() != new_tips.len() || new_tips.iter().any(|k| stationary.contains(k)) {
-        return None;
+    for pin in sheet.child_sheets.iter().flat_map(|c| c.pins.iter()) {
+        points.push((pin.position.x, pin.position.y));
     }
     for _ in 0..8 {
         points.push((
+            15.0 + 5.0 * rng.next(16) as f64,
             15.0 + 5.0 * rng.next(14) as f64,
-            15.0 + 5.0 * rng.next(8) as f64,
         ));
     }
-    for _ in 0..12 {
+    for _ in 0..(6 + rng.next(8)) {
         let a = points[rng.next(points.len() as u64) as usize];
         let b = points[rng.next(points.len() as u64) as usize];
         let elbow = if rng.next(2) == 0 {
@@ -913,91 +953,557 @@ fn random_case(rng: &mut Lcg) -> Option<Case> {
             }
         }
     }
-    let keep_wire = |w: &Wire| {
-        let (a, b) = (pt_key(&w.start), pt_key(&w.end));
-        !all.iter()
-            .any(|k| *k != a && *k != b && point_on_segment(*k, a, b))
-            && !new_tips.contains(&a)
-            && !new_tips.contains(&b)
-            && !new_tips.iter().any(|k| point_on_segment(*k, a, b))
-    };
-    sheet.wires.retain(keep_wire);
-    for n in 0..2 {
-        let at = points[rng.next(points.len() as u64) as usize];
-        if !new_tips.contains(&pt_key(&Point::new(at.0, at.1))) {
-            add_label(&mut sheet, &format!("N{n}"), at);
-        }
-    }
+    // Some T-junctions get their dot, some do not.
     let ends: Vec<(f64, f64)> = sheet
         .wires
         .iter()
         .flat_map(|w| [(w.start.x, w.start.y), (w.end.x, w.end.y)])
         .collect();
     for end in ends {
-        let k = pt_key(&Point::new(end.0, end.1));
+        let k = signex_net::pt_key(&Point::new(end.0, end.1));
         let inside = sheet.wires.iter().any(|w| {
-            let (a, b) = (pt_key(&w.start), pt_key(&w.end));
-            k != a && k != b && point_on_segment(k, a, b)
+            let (a, b) = (signex_net::pt_key(&w.start), signex_net::pt_key(&w.end));
+            k != a && k != b && signex_net::point_on_segment(k, a, b)
         });
-        let has_dot = sheet.junctions.iter().any(|j| pt_key(&j.position) == k);
-        if inside && !has_dot {
-            add_dot(&mut sheet, end, true);
+        let has_dot = sheet
+            .junctions
+            .iter()
+            .any(|j| signex_net::pt_key(&j.position) == k);
+        if inside && !has_dot && rng.next(100) < 50 {
+            add_dot(&mut sheet, end, rng.next(2) == 0);
         }
+    }
+    for _ in 0..3 {
+        let at = points[rng.next(points.len() as u64) as usize];
+        add_labelled(&mut sheet, rng, at);
+    }
+    if rng.next(100) < 30 {
+        let at = points[rng.next(points.len() as u64) as usize];
+        sheet.no_connects.push(signex_types::schematic::NoConnect {
+            uuid: Uuid::new_v4(),
+            position: Point::new(at.0, at.1),
+        });
+    }
+
+    let mut moves = Vec::new();
+    let picks = 1 + rng.next(2) as usize;
+    let mut chosen: Vec<Uuid> = (0..picks)
+        .map(|_| symbols[rng.next(symbols.len() as u64) as usize])
+        .collect();
+    chosen.sort();
+    chosen.dedup();
+    let uniform = (
+        2.5 * (rng.next(9) as f64 - 4.0),
+        2.5 * (rng.next(9) as f64 - 4.0),
+    );
+    let each = rng.next(100) < 25;
+    for id in chosen {
+        let delta = if each {
+            (
+                2.5 * (rng.next(9) as f64 - 4.0),
+                2.5 * (rng.next(9) as f64 - 4.0),
+            )
+        } else {
+            uniform
+        };
+        moves.push((symbol_item(id), delta.0, delta.1));
+    }
+    if let Some((child_id, pin_id)) = child {
+        match rng.next(10) {
+            0 | 1 => moves.push((
+                SelectedItem::new(child_id, SelectedKind::ChildSheet),
+                uniform.0,
+                uniform.1,
+            )),
+            2 => moves.push((SelectedItem::new(pin_id, SelectedKind::SheetPin), 0.0, 2.5)),
+            _ => {}
+        }
+    }
+    let selects_wire = rng.next(100) < 10 && !sheet.wires.is_empty();
+    if selects_wire {
+        let wire = sheet.wires[rng.next(sheet.wires.len() as u64) as usize].uuid;
+        moves.push((
+            SelectedItem::new(wire, SelectedKind::Wire),
+            uniform.0,
+            uniform.1,
+        ));
+    }
+    if moves.iter().all(|(_, dx, dy)| *dx == 0.0 && *dy == 0.0) {
+        return None;
     }
     Some(Case {
         sheet,
-        moved,
-        dx,
-        dy,
+        moves,
+        selects_wire,
     })
+}
+
+fn overlap_pairs(sheet: &SchematicSheet) -> usize {
+    let mut count = 0;
+    for (i, a) in sheet.wires.iter().enumerate() {
+        for b in &sheet.wires[i + 1..] {
+            count += usize::from(crate::transform::rubber_band::wires_overlap(a, b));
+        }
+    }
+    count
+}
+
+/// The sheet without the power ports among `skip_terminals`: a power port
+/// that moved plainly took its name-merges with it.
+fn without_skipped_power(
+    sheet: &SchematicSheet,
+    skip_terminals: &std::collections::BTreeSet<(Uuid, String)>,
+) -> SchematicSheet {
+    let mut copy = sheet.clone();
+    copy.symbols
+        .retain(|s| !(s.is_power && skip_terminals.iter().any(|(id, _)| *id == s.uuid)));
+    copy
+}
+
+/// The nets with the pins in `skip` taken out (see [`Guard`](crate::Guard)).
+fn projected(
+    sheet: &SchematicSheet,
+    skip_terminals: &std::collections::BTreeSet<(Uuid, String)>,
+    skip_pins: &std::collections::BTreeSet<Uuid>,
+) -> std::collections::BTreeSet<signex_net::NetSignature> {
+    signex_net::net_signatures(&without_skipped_power(sheet, skip_terminals))
+        .iter()
+        .filter_map(|net| net.without(skip_terminals, skip_pins))
+        .collect()
 }
 
 #[test]
 fn random_rubber_band_moves_never_change_the_netlist() {
     let mut rng = Lcg(0x5EED_0963);
-    let mut exercised = 0;
-    let mut rerouted = 0;
-    for index in 0..4000 {
+    let (mut exercised, mut warned, mut rerouted) = (0, 0, 0);
+    for index in 0..6000 {
         let Some(Case {
             sheet,
-            moved,
-            dx,
-            dy,
+            moves,
+            selects_wire,
         }) = random_case(&mut rng)
         else {
             continue;
         };
-        let before = net_shape(&sheet);
+        let before_sigs = signex_net::net_signatures(&sheet);
         let described = describe(&sheet);
+        let overlaps_before = overlap_pairs(&sheet);
         let wires_before: Vec<_> = sheet.wires.iter().map(|w| (w.start, w.end)).collect();
-        let mut engine = Engine::new(sheet).expect("engine");
-        let items = moved.iter().map(|u| symbol_item(*u)).collect();
-        mv(&mut engine, items, dx, dy, true);
-        if !engine.take_warnings().is_empty() {
-            continue;
-        }
-        exercised += 1;
-        let wires_after: Vec<_> = engine
-            .document()
-            .wires
+
+        // Pins the netlist did not see before are the user's to place.
+        let mut skip_terminals = std::collections::BTreeSet::new();
+        let mut skip_pins = std::collections::BTreeSet::new();
+        let connected: std::collections::BTreeSet<_> = before_sigs
             .iter()
-            .map(|w| (w.start, w.end))
+            .flat_map(|n| n.terminals.iter().cloned())
             .collect();
-        rerouted += usize::from(wires_after != wires_before);
-        assert_eq!(
-            net_shape(engine.document()),
-            before,
-            "case {index}: moved {moved:?} by ({dx},{dy})\nBEFORE {described}\nAFTER {}",
-            describe(engine.document())
+        let items: Vec<SelectedItem> = moves.iter().map(|(item, _, _)| *item).collect();
+        for tip in crate::moved_pin_tips(&sheet, &items) {
+            match tip.ident() {
+                crate::PinIdent::Terminal(symbol, pin) => {
+                    if !connected.contains(&(*symbol, pin.clone())) {
+                        skip_terminals.insert((*symbol, pin.clone()));
+                    }
+                }
+                crate::PinIdent::SheetPin(uuid) => {
+                    if !before_sigs.iter().any(|n| n.sheet_pins.contains(uuid)) {
+                        skip_pins.insert(*uuid);
+                    }
+                }
+            }
+        }
+
+        let mut engine = Engine::new(sheet.clone()).expect("engine");
+        engine
+            .execute(Command::MoveEach {
+                moves: moves.clone(),
+                keep_wires: true,
+            })
+            .expect("move");
+        let warnings = engine.take_warnings();
+        exercised += 1;
+        warned += usize::from(!warnings.is_empty());
+        let after = engine.document();
+        rerouted += usize::from(
+            after
+                .wires
+                .iter()
+                .map(|w| (w.start, w.end))
+                .collect::<Vec<_>>()
+                != wires_before,
         );
-        for w in &engine.document().wires {
+
+        for w in &after.wires {
             assert_ne!(
                 signex_net::pt_key(&w.start),
                 signex_net::pt_key(&w.end),
-                "case {index}: zero-length wire"
+                "case {index}: zero-length wire\n{described}"
+            );
+        }
+        if selects_wire {
+            // A selected wire moves plainly, wherever the user puts it.
+            continue;
+        }
+        assert!(
+            overlap_pairs(after) <= overlaps_before,
+            "case {index}: new overlapping wires\nBEFORE {described}\nAFTER {}",
+            describe(after)
+        );
+        // A warned pin keeps the old plain behaviour; every other net stays.
+        for warning in &warnings {
+            for sym in &sheet.symbols {
+                let lib = &sheet.lib_symbols[&sym.lib_id];
+                for (i, lp) in lib.pins.iter().enumerate() {
+                    let _ = i;
+                    let id = if lp.pin.number.is_empty() {
+                        &lp.pin.name
+                    } else {
+                        &lp.pin.number
+                    };
+                    if warning.contains(&format!("{} pin {id} ", sym.reference))
+                        || warning.contains(&format!(", {} pin {id} ", sym.reference))
+                    {
+                        skip_terminals.insert((sym.uuid, id.clone()));
+                    }
+                }
+            }
+            for pin in sheet.child_sheets.iter().flat_map(|c| c.pins.iter()) {
+                if warning.contains(&format!("Child pin {} ", pin.name)) {
+                    skip_pins.insert(pin.uuid);
+                }
+            }
+        }
+        let want: std::collections::BTreeSet<_> =
+            signex_net::net_signatures(&without_skipped_power(&sheet, &skip_terminals))
+                .iter()
+                .filter_map(|n| n.without(&skip_terminals, &skip_pins))
+                .collect();
+        let got = projected(after, &skip_terminals, &skip_pins);
+        assert_eq!(
+            got,
+            want,
+            "case {index}: nets changed (warnings {warnings:?}, moves {moves:?})\nBEFORE {described}\nAFTER {}",
+            describe(after)
+        );
+    }
+    assert!(exercised > 1500, "only {exercised} cases");
+    assert!(
+        rerouted * 3 > exercised,
+        "only {rerouted} cases rerouted wires"
+    );
+    assert!(
+        warned * 4 < exercised,
+        "{warned} of {exercised} cases fell back to a plain move"
+    );
+}
+
+/// No exact duplicates and no collinear overlaps among the document's wires.
+fn assert_no_overlaps(e: &Engine) {
+    let wires = &e.document().wires;
+    for (i, a) in wires.iter().enumerate() {
+        for b in &wires[i + 1..] {
+            assert!(
+                !crate::transform::rubber_band::wires_overlap(a, b),
+                "overlapping wires {:?}-{:?} and {:?}-{:?}",
+                a.start,
+                a.end,
+                b.start,
+                b.end
             );
         }
     }
-    assert!(exercised > 500, "only {exercised} usable cases");
-    assert!(rerouted > 200, "only {rerouted} cases rerouted wires");
+}
+
+/// Pins named by `warnings` ("R1 pin 2 ...") and child-sheet pins.
+fn warned_skips(
+    sheet: &SchematicSheet,
+    warnings: &[String],
+) -> (
+    std::collections::BTreeSet<(Uuid, String)>,
+    std::collections::BTreeSet<Uuid>,
+) {
+    let mut terminals = std::collections::BTreeSet::new();
+    let mut pins = std::collections::BTreeSet::new();
+    for warning in warnings {
+        for sym in &sheet.symbols {
+            for lp in &sheet.lib_symbols[&sym.lib_id].pins {
+                let id = if lp.pin.number.is_empty() {
+                    &lp.pin.name
+                } else {
+                    &lp.pin.number
+                };
+                let what = format!("{} pin {id} ", sym.reference);
+                if warning.starts_with(&format!("could not keep {what}"))
+                    || warning.contains(&format!(", {what}"))
+                {
+                    terminals.insert((sym.uuid, id.clone()));
+                }
+            }
+        }
+        for pin in sheet.child_sheets.iter().flat_map(|c| c.pins.iter()) {
+            if warning.contains(&format!("Child pin {} ", pin.name)) {
+                pins.insert(pin.uuid);
+            }
+        }
+    }
+    (terminals, pins)
+}
+
+/// Every net survives, except for pins the engine warned about and pins that
+/// were on no net before (landing a free pin on a wire is the user's call).
+fn assert_nets_hold(e: &mut Engine, before: &SchematicSheet) {
+    let warnings = e.take_warnings();
+    let (mut terminals, pins) = warned_skips(before, &warnings);
+    let was: std::collections::BTreeSet<_> = signex_net::net_signatures(before)
+        .iter()
+        .flat_map(|n| n.terminals.iter().cloned())
+        .collect();
+    for net in signex_net::net_signatures(e.document()) {
+        for t in net.terminals {
+            if !was.contains(&t) {
+                terminals.insert(t);
+            }
+        }
+    }
+    let want: std::collections::BTreeSet<_> =
+        signex_net::net_signatures(&without_skipped_power(before, &terminals))
+            .iter()
+            .filter_map(|n| n.without(&terminals, &pins))
+            .collect();
+    let got: std::collections::BTreeSet<_> =
+        signex_net::net_signatures(&without_skipped_power(e.document(), &terminals))
+            .iter()
+            .filter_map(|n| n.without(&terminals, &pins))
+            .collect();
+    assert_eq!(got, want, "nets changed (warnings {warnings:?})");
+    assert_no_overlaps(e);
+}
+
+// ---- review regressions: nets must survive every landing and overlap ----
+
+#[test]
+fn moving_a_part_by_its_own_pitch_does_not_short_its_pins() {
+    let mut sheet = test_sheet();
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0)); // 45/55
+    let _r3 = add_resistor(&mut sheet, "R3", Point::new(25.0, 50.0)); // 20/30
+    let _r2 = add_resistor(&mut sheet, "R2", Point::new(60.0, 70.0)); // 55/65 @ y70
+    add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
+    add_wire(&mut sheet, (55.0, 50.0), (55.0, 70.0));
+    let before_sheet = sheet.clone();
+    let mut e = Engine::new(sheet).unwrap();
+    mv(&mut e, vec![symbol_item(r1)], 10.0, 0.0, true);
+    assert_nets_hold(&mut e, &before_sheet);
+}
+
+#[test]
+fn a_pin_landing_on_a_foreign_wire_interior_does_not_merge_nets() {
+    let mut sheet = test_sheet();
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0)); // 45/55
+    let _r2 = add_resistor(&mut sheet, "R2", Point::new(25.0, 50.0)); // 20/30
+    let _r5 = add_resistor(&mut sheet, "R5", Point::new(50.0, 90.0)); // 45/55 @ y90
+    add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
+    add_wire(&mut sheet, (45.0, 60.0), (45.0, 90.0)); // foreign net, R5.1
+    let before_sheet = sheet.clone();
+    let mut e = Engine::new(sheet).unwrap();
+    mv(&mut e, vec![symbol_item(r1)], 0.0, 15.0, true);
+    assert_nets_hold(&mut e, &before_sheet);
+}
+
+#[test]
+fn a_pin_between_two_collinear_wires_writes_no_duplicate() {
+    let mut sheet = test_sheet();
+    // vertical part: pins at (50,45) and (50,55) via rotation 90
+    let tp = add_resistor(&mut sheet, "TP1", Point::new(50.0, 50.0));
+    sheet.symbols.last_mut().unwrap().rotation = 90.0;
+    let a = pin_tip(&sheet, tp, 0);
+    let b = pin_tip(&sheet, tp, 1);
+    let top = if a.y < b.y { a } else { b };
+    let _l = add_resistor(&mut sheet, "R1", Point::new(top.x - 25.0, top.y)); // pin2 at x-20
+    let _r = add_resistor(&mut sheet, "R2", Point::new(top.x + 25.0, top.y)); // pin1 at x+20
+    add_wire(&mut sheet, (top.x - 20.0, top.y), (top.x, top.y));
+    add_wire(&mut sheet, (top.x, top.y), (top.x + 20.0, top.y));
+    let before = net_shape(&sheet);
+    let mut e = Engine::new(sheet).unwrap();
+    mv(&mut e, vec![symbol_item(tp)], 0.0, -5.0, true);
+    let segs = segments(&e);
+    assert_eq!(net_shape(e.document()), before, "T3 netlist changed");
+    let mut s2 = segs.clone();
+    s2.sort_by(|x, y| x.partial_cmp(y).unwrap());
+    s2.dedup();
+    assert_eq!(s2.len(), segs.len(), "T3 duplicate wires {segs:?}");
+}
+
+#[test]
+fn a_pin_landing_on_a_foreign_wire_end_does_not_merge_nets() {
+    let mut sheet = test_sheet();
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0));
+    let _r2 = add_resistor(&mut sheet, "R2", Point::new(25.0, 50.0));
+    let _r5 = add_resistor(&mut sheet, "R5", Point::new(50.0, 90.0));
+    add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
+    add_wire(&mut sheet, (45.0, 65.0), (45.0, 90.0));
+    let before_sheet = sheet.clone();
+    let mut e = Engine::new(sheet).unwrap();
+    mv(&mut e, vec![symbol_item(r1)], 0.0, 15.0, true);
+    assert_nets_hold(&mut e, &before_sheet);
+}
+
+#[test]
+fn a_pin_landing_on_an_unwired_stationary_pin_keeps_the_nets() {
+    let mut sheet = test_sheet();
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0));
+    let _r2 = add_resistor(&mut sheet, "R2", Point::new(25.0, 50.0));
+    let _r5 = add_resistor(&mut sheet, "R5", Point::new(50.0, 65.0)); // pin1 at (45,65), unwired
+    add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
+    let before_sheet = sheet.clone();
+    let mut e = Engine::new(sheet).unwrap();
+    mv(&mut e, vec![symbol_item(r1)], 0.0, 15.0, true);
+    assert_nets_hold(&mut e, &before_sheet);
+}
+
+#[test]
+fn a_pin_landing_on_a_dangling_label_does_not_rename_a_net() {
+    let mut sheet = test_sheet();
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0));
+    let _r2 = add_resistor(&mut sheet, "R2", Point::new(25.0, 50.0));
+    add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
+    add_label(&mut sheet, "SDA", (45.0, 65.0));
+    let before_sheet = sheet.clone();
+    let mut e = Engine::new(sheet).unwrap();
+    mv(&mut e, vec![symbol_item(r1)], 0.0, 15.0, true);
+    assert_nets_hold(&mut e, &before_sheet);
+}
+
+#[test]
+fn a_junctionless_t_at_a_reused_fixed_end_gets_no_dot() {
+    let mut sheet = test_sheet();
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0));
+    let _r2 = add_resistor(&mut sheet, "R2", Point::new(25.0, 30.0)); // 20/30 @ y30
+    let _r9 = add_resistor(&mut sheet, "R9", Point::new(25.0, 70.0)); // 20/30 @ y70
+    add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0)); // stub to R1.1
+    add_wire(&mut sheet, (30.0, 30.0), (30.0, 70.0)); // foreign trunk, (30,50) on interior, no dot
+    let before = net_shape(&sheet);
+    let mut e = Engine::new(sheet).unwrap();
+    mv(&mut e, vec![symbol_item(r1)], 0.0, 5.0, true);
+    assert_eq!(net_shape(e.document()), before, "T7 netlist changed");
+}
+
+#[test]
+fn move_each_with_opposite_deltas_keeps_the_shared_wire_connected() {
+    let (mut e, r1, r2) = series_fixture();
+    let before = net_shape(e.document());
+    e.execute(Command::MoveEach {
+        moves: vec![(symbol_item(r1), 0.0, 10.0), (symbol_item(r2), 0.0, -10.0)],
+        keep_wires: true,
+    })
+    .unwrap();
+    assert_eq!(net_shape(e.document()), before, "T8 netlist changed");
+    e.undo().unwrap();
+}
+
+#[test]
+fn moving_past_the_fixed_end_keeps_the_nets() {
+    // move beyond the fixed end of a wire: wire (30,50)-(45,50), move left by 25 -> new (20,50)
+    let mut sheet = test_sheet();
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0));
+    let _r2 = add_resistor(&mut sheet, "R2", Point::new(25.0, 40.0)); // pin2 (30,40)
+    add_wire(&mut sheet, (30.0, 40.0), (30.0, 50.0));
+    add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
+    let before_sheet = sheet.clone();
+    let mut e = Engine::new(sheet).unwrap();
+    mv(&mut e, vec![symbol_item(r1)], -25.0, 0.0, true);
+    assert_nets_hold(&mut e, &before_sheet);
+}
+
+#[test]
+fn a_selected_wire_overlapping_a_follower_is_merged() {
+    let mut sheet = test_sheet();
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0));
+    let _r2 = add_resistor(&mut sheet, "R2", Point::new(25.0, 50.0));
+    let s = add_wire(&mut sheet, (45.0, 40.0), (45.0, 50.0));
+    add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
+    let mut e = Engine::new(sheet).unwrap();
+    let before = net_shape(e.document());
+    mv(
+        &mut e,
+        vec![symbol_item(r1), SelectedItem::new(s, SelectedKind::Wire)],
+        0.0,
+        10.0,
+        true,
+    );
+    assert_no_overlaps(&e);
+    let _ = before;
+}
+
+#[test]
+fn a_four_way_dot_moves_with_the_tip() {
+    let mut sheet = test_sheet();
+    let tp = add_resistor(&mut sheet, "TP", Point::new(55.0, 50.0)); // pin1 at (50,50)
+    for (a, b) in [
+        ((30.0, 50.0), (50.0, 50.0)),
+        ((50.0, 50.0), (70.0, 50.0)),
+        ((50.0, 30.0), (50.0, 50.0)),
+        ((50.0, 50.0), (50.0, 70.0)),
+    ] {
+        add_wire(&mut sheet, a, b);
+    }
+    add_dot(&mut sheet, (50.0, 50.0), true);
+    let before = net_shape(&sheet);
+    let mut e = Engine::new(sheet).unwrap();
+    mv(&mut e, vec![symbol_item(tp)], 5.0, 5.0, true);
+    assert_eq!(net_shape(e.document()), before, "T11 netlist changed");
+}
+
+#[test]
+fn a_no_connect_on_a_moved_pin_tip_moves_with_it() {
+    let mut sheet = test_sheet();
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0)); // pins 45, 55
+    let mark = Uuid::new_v4();
+    sheet.no_connects.push(signex_types::schematic::NoConnect {
+        uuid: mark,
+        position: Point::new(55.0, 50.0),
+    });
+    let mut engine = Engine::new(sheet).expect("engine");
+    mv(&mut engine, vec![symbol_item(r1)], 0.0, 10.0, true);
+    let moved = engine
+        .document()
+        .no_connects
+        .iter()
+        .find(|n| n.uuid == mark)
+        .expect("mark kept");
+    assert_eq!(moved.position, Point::new(55.0, 60.0));
+}
+
+/// Rubber-banding a symbol on a big sheet stays cheap, guard included.
+#[test]
+fn the_guard_is_cheap_on_a_500_symbol_sheet() {
+    let mut sheet = test_sheet();
+    let mut first = None;
+    for row in 0..20 {
+        for col in 0..25 {
+            let id = add_resistor(
+                &mut sheet,
+                &format!("R{}", row * 25 + col),
+                Point::new(20.0 + 20.0 * col as f64, 20.0 + 12.0 * row as f64),
+            );
+            first = first.or(Some(id));
+            let y = 20.0 + 12.0 * row as f64;
+            let x = 20.0 + 20.0 * col as f64;
+            // Wire pin 2 to the next symbol's pin 1 along the row.
+            if col < 24 {
+                add_wire(&mut sheet, (x + 5.0, y), (x + 15.0, y));
+            }
+        }
+    }
+    let victim = sheet.symbols[12 * 25 / 2].uuid;
+    let _ = first;
+    let mut engine = Engine::new(sheet).expect("engine");
+    let started = std::time::Instant::now();
+    mv(&mut engine, vec![symbol_item(victim)], 2.5, 6.0, true);
+    let elapsed = started.elapsed();
+    eprintln!("500-symbol rubber-band move incl. guard: {elapsed:?}");
+    assert!(engine.take_warnings().is_empty());
+    assert!(
+        elapsed < std::time::Duration::from_secs(3),
+        "took {elapsed:?}"
+    );
 }

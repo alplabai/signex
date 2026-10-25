@@ -49,10 +49,16 @@
 //! own; wires that are themselves selected move as they always did.
 
 mod env;
+mod guard;
+
+pub use guard::{Guard, Policy};
 
 use std::collections::{BTreeMap, HashSet};
 
 use env::Env;
+
+#[cfg(test)]
+pub(crate) use env::wires_overlap;
 
 use signex_net::{pt_key, uf::Key};
 use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind, SymbolTransform};
@@ -65,6 +71,41 @@ pub struct PinTip {
     source: TipSource,
     old: Point,
     label: String,
+    ident: PinIdent,
+    power: bool,
+}
+
+/// How the netlist names a pin: a component terminal or a child-sheet pin.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PinIdent {
+    Terminal(Uuid, String),
+    SheetPin(Uuid),
+}
+
+impl PinTip {
+    /// The netlist identity of this pin.
+    #[must_use]
+    pub fn ident(&self) -> &PinIdent {
+        &self.ident
+    }
+
+    /// "R1 pin 2" - how the pin is named to the user.
+    #[must_use]
+    pub fn label(&self) -> &str {
+        &self.label
+    }
+
+    /// True for a power port's pin, which can be what names its net.
+    #[must_use]
+    pub fn is_power(&self) -> bool {
+        self.power
+    }
+
+    /// Key of the tip's position before the move.
+    #[must_use]
+    pub fn old_key(&self) -> Key {
+        pt_key(&self.old)
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -75,12 +116,10 @@ enum TipSource {
     SheetPin,
 }
 
-/// What the pass changed: wires and dots for the patch, and the pins it could
-/// not keep connected.
+/// What the pass changed: wires and dots for the patch.
 #[derive(Debug, Default)]
 pub struct Follow {
     pub touched: Vec<SelectedItem>,
-    pub warnings: Vec<String>,
 }
 
 /// Pin tips carried by `items`, read before they move.
@@ -110,6 +149,8 @@ pub fn moved_pin_tips(document: &SchematicSheet, items: &[SelectedItem]) -> Vec<
                         source: TipSource::SymbolPin(lib_pin.pin.position),
                         old: xform.apply(lib_pin.pin.position),
                         label: format!("{} pin {name}", symbol.reference),
+                        ident: PinIdent::Terminal(symbol.uuid, name.clone()),
+                        power: symbol.is_power,
                     });
                 }
             }
@@ -139,6 +180,8 @@ fn sheet_pin_tip(sheet_name: &str, pin: &signex_types::schematic::SheetPin) -> P
         source: TipSource::SheetPin,
         old: pin.position,
         label: format!("{sheet_name} pin {}", pin.name),
+        ident: PinIdent::SheetPin(pin.uuid),
+        power: false,
     }
 }
 
@@ -146,7 +189,8 @@ fn sheet_pin_tip(sheet_name: &str, pin: &signex_types::schematic::SheetPin) -> P
 pub(super) struct Move {
     pub(super) old: Point,
     pub(super) new: Point,
-    pub(super) label: String,
+    /// A child-sheet pin: it also connects through a wire's interior.
+    pub(super) sheet_pin: bool,
 }
 
 fn resolve_moves(document: &SchematicSheet, tips: &[PinTip]) -> (Vec<Move>, HashSet<Uuid>) {
@@ -174,7 +218,7 @@ fn resolve_moves(document: &SchematicSheet, tips: &[PinTip]) -> (Vec<Move>, Hash
         moves.push(Move {
             old: tip.old,
             new,
-            label: tip.label.clone(),
+            sheet_pin: matches!(tip.source, TipSource::SheetPin),
         });
     }
     (moves, owners)
@@ -186,6 +230,7 @@ pub fn follow_moved_pins(
     document: &mut SchematicSheet,
     tips: &[PinTip],
     items: &[SelectedItem],
+    policy: &Policy,
 ) -> Follow {
     let (moves, moving) = resolve_moves(document, tips);
     if moves.is_empty() {
@@ -193,7 +238,7 @@ pub fn follow_moved_pins(
     }
     let selected: HashSet<Uuid> = items.iter().map(|item| item.uuid).collect();
     let old_tips = moves.iter().map(|mv| pt_key(&mv.old)).collect();
-    let mut env = Env::new(document, selected, moving, old_tips);
+    let mut env = Env::new(document, selected, moving, old_tips, policy.clone());
     let mut out = Follow::default();
 
     let mut by_tip: BTreeMap<Key, Vec<&Move>> = BTreeMap::new();
@@ -205,6 +250,7 @@ pub fn follow_moved_pins(
     for (key, group) in &by_tip {
         env.reroute_tip(*key, group, &mut out);
     }
+    env.merge_overlaps(&mut out);
     env.write_back(document);
     out
 }

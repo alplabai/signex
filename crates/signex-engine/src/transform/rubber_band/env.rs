@@ -8,7 +8,7 @@ use signex_types::schematic::{
 };
 use uuid::Uuid;
 
-use super::{Follow, Move};
+use super::{Follow, Move, Policy};
 
 fn same_delta(a: &Move, b: &Move) -> bool {
     pt_key(&Point::new(a.new.x - a.old.x, a.new.y - a.old.y))
@@ -25,7 +25,11 @@ pub(super) struct Env {
     placed: HashSet<(usize, bool)>,
     labels: Vec<(Uuid, Point)>,
     junctions: Vec<(Uuid, Point)>,
-    no_connects: Vec<Point>,
+    no_connects: Vec<(Uuid, Point)>,
+    /// Wires this pass edited or created; only these are checked for
+    /// duplicates and overlaps afterwards.
+    edited: HashSet<usize>,
+    policy: Policy,
     tips: Vec<(Uuid, Key)>,
     selected: HashSet<Uuid>,
     moving: HashSet<Uuid>,
@@ -78,6 +82,7 @@ impl Env {
         selected: HashSet<Uuid>,
         moving: HashSet<Uuid>,
         old_tips: HashSet<Key>,
+        policy: Policy,
     ) -> Self {
         let mut tips = Vec::new();
         for symbol in &document.symbols {
@@ -108,7 +113,13 @@ impl Env {
                 .iter()
                 .map(|j| (j.uuid, j.position))
                 .collect(),
-            no_connects: document.no_connects.iter().map(|n| n.position).collect(),
+            no_connects: document
+                .no_connects
+                .iter()
+                .map(|n| (n.uuid, n.position))
+                .collect(),
+            edited: HashSet::new(),
+            policy,
             tips,
             selected,
             moving,
@@ -121,8 +132,14 @@ impl Env {
             wires,
             removed,
             junctions,
+            no_connects,
             ..
         } = self;
+        for (uuid, position) in no_connects {
+            if let Some(mark) = document.no_connects.iter_mut().find(|n| n.uuid == uuid) {
+                mark.position = position;
+            }
+        }
         document.wires = wires
             .into_iter()
             .enumerate()
@@ -161,7 +178,7 @@ impl Env {
             .labels
             .iter()
             .any(|(uuid, p)| key(p) == at && !self.selected.contains(uuid));
-        probe.no_connect = self.no_connects.iter().any(|p| key(p) == at);
+        probe.no_connect = self.no_connects.iter().any(|(_, p)| key(p) == at);
         probe.stationary_pin = self
             .tips
             .iter()
@@ -202,7 +219,7 @@ impl Env {
         };
         self.labels.iter().any(|(_, p)| on(p))
             || self.junctions.iter().any(|(_, p)| on(p))
-            || self.no_connects.iter().any(on)
+            || self.no_connects.iter().any(|(_, p)| on(p))
             || self
                 .tips
                 .iter()
@@ -220,7 +237,7 @@ impl Env {
             !skip.contains(&index) && (inside(key(&w.start)) || inside(key(&w.end)))
         }) || self.labels.iter().any(|(_, p)| inside(key(p)))
             || self.junctions.iter().any(|(_, p)| inside(key(p)))
-            || self.no_connects.iter().any(|p| inside(key(p)))
+            || self.no_connects.iter().any(|(_, p)| inside(key(p)))
             || self.tips.iter().any(|(_, k)| inside(*k))
     }
 
@@ -264,6 +281,12 @@ impl Env {
             if ks == ke || !gs.iter().chain(ge.iter()).all(|m| same_delta(m, gs[0])) {
                 continue;
             }
+            if [ks, ke]
+                .iter()
+                .any(|k| self.policy.forced.contains(k) || self.policy.plain.contains(k))
+            {
+                continue;
+            }
             let (ddx, ddy) = (gs[0].new.x - gs[0].old.x, gs[0].new.y - gs[0].old.y);
             let (ns, ne) = (
                 Point::new(start.x + ddx, start.y + ddy),
@@ -285,6 +308,7 @@ impl Env {
             wire.end = ne;
             self.placed.insert((index, true));
             self.placed.insert((index, false));
+            self.edited.insert(index);
             out.touched
                 .push(SelectedItem::new(wire.uuid, SelectedKind::Wire));
         }
@@ -293,14 +317,35 @@ impl Env {
     pub(super) fn reroute_tip(&mut self, at: Key, group: &[&Move], out: &mut Follow) {
         let attached = self.attached(at);
         let skip: Vec<usize> = attached.iter().map(|(index, _)| *index).collect();
-        let probe = self.probe(at, &skip);
-        let connected = !attached.is_empty() || probe.label || !probe.junctions.is_empty();
+        let mut probe = self.probe(at, &skip);
+        let single_target = group.iter().all(|m| key(&m.new) == key(&group[0].new));
+        let plain = self.policy.plain.contains(&at);
+        if single_target && !plain && !probe.stationary_pin {
+            // A no-connect marks the pin: it moves with the tip.
+            for (uuid, position) in &mut self.no_connects {
+                if key(position) == at && !self.selected.contains(uuid) {
+                    *position = group[0].new;
+                    out.touched
+                        .push(SelectedItem::new(*uuid, SelectedKind::NoConnect));
+                    probe.no_connect = false;
+                }
+            }
+        }
+        // A child-sheet pin is anchored to the wire it sits on, interior or end.
+        let on_wire = probe.interior && group.iter().any(|m| m.sheet_pin);
+        let connected =
+            !attached.is_empty() || probe.label || !probe.junctions.is_empty() || on_wire;
         if !connected {
             return;
         }
-        let single_target = group.iter().all(|m| key(&m.new) == key(&group[0].new));
+        if plain {
+            return;
+        }
         let pinned_dot = !probe.junctions.is_empty() && probe.interior;
-        let anchored = probe.stationary_pin
+        let anchored = self.policy.forced.contains(&at)
+            || on_wire
+            || probe.stationary_pin
+            || probe.wire_ends > 0
             || probe.label
             || (probe.no_connect && !attached.is_empty())
             || pinned_dot
@@ -332,17 +377,9 @@ impl Env {
             }
         }
         for target in targets {
-            if !self.add_path(group[0].old, target, orientation, stroke, &skip, out) {
-                let names: Vec<&str> = group
-                    .iter()
-                    .filter(|m| key(&m.new) == key(&target))
-                    .map(|m| m.label.as_str())
-                    .collect();
-                out.warnings.push(format!(
-                    "could not keep {} connected without crossing another net",
-                    names.join(", ")
-                ));
-            }
+            // A tip with no collision-free route stays as it is; the guard sees
+            // the broken net and takes it down the ladder.
+            self.add_path(group[0].old, target, orientation, stroke, &skip, out);
         }
     }
 
@@ -576,6 +613,7 @@ impl Env {
     /// Mark the ends of `index` as final, except those still joined to
     /// their old neighbours (`joins`).
     fn place_ends(&mut self, index: usize, joins: &[Key]) {
+        self.edited.insert(index);
         let wire = &self.wires[index];
         for (is_start, end) in [(true, wire.start), (false, wire.end)] {
             if !joins.contains(&key(&end)) {
@@ -622,9 +660,99 @@ impl Env {
                 let index = self.wires.len() - 1;
                 self.placed.insert((index, true));
                 self.placed.insert((index, false));
+                self.edited.insert(index);
             }
             return true;
         }
         false
     }
+
+    /// Drop exact duplicates and merge collinear overlaps between the wires
+    /// this pass touched and any other wire; the older or untouched wire
+    /// survives with the union span.
+    pub(super) fn merge_overlaps(&mut self, out: &mut Follow) {
+        loop {
+            let mut found = None;
+            let mut edited: Vec<usize> = self.edited.iter().copied().collect();
+            edited.sort_unstable();
+            'search: for i in edited {
+                if i >= self.wires.len() || self.removed.contains(&i) {
+                    continue;
+                }
+                for (j, other) in self.live() {
+                    if j != i && overlap_span(&self.wires[i], other).is_some() {
+                        found = Some((i, j));
+                        break 'search;
+                    }
+                }
+            }
+            let Some((i, j)) = found else { return };
+            let (survivor, loser) = match (self.edited.contains(&i), self.edited.contains(&j)) {
+                (true, false) => (j, i),
+                (false, true) => (i, j),
+                _ => (i.min(j), i.max(j)),
+            };
+            // Re-cut the union at every original end, so each end that mattered
+            // (a pin tip, a label, a neighbour) is still the end of a wire.
+            let pieces = overlap_pieces(&self.wires[survivor], &self.wires[loser]);
+            let template = self.wires[survivor].clone();
+            let oriented = key(&template.start) <= key(&template.end);
+            let mut pieces = pieces.into_iter();
+            if let Some((lo, hi)) = pieces.next() {
+                let wire = &mut self.wires[survivor];
+                (wire.start, wire.end) = if oriented { (lo, hi) } else { (hi, lo) };
+            }
+            for (lo, hi) in pieces {
+                let mut wire = template.clone();
+                wire.uuid = Uuid::new_v4();
+                (wire.start, wire.end) = if oriented { (lo, hi) } else { (hi, lo) };
+                out.touched
+                    .push(SelectedItem::new(wire.uuid, SelectedKind::Wire));
+                self.wires.push(wire);
+                self.edited.insert(self.wires.len() - 1);
+            }
+            self.removed.insert(loser);
+            self.edited.insert(survivor);
+            for index in [survivor, loser] {
+                out.touched.push(SelectedItem::new(
+                    self.wires[index].uuid,
+                    SelectedKind::Wire,
+                ));
+            }
+        }
+    }
+}
+
+/// True when `a` and `b` lie on one axis-aligned line and share a stretch of
+/// positive length, or are the same diagonal segment.
+fn overlap_span(a: &Wire, b: &Wire) -> Option<()> {
+    let (a0, a1, b0, b1) = (key(&a.start), key(&a.end), key(&b.start), key(&b.end));
+    if (a0 == b0 && a1 == b1) || (a0 == b1 && a1 == b0) {
+        return (a0 != a1).then_some(());
+    }
+    let horizontal = a0.1 == a1.1 && b0.1 == b1.1 && a0.1 == b0.1;
+    let vertical = a0.0 == a1.0 && b0.0 == b1.0 && a0.0 == b0.0;
+    let pick = |p: Key| if horizontal { p.0 } else { p.1 };
+    if !(horizontal || vertical) {
+        return None;
+    }
+    let (alo, ahi) = (pick(a0).min(pick(a1)), pick(a0).max(pick(a1)));
+    let (blo, bhi) = (pick(b0).min(pick(b1)), pick(b0).max(pick(b1)));
+    (alo.max(blo) < ahi.min(bhi)).then_some(())
+}
+
+/// The union of two overlapping wires, cut at every one of their ends: the
+/// pieces (low, high) cover it exactly once.
+fn overlap_pieces(a: &Wire, b: &Wire) -> Vec<(Point, Point)> {
+    let horizontal = key(&a.start).1 == key(&a.end).1;
+    let along = |p: &Point| if horizontal { p.x } else { p.y };
+    let mut ends = vec![a.start, a.end, b.start, b.end];
+    ends.sort_by(|p, q| along(p).total_cmp(&along(q)));
+    ends.dedup_by(|p, q| key(p) == key(q));
+    ends.windows(2).map(|pair| (pair[0], pair[1])).collect()
+}
+
+#[cfg(test)]
+pub(crate) fn wires_overlap(a: &Wire, b: &Wire) -> bool {
+    overlap_span(a, b).is_some()
 }

@@ -43,8 +43,10 @@ pub use sheet_placement::{
     DEFAULT_CHILD_SHEET_STROKE_MM, MIN_CHILD_SHEET_EDGE_MM, child_sheet_from_corners,
     unused_sheet_stem,
 };
-use signex_types::schematic::SchematicSheet;
-pub use transform::rubber_band::{Follow, PinTip, follow_moved_pins, moved_pin_tips};
+use signex_types::schematic::{SchematicSheet, SelectedItem};
+pub use transform::rubber_band::{
+    Follow, Guard, PinIdent, PinTip, Policy, follow_moved_pins, moved_pin_tips,
+};
 
 const JUNCTION_TOLERANCE_MM: f64 = 0.01;
 
@@ -85,6 +87,28 @@ pub struct Engine {
 pub(crate) fn next_revision() -> u64 {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
     NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
+/// The sheet as `MoveEach` would leave it, for the drag ghost: the same
+/// pass the commit runs (rubber-banding, junction reconcile and the net
+/// guard included), on a throwaway engine. Warnings are dropped.
+#[must_use]
+pub fn preview_move(
+    sheet: &SchematicSheet,
+    moves: &[(SelectedItem, f64, f64)],
+    keep_wires: bool,
+) -> SchematicSheet {
+    let Ok(mut engine) = Engine::new(sheet.clone()) else {
+        return sheet.clone();
+    };
+    let moved = engine.execute(Command::MoveEach {
+        moves: moves.to_vec(),
+        keep_wires,
+    });
+    if moved.is_err() {
+        return sheet.clone();
+    }
+    engine.document().clone()
 }
 
 impl Engine {
