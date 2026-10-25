@@ -1060,9 +1060,11 @@ fn saving_the_project_while_a_library_rename_runs_is_refused() {
         "the refused save wrote nothing"
     );
     assert!(
-        diagnostics::recent_entries().iter().any(|e| e
-            .message
-            .contains("A rename of proj.snxprj is still running, so it was not saved")),
+        diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.message.contains(
+                "proj.snxprj cannot be saved while the rename of alpha.snxlib is still rewriting it"
+            )),
         "the refusal names its cause"
     );
 
@@ -1096,7 +1098,9 @@ fn a_project_rename_during_a_library_rename_is_refused() {
         .rename_dialog
         .as_ref()
         .and_then(|d| d.error.clone());
-    assert!(error.is_some_and(|e| e.starts_with("A rename of")));
+    assert!(error.is_some_and(|e| {
+        e.starts_with("proj.snxprj cannot be renamed while the rename of alpha.snxlib")
+    }));
 
     settle_task(&mut f.app, task);
     assert!(f.prj.exists(), "the project file kept its name");
@@ -1117,7 +1121,7 @@ fn reopening_the_project_during_a_library_rename_is_refused() {
     assert!(
         diagnostics::recent_entries().iter().any(|e| e
             .message
-            .contains("A rename of proj.snxprj is still running, so it was not opened")),
+            .contains("proj.snxprj cannot be opened while the rename of alpha.snxlib is still rewriting it")),
         "the refusal names its cause"
     );
 
@@ -1140,5 +1144,61 @@ fn quit_is_held_while_a_rename_runs() {
         e.message
             .starts_with("A rename or delete is still running, so the app was not closed")
     }),);
+    settle_task(&mut f.app, task);
+}
+
+/// A quit prompt that was already open when a move started must not exit
+/// mid-move: confirming it is held, the prompt stays up, and the reason is
+/// logged.
+#[test]
+fn confirming_an_open_quit_prompt_is_held_while_a_rename_runs() {
+    let _ = diagnostics::init_logging();
+    let mut f = fixture();
+    f.app.document_state.dirty_paths.insert(f.prj.clone());
+    let _prompt = f
+        .app
+        .update(Message::Window(signex_app::app::WindowMsg::CloseMainWindow));
+    assert!(f.app.ui_state.app_quit_confirm.is_some(), "prompt is up");
+    let task = submit_rename_task(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    let confirm = f.app.update(Message::Project(
+        signex_app::app::ProjectMsg::AppQuitConfirm(
+            signex_app::app::ProjectCloseChoice::DiscardAll,
+        ),
+    ));
+    assert!(run_task_messages(confirm).is_empty(), "no exit was started");
+    assert!(f.app.ui_state.app_quit_confirm.is_some(), "prompt stays up");
+    assert!(diagnostics::recent_entries().iter().any(|e| {
+        e.message
+            .starts_with("A rename or delete is still running, so the app was not closed")
+    }),);
+    settle_task(&mut f.app, task);
+}
+
+/// A sheet whose companion project is being rewritten opens without it and
+/// the Messages panel names the real cause, not a parse failure.
+#[test]
+fn opening_a_sheet_with_a_busy_companion_project_says_why() {
+    let _ = diagnostics::init_logging();
+    let mut f = fixture();
+    let sheet = f.prj.with_file_name("proj.snxsch");
+    fs::write(&sheet, b"x").unwrap();
+    let task = submit_rename_task(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    let _open = f
+        .app
+        .update(Message::File(FileMsg::Opened(Some(sheet.clone()))));
+    assert!(
+        diagnostics::recent_entries().iter().any(|e| e
+            .message
+            .contains("proj.snxprj cannot be opened while the rename of alpha.snxlib")
+            && e.message.contains("opens without its project")),
+        "the busy companion is named"
+    );
+    assert!(
+        !diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.message.contains("Failed to parse companion project")),
+    );
     settle_task(&mut f.app, task);
 }

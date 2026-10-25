@@ -538,13 +538,7 @@ impl Signex {
     /// the main window, which the daemon turns into process exit via
     /// `SecondaryWindowClosed`.
     pub(crate) fn handle_app_quit_requested(&mut self) -> Task<Message> {
-        // Quitting between the file move and its completion would leave the
-        // project naming the old file with no prompt.
-        if !self.document_state.pending_path_ops.is_empty() {
-            crate::diagnostics::log_warning(
-                "A rename or delete is still running, so the app was not closed. \
-                 Try again once it finishes.",
-            );
+        if self.hold_quit_while_path_op() {
             return Task::none();
         }
         // Same hardening as `close_project_at_tree_path`: the quit gate
@@ -582,6 +576,20 @@ impl Signex {
         self.flush_quit_writes_then(close)
     }
 
+    /// Quitting between a file move and its completion would leave the
+    /// project naming the old file with no prompt, so a quit is held (and
+    /// says why) while a rename or delete runs.
+    fn hold_quit_while_path_op(&self) -> bool {
+        if self.document_state.pending_path_ops.is_empty() {
+            return false;
+        }
+        crate::diagnostics::log_warning(
+            "A rename or delete is still running, so the app was not closed. \
+             Try again once it finishes.",
+        );
+        true
+    }
+
     /// Resolve the user's Save All / Discard All / Cancel choice on the
     /// app-quit confirmation modal.
     pub(crate) fn handle_app_quit_confirm(
@@ -589,6 +597,11 @@ impl Signex {
         choice: crate::app::ProjectCloseChoice,
     ) -> Task<Message> {
         use crate::app::ProjectCloseChoice;
+        // A move may have started behind a prompt that was already open; the
+        // prompt stays up so the choice can be made again.
+        if !matches!(choice, ProjectCloseChoice::Cancel) && self.hold_quit_while_path_op() {
+            return Task::none();
+        }
         let Some(state) = self.ui_state.app_quit_confirm.take() else {
             return Task::none();
         };

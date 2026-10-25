@@ -367,6 +367,21 @@ impl Signex {
         self.document_state.pending_opens.contains(path)
     }
 
+    /// Is the companion `.snxprj` being moved or rewritten? Then this sheet
+    /// opens without its project, and the Messages panel says why instead of
+    /// blaming a parse failure.
+    fn companion_project_is_busy(&self, companion: &std::path::Path) -> bool {
+        match self.refuse_start_while_path_op(companion, "opened") {
+            Ok(()) => false,
+            Err(refusal) => {
+                crate::diagnostics::log_warning(format!(
+                    "{refusal} The sheet opens without its project."
+                ));
+                true
+            }
+        }
+    }
+
     fn open_schematic_file(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
         self.refuse_start_while_path_op(&path, "opened")?;
         if self.activate_or_skip_duplicate_open(&path) {
@@ -384,7 +399,7 @@ impl Signex {
                 .and_then(|segment| segment.to_str())
                 .unwrap_or("");
             let companion = dir.join(format!("{stem}.snxprj"));
-            if companion.exists() {
+            if companion.exists() && !self.companion_project_is_busy(&companion) {
                 match self.load_or_activate_project(&companion) {
                     // The companion project's cold `.snxlib` mounts
                     // prepare off-thread (#99 part 2c); its task is
@@ -459,7 +474,7 @@ impl Signex {
                 .and_then(|segment| segment.to_str())
                 .unwrap_or("");
             let companion = dir.join(format!("{stem}.snxprj"));
-            if companion.exists() {
+            if companion.exists() && !self.companion_project_is_busy(&companion) {
                 match self.load_or_activate_project(&companion) {
                     // The companion project's cold `.snxlib` mounts
                     // prepare off-thread (#99 part 2c); its task is

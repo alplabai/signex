@@ -476,7 +476,7 @@ fn opening_an_unopened_rewrite_parent_during_the_rename_is_refused() {
     assert!(
         signex_app::diagnostics::recent_entries().iter().any(|e| e
             .message
-            .contains("A rename of root.snxsch is still running, so it was not opened")),
+            .contains("root.snxsch cannot be opened while the rename of child.snxsch is still rewriting it")),
         "the refusal names its cause"
     );
 

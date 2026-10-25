@@ -51,6 +51,10 @@ struct PendingPathOp {
     kind: PathOpKind,
     /// The path moved or deleted, and for a rename also its destination.
     paths: Vec<PathBuf>,
+    /// Files the operation reads or rewrites without moving them (the
+    /// project file of a library rename, the parent sheets of a sheet
+    /// rename). Written or opened meanwhile, they would race the worker.
+    dependents: Vec<PathBuf>,
     fold: CaseFold,
 }
 
@@ -58,7 +62,10 @@ struct PendingPathOp {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PathOpConflict {
     pub kind: PathOpKind,
+    /// The path the operation moves or deletes.
     pub path: PathBuf,
+    /// The collision was with a file the operation only rewrites.
+    pub dependent: bool,
 }
 
 /// Every rename and delete whose disk work has not reported back yet.
@@ -71,12 +78,25 @@ pub struct PendingPathOps {
 impl PendingPathOps {
     /// Register an operation before its worker starts.
     pub fn begin(&mut self, kind: PathOpKind, paths: Vec<PathBuf>, fold: CaseFold) -> PathOpId {
+        self.begin_with_dependents(kind, paths, Vec::new(), fold)
+    }
+
+    /// As [`Self::begin`], also guarding `dependents`: files the worker
+    /// rewrites in place.
+    pub fn begin_with_dependents(
+        &mut self,
+        kind: PathOpKind,
+        paths: Vec<PathBuf>,
+        dependents: Vec<PathBuf>,
+        fold: CaseFold,
+    ) -> PathOpId {
         let id = PathOpId(self.next_id);
         self.next_id += 1;
         self.ops.push(PendingPathOp {
             id,
             kind,
             paths,
+            dependents,
             fold,
         });
         id
@@ -126,12 +146,25 @@ impl PendingPathOps {
 
     fn find(&self, hit: impl Fn(&PendingPathOp, &Path) -> bool) -> Option<PathOpConflict> {
         self.ops.iter().find_map(|op| {
+            let primary = op.paths.first()?;
+            let conflict = |path: &PathBuf, dependent: bool| PathOpConflict {
+                kind: op.kind,
+                path: if dependent {
+                    primary.clone()
+                } else {
+                    path.clone()
+                },
+                dependent,
+            };
             op.paths
                 .iter()
                 .find(|root| hit(op, root))
-                .map(|root| PathOpConflict {
-                    kind: op.kind,
-                    path: root.clone(),
+                .map(|root| conflict(root, false))
+                .or_else(|| {
+                    op.dependents
+                        .iter()
+                        .find(|root| hit(op, root))
+                        .map(|root| conflict(root, true))
                 })
         })
     }
@@ -149,7 +182,13 @@ fn leaf(path: &Path) -> String {
 fn refusal(conflict: &PathOpConflict, path: &Path, outcome: &str) -> String {
     let moved = leaf(&conflict.path);
     let subject = leaf(path);
-    if moved == subject {
+    if conflict.dependent {
+        format!(
+            "{subject} cannot be {outcome} while the {} of {moved} is still rewriting it. \
+             Try again once it finishes.",
+            conflict.kind.noun()
+        )
+    } else if moved == subject {
         format!(
             "A {} of {moved} is still running, so it was not {outcome}. \
              Try again once it finishes.",
@@ -385,6 +424,7 @@ mod tests {
         let conflict = PathOpConflict {
             kind: PathOpKind::Rename,
             path: p("/w/a.snxsch"),
+            dependent: false,
         };
         let text = refusal(&conflict, &p("/w/a.snxsch"), "saved");
         assert!(text.starts_with("A rename of a.snxsch is still running"));

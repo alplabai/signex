@@ -182,12 +182,12 @@ impl Signex {
         // The unopened parents the worker reads are registered too, so
         // opening one meanwhile is refused instead of being replaced by the
         // rewritten copy (or replacing it).
-        let mut registered = vec![from.clone(), new_path.clone()];
-        registered.extend(parents_to_read.iter().cloned());
-        let id = self
-            .document_state
-            .pending_path_ops
-            .begin(PathOpKind::Rename, registered, fold);
+        let id = self.document_state.pending_path_ops.begin_with_dependents(
+            PathOpKind::Rename,
+            vec![from.clone(), new_path.clone()],
+            parents_to_read.clone(),
+            fold,
+        );
         let job = crate::app::path_op_jobs::RenameJob {
             from: from.clone(),
             to: new_path.clone(),
