@@ -140,10 +140,16 @@ jobs:
             arch: amd64
             arch_suffix: x86_64
 
-          # aarch64-unknown-linux-gnu deferred — cross-compiling iced +
-          # wgpu with their native C/C++ deps on ubuntu-latest needs
-          # dedicated arm64 runners or the `cross` action with a custom
-          # image. Revisit in a patch release; drop here so v0.6 can ship.
+          # Native arm64 build on GitHub's hosted Linux arm64 runner (free
+          # for public repos). Not cross-compiled: iced + wgpu pull in
+          # native C/C++ deps that are far simpler to build on-arch. The
+          # Linux steps below are fully matrix-driven: `arch` (Debian
+          # naming) feeds the .deb, `arch_suffix` the AppImage, the
+          # appimagetool download and the tarball.
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-24.04-arm
+            arch: arm64
+            arch_suffix: aarch64
 
           # One universal (arm64 + x86_64) binary built on a single
           # Apple Silicon runner: both slices are cross-built by the Xcode
@@ -254,6 +260,9 @@ jobs:
           wget -q -O appimagetool "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-${{ matrix.arch_suffix }}.AppImage"
           chmod +x appimagetool
           export APPIMAGETOOL="$PWD/appimagetool"
+          # appimagetool is itself an AppImage; extract-and-run avoids
+          # needing libfuse2 on the runner (absent on ubuntu 24.04 images).
+          export APPIMAGE_EXTRACT_AND_RUN=1
           chmod +x installer/linux/build-appimage.sh
           ./installer/linux/build-appimage.sh \
             "target/${{ matrix.target }}/release/signex" \
