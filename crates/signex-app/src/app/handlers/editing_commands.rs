@@ -22,20 +22,50 @@ impl Signex {
             .map_or(0, |engine| engine.undo_position())
     }
 
-    /// Record the current overrides as an undoable step, before a
+    /// The active sheet's slice of `wire_color_overrides`. The map is
+    /// app-wide, but a colour step only owns the wires of its own sheet.
+    pub(crate) fn active_sheet_net_colors(
+        &self,
+    ) -> std::collections::HashMap<uuid::Uuid, signex_types::theme::Color> {
+        let Some(engine) = self.document_state.active_engine() else {
+            return Default::default();
+        };
+        engine
+            .document()
+            .wires
+            .iter()
+            .filter_map(|w| Some((w.uuid, *self.ui_state.wire_color_overrides.get(&w.uuid)?)))
+            .collect()
+    }
+
+    /// Replace the active sheet's overrides with `colors`, leaving every
+    /// other sheet's untouched. Returns the overrides it displaced.
+    pub(crate) fn replace_active_sheet_net_colors(
+        &mut self,
+        colors: std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    ) -> std::collections::HashMap<uuid::Uuid, signex_types::theme::Color> {
+        let displaced = self.active_sheet_net_colors();
+        for wire in displaced.keys() {
+            self.ui_state.wire_color_overrides.remove(wire);
+        }
+        self.ui_state.wire_color_overrides.extend(colors);
+        displaced
+    }
+
+    /// Record the active sheet's overrides as an undoable step, before a
     /// net-colour change. A new colour action ends the redo branch.
     pub(crate) fn record_net_color_undo(&mut self) {
         let Some(path) = self.document_state.active_path.clone() else {
             return;
         };
         let at = self.engine_undo_position();
+        let colors = self.active_sheet_net_colors();
         self.ui_state.net_color_redo.remove(&path);
-        self.ui_state.net_color_undo.entry(path).or_default().push(
-            crate::app::state::NetColorStep {
-                colors: self.ui_state.wire_color_overrides.clone(),
-                at,
-            },
-        );
+        self.ui_state
+            .net_color_undo
+            .entry(path)
+            .or_default()
+            .push(crate::app::state::NetColorStep { colors, at });
     }
 
     /// Forget a document's colour steps, e.g. when its engine is replaced.
@@ -53,7 +83,7 @@ impl Signex {
         undoing: bool,
     ) {
         let displaced = crate::app::state::NetColorStep {
-            colors: std::mem::replace(&mut self.ui_state.wire_color_overrides, step.colors),
+            colors: self.replace_active_sheet_net_colors(step.colors),
             at: step.at,
         };
         let stack = if undoing {

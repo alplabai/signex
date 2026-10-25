@@ -12,6 +12,8 @@ use iced::widget::{Space, button, column, container, row, text, text_input};
 use iced::{Border, Element, Length, Theme};
 use signex_library::DistributorSource;
 use signex_types::theme::ThemeTokens;
+
+use crate::styles::{HAIRLINE, Spacing, TypeScale};
 use signex_widgets::theme_ext;
 
 use super::super::messages::{LibraryMessage, SettingsMsg};
@@ -26,13 +28,15 @@ pub fn view<'a>(
     settings: &'a DistributorSettings,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
+    let ts = TypeScale::default();
+    let sp = Spacing::default();
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
     let hover_bg = crate::styles::tokens::hover_overlay(tokens);
 
     let section_title = |title: &'static str| -> Element<'_, LibraryMessage> {
-        text(title).size(11).color(muted).into()
+        text(title).size(ts.body).color(muted).into()
     };
 
     // ── DigiKey ──────────────────────────────────────────────
@@ -50,7 +54,7 @@ pub fn view<'a>(
         _ => "Not connected".to_string(),
     };
     let mut digikey_actions =
-        row![text(digikey_status).size(11).color(text_c)].align_y(iced::Alignment::Center);
+        row![text(digikey_status).size(ts.body).color(text_c)].align_y(iced::Alignment::Center);
     digikey_actions = digikey_actions.push(Space::new().width(Length::Fill));
     if settings.digikey_in_flight {
         digikey_actions = digikey_actions.push(secondary_btn(
@@ -67,17 +71,17 @@ pub fn view<'a>(
     }
     let digikey_section = column![
         section_title("DigiKey"),
-        Space::new().height(4),
+        Space::new().height(sp.s),
         digikey_actions,
-        Space::new().height(4),
+        Space::new().height(sp.s),
         text(
             "OAuth2 PKCE flow — opens your browser, then stores the refresh token in the OS \
              keyring. Set SIGNEX_DIGIKEY_CLIENT_ID + SIGNEX_DIGIKEY_CLIENT_SECRET first."
         )
-        .size(10)
+        .size(ts.caption)
         .color(muted),
     ]
-    .spacing(2);
+    .spacing(sp.xs);
 
     // ── Mouser ──────────────────────────────────────────────
     // The text_input must be bound to the real `mouser_api_key_buf` —
@@ -92,18 +96,18 @@ pub fn view<'a>(
         .unwrap_or_else(|| "Not tested".to_string());
     let mouser_section = column![
         section_title("Mouser"),
-        Space::new().height(4),
+        Space::new().height(sp.s),
         row![
             text("API Key")
-                .size(11)
+                .size(ts.body)
                 .color(text_c)
                 .width(Length::Fixed(96.0)),
             text_input("Paste API key…", &settings.mouser_api_key_buf)
                 .secure(true)
                 .on_input(|s| LibraryMessage::Settings(SettingsMsg::MouserApiKeyChanged(s)))
-                .padding([4, 8])
-                .size(12),
-            Space::new().width(8),
+                .padding([sp.s, sp.m])
+                .size(ts.label),
+            Space::new().width(sp.m),
             primary_btn(
                 "Test",
                 LibraryMessage::Settings(SettingsMsg::MouserTest),
@@ -111,50 +115,55 @@ pub fn view<'a>(
             ),
         ]
         .align_y(iced::Alignment::Center),
-        Space::new().height(4),
-        text(mouser_test_status).size(10).color(muted),
+        Space::new().height(sp.s),
+        text(mouser_test_status).size(ts.caption).color(muted),
     ]
-    .spacing(2);
+    .spacing(sp.xs);
 
     // ── LCSC + JLCPCB ──────────────────────────────────────
     let no_key_section = column![
         section_title("LCSC, JLCPCB"),
-        Space::new().height(4),
-        text("(no key required)").size(11).color(text_c),
+        Space::new().height(sp.s),
+        text("(no key required)").size(ts.body).color(text_c),
     ]
-    .spacing(2);
+    .spacing(sp.xs);
 
     // ── Preference order ───────────────────────────────────
-    let mut order_col =
-        column![section_title("Order of Preference"), Space::new().height(4)].spacing(2);
+    let mut order_col = column![
+        section_title("Order of Preference"),
+        Space::new().height(sp.s)
+    ]
+    .spacing(sp.xs);
     let len = settings.preferred_order.len();
     for (i, src) in settings.preferred_order.iter().enumerate() {
         let label = distributor_label(*src);
         let up_enabled = i > 0;
         let down_enabled = i + 1 < len;
-        let mut up_btn = button(container(text("▲").size(10).color(text_c)).padding([1, 6]))
-            .padding(0)
-            .style(crate::styles::outline_button(tokens));
+        let mut up_btn =
+            button(container(text("▲").size(ts.caption).color(text_c)).padding([sp.xs, sp.s]))
+                .padding(0)
+                .style(crate::styles::outline_button(tokens));
         if up_enabled {
             up_btn = up_btn.on_press(LibraryMessage::Settings(SettingsMsg::PreferenceUp(*src)));
         }
-        let mut down_btn = button(container(text("▼").size(10).color(text_c)).padding([1, 6]))
-            .padding(0)
-            .style(crate::styles::outline_button(tokens));
+        let mut down_btn =
+            button(container(text("▼").size(ts.caption).color(text_c)).padding([sp.xs, sp.s]))
+                .padding(0)
+                .style(crate::styles::outline_button(tokens));
         if down_enabled {
             down_btn =
                 down_btn.on_press(LibraryMessage::Settings(SettingsMsg::PreferenceDown(*src)));
         }
         let row_widget = row![
             text(format!("{}.  {}", i + 1, label))
-                .size(11)
+                .size(ts.body)
                 .color(text_c)
                 .width(Length::Fill),
             up_btn,
-            Space::new().width(4),
+            Space::new().width(sp.s),
             down_btn,
         ]
-        .padding([3, 6])
+        .padding([sp.xs, sp.s])
         .align_y(iced::Alignment::Center);
         let bg_row = container(row_widget).style(move |_: &Theme| iced::widget::container::Style {
             background: Some(iced::Background::Color(hover_bg)),
@@ -172,7 +181,7 @@ pub fn view<'a>(
             "Saved to <config_dir>/signex/distributors.toml. The first matching adapter is \
              tried first when you paste a distributor URL into the Supply tab.",
         )
-        .size(10)
+        .size(ts.caption)
         .color(muted),
     );
     // A failed save must be visible here and now — otherwise the reorder
@@ -180,7 +189,7 @@ pub fn view<'a>(
     if let Some(error) = settings.preferred_order_error.as_deref() {
         order_col = order_col.push(
             text(format!("Could not save the order: {error}"))
-                .size(10)
+                .size(ts.caption)
                 .color(crate::styles::tokens::danger(tokens)),
         );
     }
@@ -195,10 +204,10 @@ pub fn view<'a>(
             divider(border),
             order_col,
         ]
-        .spacing(12)
+        .spacing(sp.l)
         .width(Length::Fill),
     )
-    .padding(14)
+    .padding(sp.l)
     .style(crate::styles::modal_card(tokens))
     .into()
 }
@@ -216,7 +225,7 @@ fn distributor_label(src: DistributorSource) -> &'static str {
 }
 
 fn divider(color: iced::Color) -> Element<'static, LibraryMessage> {
-    container(Space::new().height(1).width(Length::Fill))
+    container(Space::new().height(HAIRLINE).width(Length::Fill))
         .style(move |_: &Theme| iced::widget::container::Style {
             background: Some(iced::Background::Color(color)),
             ..Default::default()
@@ -229,8 +238,10 @@ fn primary_btn<'a>(
     message: LibraryMessage,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
+    let ts = TypeScale::default();
+    let sp = Spacing::default();
     let on_accent = crate::styles::tokens::on_accent(tokens);
-    button(container(text(label.to_string()).size(11).color(on_accent)).padding([4, 12]))
+    button(container(text(label.to_string()).size(ts.body).color(on_accent)).padding([sp.s, sp.l]))
         .on_press(message)
         .style(crate::styles::accent_button(tokens))
         .into()
@@ -241,8 +252,10 @@ fn secondary_btn<'a>(
     message: LibraryMessage,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
+    let ts = TypeScale::default();
+    let sp = Spacing::default();
     let text_c = crate::styles::ti(tokens.text);
-    button(container(text(label.to_string()).size(11).color(text_c)).padding([4, 12]))
+    button(container(text(label.to_string()).size(ts.body).color(text_c)).padding([sp.s, sp.l]))
         .on_press(message)
         .style(crate::styles::outline_button(tokens))
         .into()
