@@ -184,14 +184,17 @@ impl Signex {
         }
     }
 
-    pub(crate) fn handle_selection_rotate_requested(&mut self) {
+    /// Rotate the selected symbol by 90 degrees on screen. The engine's
+    /// `RotateSelection` delta is counter-clockwise on screen for every
+    /// symbol (it compensates for mirroring), so clockwise is -90.
+    pub(crate) fn handle_selection_rotate_requested(&mut self, clockwise: bool) {
         if let Some(engine) = self.document_state.active_engine()
             && engine.selection_is_single_symbol(&self.interaction_state.active_canvas().selected)
         {
             self.apply_engine_command(
                 signex_engine::Command::RotateSelection {
                     items: self.interaction_state.active_canvas().selected.clone(),
-                    angle_degrees: 90.0,
+                    angle_degrees: if clockwise { -90.0 } else { 90.0 },
                 },
                 true,
                 true,
