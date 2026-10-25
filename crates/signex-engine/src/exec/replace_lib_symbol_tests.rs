@@ -240,6 +240,29 @@ fn replace_stamps_library_versions_in_the_same_undo_step() {
 }
 
 #[test]
+fn only_instances_of_the_replaced_lib_id_are_stamped() {
+    let mut engine = engine_with_wired_pin_2();
+    let mut doc = engine.document().clone();
+    let mut other = doc.symbols[0].clone();
+    other.uuid = uuid::Uuid::new_v4();
+    other.lib_id = "L:other".into();
+    other.reference = "U2".into();
+    other.position = Point::new(50.0, 50.0);
+    let (mine, theirs) = (doc.symbols[0].uuid, other.uuid);
+    doc.symbols.push(other);
+    engine.set_document(doc);
+    let fresh = lib_symbol("new", vec![lib_pin("1", -2.54), lib_pin("2", 2.54)]);
+    engine
+        .execute(Command::ReplaceLibSymbol {
+            lib_symbol: fresh,
+            library_versions: vec![(mine, "2.0.0".into()), (theirs, "2.0.0".into())],
+        })
+        .unwrap();
+    assert_eq!(engine.document().symbols[0].library_version, "2.0.0");
+    assert_eq!(engine.document().symbols[1].library_version, "");
+}
+
+#[test]
 fn refusal_leaves_the_version_untouched() {
     let mut engine = engine_with_wired_pin_2();
     let uuid = engine.document().symbols[0].uuid;

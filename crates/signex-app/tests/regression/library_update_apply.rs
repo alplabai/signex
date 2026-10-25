@@ -14,7 +14,9 @@ use crate::library_symbol_drift::{
 use signex_app::app::{EditMsg, Message, Signex};
 use signex_app::dock::DockMessage;
 use signex_app::library::LibraryMessage;
-use signex_app::library::drift::{MountedLibrary, SymbolsRead, apply_input, read_symbols};
+use signex_app::library::drift::{
+    ApplyInput, MountedLibrary, SymbolsRead, apply_input, read_symbols,
+};
 use signex_app::panels::PanelMsg;
 use signex_library::primitive::SymbolFile;
 use signex_types::schematic::{Point, SymbolTransform, Wire};
@@ -88,21 +90,21 @@ fn to_team(f: &Fixture) {
     .unwrap();
 }
 
-/// Click Apply in the modal. Returns the click's `Task` and the result its
-/// worker would produce (the `Task` wraps `read_symbols` in `spawn_blocking`),
-/// from the same `apply_input` the handler builds its worker input with.
-fn click_apply(app: &mut Signex) -> (iced::Task<Message>, SymbolsRead) {
-    let (task, input) = click_apply_input(app);
-    (task, read_symbols(input, &mounted(app)))
+/// Click Apply in the modal and return the handler's own `Task`.
+fn click_apply(app: &mut Signex) -> iced::Task<Message> {
+    app.update(Message::Library(LibraryMessage::LibraryUpdatesApply))
 }
 
-/// Click Apply but leave the worker un-run, so the library can move on first.
-fn click_apply_input(
-    app: &mut Signex,
-) -> (iced::Task<Message>, signex_app::library::drift::ApplyInput) {
-    let input = apply_input(app.library.library_updates.as_ref().unwrap()).unwrap();
-    let task = app.update(Message::Library(LibraryMessage::LibraryUpdatesApply));
-    (task, input)
+/// Click Apply but build the worker input by hand and leave it un-run, so
+/// the library can move on first.
+fn click_apply_input(app: &mut Signex) -> (iced::Task<Message>, ApplyInput) {
+    let sheet = app.document_state.active_path.clone().unwrap();
+    let input = apply_input(
+        app.library.library_updates.as_ref().unwrap(),
+        app.document_state.engines[&sheet].document(),
+    )
+    .unwrap();
+    (click_apply(app), input)
 }
 
 fn mounted(app: &Signex) -> Vec<MountedLibrary> {
@@ -129,10 +131,14 @@ fn select_all_updates(app: &mut Signex) {
     }
 }
 
+/// Select everything and click Apply; the handler's `Task` runs on a tokio
+/// runtime and its completion is fed back to `update`.
 fn apply_team_updates(app: &mut Signex) {
     select_all_updates(app);
-    let (_task, read) = click_apply(app);
-    deliver(app, read);
+    let task = click_apply(app);
+    for message in run_task(task) {
+        let _ = app.update(message);
+    }
 }
 
 fn skipped(app: &Signex) -> bool {
@@ -383,12 +389,14 @@ fn team_apply_reads_off_thread_and_applies_on_completion() {
     edit_library_symbol(&f, add_pin);
     scan(&mut app);
     select_all_updates(&mut app);
-    let (task, read) = click_apply(&mut app);
+    let task = click_apply(&mut app);
     assert!(task.units() > 0, "the read runs as a Task");
     assert!(app.library.library_updates.is_none(), "modal is taken");
     assert_eq!(pin_count(&app), before, "nothing read or applied inline");
     assert_eq!(version(&app), "0.0.1");
-    deliver(&mut app, read);
+    for message in run_task(task) {
+        let _ = app.update(message);
+    }
     assert_eq!(pin_count(&app), before + 1);
     assert_eq!(version(&app), "1.2.3");
 }
@@ -405,7 +413,8 @@ fn team_apply_completion_after_the_sheet_closed_is_skipped() {
     edit_library_symbol(&f, add_pin);
     scan(&mut app);
     select_all_updates(&mut app);
-    let (_task, mut read) = click_apply(&mut app);
+    let (_task, input) = click_apply_input(&mut app);
+    let mut read = read_symbols(input, &mounted(&app));
     read.sheet = std::path::PathBuf::from("closed-meanwhile.snxsch");
     deliver(&mut app, read);
     assert_eq!(pin_count(&app), before);
@@ -665,9 +674,11 @@ fn team_apply_completion_after_close_and_reopen_is_skipped() {
     edit_library_symbol(&f, add_pin);
     scan(&mut app);
     select_all_updates(&mut app);
-    let (_task, read) = click_apply(&mut app);
+    let messages = run_task(click_apply(&mut app));
     reload_engine(&mut app); // same path, fresh engine
-    deliver(&mut app, read);
+    for message in messages {
+        let _ = app.update(message);
+    }
     assert_eq!(pin_count(&app), before, "the reopened sheet is untouched");
     assert_eq!(version(&app), "0.0.1");
     let sheet = app.document_state.active_path.clone().unwrap();
@@ -677,12 +688,15 @@ fn team_apply_completion_after_close_and_reopen_is_skipped() {
     assert!(logged, "the skip must be logged");
 }
 
-/// The worker stamps the row version as of now, not the scan's.
+/// A row that moved past the version the user approved is not applied: the
+/// copy and the stamp stay, the entry stays pending, and Messages say so.
 #[test]
-fn apply_stamps_the_row_version_read_at_apply_time() {
+fn apply_holds_back_a_row_that_moved_since_the_approval() {
+    let _ = signex_app::diagnostics::init_logging();
     let f = team_fixture();
     let mut app = app_with_library(&f);
     place(&mut app, &f);
+    let before = pin_count(&app);
     make_version_stale(&mut app);
     edit_library_symbol(&f, add_pin);
     scan(&mut app);
@@ -691,7 +705,15 @@ fn apply_stamps_the_row_version_read_at_apply_time() {
     edit_row(&f, |r| r.version = "3.0.0".into());
     let read = read_symbols(input, &mounted(&app));
     deliver(&mut app, read);
-    assert_eq!(version(&app), "3.0.0");
+    assert_eq!(pin_count(&app), before, "copy not adopted");
+    assert_eq!(version(&app), "0.0.1", "not stamped");
+    assert!(skipped(&app), "the update stays pending");
+    let logged = signex_app::diagnostics::recent_entries().iter().any(|e| {
+        e.message
+            .contains("U1: library moved to 3.0.0 since you approved")
+            && e.message.contains("not applied")
+    });
+    assert!(logged, "the hold-back must reach the Messages panel");
 }
 
 /// A row re-bound after the scan is not stamped at apply time; the shared
@@ -930,4 +952,67 @@ fn a_rebound_instance_beside_a_bound_one_is_left_unstamped() {
     let d = doc(&app);
     assert_eq!(d.symbols[0].library_version, "1.2.3");
     assert_eq!(d.symbols[1].library_version, "0.0.1", "re-bound: unstamped");
+}
+
+// ---- #950 round 6: mixed modes, every instance, scoped stamps ----
+
+/// U1 (row in the Team library A) and U2 (row in the Personal library B)
+/// share one copy: B's auto-apply must not move it past U1's modal entry.
+#[test]
+fn a_lib_id_with_a_team_instance_is_not_auto_applied_for_its_personal_one() {
+    let (a, b) = cross_library();
+    to_team(&a);
+    let mut app = app_with_libraries(&[&a, &b]);
+    place_across(&mut app, &a, &b);
+    make_version_stale(&mut app);
+    {
+        let engine = app.document_state.active_engine_mut().unwrap();
+        let mut d = engine.document().clone();
+        let mut u2 = d.symbols[0].clone();
+        u2.uuid = Uuid::new_v4();
+        u2.reference = "U2".into();
+        u2.library_id = Some(b.library_id);
+        u2.row_id = Some(b.row_id);
+        u2.library_version = "0.0.1".into();
+        d.symbols.push(u2);
+        engine.set_document(d);
+    }
+    let before = pin_count(&app);
+    edit_library_symbol(&b, add_pin);
+    scan(&mut app);
+    assert_eq!(pin_count(&app), before, "the shared copy is not touched");
+    assert_eq!(doc(&app).symbols[1].library_version, "0.0.1");
+    let state = app.library.library_updates.as_ref().unwrap();
+    assert_eq!(state.entries.len(), 2, "both instances go to the modal");
+    apply_team_updates(&mut app);
+    assert_eq!(pin_count(&app), before + 1);
+    assert!(
+        doc(&app)
+            .symbols
+            .iter()
+            .all(|s| s.library_version == "1.2.3")
+    );
+}
+
+/// The worker input covers every instance of a selected `lib_id`, with the
+/// approval only on the ones the modal listed.
+#[test]
+fn apply_input_covers_every_instance_of_the_selected_lib_id() {
+    let f = team_fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    let row2 = insert_row_of_same_symbol(&f, "SNX-TWO-E", "2.0.0", false);
+    // U2's stamp is current: the modal does not list it.
+    insert_twin(&mut app, row2, "U2", "2.0.0");
+    make_version_stale(&mut app);
+    edit_library_symbol(&f, add_pin);
+    scan(&mut app);
+    select_all_updates(&mut app);
+    let state = app.library.library_updates.as_ref().unwrap();
+    assert_eq!(state.entries.len(), 1);
+    let input = apply_input(state, doc(&app)).unwrap();
+    let stamps = &input.wanted[0].1;
+    assert_eq!(stamps.len(), 2);
+    assert_eq!(stamps[0].approved_version.as_deref(), Some("1.2.3"));
+    assert_eq!(stamps[1].approved_version, None);
 }

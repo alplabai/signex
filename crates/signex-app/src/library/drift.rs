@@ -13,7 +13,7 @@
 //! [`compute_drift`] does the IO and runs in `spawn_blocking`; the
 //! `update`-side half is `app/handlers/library_drift.rs`.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use signex_types::schematic::LibSymbol;
@@ -43,9 +43,9 @@ pub struct MountedLibrary {
 /// an empty map so a cleared drift replaces the previous result.
 #[derive(Debug, Clone, Default)]
 pub struct DriftReport {
-    /// Per sheet: the drifted `lib_id`s and the library's current symbol
-    /// for each (what "Update from library" applies).
-    pub sheets: Vec<(PathBuf, BTreeMap<String, LibSymbol>)>,
+    /// Per sheet: the `lib_id`s whose embedded copy differs from the
+    /// library's current symbol.
+    pub sheets: Vec<(PathBuf, BTreeSet<String>)>,
     /// `lib_id` -> `"<Library>/<Symbol>"` for every entry whose library is
     /// mounted and whose symbol was readable.
     pub names: HashMap<String, String>,
@@ -90,7 +90,7 @@ pub fn compute_drift(sheets: &[SheetEntries], libs: &[MountedLibrary]) -> DriftR
     // lib_id -> current (symbol, name); None = unreadable, already reported.
     let mut current: HashMap<String, Option<(LibSymbol, String)>> = HashMap::new();
     for (sheet, entries) in sheets {
-        let mut drifted = BTreeMap::new();
+        let mut drifted = BTreeSet::new();
         for (lib_id, embedded) in entries {
             let Some((library_id, symbol_id)) = split_lib_id(lib_id) else {
                 continue;
@@ -122,7 +122,7 @@ pub fn compute_drift(sheets: &[SheetEntries], libs: &[MountedLibrary]) -> DriftR
             let Some((fresh, name)) = entry else { continue };
             report.names.insert(lib_id.clone(), name.clone());
             if content_hash(fresh) != content_hash(embedded) {
-                drifted.insert(lib_id.clone(), fresh.clone());
+                drifted.insert(lib_id.clone());
             }
         }
         report.sheets.push((sheet.clone(), drifted));
@@ -138,15 +138,14 @@ pub(crate) fn row_binds_lib_id(row: &signex_library::ComponentRow, lib_id: &str)
         .is_some_and(|(lib, sym)| row.symbol_ref.library_id == lib && row.symbol_ref.uuid == sym)
 }
 
-/// What the open-time scan does about an instance whose row is re-bound.
-pub const UPDATE_SKIPPED: &str = "update skipped";
-/// What the apply paths do about it: the shared copy is refreshed anyway.
-pub const VERSION_NOT_STAMPED: &str = "version not stamped";
+/// What happens to an instance whose row is re-bound: its version is not
+/// stamped (whether the shared copy is refreshed is decided elsewhere).
+pub(crate) const VERSION_NOT_STAMPED: &str = "version not stamped";
 
 /// The Messages line for an instance whose library row now points at a
 /// different symbol than the one it embeds. The outcome comes before the
 /// long `lib_id` because the Messages panel cuts a line at 160 bytes.
-pub fn rebound_row_warning(
+pub(crate) fn rebound_row_warning(
     reference: &str,
     row_id: impl std::fmt::Display,
     lib_id: &str,
@@ -165,6 +164,10 @@ pub struct ApplyStamp {
     /// The library the row lives in. It can differ from the library of the
     /// `lib_id`'s symbol: a row may bind a symbol of another library.
     pub library_id: Uuid,
+    /// The row version the user approved in the modal. A row read at another
+    /// version has moved since: the instance is not applied. `None` (Update
+    /// from library) stamps whatever was read.
+    pub approved_version: Option<String>,
 }
 
 /// Everything the off-thread apply read needs, built on the UI thread from
@@ -185,31 +188,54 @@ pub struct ApplyInput {
     pub wanted: Vec<(String, Vec<ApplyStamp>)>,
 }
 
+/// Every instance of `lib_id` on `doc` that has a library row, as worker
+/// stamps. `approved` maps instances the user approved to that version.
+pub(crate) fn instance_stamps(
+    doc: &signex_types::schematic::SchematicSheet,
+    lib_id: &str,
+    approved: &HashMap<Uuid, String>,
+) -> Vec<ApplyStamp> {
+    doc.symbols
+        .iter()
+        .filter(|s| s.lib_id == lib_id)
+        .filter_map(|s| {
+            Some(ApplyStamp {
+                symbol: s.uuid,
+                reference: s.reference.clone(),
+                row_id: s.row_id?,
+                library_id: s.library_id?,
+                approved_version: approved.get(&s.uuid).cloned(),
+            })
+        })
+        .collect()
+}
+
 /// The worker input for the modal's current selection; `None` when nothing
-/// is selected.
-pub fn apply_input(state: &super::updates_dialog::LibraryUpdatesState) -> Option<ApplyInput> {
-    let mut by_lib_id: BTreeMap<String, Vec<ApplyStamp>> = BTreeMap::new();
-    for e in state.entries.iter().filter(|e| e.selected) {
-        by_lib_id
-            .entry(e.lib_id.clone())
-            .or_default()
-            .push(ApplyStamp {
-                symbol: e.symbol_uuid,
-                reference: e.ref_des.clone(),
-                row_id: e.row_id.as_uuid(),
-                library_id: e.library_id,
-            });
-    }
-    if by_lib_id.is_empty() {
+/// is selected. The copy is shared, so every instance of a selected `lib_id`
+/// on `doc` is included, not only the ticked rows.
+pub fn apply_input(
+    state: &super::updates_dialog::LibraryUpdatesState,
+    doc: &signex_types::schematic::SchematicSheet,
+) -> Option<ApplyInput> {
+    let selected: Vec<_> = state.entries.iter().filter(|e| e.selected).collect();
+    let lib_ids: BTreeSet<&str> = selected.iter().map(|e| e.lib_id.as_str()).collect();
+    if lib_ids.is_empty() {
         return None;
     }
+    let approved: HashMap<Uuid, String> = selected
+        .iter()
+        .map(|e| (e.symbol_uuid, e.latest_version.clone()))
+        .collect();
     Some(ApplyInput {
         sheet: state.schematic_path.clone(),
         engine_instance: state.engine_instance,
         any_unchecked: state.entries.iter().any(|e| !e.selected),
         scan_failed: state.scan_failed,
         tracks_pending: true,
-        wanted: by_lib_id.into_iter().collect(),
+        wanted: lib_ids
+            .into_iter()
+            .map(|id| (id.to_string(), instance_stamps(doc, id, &approved)))
+            .collect(),
     })
 }
 
@@ -222,6 +248,9 @@ pub struct SymbolRead {
     pub stamps: Vec<(Uuid, String)>,
     /// One line per instance whose version is not stamped, saying why.
     pub skipped: Vec<String>,
+    /// An approved instance's row moved on since the approval: the copy and
+    /// every stamp of this `lib_id` are held back.
+    pub held_back: bool,
 }
 
 /// What the off-thread read for an apply hands back to `update`.
@@ -306,31 +335,73 @@ fn read_row(opened: &OpenedLibrary, row_id: Uuid) -> RowRead {
     failure.map_or(RowRead::Missing, RowRead::Failed)
 }
 
+/// Why an instance got no stamp.
+enum NoStamp {
+    /// Its row is unreadable, missing or re-bound.
+    Unreadable(String),
+    /// Its row moved past the version the user approved.
+    Moved(String),
+}
+
 /// The stamp for one instance, or the Messages line saying why it has none.
 fn stamp_or_reason(
     w: &ApplyStamp,
     lib_id: &str,
     libraries: &mut HashMap<Uuid, Opened>,
     libs: &[MountedLibrary],
-) -> Result<(Uuid, String), String> {
+) -> Result<(Uuid, String), NoStamp> {
     let nothing = VERSION_NOT_STAMPED;
     let (reference, row) = (&w.reference, w.row_id);
     let opened = libraries
         .entry(w.library_id)
         .or_insert_with(|| open_library(libs, w.library_id));
     let opened = opened.as_ref().map_err(|e| {
-        format!("{reference}: {nothing}: the library of row {row} is unreadable ({e}) ({lib_id}).")
+        NoStamp::Unreadable(format!(
+            "{reference}: {nothing}: the library of row {row} is unreadable ({e}) ({lib_id})."
+        ))
     })?;
+    let why = NoStamp::Unreadable;
     match read_row(opened, w.row_id) {
-        RowRead::Found(r) if row_binds_lib_id(&r, lib_id) => Ok((w.symbol, r.version)),
-        RowRead::Found(_) => Err(rebound_row_warning(reference, row, lib_id, nothing)),
-        RowRead::Missing => Err(format!(
+        RowRead::Found(r) if row_binds_lib_id(&r, lib_id) => match &w.approved_version {
+            Some(approved) if *approved != r.version => Err(NoStamp::Moved(format!(
+                "{reference}: library moved to {} since you approved {approved}; not applied.",
+                r.version
+            ))),
+            _ => Ok((w.symbol, r.version)),
+        },
+        RowRead::Found(_) => Err(why(rebound_row_warning(reference, row, lib_id, nothing))),
+        RowRead::Missing => Err(why(format!(
             "{reference}: {nothing}: row {row} is not in its library ({lib_id})."
-        )),
-        RowRead::Failed(e) => Err(format!(
+        ))),
+        RowRead::Failed(e) => Err(why(format!(
             "{reference}: {nothing}: row {row} could not be read ({e}) ({lib_id})."
-        )),
+        ))),
     }
+}
+
+/// The stamps and Messages lines for one `lib_id`'s instances, and whether an
+/// approved instance moved (then nothing is stamped).
+fn decide_stamps(
+    wanted: &[ApplyStamp],
+    lib_id: &str,
+    libraries: &mut HashMap<Uuid, Opened>,
+    libs: &[MountedLibrary],
+) -> (Vec<(Uuid, String)>, Vec<String>, bool) {
+    let (mut stamps, mut skipped, mut held_back) = (Vec::new(), Vec::new(), false);
+    for w in wanted {
+        match stamp_or_reason(w, lib_id, libraries, libs) {
+            Ok(stamp) => stamps.push(stamp),
+            Err(NoStamp::Unreadable(why)) => skipped.push(why),
+            Err(NoStamp::Moved(why)) => {
+                held_back = true;
+                skipped.push(why);
+            }
+        }
+    }
+    if held_back {
+        stamps.clear();
+    }
+    (stamps, skipped, held_back)
 }
 
 /// Read each wanted `lib_id`'s current symbol and its instances' row
@@ -339,7 +410,9 @@ fn stamp_or_reason(
 /// shared with the UI thread. A row is read through the library it lives in
 /// (`ApplyStamp::library_id`), not the symbol's. Each instance is decided
 /// from its fresh row: bound to the `lib_id` -> stamped; anything else -> a
-/// line saying why, and no stamp. The shared copy is refreshed regardless.
+/// line saying why, and no stamp. The shared copy is refreshed regardless,
+/// except when an approved instance's row moved on since the approval: then
+/// the whole `lib_id` is held back.
 pub fn read_symbols(input: ApplyInput, libs: &[MountedLibrary]) -> SymbolsRead {
     use signex_library::LibraryAdapter as _;
 
@@ -348,14 +421,7 @@ pub fn read_symbols(input: ApplyInput, libs: &[MountedLibrary]) -> SymbolsRead {
         .wanted
         .iter()
         .map(|(lib_id, wanted)| {
-            let mut stamps = Vec::new();
-            let mut skipped = Vec::new();
-            for w in wanted {
-                match stamp_or_reason(w, lib_id, &mut libraries, libs) {
-                    Ok(stamp) => stamps.push(stamp),
-                    Err(why) => skipped.push(why),
-                }
-            }
+            let (stamps, skipped, held_back) = decide_stamps(wanted, lib_id, &mut libraries, libs);
             let symbol = split_lib_id(lib_id)
                 .ok_or_else(|| "its id is not <library>:<symbol>".to_string())
                 .and_then(|(library, symbol_id)| {
@@ -375,6 +441,7 @@ pub fn read_symbols(input: ApplyInput, libs: &[MountedLibrary]) -> SymbolsRead {
                 symbol,
                 stamps,
                 skipped,
+                held_back,
             }
         })
         .collect();
@@ -429,17 +496,15 @@ pub struct DriftState {
     /// nothing to check); only the report carrying the current value is
     /// stored, so an out-of-order worker result cannot overwrite a newer one.
     pub generation: u64,
-    /// Per sheet: drifted `lib_id` -> the library's current symbol.
-    pub drifted: HashMap<PathBuf, BTreeMap<String, LibSymbol>>,
+    /// Per sheet: the `lib_id`s whose embedded copy has drifted.
+    pub drifted: HashMap<PathBuf, BTreeSet<String>>,
     /// `lib_id` -> `"<Library>/<Symbol>"` where the library is mounted.
     pub names: HashMap<String, String>,
 }
 
 impl DriftState {
     pub fn is_drifted(&self, sheet: &Path, lib_id: &str) -> bool {
-        self.drifted
-            .get(sheet)
-            .is_some_and(|d| d.contains_key(lib_id))
+        self.drifted.get(sheet).is_some_and(|d| d.contains(lib_id))
     }
 
     /// Human-readable `Library/Symbol`, or the raw id when the library is

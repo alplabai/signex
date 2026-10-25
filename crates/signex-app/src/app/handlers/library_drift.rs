@@ -19,7 +19,7 @@ use iced::Task;
 use super::super::contracts::Message;
 use super::super::state::Signex;
 use crate::library::drift::{
-    ApplyInput, ApplyStamp, DriftJob, DriftReport, MountedLibrary, SheetEntries,
+    ApplyInput, DriftJob, DriftReport, MountedLibrary, SheetEntries, instance_stamps,
 };
 use crate::library::messages::LibraryMessage;
 
@@ -116,7 +116,7 @@ impl Signex {
                 continue;
             }
             let was = self.library.drift.drifted.get(&sheet);
-            let changed = was.is_none_or(|w| !w.keys().eq(entries.keys()));
+            let changed = was.is_none_or(|w| *w != entries);
             if changed && !entries.is_empty() {
                 crate::diagnostics::log_info(format!(
                     "{}: {} library symbol(s) differ from the library; select a part and use \"Update from library\" in Properties.",
@@ -152,24 +152,12 @@ impl Signex {
         };
         if !self.library.drift.is_drifted(&sheet, &lib_id) {
             crate::diagnostics::log_warning(format!(
-                "{lib_id} has no pending library update on this sheet."
+                "{} has no pending library update on this sheet.",
+                self.library.drift.display_name(&lib_id)
             ));
             return Task::none();
         }
-        let stamps = engine
-            .document()
-            .symbols
-            .iter()
-            .filter(|s| s.lib_id == lib_id)
-            .filter_map(|s| {
-                Some(ApplyStamp {
-                    symbol: s.uuid,
-                    reference: s.reference.clone(),
-                    row_id: s.row_id?,
-                    library_id: s.library_id?,
-                })
-            })
-            .collect();
+        let stamps = instance_stamps(engine.document(), &lib_id, &Default::default());
         let input = ApplyInput {
             sheet,
             engine_instance: engine.instance_id(),

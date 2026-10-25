@@ -9,7 +9,8 @@
 
 use super::*;
 use crate::library::drift::{
-    ApplyInput, SymbolsRead, UPDATE_SKIPPED, apply_input, rebound_row_warning, row_binds_lib_id,
+    ApplyInput, SymbolRead, SymbolsRead, VERSION_NOT_STAMPED, apply_input, rebound_row_warning,
+    row_binds_lib_id,
 };
 use signex_types::schematic::LibSymbol;
 
@@ -44,16 +45,20 @@ impl Signex {
     /// `library_version` drifted from the source row's current
     /// version. Splits into two control paths:
     ///
-    /// * **Personal** workflow mode — adopts the library's current symbol
+    /// * **Personal** workflow mode - adopts the library's current symbol
     ///   and stamps the new version silently, without an undo step (the
     ///   user did not ask for it), and dirty-marks the path.
-    /// * **Team** workflow mode — populates
+    /// * **Team** workflow mode - populates
     ///   `LibraryState::library_updates` with the entries so
     ///   `view_main_for` opens the modal on the next tick.
     ///
+    /// The embedded copy is shared by every instance of a `lib_id`, so the
+    /// mode is decided per `lib_id`: when any of its stale instances is
+    /// Team-mode, all of them go to the modal and nothing is auto-applied.
+    ///
     /// Adapter / library-mount failures degrade to a single
     /// `tracing::warn` line per affected library and skip those
-    /// entries — a missing library doesn't abort the schematic open.
+    /// entries - a missing library doesn't abort the schematic open.
     /// Symbols without a `library_id` (Standard-imported, hand-built)
     /// are skipped silently.
     ///
@@ -64,36 +69,27 @@ impl Signex {
         if placed.is_empty() {
             return;
         }
+        let mut any_failed = false;
+        let stale = self.stale_instances(&placed, &mut any_failed);
+        let team_ids: std::collections::HashSet<String> = stale
+            .iter()
+            .filter(|(_, row)| row.mode != signex_library::WorkflowMode::Personal)
+            .map(|(symbol, _)| symbol.lib_id.clone())
+            .collect();
         // One library read per `lib_id`, however many instances share it.
-        let mut read_cache: std::collections::HashMap<String, Result<LibSymbol, String>> =
-            std::collections::HashMap::new();
+        let mut read_cache = std::collections::HashMap::new();
         let mut team_entries = Vec::new();
         let mut personal_apply: PersonalUpdates = std::collections::BTreeMap::new();
-        let mut any_failed = false;
-        for symbol in &placed {
-            let Some(stale) = self.stale_row(symbol) else {
-                continue;
-            };
-            if !row_binds_lib_id(&stale.row, &symbol.lib_id) {
-                crate::diagnostics::log_warning(rebound_row_warning(
-                    &symbol.reference,
-                    symbol.row_id,
-                    &symbol.lib_id,
-                    UPDATE_SKIPPED,
-                ));
-                any_failed = true;
-                continue;
-            }
-            match stale.mode {
-                signex_library::WorkflowMode::Personal => {
-                    any_failed |= !self.collect_personal_update(
-                        symbol,
-                        &stale.row.version,
-                        &mut read_cache,
-                        &mut personal_apply,
-                    );
-                }
-                _ => team_entries.push(team_entry(symbol, stale)),
+        for (symbol, row) in stale {
+            if team_ids.contains(&symbol.lib_id) {
+                team_entries.push(team_entry(symbol, row));
+            } else {
+                any_failed |= !self.collect_personal_update(
+                    symbol,
+                    &row.row.version,
+                    &mut read_cache,
+                    &mut personal_apply,
+                );
             }
         }
 
@@ -105,8 +101,44 @@ impl Signex {
             any_failed |=
                 !self.adopt_library_symbol(&schematic_path, &lib_id, fresh, stamps, false);
         }
+        self.record_scan_outcome(schematic_path, team_entries, any_failed);
+    }
 
-        // Surface the Team-mode entries via the modal state.
+    /// The placed symbols whose row version moved on, each with its row.
+    /// A row re-bound to another symbol is logged and counted in `any_failed`.
+    fn stale_instances(
+        &self,
+        placed: &[PlacedLibrarySymbol],
+        any_failed: &mut bool,
+    ) -> Vec<(PlacedLibrarySymbol, StaleRow)> {
+        let mut stale = Vec::new();
+        for symbol in placed {
+            let Some(row) = self.stale_row(symbol) else {
+                continue;
+            };
+            if row_binds_lib_id(&row.row, &symbol.lib_id) {
+                stale.push((symbol.clone(), row));
+            } else {
+                crate::diagnostics::log_warning(rebound_row_warning(
+                    &symbol.reference,
+                    symbol.row_id,
+                    &symbol.lib_id,
+                    VERSION_NOT_STAMPED,
+                ));
+                *any_failed = true;
+            }
+        }
+        stale
+    }
+
+    /// Surface the Team-mode entries via the modal state, or record whether
+    /// an update is still pending for the sheet.
+    fn record_scan_outcome(
+        &mut self,
+        schematic_path: std::path::PathBuf,
+        team_entries: Vec<crate::library::updates_dialog::LibraryUpdateEntry>,
+        any_failed: bool,
+    ) {
         if !team_entries.is_empty() {
             let mut state = crate::library::updates_dialog::LibraryUpdatesState::new(
                 schematic_path.clone(),
@@ -123,7 +155,7 @@ impl Signex {
             // An update that was refused or unreadable is still pending.
             self.library.skipped_updates_for.insert(schematic_path);
         } else {
-            // Re-scan with no drift — clear the pending-update record
+            // Re-scan with no drift - clear the pending-update record
             // tied to this schematic.
             self.library.skipped_updates_for.remove(&schematic_path);
         }
@@ -209,7 +241,7 @@ impl Signex {
     /// library's symbol once per `lib_id`. `false` when it was unreadable.
     fn collect_personal_update(
         &self,
-        symbol: &PlacedLibrarySymbol,
+        symbol: PlacedLibrarySymbol,
         latest_version: &str,
         read_cache: &mut std::collections::HashMap<String, Result<LibSymbol, String>>,
         queue: &mut PersonalUpdates,
@@ -258,8 +290,9 @@ impl Signex {
     /// [`Self::handle_library_update_symbols_read`].
     ///
     /// The embedded copy is shared by every instance of a `lib_id`, so the
-    /// modal selects per `lib_id`; each selected instance gets its own row's
-    /// version, and each `lib_id` is one undo step. The library's symbol and
+    /// modal selects per `lib_id` and every instance of a selected `lib_id`
+    /// is read, each getting its own row's version; each `lib_id` is one
+    /// undo step. The library's symbol and
     /// the row versions are read fresh rather than taken from the scan or the
     /// drift pass, which may be stale: stamping a version over old content
     /// would hide the update for good.
@@ -267,7 +300,19 @@ impl Signex {
         let Some(state) = self.library.library_updates.take() else {
             return Task::none();
         };
-        let Some(input) = apply_input(&state) else {
+        let Some(doc) = self
+            .document_state
+            .engines
+            .get(&state.schematic_path)
+            .map(|e| e.document())
+        else {
+            crate::diagnostics::log_warning(format!(
+                "Library update not applied: {} is no longer open.",
+                state.schematic_path.display()
+            ));
+            return Task::none();
+        };
+        let Some(input) = apply_input(&state, doc) else {
             // User clicked Apply with nothing selected — record it as
             // skipped (Messages shows nothing; the set is not rendered yet).
             self.library
@@ -335,26 +380,7 @@ impl Signex {
             }
             return Task::none();
         }
-        let mut all_applied = problem.is_none();
-        for r in reads {
-            for why in &r.skipped {
-                crate::diagnostics::log_warning(why);
-                all_applied = false;
-            }
-            match r.symbol {
-                Ok(fresh) => {
-                    all_applied &=
-                        self.adopt_library_symbol(&sheet, &r.lib_id, fresh, r.stamps, true);
-                }
-                Err(why) => {
-                    crate::diagnostics::log_warning(format!(
-                        "Library update not applied: could not read {} ({why}).",
-                        r.lib_id
-                    ));
-                    all_applied = false;
-                }
-            }
-        }
+        let all_applied = self.apply_reads(&sheet, reads) && problem.is_none();
         // The drift rows adopted above no longer show on the selection.
         self.update_selection_info();
         if !tracks_pending {
@@ -365,6 +391,35 @@ impl Signex {
             self.library.skipped_updates_for.remove(&sheet);
         }
         Task::none()
+    }
+
+    /// Adopt each read's symbol on `sheet` and report what was left alone.
+    /// `true` when every `lib_id` landed with every instance stamped.
+    fn apply_reads(&mut self, sheet: &std::path::Path, reads: Vec<SymbolRead>) -> bool {
+        let mut all_applied = true;
+        for r in reads {
+            for why in &r.skipped {
+                crate::diagnostics::log_warning(why);
+                all_applied = false;
+            }
+            if r.held_back {
+                continue;
+            }
+            match r.symbol {
+                Ok(fresh) => {
+                    all_applied &=
+                        self.adopt_library_symbol(sheet, &r.lib_id, fresh, r.stamps, true);
+                }
+                Err(why) => {
+                    crate::diagnostics::log_warning(format!(
+                        "Library update not applied: could not read {} ({why}).",
+                        self.library.drift.display_name(&r.lib_id)
+                    ));
+                    all_applied = false;
+                }
+            }
+        }
+        all_applied
     }
 
     /// Adopt `fresh` as the embedded copy of `lib_id` on `sheet` and stamp
@@ -457,6 +512,7 @@ impl Signex {
 }
 
 /// A library-backed symbol placed on the sheet being scanned.
+#[derive(Clone)]
 struct PlacedLibrarySymbol {
     uuid: uuid::Uuid,
     reference: String,
@@ -480,20 +536,20 @@ type PersonalUpdates = std::collections::BTreeMap<String, (LibSymbol, Vec<(uuid:
 
 /// The Team-mode modal row for a stale `symbol`.
 fn team_entry(
-    symbol: &PlacedLibrarySymbol,
+    symbol: PlacedLibrarySymbol,
     stale: StaleRow,
 ) -> crate::library::updates_dialog::LibraryUpdateEntry {
     let bump_kind =
         crate::library::updates_dialog::classify_bump(&symbol.version, &stale.row.version);
     crate::library::updates_dialog::LibraryUpdateEntry {
         symbol_uuid: symbol.uuid,
-        ref_des: symbol.reference.clone(),
-        lib_id: symbol.lib_id.clone(),
+        ref_des: symbol.reference,
+        lib_id: symbol.lib_id,
         library_id: symbol.library_id,
         library_name: stale.library_name,
         row_id: symbol.row_id,
         library_path: stale.library_path,
-        current_version: symbol.version.clone(),
+        current_version: symbol.version,
         latest_version: stale.row.version,
         bump_kind,
         selected: false,

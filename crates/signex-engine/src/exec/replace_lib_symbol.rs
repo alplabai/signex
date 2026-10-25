@@ -116,6 +116,9 @@ impl Engine {
             .is_some_and(|old| format!("{old:?}") == format!("{lib_symbol:?}"));
         let mut stamped = false;
         for sym in &mut self.document.symbols {
+            if sym.lib_id != lib_symbol.id {
+                continue;
+            }
             if let Some((_, v)) = library_versions.iter().find(|(u, _)| *u == sym.uuid)
                 && sym.library_version != *v
             {
