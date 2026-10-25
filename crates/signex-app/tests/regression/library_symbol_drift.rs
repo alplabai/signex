@@ -346,7 +346,7 @@ fn personal_auto_apply_refusal_leaves_version_and_copy() {
     assert_eq!(version(&app), "0.0.1");
     let logged = signex_app::diagnostics::recent_entries()
         .iter()
-        .any(|e| e.message.contains("update not applied") && e.message.contains("U1 pin 1"));
+        .any(|e| e.message.contains("update refused") && e.message.contains("U1 pin 1"));
     assert!(logged, "the refusal must reach the Messages panel");
 }
 
@@ -358,8 +358,9 @@ fn team_apply_adopts_the_copy_and_leaves_no_update_or_drift() {
     let before = pin_count(&app);
     make_version_stale(&mut app);
     edit_library_symbol(&f, add_pin);
-    check_drift(&mut app);
+    // The real open order: the update scan first, the drift pass after.
     scan(&mut app);
+    check_drift(&mut app);
     assert!(app.library.library_updates.is_some());
     apply_team_updates(&mut app);
     assert_eq!(pin_count(&app), before + 1);
@@ -375,6 +376,7 @@ fn team_apply_adopts_the_copy_and_leaves_no_update_or_drift() {
 
 #[test]
 fn team_apply_refusal_leaves_version_and_copy() {
+    let _ = signex_app::diagnostics::init_logging();
     let f = team_fixture();
     let mut app = app_with_library(&f);
     place(&mut app, &f);
@@ -382,9 +384,144 @@ fn team_apply_refusal_leaves_version_and_copy() {
     let before = pin_count(&app);
     make_version_stale(&mut app);
     edit_library_symbol(&f, |s| s.pins.retain(|p| p.number != "1"));
-    check_drift(&mut app);
     scan(&mut app);
+    check_drift(&mut app);
     apply_team_updates(&mut app);
     assert_eq!(pin_count(&app), before);
     assert_eq!(version(&app), "0.0.1");
+    let logged = signex_app::diagnostics::recent_entries()
+        .iter()
+        .any(|e| e.message.contains("update refused") && e.message.contains("U1 pin 1"));
+    assert!(logged, "the refusal must reach the Messages panel");
+}
+
+/// The update scan runs before the drift pass lands, so Apply cannot rely on
+/// the pass: it must still bring the copy along with the version (#950).
+#[test]
+fn team_apply_before_the_drift_result_still_adopts_the_copy() {
+    let f = team_fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    let before = pin_count(&app);
+    make_version_stale(&mut app);
+    edit_library_symbol(&f, add_pin);
+    scan(&mut app);
+    assert!(app.library.drift.drifted.is_empty(), "no pass has landed");
+    apply_team_updates(&mut app);
+    assert_eq!(pin_count(&app), before + 1);
+    assert_eq!(version(&app), "1.2.3");
+    check_drift(&mut app);
+    assert!(!is_drifted(&app));
+}
+
+/// Apply goes through the mutation gateway: the canvas snapshot, dirty flag
+/// and netlist see the new pin straight away.
+#[test]
+fn team_apply_syncs_canvas_dirty_flag_and_netlist() {
+    let f = team_fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    let before = pin_count(&app);
+    make_version_stale(&mut app);
+    edit_library_symbol(&f, add_pin);
+    scan(&mut app);
+    app.document_state.tabs[0].dirty = false;
+    apply_team_updates(&mut app);
+    let canvas = app.interaction_state.active_canvas();
+    let snap = canvas
+        .render_cache
+        .as_ref()
+        .expect("canvas synced")
+        .snapshot();
+    assert_eq!(
+        snap.lib_symbols[&snap.symbols[0].lib_id].pins.len(),
+        before + 1
+    );
+    assert!(app.document_state.tabs[0].dirty);
+    assert!(app.ui_state.project_netlist.is_some(), "netlist refreshed");
+}
+
+/// Instances sharing a `lib_id` share one embedded copy and one checkbox:
+/// ticking either selects both, and Apply stamps both.
+#[test]
+fn team_apply_stamps_every_instance_of_the_shared_symbol() {
+    let f = team_fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    make_version_stale(&mut app);
+    {
+        let engine = app.document_state.active_engine_mut().unwrap();
+        let mut d = engine.document().clone();
+        let mut twin = d.symbols[0].clone();
+        twin.uuid = Uuid::new_v4();
+        twin.reference = "U2".into();
+        d.symbols.push(twin);
+        engine.set_document(d);
+    }
+    edit_library_symbol(&f, add_pin);
+    scan(&mut app);
+    let state = app.library.library_updates.as_ref().unwrap();
+    assert_eq!(state.entries.len(), 2);
+    assert!(state.entries.iter().all(|e| !e.selected), "major bump: off");
+    let first = state.entries[0].symbol_uuid;
+    let _ = app.update(Message::Library(
+        LibraryMessage::LibraryUpdatesToggleSelection(first),
+    ));
+    let state = app.library.library_updates.as_ref().unwrap();
+    assert!(state.entries.iter().all(|e| e.selected), "one shared box");
+    let _ = app.update(Message::Library(LibraryMessage::LibraryUpdatesApply));
+    assert!(
+        doc(&app)
+            .symbols
+            .iter()
+            .all(|s| s.library_version == "1.2.3")
+    );
+}
+
+/// A row re-bound to a different symbol must not write that symbol into the
+/// placed symbol's `lib_id`, which every instance of the old one shares.
+#[test]
+fn a_rebound_row_does_not_overwrite_the_placed_symbol_copy() {
+    let _ = signex_app::diagnostics::init_logging();
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    make_version_stale(&mut app);
+    // The placed symbol keys another symbol than the one its row names.
+    let other = format!("{}:{}", f.library_id, Uuid::new_v4());
+    {
+        let engine = app.document_state.active_engine_mut().unwrap();
+        let mut d = engine.document().clone();
+        let old = d.symbols[0].lib_id.clone();
+        let copy = d.lib_symbols[&old].clone();
+        d.lib_symbols.insert(other.clone(), copy);
+        d.symbols[0].lib_id = other.clone();
+        engine.set_document(d);
+    }
+    let before = pin_count(&app);
+    edit_library_symbol(&f, add_pin);
+    scan(&mut app);
+    assert_eq!(pin_count(&app), before, "copy untouched");
+    assert_eq!(version(&app), "0.0.1");
+    let logged = signex_app::diagnostics::recent_entries()
+        .iter()
+        .any(|e| e.message.contains("different symbol") && e.message.contains(&other));
+    assert!(logged, "the refusal must reach the Messages panel");
+}
+
+/// Open-time maintenance is not the user's edit: no undo step for it.
+#[test]
+fn personal_auto_apply_at_open_leaves_no_undo_step() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    make_version_stale(&mut app);
+    edit_library_symbol(&f, add_pin);
+    let steps = app.document_state.active_engine().unwrap().undo_position();
+    scan(&mut app);
+    assert_eq!(version(&app), "1.2.3");
+    assert_eq!(
+        app.document_state.active_engine().unwrap().undo_position(),
+        steps
+    );
 }

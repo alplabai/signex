@@ -88,6 +88,20 @@ impl Engine {
         Ok(CommandResult::changed(patch_pair))
     }
 
+    /// [`Engine::execute`] without a history entry, for maintenance applied
+    /// while a sheet loads (the user did not make the edit, so Undo must not
+    /// offer it). The redo stack is untouched.
+    pub fn execute_unrecorded(&mut self, cmd: Command) -> Result<CommandResult, EngineError> {
+        debug_assert!(
+            !self.history_suppressed,
+            "execute_unrecorded does not nest inside a batch"
+        );
+        self.history_suppressed = true;
+        let result = self.execute(cmd);
+        self.history_suppressed = false;
+        result
+    }
+
     /// The suppressed half of [`Engine::execute_batch`].
     ///
     /// Returns the coalesced patch, or `None` when no command in the batch
@@ -398,6 +412,19 @@ mod tests {
         assert_eq!(patch_pair.semantic, SemanticPatch::ObjectPlaced);
         assert_eq!(patch_pair.document, DocumentPatch::NO_CONNECTS);
         assert_eq!(engine.history.len(), 1);
+    }
+
+    #[test]
+    fn an_unrecorded_command_changes_the_document_but_leaves_no_undo_step() {
+        let mut engine = engine();
+
+        let result = engine.execute_unrecorded(place_no_connect()).unwrap();
+
+        assert!(result.changed);
+        assert_eq!(engine.document().no_connects.len(), 1);
+        assert!(!engine.can_undo());
+        engine.execute(place_no_connect()).unwrap();
+        assert_eq!(engine.history.len(), 1, "later commands still record");
     }
 
     #[test]

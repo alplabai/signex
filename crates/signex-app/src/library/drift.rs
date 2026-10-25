@@ -54,10 +54,11 @@ pub struct DriftReport {
     /// The [`DriftState::generation`] this pass was started under; a report
     /// whose generation is no longer current is stale and dropped.
     pub generation: u64,
-    /// `(sheet, placed symbol uuid, row version)` for each placed instance of
-    /// a drifted `lib_id`: the informational stamp "Update from library"
-    /// writes together with the new copy (#950).
-    pub versions: Vec<(PathBuf, Uuid, String)>,
+    /// `(row id, row version)` for each row behind a placed instance of a
+    /// drifted `lib_id`: the informational stamp "Update from library"
+    /// writes together with the new copy (#950). Keyed by row, not by placed
+    /// symbol, so an instance pasted after the pass is stamped too.
+    pub versions: Vec<(Uuid, String)>,
 }
 
 /// A placed library-backed symbol: `(sheet, symbol uuid, lib_id, library id,
@@ -138,7 +139,7 @@ pub fn compute_drift(
                 drifted.insert(lib_id.clone(), fresh.clone());
             }
         }
-        for (_, symbol, _, library_id, row_id) in instances
+        for (_, _, _, library_id, row_id) in instances
             .iter()
             .filter(|i| &i.0 == sheet && drifted.contains_key(&i.2))
         {
@@ -147,7 +148,7 @@ pub fn compute_drift(
                 .and_then(|a| a.as_ref().ok())
                 .and_then(|a| row_version(a, *row_id));
             if let Some(version) = version {
-                report.versions.push((sheet.clone(), *symbol, version));
+                report.versions.push((*row_id, version));
             }
         }
         report.sheets.push((sheet.clone(), drifted));
@@ -170,7 +171,7 @@ fn row_version(
         .map(|r| r.version)
 }
 
-fn split_lib_id(lib_id: &str) -> Option<(Uuid, Uuid)> {
+pub(crate) fn split_lib_id(lib_id: &str) -> Option<(Uuid, Uuid)> {
     let (lib, sym) = lib_id.split_once(':')?;
     Some((Uuid::parse_str(lib).ok()?, Uuid::parse_str(sym).ok()?))
 }
@@ -214,8 +215,8 @@ pub struct DriftState {
     pub drifted: HashMap<PathBuf, BTreeMap<String, LibSymbol>>,
     /// `lib_id` -> `"<Library>/<Symbol>"` where the library is mounted.
     pub names: HashMap<String, String>,
-    /// `(sheet, placed symbol uuid)` -> the row version to stamp on update.
-    pub versions: HashMap<(PathBuf, Uuid), String>,
+    /// Row id -> the row version to stamp on update.
+    pub versions: HashMap<Uuid, String>,
 }
 
 impl DriftState {

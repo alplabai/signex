@@ -138,11 +138,7 @@ impl Signex {
         }
         self.library.drift.drifted = drifted;
         self.library.drift.names = report.names;
-        self.library.drift.versions = report
-            .versions
-            .into_iter()
-            .map(|(sheet, symbol, version)| ((sheet, symbol), version))
-            .collect();
+        self.library.drift.versions = report.versions.into_iter().collect();
         self.update_selection_info();
         Task::none()
     }
@@ -181,7 +177,7 @@ impl Signex {
             .flatten()
             .filter(|s| s.lib_id == lib_id)
             .filter_map(|s| {
-                let v = self.library.drift.versions.get(&(sheet.clone(), s.uuid))?;
+                let v = self.library.drift.versions.get(&s.row_id?)?;
                 Some((s.uuid, v.clone()))
             })
             .collect();
