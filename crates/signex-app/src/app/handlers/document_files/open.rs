@@ -18,6 +18,22 @@ impl Signex {
         self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(message));
     }
 
+    /// An open result landed for a path a document now owns (a Save As or a
+    /// second path to the same file got there first, #1089): applying it
+    /// would push a second tab and replace the owner's engine with disk
+    /// content, losing its edits. Drop the result and say so in the log.
+    pub(crate) fn drop_open_result_for_owned_path(&self, path: &std::path::Path) -> bool {
+        if !self.path_is_owned_by_open_document(path) {
+            return false;
+        }
+        crate::diagnostics::log_warning(format!(
+            "[open] Dropped the open result for {}: a document already owns that path, \
+             so it was not reopened",
+            path.display()
+        ));
+        true
+    }
+
     pub(crate) fn handle_document_file_opened(
         &mut self,
         path: Option<PathBuf>,
