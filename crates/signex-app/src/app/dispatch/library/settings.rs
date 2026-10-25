@@ -112,6 +112,9 @@ impl Signex {
                             Some(format!("Connected as {label}"));
                     }
                     (_, Some(reason)) => {
+                        // Every failure reaches the Messages panel, not
+                        // only the settings status line (#1093).
+                        crate::diagnostics::log_warning(digikey_failure_message(&reason));
                         self.library.settings.digikey_status = Some(format!("Failed: {reason}"));
                     }
                     (None, None) => {
@@ -178,7 +181,10 @@ impl Signex {
                 self.library.settings.mouser_in_flight = false;
                 self.library.settings.mouser_status = Some(match result {
                     Ok(()) => "\u{2713} Connected & key saved to keyring.".to_string(),
-                    Err(e) => format!("Failed: {e}"),
+                    Err(e) => {
+                        crate::diagnostics::log_warning(mouser_failure_message(&e));
+                        format!("Failed: {e}")
+                    }
                 });
             }
             SettingsMsg::PreferenceUp(src) => self.swap_preferred_order(src, true),
@@ -256,5 +262,28 @@ mod tests {
         );
         assert!(r.is_ok());
         assert_eq!(seen, "abc");
+    }
+}
+
+/// Messages-panel text for a failed DigiKey connect.
+fn digikey_failure_message(reason: &str) -> String {
+    format!("DigiKey: connecting the account failed: {reason}")
+}
+
+/// Messages-panel text for a failed Mouser key test.
+fn mouser_failure_message(reason: &str) -> String {
+    format!("Mouser: testing the API key failed: {reason}")
+}
+
+#[cfg(test)]
+mod failure_message_tests {
+    use super::*;
+
+    #[test]
+    fn failure_messages_name_the_distributor_and_keep_the_reason() {
+        let d = digikey_failure_message("redirect timed out");
+        assert!(d.starts_with("DigiKey:") && d.ends_with("redirect timed out"));
+        let m = mouser_failure_message("HTTP 401");
+        assert!(m.starts_with("Mouser:") && m.ends_with("HTTP 401"));
     }
 }
