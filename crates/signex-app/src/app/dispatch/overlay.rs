@@ -521,7 +521,7 @@ impl Signex {
                 Task::none()
             }
             EnableVersionControlMsg::Close => {
-                self.ui_state.enable_version_control = None;
+                self.close_enable_version_control_dialog();
                 Task::none()
             }
         }

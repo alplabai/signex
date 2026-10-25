@@ -105,6 +105,28 @@ fn confirm_runs_off_the_ui_thread_and_the_result_closes_the_dialog() {
     let tmp = tempfile::TempDir::new().unwrap();
     std::fs::write(tmp.path().join("demo.snxprj"), "x").unwrap();
     let mut app = open_dialog_on(tmp.path());
+    let id = app.document_state.mint_project_id();
+    app.document_state
+        .projects
+        .push(crate::app::state::LoadedProject {
+            id,
+            path: tmp.path().join("demo.snxprj"),
+            data: signex_types::project::ProjectData {
+                name: "demo".to_string(),
+                dir: tmp.path().to_string_lossy().into_owned(),
+                schematic_root: None,
+                pcb_file: None,
+                sheets: Vec::new(),
+                variant_definitions: Vec::new(),
+                active_variant: None,
+                libraries: Vec::new(),
+                enable_git: false,
+                unknown: Default::default(),
+            },
+            pending_libraries: Default::default(),
+            case_fold: Default::default(),
+            case_probed: false,
+        });
 
     let task = app.handle_enable_version_control_confirm();
     let state = app.ui_state.enable_version_control.as_ref().unwrap();
@@ -168,4 +190,73 @@ fn the_setup_failure_notice_names_version_control() {
     let notice = crate::app::state::ErrorNotice::version_control("auto-commit is off");
     assert_eq!(notice.title, "Version Control Setup Failed");
     assert!(notice.detail.contains("auto-commit is off"));
+}
+
+/// #1098: a successful Enable records `.git` in the Model at once, so the
+/// menu and the open guards do not re-offer it before the re-probe lands.
+/// Exercised on the step the success path runs, because a real init needs a
+/// git identity that CI runners do not have.
+#[test]
+fn a_successful_enable_marks_the_dir_as_having_git_immediately() {
+    let (mut app, _task) = Signex::new();
+    let dir = std::path::Path::new("/nonexistent/demo-project");
+    let marker = crate::app::state::project_fs::git_marker(dir);
+    app.document_state
+        .project_fs
+        .facts
+        .set_exists(marker, false);
+    assert!(app.document_state.project_fs.facts.lacks_git(dir));
+
+    app.record_git_present(dir);
+
+    assert!(!app.document_state.project_fs.facts.lacks_git(dir));
+}
+
+/// A run in flight cannot be dismissed, so a second concurrent repository
+/// init cannot start on the same directory.
+#[test]
+fn close_is_refused_while_a_run_is_in_flight() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let mut app = open_dialog_on(tmp.path());
+    app.ui_state
+        .enable_version_control
+        .as_mut()
+        .unwrap()
+        .working = true;
+
+    app.close_enable_version_control_dialog();
+    assert!(app.ui_state.enable_version_control.is_some());
+
+    app.ui_state
+        .enable_version_control
+        .as_mut()
+        .unwrap()
+        .working = false;
+    app.close_enable_version_control_dialog();
+    assert!(app.ui_state.enable_version_control.is_none());
+}
+
+/// The project was closed mid-run: the repository exists but no loaded
+/// project can record it, so the user gets the error card, not a success.
+#[test]
+fn a_run_finishing_after_its_project_closed_raises_the_notice() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let mut app = open_dialog_on(tmp.path());
+
+    app.handle_enable_version_control_finished(
+        crate::app::VersionControlScope::Project,
+        tmp.path().to_path_buf(),
+        crate::app::EnableVersionControlOutcome::Created {
+            adapter_error: None,
+            commit_warning: None,
+        },
+    );
+
+    let notice = app
+        .document_state
+        .error_notice
+        .as_ref()
+        .expect("a closed project must raise the version-control notice");
+    assert_eq!(notice.title, "Version Control Setup Failed");
+    assert!(notice.detail.contains("closed"));
 }

@@ -17,8 +17,8 @@ impl Signex {
         let Some(project_dir) = project.path.parent() else {
             return;
         };
-        if project_dir.join(".git").exists() {
-            // Already version-controlled — nothing to enable.
+        if !self.document_state.project_fs.facts.lacks_git(project_dir) {
+            // Already version-controlled (or not probed yet) — nothing to enable.
             return;
         }
         let items = collect_track_items(project, project_dir);
@@ -63,8 +63,8 @@ impl Signex {
         let Some(root_dir) = library_file_path.parent().map(|p| p.to_path_buf()) else {
             return;
         };
-        if root_dir.join(".git").exists() {
-            // Already version-controlled — nothing to enable.
+        if !self.document_state.project_fs.facts.lacks_git(&root_dir) {
+            // Already version-controlled (or not probed yet) — nothing to enable.
             return;
         }
         let library_name = library_file_path
@@ -143,6 +143,32 @@ impl Signex {
         )
     }
 
+    /// `.git` now exists under `dir`: record it at once so the menu and the
+    /// open guards stop offering Enable before the re-probe lands, then
+    /// re-probe to confirm.
+    pub(super) fn record_git_present(&mut self, dir: &std::path::Path) {
+        self.document_state
+            .project_fs
+            .facts
+            .set_exists(crate::app::state::project_fs::git_marker(dir), true);
+        self.document_state.project_fs.invalidate();
+    }
+
+    /// Dismiss the dialog (Close button / Esc). Refused while a run is in
+    /// flight: the dialog is the only handle on that run, and closing it
+    /// would let a second concurrent `git init` start on the same directory.
+    pub(crate) fn close_enable_version_control_dialog(&mut self) {
+        if self
+            .ui_state
+            .enable_version_control
+            .as_ref()
+            .is_some_and(|s| s.working)
+        {
+            return;
+        }
+        self.ui_state.enable_version_control = None;
+    }
+
     /// Apply a finished run. The repository and the project's `enable_git`
     /// flag follow `project_dir`; the dialog is only touched when it is
     /// still open for that same directory.
@@ -181,6 +207,7 @@ impl Signex {
                 "[git] commit .gitattributes failed: {warning}"
             ));
         }
+        let mut project_closed = false;
         if let Some(reason) = &adapter_error {
             crate::diagnostics::log_warning(format!(
                 "[git] {reason} at {} — enable_git left off; fix the cause, delete the \
@@ -209,16 +236,34 @@ impl Signex {
                 loaded.data.enable_git = true;
                 snxprj_path = Some(loaded.path.clone());
             }
-            if let Some(p) = snxprj_path {
-                self.document_state.dirty_paths.insert(p);
+            match snxprj_path {
+                Some(p) => {
+                    self.document_state.dirty_paths.insert(p);
+                }
+                None => {
+                    // The project was closed while the run was in flight: the
+                    // repository exists but no loaded project can record it.
+                    crate::diagnostics::log_warning(format!(
+                        "[git] repository created at {} but its project is no longer                          open — enable_git was not recorded",
+                        project_dir.display()
+                    ));
+                    self.document_state.error_notice = Some(
+                        crate::app::state::ErrorNotice::version_control(format!(
+                            "The repository at {} was created, but its project was closed                              before auto-commit could be enabled. Reopen the project and                              enable version control in its settings.",
+                            project_dir.display()
+                        )),
+                    );
+                    project_closed = true;
+                }
             }
         }
 
         if dialog_is_this_run {
             self.ui_state.enable_version_control = None;
         }
+        self.record_git_present(&project_dir);
         self.refresh_panel_ctx();
-        if adapter_error.is_none() {
+        if adapter_error.is_none() && !project_closed {
             let scope_label = match scope {
                 crate::app::VersionControlScope::Project => "repository",
                 crate::app::VersionControlScope::Library => "library repository",
