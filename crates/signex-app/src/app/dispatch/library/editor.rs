@@ -14,6 +14,7 @@ mod container_save;
 mod primitive_save;
 #[cfg(test)]
 mod primitive_save_tests;
+mod primitive_write;
 
 impl Signex {
     /// Open a standalone primitive editor tab for the file at `path`.

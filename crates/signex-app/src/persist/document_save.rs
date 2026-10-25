@@ -6,7 +6,7 @@
 //! document is still clean afterwards is decided by the caller, from the
 //! engine revision recorded with the snapshot.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
@@ -143,6 +143,11 @@ pub struct DocumentSaves {
     /// Why the last write to a path failed, until a later one succeeds.
     /// Save All reads it to name the reason per file.
     failures: HashMap<PathBuf, String>,
+    /// Paths saved again while their write was running: one follow-up save
+    /// each, run when that write completes.
+    follow_ups: HashSet<PathBuf>,
+    /// Last generation handed out by [`Self::mint_generation`].
+    generation: u64,
 }
 
 impl DocumentSaves {
@@ -153,6 +158,8 @@ impl DocumentSaves {
             next_sequence: 0,
             saving: HashMap::new(),
             failures: HashMap::new(),
+            follow_ups: HashSet::new(),
+            generation: 0,
         }
     }
 
@@ -192,6 +199,31 @@ impl DocumentSaves {
 
     pub fn failure(&self, path: &Path) -> Option<&str> {
         self.failures.get(path).map(String::as_str)
+    }
+
+    /// A fresh, never-repeated stamp. A container save stamps the editor
+    /// with one; its completion only touches an editor still wearing it.
+    pub fn mint_generation(&mut self) -> u64 {
+        self.generation += 1;
+        self.generation
+    }
+
+    /// Ask for one more save of `path` once its running write completes.
+    /// Repeats coalesce; `false` when one was already queued.
+    pub fn queue_follow_up(&mut self, path: PathBuf) -> bool {
+        self.follow_ups.insert(path)
+    }
+
+    /// Take the follow-up queued for `path`, if any.
+    pub fn take_follow_up(&mut self, path: &Path) -> bool {
+        self.follow_ups.remove(path)
+    }
+
+    /// Drop the failure and the queued follow-up of every path `gone`
+    /// matches: its document was discarded, closed or renamed.
+    pub fn forget_where(&mut self, gone: impl Fn(&Path) -> bool) {
+        self.failures.retain(|path, _| !gone(path));
+        self.follow_ups.retain(|path| !gone(path));
     }
 
     /// The completion message for a write to `path` was handled.
@@ -277,6 +309,22 @@ mod tests {
         assert!(saves.is_saving(Path::new("a.snxsch")));
         saves.finish(Path::new("a.snxsch"));
         assert!(!saves.is_saving(Path::new("a.snxsch")));
+    }
+
+    #[test]
+    fn forgetting_a_path_drops_its_failure_and_follow_up_only() {
+        let mut saves = DocumentSaves::new(Arc::new(Recorder::default()));
+        saves.record_failure("a.snxsym".into(), "disk full".into());
+        saves.record_failure("b.snxsym".into(), "disk full".into());
+        assert!(saves.queue_follow_up("a.snxsym".into()));
+        assert!(
+            !saves.queue_follow_up("a.snxsym".into()),
+            "repeats coalesce"
+        );
+        saves.forget_where(|p| p == Path::new("a.snxsym"));
+        assert!(saves.failure(Path::new("a.snxsym")).is_none());
+        assert!(!saves.take_follow_up(Path::new("a.snxsym")));
+        assert_eq!(saves.failure(Path::new("b.snxsym")), Some("disk full"));
     }
 
     #[test]

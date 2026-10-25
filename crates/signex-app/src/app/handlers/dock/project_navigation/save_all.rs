@@ -125,8 +125,10 @@ impl Signex {
                     project_id,
                     sheet_refs,
                     kept_paths,
-                } => self.execute_close_project(project_id, &sheet_refs, &kept_paths),
-                SaveAllNext::Quit => self.close_main_window_now(),
+                } => self.close_project_after_save_all(project_id, *sheet_refs, &kept_paths),
+                // The UI stayed live during the writes, so anything edited
+                // meanwhile is dirty now; the quit gate prompts for it.
+                SaveAllNext::Quit => self.handle_app_quit_requested(),
             };
         }
         let listing = Self::save_all_failure_listing(&failed);
@@ -143,6 +145,38 @@ impl Signex {
         };
         self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(message));
         Task::none()
+    }
+
+    /// Everything the Save All wrote landed. The UI stayed live during the
+    /// writes, so re-run the close gate on the workspace as it is now
+    /// instead of closing on the lists captured at click time: a document
+    /// edited meanwhile is prompted for, never dropped.
+    fn close_project_after_save_all(
+        &mut self,
+        project_id: crate::app::state::ProjectId,
+        sheet_refs: crate::app::state::sheet_refs::SheetRefs,
+        kept_paths: &[std::path::PathBuf],
+    ) -> Task<Message> {
+        self.sync_editor_dirty_paths();
+        let unchanged = self.document_state.stale_causes(&sheet_refs).is_empty()
+            && self
+                .document_state
+                .projects
+                .iter()
+                .position(|p| p.id == project_id)
+                .is_some_and(|idx| {
+                    let scan = self.current_close_scan(idx, &sheet_refs);
+                    scan.mine.is_empty() && scan.mine_rows.is_empty() && scan.kept == kept_paths
+                });
+        if unchanged {
+            return self.execute_close_project(project_id, &sheet_refs, kept_paths);
+        }
+        crate::diagnostics::log_warning(
+            "Close Project: documents changed while Save All ran; review the list and confirm again",
+        );
+        // The gate re-reads stale references, prompts for unsaved work, and
+        // closes only when nothing of the project is left unsaved.
+        self.handle_close_refs_resolved(project_id, Ok(Box::new(sheet_refs)))
     }
 
     /// Format the per-file failure lines (`name — reason`) for a Save-All

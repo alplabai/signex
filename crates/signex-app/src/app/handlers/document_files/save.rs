@@ -390,23 +390,6 @@ impl Signex {
             ));
         }
 
-        // Reject re-keying onto a path that already hosts a different
-        // open editor or tab — would clobber the other editor's state.
-        if from_path != to_path
-            && (self.document_state.symbol_editors.contains_key(to_path)
-                || self.document_state.footprint_editors.contains_key(to_path)
-                || self
-                    .document_state
-                    .tabs
-                    .iter()
-                    .any(|tab| tab.path == to_path))
-        {
-            anyhow::bail!(
-                "save as {}: that file is already open in another tab",
-                to_path.display()
-            );
-        }
-
         // Re-key first so the save (keyed by the editor's path) writes the
         // new file. The write runs off the UI thread; if it fails the
         // completion undoes the re-key, so a tab never points at a file
@@ -436,12 +419,23 @@ impl Signex {
     /// marker from `from` to `to`. `title` overrides the tab title (used
     /// by the rollback); `None` derives it from `to`'s file stem.
     /// Returns the title the first moved tab had before the move.
+    ///
+    /// Refuses, moving nothing, when `to` already hosts another editor or
+    /// tab: overwriting it would drop that editor's edits and leave two
+    /// tabs on one file.
     pub(crate) fn retarget_primitive(
         &mut self,
         from: &std::path::Path,
         to: &std::path::Path,
         title: Option<String>,
     ) -> Result<Option<String>> {
+        if from != to
+            && (self.document_state.symbol_editors.contains_key(to)
+                || self.document_state.footprint_editors.contains_key(to)
+                || self.document_state.tabs.iter().any(|tab| tab.path == to))
+        {
+            anyhow::bail!("{} is already open in another tab", to.display());
+        }
         if let Some(mut editor) = self.document_state.symbol_editors.remove(from) {
             editor.path = to.to_path_buf();
             self.document_state
@@ -453,11 +447,7 @@ impl Signex {
                 .footprint_editors
                 .insert(to.to_path_buf(), editor);
         } else {
-            anyhow::bail!(
-                "save as {}: no editor at {} — was the tab closed?",
-                to.display(),
-                from.display()
-            );
+            anyhow::bail!("no editor at {} — was the tab closed?", from.display());
         }
 
         let new_title = title.unwrap_or_else(|| {

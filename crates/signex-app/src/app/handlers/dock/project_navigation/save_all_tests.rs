@@ -163,3 +163,124 @@ fn quit_waits_for_the_writes_of_a_running_save_all() {
     waiter.join().expect("waiter");
     assert!(symbol.exists() && sheet.exists());
 }
+
+/// Feed every completion in `messages` and hand back what the settle at
+/// their end returns: a task with no units means nothing closed.
+fn feed_then_settle(app: &mut Signex, messages: Vec<Message>) -> iced::Task<Message> {
+    let mut settled = None;
+    for message in messages {
+        match message {
+            Message::File(FileMsg::SaveAllSettled(settle)) => {
+                settled = Some(app.handle_save_all_settled(*settle));
+            }
+            other => {
+                let _ = app.update(other);
+            }
+        }
+    }
+    settled.expect("the Save All ends with its settle")
+}
+
+/// Mark the schematic at `path` edited, the way an edit site does.
+fn edit_sheet(app: &mut Signex, path: &Path) {
+    app.document_state.dirty_paths.insert(path.to_path_buf());
+    for tab in app
+        .document_state
+        .tabs
+        .iter_mut()
+        .filter(|t| t.path == path)
+    {
+        tab.dirty = true;
+    }
+}
+
+#[test]
+fn a_clean_sheet_edited_while_quit_save_all_runs_is_prompted_not_dropped() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, symbol, sheet) = app_with_two_dirty_documents(dir.path());
+    // The sheet starts clean: the quit prompt only listed the symbol.
+    app.document_state.dirty_paths.remove(&sheet);
+    app.document_state.tabs[0].dirty = false;
+
+    let task = save_all(&mut app, std::slice::from_ref(&symbol));
+    edit_sheet(&mut app, &sheet);
+    let after = feed_then_settle(&mut app, outputs(task));
+
+    assert_eq!(
+        after.units(),
+        0,
+        "Signex must not close over an unsaved sheet"
+    );
+    let modal = app
+        .ui_state
+        .app_quit_confirm
+        .as_ref()
+        .expect("the quit gate asks again");
+    assert_eq!(modal.dirty_paths, vec![sheet.clone()]);
+    assert!(app.document_state.dirty_paths.contains(&sheet));
+}
+
+#[test]
+fn quit_save_all_with_nothing_edited_meanwhile_closes() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, symbol, sheet) = app_with_two_dirty_documents(dir.path());
+    let task = save_all(&mut app, &[symbol, sheet]);
+    let after = feed_then_settle(&mut app, outputs(task));
+    assert!(after.units() > 0, "the close goes ahead");
+    assert!(app.ui_state.app_quit_confirm.is_none());
+}
+
+#[test]
+fn a_save_all_write_superseded_by_a_later_ctrl_s_does_not_quit_before_that_save_lands() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, symbol, sheet) = app_with_two_dirty_documents(dir.path());
+    let save_all_task = save_all(&mut app, &[symbol, sheet.clone()]);
+    // Ctrl+S on the sheet while Save All runs: the newer snapshot.
+    let ctrl_s = app
+        .begin_schematic_save(sheet.clone(), None)
+        .expect("ctrl+s starts");
+    // The Ctrl+S write lands first; its completion is not handled yet.
+    let ctrl_s_done = outputs(ctrl_s);
+    let save_all_messages = outputs(save_all_task);
+    assert!(
+        save_all_messages.iter().any(|m| matches!(
+            m,
+            Message::File(FileMsg::DocumentSaved(done))
+                if done.path == sheet
+                    && matches!(done.result, Ok(crate::persist::SaveOutcome::Superseded))
+        )),
+        "the older Save All snapshot is superseded"
+    );
+
+    let after = feed_then_settle(&mut app, save_all_messages);
+    assert_eq!(
+        after.units(),
+        0,
+        "no quit while the sheet's save is unreported"
+    );
+    assert!(app.document_state.dirty_paths.contains(&sheet));
+    let notice = app.document_state.error_notice.as_ref().expect("notice");
+    assert!(format!("{notice:?}").contains("Sheet.snxsch"), "{notice:?}");
+
+    feed(&mut app, ctrl_s_done);
+    assert!(!app.document_state.dirty_paths.contains(&sheet));
+}
+
+#[test]
+fn save_all_over_a_running_primitive_ctrl_s_keeps_signex_open_until_it_lands() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, symbol, sheet) = app_with_two_dirty_documents(dir.path());
+    let ctrl_s = app.save_primitive_tab_at(&symbol).expect("ctrl+s starts");
+    let save_all_task = save_all(&mut app, &[symbol.clone(), sheet]);
+
+    let after = feed_then_settle(&mut app, outputs(save_all_task));
+    assert_eq!(after.units(), 0, "the symbol has not reported back yet");
+    assert!(app.document_state.dirty_paths.contains(&symbol));
+    let notice = app.document_state.error_notice.as_ref().expect("notice");
+    assert!(format!("{notice:?}").contains("Lib.snxsym"), "{notice:?}");
+
+    feed(&mut app, outputs(ctrl_s));
+    assert!(symbol.exists());
+    assert!(!app.document_state.dirty_paths.contains(&symbol));
+    assert!(!app.document_state.document_saves.is_saving(&symbol));
+}

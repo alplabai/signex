@@ -147,7 +147,7 @@ impl Signex {
 
     /// The closing project's dirty documents split by the strict rule, from
     /// the engines and library editors as they are now.
-    fn current_close_scan(
+    pub(super) fn current_close_scan(
         &self,
         project_idx: usize,
         sheet_refs: &SheetRefs,
@@ -364,6 +364,9 @@ impl Signex {
                 let mut tasks: Vec<Task<Message>> = Vec::new();
                 for path in &state.dirty_paths {
                     self.forget_net_colors_of(path);
+                    self.document_state
+                        .document_saves
+                        .forget_where(|p| p == path);
                     self.document_state.engines.remove(path);
                     self.document_state.dirty_paths.remove(path);
                     if let Some(tab) = self

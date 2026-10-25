@@ -190,6 +190,8 @@ impl Signex {
         doc.footprint_editors.retain(|p, _| !gone(p));
         let discarded = doc.dirty_paths.iter().filter(|p| gone(p)).count();
         doc.dirty_paths.retain(|p| !gone(p));
+        doc.document_saves
+            .forget_where(|p| path_is_under(p, deleted, fold));
         if discarded > 0 {
             crate::diagnostics::log_warning(format!(
                 "Deleted {}: discarded {discarded} unsaved document(s)",

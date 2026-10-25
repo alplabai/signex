@@ -39,6 +39,10 @@ pub struct SaveAsOrigin {
 #[derive(Debug, Clone)]
 pub struct PrimitiveSaveDone {
     pub path: PathBuf,
+    /// The stamp the editor got when the snapshot was taken; a completion
+    /// for an editor since replaced (discarded and reopened, History
+    /// restore) leaves the new one alone.
+    pub generation: u64,
     pub save_as: Option<SaveAsOrigin>,
     pub result: Result<PrimitiveWritten, String>,
 }

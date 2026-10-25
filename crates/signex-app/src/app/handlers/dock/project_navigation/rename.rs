@@ -256,6 +256,10 @@ impl Signex {
                 .dirty_paths
                 .insert(new_path.to_path_buf());
         }
+        // A failure or queued save names the file by its old path.
+        self.document_state
+            .document_saves
+            .forget_where(|p| p == old_path);
         self.rekey_page_setup(old_path, new_path);
         self.rekey_undocked_windows(old_path, new_path);
     }
