@@ -114,6 +114,20 @@ pub fn parse_toml_finite<T: serde::de::DeserializeOwned>(text: &str) -> Result<T
         .map_err(TomlFiniteError::Toml)
 }
 
+/// Key path (`extras.board.outline[0].x`) of the first NaN or infinite
+/// float in `tree`, or `None` when every float is finite.
+///
+/// TOML spells those values `nan` / `inf`, so a serde-written table
+/// carries them without complaint and a save would persist the poison.
+/// Writers run this over what they are about to serialise and refuse the
+/// save, naming the key, before any byte is written.
+pub fn first_non_finite_path<T: serde::Serialize>(
+    tree: &T,
+) -> Result<Option<String>, toml::ser::Error> {
+    let value = toml::Value::try_from(tree)?;
+    Ok(first_non_finite_toml_path(&value))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

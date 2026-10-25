@@ -33,6 +33,7 @@ use crate::pcb::{PcbBoard, Zone};
 use crate::schematic::SchematicSheet;
 
 mod extras;
+mod finite_toml;
 mod pcb_footprints;
 mod pcb_rows;
 mod sch_rows;
@@ -205,6 +206,10 @@ pub enum FormatError {
         row: usize,
         field: String,
     },
+    /// A serde-written TOML table (manifest, stackup, zones, extras) holds
+    /// NaN or infinity. `path` starts with the table: `manifest.thickness`.
+    #[error("field {path:?} holds a non-finite number (NaN or infinity); it cannot be saved")]
+    NonFiniteTomlField { path: String },
     #[error("TSV block {block:?}: TSV body is empty — at minimum a header row is required")]
     TsvEmpty { block: String },
 }
@@ -334,6 +339,7 @@ impl SnxSchematic {
             root_sheet_page: self.sheet.root_sheet_page.clone(),
             unknown: self.sheet.unknown.manifest.clone(),
         };
+        finite_toml::ensure_finite_manifest(&manifest)?;
         out.push_str(&toml::to_string_pretty(&manifest)?);
         out.push('\n');
 
@@ -395,13 +401,15 @@ impl SnxSchematic {
                 #[serde(skip_serializing_if = "Option::is_none")]
                 sheet: Option<SheetExtras>,
             }
-            let body = toml::to_string_pretty(&ExtrasWrapper {
+            let wrapper = ExtrasWrapper {
                 extras: ExtrasInner {
                     symbols: symbols_extras,
                     junctions: junctions_extras,
                     sheet: sheet_extras_opt,
                 },
-            })?;
+            };
+            finite_toml::ensure_finite(&wrapper)?;
+            let body = toml::to_string_pretty(&wrapper)?;
             out.push('\n');
             out.push_str(&body);
         }
@@ -602,6 +610,7 @@ impl SnxPcb {
             thickness: self.board.thickness,
             unknown: self.board.unknown.manifest.clone(),
         };
+        finite_toml::ensure_finite_manifest(&manifest)?;
         out.push_str(&toml::to_string_pretty(&manifest)?);
         out.push('\n');
 
@@ -659,7 +668,9 @@ impl SnxPcb {
                 unknown: &self.board.unknown.nets,
             });
             out.push('\n');
-            out.push_str(&toml::to_string_pretty(&StackupWrapper { stackup, nets })?);
+            let wrapper = StackupWrapper { stackup, nets };
+            finite_toml::ensure_finite(&wrapper)?;
+            out.push_str(&toml::to_string_pretty(&wrapper)?);
         }
 
         // TSV blocks: footprints, pads, tracks, vias.
@@ -688,9 +699,11 @@ impl SnxPcb {
                 zones: &'a [Zone],
             }
             out.push('\n');
-            out.push_str(&toml::to_string_pretty(&ZonesWrapper {
+            let wrapper = ZonesWrapper {
                 zones: &self.board.zones,
-            })?);
+            };
+            finite_toml::ensure_finite(&wrapper)?;
+            out.push_str(&toml::to_string_pretty(&wrapper)?);
         }
 
         // Footprint extras / pad extras / board extras — wrap in a
@@ -728,13 +741,15 @@ impl SnxPcb {
                 board: Option<BoardExtras>,
             }
             out.push('\n');
-            out.push_str(&toml::to_string_pretty(&ExtrasWrapper {
+            let wrapper = ExtrasWrapper {
                 extras: ExtrasInner {
                     footprints,
                     pads,
                     board: board_extras,
                 },
-            })?);
+            };
+            finite_toml::ensure_finite(&wrapper)?;
+            out.push_str(&toml::to_string_pretty(&wrapper)?);
         }
 
         Ok(out)

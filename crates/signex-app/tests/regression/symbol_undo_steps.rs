@@ -188,7 +188,7 @@ fn every_properties_edit_records_exactly_one_step() {
         ("pin hidden", PanelMsg::SymEditorTogglePinHidden(0)),
         (
             "symbol designator",
-            PanelMsg::SymEditorSetSymbolDesignator("U?".into()),
+            PanelMsg::SymEditorSetSymbolDesignator("U9?".into()),
         ),
         ("symbol mirrored", PanelMsg::SymEditorToggleSymbolMirrored),
         (
