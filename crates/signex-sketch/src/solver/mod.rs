@@ -8,6 +8,9 @@ pub mod residuals;
 pub mod state;
 pub mod work;
 
+#[cfg(test)]
+mod shrink_tests;
+
 use std::collections::HashMap;
 
 use crate::error::SolveError;
@@ -37,9 +40,11 @@ const SHRINK_LIMIT: usize = 8;
 pub struct Solver {
     /// Work cap of one whole [`Solver::solve`], in work units (see
     /// [`lm::DEFAULT_WORK_BUDGET`] and [`work`]): the first run, the retry,
-    /// the offset undo, conflict recovery and the DOF analysis share it.
-    /// Counted, not timed, so a given sketch solves or fails the same way
-    /// on every machine and every run.
+    /// the offset undo and conflict recovery share it. The DOF analysis of a
+    /// converged sketch is outside it. Counted, not timed, so a given sketch
+    /// solves or fails the same way on every run of the same build and
+    /// platform (`hypot`, `atan2`, `sin` and `cos` come from the platform's
+    /// maths library).
     pub work_budget: u64,
     /// Maximum LM iterations before declaring divergence. Default 100.
     pub max_iters: usize,
@@ -196,17 +201,17 @@ impl Solver {
         if named.len() < 2 || named.len() > SHRINK_LIMIT {
             return named;
         }
-        let culprits: Vec<ConstraintId> = named
-            .iter()
-            .copied()
-            // A pool failure counts as "does not converge without it": the
-            // conflict set stays the full `named` list, the safe direction
-            // (it may over-name, never under-name).
-            .filter(|id| {
-                self.converges_without(sketch, params, meter, &[*id])
-                    .unwrap_or(false)
-            })
-            .collect();
+        let mut culprits = Vec::new();
+        for id in &named {
+            match self.converges_without(sketch, params, meter, &[*id]) {
+                Ok(true) => culprits.push(*id),
+                Ok(false) => {}
+                // The pool ran out mid-narrowing: the rest were not tested,
+                // so the full list is the only answer that cannot leave a
+                // real culprit out (it may over-name, never under-name).
+                Err(_) => return named,
+            }
+        }
         if culprits.is_empty() { named } else { culprits }
     }
 
