@@ -108,7 +108,7 @@ pub(crate) fn anchor_point(parent: &mut HashMap<Key, Key>, pk: Key, segments: &[
 /// The connectivity gate for `sheet`: wire endpoints, junctions, labels,
 /// and no-connects. A pin is a terminal only if its
 /// world-space tip is in this set — see [`ConnectedPoints`].
-fn connected_points(sheet: &SchematicSheet) -> ConnectedPoints {
+pub fn connected_points(sheet: &SchematicSheet) -> ConnectedPoints {
     let mut gate = ConnectedPoints::new();
     gate.add_anchors(sheet.wires.iter().flat_map(|w| [w.start, w.end]));
     gate.add_anchors(sheet.junctions.iter().map(|j| j.position));

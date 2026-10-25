@@ -21,21 +21,21 @@ use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig};
 use signex_library::manufacturer::ManufacturerPart;
 use signex_library::param::ParamMap;
 use signex_library::primitive::{
-    PrimitiveRef, Symbol, SymbolFile, SymbolGraphic, SymbolGraphicKind, SymbolPin,
+    PinDirection, PrimitiveRef, Symbol, SymbolFile, SymbolGraphic, SymbolGraphicKind, SymbolPin,
 };
-use signex_types::schematic::{NoConnect, SchematicSheet, SymbolTransform};
+use signex_types::schematic::{NoConnect, Point, SchematicSheet, SymbolTransform, Wire};
 use std::path::PathBuf;
 use uuid::Uuid;
 
-struct Fixture {
+pub(crate) struct Fixture {
     _tmp: tempfile::TempDir,
-    snxlib: PathBuf,
-    library_id: Uuid,
-    symbol_id: Uuid,
-    row_id: Uuid,
+    pub(crate) snxlib: PathBuf,
+    pub(crate) library_id: Uuid,
+    pub(crate) symbol_id: Uuid,
+    pub(crate) row_id: Uuid,
 }
 
-fn two_unit_symbol() -> Symbol {
+pub(crate) fn two_unit_symbol() -> Symbol {
     let mut s = Symbol::empty("TWO-UNIT");
     s.designator = "U?".into();
     s.part_count = 2;
@@ -60,7 +60,7 @@ fn two_unit_symbol() -> Symbol {
 }
 
 /// A library with a two-unit symbol and one row bound to it.
-fn fixture() -> Fixture {
+pub(crate) fn fixture() -> Fixture {
     build("lib", None)
 }
 
@@ -74,6 +74,10 @@ fn cross_library() -> (Fixture, Fixture) {
 /// `symbol_ref` overrides where the row's symbol lives; every library also
 /// carries its own copy of the symbol.
 fn build(name: &str, symbol_ref: Option<(Uuid, Uuid)>) -> Fixture {
+    build_with(name, symbol_ref, two_unit_symbol())
+}
+
+fn build_with(name: &str, symbol_ref: Option<(Uuid, Uuid)>, symbol: Symbol) -> Fixture {
     signex_library::git_identity::test_identity::install();
     let tmp = tempfile::tempdir().expect("tempdir");
     let dir = tmp.path().join(name);
@@ -101,7 +105,6 @@ fn build(name: &str, symbol_ref: Option<(Uuid, Uuid)>) -> Fixture {
     .expect("init");
     let library_id = adapter.library_id();
 
-    let symbol = two_unit_symbol();
     let sym_uuid = symbol.uuid;
     std::fs::create_dir_all(dir.join("symbols")).expect("symbols dir");
     std::fs::write(
@@ -154,7 +157,7 @@ fn build(name: &str, symbol_ref: Option<(Uuid, Uuid)>) -> Fixture {
 }
 
 /// An app with an empty active sheet and the fixture library mounted.
-fn app_with_library(f: &Fixture) -> Signex {
+pub(crate) fn app_with_library(f: &Fixture) -> Signex {
     app_with_libraries(&[f])
 }
 
@@ -220,11 +223,11 @@ fn complete(
 }
 
 /// Worker + completion against the sheet `app_with_library` made active.
-fn place(app: &mut Signex, f: &Fixture) {
+pub(crate) fn place(app: &mut Signex, f: &Fixture) {
     complete(app, f, "place-364.snxsch", resolve(f, f.row_id));
 }
 
-fn doc(app: &Signex) -> &SchematicSheet {
+pub(crate) fn doc(app: &Signex) -> &SchematicSheet {
     app.document_state
         .active_engine()
         .expect("engine")
@@ -414,9 +417,11 @@ fn warned(app: &mut Signex, f: &Fixture, resolved: Box<ResolvedPlacement>) -> bo
     let _ = signex_app::diagnostics::init_logging();
     let before = signex_app::diagnostics::newest_entry_id().unwrap_or(0);
     complete(app, f, "place-364.snxsch", Ok(resolved));
-    signex_app::diagnostics::recent_entries()
-        .iter()
-        .any(|e| e.id > before && e.message.contains("keeps its existing copy of SNX-TWO"))
+    signex_app::diagnostics::recent_entries().iter().any(|e| {
+        e.id > before
+            && e.message.contains("keeps its existing copy")
+            && e.message.contains("Update from library")
+    })
 }
 
 #[test]
@@ -548,4 +553,155 @@ fn each_unit_selects_its_own_body() {
     };
     assert_eq!(body_for(1), [1]);
     assert_eq!(body_for(2), [2]);
+}
+
+/// Stock-style power port: one `Power` pin named `GND`, `#PWR?`, comment `GND`.
+fn gnd_symbol() -> Symbol {
+    let mut s = Symbol::empty("GND");
+    s.designator = "#PWR?".into();
+    s.comment = "GND".into();
+    let mut p = SymbolPin::new("1", "GND");
+    p.electrical = PinDirection::Power;
+    s.pins.push(p);
+    s
+}
+
+#[test]
+fn a_library_power_port_places_as_a_power_port() {
+    let f = build_with("gnd", None, gnd_symbol());
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    place(&mut app, &f);
+    assert!(app.document_state.error_notice.is_none());
+
+    let mut sheet = doc(&app).clone();
+    let (a, b) = (&sheet.symbols[0], &sheet.symbols[1]);
+    assert!(a.is_power && b.is_power);
+    assert_eq!(a.value, "GND");
+    assert_eq!(a.reference, "#PWR1");
+    assert_eq!(b.reference, "#PWR2");
+
+    // A wire from the pin tip makes a net the port names.
+    let lib = sheet.lib_symbols.get(&a.lib_id).expect("lib");
+    let tip = SymbolTransform::from_symbol(a).apply(lib.pins[0].pin.position);
+    sheet.wires.push(Wire {
+        uuid: Uuid::new_v4(),
+        start: tip,
+        end: Point::new(tip.x + 10.16, tip.y),
+        ..Default::default()
+    });
+    let nets = signex_net::build_netlist(&sheet).nets;
+    assert!(nets.iter().any(|n| n.name == "GND"), "{nets:?}");
+
+    let ctx = signex_output::ExportContext {
+        sheets: vec![signex_output::SheetSnapshot {
+            path: "gnd.snxsch".into(),
+            schematic: sheet,
+            sheet_name: "Main".into(),
+            sheet_number: 1,
+            sheet_count: 1,
+        }],
+        metadata: Default::default(),
+        netlist: None,
+        netlist_sheet_placements: Vec::new(),
+        netlist_sheets: Vec::new(),
+        current_sheet: None,
+    };
+    let table = signex_output::bom::rollup(&ctx, &Default::default());
+    assert!(table.rows.is_empty(), "power ports stay out of the BOM");
+}
+
+#[test]
+fn an_ordinary_part_is_not_a_power_port() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    assert!(!doc(&app).symbols[0].is_power);
+}
+
+/// A power flag: `#FLG?` designator, one pin that drives the rail.
+fn flag_symbol() -> Symbol {
+    let mut s = Symbol::empty("PWR_FLAG");
+    s.designator = "#FLG?".into();
+    s.comment = "PWR_FLAG".into();
+    let mut p = SymbolPin::new("1", "PWR_FLAG");
+    p.electrical = PinDirection::Power;
+    s.pins.push(p);
+    s
+}
+
+/// Place `f` twice, shift the second copy down, and give each a wire stub
+/// off its pin tip; returns the sheet with two separate wired symbols.
+fn two_wired_copies(f: &Fixture) -> SchematicSheet {
+    let mut app = app_with_library(f);
+    place(&mut app, f);
+    place(&mut app, f);
+    let mut sheet = doc(&app).clone();
+    sheet.symbols[1].position.y += 50.8;
+    for i in 0..2 {
+        let sym = sheet.symbols[i].clone();
+        let lib = sheet.lib_symbols.get(&sym.lib_id).expect("lib");
+        let tip = SymbolTransform::from_symbol(&sym).apply(lib.pins[0].pin.position);
+        sheet.wires.push(Wire {
+            uuid: Uuid::new_v4(),
+            start: tip,
+            end: Point::new(tip.x + 10.16, tip.y),
+            ..Default::default()
+        });
+    }
+    sheet
+}
+
+#[test]
+fn a_flag_is_power_but_never_names_its_net() {
+    let f = build_with("flag", None, flag_symbol());
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    let flag = &doc(&app).symbols[0];
+    assert!(flag.is_power, "ERC still sees the flag");
+    assert!(flag.value.is_empty(), "a flag carries no net name");
+    assert_eq!(flag.reference, "#FLG1");
+}
+
+#[test]
+fn two_flags_on_different_rails_do_not_merge_them() {
+    let f = build_with("flag2", None, flag_symbol());
+    let nets = signex_net::build_netlist(&two_wired_copies(&f)).nets;
+    assert!(
+        nets.iter().all(|n| n.name != "PWR_FLAG"),
+        "flags must not name nets: {nets:?}"
+    );
+    let flag_nets = nets.iter().filter(|n| !n.terminals.is_empty()).count();
+    assert_eq!(flag_nets, 2, "{nets:?}");
+}
+
+#[test]
+fn a_hash_designator_without_a_power_pin_is_not_a_power_port() {
+    let mut s = Symbol::empty("VIRT");
+    s.designator = "#PWR?".into();
+    s.comment = "VIRT".into();
+    s.pins.push(SymbolPin::new("1", "VIRT"));
+    let f = build_with("virt", None, s);
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    assert!(!doc(&app).symbols[0].is_power);
+}
+
+#[test]
+fn an_empty_or_star_comment_falls_back_to_the_pin_name() {
+    for comment in ["", "*", "  "] {
+        let mut s = gnd_symbol();
+        s.comment = comment.into();
+        let f = build_with("fallback", None, s);
+        assert_eq!(resolve(&f, f.row_id).expect("resolve").value, "GND");
+    }
+}
+
+#[test]
+fn two_same_name_ports_join_their_nets() {
+    let f = build_with("gnd2", None, gnd_symbol());
+    let nets = signex_net::build_netlist(&two_wired_copies(&f)).nets;
+    let gnd: Vec<_> = nets.iter().filter(|n| n.name == "GND").collect();
+    assert_eq!(gnd.len(), 1, "both wires are one GND net: {nets:?}");
+    assert!(gnd[0].terminals.len() >= 2, "{nets:?}");
 }

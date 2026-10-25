@@ -84,6 +84,7 @@ impl Signex {
         let symbol_grid_style = crate::fonts::read_symbol_grid_style_pref();
         let symbol_pin_selection = crate::fonts::read_symbol_pin_selection_pref();
         let zoom_step_percent = crate::fonts::read_zoom_step_percent_pref();
+        let annotate_undo = crate::fonts::read_annotate_undo_pref();
         // Default to the 50-mil Altium grid; user-set value overrides
         // through the prefs file (UX §1.5 — last-used grid persists).
         let grid_size_mm =
@@ -226,6 +227,8 @@ impl Signex {
                 preferences_draft_pcb_gpu_render: pcb_gpu_render,
                 zoom_step_percent,
                 preferences_draft_zoom_step_percent: zoom_step_percent,
+                annotate_undo,
+                preferences_draft_annotate_undo: annotate_undo,
                 symbol_grid_size_mm,
                 preferences_draft_symbol_grid_size_mm: symbol_grid_size_mm,
                 symbol_grid_style,
@@ -260,12 +263,14 @@ impl Signex {
                 erc_violations: Vec::new(),
                 erc_violations_by_path: std::collections::HashMap::new(),
                 erc_focus_global_index: None,
+                erc_run_generation: 0,
+                erc_running: false,
                 project_netlist: None,
                 erc_severity_override: crate::fonts::read_erc_severity_overrides(),
                 net_colors: std::collections::HashMap::new(),
                 auto_focus: false,
                 annotate_dialog_open: false,
-                annotate_order: crate::app::state::AnnotateOrder::AcrossThenDown,
+                annotate_order: crate::app::state::AnnotateOrder::default(),
                 erc_dialog_open: false,
                 annotate_reset_confirm: false,
                 modal_offsets: std::collections::HashMap::new(),
@@ -283,11 +288,13 @@ impl Signex {
                 move_pick: None,
                 pin_matrix_overrides: crate::fonts::read_pin_matrix_overrides(),
                 annotate_locked: std::collections::HashSet::new(),
+                annotate_preview: Default::default(),
                 selection_mode: crate::schematic_runtime::hit_test::SelectionMode::default(),
                 pending_net_color: None,
                 wire_color_overrides: std::collections::HashMap::new(),
                 lasso_polygon: None,
-                net_color_undo: Vec::new(),
+                net_color_undo: Default::default(),
+                net_color_redo: Default::default(),
                 net_color_custom: crate::app::state::NetColorCustomState::default(),
                 command_palette: crate::app::command_palette::CommandPaletteState::default(),
             },
@@ -295,6 +302,7 @@ impl Signex {
                 dock,
                 dock_layout_sync,
                 search_prefs,
+                document_saves: crate::persist::DocumentSaves::default(),
                 tabs: vec![],
                 active_tab: 0,
                 engines: std::collections::HashMap::new(),
@@ -306,6 +314,8 @@ impl Signex {
                 active_project: None,
                 dirty_paths: std::collections::HashSet::new(),
                 next_project_id: 0,
+                next_undo_group: 0,
+                undo_groups: std::collections::HashMap::new(),
                 panel_ctx: crate::panels::PanelContext {
                     projects: Vec::new(),
                     sym_count: 0,
@@ -362,11 +372,14 @@ impl Signex {
                     child_sheet_border_advanced_open: false,
                     child_sheet_fill_advanced_open: false,
                     child_sheet_stroke_width_buf: None,
+                    child_sheet_name_buf: None,
+                    child_sheet_file_buf: None,
                     component_filter: initial_component_filter,
                     collapsed_sections: std::collections::HashSet::new(),
                     pre_placement: None,
                     erc_diagnostics: Vec::new(),
                     erc_focus_index: None,
+                    erc_running: false,
                     diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
                     diagnostics: crate::diagnostics::recent_entries(),
                     selection_filters: crate::active_bar::SelectionFilter::ALL
@@ -391,9 +404,6 @@ impl Signex {
                 standard_lib_dir,
                 loaded_lib: std::collections::HashMap::new(),
                 preview: None,
-                pending_pdf_options: None,
-                pending_pdf_files: None,
-                pending_bom_options: None,
                 error_notice: None,
                 netlist_incomplete_prompt: None,
                 bom_preview: None,
@@ -466,6 +476,9 @@ impl Signex {
         // section is populated from the get-go.
         app.library.global_libraries =
             crate::panels::components_panel::global_prefs::load_and_mount_all(&mut app.library);
+        // #328 — the bundled stock library is mounted every launch, not
+        // user-configured; a missing one warns and leaves the section empty.
+        crate::panels::components_panel::stock::mount_stock(&mut app.library);
         // #630 — seed the two render surfaces that consume a grid style
         // from the saved preferences. Everything else the old
         // `render_config` global carried (canvas font/size/style) had no

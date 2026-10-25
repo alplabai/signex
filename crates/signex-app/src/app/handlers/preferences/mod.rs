@@ -56,6 +56,7 @@ impl Signex {
         self.ui_state.preferences_draft_component_classes = self.ui_state.component_classes.clone();
         self.ui_state.preferences_draft_grid_style = self.ui_state.grid_style;
         self.ui_state.preferences_draft_pcb_gpu_render = self.ui_state.pcb_gpu_render;
+        self.ui_state.preferences_draft_annotate_undo = self.ui_state.annotate_undo;
         // #629 — the three Symbol Editor settings. Before they had
         // committed fields there was nothing to seed them from, so a
         // Discard left them showing (and rendering) the abandoned value.
@@ -214,6 +215,7 @@ impl Signex {
                 self.ui_state.ui_font_name = self.ui_state.preferences_draft_font.clone();
                 self.ui_state.grid_style = self.ui_state.preferences_draft_grid_style;
                 self.ui_state.pcb_gpu_render = self.ui_state.preferences_draft_pcb_gpu_render;
+                self.ui_state.annotate_undo = self.ui_state.preferences_draft_annotate_undo;
                 // #629 — the three Symbol Editor settings commit here like
                 // every other appearance draft, instead of writing
                 // themselves to disk the moment the picker moved.
@@ -235,6 +237,7 @@ impl Signex {
                 // the PCB GPU flag above).
                 crate::fonts::write_ui_font_pref(&self.ui_state.ui_font_name);
                 crate::fonts::write_grid_style_pref(self.ui_state.grid_style);
+                crate::fonts::write_annotate_undo_pref(self.ui_state.annotate_undo);
                 crate::fonts::write_pcb_gpu_render_pref(self.ui_state.pcb_gpu_render);
                 crate::fonts::write_theme_pref(self.ui_state.theme_id);
                 // #629 — moved here from the three `PrefMsg::DraftSymbol*`
@@ -385,6 +388,10 @@ impl Signex {
                 self.ui_state.preferences_draft_grid_style = style;
                 // Live preview — `set_grid_style` also drops the bg cache
                 // on every window's canvas.
+                self.recompute_preferences_dirty();
+            }
+            PrefMsg::DraftAnnotateUndo(scope) => {
+                self.ui_state.preferences_draft_annotate_undo = scope;
                 self.recompute_preferences_dirty();
             }
             PrefMsg::DraftPcbGpuRender(enabled) => {

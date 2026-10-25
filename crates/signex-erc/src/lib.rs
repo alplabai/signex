@@ -186,6 +186,12 @@ pub struct Violation {
     pub severity: Severity,
     pub message: String,
     pub location: Point,
+    /// Coordinate space of `location`. Only [`LocationSpace::ThisSheet`] may
+    /// be drawn or panned to on the sheet the violation is filed under.
+    pub location_space: LocationSpace,
+    /// For [`LocationSpace::ChildSheet`]: the `ChildSheet.filename` of the
+    /// sheet that owns `location`.
+    pub child_sheet: Option<String>,
     /// The primary object the violation refers to.
     pub primary: Option<SelectedItem>,
     /// Optional peer — the "other" object in two-object rules.
@@ -208,9 +214,19 @@ impl Violation {
             severity,
             message: message.into(),
             location,
+            location_space: LocationSpace::ThisSheet,
+            child_sheet: None,
             primary: None,
             peer: None,
         }
+    }
+
+    /// Re-file this violation under the child sheet that owns its location:
+    /// the point is now in that sheet's own coordinates.
+    pub fn into_child_sheet_space(mut self) -> Self {
+        self.location_space = LocationSpace::ThisSheet;
+        self.child_sheet = None;
+        self
     }
 
     /// The built-in rule that produced this violation, or `None` for a DSL
@@ -257,54 +273,84 @@ pub fn run_with_dsl_and_config(
 }
 
 /// Run ERC for a schematic in the context of a whole project. Cross-sheet
-/// rules consult `resolved` — THIS sheet's own `ChildSheet.filename ->
-/// SheetKey` submap — resolved through the shared `sheets` table. Pass an
-/// empty `resolved` map for top-only runs.
+/// rules consult `resolutions` — the per-parent `ChildSheet.filename ->
+/// SheetKey` submaps, outer-keyed by the parent's `SheetKey` (the shape of
+/// `signex_net::ProjectGraph::resolved`) — resolved through the shared
+/// `sheets` table, recursively, so grandchildren are seen too. `own_key` is
+/// `snapshot`'s key; pass `None` (or empty `resolutions`) for top-only runs.
 ///
-/// `resolved` must be the caller's per-parent submap for `snapshot`, not a
-/// single project-wide map: keying it that way is what stops two parents in
-/// different directories that reference a child by the same filename string
-/// from resolving to the wrong file (#466), and is what keeps this in step
-/// with `signex_net::build_project_netlist`, which takes the same shape.
+/// Per-parent submaps, not one project-wide filename map, are what stop two
+/// parents in different directories that reference a child by the same
+/// filename string from resolving to the wrong file (#466), and keep this in
+/// step with `signex_net::build_project_netlist`.
 pub fn run_with_project(
     snapshot: &SchematicSheet,
-    resolved: &std::collections::HashMap<String, signex_net::SheetKey>,
+    own_key: Option<&signex_net::SheetKey>,
+    resolutions: &std::collections::HashMap<
+        signex_net::SheetKey,
+        std::collections::HashMap<String, signex_net::SheetKey>,
+    >,
     sheets: &std::collections::HashMap<signex_net::SheetKey, SchematicSheet>,
 ) -> Vec<Violation> {
-    run_with_project_and_config(snapshot, resolved, sheets, &ErcConfig::default())
+    run_with_project_and_config(
+        snapshot,
+        own_key,
+        resolutions,
+        sheets,
+        &ErcConfig::default(),
+    )
 }
 
 /// [`run_with_project`] with an explicit [`ErcConfig`].
 pub fn run_with_project_and_config(
     snapshot: &SchematicSheet,
-    resolved: &std::collections::HashMap<String, signex_net::SheetKey>,
+    own_key: Option<&signex_net::SheetKey>,
+    resolutions: &std::collections::HashMap<
+        signex_net::SheetKey,
+        std::collections::HashMap<String, signex_net::SheetKey>,
+    >,
     sheets: &std::collections::HashMap<signex_net::SheetKey, SchematicSheet>,
     config: &ErcConfig,
 ) -> Vec<Violation> {
-    let ctx = ErcContext::from_snapshot_with_children(snapshot, resolved, sheets);
+    let ctx = ErcContext::from_snapshot_with_children(snapshot, own_key, resolutions, sheets);
     into_violations(engine::run_all_with_config(&ctx, config))
 }
 
 /// Run project-scoped ERC with built-in rules plus caller-provided DSL rules.
-/// See [`run_with_project`] for what `resolved` / `sheets` must be.
+/// See [`run_with_project`] for what `own_key` / `resolutions` / `sheets` must be.
 pub fn run_with_project_and_dsl(
     snapshot: &SchematicSheet,
-    resolved: &std::collections::HashMap<String, signex_net::SheetKey>,
+    own_key: Option<&signex_net::SheetKey>,
+    resolutions: &std::collections::HashMap<
+        signex_net::SheetKey,
+        std::collections::HashMap<String, signex_net::SheetKey>,
+    >,
     sheets: &std::collections::HashMap<signex_net::SheetKey, SchematicSheet>,
     dsl_rules: &[engine::EvalFn],
 ) -> Vec<Violation> {
-    run_with_project_dsl_and_config(snapshot, resolved, sheets, dsl_rules, &ErcConfig::default())
+    run_with_project_dsl_and_config(
+        snapshot,
+        own_key,
+        resolutions,
+        sheets,
+        dsl_rules,
+        &ErcConfig::default(),
+    )
 }
 
 /// [`run_with_project_and_dsl`] with an explicit [`ErcConfig`].
 pub fn run_with_project_dsl_and_config(
     snapshot: &SchematicSheet,
-    resolved: &std::collections::HashMap<String, signex_net::SheetKey>,
+    own_key: Option<&signex_net::SheetKey>,
+    resolutions: &std::collections::HashMap<
+        signex_net::SheetKey,
+        std::collections::HashMap<String, signex_net::SheetKey>,
+    >,
     sheets: &std::collections::HashMap<signex_net::SheetKey, SchematicSheet>,
     dsl_rules: &[engine::EvalFn],
     config: &ErcConfig,
 ) -> Vec<Violation> {
-    let ctx = ErcContext::from_snapshot_with_children(snapshot, resolved, sheets);
+    let ctx = ErcContext::from_snapshot_with_children(snapshot, own_key, resolutions, sheets);
     into_violations(engine::run_all_with_dsl_and_config(&ctx, dsl_rules, config))
 }
 

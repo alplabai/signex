@@ -30,6 +30,8 @@ mod selection_request;
 pub(crate) mod sheet_hierarchy;
 mod state;
 mod symbol_history;
+mod undo_groups;
+pub use undo_groups::UndoGroupSheets;
 pub(crate) mod view;
 
 pub use contracts::{
@@ -61,6 +63,17 @@ pub use state::AnnotateOrder;
 
 impl Signex {
     pub fn update(&mut self, message: Message) -> Task<Message> {
-        self.dispatch_update(message)
+        let before = self.active_tab_path();
+        let task = self.dispatch_update(message);
+        // Any activation path (select, open, close-neighbour, Ctrl+Tab)
+        // ends here: scroll the tab strip to the newly active tab.
+        if self.active_tab_path() == before {
+            return task;
+        }
+        let docs = &self.document_state;
+        Task::batch([
+            task,
+            tab_bar::reveal_active_tab(docs.active_tab, docs.tabs.len()),
+        ])
     }
 }

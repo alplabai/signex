@@ -241,12 +241,34 @@ fn annotate_all_off_locks_every_listed_symbol_and_all_on_unlocks_them() {
     let b = uuid::Uuid::new_v4();
     let (mut app, _path) = app_with(vec![symbol(a, "R?", 0.0), symbol(b, "R?", 10.0)]);
 
+    // The dialog lists what its background load found, so open it first.
+    crate::settle_support::settle(&mut app, Message::Annotate(AnnotateMsg::OpenDialog));
     let _ = app.update(Message::Annotate(AnnotateMsg::SetAllLocked(true)));
     assert!(app.ui_state.annotate_locked.contains(&a));
     assert!(app.ui_state.annotate_locked.contains(&b));
 
     let _ = app.update(Message::Annotate(AnnotateMsg::SetAllLocked(false)));
     assert!(app.ui_state.annotate_locked.is_empty());
+}
+
+#[test]
+fn annotate_lock_all_sent_while_the_list_is_loading_is_ignored_then_covers_every_symbol() {
+    let a = uuid::Uuid::new_v4();
+    let b = uuid::Uuid::new_v4();
+    let (mut app, _path) = app_with(vec![symbol(a, "R?", 0.0), symbol(b, "R?", 10.0)]);
+
+    // The load is in flight (its task is not driven): the list is not ready.
+    let _pending_load = app.update(Message::Annotate(AnnotateMsg::OpenDialog));
+    let _ = app.update(Message::Annotate(AnnotateMsg::SetAllLocked(true)));
+    assert!(
+        app.ui_state.annotate_locked.is_empty(),
+        "lock-all must wait for the list instead of locking part of it"
+    );
+
+    crate::settle_support::settle(&mut app, Message::Annotate(AnnotateMsg::OpenDialog));
+    let _ = app.update(Message::Annotate(AnnotateMsg::SetAllLocked(true)));
+    assert!(app.ui_state.annotate_locked.contains(&a));
+    assert!(app.ui_state.annotate_locked.contains(&b));
 }
 
 #[test]

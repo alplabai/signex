@@ -35,6 +35,9 @@
 #[path = "regression/close_support.rs"]
 mod close_support;
 
+#[path = "regression/settle_support.rs"]
+mod settle_support;
+
 #[path = "regression/project.rs"]
 mod project;
 
@@ -43,6 +46,9 @@ mod bom_validation;
 
 #[path = "regression/pdf_page_setup.rs"]
 mod pdf_page_setup;
+
+#[path = "regression/annotate_undo_scope.rs"]
+mod annotate_undo_scope;
 
 #[path = "regression/prefs.rs"]
 mod prefs;
@@ -58,6 +64,11 @@ mod diagnostics_routing;
 
 #[path = "regression/dock_layout_persist.rs"]
 mod dock_layout_persist;
+#[path = "regression/document_save_async.rs"]
+mod document_save_async;
+// #859 — rename / History restore wait for an in-flight document write.
+#[path = "regression/document_save_ordering.rs"]
+mod document_save_ordering;
 #[path = "regression/search_prefs_persist.rs"]
 mod search_prefs_persist;
 
@@ -115,6 +126,9 @@ mod history_reload_repair;
 #[path = "regression/library_browser_cell_commit.rs"]
 mod library_browser_cell_commit;
 
+#[path = "regression/library_new_component.rs"]
+mod library_new_component;
+
 #[path = "regression/render_config_grid_style.rs"]
 mod render_config_grid_style;
 
@@ -146,10 +160,16 @@ mod command_enablement;
 mod dead_schematic_controls;
 #[path = "regression/idle_cursor_move.rs"]
 mod idle_cursor_move;
+#[path = "regression/library_dangling_refs.rs"]
+mod library_dangling_refs;
 #[path = "regression/library_delete_undo.rs"]
 mod library_delete_undo;
+#[path = "regression/newer_minor_read_only.rs"]
+mod newer_minor_read_only;
 #[path = "regression/primitive_container_merge.rs"]
 mod primitive_container_merge;
+#[path = "regression/primitive_save_cascade.rs"]
+mod primitive_save_cascade;
 #[path = "regression/reload_and_switch_state.rs"]
 mod reload_and_switch_state;
 #[path = "regression/save_as_by_document_kind.rs"]
@@ -159,12 +179,16 @@ mod stable_addressing;
 
 #[path = "regression/place_sheet_tool.rs"]
 mod place_sheet_tool;
+#[path = "regression/sheet_symbol_edit.rs"]
+mod sheet_symbol_edit;
 
 #[path = "regression/symbol_undo_steps.rs"]
 mod symbol_undo_steps;
 
 #[path = "regression/library_place_symbol.rs"]
 mod library_place_symbol;
+#[path = "regression/library_symbol_drift.rs"]
+mod library_symbol_drift;
 
 #[path = "regression/canvas_editing_correctness.rs"]
 mod canvas_editing_correctness;
@@ -185,3 +209,7 @@ mod click_click_move;
 // #925 — non-finite grid steps are refused into the Messages panel.
 #[path = "regression/grid_step_refusal.rs"]
 mod grid_step_refusal;
+
+// #961 — the Annotate dialog's order of processing drives the numbering.
+#[path = "regression/annotate_order.rs"]
+mod annotate_order;

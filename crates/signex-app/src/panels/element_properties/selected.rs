@@ -56,6 +56,8 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         let position = get("Position");
         let rotation_str = get("Rotation");
         let lib_id = get("Library ID");
+        let library_name = get("Library");
+        let library_drifted = get("Library Drift") == "Yes";
         let rotation_deg = rotation_str
             .trim_end_matches('°')
             .trim()
@@ -188,7 +190,15 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                     },
                     muted,
                 ));
-                c
+                super::library_rows::push_library_rows(
+                    c,
+                    id,
+                    &library_name,
+                    library_drifted,
+                    muted,
+                    input_bg,
+                    input_bdr,
+                )
             },
         ));
 
@@ -312,6 +322,8 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             let datasheet = get("Datasheet");
             let footprint = get("Footprint");
             let lib_id = get("Library ID");
+            let library_name = get("Library");
+            let library_drifted = get("Library Drift") == "Yes";
             let position = get("Position");
             let rotation = get("Rotation");
             let locked = get("Locked") == "Yes";
@@ -378,6 +390,15 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                             input_bg,
                             input_bdr,
                         ));
+                        c = super::library_rows::push_library_rows(
+                            c,
+                            id,
+                            &library_name,
+                            library_drifted,
+                            muted,
+                            input_bg,
+                            input_bdr,
+                        );
                         c
                     },
                 ));

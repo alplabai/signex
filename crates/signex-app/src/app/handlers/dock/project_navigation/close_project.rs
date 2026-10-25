@@ -6,7 +6,6 @@
 
 use super::*;
 use crate::app::state::ProjectId;
-use crate::app::state::scope::CaseFold;
 use crate::app::state::sheet_refs::{SheetRefs, StaleRefs};
 use crate::app::state::volume_case::directory_ignores_case;
 
@@ -45,7 +44,7 @@ impl Signex {
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
-                    Box::new(inputs.resolve(CaseFold::host_default(), directory_ignores_case))
+                    Box::new(inputs.resolve(directory_ignores_case))
                 })
                 .await
                 .map_err(|e| format!("sheet-reference worker failed: {e}"))
@@ -62,7 +61,7 @@ impl Signex {
         Ok(Box::new(
             self.document_state
                 .sheet_ref_inputs()
-                .resolve(CaseFold::host_default(), directory_ignores_case),
+                .resolve(directory_ignores_case),
         ))
     }
 
@@ -278,6 +277,9 @@ impl Signex {
     /// WHY a file couldn't be saved instead of only naming it.
     fn try_save_dirty_path(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
         use anyhow::Context as _;
+        // A write still running for this sheet could land after the one
+        // below and put older content on disk; let it finish first.
+        self.document_state.document_saves.barrier().wait();
         if let Some(engine) = self.document_state.engines.get_mut(path) {
             engine
                 .save()
@@ -655,6 +657,74 @@ mod tests {
         );
     }
 
+    /// Writes the real file once the test releases the gate.
+    struct GatedFileSink {
+        entered: std::sync::Mutex<std::sync::mpsc::Sender<()>>,
+        proceed: std::sync::Mutex<std::sync::mpsc::Receiver<()>>,
+    }
+
+    impl crate::persist::DocumentSink for GatedFileSink {
+        fn write(&self, path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
+            self.entered.lock().unwrap().send(()).unwrap();
+            self.proceed.lock().unwrap().recv().unwrap();
+            std::fs::write(path, bytes)
+        }
+    }
+
+    #[test]
+    fn save_all_waits_for_an_in_flight_write_so_its_own_write_lands_last() {
+        // The barrier wait in `try_save_dirty_path` orders the sync write
+        // after a still-running async one; without it the older snapshot
+        // would overwrite the newer content.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Sheet.snxsch");
+        let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+        let (proceed_tx, proceed_rx) = std::sync::mpsc::channel();
+        let (mut app, _task) = Signex::new();
+        app.document_state.document_saves =
+            crate::persist::DocumentSaves::new(std::sync::Arc::new(GatedFileSink {
+                entered: std::sync::Mutex::new(entered_tx),
+                proceed: std::sync::Mutex::new(proceed_rx),
+            }));
+        let mut engine = signex_engine::Engine::new(signex_types::schematic::SchematicSheet {
+            uuid: uuid::Uuid::new_v4(),
+            paper_size: "A4".to_string(),
+            ..Default::default()
+        })
+        .unwrap();
+        engine.set_path(Some(path.clone()));
+        app.document_state.engines.insert(path.clone(), engine);
+        app.document_state.dirty_paths.insert(path.clone());
+        app.document_state.active_path = Some(path.clone());
+        app.document_state.active_tab = 0;
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "s".into(),
+            path: path.clone(),
+            cached_document: None,
+            dirty: true,
+            project_id: None,
+            kind: crate::app::TabKind::Schematic,
+        });
+        let job = app
+            .document_state
+            .document_saves
+            .begin(path.clone(), b"STALE".to_vec());
+        let writer = std::thread::spawn(move || job.run());
+        entered_rx
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            proceed_tx.send(()).unwrap();
+        });
+
+        app.try_save_dirty_path(&path).unwrap();
+        writer.join().unwrap().unwrap();
+
+        let on_disk = std::fs::read_to_string(&path).unwrap();
+        assert_ne!(on_disk, "STALE", "the older write landed last");
+    }
+
     #[test]
     fn save_all_reports_a_reason_for_an_unbacked_path() {
         // A dirty path backing no engine / editor / project must
@@ -693,6 +763,8 @@ mod tests {
                 unknown: Default::default(),
             },
             pending_libraries: std::collections::HashMap::new(),
+            case_fold: Default::default(),
+            case_probed: false,
         });
         let path = dir.join("lib.snxlib").join("footprints").join("g.snxfpt");
         let file =

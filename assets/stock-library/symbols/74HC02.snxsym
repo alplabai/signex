@@ -1,0 +1,57 @@
+format = "snxsym/v1"
+file_uuid = "91da6eb5-dfe4-446c-86df-2c9d834f1112"
+display_name = "74HC02"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols]]
+uuid = "e35c6a45-ff32-4c9d-8569-41ad556d3343"
+name = "74HC02"
+anchor = [
+    0.0,
+    0.0,
+]
+pins_tsv = '''
+number	name	electrical	pos_x	pos_y	orientation	length	description	function	pin_package_length	propagation_delay_ns	designator_visible	name_visible	inside_symbol	inside_edge_symbol	outside_edge_symbol	outside_symbol	hidden	locked	part_number
+1	1Y	Output	7.62	7.62	Left	2.54					true	true	None	None	None	None	false	false	1
+2	1A	Input	-7.62	8.89	Right	2.54					true	true	None	None	None	None	false	false	1
+3	1B	Input	-7.62	6.35	Right	2.54					true	true	None	None	None	None	false	false	1
+4	2Y	Output	7.62	2.54	Left	2.54					true	true	None	None	None	None	false	false	1
+5	2A	Input	-7.62	3.81	Right	2.54					true	true	None	None	None	None	false	false	1
+6	2B	Input	-7.62	1.27	Right	2.54					true	true	None	None	None	None	false	false	1
+7	GND	Power	0	-12.7	Up	2.54					true	true	None	None	None	None	false	false	1
+8	3A	Input	-7.62	-1.27	Right	2.54					true	true	None	None	None	None	false	false	1
+9	3B	Input	-7.62	-3.81	Right	2.54					true	true	None	None	None	None	false	false	1
+10	3Y	Output	7.62	-2.54	Left	2.54					true	true	None	None	None	None	false	false	1
+11	4A	Input	-7.62	-6.35	Right	2.54					true	true	None	None	None	None	false	false	1
+12	4B	Input	-7.62	-8.89	Right	2.54					true	true	None	None	None	None	false	false	1
+13	4Y	Output	7.62	-7.62	Left	2.54					true	true	None	None	None	None	false	false	1
+14	VCC	Power	0	12.7	Down	2.54					true	true	None	None	None	None	false	false	1
+'''
+designator = "U?"
+comment = "*"
+description = "Quad 2-input NOR gate, 14-pin DIP/SOIC."
+component_type = "Standard"
+mirrored = false
+version = "0.0.1"
+released = false
+part_count = 1
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "rectangle"
+from = [
+    -5.08,
+    10.16,
+]
+to = [
+    5.08,
+    -10.16,
+]
+
+[symbols.schematic_params]

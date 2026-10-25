@@ -91,6 +91,12 @@ impl SymbolCanvas<'_> {
             iced::keyboard::Key::Character(c) if c.as_str() == "a" && modifiers.command() => Some(
                 canvas::Action::publish(CanvasAction::Select(SymbolSelection::All)).and_capture(),
             ),
+            // Space turns the selection counter-clockwise ON SCREEN and
+            // Shift+Space clockwise (Altium convention, same as the
+            // schematic). The rotate maths is y-up like the world and
+            // `clockwise = false` is the CCW-positive turn, so the world
+            // to screen flip keeps the sense: `clockwise` is just Shift.
+            // Symbols have no per-item mirror to invert it.
             iced::keyboard::Key::Named(iced::keyboard::key::Named::Space) => {
                 let pivot_mode = if modifiers.alt() {
                     RotatePivotMode::GeometryCenter
@@ -99,7 +105,7 @@ impl SymbolCanvas<'_> {
                 };
                 Some(
                     canvas::Action::publish(CanvasAction::RotateSelected {
-                        clockwise: !modifiers.shift(),
+                        clockwise: modifiers.shift(),
                         pivot_mode,
                     })
                     .and_capture(),
@@ -113,7 +119,7 @@ impl SymbolCanvas<'_> {
                 };
                 Some(
                     canvas::Action::publish(CanvasAction::RotateSelected {
-                        clockwise: !modifiers.shift(),
+                        clockwise: modifiers.shift(),
                         pivot_mode,
                     })
                     .and_capture(),

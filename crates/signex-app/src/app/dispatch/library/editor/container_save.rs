@@ -20,9 +20,20 @@ pub(crate) enum ContainerWrite {
     Replace,
 }
 
+/// How a container save writes.
+#[derive(Clone, Copy)]
+pub(super) struct SaveOptions {
+    pub mode: ContainerWrite,
+    /// Patch-bump the version of each primitive the save changed, in the
+    /// same write (#832).
+    pub bump_versions: bool,
+}
+
 /// Outcome of a container save.
 pub(super) struct ContainerSave {
     pub merge: ContainerMerge,
+    /// The new version of each primitive the save bumped (#832), by uuid.
+    pub versions: std::collections::HashMap<uuid::Uuid, String>,
 }
 
 impl Signex {
@@ -67,10 +78,11 @@ impl Signex {
         editor: &SymbolFile,
         baseline: &SymbolFile,
         now: chrono::DateTime<chrono::Utc>,
-        mode: ContainerWrite,
+        options: SaveOptions,
         commit_message: &str,
     ) -> Result<ContainerSave, LibraryError> {
         let mut merge = ContainerMerge::default();
+        let mut versions = std::collections::HashMap::new();
         self.rewrite_primitive_file(path, commit_message, &mut |current| {
             let whole = || {
                 (
@@ -78,8 +90,8 @@ impl Signex {
                     whole_file(editor.symbols.iter().map(|s| s.uuid)),
                 )
             };
-            let (file, m) = match current {
-                Some(bytes) if mode == ContainerWrite::Merge && !holds_nothing(bytes) => {
+            let (mut file, m) = match current {
+                Some(bytes) if options.mode == ContainerWrite::Merge && !holds_nothing(bytes) => {
                     let disk = SymbolFile::from_bytes(bytes).map_err(|e| unreadable_on_disk(&e))?;
                     editor
                         .merge_into(baseline, disk, now)
@@ -94,11 +106,16 @@ impl Signex {
             if merge.is_empty() {
                 return Ok(None);
             }
+            // Bump the primitives this save changed in the same write, so
+            // the file never holds an edit at its old version (#832).
+            if options.bump_versions {
+                versions = super::cascade::bump_symbol_versions(&mut file, &merge.changed);
+            }
             file.to_toml_string()
                 .map(|text| Some(text.into_bytes()))
                 .map_err(|e| LibraryError::Backend(format!("serialize symbol library: {e}")))
         })?;
-        Ok(ContainerSave { merge })
+        Ok(ContainerSave { merge, versions })
     }
 
     pub(super) fn save_footprint_container(
@@ -107,10 +124,11 @@ impl Signex {
         editor: &FootprintFile,
         baseline: &FootprintFile,
         now: chrono::DateTime<chrono::Utc>,
-        mode: ContainerWrite,
+        options: SaveOptions,
         commit_message: &str,
     ) -> Result<ContainerSave, LibraryError> {
         let mut merge = ContainerMerge::default();
+        let mut versions = std::collections::HashMap::new();
         self.rewrite_primitive_file(path, commit_message, &mut |current| {
             let whole = || {
                 (
@@ -118,8 +136,8 @@ impl Signex {
                     whole_file(editor.footprints.iter().map(|f| f.uuid)),
                 )
             };
-            let (file, m) = match current {
-                Some(bytes) if mode == ContainerWrite::Merge && !holds_nothing(bytes) => {
+            let (mut file, m) = match current {
+                Some(bytes) if options.mode == ContainerWrite::Merge && !holds_nothing(bytes) => {
                     let disk =
                         FootprintFile::from_bytes(bytes).map_err(|e| unreadable_on_disk(&e))?;
                     editor
@@ -135,11 +153,16 @@ impl Signex {
             if merge.is_empty() {
                 return Ok(None);
             }
+            // Bump the primitives this save changed in the same write, so
+            // the file never holds an edit at its old version (#832).
+            if options.bump_versions {
+                versions = super::cascade::bump_footprint_versions(&mut file, &merge.changed);
+            }
             file.to_toml_string()
                 .map(|text| Some(text.into_bytes()))
                 .map_err(|e| LibraryError::Backend(format!("serialize footprint library: {e}")))
         })?;
-        Ok(ContainerSave { merge })
+        Ok(ContainerSave { merge, versions })
     }
 }
 

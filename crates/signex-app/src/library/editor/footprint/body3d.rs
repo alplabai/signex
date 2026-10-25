@@ -200,18 +200,7 @@ fn color_row<'a>(
             row_id: address.row_id,
             msg,
         })
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.04,
-            ))),
-            text_color: text_c,
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
-            },
-            ..iced::widget::button::Style::default()
-        });
+        .style(crate::styles::outline_button(tokens));
 
     let hex = format!(
         "#{:02x}{:02x}{:02x}",

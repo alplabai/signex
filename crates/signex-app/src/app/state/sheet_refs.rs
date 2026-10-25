@@ -18,7 +18,9 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use super::reference_policy::{Share, is_refused, path_is_refused, share_of};
+use super::reference_policy::{
+    Share, is_path_refused, is_walk_refused, share_of, trust_real_shares,
+};
 use super::scope::{CaseFold, KeyMap, ReachSets, path_key_with};
 use super::sheet_read::{WalkLimits, read_child_refs};
 use super::volume_case::{IgnoresCase, VolumeCase};
@@ -136,6 +138,10 @@ pub(crate) struct SheetRefInputs {
     /// UNC shares the open projects sit on: a reference on one of them is
     /// followed, any other network or device name is refused.
     trusted: Vec<Share>,
+    /// The open projects' directories as spelled. Their canonical spelling can
+    /// name another share (mapped drive, DFS, symlink), which is then the
+    /// project's own too.
+    project_dirs: Vec<PathBuf>,
 }
 
 /// The real spelling of `path`, remembered in `keys`. Disk IO.
@@ -163,7 +169,16 @@ fn real_path(path: &Path, volume: &mut VolumeCase) -> PathBuf {
                 tail.push(name);
                 current = parent;
             }
-            _ => return join_tail(current.to_path_buf(), tail, false),
+            // Nothing on the path canonicalises (an offline share, an
+            // unplugged drive): there is no volume to ask, so fold the WHOLE
+            // path, prefix included. That is `VolumeCase`'s undecided answer
+            // ("ignores case") and the safe side for identity: over-merging
+            // two spellings keeps a sheet open, under-merging could let Discard
+            // All drop a sheet another project shares.
+            _ => {
+                let folded = PathBuf::from(current.to_string_lossy().to_lowercase());
+                return join_tail(folded, tail, true);
+            }
         }
     }
 }
@@ -181,7 +196,19 @@ fn join_tail(mut base: PathBuf, tail: Vec<&std::ffi::OsStr>, fold: bool) -> Path
 }
 
 /// Record and return the ownership key of `path`.
-fn identity_key(keys: &mut KeyMap, volume: &mut VolumeCase, path: &Path) -> String {
+///
+/// A path the walk would refuse (device, untrusted network name) is keyed
+/// lexically and never canonicalised, so no library or dirty path touches the
+/// network or a device just to be compared.
+fn identity_key(
+    keys: &mut KeyMap,
+    volume: &mut VolumeCase,
+    trusted: &[Share],
+    path: &Path,
+) -> String {
+    if is_path_refused(path, trusted) {
+        return keys.key(path);
+    }
     let lexical = keys.lexical_key(path);
     let real = keys
         .real
@@ -260,8 +287,8 @@ impl SheetRefInputs {
     /// terminates.
     ///
     /// Blocking file IO: call from a worker thread.
-    pub(crate) fn resolve(self, fold: CaseFold, ignores_case: IgnoresCase) -> SheetRefs {
-        self.resolve_within(fold, ignores_case, WalkLimits::default())
+    pub(crate) fn resolve(self, ignores_case: IgnoresCase) -> SheetRefs {
+        self.resolve_within(ignores_case, WalkLimits::default())
     }
 
     /// [`resolve`](Self::resolve) with explicit bounds.
@@ -271,28 +298,34 @@ impl SheetRefInputs {
     /// a file that is not a regular file or is oversized is not read, and a
     /// walk past `limits.max_sheets` stops. Each is reported as unreadable,
     /// which switches Discard All off.
-    pub(crate) fn resolve_within(
-        self,
-        fold: CaseFold,
-        ignores_case: IgnoresCase,
-        limits: WalkLimits,
-    ) -> SheetRefs {
+    pub(crate) fn resolve_within(self, ignores_case: IgnoresCase, limits: WalkLimits) -> SheetRefs {
         let Self {
             loaded,
             roots,
             projects,
             extra,
-            trusted,
+            mut trusted,
+            project_dirs,
         } = self;
-        let mut keys = KeyMap::lexical(fold);
+        // Only a directory the classifier already allows is canonicalised.
+        trust_real_shares(&mut trusted, &project_dirs, |dir| {
+            std::fs::canonicalize(dir).ok()
+        });
+        // Identity keys never fold case: this map spans EVERY open project,
+        // and one project's volume rule must not decide whether two real
+        // files of another are one. A file that exists is keyed by its
+        // canonical spelling; only a never-saved tail goes through
+        // `VolumeCase`, per directory (#771). Only the host-derived
+        // separator rule applies.
+        let mut keys = KeyMap::lexical(CaseFold::from_probe(false));
         let mut volume = VolumeCase::new(ignores_case);
         let mut loaded_by_key: HashMap<String, Vec<String>> = HashMap::new();
         for (path, refs) in &loaded {
-            let key = identity_key(&mut keys, &mut volume, path);
+            let key = identity_key(&mut keys, &mut volume, &trusted, path);
             push_unique(loaded_by_key.entry(key).or_default(), refs.iter().cloned());
         }
         for path in &extra {
-            identity_key(&mut keys, &mut volume, path);
+            identity_key(&mut keys, &mut volume, &trusted, path);
         }
         let mut disk: HashMap<PathBuf, Vec<String>> = HashMap::new();
         let mut unreadable = Vec::new();
@@ -301,7 +334,7 @@ impl SheetRefInputs {
         let mut pending: Vec<PathBuf> = Vec::new();
         let mut truncated = false;
         for root in &roots {
-            if path_is_refused(root, &trusted) {
+            if is_path_refused(root, &trusted) {
                 refusals.refuse(&mut unreadable, &root.to_string_lossy());
                 // Never canonicalised (that is the IO refused), so the key the
                 // staleness check computes is the one recorded by `identity_key`
@@ -312,7 +345,7 @@ impl SheetRefInputs {
             }
         }
         while let Some(path) = pending.pop() {
-            let key = identity_key(&mut keys, &mut volume, &path);
+            let key = identity_key(&mut keys, &mut volume, &trusted, &path);
             if !walked.insert(key.clone()) {
                 continue;
             }
@@ -343,7 +376,7 @@ impl SheetRefInputs {
                 let Some(next) = ownership_reference(&dir, child) else {
                     continue;
                 };
-                if is_refused(child, &trusted) {
+                if is_walk_refused(child, &next, &trusted) {
                     refusals.refuse(&mut unreadable, child);
                     walked.insert(keys.key(&next));
                 } else {
@@ -462,6 +495,11 @@ impl DocumentState {
                 .iter()
                 .filter_map(|p| share_of(&p.path))
                 .collect(),
+            project_dirs: self
+                .projects
+                .iter()
+                .map(|p| p.dir().to_path_buf())
+                .collect(),
         }
     }
 
@@ -579,7 +617,7 @@ impl DocumentState {
                 .iter()
                 .enumerate()
                 .filter(|(i, _)| *i != closing)
-                .any(|(_, p)| scope::path_is_under(&row.library_path, p.dir(), keys.fold));
+                .any(|(_, p)| scope::path_is_under(&row.library_path, p.dir(), p.case_fold));
             if own && !listed_elsewhere && !inside_other {
                 scan.mine_rows.push(row.clone());
             } else if own || row.library_path.starts_with(project.dir()) {
@@ -704,9 +742,10 @@ mod tests {
             projects: Vec::new(),
             extra: Vec::new(),
             trusted: Vec::new(),
+            project_dirs: Vec::new(),
         };
 
-        let resolved = inputs.resolve(CaseFold::Preserve, |_| false);
+        let resolved = inputs.resolve(|_| false);
 
         assert!(resolved.unreadable.is_empty(), "{:?}", resolved.unreadable);
         assert_eq!(resolved.disk.len(), 1, "{:?}", resolved.disk.keys());
@@ -729,9 +768,10 @@ mod tests {
             projects: Vec::new(),
             extra: Vec::new(),
             trusted: Vec::new(),
+            project_dirs: Vec::new(),
         };
 
-        let resolved = inputs.resolve(CaseFold::Fold, |_| false);
+        let resolved = inputs.resolve(|_| true);
 
         // The engine's grandchild is followed through the variant spelling.
         assert!(
@@ -761,9 +801,10 @@ mod tests {
             projects: Vec::new(),
             extra: Vec::new(),
             trusted: Vec::new(),
+            project_dirs: Vec::new(),
         };
 
-        let resolved = inputs.resolve(CaseFold::Preserve, |_| false);
+        let resolved = inputs.resolve(|_| false);
 
         assert!(
             resolved.disk.contains_key(&outside),
@@ -792,9 +833,10 @@ mod tests {
             projects: Vec::new(),
             extra: Vec::new(),
             trusted: Vec::new(),
+            project_dirs: Vec::new(),
         };
 
-        let resolved = inputs.resolve(CaseFold::Preserve, |_| false);
+        let resolved = inputs.resolve(|_| false);
 
         assert!(
             resolved.disk.contains_key(&outside),
@@ -820,9 +862,10 @@ mod tests {
             projects: Vec::new(),
             extra: Vec::new(),
             trusted: Vec::new(),
+            project_dirs: Vec::new(),
         };
 
-        let resolved = inputs.resolve(CaseFold::Preserve, |_| false);
+        let resolved = inputs.resolve(|_| false);
 
         assert!(resolved.unreadable.is_empty(), "{:?}", resolved.unreadable);
         assert!(resolved.disk.contains_key(&root));
@@ -853,6 +896,8 @@ mod tests {
                 unknown: Default::default(),
             },
             pending_libraries: HashMap::new(),
+            case_fold: Default::default(),
+            case_probed: false,
         }
     }
 
@@ -872,16 +917,85 @@ mod tests {
         let shared = a_dir.join("S.snxsch");
         docs.dirty_paths.insert(shared.clone());
 
-        let refs = docs.sheet_ref_inputs().resolve(CaseFold::Fold, |_| false);
+        let refs = docs.sheet_ref_inputs().resolve(|_| true);
         let scan = docs.close_scan(&refs, 0, &[]);
 
         assert!(scan.mine.is_empty(), "{:?}", scan.mine);
         assert_eq!(scan.kept, vec![shared]);
     }
 
+    /// Nothing on these paths exists, so nothing canonicalises and no volume
+    /// can be asked: two spellings differing only by case must still be ONE
+    /// identity, or Discard All on A drops the sheet B also lists.
+    #[test]
+    fn spellings_of_an_unreachable_path_that_differ_by_case_are_one_identity() {
+        let (mut app, _task) = crate::app::Signex::new();
+        let docs = &mut app.document_state;
+        docs.projects.push(loaded_project(
+            1,
+            Path::new("nonexistent-694/A"),
+            "Top.snxsch",
+        ));
+        docs.projects.push(loaded_project(
+            2,
+            Path::new("nonexistent-694/a"),
+            "top.snxsch",
+        ));
+        let dirty = PathBuf::from("nonexistent-694/A/Top.snxsch");
+        docs.dirty_paths.insert(dirty.clone());
+
+        let refs = docs.sheet_ref_inputs().resolve(|_| false);
+        let scan = docs.close_scan(&refs, 0, &[]);
+
+        assert!(
+            scan.mine.is_empty(),
+            "B lists this sheet too: {:?}",
+            scan.mine
+        );
+        assert_eq!(scan.kept, vec![dirty]);
+    }
+
+    /// Project A sits on a case-insensitive stick and references
+    /// `../B/x.snxsch`; project B (case-sensitive) holds two REAL files,
+    /// `X.snxsch` (dirty, unlisted) and `x.snxsch`. A's rule must not fold B's
+    /// files together, or Discard All on A throws away B's unsaved edits.
+    #[test]
+    fn a_closing_projects_fold_does_not_merge_another_projects_real_files() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let (a_dir, b_dir) = (tmp.path().join("A"), tmp.path().join("B"));
+        std::fs::create_dir_all(&a_dir).expect("mkdir A");
+        std::fs::create_dir_all(&b_dir).expect("mkdir B");
+        write_sheet(&b_dir.join("b.snxsch"), &[]);
+        write_sheet(&b_dir.join("x.snxsch"), &[]);
+        write_sheet(&b_dir.join("X.snxsch"), &[]);
+        let distinct = std::fs::canonicalize(b_dir.join("X.snxsch")).ok()
+            != std::fs::canonicalize(b_dir.join("x.snxsch")).ok();
+        if !distinct || !b_dir.join("x.snxsch").exists() {
+            eprintln!("skipped: the temp volume is case-insensitive");
+            return;
+        }
+        write_sheet(&a_dir.join("a.snxsch"), &["../B/x.snxsch"]);
+        let (mut app, _task) = crate::app::Signex::new();
+        let docs = &mut app.document_state;
+        docs.projects.push(loaded_project(1, &a_dir, "a.snxsch"));
+        docs.projects[0].case_fold = CaseFold::from_probe(true);
+        docs.projects.push(loaded_project(2, &b_dir, "b.snxsch"));
+        let unsaved = b_dir.join("X.snxsch");
+        docs.dirty_paths.insert(unsaved.clone());
+
+        let refs = docs.sheet_ref_inputs().resolve(|_| false);
+        let scan = docs.close_scan(&refs, 0, &[]);
+
+        assert!(
+            !scan.mine.contains(&unsaved),
+            "B's unsaved X.snxsch must never be A's to discard: {:?}",
+            scan.mine
+        );
+    }
+
     /// A's never-saved `N.snxsch` and B's saved sheet referencing
     /// `../A/n.snxsch`; neither file exists. Returns A's close scan.
-    fn close_scan_of_never_saved_sheet(fold: CaseFold, ignores_case: IgnoresCase) -> CloseScan {
+    fn close_scan_of_never_saved_sheet(ignores_case: IgnoresCase) -> CloseScan {
         let tmp = tempfile::tempdir().expect("tempdir");
         let (a_dir, b_dir) = (tmp.path().join("A"), tmp.path().join("B"));
         std::fs::create_dir_all(&a_dir).expect("mkdir A");
@@ -893,13 +1007,13 @@ mod tests {
         docs.projects.push(loaded_project(2, &b_dir, "b.snxsch"));
         docs.dirty_paths.insert(a_dir.join("N.snxsch"));
 
-        let refs = docs.sheet_ref_inputs().resolve(fold, ignores_case);
+        let refs = docs.sheet_ref_inputs().resolve(ignores_case);
         docs.close_scan(&refs, 0, &[])
     }
 
     #[test]
     fn a_never_saved_case_variant_sheet_is_kept_when_its_volume_ignores_case() {
-        let scan = close_scan_of_never_saved_sheet(CaseFold::Preserve, |_| true);
+        let scan = close_scan_of_never_saved_sheet(|_| true);
 
         assert!(scan.mine.is_empty(), "N is B's sheet too: {:?}", scan.mine);
         assert_eq!(scan.kept.len(), 1, "{:?}", scan.kept);
@@ -908,7 +1022,7 @@ mod tests {
 
     #[test]
     fn a_never_saved_case_variant_sheet_stays_two_files_on_a_case_sensitive_volume() {
-        let scan = close_scan_of_never_saved_sheet(CaseFold::Preserve, |_| false);
+        let scan = close_scan_of_never_saved_sheet(|_| false);
 
         assert_eq!(scan.mine.len(), 1, "N and n are different files");
         assert!(scan.kept.is_empty(), "{:?}", scan.kept);
@@ -924,7 +1038,7 @@ mod tests {
             return;
         }
 
-        let scan = close_scan_of_never_saved_sheet(CaseFold::Preserve, directory_ignores_case);
+        let scan = close_scan_of_never_saved_sheet(directory_ignores_case);
 
         assert!(scan.mine.is_empty(), "N is B's sheet too: {:?}", scan.mine);
         assert_eq!(scan.kept.len(), 1, "{:?}", scan.kept);
@@ -951,9 +1065,7 @@ mod tests {
         docs.projects.push(loaded_project(1, &a_dir, "a.snxsch"));
         docs.dirty_paths.insert(other);
 
-        let refs = docs
-            .sheet_ref_inputs()
-            .resolve(CaseFold::Preserve, |_| false);
+        let refs = docs.sheet_ref_inputs().resolve(|_| false);
 
         assert_eq!(refs.unreadable.len(), 1, "{:?}", refs.unreadable);
         assert_eq!(docs.stale_causes(&refs), Vec::new(), "re-resolve loop");
@@ -967,8 +1079,9 @@ mod tests {
             projects: Vec::new(),
             extra: Vec::new(),
             trusted: Vec::new(),
+            project_dirs: Vec::new(),
         }
-        .resolve_within(CaseFold::Preserve, |_| false, limits)
+        .resolve_within(|_| false, limits)
     }
 
     fn assert_discard_blocked_by(refs: &SheetRefs, needle: &str) {
@@ -1083,8 +1196,9 @@ mod tests {
             projects: Vec::new(),
             extra: Vec::new(),
             trusted,
+            project_dirs: Vec::new(),
         }
-        .resolve(CaseFold::Preserve, |_| false);
+        .resolve(|_| false);
 
         assert_eq!(resolved.unreadable.len(), 1, "{:?}", resolved.unreadable);
         assert_eq!(
@@ -1116,11 +1230,119 @@ mod tests {
             projects: Vec::new(),
             extra: Vec::new(),
             trusted,
+            project_dirs: Vec::new(),
         }
-        .resolve(CaseFold::Fold, |_| true);
+        .resolve(|_| true);
 
         assert!(resolved.unreadable.is_empty(), "{:?}", resolved.unreadable);
         assert_eq!(resolved.disk.len(), 1, "{:?}", resolved.disk.keys());
+    }
+
+    /// A project dir spelled locally (a symlink here, a mapped drive in the
+    /// wild) whose real path is on a share: only `project_dirs` can make the
+    /// share trusted, so the same walk without it must refuse the root.
+    #[cfg(windows)]
+    #[test]
+    fn project_dirs_make_the_real_share_of_a_local_spelling_trusted_on_windows() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let real = tmp.path().join("real");
+        std::fs::create_dir_all(&real).expect("mkdir");
+        write_sheet(&real.join("x.snxsch"), &[]);
+        let text = real.to_string_lossy().into_owned();
+        let (drive, rest) = text.split_at(2);
+        let unc_dir = PathBuf::from(format!(r"\\localhost\{}${rest}", &drive[..1]));
+        if std::fs::metadata(&unc_dir).is_err() {
+            eprintln!("skipped: no administrative share for {unc_dir:?}");
+            return;
+        }
+        let link = tmp.path().join("link");
+        if std::os::windows::fs::symlink_dir(&unc_dir, &link).is_err() {
+            eprintln!("skipped: cannot create a directory symlink");
+            return;
+        }
+        let root = unc_dir.join("x.snxsch");
+        let inputs = |project_dirs: Vec<PathBuf>| SheetRefInputs {
+            loaded: HashMap::new(),
+            roots: vec![root.clone()],
+            projects: Vec::new(),
+            extra: Vec::new(),
+            trusted: Vec::new(),
+            project_dirs,
+        };
+
+        let without = inputs(Vec::new()).resolve(|_| true);
+        assert!(
+            !without.unreadable.is_empty(),
+            "refused without project_dirs"
+        );
+        assert!(without.disk.is_empty());
+
+        let with = inputs(vec![link]).resolve(|_| true);
+        assert!(with.unreadable.is_empty(), "{:?}", with.unreadable);
+        assert_eq!(with.disk.len(), 1, "{:?}", with.disk.keys());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_long_dotdot_chain_from_a_unc_project_stays_on_its_share_on_windows() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let local = tmp.path().join("x.snxsch");
+        let deep = format!("{}other\\share\\y.snxsch", r"..\".repeat(30));
+        write_sheet(&local, &[&deep, r"\\?\UNC\localhost/c$\z.snxsch"]);
+        let text = local.to_string_lossy().into_owned();
+        let (drive, rest) = text.split_at(2);
+        let root = PathBuf::from(format!(r"\\localhost\{}${rest}", &drive[..1]));
+        if std::fs::metadata(&root).is_err() {
+            eprintln!("skipped: no administrative share for {root:?}");
+            return;
+        }
+        let trusted: Vec<Share> = share_of(&root).into_iter().collect();
+
+        let resolved = SheetRefInputs {
+            loaded: HashMap::new(),
+            roots: vec![root],
+            projects: Vec::new(),
+            extra: Vec::new(),
+            trusted: trusted.clone(),
+            project_dirs: Vec::new(),
+        }
+        .resolve(|_| true);
+
+        // Every sheet the walk touched, read or not, is on the trusted share;
+        // only the slash-bearing verbatim spelling is refused.
+        let share = trusted.first().cloned();
+        for path in resolved.disk.keys() {
+            assert_eq!(share_of(path), share, "{path:?}");
+        }
+        let refused = |s: &UnreadableSheet| s.reason.contains("network or device");
+        for sheet in resolved.unreadable.iter().filter(|s| !refused(s)) {
+            assert_eq!(share_of(&sheet.path), share, "{sheet:?}");
+        }
+        assert_eq!(
+            resolved.unreadable.iter().filter(|s| refused(s)).count(),
+            1,
+            "{:?}",
+            resolved.unreadable
+        );
+    }
+
+    #[test]
+    fn an_untrusted_network_library_path_is_not_canonicalised() {
+        // `extra` carries `.snxprj` library paths; a refused one is keyed
+        // lexically, so no real spelling is recorded (the canonicalise that
+        // would touch the network never ran).
+        let lib = PathBuf::from(r"\\attacker\share\lib.snxlib");
+        let resolved = SheetRefInputs {
+            loaded: HashMap::new(),
+            roots: Vec::new(),
+            projects: Vec::new(),
+            extra: vec![lib.clone()],
+            trusted: Vec::new(),
+            project_dirs: Vec::new(),
+        }
+        .resolve_within(|_| false, WalkLimits::default());
+
+        assert!(!resolved.keys.knows(&lib));
     }
 
     #[cfg(unix)]
@@ -1212,9 +1434,7 @@ mod tests {
         let (mut app, _task) = crate::app::Signex::new();
         let docs = &mut app.document_state;
         docs.projects.push(loaded_project(1, &dir, "a.snxsch"));
-        let refs = docs
-            .sheet_ref_inputs()
-            .resolve(CaseFold::Preserve, |_| false);
+        let refs = docs.sheet_ref_inputs().resolve(|_| false);
         assert!(docs.stale_causes(&refs).is_empty());
 
         docs.dirty_paths.insert(dir.join("fresh.snxsch"));
@@ -1244,9 +1464,10 @@ mod tests {
             projects: Vec::new(),
             extra: Vec::new(),
             trusted: Vec::new(),
+            project_dirs: Vec::new(),
         };
 
-        let resolved = inputs.resolve(CaseFold::Preserve, |_| false);
+        let resolved = inputs.resolve(|_| false);
 
         assert!(resolved.disk.contains_key(&base.join("saved.snxsch")));
         assert!(resolved.disk.contains_key(&base.join("edited.snxsch")));
