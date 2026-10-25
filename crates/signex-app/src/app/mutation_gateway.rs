@@ -153,6 +153,31 @@ impl Signex {
         clear_overlay_cache: bool,
         update_selection_info: bool,
     ) -> (CommandOutcome, Option<String>) {
+        self.apply_engine_command_recording(
+            command,
+            true,
+            clear_overlay_cache,
+            update_selection_info,
+        )
+    }
+
+    /// [`Self::apply_engine_command_reporting`] for load-time maintenance:
+    /// the edit lands without an undo step, so the first Ctrl+Z after
+    /// opening a sheet does not revert something the user never did.
+    pub(crate) fn apply_engine_command_unrecorded(
+        &mut self,
+        command: signex_engine::Command,
+    ) -> (CommandOutcome, Option<String>) {
+        self.apply_engine_command_recording(command, false, true, true)
+    }
+
+    fn apply_engine_command_recording(
+        &mut self,
+        command: signex_engine::Command,
+        record_history: bool,
+        clear_overlay_cache: bool,
+        update_selection_info: bool,
+    ) -> (CommandOutcome, Option<String>) {
         let Some(engine) = self.document_state.active_engine_mut() else {
             return (
                 CommandOutcome::Failed,
@@ -161,7 +186,12 @@ impl Signex {
         };
         let mut failed = None;
 
-        let invalidation = match engine.execute(command) {
+        let executed = if record_history {
+            engine.execute(command)
+        } else {
+            engine.execute_unrecorded(command)
+        };
+        let invalidation = match executed {
             Ok(result) if result.changed => result
                 .patch_pair
                 .map(|patch_pair| Self::render_invalidation_for_patch(patch_pair.document))

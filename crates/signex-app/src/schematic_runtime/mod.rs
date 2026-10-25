@@ -122,29 +122,52 @@ impl SchematicSheetExt for SchematicSheet {
 pub struct SchematicRenderCache {
     sheet: Option<SchematicSheet>,
     preview: Option<SchematicSheet>,
+    /// Engine `revision()` the snapshot was last brought level with; `0`
+    /// when unknown, which never matches a real revision.
+    revision: u64,
 }
 
 impl SchematicRenderCache {
     pub fn from_sheet(sheet: &SchematicSheet) -> Self {
+        Self::from_sheet_at(sheet, 0)
+    }
+
+    /// Snapshot `sheet` as it stood at engine revision `revision`.
+    pub fn from_sheet_at(sheet: &SchematicSheet, revision: u64) -> Self {
         Self {
             sheet: Some(sheet.clone()),
             preview: None,
+            revision,
         }
     }
 
     /// Refresh the cached snapshot from `sheet`. Only the collections named by
-    /// `invalidation` are re-cloned; `FULL`, an empty cache, or a different
-    /// document (uuid mismatch) re-clones everything.
-    pub fn update_from_sheet(&mut self, sheet: &SchematicSheet, invalidation: RenderInvalidation) {
+    /// `invalidation` are re-cloned, and only when the snapshot matched the
+    /// engine just before the edit (`base_revision`, the engine's
+    /// `base_revision()`). `FULL`, an empty cache, a different document
+    /// (uuid mismatch) or a stale snapshot (an engine edit that never
+    /// refreshed this slot) re-clones everything. `revision` is the engine's
+    /// current `revision()`.
+    pub fn update_from_sheet(
+        &mut self,
+        sheet: &SchematicSheet,
+        invalidation: RenderInvalidation,
+        base_revision: u64,
+        revision: u64,
+    ) {
         self.preview = None;
+        let in_step = self.revision == base_revision;
         match self.sheet.as_mut() {
             Some(cached)
-                if invalidation != RenderInvalidation::FULL && cached.uuid == sheet.uuid =>
+                if in_step
+                    && invalidation != RenderInvalidation::FULL
+                    && cached.uuid == sheet.uuid =>
             {
                 copy_invalidated(cached, sheet, invalidation);
             }
             _ => self.sheet = Some(sheet.clone()),
         }
+        self.revision = revision;
     }
 
     pub fn snapshot(&self) -> &SchematicSheet {
@@ -159,6 +182,7 @@ impl SchematicRenderCache {
 }
 
 /// Copy the sheet collections selected by `invalidation` from `src` into `dst`.
+/// `unknown`, `version`, `generator` and `generator_version` are skipped: they are not drawn.
 fn copy_invalidated(
     dst: &mut SchematicSheet,
     src: &SchematicSheet,

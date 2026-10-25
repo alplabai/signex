@@ -25,16 +25,13 @@ use iced::{Background, Border, Color, Element, Length};
 
 use signex_types::theme::ThemeTokens;
 
+use crate::styles::{Spacing, TypeScale};
+
 use crate::app::FootprintEditorState;
 use crate::library::editor::footprint::state::AlignOp;
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::styles::ti;
 use crate::styles::tokens;
-
-/// Base font size the whole card derives its spacing/widths from —
-/// no hardcoded pixel constants independent of this (mirrors
-/// `move_by_modal::FONT_SIZE`).
-const FONT_SIZE: f32 = 12.0;
 
 /// The horizontal-axis options offered in the dialog, in display order.
 /// `None` = "leave the X axis untouched"; each `Some` maps to the same
@@ -64,6 +61,8 @@ pub fn view_align_modal<'a>(
     editor: &'a FootprintEditorState,
     tokens: &'a ThemeTokens,
 ) -> Option<Element<'a, LibraryMessage>> {
+    let ts = TypeScale::default();
+    let sp = Spacing::default();
     let modal = editor.state.align_modal.as_ref()?;
     let path = editor.path.clone();
 
@@ -73,17 +72,17 @@ pub fn view_align_modal<'a>(
     let toolbar_bg = ti(tokens.toolbar_bg);
 
     // Card width derives from the font size rather than magic pixels.
-    let card_w = Length::Fixed(FONT_SIZE * 26.0);
+    let card_w = Length::Fixed(ts.label * 26.0);
 
     let header = container(
         row![
-            text("Align Selection").size(FONT_SIZE + 1.0).color(text_c),
+            text("Align Selection").size(ts.title).color(text_c),
             iced::widget::Space::new().width(Length::Fill),
             close_x(cancel_msg(&path), text_muted, tokens),
         ]
         .align_y(iced::Alignment::Center),
     )
-    .padding([FONT_SIZE * 0.5, FONT_SIZE * 0.75])
+    .padding([sp.s, sp.m])
     .style(move |_: &iced::Theme| container::Style {
         background: Some(Background::Color(toolbar_bg)),
         text_color: Some(text_c),
@@ -106,7 +105,7 @@ pub fn view_align_modal<'a>(
                       selected: Option<AlignOp>,
                       ctor: fn(Option<AlignOp>) -> FootprintEditorMsg|
      -> Element<'a, LibraryMessage> {
-        let mut chips = row![].spacing(FONT_SIZE * 0.4);
+        let mut chips = row![].spacing(sp.s);
         for &(label, option) in options {
             chips = chips.push(option_chip(
                 label,
@@ -118,8 +117,8 @@ pub fn view_align_modal<'a>(
                 tokens,
             ));
         }
-        column![text(caption).size(FONT_SIZE - 1.0).color(text_muted), chips,]
-            .spacing(FONT_SIZE * 0.4)
+        column![text(caption).size(ts.body).color(text_muted), chips,]
+            .spacing(sp.s)
             .into()
     };
 
@@ -137,12 +136,12 @@ pub fn view_align_modal<'a>(
             FootprintEditorMsg::AlignSetVertical,
         ),
     ]
-    .spacing(FONT_SIZE);
+    .spacing(sp.l);
 
     let footer = row![
         iced::widget::Space::new().width(Length::Fill),
         secondary_button("Cancel", cancel_msg(&path), tokens),
-        iced::widget::Space::new().width(FONT_SIZE * 0.6),
+        iced::widget::Space::new().width(sp.m),
         primary_button(
             "OK",
             LibraryMessage::PrimitiveEditorEvent {
@@ -157,8 +156,8 @@ pub fn view_align_modal<'a>(
     let card = container(
         column![
             header,
-            container(body).padding(FONT_SIZE),
-            container(footer).padding([FONT_SIZE * 0.6, FONT_SIZE]),
+            container(body).padding(sp.l),
+            container(footer).padding([sp.m, sp.l]),
         ]
         .width(card_w),
     )
@@ -185,16 +184,16 @@ fn option_chip<'a>(
     message: LibraryMessage,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
+    let ts = TypeScale::default();
+    let sp = Spacing::default();
     let fg = if selected {
         tokens::on_accent(tokens)
     } else {
         tokens::muted_text(tokens)
     };
-    let chip = button(
-        container(text(label.to_string()).size(FONT_SIZE - 1.0).color(fg))
-            .padding([FONT_SIZE * 0.35, FONT_SIZE * 0.7]),
-    )
-    .on_press(message);
+    let chip =
+        button(container(text(label.to_string()).size(ts.body).color(fg)).padding([sp.s, sp.m]))
+            .on_press(message);
     if selected {
         chip.style(crate::styles::accent_button(tokens)).into()
     } else {
@@ -207,8 +206,10 @@ fn close_x<'a>(
     text_color: Color,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
-    button(text("\u{2715}").size(FONT_SIZE - 1.0).color(text_color))
-        .padding(FONT_SIZE * 0.25)
+    let ts = TypeScale::default();
+    let sp = Spacing::default();
+    button(text("\u{2715}").size(ts.body).color(text_color))
+        .padding(sp.xs)
         .on_press(message)
         .style(crate::styles::subtle_button(tokens))
         .into()
@@ -219,13 +220,11 @@ fn secondary_button<'a>(
     message: LibraryMessage,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
+    let ts = TypeScale::default();
+    let sp = Spacing::default();
     button(
-        container(
-            text(label.to_string())
-                .size(FONT_SIZE - 1.0)
-                .color(ti(tokens.text)),
-        )
-        .padding([FONT_SIZE * 0.4, FONT_SIZE * 1.1]),
+        container(text(label.to_string()).size(ts.body).color(ti(tokens.text)))
+            .padding([sp.s, sp.l]),
     )
     .on_press(message)
     .style(crate::styles::outline_button(tokens))
@@ -237,13 +236,15 @@ fn primary_button<'a>(
     message: LibraryMessage,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
+    let ts = TypeScale::default();
+    let sp = Spacing::default();
     button(
         container(
             text(label.to_string())
-                .size(FONT_SIZE - 1.0)
+                .size(ts.body)
                 .color(tokens::on_accent(tokens)),
         )
-        .padding([FONT_SIZE * 0.4, FONT_SIZE * 1.1]),
+        .padding([sp.s, sp.l]),
     )
     .on_press(message)
     .style(crate::styles::accent_button(tokens))

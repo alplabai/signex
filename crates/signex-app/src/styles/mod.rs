@@ -10,11 +10,16 @@ use signex_types::theme::ThemeTokens;
 
 mod buttons;
 pub mod tokens;
+pub mod typography;
 
 pub use buttons::{accent_button, hover_row, outline_button, subtle_button};
+pub use typography::{HAIRLINE, Spacing, TypeScale};
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod typography_tests;
 
 // ─── Color conversion ─────────────────────────────────────────
 

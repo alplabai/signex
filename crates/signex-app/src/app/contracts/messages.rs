@@ -325,6 +325,12 @@ pub enum BomPreviewMsg {
 pub enum PrintPreviewMsg {
     /// User triggered print preview via Ctrl+P or menu. Open preview dialog.
     Requested,
+    /// A background rasterisation finished. `generation` identifies the
+    /// request; a result older than the newest request is discarded.
+    Rasterized {
+        generation: u64,
+        pages: std::sync::Arc<Vec<signex_output::PreviewPage>>,
+    },
     /// User selected a page in the print preview thumbnail list.
     SelectPage(usize),
     /// User changed preview colour mode.

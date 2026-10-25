@@ -97,6 +97,7 @@ impl Signex {
                     // has an engine, so a lingering dirty marker would make
                     // every later Save All fail on it.
                     self.document_state.dirty_paths.remove(&old_path);
+                    self.rekey_page_setup(&old_path, &new_path);
                     self.rekey_undocked_windows(&old_path, &new_path);
                 }
                 if dirty {
@@ -182,6 +183,7 @@ impl Signex {
             // and cache; refresh it too or it goes stale (#171).
             let active_path = self.document_state.active_path.as_deref();
             let sheet = engine.document();
+            let (base, revision) = (engine.base_revision(), engine.revision());
             let windows = &self.ui_state.windows;
             let slots = self
                 .interaction_state
@@ -198,10 +200,12 @@ impl Signex {
                 .chain(std::iter::once(&mut self.interaction_state.canvas));
             for slot in slots {
                 if let Some(cache) = slot.render_cache.as_mut() {
-                    cache.update_from_sheet(sheet, invalidation);
+                    cache.update_from_sheet(sheet, invalidation, base, revision);
                 } else {
                     slot.set_render_cache(Some(
-                        crate::schematic_runtime::SchematicRenderCache::from_sheet(sheet),
+                        crate::schematic_runtime::SchematicRenderCache::from_sheet_at(
+                            sheet, revision,
+                        ),
                     ));
                 }
                 // The drawn geometry rebuilds only on a clear or a camera move.
@@ -224,12 +228,16 @@ impl Signex {
         };
         let slot = &mut self.interaction_state.canvas;
         let sheet = engine.document();
+        let revision = engine.revision();
         match slot.render_cache.as_mut() {
-            Some(cache) => {
-                cache.update_from_sheet(sheet, crate::schematic_runtime::RenderInvalidation::FULL)
-            }
+            Some(cache) => cache.update_from_sheet(
+                sheet,
+                crate::schematic_runtime::RenderInvalidation::FULL,
+                engine.base_revision(),
+                revision,
+            ),
             None => slot.set_render_cache(Some(
-                crate::schematic_runtime::SchematicRenderCache::from_sheet(sheet),
+                crate::schematic_runtime::SchematicRenderCache::from_sheet_at(sheet, revision),
             )),
         }
         slot.clear_content_cache();

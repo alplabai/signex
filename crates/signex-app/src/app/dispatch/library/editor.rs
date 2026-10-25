@@ -632,11 +632,13 @@ impl Signex {
             return Ok(());
         }
 
-        // Path backs no open primitive editor — nothing to write. The
-        // three direct callers gate on an open tab, and the Save-All
-        // dispatcher gates on `symbol_editors`/`footprint_editors`
-        // membership, so this leg is only reached on a stale path.
-        Ok(())
+        // No editor backs the path: a restore could not re-read it and
+        // dropped the stale editor. Reporting success here would log a write
+        // that never happened.
+        anyhow::bail!(
+            "{} could not be re-read after a restore; close the tab and reopen it, or restore another revision",
+            path.display()
+        )
     }
 
     /// Refresh the matching library's per-kind primitive cache so the
