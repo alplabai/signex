@@ -117,11 +117,14 @@ fn export_with_issues_still_writes_and_reports_the_summary() {
         .options
         .clone();
 
-    let _ = app.update(Message::Export(ExportMsg::BomFinished {
+    let finished = Message::Export(ExportMsg::BomFinished {
         source: app.document_state.active_path.clone().expect("active"),
         options: Box::new(options),
         result: Ok(out.clone()),
-    }));
+    });
+    let task = app.update(finished);
+    assert!(!out.exists(), "the BOM write must not run inside update");
+    crate::settle_support::settle_task(&mut app, task);
 
     assert!(out.exists(), "advisory validation must not block the write");
     let notice = app
@@ -209,4 +212,43 @@ fn a_dragged_column_takes_the_slot_of_the_header_it_is_dropped_on() {
     let after_left = columns(&app);
     assert_eq!(after_left[1], after_right[3]);
     assert_eq!(after_left[2], after_right[1]);
+}
+
+#[test]
+fn a_failed_bom_write_reaches_the_user_after_the_task_runs() {
+    let dir = std::env::temp_dir().join(format!("signex-bom-859-{}", uuid::Uuid::new_v4()));
+    // The parent "directory" is a regular file, so the off-thread write fails.
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let blocker = dir.join("blocker");
+    std::fs::write(&blocker, b"x").expect("write blocker");
+    let out = blocker.join("bom.csv");
+
+    let mut app = app_with_faulty_bom();
+    let _ = app.update(Message::Menu(MenuMessage::ExportBom));
+    let options = app
+        .document_state
+        .bom_preview
+        .as_ref()
+        .expect("preview open")
+        .options
+        .clone();
+    let finished = Message::Export(ExportMsg::BomFinished {
+        source: app.document_state.active_path.clone().expect("active"),
+        options: Box::new(options),
+        result: Ok(out.clone()),
+    });
+    let task = app.update(finished);
+    assert!(
+        app.document_state.error_notice.is_none(),
+        "the write has not run yet"
+    );
+    crate::settle_support::settle_task(&mut app, task);
+
+    let notice = app
+        .document_state
+        .error_notice
+        .as_ref()
+        .expect("a failed write must be reported");
+    assert!(notice.detail.contains("Could not write BOM"), "{notice:?}");
+    assert!(!out.exists());
 }

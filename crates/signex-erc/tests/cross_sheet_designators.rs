@@ -123,6 +123,43 @@ fn a_reference_cycle_terminates_without_self_duplicates() {
     assert!(found.is_empty(), "{found:?}");
 }
 
+/// Every sheet's own run, as the app does; `DuplicateRefDesignator` only.
+fn run_every_sheet(spec: &Spec) -> usize {
+    let sheets: HashMap<SheetKey, SchematicSheet> = spec
+        .iter()
+        .map(|(n, refs, _)| (key(n), sheet(refs)))
+        .collect();
+    let resolutions: Resolutions = spec
+        .iter()
+        .map(|(n, _, kids)| {
+            (
+                key(n),
+                kids.iter()
+                    .map(|(f, k)| ((*f).to_string(), key(k)))
+                    .collect(),
+            )
+        })
+        .collect();
+    sheets
+        .iter()
+        .flat_map(|(k, s)| run_with_project(s, Some(k), &resolutions, &sheets))
+        .filter(|v| v.rule == RuleKind::DuplicateRefDesignator)
+        .count()
+}
+
+#[test]
+fn a_clash_between_two_descendants_is_reported_by_one_ancestor_only() {
+    // top -> mid -> (a, b); a and b clash. Only `mid`, the lowest sheet that
+    // sees both, reports it: one finding per clashing symbol, not per ancestor.
+    let total = run_every_sheet(&[
+        ("top", &[], &[("mid.snxsch", "mid")]),
+        ("mid", &[], &[("a.snxsch", "a"), ("b.snxsch", "b")]),
+        ("a", &["R9"], &[]),
+        ("b", &["R9"], &[]),
+    ]);
+    assert_eq!(total, 2);
+}
+
 #[test]
 fn a_child_instantiated_twice_is_not_a_duplicate_of_itself() {
     let found = run_top(&[

@@ -51,7 +51,8 @@ fn switching_tabs_while_the_pdf_dialog_is_open_exports_the_original_document() {
     // The dialog opened on A; the user then clicks over to B's tab.
     app.document_state.active_path = Some(b);
     let request = Box::new(pdf_request_all_sheets(&app, &a));
-    let _ = app.handle_export_pdf_finished(request, Ok(out.clone()));
+    let task = app.handle_export_pdf_finished(request, Ok(out.clone()));
+    crate::app::handlers::menu::export::settle(&mut app, task);
 
     let bytes = std::fs::read(&out).expect("the PDF is written");
     assert_eq!(
@@ -71,7 +72,8 @@ fn a_closed_source_document_refuses_the_pdf_export_and_says_so() {
     // The source tab was closed while the dialog was up.
     let request = Box::new(pdf_request_all_sheets(&app, &a));
     app.document_state.engines.remove(&a);
-    let _ = app.handle_export_pdf_finished(request, Ok(out.clone()));
+    let task = app.handle_export_pdf_finished(request, Ok(out.clone()));
+    crate::app::handlers::menu::export::settle(&mut app, task);
 
     assert!(!out.exists(), "nothing is written for a vanished source");
     assert!(
@@ -115,7 +117,8 @@ fn netlist_finished_exports_the_document_it_started_from() {
     let out = std::env::temp_dir().join(format!("signex-852-{}.net", Uuid::new_v4()));
 
     app.document_state.active_path = Some(b);
-    let _ = app.handle_export_netlist_finished(a, Ok(out.clone()));
+    let task = app.handle_export_netlist_finished(a, Ok(out.clone()));
+    crate::app::handlers::menu::export::settle(&mut app, task);
 
     let text = std::fs::read_to_string(&out).expect("the netlist is written");
     assert!(text.contains("R_A"), "project A's part is exported: {text}");
@@ -130,7 +133,8 @@ fn a_closed_netlist_source_writes_nothing_and_says_so() {
     let out = std::env::temp_dir().join(format!("signex-852-gone-{}.net", Uuid::new_v4()));
 
     app.document_state.engines.remove(&a);
-    let _ = app.handle_export_netlist_finished(a, Ok(out.clone()));
+    let task = app.handle_export_netlist_finished(a, Ok(out.clone()));
+    crate::app::handlers::menu::export::settle(&mut app, task);
 
     assert!(!out.exists());
     assert!(
@@ -147,7 +151,8 @@ fn bom_finished_exports_the_document_it_started_from() {
     let out = std::env::temp_dir().join(format!("signex-852-{}.csv", Uuid::new_v4()));
 
     app.document_state.active_path = Some(b);
-    let _ = app.handle_export_bom_finished(a, Default::default(), Ok(out.clone()));
+    let task = app.handle_export_bom_finished(a, Default::default(), Ok(out.clone()));
+    crate::app::handlers::menu::export::settle(&mut app, task);
 
     let text = std::fs::read_to_string(&out).expect("the BOM is written");
     assert!(text.contains("R_A"), "project A's part is listed: {text}");
@@ -166,8 +171,10 @@ fn overlapping_pdf_exports_each_use_their_own_request() {
     let mut req_b = pdf_request_all_sheets(&app, &b);
     req_b.files.clear();
 
-    let _ = app.handle_export_pdf_finished(Box::new(req_b), Ok(out_b.clone()));
-    let _ = app.handle_export_pdf_finished(Box::new(req_a), Ok(out_a.clone()));
+    let task = app.handle_export_pdf_finished(Box::new(req_b), Ok(out_b.clone()));
+    crate::app::handlers::menu::export::settle(&mut app, task);
+    let task = app.handle_export_pdf_finished(Box::new(req_a), Ok(out_a.clone()));
+    crate::app::handlers::menu::export::settle(&mut app, task);
 
     assert!(
         !out_b.exists(),
@@ -181,7 +188,8 @@ fn overlapping_pdf_exports_each_use_their_own_request() {
 fn a_cancelled_save_dialog_writes_nothing() {
     let (mut app, a, _b) = two_projects();
     let request = Box::new(pdf_request_all_sheets(&app, &a));
-    let _ = app.handle_export_pdf_finished(request, Err("cancelled".into()));
+    let task = app.handle_export_pdf_finished(request, Err("cancelled".into()));
+    crate::app::handlers::menu::export::settle(&mut app, task);
     assert!(app.document_state.error_notice.is_none());
 }
 
@@ -199,7 +207,8 @@ fn a_detached_bom_preview_exports_the_document_it_was_built_for() {
     let _ = app.handle_bom_preview_export();
     // The dialog task is not run here; its completion is what the preview's
     // captured source and options feed, so build that message by hand.
-    let _ = app.handle_export_bom_finished(a, Default::default(), Ok(out.clone()));
+    let task = app.handle_export_bom_finished(a, Default::default(), Ok(out.clone()));
+    crate::app::handlers::menu::export::settle(&mut app, task);
 
     let text = std::fs::read_to_string(&out).expect("the BOM is written");
     assert!(text.contains("R_A") && !text.contains("R_B"), "{text}");

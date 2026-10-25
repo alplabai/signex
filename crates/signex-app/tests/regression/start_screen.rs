@@ -22,7 +22,7 @@ fn project_without_document_shows_the_quiet_hint() {
     let (mut app, _t) = Signex::new();
     let dir = tempfile::tempdir().expect("tempdir");
     let prj = dir.path().join("Start.snxprj");
-    let _ = app.update(Message::File(FileMsg::NewProject(Some(prj))));
+    crate::settle_support::settle(&mut app, Message::File(FileMsg::NewProject(Some(prj))));
     assert!(app.document_state.active_project.is_some());
     assert_eq!(surface_of(&app), Surface::ProjectHint);
 }
