@@ -106,9 +106,19 @@ ln -s /Applications "$DMG_STAGING/Applications"
 OUTPUT="signex-macos-$ARCH-$VERSION.dmg"
 rm -f "$OUTPUT"
 
+# Size the image explicitly. hdiutil's own estimate for -srcfolder runs
+# short once the bundle carries a universal binary and the stock library
+# ("No space left on device" while copying Contents/MacOS/signex). Staging
+# size plus 20% and 32 MB covers HFS+ metadata; UDZO compresses the result,
+# so the slack does not reach the shipped .dmg.
+STAGING_KB=$(du -sk "$DMG_STAGING" | cut -f1)
+DMG_SIZE_MB=$(( STAGING_KB / 1024 * 6 / 5 + 32 ))
+
 hdiutil create \
     -volname "Signex $VERSION" \
     -srcfolder "$DMG_STAGING" \
+    -size "${DMG_SIZE_MB}m" \
+    -fs HFS+ \
     -ov \
     -format UDZO \
     "$OUTPUT"
