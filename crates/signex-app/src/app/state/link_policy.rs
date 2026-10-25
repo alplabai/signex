@@ -61,6 +61,13 @@ pub(crate) fn link_leads_to_refused(path: &Path, trusted: &[Share]) -> bool {
         let Ok(target) = std::fs::read_link(&resolved) else {
             return true;
         };
+        // A rooted target without a drive or share (`\proj\x`, `\Device\..`)
+        // resolves against the process's current drive or the NT namespace,
+        // not the link's volume, so it cannot be classified by spelling.
+        if cfg!(windows) && target.has_root() && !target.components().next().is_some_and(is_prefix)
+        {
+            return true;
+        }
         let target = if target.has_root() || target.components().next().is_some_and(is_prefix) {
             target
         } else {
@@ -123,7 +130,7 @@ mod tests {
 
     /// An unresolvable host: nothing can answer for it, whatever the LAN does.
     #[cfg(windows)]
-    const DEAD_SHARE: &str = r"\nonexistent.invalid\s";
+    const DEAD_SHARE: &str = r"\\nonexistent.invalid\s";
 
     /// `false` (skip) when the privilege to create a symlink is missing.
     #[cfg(windows)]
@@ -156,7 +163,7 @@ mod tests {
         }
         let device = tmp.path().join("dev.snxsch");
         let share = tmp.path().join("share.snxsch");
-        assert!(symlink(Path::new(r"\.\NUL"), &device, false));
+        assert!(symlink(Path::new(r"\\.\NUL"), &device, false));
         let target = format!(r"{DEAD_SHARE}\x.snxsch");
         assert!(symlink(Path::new(&target), &share, false));
 
@@ -198,5 +205,19 @@ mod tests {
             return;
         }
         assert!(!link_leads_to_refused(&junction.join("x.snxsch"), &[]));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_link_to_a_drive_relative_or_nt_namespace_target_is_refused() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let rooted = tmp.path().join("rooted.snxsch");
+        if !symlink(Path::new(r"\proj\evil.snxsch"), &rooted, false) {
+            return;
+        }
+        let nt = tmp.path().join("nt.snxsch");
+        assert!(symlink(Path::new(r"\Device\HarddiskVolume1\x"), &nt, false));
+        assert!(link_leads_to_refused(&rooted, &[]));
+        assert!(link_leads_to_refused(&nt, &[]));
     }
 }

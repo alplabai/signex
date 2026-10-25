@@ -214,7 +214,7 @@ fn identity_key(
     trusted: &[Share],
     path: &Path,
 ) -> String {
-    if is_path_refused(path, trusted) || link_leads_to_refused(path, trusted) {
+    if is_path_refused(path, trusted) || link_leads_to_refused(&normalize_clamped(path), trusted) {
         return keys.key(path);
     }
     let lexical = keys.lexical_key(path);
