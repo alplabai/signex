@@ -86,7 +86,10 @@ fn retarget_text(
     let mut angle = transform.angle(*rotation);
     let (mut swap_h, mut swap_v) = (false, transform.is_mirror());
     let (sin, cos) = angle.to_radians().sin_cos();
-    let readable = cos > 1e-9 || (cos.abs() <= 1e-9 && sin > 0.0);
+    // World space is y-down and rotation is clockwise-positive on screen,
+    // so 90 reads top-to-bottom; vertical text reads bottom-to-top (270),
+    // readable from the right as on a drawing.
+    let readable = cos > 1e-9 || (cos.abs() <= 1e-9 && sin < 0.0);
     if !readable {
         angle = (angle + 180.0).rem_euclid(360.0);
         swap_h = !swap_h;
@@ -109,14 +112,12 @@ fn is_flag(label: &signex_types::schematic::Label) -> bool {
     )
 }
 
+/// Sheet symbols and sheet pins refuse the whole action. A symbol's
+/// ref/value field is not refused: box-select picks fields up next to their
+/// symbol, and the field travels with its parent (a field selected on its
+/// own matches nothing here and is skipped).
 fn supported(kind: SelectedKind) -> bool {
-    !matches!(
-        kind,
-        SelectedKind::ChildSheet
-            | SelectedKind::SheetPin
-            | SelectedKind::SymbolRefField
-            | SelectedKind::SymbolValField
-    )
+    !matches!(kind, SelectedKind::ChildSheet | SelectedKind::SheetPin)
 }
 
 fn drawing_points(d: &SchDrawing) -> Vec<Point> {
@@ -237,10 +238,10 @@ impl Engine {
             .find(|i| !supported(i.kind) && self.contains_selected_item(i))
         {
             return Err(EngineError::SelectionTransformUnsupported {
-                what: match bad.kind {
-                    SelectedKind::ChildSheet => "a sheet symbol",
-                    SelectedKind::SheetPin => "a sheet pin",
-                    _ => "a symbol reference / value field",
+                what: if bad.kind == SelectedKind::ChildSheet {
+                    "a sheet symbol"
+                } else {
+                    "a sheet pin"
                 }
                 .to_string(),
             });

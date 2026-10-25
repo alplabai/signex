@@ -231,9 +231,11 @@ fn assert_text_followed(op: Op, before: (f64, HAlign, VAlign), after: (f64, HAli
     let (run1, side1) = text_frame(after.0, after.1, after.2);
     close(run1, op.vec(run0), &format!("{op:?}: text run direction"));
     close(side1, op.vec(side0), &format!("{op:?}: text body side"));
+    // Readable: running left-to-right, or vertical reading bottom-to-top
+    // (rotation 270 in this y-down, clockwise-positive frame).
     let (s, c) = after.0.to_radians().sin_cos();
     assert!(
-        c > 1e-9 || (c.abs() <= 1e-9 && s > 0.0),
+        c > 1e-9 || (c.abs() <= 1e-9 && s < 0.0),
         "{op:?}: text left reading backwards or upside down (rotation {})",
         after.0
     );
@@ -548,4 +550,104 @@ fn a_selection_holding_a_sheet_symbol_is_refused_whole() {
     assert_eq!(after.wires[0].end.x, before.wires[0].end.x);
     assert_eq!(after.symbols[0].position.x, before.symbols[0].position.x);
     assert_eq!(after.symbols[0].rotation, before.symbols[0].rotation);
+}
+
+/// R1 off the grid at (10.3, 10.3) with visible reference and value fields,
+/// as box-select picks them up together.
+fn off_grid_symbol_with_fields() -> (SchematicSheet, uuid::Uuid) {
+    use signex_types::schematic::TextProp;
+    let mut r1 = symbol("R1", (10.3, 10.3), false, false);
+    let field = |dy: f64| TextProp {
+        position: Point::new(10.3, 10.3 + dy),
+        rotation: 0.0,
+        font_size: 1.27,
+        justify_h: HAlign::Left,
+        justify_v: VAlign::Bottom,
+        hidden: false,
+    };
+    r1.ref_text = Some(field(-2.0));
+    r1.val_text = Some(field(2.0));
+    let uuid = r1.uuid;
+    let sheet = SchematicSheet {
+        uuid: uuid::Uuid::new_v4(),
+        paper_size: "A4".to_string(),
+        symbols: vec![r1],
+        ..Default::default()
+    };
+    (sheet, uuid)
+}
+
+#[test]
+fn a_box_selected_lone_symbol_turns_in_place() {
+    use signex_app::schematic_runtime::hit_test::{SelectionMode, hit_test_rect_mode};
+    use signex_types::schematic::Aabb;
+    let (sheet, uuid) = off_grid_symbol_with_fields();
+    let selected = hit_test_rect_mode(
+        &sheet,
+        &Aabb::new(0.0, 0.0, 30.0, 30.0),
+        SelectionMode::Touching,
+    );
+    assert!(
+        selected.contains(&SelectedItem::new(uuid, SelectedKind::Symbol))
+            && selected.contains(&SelectedItem::new(uuid, SelectedKind::SymbolRefField))
+            && selected.contains(&SelectedItem::new(uuid, SelectedKind::SymbolValField)),
+        "box-select picks up the symbol with its fields: {selected:?}"
+    );
+    let mut app = app_with(sheet, selected);
+    press(&mut app, Op::Ccw);
+    let s = &doc(&app).symbols[0];
+    close(
+        (s.position.x, s.position.y),
+        (10.3, 10.3),
+        "an off-grid symbol turns in place, not about a grid-snapped centre",
+    );
+    close(
+        pin_world(s),
+        (10.3, 8.3),
+        "pin turned counter-clockwise (east -> north)",
+    );
+}
+
+#[test]
+fn fields_ride_with_their_symbol_in_a_mixed_selection() {
+    let (sheet, ids) = mixed_sheet((false, false));
+    let fields = [
+        SelectedItem::new(ids.symbol.uuid, SelectedKind::SymbolRefField),
+        SelectedItem::new(ids.symbol.uuid, SelectedKind::SymbolValField),
+    ];
+    let mut app = app_with(sheet, vec![ids.symbol, fields[0], fields[1], ids.wire]);
+    let before = doc(&app);
+    press(&mut app, Op::Ccw);
+    let after = doc(&app);
+    assert_ne!(
+        (after.symbols[0].position.x, after.symbols[0].position.y),
+        (before.symbols[0].position.x, before.symbols[0].position.y),
+        "a selection holding the symbol's own fields is transformed, not refused"
+    );
+    close(
+        pin_world(&after.symbols[0]),
+        (after.wires[0].start.x, after.wires[0].start.y),
+        "the wire stays on the pin",
+    );
+}
+
+#[test]
+fn vertical_text_reads_bottom_to_top() {
+    let (sheet, ids) = mixed_sheet((false, false));
+    for op in [Op::Ccw, Op::Cw] {
+        let mut app = app_with(sheet.clone(), vec![ids.wire, ids.label, ids.note]);
+        press(&mut app, op);
+        let d = doc(&app);
+        let net = d.labels.iter().find(|l| l.uuid == ids.label.uuid).unwrap();
+        assert!(
+            (net.rotation - 270.0).abs() < 1e-9,
+            "{op:?}: a vertical net label reads bottom-to-top (270), got {}",
+            net.rotation
+        );
+        assert!(
+            (d.text_notes[0].rotation - 270.0).abs() < 1e-9,
+            "{op:?}: a vertical note reads bottom-to-top (270), got {}",
+            d.text_notes[0].rotation
+        );
+    }
 }

@@ -1,5 +1,6 @@
 //! Rotate / mirror the selection (Space / Shift+Space, R / Shift+R, X / Y,
-//! Active Bar). A lone symbol turns in place about its own origin; any other
+//! Active Bar). A lone symbol (with or without its own ref/value fields)
+//! turns in place about its own origin; any other
 //! selection turns about its centre, snapped to the grid, as one engine
 //! command (`Command::TransformSelection`).
 
@@ -13,10 +14,10 @@ impl Signex {
     /// symbol (it compensates for mirroring), so clockwise is -90.
     pub(crate) fn handle_selection_rotate_requested(&mut self, clockwise: bool) {
         let selected = self.interaction_state.active_canvas().selected.clone();
-        if self.selection_is_single_symbol(&selected) {
+        if let Some(symbol) = self.lone_symbol(&selected) {
             self.apply_engine_command(
                 Command::RotateSelection {
-                    items: selected,
+                    items: symbol,
                     angle_degrees: if clockwise { -90.0 } else { 90.0 },
                 },
                 true,
@@ -42,10 +43,10 @@ impl Signex {
 
     fn mirror_selection(&mut self, axis: MirrorAxis) {
         let selected = self.interaction_state.active_canvas().selected.clone();
-        if self.selection_is_single_symbol(&selected) {
+        if let Some(symbol) = self.lone_symbol(&selected) {
             self.apply_engine_command(
                 Command::MirrorSelection {
-                    items: selected,
+                    items: symbol,
                     axis,
                 },
                 true,
@@ -56,13 +57,30 @@ impl Signex {
         self.transform_selection_about_centre(selected, SelectionTransform::Mirror(axis));
     }
 
-    fn selection_is_single_symbol(
+    /// The selection as a lone symbol, if that is what it is: one symbol,
+    /// optionally with its own reference / value fields (box-select and
+    /// lasso pick those up with it). Such a selection turns in place about
+    /// the symbol's origin rather than about a grid-snapped centre, which
+    /// would shift an off-grid symbol.
+    fn lone_symbol(
         &self,
         selected: &[signex_types::schematic::SelectedItem],
-    ) -> bool {
-        self.document_state
-            .active_engine()
-            .is_some_and(|engine| engine.selection_is_single_symbol(selected))
+    ) -> Option<Vec<signex_types::schematic::SelectedItem>> {
+        use signex_types::schematic::SelectedKind;
+        let mut symbols = selected.iter().filter(|i| i.kind == SelectedKind::Symbol);
+        let symbol = *symbols.next()?;
+        if symbols.next().is_some() {
+            return None;
+        }
+        let only_own_fields = selected.iter().all(|i| {
+            i.kind == SelectedKind::Symbol
+                || (matches!(
+                    i.kind,
+                    SelectedKind::SymbolRefField | SelectedKind::SymbolValField
+                ) && i.uuid == symbol.uuid)
+        });
+        let engine = self.document_state.active_engine()?;
+        (only_own_fields && engine.selection_is_single_symbol(&[symbol])).then(|| vec![symbol])
     }
 
     /// Turn `selected` about its bounding-box centre, rounded to the grid so
