@@ -362,29 +362,24 @@ impl Signex {
         opts.format = BomFormat::from_output_path(&save_path);
 
         match BomExporter.export(&ctx, &opts) {
-            Ok(output) => match std::fs::write(&save_path, &output.bytes) {
-                Ok(()) => {
-                    log::info!(
-                        "Wrote {} ({} bytes)",
-                        save_path.display(),
-                        output.bytes.len(),
-                    );
-                    // Advisory, not a gate: the file is written; tell the
-                    // user what validation found instead of dropping it.
-                    if let Some(notice) =
-                        bom_validation_notice(&output.validation_report, &save_path)
-                    {
-                        self.document_state.error_notice = Some(notice);
-                    }
-                }
-                Err(e) => {
-                    self.document_state.error_notice =
-                        Some(crate::app::state::ErrorNotice::export(format!(
-                            "Could not write BOM to {}:\n{e}",
-                            save_path.display(),
-                        )));
-                }
-            },
+            Ok(output) => {
+                let success_log = format!(
+                    "Wrote {} ({} bytes)",
+                    save_path.display(),
+                    output.bytes.len(),
+                );
+                // Advisory, not a gate: the file is written; tell the
+                // user what validation found instead of dropping it.
+                let advisory = bom_validation_notice(&output.validation_report, &save_path);
+                return super::write::write_export_task(
+                    save_path,
+                    output.bytes,
+                    "BOM",
+                    success_log,
+                    advisory,
+                    Vec::new(),
+                );
+            }
             Err(e) => {
                 self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
                     format!("BOM export failed: {e}"),

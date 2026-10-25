@@ -11,6 +11,9 @@ mod erc_report;
 mod page_setup;
 mod pdf_netlist;
 mod print_preview;
+mod write;
+#[cfg(test)]
+pub(crate) use write::settle;
 #[cfg(test)]
 mod source_tests;
 #[cfg(test)]
