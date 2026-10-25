@@ -18,6 +18,10 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
+### Added — fonts
+
+- **Text stores its font family (#510)** — labels, text notes, and a symbol's reference and value text can name a font family, and a sheet carries a default for text that names none. The Properties panel has a **Font** row for those items ("Default" plus the installed families) and Page Options a **Default Font** row; both edits are undoable. A family that is not installed draws in the bundled Iosevka, one Messages-panel warning per document and family names it (`Font 'X' is not installed; using Iosevka for N text items in <file>`), and the file keeps the name you chose. PDF and SVG export outline only the bundled faces: a text naming Roboto or Iosevka exports in that face and any other family exports in Iosevka. Files that set no family are byte-identical to before; the labels block gains a `font_family` column only when a label sets one. PCB board text and embedding fonts in the project are not part of this change. See `docs/architecture/snxsch-font-family.md`.
+
 ### Added
 
 - **Unknown TSV columns are preserved (#315)** — a `.snxsch` / `.snxpcb` bulk block with a column this build does not know no longer fails to load with a header mismatch; columns resolve by name, the extra cells stay attached to their row through an edit, and they are re-emitted after the known columns (in their original relative order) on save. A missing known column and a repeated column name still error. A block may carry at most 256 foreign columns, each name at most 256 bytes; a file over either cap fails to load, and a save fails (before any byte is written, the previous file stays intact) on the same caps or when a foreign column repeats a known column name, each with an error naming the offending column.
