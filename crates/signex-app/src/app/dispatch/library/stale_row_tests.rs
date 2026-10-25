@@ -122,7 +122,9 @@ fn a_stale_preview_save_is_refused_visibly_and_keeps_the_edit() {
         .as_ref()
         .expect("a refused save raises the Save Failed card");
     assert!(
-        notice.detail.contains("reload to see their version"),
+        notice
+            .detail
+            .contains("reopen the row to load their version"),
         "{}",
         notice.detail
     );
@@ -140,8 +142,40 @@ fn a_stale_browser_delete_reaches_the_messages_panel() {
     let marker = address.row_id.to_string();
     assert!(
         crate::diagnostics::recent_entries().iter().any(|entry| {
-            entry.message.contains(&marker) && entry.message.contains("reload to see their version")
+            entry.message.contains(&marker)
+                && entry
+                    .message
+                    .contains("reopen the row to load their version")
         }),
         "the refused delete must reach the Messages panel"
     );
+}
+
+#[test]
+fn a_browser_cell_commit_does_not_make_the_open_preview_save_stale() {
+    let (mut app, address) = app_with_row(1, 1);
+    let library_path: PathBuf = address.library_path.clone();
+    let mut browser = crate::library::state::LibraryBrowserState::new(library_path.clone());
+    browser.active_table = Some(TABLE.to_string());
+    browser
+        .cell_edit
+        .insert((address.row_id, "internal_pn".to_string()), "R-115b".into());
+    app.library
+        .library_browsers
+        .insert(library_path.clone(), browser);
+
+    let _ = app.handle_browser_cell_commit(
+        library_path,
+        TABLE.into(),
+        address.row_id,
+        "internal_pn".into(),
+    );
+    assert_eq!(editor(&app, &address).row.server_revision, Some(2));
+
+    app.handle_save_row(&address);
+    assert!(
+        app.document_state.error_notice.is_none(),
+        "the preview must save on top of the cell commit"
+    );
+    assert_eq!(editor(&app, &address).row.server_revision, Some(3));
 }

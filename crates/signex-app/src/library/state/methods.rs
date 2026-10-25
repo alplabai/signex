@@ -84,6 +84,15 @@ impl Default for LibraryState {
 }
 
 impl LibraryState {
+    /// Record the revision a successful `update_row` returned on any open
+    /// Component Preview of that row, so its next save is based on the
+    /// row as the server now holds it rather than refused as stale (#115).
+    pub fn note_row_saved(&mut self, address: &EditorAddress, revision: Option<u64>) {
+        if let Some(editor) = self.editors.get_mut(address) {
+            editor.row.server_revision = revision;
+        }
+    }
+
     /// Look up an open library by its on-disk root path.
     pub fn library_at(&self, path: &Path) -> Option<&OpenLibrary> {
         self.open_libraries.iter().find(|lib| lib.root == path)

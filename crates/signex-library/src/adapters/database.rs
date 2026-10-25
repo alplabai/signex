@@ -41,10 +41,6 @@ pub struct DatabaseAdapter {
     /// Bearer token sent via `Authorization: Bearer <token>`. Static
     /// credential for now; OIDC lands later.
     token: Option<String>,
-    /// Caller-facing string used for advisory locks — defaults to the
-    /// bearer token's caller identity. When OIDC lands this becomes the
-    /// JWT `sub`.
-    holder: String,
     client: reqwest::blocking::Client,
 }
 
@@ -133,7 +129,7 @@ fn row_write_error(
             }
         }
         reqwest::StatusCode::PRECONDITION_REQUIRED => LibraryError::Backend(format!(
-            "{op} {table}/{row_id}: the server requires the row's base revision (If-Match); reload the row"
+            "{op} {table}/{row_id}: the server requires the row's base revision (If-Match); reopen the row"
         )),
         other => LibraryError::Backend(format!("{op} {table}/{row_id}: {other}")),
     }
@@ -141,7 +137,7 @@ fn row_write_error(
 
 impl DatabaseAdapter {
     /// Construct from a manifest. The manifest's `auth` field is treated as
-    /// the bearer token; the holder is derived from it.
+    /// the bearer token.
     pub fn new(manifest: Manifest) -> Result<Self, LibraryError> {
         let (base_url, auth) = match &manifest.mode {
             LibraryMode::Database { url, auth } => {
@@ -167,21 +163,10 @@ impl DatabaseAdapter {
             .build()
             .map_err(|e| LibraryError::Backend(format!("reqwest client: {e}")))?;
         let token = if auth.is_empty() { None } else { Some(auth) };
-        // CRIT-3: never use the bearer token as `holder`. The `holder` is
-        // sent in the `x-signex-holder` request header AND echoed in
-        // server error bodies (`"lock held by {holder}"`), so identifying
-        // the caller via the credential leaks it through both surfaces.
-        // Derive a non-secret label from the library identity instead.
-        let holder = format!(
-            "{}@{}",
-            manifest.library.name,
-            manifest.library.library_id.simple()
-        );
         Ok(Self {
             manifest,
             base_url,
             token,
-            holder,
             client,
         })
     }
@@ -240,7 +225,6 @@ impl DatabaseAdapter {
             manifest,
             base_url,
             token,
-            holder,
             client,
         })
     }
@@ -248,11 +232,6 @@ impl DatabaseAdapter {
     /// Borrow the configured base URL.
     pub fn base_url(&self) -> &str {
         &self.base_url
-    }
-
-    /// Borrow the holder identity (logged but never the bearer secret).
-    pub fn holder(&self) -> &str {
-        &self.holder
     }
 
     fn url(&self, path: &str) -> String {
@@ -826,7 +805,7 @@ mod tests {
     }
 
     #[test]
-    fn with_token_round_trips_holder_and_url() {
+    fn with_token_round_trips_url() {
         let adapter = DatabaseAdapter::with_token(
             "https://example.com/api/",
             "secret-bearer",
@@ -834,7 +813,6 @@ mod tests {
         )
         .unwrap();
         assert_eq!(adapter.base_url(), "https://example.com/api");
-        assert_eq!(adapter.holder(), "alice@example");
     }
 
     #[test]

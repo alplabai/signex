@@ -32,7 +32,7 @@ pub enum LibraryError {
     /// The library server holds a newer revision of the row than the one
     /// the write was based on: someone else saved it in between.
     #[error(
-        "changed by someone else since you opened it (now revision {current_revision}); reload to see their version"
+        "changed by someone else since you read it (now revision {current_revision}); reopen the row to load their version"
     )]
     RowChanged { current_revision: u64 },
     #[error("unauthorized: {0}")]

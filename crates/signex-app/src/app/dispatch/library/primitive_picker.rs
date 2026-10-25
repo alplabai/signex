@@ -185,13 +185,16 @@ impl Signex {
                 address.library_path.display().to_string(),
             )),
         };
-        if let Err(e) = result {
-            crate::diagnostics::log_warning(format!(
-                "Primitive binding for row {} was not saved: {e}",
-                address.row_id
-            ));
-            self.sync_diagnostics_panel_ctx();
-            return;
+        match result {
+            Ok(revision) => self.library.note_row_saved(&address, revision),
+            Err(e) => {
+                crate::diagnostics::log_warning(format!(
+                    "Primitive binding for row {} was not saved: {e}",
+                    address.row_id
+                ));
+                self.sync_diagnostics_panel_ctx();
+                return;
+            }
         }
         // 5. Refresh cache.
         if let Err(e) = self.library.refresh_components(&address.library_path) {
@@ -279,11 +282,7 @@ impl Signex {
         match result {
             // Keep the editor's base revision current, or its next save
             // would be refused as stale.
-            Ok(revision) => {
-                if let Some(state) = self.library.editors.get_mut(&address) {
-                    state.row.server_revision = revision;
-                }
-            }
+            Ok(revision) => self.library.note_row_saved(&address, revision),
             Err(e) => {
                 crate::diagnostics::log_warning(format!(
                     "Primitive binding for row {} was not saved: {e}",
