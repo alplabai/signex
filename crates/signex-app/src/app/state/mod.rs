@@ -11,6 +11,7 @@ mod interaction;
 mod pdf_page_setup;
 mod pdf_preview_raster;
 pub(crate) mod project_case;
+pub(crate) mod project_fs;
 mod reference_policy;
 pub(crate) mod scope;
 mod sheet_read;
@@ -427,6 +428,8 @@ pub struct DocumentState {
     /// Off-thread document writes: per-path ordering, in-flight tracking and
     /// the quit barrier (#859); see `handlers/document_files/save_async.rs`.
     pub document_saves: crate::persist::DocumentSaves,
+    /// Disk facts behind the project tree's `(missing)` marks (#111).
+    pub project_fs: project_fs::ProjectFsCache,
     pub tabs: Vec<TabInfo>,
     pub active_tab: usize,
     /// All live schematic engines keyed by their on-disk path. Every

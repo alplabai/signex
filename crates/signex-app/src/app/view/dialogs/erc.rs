@@ -84,9 +84,14 @@ impl Signex {
                 .get(rule)
                 .copied()
                 .unwrap_or_else(|| rule.default_severity());
+            let label = if rule.is_on_off_only() {
+                format!("{} (on/off; severity per matrix cell)", rule.label())
+            } else {
+                rule.label().to_string()
+            };
             rule_rows = rule_rows.push(
                 row![
-                    text(rule.label())
+                    text(label)
                         .size(11)
                         .color(text_c)
                         .width(Length::FillPortion(3)),
@@ -180,7 +185,11 @@ fn severity_segmented(
                value: signex_erc::Severity,
                color: Color|
      -> Element<'static, Message> {
-        let selected = value == current;
+        let selected = if rule.is_on_off_only() && value != signex_erc::Severity::Off {
+            current != signex_erc::Severity::Off
+        } else {
+            value == current
+        };
         let bg = if selected {
             color
         } else {
@@ -201,6 +210,24 @@ fn severity_segmented(
             })
             .into()
     };
+    let off = seg(
+        "Off",
+        signex_erc::Severity::Off,
+        Color::from_rgb(0.35, 0.36, 0.42),
+    );
+    if rule.is_on_off_only() {
+        // Severity comes from the pin matrix per cell; the row only gates it.
+        return row![
+            seg(
+                "On",
+                rule.default_severity(),
+                Color::from_rgb(0.30, 0.60, 0.95)
+            ),
+            off
+        ]
+        .spacing(2)
+        .into();
+    }
     row![
         seg(
             "E",
@@ -217,11 +244,7 @@ fn severity_segmented(
             signex_erc::Severity::Info,
             Color::from_rgb(0.30, 0.60, 0.95)
         ),
-        seg(
-            "Off",
-            signex_erc::Severity::Off,
-            Color::from_rgb(0.35, 0.36, 0.42)
-        ),
+        off,
     ]
     .spacing(2)
     .into()

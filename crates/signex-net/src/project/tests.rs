@@ -1076,3 +1076,57 @@ fn a_duplicate_sheet_uuid_is_reported_anywhere_in_the_project_graph() {
         p.issues
     );
 }
+
+/// One resistor wired to a power symbol (`lib_id`, `value`), alone on its rail.
+fn rail_with_port(sheet: &mut SchematicSheet, r: &str, lib_id: &str, value: &str) {
+    add_lib(sheet, "R");
+    add_lib(sheet, lib_id);
+    sheet.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+    place(sheet, r, "R", pt(0.0, 0.0));
+    place_power(sheet, &format!("#P{r}"), lib_id, value, pt(10.0, 0.0));
+}
+
+fn project_with_child(root: SchematicSheet, child: SchematicSheet) -> ProjectNetlist {
+    let mut root = root;
+    root.child_sheets
+        .push(child_sheet("A", "a.sch", Vec::new()));
+    let mut map = HashMap::new();
+    map.insert("a.sch".to_string(), child);
+    stitch(&root, "root", &map)
+}
+
+#[test]
+fn styled_power_ports_with_one_value_merge_across_sheets() {
+    // Arrow-style ports are ordinary ports: the same value on two sheets is
+    // one rail.
+    let mut root = empty_sheet();
+    rail_with_port(&mut root, "R1", "power:arrow", "+3V3");
+    let mut child = empty_sheet();
+    rail_with_port(&mut child, "R2", "power:arrow", "+3V3");
+
+    let p = project_with_child(root, child);
+
+    assert_eq!(p.netlist.nets.len(), 1, "{:?}", p.netlist);
+    assert_eq!(p.netlist.nets[0].name, "+3V3");
+    let refs: Vec<&str> = p.netlist.nets[0]
+        .terminals
+        .iter()
+        .map(|t| t.reference.as_str())
+        .collect();
+    assert!(refs.contains(&"R1") && refs.contains(&"R2"), "{refs:?}");
+}
+
+#[test]
+fn power_flags_with_one_value_do_not_merge_across_sheets() {
+    // Every flag from the active bar carries "PWR"; a flag names no net, so
+    // flags on two sheets must leave the two rails apart.
+    let mut root = empty_sheet();
+    rail_with_port(&mut root, "R1", "power:PWR_FLAG", "PWR");
+    let mut child = empty_sheet();
+    rail_with_port(&mut child, "R2", "power:PWR_FLAG", "PWR");
+
+    let p = project_with_child(root, child);
+
+    assert_eq!(p.netlist.nets.len(), 2, "{:?}", p.netlist);
+    assert!(p.netlist.nets.iter().all(|n| n.name != "PWR"));
+}
