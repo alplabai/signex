@@ -147,10 +147,7 @@ pub(super) fn flag_text_anchor(label: &Label, document_family: Option<&str>) -> 
 /// covers the same stretch of the body but reads normally. World space is
 /// y-down and rotation clockwise-positive on screen, so vertical text reads
 /// bottom-to-top (270°), as net-label and note text do (#1083).
-pub(super) fn flag_text(
-    label: &Label,
-    document_family: Option<&str>,
-) -> ((f64, f64), f64, HAlign) {
+pub(super) fn flag_text(label: &Label, document_family: Option<&str>) -> ((f64, f64), f64, HAlign) {
     let (sin, cos) = label.rotation.to_radians().sin_cos();
     let readable = cos > 1e-9 || (cos.abs() <= 1e-9 && sin < 0.0);
     let (rotation, h_align) = if readable {

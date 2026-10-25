@@ -93,6 +93,7 @@ fn label(text: &str, label_type: LabelType, at: (f64, f64)) -> Label {
         font_size: 1.27,
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
+        font_family: None,
         unknown_columns: Default::default(),
     }
 }
@@ -120,6 +121,7 @@ fn mixed_sheet(r1_mirror: (bool, bool)) -> (SchematicSheet, Ids) {
         font_size: 1.27,
         justify_h: HAlign::Left,
         justify_v: VAlign::Bottom,
+        font_family: None,
     };
     let ids = Ids {
         symbol: SelectedItem::new(r1.uuid, SelectedKind::Symbol),
@@ -564,6 +566,7 @@ fn off_grid_symbol_with_fields() -> (SchematicSheet, uuid::Uuid) {
         justify_h: HAlign::Left,
         justify_v: VAlign::Bottom,
         hidden: false,
+        font_family: None,
     };
     r1.ref_text = Some(field(-2.0));
     r1.val_text = Some(field(2.0));
