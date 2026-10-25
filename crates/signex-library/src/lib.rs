@@ -152,9 +152,7 @@ pub fn enable_project_version_control(
     // `.git` this call created (the check above guarantees there was none).
     if let Err(e) = init_and_commit(project_dir, &sig_name, &sig_email) {
         let mut notes = files.roll_back();
-        if let Err(remove) = std::fs::remove_dir_all(project_dir.join(".git")) {
-            notes.push(format!("could not remove the new .git directory: {remove}"));
-        }
+        notes.extend(vcs_init_files::remove_new_git_dir(project_dir));
         return Err(with_rollback_notes(e, notes));
     }
     Ok(())

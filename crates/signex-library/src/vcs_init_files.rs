@@ -112,6 +112,18 @@ fn stage(path: PathBuf, file: MergedFile, rows: Option<&str>) -> Staged {
     }
 }
 
+/// Remove the `.git` directory a failed init left in `project_dir`. A note
+/// for the user comes back only when it is still there afterwards: a
+/// missing `.git` (init failed before creating it) is already the state
+/// the rollback wants.
+pub(crate) fn remove_new_git_dir(project_dir: &Path) -> Option<String> {
+    match std::fs::remove_dir_all(project_dir.join(".git")) {
+        Ok(()) => None,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => Some(format!("could not remove the new .git directory: {e}")),
+    }
+}
+
 fn refuse(e: ManagedFileError) -> LibraryError {
     match e {
         ManagedFileError::Read { .. } | ManagedFileError::Write { .. } => {
@@ -120,3 +132,7 @@ fn refuse(e: ManagedFileError) -> LibraryError {
         other => LibraryError::Conflict(other.to_string()),
     }
 }
+
+#[cfg(test)]
+#[path = "vcs_init_files_tests.rs"]
+mod vcs_init_files_tests;

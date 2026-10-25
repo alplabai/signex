@@ -24,17 +24,34 @@ pub enum ManagedBlockError {
     Unbalanced,
 }
 
+/// Where a block that is not in the file yet goes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BlockPlacement {
+    /// After the existing text. Right for `.gitignore`, where a later
+    /// pattern may re-include but the managed patterns never conflict.
+    Append,
+    /// Before the existing text, after any byte-order mark. Right for
+    /// `.gitattributes`, where the last matching line wins: the user's own
+    /// attributes must come after the block to keep overriding it.
+    Top,
+}
+
 /// Merge `body` into `existing` as the managed block.
 ///
 /// - `None` or empty text: the result is just the block.
-/// - No block present: the block is appended; every existing byte is kept,
-///   and a `\n` is added first only if the text does not end with one.
-/// - One well-formed block: only the lines from the begin marker to the end
+/// - No block present, [`BlockPlacement::Append`]: the block is appended;
+///   every existing byte is kept, and a line break is added first only if
+///   the text does not end with one.
+/// - No block present, [`BlockPlacement::Top`]: the block goes first (after
+///   a BOM), then one blank line in the file's line-ending style, then every
+///   existing byte.
+/// - One well-formed block, wherever it sits: only the lines from the begin marker to the end
 ///   marker are replaced. Merging the same body again returns identical text.
 /// - Duplicate or unbalanced markers: [`ManagedBlockError`], nothing guessed.
 pub fn merge_managed_block(
     existing: Option<&str>,
     body: &str,
+    placement: BlockPlacement,
 ) -> Result<String, ManagedBlockError> {
     let text = existing.unwrap_or("");
     let lines: Vec<&str> = text.split_inclusive('\n').collect();
@@ -49,12 +66,29 @@ pub fn merge_managed_block(
     match (begins.as_slice(), ends.as_slice()) {
         ([], []) => {
             let eol = text_eol(text);
-            let mut out = String::from(text);
-            if !out.is_empty() && !out.ends_with('\n') {
-                out.push_str(eol);
-            }
-            out.push_str(&render_block(body, eol, true));
-            Ok(out)
+            Ok(match placement {
+                BlockPlacement::Append => {
+                    let mut out = String::from(text);
+                    if !out.is_empty() && !out.ends_with('\n') {
+                        out.push_str(eol);
+                    }
+                    out.push_str(&render_block(body, eol, true));
+                    out
+                }
+                BlockPlacement::Top => {
+                    let (bom, rest) = match text.strip_prefix(BOM) {
+                        Some(rest) => (Some(BOM), rest),
+                        None => (None, text),
+                    };
+                    let mut out: String = bom.into_iter().collect();
+                    out.push_str(&render_block(body, eol, true));
+                    if !rest.is_empty() {
+                        out.push_str(eol);
+                        out.push_str(rest);
+                    }
+                    out
+                }
+            })
         }
         (&[begin], &[end]) if begin < end => {
             let eol = if lines[begin].ends_with("\r\n") {

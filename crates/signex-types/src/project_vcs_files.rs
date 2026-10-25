@@ -8,7 +8,7 @@ use std::io;
 use std::path::Path;
 
 use crate::atomic_io::atomic_write;
-use crate::managed_block::{ManagedBlockError, merge_managed_block};
+use crate::managed_block::{BlockPlacement, ManagedBlockError, merge_managed_block};
 
 /// Patterns Signex itself generates, derived from the code that writes them:
 ///
@@ -116,34 +116,38 @@ impl MergedFile {
 /// Read `path` and merge `body` in as the managed block, without writing.
 /// A missing file is the same as an empty one.
 pub fn merge_file(path: &Path, body: &str) -> Result<MergedFile, ManagedFileError> {
-    merge_file_with(path, body, |text| text.to_owned())
+    merge_file_with(path, body, BlockPlacement::Append, |text| text.to_owned())
 }
 
 /// Like [`merge_file`], with `normalise` applied to the existing text before
-/// the block goes in (the returned `existing` stays the file as read).
+/// the block goes in (the returned `existing` stays the file as read), and
+/// `placement` deciding where a block not yet in the file goes.
 fn merge_file_with(
     path: &Path,
     body: &str,
+    placement: BlockPlacement,
     normalise: impl Fn(&str) -> String,
 ) -> Result<MergedFile, ManagedFileError> {
     let shown = path.display().to_string();
     let Some(existing) = read_regular_utf8_inner(path, &shown)? else {
-        let merged =
-            merge_managed_block(None, body).map_err(|source| ManagedFileError::Markers {
+        let merged = merge_managed_block(None, body, placement).map_err(|source| {
+            ManagedFileError::Markers {
                 path: shown,
                 source,
-            })?;
+            }
+        })?;
         return Ok(MergedFile {
             existing: None,
             merged,
         });
     };
-    let merged = merge_managed_block(Some(&normalise(&existing)), body).map_err(|source| {
-        ManagedFileError::Markers {
-            path: shown,
-            source,
-        }
-    })?;
+    let merged =
+        merge_managed_block(Some(&normalise(&existing)), body, placement).map_err(|source| {
+            ManagedFileError::Markers {
+                path: shown,
+                source,
+            }
+        })?;
     Ok(MergedFile {
         existing: Some(existing),
         merged,
@@ -238,6 +242,12 @@ fn legacy_generated_lines() -> Vec<String> {
 /// Drop the whole-file generated content of an old Signex `.gitattributes`
 /// (recognised by its first non-blank line) so the managed block replaces it
 /// instead of repeating it. Every other line, the user's, stays.
+///
+/// The legacy file always carried `assets/3d-models/**\tfilter=lfs ...`,
+/// and that line is dropped here whatever `use_lfs` is now. Turning Version
+/// Control back on with LFS off therefore ends with no LFS rule for the
+/// models, which is the user's choice; the managed block adds the LFS rules
+/// only when `use_lfs` is set.
 fn strip_legacy_gitattributes(text: &str) -> String {
     let first = text.lines().find(|l| !l.trim().is_empty());
     if first.map(str::trim_end) != Some(LEGACY_FIRST_LINE) {
@@ -293,6 +303,7 @@ pub fn merge_gitattributes_file(
     merge_file_with(
         &project_dir.join(".gitattributes"),
         &gitattributes_block_body(use_lfs),
+        BlockPlacement::Top,
         strip_legacy_gitattributes,
     )
 }

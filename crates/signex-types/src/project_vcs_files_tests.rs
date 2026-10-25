@@ -223,7 +223,8 @@ fn legacy_cleanup_keeps_every_user_line() {
 
     ensure_gitattributes(dir.path(), false).unwrap();
     let text = std::fs::read_to_string(&path).unwrap();
-    assert!(text.starts_with("*.mine text\n# >>> signex"), "{text}");
+    assert!(text.starts_with("# >>> signex"), "{text}");
+    assert!(text.ends_with("\n\n*.mine text\n"), "{text}");
 }
 
 #[test]
@@ -233,7 +234,11 @@ fn a_user_file_that_merely_mentions_a_spec_line_is_not_legacy() {
     std::fs::write(&path, "*.snxsch\ttext eol=lf\n*.x text\n").unwrap();
     ensure_gitattributes(dir.path(), false).unwrap();
     let text = std::fs::read_to_string(&path).unwrap();
-    assert!(text.starts_with("*.snxsch\ttext eol=lf\n*.x text\n# >>> signex"));
+    assert!(text.starts_with("# >>> signex"), "{text}");
+    assert!(
+        text.ends_with("\n\n*.snxsch\ttext eol=lf\n*.x text\n"),
+        "{text}"
+    );
 }
 
 #[test]
@@ -312,4 +317,87 @@ fn a_hard_linked_file_is_refused_and_both_names_keep_their_bytes() {
     let err = ensure_project_gitignore(dir.path()).unwrap_err();
     assert!(matches!(err, ManagedFileError::HardLinked { .. }), "{err}");
     assert_eq!(std::fs::read_to_string(&twin).unwrap(), "mine\n");
+}
+
+/// What `git check-attr <attr> -- <path>` reports, or `None` without a git CLI.
+fn git_attr(dir: &Path, attr: &str, path: &str) -> Option<String> {
+    let init = std::process::Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(dir)
+        .output()
+        .ok()?;
+    assert!(init.status.success());
+    let out = std::process::Command::new("git")
+        .args(["check-attr", attr, "--", path])
+        .current_dir(dir)
+        .output()
+        .ok()?;
+    assert!(out.status.success());
+    let text = String::from_utf8(out.stdout).unwrap();
+    Some(text.rsplit(": ").next().unwrap().trim().to_owned())
+}
+
+#[test]
+fn a_users_own_attribute_still_wins_after_the_block_is_merged() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join(".gitattributes"), "*.pdf diff=pdf\n").unwrap();
+    ensure_gitattributes(dir.path(), false).unwrap();
+    let text = std::fs::read_to_string(dir.path().join(".gitattributes")).unwrap();
+    assert!(text.starts_with(BEGIN_MARKER), "block goes first:\n{text}");
+    assert!(
+        text.ends_with("*.pdf diff=pdf\n"),
+        "user line kept:\n{text}"
+    );
+    let Some(diff) = git_attr(dir.path(), "diff", "x.pdf") else {
+        eprintln!("git CLI unavailable; attribute lookup skipped");
+        return;
+    };
+    assert_eq!(
+        diff, "pdf",
+        "the block must not override the user's diff=pdf"
+    );
+}
+
+#[test]
+fn a_new_gitattributes_block_goes_after_the_bom_with_one_separator_in_the_files_eol() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join(".gitattributes");
+    std::fs::write(&path, "\u{feff}*.pdf diff=pdf\r\n").unwrap();
+    ensure_gitattributes(dir.path(), false).unwrap();
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(
+        text.starts_with(&format!("\u{feff}{BEGIN_MARKER}\r\n")),
+        "{text:?}"
+    );
+    assert!(
+        text.ends_with(&format!("{END_MARKER}\r\n\r\n*.pdf diff=pdf\r\n")),
+        "{text:?}"
+    );
+    ensure_gitattributes(dir.path(), false).unwrap();
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), text, "idempotent");
+}
+
+#[test]
+fn an_existing_gitattributes_block_is_replaced_where_it_sits() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join(".gitattributes");
+    let old = format!("*.a x\n{BEGIN_MARKER}\nold\n{END_MARKER}\n*.b y\n");
+    std::fs::write(&path, &old).unwrap();
+    ensure_gitattributes(dir.path(), false).unwrap();
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(
+        text.starts_with("*.a x\n") && text.ends_with("*.b y\n"),
+        "{text}"
+    );
+    assert!(!text.contains("\nold\n"));
+}
+
+#[test]
+fn a_legacy_lfs_models_line_is_dropped_when_lfs_is_turned_off() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join(".gitattributes");
+    std::fs::write(&path, legacy_gitattributes(true)).unwrap();
+    ensure_gitattributes(dir.path(), false).unwrap();
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(!text.contains("filter=lfs"), "{text}");
 }
