@@ -216,6 +216,7 @@ impl Signex {
                         if let Some(editor) = self.document_state.footprint_editors.get_mut(&p) {
                             editor.canvas_cache.clear();
                         }
+                        self.commit_restore(&p);
                     }
                     Ok(_) => {
                         crate::diagnostics::log_warning(format!(
@@ -250,6 +251,7 @@ impl Signex {
                         // dirty marker must go or quit asks about a
                         // file that matches disk.
                         self.set_reloaded_dirty(&p, active_idx, false);
+                        self.commit_restore(&p);
                     }
                     Ok(_) => {
                         crate::diagnostics::log_warning(format!(
@@ -319,6 +321,17 @@ impl Signex {
                 self.refresh_panel_ctx();
             }
         }
+    }
+
+    /// Queue the project git commit for the restored bytes already on disk,
+    /// so a clean tab does not leave them uncommitted. Dropped while a commit
+    /// of this file is in flight (see `commit_save_to_project_git`).
+    fn commit_restore(&mut self, path: &std::path::Path) {
+        let label = path
+            .file_name()
+            .map(|f| f.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.display().to_string());
+        self.commit_save_to_project_git(path, &format!("Restore {label}"));
     }
 
     /// Records whether a document just reloaded from disk is dirty, in
