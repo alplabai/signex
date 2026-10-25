@@ -246,6 +246,23 @@ impl ErrorNotice {
         }
     }
 
+    /// File ▸ Import ▸ Altium Project could not convert or open the design.
+    pub fn import(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Altium Import Failed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
+    /// The Altium import succeeded but approximated or skipped something
+    /// the user must review. Advisory: the converted files exist.
+    pub fn import_advisory(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Imported with Approximations".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
     /// A file could not be opened — unreadable, unparseable, or empty
     /// where it must not be (#532).
     pub fn open(detail: impl Into<String>) -> Self {

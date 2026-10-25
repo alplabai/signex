@@ -23,6 +23,18 @@ impl Signex {
                 Some(self.handle_open_recent_project(path.clone()))
             }
             MenuMessage::ClearRecentProjects => Some(self.handle_clear_recent_projects()),
+            MenuMessage::ImportAltium => Some(Task::perform(
+                async {
+                    rfd::AsyncFileDialog::new()
+                        .set_title("Import Altium Project")
+                        .add_filter("Altium Design", &["PrjPcb", "SchDoc", "PcbDoc"])
+                        .add_filter("All files", &["*"])
+                        .pick_file()
+                        .await
+                        .map(|file| file.path().to_path_buf())
+                },
+                |p| Message::File(FileMsg::AltiumImportPicked(p)),
+            )),
             MenuMessage::Save => Some(self.update(Message::File(FileMsg::Save))),
             MenuMessage::SaveAs => Some(self.save_as_dialog_for_active_tab()),
             MenuMessage::NewProject => Some(Task::perform(

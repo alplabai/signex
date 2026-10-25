@@ -79,6 +79,7 @@ pub fn message_touches_disk(message: &crate::app::Message) -> bool {
             m,
             FileMsg::NewProject(_)
                 | FileMsg::SampleProjectUnpacked(_)
+                | FileMsg::AltiumImportFinished(_)
                 | FileMsg::DocumentSaved(_)
                 | FileMsg::SavePrimitiveAs { .. }
         ),
