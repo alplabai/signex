@@ -10,6 +10,16 @@ use crate::render_config::GridStyle;
 /// Range: 0.635 mm (¼ grid) → 5.08 mm (2× grid). Default: 1.27 mm (Altium default, 50 mil).
 pub const GRID_SIZES_MM: &[f32] = &[0.635, 1.27, 2.54, 5.08];
 
+/// The grid pitch as the exact `f64` millimetre value the user sees.
+///
+/// The pitch is stored as `f32`, and widening it with `f64::from` turns
+/// `1.27` into `1.2699999809…`, which lands snapped points 1–4 nm off the
+/// grid in the saved file. Rounding to the nearest whole nanometre recovers
+/// the intended decimal (`1.27f32` -> `1.27f64`).
+pub fn pitch_mm_exact(mm: f32) -> f64 {
+    (f64::from(mm) * 1e6).round() / 1e6
+}
+
 /// Human-readable labels for GRID_SIZES_MM (same order).
 pub const GRID_SIZE_LABELS: &[&str] = &["0.635 mm", "1.27 mm", "2.54 mm", "5.08 mm"];
 
@@ -295,7 +305,7 @@ pub fn draw_grid(
 
 #[cfg(test)]
 mod pitch_tests {
-    use super::adaptive_pitch_mm;
+    use super::{adaptive_pitch_mm, pitch_mm_exact};
 
     #[test]
     fn default_pcb_zoom_draws_a_multiple_of_the_grid() {
@@ -313,5 +323,32 @@ mod pitch_tests {
     fn too_dense_even_at_coarsest_level_hides() {
         assert_eq!(adaptive_pitch_mm(0.635, 0.01, 8.0), None);
         assert_eq!(adaptive_pitch_mm(0.0, 3.0, 8.0), None);
+    }
+
+    /// #1057 - a snapped point is an exact multiple of the pitch in nm, for
+    /// every preset and the issue's extra grids, at large step counts.
+    #[test]
+    fn snapped_points_are_exact_nm_multiples() {
+        let grids: [(f32, i64); 7] = [
+            (0.635, 635_000),
+            (1.27, 1_270_000),
+            (2.54, 2_540_000),
+            (5.08, 5_080_000),
+            (0.127, 127_000),
+            (0.1, 100_000),
+            (0.254, 254_000),
+        ];
+        for (mm, pitch_nm) in grids {
+            let g = pitch_mm_exact(mm);
+            for steps in [1_i64, 7, 100, 400, 1000, 5000] {
+                let x = steps as f64 * g + 0.3 * g;
+                let snapped = (x / g).round() * g;
+                assert_eq!(
+                    (snapped * 1e6).round() as i64,
+                    steps * pitch_nm,
+                    "{mm} x {steps}"
+                );
+            }
+        }
     }
 }
