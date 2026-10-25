@@ -108,6 +108,21 @@ pub fn hash_row_content(row: &ComponentRow) -> Result<[u8; 32], LibraryError> {
     Ok(out)
 }
 
+/// Refuse a row carrying a NaN / infinite parameter, naming the row and the
+/// parameter key. Every write path (TSV table, `.snxlib`, the database and
+/// the library server) calls this before serialising: `serde_json` writes a
+/// non-finite float as `null`, which cannot be read back, so storing one
+/// would leave the table or library unloadable (#1056).
+pub fn ensure_row_params_finite(row: &ComponentRow) -> Result<(), LibraryError> {
+    check_param_map_finite(&row.parameters).map_err(|e| match e {
+        LibraryError::Backend(msg) => LibraryError::Backend(format!(
+            "row {} ({}): {msg}; nothing was written",
+            row.internal_pn, row.row_id
+        )),
+        other => other,
+    })
+}
+
 /// Reject any `ParamValue::Number` / `ParamValue::Measurement` whose float
 /// payload is not finite (`NaN`, `Infinity`, `-Infinity`).
 fn check_param_map_finite(params: &ParamMap) -> Result<(), LibraryError> {
@@ -115,12 +130,12 @@ fn check_param_map_finite(params: &ParamMap) -> Result<(), LibraryError> {
         match value {
             ParamValue::Number(n) if !n.is_finite() => {
                 return Err(LibraryError::Backend(format!(
-                    "parameter {key:?} is non-finite ({n}); content hash refuses NaN / Infinity"
+                    "parameter {key:?} is non-finite ({n}); refused: NaN / Infinity cannot be stored"
                 )));
             }
             ParamValue::Measurement { value: n, .. } if !n.is_finite() => {
                 return Err(LibraryError::Backend(format!(
-                    "parameter {key:?} measurement value is non-finite ({n}); content hash refuses NaN / Infinity"
+                    "parameter {key:?} measurement value is non-finite ({n}); refused: NaN / Infinity cannot be stored"
                 )));
             }
             _ => {}

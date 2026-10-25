@@ -250,7 +250,7 @@ fn view_symbol_canvas<'a>(
         editor.active_part,
         editor.context_menu.is_some(),
         &editor.camera,
-        display.grid_size_mm as f64,
+        crate::canvas::grid::pitch_mm_exact(display.grid_size_mm),
         display.grid_visible,
         panel_ctx.symbol_grid_style,
         display.pin_selection.allows_label_grab(),

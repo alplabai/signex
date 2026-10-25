@@ -348,6 +348,9 @@ fn eval_helper(helper: &CompiledHelper, subject: Subject<'_>) -> bool {
 
 enum Value {
     Str(String),
+    /// Several strings; a comparison or match holds if ANY of them does
+    /// (`!=` holds when NONE equals).
+    Strs(Vec<String>),
     Bool(bool),
 }
 
@@ -373,6 +376,15 @@ fn eval_field_cmp(
                 CmpOp::Ne => normalize(&a) != normalize(&b),
             }
         }
+        (Value::Strs(all), rhs) => {
+            let any_eq = all
+                .iter()
+                .any(|a| normalize(a) == normalize(rhs.as_str_value()));
+            match op {
+                CmpOp::Eq => any_eq,
+                CmpOp::Ne => !any_eq,
+            }
+        }
         (Value::Bool(a), rhs) => {
             let b = normalize(rhs.as_str_value()) == "true";
             match op {
@@ -389,6 +401,7 @@ fn eval_field_matches(field: &FieldExprAst, regex: &Regex, subject: Subject<'_>)
     };
     match lhs {
         Value::Str(s) => regex.is_match(&s),
+        Value::Strs(all) => all.iter().any(|s| regex.is_match(s)),
         Value::Bool(_) => false,
     }
 }
@@ -398,6 +411,7 @@ fn resolve_field(field: &FieldExprAst, subject: Subject<'_>) -> Option<Value> {
         (FieldExprAst::Access { object, field }, Subject::Net(net)) if object == "net" => {
             match field.as_str() {
                 "name" => Some(Value::Str(net.name.clone())),
+                "names" => Some(Value::Strs(net.names.clone())),
                 "class" => Some(Value::Str(net.class.clone())),
                 _ => None,
             }

@@ -1042,6 +1042,7 @@ fn sheet_placements_count_every_occurrence_of_a_nested_child() {
 }
 
 mod multi_root;
+mod multiple_names;
 
 /// #537: duplicate-uuid detection covers the whole project graph, so a
 /// declared page outside the root's hierarchy that copies the root's uuid is

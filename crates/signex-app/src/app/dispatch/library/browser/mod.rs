@@ -463,26 +463,9 @@ impl Signex {
                 }
                 BrowserEditMsg::CommitParam { key } => {
                     if let Some((value, unit)) = modal.param_buf.get(&key).cloned() {
-                        let pv = if !unit.trim().is_empty() {
-                            // Try parse as f64 first, otherwise store as text.
-                            value
-                                .parse::<f64>()
-                                .ok()
-                                .map(|n| signex_library::ParamValue::Measurement {
-                                    value: n,
-                                    unit: unit.clone(),
-                                })
-                                .unwrap_or_else(|| {
-                                    signex_library::ParamValue::Text(format!("{value} {unit}"))
-                                })
-                        } else if let Ok(n) = value.parse::<f64>() {
-                            signex_library::ParamValue::Number(n)
-                        } else if value.eq_ignore_ascii_case("true") {
-                            signex_library::ParamValue::Bool(true)
-                        } else if value.eq_ignore_ascii_case("false") {
-                            signex_library::ParamValue::Bool(false)
-                        } else {
-                            signex_library::ParamValue::Text(value)
+                        // A refused entry leaves the draft untouched.
+                        let Some(pv) = param_commit::modal_param_value(value, &unit) else {
+                            return Task::none();
                         };
                         modal.draft.parameters.insert(key, pv);
                     }
@@ -712,6 +695,7 @@ impl Signex {
                 if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
                     state.cell_edit.insert((row_id, column), buf);
                 }
+                self.sync_diagnostics_panel_ctx();
                 return Task::none();
             }
         }
@@ -734,6 +718,8 @@ impl Signex {
             if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
                 state.cell_edit.insert((row_id, column), buf);
             }
+            // No `finish_update` here: republish so the refusal shows now.
+            self.sync_diagnostics_panel_ctx();
             return Task::none();
         }
         if let Err(e) = self.library.refresh_components(&library_path) {

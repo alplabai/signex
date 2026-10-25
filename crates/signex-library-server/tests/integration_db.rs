@@ -512,3 +512,32 @@ async fn postgres_migrations_apply_when_env_set() {
     let state = AppState::connect(&url).await.expect("pg connect");
     state.migrate().await.expect("pg migrations apply");
 }
+
+/// #1056: the store refuses a non-finite parameter instead of saving
+/// `null`, on both insert and update, and keeps the stored row.
+#[tokio::test]
+async fn store_refuses_non_finite_parameter() {
+    use signex_library::param::ParamValue;
+
+    let state = fresh_state().await;
+    let lib = Uuid::now_v7();
+    let good = fixture_row("R1");
+    assert!(state.insert_row(lib, "resistors", &good).await.unwrap());
+
+    let mut bad = fixture_row("R_BAD");
+    bad.parameters
+        .insert("tolerance".into(), ParamValue::Number(f64::NAN));
+    let err = state.insert_row(lib, "resistors", &bad).await.unwrap_err();
+    assert!(err.to_string().contains("tolerance"), "{err}");
+
+    let mut upd = good.clone();
+    upd.parameters
+        .insert("tolerance".into(), ParamValue::Number(f64::INFINITY));
+    assert!(state.update_row(lib, "resistors", &upd).await.is_err());
+    let stored = state
+        .fetch_row(lib, "resistors", RowId::from_uuid(good.row_id))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(stored.parameters, good.parameters);
+}
