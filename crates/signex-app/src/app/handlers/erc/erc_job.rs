@@ -92,25 +92,20 @@ pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
     }
 
     let mut by_path: ViolationsByPath = HashMap::new();
+    // One memo for the whole run: a sheet reached from several parents (or
+    // from several sheets' runs) is projected once (#998).
+    let mut hierarchy_memo = signex_erc::HierarchyMemo::new();
     for (path, snapshot) in &snapshots {
         let key = project_sheets::sheet_key_with(path, base_dir.as_deref(), fold);
-        let raw = match dsl_eval_fns.as_ref() {
-            Some(eval_fns) => signex_erc::run_with_project_dsl_and_config(
-                snapshot,
-                Some(&key),
-                &graph.resolved,
-                &graph.sheets,
-                eval_fns,
-                &inputs.config,
-            ),
-            None => signex_erc::run_with_project_and_config(
-                snapshot,
-                Some(&key),
-                &graph.resolved,
-                &graph.sheets,
-                &inputs.config,
-            ),
-        };
+        let raw = signex_erc::run_with_project_memoised(
+            snapshot,
+            Some(&key),
+            &graph.resolved,
+            &graph.sheets,
+            dsl_eval_fns.as_deref().unwrap_or(&[]),
+            &inputs.config,
+            &mut hierarchy_memo,
+        );
         by_path.insert(
             path.clone(),
             signex_erc::apply_overrides(raw, &inputs.overrides),
@@ -118,6 +113,7 @@ pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
     }
 
     refile_child_sheet_violations(&mut by_path);
+    dedupe_descendant_clashes(&mut by_path);
 
     let total: usize = by_path.values().map(Vec::len).sum();
     infos.push(format!(
@@ -159,6 +155,42 @@ fn refile_child_sheet_violations(by_path: &mut ViolationsByPath) {
     }
     for (child, v) in moved {
         by_path.entry(child).or_default().push(v);
+    }
+}
+
+/// A duplicate-designator clash between descendant sheets is found by each
+/// sheet that sees both sides (the rule already stops ancestors above the
+/// lowest one). When a sub-sheet is reused under several parents, those
+/// parents still all report the identical finding; keep it once per ERC run,
+/// under the first sheet path in sort order so the result is stable (#998).
+/// Identity is the owning sheet's resolved key, not the display text: two
+/// copied channels with identical file names and positions are distinct
+/// sheets and each keep their own finding.
+fn dedupe_descendant_clashes(by_path: &mut ViolationsByPath) {
+    let is_clash = |v: &signex_erc::Violation| {
+        v.rule == signex_erc::RuleKind::DuplicateRefDesignator
+            && v.location_space == signex_erc::LocationSpace::ChildSheet
+    };
+    let mut paths: Vec<std::path::PathBuf> = by_path.keys().cloned().collect();
+    paths.sort();
+    let key_of = |v: &signex_erc::Violation| {
+        (
+            v.message.clone(),
+            v.location.x.to_bits(),
+            v.location.y.to_bits(),
+            v.owner_sheet.clone(),
+        )
+    };
+    // Only findings from earlier sheets count as already reported, so two
+    // distinct clashes inside one sheet's own list are never merged.
+    let mut reported: std::collections::HashSet<(String, u64, u64, Option<signex_net::SheetKey>)> =
+        std::collections::HashSet::new();
+    for path in paths {
+        let Some(list) = by_path.get_mut(&path) else {
+            continue;
+        };
+        list.retain(|v| !is_clash(v) || !reported.contains(&key_of(v)));
+        reported.extend(list.iter().filter(|v| is_clash(v)).map(key_of));
     }
 }
 
