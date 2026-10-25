@@ -22,6 +22,8 @@ use std::path::PathBuf;
 use iced::widget::{Space, button, container, row, text};
 use iced::{Border, Length, Theme};
 use signex_types::theme::ThemeTokens;
+
+use crate::styles::{Spacing, TypeScale};
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 use signex_widgets::theme_ext;
 
@@ -39,6 +41,8 @@ pub fn mode_switcher_overlay<'a>(
     editor: &'a FootprintEditorState,
     tokens: &'a ThemeTokens,
 ) -> iced::Element<'a, LibraryMessage> {
+    let ts = TypeScale::default();
+    let sp = Spacing::default();
     let mode = editor.state.mode;
     let path = editor.path.clone();
     let text_c = theme_ext::text_primary(tokens);
@@ -55,14 +59,14 @@ pub fn mode_switcher_overlay<'a>(
         button(
             container(
                 text(label)
-                    .size(11)
+                    .size(ts.body)
                     .color(label_color)
                     .align_x(iced::alignment::Horizontal::Center),
             )
             .height(Length::Fixed(22.0))
             .center_y(Length::Fixed(22.0)),
         )
-        .padding([0, 12])
+        .padding([0.0, sp.l])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path,
             msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetMode(target)),
@@ -92,26 +96,24 @@ pub fn mode_switcher_overlay<'a>(
             path.clone()
         ),
     ]
-    .spacing(2)
+    .spacing(sp.xs)
     .align_y(iced::Alignment::Center);
 
     // Wrap in a panel-backed container so the chrome reads as a
     // floating chip over the canvas (matches the active bar's
     // visual rhythm).
-    iced::widget::container(
-        iced::widget::container(segments)
-            .padding(4)
-            .style(move |_: &Theme| iced::widget::container::Style {
-                background: Some(iced::Background::Color(panel_bg)),
-                border: Border {
-                    width: 1.0,
-                    radius: 4.0.into(),
-                    color: border,
-                },
-                ..iced::widget::container::Style::default()
-            }),
-    )
-    .padding([6, 10])
+    iced::widget::container(iced::widget::container(segments).padding(sp.s).style(
+        move |_: &Theme| iced::widget::container::Style {
+            background: Some(iced::Background::Color(panel_bg)),
+            border: Border {
+                width: 1.0,
+                radius: 4.0.into(),
+                color: border,
+            },
+            ..iced::widget::container::Style::default()
+        },
+    ))
+    .padding([sp.s, sp.m])
     .align_x(iced::alignment::Horizontal::Right)
     .align_y(iced::alignment::Vertical::Top)
     .width(Length::Fill)
@@ -129,6 +131,8 @@ pub fn footprint_tabs_overlay<'a>(
     editor: &'a FootprintEditorState,
     tokens: &'a ThemeTokens,
 ) -> iced::Element<'a, LibraryMessage> {
+    let ts = TypeScale::default();
+    let sp = Spacing::default();
     let path = editor.path.clone();
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
@@ -146,11 +150,11 @@ pub fn footprint_tabs_overlay<'a>(
         let label_color = if active { on_accent } else { text_c };
         button(
             text(label)
-                .size(11)
+                .size(ts.body)
                 .color(label_color)
                 .align_x(iced::alignment::Horizontal::Center),
         )
-        .padding([5, 10])
+        .padding([sp.s, sp.m])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path,
             msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SelectActiveIdx(idx)),
@@ -159,7 +163,7 @@ pub fn footprint_tabs_overlay<'a>(
         .into()
     };
 
-    let mut tabs = row![].spacing(2).align_y(iced::Alignment::Center);
+    let mut tabs = row![].spacing(sp.xs).align_y(iced::Alignment::Center);
     for (idx, fp) in editor.file.footprints.iter().enumerate() {
         let is_active = idx == active_idx;
         tabs = tabs.push(tab_btn(idx, fp.name.clone(), is_active, path.clone()));
@@ -169,18 +173,18 @@ pub fn footprint_tabs_overlay<'a>(
     // sibling even when the envelope is a one-element file.
     let add_btn = button(
         text("+")
-            .size(13)
+            .size(ts.title)
             .color(muted)
             .align_x(iced::alignment::Horizontal::Center),
     )
-    .padding([3, 9])
+    .padding([sp.xs, sp.m])
     .on_press(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
         msg: PrimitiveEdit::Footprint(FootprintEditorMsg::AddNewSibling),
     })
     .style(crate::styles::outline_button(tokens));
 
-    tabs = tabs.push(Space::new().width(Length::Fixed(4.0)));
+    tabs = tabs.push(Space::new().width(sp.s));
     tabs = tabs.push(add_btn);
 
     // Single-footprint files with no sibling action: still render the
@@ -188,7 +192,7 @@ pub fn footprint_tabs_overlay<'a>(
     // switcher chip on the opposite corner.
     iced::widget::container(
         iced::widget::container(tabs)
-            .padding(4)
+            .padding(sp.s)
             .style(move |_: &Theme| iced::widget::container::Style {
                 background: Some(iced::Background::Color(panel_bg)),
                 border: Border {
@@ -199,7 +203,7 @@ pub fn footprint_tabs_overlay<'a>(
                 ..iced::widget::container::Style::default()
             }),
     )
-    .padding([6, 10])
+    .padding([sp.s, sp.m])
     .align_x(iced::alignment::Horizontal::Left)
     .align_y(iced::alignment::Vertical::Top)
     .width(Length::Fill)
