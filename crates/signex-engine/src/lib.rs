@@ -167,6 +167,45 @@ impl Engine {
         self.instance
     }
 
+    /// [`Self::serialize`] with `colors` as the sheet's net colour overrides.
+    /// The app keeps the live overrides outside the document (they are not
+    /// part of the undo history), so a save passes them in. Overrides whose
+    /// wire or junction is no longer in the sheet are dropped here.
+    pub fn serialize_with_net_colors(
+        &self,
+        colors: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    ) -> Result<String, EngineError> {
+        let mut sheet = self.document.clone();
+        let live: std::collections::HashSet<uuid::Uuid> = sheet
+            .wires
+            .iter()
+            .map(|w| w.uuid)
+            .chain(sheet.junctions.iter().map(|j| j.uuid))
+            .collect();
+        sheet.net_colors = colors
+            .iter()
+            .filter(|(id, _)| live.contains(id))
+            .map(|(id, color)| (*id, *color))
+            .collect();
+        signex_types::format::SnxSchematic::new(sheet)
+            .write_string()
+            .map_err(|error| EngineError::SaveFailed(std::io::Error::other(error.to_string())))
+    }
+
+    /// [`Self::save`] writing `colors` as the net colour overrides; see
+    /// [`Self::serialize_with_net_colors`].
+    pub fn save_with_net_colors(
+        &mut self,
+        colors: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    ) -> Result<(), EngineError> {
+        let Some(path) = self.path.clone() else {
+            return Err(EngineError::MissingPath);
+        };
+        let content = self.serialize_with_net_colors(colors)?;
+        signex_types::atomic_io::atomic_write(&path, content.as_bytes())
+            .map_err(EngineError::SaveFailed)
+    }
+
     pub fn save_as(&mut self, path: &Path) -> Result<(), EngineError> {
         let content = self.serialize()?;
         // HI-6: atomic write — a crash mid-save no longer truncates the

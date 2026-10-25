@@ -31,7 +31,7 @@ impl Signex {
             .with_context(|| format!("no open schematic at {}", source.display()))?;
         let revision = engine.revision();
         let bytes = engine
-            .serialize()
+            .serialize_with_net_colors(&self.ui_state.wire_color_overrides)
             .with_context(|| format!("encode schematic {}", source.display()))?
             .into_bytes();
         let job = self
