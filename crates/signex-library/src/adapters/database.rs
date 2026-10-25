@@ -18,7 +18,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use uuid::Uuid;
 
-use crate::adapter::{LibraryAdapter, LibraryError, PrimitiveSummary};
+use crate::adapter::{FieldSet, LibraryAdapter, LibraryError, PrimitiveSummary};
 use crate::component::ComponentRow;
 use crate::identity::{InternalPn, RowId};
 use crate::library_file::SnxlibManifest;
@@ -100,6 +100,26 @@ fn redirect_policy(has_token: bool) -> reqwest::redirect::Policy {
     })
 }
 
+/// Field-set locked around a whole-row write. The server keys locks per
+/// `(row, field_set)`; every writer of a row must contend on the same key, so
+/// row writes all use this one.
+const ROW_LOCK_FIELD_SET: FieldSet = FieldSet::SharedParams;
+
+/// Server wire name of [`ROW_LOCK_FIELD_SET`] (`routes/locks.rs`).
+const ROW_LOCK_FIELD_SET_WIRE: &str = "SharedParams";
+
+/// Longest label kept ahead of the suffix; the server caps the whole header
+/// at 256 bytes.
+const HOLDER_LABEL_MAX: usize = 200;
+
+/// Make a holder label unique per client: the server tells lock owners apart
+/// only by this string, and `name@library_id` is identical for every user of
+/// a library. The suffix is random and carries no credential.
+fn unique_holder(label: &str) -> String {
+    let label: String = label.chars().take(HOLDER_LABEL_MAX).collect();
+    format!("{label}#{}", Uuid::new_v4().simple())
+}
+
 impl DatabaseAdapter {
     /// Construct from a manifest. The manifest's `auth` field is treated as
     /// the bearer token; the holder is derived from it.
@@ -133,11 +153,11 @@ impl DatabaseAdapter {
         // server error bodies (`"lock held by {holder}"`), so identifying
         // the caller via the credential leaks it through both surfaces.
         // Derive a non-secret label from the library identity instead.
-        let holder = format!(
+        let holder = unique_holder(&format!(
             "{}@{}",
             manifest.library.name,
             manifest.library.library_id.simple()
-        );
+        ));
         Ok(Self {
             manifest,
             base_url,
@@ -173,7 +193,7 @@ impl DatabaseAdapter {
         let token = token.into();
         check_transport_security(&base_url, !token.is_empty())?;
         let token = if token.is_empty() { None } else { Some(token) };
-        let holder = holder.into();
+        let holder = unique_holder(&holder.into());
         let client = reqwest::blocking::Client::builder()
             .connect_timeout(HTTP_CONNECT_TIMEOUT)
             .timeout(HTTP_REQUEST_TIMEOUT)
@@ -236,6 +256,37 @@ impl DatabaseAdapter {
             }
         }
         out
+    }
+
+    /// Run `write` while holding the row lock. The lock is released on the
+    /// success and the error path alike; a failed release never hides the
+    /// write's own error.
+    fn with_row_lock<T>(
+        &self,
+        row_id: RowId,
+        write: impl FnOnce() -> Result<T, LibraryError>,
+    ) -> Result<T, LibraryError> {
+        self.try_lock(row_id, ROW_LOCK_FIELD_SET)?;
+        let result = write();
+        let released = self.release_lock(row_id, ROW_LOCK_FIELD_SET);
+        match (result, released) {
+            (Ok(v), Ok(())) => Ok(v),
+            (Ok(_), Err(e)) => Err(e),
+            (Err(e), _) => Err(e),
+        }
+    }
+
+    fn lock_request(
+        &self,
+        method: reqwest::Method,
+        row_id: RowId,
+    ) -> reqwest::blocking::RequestBuilder {
+        self.auth(
+            self.client
+                .request(method, self.url(&format!("/rows/{row_id}/locks")))
+                .header("x-signex-holder", &self.holder)
+                .json(&serde_json::json!({ "field_set": ROW_LOCK_FIELD_SET_WIRE })),
+        )
     }
 
     /// Apply the `Authorization: Bearer <token>` header when configured.
@@ -528,24 +579,26 @@ impl LibraryAdapter for DatabaseAdapter {
             "/tables/{t}/rows/{row_id}?{}",
             self.library_id_query()
         ));
-        let resp = self
-            .auth(
-                self.client
-                    .put(url)
-                    .header("x-signex-message", msg)
-                    .json(&row),
-            )
-            .send()
-            .map_err(|e| LibraryError::Backend(e.to_string()))?;
-        match resp.status() {
-            s if s.is_success() => Ok(()),
-            reqwest::StatusCode::NOT_FOUND => {
-                Err(LibraryError::NotFound(format!("row {table}/{row_id}")))
+        self.with_row_lock(RowId::from_uuid(row_id), || {
+            let resp = self
+                .auth(
+                    self.client
+                        .put(url)
+                        .header("x-signex-message", msg)
+                        .json(&row),
+                )
+                .send()
+                .map_err(|e| LibraryError::Backend(e.to_string()))?;
+            match resp.status() {
+                s if s.is_success() => Ok(()),
+                reqwest::StatusCode::NOT_FOUND => {
+                    Err(LibraryError::NotFound(format!("row {table}/{row_id}")))
+                }
+                other => Err(LibraryError::Backend(format!(
+                    "update_row {table}/{row_id}: {other}"
+                ))),
             }
-            other => Err(LibraryError::Backend(format!(
-                "update_row {table}/{row_id}: {other}"
-            ))),
-        }
+        })
     }
 
     fn delete_row(&self, table: &str, row_id: RowId, msg: &str) -> Result<(), LibraryError> {
@@ -562,17 +615,66 @@ impl LibraryAdapter for DatabaseAdapter {
             "/tables/{t}/rows/{row_id}?{}",
             self.library_id_query()
         ));
+        self.with_row_lock(row_id, || {
+            let resp = self
+                .auth(self.client.delete(url).header("x-signex-message", msg))
+                .send()
+                .map_err(|e| LibraryError::Backend(e.to_string()))?;
+            match resp.status() {
+                s if s.is_success() => Ok(()),
+                reqwest::StatusCode::NOT_FOUND => {
+                    Err(LibraryError::NotFound(format!("row {table}/{row_id}")))
+                }
+                other => Err(LibraryError::Backend(format!(
+                    "delete_row {table}/{row_id}: {other}"
+                ))),
+            }
+        })
+    }
+
+    fn try_lock(&self, row_id: RowId, field_set: FieldSet) -> Result<(), LibraryError> {
+        if field_set != ROW_LOCK_FIELD_SET {
+            return Err(LibraryError::Backend(format!(
+                "try_lock: only the row lock ({ROW_LOCK_FIELD_SET:?}) is supported, got {field_set:?}"
+            )));
+        }
         let resp = self
-            .auth(self.client.delete(url).header("x-signex-message", msg))
+            .lock_request(reqwest::Method::POST, row_id)
             .send()
             .map_err(|e| LibraryError::Backend(e.to_string()))?;
         match resp.status() {
             s if s.is_success() => Ok(()),
-            reqwest::StatusCode::NOT_FOUND => {
-                Err(LibraryError::NotFound(format!("row {table}/{row_id}")))
+            reqwest::StatusCode::CONFLICT => {
+                // Body is `{"error":"lock held by <holder>"}`.
+                let body = resp.text().unwrap_or_default();
+                let holder = serde_json::from_str::<serde_json::Value>(&body)
+                    .ok()
+                    .and_then(|v| v["error"].as_str().map(str::to_owned))
+                    .and_then(|m| m.strip_prefix("lock held by ").map(str::to_owned))
+                    .unwrap_or_else(|| "another holder".into());
+                Err(LibraryError::Locked {
+                    holder,
+                    field_set: format!("row {row_id} ({field_set:?})"),
+                })
             }
+            other => Err(LibraryError::Backend(format!("try_lock {row_id}: {other}"))),
+        }
+    }
+
+    fn release_lock(&self, row_id: RowId, field_set: FieldSet) -> Result<(), LibraryError> {
+        if field_set != ROW_LOCK_FIELD_SET {
+            return Err(LibraryError::Backend(format!(
+                "release_lock: only the row lock ({ROW_LOCK_FIELD_SET:?}) is supported, got {field_set:?}"
+            )));
+        }
+        let resp = self
+            .lock_request(reqwest::Method::DELETE, row_id)
+            .send()
+            .map_err(|e| LibraryError::Backend(e.to_string()))?;
+        match resp.status() {
+            s if s.is_success() => Ok(()),
             other => Err(LibraryError::Backend(format!(
-                "delete_row {table}/{row_id}: {other}"
+                "release_lock {row_id}: {other}"
             ))),
         }
     }
@@ -789,7 +891,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(adapter.base_url(), "https://example.com/api");
-        assert_eq!(adapter.holder(), "alice@example");
+        assert!(adapter.holder().starts_with("alice@example#"));
     }
 
     #[test]

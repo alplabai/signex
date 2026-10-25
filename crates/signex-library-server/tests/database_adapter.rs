@@ -10,10 +10,15 @@
 //! value. Unset, the loopback server runs unauthenticated; the wiremock tests
 //! in signex-library cover the auth header.
 
-use signex_library::adapter::{LibraryAdapter, LibraryError, PrimitiveSummary};
+use signex_library::adapter::{FieldSet, LibraryAdapter, LibraryError, PrimitiveSummary};
 use signex_library::adapters::database::DatabaseAdapter;
+use signex_library::component::{ComponentRow, DatasheetRef, PlmReserved};
+use signex_library::identity::{ComponentClass, InternalPn, RowId};
+use signex_library::lifecycle::LifecycleState;
 use signex_library::manifest::{LibraryMeta, LibraryMode, Manifest};
-use signex_library::primitive::{Footprint, SimKind, SimModel, Symbol};
+use signex_library::manufacturer::ManufacturerPart;
+use signex_library::param::ParamMap;
+use signex_library::primitive::{Footprint, PrimitiveRef, SimKind, SimModel, Symbol};
 use signex_library_server::db::AppState;
 use signex_library_server::{API_TOKEN_ENV, router_with_state};
 use uuid::Uuid;
@@ -149,4 +154,111 @@ fn primitives_stay_in_their_own_library() {
         library_a.get_symbol(symbol_b.uuid),
         Err(LibraryError::NotFound(_))
     ));
+}
+
+// ── Advisory row locks (#115) ────────────────────────────────────────────
+
+fn lock_test_row(pn: &str) -> ComponentRow {
+    let lib = Uuid::now_v7();
+    let now = chrono::Utc::now();
+    ComponentRow {
+        row_id: Uuid::now_v7(),
+        internal_pn: InternalPn::new(pn),
+        class: ComponentClass::new("resistor"),
+        datasheet: DatasheetRef::url("https://example.com/ds.pdf"),
+        state: LifecycleState::Draft,
+        symbol_ref: PrimitiveRef::new(lib, Uuid::now_v7()),
+        footprint_ref: None,
+        sim_ref: None,
+        pin_map_overrides: Vec::new(),
+        primary_mpn: ManufacturerPart::draft("Acme", format!("MPN-{pn}")),
+        alternates: Vec::new(),
+        supply: Vec::new(),
+        parameters: ParamMap::new(),
+        plm: PlmReserved::default(),
+        version: "0.0.1".into(),
+        released: false,
+        symbol_version: String::new(),
+        footprint_version: String::new(),
+        sim_version: String::new(),
+        created: now,
+        updated: now,
+        content_hash: [0u8; 32],
+    }
+}
+
+/// The field-set row writes lock on; a second client probing it sees whether
+/// the first still holds the lock.
+const ROW_LOCK: FieldSet = FieldSet::SharedParams;
+
+#[test]
+fn adapters_have_distinct_holders() {
+    let server = TestServer::start();
+    let library = Uuid::now_v7();
+    let (a, b) = (server.adapter(library), server.adapter(library));
+    assert_ne!(a.holder(), b.holder());
+}
+
+#[test]
+fn a_lock_held_by_another_client_blocks_update_row() {
+    let server = TestServer::start();
+    let library = Uuid::now_v7();
+    let (alice, bob) = (server.adapter(library), server.adapter(library));
+    let row = lock_test_row("R-LOCK");
+    alice
+        .insert_row("resistors", row.clone(), "add")
+        .expect("insert_row");
+
+    alice
+        .try_lock(RowId::from_uuid(row.row_id), ROW_LOCK)
+        .expect("alice locks");
+    let err = bob
+        .update_row("resistors", row.clone(), "edit")
+        .expect_err("bob is blocked");
+    match err {
+        LibraryError::Locked { holder, .. } => assert_eq!(holder, alice.holder()),
+        other => panic!("expected Locked, got {other:?}"),
+    }
+    // delete is blocked the same way.
+    assert!(matches!(
+        bob.delete_row("resistors", RowId::from_uuid(row.row_id), "drop"),
+        Err(LibraryError::Locked { .. })
+    ));
+
+    alice
+        .release_lock(RowId::from_uuid(row.row_id), ROW_LOCK)
+        .expect("alice releases");
+    bob.update_row("resistors", row, "edit")
+        .expect("bob writes once the lock is free");
+}
+
+#[test]
+fn the_lock_is_released_after_a_successful_and_a_failed_write() {
+    let server = TestServer::start();
+    let library = Uuid::now_v7();
+    let (alice, bob) = (server.adapter(library), server.adapter(library));
+    let row = lock_test_row("R-REL");
+    let id = RowId::from_uuid(row.row_id);
+    alice
+        .insert_row("resistors", row.clone(), "add")
+        .expect("insert_row");
+
+    alice
+        .update_row("resistors", row.clone(), "ok")
+        .expect("update_row");
+    bob.try_lock(id, ROW_LOCK).expect("free after success");
+    bob.release_lock(id, ROW_LOCK).expect("bob releases");
+
+    // A table that does not exist: the write fails with NotFound.
+    let err = alice
+        .update_row("no_such_table", row.clone(), "bad")
+        .expect_err("write fails");
+    assert!(matches!(err, LibraryError::NotFound(_)), "{err:?}");
+    bob.try_lock(id, ROW_LOCK).expect("free after failure");
+    bob.release_lock(id, ROW_LOCK).expect("bob releases");
+
+    alice
+        .delete_row("resistors", id, "drop")
+        .expect("delete_row");
+    bob.try_lock(id, ROW_LOCK).expect("free after delete");
 }

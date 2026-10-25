@@ -30,7 +30,7 @@ use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 use uuid::Uuid;
-use wiremock::matchers::{body_partial_json, header, method, path, query_param};
+use wiremock::matchers::{body_partial_json, header, header_exists, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 /// Test bearer token — every request must carry it via `Authorization: Bearer`.
@@ -53,6 +53,22 @@ where
 
     let server = rt.block_on(MockServer::start());
     rt.block_on(setup(&server));
+    // Row writes take the server's advisory lock around the write; the
+    // stubs accept any lock request so each test only models its own route.
+    rt.block_on(async {
+        Mock::given(method("POST"))
+            .and(wiremock::matchers::path_regex(r"^/rows/[^/]+/locks$"))
+            .and(header_exists("x-signex-holder"))
+            .respond_with(ResponseTemplate::new(201))
+            .mount(&server)
+            .await;
+        Mock::given(method("DELETE"))
+            .and(wiremock::matchers::path_regex(r"^/rows/[^/]+/locks$"))
+            .and(header_exists("x-signex-holder"))
+            .respond_with(ResponseTemplate::new(204))
+            .mount(&server)
+            .await;
+    });
 
     let adapter =
         DatabaseAdapter::with_token(server.uri(), TEST_TOKEN, TEST_HOLDER).expect("adapter");
