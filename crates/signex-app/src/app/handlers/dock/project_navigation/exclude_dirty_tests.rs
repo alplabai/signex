@@ -216,3 +216,59 @@ fn prompt_follows_its_project_when_an_earlier_project_closes() {
     let (body, can_discard) = app.exclude_dirty_prompt(&state);
     assert!(can_discard, "only the dialog's own project is open: {body}");
 }
+
+/// Two engines for one file, held as `Lib`/`lib` with different edits, both
+/// dirty, under `dir`.
+fn hold_differing_case_variants(app: &mut Signex, dir: &Path) -> (PathBuf, PathBuf) {
+    let upper = dir.join("Lib.snxsch");
+    let lower = dir.join("lib.snxsch");
+    for (path, paper) in [(&upper, "A4"), (&lower, "A3")] {
+        let sheet = signex_types::schematic::SchematicSheet {
+            paper_size: paper.to_string(),
+            ..Default::default()
+        };
+        let mut engine = signex_engine::Engine::new(sheet).expect("engine");
+        engine.set_path(Some(path.clone()));
+        app.document_state.engines.insert(path.clone(), engine);
+        app.document_state.dirty_paths.insert(path.clone());
+    }
+    (upper, lower)
+}
+
+/// #1077 — Save All keys by the owning project's probed fold.
+#[test]
+fn save_all_refuses_differing_variants_on_a_folding_project_and_keeps_markers() {
+    let _ = crate::diagnostics::init_logging();
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let dir = tmp.path().to_str().expect("utf8 tempdir").to_string();
+    let mut app = app_workspace(&dir, &["Lib.snxsch"]);
+    app.document_state.projects[0].case_fold = CaseFold::from_probe(true);
+    let (upper, lower) = hold_differing_case_variants(&mut app, tmp.path());
+    std::fs::write(&upper, ORIGINAL).unwrap();
+
+    let result = app.try_save_dirty_path(&upper);
+
+    assert!(result.is_err(), "differing variants must be refused");
+    assert_eq!(std::fs::read(&upper).unwrap(), ORIGINAL, "nothing written");
+    assert!(app.document_state.dirty_paths.contains(&upper));
+    assert!(app.document_state.dirty_paths.contains(&lower));
+}
+
+/// #1077 — a loose document has no probe, so the host default decides.
+#[test]
+fn save_all_uses_the_host_default_for_a_loose_document() {
+    let _ = crate::diagnostics::init_logging();
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let (mut app, _task) = Signex::new();
+    let (upper, lower) = hold_differing_case_variants(&mut app, tmp.path());
+
+    let result = app.try_save_dirty_path(&upper);
+
+    if CaseFold::host_default().fold_case {
+        assert!(result.is_err(), "host folds: variants are one file");
+        assert!(app.document_state.dirty_paths.contains(&lower));
+    } else {
+        assert!(result.is_ok(), "host keeps case: {result:?}");
+        assert!(app.document_state.dirty_paths.contains(&lower));
+    }
+}
