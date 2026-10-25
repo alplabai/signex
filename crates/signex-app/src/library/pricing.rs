@@ -240,6 +240,7 @@ mod tests {
             created: now,
             updated: now,
             content_hash: [0u8; 32],
+            server_revision: None,
         }
     }
 

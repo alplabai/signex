@@ -161,6 +161,7 @@ fn row(pn: &str, lib: Uuid, listings: &[(&str, &str)]) -> ComponentRow {
         created: now,
         updated: now,
         content_hash: [0u8; 32],
+        server_revision: None,
     }
 }
 
@@ -380,7 +381,7 @@ fn deleting_a_row_drops_its_cached_price() {
     refresh_library_pricing(&adapter, &mut resolve, &AtomicBool::new(false)).unwrap();
     assert_eq!(adapter.table_pricing("R").unwrap().len(), 1);
     adapter
-        .delete_row("R", RowId::from_uuid(ids["ok"]), "delete")
+        .delete_row("R", RowId::from_uuid(ids["ok"]), None, "delete")
         .unwrap();
     assert!(adapter.table_pricing("R").unwrap().is_empty());
 }

@@ -423,6 +423,7 @@ mod tests {
             created: now,
             updated: now,
             content_hash: [0; 32],
+            server_revision: None,
         };
         let cached = RowPricing::from([(
             "DigiKey".to_string(),
@@ -486,6 +487,7 @@ mod tests {
             created: now,
             updated: now,
             content_hash: [0; 32],
+            server_revision: None,
         }
     }
 
