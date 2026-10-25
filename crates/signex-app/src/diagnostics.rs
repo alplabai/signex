@@ -86,6 +86,18 @@ pub fn recent_entries() -> Vec<DiagnosticEntry> {
         .collect()
 }
 
+/// How many logged entries contain `needle`, installing the logger first.
+/// Tests share one ring, so they compare counts before and after with a
+/// needle unique to the test.
+#[cfg(test)]
+pub(crate) fn logged_count(needle: &str) -> usize {
+    let _ = init_logging();
+    recent_entries()
+        .iter()
+        .filter(|e| e.message.contains(needle))
+        .count()
+}
+
 /// Id of the most recent entry in the ring, without cloning it.
 pub fn newest_entry_id() -> Option<u64> {
     entries()
