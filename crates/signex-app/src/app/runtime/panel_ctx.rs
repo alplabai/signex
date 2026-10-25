@@ -532,3 +532,51 @@ impl Signex {
             crate::panels::build_project_tree(&self.document_state.panel_ctx);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::{Path, PathBuf};
+
+    use signex_types::project::{LibraryEntry, LibraryEntryKind, ProjectData};
+
+    use crate::app::Signex;
+    use crate::app::state::LoadedProject;
+    use crate::app::state::project_fs::git_marker;
+
+    /// #1098: the probe request must name `<dir>/.git` for the project dir
+    /// and each library dir, or the Enable Version Control row never appears.
+    #[test]
+    fn fs_request_names_the_git_marker_of_project_and_library_dirs() {
+        let dir = Path::new("snx-1098-proj");
+        let (mut app, _task) = Signex::new();
+        let id = app.document_state.mint_project_id();
+        app.document_state.projects.push(LoadedProject {
+            id,
+            path: dir.join("P.snxprj"),
+            data: ProjectData {
+                name: "P".to_string(),
+                dir: dir.to_string_lossy().into_owned(),
+                schematic_root: None,
+                pcb_file: None,
+                sheets: Vec::new(),
+                variant_definitions: Vec::new(),
+                active_variant: None,
+                libraries: vec![LibraryEntry {
+                    path: PathBuf::from("lib/L.snxlib"),
+                    kind: LibraryEntryKind::ProjectLocal,
+                    library_id: None,
+                    unknown: Default::default(),
+                }],
+                enable_git: false,
+                unknown: Default::default(),
+            },
+            pending_libraries: Default::default(),
+            case_fold: Default::default(),
+            case_probed: false,
+        });
+
+        let request = app.project_fs_request();
+        assert!(request.exists.contains(&git_marker(dir)));
+        assert!(request.exists.contains(&git_marker(&dir.join("lib"))));
+    }
+}

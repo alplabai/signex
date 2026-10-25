@@ -208,7 +208,12 @@ impl Signex {
                 }
 
                 self.ui_state.enable_version_control = None;
-                // `.git` now exists: re-probe so the menu stops offering this.
+                // `.git` now exists: record it at once so the menu and the
+                // open guards stop offering Enable before the re-probe lands.
+                self.document_state.project_fs.facts.set_exists(
+                    crate::app::state::project_fs::git_marker(&state.project_dir),
+                    true,
+                );
                 self.document_state.project_fs.invalidate();
                 self.refresh_panel_ctx();
                 let scope_label = match state.scope {

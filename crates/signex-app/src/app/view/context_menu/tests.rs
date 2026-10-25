@@ -228,11 +228,11 @@ fn enable_version_control_follows_the_model_fact_not_the_disk() {
         "unprobed must not offer the row"
     );
     let facts = &mut app.document_state.project_fs.facts;
-    facts.set_exists_for_test(git_marker(dir), false);
+    facts.set_exists(git_marker(dir), false);
     assert!(app.offers_enable_version_control(dir), "probed: no .git");
     app.document_state
         .project_fs
         .facts
-        .set_exists_for_test(git_marker(dir), true);
+        .set_exists(git_marker(dir), true);
     assert!(!app.offers_enable_version_control(dir), "probed: has .git");
 }

@@ -93,3 +93,24 @@ fn the_setup_failure_notice_names_version_control() {
     assert_eq!(notice.title, "Version Control Setup Failed");
     assert!(notice.detail.contains("auto-commit is off"));
 }
+
+/// #1098: a successful Enable records `.git` in the Model at once, so the
+/// menu and the open guards do not re-offer it before the re-probe lands.
+#[test]
+fn a_successful_enable_marks_the_dir_as_having_git_immediately() {
+    let _ = crate::diagnostics::init_logging();
+    let tmp = tempfile::TempDir::new().unwrap();
+    std::fs::write(tmp.path().join("demo.snxprj"), "x").unwrap();
+    let mut app = open_dialog_on(tmp.path());
+    let marker = crate::app::state::project_fs::git_marker(tmp.path());
+    app.document_state
+        .project_fs
+        .facts
+        .set_exists(marker, false);
+    assert!(app.document_state.project_fs.facts.lacks_git(tmp.path()));
+
+    app.handle_enable_version_control_confirm();
+
+    assert!(app.ui_state.enable_version_control.is_none());
+    assert!(!app.document_state.project_fs.facts.lacks_git(tmp.path()));
+}

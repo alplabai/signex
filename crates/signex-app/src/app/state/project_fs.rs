@@ -45,8 +45,9 @@ impl ProjectFsFacts {
         self.is_missing(&git_marker(dir))
     }
 
-    #[cfg(test)]
-    pub fn set_exists_for_test(&mut self, path: PathBuf, exists: bool) {
+    /// Record a fact the app itself just made true (a repository it created),
+    /// so the UI does not wait for the next probe to see it.
+    pub fn set_exists(&mut self, path: PathBuf, exists: bool) {
         self.exists.insert(path, exists);
     }
 
@@ -61,8 +62,10 @@ pub fn git_marker(dir: &Path) -> PathBuf {
     dir.join(".git")
 }
 
-/// Blocking check for callers already off the UI thread. UI-thread code
-/// reads [`ProjectFsFacts::lacks_git`] instead.
+/// Blocking `stat`: never call it from `view`. UI-thread update code reads
+/// [`ProjectFsFacts::lacks_git`] instead; `runtime/history.rs`
+/// (`resolve_history_target`) is a known update-path caller, tracked as a
+/// follow-up.
 pub fn dir_has_git(dir: &Path) -> bool {
     git_marker(dir).exists()
 }
