@@ -184,3 +184,49 @@ fn a_constraint_on_a_zero_length_line_is_reported_to_the_user() {
         "the edit is kept, not reverted"
     );
 }
+
+/// A drag re-solves on every pointer tick, and a kept zero-length line makes
+/// every one of those solves fail the same way. The Properties strip shows it
+/// for as long as it holds; the Messages panel hears it once.
+#[test]
+fn repeated_failing_solves_reach_the_messages_panel_once() {
+    use super::sketch_dispatch::apply_sketch_edit_with_warnings;
+
+    let _ = crate::diagnostics::init_logging();
+    let (mut fp, mut state, p1, _p2) = solved_footprint();
+    let sketch = fp.sketch.as_mut().expect("sketch");
+    let plane = sketch.planes[0].id;
+    let (a, b, line) = (
+        SketchEntityId::new(),
+        SketchEntityId::new(),
+        SketchEntityId::new(),
+    );
+    sketch.entities.extend([
+        Entity::new(a, plane, EntityKind::Point { x: 2.0, y: 2.0 }),
+        Entity::new(b, plane, EntityKind::Point { x: 2.0, y: 2.0 }),
+        Entity::new(line, plane, EntityKind::Line { start: a, end: b }),
+    ]);
+    let on_line = Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::PointOnLine { point: p1, line },
+    };
+    apply_sketch_edit_with_warnings(&mut state, &mut fp, SketchEdit::AddConstraint(on_line));
+
+    for _ in 0..5 {
+        apply_sketch_edit_with_warnings(&mut state, &mut fp, SketchEdit::ForceRebuild);
+    }
+
+    let logged = crate::diagnostics::recent_entries()
+        .into_iter()
+        .filter(|e| e.message.contains(&line.to_string()))
+        .count();
+    assert_eq!(logged, 1, "six failing solves, one log line");
+    assert!(
+        state
+            .solve_warnings
+            .iter()
+            .any(|w| w.contains("zero length")),
+        "the strip still shows it: {:?}",
+        state.solve_warnings
+    );
+}
