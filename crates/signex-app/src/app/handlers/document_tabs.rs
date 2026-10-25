@@ -211,6 +211,20 @@ impl Signex {
             self.library.library_browsers.remove(p);
         }
         self.document_state.tabs.remove(idx);
+        // The remembered page setup is session memory for an open document;
+        // once no tab holds the path any more it has nothing to restore into.
+        if !self
+            .document_state
+            .tabs
+            .iter()
+            .any(|tab| tab.path == closing_path)
+        {
+            crate::app::state::forget_page_setup(
+                &mut self.document_state.page_setup_memory,
+                self.document_state.preview.as_mut(),
+                &closing_path,
+            );
+        }
         // A tab left of the active one shifted it down a slot: follow it
         // so focus stays on the same document.
         // Removing the tail while active also clamps one slot down.

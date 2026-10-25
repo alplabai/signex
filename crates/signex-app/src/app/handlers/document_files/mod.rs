@@ -10,6 +10,8 @@ mod git_tests;
 mod history;
 mod open;
 mod recent;
+#[cfg(test)]
+mod restore_commit_tests;
 mod save;
 mod save_async;
 #[cfg(test)]
