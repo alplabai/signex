@@ -135,3 +135,74 @@ pub(crate) fn cached_summary(name: &str) -> PrimitiveSummary {
         used_by_count: 0,
     }
 }
+
+/// A server-backed library in miniature: it holds one revision counter and,
+/// like the library server, writes a row only when the caller's
+/// `server_revision` matches it, bumping it on every update.
+pub(crate) struct RevisionedRowAdapter {
+    manifest: Manifest,
+    revision: std::sync::atomic::AtomicU64,
+}
+
+impl RevisionedRowAdapter {
+    pub(crate) fn new(library_id: Uuid, revision: u64) -> Self {
+        Self {
+            manifest: FailingListingAdapter::new(library_id).manifest,
+            revision: std::sync::atomic::AtomicU64::new(revision),
+        }
+    }
+
+    /// Advance the stored revision if it is still `base`.
+    fn bump_from(&self, base: Option<u64>) -> Result<u64, LibraryError> {
+        let current = self.revision.load(std::sync::atomic::Ordering::SeqCst);
+        if base != Some(current) {
+            return Err(LibraryError::RowChanged {
+                current_revision: current,
+            });
+        }
+        self.revision
+            .store(current + 1, std::sync::atomic::Ordering::SeqCst);
+        Ok(current + 1)
+    }
+}
+
+impl LibraryAdapter for RevisionedRowAdapter {
+    fn manifest(&self) -> &Manifest {
+        &self.manifest
+    }
+
+    fn list_tables(&self) -> Result<Vec<String>, LibraryError> {
+        Ok(Vec::new())
+    }
+
+    fn list_symbols(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
+        Ok(Vec::new())
+    }
+
+    fn list_footprints(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
+        Ok(Vec::new())
+    }
+
+    fn list_sims(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
+        Ok(Vec::new())
+    }
+
+    fn update_row(
+        &self,
+        _table: &str,
+        row: signex_library::ComponentRow,
+        _msg: &str,
+    ) -> Result<Option<u64>, LibraryError> {
+        self.bump_from(row.server_revision).map(Some)
+    }
+
+    fn delete_row(
+        &self,
+        _table: &str,
+        _row_id: signex_library::RowId,
+        base_revision: Option<u64>,
+        _msg: &str,
+    ) -> Result<(), LibraryError> {
+        self.bump_from(base_revision).map(|_| ())
+    }
+}

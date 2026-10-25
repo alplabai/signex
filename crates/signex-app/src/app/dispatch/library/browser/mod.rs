@@ -332,7 +332,15 @@ impl Signex {
                 return Task::none();
             }
         };
-        match adapter.delete_row(&table, row_id, "delete row") {
+        // The revision the user saw: the server refuses the delete if the
+        // row has been saved by someone else since.
+        let base_revision = self
+            .library
+            .library_at(&library_path)
+            .and_then(|lib| lib.tables.get(&table))
+            .and_then(|rows| rows.iter().find(|r| RowId::from_uuid(r.row_id) == row_id))
+            .and_then(|row| row.server_revision);
+        match adapter.delete_row(&table, row_id, base_revision, "delete row") {
             Ok(_) => {
                 tracing::info!(
                     target: "signex::library",
@@ -359,13 +367,11 @@ impl Signex {
                 }
             }
             Err(e) => {
-                tracing::warn!(
-                    target: "signex::library",
-                    path = %library_path.display(),
-                    table = %table,
-                    error = %e,
-                    "browser delete: delete_row failed"
-                );
+                crate::diagnostics::log_warning(format!(
+                    "Row {row_id} was not deleted: {e} (table {table}, {})",
+                    library_path.display()
+                ));
+                self.sync_diagnostics_panel_ctx();
                 if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
                     state.delete_confirm = None;
                 }
@@ -710,11 +716,10 @@ impl Signex {
             )),
         };
         if let Err(e) = result {
-            tracing::warn!(
-                target: "signex::library",
-                error = %e,
-                "browser cell commit: update_row failed"
-            );
+            crate::diagnostics::log_warning(format!(
+                "Cell {column} of row {row_id} was not saved: {e} (table {table}, {})",
+                library_path.display()
+            ));
             if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
                 state.cell_edit.insert((row_id, column), buf);
             }

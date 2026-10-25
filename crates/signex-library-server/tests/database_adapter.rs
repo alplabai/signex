@@ -10,7 +10,7 @@
 //! value. Unset, the loopback server runs unauthenticated; the wiremock tests
 //! in signex-library cover the auth header.
 
-use signex_library::adapter::{FieldSet, LibraryAdapter, LibraryError, PrimitiveSummary};
+use signex_library::adapter::{LibraryAdapter, LibraryError, PrimitiveSummary};
 use signex_library::adapters::database::DatabaseAdapter;
 use signex_library::component::{ComponentRow, DatasheetRef, PlmReserved};
 use signex_library::identity::{ComponentClass, InternalPn, RowId};
@@ -59,9 +59,14 @@ impl TestServer {
 
     /// A client for the library `library_id` on this server.
     fn adapter(&self, library_id: Uuid) -> DatabaseAdapter {
+        self.adapter_named(library_id, "remote")
+    }
+
+    /// A client for `library_id` whose library is called `name`.
+    fn adapter_named(&self, library_id: Uuid, name: &str) -> DatabaseAdapter {
         DatabaseAdapter::new(Manifest {
             library: LibraryMeta {
-                name: "remote".into(),
+                name: name.into(),
                 library_id,
                 description: None,
             },
@@ -156,9 +161,9 @@ fn primitives_stay_in_their_own_library() {
     ));
 }
 
-// ── Advisory row locks (#115) ────────────────────────────────────────────
+// ── Stale row writes (#115) ──────────────────────────────────────────────
 
-fn lock_test_row(pn: &str) -> ComponentRow {
+fn test_row(pn: &str) -> ComponentRow {
     let lib = Uuid::now_v7();
     let now = chrono::Utc::now();
     ComponentRow {
@@ -184,81 +189,108 @@ fn lock_test_row(pn: &str) -> ComponentRow {
         created: now,
         updated: now,
         content_hash: [0u8; 32],
+        server_revision: None,
     }
 }
 
-/// The field-set row writes lock on; a second client probing it sees whether
-/// the first still holds the lock.
-const ROW_LOCK: FieldSet = FieldSet::SharedParams;
-
+/// Two users open the same row at revision 1. Alice saves first; Bob's
+/// save, still based on revision 1, is refused and Alice's edit survives.
 #[test]
-fn adapters_have_distinct_holders() {
-    let server = TestServer::start();
-    let library = Uuid::now_v7();
-    let (a, b) = (server.adapter(library), server.adapter(library));
-    assert_ne!(a.holder(), b.holder());
-}
-
-#[test]
-fn a_lock_held_by_another_client_blocks_update_row() {
+fn a_save_based_on_a_stale_revision_is_refused() {
     let server = TestServer::start();
     let library = Uuid::now_v7();
     let (alice, bob) = (server.adapter(library), server.adapter(library));
-    let row = lock_test_row("R-LOCK");
-    alice
-        .insert_row("resistors", row.clone(), "add")
-        .expect("insert_row");
-
-    alice
-        .try_lock(RowId::from_uuid(row.row_id), ROW_LOCK)
-        .expect("alice locks");
-    let err = bob
-        .update_row("resistors", row.clone(), "edit")
-        .expect_err("bob is blocked");
-    match err {
-        LibraryError::Locked { holder, .. } => assert_eq!(holder, alice.holder()),
-        other => panic!("expected Locked, got {other:?}"),
-    }
-    // delete is blocked the same way.
-    assert!(matches!(
-        bob.delete_row("resistors", RowId::from_uuid(row.row_id), "drop"),
-        Err(LibraryError::Locked { .. })
-    ));
-
-    alice
-        .release_lock(RowId::from_uuid(row.row_id), ROW_LOCK)
-        .expect("alice releases");
-    bob.update_row("resistors", row, "edit")
-        .expect("bob writes once the lock is free");
-}
-
-#[test]
-fn the_lock_is_released_after_a_successful_and_a_failed_write() {
-    let server = TestServer::start();
-    let library = Uuid::now_v7();
-    let (alice, bob) = (server.adapter(library), server.adapter(library));
-    let row = lock_test_row("R-REL");
+    let row = test_row("R-STALE");
     let id = RowId::from_uuid(row.row_id);
     alice
-        .insert_row("resistors", row.clone(), "add")
+        .insert_row("resistors", row, "add")
         .expect("insert_row");
 
+    let mut alice_copy = alice.read_row("resistors", id).expect("alice reads");
+    let mut bob_copy = bob.read_row("resistors", id).expect("bob reads");
+    assert_eq!(alice_copy.server_revision, Some(1));
+    assert_eq!(bob_copy.server_revision, Some(1));
+
+    alice_copy.primary_mpn.mpn = "ALICE".into();
+    let revision = alice
+        .update_row("resistors", alice_copy, "alice edits")
+        .expect("alice saves");
+    assert_eq!(revision, Some(2));
+
+    bob_copy.primary_mpn.mpn = "BOB".into();
+    let err = bob
+        .update_row("resistors", bob_copy, "bob edits")
+        .expect_err("bob's base is stale");
+    assert!(
+        matches!(
+            err,
+            LibraryError::RowChanged {
+                current_revision: 2
+            }
+        ),
+        "{err:?}"
+    );
+
+    let stored = bob.read_row("resistors", id).expect("read back");
+    assert_eq!(stored.primary_mpn.mpn, "ALICE");
+    assert_eq!(stored.server_revision, Some(2));
+}
+
+/// A delete based on a stale revision is refused and the row stays; one
+/// based on the current revision goes through.
+#[test]
+fn a_delete_based_on_a_stale_revision_is_refused() {
+    let server = TestServer::start();
+    let library = Uuid::now_v7();
+    let (alice, bob) = (server.adapter(library), server.adapter(library));
+    let row = test_row("R-DEL");
+    let id = RowId::from_uuid(row.row_id);
     alice
-        .update_row("resistors", row.clone(), "ok")
+        .insert_row("resistors", row, "add")
+        .expect("insert_row");
+    let copy = alice.read_row("resistors", id).expect("read");
+    alice
+        .update_row("resistors", copy, "edit")
+        .expect("alice saves");
+
+    let err = bob
+        .delete_row("resistors", id, Some(1), "drop")
+        .expect_err("bob's base is stale");
+    assert!(
+        matches!(
+            err,
+            LibraryError::RowChanged {
+                current_revision: 2
+            }
+        ),
+        "{err:?}"
+    );
+    assert!(bob.read_row("resistors", id).is_ok(), "the row is kept");
+
+    bob.delete_row("resistors", id, Some(2), "drop")
+        .expect("current base deletes");
+    assert!(matches!(
+        bob.read_row("resistors", id),
+        Err(LibraryError::NotFound(_))
+    ));
+}
+
+/// A library whose name is not ASCII can still update and delete rows.
+#[test]
+fn a_library_with_a_non_ascii_name_updates_and_deletes_rows() {
+    let server = TestServer::start();
+    let adapter = server.adapter_named(Uuid::now_v7(), "Dirençler");
+    let row = test_row("R-UTF8");
+    let id = RowId::from_uuid(row.row_id);
+    adapter
+        .insert_row("resistors", row, "add")
+        .expect("insert_row");
+    let mut copy = adapter.read_row("resistors", id).expect("read");
+    copy.primary_mpn.mpn = "EDITED".into();
+    let revision = adapter
+        .update_row("resistors", copy, "edit")
         .expect("update_row");
-    bob.try_lock(id, ROW_LOCK).expect("free after success");
-    bob.release_lock(id, ROW_LOCK).expect("bob releases");
-
-    // A table that does not exist: the write fails with NotFound.
-    let err = alice
-        .update_row("no_such_table", row.clone(), "bad")
-        .expect_err("write fails");
-    assert!(matches!(err, LibraryError::NotFound(_)), "{err:?}");
-    bob.try_lock(id, ROW_LOCK).expect("free after failure");
-    bob.release_lock(id, ROW_LOCK).expect("bob releases");
-
-    alice
-        .delete_row("resistors", id, "drop")
+    adapter
+        .delete_row("resistors", id, revision, "drop")
         .expect("delete_row");
-    bob.try_lock(id, ROW_LOCK).expect("free after delete");
 }

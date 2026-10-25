@@ -197,6 +197,7 @@ fn preview_row() -> ComponentRow {
         created: chrono::Utc::now(),
         updated: chrono::Utc::now(),
         content_hash: [0u8; 32],
+        server_revision: None,
     }
 }
 

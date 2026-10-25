@@ -216,9 +216,12 @@ impl Signex {
             .set
             .get(library_id)
             .with_context(|| format!("library {} is not mounted", library_path.display()))?;
-        adapter
+        // A server-backed library refuses the write if the row changed
+        // since this editor read it; the error keeps the editor dirty.
+        let revision = adapter
             .update_row(&table, row.clone(), "edit row (signex-app)")
             .with_context(|| format!("update row in table {table}"))?;
+        row.server_revision = revision;
         if let Some(state) = self.library.editors.get_mut(address) {
             state.row = row;
             state.dirty = false;

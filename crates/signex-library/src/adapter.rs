@@ -29,6 +29,12 @@ pub enum LibraryError {
     Conflict(String),
     #[error("locked by {holder}: {field_set}")]
     Locked { holder: String, field_set: String },
+    /// The library server holds a newer revision of the row than the one
+    /// the write was based on: someone else saved it in between.
+    #[error(
+        "changed by someone else since you opened it (now revision {current_revision}); reload to see their version"
+    )]
+    RowChanged { current_revision: u64 },
     #[error("unauthorized: {0}")]
     Unauthorized(String),
     #[error("backend: {0}")]
@@ -416,13 +422,30 @@ pub trait LibraryAdapter: Send + Sync {
         ))
     }
 
-    fn update_row(&self, _table: &str, _row: ComponentRow, _msg: &str) -> Result<(), LibraryError> {
+    /// Replace a row. A server-backed adapter writes only when the stored
+    /// row is still at `row.server_revision` and returns the row's new
+    /// revision; an adapter without revisions returns `None`.
+    fn update_row(
+        &self,
+        _table: &str,
+        _row: ComponentRow,
+        _msg: &str,
+    ) -> Result<Option<u64>, LibraryError> {
         Err(LibraryError::Backend(
             "update_row not implemented for this adapter".into(),
         ))
     }
 
-    fn delete_row(&self, _table: &str, _row_id: RowId, _msg: &str) -> Result<(), LibraryError> {
+    /// Delete a row. `base_revision` is the `server_revision` of the copy
+    /// the caller is deleting; a server-backed adapter refuses the delete
+    /// when the stored row has moved past it.
+    fn delete_row(
+        &self,
+        _table: &str,
+        _row_id: RowId,
+        _base_revision: Option<u64>,
+        _msg: &str,
+    ) -> Result<(), LibraryError> {
         Err(LibraryError::Backend(
             "delete_row not implemented for this adapter".into(),
         ))
