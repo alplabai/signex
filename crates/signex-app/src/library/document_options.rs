@@ -68,7 +68,7 @@ pub fn view<'a>(
         LibraryMessage::DocumentOptionsSetSheetColor,
     )
     .padding([sp.xs, sp.s])
-    .text_size(11)
+    .text_size(ts.body)
     .into();
 
     let grid_check: Element<'a, LibraryMessage> = iced::widget::checkbox(state.draft.grid_visible)

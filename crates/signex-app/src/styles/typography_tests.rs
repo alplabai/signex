@@ -54,6 +54,7 @@ const SWEPT: &[&str] = &[
 /// Calls whose argument must come from the scale, not a literal.
 const GUARDED: &[&str] = &[
     ".size(",
+    ".text_size(",
     ".padding(",
     ".spacing(",
     "Space::new().width(",
@@ -121,6 +122,7 @@ fn literal_violations(src: &str) -> Vec<(usize, String)> {
 #[test]
 fn guard_flags_literals_and_accepts_tokens() {
     assert!(!literal_violations("text(x).size(11)").is_empty());
+    assert!(!literal_violations("pick_list(a, b, c).text_size(11)").is_empty());
     assert!(!literal_violations("c.padding([4, sp.m])").is_empty());
     assert!(!literal_violations("Space::new().height(4.5)").is_empty());
     assert!(!literal_violations("row![].spacing(ts.label * 2.0)").is_empty());

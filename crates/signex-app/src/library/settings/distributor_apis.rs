@@ -13,7 +13,7 @@ use iced::{Border, Element, Length, Theme};
 use signex_library::DistributorSource;
 use signex_types::theme::ThemeTokens;
 
-use crate::styles::{Spacing, TypeScale};
+use crate::styles::{HAIRLINE, Spacing, TypeScale};
 use signex_widgets::theme_ext;
 
 use super::super::messages::{LibraryMessage, SettingsMsg};
@@ -225,8 +225,7 @@ fn distributor_label(src: DistributorSource) -> &'static str {
 }
 
 fn divider(color: iced::Color) -> Element<'static, LibraryMessage> {
-    let sp = Spacing::default();
-    container(Space::new().height(sp.xs).width(Length::Fill))
+    container(Space::new().height(HAIRLINE).width(Length::Fill))
         .style(move |_: &Theme| iced::widget::container::Style {
             background: Some(iced::Background::Color(color)),
             ..Default::default()

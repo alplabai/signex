@@ -32,6 +32,10 @@
 /// size: the most common literal (11 px) in the pre-token code.
 pub const DEFAULT_BASE_SIZE: f32 = 11.0;
 
+/// Thickness, in px, of a divider rule. A line weight, not a spacing gap, so
+/// it stays 1 px whatever the base size.
+pub const HAIRLINE: f32 = 1.0;
+
 /// Text sizes, smallest to largest.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TypeScale {
