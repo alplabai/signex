@@ -110,17 +110,18 @@ pub(super) fn schematic_text_offset_global(shape: &str, spin: SpinStyle) -> (f64
     }
 }
 
+/// Alignment and rotation of label text for `spin`. Vertical text always
+/// reads bottom-to-top (-90° in the y-down page frame), as on the canvas
+/// (#1111): a label that runs down from its anchor is drawn turned half a
+/// revolution with both alignments swapped, which covers the same strip of
+/// the page as top-to-bottom text would.
 pub(super) fn spin_text_style(spin: SpinStyle) -> (SvgTextAlign, SvgTextVAlign, f32) {
-    let align = match spin {
-        SpinStyle::Left | SpinStyle::Bottom => SvgTextAlign::Right,
-        SpinStyle::Right | SpinStyle::Up => SvgTextAlign::Left,
-    };
-    let rotation = match spin {
-        SpinStyle::Up => -90.0,
-        SpinStyle::Bottom => 90.0,
-        _ => 0.0,
-    };
-    (align, SvgTextVAlign::Bottom, rotation)
+    match spin {
+        SpinStyle::Right => (SvgTextAlign::Left, SvgTextVAlign::Bottom, 0.0),
+        SpinStyle::Left => (SvgTextAlign::Right, SvgTextVAlign::Bottom, 0.0),
+        SpinStyle::Up => (SvgTextAlign::Left, SvgTextVAlign::Bottom, -90.0),
+        SpinStyle::Bottom => (SvgTextAlign::Left, SvgTextVAlign::Top, -90.0),
+    }
 }
 
 fn normalize_rotation(deg: f64) -> i32 {
@@ -141,5 +142,38 @@ pub(super) fn valign_to_svg(v: VAlign) -> SvgTextVAlign {
         VAlign::Top => SvgTextVAlign::Top,
         VAlign::Center => SvgTextVAlign::Center,
         VAlign::Bottom => SvgTextVAlign::Bottom,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every label orientation exports upright or bottom-to-top text.
+    #[test]
+    fn label_text_is_never_upside_down_or_top_to_bottom() {
+        for justify in [HAlign::Left, HAlign::Right, HAlign::Center] {
+            for rotation in [0.0, 90.0, 180.0, 270.0] {
+                let (_, _, rot) = spin_text_style(label_spin_style(justify, rotation));
+                assert!(
+                    rot == 0.0 || rot == -90.0,
+                    "{justify:?} @ {rotation}: {rot}°"
+                );
+            }
+        }
+    }
+
+    /// Turning top-to-bottom text half a revolution keeps it on the same
+    /// strip of the page and the same side of its baseline.
+    #[test]
+    fn downward_label_text_keeps_its_place() {
+        let (align, v_align, rot) = spin_text_style(SpinStyle::Bottom);
+        // Was right-aligned at +90°: the text ends at the anchor, so it
+        // covers the strip above it. Left-aligned at -90° starts at the
+        // anchor and runs up the same strip. Top alignment at -90° puts the
+        // glyphs on the same (+x) side of the baseline as Bottom did at +90°.
+        assert_eq!(rot, -90.0);
+        assert!(matches!(align, SvgTextAlign::Left));
+        assert!(matches!(v_align, SvgTextVAlign::Top));
     }
 }
