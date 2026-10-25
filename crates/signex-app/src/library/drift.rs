@@ -379,29 +379,64 @@ fn stamp_or_reason(
     }
 }
 
-/// The stamps and Messages lines for one `lib_id`'s instances, and whether an
-/// approved instance moved (then nothing is stamped).
+/// What the stamp decisions of one `lib_id` came to.
+struct Decided {
+    stamps: Vec<(Uuid, String)>,
+    skipped: Vec<String>,
+    /// References of approved instances whose row moved (then nothing is stamped).
+    moved: Vec<String>,
+    /// References of the other instances, left on the old copy by a hold-back.
+    left: Vec<String>,
+}
+
+/// The stamps and Messages lines for one `lib_id`'s instances.
 fn decide_stamps(
     wanted: &[ApplyStamp],
     lib_id: &str,
     libraries: &mut HashMap<Uuid, Opened>,
     libs: &[MountedLibrary],
-) -> (Vec<(Uuid, String)>, Vec<String>, bool) {
-    let (mut stamps, mut skipped, mut held_back) = (Vec::new(), Vec::new(), false);
+) -> Decided {
+    let mut d = Decided {
+        stamps: Vec::new(),
+        skipped: Vec::new(),
+        moved: Vec::new(),
+        left: Vec::new(),
+    };
     for w in wanted {
         match stamp_or_reason(w, lib_id, libraries, libs) {
-            Ok(stamp) => stamps.push(stamp),
-            Err(NoStamp::Unreadable(why)) => skipped.push(why),
+            Ok(stamp) => {
+                d.stamps.push(stamp);
+                d.left.push(w.reference.clone());
+            }
+            Err(NoStamp::Unreadable(why)) => {
+                d.skipped.push(why);
+                d.left.push(w.reference.clone());
+            }
             Err(NoStamp::Moved(why)) => {
-                held_back = true;
-                skipped.push(why);
+                d.skipped.push(why);
+                d.moved.push(w.reference.clone());
             }
         }
     }
-    if held_back {
-        stamps.clear();
+    if d.moved.is_empty() {
+        d.left.clear();
+    } else {
+        d.stamps.clear();
     }
-    (stamps, skipped, held_back)
+    d
+}
+
+/// The one Messages line for a held-back `lib_id`: none of it was applied.
+fn held_back_summary(name: &str, moved: &[String], left: &[String]) -> String {
+    let moved = moved.join(", ");
+    if left.is_empty() {
+        format!("{name}: not applied ({moved} moved).")
+    } else {
+        format!(
+            "{name}: not applied ({moved} moved); {} left on the old copy.",
+            left.join(", ")
+        )
+    }
 }
 
 /// Read each wanted `lib_id`'s current symbol and its instances' row
@@ -412,7 +447,7 @@ fn decide_stamps(
 /// from its fresh row: bound to the `lib_id` -> stamped; anything else -> a
 /// line saying why, and no stamp. The shared copy is refreshed regardless,
 /// except when an approved instance's row moved on since the approval: then
-/// the whole `lib_id` is held back.
+/// the whole `lib_id` is held back, with one summary line.
 pub fn read_symbols(input: ApplyInput, libs: &[MountedLibrary]) -> SymbolsRead {
     use signex_library::LibraryAdapter as _;
 
@@ -421,8 +456,8 @@ pub fn read_symbols(input: ApplyInput, libs: &[MountedLibrary]) -> SymbolsRead {
         .wanted
         .iter()
         .map(|(lib_id, wanted)| {
-            let (stamps, skipped, held_back) = decide_stamps(wanted, lib_id, &mut libraries, libs);
-            let symbol = split_lib_id(lib_id)
+            let mut decided = decide_stamps(wanted, lib_id, &mut libraries, libs);
+            let read = split_lib_id(lib_id)
                 .ok_or_else(|| "its id is not <library>:<symbol>".to_string())
                 .and_then(|(library, symbol_id)| {
                     let opened = libraries
@@ -430,17 +465,27 @@ pub fn read_symbols(input: ApplyInput, libs: &[MountedLibrary]) -> SymbolsRead {
                         .or_insert_with(|| open_library(libs, library))
                         .as_ref()
                         .map_err(Clone::clone)?;
-                    opened
+                    let symbol = opened
                         .adapter
                         .get_symbol(symbol_id)
-                        .map(|s| s.to_lib_symbol(lib_id.clone()))
-                        .map_err(|e| e.to_string())
+                        .map_err(|e| e.to_string())?;
+                    let shown = libs.iter().find(|l| l.id == library).map_or_else(
+                        || symbol.name.clone(),
+                        |l| format!("{}/{}", l.display_name, symbol.name),
+                    );
+                    Ok((shown, symbol.to_lib_symbol(lib_id.clone())))
                 });
+            let held_back = !decided.moved.is_empty();
+            if held_back {
+                let name = read.as_ref().map_or(lib_id.as_str(), |(n, _)| n.as_str());
+                let line = held_back_summary(name, &decided.moved, &decided.left);
+                decided.skipped.push(line);
+            }
             SymbolRead {
                 lib_id: lib_id.clone(),
-                symbol,
-                stamps,
-                skipped,
+                symbol: read.map(|(_, s)| s),
+                stamps: decided.stamps,
+                skipped: decided.skipped,
                 held_back,
             }
         })

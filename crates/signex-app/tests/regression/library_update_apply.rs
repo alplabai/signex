@@ -1016,3 +1016,121 @@ fn apply_input_covers_every_instance_of_the_selected_lib_id() {
     assert_eq!(stamps[0].approved_version.as_deref(), Some("1.2.3"));
     assert_eq!(stamps[1].approved_version, None);
 }
+
+// ---- #950 round 7: conservative mixed-mode rule, hold-back summary ----
+
+/// U1 (row `u1_row`, made before A is mounted, in the Team library A) and U2 (stale,
+/// row in the Personal library B) share one copy. Returns the app and the
+/// pin count before B's symbol grew a pin.
+fn team_beside_stale_personal(u1_row: impl FnOnce(&Fixture) -> Uuid) -> (Signex, usize) {
+    let (a, b) = cross_library();
+    to_team(&a);
+    let u1_row = u1_row(&a);
+    let mut app = app_with_libraries(&[&a, &b]);
+    place_across(&mut app, &a, &b);
+    make_version_stale(&mut app);
+    {
+        let engine = app.document_state.active_engine_mut().unwrap();
+        let mut d = engine.document().clone();
+        let mut u2 = d.symbols[0].clone();
+        u2.uuid = Uuid::new_v4();
+        u2.reference = "U2".into();
+        u2.library_id = Some(b.library_id);
+        u2.row_id = Some(b.row_id);
+        u2.library_version = "0.0.1".into();
+        d.symbols[0].reference = "U1".into();
+        d.symbols[0].row_id = Some(u1_row);
+        d.symbols.push(u2);
+        engine.set_document(d);
+    }
+    let before = pin_count(&app);
+    edit_library_symbol(&b, add_pin);
+    (app, before)
+}
+
+fn logged_with(parts: &[&str]) -> bool {
+    signex_app::diagnostics::recent_entries()
+        .iter()
+        .any(|e| parts.iter().all(|p| e.message.contains(p)))
+}
+
+/// A Team instance whose row cannot be read must still block the Personal
+/// sibling's auto-apply: the shared copy stays untouched.
+#[test]
+fn an_unreadable_team_row_blocks_the_personal_siblings_auto_apply() {
+    let _ = signex_app::diagnostics::init_logging();
+    let (mut app, before) = team_beside_stale_personal(|_| Uuid::new_v4());
+    scan(&mut app);
+    assert_eq!(pin_count(&app), before, "the shared copy is not touched");
+    assert_eq!(doc(&app).symbols[1].library_version, "0.0.1");
+    assert!(skipped(&app), "the update stays pending");
+    assert!(logged_with(&["U1: its library row is unreadable"]));
+}
+
+/// Same for a Team row re-bound to another symbol.
+#[test]
+fn a_rebound_team_row_blocks_the_personal_siblings_auto_apply() {
+    let _ = signex_app::diagnostics::init_logging();
+    let (mut app, before) =
+        team_beside_stale_personal(|a| insert_row_of_same_symbol(a, "SNX-TWO-G", "1.0.0", true));
+    scan(&mut app);
+    assert_eq!(pin_count(&app), before, "the shared copy is not touched");
+    assert_eq!(doc(&app).symbols[1].library_version, "0.0.1");
+    assert!(skipped(&app));
+    assert!(logged_with(&["U1: its row binds a different symbol"]));
+}
+
+/// A hold-back leaves the sibling instances unstamped and unadopted, says so
+/// in one summary line, and the next scan offers the update again.
+#[test]
+fn a_hold_back_logs_one_summary_and_the_next_scan_reoffers() {
+    let _ = signex_app::diagnostics::init_logging();
+    let f = team_fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    let row2 = insert_row_of_same_symbol(&f, "SNX-TWO-F", "2.0.0", false);
+    insert_twin(&mut app, row2, "U2", "2.0.0");
+    make_version_stale(&mut app);
+    let before = pin_count(&app);
+    edit_library_symbol(&f, add_pin);
+    scan(&mut app);
+    select_all_updates(&mut app);
+    let (_task, input) = click_apply_input(&mut app);
+    edit_row(&f, |r| r.version = "3.0.0".into());
+    let read = read_symbols(input, &mounted(&app));
+    assert!(read.reads[0].stamps.is_empty());
+    let summaries = read.reads[0]
+        .skipped
+        .iter()
+        .filter(|l| l.contains("not applied (U1 moved); U2 left on the old copy."))
+        .count();
+    assert_eq!(summaries, 1, "{:?}", read.reads[0].skipped);
+    deliver(&mut app, read);
+    assert_eq!(pin_count(&app), before, "copy not adopted");
+    assert_eq!(doc(&app).symbols[0].library_version, "0.0.1");
+    assert_eq!(doc(&app).symbols[1].library_version, "2.0.0");
+    assert!(logged_with(&[
+        "not applied (U1 moved); U2 left on the old copy."
+    ]));
+    scan(&mut app);
+    let entries = &app.library.library_updates.as_ref().unwrap().entries;
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].ref_des, "U1");
+}
+
+/// Apply on a sheet that is no longer open keeps its pending record.
+#[test]
+fn apply_after_the_sheet_closed_keeps_the_pending_record() {
+    let _ = signex_app::diagnostics::init_logging();
+    let f = team_fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    make_version_stale(&mut app);
+    edit_library_symbol(&f, add_pin);
+    scan(&mut app);
+    select_all_updates(&mut app);
+    let sheet = app.document_state.active_path.clone().unwrap();
+    app.document_state.engines.remove(&sheet);
+    let _ = click_apply(&mut app);
+    assert!(app.library.skipped_updates_for.contains(&sheet));
+}

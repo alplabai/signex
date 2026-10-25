@@ -53,8 +53,11 @@ impl Signex {
     ///   `view_main_for` opens the modal on the next tick.
     ///
     /// The embedded copy is shared by every instance of a `lib_id`, so the
-    /// mode is decided per `lib_id`: when any of its stale instances is
-    /// Team-mode, all of them go to the modal and nothing is auto-applied.
+    /// decision is per `lib_id`: it is auto-applied only when EVERY placed
+    /// instance has a readable Personal-mode row that still binds it. When a
+    /// stale instance is Team-mode, the stale instances go to the modal;
+    /// when only an unreadable, re-bound or Team sibling blocks it, nothing
+    /// is applied and the blocking reference is named in Messages.
     ///
     /// Adapter / library-mount failures degrade to a single
     /// `tracing::warn` line per affected library and skip those
@@ -69,27 +72,45 @@ impl Signex {
         if placed.is_empty() {
             return;
         }
+        let mut by_lib: std::collections::BTreeMap<String, Vec<Instance>> =
+            std::collections::BTreeMap::new();
+        for symbol in placed {
+            let row = self.instance_row(&symbol);
+            by_lib
+                .entry(symbol.lib_id.clone())
+                .or_default()
+                .push((symbol, row));
+        }
         let mut any_failed = false;
-        let stale = self.stale_instances(&placed, &mut any_failed);
-        let team_ids: std::collections::HashSet<String> = stale
-            .iter()
-            .filter(|(_, row)| row.mode != signex_library::WorkflowMode::Personal)
-            .map(|(symbol, _)| symbol.lib_id.clone())
-            .collect();
         // One library read per `lib_id`, however many instances share it.
         let mut read_cache = std::collections::HashMap::new();
         let mut team_entries = Vec::new();
         let mut personal_apply: PersonalUpdates = std::collections::BTreeMap::new();
-        for (symbol, row) in stale {
-            if team_ids.contains(&symbol.lib_id) {
-                team_entries.push(team_entry(symbol, row));
+        for (lib_id, group) in by_lib {
+            let stale = stale_bound(&group, &lib_id, &mut any_failed);
+            if stale.is_empty() {
+                continue;
+            }
+            let team = stale
+                .iter()
+                .any(|(_, r)| r.mode != signex_library::WorkflowMode::Personal);
+            let blocked = group
+                .iter()
+                .find_map(|(s, r)| blocker(s, r.as_ref(), &lib_id));
+            if team {
+                team_entries.extend(stale.into_iter().map(|(s, r)| team_entry(s.clone(), r)));
+            } else if let Some(why) = blocked {
+                crate::diagnostics::log_warning(why);
+                any_failed = true;
             } else {
-                any_failed |= !self.collect_personal_update(
-                    symbol,
-                    &row.row.version,
-                    &mut read_cache,
-                    &mut personal_apply,
-                );
+                for (symbol, row) in stale {
+                    any_failed |= !self.collect_personal_update(
+                        symbol.clone(),
+                        &row.row.version,
+                        &mut read_cache,
+                        &mut personal_apply,
+                    );
+                }
             }
         }
 
@@ -102,33 +123,6 @@ impl Signex {
                 !self.adopt_library_symbol(&schematic_path, &lib_id, fresh, stamps, false);
         }
         self.record_scan_outcome(schematic_path, team_entries, any_failed);
-    }
-
-    /// The placed symbols whose row version moved on, each with its row.
-    /// A row re-bound to another symbol is logged and counted in `any_failed`.
-    fn stale_instances(
-        &self,
-        placed: &[PlacedLibrarySymbol],
-        any_failed: &mut bool,
-    ) -> Vec<(PlacedLibrarySymbol, StaleRow)> {
-        let mut stale = Vec::new();
-        for symbol in placed {
-            let Some(row) = self.stale_row(symbol) else {
-                continue;
-            };
-            if row_binds_lib_id(&row.row, &symbol.lib_id) {
-                stale.push((symbol.clone(), row));
-            } else {
-                crate::diagnostics::log_warning(rebound_row_warning(
-                    &symbol.reference,
-                    symbol.row_id,
-                    &symbol.lib_id,
-                    VERSION_NOT_STAMPED,
-                ));
-                *any_failed = true;
-            }
-        }
-        stale
     }
 
     /// Surface the Team-mode entries via the modal state, or record whether
@@ -183,10 +177,10 @@ impl Signex {
             .collect()
     }
 
-    /// The symbol's library row when its version moved on from the placed
-    /// one; `None` when current, or when the library/row cannot be read
+    /// The symbol's library row, flagged stale when its version moved on
+    /// from the placed one; `None` when the library/row cannot be read
     /// (logged, and the schematic open carries on).
-    fn stale_row(&self, symbol: &PlacedLibrarySymbol) -> Option<StaleRow> {
+    fn instance_row(&self, symbol: &PlacedLibrarySymbol) -> Option<InstanceRow> {
         let library_id = symbol.library_id;
         let Some(open_lib) = self
             .library
@@ -229,7 +223,8 @@ impl Signex {
             );
             return None;
         };
-        (row.version != symbol.version).then(|| StaleRow {
+        Some(InstanceRow {
+            stale: row.version != symbol.version,
             mode: adapter.manifest().workflow.mode,
             library_name: open_lib.display_name.clone(),
             library_path: open_lib.root.clone(),
@@ -310,6 +305,9 @@ impl Signex {
                 "Library update not applied: {} is no longer open.",
                 state.schematic_path.display()
             ));
+            self.library
+                .skipped_updates_for
+                .insert(state.schematic_path);
             return Task::none();
         };
         let Some(input) = apply_input(&state, doc) else {
@@ -522,8 +520,10 @@ struct PlacedLibrarySymbol {
     lib_id: String,
 }
 
-/// A library row whose version differs from the placed symbol's.
-struct StaleRow {
+/// A placed symbol's library row.
+struct InstanceRow {
+    /// Its version differs from the placed symbol's.
+    stale: bool,
     mode: signex_library::WorkflowMode,
     library_name: String,
     library_path: std::path::PathBuf,
@@ -534,10 +534,60 @@ struct StaleRow {
 /// stamps to apply with it.
 type PersonalUpdates = std::collections::BTreeMap<String, (LibSymbol, Vec<(uuid::Uuid, String)>)>;
 
+/// A placed instance with its row (`None`: unreadable).
+type Instance = (PlacedLibrarySymbol, Option<InstanceRow>);
+
+/// The stale instances of `lib_id` whose row still binds it. A stale row
+/// re-bound to another symbol is logged and counted in `any_failed`.
+fn stale_bound<'a>(
+    group: &'a [Instance],
+    lib_id: &str,
+    any_failed: &mut bool,
+) -> Vec<(&'a PlacedLibrarySymbol, &'a InstanceRow)> {
+    let mut stale = Vec::new();
+    for (symbol, row) in group {
+        let Some(row) = row.as_ref().filter(|r| r.stale) else {
+            continue;
+        };
+        if row_binds_lib_id(&row.row, lib_id) {
+            stale.push((symbol, row));
+        } else {
+            crate::diagnostics::log_warning(rebound_row_warning(
+                &symbol.reference,
+                symbol.row_id,
+                lib_id,
+                VERSION_NOT_STAMPED,
+            ));
+            *any_failed = true;
+        }
+    }
+    stale
+}
+
+/// Why `symbol` stops its `lib_id` from being auto-applied: the shared copy
+/// moves only when every instance has a readable Personal-mode row that
+/// still binds it. The Messages line names the instance.
+fn blocker(
+    symbol: &PlacedLibrarySymbol,
+    row: Option<&InstanceRow>,
+    lib_id: &str,
+) -> Option<String> {
+    let reason = match row {
+        None => "its library row is unreadable",
+        Some(r) if !row_binds_lib_id(&r.row, lib_id) => "its row binds a different symbol",
+        Some(r) if r.mode != signex_library::WorkflowMode::Personal => "its library is Team-mode",
+        Some(_) => return None,
+    };
+    Some(format!(
+        "{}: {reason}, so the shared copy was not auto-updated ({lib_id}).",
+        symbol.reference
+    ))
+}
+
 /// The Team-mode modal row for a stale `symbol`.
 fn team_entry(
     symbol: PlacedLibrarySymbol,
-    stale: StaleRow,
+    stale: &InstanceRow,
 ) -> crate::library::updates_dialog::LibraryUpdateEntry {
     let bump_kind =
         crate::library::updates_dialog::classify_bump(&symbol.version, &stale.row.version);
@@ -546,11 +596,11 @@ fn team_entry(
         ref_des: symbol.reference,
         lib_id: symbol.lib_id,
         library_id: symbol.library_id,
-        library_name: stale.library_name,
+        library_name: stale.library_name.clone(),
         row_id: symbol.row_id,
-        library_path: stale.library_path,
+        library_path: stale.library_path.clone(),
         current_version: symbol.version,
-        latest_version: stale.row.version,
+        latest_version: stale.row.version.clone(),
         bump_kind,
         selected: false,
     }
