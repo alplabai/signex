@@ -5,8 +5,10 @@ use super::super::super::*;
 impl Signex {
     /// v0.22 Phase 8.5 — Resolve the active tab's path and project,
     /// then call `LocalGitProjectAdapter::restore_at` with the user-
-    /// picked SHA. Marks the file dirty so the next Ctrl+S captures
-    /// the restored content.
+    /// picked SHA. Per kind: a schematic ends dirty, so the next Ctrl+S
+    /// captures the restored content; a PCB ends clean and commits
+    /// "Restore X"; so does a footprint or symbol. A restore whose file
+    /// cannot be re-read drops the stale copy so a save cannot undo it.
     ///
     /// Best-effort: failures log a warning and surface as a status
     /// message; nothing destructive runs (the working tree changes
@@ -163,23 +165,15 @@ impl Signex {
                 self.apply_loaded_schematic(Some(parsed), true, false, false);
             }
             crate::app::TabKind::Pcb => {
-                let text = match std::fs::read_to_string(&path) {
-                    Ok(t) => t,
-                    Err(e) => {
-                        crate::diagnostics::log_warning(format!(
-                            "[reload] read {} failed: {e}",
-                            path.display()
-                        ));
-                        return;
-                    }
-                };
-                let board = match signex_types::format::SnxPcb::parse(&text) {
+                let board = match std::fs::read_to_string(&path)
+                    .map_err(|e| (format!("could not be read: {e}"), true))
+                    .and_then(|text| {
+                        signex_types::format::SnxPcb::parse(&text)
+                            .map_err(|e| (format!("could not be parsed: {e}"), false))
+                    }) {
                     Ok(p) => p.board,
-                    Err(e) => {
-                        crate::diagnostics::log_warning(format!(
-                            "[reload] parse {} failed: {e}",
-                            path.display()
-                        ));
+                    Err((why, unreadable)) => {
+                        self.fail_pcb_reload(&path, active_idx, &why, unreadable);
                         return;
                     }
                 };
@@ -189,6 +183,11 @@ impl Signex {
                 }
                 // Refresh canvas; preserve camera (don't fit-to-board).
                 self.apply_loaded_pcb_document(false, false);
+                // The tab now matches disk. Leaving it dirty would let Ctrl+S
+                // re-encode the board and drop the restored file's comments
+                // and formatting, so commit the on-disk bytes as they are.
+                self.set_reloaded_dirty(&path, active_idx, false);
+                self.commit_restore(&path);
             }
             crate::app::TabKind::FootprintEditor(p) => {
                 let bytes = match std::fs::read_to_string(&p) {
@@ -376,6 +375,24 @@ impl Signex {
     ) {
         self.document_state.engines.remove(path);
         self.set_reloaded_dirty(path, active_idx, false);
+        self.report_restore_failure(restore_reload_card(path, why, unreadable));
+    }
+
+    /// Same for a PCB: the tab's cached board is the pre-restore one and
+    /// is what Ctrl+S would encode, so drop it (a save then refuses) and
+    /// stop the canvas drawing it.
+    fn fail_pcb_reload(
+        &mut self,
+        path: &std::path::Path,
+        active_idx: usize,
+        why: &str,
+        unreadable: bool,
+    ) {
+        if let Some(t) = self.document_state.tabs.get_mut(active_idx) {
+            t.cached_document = None;
+        }
+        self.set_reloaded_dirty(path, active_idx, false);
+        self.apply_loaded_empty_document(false);
         self.report_restore_failure(restore_reload_card(path, why, unreadable));
     }
 
